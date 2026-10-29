@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-10-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -243,7 +243,7 @@ This is a read-contract correction, not a new bulk assignment endpoint, permissi
 | POST `/{id}/gr-number` | AllocateIdentifier; `{numberSeriesId, manualValue?, manualSequence?, reason?, concurrencyStamp?}`. First manual assignment needs no correction reason. |
 | POST `/{id}/roll-number` | AllocateIdentifier; `{rollNumber, rollAssignmentMode?, reason?, concurrencyStamp?}`. Independent from GR assignment. |
 | POST `/identifier-locks` | Add/Update (AllocateIdentifier and Repair aliases); `{academicYearId, divisionId, identifierType: gr|roll, isLocked, reason?}`. Both actions enforce the selected division scope; Unlock requires a reason. No Division placement lock. |
-| GET `/{id}/fee-structure` and `/fee-structure/candidates` | View; existing Admissions selection/candidate DTOs backed by published Finance structure reads. |
+| GET `/{id}/fee-structure` and `/fee-structure/candidates` | View; existing Admissions selection/candidate DTOs backed by published Finance structure reads. Missing confirmation does not set `onboardingBlocker`; fee assignment/payment do not gate activation. |
 | PUT `/{id}/fee-structure` | Edit; `{structureId, optionalHeadIds, concurrencyStamp?}` confirms admission intent only. No Finance mutation. |
 | GET `/{id}/workflow-documents` | View; frozen applicable workflow requirements and canonical evidence. |
 | POST `/{id}/workflow-documents/{stageId}/{code}/upload` or `/original` | Edit plus AdmissionDocuments.Upload or RecordOriginal respectively; reuses canonical Admissions evidence contracts. |
@@ -371,6 +371,22 @@ as the displayed usage values. Lifecycle/window filters retain their scalar para
 Invalid fields, operators, values or malformed JSON return `Students:Admissions:InvalidCycleFilter`.
 Close, reopen, archive, and window revision require a reason of at most 500 characters. Cycle
 description is optional and limited to 1000 characters.
+
+Cycle `startDate`/`endDate` (including clone and window-revision requests) and reopen's nullable
+`newEndDate` are calendar dates. ISO date-only and ISO date-time inputs are accepted; when an
+offset is present, the written calendar date is retained before any timezone conversion.
+Cycle responses emit those boundaries at UTC midnight (`2026-06-01T00:00:00Z` for a submitted
+`2026-06-01T00:00:00+05:30`). Only these properties use `AdmissionCalendarDateJsonConverter`;
+property-scoped `DisableDateTimeNormalization` prevents ABP from replacing the calendar converter.
+Schedule `publishAt`/`closeAt`, response schedule fields and audit timestamps retain normal instant
+serialization and UTC scheduling. No global date converter, schema migration or historical date
+rewrite is introduced.
+
+Cycle schedule/lifecycle timestamps and history `occurredAt` use the existing PostgreSQL UTC-instant
+mapping helper. Parameters remain `timestamptz` with zero offset under legacy Npgsql settings, and
+fresh reads retain the same instant as the save response. Calendar window properties do not use
+this mapping. Existing timestamp columns and stored values are unchanged; this does not repair
+previously mis-stored schedule intentions or alter the global clock/database timezone.
 
 ## Offering endpoints
 
@@ -623,6 +639,8 @@ Unknown policy versions, stale stamps, unavailable capacity, missing evidence, a
 The existing inquiry capture-context response includes nullable `academicYearStartDate` (a calendar date) and `minimumAgeYears`. After the offering scope check, these are read from its cycle's Academic Year and its Standard's existing `AgeLowerLimit`; non-positive minima return null. Clients use them for advisory DOB age feedback in inquiry create/edit. This does not add inquiry validation, change workflow eligibility policies, require Institute Setup permissions, or introduce persisted settings/migrations.
 
 The inquiry collection route prefix is `/api/student/enrollment/admissions/inquiries`.
+
+Inquiry detail includes nullable `parentRelationship` from the applicant's captured Father/Mother role. It is independent of `mainSchoolContact` and remains null when no role was captured; clients must not infer it from a shared mobile number. Legacy identity field codes remain supported, but an explicit known binding for another person cannot override the supplied primary contact through an alias.
 
 | Method | Route | Permission | Purpose |
 | --- | --- | --- | --- |

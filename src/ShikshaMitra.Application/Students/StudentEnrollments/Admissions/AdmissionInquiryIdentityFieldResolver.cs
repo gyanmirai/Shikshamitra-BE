@@ -37,7 +37,10 @@ internal static class AdmissionInquiryIdentityFieldResolver
 			foreach (var alias in aliases)
 			{
 				var aliasCode = fieldList.FirstOrDefault(field =>
-					string.Equals(field.Code, alias, StringComparison.OrdinalIgnoreCase))?.Code;
+					string.Equals(field.Code, alias, StringComparison.OrdinalIgnoreCase) &&
+					(string.IsNullOrWhiteSpace(field.BindingKey) ||
+					 !AdmissionFormBindingRegistry.Metadata.ContainsKey(field.BindingKey) ||
+					 string.Equals(field.BindingKey, bindingKey, StringComparison.OrdinalIgnoreCase)))?.Code;
 				var aliasValue = Value(values, aliasCode);
 				if (!string.IsNullOrWhiteSpace(aliasValue)) return aliasValue;
 			}

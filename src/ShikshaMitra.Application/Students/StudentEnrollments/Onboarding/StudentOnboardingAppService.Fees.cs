@@ -21,7 +21,7 @@ public partial class StudentOnboardingAppService
 		result.Available = true;
 		result.CanEdit = !result.IsLocked && !item.StudentEnrollmentId.HasValue && item.Status != StudentOnboardingStatus.Cancelled &&
 			await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
-		result.OnboardingBlocker = result.OnboardingConfirmed ? null : "Select and confirm a published fee structure.";
+		result.OnboardingBlocker = null;
 		return result;
 	}
 

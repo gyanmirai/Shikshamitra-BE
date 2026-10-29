@@ -9,6 +9,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 {
 	public AdmissionSchoolContactDto? MainSchoolContact { get; set; }
+	public string? ParentRelationship { get; set; }
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public string InquiryNumber { get; set; } = string.Empty;
 	public Guid AdmissionCycleId { get; set; }

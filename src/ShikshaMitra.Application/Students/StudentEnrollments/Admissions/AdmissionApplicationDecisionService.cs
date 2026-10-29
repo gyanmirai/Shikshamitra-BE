@@ -330,7 +330,7 @@ public class AdmissionApplicationDecisionService(
             if (onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot") && definition.Key is
                 StudentOnboardingStepKeys.Identity or StudentOnboardingStepKeys.Family or StudentOnboardingStepKeys.Communication or StudentOnboardingStepKeys.MedicalAndPreviousSchool)
                 required = false;
-            if (onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot") && definition.Key is StudentOnboardingStepKeys.Documents or StudentOnboardingStepKeys.FinanceAccountsServices) required = true;
+            if (onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot") && definition.Key == StudentOnboardingStepKeys.Documents) required = true;
 			if (AutomaticOnboardingReadinessRules.CanAdopt(onboardingCase) && definition.Key == StudentOnboardingStepKeys.Identity)
 				required = true;
 			var initialStatus = required ? StudentOnboardingStepStatus.Pending : StudentOnboardingStepStatus.NotRequired;
@@ -378,8 +378,7 @@ public class AdmissionApplicationDecisionService(
 		StudentOnboardingStepKeys.MedicalAndPreviousSchool => policy?.RequireMedicalDetails ?? false,
 		StudentOnboardingStepKeys.PlacementAndSeat => true,
 		StudentOnboardingStepKeys.IdentifiersAndRoll => true,
-		StudentOnboardingStepKeys.FinanceAccountsServices => policy is not null &&
-			(policy.RequireFeeClearance || policy.RequireStudentAccount || policy.RequireGuardianAccount || policy.RequireServiceConsent),
+		StudentOnboardingStepKeys.FinanceAccountsServices => false,
 		StudentOnboardingStepKeys.FinalReadiness => true,
 		_ => true
 	};

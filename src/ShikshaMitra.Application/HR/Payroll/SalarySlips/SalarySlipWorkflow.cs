@@ -16,10 +16,9 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 public class SalarySlipWorkflow(
 	ISalarySlipRepository salarySlipRepository,
 	IEmployeeRepository employeeRepository,
-	SalarySlipManager salarySlipManager,
 	SalarySlipDraftFreshnessService draftFreshnessService,
-	SalarySlipSnapshotGenerationService snapshotGenerationService,
 	SalarySlipDtoMapper salarySlipDtoMapper,
+	SalarySlipIssuedReader issuedReader,
 	SalarySlipAccessService accessService,
 	IPayrollInputRevisionStore revisions,
 	EsiContinuityInvalidator continuityInvalidator,
@@ -42,24 +41,7 @@ public class SalarySlipWorkflow(
 				throw new BusinessException(HRErrorCodes.PayrollEmployeeIdRequired);
 			}
 
-			await accessService.EnsureEmployeeScopeAllowedAsync(employeeId);
-			salarySlipManager.ValidateMonthYearFormat(monthYear);
-			var normalizedMonthYear = SalarySlipMonthYearNormalizer.Normalize(monthYear);
-			var existingSalarySlip = await salarySlipRepository.GetByEmployeeAndMonthAsync(
-				employeeId,
-				normalizedMonthYear);
-
-			if (existingSalarySlip?.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
-			{
-				var existingEmployee = await employeeRepository.GetAsync(existingSalarySlip.EmployeeId, includeDetails: false);
-				return await salarySlipDtoMapper.ToDtoAsync(existingSalarySlip, existingEmployee);
-			}
-
-			var salarySlip = existingSalarySlip == null
-				? await snapshotGenerationService.GenerateOrGetFromSnapshotAsync(
-					employeeId,
-					normalizedMonthYear)
-				: await draftFreshnessService.EnsureFreshAsync(existingSalarySlip);
+			var salarySlip = await issuedReader.GetAsync(employeeId, monthYear);
 
 			var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 			var dto = await salarySlipDtoMapper.ToDtoAsync(salarySlip, employee);
@@ -101,12 +83,8 @@ public class SalarySlipWorkflow(
 			throw new BusinessException(HRErrorCodes.PayrollEmployeeIdRequired);
 		}
 
-		await accessService.EnsureEmployeeScopeAllowedAsync(input.EmployeeId);
-		salarySlipManager.ValidateMonthYearFormat(input.MonthYear);
-
-		var salarySlip = await snapshotGenerationService.GenerateOrGetFromSnapshotAsync(
-			input.EmployeeId,
-			input.MonthYear);
+		// Payroll review/locking owns creation. This compatibility command must not expose or create drafts.
+		var salarySlip = await issuedReader.GetAsync(input.EmployeeId, input.MonthYear);
 
 		var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 		var dto = await salarySlipDtoMapper.ToDtoAsync(salarySlip, employee);
@@ -121,9 +99,7 @@ public class SalarySlipWorkflow(
 	{
 		logger.LogInformation("GetSalarySlipById request - Id: {Id}", id);
 
-		var salarySlip = await salarySlipRepository.GetAsync(id);
-		await accessService.EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);
-		salarySlip = await draftFreshnessService.EnsureFreshAsync(salarySlip);
+		var salarySlip = await issuedReader.GetAsync(id);
 		var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 
 		var dto = await salarySlipDtoMapper.ToDtoAsync(salarySlip, employee);
@@ -138,21 +114,8 @@ public class SalarySlipWorkflow(
 	{
 		logger.LogInformation("UpdateSalarySlip request - Id: {Id}", id);
 
-		var salarySlip = await salarySlipRepository.GetAsync(id);
-		await accessService.EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);
-		salarySlip = await draftFreshnessService.EnsureFreshAsync(salarySlip);
-
-		salarySlip.UpdateRemarks(input.Remarks);
-
-		await salarySlipRepository.UpdateAsync(salarySlip);
-
-		var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
-		var dto = await salarySlipDtoMapper.ToDtoAsync(salarySlip, employee);
-
-		logger.LogInformation("Salary slip updated - Id: {Id}, EmployeeId: {EmployeeId}, MonthYear: {MonthYear}",
-			id, salarySlip.EmployeeId, salarySlip.MonthYear);
-
-		return dto;
+		await issuedReader.GetAsync(id);
+		throw new BusinessException(HRErrorCodes.SalarySlipAlreadyFinalized);
 	}
 
 	[UnitOfWork(true)]

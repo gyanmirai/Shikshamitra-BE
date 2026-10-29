@@ -19,6 +19,10 @@ Organization names are enriched in a batch for the returned page, with the exist
 
 Onboarding list reads count and page the existing tenant-filtered application query, then select `EmployeeApplicationListProjection.Item` before materialization. Only summary scalars and work-assignment arrays are read; personal/family/additional JSON snapshots, work history, tokens and the tracked application graph are excluded. Display formatting runs over those projected values. Detail/public/finalization readers retain their full snapshots and existing authorization paths.
 
+The staff profile ID reader keeps the existing employee-access check, then projects only the existing details contract and enriches organization labels. It avoids a second detailed employee read and discarded family rows; the authorization check retains its own required data access. Document reads likewise keep existing authorization, use targeted scalar metadata for the selected document or checklist definition page, and leave mutation-oriented managers unchanged.
+
+Attendance register lock lookup projects requested distinct lock dates in one query and reuses that result for page rows and summaries. Central holiday overlap is filtered before materialization. Report history authorizes its already-loaded run entities through the same tenant/owner, captured-access and interrupted-work recovery checks used by direct ID reads; it does not introduce an authorization cache.
+
 ## Layer map
 
 Use this table to find the right source path:

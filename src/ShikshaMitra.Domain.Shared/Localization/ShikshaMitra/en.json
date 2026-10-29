@@ -86,6 +86,8 @@
         "HostTenants:CodeReadOnly": "The school code cannot be changed after creation.",
         "HostTenants:ReasonRequired": "Enter a reason to deactivate the tenant.",
         "HostTenants:InvalidSorting": "Choose a supported tenant sort column.",
+        "HR:Payroll:PayslipNotAvailable": "Payslip is not available because payroll has not been locked. Complete payroll review and locking before viewing or downloading it.",
+        "HR:Payroll:PayslipReportRequiresIssued": "Payslip reports require issued payroll. Open Salary documents or generate a new salary register or statement after payroll is locked.",
         "HR:Payroll:030044": "The issued payslip document is invalid. Contact payroll support.",
         "HR:Payroll:030045": "No issued document is available. Complete payslip issuance before downloading.",
         "HR:Payroll:030046": "Configure the school name and address in Payslip settings before finalizing payroll.",

@@ -19,7 +19,11 @@ public class HrReportingCapturedAccess(HrReportingAccess access, HrReportExportS
 	{
 		await access.EnsureDesignAsync(JsonSerializer.Deserialize<HrReportDesignDto>(run.DefinitionJson, HrReportingEngine.Json)!, run.OwnerUserId);
 		await scopeAuthorization.EnsureRecipientCoversSnapshotAsync(JsonSerializer.Deserialize<HrReportExportScopeSnapshot>(run.ScopeJson)!, run.OwnerUserId);
+		PayrollIssuedReportBoundary.EnsureLegacyPayslipRequest(new() { ReportType = run.Name, DataSource = run.DataSource });
+		var parameters = JsonSerializer.Deserialize<HrReportParametersDto>(run.ParametersJson, HrReportingEngine.Json)!;
+		PayrollIssuedReportBoundary.EnsureLegacyCapture(run.DataSource, parameters.IncludeDrafts, PayrollIssuedReportBoundary.IsIssuedOnly(run));
 		var captured = JsonSerializer.Deserialize<HrReportingResult>(run.ResultJson, HrReportingEngine.Json)!;
+		PayrollIssuedReportBoundary.EnsureCaptured(run.DataSource, captured);
 		if (captured.EmployeeIds.Count > 0)
 		{
 			var ids = captured.EmployeeIds.ToArray();

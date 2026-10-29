@@ -50,9 +50,8 @@ public class AttendanceRegisterLookupReader(
 		var start = dateList.First();
 		var end = dateList.Last();
 		var query = await holidayRepository.GetQueryableAsync();
-		var holidays = (await asyncExecuter.ToListAsync(query))
-			.Where(x => x.StartDate <= end && x.EndDate >= start)
-			.ToList();
+		var holidays = await asyncExecuter.ToListAsync(query
+			.Where(x => x.StartDate <= end && x.EndDate >= start));
 		var lookup = new Dictionary<DateOnly, HolidayInfo>();
 		var requestedDates = dateList.ToHashSet();
 
@@ -200,15 +199,16 @@ public class AttendanceRegisterLookupReader(
 
 	internal async Task<HashSet<DateOnly>> BuildDayLockLookupAsync(IEnumerable<DateOnly> dates)
 	{
-		var result = new HashSet<DateOnly>();
-		foreach (var date in dates.Distinct())
+		var requestedDates = dates.Distinct().ToArray();
+		if (requestedDates.Length == 0)
 		{
-			if (await staffAttendanceDayLockRepository.FindAsync(date) != null)
-			{
-				result.Add(date);
-			}
+			return [];
 		}
 
-		return result;
+		var query = await staffAttendanceDayLockRepository.GetQueryableAsync();
+		var lockedDates = await asyncExecuter.ToListAsync(query
+			.Where(x => Enumerable.Contains(requestedDates, x.LockDate))
+			.Select(x => x.LockDate));
+		return lockedDates.ToHashSet();
 	}
 }

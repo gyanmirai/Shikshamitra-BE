@@ -30,6 +30,13 @@ public class SalarySlipController : AbpControllerBase
 		_salarySlipAppService = salarySlipAppService;
 	}
 
+	[HttpGet("availability")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.View)]
+	[ProducesResponseType(typeof(SalarySlipAvailabilityDto), StatusCodes.Status200OK)]
+	public Task<SalarySlipAvailabilityDto> GetAvailabilityAsync([FromQuery, Required] Guid employeeId,
+		[FromQuery, Required] string monthYear, [FromQuery] Guid? academicYearId = null) =>
+		_salarySlipAppService.GetAvailabilityAsync(employeeId, monthYear, academicYearId);
+
 	/// <summary>
 	/// Retrieves employee salary slip for a specific month (OpenAPI contract)
 	/// </summary>

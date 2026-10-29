@@ -28,6 +28,7 @@ public class HrTableExportAppService(IRepository<HrReportRun, Guid> runs, HrTabl
 		var run = new HrReportRun(GuidGenerator.Create(), CurrentTenant.Id, CurrentUser.Id.Value, presentation.Name,
 			"table-export", 1, "table:" + request.Table, JsonSerializer.Serialize(definition, HrReportingEngine.Json),
 			JsonSerializer.Serialize(presentation.Parameters, HrReportingEngine.Json), JsonSerializer.Serialize(snapshot), Clock.Now);
+		if (request.Table == "hr-salary-documents") run.ExtraProperties["issuedSalaryDocumentsOnly"] = true;
 		run.ExtraProperties["tableExportRequest"] = JsonSerializer.Serialize(request, HrReportingEngine.Json);
 		run.ExtraProperties["tableExportContext"] = presentation.Context;
 		await runs.InsertAsync(run, true);

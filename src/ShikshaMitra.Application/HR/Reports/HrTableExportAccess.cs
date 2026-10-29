@@ -24,6 +24,13 @@ public class HrTableExportAccess(HrTableExportSources sources, HrReportExportSco
 		await scope.EnsureRecipientCoversSnapshotAsync(JsonSerializer.Deserialize<HrReportExportScopeSnapshot>(run.ScopeJson)!, run.OwnerUserId);
 		if (run.Status != "Completed") return;
 		var captured = JsonSerializer.Deserialize<HrReportingResult>(run.ResultJson, HrReportingEngine.Json)!;
+		if (request.Table == "hr-salary-documents")
+		{
+			var filters = request.Query.TryGetProperty("filters", out var nested) ? nested : request.Query;
+			var includesDrafts = filters.TryGetProperty("includeDrafts", out var drafts) && bool.TryParse(drafts.ToString(), out var included) && included;
+			PayrollIssuedReportBoundary.EnsureLegacyCapture(request.Query.GetProperty("dataSource").GetString()!, includesDrafts, PayrollIssuedReportBoundary.IsIssuedOnly(run));
+			PayrollIssuedReportBoundary.EnsureCaptured(request.Query.GetProperty("dataSource").GetString()!, captured);
+		}
 		if (captured.EmployeeIds.Count == 0 && captured.EmployeeCodes.Count == 0) return;
 		var ids = captured.EmployeeIds.ToArray();
 		if (request.Table == "employee-table")

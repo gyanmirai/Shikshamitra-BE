@@ -3,7 +3,7 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-10-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -368,7 +368,7 @@ fixed two-decimal string; due dates are date-only, activity timestamps UTC insta
 | GET suffix | Existing permission | Result |
 |---|---|---|
 | `context` | `Finance.Fees.FeeCollections.View` | Linked student, enrolled years, selected year, section/action capabilities and disabled reasons |
-| `overview`, `installments`, `payments` | `Finance.Fees.FeeCollections.View` | Collection-account summary, obligations and payment history; embedded receipt details additionally require Receipts View |
+| `overview`, `installments`, `payments`, `transactions` | `Finance.Fees.FeeCollections.View` | Collection-account summary, obligations and payment history; embedded receipt details additionally require Receipts View; transaction refund/return rows additionally require Refund View |
 | `charges` | `Finance.Fees.Charges.View` | Detailed approved/voided child/year charges |
 | `receipts`, `receipts/{receiptId}/pdf` | `Finance.Fees.InvoiceReceipt.View` | Official receipts and PDF after tenant/student/year ownership checks |
 | `requests?kind=concession` | `Finance.Fees.Concession.View` | Authorized concession history |
@@ -437,6 +437,38 @@ payment-method evidence, including principal/charge components of the transactio
 This is successful-payment history, not retained principal after refunds. InReconciliation
 and Reversed transactions remain visible under their actual list statuses but are excluded
 from this summary. Receipt visibility still requires its independent existing grant.
+
+`GET /api/mobile/v1/finance/students/{studentId}/transactions?academicYearId={yearId}&skipCount=0&maxResultCount=20`
+returns the standard result envelope containing `{items,totalCount,currency,paymentSummary}`.
+It requires Collection View and the current persisted tenant/child/enrolled-year association.
+Offsets must be nonnegative, page size is 1-100, and offset plus size must fit a signed 32-bit integer.
+Each source contributes at most offset plus size candidates; counts cover the complete authorized union.
+Ordering is `occurredAt` descending followed by `transactionId` ordinal ascending, with pagination after merging.
+
+| Transaction field | Contract |
+|---|---|
+| `transactionId` | Stable string: `payment:{collectionGuid}`, `refund:{settlementGuid}`, or `refundReturn:{accountingEntryGuid}`; GUIDs use lowercase hyphenated form |
+| `kind`, `direction` | `payment` / `in`, `refund` / `out`, or `refundReturn` / `in` |
+| `date`, `occurredAt` | Source calendar date (`yyyy-MM-dd`) and authoritative event instant (UTC ISO timestamp) |
+| `amount`, `currency` | Positive fixed two-decimal string and `INR` |
+| `status` | Existing collection/settlement status; recorded returns use `Reversed` |
+| `paymentMethods`, `receipts` | Method names and existing receipt references; receipt references require the independent Receipts View action |
+| `paymentId` | Collection GUID for payment rows; null for refund and return rows |
+
+Fee, charge and combined collections each appear once by collection metadata ID, with validated decimal payment-method evidence.
+Collection calendar dates and instants retain the existing payment history's creation timestamp semantics.
+Zero-value metadata is omitted from this positive-amount cash feed; `/payments` retains its existing contract.
+Refund View independently controls inclusion of both payout and return rows and their contribution to `totalCount`.
+Immutable refund accounting postings are authoritative, including historical payouts whose current settlement status is Reversed.
+Payout `date` comes from the recorded settlement date where available, otherwise its immutable posting date; `occurredAt` is the immutable posting timestamp.
+Return `date` and `occurredAt` come from the correction posting.
+For older payouts with no outgoing accounting posting, only positive Processed/Reversed settlements with their own nondefault settlement date and completion timestamp qualify; completion time supplies `occurredAt`.
+The settlement and its accounting posting never produce duplicate payout rows.
+Request approvals, concessions, noncash adjustments, pending/failed payout attempts, aggregate-only legacy refund amounts and undated legacy records do not establish a transaction.
+Legacy reversals lacking a correction posting do not create an invented incoming return entry.
+Refund rows have no receipt references because this endpoint has no authentic refund PDF route.
+No beneficiary, bank account, external reference, private reason or payout evidence is exposed.
+The annual `paymentSummary` remains gross successful collection history, independent of feed page and refund permission; refunds and returns never subtract from it.
 
 `requests?kind=concession|refund` includes `requestSummary` with `studentId`,
 `academicYearId`, `kind`, decimal-string `totalAmount` and `completedRequestCount`.

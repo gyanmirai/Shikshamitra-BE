@@ -16,6 +16,7 @@ public interface IMobileFinanceReadService : IApplicationService
 	Task<MobileChargeDetail> ChargeAsync(Guid studentId, Guid academicYearId, Guid chargeId, CancellationToken cancellationToken = default);
 	Task<MobileChargePaymentPage> ChargePaymentsAsync(Guid studentId, Guid academicYearId, Guid chargeId, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default);
 	Task<MobileFinanceList<MobileFinancePayment>> PaymentsAsync(Guid studentId, Guid academicYearId, int skipCount = 0, int maxResultCount = 20, CancellationToken cancellationToken = default, string? status = null);
+	Task<MobileFinanceList<MobileFinanceTransaction>> TransactionsAsync(Guid studentId, Guid academicYearId, int skipCount = 0, int maxResultCount = 20, CancellationToken cancellationToken = default);
 	Task<MobileFinanceList<MobileFinanceReceipt>> ReceiptsAsync(Guid studentId, Guid academicYearId, int skipCount = 0, int maxResultCount = 20, CancellationToken cancellationToken = default);
 	Task<MobileFinanceRequestPage> RequestsAsync(Guid studentId, Guid academicYearId, string? kind = null, int skipCount = 0, int maxResultCount = 20, CancellationToken cancellationToken = default);
 	Task<byte[]> ReceiptPdfAsync(Guid studentId, Guid academicYearId, Guid receiptId, CancellationToken cancellationToken = default);

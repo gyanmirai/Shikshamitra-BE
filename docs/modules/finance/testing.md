@@ -3,7 +3,7 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-10-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -40,6 +40,26 @@ git diff --check
 ```
 
 ## Focused test map
+
+### Combined family transaction history
+
+`MobileFinanceTransactions_Tests.cs` (partial `MobileAcademicAppService_Tests`) covers Collection View, child/year association, revocation, independent Receipt View, exact decimal collection evidence, combined receipt identity, offset validation and the annual summary.
+`PostgreSQL_family_transactions_union_refunds_returns_legacy_and_global_page` uses the dedicated `FAMILY_FINANCE_TEST_POSTGRES` harness to verify bounded timestamp-ordered source queries, posting/settlement deduplication, payout returns, successful legacy settlement fallback, omission of failed/pending/undated attempts, foreign-child exclusion, global pagination/ties and gross annual totals.
+The ordinary SQLite provider cannot certify PostgreSQL `DateTimeOffset` ordering; the refund-union test therefore requires the existing isolated PostgreSQL opt-in.
+`MobileFinanceWireContract_Tests` verifies the namespaced string IDs, fixed money strings, nullable collection IDs, date wire shape and shared offset defaults.
+`MobileFinancePermissionContract_Tests` and `MobileFinancePermissionApi_Tests` cover the new action attribute, anonymous calls and missing family association.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Finance_transactions|FullyQualifiedName~PostgreSQL_family_transactions|FullyQualifiedName~MobileFinanceWireContract_Tests"
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~MobileFinancePermission"
+```
+
+Verification on 2026-10-29: four focused persisted SQLite application cases, two runtime serializer cases and the PostgreSQL union case passed.
+Focused Application and HttpApi/Host test builds passed with the external generated-migration exclusions described below; the HTTP exclusion list additionally required unchanged `CashManagementMigration_Tests` and `InstitutePerformancePostgres_Tests` sources.
+The first HTTP run passed 41 of 42 cases, including the new action attribute and anonymous route; its first authenticated transaction association request hit a test-client cancellation during overloaded startup before an HTTP response could be asserted.
+The isolated two-route retry remained in existing fixture seeders before reaching either selected route and was stopped; authenticated HTTP acceptance remains unverified in this environment.
+Keep this runtime timeout separate from the passing direct-service scope checks; it does not certify deployed latency or HTTP acceptance.
+The persisted serializer fixture contains two collection rows, a payout, a legacy payout and a recorded return, with gross annual paid amount `1000.30`.
 
 ### Admission and withdrawal proration
 

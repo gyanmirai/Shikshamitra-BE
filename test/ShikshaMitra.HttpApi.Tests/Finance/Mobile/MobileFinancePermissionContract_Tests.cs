@@ -14,6 +14,7 @@ public class MobileFinancePermissionContract_Tests
 	[InlineData("OverviewAsync", "Finance.Fees.FeeCollections.View")]
 	[InlineData("InstallmentsAsync", "Finance.Fees.FeeCollections.View")]
 	[InlineData("PaymentsAsync", "Finance.Fees.FeeCollections.View")]
+	[InlineData("TransactionsAsync", "Finance.Fees.FeeCollections.View")]
 	[InlineData("StatementPdfAsync", "Finance.Fees.FeeCollections.View")]
 	[InlineData("ChargesAsync", "Finance.Fees.Charges.View")]
 	[InlineData("ChargesPageAsync", "Finance.Fees.Charges.View")]

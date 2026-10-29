@@ -20,6 +20,8 @@ public class MobileFinanceWireContract_Tests
   chargePaging[3].Name.ShouldBe("page");chargePaging[3].DefaultValue.ShouldBe(1);
   var historyPaging=typeof(IMobileFinanceReadService).GetMethod("PaymentsAsync")!.GetParameters();
   historyPaging[2].Name.ShouldBe("skipCount");historyPaging[2].DefaultValue.ShouldBe(0);
+  var transactionPaging=typeof(IMobileFinanceReadService).GetMethod("TransactionsAsync")!.GetParameters();
+  transactionPaging[2].Name.ShouldBe("skipCount");transactionPaging[3].DefaultValue.ShouldBe(20);
  }
 
  public static JsonElement Write(string name,object value)
@@ -41,6 +43,14 @@ public class MobileFinanceWireContract_Tests
   var paymentJson=Write("payments.json",new MobileFinanceList<MobileFinancePayment>([payment],1) { PaymentSummary=new(id,year,"1000.00",1,new(2026,10,28)) });
   paymentJson.GetProperty("paymentSummary").GetProperty("paidAmount").GetString().ShouldBe("1000.00");
   paymentJson.TryGetProperty("page",out _).ShouldBeFalse();paymentJson.GetProperty("items")[0].GetProperty("receipts")[0].TryGetProperty("id",out _).ShouldBeFalse();
+  var transactionJson=Write("transactions.json",new MobileFinanceList<MobileFinanceTransaction>([
+   new($"payment:{id:D}","payment",new(2026,10,28),DateTimeOffset.Parse("2026-10-28T10:00:00Z"),"1000.00","in","Paid",["Cash"],[MobileFinanceProjection.ReceiptReference(receipt)],id),
+   new($"refund:{id:D}","refund",new(2026,10,28),DateTimeOffset.Parse("2026-10-28T11:00:00Z"),"50.25","out","Processed",["Cash"],[])],2) { PaymentSummary=new(id,year,"1000.00",1,new(2026,10,28)) });
+  var transactionRow=transactionJson.GetProperty("items")[0];
+  transactionRow.GetProperty("transactionId").ValueKind.ShouldBe(JsonValueKind.String);
+  transactionRow.GetProperty("date").GetString().ShouldBe("2026-10-28");
+  transactionRow.GetProperty("amount").GetString().ShouldBe("1000.00");
+  transactionJson.GetProperty("items")[1].GetProperty("paymentId").ValueKind.ShouldBe(JsonValueKind.Null);
   var receiptJson=Write("receipts.json",new MobileFinanceList<MobileFinanceReceipt>([receipt],1));
   receiptJson.GetProperty("items")[0].GetProperty("totalPaidAmount").GetString().ShouldBe("1000.00");
   foreach(var alias in new[]{"kind","date","amount","paymentId","linkedReceiptId"})receiptJson.GetProperty("items")[0].TryGetProperty(alias,out _).ShouldBeFalse();

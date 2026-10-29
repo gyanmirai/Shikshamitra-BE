@@ -42,11 +42,12 @@ public partial class PermissionConsistencyApi_Tests
 		await AssertOverrideAsync(user, name, "inherit", false);
 		await AssertRealCheckerAsync(user, role, name, false);
 
+		await GrantActionVisibilityAsync(roleUrl, actionNames[0]);
 		await SetAsync(roleUrl, (actionNames[0], true));
 		await AssertRealCheckerAsync(user, role, actionNames[0], true);
-		await AssertRealCheckerAsync(user, role, name, false);
+		await AssertRealCheckerAsync(user, role, name, true);
 		(await ReadAsync(roleUrl)).Single(entry => entry.Name == ShikshaMitraSubModulePermissions.RoomManagement)
-			.IsGranted.ShouldBeFalse();
+			.IsGranted.ShouldBeTrue();
 	}
 
 	[Theory]
@@ -60,6 +61,7 @@ public partial class PermissionConsistencyApi_Tests
 			: ShikshaMitraSubmodulePermissions.InstituteSetup.AcademicSetup.All;
 		var roleUrl = Url("R", role);
 		var catalogue = await ReadAsync(roleUrl);
+		await GrantActionVisibilityAsync(roleUrl, actions);
 		actions.Length.ShouldBe(4);
 		foreach (var name in actions)
 		{

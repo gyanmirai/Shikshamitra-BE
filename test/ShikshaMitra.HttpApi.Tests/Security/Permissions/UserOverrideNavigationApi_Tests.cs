@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.Net;
+using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,7 +26,10 @@ public partial class PermissionConsistencyApi_Tests
 	{
 		var (role, user) = await CreateTargetAsync();
 		var names = ShikshaMitraModulePermissions.All.Concat(new[] { View, Edit,
-			ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View }).ToArray();
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View })
+			.Concat(new[] { View, Edit, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View }
+				.SelectMany(name => NavigationVisibilityPrerequisites.GetPaths(name).FirstOrDefault() ?? []))
+			.Distinct().ToArray();
 		await SetOverridesAsync(user, names.Select(name => (name, "allow")).ToArray());
 		(await ReadAsync(Url("R", role))).ShouldAllBe(permission => !permission.IsGranted);
 
@@ -41,17 +46,19 @@ public partial class PermissionConsistencyApi_Tests
 	}
 
 	[Fact]
-	public async Task Action_allow_does_not_implicitly_grant_separate_module_or_dashboard_visibility()
+	public async Task Action_allow_without_visibility_is_rejected_without_implicitly_granting_navigation()
 	{
 		var (role, user) = await CreateTargetAsync();
 		const string refundView = ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View;
-		await SetOverridesAsync(user, (View, "allow"), (Edit, "allow"), (refundView, "allow"));
+		using var rejected = await Client.PutAsJsonAsync(OverrideUrl(user), new { permissions =
+			new[] { View, Edit, refundView }.Select(name => new { name, state = "allow" }) });
+		rejected.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await rejected.Content.ReadAsStringAsync());
 
 		var (catalogue, mask) = await ReadEffectiveSelfCatalogueAndMaskAsync(user, role);
 		var permissions = catalogue.Groups.SelectMany(group => group.Permissions).ToDictionary(permission => permission.Name);
-		permissions[View].IsGranted.ShouldBeTrue();
-		permissions[Edit].IsGranted.ShouldBeTrue();
-		permissions[refundView].IsGranted.ShouldBeTrue();
+		permissions[View].IsGranted.ShouldBeFalse();
+		permissions[Edit].IsGranted.ShouldBeFalse();
+		permissions[refundView].IsGranted.ShouldBeFalse();
 		permissions[ShikshaMitraModulePermissions.HR].IsGranted.ShouldBeFalse();
 		permissions[ShikshaMitraModulePermissions.Finance].IsGranted.ShouldBeFalse();
 		permissions[ShikshaMitraModulePermissions.Dashboard].IsGranted.ShouldBeFalse();

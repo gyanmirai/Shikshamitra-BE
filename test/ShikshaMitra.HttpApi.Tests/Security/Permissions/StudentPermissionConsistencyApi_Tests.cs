@@ -56,6 +56,7 @@ public partial class PermissionConsistencyApi_Tests
 	public async Task Student_actions_follow_exact_role_grants_user_overrides_and_revocation(string action)
 	{
 		var (role, user) = await CreateTargetAsync();
+		await GrantActionVisibilityAsync(Url("R", role), action);
 		await SetAsync(Url("R", role), (action, true));
 		await AssertRealCheckerAsync(user, role, action, true);
 		foreach (var other in new[] {
@@ -82,6 +83,7 @@ public partial class PermissionConsistencyApi_Tests
 	public async Task Retired_Student_grants_do_not_promote_to_broader_canonical_actions(string retired, string canonical)
 	{
 		var (role, user) = await CreateTargetAsync();
+		await GrantActionVisibilityAsync(Url("R", role), canonical);
 		await InsertRetiredStudentPermissionAsync(role, user, retired, denied: false);
 		await AssertRealCheckerAsync(user, role, canonical, false);
 		await AssertRealCheckerAsync(user, role, retired, false);
@@ -97,6 +99,7 @@ public partial class PermissionConsistencyApi_Tests
 	public async Task Retired_Student_denials_remain_effective_and_are_editable_through_canonical_overrides(string retired, string canonical)
 	{
 		var (role, user) = await CreateTargetAsync();
+		await GrantActionVisibilityAsync(Url("R", role), canonical);
 		await SetAsync(Url("R", role), (canonical, true));
 		await InsertRetiredStudentPermissionAsync(role, user, retired, denied: true);
 		await AssertOverrideAsync(user, canonical, "deny", false);
@@ -112,6 +115,7 @@ public partial class PermissionConsistencyApi_Tests
 	public async Task Clearing_one_split_legacy_denial_preserves_the_other_action(string edited, string preserved)
 	{
 		var (role, user) = await CreateTargetAsync();
+		await GrantActionVisibilityAsync(Url("R", role), edited, preserved);
 		await SetAsync(Url("R", role), (edited, true), (preserved, true));
 		await InsertRetiredStudentPermissionAsync(role, user, "Students.Records.Transitions.Create", denied: true);
 		await AssertOverrideAsync(user, edited, "deny", false);

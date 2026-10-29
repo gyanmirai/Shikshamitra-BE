@@ -375,7 +375,7 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void EnsureDraft()
 	{
 		if (Status != ConcessionRequestStatus.Draft)
-			throw new BusinessException(FinanceConcessionErrorCodes.InvalidTransition)
+			throw new BusinessException(FinanceConcessionErrorCodes.RequestNotEditable)
 				.WithData("Status", Status.ToString());
 	}
 

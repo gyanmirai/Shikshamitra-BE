@@ -14,7 +14,7 @@ using Volo.Abp.EntityFrameworkCore;
 
 namespace ShikshaMitra.EntityFrameworkCore.Finance.Fees.ConcessionRequests;
 
-public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
+public partial class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
 	: EfCoreRepository<ShikshaMitraDbContext, ConcessionRequest, Guid>(dbContextProvider),
 		IConcessionRequestRepository
 {

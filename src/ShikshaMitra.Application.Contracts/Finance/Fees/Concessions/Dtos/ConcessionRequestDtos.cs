@@ -311,6 +311,7 @@ public class FeeHeadApprovalGroupDto
 
 public class ConcessionApprovalContextDto
 {
+	public ConcessionBenefitBlockerDto? BenefitBlocker { get; set; }
 	public Guid ConcessionRequestId { get; set; }
 	public Guid StudentId { get; set; }
 	public string ConcessionPolicyName { get; set; } = string.Empty;
@@ -326,6 +327,7 @@ public class ConcessionApprovalContextDto
 
 public class ConcessionRequestPreviewInputDto
 {
+	public Guid? RequestId { get; set; }
 	public Guid StudentId { get; set; }
 	public Guid? StudentFeeStructureId { get; set; }
 	public Guid ConcessionPolicyId { get; set; }
@@ -423,10 +425,19 @@ public class ConcessionEligibleFeeHeadDto
 
 public class ConcessionTypeOptionDto
 {
+	public ConcessionBenefitBlockerDto? BenefitBlocker { get; set; }
 	public Guid ConcessionTypeId { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public string? Description { get; set; }
 	public List<ConcessionDocumentRequirementDto> Documents { get; set; } = [];
+}
+
+public class ConcessionBenefitBlockerDto
+{
+	public string Code { get; set; } = string.Empty;
+	public string Message { get; set; } = string.Empty;
+	public Guid BlockingRequestId { get; set; }
+	public string BlockingStatus { get; set; } = string.Empty;
 }
 
 public class ApprovedDueFeeAllocationDto

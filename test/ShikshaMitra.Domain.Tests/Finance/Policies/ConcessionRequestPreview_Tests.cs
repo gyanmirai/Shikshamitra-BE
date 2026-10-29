@@ -24,6 +24,55 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 
 public class ConcessionRequestPreview_Tests
 {
+	[Theory]
+	[InlineData(ConcessionRequestStatus.Pending, "Finance:Concession:010010")]
+	[InlineData(ConcessionRequestStatus.Approved, "Finance:Concession:010034")]
+	[InlineData(ConcessionRequestStatus.PartiallyReversed, "Finance:Concession:010034")]
+	public async Task Another_active_benefit_blocks_even_an_incomplete_draft(ConcessionRequestStatus existingStatus, string code)
+	{
+		var (manager, student, type, assignment, policy, version, dues) = BuildManager(policyFixed: true, existingStatus: existingStatus);
+		var balances = dues.Select(x => (x.ConcessionAmount, x.OutstandingAmount)).ToArray();
+
+		var exception = await Assert.ThrowsAsync<BusinessException>(() => manager.CreatePendingAsync(null,
+			policy.AcademicYearId, student.Id, policy.PolicyId, version.Id, type.Id, null, [], assignment.Id,
+			allowIncomplete: true, enforcePendingUniqueness: false));
+
+		Assert.Equal(code, exception.Code);
+		Assert.Equal(existingStatus.ToString(), exception.Data["BlockingStatus"]);
+		Assert.Equal(balances, dues.Select(x => (x.ConcessionAmount, x.OutstandingAmount)).ToArray());
+	}
+
+	[Fact]
+	public async Task Inactive_policy_reports_the_specific_activation_rule()
+	{
+		var (manager, student, type, assignment, policy, version, _) = BuildManager(status: ConcessionPolicyStatus.Draft);
+
+		var exception = await Assert.ThrowsAsync<BusinessException>(() => manager.PreviewAsync(null,
+			policy.AcademicYearId, student.Id, policy.PolicyId, version.Id, type.Id, [], assignment.Id));
+
+		Assert.Equal(ConcessionPolicyErrorCodes.PolicyNotActive, exception.Code);
+	}
+
+	[Fact]
+	public async Task Fixed_policy_update_distributes_one_thousand_across_large_and_small_heads_including_paid_fees()
+	{
+		var (manager, student, type, assignment, policy, version, dues) = BuildManager(policyFixed: true);
+		var inputs = dues.Select(due => new FeeHeadConcessionInput(due.FeeHeadId, DiscountBasis.FlatAmount, 1000m)).ToList();
+		var request = await manager.CreatePendingAsync(null, policy.AcademicYearId, student.Id, policy.PolicyId,
+			version.Id, type.Id, null, [], assignment.Id, allowIncomplete: true);
+
+		await manager.ReplaceFeeHeadMappingsAsync(request, policy.PolicyId, version.Id, inputs, allowIncomplete: true);
+		await manager.ValidateDraftApprovalAsync(request);
+
+		Assert.Equal(1000m, request.GetTotalRequestedConcession());
+		Assert.Equal(58883m, request.ConcessionFeeHeadMappings.Sum(x => x.PreConcessionFeeHeadAmount));
+		Assert.Equal(988m, request.ConcessionFeeHeadMappings.Single(x => x.FeeHeadId == dues[0].FeeHeadId).FeeHeadConcessionAmount);
+		Assert.Equal(12m, request.ConcessionFeeHeadMappings.Single(x => x.FeeHeadId == dues[1].FeeHeadId).FeeHeadConcessionAmount);
+		Assert.Equal(2, request.GetSelectedDueFeeIds().Count);
+		Assert.Equal(0m, dues[1].OutstandingAmount);
+		Assert.True(dues[0].OutstandingAmount > 0m);
+	}
+
 	[Fact]
 	public async Task Direct_approval_validation_preserves_saved_amount_when_percentage_capacity_increases()
 	{
@@ -82,26 +131,37 @@ public class ConcessionRequestPreview_Tests
 	}
 
 	private static (ConcessionRequestManager Manager, Student Student, ConcessionType Type,
-		StudentFeeStructure Assignment, ConcessionPolicySnapshot Policy, FinancePolicyVersion Version, List<DueFee> Dues) BuildManager(bool percentage = false)
+		StudentFeeStructure Assignment, ConcessionPolicySnapshot Policy, FinancePolicyVersion Version, List<DueFee> Dues) BuildManager(bool percentage = false, bool policyFixed = false, ConcessionPolicyStatus status = ConcessionPolicyStatus.Active,
+		ConcessionRequestStatus? existingStatus = null)
 	{
 		var yearId = Guid.NewGuid();
 		var student = new Student(Guid.NewGuid(), null, "Synthetic", null, "Student", yearId,
 			Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
 		var type = new ConcessionType(Guid.NewGuid(), null, yearId, "Test concession");
 		var assignment = new StudentFeeStructure(Guid.NewGuid(), null, student.Id, Guid.NewGuid(), yearId);
-		var policy = new ConcessionPolicySnapshot(Guid.NewGuid(), yearId, "8th test policy", "TEST", ConcessionPolicyStatus.Active,
+		var policy = new ConcessionPolicySnapshot(Guid.NewGuid(), yearId, "8th test policy", "TEST", status,
 			false, ConcessionValueSource.RequestEnteredWithinLimits,
 			percentage ? ConcessionCalculationMethod.Percentage : ConcessionCalculationMethod.FixedAmount,
 			null, null, percentage ? 100m : null, percentage ? null : 11111m,
 			ConcessionApplyOn.AllOutstanding, RoundingMethodType.RoundUp, 19);
-		var version = new FinancePolicyVersion(Guid.NewGuid(), null, "concession", policy.PolicyId, yearId,
-			19, policy.PolicyName, "Active", JsonSerializer.Serialize(policy), "created");
-		var head = new FeeHead(Guid.NewGuid(), null, yearId, Guid.NewGuid(), "Tuition", null, true, null, Guid.NewGuid());
-		var dues = new[] { 1m, 30000m, 29197m }.Select((amount, index) =>
+		if (policyFixed) policy = policy with
 		{
-			var due = new DueFee(Guid.NewGuid(), null, student.Id, head.Id,
+			ValueSource = ConcessionValueSource.PolicyFixed,
+			FixedAmount = 1000m,
+			MaximumFixedAmount = null,
+			ApplyOn = ConcessionApplyOn.AllFees,
+			AutoCreateRefund = false,
+		};
+		var version = new FinancePolicyVersion(Guid.NewGuid(), null, "concession", policy.PolicyId, yearId,
+			19, policy.PolicyName, policy.Status.ToString(), JsonSerializer.Serialize(policy), "created");
+		var head = new FeeHead(Guid.NewGuid(), null, yearId, Guid.NewGuid(), "Tuition", null, true, null, Guid.NewGuid());
+		var secondHead = new FeeHead(Guid.NewGuid(), null, yearId, head.FeeCategoryId, "Activity", null, true, null, Guid.NewGuid());
+		var dues = (policyFixed ? new[] { 58166m, 717m } : new[] { 1m, 30000m, 29197m }).Select((amount, index) =>
+		{
+			var due = new DueFee(Guid.NewGuid(), null, student.Id, policyFixed && index == 1 ? secondHead.Id : head.Id,
 				(MonthEnum)(index + 1), 2026, false, amount, new DateTime(2026, index + 1, 1));
 			due.BindAssignment(assignment.Id);
+			if (policyFixed) due.ApplyPayment(index == 1 ? amount : 1000m);
 			return due;
 		}).ToList();
 		var studentRepository = Repository(student);
@@ -110,12 +170,17 @@ public class ConcessionRequestPreview_Tests
 		var assignmentRepository = Repository(assignment);
 		var versionRepository = Repository(version);
 		var requestRepository = Substitute.For<IConcessionRequestRepository>();
+		var conflict = existingStatus.HasValue ? new ConcessionBenefitConflict(Guid.NewGuid(), type.Id, existingStatus.Value) : null;
+		requestRepository.FindBlockingBenefitAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+			.Returns(conflict);
+		requestRepository.FindBlockingBenefitForMutationAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+			.Returns(conflict);
 		requestRepository.InsertAsync(Arg.Any<ConcessionRequest>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
 			.Returns(call => Task.FromResult(call.Arg<ConcessionRequest>()));
 		var guidGenerator = Substitute.For<IGuidGenerator>();
 		guidGenerator.Create().Returns(_ => Guid.NewGuid());
 		var manager = new ConcessionRequestManager(requestRepository, studentRepository, typeRepository,
-			dueRepository, assignmentRepository, Repository<FeeStructure>(), Repository(head), versionRepository,
+			dueRepository, assignmentRepository, Repository<FeeStructure>(), Repository(head, secondHead), versionRepository,
 			new ConcessionPolicyCalculationService(), guidGenerator, NullLogger<ConcessionRequestManager>.Instance);
 		return (manager, student, type, assignment, policy, version, dues);
 	}

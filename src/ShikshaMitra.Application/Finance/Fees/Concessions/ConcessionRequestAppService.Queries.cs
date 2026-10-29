@@ -34,13 +34,16 @@ public partial class ConcessionRequestAppService
 		Guid? studentFeeStructureId = null,
 		Guid? concessionTypeId = null,
 		Guid? concessionPolicyId = null,
-		Guid? concessionPolicyVersionId = null)
+		Guid? concessionPolicyVersionId = null,
+		Guid? requestId = null)
 	{
 		await EnsureAnyPermissionAsync(
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Add,
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Edit,
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Submit);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
+		await ValidateContextRequestAsync(requestId, studentId, academicYearId);
+		var benefits = await concessionRequestRepository.GetBlockingBenefitsAsync(studentId, academicYearId, requestId);
 		var activePolicies = await concessionPolicyRepository.GetListAsync(x =>
 			x.AcademicYearId == academicYearId && x.Status == ConcessionPolicyStatus.Active);
 		var activePolicyIds = activePolicies.Select(x => x.Id).ToList();
@@ -182,6 +185,7 @@ public partial class ConcessionRequestAppService
 			ConcessionTypes = concessionTypes.OrderBy(x => x.Name).Select(type => new ConcessionTypeOptionDto
 			{
 				ConcessionTypeId = type.Id,
+				BenefitBlocker = MapBenefitBlocker(benefits.FirstOrDefault(x => x.ConcessionTypeId == type.Id)),
 				Name = type.Name,
 				Description = type.Description,
 				Documents = type.ConcessionTypeDocuments.OrderBy(x => x.DocumentName)
@@ -493,6 +497,9 @@ public partial class ConcessionRequestAppService
 
 		return new ConcessionApprovalContextDto
 		{
+			BenefitBlocker = request.Status is ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending
+				? MapBenefitBlocker(await concessionRequestRepository.FindBlockingBenefitAsync(
+					request.StudentId, request.ConcessionTypeId, request.AcademicYearId, request.Id)) : null,
 			ConcessionRequestId = request.Id,
 			StudentId           = request.StudentId,
 			ConcessionPolicyName = policy.PolicyName,

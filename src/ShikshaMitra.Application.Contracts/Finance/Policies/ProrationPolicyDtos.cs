@@ -115,6 +115,7 @@ public class ProrationPolicyRuleDtoValidator : AbstractValidator<ProrationPolicy
 
 public class ProrationPolicyListRequestDto : PagedAndSortedResultRequestDto
 {
+	public bool IncludeArchived { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public string? Status { get; set; }
 	public string? Search { get; set; }

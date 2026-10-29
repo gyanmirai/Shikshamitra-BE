@@ -10,6 +10,23 @@ using Xunit;
 namespace ShikshaMitra.Finance.Mobile;
 public class MobileFinanceWireContract_Tests
 {
+ [Fact] public void Canonical_concession_type_projection_preserves_annual_benefit_blocker()
+ {
+  var requestId=Guid.NewGuid();
+  var option=MobileFinanceCanonicalCommandProjection.Map(new ConcessionTypeOptionDto
+  {
+   ConcessionTypeId=Guid.NewGuid(),Name="Hardship",BenefitBlocker=new()
+   {
+    Code="Finance:Concession:BenefitAlreadyGranted",Message="An annual benefit is already granted.",
+    BlockingRequestId=requestId,BlockingStatus="Approved"
+   }
+  });
+  var json=JsonSerializer.SerializeToElement(option,new JsonSerializerOptions(JsonSerializerDefaults.Web));
+  json.GetProperty("benefitBlocker").GetProperty("blockingRequestId").GetGuid().ShouldBe(requestId);
+  json.GetProperty("benefitBlocker").GetProperty("blockingStatus").GetString().ShouldBe("Approved");
+  json.GetProperty("benefitBlocker").GetProperty("message").GetString().ShouldBe("An annual benefit is already granted.");
+ }
+
  [Fact] public void Read_contracts_use_canonical_web_names()
  {
   typeof(MobileFinanceInstallment).GetProperties().Select(x=>x.Name).ShouldContain("DueFeeId");

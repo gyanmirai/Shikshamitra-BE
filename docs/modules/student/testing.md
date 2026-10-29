@@ -3,12 +3,77 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-10-29
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Optional onboarding fees
+
+`Current_onboarding_activates_without_fee_assignment_or_payment_and_keeps_finance_pending` covers activation and idempotent retry with no selected structure, no dues/assignment/payment metadata and truthful pending fee flags. `Activation_preview_*` includes legacy saved fee-step projection without a read-side evidence rewrite and the retained live-seat gate. `Optional_fees_*` covers missing Roll rejection and manual Student/Parent delivery intents with automatic sending disabled, for both configured credential timings. Existing `Automatic_onboarding_*` cases retain identity/document and account/snapshot regression coverage.
+
+Focused local Application tests passed 6 activation/preview cases and 20 related regression cases on 29 October 2026. These use isolated test persistence and credential request records, not real mailbox delivery or deployed acceptance. No Finance implementation was changed.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Current_onboarding_activates_without_fee_assignment|FullyQualifiedName~Activation_preview_|FullyQualifiedName~Optional_fees_|FullyQualifiedName~Automatic_onboarding_|FullyQualifiedName~One_click_credentials_prepares_both|FullyQualifiedName~Current_offering_does_not_fabricate"
+```
+
+## Admission window calendar dates
+
+`AdmissionCycleCalendarDate_Tests` covers create/edit, inherited clone, window revision and nullable
+reopen inputs with IST, UTC, positive/negative offsets, timezone-free ISO dates/times, invalid dates,
+and UTC-midnight response values. The tests use the actual ABP date-converter modifier with UTC,
+local and unspecified clock modes, guarding its override of property converters. The separate scheduled-action regression retains the precise
+publish/close instants, including seconds, and checks lifecycle schedule clearing.
+`Cycle_calendar_dates_round_trip_through_abp_serialization_persistence_and_governed_commands` uses
+the actual ABP serializer and scoped application service with test persistence for create, edit,
+clone, schedule, publish, revise, close and reopen. Keep the existing Domain cycle/window rules
+in the regression gate. Local automated checks do not establish deployed staging acceptance.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AdmissionCycleCalendarDate_Tests|FullyQualifiedName~Cycle_calendar_dates_round_trip|FullyQualifiedName~AdmissionCycleContract_Tests|FullyQualifiedName~AdmissionCycleColumnFilters_Tests"
+dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~AdmissionCycle_Tests"
+```
+
+On 2026-10-29, the focused gate passed 68 Application tests and 12 Domain tests, with no skips.
+An isolated process reproduced the original UTC/IST mismatch before the fix and retained
+`2026-06-01` / `2027-03-31` in both timezone simulations afterward. The integration test also caught
+ABP replacing property converters; property-level normalization opt-out is required, not a global
+clock change. Existing compiler warnings remain; the completed focused test builds disabled
+analyzers after the initial analyzer build was stopped. Local authenticated browser create/edit
+retained June 1 / March 31 and then June 2 / March 30 after a fresh reload. Staging deployment
+and correction of previously shifted records remain separate verification steps.
+
+The live PostgreSQL check also caught schedule timestamps matching in the save response but
+shifting by 5h30m in a fresh GET. `AdmissionJourneyUtc_Tests.Cycle_schedules_lifecycle_and_history_preserve_instants_under_legacy_Npgsql`
+guards this provider-specific gap: actual PostgreSQL parameter type, UTC/Local/Unspecified inputs,
+nullable values, offset-bearing reads, and lifecycle/history timestamps. Run it with the existing
+journey UTC and cycle model tests; SQLite serialization tests alone cannot establish this contract.
+
+```powershell
+dotnet test test/ShikshaMitra.EntityFrameworkCore.Tests --filter "FullyQualifiedName~AdmissionJourneyUtc_Tests|FullyQualifiedName~AdmissionCycleModelMapping_Tests"
+```
+
+The initial provider/model gate exposed a stale test assertion: it expected no converter for
+`AdmissionApplicationStageInstance.EnteredAt`, although the existing SQLite helper deliberately
+normalizes DateTime to DateTime. The corrected test verifies that provider type, UTC normalization
+for UTC/local/unspecified inputs and null preservation. A real in-memory SQLite regression using
+the production stage configuration executes SQL `MIN`/`MAX`/`GROUP BY`, including an all-null group,
+then checks UTC materialization after clearing tracked entities. Its isolated parent-table-free
+fixture verifies scalar mapping and queries, not workflow foreign keys. No production mapping
+change was needed. The corrected provider/model gate plus the credential-email parameter test
+passed 8/8 with no skips. After the provider fix, the focused Application gate passed again
+(68/68), and the local Host build completed with no warnings or errors.
+
+Authenticated local PostgreSQL acceptance on 2026-10-29 scheduled a separate QA draft for
+12:38:13 / 12:40:13 IST. Save and independent GET returned the same UTC instants. The existing
+one-minute worker automatically published it at 12:38:58 and closed it at 12:40:58; history
+recorded both scheduled lifecycle actions, both schedules cleared, and the June 2 / March 30
+calendar window remained unchanged. The QA cycle had no offerings or applications. The existing
+published General Admission Flow retained June 1 / March 31 and no schedules. This verifies the
+restarted local Host, not deployed staging.
 
 ## Payment joining date
 

@@ -113,6 +113,7 @@ public class AdmissionInquiryAppService(
 		if (applicant != null)
 		{
 			result.ApplicantFirstName = applicant.FirstName; result.ApplicantLastName = applicant.LastName; result.ApplicantDateOfBirth = applicant.DateOfBirth;
+			result.ParentRelationship = AdmissionSiblingParentSelection.ReadRelationship(applicant);
 		}
 		if (guardian != null)
 		{

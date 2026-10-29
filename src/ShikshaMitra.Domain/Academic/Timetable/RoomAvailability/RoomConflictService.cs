@@ -57,6 +57,12 @@ public partial class RoomConflictService : DomainService
             teacherId, standardId, divisionId, null);
     }
 
+    public Task<ConflictCheckResult> CheckScopedConflictsAsync(
+        RoomConflictAcademicScope academicScope, Guid roomId, DateTime date, TimeSpan startTime, TimeSpan endTime,
+        Guid? currentReservationId = null, Guid? teacherId = null) =>
+        CheckConflictsAsync(roomId, date, startTime, endTime, currentReservationId,
+            teacherId, academicScope.StandardId, null, null, academicScope);
+
     /// <summary>Checks a room list using one request-local set of availability data.</summary>
     public async Task<IReadOnlyDictionary<Guid, ConflictCheckResult>> CheckRoomsAsync(
         IReadOnlyCollection<Room> rooms,
@@ -158,13 +164,20 @@ public partial class RoomConflictService : DomainService
         Guid? teacherId,
         Guid? standardId,
         Guid? divisionId,
-        RoomConflictReadContext? context)
+        RoomConflictReadContext? context,
+        RoomConflictAcademicScope? academicScope = null)
     {
         var result = new ConflictCheckResult();
         var conflicts = new List<ConflictItem>();
 
         // 1. Check Academic Calendar
+        var academicMediumId = academicScope?.AcademicMediumId;
+        var academicYearId = academicScope?.AcademicYearId;
+        var legacyCalendarYearMatches = academicYearId.HasValue && academicScope?.MediumAcademicYearId == academicYearId;
         var calendar = context != null ? context.Calendar : await _calendarRepository.FirstOrDefaultAsync(c =>
+            (!academicMediumId.HasValue || c.AcademicMediumId == academicMediumId.Value) &&
+            (!academicYearId.HasValue || c.AcademicYearId == academicYearId.Value ||
+                c.AcademicYearId == null && legacyCalendarYearMatches) &&
             c.Status == CalendarStatus.Published &&
             date.Date >= c.StartDate.Date &&
             date.Date <= c.EndDate.Date);

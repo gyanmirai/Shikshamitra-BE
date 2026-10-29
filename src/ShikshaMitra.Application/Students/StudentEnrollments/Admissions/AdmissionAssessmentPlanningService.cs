@@ -36,7 +36,7 @@ public class AdmissionAssessmentPlanningService(
 	AdmissionAssessmentSchedulingService scheduling,
 	AdmissionInquiryPeopleService people,
 	IAdmissionAssessmentResourceLock resourceLock,
-	IRoomAvailabilityAppService roomService,
+	RoomAvailabilityAppService roomService,
 	AdmissionAssessmentCommandService commands) : ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionAssessmentSessionResourcesDto> GetResourcesAsync()
@@ -210,7 +210,7 @@ public class AdmissionAssessmentPlanningService(
 		if (!reservationId.HasValue || resourceChanged)
 		{
 			if (reservationId.HasValue) await LazyServiceProvider.LazyGetRequiredService<RoomAvailabilityAppService>().CancelAssessmentReservationAsync(reservationId.Value, id, "Assessment session rescheduled.");
-			reservationId = (await roomService.CreateReservationAsync(Reservation(input, plan.Offerings))).Id;
+			reservationId = (await roomService.CreateAssessmentReservationAsync(Reservation(input, plan.Offerings), plan.Offerings)).Id;
 		}
 		else if (current.Name != input.Name.Trim())
 			await LazyServiceProvider.LazyGetRequiredService<RoomAvailabilityAppService>().RenameAssessmentReservationAsync(reservationId.Value, id, input.Name.Trim());
@@ -299,7 +299,7 @@ public class AdmissionAssessmentPlanningService(
 
 	private async Task<AdmissionAssessmentSession> CreateEntityAsync(AdmissionAssessmentSessionInput input, Plan plan)
 	{
-		var reservation = await roomService.CreateReservationAsync(Reservation(input, plan.Offerings));
+		var reservation = await roomService.CreateAssessmentReservationAsync(Reservation(input, plan.Offerings), plan.Offerings);
 		var session = new AdmissionAssessmentSession(GuidGenerator.Create(), CurrentTenant.Id, plan.Links[0].AdmissionOfferingId, plan.Links[0].WorkflowStageDefinitionId,
 			input.Name, input.StartsAt.UtcDateTime, input.EndsAt.UtcDateTime, Location(plan.Room), input.Capacity);
 		session.ConfigurePlanning(input.SessionType, plan.Room.Id, reservation.Id, input.InterviewerId, input.SlotDurationMinutes, input.BreakMinutes,

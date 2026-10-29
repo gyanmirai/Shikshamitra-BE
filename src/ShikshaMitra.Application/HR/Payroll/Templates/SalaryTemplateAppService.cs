@@ -32,6 +32,7 @@ public class SalaryTemplateAppService(
 
 	public async Task<SalaryTemplateListDto> GetListAsync()
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View);
 		var templates = await asyncExecuter.ToListAsync(
 			(await templateRepository.GetQueryableAsync()).OrderByDescending(x => x.IsDefault).ThenBy(x => x.Name));
 		var versions = await asyncExecuter.ToListAsync(await versionRepository.GetQueryableAsync());
@@ -45,6 +46,7 @@ public class SalaryTemplateAppService(
 
 	public async Task<SalaryTemplateListDto> GetActiveListAsync()
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage);
 		var templates = await asyncExecuter.ToListAsync(
 			(await templateRepository.GetQueryableAsync())
 				.Where(x => x.Status == SalaryTemplateStatus.Published && x.PublishedVersion.HasValue)
@@ -64,6 +66,7 @@ public class SalaryTemplateAppService(
 
 	public async Task<SalaryTemplateComponentCatalogDto> GetComponentCatalogAsync()
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View);
 		var earnings = await asyncExecuter.ToListAsync(
 			(await earningComponentRepository.GetQueryableAsync()).Where(x => x.IsActive).OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name));
 		var deductions = await asyncExecuter.ToListAsync(
@@ -102,12 +105,19 @@ public class SalaryTemplateAppService(
 
 	public async Task<SalaryTemplateDto> GetAsync(Guid id)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View);
+		return await ReadAsync(id);
+	}
+
+	private async Task<SalaryTemplateDto> ReadAsync(Guid id)
+	{
 		var template = await templateRepository.GetAsync(id);
 		return Map(template, await LoadVersionsAsync(id));
 	}
 
 	public async Task<SalaryTemplateVersionListDto> GetVersionsAsync(Guid id)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View);
 		var template = await templateRepository.GetAsync(id);
 		var versions = await LoadVersionsAsync(id);
 		return new SalaryTemplateVersionListDto
@@ -119,12 +129,13 @@ public class SalaryTemplateAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Add)]
 	public async Task<SalaryTemplateDto> CreateAsync(SaveSalaryTemplateDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Add);
 		var replay = await FindIdempotentSaveAsync(input.IdempotencyKey);
 		if (replay != null)
 		{
 			EnsureEsiAssignmentMatchesReplay(replay, input);
 			previewProofService.Validate(input.PreviewToken, PreviewBinding(ToPreview(input)), replay: true);
-			return await GetAsync(replay.TemplateId);
+			return await ReadAsync(replay.TemplateId);
 		}
 
 		await EnsureNameAvailableAsync(input.Name);
@@ -150,6 +161,7 @@ public class SalaryTemplateAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Edit)]
 	public async Task<SalaryTemplateDto> UpdateAsync(Guid id, SaveSalaryTemplateDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Edit);
 		var template = await templateRepository.GetAsync(id);
 		EnsureNotArchived(template);
 		var replay = await FindIdempotentSaveAsync(input.IdempotencyKey, id);
@@ -157,7 +169,7 @@ public class SalaryTemplateAppService(
 		{
 			EnsureEsiAssignmentMatchesReplay(replay, input);
 			previewProofService.Validate(input.PreviewToken, PreviewBinding(ToPreview(input, id)), replay: true);
-			return await GetAsync(id);
+			return await ReadAsync(id);
 		}
 
 		var versions = await LoadVersionsAsync(id);
@@ -199,11 +211,12 @@ public class SalaryTemplateAppService(
 		await templateRepository.UpdateAsync(template, autoSave: false);
 		await versionRepository.UpdateAsync(version, autoSave: false);
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
-		return await GetAsync(id);
+		return await ReadAsync(id);
 	}
 
 	public async Task ArchiveAsync(Guid id, ArchiveSalaryTemplateDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Archive);
 		var template = await templateRepository.GetAsync(id);
 		if (template.IsDefault)
 		{
@@ -234,6 +247,7 @@ public class SalaryTemplateAppService(
 
 	public async Task<SalaryTemplateDto> SetDefaultAsync(Guid id)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.SetDefault);
 		var template = await templateRepository.GetAsync(id);
 		var versions = await LoadVersionsAsync(id);
 		if (template.Status != SalaryTemplateStatus.Published ||
@@ -255,7 +269,7 @@ public class SalaryTemplateAppService(
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
 		template.SetDefault(true);
 		await templateRepository.UpdateAsync(template, autoSave: true);
-		return await GetAsync(id);
+		return await ReadAsync(id);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage)]
@@ -295,6 +309,7 @@ public class SalaryTemplateAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View)]
 	public async Task<SalaryTemplatePreviewDto> PreviewAsync(PreviewSalaryTemplateRequestDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View);
 		ValidatePreviewInput(input);
 		if (input.TemplateId.HasValue)
 		{

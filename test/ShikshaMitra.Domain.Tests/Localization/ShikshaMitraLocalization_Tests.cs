@@ -43,6 +43,8 @@ public class ShikshaMitraLocalization_Tests : ShikshaMitraTestBase<ShikshaMitraL
 	[InlineData("en", "Permission:Student.AttendanceTracker", "Attendance Tracker")]
 	[InlineData("en", "StudentAttendance:ConcurrencyConflict", "Attendance changed while you were editing. Refresh and review the latest record before saving.")]
 	[InlineData("hi", "Menu:Home", "घर")]
+	[InlineData("en", "Students:Family:MainContactInvalid", "Choose a saved parent or guardian as the main school contact. Review the family details before finalizing admission.")]
+	[InlineData("hi", "Students:Family:MainContactInvalid", "स्कूल के मुख्य संपर्क के लिए सहेजे गए माता-पिता या अभिभावक को चुनें। प्रवेश अंतिम करने से पहले परिवार की जानकारी जाँचें।")]
 	public void Development_Localizer_Should_Resolve_Permission_And_Existing_Translations(
 		string culture, string key, string expected)
 	{

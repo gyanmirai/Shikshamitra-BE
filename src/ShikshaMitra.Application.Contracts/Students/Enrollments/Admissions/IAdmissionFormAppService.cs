@@ -9,6 +9,8 @@ public interface IAdmissionFormAppService : IApplicationService
 	Task<PagedResultDto<AdmissionFormDto>> GetListAsync(AdmissionFormListInput input);
 	Task<AdmissionFormDto> GetAsync(Guid id);
 	Task<AdmissionFormDto> PreviewAsync(Guid id);
+	Task<PagedResultDto<AdmissionFormInheritanceSourceSummaryDto>> GetInheritanceSourcesAsync(Guid id, PagedResultRequestDto input);
+	Task<AdmissionFormInheritancePreviewDto> PreviewInheritanceAsync(AdmissionFormInheritancePreviewInput input);
 	Task<AdmissionFormDto> CreateAsync(CreateUpdateAdmissionFormDto input);
 	Task<AdmissionFormDto> UpdateAsync(Guid id, CreateUpdateAdmissionFormDto input);
 	Task<AdmissionFormDto> CloneAsync(Guid id, CloneAdmissionFormDto input);

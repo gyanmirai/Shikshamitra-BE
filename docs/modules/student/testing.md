@@ -1,4 +1,4 @@
-﻿---
+---
 module: student
 domain: testing
 content_type: Reference
@@ -9,6 +9,23 @@ audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Configured Inquiry capture
+
+The configured-field helper and runtime integration suites cover Inquiry-only publication minima, full/split names, coherent generic/Father/Mother contacts, explicit parent selection, registered-binding ownership, legacy captured-role edits, preservation of unconfigured email, configured blank values, public source attribution and absence of staff-account provenance, scoped duplicate reference metadata, and rejection of forged sibling-role changes. Run the Inquiry-specific visibility-validator regressions as well: hidden-step questions cannot block capture, while visible required questions retain validation. Preserve the existing Registration validator path. These tests do not establish staging deployment or email delivery; normal Application/Contracts compilation and isolated test-only dependency compilation must be reported separately.
+
+## Finalization main-contact compatibility
+
+Run `AdmissionFamilyContactCapture_Tests`, `AdmissionFirstParentContactMapping_Tests`, the `First_parent_` integration scenarios and `Finalization_main_contact_preview` in the Application test project. These cover legacy Guardian handoff, explicit and malformed provenance guards, accepted parent-answer recovery, read-only preview and idempotent Student/Onboarding case reuse. Run `ShikshaMitraLocalization_Tests` in Domain tests and `Finalization_contact_errors_should_explain_the_required_review` in HTTP tests for readable errors. A focused diagnostic build does not establish full-checkout compilation, migration validation or deployed acceptance.
+
+## Resume admission
+
+`AdmissionJourneyResumeIntegration_Tests.cs` covers immutable closure evidence, exact stage and reference restoration, replay/second-closure rejection, legacy evidence and ambiguity, completed workflow finalization, tenant/stamp guards and part-paid Finance preservation. `AdmissionJourneyApiContract_Tests` asserts existing permissions at each entry point. `AdmissionJourneyResumePostgres_Tests` exercises two real serializable HTTP resume requests and one persisted resume event in the isolated `records_tests_*` database harness. Provider tests require `STUDENT_RECORDS_APPLICATION_POSTGRES`; an opt-in skip is not a passed concurrency check.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Journey_resume|FullyQualifiedName~Journey_end_"
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AdmissionJourneyApiContract|FullyQualifiedName~Admission_resume_postgres"
+```
 
 ## Optional onboarding fees
 
@@ -1226,3 +1243,22 @@ powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module 
 ```
 
 Focused tests do not establish browser, deployed permission, worker concurrency on PostgreSQL, or production acceptance.
+## Resume admission acceptance (29 October 2026)
+
+The focused `AdmissionJourneyResumeIntegration_Tests` run passes 16 cases. It covers immutable closure evidence, exact runtime restoration at Form/Assessment/Documents/Payment/Approval, same application number and form snapshot, repeated withdrawal/replay protection, tenant/stamp/closure guards, conservative legacy recovery, finalization-boundary restoration, slow closure cleanup and seat-capacity rollback/reacquisition. The Finance integration retains the same account/due/receipt with 400 paid and 600 outstanding; Resume does not collect or reprice money.
+
+`AdmissionJourneyApiContract_Tests` plus `Admission_resume_postgres` pass eight checks using a fresh disposable loopback `records_tests_resume_*` database. They cover authenticated View/Decide separation, anonymous denial, simultaneous commands producing one success and one safe conflict, idempotent replay and a concurrent Start resolving the existing application. This establishes provider concurrency behavior, not production migration or deployed acceptance. Test evidence is under `.artifacts/admission-resume/results/`.
+
+Local signed-in browser acceptance used synthetic Class 1 / CBSE / English application APP-002 (`3a2499dd-6b7a-ba04-baaf-e4fa16f58dc1`). Desktop 1440 x 1000 and mobile viewport 390 x 844 each completed End Journey -> Resume -> the same Entrance assessment stage (`3a2499dd-6b94-37b3-11be-6a70a6a4bddb`). Two End and two Resume events remain in history. Acknowledgement was disabled; no real student, payment, portal account or credential send was used. This is localhost acceptance, not staging or physical-device acceptance.
+
+The focused Host publish succeeds with isolated outputs and analyzers disabled; existing warnings remain. No schema migration is introduced. Dedicated refunded/full-paid, waitlist/expired-seat, expired-offer and Records-return browser scenarios were not executed; their existing owner rules remain authoritative. Local success does not establish those scenario-specific or production outcomes.
+
+## Inquiry inheritance regression checks
+
+Run Domain `AdmissionFormInheritanceComposer_Tests`, Application `AdmissionFormInheritance_Tests`, `AdmissionEffectiveFormStore_Tests`, `Inherited_registration_*`, `StudentRecordInheritedIdentity_Tests` and the retained-schema Records regression. HTTP `AdmissionFormInheritanceApiContract_Tests` checks endpoint contracts and existing authorization grants. Include existing form validation, prefill, application-start concurrency, correction, family ownership and Records suites when reviewing the integrated change.
+
+Required cases include source-specific labels/options/translations, semantic-identity deduplication, unrelated custom-code collisions, effective conditional rules, repeatable groups, requiredness strengthening, unsupported fields, readonly context, corrupt snapshot rejection, save/clear persistence, start retry and retained submission/Records evidence. Application tests verify persistence through their configured provider; they do not establish PostgreSQL production concurrency or browser behavior. Run the full Release solution build with the pinned SDK and isolated artifacts before handoff.
+
+Local verification on 30 October 2026 passed the full Release solution build with the pinned .NET 9 SDK, isolated artifacts and analyzers enabled: zero errors, 898 warnings. Fresh post-build selections passed 20 Domain composition tests, 49 Application inheritance/runtime/identity tests, one retained-schema Records integration test and four HTTP contract tests, with no skips. The earlier separate 58-case existing validation/prefill/contact regression selection also passed. The runtime integration selection verifies exact source labels, prefill, explicit clears, required effective fields, unknown-write denial, start idempotency and immutable schema persistence; the Records case retains inherited questions and submitted answers. These provider tests do not establish production PostgreSQL concurrency.
+
+The verified localhost API uses the same Release Application assembly as the post-build tests and the existing loopback launch configuration; migrations, seeders and delivery workers are disabled. Authenticated browser checks verify source discovery/preview and an isolated Registration draft's two approvals and requiredness surviving full reload. No active Offering or applicant journey was changed; see [frontend browser evidence](../../../../Shikshamitra-FE/docs/student/testing.md#inquiry-inheritance-checks). Student docs validate under PowerShell 7; Windows PowerShell 5.1 misreads the existing BOM-less UTF-8 pages and reports false mojibake. Local checks do not establish staging or production acceptance.

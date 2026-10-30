@@ -93,6 +93,33 @@ public class ApiProblemDetailsPipeline_Tests
 	}
 
 	[Theory]
+	[InlineData("Students:Family:MainContactInvalid", "saved parent or guardian")]
+	[InlineData("Students.Onboarding.FinalizationNotReady", "Main school contact valid")]
+	public async Task Finalization_contact_errors_should_explain_the_required_review(string code, string expectedDetail)
+	{
+		var assembly = typeof(ShikshaMitraDomainSharedModule).Assembly;
+		using var resource = assembly.GetManifestResourceStream(assembly.GetManifestResourceNames()
+			.Single(name => name.EndsWith("Localization.ShikshaMitra.en.json")))!;
+		using var messages = await JsonDocument.ParseAsync(resource);
+		var template = messages.RootElement.GetProperty("Texts").GetProperty(code).GetString()!;
+		var resolver = CreateResolver(new Dictionary<string, string> { [code] = template });
+		var http = new DefaultHttpContext();
+		http.Request.Path = "/api/student/enrollment/admissions/applications/00000000-0000-0000-0000-000000000001/finalize";
+		http.Response.Body = new MemoryStream();
+		var error = new BusinessException(code).WithData("Blockers", "Main school contact valid");
+		await new ApiProblemDetailsMiddleware(_ => throw error,
+			NullLogger<ApiProblemDetailsMiddleware>.Instance, resolver).InvokeAsync(http);
+		http.Response.StatusCode.ShouldBe(400);
+		http.Response.Body.Position = 0;
+		using var response = await JsonDocument.ParseAsync(http.Response.Body);
+		response.RootElement.GetProperty("errorCode").GetString().ShouldBe(code);
+		var detail = response.RootElement.GetProperty("detail").GetString();
+		detail.ShouldContain(expectedDetail);
+		detail.ShouldNotContain("One or more business rules were violated");
+		detail.ShouldNotContain("{Blockers}");
+	}
+
+	[Theory]
 	[InlineData(false, "010005", "different name")]
 	[InlineData(true, "010005", "different name")]
 	[InlineData(false, "010014", "Review")]

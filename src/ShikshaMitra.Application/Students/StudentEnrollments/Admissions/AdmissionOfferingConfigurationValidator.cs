@@ -239,9 +239,29 @@ public class AdmissionOfferingConfigurationValidator(
 			AdmissionFormPurpose.Registration, "Application Form", errors);
 		await ValidateWorkflowFormCompatibilityAsync(input.WorkflowDefinitionId, input.ApplicationFormDefinitionId, errors);
 		await ValidateEntryModeWorkflowCompatibilityAsync(input.WorkflowDefinitionId, input.Track, input.EntryMode, errors);
+		await ValidateInheritanceCompatibilityAsync(input, errors);
 		foreach (var error in await eligibilityValidator.ValidateAsync(
 			input.WorkflowDefinitionId, input.ApplicationFormDefinitionId, input.InquiryFormDefinitionId, input.EntryMode))
 			errors.Add(error);
+	}
+
+	private async Task ValidateInheritanceCompatibilityAsync(AdmissionOfferingWriteDto input, ICollection<AdmissionOfferingValidationError> errors)
+	{
+		if (!input.ApplicationFormDefinitionId.HasValue) return;
+		var registration = await formRepository.FindAsync(input.ApplicationFormDefinitionId.Value);
+		if (registration == null) return;
+		var policy = AdmissionFormInheritanceMetadataStore.ReadPolicy(registration);
+		if (policy?.Enabled != true) return;
+		if (input.InquiryFormDefinitionId.HasValue && policy.Sources.All(source => source.InquiryFormDefinitionId != input.InquiryFormDefinitionId.Value))
+			errors.Add(Error(AdmissionFormInheritanceErrorCodes.SourceNotApproved,
+				"Review and approve this Inquiry version in the workflow's Registration form before activating the Offering.", activationOnly: true));
+		if (input.EntryMode is AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both)
+		{
+			var fieldRepository = LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>();
+			if (!await fieldRepository.AnyAsync(field => field.FormDefinitionId == registration.Id && field.FieldType != AdmissionFormFieldType.Static))
+				errors.Add(Error(AdmissionFormInheritanceErrorCodes.IncompatibleSource,
+					"Direct Registration needs questions in its Registration form because no Inquiry supplies inherited questions.", activationOnly: true));
+		}
 	}
 
 	private async Task ValidateAssessmentProfilesAsync(AdmissionOfferingWriteDto input, ICollection<AdmissionOfferingValidationError> errors)

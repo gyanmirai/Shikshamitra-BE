@@ -316,7 +316,7 @@ public partial class RoomConflictService : DomainService
                 {
                     var firstOccupation = slotOccupations.First();
                     var timetableRoomMessage = await BuildTimetableRoomConflictMessageAsync(
-                        firstOccupation, date, context);
+                        firstOccupation, context);
 
                     conflicts.Add(new ConflictItem(
                         "roomAvailability",
@@ -341,21 +341,9 @@ public partial class RoomConflictService : DomainService
                 context);
             if (classOccupancy != null)
             {
-                var shiftName = string.IsNullOrWhiteSpace(classOccupancy.ShiftName)
-                    ? "configured class shift"
-                    : classOccupancy.ShiftName;
-
-                var message =
-                    $"Room is occupied by {classOccupancy.StandardName} Division {classOccupancy.DivisionName} " +
-                    $"from {classOccupancy.StartTime:hh\\:mm} to {classOccupancy.EndTime:hh\\:mm} based on institute setup shift '{shiftName}'.";
-
-                conflicts.Add(new ConflictItem(
-                    "classAvailability",
-                    "critical",
-                    message,
-                    "Choose another room or change the division room assignment / class shift in institute setup."
-                ));
-                result.ClassAvailability = new ValidationPass(false, message);
+                var conflict = CreateClassShiftConflict(classOccupancy);
+                conflicts.Add(conflict);
+                result.ClassAvailability = new ValidationPass(false, conflict.Message);
                 result.RoomAvailability = new ValidationPass(false, "Class shift assignment conflict.");
             }
         }
@@ -401,7 +389,6 @@ public partial class RoomConflictService : DomainService
 
     private async Task<string> BuildTimetableRoomConflictMessageAsync(
         TimetableConflictCandidate occupation,
-        DateTime date,
         RoomConflictReadContext? context)
     {
         var standard = context != null ? context.Standards.GetValueOrDefault(occupation.StandardId)
@@ -411,7 +398,7 @@ public partial class RoomConflictService : DomainService
         var classLabel = $"{standard?.Name ?? "Class"} Division {division?.Name ?? "-"}";
 
         return
-            $"Room is already allocated in the timetable for {classLabel} on {date:dddd} " +
+            $"Room is already allocated in the timetable for {classLabel} on {occupation.Day} " +
             $"{occupation.StartTime:HH\\:mm}-{occupation.EndTime:HH\\:mm}.";
     }
 

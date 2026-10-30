@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Academic.Timetable.RoomAvailability;
 
 public class RoomAvailabilityFilterDto
 {
     public DateTime Date { get; set; }
+    [EnumDataType(typeof(TimetableDayOfWeek))]
+    public TimetableDayOfWeek? WeeklyTimetableDay { get; set; }
     public TimeSpan? StartTime { get; set; }
     public TimeSpan? EndTime { get; set; }
     public Guid? LectureSlotId { get; set; }

@@ -1241,16 +1241,13 @@ public partial class TimetableAppService(
             return savedSubjects;
         }
 
-        var fallback = savedSubjects.FirstOrDefault();
         return selectedSubjectIds
             .Select(subjectId =>
                 savedSubjects.FirstOrDefault(subject => subject.SubjectId == subjectId) ??
                 new TimetableSlotSubject(
                     Guid.Empty,
                     slot.Id,
-                    subjectId,
-                    fallback?.TeacherId,
-                    fallback?.RoomId))
+                    subjectId))
             .ToList();
     }
 

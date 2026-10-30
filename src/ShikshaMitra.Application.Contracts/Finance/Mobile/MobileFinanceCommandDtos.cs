@@ -62,9 +62,13 @@ public class MobileRefundInput
 
 public class MobileRefundLineInput
 {
-    public Guid DueFeeId { get; set; }
+    public Guid? DueFeeId { get; set; }
     public Guid SourceAllocationId { get; set; }
     public string Amount { get; set; } = "0.00";
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? ChargeId { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? LateFeeDueFeeId { get; set; }
 }
 
 public class MobileAdjustmentInput

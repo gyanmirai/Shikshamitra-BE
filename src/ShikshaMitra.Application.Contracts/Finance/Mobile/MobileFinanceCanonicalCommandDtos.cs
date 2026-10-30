@@ -189,6 +189,7 @@ public sealed class MobileConcessionSubmittedDocument
 
 public sealed class MobileRefundEligibility
 {
+ public MobileRefundFormRules? FormRules { get; set; }
  public Guid? StudentId { get; set; }
  public Guid? FinanceFeeAccountId { get; set; }
  public Guid AcademicYearId { get; set; }
@@ -229,6 +230,8 @@ public sealed class MobileRefundEligibilityFeeHead
 
 public sealed class MobileRefundEligibilityMonth
 {
+ public string InstallmentLabel { get; set; } = string.Empty;
+ public DateOnly? PaymentDate { get; set; }
  public Guid? ChargeId { get; set; }
  public Guid? LateFeeDueFeeId { get; set; }
  public Guid? DueFeeId { get; set; }
@@ -246,6 +249,7 @@ public sealed class MobileRefundEligibilityMonth
 
 public sealed class MobileFeeRefundPreview
 {
+ public string PolicyCalculatedAmount { get; set; } = "0.00";
  public Guid? StudentFeeStructureId { get; set; }
  public Guid RefundPolicyId { get; set; }
  public Guid RefundPolicyVersionId { get; set; }
@@ -261,4 +265,14 @@ public sealed class MobileFeeRefundPreview
  public List<string> Reasons { get; set; } = [];
  public string Currency => "INR";
  public string PreviewFingerprint { get; set; } = string.Empty;
+}
+
+public sealed class MobileRefundFormRules
+{
+ public string AmountMode { get; set; } = string.Empty;
+ public bool CanEditLineAmounts { get; set; }
+ public bool IncludePaidCharges { get; set; }
+ public bool IncludePaidLateFee { get; set; }
+ public string? PercentageValue { get; set; }
+ public string? FixedAmount { get; set; }
 }

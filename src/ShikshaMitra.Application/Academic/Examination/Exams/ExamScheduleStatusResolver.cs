@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
 
@@ -7,6 +9,20 @@ internal static class ExamScheduleStatusResolver
 	private const string InstitutionTimeZoneId = "Asia/Kolkata";
 	private const string WindowsInstitutionTimeZoneId = "India Standard Time";
 	private static readonly TimeZoneInfo InstitutionTimeZone = GetInstitutionTimeZone();
+
+	// Stored ISO offsets are metadata: date + clock components describe the
+	// institution's civil time, rather than absolute UTC instants.
+	public static ExamScheduleWindow GetWindow(IEnumerable<(DateTime? ExamDate, DateTime? StartTime, DateTime? EndTime)> subjects)
+	{
+		var scheduled = subjects.Where(subject => subject.ExamDate.HasValue).ToList();
+		if (scheduled.Count == 0) return new(null, null, null);
+		return new(
+			scheduled.Min(subject => subject.ExamDate!.Value.Date),
+			scheduled.Min(subject => subject.ExamDate!.Value.Date.Add(subject.StartTime?.TimeOfDay ?? TimeSpan.Zero)),
+			scheduled.Max(subject => subject.EndTime.HasValue
+				? subject.ExamDate!.Value.Date.Add(subject.EndTime.Value.TimeOfDay)
+				: subject.ExamDate!.Value.Date.AddDays(1).AddTicks(-1)));
+	}
 
 	public static ExamStatus Resolve(
 		ExamStatus persistedStatus,
@@ -55,3 +71,5 @@ internal static class ExamScheduleStatusResolver
 		}
 	}
 }
+
+internal sealed record ExamScheduleWindow(DateTime? FirstDate, DateTime? StartAt, DateTime? EndAt);

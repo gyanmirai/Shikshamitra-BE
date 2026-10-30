@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students;
-using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.Standards;
@@ -93,7 +92,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				.WithData("DivisionId", filter.DivisionId);
 		}
 
-		// 3. Get ALL students in the division (approved students only)
+		// Current onboarding activates enrollment without setting the legacy admission approval flag.
 		var studentsQuery = await _studentRepository.GetQueryableAsync();
 		var students = await _asyncExecuter.ToListAsync(
 			studentsQuery.Where(s =>
@@ -101,11 +100,10 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				&& s.StandardId == filter.ClassId
 				&& s.AcademicMediumId == academicMediumId
 				&& s.Status == StudentLifeCycleStatusEnum.Enrolled
-				&& s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved
 				&& !s.IsDeleted
 			).OrderBy(student => student.Id).Select(student => new
 			{
-				student.Id, student.RollNo, student.GrNo, student.FirstName, student.MiddleName, student.LastName
+				student.Id, student.RollNo, student.GrNo, student.GrNumber, student.FirstName, student.MiddleName, student.LastName
 			})
 		);
 
@@ -141,7 +139,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				Id = submission?.Id.ToString() ?? Guid.Empty.ToString(),
 				StudentId = student.Id,
 				RollNumber = student.RollNo?.ToString() ?? string.Empty,
-				GrNumber = student.GrNo?.ToString() ?? string.Empty,
+				GrNumber = student.GrNumber ?? student.GrNo?.ToString() ?? string.Empty,
 				StudentName =
 					$"{student.FirstName} {student.MiddleName} {student.LastName}".Trim(),
 				Homework = assignment.Title,

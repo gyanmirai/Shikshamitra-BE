@@ -3,7 +3,7 @@ module: academic
 domain: read-contracts
 content_type: Reference
 status: active
-updated_on: 2026-10-28
+updated_on: 2026-10-30
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -30,6 +30,7 @@ Controllers delegate authorization and scoped reads to their application service
 | `POST /api/class-management/student-elective-assignments/selection-counts` | Body: `academicMediumId`, `classId`, `divisionIds`, `electiveGroupIds`; counts grouped by elective group, division and subject. |
 | `GET /api/class-management/student-elective-assignments` | Existing context/search plus `includeSelectableSubjects` (default true); pass false to omit per-student option arrays and use the shared `subjectOptions` response. Each record includes `isLocked`; response `isLocked` requires every student in the full context roster to have a locked selection, independently of search. |
 | `GET /api/academics/timetable/room-reservations/page` | `skipCount`, `maxResultCount`, `sorting`, optional created date, room, approval view, status group, search and JSON filters; page plus status counts. |
+| `GET /api/academics/timetable/room-availability` | Dated checks use `date`. Weekly planning sends `weeklyTimetableDay` (`Monday` through `Saturday`), period times and current class/division instead; it checks recurring timetable and class-shift allocations, excludes the current timetable, and ignores date-specific calendar closures, reservations and maintenance. Existing tenant filters, metadata filters and `includeOccupied` apply to both modes. |
 | `GET /api/academics/timetable/room-reservations/summary` | Existing reservation context; status counts for badges without loading reservation details. |
 | `GET /api/academics/timetable/room-availability/audit-logs/page` | Paging/sorting, optional room, date range, action and search; selected audit rows with their complete snapshots and inline differences. |
 | `GET /api/academics/student-academic-360` | Year, board, education medium, optional class/division, search, smart filter and paging; page items plus the existing all-selection summary. |

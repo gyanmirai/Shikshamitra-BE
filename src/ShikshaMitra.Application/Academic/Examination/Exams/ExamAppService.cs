@@ -513,8 +513,9 @@ public partial class ExamAppService(
 				PrimaryTeacherCanAccessExam(row.exam, primaryTeacherSubjects))
 			.ToList();
 
+		var utcNow = Clock.Now;
 		return rows
-			.Where(row => GetEffectiveScheduleStatus(row.exam) != ExamStatus.Completed)
+			.Where(row => GetEffectiveScheduleStatus(row.exam, utcNow) != ExamStatus.Completed)
 			.SelectMany(row => row.exam.ExamSubjects
 				.Where(subject =>
 					schedulableSubjectIds.Contains(subject.SubjectId) &&
@@ -534,7 +535,7 @@ public partial class ExamAppService(
 					EndTime = subject.EndTime,
 					TotalMarks = subject.TotalMarks,
 					PassingMarks = subject.PassingMarks,
-					Status = GetEffectiveScheduleStatus(row.exam)
+					Status = GetEffectiveScheduleStatus(row.exam, utcNow)
 				}))
 			.OrderBy(row => row.ExamDate)
 			.ThenBy(row => row.StartTime)
@@ -652,7 +653,7 @@ public partial class ExamAppService(
 			);
 		}
 
-		var utcNow = DateTime.UtcNow;
+		var utcNow = Clock.Now;
 		var institutionNow = ExamScheduleStatusResolver.GetInstitutionNow(utcNow);
 		var todayInInstitution = DateTime.SpecifyKind(institutionNow.Date, DateTimeKind.Utc);
 		var currentSecond = institutionNow.Hour * 3600 + institutionNow.Minute * 60 + institutionNow.Second;
@@ -1498,7 +1499,7 @@ public partial class ExamAppService(
 		}
 	}
 
-	private ExamStatus GetEffectiveScheduleStatus(Exam exam)
+	private static ExamStatus GetEffectiveScheduleStatus(Exam exam, DateTime utcNow)
 	{
 		var start = GetExamStartDateTime(exam);
 		var end = GetExamFinalEndAt(exam);
@@ -1506,18 +1507,13 @@ public partial class ExamAppService(
 		// Exam schedule fields contain institution-local wall-clock values. Resolve
 		// them against an explicit UTC clock so an Azure/UTC host cannot lag IST by
 		// 5.5 hours and leave an active exam in the Published tab.
-		return ExamScheduleStatusResolver.Resolve(exam.Status, start, end, DateTime.UtcNow);
+		return ExamScheduleStatusResolver.Resolve(exam.Status, start, end, utcNow);
 	}
 
 	private static DateTime? GetExamStartDateTime(Exam exam)
 	{
-		var starts = exam.ExamSubjects
-			.Where(subject => subject.ExamDate.HasValue)
-			.Select(subject => subject.ExamDate!.Value.Date.Add(
-				subject.StartTime?.TimeOfDay ?? TimeSpan.Zero))
-			.ToList();
-
-		return starts.Count == 0 ? null : starts.Min();
+		return ExamScheduleStatusResolver.GetWindow(exam.ExamSubjects.Select(subject =>
+			(subject.ExamDate, subject.StartTime, subject.EndTime))).StartAt;
 	}
 
 	private static bool HasExamScheduleEnded(Exam exam, DateTime currentAt)
@@ -1538,14 +1534,8 @@ public partial class ExamAppService(
 
 	private static ExamScheduleWindow GetExamScheduleWindow(IEnumerable<ExamListSubjectSchedule> subjects)
 	{
-		var scheduled = subjects.Where(subject => subject.ExamDate.HasValue).ToList();
-		if (scheduled.Count == 0) return new ExamScheduleWindow(null, null, null);
-		return new ExamScheduleWindow(
-			scheduled.Min(subject => subject.ExamDate!.Value.Date),
-			scheduled.Min(subject => subject.ExamDate!.Value.Date.Add(subject.StartTime?.TimeOfDay ?? TimeSpan.Zero)),
-			scheduled.Max(subject => subject.EndTime.HasValue
-				? subject.ExamDate!.Value.Date.Add(subject.EndTime.Value.TimeOfDay)
-				: subject.ExamDate!.Value.Date.AddDays(1).AddTicks(-1)));
+		return ExamScheduleStatusResolver.GetWindow(subjects.Select(subject =>
+			(subject.ExamDate, subject.StartTime, subject.EndTime)));
 	}
 
 	private static bool IsExamInDateRange(
@@ -1572,18 +1562,11 @@ public partial class ExamAppService(
 		ExamStatus Status, List<Guid> DivisionIds, List<ExamListSubjectSchedule> Subjects);
 	private sealed record ExamListSubjectSchedule(Guid SubjectId, DateTime? ExamDate, DateTime? StartTime, DateTime? EndTime);
 	private sealed record ExamListBoundaryCandidate(Guid Id, ExamStatus Status, List<ExamListSubjectSchedule> Subjects);
-	private sealed record ExamScheduleWindow(DateTime? FirstDate, DateTime? StartAt, DateTime? EndAt);
 
 	private static DateTime? GetExamFinalEndAt(Exam exam)
 	{
-		var endTimes = exam.ExamSubjects
-			.Where(subject => subject.ExamDate.HasValue)
-			.Select(subject => subject.EndTime.HasValue
-				? subject.ExamDate!.Value.Date.Add(subject.EndTime!.Value.TimeOfDay)
-				: subject.ExamDate!.Value.Date.AddDays(1).AddTicks(-1))
-			.ToList();
-
-		return endTimes.Count == 0 ? null : endTimes.Max();
+		return ExamScheduleStatusResolver.GetWindow(exam.ExamSubjects.Select(subject =>
+			(subject.ExamDate, subject.StartTime, subject.EndTime))).EndAt;
 	}
 
 	private static bool HasCompleteSchedule(ExamSubject subject)

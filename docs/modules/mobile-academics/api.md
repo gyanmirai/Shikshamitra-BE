@@ -63,6 +63,22 @@ The subject chapters endpoint additionally returns `data.summary` with `totalCha
 
 ## Exam prefix: `/api/mobile/v1/exams`
 
+`examDate` is a school calendar date. `startTime` and `endTime` encode Asia/Kolkata
+wall-clock components, including when the ISO wrapper ends in `+00:00`.
+`2026-10-30T14:10:00+00:00` therefore means **2:10 PM school time**; clients must
+not convert it from UTC into the device timezone. Combine the clock components
+with `examDate`, not with the date portion of the time field.
+
+List, detail and dashboard projections share the web's effective schedule rule:
+Published maps to `upcoming`; the interval from the first paper's start through
+the final paper's end (inclusive) maps to `ongoing`; a later time maps to
+`completed`. Gaps between papers remain ongoing. Lifecycle rules still apply;
+`resultStatus` independently describes result publication. Missing start/end
+clocks retain the web defaults of start/end of the school day. Exams without a
+dated assigned paper are not listed. Status uses the complete exam window;
+returned papers remain restricted to the student's assigned subjects. Routes and
+response fields are unchanged; no migration or stored-time conversion is needed.
+
 | Method | Suffix |
 |---|---|
 | GET | root |

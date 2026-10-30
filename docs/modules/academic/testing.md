@@ -74,6 +74,15 @@ Elective late-admission regression: `StudentElectiveAssignmentAppService_Tests.N
 dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~StudentElectiveAssignmentAppService_Tests|FullyQualifiedName~StudentElectiveReadPerformance_Tests" --artifacts-path .artifacts/elective-lock-tests -p:RunAnalyzers=false
 ```
 
+## Homework and assignment student rosters
+
+`FeedbackStudentRoster_Tests` exercises both feedback services against disposable SQLite data.
+It reads a task before and after an active student with a pending legacy approval flag is added, checks the alphanumeric GR number and missing-submission summary, and excludes inactive, departed, pending-admission, deleted, other-tenant, other-medium, other-class and other-division students.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter FullyQualifiedName~FeedbackStudentRoster_Tests -p:RunAnalyzers=false -p:UseSharedCompilation=false -m:1
+```
+
 ## Concurrency and provider limits
 
 The normal API fixture shares one in-memory SQLite connection.

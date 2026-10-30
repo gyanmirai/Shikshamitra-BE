@@ -36,6 +36,11 @@ public partial class FeeRefundAppService : IFamilyRefundService
 			_ => Array.Empty<string>()
 		};
 		if (allowed.Length == 0 || input.Lines.Count is 0 or > 100 || input.PaymentDetails == null ||
+			input.OriginalReceiptId == Guid.Empty ||
+			input.Lines.Any(x => x.SourceAllocationId == Guid.Empty ||
+				(x.DueFeeId.HasValue ? 1 : 0) + (x.ChargeId.HasValue ? 1 : 0) + (x.LateFeeDueFeeId.HasValue ? 1 : 0) != 1 ||
+				x.DueFeeId == Guid.Empty || x.ChargeId == Guid.Empty || x.LateFeeDueFeeId == Guid.Empty) ||
+			input.Lines.Select(x => x.SourceAllocationId).Distinct().Count() != input.Lines.Count ||
 			input.PaymentDetails.Keys.Any(x => !allowed.Contains(x, StringComparer.Ordinal)) ||
 			allowed.Any(x => !input.PaymentDetails.TryGetValue(x, out var value) || string.IsNullOrWhiteSpace(value) || value.Length > 200) ||
 			string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Length > 1000)
@@ -45,17 +50,19 @@ public partial class FeeRefundAppService : IFamilyRefundService
 			RefundMethod = input.RefundMethod, Reason = input.Reason,
 			PaymentDetails = input.PaymentDetails.ToDictionary(x => x.Key, x => (object?)x.Value),
 			Lines = input.Lines.Select(x => new CreateFeeRefundLineDto { DueFeeId = x.DueFeeId,
+				ChargeId = x.ChargeId, LateFeeDueFeeId = x.LateFeeDueFeeId,
 				SourceAllocationId = x.SourceAllocationId, Amount = MobileFinanceCommandRules.ParseMoney(x.Amount) }).ToList() };
 	}
 
 	public virtual async Task<MobileFeeRefundPreview> FamilyRefundPreviewAsync(Guid child, Guid year, MobileRefundInput input)
 	{
 		await RequireFamilyRefundAsync(child, year);
-		var prepared = await PrepareAsync(FamilyRefundInput(child, year, input), familyAuthorized: true);
+		var prepared = await PrepareFamilyRefundAsync(child, year, input);
 		return new MobileFeeRefundPreview { PreviewFingerprint=prepared.Hash,StudentFeeStructureId=prepared.AssignmentId,
    RefundPolicyId=prepared.PolicyId,RefundPolicyVersionId=prepared.PolicyVersionId,RefundPolicyName=prepared.Policy.PolicyName,
    SettledPaidAmount=MobileFinanceProjection.Money(prepared.Calculation.SettledPaidAmount),PriorProcessedRefund=MobileFinanceProjection.Money(prepared.Calculation.PriorProcessedRefund),
-   ActiveReservation=MobileFinanceProjection.Money(prepared.Calculation.ActiveReservation),RequestedAmount=MobileFinanceProjection.Money(input.Lines.Sum(x=>MobileFinanceCommandRules.ParseMoney(x.Amount))),
+   ActiveReservation=MobileFinanceProjection.Money(prepared.Calculation.ActiveReservation),RequestedAmount=MobileFinanceProjection.Money(prepared.Lines.Sum(x=>x.Amount)),
+   PolicyCalculatedAmount=MobileFinanceProjection.Money(Math.Min(prepared.Calculation.RawRefund,prepared.Calculation.RemainingEligible)),
    DeductionAmount=MobileFinanceProjection.Money(prepared.Calculation.DeductionAmount),CapAdjustment=MobileFinanceProjection.Money(prepared.Calculation.CapAdjustment),
    MaximumAllowedAmount=MobileFinanceProjection.Money(prepared.Calculation.FinalRefund),IsAllowed=true };
 	}
@@ -78,7 +85,7 @@ public partial class FeeRefundAppService : IFamilyRefundService
 			return MobileFinanceReadService.RefundDto(saved,saved.Reason);
 		}
 		var create = FamilyRefundInput(child, year, input);
-		var prepared = await PrepareAsync(create, familyAuthorized: true);
+		var prepared = await PrepareFamilyRefundAsync(child, year, input);
 		MobileFinanceCommandRules.RequireFingerprint(prepared.Hash, input.PreviewFingerprint);
 		// Existing refund request keys are tenant-wide; namespace family keys by actor to prevent cross-user replay.
 		var domainKey = "family:" + MobileFinanceCommandRules.Hash(new { actor = currentUser.GetId(), input.IdempotencyKey });
@@ -92,109 +99,12 @@ public partial class FeeRefundAppService : IFamilyRefundService
 		return MobileFinanceReadService.RefundDto(request,request.Reason);
 	}
 
-    public virtual async Task<MobileRefundEligibility> FamilyRefundEligibilityAsync(Guid child, Guid year)
-    {
-        await RequireFamilyRefundAsync(child, year);
-        var result = await FamilyEligibilityCoreAsync(child, year);
-        return MobileFinanceCanonicalCommandProjection.Map(result);
-    }
-    private async Task<RefundEligibilityDto> FamilyEligibilityCoreAsync(Guid child, Guid academicYearId)
-    {
-        Guid? studentId = child; Guid? financeFeeAccountId = null; Guid? originalReceiptId = null;
-        if (originalReceiptId.HasValue)
-        {
-            var sourceReceipt = await feePaymentReceiptRepository.FindAsync(originalReceiptId.Value)
-                ?? throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
-            if (sourceReceipt.StudentId != child) throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
-            if (sourceReceipt.AcademicYearId != academicYearId ||
-                financeFeeAccountId.HasValue && sourceReceipt.FinanceFeeAccountId != financeFeeAccountId ||
-                !sourceReceipt.FinanceFeeAccountId.HasValue && studentId.HasValue && sourceReceipt.StudentId != studentId)
-                throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
-            financeFeeAccountId = sourceReceipt.FinanceFeeAccountId;
-            studentId ??= sourceReceipt.StudentId;
-        }
-        var payer = await RequirePolicyEvidenceAsync(studentId, academicYearId, financeFeeAccountId, familyAuthorized: true);
-        var version = payer.Version;
-        var policy = payer.Policy;
-        var dues = await dueFeeRepository.GetListAsync(x => x.PaidAmount > 0 && (payer.FinanceFeeAccountId.HasValue
-            ? x.FinanceFeeAccountId == payer.FinanceFeeAccountId
-            : x.StudentId == payer.StudentId && x.StudentFeeStructureId == payer.AssignmentId));
-        if (policy.FeeHeadScope == RefundFeeHeadScope.SelectedFeeHeads)
-        {
-            var hasPaidDues = dues.Count > 0;
-            dues = dues.Where(x => policy.ApplicableFeeHeadIds.Contains(x.FeeHeadId)).ToList();
-            if (hasPaidDues && dues.Count == 0)
-                throw new BusinessException(FeeRefundErrorCodes.FeeHeadNotEligible);
-        }
-        var dueIds = dues.Select(x => x.Id).ToList();
-        var collections = await collectionRepository.GetListAsync(x => (payer.FinanceFeeAccountId.HasValue
-            ? x.FinanceFeeAccountId == payer.FinanceFeeAccountId : x.StudentId == payer.StudentId) &&
-            x.AcademicYearId == academicYearId && x.Status != FeeCollectionStatus.Reversed &&
-            x.Status != FeeCollectionStatus.InReconciliation);
-        var collectionIds = collections.Select(x => x.Id).ToList();
-        var receipts = await feePaymentReceiptRepository.GetListAsync(x => x.StudentId == child && x.AcademicYearId == academicYearId && collectionIds.Contains(x.FeeCollectionTransactionId) &&
-            (!originalReceiptId.HasValue || x.Id == originalReceiptId.Value) &&
-            x.ReceiptScope == FeeReceiptScope.Fee && (x.ReceiptKind == FeeReceiptKind.FinalFee ||
-            (x.ReceiptKind == FeeReceiptKind.ProvisionalFee && x.VerificationStatus == FeeReceiptVerificationStatus.Verified)));
-        var receiptByCollection = receipts.GroupBy(x => x.FeeCollectionTransactionId)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.ReceiptKind == FeeReceiptKind.FinalFee).ThenByDescending(x => x.CreationTime).First());
-        var eligibleCollectionIds = receiptByCollection.Keys.ToList();
-        var allocations = await allocationRepository.GetListAsync(x => eligibleCollectionIds.Contains(x.FeeRecordMetadataId) && dueIds.Contains(x.DueFeeId));
-        var allocationIds = allocations.Select(x => x.Id).ToList();
-        var committed = await feeRefundRepository.GetCommittedAllocationAmountsAsync(allocationIds);
-        var dueRemaining = dues.ToDictionary(x => x.Id, x => x.RefundableBalance);
-        var heads = (await feeHeadRepository.GetListAsync(x => dues.Select(d => d.FeeHeadId).Contains(x.Id))).ToDictionary(x => x.Id, x => x.Name);
-        var dueMap = dues.ToDictionary(x => x.Id);
-        var rows = new List<RefundEligibilityMonthDto>();
-        foreach (var allocation in allocations.OrderBy(x => receiptByCollection[x.FeeRecordMetadataId].ReceiptDate).ThenBy(x => x.Id))
-        {
-            var receipt = receiptByCollection[allocation.FeeRecordMetadataId];
-            var available = Math.Min(dueRemaining.GetValueOrDefault(allocation.DueFeeId),
-                Math.Max(0m, Convert.ToDecimal(allocation.Amount) - committed.GetValueOrDefault(allocation.Id)));
-            if (available <= 0) continue;
-            dueRemaining[allocation.DueFeeId] -= available;
-            var due = dueMap[allocation.DueFeeId];
-            rows.Add(new RefundEligibilityMonthDto
-            {
-                DueFeeId = due.Id, SourceAllocationId = allocation.Id, SourceReceiptId = receipt.Id,
-                ReceiptNumber = receipt.ReceiptNumber, Month = due.Month, Year = due.Year,
-                Total = due.OriginalAmount, Paid = Convert.ToDecimal(allocation.Amount),
-                Refunded = committed.GetValueOrDefault(allocation.Id), Refundable = available
-            });
-        }
-        var grouped = rows.GroupBy(x => dueMap[x.DueFeeId!.Value].FeeHeadId).Select(g => new RefundEligibilityFeeHeadDto
-        {
-            FeeHeadId = g.Key, FeeHeadName = heads.GetValueOrDefault(g.Key, "Fee head"),
-            TotalPaid = g.Sum(x => x.Paid), TotalRefunded = g.Sum(x => x.Refunded),
-            TotalRefundable = g.Sum(x => x.Refundable), Months = g.ToList()
-        }).ToList();
-        var totalPaid = allocations.Sum(x => Convert.ToDecimal(x.Amount));
-        var totalCommitted = allocationIds.Sum(x => committed.GetValueOrDefault(x));
-        var studentYearCommitted = await GetPayerYearCommittedAsync(payer, academicYearId);
-        var refundableFromAllocations = grouped.Sum(x => x.TotalRefundable);
-        // Eligibility is a read of the current balance, not a request for a manual amount.
-        // The manual calculator deliberately rejects zero requested amounts on write paths.
-        var totalRefundable = refundableFromAllocations > 0m
-            ? refundPolicyCalculationService.Calculate(policy, new RefundPolicyCalculationInput(
-                totalPaid, totalCommitted, 0m, studentYearCommitted,
-                policy.AmountMode == RefundAmountMode.ManualUpToEligible ? refundableFromAllocations : null)).FinalRefund
-            : 0m;
-        return new RefundEligibilityDto
-        {
-            StudentId = payer.StudentId, FinanceFeeAccountId = payer.FinanceFeeAccountId,
-            AcademicYearId = academicYearId, StudentFeeStructureId = payer.AssignmentId,
-            RefundPolicyId = version.PolicyId, RefundPolicyVersionId = version.Id, RefundPolicyName = policy.PolicyName,
-            AllowedPayoutMethods = policy.AllowedPayoutMethods.Select(ToPayoutMethodLabel).ToList(),
-            ProcessingTargetDays = policy.ProcessingTargetDays, AllowPartialRefund = policy.AllowPartialRefund, TotalPaid = totalPaid,
-            TotalRefunded = totalCommitted, TotalRefundable = totalRefundable, FeeHeads = grouped,
-            Receipts = rows.GroupBy(x => x.SourceReceiptId).Select(g =>
-            {
-                var receipt = receipts.Single(x => x.Id == g.Key);
-                return new RefundEligibleReceiptDto { ReceiptId = receipt.Id, ReceiptNumber = receipt.ReceiptNumber,
-                    ReceiptDate = receipt.ReceiptDate, PaidAmount = g.Sum(x => x.Paid), RefundableAmount = g.Sum(x => x.Refundable) };
-            }).OrderByDescending(x => x.ReceiptDate).ToList()
-        };
-    }
-
-
+	private async Task<PreparedRefund> PrepareFamilyRefundAsync(Guid child, Guid year, MobileRefundInput input)
+	{
+		var prepared = await PrepareAsync(FamilyRefundInput(child, year, input), familyAuthorized: true);
+		if (!prepared.Policy.AllowPartialRefund && prepared.Policy.AmountMode == RefundAmountMode.ManualUpToEligible &&
+			prepared.Lines.Any(x => x.Amount != x.SettledPaidAmount))
+			throw new BusinessException(FeeRefundErrorCodes.RefundExceedsPolicyAmount);
+		return prepared;
+	}
 }

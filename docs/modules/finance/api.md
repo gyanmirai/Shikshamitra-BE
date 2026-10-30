@@ -375,6 +375,8 @@ Family monetary responses identify `currency: "INR"` and encode amounts as decim
 
 Root: `/api/mobile/v1/finance/students/{studentId}`. Reads return the standard
 `{success:true,data:...}` envelope; PDF routes return `application/pdf`.
+
+Family refund eligibility (`refunds/eligibility`) adds `formRules` from the pinned assigned policy: amount mode, manual-edit capability, paid-charge/late-fee inclusion and optional configured rate/amount. Eligible rows carry their original allocation/payment identifiers, installment label and payment date. Parent refund lines accept exactly one of `dueFeeId`, `chargeId` or `lateFeeDueFeeId`. Each preview/create remains bound to one original payment and at most 100 allocations. Full-only requests require every eligible source from that payment; manual full-only requests cannot reduce individual amounts. Decimal-string money, guardian/tenant/child/year checks, existing permissions, preview fingerprints and durable idempotency remain in force. New null source identifiers are omitted from serialization to preserve existing fee-only command hashes. Preview requested/policy-calculated amounts are prepared on the server; submission creates a request for staff review and does not execute a payout. Staff endpoints and shared policy calculations are unchanged.
 `academicYearId` is required except for `context`. Charges use `page=1&pageSize=20` (maximum 100), returning `currentPage` and `pageSize`.
 Payment, receipt and request GETs use `skipCount=0&maxResultCount=20` (maximum 100) and return `{items,totalCount,currency}`; concession request pages additionally return `currentPage,pageSize,totalPages`. Money is an INR
 fixed two-decimal string; due dates are date-only, activity timestamps UTC instants.

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Validation;
+using Volo.Abp.Users;
 using static ShikshaMitra.Dashboard.DashboardSummaryMutator;
 using static ShikshaMitra.Dashboard.DashboardTemplates;
 using static ShikshaMitra.Dashboard.DashboardWidgetCatalog;
@@ -19,15 +20,22 @@ namespace ShikshaMitra.Dashboard;
 public class DashboardSummaryReader(
 	DashboardSummarySlicePipeline slicePipeline,
 	IPermissionChecker permissionChecker,
-	ILogger<DashboardSummaryReader> logger)
+	ILogger<DashboardSummaryReader> logger,
+	DashboardFocusReader focusReader,
+	DashboardPersonalFocusReader personalReader,
+	ICurrentUser currentUser)
 	: ITransientDependency
 {
 	public async Task<DashboardSummaryDto> GetSummaryAsync(DashboardSummaryRequestDto? input, DateTime now)
 	{
 		input ??= new DashboardSummaryRequestDto();
 		var template = NormalizeTemplate(input.DashboardTemplate);
+		DashboardPresentationPolicy.Validate(template, input.PresentationRole);
 		var range = NormalizeDateRange(input.From, input.To, now.Date);
+		if (template == StudentParent)
+			return await personalReader.ReadAsync(input, range, now);
 		var summary = BuildBaseSummary(template, input.AcademicYearId, range, now);
+		summary.PresentationRole = await focusReader.ResolvePresentationAsync(template, input.PresentationRole, currentUser.Roles);
 		var sliceContext = new DashboardSummarySliceContext(summary, range);
 
 		foreach (var registration in slicePipeline.Registrations)
@@ -36,6 +44,7 @@ public class DashboardSummaryReader(
 		}
 
 		await FilterByPermissionsAsync(summary);
+		await focusReader.ApplyAsync(summary);
 		ApplySemanticMetadata(summary);
 
 		return summary;
@@ -107,11 +116,11 @@ public class DashboardSummaryReader(
 		var from = ParseDateOrDefault(fromValue, defaultFrom, nameof(DashboardSummaryRequestDto.From));
 		var to = ParseDateOrDefault(toValue, now, nameof(DashboardSummaryRequestDto.To));
 
-		if (from > to)
+		if (from > to || (to - from).TotalDays > 366)
 		{
 			throw new AbpValidationException(
 				"Dashboard date range is invalid.",
-				[new ValidationResult("From must be on or before To.", [nameof(DashboardSummaryRequestDto.From), nameof(DashboardSummaryRequestDto.To)])]);
+				[new ValidationResult("Supply an ordered date range of at most 367 days.", [nameof(DashboardSummaryRequestDto.From), nameof(DashboardSummaryRequestDto.To)])]);
 		}
 
 		return new DashboardDateRangeDto
@@ -162,47 +171,47 @@ public class DashboardSummaryReader(
 				Add(summary.KpiCards, Widget("leadership-total-students", "Total Students", "Review", "Open scoped student records", "primary"));
 				Add(summary.KpiCards, Widget("leadership-fee-collection", "Fee Collection", "Open", "Review collections in Finance", "warning"));
 				Add(summary.KpiCards, Widget("leadership-compliance", "Compliance Readiness", "Review", "UDISE, APAAR, CBSE and safety readiness", "warning"));
-				Add(summary.ActionItems, Widget("leadership-admission-approvals", "Admission approvals", null, "Waiting for leadership review", "info", count: 0));
-				Add(summary.ActionItems, Widget("leadership-payroll-review", "Payroll review", null, "Open payroll readiness before lock", "warning", count: 0));
+				Add(summary.ActionItems, Widget("leadership-admission-approvals", "Admission approvals", null, "Open the admissions review workflow.", "info"));
+				Add(summary.ActionItems, Widget("leadership-payroll-review", "Payroll review", null, "Open payroll readiness before lock.", "info"));
 				Add(summary.RiskAlerts, Widget("leadership-certificate-risk", "Safety certificate readiness", null, "Review certificate expiry and disclosure gaps.", "warning"));
-				Add(summary.ModuleSnapshots, Widget("leadership-academic-health", "Academic Health", "Open", "Academic readiness and intervention dashboard", "success", health: "good"));
-				Add(summary.ModuleSnapshots, Widget("leadership-transport-health", "Transport Health", "Open", "Route and safety exception dashboard", "warning", health: "attention"));
+				Add(summary.ModuleSnapshots, Widget("leadership-academic-health", "Academic Health", "Open", "Academic readiness and intervention dashboard", "info"));
+				Add(summary.ModuleSnapshots, Widget("leadership-transport-health", "Transport Health", "Open", "Route and safety exception dashboard", "info"));
 				break;
 			case PrincipalAdmin:
 				Add(summary.KpiCards, Widget("principal-teacher-attendance", "Teacher Attendance", "Open", "Review staff attendance tracking", "info"));
 				Add(summary.KpiCards, Widget("principal-curriculum", "Curriculum Completion", "Review", "Open chapter progress and syllabus updates", "warning"));
-				Add(summary.KpiCards, Widget("principal-pending-admissions", "Pending Admissions", "Review", "Admissions waiting for action", "secondary"));
-				Add(summary.ActionItems, Widget("principal-leave-approvals", "Staff leave approvals", null, "Requests awaiting admin action", "warning", count: 0));
-				Add(summary.ActionItems, Widget("principal-transport-applications", "Transport applications", null, "Route allocation workflow is available for review", "info", count: 0));
+				Add(summary.KpiCards, Widget("principal-pending-admissions", "Admissions", "Review", "Open the admissions workflow.", "info"));
+				Add(summary.ActionItems, Widget("principal-leave-approvals", "Staff leave approvals", null, "Open staff leave requests and approvals.", "info"));
+				Add(summary.ActionItems, Widget("principal-transport-applications", "Transport applications", null, "Open the route allocation workflow.", "info"));
 				Add(summary.RiskAlerts, Widget("principal-weak-classes", "Weak class performance", null, "Open Academic Dashboard for intervention planning.", "warning"));
-				Add(summary.ModuleSnapshots, Widget("principal-academic-dashboard", "Academic Dashboard", "Open", "Class performance and syllabus risk", "primary", health: "attention"));
-				Add(summary.ModuleSnapshots, Widget("principal-security-dashboard", "Safety Exceptions", "Open", "Open security dashboard for visitor and gate-pass follow-up", "warning", health: "attention"));
+				Add(summary.ModuleSnapshots, Widget("principal-academic-dashboard", "Academic Dashboard", "Open", "Class performance and syllabus risk", "info"));
+				Add(summary.ModuleSnapshots, Widget("principal-security-dashboard", "Safety Exceptions", "Open", "Open security dashboard for visitor and gate-pass follow-up", "info"));
 				break;
 			case Teacher:
-				Add(summary.KpiCards, Widget("teacher-classes", "Today's Classes", "Open", "Use timetable for assigned classes", "primary"));
+				Add(summary.KpiCards, Widget("teacher-classes", "Teacher timetable", "Open", "Use timetable for assigned classes", "info"));
 				Add(summary.KpiCards, Widget("teacher-homework", "Pending Homework Review", "Review", "Homework and assignment feedback queue", "warning"));
 				Add(summary.KpiCards, Widget("teacher-exam-evaluation", "Pending Exam Evaluation", "Review", "Marks entry and evaluation tasks", "info"));
-				Add(summary.ActionItems, Widget("teacher-attendance", "Take class attendance", null, "Open attendance marking for assigned classes", "error", count: 0));
+				Add(summary.ActionItems, Widget("teacher-attendance", "Take class attendance", null, "Open attendance marking for assigned classes.", "info"));
 				Add(summary.RiskAlerts, Widget("teacher-student-risk", "Students needing follow-up", null, "Use scoped student records for attendance or academic risk.", "warning"));
-				Add(summary.ModuleSnapshots, Widget("teacher-class-performance", "Class Performance", "Open", "Academic dashboard and class trends", "success", health: "good"));
+				Add(summary.ModuleSnapshots, Widget("teacher-class-performance", "Class Performance", "Open", "Academic dashboard and class trends", "info"));
 				break;
 			case FinanceHr:
-				Add(summary.KpiCards, Widget("finance-collection", "Today Collection", "Open", "Collections and receipts", "success"));
+				Add(summary.KpiCards, Widget("finance-collection", "Fee collection", "Open", "Open collections and receipts.", "info"));
 				Add(summary.KpiCards, Widget("finance-dues", "Outstanding Dues", "Review", "Pending fee follow-up", "warning"));
 				Add(summary.KpiCards, Widget("hr-payroll-readiness", "Payroll Readiness", "Review", "Payroll blockers and readiness", "info"));
 				Add(summary.KpiCards, Widget("hr-staff-attendance", "Staff Attendance", "Open", "Attendance tracking and exceptions", "primary"));
-				Add(summary.ActionItems, Widget("finance-reconciliation", "Pending fee reconciliation", null, "Bank entries need matching", "warning", count: 0));
-				Add(summary.ActionItems, Widget("hr-leave-approvals", "Leave approvals", null, "Requests awaiting action", "info", count: 0));
+				Add(summary.ActionItems, Widget("finance-reconciliation", "Fee reconciliation", null, "Open bank and receipt reconciliation.", "info"));
+				Add(summary.ActionItems, Widget("hr-leave-approvals", "Leave approvals", null, "Open staff leave requests and approvals.", "info"));
 				Add(summary.RiskAlerts, Widget("finance-concession-impact", "Concession impact review", null, "Review concessions before month close.", "warning"));
-				Add(summary.ModuleSnapshots, Widget("finance-dashboard", "Finance Dashboard", "Open", "Collections, dues and concessions", "success", health: "good"));
-				Add(summary.ModuleSnapshots, Widget("hr-dashboard", "HR Dashboard", "Open", "Attendance, leave and payroll", "primary", health: "attention"));
+				Add(summary.ModuleSnapshots, Widget("finance-dashboard", "Finance Dashboard", "Open", "Collections, dues and concessions", "info"));
+				Add(summary.ModuleSnapshots, Widget("hr-dashboard", "HR Dashboard", "Open", "Attendance, leave and payroll", "info"));
 				break;
 			case StudentParent:
 				Add(summary.KpiCards, Widget("student-attendance", "Attendance", "View", "Open student dashboard for personal attendance.", "success"));
 				Add(summary.KpiCards, Widget("student-assignments", "Assignments Due", "View", "Open homework and learning tasks", "warning"));
 				Add(summary.KpiCards, Widget("student-fee-status", "Fee Status", "Review", "Open fee collection for dues", "info"));
-				Add(summary.ActionItems, Widget("student-document-update", "Document update required", null, "Student identity record needs review", "warning", count: 0));
-				Add(summary.ModuleSnapshots, Widget("student-academic-summary", "Academic Summary", "View", "Homework, exams and progress", "primary", health: "good"));
+				Add(summary.ActionItems, Widget("student-document-update", "Student documents", null, "Open student identity documents.", "info"));
+				Add(summary.ModuleSnapshots, Widget("student-academic-summary", "Academic Summary", "View", "Homework, exams and progress", "info"));
 				break;
 		}
 
@@ -285,12 +294,13 @@ public class DashboardSummaryReader(
 				continue;
 			}
 
-			if (!await HasAnyPermissionAsync(definition.RequiredPermissions))
+			if (!await HasAllPermissionsAsync(definition.RequiredPermissions))
 			{
 				continue;
 			}
 
 			widget.Owner = definition.Owner;
+			widget.RequiredPermissions = definition.RequiredPermissions.ToList();
 			widget.DrilldownUrl = definition.DrilldownUrl;
 			filtered.Add(widget);
 		}
@@ -298,27 +308,23 @@ public class DashboardSummaryReader(
 		return filtered;
 	}
 
-	private async Task<bool> HasAnyPermissionAsync(IEnumerable<string> permissionNames)
+	private async Task<bool> HasAllPermissionsAsync(IEnumerable<string> permissionNames)
 	{
+		var hasRequirement = false;
 		foreach (var permissionName in permissionNames)
 		{
-			if (await permissionChecker.IsGrantedAsync(permissionName))
-			{
-				return true;
-			}
+			hasRequirement = true;
+			if (!await permissionChecker.IsGrantedAsync(permissionName)) return false;
 		}
-
-		return false;
+		return hasRequirement;
 	}
 
 	private static void AddSharedCalendarAndAnnouncements(DashboardSummaryDto summary)
 	{
-		Add(summary.CalendarItems, Widget("calendar-periodic-test", "Periodic test review", null, "Open exam schedule for academic calendar review", "primary", count: 0));
-		summary.CalendarItems[^1].DueLabel = "Today";
-		Add(summary.CalendarItems, Widget("calendar-safety-drill", "Safety drill follow-up", null, "Admin office, today", "warning", count: 0));
-		summary.CalendarItems[^1].DueLabel = "Today";
-		Add(summary.Announcements, Widget("announcement-board-practical", "Board practical timetable published", null, "Class 10 and 12 schedules are ready for review.", "info"));
-		Add(summary.Announcements, Widget("announcement-ptm", "PTM circular pending acknowledgement", null, "Open communication dashboard for acknowledgement status.", "warning"));
+		Add(summary.CalendarItems, Widget("calendar-periodic-test", "Exam schedules", null, "Open the exam schedule to review academic dates.", "info"));
+		Add(summary.CalendarItems, Widget("calendar-safety-drill", "School calendar", null, "Open the calendar to review events and holidays.", "info"));
+		Add(summary.Announcements, Widget("announcement-board-practical", "Published exam information", null, "Open exam schedules to review available information.", "info"));
+		Add(summary.Announcements, Widget("announcement-ptm", "Communication updates", null, "Open Communication to review school updates.", "info"));
 	}
 
 	private sealed class DashboardSummarySnapshot
@@ -359,6 +365,7 @@ public class DashboardSummaryReader(
 			widgets.Select(widget => new DashboardWidgetDto
 			{
 				Id = widget.Id,
+				RequiredPermissions = widget.RequiredPermissions.ToList(),
 				Title = widget.Title,
 				Value = widget.Value,
 				Count = widget.Count,

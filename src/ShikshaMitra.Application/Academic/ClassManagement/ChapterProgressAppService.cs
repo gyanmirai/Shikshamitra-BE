@@ -105,7 +105,7 @@ public class ChapterProgressAppService(
 			.GroupBy(p => p.ChapterId)
 			.ToDictionary(
 				g => g.Key,
-				g => g.OrderByDescending(p => p.CreationTime).First()
+				g => g.OrderByDescending(p => p.CreationTime).ThenByDescending(p => p.Id).First()
 			);
 
 		foreach (var assignment in assignments)
@@ -266,7 +266,7 @@ public class ChapterProgressAppService(
 			.GroupBy(p => p.ChapterId)
 			.ToDictionary(
 				g => g.Key,
-				g => g.OrderByDescending(p => p.CreationTime).First()
+				g => g.OrderByDescending(p => p.CreationTime).ThenByDescending(p => p.Id).First()
 			);
 
 		var result = new PaginatedChapterProgressResponseDto
@@ -362,10 +362,9 @@ public class ChapterProgressAppService(
 				try
 				{
 					// Find existing progress record for the chapter and division
-					var progress = await progressRepository.FirstOrDefaultAsync(p =>
-						p.ChapterId == chapterId &&
-						p.DivisionId == input.DivisionId
-					);
+					var progress = await AsyncExecuter.FirstOrDefaultAsync((await progressRepository.GetQueryableAsync())
+						.Where(p => p.ChapterId == chapterId && p.DivisionId == input.DivisionId)
+						.OrderByDescending(p => p.CreationTime).ThenByDescending(p => p.Id));
 
 					if (progress != null)
 					{
@@ -1183,7 +1182,7 @@ public class ChapterProgressAppService(
 			.GroupBy(p => p.ChapterId)
 			.ToDictionary(
 				g => g.Key,
-				g => g.OrderByDescending(p => p.CreationTime).First()
+				g => g.OrderByDescending(p => p.CreationTime).ThenByDescending(p => p.Id).First()
 			);
 
 		foreach (var assignment in assignments)

@@ -21,7 +21,7 @@ namespace ShikshaMitra.Students.Portal;
 public class StudentPortalAccessService(
 	IRepository<StudentPortalAccountLink, Guid> links,
 	IRepository<IdentityUser, Guid> users,
-	IRepository<Student, Guid> students,
+	IStudentRepository students,
 	IDataFilter dataFilter) : ApplicationService, ITransientDependency
 {
 	public async Task<IReadOnlyList<StudentPortalAccountDto>> GetMyStudentsAsync()
@@ -65,7 +65,8 @@ public class StudentPortalAccessService(
 		if (owned.Count == 0) throw new AbpAuthorizationException();
 		if (owned.Select(x => x.StudentId).Distinct().Count() != 1)
 			throw new BusinessException(StudentOnboardingErrorCodes.PortalAccountInvalid).WithData("Reason", "Select one linked student.");
-		return await students.FindAsync(x => x.Id == owned[0].StudentId && x.TenantId == CurrentTenant.Id)
+		return await AsyncExecuter.FirstOrDefaultAsync((await students.GetQueryableWithoutAutoIncludesAsync())
+			.Where(x => x.Id == owned[0].StudentId && x.TenantId == CurrentTenant.Id))
 			?? throw new AbpAuthorizationException();
 	}
 

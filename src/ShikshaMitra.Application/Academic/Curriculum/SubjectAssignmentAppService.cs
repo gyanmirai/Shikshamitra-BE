@@ -49,7 +49,8 @@ public partial class SubjectAssignmentAppService(
 	IReportingManagerAccessService reportingManagerAccessService,
 	SubjectTeacherReassignmentManager teacherReassignmentManager,
 	SubjectScheduleBreakdownQueryService scheduleBreakdownQueryService,
-	SubjectAssignmentTeacherEligibilityManager teacherEligibilityManager
+	SubjectAssignmentTeacherEligibilityManager teacherEligibilityManager,
+	SubjectAssignmentScopeAccess assignmentScope
 ) : ApplicationService, ISubjectAssignmentAppService
 {
 	public async Task CreateAsync(
@@ -115,7 +116,7 @@ public partial class SubjectAssignmentAppService(
 				assignedSubject.RecalculateSetupHealth();
 				await EnsureCurrentUserCanAccessAssignmentAsync(
 					assignedSubject,
-					operation: "subject-assignment-create");
+					operation: "subject-assignment-create", academicMediumId);
 				assignedSubjects.Add(assignedSubject);
 			}
 
@@ -198,7 +199,8 @@ public partial class SubjectAssignmentAppService(
 		Guid? divisionId = null
 	)
 	{
-		var query = await assignmentRepository.GetQueryableAsync();
+		var query = await assignmentScope.TenantAssignmentsAsync(await assignmentRepository.GetQueryableAsync());
+		var scopedAssignmentIds = (await assignmentScope.FilterAsync(query.Where(assignment => assignment.StandardId == classId))).Select(assignment => assignment.Id);
 		var hasTenantWideScope = await userScopeAccessService.CurrentUserHasTenantWideScopeAsync();
 		var hasClassTeacherAccess = await HasClassTeacherAccessAsync();
 		var reportingEmployeeIds = CurrentUser.Id.HasValue
@@ -238,7 +240,7 @@ public partial class SubjectAssignmentAppService(
 			if (!hasClassTeacherAccess)
 			{
 				query = query.Where(assignment =>
-					assignment.Teachers.Any(teacher =>
+					scopedAssignmentIds.Contains(assignment.Id) || assignment.Teachers.Any(teacher =>
 						Enumerable.Contains(eligibleTeacherIds, teacher.TeacherId)) ||
 					Enumerable.Contains(allocatedSubjectIds, assignment.SubjectId));
 			}
@@ -2180,23 +2182,15 @@ public partial class SubjectAssignmentAppService(
 	private async Task<IQueryable<AssignedSubject>> ApplyCurrentUserAssignmentScopeAsync(
 		IQueryable<AssignedSubject> query)
 	{
-		if (!await HasClassTeacherAccessAsync())
-		{
-			return await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
-		}
-
-		var standardIds = await GetCurrentUserClassTeacherStandardIdsAsync();
-		return standardIds.Count == 0
-			? query.Where(_ => false)
-			: query.Where(assignment => standardIds.Contains(assignment.StandardId));
+		return await assignmentScope.FilterAsync(query);
 	}
 
 	private async Task EnsureCurrentUserCanAccessAssignmentAsync(
 		AssignedSubject assignment,
-		string operation)
+		string operation, Guid? academicMediumId = null)
 	{
+		await assignmentScope.ValidateContextAsync(assignment, academicMediumId);
 		var hasTenantWideScope = await userScopeAccessService.CurrentUserHasTenantWideScopeAsync();
-		var hasClassTeacherAccess = await HasClassTeacherAccessAsync();
 
 		// Subject-teacher ownership remains valid even when the same employee also owns a
 		// class. The list query combines these access paths, so detail reads must use the
@@ -2222,30 +2216,7 @@ public partial class SubjectAssignmentAppService(
 			}
 		}
 
-		if (!hasClassTeacherAccess)
-		{
-			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignment, operation: operation);
-			return;
-		}
-
-		var standardIds = await GetCurrentUserClassTeacherStandardIdsAsync();
-		if (!standardIds.Contains(assignment.StandardId))
-		{
-			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
-		}
-	}
-
-	private async Task<HashSet<Guid>> GetCurrentUserClassTeacherStandardIdsAsync()
-	{
-		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
-		if (scope.IsAdmin || scope.HasTenantWideScope())
-		{
-			return (await divisionRepository.GetListAsync()).Select(division => division.StandardId).ToHashSet();
-		}
-
-		var divisions = await divisionRepository.GetListAsync(
-			division => scope.DivisionIds.Contains(division.Id));
-		return divisions.Select(division => division.StandardId).ToHashSet();
+		await assignmentScope.EnsureAsync(assignment);
 	}
 
 	private Task<bool> HasClassTeacherAccessAsync() =>

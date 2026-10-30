@@ -28,6 +28,7 @@ public class PortalTimetableContextDto
     public List<string> WorkingDays { get; set; } = [];
     public string Timezone { get; set; } = "Asia/Kolkata";
     public string Availability { get; set; } = "noEnrollment";
+    public string? Message { get; set; }
 }
 
 public class PortalTimetableStudentDto
@@ -62,6 +63,7 @@ public class PortalTimetableScheduleDto
     public DateOnly ToDate { get; set; }
     public string Timezone { get; set; } = "Asia/Kolkata";
     public string Availability { get; set; } = "available";
+    public string? Message { get; set; }
     public List<PortalTimetableDayDto> Days { get; set; } = [];
 }
 

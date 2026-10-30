@@ -3,14 +3,14 @@ module: mobile-academics
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-10-12
+updated_on: 2026-10-30
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Mobile Academics
 
-TL;DR: dedicated student and guardian APIs serve Dashboard, Homework & Assignment, Attendance, Syllabus, Exam, Result, and Holidays & Events. Timetable keeps its existing implementation.
+TL;DR: dedicated student and guardian APIs serve Dashboard, Homework & Assignment, Attendance, Syllabus, Exam, Result, Holidays & Events, and Timetable. Elective preferences are submitted once through mobile and approved through the existing school assignment lock.
 
 ## Read order
 
@@ -30,6 +30,7 @@ TL;DR: dedicated student and guardian APIs serve Dashboard, Homework & Assignmen
 | Services | `src/ShikshaMitra.Application/Academic/Mobile/` |
 | HTTP | `src/ShikshaMitra.HttpApi/Controllers/Academic/Mobile/` |
 | Tests | `test/ShikshaMitra.Application.Tests/Academic/Mobile/MobileAcademicAppService_Tests.cs` |
+| Timetable / elective contracts | `src/ShikshaMitra.Application.Contracts/Academic/Timetable/Portal/` |
 | Flutter integration | [Mobile binding guide](../../../../Gyanmirai-Mobile/docs/mobile-academics.md) |
 
 ## For agents

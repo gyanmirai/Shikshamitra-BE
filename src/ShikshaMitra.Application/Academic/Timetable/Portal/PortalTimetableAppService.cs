@@ -31,6 +31,7 @@ namespace ShikshaMitra.Academic.Timetable.Portal;
 public class PortalTimetableAppService(
     StudentPortalAccessService portalAccess,
     PortalStudentContextReader contextReader,
+    IPortalElectivePreferenceAppService electivePreferences,
     ITimetableRepository timetables,
     ILectureSlotConfigRepository configs,
     IRepository<Subject, Guid> subjects,
@@ -49,7 +50,14 @@ public class PortalTimetableAppService(
         var student = await ResolveStudentAsync(studentId);
         var result = (await contextReader.ReadAsync([student.Id], academicYearId))[student.Id];
         if (result.Error != null) throw result.Error;
-        return result.Context!;
+        var context = result.Context!;
+        if (context.Availability == "available" && context.CurrentAcademicYear != null)
+        {
+            var preferenceState = await electivePreferences.GetAsync(student.Id, context.CurrentAcademicYear.Id);
+            context.Availability = preferenceState.Availability;
+            context.Message = preferenceState.Message;
+        }
+        return context;
     }
 
     public async Task<PortalTimetableScheduleDto> GetScheduleAsync(PortalTimetableScheduleInput input)
@@ -64,7 +72,7 @@ public class PortalTimetableAppService(
             throw Invalid("The dates must be inside the enrolled academic year.");
         var result = new PortalTimetableScheduleDto { StudentId = context.Student.Id,
             AcademicYearId = input.AcademicYearId, FromDate = input.FromDate, ToDate = input.ToDate,
-            Availability = context.Availability };
+            Availability = context.Availability, Message = context.Message };
         for (var date = input.FromDate; date <= input.ToDate; date = date.AddDays(1))
             result.Days.Add(new() { Date = date, IsWorkingDay = context.WorkingDays.Contains(date.DayOfWeek.ToString().ToLowerInvariant()) });
         if (context.Availability != "available") return result;
@@ -73,11 +81,33 @@ public class PortalTimetableAppService(
         var timetable = await timetables.FindByStandardAndDivisionAsync(standardId, divisionId);
         if (timetable?.Status != TimetableStatus.Published) { result.Availability = "noPublishedTimetable"; return result; }
         var config = await configs.FindByStandardIdAsync(standardId);
-        var selections = await electives.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == context.Student.Id);
+        var requiredGroups = timetable.Slots.Where(x => x.ElectiveGroupId.HasValue)
+            .Select(x => x.ElectiveGroupId!.Value).Distinct().ToArray();
+        // Re-read the approval policy after loading the current timetable. A
+        // schedule must not use the earlier context as a cached authorization.
+        if (requiredGroups.Length > 0)
+        {
+            var preferenceState = await electivePreferences.GetAsync(context.Student.Id, input.AcademicYearId);
+            if (preferenceState.Availability != "available")
+            {
+                result.Availability = preferenceState.Availability;
+                result.Message = preferenceState.Message;
+                return result;
+            }
+        }
+        var selections = await electives.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == context.Student.Id &&
+            x.IsLocked && Enumerable.Contains(requiredGroups, x.ElectiveGroupId));
         var selected = selections.GroupBy(x => x.ElectiveGroupId).ToDictionary(x => x.Key, x => x.Select(s => s.SelectedSubjectId).Distinct().ToList());
         if (selected.Values.Any(x => x.Count != 1)) throw Invalid("The student's elective selections are ambiguous.");
-        if (timetable.Slots.Any(x => x.ElectiveGroupId.HasValue && !selected.ContainsKey(x.ElectiveGroupId.Value)))
-            throw Invalid("The student's required elective selection is missing.");
+        if (requiredGroups.Any(groupId => !selected.ContainsKey(groupId)))
+        {
+            // A school-side change between reads is conservative: never expose
+            // periods using an unlocked, deleted or missing assignment.
+            var preferenceState = await electivePreferences.GetAsync(context.Student.Id, input.AcademicYearId);
+            result.Availability = preferenceState.Availability == "available" ? "electiveSetupRequired" : preferenceState.Availability;
+            result.Message = preferenceState.Message ?? "Please contact your school to review your elective assignments.";
+            return result;
+        }
         var subjectIds = timetable.Slots.SelectMany(x => x.Subjects).Select(x => x.SubjectId).Distinct().ToArray();
         var subjectMap = (await subjects.GetListAsync(x => Enumerable.Contains(subjectIds, x.Id))).ToDictionary(x => x.Id);
         var teacherIds = timetable.Slots.SelectMany(x => x.Subjects).Where(x => x.TeacherId.HasValue).Select(x => x.TeacherId!.Value).Distinct().ToArray();

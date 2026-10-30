@@ -31,6 +31,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<AssignedSubject> StandardSubjectAssignments { get; set; }
     public DbSet<TeacherSubjectAllocation> TeacherSubjectAllocations { get; set; }
     public DbSet<StudentElectiveSelection> StudentElectiveSelections { get; set; }
+    public DbSet<StudentElectivePreferenceSubmission> StudentElectivePreferenceSubmissions { get; set; }
     public DbSet<LessonPlan> LessonPlans { get; set; }
     public DbSet<TeacherDiary> TeacherDiaries { get; set; }
 

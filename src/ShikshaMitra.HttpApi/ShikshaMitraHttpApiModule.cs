@@ -28,6 +28,8 @@ public class ShikshaMitraHttpApiModule : AbpModule
 		Configure<Volo.Abp.AspNetCore.ExceptionHandling.AbpExceptionHttpStatusCodeOptions>(options =>
 		{
 			options.Map("MobileAcademics:SubmissionConflict", System.Net.HttpStatusCode.Conflict);
+			options.Map(Academic.Curriculum.ElectivePreferenceErrorCodes.Conflict, System.Net.HttpStatusCode.Conflict);
+			options.Map(Academic.Curriculum.ElectivePreferenceErrorCodes.InvalidRequest, System.Net.HttpStatusCode.BadRequest);
 			options.Map("MobileAcademics:IdempotencyConflict", System.Net.HttpStatusCode.Conflict);
 			foreach (var code in new[] {
 				Academic.Mobile.MobileSubmissionErrorCodes.AmbiguousAnswer,

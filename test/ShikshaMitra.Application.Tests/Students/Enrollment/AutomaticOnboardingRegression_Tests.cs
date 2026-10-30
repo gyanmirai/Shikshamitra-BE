@@ -260,7 +260,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	}
 
 	private async Task<StudentOnboardingCaseDto> PrepareAutomaticRegressionCaseAsync(AdmissionCertificationFixture fixture, bool createNew,
-		string key, Guid? existingCaseId = null, bool confirmFeesBeforePlacement = false)
+		string key, Guid? existingCaseId = null, bool confirmFeesBeforePlacement = false, bool confirmFees = true)
 	{
 		var cycle = await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(fixture.Offering.AdmissionCycleId));
 		var structure = await CreateFeeSelectionReferenceAsync(fixture.Offering, cycle.AcademicYearId);
@@ -272,7 +272,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			return await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(value, true);
 		});
 		var item = await service.GetAsync(caseId);
-		if (confirmFeesBeforePlacement)
+		if (confirmFees && confirmFeesBeforePlacement)
 		{
 			await service.SaveFeeStructureAsync(item.Id, new() { StructureId = structure.Id, ConcurrencyStamp = item.ConcurrencyStamp });
 			item = await service.GetAsync(item.Id);
@@ -280,7 +280,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		item = await service.SetPlacementAsync(item.Id, new() { DivisionId = division.Id, ConcurrencyStamp = item.ConcurrencyStamp });
 		var series = (await service.GetAvailableIdentifierSeriesAsync(item.Id)).Single();
 		item = await service.AllocateIdentifierAsync(item.Id, new() { NumberSeriesId = series.Id, RollNumber = 1, ConcurrencyStamp = item.ConcurrencyStamp });
-		if (!confirmFeesBeforePlacement)
+		if (confirmFees && !confirmFeesBeforePlacement)
 			await service.SaveFeeStructureAsync(item.Id, new() { StructureId = structure.Id, ConcurrencyStamp = item.ConcurrencyStamp });
 		return await service.GetAsync(item.Id);
 	}

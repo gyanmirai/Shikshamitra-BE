@@ -20,7 +20,12 @@ public class AdmissionFormStageReadService(
 		var context = await access.GetContextAsync(applicationId, stageId);
 		var policy = context.Policy;
 		var attempts = await submissions.GetListAsync(item => item.FormInstanceId == context.Form.Id);
-		var formSections = (await sections.GetListAsync(item => item.FormDefinitionId == context.Form.FormDefinitionId))
+		var frozen = AdmissionEffectiveFormStore.Read(context.Form);
+		if (frozen == null) AdmissionEffectiveFormStore.EnsureLegacyAllowed(
+			await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionFormDefinition, Guid>>().GetAsync(context.Form.FormDefinitionId));
+		var formSections = (frozen == null
+			? await sections.GetListAsync(item => item.FormDefinitionId == context.Form.FormDefinitionId)
+			: AdmissionEffectiveFormResolver.MaterializeSections(frozen.Definition))
 			.OrderBy(item => item.DisplayOrder).ToList();
 		var events = (await history.GetListAsync(item => item.FormInstanceId == context.Form.Id))
 			.OrderBy(item => item.OccurredAt).ToList();

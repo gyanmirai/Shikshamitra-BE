@@ -12,6 +12,19 @@ namespace ShikshaMitra.HttpApi.Tests.Students.Enrollment;
 
 public class AdmissionJourneyApiContract_Tests
 {
+	[Theory]
+	[InlineData(typeof(AdmissionApplicationsController), "GetResumePreviewAsync", Permissions.View)]
+	[InlineData(typeof(AdmissionApplicationsController), "ResumeJourneyAsync", Permissions.Decide)]
+	[InlineData(typeof(AdmissionApplicationAppService), "GetResumePreviewAsync", Permissions.View)]
+	[InlineData(typeof(AdmissionApplicationAppService), "ResumeJourneyAsync", Permissions.Decide)]
+	[InlineData(typeof(AdmissionJourneyResumeService), "PreviewAsync", Permissions.View)]
+	[InlineData(typeof(AdmissionJourneyResumeService), "ResumeAsync", Permissions.Decide)]
+	public void Resume_uses_existing_owner_permission(System.Type type, string name, string permission)
+	{
+		var method = type.GetMethod(name)!;
+		method.GetCustomAttributes<AuthorizeAttribute>().Select(x => x.Policy).ShouldContain(permission);
+		method.GetCustomAttribute<AllowAnonymousAttribute>().ShouldBeNull();
+	}
 	[Fact]
 	public void End_journey_has_matching_permission_and_transaction_boundaries()
 	{

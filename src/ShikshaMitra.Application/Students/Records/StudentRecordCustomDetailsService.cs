@@ -227,8 +227,15 @@ public class StudentRecordCustomDetailsService(StudentRecordRegistrationReader r
 		source.Definition?.Sections.SelectMany(x => x.Fields).Where(x => x.FieldType != AdmissionFormFieldType.Static &&
 			(x.BindingType == AdmissionFormBindingType.Custom || x.BindingKey != null &&
 			 AdmissionAdditionalStudentFieldCatalog.Metadata.TryGetValue(x.BindingKey, out var metadata) && metadata.Destination == "capturedAdmissionDetails")) ?? [];
-	internal static string Identity(StudentRecordRegistrationSourceDto source, AdmissionFormFieldDto field) =>
-		$"{source.FormFamilyId:D}:{field.Code}:{field.FieldType}:{source.Definition!.Sections.First(x => x.Id == field.SectionId).IsRepeatable}";
+	internal static string Identity(StudentRecordRegistrationSourceDto source, AdmissionFormFieldDto field)
+	{
+		// Effective field codes can change when another source uses the same code. Only new
+		// inherited questions use semantic identity; existing stored profile keys stay intact.
+		var inheritedIdentity = field.InheritedFrom?.FieldIdentity;
+		var question = string.IsNullOrWhiteSpace(inheritedIdentity)
+			? field.Code : "INHERITED:" + inheritedIdentity.ToUpperInvariant();
+		return $"{source.FormFamilyId:D}:{question}:{field.FieldType}:{source.Definition!.Sections.First(x => x.Id == field.SectionId).IsRepeatable}";
+	}
 	internal static bool CanEditField(AdmissionFormFieldDto field)
 	{
 		if (field.FieldType == AdmissionFormFieldType.File || field.BindingKey == "Applicant.ProfilePhoto") return false;

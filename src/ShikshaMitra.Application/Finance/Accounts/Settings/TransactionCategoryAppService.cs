@@ -81,7 +81,8 @@ public class TransactionCategoryAppService(
 		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(academicYearId, null, null, null, null))
 			return new PaginatedTransactionCategoryResponse { TotalCount = 0, CurrentPage = page, PageSize = pageSize, TotalPages = 0, Items = [] };
 		var query = await categoryRepository.GetQueryableAsync();
-		query = query.Where(x => x.AcademicYearId == academicYearId && x.CategoryType == categoryType);
+		query = query.Where(x => x.AcademicYearId == academicYearId && x.CategoryType == categoryType &&
+			x.Name.Trim().ToUpper() != "NONE");
 		if (!includeInactive) query = query.Where(x => x.IsActive);
 		if (!string.IsNullOrWhiteSpace(search))
 		{
@@ -128,6 +129,7 @@ public class TransactionCategoryAppService(
 		var entity = await categoryRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureCategoryType(entity, categoryType);
+		entity.EnsureUserEditable();
 		EnsureConcurrency(entity, input.ConcurrencyStamp);
 		await EnsureUniqueAsync(entity.AcademicYearId, categoryType, entity.Code ?? id.ToString("N").ToUpperInvariant(), input.Name, id);
 		entity.Update(entity.Code ?? id.ToString("N").ToUpperInvariant(), input.Name, input.Description, entity.DefaultAccountHeadId,
@@ -145,6 +147,7 @@ public class TransactionCategoryAppService(
 		var entity = await categoryRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureCategoryType(entity, categoryType);
+		entity.EnsureUserEditable();
 		EnsureConcurrency(entity, input.ConcurrencyStamp);
 		if (!input.IsActive && await IsConfiguredForFuturePaymentsAsync(id))
 			throw new BusinessException(AccountSettingErrorCodes.CategoryInUse)
@@ -162,6 +165,7 @@ public class TransactionCategoryAppService(
 		var entity = await categoryRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureCategoryType(entity, categoryType);
+		entity.EnsureUserEditable();
 		if (entity.CategoryType != TransactionType.Income && entity.IsActive)
 			throw new BusinessException(AccountSettingErrorCodes.ActiveRecordCannotBeDeleted);
 		var blockedReason = await GetDeletionBlockedReasonAsync(id);
@@ -212,7 +216,9 @@ public class TransactionCategoryAppService(
 	private async Task<TransactionCategoryResponse> MapAsync(TransactionCategory entity)
 	{
 		var account = entity.DefaultAccountHeadId.HasValue ? await accountHeadRepository.FindAsync(entity.DefaultAccountHeadId.Value) : null;
-		var blockedReason = await GetDeletionBlockedReasonAsync(entity.Id);
+		var blockedReason = entity.IsSystemCategory
+			? "None is a built-in category and cannot be changed or deleted."
+			: await GetDeletionBlockedReasonAsync(entity.Id);
 		return new TransactionCategoryResponse
 		{
 			Id = entity.Id, AcademicYearId = entity.AcademicYearId, Code = entity.Code,
@@ -220,8 +226,9 @@ public class TransactionCategoryAppService(
 			DefaultAccountHeadId = entity.DefaultAccountHeadId, DefaultAccountHeadName = account?.Name,
 			EffectiveFrom = entity.EffectiveFrom, EffectiveTo = entity.EffectiveTo,
 			IsActive = entity.IsActive, DeactivationReason = entity.DeactivationReason,
+			IsSystemCategory = entity.IsSystemCategory,
 			Version = entity.Version, ConcurrencyStamp = entity.ConcurrencyStamp,
-			IsUsedInDownstream = blockedReason != null,
+			IsUsedInDownstream = !entity.IsSystemCategory && blockedReason != null,
 			DeletionBlockedReason = blockedReason,
 			CanDelete = blockedReason == null && (entity.CategoryType == TransactionType.Income || !entity.IsActive)
 		};

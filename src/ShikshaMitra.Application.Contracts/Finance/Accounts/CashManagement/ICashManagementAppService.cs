@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Auditing;
 
 namespace ShikshaMitra.Finance.Accounts.CashManagement;
 
@@ -13,11 +14,17 @@ public interface ICashManagementAppService : IApplicationService
 	Task<CashDetail> ApproveAsync(Guid id, CashApproval input);
 	Task<CashDetail> DepositAsync(Guid id, CashDepositInput input);
 	Task<CashDetail> ConfirmAsync(Guid id, Guid depositId, CashCreditInput input);
+	Task<CashBulkDepositResult> BulkDepositAsync(CashBulkDeposit input);
+	Task<CashDocument> GetDocumentAsync(Guid id, Guid academicYearId);
 }
 
 public class CashQuery
 {
 	public Guid AcademicYearId { get; set; }
+	public Guid? BoardId { get; set; }
+	public Guid? MediumId { get; set; }
+	public int? Month { get; set; }
+	public int? Year { get; set; }
 	public int Page { get; set; } = 1;
 	public int PageSize { get; set; } = 20;
 	public int? Status { get; set; }
@@ -33,6 +40,8 @@ public class CashPage
 	public int Page { get; set; }
 	public int PageSize { get; set; }
 	public CashSummary Summary { get; set; } = new();
+	public CashSummary YearSummary { get; set; } = new();
+	public decimal AvailableCash { get; set; }
 	public CashStatusCounts StatusCounts { get; set; } = new();
 }
 public class CashStatusCounts
@@ -74,6 +83,7 @@ public class CashRow
 }
 public class CashDetail : CashRow
 {
+	public string? SupportingDocumentName { get; set; }
 	public string? Notes { get; set; }
 	public Guid? ApprovedBy { get; set; }
 	public Guid? StudentId { get; set; }
@@ -82,7 +92,8 @@ public class CashDetail : CashRow
 	public List<CashExpense> Expenses { get; set; } = [];
 }
 public record CashDeposit(Guid Id, decimal Amount, decimal CreditedAmount, int Status, string Reference,
-	DateTimeOffset DepositDate, DateTimeOffset? CreditDate, Guid CreatedBy, bool CanConfirm);
+	DateTimeOffset DepositDate, DateTimeOffset? CreditDate, Guid CreatedBy, bool CanConfirm,
+	Guid? BankAccountId = null, string? BankLabel = null);
 public record CashExpense(Guid Id, string Name, decimal Amount, DateTimeOffset PaymentDate);
 public record CashBankOption(Guid Id, string Label);
 public record CashSourceOption(Guid Id, string Label, decimal RemainingAmount, string ConcurrencyStamp);
@@ -113,3 +124,16 @@ public class CashCreditInput : CashCommandInput
 	public string Reference { get; set; } = "";
 	public string? Notes { get; set; }
 }
+
+public class CashBulkDeposit
+{
+	public Guid AcademicYearId { get; set; }
+	public Guid BankAccountId { get; set; }
+	public decimal ExpectedAmount { get; set; }
+	public Guid IdempotencyKey { get; set; }
+	public string? Notes { get; set; }
+	public string? FileName { get; set; }
+	[DisableAuditing] public byte[]? FileContent { get; set; }
+}
+public record CashBulkDepositResult(decimal Amount, int SourceCount);
+public record CashDocument(string FileName, string ContentType, byte[] Content);

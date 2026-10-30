@@ -21,6 +21,9 @@ public class AdmissionCycleConfiguration : IEntityTypeConfiguration<AdmissionCyc
 		builder.Property(x => x.Status).IsRequired().HasConversion<int>();
 		builder.Property(x => x.StartDate).IsRequired();
 		builder.Property(x => x.EndDate).IsRequired();
+		builder.ConfigureUtcInstants(nameof(AdmissionCycle.ScheduledPublishAt), nameof(AdmissionCycle.ScheduledCloseAt),
+			nameof(AdmissionCycle.PublishedAt), nameof(AdmissionCycle.ClosedAt),
+			nameof(AdmissionCycle.ReopenedAt), nameof(AdmissionCycle.ArchivedAt));
 		builder.HasIndex(x => new { x.TenantId, x.Code }).IsUnique();
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Status });
 	}
@@ -37,6 +40,7 @@ public class AdmissionCycleHistoryConfiguration : IEntityTypeConfiguration<Admis
 		builder.Property(x => x.ToStatus).HasConversion<int>();
 		builder.Property(x => x.Description).IsRequired().HasMaxLength(AdmissionCycleConsts.MaxDescriptionLength);
 		builder.Property(x => x.Reason).HasMaxLength(AdmissionCycleConsts.MaxReasonLength);
+		builder.ConfigureUtcInstants(nameof(AdmissionCycleHistory.OccurredAt));
 		builder.HasIndex(x => new { x.TenantId, x.AdmissionCycleId, x.OccurredAt });
 	}
 }

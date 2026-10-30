@@ -36,6 +36,8 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 		if (input.Page < 1 || input.PageSize is < 1 or > 100 || input.Status is < 0 or > 1 || input.Search?.Length > 200)
 			throw new BusinessException(CashManagementErrorCodes.InvalidQuery);
 		var query = await ScopedQueryAsync(input.AcademicYearId);
+		var yearSummary = await SummarizeAsync(query);
+		query = await ApplyDisplayFiltersAsync(query, input);
 		var table = FinanceTableQuery.Parse(input.Filters, input.Search, input.SortBy, input.SortOrder, TableColumns);
 		query = table.Apply(query, TableFields);
 		if (!string.IsNullOrWhiteSpace(input.Search))
@@ -66,7 +68,8 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 			.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize));
 		var flags = await FlagsAsync();
 		return new CashPage { Items = page.Select(x => (CashRow)Map(x, flags)).ToList(), TotalCount = total,
-			Page = input.Page, PageSize = input.PageSize, Summary = totals, StatusCounts = counts };
+			Page = input.Page, PageSize = input.PageSize, Summary = totals, YearSummary = yearSummary,
+			AvailableCash = yearSummary.Remaining, StatusCounts = counts };
 	}
 	public async Task<CashDetail> GetAsync(Guid id, Guid academicYearId)
 	{
@@ -82,7 +85,7 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 			_ => throw new AbpAuthorizationException()
 		});
 		var query = await ScopedQueryAsync(academicYearId);
-		var available = operation == "approve" ? [] : await AsyncExecuter.ToListAsync(query.Where(x => x.Status == (operation == "expense" ? 0 : 1) &&
+		var available = operation == "approve" ? [] : await AsyncExecuter.ToListAsync(query.Where(x => (operation == "expense" || x.Status == 1) &&
 			x.Amount > x.SpentAmount + x.DepositedAmount + x.InTransitAmount).OrderBy(x => x.CreationTime));
 		var bankRows = operation == "expense" ? [] : await banks.GetListAsync(x => x.TenantId == CurrentTenant.Id &&
 			x.AcademicYearId == academicYearId && x.IsActive);
@@ -96,14 +99,19 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 		var approvedAt = Now;
 		await EnsureActualDateAsync(input.AcademicYearId, approvedAt);
 		var bank = await routing.RequireBankAsync(input.AcademicYearId, input.BankAccountId, approvedAt);
+		var priorDeposits = cash.Deposits.Count;
 		cash.Approve(Actor, bank.Id, BankLabel(bank), input.CountedAmount, approvedAt, input.Notes,
 			allowSelfApproval: await userScopes.IsAdminUserAsync(Actor));
+		if (cash.Deposits.Count > priorDeposits)
+			cash.ExtraProperties["DepositBank:" + cash.Deposits.Last().Id.ToString("N")] = JsonSerializer.Serialize(new CashBankOption(bank.Id, BankLabel(bank)));
 		await FinalizeIncomeAsync(cash, bank);
 	});
 	public Task<CashDetail> DepositAsync(Guid id, CashDepositInput input) => ExecuteAsync(id, input, P.Deposit, "deposit", async cash =>
 	{
 		await EnsureActualDateAsync(input.AcademicYearId, input.DepositDate);
-		cash.Dispatch(GuidGenerator.Create(), Actor, input.Amount, input.DepositDate, input.Reference, input.Notes);
+		var deposit = cash.Dispatch(GuidGenerator.Create(), Actor, input.Amount, input.DepositDate, input.Reference, input.Notes);
+		if (cash.BankAccountId.HasValue)
+			cash.ExtraProperties["DepositBank:" + deposit.Id.ToString("N")] = JsonSerializer.Serialize(new CashBankOption(cash.BankAccountId.Value, cash.BankLabel ?? ""));
 	});
 	public Task<CashDetail> ConfirmAsync(Guid id, Guid depositId, CashCreditInput input) => ExecuteAsync(id, input, P.Reconcile,
 		"confirm:" + depositId.ToString("N"), async cash =>
@@ -116,6 +124,7 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 	{
 		await AuthorizationService.CheckAsync(permission);
 		using var uow = uows.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+		await sourceLock.AcquireAsync(input.AcademicYearId);
 		await sourceLock.AcquireAsync(id);
 		var cash = await RequireForUpdateAsync(id, input.AcademicYearId);
 		var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(action + ":" + Actor + ":" + JsonSerializer.Serialize(input))));
@@ -179,17 +188,28 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 	}
 	private CashDetail Map(CashCollection cash, (bool Approve, bool Deposit, bool Credit, bool SelfApproval) flags) => new()
 	{
+		SupportingDocumentName = cash.ExtraProperties.TryGetValue("SupportingDocumentName", out var documentName) ? documentName?.ToString() : null,
 		Id = cash.Id, SourceId = cash.SourceId, Reference = cash.Reference, PayerName = cash.PayerName,
 		Amount = cash.Amount, SpentAmount = cash.SpentAmount, DepositedAmount = cash.DepositedAmount,
 		InTransitAmount = cash.InTransitAmount, RemainingAmount = cash.RemainingAmount, Status = cash.Status,
-		BankAccountId = cash.BankAccountId, BankLabel = cash.BankLabel, CollectedAt = cash.CollectedAt,
+		BankAccountId = LatestBank(cash)?.Id ?? cash.BankAccountId, BankLabel = LatestBank(cash)?.Label ?? cash.BankLabel, CollectedAt = cash.CollectedAt,
 		ApprovedAt = cash.ApprovedAt, CreatorId = cash.CollectedBy, ConcurrencyStamp = cash.ConcurrencyStamp,
 		CanApprove = flags.Approve && cash.Status == 0 && (cash.CollectedBy != Actor || flags.SelfApproval),
 		CanDeposit = flags.Deposit && cash.Status == 1 && cash.RemainingAmount > 0,
 		Notes = cash.Notes, ApprovedBy = cash.ApprovedBy, StudentId = cash.StudentId, FinanceFeeAccountId = cash.FinanceFeeAccountId,
 		Deposits = cash.Deposits.OrderBy(x => x.DepositDate).Select(x => new CashDeposit(x.Id, x.Amount, x.CreditedAmount,
 			x.Amount == x.CreditedAmount ? 1 : 0, x.Reference, x.DepositDate, x.CreditDate, x.CreatedBy,
-			flags.Credit && x.CreditedAmount < x.Amount && x.CreatedBy != Actor)).ToList(),
-		Expenses = cash.Expenses.OrderBy(x => x.PaymentDate).Select(x => new CashExpense(x.Id, x.Name, x.Amount, x.PaymentDate)).ToList()
+			flags.Credit && x.CreditedAmount < x.Amount && x.CreatedBy != Actor,
+			DepositBank(cash, x.Id)?.Id ?? cash.BankAccountId, DepositBank(cash, x.Id)?.Label ?? cash.BankLabel)).ToList(),
+		Expenses = cash.Expenses.OrderBy(x => x.PaymentDate).Select(x => new CashExpense(ExpenseTransactionId(cash, x.Id), x.Name, x.Amount, x.PaymentDate)).ToList()
 	};
+	private static Guid ExpenseTransactionId(CashCollection cash, Guid allocationId) =>
+		cash.ExtraProperties.TryGetValue("ExpenseTransaction:" + allocationId.ToString("N"), out var value) &&
+		Guid.TryParse(value?.ToString(), out var transactionId) ? transactionId : allocationId;
+	private static CashBankOption? DepositBank(CashCollection cash, Guid depositId) =>
+		cash.ExtraProperties.TryGetValue("DepositBank:" + depositId.ToString("N"), out var bank) && bank != null
+			? JsonSerializer.Deserialize<CashBankOption>(bank.ToString()!) : null;
+	private static CashBankOption? LatestBank(CashCollection cash) => cash.Deposits
+		.OrderByDescending(x => x.DepositDate).ThenByDescending(x => x.Id)
+		.Select(x => DepositBank(cash, x.Id)).FirstOrDefault(x => x != null);
 }

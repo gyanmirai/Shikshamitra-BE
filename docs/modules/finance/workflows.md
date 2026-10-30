@@ -3,7 +3,7 @@ module: finance
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -130,3 +130,22 @@ Included variable heads require a student amount before preview and commit; skip
 ## Income and Expenses workspaces
 
 See [the workspace contract](./references/income-expense-workspaces.md) for separate registers, academic-year months, selected-record details, manual creation and automatic refund visibility.
+
+## Review a bank account's recorded activity
+
+The bank activity reader validates bank ownership, selected academic year and exact bank View before resolving operational slice grants.
+Each slice applies original student or admission FinanceFeeAccount scope before filtering, totals, count or paging.
+Institution/manual facts require full selected-year scope; a narrow class assignment does not grant them.
+Pending collection evidence additionally requires the existing provisional receipt View authority.
+The response labels its coverage as visible recorded activity rather than a complete bank balance.
+
+Noncash category shares group once per instrument; signed reversals remain distinct opposite movements.
+Cash deposit Income explains recognition and is excluded from bank totals.
+The cash movement uses individual bank-credit evidence and its actual date; outstanding transit remains separate from provisional incoming.
+New direct approval/dispatch commands pin the deposit's receiving-bank JSON when the deposit is created, and bulk commands retain earlier destination evidence before changing the header.
+Unmapped historical deposits are excluded rather than assigned using the latest header bank.
+Cash-method refunds with bank tags remain unverified evidence with zero recorded bank movement.
+
+Detail resolves the stable movement key again under the same scope and owning detail permission.
+Exports run the same query across all matching pages in a repeatable-read snapshot and reject more than 5000 rows explicitly.
+Opening activity or exporting creates no financial mutation, bank confirmation, balance, transfer or production migration.

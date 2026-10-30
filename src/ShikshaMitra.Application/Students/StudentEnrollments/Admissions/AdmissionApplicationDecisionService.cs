@@ -330,7 +330,7 @@ public class AdmissionApplicationDecisionService(
             if (onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot") && definition.Key is
                 StudentOnboardingStepKeys.Identity or StudentOnboardingStepKeys.Family or StudentOnboardingStepKeys.Communication or StudentOnboardingStepKeys.MedicalAndPreviousSchool)
                 required = false;
-            if (onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot") && definition.Key is StudentOnboardingStepKeys.Documents or StudentOnboardingStepKeys.FinanceAccountsServices) required = true;
+            if (onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot") && definition.Key == StudentOnboardingStepKeys.Documents) required = true;
 			if (AutomaticOnboardingReadinessRules.CanAdopt(onboardingCase) && definition.Key == StudentOnboardingStepKeys.Identity)
 				required = true;
 			var initialStatus = required ? StudentOnboardingStepStatus.Pending : StudentOnboardingStepStatus.NotRequired;
@@ -378,8 +378,7 @@ public class AdmissionApplicationDecisionService(
 		StudentOnboardingStepKeys.MedicalAndPreviousSchool => policy?.RequireMedicalDetails ?? false,
 		StudentOnboardingStepKeys.PlacementAndSeat => true,
 		StudentOnboardingStepKeys.IdentifiersAndRoll => true,
-		StudentOnboardingStepKeys.FinanceAccountsServices => policy is not null &&
-			(policy.RequireFeeClearance || policy.RequireStudentAccount || policy.RequireGuardianAccount || policy.RequireServiceConsent),
+		StudentOnboardingStepKeys.FinanceAccountsServices => false,
 		StudentOnboardingStepKeys.FinalReadiness => true,
 		_ => true
 	};
@@ -453,7 +452,7 @@ public class AdmissionApplicationDecisionService(
 			throw new BusinessException("Admissions:InvalidSiblingSelection");
 	}
 
-	private static List<AdmissionFinalizationReadinessItemDto> BuildReadinessItems(
+	private List<AdmissionFinalizationReadinessItemDto> BuildReadinessItems(
 		FinalizationContext context, IReadOnlyCollection<Student> matches)
 	{
 		var application = context.Application;
@@ -467,7 +466,7 @@ public class AdmissionApplicationDecisionService(
 			 MailAddress.TryCreate(context.Guardian.Email, out _));
 		var workflowReady = context.Workflow?.Status == AdmissionWorkflowInstanceStatus.Completed &&
 			!application.CurrentStageInstanceId.HasValue;
-		return
+		List<AdmissionFinalizationReadinessItemDto> items =
 		[
 			Item("decision", "Admission approved", decisionReady,
 				decisionReady ? "Ready" : "Approve the admission decision before finalizing."),
@@ -477,6 +476,19 @@ public class AdmissionApplicationDecisionService(
 			Item("duplicate_resolution", "Student identity resolved", applicant.ExistingStudentId.HasValue || matches.Count == 0,
 				applicant.ExistingStudentId.HasValue ? "Existing Student is already linked." : matches.Count == 0 ? "No exact identity matches found." : $"{matches.Count} possible match(es) require a staff decision.")
 		];
+		// Typed-parent records may still recover accepted answers during finalization. Only project
+		// unambiguous new legacy identities here; preview must never mutate the tracked applicant.
+		if (identityReady && guardianReady && !applicant.ExistingStudentId.HasValue && matches.Count == 0 &&
+			!AdmissionSiblingParentSelection.HasParentFlowProvenance(applicant))
+		{
+			try { AdmissionStudentProfileMapping.Apply(applicant, CreateStudent(context)); }
+			catch (BusinessException exception) when (exception.Code == "Students:Family:MainContactInvalid")
+			{
+				items.Add(Item("family_contact", "Main school contact valid", false,
+					"Choose a saved parent or guardian as the main school contact. Review the family details before finalizing admission."));
+			}
+		}
+		return items;
 	}
 
 	private static AdmissionFinalizationReadinessItemDto Item(string key, string label, bool passed, string detail) =>

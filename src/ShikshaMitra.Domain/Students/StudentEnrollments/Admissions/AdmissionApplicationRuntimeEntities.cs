@@ -42,6 +42,16 @@ public class AdmissionApplicationWorkflowInstance : FullAuditedAggregateRoot<Gui
 		Status = AdmissionWorkflowInstanceStatus.Cancelled;
 		CompletedAt ??= DateTime.UtcNow;
 	}
+
+	public void Resume(AdmissionJourneyClosureSnapshot snapshot)
+	{
+		if (Status != AdmissionWorkflowInstanceStatus.Cancelled || snapshot.WorkflowId != Id ||
+			snapshot.WorkflowDefinitionId != WorkflowDefinitionId || snapshot.WorkflowStatus is not
+			(AdmissionWorkflowInstanceStatus.Active or AdmissionWorkflowInstanceStatus.Completed))
+			throw new BusinessException(AdmissionJourneyResumeErrorCodes.Blocked, "The saved workflow cannot be restored.");
+		Status = snapshot.WorkflowStatus;
+		CompletedAt = snapshot.WorkflowCompletedAt;
+	}
 }
 
 public class AdmissionApplicationStageInstance : Entity<Guid>, IMultiTenant
@@ -115,6 +125,14 @@ public class AdmissionApplicationStageInstance : Entity<Guid>, IMultiTenant
 			throw new BusinessException(AdmissionApplicationErrorCodes.InvalidCurrentStage);
 	}
 
+	public void ResumeCancelled(bool wasActive)
+	{
+		if (Status != AdmissionRuntimeStageStatus.Cancelled || wasActive != EnteredAt.HasValue)
+			throw new BusinessException(AdmissionJourneyResumeErrorCodes.Blocked, "The saved stage cannot be restored.");
+		Status = wasActive ? AdmissionRuntimeStageStatus.Active : AdmissionRuntimeStageStatus.Pending;
+		CompletedAt = null; CompletedBy = null; CompletionReason = null;
+	}
+
 	private static string? NormalizeReason(string? reason) =>
 		string.IsNullOrWhiteSpace(reason) ? null : Check.Length(reason.Trim(), nameof(reason), 512);
 }
@@ -169,6 +187,9 @@ public class AdmissionWorkflowTransitionHistory : FullAuditedAggregateRoot<Guid>
 
 public class AdmissionFormInstance : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	public const string EffectiveSchemaKey = "AdmissionEffectiveFormSchemaV1";
+	public const string EffectiveSchemaEnabledKey = "AdmissionEffectiveFormEnabled";
+
 	public Guid? TenantId { get; private set; }
 	public Guid ApplicationId { get; private set; }
 	public Guid FormDefinitionId { get; private set; }
@@ -186,6 +207,15 @@ public class AdmissionFormInstance : FullAuditedAggregateRoot<Guid>, IMultiTenan
 	public void MarkSaved() { if (Status == AdmissionFormInstanceStatus.Submitted) throw new BusinessException(AdmissionApplicationErrorCodes.AlreadySubmitted); LastSavedAt = DateTime.UtcNow; }
 	public void Submit(Guid? submittedBy = null) { if (Status == AdmissionFormInstanceStatus.Submitted) throw new BusinessException(AdmissionApplicationErrorCodes.AlreadySubmitted); Status = AdmissionFormInstanceStatus.Submitted; SubmittedAt = DateTime.UtcNow; SubmittedBy = submittedBy; LastSavedAt = SubmittedAt.Value; }
 	public void Reopen() { if (Status != AdmissionFormInstanceStatus.Submitted) throw new BusinessException(AdmissionApplicationErrorCodes.FormNotSubmitted); Status = AdmissionFormInstanceStatus.Reopened; }
+
+	public void FreezeEffectiveSchema(string snapshotJson)
+	{
+		if (Status != AdmissionFormInstanceStatus.Draft || ExtraProperties.ContainsKey(EffectiveSchemaKey) ||
+			ExtraProperties.ContainsKey(EffectiveSchemaEnabledKey))
+			throw new BusinessException(AdmissionFormInheritanceErrorCodes.SnapshotImmutable);
+		ExtraProperties[EffectiveSchemaKey] = Check.NotNullOrWhiteSpace(snapshotJson, nameof(snapshotJson));
+		ExtraProperties[EffectiveSchemaEnabledKey] = true;
+	}
 }
 
 public class AdmissionFormFieldValue : Entity<Guid>, IMultiTenant

@@ -40,7 +40,7 @@ public class ProrationPolicyAppService(
 			var status = ParseListStatus(input.Status);
 			query = query.Where(x => x.Status == status);
 		}
-		else
+		else if (!input.IncludeArchived)
 		{
 			query = query.Where(x => x.Status != ProrationPolicyStatus.Archived);
 		}

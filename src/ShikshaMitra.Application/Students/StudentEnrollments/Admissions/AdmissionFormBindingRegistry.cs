@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 using Volo.Abp.Data;
 
@@ -15,6 +16,7 @@ internal static class AdmissionFormBindingRegistry
 	{
 		var metadata = new Dictionary<string, AdmissionFormSystemFieldMetadataDto>(StringComparer.OrdinalIgnoreCase)
 		{
+			["Applicant.Name"] = new() { Key = "Applicant.Name", DisplayName = "Student name", Description = "The applicant's full name in one question.", FieldType = AdmissionFormFieldType.Text },
 			["Applicant.FirstName"] = new() { Key = "Applicant.FirstName", DisplayName = "Applicant first name", Description = "The applicant's first name.", FieldType = AdmissionFormFieldType.Text },
 			["Applicant.MiddleName"] = new() { Key = "Applicant.MiddleName", DisplayName = "Applicant middle name", Description = "The applicant's middle name.", FieldType = AdmissionFormFieldType.Text },
 			["Applicant.LastName"] = new() { Key = "Applicant.LastName", DisplayName = "Applicant last name", Description = "The applicant's last name.", FieldType = AdmissionFormFieldType.Text },
@@ -24,6 +26,10 @@ internal static class AdmissionFormBindingRegistry
 			["Guardian.LastName"] = new() { Key = "Guardian.LastName", DisplayName = "Guardian last name", Description = "The primary guardian's last name.", FieldType = AdmissionFormFieldType.Text },
 			["Guardian.Mobile"] = new() { Key = "Guardian.Mobile", DisplayName = "Guardian mobile", Description = "The primary guardian's mobile number.", FieldType = AdmissionFormFieldType.Phone },
 			["Guardian.Email"] = new() { Key = "Guardian.Email", DisplayName = "Guardian email", Description = "The primary guardian's email address.", FieldType = AdmissionFormFieldType.Email },
+			["Inquiry.ParentRelationship"] = new() { Key = "Inquiry.ParentRelationship", DisplayName = "Primary parent", Description = "Choose which configured parent's contact belongs to this inquiry.", FieldType = AdmissionFormFieldType.Select, OptionsJson = "[{\"value\":\"father\",\"label\":\"Father\"},{\"value\":\"mother\",\"label\":\"Mother\"}]" },
+			["Inquiry.Source"] = new() { Key = "Inquiry.Source", DisplayName = "Source", Description = "How this inquiry reached the school.", FieldType = AdmissionFormFieldType.Select, OptionsJson = "[{\"value\":\"0\",\"label\":\"Website\"},{\"value\":\"1\",\"label\":\"Walk-in\"},{\"value\":\"2\",\"label\":\"Phone\"},{\"value\":\"3\",\"label\":\"Referral\"},{\"value\":\"4\",\"label\":\"Campaign\"},{\"value\":\"5\",\"label\":\"Import\"},{\"value\":\"6\",\"label\":\"WhatsApp\"},{\"value\":\"7\",\"label\":\"Existing parent\"},{\"value\":\"8\",\"label\":\"Manual\"},{\"value\":\"9\",\"label\":\"Other\"},{\"value\":\"10\",\"label\":\"QR code\"},{\"value\":\"11\",\"label\":\"School fair\"},{\"value\":\"12\",\"label\":\"Social media\"}]" },
+			["Inquiry.SourceDetail"] = new() { Key = "Inquiry.SourceDetail", DisplayName = "Source details", Description = "Optional source context, up to 128 characters.", FieldType = AdmissionFormFieldType.Text },
+			["Inquiry.PreferredLanguageCode"] = new() { Key = "Inquiry.PreferredLanguageCode", DisplayName = "Communication language", Description = "Preferred language for contact; independent of form display language.", FieldType = AdmissionFormFieldType.Select, OptionsJson = "[{\"value\":\"en\",\"label\":\"English\"},{\"value\":\"hi\",\"label\":\"Hindi\"},{\"value\":\"mr\",\"label\":\"Marathi\"},{\"value\":\"gu\",\"label\":\"Gujarati\"},{\"value\":\"bn\",\"label\":\"Bengali\"},{\"value\":\"pa\",\"label\":\"Punjabi\"},{\"value\":\"ta\",\"label\":\"Tamil\"},{\"value\":\"te\",\"label\":\"Telugu\"},{\"value\":\"kn\",\"label\":\"Kannada\"},{\"value\":\"ml\",\"label\":\"Malayalam\"},{\"value\":\"ur\",\"label\":\"Urdu\"}]" },
 			["Address.AddressLine1"] = new() { Key = "Address.AddressLine1", DisplayName = "Address line 1", Description = "The applicant's primary address line.", FieldType = AdmissionFormFieldType.Text },
 			["Address.AddressLine2"] = new() { Key = "Address.AddressLine2", DisplayName = "Address line 2", Description = "The applicant's secondary address line.", FieldType = AdmissionFormFieldType.Text },
 			["Address.City"] = new() { Key = "Address.City", DisplayName = "City", Description = "The applicant's city.", FieldType = AdmissionFormFieldType.Text },
@@ -54,6 +60,8 @@ internal static class AdmissionFormBindingRegistry
 		}
 		return key switch
 		{
+			"Applicant.Name" => string.Join(" ", new[] { applicant.FirstName, applicant.MiddleName, applicant.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))),
+			"Inquiry.ParentRelationship" => AdmissionSiblingParentSelection.ReadRelationship(applicant),
 			"Applicant.FirstName" => applicant.FirstName,
 			"Applicant.MiddleName" => applicant.MiddleName,
 			"Applicant.LastName" => applicant.LastName,
@@ -78,6 +86,10 @@ internal static class AdmissionFormBindingRegistry
 		if (key is "Address.State" or "Address.Country") applicant.SetProperty("AdmissionLocation." + key, value);
 		switch (key)
 		{
+			case "Applicant.Name": UpdateApplicant(applicant, value, null, null, applicant.DateOfBirth, applicant.Gender); return true;
+			// Inquiry operational answers are persisted in the form snapshot and applied by inquiry services.
+			case "Inquiry.ParentRelationship": return AdmissionSiblingParentSelection.IsRelationship(value);
+			case "Inquiry.Source": case "Inquiry.SourceDetail": case "Inquiry.PreferredLanguageCode": return true;
 			case "Applicant.FirstName": UpdateApplicant(applicant, value, applicant.MiddleName, applicant.LastName, applicant.DateOfBirth, applicant.Gender); return true;
 			case "Applicant.MiddleName": UpdateApplicant(applicant, applicant.FirstName, value, applicant.LastName, applicant.DateOfBirth, applicant.Gender); return true;
 			case "Applicant.LastName": UpdateApplicant(applicant, applicant.FirstName, applicant.MiddleName, value, applicant.DateOfBirth, applicant.Gender); return true;

@@ -1,9 +1,9 @@
-﻿---
+---
 module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-10-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,12 @@ audience: humans-and-agents
 # Understand Student Enrollment Admissions behavior
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
+
+## Resume an ended admission
+
+Resume admission restores an eligible End Journey withdrawal within its original offering, cycle and unended academic year. The application ID/number, pinned workflow/form, completed or skipped evidence and Finance records remain unchanged. End Journey saves a versioned immutable decision-history snapshot; Resume appends its own actor/reason/closure event. Earlier withdrawal history is retained.
+
+Closed/unavailable intake, expired offers, finalized/enrolled cases and cancelled Records return handoffs are blocked. Legacy withdrawals are reconstructed only from unambiguous recorded pre-decision stage/form evidence; unclear cases require review. Seat resources are reacquired through the seat owner under current capacity and saved policy. Cancelled assessment bookings and follow-ups remain cancelled.
 
 ## Parents and the main school contact
 
@@ -75,7 +81,7 @@ Admission event instants use UTC and timezone-aware persistence parameters. Prev
 | Rule | Behavior |
 |---|---|
 | Configuration | Admission supplies common readiness and published workflow documents automatically. The school's saved student/parent access choices apply to pending cases; new schools default to Student Not needed, Parent Required and manual sending. Activated, completed and cancelled case snapshots remain unchanged. Named readiness rules and Offering links are no longer prerequisites. |
-| Mandatory readiness | Current Offering cases require confirmed admission, complete operational Student name/date of birth/gender, applicable required workflow documents verified, Division, GR/Roll and existing fee-structure confirmation. Reusing an incomplete Student cannot bypass the identity check through a complete Applicant. Admission owns approval; there is no separate default onboarding approval. Payments and legacy blanket service-consent/profile requirements do not gate activation or completion. Credential preparation failure leaves an active enrollment with access pending. |
+| Mandatory readiness | Current Offering cases require confirmed admission, complete operational Student name/date of birth/gender, applicable required workflow documents verified, Division and GR/Roll. Reusing an incomplete Student cannot bypass the identity check through a complete Applicant. Admission owns approval; there is no separate default onboarding approval. Fee assignment, payment and legacy blanket service-consent/profile requirements do not gate activation or completion. Fee confirmation remains separately visible and pending until genuinely confirmed; activation never marks it Paid or Waived. Credential preparation failure leaves an active enrollment with access pending. |
 | Required documents | Canonical published workflow policy determines upload/original evidence and verification. Waivers and document-complete overrides cannot satisfy required evidence. Accepted admission evidence remains available during Onboarding. |
 | Account ownership | Email is mandatory. Student gets its own identity; a selected adult uses the Parent role. Confirmed Father/Mother reuse can link multiple children while preserving the existing password. Optional other guardians require explicit authorisation; existing identities/colliding emails retain reviewed repair. Automatic preparation does not create new generic-guardian access. |
 | Retained parent links | A verified existing Father/Mother link is validated against the current child's saved owner, tenant, active Parent-only identity and any pinned sibling selection. It does not depend on another child's link remaining eligible for new sibling discovery. The first account prepared for a confirmed-family child remains ordinary manual credential delivery, not sibling reuse; its own link never becomes a new-link candidate. New links still require confirmed family/source provenance and eligible source evidence. Existing identities, passwords and other child links are not rewritten. |
@@ -178,6 +184,14 @@ Lifecycle and time window are deliberately separate:
 Cycle codes are tenant-unique and normalized to uppercase. The close date must be after the open
 date. Draft details are editable; after publication, only the controlled window-revision command
 can change dates, and all linked Offering overrides must still fit inside the revised window.
+
+Application-window boundaries are calendar dates. Create/edit, clone, window revision and the
+optional reopen end date preserve the date written by the client, including offset-bearing
+midnight payloads, independently of the API server timezone. UTC midnight is their existing
+storage/wire representation; it does not convert the selected date to another timezone.
+Scheduled publish/close actions and lifecycle/audit timestamps remain actual instants.
+This fix does not infer or automatically shift dates already saved incorrectly; repair a confirmed
+affected record through the existing governed edit/window-revision flow.
 
 Publishing performs a readiness check. Closing and archiving require a reason and show dependency
 counts. Closing a cycle with enabled Offerings requires explicit acknowledgement; existing
@@ -395,3 +409,11 @@ One dashboard serves all authorized identities. Persisted roles select admin, le
 | Attendance | Saved register counts grouped by submitted/draft status and pending leave requests within selected-year enrollment/division scope. These are year work summaries, not daily completeness or attendance percentages. |
 
 Student/Parent-only database roles receive names and relationships from persisted verified portal associations, including existing self-link revocation rules; they receive no staff sections or shortcuts. Mixed staff/portal roles follow staff grants and scope. No grants, seeders, snapshots or migrations are created by a dashboard read. Existing Attendance reports remain authoritative for credit, percentage, cutoff, provisional and missing-day behavior.
+
+## Inquiry-to-Registration field inheritance
+
+Inheritance is an explicit versioned Registration setting. Offering references still determine Inquiry and workflow; the workflow supplies the one Registration form. Multiple Inquiry forms can share Registration, and separate routes can use other Registration forms. Approved source versions are checked against the application's exact captured Inquiry, rather than names, class ranges or the latest published version.
+
+Composition includes only that source's questions plus common Registration questions. Registered Student binding identities are deduplicated; custom identities retain lineage or explicit reviewed equivalence. Source labels/translations, types, options, visibility and repeatable structure remain authoritative. Registration can strengthen requiredness and adjust compatible placement, but cannot independently delete, rename or change inherited types/options. A read-only field cannot become newly unanswerably required. Inquiry-only bindings remain read-only source context and do not become editable Student bindings.
+
+Application start freezes the effective schema and safe source context in the existing form instance's extra properties. Rendering, writes, submission validation and retained Records evidence use that schema. Existing applications without a snapshot remain legacy; a corrupt enabled snapshot fails visibly. Registration edits and explicit clears are retained, source-only questions do not leak between paths, and later publications do not rewrite existing instances or submission history. No schema migration or automatic historical backfill is introduced.

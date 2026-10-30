@@ -95,6 +95,8 @@ public class StudentRecordRegistrationReader(
 		// A narrower user's visible returning admission must never become a new baseline.
 		var baseline = await AsyncExecuter.FirstOrDefaultAsync((await GetSourceRowsAsync(studentId, false)).Select(x => (Guid?)x.ApplicationId));
 		var instanceIds = rows.Select(x => x.FormInstanceId).Distinct().ToArray();
+		var sourceInstances = (await instances.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(instanceIds, x.Id)))
+			.ToDictionary(instance => instance.Id);
 		var submissionRows = await submissions.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(instanceIds, x.FormInstanceId));
 		var definitionIds = rows.Select(x => x.FormDefinitionId).Distinct().ToArray();
 		var definitions = (await forms.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(definitionIds, x.Id))).ToDictionary(x => x.Id);
@@ -110,7 +112,9 @@ public class StudentRecordRegistrationReader(
 				(!row.FinalizedAt.HasValue || x.SubmittedAt <= row.FinalizedAt.Value)).OrderByDescending(x => x.AttemptNumber).ThenByDescending(x => x.SubmittedAt).FirstOrDefault();
 			if (submission == null) continue;
 			var definition = definitions[row.FormDefinitionId];
-			var dto = AdmissionApplicationFormService.MapDefinition(definition,
+			var frozen = AdmissionEffectiveFormStore.Read(sourceInstances[row.FormInstanceId]);
+			if (frozen == null) AdmissionEffectiveFormStore.EnsureLegacyAllowed(definition);
+			var dto = frozen?.Definition ?? AdmissionApplicationFormService.MapDefinition(definition,
 				sectionRows.Where(x => x.FormDefinitionId == definition.Id), fieldRows.Where(x => x.FormDefinitionId == definition.Id).ToList());
 			var family = definition.Id;
 			var seen = new HashSet<Guid> { family };

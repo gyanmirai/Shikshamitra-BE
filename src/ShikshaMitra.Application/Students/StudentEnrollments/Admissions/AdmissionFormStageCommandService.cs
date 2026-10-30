@@ -27,7 +27,9 @@ public class AdmissionFormStageCommandService(
 		if (context.Form.Status != AdmissionFormInstanceStatus.Submitted || context.Policy?.RequireSectionVerification != true)
 			throw new BusinessException(AdmissionFormStageErrorCodes.InvalidState,
 				"Submit the form before recording section verification.");
-		var section = await sections.FindAsync(sectionId);
+		var frozen = AdmissionEffectiveFormStore.Read(context.Form);
+		var section = frozen == null ? await sections.FindAsync(sectionId)
+			: AdmissionEffectiveFormResolver.MaterializeSections(frozen.Definition).FirstOrDefault(item => item.Id == sectionId);
 		if (section?.FormDefinitionId != context.Form.FormDefinitionId ||
 			!context.Policy.VerificationSectionCodes.Contains(section.Code, StringComparer.OrdinalIgnoreCase))
 			throw new BusinessException(AdmissionFormStageErrorCodes.InvalidSection,

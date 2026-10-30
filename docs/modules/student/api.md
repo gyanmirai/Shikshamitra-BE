@@ -1,9 +1,9 @@
-﻿---
+---
 module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-10-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,8 @@ audience: humans-and-agents
 # Find Student Enrollment Admissions APIs
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
+
+Finalization may report `Students:Family:MainContactInvalid` when the selected main school contact has no saved profile. For unambiguous new legacy identities, finalization preview exposes this as a failed `family_contact` readiness item; `Students.Onboarding.FinalizationNotReady` includes the failed check labels in `Blockers`. Existing structured error codes are preserved with localized English/Hindi recovery text. Preview does not modify the applicant or concurrency stamp.
 
 ## Mobile student profile
 
@@ -137,6 +139,8 @@ No new workflow, messaging store or finalization path is created.
 | Contract | Authority and behavior |
 |---|---|
 | POST `/api/student/enrollment/admissions/applications/{id}/end-journey` | Existing AdmissionApplications.Decide (`Students.Admissions.Applications.Add`) and tenant/academic scope. Requires `{reason, concurrencyStamp}`; the trimmed reason is mandatory and limited to 512 characters. Returns the updated Application DTO with `canEndJourney=false`. |
+| GET `/api/student/enrollment/admissions/applications/{id}/resume-preview` | Existing AdmissionApplications.View and the application's tenant/academic scope. Returns the exact closure ID/stamp, target stage or finalization boundary, target workspace and eligibility blockers. Reads do not restore resources. |
+| POST `/api/student/enrollment/admissions/applications/{id}/resume-journey` | Existing AdmissionApplications.Decide. Requires `{reason, concurrencyStamp, closureHistoryId, idempotencyKey}`; reason max 512, key max 80. Revalidates inside a serializable transaction. Same-closure/key/reason replay returns the existing result; stale/changed closure returns `Admissions:JourneyResumeConflict` (409). `Admissions:JourneyResumeBlocked` (400) includes the actual `data.Reason`. |
 | Application `canEndJourney` | Available before finalization for Draft, Submitted, InReview, Waitlisted, Approved, Offered and OfferAccepted applications without Student/Onboarding/enrollment links. Rejected, OfferDeclined, Withdrawn, finalized and enrolled applications cannot be closed again. |
 | Future-stage preparation | Existing Form draft/verification/correction, Documents evidence/review, Assessment booking/attendance/results and fee-selection permissions remain authoritative. Capabilities permit Pending or Active stages only while the workflow is Active and the application is open; published configuration and independent review rules still apply. |
 | Current-stage progression | Form submission (except the existing Inquiry entry handoff), Continue, completion and admission decisions retain their current-stage guards. Preparing evidence does not enter or complete a Pending stage. Fee selection confirms Admissions intent only and never collects payment. |
@@ -243,7 +247,7 @@ This is a read-contract correction, not a new bulk assignment endpoint, permissi
 | POST `/{id}/gr-number` | AllocateIdentifier; `{numberSeriesId, manualValue?, manualSequence?, reason?, concurrencyStamp?}`. First manual assignment needs no correction reason. |
 | POST `/{id}/roll-number` | AllocateIdentifier; `{rollNumber, rollAssignmentMode?, reason?, concurrencyStamp?}`. Independent from GR assignment. |
 | POST `/identifier-locks` | Add/Update (AllocateIdentifier and Repair aliases); `{academicYearId, divisionId, identifierType: gr|roll, isLocked, reason?}`. Both actions enforce the selected division scope; Unlock requires a reason. No Division placement lock. |
-| GET `/{id}/fee-structure` and `/fee-structure/candidates` | View; existing Admissions selection/candidate DTOs backed by published Finance structure reads. |
+| GET `/{id}/fee-structure` and `/fee-structure/candidates` | View; existing Admissions selection/candidate DTOs backed by published Finance structure reads. Missing confirmation does not set `onboardingBlocker`; fee assignment/payment do not gate activation. |
 | PUT `/{id}/fee-structure` | Edit; `{structureId, optionalHeadIds, concurrencyStamp?}` confirms admission intent only. No Finance mutation. |
 | GET `/{id}/workflow-documents` | View; frozen applicable workflow requirements and canonical evidence. |
 | POST `/{id}/workflow-documents/{stageId}/{code}/upload` or `/original` | Edit plus AdmissionDocuments.Upload or RecordOriginal respectively; reuses canonical Admissions evidence contracts. |
@@ -371,6 +375,22 @@ as the displayed usage values. Lifecycle/window filters retain their scalar para
 Invalid fields, operators, values or malformed JSON return `Students:Admissions:InvalidCycleFilter`.
 Close, reopen, archive, and window revision require a reason of at most 500 characters. Cycle
 description is optional and limited to 1000 characters.
+
+Cycle `startDate`/`endDate` (including clone and window-revision requests) and reopen's nullable
+`newEndDate` are calendar dates. ISO date-only and ISO date-time inputs are accepted; when an
+offset is present, the written calendar date is retained before any timezone conversion.
+Cycle responses emit those boundaries at UTC midnight (`2026-06-01T00:00:00Z` for a submitted
+`2026-06-01T00:00:00+05:30`). Only these properties use `AdmissionCalendarDateJsonConverter`;
+property-scoped `DisableDateTimeNormalization` prevents ABP from replacing the calendar converter.
+Schedule `publishAt`/`closeAt`, response schedule fields and audit timestamps retain normal instant
+serialization and UTC scheduling. No global date converter, schema migration or historical date
+rewrite is introduced.
+
+Cycle schedule/lifecycle timestamps and history `occurredAt` use the existing PostgreSQL UTC-instant
+mapping helper. Parameters remain `timestamptz` with zero offset under legacy Npgsql settings, and
+fresh reads retain the same instant as the save response. Calendar window properties do not use
+this mapping. Existing timestamp columns and stored values are unchanged; this does not repair
+previously mis-stored schedule intentions or alter the global clock/database timezone.
 
 ## Offering endpoints
 
@@ -608,7 +628,7 @@ New session input adds `scopes: [{ admissionOfferingId, workflowStageDefinitionI
 | `GET interviewers?search=...` | ManageSessions; employee-first searchable staff choices, maximum 50 |
 | `GET sessions/workbench` / `GET sessions/{id}` | View; combined server-paged/sorted sessions (page maximum 200), or direct scoped lookup |
 | `GET sessions/{id}/slots` | Book; free individual appointment times without applicant-private data |
-| `POST sessions/preview` | ManageSessions; `{ session, sessionId?, sessionConcurrencyStamp?, skipCount, maxResultCount, search? }`; paged candidates plus independent proposed bookings (up to 200), availability and fingerprint |
+| `POST sessions/preview` | ManageSessions; `{ session, sessionId?, sessionConcurrencyStamp?, skipCount, maxResultCount, search?, stageInstanceIds? }`; paged candidates plus independent proposed bookings (up to 200), availability and fingerprint. Optional `stageInstanceIds` accepts 1–200 distinct non-empty IDs and intersects the authorized eligible stages before pupil deduplication and interview proposals; omission retains the existing combined preview. It never expands authorization or books additional applicants. |
 | `POST sessions/confirm` | ManageSessions plus Book when candidates are selected; `{ session, sessionId?, sessionConcurrencyStamp?, idempotencyKey, previewFingerprint, bookings }`; atomic creation/reservation/booking or additional booking of an existing session |
 
 Confirmation rechecks eligibility, application versions, room/calendar/interviewer conflicts, shared seats and exact free interview slots. Durable receipts bind retries to actor and payload; later arrivals are never implicitly booked. Preview excludes conflicting appointments and proposes one application per pupil. Reservation dates/times use the existing India school-day timezone; cross-school-day sessions are rejected. Pending room approval holds bookings but blocks attendance/results. Direct generic room edits/cancellation of a live assessment reservation are rejected with guidance to Assessments; rescheduling replaces the reservation through the existing approval path. Session cancellation with `cancelPendingBookings: true` requires ManageSessions and Book and atomically cancels only unstarted pending attempts before releasing the room. Booked individual interviews cannot silently change slot layout. Partial-scope readers receive only authorized links and `canManage: false`; whole-session management requires every linked Offering. Missing attendance remains pending.
@@ -623,6 +643,12 @@ Unknown policy versions, stale stamps, unavailable capacity, missing evidence, a
 The existing inquiry capture-context response includes nullable `academicYearStartDate` (a calendar date) and `minimumAgeYears`. After the offering scope check, these are read from its cycle's Academic Year and its Standard's existing `AgeLowerLimit`; non-positive minima return null. Clients use them for advisory DOB age feedback in inquiry create/edit. This does not add inquiry validation, change workflow eligibility policies, require Institute Setup permissions, or introduce persisted settings/migrations.
 
 The inquiry collection route prefix is `/api/student/enrollment/admissions/inquiries`.
+
+Inquiry form validation/publication requires a configured, required, editable, unconditionally visible Student name and one coherent Parent/Guardian name/mobile contact path. Draft saves remain available when these are incomplete; existing Registration publication is unchanged. System bindings include `Applicant.Name` as well as first/middle/last names. New Inquiry publication rejects a mixture of full-name and split-name questions; historical capture deterministically resolves nonblank split names before the full-name fallback. Inquiry-only optional keys are `Inquiry.ParentRelationship` (Father/Mother selector), `Inquiry.Source`, `Inquiry.SourceDetail` and `Inquiry.PreferredLanguageCode`. A single bound Father or Mother contact pair resolves that role; two structured contact paths require the configured selector for new publication. Generic Guardian primary contact remains supported. Request identity is resolved from those published answers without injecting fallback questions, and a forged sibling-role mismatch is rejected. Existing captured roles/contacts protect legacy edits; shared phone/name values do not establish role or account provenance.
+
+Public Inquiry form fields expose binding metadata and step visibility with their configured questions. The response no longer appends synthetic `PUBLIC_*` identity fields. Public submission resolves configured identity on the server and retains link-owned source attribution; it does not gain staff-confirmed parent-account or sibling provenance. Duplicate match results optionally include `existingInquiryAdmissionCycleId`; a visible current-cycle inquiry is selected before older references for the same applicant. Existing scopes, permissions and explicit family confirmation remain authoritative.
+
+Inquiry detail includes nullable `parentRelationship` from the applicant's captured Father/Mother role. It is independent of `mainSchoolContact` and remains null when no role was captured; clients must not infer it from a shared mobile number. Legacy identity field codes remain supported, but an explicit known binding for another person cannot override the supplied primary contact through an alias.
 
 | Method | Route | Permission | Purpose |
 | --- | --- | --- | --- |
@@ -967,3 +993,16 @@ Fees expose `status`, `detail` and nullable `outstandingAmount`; amounts require
 Existing preview/batch/decision routes remain authoritative. Preview rows add `approvalRequired` and `outstandingItems`; transition rows add `outstandingOverrideRequired` and `outstandingItems`. Approval input adds `outstandingReason` (required, maximum 1000 characters, whenever pending money/books exist at that stage). No client override flag exists. Only owner-classified `OutstandingFees` and `OutstandingBooks` can proceed to configured independent approval; malformed assignments, proration errors, reconciliation and other blockers remain blocking. Outstanding items force configured approval even for Direct policies. Each approving stage records a reason and frozen owner evidence; scheduling/application recheck all recorded stage authority and exact evidence. Changed balances/new books require fresh review, never a waiver or automatic book return.
 
 Business errors include `Students:Records:OutstandingReasonRequired`, `OutstandingApprovalNotConfigured`, `OutstandingReviewRequired`, `OutstandingReviewChanged`, and `ExitAlreadyPending` (with the same prefix). Batch idempotency, concurrency stamps, serializable operations, frozen policy, effective dates and withdrawal proration retain their existing contracts. Approval evidence uses existing transition extra properties and immutable events; no migration or permission reseeding is required.
+
+## Inquiry inheritance contracts
+
+| Endpoint under `/api/student/enrollment/admissions` | Existing authority | Result |
+| --- | --- | --- |
+| `GET forms/{id}/inheritance/sources?skipCount=0&maxResultCount=25` | `AdmissionForms.ViewUsage` plus scoped Offering discovery | Paged exact Inquiry versions, approval status and accessible Offering connections. |
+| `POST forms/inheritance/preview` | `AdmissionForms.Manage` | Read-only effective Registration definition, field issues and read-only Inquiry context for a selected source and optional unsaved Registration draft. |
+
+Form DTOs and existing draft writes add optional `inheritance` with `enabled` and source entries containing `inquiryFormDefinitionId`, `requiredFieldIdentities`, reviewed `fieldMappings` and compatible `layouts`. Preview input contains `inquiryFormDefinitionId`, optional `registrationFormDefinitionId` and optional `draft`. A preview does not create a form/application, approve a source or modify routing. Effective fields carry `fieldIdentity` and optional `inheritedFrom` provenance. The application-form response keeps the existing definition/value shape and adds safe source context.
+
+Existing publish validates every approved source composition. Active routes and application start enforce compatibility; incomplete inactive drafts retain their existing save behavior. Published/base definitions stay immutable. Legacy requests without inheritance settings retain existing behavior. `Admissions.FormInheritance...` business failures identify invalid policy, incompatible source or unavailable frozen schema without weakening existing tenant, permission, ownership or concurrency checks.
+
+Discovery includes exact versions captured by tenant inquiries on accessible connected Offerings. Archived source retention requires this captured history or an enabled previously Published/Archived Registration-family approval; an unsaved draft cannot manufacture that proof. New Offering source selection still requires Published. Discovery returns source/version and connection metadata, not applicant answers.

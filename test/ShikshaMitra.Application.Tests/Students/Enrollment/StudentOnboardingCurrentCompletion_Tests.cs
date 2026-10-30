@@ -17,19 +17,29 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
-	public Task Current_onboarding_requires_a_confirmed_structure_without_a_payment_completion_gate() => RunCertificationScenarioAsync(async () =>
+	public Task Current_onboarding_activates_without_fee_assignment_or_payment_and_keeps_finance_pending() => RunCertificationScenarioAsync(async () =>
 	{
 		var (fixture, item) = await PrepareCurrentCompletionCaseAsync("CurrentFees");
 		var service = GetRequiredService<IStudentOnboardingAppService>();
-		(await service.PreviewActivationAsync(item.Id)).LastError.ShouldContain("fee structure");
-		(await Should.ThrowAsync<BusinessException>(() => service.ActivateAsync(item.Id,
-			new() { ConcurrencyStamp = item.ConcurrencyStamp, IdempotencyKey = "current-fees-missing" })))
-			.Code.ShouldBe(StudentOnboardingErrorCodes.RequiredStepsIncomplete);
-		item = await ConfirmFixtureFeeStructureAsync(fixture.Offering, await service.GetAsync(item.Id));
-		item = await service.ActivateAsync(item.Id, new() { ConcurrencyStamp = item.ConcurrencyStamp, IdempotencyKey = "current-fees-confirmed" });
+		var preview = await service.PreviewActivationAsync(item.Id);
+		preview.Status.ShouldBe(StudentOnboardingStatus.ReadyForActivation);
+		preview.LastError.ShouldBeNullOrEmpty();
+		(await service.GetFeeStructureAsync(item.Id)).OnboardingBlocker.ShouldBeNull();
+		var command = new ActivateStudentOnboardingDto { ConcurrencyStamp = preview.ConcurrencyStamp, IdempotencyKey = "current-fees-optional" };
+		item = await service.ActivateAsync(item.Id, command);
 		item.Status.ShouldBe(StudentOnboardingStatus.Completed, item.LastError);
-		item.FeeStructureConfirmed.ShouldBeTrue();
+		item.FeeStructureConfirmed.ShouldBeFalse();
+		item.FeeAssignmentConfirmed.ShouldBe(false);
+		item.SelectedFeeStructureId.ShouldBeNull();
 		item.FirstPaymentConfirmed.ShouldBeNull();
+		item.PrimaryBlocker.ShouldBeNull();
+		item.ProgressPercent.ShouldBe(100);
+		var feeStep = item.Steps.Single(s => s.Key == StudentOnboardingStepKeys.FinanceAccountsServices);
+		feeStep.Required.ShouldBeFalse();
+		feeStep.Status.ShouldBe(StudentOnboardingStepStatus.NotRequired);
+		(await service.ActivateAsync(item.Id, command)).StudentEnrollmentId.ShouldBe(item.StudentEnrollmentId);
+		(await WithUnitOfWorkAsync(() => _studentEnrollmentRepository.CountAsync(e => e.OnboardingCaseId == item.Id))).ShouldBe(1);
+		(await ReadAsync<AdmissionApplication>(fixture.Application.Id)).GetFeeSelection().ShouldBeNull();
 		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<DueFee, Guid>>().CountAsync(value => value.StudentId == item.StudentId))).ShouldBe(0);
 		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentFeeStructure, Guid>>().CountAsync(value => value.StudentId == item.StudentId))).ShouldBe(0);
 		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().CountAsync(value => value.StudentId == item.StudentId))).ShouldBe(0);

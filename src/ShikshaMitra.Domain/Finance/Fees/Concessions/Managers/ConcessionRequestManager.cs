@@ -57,11 +57,8 @@ public class ConcessionRequestManager(
 		if (dueFeeConcessions is { Count: > 0 } && feeHeadConcessions.Count > 0)
 			throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
 
-		if (enforcePendingUniqueness && await concessionRequestRepository.HasPendingForStudentAndTypeAsync(
-			studentId, concessionTypeId, academicYearId))
-		{
-			throw new BusinessException(FinanceConcessionErrorCodes.DuplicatePendingRequest);
-		}
+		// Drafts do not reserve a benefit, but cannot bypass a benefit already reserved or granted.
+		await EnsureBenefitAvailableAsync(studentId, concessionTypeId, academicYearId);
 		if (sourceRequestId.HasValue)
 		{
 			var source = await concessionRequestRepository.FindAsync(sourceRequestId.Value)
@@ -125,10 +122,12 @@ public class ConcessionRequestManager(
 		Guid concessionTypeId,
 		IReadOnlyList<FeeHeadConcessionInput> feeHeadConcessions,
 		Guid? studentFeeStructureId = null,
-		IReadOnlyList<DueFeeConcessionInput>? dueFeeConcessions = null)
+		IReadOnlyList<DueFeeConcessionInput>? dueFeeConcessions = null,
+		Guid? requestId = null)
 	{
 		await LoadStudentAsync(studentId);
 		await LoadConcessionTypeAsync(concessionTypeId, academicYearId);
+		await EnsureBenefitAvailableAsync(studentId, concessionTypeId, academicYearId, requestId, forMutation: false);
 		var assignment = await ResolveAssignmentAsync(studentId, academicYearId, studentFeeStructureId);
 		var policy = await LoadPolicySnapshotAsync(
 			assignment, concessionPolicyId, concessionPolicyVersionId, requireActive: true);
@@ -164,6 +163,7 @@ public class ConcessionRequestManager(
 		IReadOnlyList<DueFeeConcessionInput>? dueFeeConcessions = null)
 	{
 		request.EnsureDraft();
+		await EnsureBenefitAvailableAsync(request.StudentId, request.ConcessionTypeId, request.AcademicYearId, request.Id);
 		var assignment = await studentFeeStructureRepository.GetAsync(request.StudentFeeStructureId);
 		var policy = await LoadPolicySnapshotAsync(
 			assignment, concessionPolicyId, concessionPolicyVersionId, requireActive: true);
@@ -204,7 +204,7 @@ public class ConcessionRequestManager(
 		// Revalidate current configuration without replacing the saved amounts or evidence reviewed by the checker.
 		await PreviewAsync(request.TenantId, request.AcademicYearId, request.StudentId,
 			request.ConcessionPolicyId, request.ConcessionPolicyVersionId, request.ConcessionTypeId,
-			inputs, request.StudentFeeStructureId, dueInputs);
+			inputs, request.StudentFeeStructureId, dueInputs, request.Id);
 		var type = await LoadConcessionTypeAsync(request.ConcessionTypeId, request.AcademicYearId);
 		var uploadedIds = request.ConcessionRequestDocuments
 			.Where(x => x.Status == 1 && !string.IsNullOrWhiteSpace(x.Url)).Select(x => x.DocumentId).ToHashSet();
@@ -700,6 +700,20 @@ public class ConcessionRequestManager(
 			.ToList();
 	}
 
+	public async Task EnsureBenefitAvailableAsync(Guid studentId, Guid concessionTypeId, Guid academicYearId,
+		Guid? excludeRequestId = null, bool forMutation = true)
+	{
+		var conflict = forMutation
+			? await concessionRequestRepository.FindBlockingBenefitForMutationAsync(studentId, concessionTypeId, academicYearId, excludeRequestId)
+			: await concessionRequestRepository.FindBlockingBenefitAsync(studentId, concessionTypeId, academicYearId, excludeRequestId);
+		if (conflict is null) return;
+		throw new BusinessException(conflict.Status == ConcessionRequestStatus.Pending
+			? FinanceConcessionErrorCodes.DuplicatePendingRequest : FinanceConcessionErrorCodes.BenefitAlreadyGranted)
+			.WithData("BlockingRequestId", conflict.RequestId)
+			.WithData("BlockingStatus", conflict.Status.ToString())
+			.WithData("ConcessionTypeId", concessionTypeId);
+	}
+
 	private async Task<ConcessionPolicySnapshot> LoadPolicySnapshotAsync(
 		StudentFeeStructure assignment,
 		Guid expectedPolicyId,
@@ -716,7 +730,7 @@ public class ConcessionRequestManager(
 		if (requireActive)
 		{
 			if (snapshot.Status != ConcessionPolicyStatus.Active)
-				throw new BusinessException(ConcessionPolicyErrorCodes.InvalidStatus);
+				throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotActive);
 			if (await financePolicyVersionRepository.AnyAsync(x =>
 				x.PolicyType == "concession" && x.PolicyId == expectedPolicyId &&
 				x.VersionNumber > version.VersionNumber))

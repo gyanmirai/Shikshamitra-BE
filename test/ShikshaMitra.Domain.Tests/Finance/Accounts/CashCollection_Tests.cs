@@ -15,6 +15,28 @@ public class CashCollection_Tests
 		"collection:source:0:", null, "R-001", "Payer", 10000m, now, maker, Guid.NewGuid(), null);
 
 	[Fact]
+	public void Direct_deposit_closes_remaining_cash_without_checker()
+	{
+		var cash = Source();
+		cash.Spend(Guid.NewGuid(), "Expense", 2000m, now);
+		cash.DepositRemaining(maker, Guid.NewGuid(), "Bank", now, "Deposit cash");
+		cash.RemainingAmount.ShouldBe(0m);
+		cash.DepositedAmount.ShouldBe(8000m);
+		cash.Deposits.ShouldHaveSingleItem().CreditedAmount.ShouldBe(8000m);
+		cash.Amount.ShouldBe(cash.SpentAmount + cash.DepositedAmount + cash.InTransitAmount + cash.RemainingAmount);
+	}
+
+	[Fact]
+	public void Pool_can_spend_legacy_held_cash_and_rejects_overdraft()
+	{
+		var cash = LegacySource();
+		var remaining = cash.RemainingAmount;
+		cash.SpendAvailable(Guid.NewGuid(), "Pooled expense", 100m, now);
+		cash.RemainingAmount.ShouldBe(remaining - 100m);
+		Should.Throw<BusinessException>(() => cash.SpendAvailable(Guid.NewGuid(), "Overdraft", remaining, now));
+	}
+
+	[Fact]
 	public void Pending_expense_and_final_net_approval_conserve_cash()
 	{
 		var cash = Source();

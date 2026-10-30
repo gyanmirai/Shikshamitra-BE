@@ -10,7 +10,36 @@ audience: humans-and-agents
 
 # Validate Finance backend changes
 
+Stored None defaults: run `NoneCategory_Tests` and `NoneCategoryApi_Tests`, plus the existing account
+settings permission/simplification suites. Verify None is first in fee-head income and refund-policy
+expense lookups, absent from master lists and every other routing lookup, and ordinary categories
+remain available. Verify valid fee-head saves, immutable defaults, new-year initialization, idempotent
+retries and cross-year denial. Apply `AddNoneTransactionCategories` to existing contexts; verify the
+data-only backfill on disposable PostgreSQL tables, including nullable tenants, existing/archived
+None IDs, historical deleted duplicates and preservation of ordinary categories and references.
+
+Cash verification on 2026-10-28: all 12 `CashCollection_Tests` and all 21 HTTP cases across `SimpleCashFlowApi_Tests`, `CashExpenseRoutingApi_Tests`, `CashManagementAuthorizationApi_Tests` and `PendingCashRegisterApi_Tests` passed using the .NET 9 SDK selected by `global.json`. Coverage includes pooled FIFO expenses without source/reference fields, overdraft rollback, academic-year totals independent of table/month criteria, Deposit-only direct deposits, optional document download, stale totals and exact/changed replays, scope loss after replay, visibility of every expense allocation, legacy bank destination snapshots and historical-year deposits. SQLite cannot translate collection-instant inequalities, so month matching and FIFO ordering use scoped ID/timestamp projections; row predicates still precede counts and paging.
+
+The isolated targeted build passed through Domain.Shared, Domain, Application.Contracts, Application, EntityFrameworkCore, HttpApi, Host and both affected test projects. The existing external verification target omitted 109 historical generated migration designers while retaining the current runtime model, current snapshot and cash migration designer. No schema change, production migration or PostgreSQL allocation race was executed. `git diff --check` passed. The Finance docs validator still reports the pre-existing encoding issues in `references/charge-management-e2e-test-plan.md` and `references/income-expense-workspaces.md`.
+
 Direct pending decisions: `ConcessionDirectDecisionApi_Tests.Checker_Can_Decide_Saved_Request_Without_Separate_Submission` covers scoped reviewer visibility, view-only draft privacy and approval/rejection without submission. Its percentage scenario increases live capacity after save and requires approval to equal the reviewed saved amount. `Checker_Can_Reject_Incomplete_Saved_Request_Without_Submission`, `ConcessionRequestLifecycle_Tests` and `ConcessionRequestPreview_Tests` cover incomplete rejection, audit status, independent actors and preserved monetary evidence.
+
+Draft update/submission: `ConcessionRequestUpdateApi_Tests.Fixed_policy_draft_update_returns_the_persisted_stamp_and_can_be_submitted_immediately` exercises real HTTP/EF persistence for a fixed 1,000 concession over eligible fee heads of 58,166 and 717, including partially and fully paid installments with automatic refunds disabled. It requires the update response stamp to equal a subsequent read, rejects an older editor with a specific concurrency error and support reference, and submits with the update response stamp. `ConcessionRequestPreview_Tests` verifies the exact 988/12 allocation and preserved paid-fee eligibility; `ConcessionRequestLifecycle_Tests` verifies locked-state edit diagnostics. `ApiProblemDetailsPipeline_Tests` covers localized rule details and `traceId` through both exception middleware and ABP result normalization.
+
+Annual type benefit regression: the HTTP scenario retains an earlier approved 200 benefit beside a pending 1,000 request, verifies typed eligibility and approval blockers, rejects a forged create `requestId` exclusion, permits rejection and another concession type, and checks that blocked commands leave dues and approved history unchanged. Domain coverage rejects new incomplete drafts for Pending, Approved and PartiallyReversed benefits. PostgreSQL guard concurrency coverage uses an explicitly configured disposable database; SQLite verifies HTTP behavior but does not establish PostgreSQL lock or Serializable snapshot guarantees.
+
+`ConcessionBenefitGuardConcurrency_Tests` runs the production repository guard with real PostgreSQL transactions and a minimal header model. Six cases cover Read Committed and Serializable lock waiters, fresh idempotency evidence while the caller retains its older Serializable snapshot, a saturated writer pool, blocking/released status and tenant/student/year/type scope, own-request exclusion, approved-benefit priority, and uncommitted same-UOW claims before and after flushing. Model and ambient-UOW plumbing are isolated; this is repository concurrency coverage alongside the HTTP workflow test, rather than a full PostgreSQL HTTP application test.
+
+Set `SHIKSHAMITRA_CONCESSION_BENEFIT_TEST_DB` to a synthetic loopback PostgreSQL connection with a fresh database name beginning `concession_benefit_test_`, then run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~ConcessionBenefitGuardConcurrency_Tests"`. The fixture requires this explicit opt-in, creates and drops only its dedicated test database, and skips when unset. The six PostgreSQL 18 cases passed with zero skips on 2026-10-28; the domain concession suites passed 26 cases.
+
+The dedicated SQLite fixture uses minimal seed data, cheap hashing for synthetic test-auth users, and a real EF student repository that suppresses recursive automatic navigation expansion. Explicit includes, tenant query filters, student-scope checks, transaction boundaries and optimistic concurrency remain active.
+
+Verification on 2026-10-28: all 26 focused domain cases, all 54 HTTP/pipeline cases and all six real PostgreSQL guard cases passed with zero skips. The pre-fix application binary failed the update-response versus persisted-stamp assertion; the rebuilt flush fix passed immediate submission and rejected stale edits. The final HTTP workflow also passed same-key submit/draft replay, annual-benefit rejection, recovery by rejection, and another concession type without changing approved history or blocked-command balances. HTTP compilation used a local focused target to avoid unrelated receipt-test compilation errors; the full HTTP suite was not run. PostgreSQL verification covers the actual repository guard and transaction behavior, while the complete HTTP workflow uses SQLite.
+
+```powershell
+dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~ConcessionRequestLifecycle_Tests|FullyQualifiedName~ConcessionRequestPreview_Tests"
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~ConcessionRequestUpdateApi_Tests|FullyQualifiedName~ApiProblemDetailsPipeline_Tests"
+```
 
 Copy-policy regressions live in `FeeStructureAppService_Copy_Tests.cs` (partial
 `FeeStructureAppService_CollectionPolicy_Tests`). Cover current/stale refund selection,
@@ -195,6 +224,8 @@ See [Cash Management](./references/cash-management.md).
 
 ## Family mobile Finance
 
+`MobileFinanceConcessionBenefit_Tests.cs` combines the typed family contract with the annual concession guard for Pending, Approved and PartiallyReversed benefits. It checks eligibility/detail blockers, unaffected concession types, denied preview/create/edit/submit, cancellation with the canonical request stamp, stale-stamp rejection, cancellation replay and unchanged dues/history. `MobileFinanceWireContract_Tests.Canonical_concession_type_projection_preserves_annual_benefit_blocker` checks the shared type-option projection and serialized blocker evidence.
+
 `MobileFinanceScreenSummary_Tests` verifies successful-payment/uncleared/reversed
 separation, exact paise, net processed refunds, completed counts and real zero totals.
 The persisted `Finance_overview_uses_owned_principal_records_instead_of_mixed_transaction_totals`
@@ -243,3 +274,21 @@ Verification on 2026-10-27 for existing web Finance grants: 18 focused applicati
 
 Synthetic test data only; no deployed school writes, permission reseeding, push,
 gateway checkout or scheduled reminder execution is part of this implementation.
+
+## Bank account activity
+
+`BankActivityQuery_Tests` covers paging/query rejection, later historical credit windows, original admission-account scope precedence, manual-row exclusion for partial scopes, paise and disjoint provisional/transit totals.
+`BankAccountActivityApi_Tests` checks exact bank View on all four endpoints and rejects operational reads/exports with bank settings View alone.
+`BankActivityPostgres_Tests` executes the real composable provider projection against isolated temporary tables: split instruments, signed corrections, cash Income suppression, unverified cash refunds, historical destination JSON, actual credit-date boundaries, transit, tenant/year rejection and stable paging.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter FullyQualifiedName~BankActivityQuery_Tests -m:1
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~BankAccountActivityApi_Tests -m:1
+# Set BANK_ACTIVITY_TEST_POSTGRES only for the dedicated isolated cluster described below.
+dotnet test test/ShikshaMitra.EntityFrameworkCore.Tests --filter FullyQualifiedName~BankActivityPostgres_Tests -m:1
+```
+
+The opt-in PostgreSQL suite accepts only host `127.0.0.1`, port `55443`, database `postgres`, user `bank_activity_tests`.
+It uses connection-local temporary tables, never an application database, and skips explicitly when its environment variable is absent.
+SQLite authorization tests exercise denial before provider execution; they do not certify PostgreSQL JSON projection or snapshot isolation.
+Production deployment, real bank settlement matching and production evidence downloads require their separate operational validation.

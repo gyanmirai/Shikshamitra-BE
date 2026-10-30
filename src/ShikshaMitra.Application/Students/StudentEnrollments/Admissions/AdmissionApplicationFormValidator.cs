@@ -11,6 +11,22 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionApplicationFormValidator(AdmissionWorkflowConditionEvaluator conditionEvaluator)
 	: ITransientDependency
 {
+	public AdmissionFormValidationResult ValidateInquiry(
+		IEnumerable<AdmissionFormFieldDefinition> fields,
+		IEnumerable<AdmissionFormSectionDefinition> sections,
+		IReadOnlyDictionary<string, string> values) =>
+		Validate(fields, sections.Where(section => IsVisible(section.StepVisibilityRuleJson, values)), values);
+
+	public IReadOnlySet<string> GetVisibleInquiryFieldCodes(
+		IEnumerable<AdmissionFormFieldDefinition> fields,
+		IEnumerable<AdmissionFormSectionDefinition> sections,
+		IReadOnlyDictionary<string, string> values)
+	{
+		var visibleSections = sections.Where(section => IsVisible(section.StepVisibilityRuleJson, values)).ToList();
+		var ids = visibleSections.Select(section => section.Id).ToHashSet();
+		return GetVisibleFieldCodes(fields.Where(field => ids.Contains(field.SectionId)), visibleSections, values);
+	}
+
 	public AdmissionFormValidationResult Validate(
 		IEnumerable<AdmissionFormFieldDefinition> fields,
 		IEnumerable<AdmissionFormSectionDefinition> sections,

@@ -16,6 +16,7 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
 using Volo.Abp.Timing;
 using Volo.Abp.Users;
+using Volo.Abp.Authorization;
 
 namespace ShikshaMitra.HR.Payroll.Compensation;
 
@@ -34,6 +35,7 @@ public class CompensationRevisionAppService(
 {
 	public async Task<CompensationRevisionListDto> GetListAsync(Guid employeeId)
 	{
+		await CheckReadAccessAsync(employeeId);
 		var revisions = await asyncExecuter.ToListAsync(
 			(await revisionRepository.GetQueryableAsync())
 				.Where(x => x.EmployeeId == employeeId)
@@ -48,6 +50,7 @@ public class CompensationRevisionAppService(
 
 	public async Task<CompensationRevisionDto?> GetEffectiveAsync(Guid employeeId, DateTime month)
 	{
+		await CheckReadAccessAsync(employeeId);
 		var effectiveMonth = NormalizeMonth(month);
 		var revision = await asyncExecuter.FirstOrDefaultAsync(
 			(await revisionRepository.GetQueryableAsync())
@@ -57,6 +60,14 @@ public class CompensationRevisionAppService(
 		return revision == null
 			? null
 			: await MapAsync(revision, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
+	}
+
+	private async Task CheckReadAccessAsync(Guid employeeId)
+	{
+		if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.View) &&
+			!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage))
+			throw new AbpAuthorizationException("Salary history requires compensation View or Manage permission.");
+		await employeeAuthorizationService.CheckEmployeeScopeAccessAsync(employeeId);
 	}
 
 	[Volo.Abp.Uow.UnitOfWork(true)]

@@ -85,12 +85,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	});
 
 	[Fact]
-	public Task Activation_preview_rejects_unconfirmed_fees_even_when_saved_step_and_status_say_ready() => RunCertificationScenarioAsync(async () =>
+	public Task Activation_preview_treats_legacy_fee_step_as_optional_without_fabricating_confirmation() => RunCertificationScenarioAsync(async () =>
 	{
 		var (_, item) = await PrepareCurrentCompletionCaseAsync("PreviewMissingFee");
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var step = await _onboardingStepRepository.GetAsync(item.Steps.Single(s => s.Key == StudentOnboardingStepKeys.FinanceAccountsServices).Id);
+			step.SetRequired(true);
 			step.Complete(TestUserId, DateTime.UtcNow, "Stale fee confirmation.");
 			await _onboardingStepRepository.UpdateAsync(step, true);
 			var cases = GetRequiredService<IRepository<StudentOnboardingCase, Guid>>();
@@ -99,13 +100,18 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await cases.UpdateAsync(stored, true);
 		});
 		var service = GetRequiredService<IStudentOnboardingAppService>();
+		var before = await ReadAutomaticRegressionStepsAsync(item.Id);
 		var preview = await service.PreviewActivationAsync(item.Id);
-		preview.Status.ShouldBe(StudentOnboardingStatus.InProgress);
-		preview.LastError.ShouldContain("A confirmed fee structure is required.");
-		preview.Steps.Single(s => s.Key == StudentOnboardingStepKeys.FinanceAccountsServices).Status.ShouldBe(StudentOnboardingStepStatus.Blocked);
-		(await Should.ThrowAsync<BusinessException>(() => service.ActivateAsync(item.Id,
-			new() { ConcurrencyStamp = preview.ConcurrencyStamp, IdempotencyKey = "preview-missing-fee" }))).Code.ShouldBe(StudentOnboardingErrorCodes.RequiredStepsIncomplete);
-		(await WithUnitOfWorkAsync(() => _studentEnrollmentRepository.CountAsync(e => e.OnboardingCaseId == item.Id))).ShouldBe(0);
+		preview.Status.ShouldBe(StudentOnboardingStatus.ReadyForActivation);
+		preview.LastError.ShouldBeNullOrEmpty();
+		preview.FeeStructureConfirmed.ShouldBeFalse();
+		preview.Steps.Single(s => s.Key == StudentOnboardingStepKeys.FinanceAccountsServices).Status.ShouldBe(StudentOnboardingStepStatus.NotRequired);
+		preview.Steps.Single(s => s.Key == StudentOnboardingStepKeys.FinanceAccountsServices).Required.ShouldBeFalse();
+		(await ReadAutomaticRegressionStepsAsync(item.Id)).ShouldBe(before);
+		var activated = await service.ActivateAsync(item.Id,
+			new() { ConcurrencyStamp = preview.ConcurrencyStamp, IdempotencyKey = "preview-missing-fee" });
+		activated.Status.ShouldBe(StudentOnboardingStatus.Completed, activated.LastError);
+		activated.FeeStructureConfirmed.ShouldBeFalse();
 	});
 
 	[Fact]

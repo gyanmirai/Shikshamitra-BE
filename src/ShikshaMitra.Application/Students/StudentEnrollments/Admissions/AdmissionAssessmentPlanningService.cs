@@ -36,7 +36,7 @@ public class AdmissionAssessmentPlanningService(
 	AdmissionAssessmentSchedulingService scheduling,
 	AdmissionInquiryPeopleService people,
 	IAdmissionAssessmentResourceLock resourceLock,
-	IRoomAvailabilityAppService roomService,
+	RoomAvailabilityAppService roomService,
 	AdmissionAssessmentCommandService commands) : ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionAssessmentSessionResourcesDto> GetResourcesAsync()
@@ -125,7 +125,9 @@ public class AdmissionAssessmentPlanningService(
 	public async Task<AdmissionAssessmentSessionPreviewDto> PreviewAsync(AdmissionAssessmentSessionPreviewInput input)
 	{
 		if (input == null || input.Session == null) throw AdmissionAssessmentSchedulingService.Invalid("Choose a valid session setup.");
-		var plan = await PrepareAsync(input.Session, input.SessionId, input.SessionConcurrencyStamp);
+		if (input.StageInstanceIds is { } selected && (selected.Count is < 1 or > 200 || selected.Any(id => id == Guid.Empty) || selected.Distinct().Count() != selected.Count))
+			throw AdmissionAssessmentSchedulingService.Invalid("Select up to 200 distinct assessment stages.");
+		var plan = await PrepareAsync(input.Session, input.SessionId, input.SessionConcurrencyStamp, selectedStageIds: input.StageInstanceIds?.ToArray());
 		if (input.SkipCount < 0 || input.MaxResultCount is < 1 or > 200 || input.Search?.Length > 128) throw AdmissionAssessmentSchedulingService.Invalid("Choose a valid preview page.");
 		var result = plan.Preview;
 		var filtered = plan.Candidates.AsEnumerable();
@@ -147,7 +149,9 @@ public class AdmissionAssessmentPlanningService(
 			if (existing.ActorId != CurrentUser.Id || existing.Fingerprint != requestFingerprint) throw AdmissionAssessmentSchedulingService.Invalid("This confirmation key was already used for a different request.");
 			return new() { Session = await GetAsync(existing.SessionId), BookedCount = existing.BookedCount };
 		}
-		var plan = await PrepareAsync(input.Session, input.SessionId, input.SessionConcurrencyStamp);
+		// Validate the explicit selection before pupil deduplication, as in its targeted preview.
+		var plan = await PrepareAsync(input.Session, input.SessionId, input.SessionConcurrencyStamp,
+			selectedStageIds: input.Bookings.Count > 0 ? input.Bookings.Select(item => item.StageInstanceId).ToArray() : null);
 		if (plan.Preview.PreviewFingerprint != input.PreviewFingerprint) throw new BusinessException(AdmissionAssessmentErrorCodes.ConcurrencyConflict, "Availability or eligible applicants changed. Refresh the booking preview.");
 		if (input.Bookings.Count > plan.Preview.AvailableCount) throw new BusinessException(AdmissionAssessmentErrorCodes.CapacityExceeded, "There are not enough available seats or interview slots.");
 		var candidates = plan.Candidates.ToDictionary(item => item.StageInstanceId);
@@ -210,7 +214,7 @@ public class AdmissionAssessmentPlanningService(
 		if (!reservationId.HasValue || resourceChanged)
 		{
 			if (reservationId.HasValue) await LazyServiceProvider.LazyGetRequiredService<RoomAvailabilityAppService>().CancelAssessmentReservationAsync(reservationId.Value, id, "Assessment session rescheduled.");
-			reservationId = (await roomService.CreateReservationAsync(Reservation(input, plan.Offerings))).Id;
+			reservationId = (await roomService.CreateAssessmentReservationAsync(Reservation(input, plan.Offerings), plan.Offerings)).Id;
 		}
 		else if (current.Name != input.Name.Trim())
 			await LazyServiceProvider.LazyGetRequiredService<RoomAvailabilityAppService>().RenameAssessmentReservationAsync(reservationId.Value, id, input.Name.Trim());
@@ -221,7 +225,7 @@ public class AdmissionAssessmentPlanningService(
 		return await GetAsync(id);
 	}
 
-	private async Task<Plan> PrepareAsync(AdmissionAssessmentSessionInput input, Guid? id, string? stamp, bool allowChanges = false)
+	private async Task<Plan> PrepareAsync(AdmissionAssessmentSessionInput input, Guid? id, string? stamp, bool allowChanges = false, Guid[]? selectedStageIds = null)
 	{
 		if (input == null || input.Scopes == null || input.Scopes.Any(item => item == null)) throw AdmissionAssessmentSchedulingService.Invalid("Choose valid session scope links.");
 		if ((input.StartsAt.UtcDateTime <= DateTime.UtcNow && !(id.HasValue && !allowChanges && input.SessionType == "individualInterview" && input.EndsAt.UtcDateTime > DateTime.UtcNow)) || input.EndsAt <= input.StartsAt || string.IsNullOrWhiteSpace(input.Name) || input.Name.Trim().Length > 128)
@@ -245,7 +249,7 @@ public class AdmissionAssessmentPlanningService(
 		temporary.ConfigurePlanning(input.SessionType, room.Id, Guid.NewGuid(), input.InterviewerId, input.SlotDurationMinutes, input.BreakMinutes,
 			links.Select(item => new AdmissionAssessmentSessionScope(Guid.NewGuid(), CurrentTenant.Id, temporary.Id, item.AdmissionOfferingId, item.WorkflowStageDefinitionId)));
 		if (input.SessionType == "individualInterview" && temporary.GetInterviewSlots().Count < input.Capacity) throw AdmissionAssessmentSchedulingService.Invalid("Capacity exceeds the interview slots available in this time window.");
-		var candidates = await CandidatesAsync(links, definitionRows);
+		var candidates = await CandidatesAsync(links, definitionRows, selectedStageIds);
 		var appointments = await scheduling.GetApplicantAppointmentsAsync(candidates.Select(item => item.ApplicantId).Distinct().ToArray(), input.StartsAt.UtcDateTime, input.EndsAt.UtcDateTime);
 		var occupiedSlots = existing == null ? [] : await attempts.GetListAsync(item => item.SessionId == existing.Id && item.Status != "cancelled" && item.Outcome != "waived" && item.SlotStartsAt.HasValue);
 		var freeSlots = temporary.GetInterviewSlots().Where(slot => slot.StartsAt > DateTime.UtcNow && occupiedSlots.All(item => item.SlotStartsAt != slot.StartsAt)).ToList();
@@ -277,7 +281,7 @@ public class AdmissionAssessmentPlanningService(
 			ProposedBookings = proposed, Slots = freeSlots.Select(slot => new AdmissionAssessmentInterviewSlotDto { StartsAt = AdmissionAssessmentSessionService.ToUtcOffset(slot.StartsAt), EndsAt = AdmissionAssessmentSessionService.ToUtcOffset(slot.EndsAt) }).ToList() });
 	}
 
-	private async Task<List<AdmissionAssessmentBookingCandidateDto>> CandidatesAsync(List<AdmissionAssessmentSessionScopeInput> links, Dictionary<Guid, AdmissionWorkflowStageDefinition> definitionRows)
+	private async Task<List<AdmissionAssessmentBookingCandidateDto>> CandidatesAsync(List<AdmissionAssessmentSessionScopeInput> links, Dictionary<Guid, AdmissionWorkflowStageDefinition> definitionRows, Guid[]? selectedStageIds = null)
 	{
 		var offeringIds = links.Select(item => item.AdmissionOfferingId).Distinct().ToArray(); var stageIds = links.Select(item => item.WorkflowStageDefinitionId).Distinct().ToArray();
 		var appQuery = await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationScopeAccessService>().GetScopedApplicationsAsync();
@@ -290,6 +294,7 @@ public class AdmissionAssessmentPlanningService(
 				(app.Status == AdmissionApplicationStatus.Draft || app.Status == AdmissionApplicationStatus.Submitted || app.Status == AdmissionApplicationStatus.InReview || app.Status == AdmissionApplicationStatus.Approved || app.Status == AdmissionApplicationStatus.Waitlisted || app.Status == AdmissionApplicationStatus.Offered || app.Status == AdmissionApplicationStatus.OfferAccepted)
 			select new { App = app, Stage = stage, Name = applicant.FirstName + " " + (applicant.LastName ?? ""), Count = attemptQuery.Count(item => item.StageInstanceId == stage.Id && item.Status != "cancelled"),
 				LatestOutcome = attemptQuery.Where(item => item.StageInstanceId == stage.Id && item.Status != "cancelled").OrderByDescending(item => item.AttemptNumber).Select(item => item.Outcome).FirstOrDefault() };
+		if (selectedStageIds != null) query = query.Where(item => Enumerable.Contains(selectedStageIds, item.Stage.Id));
 		var rows = await AsyncExecuter.ToListAsync(query.OrderBy(item => item.Stage.EnteredAt).ThenBy(item => item.App.ApplicationNumber).ThenBy(item => item.Stage.Id));
 		return rows.Where(row => links.Any(link => link.AdmissionOfferingId == row.App.AdmissionOfferingId && link.WorkflowStageDefinitionId == row.Stage.DefinitionStageId) &&
 			definitionRows[row.Stage.DefinitionStageId].WorkflowDefinitionId == row.App.WorkflowDefinitionId && row.Count < AdmissionAssessmentAccessService.ReadPolicy(definitionRows[row.Stage.DefinitionStageId])!.MaxAttempts && (row.LatestOutcome == null || row.LatestOutcome == "retake"))
@@ -299,7 +304,7 @@ public class AdmissionAssessmentPlanningService(
 
 	private async Task<AdmissionAssessmentSession> CreateEntityAsync(AdmissionAssessmentSessionInput input, Plan plan)
 	{
-		var reservation = await roomService.CreateReservationAsync(Reservation(input, plan.Offerings));
+		var reservation = await roomService.CreateAssessmentReservationAsync(Reservation(input, plan.Offerings), plan.Offerings);
 		var session = new AdmissionAssessmentSession(GuidGenerator.Create(), CurrentTenant.Id, plan.Links[0].AdmissionOfferingId, plan.Links[0].WorkflowStageDefinitionId,
 			input.Name, input.StartsAt.UtcDateTime, input.EndsAt.UtcDateTime, Location(plan.Room), input.Capacity);
 		session.ConfigurePlanning(input.SessionType, plan.Room.Id, reservation.Id, input.InterviewerId, input.SlotDurationMinutes, input.BreakMinutes,

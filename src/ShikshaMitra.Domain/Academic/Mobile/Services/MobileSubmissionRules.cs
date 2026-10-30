@@ -1,4 +1,5 @@
 using System;
+using System.Linq.Expressions;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using Volo.Abp;
 
@@ -6,8 +7,17 @@ namespace ShikshaMitra.Academic.Mobile;
 
 public static class MobileSubmissionRules
 {
+	// Also consumed as an EF expression by the count reader: keep command
+	// eligibility and badge eligibility identical without hydrating submissions.
+	public static Expression<Func<StudentSubmissionEntity, bool>> BlocksFirstSubmission { get; } = submission =>
+		submission.SubmissionDate.HasValue || submission.ReviewedAt.HasValue ||
+		(submission.Status != SubmissionStatus.Draft && submission.Status != SubmissionStatus.NotSubmitted &&
+		 submission.Status != SubmissionStatus.NeedsReview && submission.Status != SubmissionStatus.Submitted &&
+		 submission.Status != SubmissionStatus.Late);
+	private static readonly Func<StudentSubmissionEntity, bool> BlocksFirstSubmissionCompiled = BlocksFirstSubmission.Compile();
+
 	public static bool CanSubmit(StudentSubmissionEntity? submission, bool closed) =>
-		submission?.SubmissionDate == null && IsOpen(submission, closed);
+		!closed && (submission == null || !BlocksFirstSubmissionCompiled(submission));
 
 	public static bool CanEdit(StudentSubmissionEntity? submission, DateTime dueDate, DateTime now, bool closed) =>
 		now <= dueDate && IsOpen(submission, closed);

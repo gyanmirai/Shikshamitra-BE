@@ -71,6 +71,7 @@ public class MobileStudentProfileAppService(StudentPortalAccessService access, M
 				OptionsByField = source.OptionsByField, OptionsByFieldPath = source.OptionsByFieldPath
 			});
 		}
+		result.Photo = await LazyServiceProvider.LazyGetRequiredService<IMobileStudentPhotoAppService>().GetInfoAsync(studentId);
 		return result;
 	}
 }

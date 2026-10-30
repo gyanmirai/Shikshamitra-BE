@@ -3,12 +3,45 @@ module: mobile-academics
 domain: validation
 content_type: Reference
 status: canonical
-updated_on: 2026-10-30
+updated_on: 2026-10-31
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate mobile Academics
+
+## Dashboard class teacher
+
+`MobileAcademicAppService_ClassTeacher_Tests` exercises student and guardian
+dashboard reads, assigned-year/yearless mappings, canonical serialized keys,
+duplicate identities, conflicts, inactive/non-teaching/deleted/missing employees,
+tenant/class/division/medium/year mismatches and revoked portal links. Query
+capture checks one narrow teacher projection without HR profile hydration;
+repository authorization reads are separate from that projection.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~Dashboard_class_teacher_|FullyQualifiedName~Student_and_guardian_read_published_academics_without_staff_grants"
+```
+
+Run the dashboard/header/count Flutter regressions in the linked mobile guide.
+Local application tests do not replace an authenticated staging/device check.
+
+## Homework counts
+
+`MobileAcademicAppService_HomeworkCounts_Tests` covers first submissions and edits
+for students/guardians, drafts, legacy submission rows, review/excusal, publication,
+closed and unsupported work, late first submissions, legacy subject identifiers,
+tenant/link/year boundaries and reads after a committed write in a fresh unit of
+work. SQL capture verifies scalar counts without task/submission content hydration.
+Keep the existing homework visibility and date-range regressions alongside it.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Homework_counts_|FullyQualifiedName~Homework_compatibility_keeps_placement_and_publication_boundaries|FullyQualifiedName~HomeworkDates"
+```
+
+Focused local source builds may use the bounded historical-migration-designer
+compilation described below on constrained machines. That is not a full solution
+build or authenticated staging certification. Counts require no migration.
 
 ## Elective preferences
 

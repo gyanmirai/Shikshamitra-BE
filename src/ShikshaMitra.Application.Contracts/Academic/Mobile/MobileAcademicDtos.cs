@@ -42,6 +42,7 @@ public record MobileFileDto(byte[] Content, string Name, string ContentType);
 public record MobileRubricScoreDto(string Title, decimal MaxScore, decimal? Score);
 
 public record MobileHomeworkSubjectDto(Guid Id, string Name, string Code);
+public record MobileHomeworkCountsDto(Guid StudentId, Guid AcademicYearId, int PendingHomework, DateTimeOffset CalculatedAt);
 
 public class MobileHomeworkDto
 {
@@ -187,7 +188,8 @@ public class MobileResultDto
 }
 public record MobileSubjectResultDto(Guid SubjectId, string SubjectName, double? ObtainedMarks, double? TotalMarks, double? Percentage, string? Status, string? TeacherRemark, double? ClassAverage = null, double? HighestPercentage = null);
 public record MobileSchoolMarkerDto(Guid Id, string Type, DateOnly Date, string Title, string? Description, string Audience, string? Category, DateTimeOffset? StartAt, DateTimeOffset? EndAt, string? Venue, bool SchoolClosed);
-public record MobileDashboardDto(Guid StudentId, Guid AcademicYearId, int PendingHomework, MobileAttendanceOverviewDto Attendance, List<MobileExamDto> UpcomingExams, List<MobileSchoolMarkerDto> UpcomingEvents);
+public record MobileClassTeacherDto(Guid TeacherId, string TeacherName);
+public record MobileDashboardDto(Guid StudentId, Guid AcademicYearId, int PendingHomework, MobileAttendanceOverviewDto Attendance, List<MobileExamDto> UpcomingExams, List<MobileSchoolMarkerDto> UpcomingEvents, MobileClassTeacherDto? ClassTeacher = null);
 
 public interface IMobileAcademicContextAppService : IApplicationService
 {
@@ -195,6 +197,7 @@ public interface IMobileAcademicContextAppService : IApplicationService
 }
 public interface IMobileHomeworkAppService : IApplicationService
 {
+	Task<MobileHomeworkCountsDto> GetCountsAsync(MobileAcademicInput input);
 	Task<List<MobileHomeworkSubjectDto>> GetSubjectsAsync(MobileAcademicInput input);
 	Task<MobilePage<MobileHomeworkDto>> GetListAsync(MobileListInput input);
 	Task<MobileHomeworkDto> GetAsync(Guid id, MobileAcademicInput input);

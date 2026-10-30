@@ -44,7 +44,7 @@ Changing from the default format to a school prefix carries the existing sequenc
 
 ## Student action permissions
 
-The Student catalogue exposes only `View`, `Add` and supported `Delete` leaves across 36 features (106 action leaves).
+The Student catalogue exposes only `View`, `Add` and supported `Delete` leaves across 37 features (108 action leaves).
 The permission editor labels `Add` as **Add/Update**.
 Approve, reject, publish, rollback, waive, finalize, activate, identifier unlock and attendance lock/unlock use the owning feature's `Add` permission.
 Lifecycle commands including close, archive, deactivate, cancellation, withdrawal, seat release, payment reversal and document void use the owning feature's `Add` permission. Actual record removal retains `Delete`.
@@ -1006,3 +1006,21 @@ Form DTOs and existing draft writes add optional `inheritance` with `enabled` an
 Existing publish validates every approved source composition. Active routes and application start enforce compatibility; incomplete inactive drafts retain their existing save behavior. Published/base definitions stay immutable. Legacy requests without inheritance settings retain existing behavior. `Admissions.FormInheritance...` business failures identify invalid policy, incompatible source or unavailable frozen schema without weakening existing tenant, permission, ownership or concurrency checks.
 
 Discovery includes exact versions captured by tenant inquiries on accessible connected Offerings. Archived source retention requires this captured history or an enabled previously Published/Archived Registration-family approval; an unsaved draft cannot manufacture that proof. New Offering source selection still requires Published. Discovery returns source/version and connection metadata, not applicant answers.
+
+### Mobile student profile photo
+
+The existing `GET /api/mobile/v1/students/{studentId}/profile` retains its portal association read contract and adds nullable `photo` metadata. Missing photo View permission yields unavailable capabilities, without denying the existing form/profile read.
+
+Photo metadata contains `hasPhoto`, private `url`, opaque `version`, `maxBytes:3145728`, `allowedContentTypes:["image/jpeg","image/png"]`, `canView`, `canUpdate`, `requiresApproval`, `expectedSnapshot`, and `pendingChange`. View and Add are independent exact capabilities: `Students.Portal.ProfilePhoto.View` and `.Add`; mutation also requires View. No staff navigation permission or staff Records grant is inferred.
+
+| Method and route below `/api/mobile/v1/students/{studentId}/profile/photo` | Contract |
+|---|---|
+| GET root | Authenticated official image; 404 when no canonical photo; private, no-store response |
+| POST `/drafts` | Multipart `file`; returns Result `{id,photoUrl}`; JPG/JPEG/PNG, declared MIME and file signature agree; decoded image bounded to 4096px per edge; inclusive 3 MiB limit and bounded HTTP stream |
+| GET `/drafts/{draftId}` | Authenticated draft bytes; tenant/student/requester ownership checked |
+| POST `/changes` | JSON `{photoDraftId,expectedSnapshot,clientKey}`; returns Result PhotoChange |
+| GET `/changes/{changeId}` | Result PhotoChange for the verified linked student and requesting portal actor |
+
+PhotoChange contains `id`, `studentId`, native Records `status`, optional authenticated `proposedPhotoUrl`, `createdAt`, `rejectionReason`, and `exceptionCode`. Pending, Approved and Scheduled block another photo command. Conflict is nonapplied and recoverable; only Applied changes replace `Student.PhotoBlobName`. Exact actor/payload/snapshot retries return the original change; mismatched keys return `Students:Records:IdempotencyConflict`. Other safe errors include `PhotoChangePending`, `InvalidPhoto`, `PhotoTooLarge`, `InvalidPhotoDraft`, `StaleSnapshot`, and `AuthorityChanged` under the `Students:Records:` prefix.
+
+Metadata pendingChange reports an active photo request even when another linked actor submitted it, without that actor's draft URL. When no active request remains, it reports the latest photo change only if that change is the caller's portal submission, so rejection/conflict/application outcomes survive navigation without exposing another requester's review details.

@@ -16,6 +16,7 @@ public class MobileHomeworkController(IMobileHomeworkAppService service) : Shiks
 {
 	[HttpGet] public async Task<Result<MobilePage<MobileHomeworkDto>>> List([FromQuery] MobileListInput input) => Result.Success(await service.GetListAsync(input));
 	[HttpGet("subjects")] public async Task<Result<List<MobileHomeworkSubjectDto>>> Subjects([FromQuery] MobileAcademicInput input) => Result.Success(await service.GetSubjectsAsync(input));
+	[HttpGet("counts")] public async Task<Result<MobileHomeworkCountsDto>> Counts([FromQuery] MobileAcademicInput input) => Result.Success(await service.GetCountsAsync(input));
 	[HttpGet("{id:guid}")] public async Task<Result<MobileHomeworkDto>> Detail(Guid id, [FromQuery] MobileAcademicInput input) => Result.Success(await service.GetAsync(id, input));
 	[HttpPut("{id:guid}/submission/draft")] public async Task<Result<MobileHomeworkDto>> Draft(Guid id, [FromBody] MobileSubmissionInput input) => Result.Success(await service.SaveAsync(id, input, true, false));
 	[HttpPost("{id:guid}/submission")] public async Task<Result<MobileHomeworkDto>> Submit(Guid id, [FromBody] MobileSubmissionInput input) => Result.Success(await service.SaveAsync(id, input, false, false));

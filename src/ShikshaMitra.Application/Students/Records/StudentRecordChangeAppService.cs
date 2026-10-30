@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
+using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -81,9 +82,18 @@ public partial class StudentRecordChangeAppService(
 
 	private async Task<StudentRecordChangeDto> CreateCoreAsync(CreateStudentRecordChangeDto input, bool joinAdmissionWork)
 	{
+		try { return await CreateCoreInternalAsync(input, joinAdmissionWork); }
+		catch (Exception exception) when (input.Section == "photo" && StudentOnboardingRollConflictMapper.IsSerializationConflict(exception))
+		{ throw new BusinessException("Students:Records:ConcurrencyConflict"); }
+	}
+
+	private async Task<StudentRecordChangeDto> CreateCoreInternalAsync(CreateStudentRecordChangeDto input, bool joinAdmissionWork)
+	{
 		Guid id;
-		using (var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: !joinAdmissionWork))
+		using (var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true,
+			IsolationLevel = input.Section == "photo" ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable }, requiresNew: !joinAdmissionWork))
 		{
+			if (input.Section == "photo") await LazyServiceProvider.LazyGetRequiredService<IStudentPhotoChangeLock>().AcquireAsync(CurrentTenant.Id, input.StudentId);
 			var allowed = await access.EnsureWritableAsync(input.StudentId, input.Section == "placement");
 			await EnsureVisibleAsync(allowed.Policy, input.Section);
 			var existing = await changes.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == input.StudentId && x.ClientKey == input.ClientKey);
@@ -95,7 +105,8 @@ public partial class StudentRecordChangeAppService(
 				: await payloads.ValidateAndNormalizeAsync(input.Section, input.Payload, input.StudentId);
 			if (existing != null)
 			{
-				if (existing.Section != input.Section || StudentRecordPayloadService.Canonical(existing.PayloadJson) != json ||
+				if (input.Section == "photo" && existing.RequestedBy != CurrentUser.Id ||
+					existing.Section != input.Section || StudentRecordPayloadService.Canonical(existing.PayloadJson) != json ||
 					existing.CorrectsChangeId != input.CorrectsChangeId || existing.Reason != input.Reason.Trim() ||
 					(input.EffectiveAt.HasValue && existing.EffectiveAt != input.EffectiveAt.Value.ToUniversalTime()))
 					throw new BusinessException("Students:Records:IdempotencyConflict");
@@ -104,6 +115,8 @@ public partial class StudentRecordChangeAppService(
 			}
 			else
 			{
+			if (input.Section == "photo" && await changes.AnyAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == input.StudentId && x.Section == "photo" &&
+				(x.Status == "Pending" || x.Status == "Approved" || x.Status == "Scheduled"))) throw new BusinessException("Students:Records:PhotoChangePending");
 			await payloads.ValidateImpactAsync(input.StudentId, input.Section, json);
 			if (input.Section == "photo") await payloads.EnsurePhotoDraftAsync(input.StudentId, CurrentUser.GetId(), json);
 			var before = await payloads.CaptureAsync(input.StudentId, input.Section);

@@ -99,8 +99,12 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
 
         var timeStart = input.StartTime ?? new TimeSpan(8, 0, 0);
         var timeEnd = input.EndTime ?? new TimeSpan(16, 0, 0);
-        var availability = await _conflictService.CheckRoomSnapshotsAsync(
-            rooms.Select(room => new RoomConflictRoom(room.Id, room.RoomName)).ToList(), input.Date, timeStart, timeEnd, input.StandardId, input.DivisionId);
+        var roomSnapshots = rooms.Select(room => new RoomConflictRoom(room.Id, room.RoomName)).ToList();
+        var availability = input.WeeklyTimetableDay.HasValue
+            ? await _conflictService.CheckWeeklyRoomSnapshotsAsync(roomSnapshots, input.WeeklyTimetableDay.Value,
+                timeStart, timeEnd, input.StandardId, input.DivisionId)
+            : await _conflictService.CheckRoomSnapshotsAsync(roomSnapshots, input.Date,
+                timeStart, timeEnd, input.StandardId, input.DivisionId);
 
         foreach (var room in rooms)
         {

@@ -573,7 +573,7 @@ public partial class AssignmentV2AppService(
         return await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
     }
 
-    private static IQueryable<AssignmentEntity> ApplyAssignmentScope(
+    internal static IQueryable<AssignmentEntity> ApplyAssignmentScope(
         IQueryable<AssignmentEntity> query,
         UserScopeContext scope)
     {

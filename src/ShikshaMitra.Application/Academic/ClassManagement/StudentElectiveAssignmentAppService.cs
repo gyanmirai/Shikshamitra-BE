@@ -72,6 +72,10 @@ public class StudentElectiveAssignmentAppService(
 			s.StandardId == classId &&
 			s.DivisionId == divisionId
 		);
+		var selectionsQuery = await selectionRepository.GetQueryableAsync();
+		var rosterLockStates = await AsyncExecuter.ToListAsync(studentsQuery.Select(student =>
+			selectionsQuery.Any(selection => selection.StudentId == student.Id &&
+				selection.ElectiveGroupId == electiveGroupId && selection.IsLocked)));
 
 		if (!string.IsNullOrWhiteSpace(search))
 		{
@@ -118,7 +122,7 @@ public class StudentElectiveAssignmentAppService(
 		var result = new PaginatedStudentElectiveResponseDto
 		{
 			TotalRecords = students.Count,
-			IsLocked = selections.Any() && selections.All(s => s.IsLocked),
+			IsLocked = rosterLockStates.Count > 0 && rosterLockStates.All(locked => locked),
 			SubjectOptions = subjectOptions,
 			Records = students.Select(student =>
 			{
@@ -141,6 +145,7 @@ public class StudentElectiveAssignmentAppService(
 					StudentName = studentName,
 					RollNo = student.RollNo?.ToString() ?? "N/A",
 					SelectedSubjectId = selection?.SelectedSubjectId,
+					IsLocked = selection?.IsLocked ?? false,
 					SelectedSubjectName = selectedSubjectOption?.SubjectName,
 					StudentPreference = selection?.StudentPreference,
 					SelectableSubjects = includeSelectableSubjects ? subjectOptions : []
@@ -331,13 +336,13 @@ public class StudentElectiveAssignmentAppService(
 				};
 			}
 
-			// Lock all selections
-			foreach (var selection in selections)
+			var unlockedSelections = selections.Where(selection => !selection.IsLocked).ToList();
+			foreach (var selection in unlockedSelections)
 			{
 				selection.LockSelection();
 			}
 
-			await selectionRepository.UpdateManyAsync(selections);
+			await selectionRepository.UpdateManyAsync(unlockedSelections);
 
 			return new ApiSuccessResponseDto
 			{

@@ -270,9 +270,10 @@ public class AdmissionInquiryAppService(
 					throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 						"The inquiry contains a field outside its published form.");
 				var sections = await formSectionRepository.GetListAsync(section => section.FormDefinitionId == inquiryFormId.Value);
-				var validation = formValidator.Validate(fields, sections, values);
+				var validation = formValidator.ValidateInquiry(fields, sections, values);
+				var visibleFields = formValidator.GetVisibleInquiryFieldCodes(fields, sections, values);
 				await LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryAcademicOptionsService>()
-					.ValidateAsync(fields, values, offering!, cycle.AcademicYearId, isPublic);
+					.ValidateAsync(fields.Where(field => visibleFields.Contains(field.Code)).ToList(), values, offering!, cycle.AcademicYearId, isPublic);
 				if (validation.Errors.Count > 0)
 					throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed)
 						.WithData("Fields", string.Join(", ", validation.FieldErrors.Keys));
@@ -294,6 +295,29 @@ public class AdmissionInquiryAppService(
 			"Guardian.Mobile", input.GuardianPhone) ?? input.GuardianPhone;
 		input.GuardianEmail = AdmissionInquiryIdentityFieldResolver.Resolve(values, inquiryFields,
 			"Guardian.Email", input.GuardianEmail);
+		var configuredFirstName = AdmissionInquiryConfiguredFields.Read(inquiryFields, values, "Applicant.FirstName");
+		if (AdmissionInquiryConfiguredFields.Find(inquiryFields, "Applicant.Name") != null && string.IsNullOrWhiteSpace(configuredFirstName))
+		{
+			input.ApplicantFirstName = input.ApplicantName;
+			input.ApplicantLastName = null;
+		}
+		else if (!string.IsNullOrWhiteSpace(configuredFirstName))
+			input.ApplicantName = string.Join(" ", new[] { input.ApplicantFirstName,
+				AdmissionInquiryConfiguredFields.Read(inquiryFields, values, "Applicant.MiddleName"), input.ApplicantLastName }.Where(value => !string.IsNullOrWhiteSpace(value)));
+		var configuredContact = AdmissionInquiryConfiguredFields.ResolveContact(inquiryFields, values, input.ParentRelationship);
+		if (configuredContact.IsConfigured)
+		{
+			if (input.ExistingParentApplicantId.HasValue && input.ParentRelationship != null && configuredContact.Relationship != null &&
+				input.ParentRelationship != configuredContact.Relationship)
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Choose the parent configured by this inquiry form.");
+			input.GuardianFirstName = configuredContact.Name ?? string.Empty;
+			input.GuardianLastName = configuredContact.LastName;
+			input.GuardianPhone = configuredContact.Mobile ?? string.Empty;
+			input.GuardianEmail = configuredContact.Email;
+			input.Email = configuredContact.Email;
+			input.ParentRelationship = configuredContact.Relationship;
+		}
+		AdmissionInquiryConfiguredFields.ApplyOperationalValues(inquiryFields, values, input, isPublic);
 		input.Email ??= input.GuardianEmail;
 		if (returningContact != null)
 		{
@@ -353,6 +377,9 @@ public class AdmissionInquiryAppService(
 				if (!CurrentUser.Id.HasValue) throw new BusinessException(AdmissionErrorCodes.InquiryFamilyMismatch);
 				selectedParent = await familyMatchService.ResolveParentAsync(existingFamily.Id, input.ExistingParentApplicantId.Value,
 					input.ParentRelationship, phone, input.GuardianEmail, AdmissionErrorCodes.InquiryFamilyMismatch);
+				// Only the verified saved parent may supply contact data absent from the configured form.
+				if (!configuredContact.EmailIsConfigured)
+					input.GuardianEmail = input.Email = selectedParent.Email;
 			}
 			if (selectedParent == null && (primaryGuardian == null || primaryGuardian.FamilyId != existingFamily.Id ||
 				primaryGuardian.Mobile != phone))
@@ -400,8 +427,10 @@ public class AdmissionInquiryAppService(
 					throw new BusinessException("Admissions:InvalidSiblingSelection");
 				await LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>().EnsureCanAccessStudentsAsync(siblingIds, nameof(CreateAsync));
 			}
+			if (field.BindingKey is "Applicant.Name" or "Applicant.FirstName" or "Applicant.MiddleName" or "Applicant.LastName") continue;
 			AdmissionFormBindingRegistry.ApplyValue(field.BindingKey!, values[field.Code], applicant, guardian);
 		}
+		AdmissionInquiryConfiguredFields.ApplyApplicantName(applicant, inquiryFields, values);
 		if (selectedParent != null)
 		{
 			AdmissionSiblingParentSelection.Confirm(applicant, selectedParent, CurrentUser.Id!.Value, Clock.Now.ToUniversalTime(), phone, input.GuardianEmail);
@@ -412,7 +441,7 @@ public class AdmissionInquiryAppService(
 				if (answer != null) answer.ValueJson = JsonSerializer.Serialize(AdmissionStudentProfileMapping.Read(applicant, field.BindingKey!));
 			}
 		}
-		else if (input.ParentRelationship != null)
+		else if (input.ParentRelationship != null && !isPublic)
 		{
 			var prefix = input.ParentRelationship == "father" ? "Father" : "Mother";
 			AdmissionSiblingParentSelection.CaptureParent(applicant, input.ParentRelationship,
@@ -645,13 +674,14 @@ public class AdmissionInquiryAppService(
 			var parentMatch = parentMatches.FirstOrDefault(match => match.FamilyId == x.FamilyId);
 			var canLinkFamily = activeFamilies.TryGetValue(x.FamilyId, out var family) &&
 				(parentMatch?.Parents.Count > 0 || guardian != null && family!.PrimaryGuardianId == guardian.Id && guardian.Mobile == phone);
-			var existingInquiry = scopedInquiries.OrderByDescending(item => item.CreationTime)
+			var existingInquiry = scopedInquiries.OrderByDescending(item => item.AdmissionCycleId == input.AdmissionCycleId).ThenByDescending(item => item.CreationTime)
 				.FirstOrDefault(item => item.ApplicantId == x.Id);
 			return new AdmissionInquiryDuplicateMatchDto
 			{
 				ApplicantId = x.Id, FamilyId = x.FamilyId, ExistingInquiryId = existingInquiry?.Id,
 				ExistingInquiryNumber = existingInquiry?.InquiryNumber,
-				ApplicantName = string.Join(" ", new[] { x.FirstName, x.LastName }
+				ExistingInquiryAdmissionCycleId = existingInquiry?.AdmissionCycleId,
+				ApplicantName = existingInquiry?.ApplicantName ?? string.Join(" ", new[] { x.FirstName, x.MiddleName, x.LastName }
 					.Where(y => !string.IsNullOrWhiteSpace(y))),
 				GuardianPhone = guardian?.Mobile, GuardianEmail = guardian?.Email, DateOfBirth = x.DateOfBirth,
 				CanLinkFamily = canLinkFamily, Parents = parentMatch?.Parents ?? [],

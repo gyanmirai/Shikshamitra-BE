@@ -21,6 +21,7 @@ public class AdmissionApplicationAppService(
 	AdmissionApplicationWorkflowService workflowService,
 	AdmissionApplicationFormService formService,
 	AdmissionJourneyClosureService journeyClosure,
+	AdmissionJourneyResumeService journeyResume,
 	AdmissionApplicationDecisionService decisionService)
 	: ApplicationService, IAdmissionApplicationAppService
 {
@@ -131,6 +132,12 @@ public class AdmissionApplicationAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
 	[UnitOfWork(true)]
 	public Task<AdmissionApplicationDto> EndJourneyAsync(Guid id, EndAdmissionJourneyDto input) => journeyClosure.EndAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public Task<AdmissionJourneyResumePreviewDto> GetResumePreviewAsync(Guid id) => journeyResume.PreviewAsync(id);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public Task<AdmissionApplicationDto> ResumeJourneyAsync(Guid id, ResumeAdmissionJourneyDto input) => journeyResume.ResumeAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
 	public Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.IssueOfferAsync(id, input);

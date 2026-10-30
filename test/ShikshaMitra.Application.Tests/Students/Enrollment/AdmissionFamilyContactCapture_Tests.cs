@@ -2,12 +2,69 @@ using System;
 using ShikshaMitra.Students.Records;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionFamilyContactCapture_Tests
 {
+	[Theory]
+	[InlineData("father")]
+	[InlineData("mother")]
+	public void Legacy_default_parent_selection_preserves_the_only_saved_primary_guardian(string staleSelection)
+	{
+		var applicant = Applicant();
+		applicant.SetProperty(StudentFamilyContactSelection.SelectionKey, staleSelection);
+		applicant.SetProperty("AdmissionStudentField.Applicant.Nationality", "Indian");
+		var student = NewStudent(applicant);
+		student.UpdateFamilyInfo(null, null, PrimaryGuardian(), null);
+		AdmissionStudentProfileMapping.Apply(applicant, student);
+		StudentFamilyContactSelection.Resolve(student).ShouldBe("guardian");
+		student.FamilyDetail!.FatherDetails.ShouldBeNull();
+		student.FamilyDetail.MotherDetails.ShouldBeNull();
+		student.FamilyDetail.GuardianDetails!.FullName.ShouldBe("Saved primary contact");
+		applicant.GetProperty<string>(StudentFamilyContactSelection.SelectionKey).ShouldBe(staleSelection);
+		AdmissionSiblingParentSelection.IsParentFlow(applicant).ShouldBeFalse();
+		AdmissionSiblingParentSelection.ReadConfirmation(applicant).ShouldBeNull();
+		student.UserId.ShouldBeNull();
+	}
+
+	[Theory]
+	[InlineData("explicit-request")]
+	[InlineData("parent-flow")]
+	[InlineData("existing-student")]
+	[InlineData("other-parent")]
+	[InlineData("other-guardian")]
+	[InlineData("relationship-provenance")]
+	[InlineData("malformed-confirmation")]
+	[InlineData("unsupported-flow")]
+	[InlineData("null-flow-key")]
+	[InlineData("unknown-role")]
+	[InlineData("reserved-id-mismatch")]
+	[InlineData("no-guardian")]
+	public void Missing_main_parent_does_not_silently_change_an_explicit_or_existing_contact(string scenario)
+	{
+		var applicant = Applicant();
+		applicant.SetProperty(StudentFamilyContactSelection.SelectionKey, "father");
+		if (scenario == "explicit-request") applicant.SetProperty("AdmissionFamilyContactsRequest", "{\"MainContactRelationship\":\"father\"}");
+		if (scenario == "parent-flow") applicant.SetProperty("ParentAccountFlowVersion", 1);
+		if (scenario == "other-guardian") applicant.SetProperty(StudentFamilyContactSelection.GuardianRelationshipKey, "Aunt");
+		if (scenario == "relationship-provenance") applicant.SetProperty("ParentAccountRelationship", "father");
+		if (scenario == "malformed-confirmation") applicant.SetProperty("SiblingParentConfirmation", "{malformed");
+		if (scenario == "unsupported-flow") applicant.SetProperty("ParentAccountFlowVersion", 2);
+		if (scenario == "null-flow-key") applicant.ExtraProperties["ParentAccountFlowVersion"] = null!;
+		if (scenario == "unknown-role") applicant.SetProperty(StudentFamilyContactSelection.SelectionKey, "uncle");
+		var student = NewStudent(applicant, scenario == "reserved-id-mismatch" ? Guid.NewGuid() : null);
+		if (scenario == "existing-student") applicant.LinkStudent(Guid.NewGuid());
+		student.UpdateFamilyInfo(null, scenario == "other-parent" ? PrimaryGuardian() : null, scenario == "no-guardian" ? null : PrimaryGuardian(), null);
+		Should.Throw<BusinessException>(() => AdmissionFamilyContactCapture.ApplySelection(applicant, student))
+			.Code.ShouldBe("Students:Family:MainContactInvalid");
+	}
+
+	private static ShikshaMitra.Students.ValueObjects.ParentGuardianDetails PrimaryGuardian() =>
+		new("Saved primary contact", null, null, null, "9876543210", null, null, null, null, null, null, null, null);
+
 	[Fact]
 	public void Optional_guardian_and_second_parent_survive_student_handoff_without_replacing_first_parent()
 	{
@@ -116,6 +173,6 @@ public class AdmissionFamilyContactCapture_Tests
 		input.OtherGuardian!.FullName = null!;
 		AdmissionFamilyContactCapture.MatchesRequest(applicant, input, "father").ShouldBeFalse();
 	}
-	private static Student NewStudent(AdmissionApplicant applicant) => Student.CreateDirectRegistration(applicant.ReservedStudentId, applicant.TenantId, "Rahul", null, "Sharma",
+	private static Student NewStudent(AdmissionApplicant applicant, Guid? studentId = null) => Student.CreateDirectRegistration(studentId ?? applicant.ReservedStudentId, applicant.TenantId, "Rahul", null, "Sharma",
 		Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, null, new DateTime(2018, 5, 15), GenderEnum.Male, "9876543210");
 }

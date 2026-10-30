@@ -27,6 +27,8 @@ internal static class AdmissionInquiryIdentityFieldResolver
 		string? fallback)
 	{
 		var fieldList = fields as IReadOnlyList<AdmissionFormFieldDefinition> ?? fields.ToList();
+		var configured = AdmissionInquiryConfiguredFields.Read(fieldList, values, bindingKey);
+		if (!string.IsNullOrWhiteSpace(configured)) return configured;
 		var canonicalCode = fieldList.FirstOrDefault(field =>
 			string.Equals(field.BindingKey, bindingKey, StringComparison.OrdinalIgnoreCase))?.Code;
 		var canonicalValue = Value(values, canonicalCode);

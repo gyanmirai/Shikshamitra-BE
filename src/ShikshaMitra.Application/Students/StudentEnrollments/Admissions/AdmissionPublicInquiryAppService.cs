@@ -26,8 +26,6 @@ public class AdmissionPublicInquiryAppService(
 	IRepository<AdmissionPublicInquiryLink, Guid> links,
 	IRepository<AdmissionCycle, Guid> cycles,
 	IRepository<AdmissionOffering, Guid> offerings,
-	IRepository<AdmissionIntakeProfile, Guid> profiles,
-	IRepository<AdmissionIntakeSetup, Guid> setups,
 	IRepository<AdmissionFormDefinition, Guid> forms,
 	IRepository<AdmissionFormSectionDefinition, Guid> formSections,
 	IRepository<AdmissionFormFieldDefinition, Guid> formFields,
@@ -167,10 +165,12 @@ public class AdmissionPublicInquiryAppService(
 				{
 					Code = section.Code, Name = section.Name, DisplayOrder = section.DisplayOrder,
 					VisibilityRuleJson = section.VisibilityRuleJson,
+					StepVisibilityRuleJson = section.StepVisibilityRuleJson,
 					Fields = fields.Where(field => field.SectionId == section.Id)
 						.OrderBy(field => field.DisplayOrder).Select(field => new PublicAdmissionInquiryFieldDto
 						{
 							Code = field.Code, Label = field.Label, FieldType = field.FieldType,
+							BindingType = field.BindingType, BindingKey = field.BindingKey,
 							Required = field.Required, ReadOnly = field.ReadOnly,
 							DisplayOrder = field.DisplayOrder, Placeholder = field.Placeholder,
 							HelpText = field.HelpText, DefaultValue = field.DefaultValue,
@@ -180,7 +180,6 @@ public class AdmissionPublicInquiryAppService(
 						}).ToList()
 				}).ToList()
 			};
-			AddIdentityFallbacks(context.Form, fields);
 			var academicChoices = LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryAcademicOptionsService>();
 			foreach (var field in context.Form.Sections.SelectMany(section => section.Fields))
 				if (AdmissionFormMasterDataValidator.TrySource(AdmissionAcademicFormOptions.OptionsJson(field.Code, field.FieldType, field.OptionsJson), out var key, out _) && AdmissionAcademicFormOptions.IsAcademic(key))
@@ -320,40 +319,6 @@ public class AdmissionPublicInquiryAppService(
 
 	private static string Hash(string token) =>
 		Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
-
-	private static void AddIdentityFallbacks(PublicAdmissionInquiryFormDto form,
-		IReadOnlyCollection<AdmissionFormFieldDefinition> fields)
-	{
-		var fallback = new PublicAdmissionInquirySectionDto
-		{
-			Code = "PUBLIC_IDENTITY", Name = "Contact details", DisplayOrder = int.MaxValue
-		};
-		if (!HasIdentityField(fields, "Applicant.FirstName", "APPLICANT_FIRST_NAME", "STUDENT_FIRST_NAME", "FIRST_NAME"))
-			fallback.Fields.Add(new PublicAdmissionInquiryFieldDto
-			{
-				Code = "PUBLIC_APPLICANT_FIRST_NAME", Label = "Applicant first name",
-				FieldType = AdmissionFormFieldType.Text, Required = true, IsIdentityFallback = true
-			});
-		if (!HasIdentityField(fields, "Guardian.FirstName", "GUARDIAN_FIRST_NAME", "PARENT_FIRST_NAME", "GUARDIAN_NAME", "PARENT_NAME"))
-			fallback.Fields.Add(new PublicAdmissionInquiryFieldDto
-			{
-				Code = "PUBLIC_GUARDIAN_FIRST_NAME", Label = "Guardian first name",
-				FieldType = AdmissionFormFieldType.Text, Required = true, IsIdentityFallback = true
-			});
-		if (!HasIdentityField(fields, "Guardian.Mobile", "GUARDIAN_MOBILE", "GUARDIAN_PHONE", "PARENT_MOBILE", "PARENT_PHONE"))
-			fallback.Fields.Add(new PublicAdmissionInquiryFieldDto
-			{
-				Code = "PUBLIC_GUARDIAN_PHONE", Label = "Guardian mobile",
-				FieldType = AdmissionFormFieldType.Phone, Required = true, IsIdentityFallback = true,
-				ValidationJson = "{\"regex\":\"^[6-9]\\\\d{9}$\"}"
-			});
-		if (fallback.Fields.Count > 0) form.Sections.Add(fallback);
-	}
-
-	private static bool HasIdentityField(IEnumerable<AdmissionFormFieldDefinition> fields,
-		string bindingKey, params string[] aliases) =>
-		fields.Any(field => string.Equals(field.BindingKey, bindingKey, StringComparison.OrdinalIgnoreCase) ||
-			aliases.Contains(field.Code, StringComparer.OrdinalIgnoreCase));
 
 	private async Task EnsurePublishedInquiryFormAsync(Guid formId)
 	{

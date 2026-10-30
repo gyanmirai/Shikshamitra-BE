@@ -100,6 +100,7 @@ public class AdmissionApplicationLifecycleService(
 
 		var formInstance = new AdmissionFormInstance(
 			GuidGenerator.Create(), CurrentTenant.Id, application.Id, form.Id, form.Version);
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionEffectiveFormResolver>().FreezeAsync(application, formInstance, inquiry, form);
 		await PersistAsync(application, workflowInstance, stages, formInstance,
 			await CreateInitialValuesAsync(applicant, formInstance, inquiry), inquiryId, workflow, entryInstance);
 		await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().GetForApplicationAsync(application);
@@ -110,8 +111,7 @@ public class AdmissionApplicationLifecycleService(
 	{
 		var query = await applicationRepository.GetQueryableAsync();
 		return await AsyncExecuter.FirstOrDefaultAsync(query.Where(application =>
-			application.ApplicantId == applicantId && application.AdmissionOfferingId == offeringId &&
-			application.Status != AdmissionApplicationStatus.Withdrawn));
+			application.ApplicantId == applicantId && application.AdmissionOfferingId == offeringId));
 	}
 
 	private async Task<AdmissionApplicationDto> MapExistingAsync(AdmissionApplication existing, Guid? inquiryId)
@@ -150,8 +150,14 @@ public class AdmissionApplicationLifecycleService(
 		var family = await familyRepository.FindAsync(applicant.FamilyId);
 		var guardian = family?.PrimaryGuardianId.HasValue == true
 			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
-		var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
 		var inquiryValues = ReadInquiryValues(inquiry?.FormResponseSnapshotJson);
+		var frozen = AdmissionEffectiveFormStore.Read(instance);
+		if (frozen != null)
+			return frozen.Definition.Sections.SelectMany(section => section.Fields)
+				.Select(field => new AdmissionFormFieldValue(GuidGenerator.Create(), CurrentTenant.Id, instance.Id, field.Code,
+					ResolveFrozenInitialValue(field, applicant, guardian, inquiryValues)))
+				.Where(value => value.ValueJson != "null" && !string.IsNullOrWhiteSpace(value.ValueJson)).ToArray();
+		var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
 		var inquiryFields = inquiry?.FormResponseDefinitionId is Guid inquiryFormId
 			? await fieldRepository.GetListAsync(field => field.FormDefinitionId == inquiryFormId)
 			: [];
@@ -159,6 +165,23 @@ public class AdmissionApplicationLifecycleService(
 				GuidGenerator.Create(), CurrentTenant.Id, instance.Id, field.Code,
 				ResolveInitialValue(field, applicant, guardian, inquiryFields, inquiryValues)))
 			.Where(value => value.ValueJson != "null" && !string.IsNullOrWhiteSpace(value.ValueJson)).ToArray();
+	}
+
+	internal static string? ResolveFrozenInitialValue(AdmissionFormFieldDto field, AdmissionApplicant applicant,
+		AdmissionGuardian? guardian, IReadOnlyDictionary<string, string> inquiryValues)
+	{
+		var protectedContact = (applicant.ExistingStudentId.HasValue || AdmissionSiblingParentSelection.ReadConfirmation(applicant) != null) &&
+			(field.BindingKey?.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase) == true ||
+			 field.BindingKey?.StartsWith("Father.", StringComparison.OrdinalIgnoreCase) == true ||
+			 field.BindingKey?.StartsWith("Mother.", StringComparison.OrdinalIgnoreCase) == true);
+		if ((!field.ReadOnly || field.BindingType == AdmissionFormBindingType.Custom) && !protectedContact && field.InheritedFrom != null)
+		{
+			var source = AdmissionEffectiveFormStore.ReadInquiryValue(field, inquiryValues);
+			if (source != null) return source;
+		}
+		if (field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey))
+			return JsonSerializer.Serialize(AdmissionApplicationMapper.GetBoundValue(field.BindingKey, applicant, guardian));
+		return field.DefaultValue;
 	}
 
 	private static string? ResolveInitialValue(

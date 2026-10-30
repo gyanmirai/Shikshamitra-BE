@@ -1,4 +1,4 @@
-﻿---
+---
 module: student
 domain: product
 content_type: Reference
@@ -11,6 +11,12 @@ audience: humans-and-agents
 # Understand Student Enrollment Admissions behavior
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
+
+## Resume an ended admission
+
+Resume admission restores an eligible End Journey withdrawal within its original offering, cycle and unended academic year. The application ID/number, pinned workflow/form, completed or skipped evidence and Finance records remain unchanged. End Journey saves a versioned immutable decision-history snapshot; Resume appends its own actor/reason/closure event. Earlier withdrawal history is retained.
+
+Closed/unavailable intake, expired offers, finalized/enrolled cases and cancelled Records return handoffs are blocked. Legacy withdrawals are reconstructed only from unambiguous recorded pre-decision stage/form evidence; unclear cases require review. Seat resources are reacquired through the seat owner under current capacity and saved policy. Cancelled assessment bookings and follow-ups remain cancelled.
 
 ## Parents and the main school contact
 
@@ -403,3 +409,11 @@ One dashboard serves all authorized identities. Persisted roles select admin, le
 | Attendance | Saved register counts grouped by submitted/draft status and pending leave requests within selected-year enrollment/division scope. These are year work summaries, not daily completeness or attendance percentages. |
 
 Student/Parent-only database roles receive names and relationships from persisted verified portal associations, including existing self-link revocation rules; they receive no staff sections or shortcuts. Mixed staff/portal roles follow staff grants and scope. No grants, seeders, snapshots or migrations are created by a dashboard read. Existing Attendance reports remain authoritative for credit, percentage, cutoff, provisional and missing-day behavior.
+
+## Inquiry-to-Registration field inheritance
+
+Inheritance is an explicit versioned Registration setting. Offering references still determine Inquiry and workflow; the workflow supplies the one Registration form. Multiple Inquiry forms can share Registration, and separate routes can use other Registration forms. Approved source versions are checked against the application's exact captured Inquiry, rather than names, class ranges or the latest published version.
+
+Composition includes only that source's questions plus common Registration questions. Registered Student binding identities are deduplicated; custom identities retain lineage or explicit reviewed equivalence. Source labels/translations, types, options, visibility and repeatable structure remain authoritative. Registration can strengthen requiredness and adjust compatible placement, but cannot independently delete, rename or change inherited types/options. A read-only field cannot become newly unanswerably required. Inquiry-only bindings remain read-only source context and do not become editable Student bindings.
+
+Application start freezes the effective schema and safe source context in the existing form instance's extra properties. Rendering, writes, submission validation and retained Records evidence use that schema. Existing applications without a snapshot remain legacy; a corrupt enabled snapshot fails visibly. Registration edits and explicit clears are retained, source-only questions do not leak between paths, and later publications do not rewrite existing instances or submission history. No schema migration or automatic historical backfill is introduced.

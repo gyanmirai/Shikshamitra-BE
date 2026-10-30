@@ -1,6 +1,10 @@
 {
     "Culture": "en",
     "Texts": {
+        "Students:Family:MainContactInvalid": "Choose a saved parent or guardian as the main school contact. Review the family details before finalizing admission.",
+        "Students.Onboarding.FinalizationNotReady": "Admission cannot be finalized yet. Review these checks: {Blockers}.",
+        "Admissions:JourneyResumeBlocked": "{Reason}",
+        "Admissions:JourneyResumeConflict": "This admission changed. Refresh the case and review the latest resume stage before continuing.",
         "HR:Payroll:CompensationTargetNotSolvable": "{message}",
         "HR:Payroll:SalaryTemplateAllocationMismatch": "Regular earnings must add up to gross salary. Review the amount and earning rules, or choose an explicit remainder earning when appropriate.",
         "HR:Payroll:SalaryTemplateEarningsExceedGross": "The earning rules exceed gross salary. Reduce fixed amounts or percentages, or correct the monthly amount before previewing again.",

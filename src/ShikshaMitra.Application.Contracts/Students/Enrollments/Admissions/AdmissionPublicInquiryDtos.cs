@@ -98,11 +98,14 @@ public class PublicAdmissionInquirySectionDto
 	public string Name { get; set; } = string.Empty;
 	public int DisplayOrder { get; set; }
 	public string? VisibilityRuleJson { get; set; }
+	public string? StepVisibilityRuleJson { get; set; }
 	public List<PublicAdmissionInquiryFieldDto> Fields { get; set; } = [];
 }
 
 public class PublicAdmissionInquiryFieldDto
 {
+	public AdmissionFormBindingType? BindingType { get; set; }
+	public string? BindingKey { get; set; }
 	public string Code { get; set; } = string.Empty;
 	public string Label { get; set; } = string.Empty;
 	public AdmissionFormFieldType FieldType { get; set; }

@@ -109,6 +109,14 @@ public class AdmissionFormAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public Task<AdmissionFormDto> PreviewAsync(Guid id) => GetAsync(id);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.ViewUsage)]
+	public Task<PagedResultDto<AdmissionFormInheritanceSourceSummaryDto>> GetInheritanceSourcesAsync(Guid id, PagedResultRequestDto input) =>
+		LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>().GetSourcesAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
+	public Task<AdmissionFormInheritancePreviewDto> PreviewInheritanceAsync(AdmissionFormInheritancePreviewInput input) =>
+		LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>().PreviewAsync(input);
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
 	public async Task<AdmissionFormDto> CreateAsync(CreateUpdateAdmissionFormDto input)
 	{
@@ -331,12 +339,17 @@ public class AdmissionFormAppService(
 		var fields = await GetFieldsAsync(id);
 		var result = new AdmissionFormValidationResultDto();
 		var experience = AdmissionFormMetadataStore.ReadExperience(form);
+		var inheritance = AdmissionFormInheritanceMetadataStore.ReadPolicy(form);
+		var usesInheritedFields = inheritance?.Enabled == true && inheritance.Sources.Count > 0;
+		if (form.Purpose == AdmissionFormPurpose.Inquiry)
+			result.Errors.AddRange(AdmissionInquiryConfiguredFields.Validate(fields, sections,
+				sections.Where(section => experience.Sections.GetValueOrDefault(section.Code)?.IsRepeatable == true).Select(section => section.Id).ToHashSet()));
 		if (experience.SupportedLanguages.Count == 0 || !experience.SupportedLanguages.Contains(experience.DefaultLanguage, StringComparer.OrdinalIgnoreCase)) result.Errors.Add("Admissions.FormInvalidLanguages");
 		if (experience.SupportedLanguages.Count > 10 || experience.SupportedLanguages.Any(language => !Regex.IsMatch(language, "^[a-z]{2,3}(-[a-z0-9]{2,8})?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))) result.Errors.Add("Admissions.FormInvalidLanguages");
-		if (sections.Count == 0) result.Errors.Add(AdmissionFormErrorCodes.NoSections);
+		if (sections.Count == 0 && !usesInheritedFields) result.Errors.Add(AdmissionFormErrorCodes.NoSections);
 		if (sections.GroupBy(section => section.Code, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1)) result.Errors.Add("Admissions.FormDuplicateSectionCode");
 		if (sections.Any(section => !Regex.IsMatch(section.Code, "^[A-Z][A-Z0-9_-]*$", RegexOptions.CultureInvariant))) result.Errors.Add("Admissions.FormInvalidSectionCode");
-		if (form.LayoutType == AdmissionFormLayoutType.Stepper)
+		if (form.LayoutType == AdmissionFormLayoutType.Stepper && !usesInheritedFields)
 		{
 			var steps = sections.GroupBy(section => section.StepId ?? section.Id).Select(group => group.First()).ToList();
 			if (steps.Count < 2) result.Errors.Add("Admissions.FormStepperRequiresTwoSteps");
@@ -344,7 +357,7 @@ public class AdmissionFormAppService(
 			if (stepCodes.Any(code => !Regex.IsMatch(code, "^[A-Z][A-Z0-9_-]*$", RegexOptions.CultureInvariant))) result.Errors.Add("Admissions.FormInvalidStepCode");
 			if (stepCodes.GroupBy(code => code, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1)) result.Errors.Add("Admissions.FormDuplicateStepCode");
 		}
-		if (fields.Count == 0) result.Errors.Add("Admissions.FormNoFields");
+		if (fields.Count == 0 && !usesInheritedFields) result.Errors.Add("Admissions.FormNoFields");
 		if (fields.GroupBy(field => field.Code, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1)) result.Errors.Add(AdmissionFormErrorCodes.DuplicateFieldCode);
 		if (fields.Any(field => !Regex.IsMatch(field.Code, "^[A-Z][A-Z0-9_-]*$", RegexOptions.CultureInvariant))) result.Errors.Add("Admissions.FormInvalidFieldCode");
 		var fieldCodes = fields.Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -364,6 +377,8 @@ public class AdmissionFormAppService(
 			ValidateRule(step.StepVisibilityRuleJson, fieldCodes, $"Step:{step.StepCode ?? step.Code}", result);
 		foreach (var field in fields)
 		{
+			if (form.Purpose != AdmissionFormPurpose.Inquiry && field.BindingKey?.StartsWith("Inquiry.", StringComparison.OrdinalIgnoreCase) == true)
+				result.Errors.Add($"{AdmissionFormErrorCodes.InvalidSystemBinding}:{field.Code}");
 			var fieldMetadata = FieldTypes.FirstOrDefault(metadata => metadata.FieldType == field.FieldType);
 			if (fieldMetadata is null) result.Errors.Add($"{AdmissionFormErrorCodes.InvalidFieldType}:{field.Code}");
 			else if (!fieldMetadata.IsRuntimeReady) result.Errors.Add($"UnsupportedRuntimeField:{field.Code}");
@@ -381,6 +396,11 @@ public class AdmissionFormAppService(
 			ValidateValidationJson(field.ValidationJson, field.Code, fieldCodes, result);
 		}
 		ValidateDependencyCycles(fields, result);
+		if (inheritance?.Enabled == true)
+		{
+			var inheritanceIssues = await LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>().ValidatePolicyAsync(id);
+			result.Errors.AddRange(inheritanceIssues.Select(issue => $"{AdmissionFormInheritanceErrorCodes.IncompatibleSource}:{issue.Message}"));
+		}
 		return result;
 	}
 
@@ -419,7 +439,7 @@ public class AdmissionFormAppService(
 		catch (JsonException) { result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}"); }
 	}
 
-	private static void ValidateRule(string? rule, HashSet<string> knownFields, string owner, AdmissionFormValidationResultDto result)
+	internal static void ValidateRule(string? rule, HashSet<string> knownFields, string owner, AdmissionFormValidationResultDto result)
 	{
 		if (string.IsNullOrWhiteSpace(rule)) return;
 		try { using var document = JsonDocument.Parse(rule); ValidateRuleNode(document.RootElement, knownFields, owner, result); }
@@ -497,7 +517,7 @@ public class AdmissionFormAppService(
 			result.Errors.Add($"{AdmissionFormErrorCodes.InvalidRuleReference}:{code}");
 	}
 
-	private static void ValidateDependencyCycles(IEnumerable<AdmissionFormFieldDefinition> fields, AdmissionFormValidationResultDto result)
+	internal static void ValidateDependencyCycles(IEnumerable<AdmissionFormFieldDefinition> fields, AdmissionFormValidationResultDto result)
 	{
 		var graph = fields.ToDictionary(field => field.Code, _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
 		foreach (var field in fields)
@@ -572,7 +592,7 @@ public class AdmissionFormAppService(
 	private async Task<AdmissionFormDefinition> GetFormAsync(Guid id) => await formRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionFormDefinition), id);
 	private async Task<List<AdmissionFormSectionDefinition>> GetSectionsAsync(Guid id) => await AsyncExecuter.ToListAsync((await sectionRepository.GetQueryableAsync()).Where(section => section.FormDefinitionId == id).OrderBy(section => section.DisplayOrder));
 	private async Task<List<AdmissionFormFieldDefinition>> GetFieldsAsync(Guid id) => await AsyncExecuter.ToListAsync((await fieldRepository.GetQueryableAsync()).Where(field => field.FormDefinitionId == id).OrderBy(field => field.DisplayOrder));
-	private async Task<AdmissionFormDto> MapAsync(AdmissionFormDefinition form)
+	internal async Task<AdmissionFormDto> MapAsync(AdmissionFormDefinition form)
 	{
 		var fields = await GetFieldsAsync(form.Id);
 		return MapWithRequiredRules(form, await GetSectionsAsync(form.Id), fields);
@@ -586,7 +606,7 @@ public class AdmissionFormAppService(
 			if (rules.TryGetValue(field.Code, out var rule)) field.RequiredRuleJson = rule;
 		return dto;
 	}
-	private static AdmissionFormDto Map(AdmissionFormDefinition form, List<AdmissionFormSectionDefinition> sections, List<AdmissionFormFieldDefinition> fields)
+	internal static AdmissionFormDto Map(AdmissionFormDefinition form, List<AdmissionFormSectionDefinition> sections, List<AdmissionFormFieldDefinition> fields)
 	{
 		var experience = AdmissionFormMetadataStore.ReadExperience(form);
 		return new AdmissionFormDto
@@ -598,7 +618,7 @@ public class AdmissionFormAppService(
 			ParentVersionId = form.ParentVersionId, PublishedAt = form.PublishedAt, PublishedBy = form.PublishedBy,
 			ConcurrencyStamp = form.ConcurrencyStamp, CreationTime = form.CreationTime, CreatorId = form.CreatorId,
 			LastModificationTime = form.LastModificationTime, LastModifierId = form.LastModifierId,
-			SectionCount = sections.Count,
+			SectionCount = sections.Count, Inheritance = AdmissionFormInheritanceMetadataStore.ReadPolicy(form),
 			Sections = sections.Select(section =>
 			{
 				experience.Sections.TryGetValue(section.Code, out var sectionExperience);
@@ -617,6 +637,7 @@ public class AdmissionFormAppService(
 					{
 						Id = field.Id, FormDefinitionId = field.FormDefinitionId, SectionId = field.SectionId,
 						Code = field.Code, Label = field.Label, FieldType = field.FieldType, BindingType = field.BindingType,
+						FieldIdentity = AdmissionFormInheritanceMetadataStore.Identity(form, field),
 						BindingKey = field.BindingKey, Placeholder = field.Placeholder, HelpText = field.HelpText,
 						DefaultValue = field.DefaultValue, OptionsJson = field.OptionsJson, Required = field.Required,
 						ReadOnly = field.ReadOnly, DisplayOrder = field.DisplayOrder, ValidationJson = field.ValidationJson,

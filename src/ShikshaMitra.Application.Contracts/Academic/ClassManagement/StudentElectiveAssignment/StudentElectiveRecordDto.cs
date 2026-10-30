@@ -9,6 +9,7 @@ public class StudentElectiveRecordDto
 	public string StudentName { get; set; } = string.Empty;
 	public string RollNo { get; set; } = string.Empty;
 	public Guid? SelectedSubjectId { get; set; }
+	public bool IsLocked { get; set; }
 	public string? SelectedSubjectName { get; set; }
 	public string? StudentPreference { get; set; }
 	public List<ElectiveSubjectOptionDto> SelectableSubjects { get; set; } = new();

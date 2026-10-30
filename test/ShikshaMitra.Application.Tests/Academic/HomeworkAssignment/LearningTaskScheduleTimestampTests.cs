@@ -11,6 +11,16 @@ public class LearningTaskScheduleTimestampTests
 	[InlineData(DateTimeKind.Utc)]
 	[InlineData(DateTimeKind.Unspecified)]
 	[InlineData(DateTimeKind.Local)]
+	public void Calendar_date_uses_the_school_day_at_midnight_independent_of_host_kind(DateTimeKind kind)
+	{
+		var stored = new DateTime(2026, 10, 29, 18, 30, 0, kind);
+		Assert.Equal(new DateTime(2026, 10, 30, 0, 0, 0, DateTimeKind.Utc), LearningTaskScheduleTimestamp.ToSchoolDate(stored));
+		Assert.Equal(TimeSpan.FromMinutes(330), LearningTaskScheduleTimestamp.ToSchoolTime(stored).Offset);
+	}
+	[Theory]
+	[InlineData(DateTimeKind.Utc)]
+	[InlineData(DateTimeKind.Unspecified)]
+	[InlineData(DateTimeKind.Local)]
 	public void Stored_utc_clock_is_serialized_with_its_real_offset(DateTimeKind kind)
 	{
 		var stored = new DateTime(2026, 10, 30, 11, 30, 0, kind);

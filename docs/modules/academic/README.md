@@ -3,14 +3,14 @@ module: academic
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-10-29
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Understand the Academic setup guide backend
 
-TL;DR: this doc set owns the Academic setup guide's school-wide first-visit marker, year-specific advisory progress, configuration-state queries and security contract.
+TL;DR: this doc set owns Academic Insights read models and the Academic setup guide's school-wide first-visit marker, year-specific advisory progress, configuration-state queries and security contract.
 Operational configuration stays with its existing application services.
 [Examination](../examination/README.md) owns its documented seating workflows; [frontend Academic docs](../../../../Shikshamitra-FE/docs/academic/README.md) own routes, screens, forms and browser evidence.
 
@@ -35,6 +35,8 @@ Operational configuration stays with its existing application services.
 | Stored metadata and invariants | `src/ShikshaMitra.Domain/Academic/Setup/Services/**` |
 | Exact keys and error codes | `src/ShikshaMitra.Domain.Shared/Academic/Setup/AcademicSetupKeys.cs` |
 | Executable evidence | `test/ShikshaMitra.HttpApi.Tests/Academic/Setup/**` |
+| Insights API and read model | `src/ShikshaMitra.Application/Academic/Dashboard/AcademicInsights*.cs` and [API contract](./api.md#academic-insights) |
+| Insights executable evidence | `test/ShikshaMitra.Application.Tests/Academic/Dashboard/AcademicInsights*_Tests.cs` |
 
 ## For agents
 

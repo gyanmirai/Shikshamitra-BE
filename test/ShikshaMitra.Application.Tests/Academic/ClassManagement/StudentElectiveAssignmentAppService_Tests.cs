@@ -51,6 +51,69 @@ public class StudentElectiveAssignmentAppService_Tests
 	}
 
 	[Fact]
+	public async Task New_Admission_Should_Remain_Editable_Without_Unlocking_Existing_Students()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+				var stage = await _stageRepository.GetAsync(stageId);
+				var medium = await _mediumRepository.GetAsync(stage.EducationMediumId);
+				var board = await _boardRepository.GetAsync(medium.EducationBoardId);
+				var standard = await _standardRepository.InsertAsync(new Standard(Guid.NewGuid(), TestTenantId, "Elective class", 8, stageId, null), autoSave: true);
+				var division = await _divisionRepository.InsertAsync(new Division(Guid.NewGuid(), TestTenantId, "A", standard.Id, 30, "E-A"), autoSave: true);
+				var subject = await _subjectRepository.InsertAsync(new Subject(Guid.NewGuid(), TestTenantId, "Music", "#00A76F", medium.Id), autoSave: true);
+				var otherSubject = await _subjectRepository.InsertAsync(new Subject(Guid.NewGuid(), TestTenantId, "Art", "#00A76F", medium.Id), autoSave: true);
+				var group = new ElectiveGroup(Guid.NewGuid(), TestTenantId, "Arts", "#00A76F", medium.Id);
+				group.AddSubject(subject.Id);
+				group.AddSubject(otherSubject.Id);
+				await _electiveGroupRepository.InsertAsync(group, autoSave: true);
+				async Task<Student> AdmitAsync(string name, int roll) => await _studentRepository.InsertAsync(new Student(
+					Guid.NewGuid(), TestTenantId, name, null, "Student", board.AcademicYearId, board.Id,
+					medium.Id, stageId, standard.Id, division.Id, rollNo: roll), autoSave: true);
+				var existing = await AdmitAsync("Existing", 1);
+				var selection = await _selectionRepository.InsertAsync(new StudentElectiveSelection(
+					Guid.NewGuid(), TestTenantId, existing.Id, group.Id, subject.Id, medium.Id), autoSave: true);
+				var lockInput = new LockStudentElectiveAssignmentsDto
+				{
+					AcademicMediumId = medium.Id, ClassId = standard.Id, DivisionId = division.Id, ElectiveGroupId = group.Id
+				};
+				await _appService.LockStudentElectiveAssignmentsAsync(lockInput);
+				(await _appService.GetStudentElectiveAssignmentsAsync(medium.Id, standard.Id, division.Id, group.Id)).IsLocked.ShouldBeTrue();
+				var admitted = await AdmitAsync("New", 2);
+				var roster = await _appService.GetStudentElectiveAssignmentsAsync(medium.Id, standard.Id, division.Id, group.Id);
+				roster.IsLocked.ShouldBeFalse();
+				roster.Records.Single(row => row.StudentId == existing.Id).IsLocked.ShouldBeTrue();
+				roster.Records.Single(row => row.StudentId == admitted.Id).IsLocked.ShouldBeFalse();
+				roster.Records.Single(row => row.StudentId == admitted.Id).SelectedSubjectId.ShouldBeNull();
+				var searched = await _appService.GetStudentElectiveAssignmentsAsync(medium.Id, standard.Id, division.Id, group.Id, "Existing");
+				searched.IsLocked.ShouldBeFalse();
+				await Should.ThrowAsync<Volo.Abp.UserFriendlyException>(() => _appService.LockStudentElectiveAssignmentsAsync(lockInput));
+				await _appService.SaveStudentElectiveAssignmentsAsync(new SaveStudentElectiveAssignmentsDto
+				{
+					AcademicMediumId = medium.Id, ElectiveGroupId = group.Id,
+					Assignments = new List<StudentElectiveUpdateDto> { new() { StudentId = admitted.Id, SelectedSubjectId = otherSubject.Id } }
+				});
+				(await _appService.GetStudentElectiveAssignmentsAsync(medium.Id, standard.Id, division.Id, group.Id)).IsLocked.ShouldBeFalse();
+				await _appService.LockStudentElectiveAssignmentsAsync(lockInput);
+				(await _appService.GetStudentElectiveAssignmentsAsync(medium.Id, standard.Id, division.Id, group.Id)).IsLocked.ShouldBeTrue();
+				(await _selectionRepository.GetAsync(selection.Id)).SelectedSubjectId.ShouldBe(subject.Id);
+				(await _selectionRepository.GetAsync(selection.Id)).IsLocked.ShouldBeTrue();
+				foreach (var attemptedSubject in new Guid?[] { otherSubject.Id, null })
+				{
+					await Should.ThrowAsync<Volo.Abp.UserFriendlyException>(() => _appService.SaveStudentElectiveAssignmentsAsync(
+						new SaveStudentElectiveAssignmentsDto
+						{
+							AcademicMediumId = medium.Id, ElectiveGroupId = group.Id,
+							Assignments = new List<StudentElectiveUpdateDto> { new() { StudentId = existing.Id, SelectedSubjectId = attemptedSubject } }
+						}));
+				}
+				(await _selectionRepository.GetAsync(selection.Id)).SelectedSubjectId.ShouldBe(subject.Id);
+			}
+		});
+	}
+	[Fact]
 	public async Task Get_Assignments_Should_Return_Numeric_Roll_Order_With_Unassigned_Last()
 	{
 		await WithUnitOfWorkAsync(async () =>

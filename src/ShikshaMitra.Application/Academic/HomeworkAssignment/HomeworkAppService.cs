@@ -36,6 +36,7 @@ public partial class HomeworkAppService(
     HomeworkManager homeworkManager,
     IAsyncQueryableExecuter asyncExecuter,
     IRepository<StudentSubmissionEntity, Guid> studentSubmissionRepository,
+    IRepository<AcademicCalendar, Guid> calendarRepository,
     IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
     IRepository<Employee, Guid> employeeRepository,
     IReportingManagerAccessService reportingManagerAccessService
@@ -64,7 +65,7 @@ public partial class HomeworkAppService(
             input.DivisionSchedules.Select(schedule => schedule.DivisionId));
 
         await homeworkManager.ValidateHomeworkTypeAsync(input.HomeworkTypeId);
-        await ValidateHomeworkScheduleDatesAsync(input.StandardId, input.DivisionSchedules);
+        await ValidateHomeworkScheduleDatesAsync(academicMediumId, input.StandardId, input.DivisionSchedules);
 
         var divisionData = input.DivisionSchedules
             .Select(d => (d.DivisionId, d.PublishAt, d.DueAt))
@@ -320,7 +321,7 @@ public partial class HomeworkAppService(
                 .WithData("HomeworkId", homeworkId);
 
         await homeworkManager.ValidateHomeworkTypeAsync(input.HomeworkTypeId);
-        await ValidateHomeworkScheduleDatesAsync(input.StandardId, input.DivisionSchedules);
+        await ValidateHomeworkScheduleDatesAsync(homework.EducationMediumId ?? Guid.Empty, input.StandardId, input.DivisionSchedules);
 
         // Keep existing blob if no new one provided
         var resolvedBlob = attachmentBlobName ?? homework.DocumentUrl;
@@ -622,7 +623,7 @@ public partial class HomeworkAppService(
         };
     }
 
-    private async Task<IQueryable<HomeworkAssignmentEntity>> ApplyCurrentUserScopeAsync(
+    internal async Task<IQueryable<HomeworkAssignmentEntity>> ApplyCurrentUserScopeAsync(
         IQueryable<HomeworkAssignmentEntity> query)
     {
         var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
@@ -879,6 +880,7 @@ public partial class HomeworkAppService(
     }
 
     private async Task ValidateHomeworkScheduleDatesAsync(
+        Guid academicMediumId,
         Guid standardId,
         IEnumerable<CreateHomeworkDivisionScheduleDto> schedules)
     {
@@ -896,7 +898,7 @@ public partial class HomeworkAppService(
         var divisionIds = rows.Select(row => row.DivisionId).Distinct().ToList();
         var divisions = await divisionRepository.GetListAsync(division => divisionIds.Contains(division.Id));
         var divisionLookup = divisions.ToDictionary(division => division.Id, division => division.Name);
-        var calendarDays = await ReadHomeworkDueDateCandidatesAsync(standardId,
+        var calendarDays = await ReadHomeworkDueDateCandidatesAsync(academicMediumId, standardId,
             rows.Select(row => (row.DivisionId, row.DueAt)));
 
         foreach (var row in rows)
@@ -910,7 +912,7 @@ public partial class HomeworkAppService(
             if (row.DueAt <= row.PublishAt.Value)
             {
                 throw new UserFriendlyException(
-                    $"Due Date must be after Publish Date for {divisionName}. Publish Date: {row.PublishAt.Value:dd/MM/yyyy HH:mm}; Due Date: {row.DueAt:dd/MM/yyyy HH:mm}.");
+                    $"Due Date must be after Publish Date for {divisionName}. Publish Date: {LearningTaskScheduleTimestamp.ToSchoolTime(row.PublishAt.Value):dd/MM/yyyy HH:mm}; Due Date: {LearningTaskScheduleTimestamp.ToSchoolTime(row.DueAt):dd/MM/yyyy HH:mm}.");
             }
 
             EnsureHomeworkDueDateAllowed(calendarDays, standardId, row.DivisionId, row.DueAt, divisionName);
@@ -919,7 +921,7 @@ public partial class HomeworkAppService(
 
     private async Task ValidateExistingHomeworkScheduleDatesAsync(HomeworkAssignmentEntity homework)
     {
-        var calendarDays = await ReadHomeworkDueDateCandidatesAsync(homework.StandardId,
+        var calendarDays = await ReadHomeworkDueDateCandidatesAsync(homework.EducationMediumId ?? Guid.Empty, homework.StandardId,
             homework.DivisionSchedules.Select(row => (row.DivisionId, row.DueDate)));
         foreach (var row in homework.DivisionSchedules)
         {

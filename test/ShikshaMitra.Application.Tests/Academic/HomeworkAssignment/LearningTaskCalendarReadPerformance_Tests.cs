@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -96,7 +97,7 @@ public class LearningTaskCalendarReadPerformance_Tests : SubjectTeacherReassignm
 					if (blocked)
 					{
 						var error = await Should.ThrowAsync<UserFriendlyException>(() => service.CreateAsync(AcademicMediumId, input, null));
-						error.Message.ShouldBe($"Due Date {publish.AddDays(10):dd/MM/yyyy} for Calendar 9 is blocked by the academic calendar entry \"Last division holiday\". Choose another due date.");
+						error.Message.ShouldBe($"Due Date {publish.AddDays(10).ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)} for Calendar 9 is blocked by the academic calendar entry \"Last division holiday\". Choose another due date.");
 					}
 					else (await service.CreateAsync(AcademicMediumId, input, null)).Data.DivisionSchedules.Count.ShouldBe(10);
 				}

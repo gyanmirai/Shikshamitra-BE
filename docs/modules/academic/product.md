@@ -56,7 +56,15 @@ Finishing review does not require every setting to be configured.
 Changing cursor or deferred settings clears a prior review; an unchanged save preserves it.
 Operational edits outside the guide do not invalidate this advisory review automatically.
 
+## Homework calendar validation
+
+Homework schedules remain UTC instants in storage. Calendar matching and conflict messages use the corresponding Asia/Kolkata school date, so `2026-10-30T00:00:00+05:30` matches 30 October even though its UTC clock is still 29 October. The same conversion is applied when creating, updating and publishing saved drafts. Error dates use `dd/MM/yyyy` independently of the server culture.
+
+Calendar selection follows the picker: non-archived calendars for the homework medium covering the selected school date; published calendars take priority, followed by a default draft and then other drafts, with newest creation and ID breaking ties. Only active markers from that selected calendar and the matching class/division scope can block homework. Holidays, vacations and emergency closures block due dates; another division's marker does not apply merely because its class matches. Publish timestamps retain instant ordering and are not blocked by the due-date calendar policy.
+
 ## Data integrity
+
+Elective locks belong to individual student selections. A student admitted after the existing selections are locked has no selection and remains editable. Saving new selections does not unlock existing ones. Locking requires saved selections for the full class/division roster and locks only selections that are still unlocked. Attempts to change or delete an existing locked selection remain rejected by the server.
 
 Authorization, active tenant identity and hierarchical scope are enforced on the server.
 Hidden frontend controls do not authorize a request.

@@ -25,6 +25,101 @@ namespace ShikshaMitra.Common.Tests.Middleware;
 public class ApiProblemDetailsPipeline_Tests
 {
 	[Theory]
+	[InlineData(false, "Finance:Concession:010033", "Approved")]
+	[InlineData(true, "Finance:Concession:010033", "Approved")]
+	[InlineData(false, "Finance:Concession:010034", "approved benefit")]
+	[InlineData(true, "Finance:Concession:010034", "approved benefit")]
+	[InlineData(false, "Finance:Concession:010010", "academic year")]
+	[InlineData(true, "Finance:Concession:010010", "academic year")]
+	[InlineData(false, "Finance:Concession:020006", "selected fees")]
+	[InlineData(true, "Finance:Concession:020006", "selected fees")]
+	[InlineData(false, "Finance:ConcessionPolicy:010012", "policy version")]
+	[InlineData(true, "Finance:ConcessionPolicy:010012", "policy version")]
+	[InlineData(false, "Finance:ConcessionPolicy:010010", "active")]
+	[InlineData(true, "Finance:ConcessionPolicy:010010", "active")]
+	[InlineData(false, "Finance:Concession:010017", "documents")]
+	[InlineData(true, "Finance:Concession:010017", "documents")]
+	[InlineData(false, "Finance:Concession:010023", "repair")]
+	[InlineData(true, "Finance:Concession:010023", "repair")]
+	[InlineData(false, "Finance:Concession:010025", "configuration")]
+	[InlineData(true, "Finance:Concession:010025", "configuration")]
+	[InlineData(false, "Finance:Concession:020005", "assignment")]
+	[InlineData(true, "Finance:Concession:020005", "assignment")]
+	public async Task Concession_rejections_explain_the_rule_and_preserve_support_reference(bool useResultFilter, string code, string expected)
+	{
+		var assembly = typeof(ShikshaMitraDomainSharedModule).Assembly;
+		using var resource = assembly.GetManifestResourceStream(assembly.GetManifestResourceNames()
+			.Single(name => name.EndsWith("Localization.ShikshaMitra.en.json")))!;
+		using var messages = await JsonDocument.ParseAsync(resource);
+		var template = messages.RootElement.GetProperty("Texts").GetProperty(code).GetString()!;
+		var resolver = CreateResolver(new Dictionary<string, string> { [code] = template });
+		var http = new DefaultHttpContext { TraceIdentifier = "concession-update-reference" };
+		http.Request.Path = "/api/concession-request/request-id";
+		var data = new Dictionary<string, object?> { ["Status"] = "Approved" };
+		if (useResultFilter)
+		{
+			var payload = new { Error = new { Code = code, Message = "One or more business rules were violated.", Data = data } };
+			var context = new ResultExecutingContext(new ActionContext(http, new RouteData(), new ActionDescriptor()),
+				new List<IFilterMetadata>(), new ObjectResult(payload) { StatusCode = 400 }, new object());
+			await new ApiProblemDetailsResultFilter(resolver).OnResultExecutionAsync(context,
+				() => Task.FromResult(new ResultExecutedContext(context, new List<IFilterMetadata>(), context.Result, new object())));
+			var result = ((ObjectResult)context.Result).Value.ShouldBeOfType<ProblemDetails>();
+			result.Detail!.ShouldContain(expected);
+			result.Detail!.ShouldNotContain("{Status}");
+			result.Detail!.ShouldNotContain("One or more business rules were violated");
+			result.Extensions["errorCode"].ShouldBe(code);
+			result.Extensions["traceId"].ShouldBe(http.TraceIdentifier);
+		}
+		else
+		{
+			http.Response.Body = new MemoryStream();
+			await new ApiProblemDetailsMiddleware(_ => throw new BusinessException(code).WithData("Status", "Approved"),
+				NullLogger<ApiProblemDetailsMiddleware>.Instance, resolver).InvokeAsync(http);
+			http.Response.Body.Position = 0;
+			using var result = await JsonDocument.ParseAsync(http.Response.Body);
+			result.RootElement.GetProperty("detail").GetString()!.ShouldContain(expected);
+			result.RootElement.GetProperty("errorCode").GetString().ShouldBe(code);
+			result.RootElement.GetProperty("traceId").GetString().ShouldBe(http.TraceIdentifier);
+		}
+	}
+
+	[Fact]
+	public void Framework_business_message_is_replaced_with_specific_rule_even_when_status_default_differs()
+	{
+		const string code = "Finance:Concession:030003";
+		var resolver = CreateResolver(new Dictionary<string, string> { [code] = "This concession request was changed elsewhere. Refresh the request and try again." });
+		resolver.ResolveDetail("One or more business rules were violated.", code, ApiProblemDetailsMapper.GetDefaultDetail(409))
+			.ShouldBe("This concession request was changed elsewhere. Refresh the request and try again.");
+	}
+
+	[Theory]
+	[InlineData("Students:Family:MainContactInvalid", "saved parent or guardian")]
+	[InlineData("Students.Onboarding.FinalizationNotReady", "Main school contact valid")]
+	public async Task Finalization_contact_errors_should_explain_the_required_review(string code, string expectedDetail)
+	{
+		var assembly = typeof(ShikshaMitraDomainSharedModule).Assembly;
+		using var resource = assembly.GetManifestResourceStream(assembly.GetManifestResourceNames()
+			.Single(name => name.EndsWith("Localization.ShikshaMitra.en.json")))!;
+		using var messages = await JsonDocument.ParseAsync(resource);
+		var template = messages.RootElement.GetProperty("Texts").GetProperty(code).GetString()!;
+		var resolver = CreateResolver(new Dictionary<string, string> { [code] = template });
+		var http = new DefaultHttpContext();
+		http.Request.Path = "/api/student/enrollment/admissions/applications/00000000-0000-0000-0000-000000000001/finalize";
+		http.Response.Body = new MemoryStream();
+		var error = new BusinessException(code).WithData("Blockers", "Main school contact valid");
+		await new ApiProblemDetailsMiddleware(_ => throw error,
+			NullLogger<ApiProblemDetailsMiddleware>.Instance, resolver).InvokeAsync(http);
+		http.Response.StatusCode.ShouldBe(400);
+		http.Response.Body.Position = 0;
+		using var response = await JsonDocument.ParseAsync(http.Response.Body);
+		response.RootElement.GetProperty("errorCode").GetString().ShouldBe(code);
+		var detail = response.RootElement.GetProperty("detail").GetString();
+		detail.ShouldContain(expectedDetail);
+		detail.ShouldNotContain("One or more business rules were violated");
+		detail.ShouldNotContain("{Blockers}");
+	}
+
+	[Theory]
 	[InlineData(false, "010005", "different name")]
 	[InlineData(true, "010005", "different name")]
 	[InlineData(false, "010014", "Review")]

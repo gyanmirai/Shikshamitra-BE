@@ -124,6 +124,24 @@ public partial class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMul
 	}
 	public void RecordWorkflowStarted(Guid workflowInstanceId, Guid entryStageInstanceId) =>
 		AddLocalEvent(new ApplicationWorkflowStartedEvent(Id, workflowInstanceId, WorkflowDefinitionId, entryStageInstanceId, TenantId));
+	public void ResumeJourney(AdmissionJourneyClosureSnapshot snapshot, DateTime now)
+	{
+		if (Status != AdmissionApplicationStatus.Withdrawn || StudentId.HasValue || OnboardingCaseId.HasValue ||
+			EnrolledStudentId.HasValue || StudentEnrollmentId.HasValue || snapshot.Version != 1 ||
+			snapshot.OfferingId != AdmissionOfferingId || snapshot.CycleId != AdmissionCycleId ||
+			snapshot.WorkflowDefinitionId != WorkflowDefinitionId || snapshot.PreviousStatus is not
+			(AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted or AdmissionApplicationStatus.InReview or
+			 AdmissionApplicationStatus.Waitlisted or AdmissionApplicationStatus.Approved or AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted))
+			throw new BusinessException(AdmissionJourneyResumeErrorCodes.Blocked, "This admission cannot be resumed from its saved state.");
+		if (snapshot.PreviousStatus is AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted &&
+			(!snapshot.OfferExpiresAt.HasValue || snapshot.OfferExpiresAt.Value <= now))
+			throw new BusinessException(AdmissionJourneyResumeErrorCodes.Blocked, "The previous offer has expired. An authorized offer review is required.");
+		Status = snapshot.PreviousStatus;
+		CurrentStageInstanceId = snapshot.CurrentStageId;
+		DecisionReason = snapshot.DecisionReason; DecisionBy = snapshot.DecisionBy; DecisionAt = snapshot.DecisionAt;
+		// Offer dates, submitted form, fee selection and Finance evidence are deliberately not mutated.
+		LastSavedAt = now;
+	}
 	public void RecordStageEntered(Guid workflowInstanceId, Guid stageInstanceId) =>
 		AddLocalEvent(new ApplicationWorkflowStageEnteredEvent(Id, workflowInstanceId, stageInstanceId, TenantId));
 	public void RecordStageCompleted(Guid workflowInstanceId, Guid stageInstanceId) =>

@@ -30,6 +30,8 @@ public class AdmissionAssessmentSessionPreviewInput : PagedResultRequestDto
 	public string? SessionConcurrencyStamp { get; set; }
 	[Required] public AdmissionAssessmentSessionInput Session { get; set; } = new();
 	[MaxLength(128)] public string? Search { get; set; }
+	/// <summary>Optional student selection, intersected with authorized eligible assessment stages.</summary>
+	[MaxLength(200)] public List<Guid>? StageInstanceIds { get; set; }
 }
 
 public class AdmissionAssessmentBookingCandidateDto

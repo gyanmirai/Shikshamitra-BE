@@ -1,9 +1,11 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsProfessionalTax;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
@@ -14,8 +16,15 @@ public class ProfessionalTaxAppService(
 	: CrudAppService<ProfessionalTax, ProfessionalTaxDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateProfessionalTaxDto>(professionalTaxRepository),
 		IProfessionalTaxAppService
 {
+	protected override Task CheckGetPolicyAsync() => AuthorizationService.CheckAsync(Permissions.View);
+	protected override Task CheckGetListPolicyAsync() => AuthorizationService.CheckAsync(Permissions.View);
+	protected override Task CheckCreatePolicyAsync() => AuthorizationService.CheckAsync(Permissions.Add);
+	protected override Task CheckUpdatePolicyAsync() => AuthorizationService.CheckAsync(Permissions.Add);
+	protected override Task CheckDeletePolicyAsync() => AuthorizationService.CheckAsync(Permissions.Delete);
+
 	public override async Task<ProfessionalTaxDto> CreateAsync(CreateUpdateProfessionalTaxDto input)
 	{
+		await CheckCreatePolicyAsync();
 		ArgumentNullException.ThrowIfNull(input);
 		await EnsureNoOverlapAsync(input);
 		var entity = new ProfessionalTax(
@@ -29,6 +38,7 @@ public class ProfessionalTaxAppService(
 
 	public override async Task<ProfessionalTaxDto> UpdateAsync(Guid id, CreateUpdateProfessionalTaxDto input)
 	{
+		await CheckUpdatePolicyAsync();
 		ArgumentNullException.ThrowIfNull(input);
 		await EnsureNoOverlapAsync(input, id);
 		var entity = await Repository.GetAsync(id);

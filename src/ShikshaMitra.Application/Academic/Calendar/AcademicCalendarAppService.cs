@@ -97,7 +97,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             query = query.Where(c => c.Status == status.Value);
         }
 
-        var items = await AsyncExecuter.ToListAsync(query.OrderByDescending(c => c.CreationTime));
+        var items = await AsyncExecuter.ToListAsync(query.OrderByDescending(c => c.CreationTime).ThenByDescending(c => c.Id));
         
         var dtos = ObjectMapper.Map<List<AcademicCalendar>, List<AcademicCalendarDto>>(items);
         

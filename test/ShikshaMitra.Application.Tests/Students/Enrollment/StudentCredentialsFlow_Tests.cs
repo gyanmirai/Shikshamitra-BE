@@ -297,7 +297,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 	private async Task<OneClickCredentialsFixture> CreateOneClickCredentialsCaseAsync(string timing, bool captureStudentEmail = true,
 		bool emailEnabled = true, bool accountsEnabled = true, string? studentAccess = null, string? guardianAccess = null,
-		string provisioningMode = "manual")
+		string provisioningMode = "manual", bool confirmFees = true)
 	{
 		var fixture = await CreateAutomaticRegressionFixtureAsync("OneClickCredentials");
 		var cycle = await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(fixture.Offering.AdmissionCycleId));
@@ -316,7 +316,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var applicant = await _applicantRepository.GetAsync(fixture.Applicant.Id);
 			applicant.ExtraProperties["AdmissionStudentField.Applicant.Email"] = studentEmail; await _applicantRepository.UpdateAsync(applicant, true);
 		});
-		var item = await PrepareAutomaticRegressionCaseAsync(fixture, true, "one-click-credentials", confirmFeesBeforePlacement: true);
+		var item = await PrepareAutomaticRegressionCaseAsync(fixture, true, "one-click-credentials", confirmFeesBeforePlacement: true, confirmFees: confirmFees);
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var families = GetRequiredService<IRepository<StudentFamilyDetail, Guid>>(); var family = await families.GetAsync(item.StudentId);

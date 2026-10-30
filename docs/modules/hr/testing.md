@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-10-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -180,6 +180,11 @@ Use this table to pick focused tests:
 | Calendar events and holidays | `EventApi_Tests`, `HolidayApi_Tests`, `EventTypeApi_Tests`, `HolidayTypeApi_Tests`, `CalendarViewApi_Tests` |
 | Policy rules and audit | `PolicyAggregateRequiredIds_Tests`, `HrPolicyAppService_Tests`, `PolicyReportRegression_Tests` |
 | Reports | `HrReportApi_Tests`, `PolicyReportRegression_Tests`, `EfCoreHrReportExportJobRepository_Tests` |
+
+`PayrollSettingsActionAuthorization_Tests` verifies unproxied PF, professional-tax, salary-structure and template calls reject the exact denied action before accessing data, preserve independent Add grants and retain employee-scope checks.
+`PayrollSettingsActionWorkflow_Tests` uses the existing SQLite in-memory fixture to cover independent template write grants, idempotent create/update responses, active-catalogue authority, tenant isolation and fresh revocation.
+The direct-call suite also covers compensation-history and effective-revision View-or-Manage access, scoped denial and revocation before subsequent salary reads.
+These tests do not exercise PostgreSQL locks, workers or deployed permissions.
 
 Policy regression coverage must prove semantic manual-holiday audit comparison, restore-name collisions, archived/current filtering before paging, leave-policy restore conflicts, normal-workflow archive rejection, and stable unique-constraint errors.
 Report regression coverage must prove PDF row-cap metadata, inverted-date request suppression, newly queued export visibility, failed-export deletion wiring, UTC PostgreSQL timestamp boundaries, broad-owner to narrow-recipient rejection, compatible recipient access, cross-tenant rejection, owner and recipient scope revocation, schedule-owner permission revocation, invalid-first schedule isolation, legacy queued-snapshot capture, fail-closed legacy generation without an effective owner scope, retry generation fencing, and stale queued-snapshot rejection by the export worker.

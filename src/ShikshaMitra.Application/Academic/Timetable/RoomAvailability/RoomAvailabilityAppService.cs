@@ -99,8 +99,12 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
 
         var timeStart = input.StartTime ?? new TimeSpan(8, 0, 0);
         var timeEnd = input.EndTime ?? new TimeSpan(16, 0, 0);
-        var availability = await _conflictService.CheckRoomSnapshotsAsync(
-            rooms.Select(room => new RoomConflictRoom(room.Id, room.RoomName)).ToList(), input.Date, timeStart, timeEnd, input.StandardId, input.DivisionId);
+        var roomSnapshots = rooms.Select(room => new RoomConflictRoom(room.Id, room.RoomName)).ToList();
+        var availability = input.WeeklyTimetableDay.HasValue
+            ? await _conflictService.CheckWeeklyRoomSnapshotsAsync(roomSnapshots, input.WeeklyTimetableDay.Value,
+                timeStart, timeEnd, input.StandardId, input.DivisionId)
+            : await _conflictService.CheckRoomSnapshotsAsync(roomSnapshots, input.Date,
+                timeStart, timeEnd, input.StandardId, input.DivisionId);
 
         foreach (var room in rooms)
         {
@@ -212,7 +216,11 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
     }
 
     [UnitOfWork(true)]
-    public async Task<RoomReservationDto> CreateReservationAsync(CreateRoomReservationDto input)
+    public Task<RoomReservationDto> CreateReservationAsync(CreateRoomReservationDto input) =>
+        CreateReservationCoreAsync(input);
+
+    private async Task<RoomReservationDto> CreateReservationCoreAsync(CreateRoomReservationDto input,
+        IReadOnlyCollection<RoomConflictAcademicScope>? calendarScopes = null)
     {
         await LazyServiceProvider.LazyGetRequiredService<IAdmissionAssessmentResourceLock>().AcquireAsync(CurrentTenant.Id,
             new[] { input.RoomId, input.TeacherId.GetValueOrDefault() });
@@ -223,10 +231,18 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
         var series = input.IsRecurring && input.RecurringConfig != null
             ? await _conflictService.CreateSessionAsync(dates.Select(date => mainWindow with { Date = date }).Prepend(mainWindow).ToList())
             : null;
-        var conflicts = series != null ? await series.CheckAsync(mainWindow) : await _conflictService.CheckConflictsAsync(
-            input.RoomId, input.Date, input.StartTime, input.EndTime, null, input.TeacherId, input.StandardId, input.DivisionId);
-
-        EnsureNoCriticalConflicts(conflicts, "Cannot complete booking");
+        if (calendarScopes == null)
+        {
+            var conflicts = series != null ? await series.CheckAsync(mainWindow) : await _conflictService.CheckConflictsAsync(
+                input.RoomId, input.Date, input.StartTime, input.EndTime, null, input.TeacherId, input.StandardId, input.DivisionId);
+            EnsureNoCriticalConflicts(conflicts, "Cannot complete booking");
+        }
+        else
+        {
+            foreach (var scope in calendarScopes)
+                EnsureNoCriticalConflicts(await _conflictService.CheckScopedConflictsAsync(scope, input.RoomId, input.Date,
+                    input.StartTime, input.EndTime, teacherId: input.TeacherId), "Cannot complete booking");
+        }
 
         var isAdmin = IsAdministrator();
         var approverId = CurrentUser.Id ?? Guid.Empty;
@@ -730,6 +746,15 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
 
     private async Task EnsureReservationCanBeApprovedAsync(RoomReservation reservation)
     {
+        var calendarScopes = await LazyServiceProvider.LazyGetRequiredService<AdmissionAssessmentCalendarScopeService>()
+            .GetForReservationAsync(reservation.Id);
+        if (calendarScopes != null)
+        {
+            foreach (var scope in calendarScopes)
+                EnsureNoCriticalConflicts(await _conflictService.CheckScopedConflictsAsync(scope, reservation.RoomId, reservation.Date,
+                    reservation.StartTime, reservation.EndTime, reservation.Id, reservation.TeacherId), "Cannot approve booking");
+            return;
+        }
         var conflicts = await _conflictService.CheckConflictsAsync(
             reservation.RoomId,
             reservation.Date,

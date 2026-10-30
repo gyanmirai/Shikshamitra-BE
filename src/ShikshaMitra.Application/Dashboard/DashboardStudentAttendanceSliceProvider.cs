@@ -27,7 +27,8 @@ public class DashboardStudentAttendanceSliceProvider(
 			return;
 		}
 
-		if (!await HasAnyPermissionAsync(StudentAttendancePermissions))
+		if (!await HasAnyPermissionAsync(StudentAttendancePermissions) ||
+			!await permissionChecker.IsGrantedAsync(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View))
 		{
 			return;
 		}
@@ -37,6 +38,7 @@ public class DashboardStudentAttendanceSliceProvider(
 			var attendance = await studentListAppService.GetAttendanceDashboardSummaryAsync(
 				new GetStudentAttendanceDashboardSummaryInput
 				{
+					AcademicYearId = Guid.TryParse(summary.AcademicYearId, out var year) ? year : null,
 					StartDate = DateTime.ParseExact(range.From!, "yyyy-MM-dd", CultureInfo.InvariantCulture),
 					EndDate = DateTime.ParseExact(range.To!, "yyyy-MM-dd", CultureInfo.InvariantCulture)
 				});

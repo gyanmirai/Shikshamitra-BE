@@ -142,9 +142,7 @@ public partial class ConcessionRequestAppService
 
 		request.EnsureDraft();
 		await concessionRequestManager.ValidateDraftApprovalAsync(request);
-		if (await concessionRequestRepository.HasPendingForStudentAndTypeAsync(
-			request.StudentId, request.ConcessionTypeId, request.AcademicYearId, request.Id))
-			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.DuplicatePendingRequest);
+		await concessionRequestManager.EnsureBenefitAvailableAsync(request.StudentId, request.ConcessionTypeId, request.AcademicYearId, request.Id);
 
 		request.Submit(Clock.Now);
 	}

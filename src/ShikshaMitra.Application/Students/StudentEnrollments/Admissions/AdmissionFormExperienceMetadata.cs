@@ -34,6 +34,7 @@ internal static class AdmissionFormMetadataStore
 
 	public static void WriteExperience(AdmissionFormDefinition form, CreateUpdateAdmissionFormDto input)
 	{
+		AdmissionFormInheritanceMetadataStore.Write(form, input);
 		var languages = input.SupportedLanguages
 			.Where(language => !string.IsNullOrWhiteSpace(language))
 			.Select(language => language.Trim().ToLowerInvariant())
@@ -78,6 +79,7 @@ internal static class AdmissionFormMetadataStore
 
 	public static void CopyExperience(AdmissionFormDefinition source, AdmissionFormDefinition target)
 	{
+		AdmissionFormInheritanceMetadataStore.Copy(source, target);
 		var json = source.GetProperty<string>(ExperienceKey);
 		if (!string.IsNullOrWhiteSpace(json)) target.SetProperty(ExperienceKey, json);
 	}

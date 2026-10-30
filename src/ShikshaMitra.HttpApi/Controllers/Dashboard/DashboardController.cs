@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -25,13 +26,17 @@ public class DashboardController(IMainDashboardAppService dashboardAppService) :
 		[FromQuery] string? dashboardTemplate = null,
 		[FromQuery] string? academicYearId = null,
 		[FromQuery] string? from = null,
-		[FromQuery] string? to = null) =>
+		[FromQuery] string? to = null,
+		[FromQuery] string? presentationRole = null,
+		[FromQuery] Guid? studentId = null) =>
 		dashboardAppService.GetSummaryAsync(new DashboardSummaryRequestDto
 		{
 			DashboardTemplate = dashboardTemplate,
 			AcademicYearId = academicYearId,
 			From = from,
-			To = to
+			To = to,
+			PresentationRole = presentationRole,
+			StudentId = studentId
 		});
 
 	[HttpGet("widgets")]

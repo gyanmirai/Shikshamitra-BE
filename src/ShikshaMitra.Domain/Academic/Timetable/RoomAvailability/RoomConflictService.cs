@@ -57,6 +57,12 @@ public partial class RoomConflictService : DomainService
             teacherId, standardId, divisionId, null);
     }
 
+    public Task<ConflictCheckResult> CheckScopedConflictsAsync(
+        RoomConflictAcademicScope academicScope, Guid roomId, DateTime date, TimeSpan startTime, TimeSpan endTime,
+        Guid? currentReservationId = null, Guid? teacherId = null) =>
+        CheckConflictsAsync(roomId, date, startTime, endTime, currentReservationId,
+            teacherId, academicScope.StandardId, null, null, academicScope);
+
     /// <summary>Checks a room list using one request-local set of availability data.</summary>
     public async Task<IReadOnlyDictionary<Guid, ConflictCheckResult>> CheckRoomsAsync(
         IReadOnlyCollection<Room> rooms,
@@ -158,13 +164,20 @@ public partial class RoomConflictService : DomainService
         Guid? teacherId,
         Guid? standardId,
         Guid? divisionId,
-        RoomConflictReadContext? context)
+        RoomConflictReadContext? context,
+        RoomConflictAcademicScope? academicScope = null)
     {
         var result = new ConflictCheckResult();
         var conflicts = new List<ConflictItem>();
 
         // 1. Check Academic Calendar
+        var academicMediumId = academicScope?.AcademicMediumId;
+        var academicYearId = academicScope?.AcademicYearId;
+        var legacyCalendarYearMatches = academicYearId.HasValue && academicScope?.MediumAcademicYearId == academicYearId;
         var calendar = context != null ? context.Calendar : await _calendarRepository.FirstOrDefaultAsync(c =>
+            (!academicMediumId.HasValue || c.AcademicMediumId == academicMediumId.Value) &&
+            (!academicYearId.HasValue || c.AcademicYearId == academicYearId.Value ||
+                c.AcademicYearId == null && legacyCalendarYearMatches) &&
             c.Status == CalendarStatus.Published &&
             date.Date >= c.StartDate.Date &&
             date.Date <= c.EndDate.Date);
@@ -303,7 +316,7 @@ public partial class RoomConflictService : DomainService
                 {
                     var firstOccupation = slotOccupations.First();
                     var timetableRoomMessage = await BuildTimetableRoomConflictMessageAsync(
-                        firstOccupation, date, context);
+                        firstOccupation, context);
 
                     conflicts.Add(new ConflictItem(
                         "roomAvailability",
@@ -328,21 +341,9 @@ public partial class RoomConflictService : DomainService
                 context);
             if (classOccupancy != null)
             {
-                var shiftName = string.IsNullOrWhiteSpace(classOccupancy.ShiftName)
-                    ? "configured class shift"
-                    : classOccupancy.ShiftName;
-
-                var message =
-                    $"Room is occupied by {classOccupancy.StandardName} Division {classOccupancy.DivisionName} " +
-                    $"from {classOccupancy.StartTime:hh\\:mm} to {classOccupancy.EndTime:hh\\:mm} based on institute setup shift '{shiftName}'.";
-
-                conflicts.Add(new ConflictItem(
-                    "classAvailability",
-                    "critical",
-                    message,
-                    "Choose another room or change the division room assignment / class shift in institute setup."
-                ));
-                result.ClassAvailability = new ValidationPass(false, message);
+                var conflict = CreateClassShiftConflict(classOccupancy);
+                conflicts.Add(conflict);
+                result.ClassAvailability = new ValidationPass(false, conflict.Message);
                 result.RoomAvailability = new ValidationPass(false, "Class shift assignment conflict.");
             }
         }
@@ -388,7 +389,6 @@ public partial class RoomConflictService : DomainService
 
     private async Task<string> BuildTimetableRoomConflictMessageAsync(
         TimetableConflictCandidate occupation,
-        DateTime date,
         RoomConflictReadContext? context)
     {
         var standard = context != null ? context.Standards.GetValueOrDefault(occupation.StandardId)
@@ -398,7 +398,7 @@ public partial class RoomConflictService : DomainService
         var classLabel = $"{standard?.Name ?? "Class"} Division {division?.Name ?? "-"}";
 
         return
-            $"Room is already allocated in the timetable for {classLabel} on {date:dddd} " +
+            $"Room is already allocated in the timetable for {classLabel} on {occupation.Day} " +
             $"{occupation.StartTime:HH\\:mm}-{occupation.EndTime:HH\\:mm}.";
     }
 

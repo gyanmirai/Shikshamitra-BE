@@ -10,6 +10,14 @@ audience: humans-and-agents
 
 # Use Finance backend APIs
 
+## Combined configuration lists
+
+The Collection, Concession, Refund and Proration policy list requests accept optional `includeArchived` (default `false`).
+Management tables set it to `true` and omit `status` to return Draft, Active and Archived records through one filtered, sorted, paged query with a combined total count.
+An explicit `status` still narrows the result, including Archived-only queries; tenant and academic-year scope remain enforced.
+Callers omitting `includeArchived` retain the existing current-record behavior, including attachment pickers.
+Fee and Charge Category lists support all statuses by omitting `isActive`; Concession Type uses `includeInactive=true`; Payment Terms already support `includeArchived=true`.
+
 ## Fee structure copy policy preflight
 
 `GET /api/fee-structures/{id}/copy-policies?feeStructureMetadataId=...&standardId=...`
@@ -184,6 +192,12 @@ An `AllFees` concession policy permits paid installments. Approval preview repor
 
 Every retryable command requires its idempotency key; every mutation of an existing request requires the request concurrency stamp, and submit/approve also require the current preview fingerprint. Approval requires explicit due-row allocations and due-row stamps. Exact actions are `View`, `Add`, `Edit`, `Submit`, `Cancel`, `UploadDocument`, `ViewDocument`, `Delete`, `Approve`, `Reject`, and `Reverse` under `Finance.Fees.Concession`.
 
+Draft update flushes its changes before returning the detail response so `concurrencyStamp` matches the persisted request even when the command joins an ambient HTTP transaction. A subsequent Submit uses that returned stamp; an older editor's stamp still fails with `Finance:Concession:030003`. Editing a non-draft returns `Finance:Concession:010033` with `Status` and a localized explanation. Ineligible selected heads (`Finance:Concession:020006`), inactive policy versions (`Finance:ConcessionPolicy:010010`), and missing, mismatched or superseded policy versions (`Finance:ConcessionPolicy:010012`) also return actionable details. Problem responses retain `errorCode` and `traceId` for support; an unknown rule keeps the generic fallback.
+
+One benefit is available per tenant, student, academic year and concession type. Another request in Pending blocks with `Finance:Concession:010010`; Approved or PartiallyReversed blocks with `Finance:Concession:010034`. Drafts do not reserve a benefit. Rejected, Cancelled and fully Reversed requests release it. The rule spans every policy, version, assignment and fee head. Create, draft save, submit and approval enforce it, including administrator automatic approval and family commands. An existing request excludes only its own server-loaded ID. Historical collisions remain readable and can be rejected, cancelled or reversed; they cannot receive another approval.
+
+Context GET accepts optional `requestId` and individual preview accepts optional `requestId` for verified read-side self exclusion. Each concession type option and approval context exposes nullable `benefitBlocker` (`code`, `message`, `blockingRequestId`, `blockingStatus`). Approval context still returns its groups for review and rejection. Create never trusts a supplied read-side exclusion. PostgreSQL mutations serialize the annual type claim with a transaction-scoped advisory lock and validate committed evidence through an independent, non-pooled read connection, preserving the caller's isolation level, including family Serializable transactions. Idempotency receipts are re-read after the lock so a committed identical command replays its result.
+
 Staged concession uploads are tenant- and uploader-bound. Their stored receipt records the concession type and document definition; attaching a URL binds it to one request and rejects another uploader, requirement, type, tenant, request, or an upload older than 24 hours. Removing or replacing evidence on a Draft releases its old upload for cleanup in the same transaction. An hourly worker removes at most 100 expired unattached uploads per tenant per run and never selects evidence still attached to a request. Submitted requirement and due-row selections are immutable snapshots. Only approval changes due balances, and reversal reopens the linked obligation without rewriting payment or receipt history.
 
 The student concession detail endpoint, `GET api/concession-requests/{studentId}`, includes
@@ -277,7 +291,7 @@ Collection View do not substitute for this action. Tenant and payer scope still 
 
 ## Fee configuration permissions
 
-Refund and Proration list endpoints (`GET /api/finance/refund-policies` and `GET /api/finance/proration-policies`) exclude Archived policies when `status` is omitted, matching Concession.
+Refund and Proration list endpoints (`GET /api/finance/refund-policies` and `GET /api/finance/proration-policies`) exclude Archived policies when `status` is omitted and `includeArchived` is false, matching Concession.
 An explicit `status=Archived` selects only archived policies; Draft and Active select their respective current states.
 Academic-year and search filters apply before counting and pagination, so archive badges and list totals reflect the same scoped records.
 Existing archive and unarchive endpoints retain lifecycle guards and version history; unarchive restores Draft.
@@ -507,6 +521,7 @@ Canonical family read contracts use the web facts and retain only necessary fami
 
 Concession eligibility accepts optional `studentFeeStructureId`. Its typed context follows web `ConcessionRequestContextDto`: assignment options, selection flag, blockers, selected assignment's `feeHeads`, `eligibleDueFees`, `concessionPolicies` and `concessionTypes`. Only the exact child's/year's assigned current active policy is offered. Due rows use `installmentLabel,originalAmount,eligibleConcessionAmount`; types use `concessionTypeId`, document requirements `documentName`. No selection returns nullable `studentFeeStructureId` and requires explicit assignment choice when multiple assignments exist. Family create/edit/submit/upload capabilities are extensions.
 Concession preview uses `totalConcessionAmount,concessionPolicyName,totalEligibleBase,netPayable` and the preview fingerprint. Owner detail/save/action results use `concessionRequestId,totalRequestedConcessionAmount,totalApprovedConcessionAmount,totalReversedConcessionAmount,netApprovedConcessionAmount,submittedDocuments` with canonical web fields, decimal strings and family-only available actions. Document downloads additionally require ViewDocument; no staff approval/actor projection is exposed.
+Concession type options and owner request details include nullable `benefitBlocker` with `code,message,blockingRequestId,blockingStatus`. A Pending, Approved or PartiallyReversed request for the same student, academic year and concession type blocks another benefit; detail excludes the current request. A blocker removes draft edit/submit actions while leaving permitted cancellation available. These hints supplement the existing server-side benefit lock and validation; the typed eligibility, preview, document and monetary fields remain available. Submit uses `concurrencyStamp`, while cancellation uses `requestConcurrencyStamp`; both preserve idempotent replay.
 Refund eligibility follows web `RefundEligibilityDto`: `refundPolicyName,allowedPayoutMethods,totalRefundable,receipts[receiptId,...],feeHeads[feeHeadId,feeHeadName,totalPaid,totalRefunded,totalRefundable,months[dueFeeId,sourceAllocationId,sourceReceiptId,receiptNumber,month,year,total,paid,refunded,refundable]]`. Supported family commands remain fee-allocation based. Preview follows `FeeRefundPreviewDto` including `requestedAmount,maximumAllowedAmount,settledPaidAmount,priorProcessedRefund,activeReservation,deductionAmount,capAdjustment,isAllowed,reasons` plus `previewFingerprint`. Numeric enums retain their existing wire identity; money always uses invariant two-decimal strings.
 
 Request history includes submitted staff-created requests and the current actor's
@@ -552,3 +567,38 @@ read markers deduplicate by event identity and survive reloads. Marking a status
 message read does not mutate financial history. There is no push delivery or
 scheduled reminder worker in this surface.
 A missing or incomplete decimal payment-method split does not become a zero payment. `Finance:SelfService:PaymentEvidenceIncomplete` fails the affected overview/history/statement and directs the caller to school Finance for reconciliation; the legacy header is used only to check evidence completeness.
+
+## Bank account activity
+
+The read-only bank activity family requires `Finance.Accounts.Settings.BankAccount.View` and at least one exact operational View grant.
+Bank settings View alone returns 403 for these operational reads; masked settings remain available from the existing bank list.
+
+| Method | Path | Contract |
+|---|---|---|
+| GET | `/api/bank-accounts/{id}/activity` | `BankActivityQuery` to `BankActivityPage` |
+| GET | `/api/bank-accounts/{id}/deposits` | Same query, deposit panel |
+| GET | `/api/bank-accounts/{id}/activity/{movementKey}?academicYearId={year}` | Stable scoped movement to `BankActivityDetail`; owning source View is checked before detail enrichment |
+| POST | `/api/bank-accounts/{id}/activity/export` | `{query,format:'excel'|'pdf',columns:[{id,label}]}` to XLSX/PDF stream |
+
+Income/collection slices require `Finance.Accounts.IncomeTracking.View`, expense/refund slices require `Finance.Accounts.ExpenseTracking.View`, and cash-credit/deposit slices require `Finance.Accounts.CashManagement.View`.
+Collection/refund source opening and details additionally require their existing receipt/refund View authority.
+Capabilities require the destination's View plus Add/Deposit grant and a currently active/effective account.
+No permission definitions, grants or seed data are added.
+
+The query requires `academicYearId`; optional filters are offset-aware half-open `from`/`toExclusive`, direction, source, shared numeric payment method, category, recognition status, global search, and allowlisted shared table filters/sort.
+Paging requires page >= 1 and page size 1..100; search is limited to 100 characters.
+The default window starts at the selected academic-year school-calendar start and ends after today in the India calendar.
+Year ownership is independent of movement date, allowing historical-year cash to be credited later.
+`BankActivityRecognitionStatus` is Recorded/Pending/Reversed/Unverified; independent `BankActivityConfirmationStatus` is Unavailable/CreditConfirmed/InTransit.
+Pending incoming includes provisional noncash payments only; outstanding cash transit is separate.
+Account numbers, IFSC, UPI and payment references are masked; creator labels remain absent when unavailable.
+
+All rows, counts, totals, method breakdowns, details and exports preserve original student/admission-account scope.
+Coverage is explicitly limited to visible recorded activity; no bank balance or excluded amount/count is inferred.
+Mixed-scope cash batches expose individual authorized source shares only.
+Batch evidence downloads are deliberately unavailable from this aggregate detail because a source file can contain inaccessible shares; the existing Cash Management endpoint retains its own authorization.
+
+Exports read all matching rows in the same repeatable-read snapshot, ignoring table page selection.
+More than 5000 matching rows fails with `Finance:BankActivity:ExportLimit`; no truncation or page-only export is presented as complete.
+Unsupported queries fail with `Finance:BankActivity:InvalidQuery`.
+The read adapter uses PostgreSQL and fails explicitly on unsupported providers rather than silently loading history into memory.

@@ -3,7 +3,7 @@ module: academic
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-10-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -13,6 +13,13 @@ audience: humans-and-agents
 TL;DR: the guide adds bounded metadata to existing audited Tenant and AcademicYear aggregates and reads existing configuration records; it adds no entity table, migration, permission catalogue or seeder.
 
 ## Source ownership
+
+Academic Insights is an additive read model under `Application/Academic/Dashboard/AcademicInsights*.cs`.
+`AcademicInsightsContextReader` validates the tenant-owned hierarchy and resolves allowed divisions before feature readers run.
+Separate teaching, task, student, operational, and personal readers own bounded projections; `AcademicInsightsAppService` checks exact section permissions and composes the response.
+`AcademicInsightsSectionAccess` prevents denied sources from being invoked.
+`HttpApi/Controllers/Academic/Dashboard/AcademicInsightsController.cs` delegates the additive GET route, and `Application.Contracts/Academic/Dashboard/AcademicInsightsDtos.cs` owns its payload.
+The personal reader reuses persisted portal association and mobile placement/services. The read model adds no persistence, migrations, permission definitions, or seeders.
 
 | Layer | Source | Responsibility |
 |---|---|---|

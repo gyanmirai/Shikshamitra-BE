@@ -24,7 +24,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
-	private async Task<(Student Student, Guid DefinitionId, Guid ApplicationId, Guid SubmissionId)> CustomRecordFixtureAsync(bool direct = true, bool repeatable = false, bool canonical = true, bool structuredCondition = false, bool sibling = false, bool standards = false, bool largeFile = false)
+	private async Task<(Student Student, Guid DefinitionId, Guid ApplicationId, Guid SubmissionId)> CustomRecordFixtureAsync(bool direct = true, bool repeatable = false, bool canonical = true, bool structuredCondition = false, bool sibling = false, bool standards = false, bool largeFile = false, bool inherited = false)
 	{
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
 		var student = await CreateExistingStudentAsync(offering, "CustomRecord", "Student");
@@ -61,8 +61,26 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				offering.AdmissionCycleId, offering.Id, offering.WorkflowDefinitionId!.Value, formId);
 			application.Submit(); application.Approve(TestUserId, null);
 			var instance = new AdmissionFormInstance(Guid.NewGuid(), TestTenantId, application.Id, formId, 1);
+			if (inherited)
+			{
+				await GetRequiredService<Volo.Abp.Uow.IUnitOfWorkManager>().Current!.SaveChangesAsync();
+				var effectiveDefinition = AdmissionApplicationFormService.MapDefinition(definition,
+					await GetRequiredService<IRepository<AdmissionFormSectionDefinition, Guid>>().GetListAsync(x => x.FormDefinitionId == formId),
+					await fieldRepo.GetListAsync(x => x.FormDefinitionId == formId));
+				effectiveDefinition.Sections[0].Fields.Add(new()
+				{
+					Id = Guid.NewGuid(), FormDefinitionId = formId, SectionId = sectionId, Code = "INHERITED_NOTE",
+					Label = "Learning interests", BindingType = AdmissionFormBindingType.Custom,
+					BindingKey = "INHERITED_NOTE", FieldType = AdmissionFormFieldType.Text
+				});
+				AdmissionEffectiveFormStore.Freeze(instance, new AdmissionFormInheritancePreviewDto
+				{
+					Definition = effectiveDefinition, InquiryFormDefinitionId = Guid.NewGuid()
+				});
+			}
 			instance.Submit(TestUserId);
 			var submittedValues = new Dictionary<string, string> { ["BLOOD"] = "B+", ["TRANSPORT"] = "true", ["PICKUP"] = "Satellite", ["ZERO"] = "0", ["ACCESSIBILITY"] = "Ramp", ["CANONICAL_BLOOD"] = "B+", ["DYNAMIC"] = "" };
+			if (inherited) submittedValues["INHERITED_NOTE"] = "Science and drawing";
 			if (largeFile) submittedValues["UPLOAD"] = "data:application/pdf;base64," + new string('A', 70000);
 			if (sibling) submittedValues["SIBLINGS"] = JsonSerializer.Serialize(new[] { student.Id.ToString() });
 			if (standards) submittedValues["STAGE"] = offering.StageId.ToString();

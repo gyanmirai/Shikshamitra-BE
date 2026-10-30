@@ -12,6 +12,14 @@ namespace ShikshaMitra.Finance.Fees.ConcessionRequests;
 public interface IConcessionRequestRepository : IRepository<ConcessionRequest, Guid>
 {
 	Task<ConcessionRequest> GetWithDetailsAsync(Guid id, CancellationToken cancellationToken = default);
+	Task AcquireBenefitLockAsync(Guid studentId, Guid concessionTypeId, Guid academicYearId, CancellationToken cancellationToken = default);
+	Task<ConcessionBenefitConflict?> FindBlockingBenefitAsync(Guid studentId, Guid concessionTypeId, Guid academicYearId,
+		Guid? excludeRequestId = null, CancellationToken cancellationToken = default);
+	Task<ConcessionBenefitConflict?> FindBlockingBenefitForMutationAsync(Guid studentId, Guid concessionTypeId, Guid academicYearId,
+		Guid? excludeRequestId = null, CancellationToken cancellationToken = default);
+	Task<List<ConcessionBenefitConflict>> GetBlockingBenefitsAsync(Guid studentId, Guid academicYearId,
+		Guid? excludeRequestId = null, CancellationToken cancellationToken = default);
+	Task<T> ReadCommittedAsync<T>(Func<Task<T>> read, CancellationToken cancellationToken = default);
 
 	Task<bool> HasPendingForStudentAndTypeAsync(
 		Guid studentId,
@@ -57,3 +65,5 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		CancellationToken cancellationToken = default,
         FinanceTableQuery? tableQuery = null, bool includeReviewableDrafts = false);
 }
+
+public sealed record ConcessionBenefitConflict(Guid RequestId, Guid ConcessionTypeId, ConcessionRequestStatus Status);

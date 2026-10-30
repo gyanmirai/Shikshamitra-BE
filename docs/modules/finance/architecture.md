@@ -61,3 +61,24 @@ Proration integration uses `AdmissionProrationPolicyResolver` for the Finance ye
 ## Category and bank routing
 
 See [Income and expense routing](./references/income-expense-routing.md) for the current category selection, school bank, recognition, historical compatibility, and validation contracts.
+
+## Bank account activity projection
+
+`Application.Contracts/Finance/Accounts/BankActivity` defines the bank query, page/detail, status and export contracts.
+`BankAccountActivityController` delegates to the focused `BankAccountActivityAppService`; settings CRUD is unchanged.
+`IBankActivityQuerySource` keeps provider expressions below Application, and `EfCoreBankActivityQuerySource` composes PostgreSQL SQL over existing authoritative tables without a new ledger, schema change or historical backfill.
+The application applies original student/admission-account scope and exact slice grants before database filters, sums, counts and paging.
+Repeatable-read snapshots keep each page/detail/export internally coherent.
+
+Canonical noncash collection category allocations group once per instrument and correction, with signed correction directions preserved.
+Cash Income and cash expenses are excluded from bank movement; actual per-credit records use saved credit dates.
+Historical deposit destinations are resolved only from `DepositBank:<depositId N>` or matching `BulkDeposit:<key>` JSON evidence.
+The latest mutable cash-header bank is never used to assign historical deposits.
+Legacy instruments/refund accounting entries are fallback evidence only when canonical automatic entries are absent; unassigned or unmapped methods remain excluded.
+Legacy cash credit-date evidence is used only when individual credit records are absent.
+Cash-method refunds with a selected bank remain Unverified with zero recognized movement.
+Operational confirmation never implies external bank settlement.
+
+The adapter returns composable unmapped EF read facts, so historical JSON remains queried in PostgreSQL instead of materializing tenant history.
+Malformed destination JSON fails the read rather than guessing an account.
+No production migration or normalization job is required by this change.

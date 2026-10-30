@@ -13,6 +13,9 @@ public static class AdmissionSiblingParentSelection
 	private const string RelationshipKey = "ParentAccountRelationship";
 
 	public static bool IsParentFlow(AdmissionApplicant applicant) => applicant.GetProperty<int>(FlowKey) == 1;
+	public static bool HasParentFlowProvenance(AdmissionApplicant applicant) =>
+		applicant.ExtraProperties.ContainsKey(FlowKey) || applicant.ExtraProperties.ContainsKey(RelationshipKey) ||
+		applicant.ExtraProperties.ContainsKey(ConfirmationKey);
 	public static string? ReadRelationship(AdmissionApplicant applicant) => applicant.GetProperty<string>(RelationshipKey);
 
 	public static AdmissionSiblingParentConfirmation? ReadConfirmation(AdmissionApplicant applicant)

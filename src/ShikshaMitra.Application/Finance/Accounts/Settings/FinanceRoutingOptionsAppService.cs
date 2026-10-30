@@ -40,12 +40,14 @@ public class FinanceRoutingOptionsAppService(IRepository<TransactionCategory, Gu
    var bankRows = operation == "cash-expense" ? [] : await banks.GetListAsync(x => x.TenantId == CurrentTenant.Id &&
      x.AcademicYearId == academicYearId && x.IsActive);
    // Evaluate DateTimeOffset windows after tenant/year filtering for provider parity.
-   categoryRows.RemoveAll(x => x.EffectiveFrom > instant || x.EffectiveTo < instant);
+   var includeNone = operation is "fee-head" or "refund-policy";
+   categoryRows.RemoveAll(x => x.EffectiveFrom > instant || x.EffectiveTo < instant ||
+     (!includeNone && x.IsSystemCategory));
    bankRows.RemoveAll(x => x.EffectiveFrom > instant || x.EffectiveTo < instant);
    var income = operation is "income-entry" or "collection" or "collection-policy" or "fee-head" or "charge-category";
    var expense = operation is "expense-entry" or "cash-expense" or "refund" or "refund-policy";
-   return new(income ? categoryRows.Where(x => x.CategoryType == TransactionType.Income).OrderBy(x=>x.Name).Select(x=>new FinanceRoutingOption(x.Id,x.Name)).ToList() : [],
-     expense ? categoryRows.Where(x => x.CategoryType == TransactionType.Expense).OrderBy(x=>x.Name).Select(x=>new FinanceRoutingOption(x.Id,x.Name)).ToList() : [],
+   return new(income ? categoryRows.Where(x => x.CategoryType == TransactionType.Income).OrderBy(x=>x.IsSystemCategory ? 0 : 1).ThenBy(x=>x.Name).Select(x=>new FinanceRoutingOption(x.Id,x.Name)).ToList() : [],
+     expense ? categoryRows.Where(x => x.CategoryType == TransactionType.Expense).OrderBy(x=>x.IsSystemCategory ? 0 : 1).ThenBy(x=>x.Name).Select(x=>new FinanceRoutingOption(x.Id,x.Name)).ToList() : [],
      operation is "collection-policy" or "fee-head" or "charge-category" ? [] : bankRows.OrderBy(x=>x.BankName).Select(x=>new FinanceRoutingOption(x.Id,$"{x.BankName} • {x.AccountNumber[^Math.Min(4,x.AccountNumber.Length)..]}")).ToList());
  }
 }

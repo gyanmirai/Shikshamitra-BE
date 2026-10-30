@@ -100,6 +100,16 @@ internal static class AdmissionFamilyContactCapture
 	public static void ApplySelection(AdmissionApplicant applicant, Student student)
 	{
 		var selection = applicant.GetProperty<string>(StudentFamilyContactSelection.SelectionKey);
+		// Older intake stored its primary adult as Guardian while defaulting the role to Father/Mother.
+		// Preserve that same adult only for a new, unambiguous legacy identity, never an explicit choice.
+		if (selection is "father" or "mother" && student.Id == applicant.ReservedStudentId && !applicant.ExistingStudentId.HasValue &&
+			!AdmissionSiblingParentSelection.HasParentFlowProvenance(applicant) &&
+			string.IsNullOrWhiteSpace(applicant.GetProperty<string>(RequestKey)) &&
+			string.IsNullOrWhiteSpace(applicant.GetProperty<string>(StudentFamilyContactSelection.GuardianRelationshipKey)) &&
+			!StudentFamilyContactSelection.Present(student.FamilyDetail?.FatherDetails) &&
+			!StudentFamilyContactSelection.Present(student.FamilyDetail?.MotherDetails) &&
+			StudentFamilyContactSelection.Present(student.FamilyDetail?.GuardianDetails))
+			selection = "guardian";
 		if (selection != null) StudentFamilyContactSelection.Select(student, selection);
 		var relationship = applicant.GetProperty<string>(StudentFamilyContactSelection.GuardianRelationshipKey);
 		if (relationship != null) student.SetProperty(StudentFamilyContactSelection.GuardianRelationshipKey, relationship);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 namespace ShikshaMitra.Finance.Mobile;
 
 public sealed class MobileConcessionRequestContext
@@ -82,6 +83,7 @@ public sealed class MobileConcessionPolicyOption
 
 public sealed class MobileConcessionTypeOption
 {
+ public ConcessionBenefitBlockerDto? BenefitBlocker { get; set; }
  public Guid ConcessionTypeId { get; set; }
  public string Name { get; set; } = string.Empty;
  public string? Description { get; set; }
@@ -135,6 +137,7 @@ public sealed class MobileFeeHeadConcessionDetail
 
 public sealed class MobileConcessionRequestDetail
 {
+ public ConcessionBenefitBlockerDto? BenefitBlocker { get; set; }
  public Guid ConcessionRequestId { get; set; }
  public Guid AcademicYearId { get; set; }
  public Guid StudentId { get; set; }

@@ -70,6 +70,8 @@ public partial class ExamAppService_ScheduleStatus_Tests
                     StartTime = DateTime.Today.AddDays(index + 30).AddHours(10), EndTime = DateTime.Today.AddDays(index + 30).AddHours(11),
                     TotalMarks = 100, PassingMarks = 33
                 }).ToList();
+                await _calendarRepository.InsertAsync(new AcademicCalendar(Guid.NewGuid(), TestTenantId, mediumId, null,
+                    "Batch schedule calendar", DateTime.Today, DateTime.Today.AddMonths(3)), autoSave: true);
                 var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
                 var calendarTable = db.Model.FindEntityType(typeof(AcademicCalendarDay))!.GetTableName();
                 db.ChangeTracker.Clear();

@@ -34,6 +34,8 @@ public interface IAdmissionApplicationAppService : IApplicationService
 	Task<AdmissionApplicationDto> RejectAsync(Guid id, AdmissionApplicationDecisionDto input);
 	Task<AdmissionApplicationDto> WaitlistAsync(Guid id, AdmissionApplicationDecisionDto input);
 	Task<AdmissionApplicationDto> EndJourneyAsync(Guid id, EndAdmissionJourneyDto input);
+	Task<AdmissionJourneyResumePreviewDto> GetResumePreviewAsync(Guid id);
+	Task<AdmissionApplicationDto> ResumeJourneyAsync(Guid id, ResumeAdmissionJourneyDto input);
 	Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input);
 	Task<AdmissionApplicationDto> AcceptOfferAsync(Guid id, AdmissionApplicationDecisionDto input);
 	Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input);

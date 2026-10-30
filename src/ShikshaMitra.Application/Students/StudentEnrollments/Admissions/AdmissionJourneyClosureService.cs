@@ -44,14 +44,18 @@ public class AdmissionJourneyClosureService(
 			throw new BusinessException(AdmissionApplicationErrorCodes.ConcurrencyConflict);
 		var actor = CurrentUser.Id ?? throw new Volo.Abp.Authorization.AbpAuthorizationException();
 		var previousStageId = application.CurrentStageInstanceId;
-		application.EndJourney(actor, reason);
 		var workflow = await workflows.FindAsync(item => item.ApplicationId == id);
+		var runtimeStages = workflow == null ? [] : await stages.GetListAsync(item => item.WorkflowInstanceId == workflow.Id);
+		var snapshot = workflow == null ? null : AdmissionJourneyClosureSnapshot.Capture(application, workflow, runtimeStages);
+		if (snapshot != null) snapshot = snapshot with { SeatStates = (await reservations.GetListAsync(item => item.ApplicationId == id))
+			.ToDictionary(item => item.StageInstanceId, item => item.Status) };
+		application.EndJourney(actor, reason);
 		if (workflow != null)
 		{
 			workflow.Cancel();
 			await workflows.UpdateAsync(workflow, false);
-			foreach (var stage in await stages.GetListAsync(item => item.WorkflowInstanceId == workflow.Id &&
-				(item.Status == AdmissionRuntimeStageStatus.Active || item.Status == AdmissionRuntimeStageStatus.Pending)))
+			foreach (var stage in runtimeStages.Where(item =>
+				item.Status is AdmissionRuntimeStageStatus.Active or AdmissionRuntimeStageStatus.Pending))
 			{
 				stage.Cancel(actor, reason);
 				await stages.UpdateAsync(stage, false);
@@ -69,7 +73,8 @@ public class AdmissionJourneyClosureService(
 		await returnClosure.CloseWithdrawnApplicationAsync(application, reason);
 		await applications.UpdateAsync(application, false);
 		await history.InsertAsync(new AdmissionApplicationDecisionHistory(GuidGenerator.Create(), CurrentTenant.Id,
-			id, AdmissionApplicationStatus.Withdrawn, reason, actor, "journey-ended", previousStageId), false);
+			id, AdmissionApplicationStatus.Withdrawn, reason, actor, "journey-ended", previousStageId,
+			metadataJson: snapshot == null ? null : JsonSerializer.Serialize(snapshot)), false);
 		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("AdmissionJourneyEnded", "Admission journey ended", application.ApplicantId, id, application.InquiryId,
 			JsonSerializer.Serialize(new { Reason = reason, ActorUserId = actor, PreviousStageInstanceId = previousStageId })), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();

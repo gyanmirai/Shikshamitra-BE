@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-10-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,14 @@ audience: humans-and-agents
 # Trace Student Enrollment Admissions workflows
 
 TL;DR: setup commands produce validated offering defaults, while inquiry and application runtime commands consume only offerings that are open and ready.
+
+## Resume an End Journey withdrawal
+
+1. Staff opens the Withdrawn application in Applications and requests its resume preview under existing scope/permissions.
+2. The preview identifies the original unfinished stage or completed-workflow finalization boundary and any blockers. Staff supplies a required audit reason.
+3. The command revalidates the exact latest closure and concurrency stamp. Application, workflow, closure-cancelled stages, resource owner operations and the new resume audit commit atomically.
+4. The same application returns to Pipeline if Decision was never entered. Persisted Decision entry keeps it in Applications, including earlier-stage corrections. Starting again for the same applicant/offering resolves the existing withdrawn record; it never implicitly resumes or creates a duplicate.
+5. Existing stage completion, booking, document, fee and finalization checks continue normally. Resume does not replay completed stages or change a Finance ledger/receipt.
 
 ## Correct app-login email without leaving onboarding
 
@@ -121,7 +129,7 @@ The schedulers poll every minute. Transition dates use the Admissions institutio
 
 Admission finalization links a Student and an onboarding case without creating operational enrollment. One effective readiness rule must cover the Admission Offering; a rule may cover multiple Offerings. Academic context comes from those Offerings. New cases freeze the readiness, applicable published workflow document policies, approval and access requirements. An older unactivated case without that snapshot requires an explicit requirements review; reading it does not silently adopt current settings. Completed and activated historical cases retain their history.
 
-Applicable required documents and fee-structure selection may be deferred from Admissions into Onboarding. Activation requires confirmed admission, verified required workflow documents, Class/Division placement, assigned GR and Roll numbers, confirmation of an existing matching Finance fee structure, and configured approval. A fee choice saved in Admissions with payment evidence and no collection deferral satisfies fee confirmation automatically when Finance verifies the matching obligations are fully settled; Onboarding Fees is then read-only and complete without another confirmation. Pending queues, displayed progress and activation share that decision. Partial, pending-verification and deferred cases retain the explicit confirmation flow, and payment is not made mandatory for other cases. Waivers and manual document-complete overrides cannot satisfy required evidence. Existing Admissions validation owns required profile data; legacy blanket family, medical, contact and service-consent settings do not add requirements to an Offering snapshot.
+Applicable required documents and fee-structure selection may be deferred from Admissions into Onboarding. Activation requires confirmed admission, verified required workflow documents, Class/Division placement, assigned GR and Roll numbers, and configured approval. Fee assignment and payment are optional for activation and completion. A fee choice saved in Admissions with payment evidence and no collection deferral satisfies fee confirmation automatically when Finance verifies the matching obligations are fully settled; Onboarding Fees is then read-only and complete without another confirmation. Unconfirmed fees remain separately pending in the Fees queue, outside mandatory readiness. Staff can still explicitly confirm a published structure before activation; later fee assignment belongs to Finance. Waivers and manual document-complete overrides cannot satisfy required evidence. Existing Admissions validation owns required profile data; legacy blanket family, medical, contact and service-consent settings do not add requirements to an Offering snapshot.
 
 Fee selection and confirmation save admission intent only. Onboarding does not assign Finance obligations, create dues, collect payments or wait for first payment before activation, completion or credentials. Finance source and APIs remain unchanged.
 
@@ -260,10 +268,14 @@ For the selected first parent, a generic Registration contact email collected af
 Explicit structured contact answers, including clears, take precedence over generic aliases across stages; corrections to generic-owned contacts remain editable without changing the other parent or Student login fields.
 Older unfinalized parent-only records recover ownership from the saved Inquiry definition/answers and actually saved Registration field codes before edits or finalization; generated prefills alone do not establish structured ownership.
 This recovery never rewrites confirmed sibling sources, returning/existing Student profiles or legacy guardian records.
+For a new reserved Student, a legacy Father/Mother default with no parent-flow provenance or explicit family-contact request may resolve to the already saved primary Guardian when neither parent profile exists. This only sets the new Student's main contact; it does not relabel the adult, rewrite the applicant/inquiry, or grant portal access. Explicit choices, sibling proofs, other-guardian labels and existing Student mappings retain strict validation.
+Finalization preview projects supported profile fields in memory for unambiguous new legacy identities. An unresolvable selection adds the `family_contact` blocker before saving; reading preview does not change applicant data or concurrency. Typed-parent records keep their existing accepted-answer recovery during finalization.
 Public inquiry cannot submit trusted sibling confirmation.
 Legacy mobile-only family linking remains compatible and does not acquire the new trusted confirmation automatically.
 
 ## Inquiry and application runtime
+
+Configure the required student name and a coherent primary adult name/mobile in the Inquiry form before publishing it. The form publisher reports missing, optional, read-only or conditionally hidden minimum questions instead of the capture runtime adding its own controls. Use generic Guardian fields or a bound Father/Mother contact pair; configure Primary parent when both structured contact paths are available. Staff create/edit resolve the selected person's own details, preserve legacy saved identity, and retain explicit sibling confirmation. Public capture uses configured answers without synthetic identity questions and retains public-link attribution and its existing restricted trust level. See [Inquiry contracts](./api.md#inquiry-management-apis).
 
 Inquiry creation checks cycle consistency and shared offering availability before validating inquiry form values.
 Legacy create-time duplicate enforcement stays in the selected admission cycle; the new parent flow also requires explicit existing/separate family choice when a scoped saved-parent contact matches.

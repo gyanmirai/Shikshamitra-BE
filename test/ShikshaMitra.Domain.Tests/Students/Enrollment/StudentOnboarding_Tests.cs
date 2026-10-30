@@ -91,6 +91,7 @@ public class StudentOnboarding_Tests
 	[InlineData("documentCheck", "required", "\"false\"")]
 	[InlineData("grNumber", "manualEntryAllowed", "\"true\"")]
 	[InlineData("grNumber", "maximumNumber", "\"100\"")]
+	[InlineData("grNumber", "maximumNumber", "\"\"")]
 	[InlineData("rollNumber", "requireApproval", "\"true\"")]
 	[InlineData("divisionChange", "isActive", "\"false\"")]
 	public void Configuration_rejects_malformed_operational_rules_before_they_can_weaken_readiness(
@@ -114,6 +115,23 @@ public class StudentOnboarding_Tests
 		target[key] = JsonNode.Parse(value);
 		Should.Throw<BusinessException>(() => new OnboardingRuleConfiguration(root.ToJsonString()))
 			.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+	}
+
+	[Theory]
+	[InlineData(null)]
+	[InlineData("null")]
+	[InlineData("100")]
+	public void Configuration_accepts_an_omitted_null_or_numeric_GR_maximum(string? maximum)
+	{
+		const string json = """
+			{"readinessAccess":{},"onboardingProfiles":[],
+			"grNumber":{"configurations":[{"id":"gr","formatPattern":"{SEQUENCE}"}]},
+			"rollNumber":{"configurations":[]},"divisionChange":{"configurations":[]}}
+			""";
+		var root = JsonNode.Parse(json)!;
+		if (maximum != null)
+			root["grNumber"]!["configurations"]![0]!["maximumNumber"] = JsonNode.Parse(maximum);
+		Should.NotThrow(() => new OnboardingRuleConfiguration(root.ToJsonString()));
 	}
 
 	[Theory]

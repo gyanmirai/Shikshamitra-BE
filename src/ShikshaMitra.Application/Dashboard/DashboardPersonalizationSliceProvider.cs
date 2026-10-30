@@ -59,76 +59,15 @@ public sealed record DashboardTeacherScope(bool IsResolved, Guid? EmployeeId)
 	public static DashboardTeacherScope Unresolved { get; } = new(false, null);
 }
 
-public sealed class DashboardStudentParentScopeResolver(
-	IRepository<Student, Guid> studentRepository,
-	IRepository<StudentContactDetail, Guid> contactDetailRepository,
-	IRepository<StudentFamilyDetail, Guid> familyDetailRepository,
-	IAsyncQueryableExecuter asyncExecuter,
-	ICurrentUser currentUser)
+public sealed class DashboardStudentParentScopeResolver(ShikshaMitra.Students.Portal.StudentPortalAccessService portal)
 	: ITransientDependency
 {
 	public async Task<DashboardStudentParentScope> ResolveAsync()
 	{
-		var email = NormalizeEmail(currentUser.Email);
-		if (email == null)
-		{
-			return DashboardStudentParentScope.Unresolved;
-		}
-
-		var matchedStudentIds = await ResolveMatchedStudentIdsAsync(email);
-		if (matchedStudentIds.Count == 0)
-		{
-			return DashboardStudentParentScope.Unresolved;
-		}
-
-		var students = await studentRepository.GetQueryableAsync();
-		var enrolledStudentIds = await asyncExecuter.ToListAsync(students
-			.Where(student =>
-				matchedStudentIds.Contains(student.Id) &&
-				student.Status == StudentLifeCycleStatusEnum.Enrolled)
-			.Select(student => student.Id));
-
-		var resolvedIds = enrolledStudentIds.Distinct().ToList();
-		return resolvedIds.Count == 1
-			? new DashboardStudentParentScope(true, resolvedIds[0])
-			: DashboardStudentParentScope.Unresolved;
+		var ids = (await portal.GetMyStudentsAsync()).Select(x => x.StudentId).Distinct().ToList();
+		return ids.Count == 1 ? new DashboardStudentParentScope(true, ids[0]) : DashboardStudentParentScope.Unresolved;
 	}
-
-	private async Task<List<Guid>> ResolveMatchedStudentIdsAsync(string normalizedEmail)
-	{
-		var contacts = await contactDetailRepository.GetQueryableAsync();
-		var contactMatches = await asyncExecuter.ToListAsync(contacts
-			.Where(contact =>
-				contact.Email != null &&
-				contact.Email.ToLower() == normalizedEmail)
-			.Select(contact => contact.Id));
-
-		var families = await familyDetailRepository.GetQueryableAsync();
-		var familyMatches = await asyncExecuter.ToListAsync(families
-			.Where(family =>
-				(family.FatherDetails != null &&
-				 family.FatherDetails.Email != null &&
-				 family.FatherDetails.Email.ToLower() == normalizedEmail) ||
-				(family.MotherDetails != null &&
-				 family.MotherDetails.Email != null &&
-				 family.MotherDetails.Email.ToLower() == normalizedEmail) ||
-				(family.GuardianDetails != null &&
-				 family.GuardianDetails.Email != null &&
-				 family.GuardianDetails.Email.ToLower() == normalizedEmail))
-			.Select(family => family.Id));
-
-		return contactMatches
-			.Concat(familyMatches)
-			.Distinct()
-			.ToList();
-	}
-
-	private static string? NormalizeEmail(string? email) =>
-		string.IsNullOrWhiteSpace(email)
-			? null
-			: email.Trim().ToLowerInvariant();
 }
-
 public sealed record DashboardStudentParentScope(bool IsResolved, Guid? StudentId)
 {
 	public static DashboardStudentParentScope Unresolved { get; } = new(false, null);

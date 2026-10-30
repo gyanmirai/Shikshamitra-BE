@@ -45,7 +45,8 @@ public partial class TransactionAppService(
 		}
 
 		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
-        var transactionQuery = await transactionRepository.GetQueryableAsync();
+		var transactionQuery = await financeScopeAccessService.FilterPooledCashTransactionsAsync(
+			await transactionRepository.GetQueryableAsync(), academicYearId);
 		var categoryQuery    = await transactionCategoryRepository.GetQueryableAsync();
 
 		var joinedQuery =
@@ -94,12 +95,14 @@ public partial class TransactionAppService(
 		Transaction.EnsureValidMoneyAndMethod(input.Amount, input.PaymentMethod);
 		if (input.PaymentMethod == 0 && input.PaymentDate > new DateTimeOffset(Clock.Now.ToUniversalTime()))
 			throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidEvidence);
-		if (transactionType == TransactionType.Expense && input.PaymentMethod == 0 && input.CashCollectionId.HasValue)
+		if (transactionType == TransactionType.Expense && input.PaymentMethod == 0)
 			await financeScopeAccessService.EnsureCollectionYearAccessibleAsync(academicYearId);
 		else await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(academicYearId, null, null, null, null);
 
 		if (input.IdempotencyKey == Guid.Empty || input.PaymentMethod == 0 && !input.IdempotencyKey.HasValue)
 			throw new BusinessException(AccountsRegisterErrorCodes.ManualEntryKeyConflict);
+		if (input.PaymentMethod == 0)
+			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Accounts.CashManagement.ICashCollectionLock>().AcquireAsync(academicYearId);
 		if (input.PaymentMethod != 0 && (input.CashCollectionId.HasValue || input.CashConcurrencyStamp != null))
 			throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidSource);
 		// Validate the original cash request before any idempotent replay. Approval
@@ -128,11 +131,13 @@ public partial class TransactionAppService(
                     (!(prior.PaymentMethod == 0 && prior.CashCollectionId.HasValue && transactionType == TransactionType.Income) && prior.BankAccountId != input.BankAccountId) ||
                     prior.Name != input.Name || prior.Notes != input.Notes || reference?.ToString() != input.PaymentReference?.Trim() ||
                     (input.PaymentMethod == 0 && prior.CreatorId != CurrentUser.Id) ||
-                    (transactionType == TransactionType.Expense && (prior.CashCollectionId != input.CashCollectionId || cashStamp?.ToString() != input.CashConcurrencyStamp)) ||
+                    (transactionType == TransactionType.Expense && !prior.ExtraProperties.ContainsKey("CashAllocations") && (prior.CashCollectionId != input.CashCollectionId || cashStamp?.ToString() != input.CashConcurrencyStamp)) ||
+                    (prior.ExtraProperties.ContainsKey("CashAllocations") && (input.CashCollectionId.HasValue || input.CashConcurrencyStamp != null)) ||
                     counterparty?.ToString() != input.Counterparty?.Trim() || !prior.CategoryTags.Select(x => x.Value).OrderBy(x => x).SequenceEqual(input.CategoryTags.Select(x => new Tag(x).Value).Distinct().OrderBy(x => x)))
                     throw new BusinessException(AccountsRegisterErrorCodes.ManualEntryKeyConflict);
                 if (prior.FinanceFeeAccountId.HasValue || prior.StudentId.HasValue)
                     await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(prior.StudentId, prior.FinanceFeeAccountId);
+                await EnsurePooledReplayScopeAsync(prior);
                 return MapToCreateUpdateResponse(prior, await transactionCategoryRepository.GetAsync(prior.CategoryId));
             }
         }
@@ -175,11 +180,13 @@ public partial class TransactionAppService(
 		await EnsureTransactionYearAsync(transaction);
 		EnsureTransactionType(transaction, transactionType);
 		if (!transaction.IsConfirmed) throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidSource);
+		await financeScopeAccessService.EnsurePooledCashTransactionAccessibleAsync(transaction);
 
 		var category = await transactionCategoryRepository.GetAsync(transaction.CategoryId);
 		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
 		var scopedAccountIds = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
-        var transactionQuery  = await transactionRepository.GetQueryableAsync();
+		var transactionQuery = await financeScopeAccessService.FilterPooledCashTransactionsAsync(
+			await transactionRepository.GetQueryableAsync(), transaction.AcademicYearId);
 		var relatedTransactions = await AsyncExecuter.ToListAsync(
 			transactionQuery.Where(x =>
 				x.IsConfirmed && (x.FinanceFeeAccountId.HasValue ? scopedAccountIds.Contains(x.FinanceFeeAccountId.Value) : x.StudentId == null || scopedStudentIds.Contains(x.StudentId.Value)) && x.CategoryId == transaction.CategoryId &&

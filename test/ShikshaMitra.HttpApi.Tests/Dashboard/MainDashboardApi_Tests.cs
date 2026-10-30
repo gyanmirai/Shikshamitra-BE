@@ -22,6 +22,7 @@ using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Application.Contracts.HR.Calendar.Events;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Calendar;
@@ -33,6 +34,8 @@ using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.Compliance;
+using ShikshaMitra.Students.Portal;
+using Volo.Abp.Identity;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using Shouldly;
@@ -99,17 +102,6 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 				"hr-leave-approvals",
 				"finance-dashboard",
 				"hr-dashboard"
-			}
-		],
-		[
-			"studentParent",
-			new[]
-			{
-				"student-attendance",
-				"student-assignments",
-				"student-fee-status",
-				"student-document-update",
-				"student-academic-summary"
 			}
 		]
 	];
@@ -210,7 +202,8 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 		metadata.ShouldAllBe(widget => !string.IsNullOrWhiteSpace(widget.Id));
 		metadata.ShouldAllBe(widget => !string.IsNullOrWhiteSpace(widget.Zone));
 		metadata.ShouldAllBe(widget => !string.IsNullOrWhiteSpace(widget.DrilldownUrl) || !string.IsNullOrWhiteSpace(widget.Owner));
-		metadata.ShouldAllBe(widget => widget.RequiredPermissions.Count > 0);
+		metadata.ShouldAllBe(widget => widget.RequiredPermissions.Count > 0 ||
+			new[] { "student-learning-tasks", "student-upcoming-exam", "student-upcoming-exams", "student-latest-result" }.Contains(widget.Id));
 
 		var financeCollection = metadata.Single(x => x.Id == "finance-collection");
 		financeCollection.Zone.ShouldBe("kpis");
@@ -884,6 +877,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_Dashboard.View,
 				ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View,
 				ShikshaMitraModulePermissions.Finance,
+				ShikshaMitraSubModulePermissions.FinanceDashboard,
 				ShikshaMitraSubModulePermissions.HRDashboard));
 
 		var response = await client.GetAsync(
@@ -902,7 +896,9 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 		widgets["finance-dues"].Value.ShouldNotBeNull();
 		widgets["finance-dues"].Value!.ToString()!.ShouldStartWith("INR");
 		widgets["hr-payroll-readiness"].Value.ShouldNotBeNull();
-		widgets["hr-payroll-readiness"].Value!.ToString()!.ShouldContain("%");
+		var payrollValue = widgets["hr-payroll-readiness"].Value!.ToString()!;
+		if (payrollValue == "Unavailable") widgets["hr-payroll-readiness"].Subtitle!.ShouldContain("No saved payroll preview");
+		else widgets["hr-payroll-readiness"].Subtitle!.ShouldContain("Saved preview");
 		widgets["hr-staff-attendance"].Value.ShouldNotBeNull();
 		widgets["hr-staff-attendance"].Value!.ToString()!.ShouldContain("%");
 		var concessionRisk = payload.RiskAlerts.Single(x => x.Id == "finance-concession-impact");
@@ -912,11 +908,11 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 		moduleSnapshots["finance-dashboard"].Value.ShouldNotBeNull();
 		moduleSnapshots["finance-dashboard"].Value!.ToString()!.ShouldStartWith("INR");
 		moduleSnapshots["finance-dashboard"].Subtitle.ShouldNotBeNull();
-		moduleSnapshots["finance-dashboard"].Subtitle!.ShouldContain("due students");
+		moduleSnapshots["finance-dashboard"].Subtitle!.ShouldContain("due payers");
 		moduleSnapshots["finance-dashboard"].DrilldownUrl.ShouldBe("/finance/dashboard");
 
 		moduleSnapshots["hr-dashboard"].Value.ShouldNotBeNull();
-		moduleSnapshots["hr-dashboard"].Value!.ToString()!.ShouldContain("%");
+		moduleSnapshots["hr-dashboard"].Value!.ToString().ShouldBe(payrollValue);
 		moduleSnapshots["hr-dashboard"].Subtitle.ShouldNotBeNull();
 		moduleSnapshots["hr-dashboard"].Subtitle!.ShouldContain("staff attendance");
 		moduleSnapshots["hr-dashboard"].DrilldownUrl.ShouldBe("/hr/dashboard");
@@ -1108,6 +1104,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Surface_Teacher_Class_Performance_For_Assigned_Class_When_Result_Permission_Is_Granted()
 	{
 		var teacher = await EmployeeTestHelper.CreateEmployeeAsync(Client, "DashboardClassPerformance");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, teacher.Id);
 		teacher.UserId.ShouldNotBeNull();
 		await EnsureUserHasTenantWideScopeAsync(teacher.UserId.Value);
 		await SeedTeacherClassPerformanceAsync(teacher.Id, teacher.UserId.Value);
@@ -1142,6 +1139,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Surface_Teacher_Class_Attendance_Action_For_Assigned_Classes()
 	{
 		var teacher = await EmployeeTestHelper.CreateEmployeeAsync(Client, "DashboardClassAttendance");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, teacher.Id);
 		teacher.UserId.ShouldNotBeNull();
 		await EnsureUserHasTenantWideScopeAsync(teacher.UserId.Value);
 		await SeedTeacherClassAttendanceAsync(teacher.Id, teacher.UserId.Value, new DateTime(2026, 5, 23));
@@ -1173,6 +1171,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Surface_Teacher_Exam_Evaluation_For_Assigned_Subject_Workflow()
 	{
 		var teacher = await EmployeeTestHelper.CreateEmployeeAsync(Client, "DashboardExamEvaluation");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, teacher.Id);
 		teacher.UserId.ShouldNotBeNull();
 		await EnsureUserHasTenantWideScopeAsync(teacher.UserId.Value);
 		await SeedTeacherExamEvaluationAsync(teacher.Id);
@@ -1205,6 +1204,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Hide_Teacher_Exam_Evaluation_When_Record_Marks_Permission_Is_Missing()
 	{
 		var teacher = await EmployeeTestHelper.CreateEmployeeAsync(Client, "DashboardDeniedExamEvaluation");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, teacher.Id);
 		teacher.UserId.ShouldNotBeNull();
 		await EnsureUserHasTenantWideScopeAsync(teacher.UserId.Value);
 		await SeedTeacherExamEvaluationAsync(teacher.Id);
@@ -1247,7 +1247,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 			?? throw new InvalidOperationException("Failed to deserialize dashboard summary.");
 		var classWidget = payload.KpiCards.Single(x => x.Id == "teacher-classes");
 
-		classWidget.Title.ShouldBe("Today's Classes");
+		classWidget.Title.ShouldBe("Teacher timetable");
 		classWidget.Value!.ToString().ShouldBe("Open");
 		classWidget.Subtitle!.ShouldContain("assigned classes");
 	}
@@ -1257,6 +1257,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Surface_Teacher_Learning_Task_Workload_For_Creator_Owned_Scoped_Submissions()
 	{
 		var teacher = await EmployeeTestHelper.CreateEmployeeAsync(Client, "DashboardWorkload");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, teacher.Id);
 		teacher.UserId.ShouldNotBeNull();
 		await SeedTeacherLearningTaskWorkloadAsync(teacher.UserId.Value);
 
@@ -1318,6 +1319,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Hide_Teacher_Homework_When_Assessment_Feedback_Permission_Is_Missing()
 	{
 		var teacher = await EmployeeTestHelper.CreateEmployeeAsync(Client, "DashboardDeniedWorkload");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, teacher.Id);
 		teacher.UserId.ShouldNotBeNull();
 		await SeedTeacherLearningTaskWorkloadAsync(teacher.UserId.Value);
 
@@ -1340,6 +1342,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Keep_Unsafe_Teacher_Areas_Readiness_Only_When_Workload_Is_Live()
 	{
 		var teacher = await EmployeeTestHelper.CreateEmployeeAsync(Client, "DashboardReadinessWorkload");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, teacher.Id);
 		teacher.UserId.ShouldNotBeNull();
 		await SeedTeacherLearningTaskWorkloadAsync(teacher.UserId.Value);
 
@@ -1371,181 +1374,155 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Surface_Student_Parent_Personal_Snapshot_When_Email_Maps_To_One_Enrolled_Student()
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Contact_Email_Without_Verified_Portal_Link()
 	{
-		var email = $"dashboard-student-{Guid.NewGuid():N}@example.test";
-		var studentId = await SeedEnrolledStudentWithContactEmailAsync(email);
-		await SeedStudentPersonalAttendanceAsync(studentId);
-		await SeedStudentOutstandingDueAsync(studentId, 1250d);
-		await SeedStudentRequiredDocumentStatusAsync(studentId);
-
+		var email = $"dashboard-unlinked-{Guid.NewGuid():N}@example.test";
+		await SeedEnrolledStudentWithContactEmailAsync(email);
 		var client = CreateClientAs(Guid.NewGuid(), email);
-		client.DefaultRequestHeaders.Add(
-			AlwaysGrantPermissionChecker.TestPermissionsHeader,
-			string.Join(
-				",",
-				ShikshaMitraModulePermissions.Dashboard,
-				ShikshaMitraModulePermissions.Students,
-				ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View,
-				ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View));
-
-		var response = await client.GetAsync($"{BaseUrl}?dashboardTemplate=studentParent&from=2026-05-01&to=2026-05-23");
-		var rawPayload = await response.Content.ReadAsStringAsync();
-
-		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
-
-		var payload = await response.Content.ReadFromJsonAsync<DashboardSummaryDto>(JsonOptions)
-			?? throw new InvalidOperationException("Failed to deserialize dashboard summary.");
-		var attendance = payload.KpiCards.Single(x => x.Id == "student-attendance");
-		var fee = payload.KpiCards.Single(x => x.Id == "student-fee-status");
-		var documents = payload.ActionItems.Single(x => x.Id == "student-document-update");
-
-		attendance.Value!.ToString().ShouldBe("50%");
-		attendance.Subtitle!.ShouldContain("marked attendance days");
-		fee.Value!.ToString().ShouldBe("INR 1250");
-		fee.Count.ShouldBe(1);
-		documents.Count.ShouldNotBeNull();
-		documents.Count.Value.ShouldBeGreaterThan(0);
-		documents.Subtitle!.ShouldContain("required document");
-		rawPayload.ShouldNotContain("school-wide");
+		var response = await client.GetAsync($"{BaseUrl}?dashboardTemplate=studentParent");
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Surface_Student_Parent_Academic_Work_When_Email_Maps_To_One_Enrolled_Student()
+	public async Task Should_Reject_Student_Parent_Without_Verified_Association()
 	{
-		var email = $"dashboard-student-academic-{Guid.NewGuid():N}@example.test";
-		var studentId = await SeedEnrolledStudentWithContactEmailAsync(email);
-		await SeedStudentAcademicWorkAsync(studentId);
-
-		var client = CreateClientAs(Guid.NewGuid(), email);
-		client.DefaultRequestHeaders.Add(
-			AlwaysGrantPermissionChecker.TestPermissionsHeader,
-			string.Join(
-				",",
-				ShikshaMitraModulePermissions.Dashboard,
-				ShikshaMitraModulePermissions.Students,
-				ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View));
-
-		var response = await client.GetAsync($"{BaseUrl}?dashboardTemplate=studentParent");
-		var rawPayload = await response.Content.ReadAsStringAsync();
-
-		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
-
-		var payload = await response.Content.ReadFromJsonAsync<DashboardSummaryDto>(JsonOptions)
-			?? throw new InvalidOperationException("Failed to deserialize dashboard summary.");
-		var assignments = payload.KpiCards.Single(x => x.Id == "student-assignments");
-		var academicSummary = payload.ModuleSnapshots.Single(x => x.Id == "student-academic-summary");
-
-		assignments.Title.ShouldBe("Assignments Due");
-		assignments.Value!.ToString().ShouldBe("2");
-		assignments.Count.ShouldBe(2);
-		assignments.Subtitle!.ShouldContain("overdue");
-		assignments.DrilldownUrl.ShouldBe("/academic/homeworkCreation");
-
-		academicSummary.Value!.ToString().ShouldBe("88%");
-		academicSummary.Subtitle!.ShouldContain("Latest published result");
-		academicSummary.Subtitle!.ShouldContain("Pass");
-		academicSummary.Subtitle!.ShouldContain("grade A");
-		academicSummary.DrilldownUrl.ShouldBe("/student/dashboard");
+		var response = await Client.GetAsync($"{BaseUrl}?dashboardTemplate=studentParent");
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
 	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Keep_Student_Parent_Readiness_When_Email_Matches_Multiple_Students()
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Require_Selection_And_Switch_Only_Verified_Linked_Children()
 	{
-		var email = $"dashboard-ambiguous-{Guid.NewGuid():N}@example.test";
-		await SeedEnrolledStudentWithContactEmailAsync(email);
-		await SeedEnrolledStudentWithContactEmailAsync(email);
+		var first = await SeedEnrolledStudentWithContactEmailAsync($"first-{Guid.NewGuid():N}@example.test");
+		var second = await SeedEnrolledStudentWithContactEmailAsync($"second-{Guid.NewGuid():N}@example.test");
+		var user = await SeedVerifiedGuardianAsync(first, second);
+		var client = CreateClientAs(user);
+		var selection = await client.GetAsync($"{BaseUrl}?dashboardTemplate=studentParent");
+		selection.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var options = await selection.Content.ReadFromJsonAsync<DashboardSummaryDto>(JsonOptions);
+		options!.Students.Count.ShouldBe(2);
+		options.SelectedStudentId.ShouldBeNull();
+		options.KpiCards.ShouldBeEmpty();
+		options.ModuleSnapshots.ShouldBeEmpty();
+		options.PresentationRole.ShouldBe("parent");
+		foreach (var id in new[] { first, second })
+		{
+			var selected = await client.GetAsync($"{BaseUrl}?dashboardTemplate=studentParent&studentId={id}&academicYearId={Factory.SeededAcademicYearId}");
+			selected.StatusCode.ShouldBe(HttpStatusCode.OK, await selected.Content.ReadAsStringAsync());
+			var payload = await selected.Content.ReadFromJsonAsync<DashboardSummaryDto>(JsonOptions);
+			payload!.SelectedStudentId.ShouldBe(id);
+			payload.Focus!.AccessMode.ShouldBe("personal");
+			payload.Focus.Kind.ShouldBe("results");
+			payload.KpiCards.Concat(payload.ActionItems).Concat(payload.ModuleSnapshots).Concat(payload.CalendarItems).ShouldAllBe(x => x.DrilldownUrl == null);
+			payload.ActionItems.ShouldNotContain(x => x.Id.StartsWith("leadership-"));
+		}
+		(await client.GetAsync($"{BaseUrl}?dashboardTemplate=studentParent&studentId={Guid.NewGuid()}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
 
-		var client = CreateClientAs(Guid.NewGuid(), email);
-		client.DefaultRequestHeaders.Add(
-			AlwaysGrantPermissionChecker.TestPermissionsHeader,
-			string.Join(
-				",",
-				ShikshaMitraModulePermissions.Dashboard,
-				ShikshaMitraModulePermissions.Students,
-				ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View,
-				ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View));
-
-		var response = await client.GetAsync($"{BaseUrl}?dashboardTemplate=studentParent");
-		var rawPayload = await response.Content.ReadAsStringAsync();
-
-		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
-
-		var payload = await response.Content.ReadFromJsonAsync<DashboardSummaryDto>(JsonOptions)
-			?? throw new InvalidOperationException("Failed to deserialize dashboard summary.");
-		var attendance = payload.KpiCards.Single(x => x.Id == "student-attendance");
-		var fee = payload.KpiCards.Single(x => x.Id == "student-fee-status");
-
-		attendance.Value!.ToString().ShouldBe("View");
-		attendance.Subtitle!.ShouldContain("Open student dashboard");
-		fee.Value!.ToString().ShouldBe("Review");
-		rawPayload.ShouldNotContain("marked attendance days");
-		rawPayload.ShouldNotContain("Latest published result");
+	private async Task<Guid> SeedVerifiedGuardianAsync(params Guid[] studentIds)
+	{
+		using var services = Factory.Services.CreateScope();
+		var provider = services.ServiceProvider;
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using var tenant = provider.GetRequiredService<ICurrentTenant>().Change(tenantId);
+		using var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+		var id = Guid.NewGuid();
+		var identity = new IdentityUser(id, $"dashboard-family-{id:N}", $"family-{id:N}@example.test", tenantId);
+		identity.SetEmailConfirmed(true);
+		await provider.GetRequiredService<IRepository<IdentityUser, Guid>>().InsertAsync(identity);
+		var links = provider.GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>();
+		foreach (var student in studentIds)
+			await links.InsertAsync(new StudentPortalAccountLink(Guid.NewGuid(), tenantId, student, id, "guardian", "mother", Guid.NewGuid()));
+		await uow.CompleteAsync();
+		return id;
 	}
 
 	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Keep_Student_Parent_Readiness_When_No_Personal_Mapping_Exists()
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Collections_Focus_And_Kpis_Exclude_Provisional_Pending_And_Reversed_Evidence()
 	{
-		var client = Factory.CreateClient();
-		client.DefaultRequestHeaders.Add(
-			AlwaysGrantPermissionChecker.TestPermissionsHeader,
-			string.Join(
-				",",
-				ShikshaMitraModulePermissions.Dashboard,
-				ShikshaMitraModulePermissions.Students,
-				ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View,
-				ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View,
-				ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View));
-
-		var response = await client.GetAsync($"{BaseUrl}?dashboardTemplate=studentParent");
-		var rawPayload = await response.Content.ReadAsStringAsync();
-
-		response.StatusCode.ShouldBe(HttpStatusCode.OK, rawPayload);
-
-		var payload = await response.Content.ReadFromJsonAsync<DashboardSummaryDto>(JsonOptions)
-			?? throw new InvalidOperationException("Failed to deserialize dashboard summary.");
-		var attendance = payload.KpiCards.Single(x => x.Id == "student-attendance");
-		var fee = payload.KpiCards.Single(x => x.Id == "student-fee-status");
-
-		attendance.Value!.ToString().ShouldBe("View");
-		attendance.Subtitle!.ShouldContain("Open student dashboard");
-		fee.Value!.ToString().ShouldBe("Review");
-		rawPayload.ShouldNotContain("94%");
-		rawPayload.ShouldNotContain("school-wide");
-		rawPayload.ShouldNotContain("Latest published result");
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var student = await SeedEnrolledStudentWithContactEmailAsync($"collections-{Guid.NewGuid():N}@example.test");
+		DateOnly date;
+		using (var services = Factory.Services.CreateScope())
+		{
+			using var tenant = services.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId));
+			using var uow = services.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+			var year = await services.ServiceProvider.GetRequiredService<IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid>>().GetAsync(Factory.SeededAcademicYearId);
+			date = DateOnly.FromDateTime(year.StartDate).AddDays(3);
+		}
+		var query = $"academicYearId={Factory.SeededAcademicYearId}&from={date:yyyy-MM-dd}&to={date:yyyy-MM-dd}";
+		var before = await Client.GetFromJsonAsync<DashboardSummaryDto>($"{BaseUrl}?dashboardTemplate=financeHr&presentationRole=finance&{query}", JsonOptions);
+		var initial = before!.Focus!.Metrics.Single(x => x.Key == "collected").Value!.Value;
+		using (var services = Factory.Services.CreateScope())
+		{
+			var provider = services.ServiceProvider;
+			var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+			using var tenant = provider.GetRequiredService<ICurrentTenant>().Change(tenantId);
+			using var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+			var metadata = provider.GetRequiredService<IRepository<FeeRecordMetadata, Guid>>();
+			var receipts = provider.GetRequiredService<IRepository<FeePaymentReceipt, Guid>>();
+			foreach (var (kind, verification, status, amount) in new[]
+			{
+				(FeeReceiptKind.FinalFee, FeeReceiptVerificationStatus.NotApplicable, FeeCollectionStatus.Paid, 100d),
+				(FeeReceiptKind.ProvisionalFee, FeeReceiptVerificationStatus.PendingVerification, FeeCollectionStatus.InReconciliation, 500d),
+				(FeeReceiptKind.FinalFee, FeeReceiptVerificationStatus.PendingVerification, FeeCollectionStatus.Paid, 700d),
+				(FeeReceiptKind.FinalFee, FeeReceiptVerificationStatus.NotApplicable, FeeCollectionStatus.Reversed, 900d)
+			})
+			{
+				var id = Guid.NewGuid();
+				await metadata.InsertAsync(new FeeRecordMetadata(id, tenantId, student, Factory.SeededAcademicYearId, amount, $"TEST-{id:N}", status));
+				await receipts.InsertAsync(new FeePaymentReceipt(Guid.NewGuid()) { TenantId = tenantId, StudentId = student,
+					AcademicYearId = Factory.SeededAcademicYearId, ReceiptDate = date, FeeCollectionTransactionId = id,
+					ReceiptKind = kind, ReceiptScope = FeeReceiptScope.Fee, VerificationStatus = verification, TotalPaidAmount = amount, ReceiptNumber = $"TEST-{id:N}" });
+			}
+			await uow.CompleteAsync();
+		}
+		var finance = await Client.GetFromJsonAsync<DashboardSummaryDto>($"{BaseUrl}?dashboardTemplate=financeHr&presentationRole=finance&{query}", JsonOptions);
+		finance!.Focus!.Metrics.Single(x => x.Key == "collected").Value.ShouldBe(initial + 100m);
+		var leadership = await Client.GetFromJsonAsync<DashboardSummaryDto>($"{BaseUrl}?dashboardTemplate=leadership&{query}", JsonOptions);
+		leadership!.KpiCards.Single(x => x.Id == "leadership-fee-collection").Value!.ToString()
+			.ShouldBe(finance.KpiCards.Single(x => x.Id == "finance-collection").Value!.ToString());
 	}
 
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Not_Surface_Student_Transport_Alert_Without_Personal_Mapping()
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Revoked_Link_Or_Unverified_Identity(bool revokeLink)
 	{
-		var client = Factory.CreateClient();
-		client.DefaultRequestHeaders.Add(
-			AlwaysGrantPermissionChecker.TestPermissionsHeader,
-			string.Join(
-				",",
-				ShikshaMitraModulePermissions.Dashboard,
-				ShikshaMitraSubModulePermissions.TransportDashboard));
-
-		var response = await client.GetAsync($"{BaseUrl}?dashboardTemplate=studentParent");
-
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
-		var json = await response.Content.ReadAsStringAsync();
-		json.ShouldNotContain("student-transport-alert");
-		json.ShouldNotContain("Route timing changed");
+		var student = await SeedEnrolledStudentWithContactEmailAsync($"revoked-{Guid.NewGuid():N}@example.test");
+		var user = await SeedVerifiedGuardianAsync(student);
+		using (var services = Factory.Services.CreateScope())
+		{
+			var provider = services.ServiceProvider;
+			using var tenant = provider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId));
+			using var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+			if (revokeLink)
+				await provider.GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().DeleteAsync(x => x.UserId == user && x.StudentId == student);
+			else
+			{
+				var users = provider.GetRequiredService<IRepository<IdentityUser, Guid>>();
+				var identity = await users.GetAsync(user); identity.SetEmailConfirmed(false); await users.UpdateAsync(identity);
+			}
+			await uow.CompleteAsync();
+		}
+		(await CreateClientAs(user).GetAsync($"{BaseUrl}?dashboardTemplate=studentParent&studentId={student}")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
-	private static DashboardSummaryReader CreateReaderForSliceFailureTests(
+	private DashboardSummaryReader CreateReaderForSliceFailureTests(
 		DashboardSummarySliceRegistration registration,
 		IPermissionChecker? permissionChecker = null) =>
 		new(
 			DashboardSummarySlicePipeline.CreateForTesting([registration]),
 			permissionChecker ?? FixedPermissionChecker.GrantAll(),
-			NullLogger<DashboardSummaryReader>.Instance);
+			NullLogger<DashboardSummaryReader>.Instance,
+			Factory.Services.GetRequiredService<DashboardFocusReader>(),
+			Factory.Services.GetRequiredService<DashboardPersonalFocusReader>(),
+			Factory.Services.GetRequiredService<Volo.Abp.Users.ICurrentUser>());
 
 	private HttpClient CreateClientAs(Guid userId, string email)
 	{

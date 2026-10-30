@@ -1879,11 +1879,7 @@ public partial class ExamAppService(
 
 		foreach (var row in scheduledRows)
 		{
-			var calendar = calendars
-				.Where(candidate => candidate.StartDate.Date <= row.Date && candidate.EndDate.Date >= row.Date)
-				.OrderByDescending(candidate => candidate.Status == CalendarStatus.Published)
-				.ThenByDescending(candidate => candidate.IsDefault)
-				.FirstOrDefault();
+			var calendar = SelectExamCalendar(calendars, row.Date);
 
 			if (calendar == null)
 			{

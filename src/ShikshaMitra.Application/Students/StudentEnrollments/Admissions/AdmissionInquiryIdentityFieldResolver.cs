@@ -27,6 +27,8 @@ internal static class AdmissionInquiryIdentityFieldResolver
 		string? fallback)
 	{
 		var fieldList = fields as IReadOnlyList<AdmissionFormFieldDefinition> ?? fields.ToList();
+		var configured = AdmissionInquiryConfiguredFields.Read(fieldList, values, bindingKey);
+		if (!string.IsNullOrWhiteSpace(configured)) return configured;
 		var canonicalCode = fieldList.FirstOrDefault(field =>
 			string.Equals(field.BindingKey, bindingKey, StringComparison.OrdinalIgnoreCase))?.Code;
 		var canonicalValue = Value(values, canonicalCode);
@@ -37,7 +39,10 @@ internal static class AdmissionInquiryIdentityFieldResolver
 			foreach (var alias in aliases)
 			{
 				var aliasCode = fieldList.FirstOrDefault(field =>
-					string.Equals(field.Code, alias, StringComparison.OrdinalIgnoreCase))?.Code;
+					string.Equals(field.Code, alias, StringComparison.OrdinalIgnoreCase) &&
+					(string.IsNullOrWhiteSpace(field.BindingKey) ||
+					 !AdmissionFormBindingRegistry.Metadata.ContainsKey(field.BindingKey) ||
+					 string.Equals(field.BindingKey, bindingKey, StringComparison.OrdinalIgnoreCase)))?.Code;
 				var aliasValue = Value(values, aliasCode);
 				if (!string.IsNullOrWhiteSpace(aliasValue)) return aliasValue;
 			}

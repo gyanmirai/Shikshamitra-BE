@@ -9,6 +9,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 {
 	public AdmissionSchoolContactDto? MainSchoolContact { get; set; }
+	public string? ParentRelationship { get; set; }
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public string InquiryNumber { get; set; } = string.Empty;
 	public Guid AdmissionCycleId { get; set; }
@@ -198,7 +199,7 @@ public class BulkAdmissionInquiryResultDto
 }
 
 public class AdmissionInquiryDuplicateCheckInput { public Guid AdmissionCycleId { get; set; } public string GuardianPhone { get; set; } = string.Empty; public string? GuardianEmail { get; set; } public string ApplicantName { get; set; } = string.Empty; public DateTime? ApplicantDateOfBirth { get; set; } [MaxLength(2)] public List<AdmissionSiblingParentContactDto> ParentContacts { get; set; } = []; }
-public class AdmissionInquiryDuplicateMatchDto { public Guid ApplicantId { get; set; } public Guid FamilyId { get; set; } public Guid? ExistingInquiryId { get; set; } public string? ExistingInquiryNumber { get; set; } public string ApplicantName { get; set; } = string.Empty; public string? GuardianPhone { get; set; } public string? GuardianEmail { get; set; } public DateTime? DateOfBirth { get; set; } public bool CanLinkFamily { get; set; } public List<AdmissionSiblingParentCandidateDto> Parents { get; set; } = []; public bool MatchByEmail { get; set; } public bool MatchByMobile { get; set; } }
+public class AdmissionInquiryDuplicateMatchDto { public Guid ApplicantId { get; set; } public Guid FamilyId { get; set; } public Guid? ExistingInquiryId { get; set; } public string? ExistingInquiryNumber { get; set; } public Guid? ExistingInquiryAdmissionCycleId { get; set; } public string ApplicantName { get; set; } = string.Empty; public string? GuardianPhone { get; set; } public string? GuardianEmail { get; set; } public DateTime? DateOfBirth { get; set; } public bool CanLinkFamily { get; set; } public List<AdmissionSiblingParentCandidateDto> Parents { get; set; } = []; public bool MatchByEmail { get; set; } public bool MatchByMobile { get; set; } }
 public class AssignAdmissionCounsellorDto { public AdmissionCounsellorAssignmentMode Mode { get; set; } public Guid? CounsellorId { get; set; } public List<Guid> CandidateCounsellorIds { get; set; } = []; [StringLength(1024)] public string? Reason { get; set; } }
 
 public class CreateAdmissionInquiryCommunicationDto

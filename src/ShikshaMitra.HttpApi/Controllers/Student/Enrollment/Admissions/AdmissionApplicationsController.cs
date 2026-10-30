@@ -127,6 +127,16 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	public async Task<Result<AdmissionApplicationDto>> EndJourneyAsync(Guid id, [FromBody] EndAdmissionJourneyDto input) =>
 		Result.Success(await service.EndJourneyAsync(id, input));
 
+	[HttpGet("{id:guid}/resume-preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<AdmissionJourneyResumePreviewDto>> GetResumePreviewAsync(Guid id) =>
+		Result.Success(await service.GetResumePreviewAsync(id));
+
+	[HttpPost("{id:guid}/resume-journey")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public async Task<Result<AdmissionApplicationDto>> ResumeJourneyAsync(Guid id, [FromBody] ResumeAdmissionJourneyDto input) =>
+		Result.Success(await service.ResumeJourneyAsync(id, input));
+
 	[HttpPost("{id:guid}/decision/approve")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
 	public async Task<Result<AdmissionApplicationDto>> ApproveAsync(Guid id, AdmissionApplicationDecisionDto input) => Result.Success(await service.ApproveAsync(id, input));

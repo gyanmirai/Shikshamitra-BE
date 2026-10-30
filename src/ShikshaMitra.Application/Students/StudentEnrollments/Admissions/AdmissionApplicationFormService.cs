@@ -40,10 +40,18 @@ public class AdmissionApplicationFormService(
 		var instance = await GetInstanceAsync(applicationId);
 		var cycle = await cycleRepository.FindAsync(application.AdmissionCycleId) ??
 			throw new EntityNotFoundException(typeof(AdmissionCycle), application.AdmissionCycleId);
-		var definition = await formRepository.FindAsync(instance.FormDefinitionId) ??
-			throw new EntityNotFoundException(typeof(AdmissionFormDefinition), instance.FormDefinitionId);
-		var sections = await sectionRepository.GetListAsync(section => section.FormDefinitionId == definition.Id);
-		var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == definition.Id);
+		var frozen = AdmissionEffectiveFormStore.Read(instance);
+		AdmissionFormDto definitionDto;
+		if (frozen != null) definitionDto = frozen.Definition;
+		else
+		{
+			var definition = await formRepository.FindAsync(instance.FormDefinitionId) ??
+				throw new EntityNotFoundException(typeof(AdmissionFormDefinition), instance.FormDefinitionId);
+			AdmissionEffectiveFormStore.EnsureLegacyAllowed(definition);
+			var sections = await sectionRepository.GetListAsync(section => section.FormDefinitionId == definition.Id);
+			var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == definition.Id);
+			definitionDto = MapDefinition(definition, sections, fields);
+		}
 		var values = await valueRepository.GetListAsync(value => value.FormInstanceId == instance.Id);
 		return new AdmissionApplicationFormDto
 		{
@@ -53,7 +61,10 @@ public class AdmissionApplicationFormService(
 			FormVersion = instance.FormVersion,
 			Status = instance.Status,
 			SubmittedAt = instance.SubmittedAt,
-			Definition = MapDefinition(definition, sections, fields),
+			Definition = definitionDto,
+			InquiryFormDefinitionId = frozen?.InquiryFormDefinitionId,
+			InquiryContextSections = frozen?.InquiryContextSections ?? [],
+			InquiryContextValues = frozen?.InquiryContextValues ?? [],
 			Values = values.OrderBy(value => value.FieldCode).Select(value => new AdmissionFormValueDto
 			{
 				FieldCode = value.FieldCode,
@@ -73,7 +84,11 @@ public class AdmissionApplicationFormService(
 		EnsureConcurrency(application, input.ConcurrencyStamp);
 		var instance = await GetInstanceAsync(applicationId);
 		var existingValues = await valueRepository.GetListAsync(value => value.FormInstanceId == instance.Id);
-		var definitions = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
+		var frozen = AdmissionEffectiveFormStore.Read(instance);
+		if (frozen == null) AdmissionEffectiveFormStore.EnsureLegacyAllowed(await formRepository.GetAsync(instance.FormDefinitionId));
+		var definitions = frozen == null
+			? await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId)
+			: AdmissionEffectiveFormResolver.MaterializeFields(frozen.Definition);
 		await LazyServiceProvider.LazyGetRequiredService<AdmissionJoiningDateCapture>()
 			.GuardFormChangeAsync(application, definitions, input.Values);
 		var applicant = await applicantRepository.FindAsync(application.ApplicantId);
@@ -87,6 +102,21 @@ public class AdmissionApplicationFormService(
 		var unknownCode = input.Values.FirstOrDefault(value => !definitionCodes.Contains(value.FieldCode))?.FieldCode;
 		if (!string.IsNullOrWhiteSpace(unknownCode))
 			throw new BusinessException(AdmissionApplicationErrorCodes.UnknownFormField).WithData("FieldCode", unknownCode);
+		IReadOnlySet<string>? writableCodes = null;
+		if (frozen != null)
+		{
+			foreach (var value in input.Values)
+			{
+				var field = definitions.First(item => string.Equals(item.Code, value.FieldCode, StringComparison.OrdinalIgnoreCase));
+				if (field.ReadOnly && AdmissionApplicationValueConverter.Unwrap(existingValues.FirstOrDefault(item => item.FieldCode == field.Code)?.ValueJson) !=
+					AdmissionApplicationValueConverter.Unwrap(value.ValueJson))
+					throw new BusinessException(AdmissionApplicationErrorCodes.UnknownFormField).WithData("FieldCode", field.Code);
+			}
+			var currentValues = existingValues.ToDictionary(value => value.FieldCode, value => AdmissionApplicationValueConverter.Unwrap(value.ValueJson), StringComparer.OrdinalIgnoreCase);
+			foreach (var value in input.Values.Where(value => definitions.Any(field => !field.ReadOnly && string.Equals(field.Code, value.FieldCode, StringComparison.OrdinalIgnoreCase))))
+				currentValues[value.FieldCode] = AdmissionApplicationValueConverter.Unwrap(value.ValueJson);
+			writableCodes = AdmissionEffectiveFormResolver.VisibleFieldCodes(frozen.Definition, currentValues, formValidator);
+		}
 		if (applicant != null)
 			await RecoverFirstParentContactAsync(application, applicant, instance, definitions, existingValues);
 		var parentAnswers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -97,7 +127,7 @@ public class AdmissionApplicationFormService(
 				Input = value,
 				Definition = definitions.FirstOrDefault(field => field.Code == value.FieldCode.ToUpperInvariant())
 			})
-			.Where(item => item.Definition is { ReadOnly: false }))
+			.Where(item => item.Definition is { ReadOnly: false } && (writableCodes == null || writableCodes.Contains(item.Definition.Code))))
 		{
 			var definition = item.Definition!;
 			var code = item.Input.FieldCode.ToUpperInvariant();
@@ -173,7 +203,14 @@ public class AdmissionApplicationFormService(
 			}
 		}
 		instance ??= await GetInstanceAsync(application.Id);
-		definitions ??= await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
+		if (definitions == null)
+		{
+			var frozen = AdmissionEffectiveFormStore.Read(instance);
+			if (frozen == null) AdmissionEffectiveFormStore.EnsureLegacyAllowed(await formRepository.GetAsync(instance.FormDefinitionId));
+			definitions = frozen == null
+				? await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId)
+				: AdmissionEffectiveFormResolver.MaterializeFields(frozen.Definition);
+		}
 		values ??= await valueRepository.GetListAsync(value => value.FormInstanceId == instance.Id);
 		var saves = await historyRepository.GetListAsync(item => item.FormInstanceId == instance.Id && item.ChangeType == "DraftSaved");
 		var editedCodes = saves.SelectMany(save => JsonSerializer.Deserialize<string[]>(save.ChangedFieldsJson ?? "[]") ?? [])
@@ -202,12 +239,18 @@ public class AdmissionApplicationFormService(
 		application.SaveDraft();
 		await formStageRuntime.EnsureCanSubmitAsync(applicationId);
 		var instance = await GetInstanceAsync(applicationId);
-		var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
+		var frozen = AdmissionEffectiveFormStore.Read(instance);
+		var fields = frozen == null
+			? await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId)
+			: AdmissionEffectiveFormResolver.MaterializeFields(frozen.Definition);
 		var cycle = await cycleRepository.FindAsync(application.AdmissionCycleId) ??
 			throw new EntityNotFoundException(typeof(AdmissionCycle), application.AdmissionCycleId);
-		var definition = await formRepository.GetAsync(instance.FormDefinitionId);
-		var experience = AdmissionFormMetadataStore.ReadExperience(definition);
-		var sections = await sectionRepository.GetListAsync(section => section.FormDefinitionId == instance.FormDefinitionId);
+		var experience = frozen == null
+			? await GetLegacyExperienceAsync(instance)
+			: AdmissionEffectiveFormResolver.Experience(frozen.Definition);
+		var sections = frozen == null
+			? await sectionRepository.GetListAsync(section => section.FormDefinitionId == instance.FormDefinitionId)
+			: AdmissionEffectiveFormResolver.MaterializeSections(frozen.Definition);
 		var values = await valueRepository.GetListAsync(value => value.FormInstanceId == instance.Id);
 		var valueMap = values.ToDictionary(
 			value => value.FieldCode,
@@ -272,6 +315,13 @@ public class AdmissionApplicationFormService(
 	private async Task<AdmissionFormInstance> GetInstanceAsync(Guid applicationId) =>
 		await instanceRepository.FindAsync(instance => instance.ApplicationId == applicationId) ??
 		throw new EntityNotFoundException(typeof(AdmissionFormInstance), applicationId);
+
+	private async Task<AdmissionFormExperienceMetadata> GetLegacyExperienceAsync(AdmissionFormInstance instance)
+	{
+		var definition = await formRepository.GetAsync(instance.FormDefinitionId);
+		AdmissionEffectiveFormStore.EnsureLegacyAllowed(definition);
+		return AdmissionFormMetadataStore.ReadExperience(definition);
+	}
 
 	private static void EnsureConcurrency(AdmissionApplication application, string? stamp)
 	{

@@ -34,6 +34,8 @@ public class MobileExamAppService(MobileAcademicContextAppService context, IRepo
 
 	public async Task<List<MobileExamDto>> ReadDtosAsync(MobilePlacement p)
 	{
+		var utcNow = Clock.Now;
+		var today = ExamScheduleStatusResolver.GetInstitutionNow(utcNow).Date;
 		var assigned = (await context.GetSubjectsAsync(p)).Select(x => x.SubjectId).ToHashSet();
 		var list = await ReadExamsAsync(p);
 		var ids = list.SelectMany(x => x.ExamSubjects).Select(x => x.SubjectId).Distinct().ToArray();
@@ -41,17 +43,21 @@ public class MobileExamAppService(MobileAcademicContextAppService context, IRepo
 		var examIds = list.Select(x => x.Id).ToArray();
 		var headers = await results.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(examIds, x.ExamId) && x.DivisionId == p.DivisionId &&
 			(x.Status == ExamResultStatus.Published || x.Status == ExamResultStatus.Frozen));
-		return list.Select(e =>
+		return list.Where(e => e.ExamSubjects.Any(x => assigned.Contains(x.SubjectId) && x.ExamDate.HasValue)).Select(e =>
 		{
 			var schedule = e.ExamSubjects.Where(x => assigned.Contains(x.SubjectId)).OrderBy(x => x.ExamDate).ThenBy(x => x.StartTime)
 				.Select(x => new MobileExamSubjectDto { Id = x.Id, SubjectId = x.SubjectId, SubjectName = names.GetValueOrDefault(x.SubjectId, ""), ExamDate = x.ExamDate,
 					StartTime = x.StartTime, EndTime = x.EndTime, TotalMarks = x.TotalMarks, PassingMarks = x.PassingMarks, Notes = x.Notes }).ToList();
-			var first = schedule.Where(x => x.ExamDate.HasValue).Select(x => x.ExamDate!.Value.Date).DefaultIfEmpty(p.Year.EndDate.Date).Min();
-			var last = schedule.Where(x => x.ExamDate.HasValue).Select(x => x.ExamDate!.Value.Date).DefaultIfEmpty(p.Year.EndDate.Date).Max();
-			var today = MobileAcademicContextAppService.SchoolToday;
-			var status = e.Status == ExamStatus.Completed || last < today ? "completed" : first <= today ? "ongoing" : "upcoming";
+			var window = ExamScheduleStatusResolver.GetWindow(e.ExamSubjects.Select(x => (x.ExamDate, x.StartTime, x.EndTime)));
+			var effectiveStatus = ExamScheduleStatusResolver.Resolve(e.Status, window.StartAt, window.EndAt, utcNow);
+			var status = effectiveStatus switch
+			{
+				ExamStatus.Completed => "completed",
+				ExamStatus.Ongoing => "ongoing",
+				_ => "upcoming"
+			};
 			return new MobileExamDto(e.Id, e.ExamName, p.Year.Name, $"{p.StandardName} - {p.DivisionName}", status,
-				headers.Any(x => x.ExamId == e.Id) ? "published" : "pending", Math.Max(0, (first - today).Days), schedule);
+				headers.Any(x => x.ExamId == e.Id) ? "published" : "pending", Math.Max(0, (window.FirstDate!.Value - today).Days), schedule);
 		}).OrderBy(x => x.Schedule.FirstOrDefault()?.ExamDate).ThenBy(x => x.Id).ToList();
 	}
 

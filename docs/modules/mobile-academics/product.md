@@ -3,7 +3,7 @@ module: mobile-academics
 domain: behavior
 content_type: Reference
 status: canonical
-updated_on: 2026-10-22
+updated_on: 2026-10-30
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -29,6 +29,10 @@ Homework and assignments share the mobile submission workflow. The teacher's req
 Absent records remain empty or unavailable. A zero attendance denominator produces a null percentage. Unpublished or withheld results expose no marks or report card. Class comparisons include only published marks belonging to released class results.
 
 ## Availability boundaries
+
+Timetable elective preferences are once per student, academic year and required elective group, whether submitted by the student or a linked guardian. Each group becomes read-only immediately. Existing unlocked school assignments are also read-only and await school approval. The original mobile preference remains in immutable history if staff changes or removes the assignment; a removed assignment requires school intervention rather than another mobile submission.
+
+Approval uses the existing school `IsLocked` workflow for a class/division/group. Every required group in the published weekly timetable must be valid and locked before any mobile schedule periods are returned. Students receive selection/approval/setup guidance instead of a missing-elective 400. The school-approved subject controls the schedule and may differ from the original preference. There is no new rejection, reopening, individual approval or historical timetable workflow.
 
 Syllabus chapters require `PublishStatus = Published` and a student-facing audience (`Students` or `All`); guardians can also read `Parents` chapters. `Teacher` visibility excludes both mobile audiences. Draft, in-review, and archived chapters do not contribute to mobile dashboard counts or chapter lists, and their detail endpoints return not found. A chapter appearing in the staff syllabus table does not establish mobile publication. Teaching progress of zero does not hide a published chapter; it appears as `notStarted`.
 

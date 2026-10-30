@@ -3,14 +3,14 @@ module: mobile-academics
 domain: contracts
 content_type: Reference
 status: canonical
-updated_on: 2026-10-22
+updated_on: 2026-10-30
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Mobile academic API contracts
 
-All 42 routes require bearer authentication and a current tenant. Reads and multipart uploads take `studentId` and `academicYearId` in the query; JSON writes take them in the body. Context can omit the year. The backend validates enrollment and persisted student access independently of client selections or role claims.
+All module routes require bearer authentication and a current tenant. Reads and multipart uploads take `studentId` and `academicYearId` in the query; JSON writes take them in the body. Context can omit the year. The backend validates enrollment and persisted student access independently of client selections or role claims.
 
 JSON success uses the existing `Result<T>` envelope (`success`, `data`). ABP supplies HTTP validation, authorization, business, and not-found errors; clients must treat failed HTTP responses as failures. Downloads return binary content with the filename and MIME type. Deletes return 204.
 
@@ -25,7 +25,7 @@ Division publication and publish-time checks continue to apply to task reads.
 
 The syllabus dashboard includes overall counts in `data.totalChapters` and `data.chaptersCovered`, and per-subject counts in `data.subjects[]`: `totalChapters`, `completedChapters`, `inProgressChapters`, and `upcomingChapters`.
 
-The subject chapters endpoint additionally returns `data.summary` with `totalChapters`, `completedChapters`, `inProgressChapters`, `upcomingChapters`, and `coveragePercentage`. This summary covers all published chapters visible to the current student/guardian for the subject, before search, status filtering, or pagination. `totalCount` remains the count after filtering, before pagination. Completion means division progress is 100; in progress means 1–99; upcoming means 0. Coverage is the rounded mean chapter progress, or 0 for no visible chapters. Draft, in-review, archived, and audience-inaccessible chapters do not contribute to these counts.
+The subject chapters endpoint additionally returns `data.summary` with `totalChapters`, `completedChapters`, `inProgressChapters`, `upcomingChapters`, and `coveragePercentage`. This summary covers all published chapters visible to the current student/guardian for the subject, before search, status filtering, or pagination. `totalCount` remains the count after filtering, before pagination. Completion means division progress is 100; in progress means 1-99; upcoming means 0. Coverage is the rounded mean chapter progress, or 0 for no visible chapters. Draft, in-review, archived, and audience-inaccessible chapters do not contribute to these counts.
 
 ## Academics prefix: `/api/mobile/v1/academics`
 
@@ -85,6 +85,34 @@ The subject chapters endpoint additionally returns `data.summary` with `totalCha
 | GET | `/{id}/report-card/download` |
 
 ## Write contracts
+
+### Timetable and one-time elective preferences
+
+Prefix: `/api/mobile/v1/academics/timetable`. The existing `context` and `schedule` reads retain their routes and response envelope.
+
+| Method | Suffix | Input |
+|---|---|---|
+| GET | `/elective-preferences` | Query `studentId`, `academicYearId` |
+| POST | `/elective-preferences` | JSON `studentId`, `academicYearId`, `electiveGroupId`, `preferredSubjectId`, `clientRequestId`; all UUIDs |
+
+GET and POST return `Result<PortalElectivePreferencesDto>` with `studentId`, `academicYearId`, `academicYearName`, `availability`, nullable `message`, `canViewTimetable`, and `groups`. A group includes `electiveGroupId`, `name`, `options` (`subjectId`, `name`), nullable original preference ID/name, nullable school-assigned subject ID/name, nullable `submittedAt`, `status`, and server-controlled `canSubmit`.
+
+| Group status | Meaning |
+|---|---|
+| `selectionRequired` | No assignment or immutable submission exists; the student or linked guardian may choose one offered subject |
+| `pendingApproval` | An unlocked assignment exists; read-only, including existing school assignments |
+| `approved` | The valid school assignment is locked; read-only |
+| `schoolActionRequired` | Configuration is invalid or an assignment was removed after submission; resubmission is unavailable |
+
+Required groups come from the entire published class/division timetable, independent of the requested date. Options must be active group members published for that class and usable in the group's scheduled occurrences. Only the currently enrolled academic year is supported, as with the existing timetable API.
+
+POST creates the immutable receipt and unlocked legacy assignment in one transaction. It never overwrites an existing school assignment. An identical `clientRequestId` and payload replays current state after authorization; a different retry or second submission returns HTTP 409. The uniqueness boundary is tenant/student/year/group, shared by the student and every linked guardian. Revoked links cannot replay an earlier operation.
+
+Mobile `context` and `schedule` return normal HTTP 200 action states: `electiveSetupRequired`, `electivePreferenceRequired`, or `electiveApprovalPending`, in that priority order. Missing choices take priority over pending approval. `message` provides guidance; clients localize by `availability`. These states contain no timetable periods. Once all groups are approved, the schedule uses the school's assigned subject, which can differ from the immutable original preference. Invalid enrollment, access denial and malformed requests retain their errors. Profile/shared enrollment context is unchanged.
+
+The staff contract remains unchanged: `GET` and `PUT /api/class-management/student-elective-assignments` read/save school assignments; `POST /api/class-management/student-elective-assignments/lock` locks an entire class/division/group after all students have assignments. Mobile creates no staff grants and offers no approve, unlock, delete, or edit endpoint. Existing locked assignments remain approved without inventing an original student submission.
+
+### Homework and attendance inputs
 
 Homework accepts legacy `textAnswer` or sanitized `textAnswerHtml` (100,000 UTF-16 text units), plus `attachmentIds`. See the submission contract below. Leave accepts `leaveTypeId`, `startDate`, `endDate`, `isHalfDay`, optional paired `halfDayStartTime`/`halfDayEndTime`, `description`, and `attachmentIds`. Absence reason accepts `reason` (maximum 500 characters). Cancel accepts student/year context only. Multipart uploads use field `file`, allow five distinct attachments per response, and enforce a 5 MiB per-file limit plus extension, MIME, and signature validation. Staged uploads belong to the uploading identity, student, and task; retained attachments may be used by another authorized guardian/self account after they are saved.
 

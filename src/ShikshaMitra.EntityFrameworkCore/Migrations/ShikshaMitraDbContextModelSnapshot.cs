@@ -1732,6 +1732,54 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("academic_SubjectAuditLogs", (string) null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.StudentElectivePreferenceSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ClientRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ElectiveGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PreferredSubjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PreferredSubjectName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SubmittingUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "ClientRequestId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ElectivePreference_ClientRequest");
+
+                    b.HasIndex("TenantId", "StudentId", "AcademicYearId", "ElectiveGroupId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ElectivePreference_StudentYearGroup");
+
+                    b.ToTable("academic_StudentElectivePreferenceSubmissions", (string) null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Academic.Curriculum.StudentElectiveSelection", b =>
                 {
                     b.Property<Guid>("Id")

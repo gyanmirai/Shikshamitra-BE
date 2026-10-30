@@ -133,6 +133,15 @@ public sealed class MobileAcademicPostgresFactory : ShikshaMitraApiTestFactory
 		foreach (var command in db.GetService<IMigrationsSqlGenerator>().Generate(acknowledgmentMigration.UpOperations, db.Model))
 			db.Database.ExecuteSqlRaw(command.CommandText);
 		db.Database.ExecuteSqlRaw(history.GetInsertScript(new HistoryRow("20261022072327_MobileHomeworkCompletionAcknowledgment", "9.0.0")));
+		// Recreate this additive migration's predecessor, then run the actual generated PostgreSQL DDL.
+		var electiveMigration = new AddStudentElectivePreferenceSubmissions { ActiveProvider = "Npgsql.EntityFrameworkCore.PostgreSQL" };
+		foreach (var command in db.GetService<IMigrationsSqlGenerator>().Generate(electiveMigration.DownOperations, db.Model))
+			db.Database.ExecuteSqlRaw(command.CommandText);
+		foreach (var command in db.GetService<IMigrationsSqlGenerator>().Generate(electiveMigration.UpOperations, db.Model))
+			db.Database.ExecuteSqlRaw(command.CommandText);
+		db.Database.ExecuteSqlRaw(history.GetInsertScript(new HistoryRow("20261030063627_AddStudentElectivePreferenceSubmissions", "9.0.0")));
+		db.Database.GetMigrations().ShouldContain("20261030063627_AddStudentElectivePreferenceSubmissions");
+		db.Database.GetAppliedMigrations().ShouldContain("20261030063627_AddStudentElectivePreferenceSubmissions");
 	}
 }
 
@@ -323,6 +332,7 @@ public sealed partial class MobileAcademicPostgresApi_Tests
 		Encoding.ASCII.GetString((await report.Content.ReadAsByteArrayAsync()).Take(5).ToArray()).ShouldBe("%PDF-");
 		await CheckHomeworkSubmissionsAsync(client, f, factory, tenantId);
 		await CheckCompletionAcknowledgmentAsync(client, f, factory, tenantId);
+		await CheckElectivePreferencesAsync(client, f, factory, tenantId);
 	}
 }
 

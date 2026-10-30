@@ -3,7 +3,7 @@ module: mobile-academics
 domain: implementation
 content_type: Reference
 status: canonical
-updated_on: 2026-10-22
+updated_on: 2026-10-30
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -22,7 +22,17 @@ Mobile leave writes acquire a PostgreSQL advisory transaction lock keyed by tena
 
 `MobileSubmissionOperation` stores operation identity, payload hash, and successful response in the same transaction as the write. `MobileSubmissionSnapshot` is append-only final-response history and protects referenced attachment blobs after replacement. Both use tenant filters. Staging metadata doubles as an ownership receipt for safe deletion retries; draft replacement grants a linked actor access to release the files it just removed.
 
+## Timetable elective preferences
+
+`IPortalElectivePreferenceAppService` and its DTOs live under `Application.Contracts/Academic/Timetable/Portal/`. `PortalElectivePreferenceController` is a thin authenticated controller. `PortalElectivePreferenceAppService` resolves persisted self/guardian access and owns submission transactions; `PortalElectivePreferenceReader` computes the whole-week choice/approval policy using the unchanged shared `PortalStudentContextReader`. Mobile timetable context and schedule consume that policy; profile/enrollment reads do not acquire elective gating semantics.
+
+`Domain/Academic/Curriculum/Entities/StudentElectivePreferenceSubmission.cs` is permanent, year-scoped original preference history, independent of the mutable `StudentElectiveSelection`. It stores tenant/student/year/group, the subject ID/name snapshot, submitting user/time and request ID. Relational unique indexes enforce tenant/student/year/group and tenant/request identity. The original selection's existing uniqueness and staff mutation contracts are unchanged.
+
+`EfCorePortalElectivePreferenceWriter` serializes mobile requests with PostgreSQL transaction advisory locks for request identity and student, then inserts the immutable receipt and unlocked legacy assignment together. A uniqueness race with staff insertion rolls back both writes and returns conflict. Soft-deleted legacy selections are detected before writing because the existing student/group unique index includes them. No staff selection is overwritten, and a school removal never deletes the receipt or reopens mobile submission.
+
 ## Migration
+
+`20261030063627_AddStudentElectivePreferenceSubmissions` adds only `academic_StudentElectivePreferenceSubmissions` and its two unique indexes. Apply it before deploying the elective preference API. It changes no existing school assignment rows or approval flags; no synthetic submissions are backfilled for legacy assignments.
 
 `src/ShikshaMitra.EntityFrameworkCore/Migrations/20261012061916_MobileAcademicResponses.cs` adds five nullable columns: submission/leave attachment metadata, guardian absence reason, and two half-day time columns. Existing rows need no synthetic backfill. Submission and attendance-entry modification timestamps are concurrency tokens. Leave already uses aggregate concurrency stamps.
 

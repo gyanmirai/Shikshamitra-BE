@@ -414,13 +414,52 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         var group = await Insert(new ElectiveGroup(Guid.NewGuid(), id, "Languages", "#008967", f.Medium.Id));
         var first = await Insert(new Subject(Guid.NewGuid(), id, "Hindi", "#008967", f.Medium.Id));
         var second = await Insert(new Subject(Guid.NewGuid(), id, "Gujarati", "#008967", f.Medium.Id));
+        group.AddSubject(first.Id); group.AddSubject(second.Id);
+        await GetRequiredService<IRepository<ElectiveGroup, Guid>>().UpdateAsync(group, true);
+        await Insert(new AssignedSubject(Guid.NewGuid(), id, f.Student.StandardId!.Value, first.Id, "HIN", SubjectStatus.Published, SubjectType.Elective, group.Id));
+        await Insert(new AssignedSubject(Guid.NewGuid(), id, f.Student.StandardId!.Value, second.Id, "GUJ", SubjectStatus.Published, SubjectType.Elective, group.Id));
         var slot = new TimetableSlot(Guid.NewGuid(), f.Timetable.Id, TimetableDayOfWeek.Monday, 3, new(9,30), new(10,15), SlotType.Period, electiveGroupId: group.Id);
         slot.AddSubject(new(Guid.NewGuid(), slot.Id, first.Id)); slot.AddSubject(new(Guid.NewGuid(), slot.Id, second.Id));
         f.Timetable.AddSlot(slot); await GetRequiredService<IRepository<TimetableEntity, Guid>>().UpdateAsync(f.Timetable, true);
-        await Insert(new StudentElectiveSelection(Guid.NewGuid(), id, f.Student.Id, group.Id, second.Id, f.Medium.Id));
+        var approved = new StudentElectiveSelection(Guid.NewGuid(), id, f.Student.Id, group.Id, second.Id, f.Medium.Id);
+        approved.LockSelection();
+        await Insert(approved);
         var periods = (await Service.GetScheduleAsync(f.Request)).Days.Single().Periods;
         periods.ShouldContain(x => x.Subject != null && x.Subject.Name == "Gujarati");
         periods.ShouldNotContain(x => x.Subject != null && x.Subject.Name == "Hindi");
+    });
+
+    [Theory]
+    [InlineData(false, false, "electivePreferenceRequired")]
+    [InlineData(true, false, "electiveApprovalPending")]
+    [InlineData(true, true, "available")]
+    public Task Mobile_context_and_schedule_share_whole_week_elective_approval_policy(bool assigned, bool locked, string availability) => WithUnitOfWorkAsync(async () =>
+    {
+        var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+        var f = await Seed(id); using var identity = SignIn(f.User.Id);
+        var subject = await Insert(new Subject(Guid.NewGuid(), id, "Hindi", "#008967", f.Medium.Id));
+        var group = new ElectiveGroup(Guid.NewGuid(), id, "Language", "#008967", f.Medium.Id);
+        group.AddSubject(subject.Id); await Insert(group);
+        await Insert(new AssignedSubject(Guid.NewGuid(), id, f.Student.StandardId!.Value, subject.Id, "HIN", SubjectStatus.Published, SubjectType.Elective, group.Id));
+        // The request is for Monday, but a missing Wednesday choice must still gate it.
+        var slot = new TimetableSlot(Guid.NewGuid(), f.Timetable.Id, TimetableDayOfWeek.Wednesday, 1, new(8, 30), new(9, 15), SlotType.Period, electiveGroupId: group.Id);
+        slot.AddSubject(new(Guid.NewGuid(), slot.Id, subject.Id)); f.Timetable.AddSlot(slot);
+        await GetRequiredService<IRepository<TimetableEntity, Guid>>().UpdateAsync(f.Timetable, true);
+        if (assigned)
+        {
+            var selection = new StudentElectiveSelection(Guid.NewGuid(), id, f.Student.Id, group.Id, subject.Id, f.Medium.Id);
+            if (locked) selection.LockSelection();
+            await Insert(selection);
+        }
+        var context = await Service.GetContextAsync(f.Student.Id, f.Year.Id);
+        context.Availability.ShouldBe(availability);
+        var result = await Service.GetScheduleAsync(f.Request);
+        result.Availability.ShouldBe(availability);
+        if (!locked) result.Days.SelectMany(day => day.Periods).ShouldBeEmpty();
+        else result.Days.SelectMany(day => day.Periods).ShouldNotBeEmpty();
+        // Shared profile/enrollment context retains its own meaning; only mobile timetable is gated.
+        var profile = await GetRequiredService<IProfileAppService>().GetAsync();
+        ((List<PortalTimetableContextDto>)profile.ExtraProperties["studentContexts"]!).Single().Availability.ShouldBe("available");
     });
 
     [Fact]

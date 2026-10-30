@@ -3,12 +3,31 @@ module: mobile-academics
 domain: validation
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-30
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate mobile Academics
+
+## Elective preferences
+
+Run the preference application and timetable approval-policy regressions together. The timetable theory verifies that a Wednesday elective gates a Monday request, that unlocked assignments never expose periods, and that profile context remains independent. Existing no-elective, unpublished, date and calendar behavior must remain covered.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~PortalElectivePreferenceAppService_Tests|FullyQualifiedName~PortalTimetableAppService_Tests"
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter "FullyQualifiedName~PortalElectivePreferenceApi_Tests|FullyQualifiedName~PortalTimetableApi_Tests"
+powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module mobile-academics
+git diff --check
+```
+
+Relational acceptance must exercise the actual receipt migration and two concurrent student/guardian requests on separate PostgreSQL connections. Verify rollback after a failed legacy assignment insertion, immutable original preference after staff save, visibility through the unchanged school read, and timetable availability after the existing group lock. SQLite/application tests alone cannot prove advisory-lock or unique-index race behavior. Use the disposable loopback database convention below; do not run migrations or reset a school database. Deployment and authenticated staging smoke remain release checks.
+
+On 2026-10-30, all 46 focused application cases passed: the complete existing timetable/profile test class and ten preference cases, including direct access/year validation, independent groups, legacy read-only assignments, soft-delete conflicts, immutable history, whole-week approval gating and profile-context compatibility. All ten focused HTTP cases also passed. The PostgreSQL 18.6 workflow in `MobileAcademicPostgresApi_Tests` applies the actual `AddStudentElectivePreferenceSubmissions` migration SQL in a fresh loopback database, checks both unique indexes, forces a legacy-insert failure to prove rollback, races separate student/parent connections, verifies retry row versions remain unchanged, and exercises the unchanged staff read/save/lock followed by an approved timetable using the final assigned subject.
+
+Application, EF Core, HTTP API, Host and HTTP test projects compiled with zero errors using bounded selective local builds. Focused validation retained the actual migration bodies, new designer and current model, while excluding historical migration designers to fit local memory; the normal full solution build and full repository test suites were not run. Existing warnings remain. No school/development database migration or staging deployment was performed. See the [mobile guide](../../../../Gyanmirai-Mobile/docs/mobile-academics.md) for Flutter validation and refresh behavior.
+
+## Earlier academic checks
 
 The leave-list regression `Leave_list_accepts_UTC_year_dates_and_preserves_school_date_boundaries`
 in `MobileAcademicAppService_Tests.cs` covers academic-year dates with UTC and

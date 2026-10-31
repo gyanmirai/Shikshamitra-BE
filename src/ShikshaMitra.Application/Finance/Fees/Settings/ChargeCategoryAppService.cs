@@ -18,7 +18,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Finance.Fees.Settings;
 
 [RemoteService(false)]
-public class ChargeCategoryAppService(
+public partial class ChargeCategoryAppService(
 	IRepository<ChargeCategory, Guid> chargeCategoryRepository,
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<TransactionCategory, Guid> transactionCategoryRepository,
@@ -55,8 +55,9 @@ public class ChargeCategoryAppService(
 		return await ToResponseAsync(chargeCategory);
     }
 
-    public async Task<PaginatedChargeCategoryResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null, bool? isActive = null)
+    public async Task<PaginatedChargeCategoryResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null, bool? isActive = null, string? filters = null)
     {
+		var tableQuery = ListFilter.Parse(filters);
 		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(academicYearId, null, null, null, null))
 			return new PaginatedChargeCategoryResponse { CurrentPage = page, PageSize = pageSize, Items = [] };
         var query = await chargeCategoryRepository.GetQueryableAsync();
@@ -84,7 +85,8 @@ public class ChargeCategoryAppService(
                 (x.Description != null && x.Description.ToLower().Contains(text)) || Enumerable.Contains(categoryIds, x.Id));
         }
 
-        var totalCount = await AsyncExecuter.CountAsync(query);
+        query = await ApplyListFiltersAsync(query, tableQuery);
+		var totalCount = await AsyncExecuter.CountAsync(query);
 
         var items = await AsyncExecuter.ToListAsync(
             query

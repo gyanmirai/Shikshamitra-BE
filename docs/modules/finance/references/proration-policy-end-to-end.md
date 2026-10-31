@@ -87,11 +87,9 @@ Posted demands and receipts are never recalculated by editing a policy.
 |---|---|
 | ApplyOnAdmission | True; false retains the coverage start boundary |
 | RuleType | Admission model: FullCharge (No Proration), Daily, MonthlyCutoff, or FullMonthCharge |
-| MinimumChargeDays | Daily floor, integer 0-366; capped at covered days |
 | CutoffDay / AfterCutoffAction | Monthly admission cutoff 1-31; on/before bills full current month, after bills zero (Charge Next Month) or 50% (Half Month Rule) |
 | ApplyOnEarlyWithdrawal | True; false retains the coverage end boundary |
 | EarlyWithdrawalRuleType | Independently selected FullCharge, Daily, MonthlyCutoff, or FullMonthCharge |
-| EarlyWithdrawalMinimumChargeDays | Independent daily floor, integer 0-366 |
 | EarlyWithdrawalCutoffDay / EarlyWithdrawalBeforeCutoffAction | Exit on/before cutoff bills zero or 50% of the exit month; after bills the full exit month; later months are excluded |
 | RoundingMode | One shared head-level Currency, NearestRupee, RoundUpRupee or RoundDownRupee mode, applied once after combining both events |
 
@@ -101,7 +99,7 @@ Policy validation requires at least one recurring fee head with an enabled Daily
 Monthly rules use equal calendar-month shares of the coverage amount before payment-term allocation.
 When mixed with daily, only the daily boundary month is reduced by its eligible-day fraction.
 When admission and withdrawal affect the same month, apply the smallest applicable fraction once rather than multiplying reductions.
-If either enabled daily rule specifies minimum days, the greater floor applies once to the combined coverage calculation, capped at the scheduled amount.
+Daily rules use eligible calendar days without a minimum-day floor.
 No date overlap always produces zero, even when both event switches are disabled.
 Cutoffs exceeding a month's length clamp to its last day; cutoff equality is inclusive.
 One-time Fee Structure details remain unprorated for both events.
@@ -187,7 +185,6 @@ Do not add editable policy effective dates in v1. Academic-year scope and immuta
 |---|---|
 | `FeeHeadId` | Active, tenant-owned Finance Fee Head; unique within policy |
 | `RuleType` | `FullCharge` (No Proration), `Daily`, `MonthlyCutoff`, or `FullMonthCharge` |
-| `MinimumChargeDays` | Daily only; integer 0 through coverage-day count |
 | `RoundingMode` | `Currency`, `NearestRupee`, `RoundUpRupee`, or `RoundDownRupee` |
 | `CutoffDay` | MonthlyCutoff only; integer 1-31, clamped to the last calendar day of a shorter month |
 | `AfterCutoffAction` | MonthlyCutoff admission only; `NoCharge` or `HalfCharge` for the admission month's share |
@@ -241,13 +238,13 @@ eligibleEnd = min(chargeEnd, coverageEnd)
 actualDays = max(0, (eligibleEnd - eligibleStart) + 1)
 chargeDays = actualDays == 0
   ? 0
-  : min(coverageDays, max(actualDays, minimumChargeDays))
+  : actualDays
 factor = chargeDays / coverageDays
 rawAmount = scheduledInstallmentAmount * factor
 proratedAmount = round(rawAmount, configuredRoundingMode)
 ```
 
-`MinimumChargeDays` has no effect when there is no overlap unless Finance explicitly approves charging outside the service interval. This prevents a student with zero eligible days from receiving a minimum charge unexpectedly.
+Daily proration charges only eligible calendar days. Retired minimum-day fields in old snapshot JSON are ignored when calculating new results; stored dues and audit snapshots are not rewritten.
 
 ### Legacy monthly-cutoff formula
 
@@ -471,7 +468,7 @@ Do not backfill a policy as if it had governed historical dues. Existing due row
 ### Domain
 
 - every lifecycle transition and forbidden transition;
-- daily inclusive-day boundaries, no overlap, full overlap, minimum days, leap year;
+- daily inclusive-day boundaries, no overlap, full overlap, legacy minimum-field compatibility, leap year;
 - cutoff day equality, short months, no-charge and half-charge actions;
 - all rounding modes and residual reconciliation;
 - one-time exclusion and missing-rule full charge;
@@ -511,7 +508,7 @@ Do not backfill a policy as if it had governed historical dues. Existing due row
 ## Implemented boundary decisions
 
 1. Daily and MonthlyCutoff support independent admission and withdrawal settings. Withdrawal uses its own before-cutoff action.
-2. Zero overlap remains zero. Minimum days never create a charge outside the eligible interval.
+2. Zero overlap remains zero. Daily proration uses eligible calendar days without a minimum-day floor.
 3. Admission after cutoff with Charge Next Month waives the admission month's share and starts charging subsequent covered months. The waived share is not carried forward.
 
 Withdrawal recorded after demands have already been created requires an auditable adjustment workflow; this change does not automatically rewrite those demands or receipts.

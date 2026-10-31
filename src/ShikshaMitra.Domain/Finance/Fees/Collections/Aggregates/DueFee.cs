@@ -425,11 +425,12 @@ public DueFee(
 
 	private void RecalculateBalancesAndStatus()
 	{
-		var netPaid = Math.Max(0m, PaidAmount - RefundedAmount);
-		OutstandingAmount = Math.Max(0m, OriginalAmount - netPaid - NetAmount);
+		// A refund returns settled cash; it does not create a new fee demand.
+		// Only a payment reversal removes settlement from the original obligation.
+		OutstandingAmount = Math.Max(0m, OriginalAmount - PaidAmount - NetAmount);
 		Status = OutstandingAmount <= 0m
 			? FeeStatus.Paid
-			: netPaid > 0m || NetAmount > 0m
+			: PaidAmount > 0m || NetAmount > 0m
 				? FeeStatus.Partial
 				: FeeStatus.Pending;
 	}

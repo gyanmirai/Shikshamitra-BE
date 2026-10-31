@@ -17,6 +17,10 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 /// </summary>
 public class UpdateFeeRefundRequestDto
 {
+    /// <summary>Required for current-workflow edits; prevents overwriting a stale form.</summary>
+    [MaxLength(128)]
+    public string? ConcurrencyStamp { get; set; }
+
     /// <summary>Accepted for payload symmetry with create; the route id is authoritative.</summary>
     public Guid? StudentId { get; set; }
 

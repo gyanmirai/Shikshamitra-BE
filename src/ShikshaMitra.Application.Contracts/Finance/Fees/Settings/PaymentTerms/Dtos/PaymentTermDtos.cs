@@ -266,5 +266,7 @@ public class PaymentTermGetListInput : PagedAndSortedResultRequestDto
 	public Guid? BoardId { get; set; }
 	public PaymentTermStatus? Status { get; set; }
 	public string? Search { get; set; }
+	/// <summary>Serialized header criteria for name, currentVersionNumber, usage and lifecycle status.</summary>
+	public string? Filters { get; set; }
 	public bool IncludeArchived { get; set; }
 }

@@ -104,7 +104,7 @@ public class DueFeeManager(
         var weights = schedule.Installments.Select(x => x.AllocationPercentage).ToArray();
         var scheduled = AssignmentAmountCalculator.Allocate(annualAmount, weights);
         var rule = prorationPolicy?.Rules.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
-            ?? new ProrationPolicyRuleSnapshot(detail.FeeHeadId, ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null, null);
+            ?? new ProrationPolicyRuleSnapshot(detail.FeeHeadId, ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null);
         if (detail.IsOneTime) rule = rule with { RuleType = ProrationRuleType.FullCharge, ApplyOnAdmission = false, ApplyOnEarlyWithdrawal = false, EarlyWithdrawalRuleType = ProrationRuleType.FullCharge };
         var calculation = AssignmentAmountCalculator.Calculate(prorationCalculator, rule, annualAmount,
             academicYear.StartDate.Date, academicYear.EndDate.Date, chargeStartDate, chargeEndDate);
@@ -252,7 +252,7 @@ public class DueFeeManager(
 		var rule = policy?.Rules.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
 			?? new ProrationPolicyRuleSnapshot(
 				detail.FeeHeadId, ProrationRuleType.FullCharge,
-				ProrationRoundingMode.Currency, null, null, null);
+				ProrationRoundingMode.Currency, null, null);
 		if (detail.IsOneTime)
 			rule = rule with { RuleType = ProrationRuleType.FullCharge, ApplyOnAdmission = false, ApplyOnEarlyWithdrawal = false, EarlyWithdrawalRuleType = ProrationRuleType.FullCharge };
 		return prorationCalculator.Calculate(rule, scheduledAmount, coverageStart, coverageEnd, chargeStart, chargeEnd);

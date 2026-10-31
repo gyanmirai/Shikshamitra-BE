@@ -3,7 +3,7 @@ module: finance
 domain: concession-policy
 content_type: Reference
 status: active
-updated_on: 2026-09-01
+updated_on: 2026-10-30
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -67,7 +67,7 @@ Staff normally selects the student, concession type, fee heads, and evidence; co
 | Value source | `PolicyFixed`, `RequestEnteredWithinLimits` | Fixed policies calculate the value automatically; request-entered policies let staff propose a value up to the eligible unpaid amount |
 | Calculation method | `Percentage`, `FixedAmount`, `FullWaiver` | Calculated on the eligible scope base; only `AllFees` includes paid amounts |
 | Percentage/fixed value | Conditional | Required only for the matching PolicyFixed method |
-| Maximum percentage | Optional | Caps request-entered percentages and the resulting concession |
+| Maximum percentage | Optional | Caps the sum of entered percentages across all installments and fee heads in one request; defaults to 100% when omitted |
 | Fee-head scope | Entire structure or selected fee heads | The request cannot include a fee head outside the snapshot |
 | Apply on | All outstanding, current installment, future installments, all installments including paid | The first three scopes filter unpaid due rows; `AllFees` also includes paid amounts |
 | Auto create refund | Boolean; default on for `AllFees`, off for unpaid scopes | Policy-owned, snapshotted and audited. Explicit on is rejected for unpaid scopes (`Finance:ConcessionPolicy:010026`). Controls request creation, with review and payout remaining separate |
@@ -86,7 +86,11 @@ Let `eligibleBase` be the sum of currently eligible due amounts after fee-head a
 The server then applies rounding and these boundaries:
 
 - the eligible outstanding amount;
-- maximum percentage for a request-entered percentage, when configured.
+- the request-wide maximum percentage: entered percentages are summed across all selected installments and fee heads, rather than given a separate allowance per row.
+
+For a 50% request maximum, 30% + 20% is valid and 30% + 30% is rejected with `Finance:ConcessionPolicy:010015`.
+Each accepted percentage still calculates its reduction against its own installment's eligible amount.
+The request editor shows the entered and remaining percentage allowance; preview, create, draft update and approval validate the same shared cap.
 
 The frontend preview is advisory.
 Create and approve commands calculate against live server data, so changing balances or duplicate allocations cannot bypass limits.

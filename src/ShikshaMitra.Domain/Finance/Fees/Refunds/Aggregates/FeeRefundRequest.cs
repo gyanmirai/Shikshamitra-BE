@@ -23,6 +23,9 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid? ReplacesRefundRequestId { get; private set; }
     public string? RequestIdempotencyKey { get; private set; }
     public int WorkflowVersion { get; private set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public bool CanEdit => !ConcessionRequestId.HasValue && _reservations.Count == 0 && _settlements.Count == 0
+        && (Status == FeeRefundStatus.Draft || WorkflowVersion == 1 && Status == FeeRefundStatus.Submitted);
     public Guid? OriginalReceiptId { get; private set; }
     public string? OriginalReceiptNumber { get; private set; }
     public string Currency { get; private set; } = "INR";
@@ -153,15 +156,15 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     internal void UpdateEvidence(string calculationSnapshotJson, string calculationHash)
     {
-        EnsureDraft();
+        EnsureEditable();
         CalculationSnapshotJson = Check.NotNullOrWhiteSpace(calculationSnapshotJson, nameof(calculationSnapshotJson));
         CalculationHash = Check.NotNullOrWhiteSpace(calculationHash, nameof(calculationHash), 64);
     }
 
-    internal void UpdatePaymentDetails(string? method, RefundPaymentDetails? details) { EnsureDraft(); RefundMethod = Normalize(method); RefundPaymentDetails = details; }
+    internal void UpdatePaymentDetails(string? method, RefundPaymentDetails? details) { EnsureEditable(); RefundMethod = Normalize(method); RefundPaymentDetails = details; }
     internal void AddLine(FeeRefundLine line) { EnsureDraft(); _lines.Add(line); Recalculate(); }
-    internal void ReplaceLines(List<FeeRefundLine> lines) { EnsureDraft(); _lines.Clear(); _lines.AddRange(lines); Recalculate(); }
-    internal void UpdateReason(string? reason) { EnsureDraft(); Reason = Normalize(reason); }
+    internal void ReplaceLines(List<FeeRefundLine> lines) { EnsureEditable(); _lines.Clear(); _lines.AddRange(lines); Recalculate(); }
+    internal void UpdateReason(string? reason) { EnsureEditable(); Reason = Normalize(reason); }
 
     public FeeRefundRequest Submit(Guid userId)
     {
@@ -345,6 +348,20 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         TotalAmount = _lines.Sum(x => x.RequestedAmount);
         CalculatedAmount = _lines.Sum(x => x.CalculatedAmount);
     }
+    internal void RecordPendingEdit(Guid editorId)
+    {
+        EnsureEditable();
+        if (WorkflowVersion != 1 || Status != FeeRefundStatus.Submitted)
+            ThrowIllegalTransition(FeeRefundStatus.Submitted);
+        SubmittedByUserId = editorId;
+        SubmittedAt = DateTimeOffset.UtcNow;
+    }
+
+    private void EnsureEditable()
+    {
+        if (!CanEdit) throw new BusinessException(FeeRefundErrorCodes.CannotModifyNonPendingRefund);
+    }
+
     private void EnsureDraft() { if (Status != FeeRefundStatus.Draft) ThrowIllegalTransition(FeeRefundStatus.Draft); }
     private void EnsureTransition(FeeRefundStatus target, FeeRefundStatus from) { if (Status != from) ThrowIllegalTransition(target); }
     private void EnsureTransitionAny(FeeRefundStatus target, params FeeRefundStatus[] from) { if (!from.Contains(Status)) ThrowIllegalTransition(target); }

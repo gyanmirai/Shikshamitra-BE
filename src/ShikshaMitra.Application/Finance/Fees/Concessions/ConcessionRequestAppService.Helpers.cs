@@ -751,4 +751,9 @@ public partial class ConcessionRequestAppService
             : string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
 
+    private static string FormatStudentGrNumber(Student? student) =>
+        !string.IsNullOrWhiteSpace(student?.GrNumber)
+            ? student.GrNumber
+            : student?.GrNo?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+
 }

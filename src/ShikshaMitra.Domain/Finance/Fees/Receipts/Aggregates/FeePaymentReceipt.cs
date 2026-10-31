@@ -70,6 +70,22 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
     [NotMapped]
     public decimal ChargePaidAmount => this.GetProperty<decimal>(nameof(ChargePaidAmount), ReceiptScope == FeeReceiptScope.Charge ? (decimal)TotalPaidAmount : 0m);
 
+    /// <summary>
+    /// Immutable late-fee portion of the charge component. Null identifies historical
+    /// receipts issued before late fees were grouped with charges.
+    /// </summary>
+    [NotMapped]
+    public decimal? LateFeePaidAmount => ExtraProperties.ContainsKey(nameof(LateFeePaidAmount))
+        ? this.GetProperty<decimal>(nameof(LateFeePaidAmount)) : null;
+
+    public void SetLateFeePaidAmount(decimal amount)
+    {
+        if (amount < 0m || amount > ChargePaidAmount ||
+            (LateFeePaidAmount.HasValue && LateFeePaidAmount.Value != amount))
+            throw new BusinessException(ShikshaMitra.Finance.Fees.Collections.FeeCollectionErrorCodes.PaymentDetailsMismatch);
+        this.SetProperty(nameof(LateFeePaidAmount), amount);
+    }
+
     public void SetAmountBreakdown(decimal feeAmount, decimal chargeAmount)
     {
         if (feeAmount < 0m || chargeAmount < 0m || feeAmount + chargeAmount != (decimal)TotalPaidAmount)

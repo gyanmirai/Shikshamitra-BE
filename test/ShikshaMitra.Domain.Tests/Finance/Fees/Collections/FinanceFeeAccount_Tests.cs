@@ -80,7 +80,7 @@ public class FinanceFeeAccount_Tests
 		Assert.Equal(2500m, due.OriginalAmount);
 		Assert.Equal(600m, due.PaidAmount);
 		Assert.Equal(100m, due.RefundedAmount);
-		Assert.Equal(2000m, due.OutstandingAmount);
+		Assert.Equal(1900m, due.OutstandingAmount);
 		Assert.Throws<BusinessException>(() => due.LinkStudent(Guid.NewGuid()));
 	}
 

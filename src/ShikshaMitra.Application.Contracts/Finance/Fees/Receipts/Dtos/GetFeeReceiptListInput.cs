@@ -27,6 +27,9 @@ public class GetFeeReceiptListInput : PagedAndSortedResultRequestDto, IFinanceCl
     /// <summary>Free-text search over receipt number, student name, or GR number.</summary>
     public string? Search { get; set; }
 
+	/// <summary>Optional Finance table criteria over the displayed receipt columns.</summary>
+	public string? Filters { get; set; }
+
     public Guid? StandardId { get; set; }
 
     public Guid? DivisionId { get; set; }

@@ -69,6 +69,8 @@ public class ReconciliationManager(
                 original.TotalPaidAmount, finalReceiptNumber, remarks, original.ReceiptBookId, original.FinanceFeeAccountId);
             if (original.ReceiptScope == FeeReceiptScope.Combined)
                 finalReceipt.SetAmountBreakdown(original.FeePaidAmount, original.ChargePaidAmount);
+            if (original.LateFeePaidAmount.HasValue)
+                finalReceipt.SetLateFeePaidAmount(original.LateFeePaidAmount.Value);
             finalReceipt.SetLinkedProvisionalReceiptId(original.Id);
             await receiptRepository.InsertAsync(finalReceipt, autoSave: false);
             var student = original.StudentId.HasValue

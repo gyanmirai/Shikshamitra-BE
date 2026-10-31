@@ -79,7 +79,8 @@ public static class ConcessionRequestTestHelper
 
 
 	// Receipt tests seed prerequisite students directly; the legacy registration HTTP route was retired.
-	public static async Task<(Guid StudentId, Guid BoardId)> CreateStudentAsync(IServiceProvider services, Guid? divisionId = null)
+	public static async Task<(Guid StudentId, Guid BoardId)> CreateStudentAsync(
+		IServiceProvider services, Guid? divisionId = null, string? grNumber = null, int? legacyGrNo = null)
 	{
 		var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 		using var scope = services.CreateScope();
@@ -93,6 +94,10 @@ public static class ConcessionRequestTestHelper
 			boardId, DefaultMediumId, standard.EducationMediumStageId, DefaultStandardId,
 			divisionId ?? DefaultDivisionId, DateTimeOffset.UtcNow.AddYears(-12), GenderEnum.Male,
 			TestDataHelper.UniquePhone());
+		if (!string.IsNullOrWhiteSpace(grNumber))
+			student.AssignGrNumber(grNumber, legacyGrNo);
+		else if (legacyGrNo.HasValue)
+			student.AssignGrNo(legacyGrNo);
 		await scope.ServiceProvider.GetRequiredService<IRepository<Student, Guid>>().InsertAsync(student);
 		await uow.CompleteAsync();
 		return (student.Id, boardId);

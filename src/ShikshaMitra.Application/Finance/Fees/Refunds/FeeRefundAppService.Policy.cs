@@ -83,9 +83,8 @@ public partial class FeeRefundAppService
         if (input.FinanceFeeAccountId.HasValue && receipt.FinanceFeeAccountId != input.FinanceFeeAccountId ||
             !receipt.FinanceFeeAccountId.HasValue && receipt.StudentId != input.StudentId ||
             receipt.AcademicYearId != input.AcademicYearId ||
-            receipt.ReceiptScope is not (FeeReceiptScope.Fee or FeeReceiptScope.Combined) ||
-            (receipt.ReceiptKind != FeeReceiptKind.FinalFee &&
-             !(receipt.ReceiptKind == FeeReceiptKind.ProvisionalFee && receipt.VerificationStatus == FeeReceiptVerificationStatus.Verified)))
+            !RefundReceiptEvidencePolicy.IsSettled(receipt) ||
+            input.Lines.Any(x => x.DueFeeId.HasValue) && !RefundReceiptEvidencePolicy.CoversPrincipal(receipt))
             throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
 
         var collection = await collectionRepository.FindAsync(receipt.FeeCollectionTransactionId)
@@ -193,7 +192,8 @@ public partial class FeeRefundAppService
         var requested = specs.Sum(x => x.Amount);
         var policyBase = specs.Sum(x => x.SettledPaidAmount);
         if (!policy.AllowPartialRefund)
-            await EnsureWholeReceiptSelectedAsync(collection.Id, payer.AssignmentId, policy, input.Lines.Select(x => x.SourceAllocationId).ToList(), excludingRequestId, payer.FinanceFeeAccountId, payer.StudentId, input.AcademicYearId, receipt.Id);
+            await EnsureWholeReceiptSelectedAsync(collection.Id, payer.AssignmentId, policy, input.Lines.Select(x => x.SourceAllocationId).ToList(), excludingRequestId, payer.FinanceFeeAccountId, payer.StudentId, input.AcademicYearId, receipt.Id,
+                RefundReceiptEvidencePolicy.CoversPrincipal(receipt));
         var studentYearCommitted = await GetPayerYearCommittedAsync(payer, input.AcademicYearId, excludingRequestId);
         var calculation = refundPolicyCalculationService.Calculate(policy, new RefundPolicyCalculationInput(
             policyBase, 0m, 0m, studentYearCommitted,
@@ -218,7 +218,8 @@ public partial class FeeRefundAppService
 
     private async Task EnsureWholeReceiptSelectedAsync(Guid collectionId, Guid? assignmentId,
         RefundPolicySnapshot policy, IReadOnlyCollection<Guid> selectedAllocationIds, Guid? excludingRequestId,
-        Guid? accountId = null, Guid? studentId = null, Guid? academicYearId = null, Guid? receiptId = null)
+        Guid? accountId = null, Guid? studentId = null, Guid? academicYearId = null, Guid? receiptId = null,
+        bool includesPrincipal = true)
     {
         var eligibleDues = await dueFeeRepository.GetListAsync(x => x.PaidAmount > 0 && (accountId.HasValue
             ? x.FinanceFeeAccountId == accountId : x.StudentFeeStructureId == assignmentId));
@@ -226,7 +227,7 @@ public partial class FeeRefundAppService
             eligibleDues = eligibleDues.Where(x => policy.ApplicableFeeHeadIds.Contains(x.FeeHeadId)).ToList();
         var eligibleDueIds = eligibleDues.Select(x => x.Id).ToList();
         var receiptAllocations = await allocationRepository.GetListAsync(x =>
-            x.FeeRecordMetadataId == collectionId && eligibleDueIds.Contains(x.DueFeeId));
+            includesPrincipal && x.FeeRecordMetadataId == collectionId && eligibleDueIds.Contains(x.DueFeeId));
         var receiptAllocationIds = receiptAllocations.Select(x => x.Id).ToList();
         var committed = await feeRefundRepository.GetCommittedAllocationAmountsAsync(receiptAllocationIds, excludingRequestId);
         var reserved = await feeRefundRepository.GetActiveReservedAmountsAsync(eligibleDueIds, excludingRequestId);

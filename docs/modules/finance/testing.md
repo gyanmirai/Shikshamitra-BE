@@ -1,14 +1,35 @@
----
+﻿---
 module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-29
+updated_on: 2026-10-30
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Finance backend changes
+
+Late-fee receipt grouping: run `LateFeeReceiptGrouping_Tests`, `CollectionReceiptGrouping_Tests`,
+`RefundReceiptEvidencePolicy_Tests`, `FeeReceiptPdfGenerator_Tests` and
+`ReceiptGroupingReconciliationApi_Tests`. Verify principal 20,000 plus late fees 60,600 issues
+Fee/Charge documents of 20,000/60,600 in Separate mode and one 80,600 document in Combined mode.
+Cover late-only and mixed charges, immutable late-fee evidence, legacy attribution and atomic
+reconciliation approval/rejection. Render the generated PDFs to check fee/charge isolation.
+
+`LateFeeCollectionRuntime_Tests.Summary_Pending_Includes_Future_Payment_Term_Installments_And_Matches_Collection`
+covers INR 43,000 total, INR 13,224 paid, INR 3,306 overdue and INR 29,776 full pending across
+summary, fee details and collect form. Its other cases cover noncash credits and a future-only
+unpaid balance remaining Pending. Run alongside `MobileFinanceProjection_Tests` to preserve
+the mobile generated-bill/future partition and the existing overdue-boundary runtime cases.
+
+Refunds must preserve collection settlement: run `DueFeeCollectionStatusResolver_Tests`,
+`DueFee_AppliedPayment_Tests`, `RefundedFeeBalanceMigration_Tests` and
+`FeeRefundApi_Tests.Fully_Paid_Fee_Should_Stay_Paid_Through_Refund_Request_Approval_And_Payout`.
+These cover full/partial refunds, the original unpaid remainder, refund reversal, retained-cash
+eligibility, collection-form/detail status and the idempotent historical balance correction.
+The refund HTTP fixture requires a disposable loopback PostgreSQL database in
+`SHIKSHAMITRA_REFUND_TEST_DB`; never point it at an operational database.
 
 Stored None defaults: run `NoneCategory_Tests` and `NoneCategoryApi_Tests`, plus the existing account
 settings permission/simplification suites. Verify None is first in fee-head income and refund-policy
@@ -292,3 +313,28 @@ The opt-in PostgreSQL suite accepts only host `127.0.0.1`, port `55443`, databas
 It uses connection-local temporary tables, never an application database, and skips explicitly when its environment variable is absent.
 SQLite authorization tests exercise denial before provider execution; they do not certify PostgreSQL JSON projection or snapshot isolation.
 Production deployment, real bank settlement matching and production evidence downloads require their separate operational validation.
+
+
+## Table query regressions
+
+| Suite | Behavior |
+|---|---|
+| `LateFeeCollectionRuntime.SearchTests.cs` | Summary name, GR, mixed name/GR and roll search; no matches; counts before paging |
+| `ChargeTableFilterApi_Tests.cs` | HTTP amount header criteria reach the application query, filter before counting/paging, and clear correctly |
+
+Run the Application test filter `FullyQualifiedName~Summary_Search_Matches` and HTTP test filter `FullyQualifiedName~ChargeTableFilterApi_Tests` after changing these query boundaries.
+Finish with the signed-in local Finance tables and distinguish live tenant evidence from frontend transport fixtures.
+
+
+Settings filter regressions: `SettingsTableFilters_Tests` (including `SettingsTableFilters.ScopeTests.cs`) exercise all six list services, exact masked/document/fraction values, scope/tenant/year intersections and filtered counts before pagination. `SettingsTableFilterBinding_Tests` verifies the six optional query bindings and forwarding. Execution results are recorded in the local Finance QA report; authored tests are not evidence of a passing run.
+
+Finance table query regressions: `ReceiptReconciliationHeaderFilterApi_Tests` and `ReceiptReconciliationHeaderScopeApi_Tests` exercise actual HTTP binding, complete results beyond the former page cap, display/identifier/mask/date criteria, malformed input and restricted/foreign-tenant scope. The selected 12-case transport run including Charges and settings bindings passed on 2026-10-30. `DirectFinanceTableFilterApi_Tests` covers Fee Head/Receipt Book/Adjustment full-result queries and scope; `DirectFinanceTableFilterBinding_Tests` checks optional MVC binding, unchanged context forwarding and Adjustment input criteria. Keep host-startup failures distinct from behavioral assertions. The focused external runner excludes one unrelated pre-existing invalid Domain test only for verification; normal full-suite compilation still requires that existing error to be resolved.
+
+Adjustment table lookup regression: the unchanged 103-student HTTP fact passed after replacing entity lookups with scalar projections. Keep student, class, division and requester display formatting and the tenant/student/context intersections intact. Entity AutoInclude graphs must not be reintroduced into table label lookup queries. The nine distinct direct-table cases have passing evidence across separate recorded runs; this does not establish live DDVS browser acceptance.
+
+## Pending refund editing
+
+`FeeRefundRequestLifecycle_Tests` covers Pending mutation, preserved identity/policy, recalculated amounts, editor attribution, unchanged status and protection after approval.
+`FeeRefundApi.EditTests.cs` extends `FeeRefundApi_Tests` with same-request editing, ignored identity reassignment, stale-stamp conflicts, editor/checker separation and rejection of updates after approval.
+HTTP workflow tests require `SHIKSHAMITRA_REFUND_TEST_DB` pointing to a migrated disposable loopback PostgreSQL database accepted by `FeeRefundApiTestFactory`.
+Do not treat an absent database or a host compilation failure as passing API coverage.

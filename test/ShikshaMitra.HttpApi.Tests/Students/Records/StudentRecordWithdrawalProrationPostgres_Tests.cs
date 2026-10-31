@@ -202,7 +202,9 @@ public sealed partial class StudentRecordMidnightSchedule_Tests
 		var detail = new FeeStructureDetail(Guid.NewGuid(), TenantId, structure.Id, head.Id, 12000m, false, false, null, null); detail.AttachPaymentTerm(term.Id, termVersion.Id); structure.AddDetail(detail); structure.Lock();
 		await services.GetRequiredService<IRepository<FeeStructure, Guid>>().UpdateAsync(structure, true);
 		var policy = new ProrationPolicy(Guid.NewGuid(), TenantId, fixture.Year, new("Proration fixture " + suffix, "PRO-" + Guid.NewGuid().ToString("N")[..8], null, ProrationPolicyStatus.Active, false,
-			[new(Guid.NewGuid(), head.Id, ProrationRuleType.FullMonthCharge, ProrationRoundingMode.RoundUpRupee, null, null, null, true, true, ProrationRuleType.FullMonthCharge)]));
+			[new(Guid.NewGuid(), head.Id, ProrationRuleType.FullMonthCharge, ProrationRoundingMode.RoundUpRupee,
+				CutoffDay: null, AfterCutoffAction: null, ApplyOnAdmission: true, ApplyOnEarlyWithdrawal: true,
+				EarlyWithdrawalRuleType: ProrationRuleType.FullMonthCharge)]));
 		await services.GetRequiredService<IRepository<ProrationPolicy, Guid>>().InsertAsync(policy, true);
 		var version = await services.GetRequiredService<IRepository<FinancePolicyVersion, Guid>>().InsertAsync(new(Guid.NewGuid(), TenantId, "proration", policy.Id, fixture.Year, policy.Version, policy.PolicyName, "Active", JsonSerializer.Serialize(policy.ToSnapshot()), "created"), true);
 		var rule = policy.ToSnapshot().Rules.Single(); var calculator = new ProrationPolicyCalculationService();

@@ -61,6 +61,41 @@ public class DueFeeCollectionStatusResolver_Tests
 	}
 
 	[Fact]
+	public void Refunds_Do_Not_Reopen_A_Fully_Paid_Overdue_Installment()
+	{
+		var due = Create(Today.AddDays(-30));
+		due.ApplyPayment(1000m);
+		due.ApplyRefund(300m);
+		Assert.Equal(0m, due.OutstandingAmount);
+		Assert.Equal(FeeStatus.Paid, due.Status);
+		Assert.False(DueFeeCollectionStatusResolver.OverdueOn(Today).Compile()(due));
+		Assert.Equal(FeeCollectionStatus.Paid, DueFeeCollectionStatusResolver.Resolve(due, Today, 0));
+		Assert.Equal(700m, due.RefundableBalance);
+
+		due.ApplyRefund(700m);
+		Assert.Equal(0m, due.OutstandingAmount);
+		Assert.Equal(FeeCollectionStatus.Paid, DueFeeCollectionStatusResolver.Resolve(due, Today, 0));
+		Assert.Equal(0m, due.RefundableBalance);
+
+		due.ReverseRefund(1000m);
+		Assert.Equal(0m, due.OutstandingAmount);
+		Assert.Equal(FeeCollectionStatus.Paid, DueFeeCollectionStatusResolver.Resolve(due, Today, 0));
+		Assert.Equal(1000m, due.RefundableBalance);
+	}
+
+	[Fact]
+	public void Refunding_A_Partial_Payment_Preserves_The_Original_Unpaid_Remainder()
+	{
+		var due = Create(Today.AddDays(-30));
+		due.ApplyPayment(400m);
+		due.ApplyRefund(400m);
+		Assert.Equal(600m, due.OutstandingAmount);
+		Assert.Equal(FeeStatus.Partial, due.Status);
+		Assert.Equal(FeeCollectionStatus.Overdue, DueFeeCollectionStatusResolver.Resolve(due, Today, 0));
+		Assert.Equal(FeeCollectionStatus.Partial, DueFeeCollectionStatusResolver.Resolve(due, Today.AddDays(-31), 0));
+	}
+
+	[Fact]
 	public void NonOverdue_Status_Preserves_Reconciliation_And_Partial_Settlement()
 	{
 		var due = Create(Today); due.ApplyPayment(200m);

@@ -8,9 +8,28 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 public class ProrationEventCalculation_Tests
 {
 	private readonly ProrationPolicyCalculationService calculator = new();
+	[Theory]
+	[InlineData(null, 500)]
+	[InlineData(1, 500)]
+	[InlineData(2, 1500)]
+	public void Retired_minimum_fields_in_saved_json_do_not_inflate_daily_charges(int? withdrawalType, decimal expected)
+	{
+		var json = JsonSerializer.Serialize(new
+		{
+			FeeHeadId = Guid.NewGuid(), RuleType = 1, RoundingMode = 0,
+			MinimumChargeDays = 25, EarlyWithdrawalMinimumChargeDays = 20,
+			EarlyWithdrawalRuleType = withdrawalType, EarlyWithdrawalCutoffDay = 15,
+			EarlyWithdrawalBeforeCutoffAction = 1
+		});
+		var rule = JsonSerializer.Deserialize<ProrationPolicyRuleSnapshot>(json)!;
+		var result = calculator.Calculate(rule, 3000m, new(2026, 4, 1), new(2026, 4, 30),
+			new(2026, 4, 16), new(2026, 4, 20));
+		Assert.Equal(5, result.ChargedDays);
+		Assert.Equal(expected, result.ProratedAmount);
+	}
 	private static ProrationPolicyRuleSnapshot Rule(ProrationRuleType admission, ProrationRuleType withdrawal) =>
-		new(Guid.NewGuid(), admission, ProrationRoundingMode.Currency, 0, 15,
-			ProrationAfterCutoffAction.NoCharge, true, true, withdrawal, 0, 15, ProrationAfterCutoffAction.HalfCharge);
+		new(Guid.NewGuid(), admission, ProrationRoundingMode.Currency, 15,
+			ProrationAfterCutoffAction.NoCharge, true, true, withdrawal, 15, ProrationAfterCutoffAction.HalfCharge);
 
 	[Theory]
 	[InlineData(true, true, 500)]
@@ -74,13 +93,13 @@ public class ProrationEventCalculation_Tests
 	}
 
 	[Fact]
-	public void Leap_day_minimum_floor_and_rounding_are_capped()
+	public void Leap_day_charges_only_the_eligible_day()
 	{
 		var rule = Rule(ProrationRuleType.Daily, ProrationRuleType.Daily) with
-			{ EarlyWithdrawalMinimumChargeDays = 40, RoundingMode = ProrationRoundingMode.RoundUpRupee };
+			{ RoundingMode = ProrationRoundingMode.RoundUpRupee };
 		var result = calculator.Calculate(rule, 2900m, new(2028, 2, 1), new(2028, 2, 29), new(2028, 2, 29), new(2028, 2, 29));
-		Assert.Equal(29, result.ChargedDays);
-		Assert.Equal(2900m, result.ProratedAmount);
+		Assert.Equal(1, result.ChargedDays);
+		Assert.Equal(100m, result.ProratedAmount);
 	}
 
 	[Fact]
@@ -102,10 +121,10 @@ public class ProrationEventCalculation_Tests
 	}
 
 	[Fact]
-	public void Explicit_withdrawal_daily_does_not_inherit_disabled_admission_minimum()
+	public void Explicit_withdrawal_daily_charges_one_eligible_day()
 	{
 		var rule = Rule(ProrationRuleType.Daily, ProrationRuleType.Daily) with
-			{ ApplyOnAdmission = false, MinimumChargeDays = 20, EarlyWithdrawalMinimumChargeDays = null };
+			{ ApplyOnAdmission = false };
 		Assert.Equal(100m, calculator.Calculate(rule, 3000m, new(2026, 4, 1), new(2026, 4, 30), new(2026, 4, 1), new(2026, 4, 1)).ProratedAmount);
 	}
 
@@ -113,7 +132,7 @@ public class ProrationEventCalculation_Tests
 	public void Legacy_full_charge_stays_full_when_admission_switch_is_disabled()
 	{
 		var rule = new ProrationPolicyRuleSnapshot(Guid.NewGuid(), ProrationRuleType.FullCharge,
-			ProrationRoundingMode.Currency, null, null, null, ApplyOnAdmission: false);
+			ProrationRoundingMode.Currency, null, null, ApplyOnAdmission: false);
 		Assert.Equal(3000m, calculator.Calculate(rule, 3000m, new(2026, 4, 1), new(2026, 6, 30), new(2026, 4, 1), new(2026, 4, 1)).ProratedAmount);
 	}
 

@@ -715,7 +715,7 @@
         "Finance:ProrationPolicy:010008": "Restore the archived proration policy to Draft before editing it.",
         "Finance:ProrationPolicy:010009": "The academic year cannot be changed after creation. Clone the proration policy instead.",
         "Finance:ProrationPolicy:010013": "Select at least one active fee head from the selected academic year and configure a rule before saving.",
-        "Finance:ProrationPolicy:010014": "Review the proration policy admission and withdrawal rules: use valid rule types, daily minimum days from 0 to 366, and monthly cutoff days from 1 to 31 with a cutoff action.",
+        "Finance:ProrationPolicy:010014": "Review the proration policy admission and withdrawal rules: use valid rule types, calendar-day daily proration, and monthly cutoff days from 1 to 31 with a cutoff action.",
         "Finance:ProrationPolicy:010020": "Another Active proration policy is already the default for this academic year. Refresh and review the default policy before retrying.",
         "Finance:ProrationPolicy:010025": "Only an Active proration policy can be the default. Activate the policy before making it the default.",
         "Finance:ProrationPolicy:010026": "Set another Active proration policy as default before clearing this default or archiving it.",

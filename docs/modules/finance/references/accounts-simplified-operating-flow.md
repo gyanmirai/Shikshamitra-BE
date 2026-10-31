@@ -286,7 +286,7 @@ The requester sees the **maximum refundable amount** and chooses a permitted amo
 
 ### Proration Policy
 
-Proration Policy owns fee-head rules, cutoff, minimum charge days, rounding, and after-cutoff behavior.
+Proration Policy owns fee-head rules, cutoff, rounding, and after-cutoff behavior.
 Proration before demand changes the generated amount.
 Proration after demand creates a traceable demand reduction or reversal rather than overwriting history.
 Use the automatically applicable rule and a plain-language preview; the officer does not select a policy or edit a calculation formula or effective-version ID in an assignment form.

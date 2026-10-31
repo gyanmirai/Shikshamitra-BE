@@ -13,7 +13,7 @@ public interface ITransactionCategoryAppService : IApplicationService
 	Task<System.Collections.Generic.List<AccountHeadOptionDto>> GetAccountHeadOptionsAsync(Guid academicYearId, TransactionType categoryType);
     Task<TransactionCategoryResponse> CreateAsync(Guid academicYearId, CreateTransactionCategoryRequest input, TransactionType categoryType);
 	Task<PaginatedTransactionCategoryResponse> GetListAsync(Guid academicYearId, TransactionType categoryType,
-		int page = 1, int pageSize = 10, string? search = null, bool includeInactive = true);
+		int page = 1, int pageSize = 10, string? search = null, bool includeInactive = true, string? filters = null);
     Task<TransactionCategoryResponse> GetAsync(Guid id, TransactionType categoryType);
     Task<TransactionCategoryResponse> UpdateAsync(Guid id, UpdateTransactionCategoryRequest input, TransactionType categoryType);
 	Task<TransactionCategoryResponse> UpdateStatusAsync(Guid id, AccountSettingStatusUpdateRequest input, TransactionType categoryType);

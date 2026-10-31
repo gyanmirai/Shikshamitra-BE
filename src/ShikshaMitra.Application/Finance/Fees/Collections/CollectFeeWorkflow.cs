@@ -110,6 +110,7 @@ public partial class CollectFeeWorkflow(
 
 			var replayOutput = JsonSerializer.Deserialize<CollectFeeOutput>(replay.CommandResultJson)
 				?? throw new UserFriendlyException("The saved fee collection result could not be read.");
+			await PopulateSavedReceiptAmountsAsync(replayOutput, replay.Id);
 			await serializableUow.CompleteAsync();
 			return replayOutput;
 		}
@@ -208,6 +209,8 @@ public partial class CollectFeeWorkflow(
 			ReceiptGrouping = (effectivePolicy?.ReceiptGrouping ?? CollectionReceiptGrouping.Separate).ToString(),
 			FeeReceiptNumber = feeReceipt?.ReceiptNumber, FeeReceiptId = feeReceipt?.Id,
 			ChargeReceiptId = chargeReceipt?.Id, ChargeReceiptNumber = chargeReceipt?.ReceiptNumber,
+			FeeReceiptAmount = feeReceipt == null ? null : (decimal)feeReceipt.TotalPaidAmount,
+			ChargeReceiptAmount = chargeReceipt == null ? null : (decimal)chargeReceipt.TotalPaidAmount,
             FeeReceiptPdfFileName = feeReceipt == null ? null : FeeReceiptPresentation.GetPdfFileName(feeReceipt.ReceiptKind, feeReceipt.ReceiptScope, feeReceipt.ReceiptNumber, feeReceipt.ReceiptDate),
             ChargeReceiptPdfFileName = chargeReceipt == null ? null : FeeReceiptPresentation.GetPdfFileName(chargeReceipt.ReceiptKind, chargeReceipt.ReceiptScope, chargeReceipt.ReceiptNumber, chargeReceipt.ReceiptDate),
 			StudentId = input.StudentId, FinanceFeeAccountId = account?.Id, AcademicYearId = input.AcademicYearId,

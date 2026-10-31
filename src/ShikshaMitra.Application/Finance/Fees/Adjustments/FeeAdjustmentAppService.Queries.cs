@@ -81,36 +81,82 @@ public partial class FeeAdjustmentAppService
         FinanceClassDivisionFilterValidator.Validate(input);
         await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
             input.AcademicYearId, input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId);
+        var tableQuery = ParseListFilters(input.Filters, input.Filter);
+        var hasCriteria = tableQuery.Filters.Count > 0 || !string.IsNullOrEmpty(tableQuery.Search);
+        var page = Math.Max(input.Page, 1);
+        var pageSize = Math.Clamp(input.PageSize, 1, 100);
+        var skip = (int)Math.Min((long)(page - 1) * pageSize, int.MaxValue);
 
-        var pageSize = Math.Min(Math.Max(input.PageSize, 1), 100);
-        var skip = (Math.Max(input.Page, 1) - 1) * pageSize;
+        // Count and list share exactly the same database-enforced tenant/student/context scope.
+        var query = await BuildApplicationsListQueryAsync(input);
+        var counts = (await AsyncExecuter.ToListAsync(query.GroupBy(row => row.Status)
+            .Select(group => new { Status = group.Key, Count = group.Count() })))
+            .ToDictionary(row => row.Status, row => row.Count);
+        if (input.CompletedOnly == true)
+            query = query.Where(row => row.Status == FeeAdjustmentStatus.PartiallyApplied || row.Status == FeeAdjustmentStatus.Applied);
+        else if (input.Status.HasValue)
+            query = query.Where(row => row.Status == input.Status.Value);
+        var total = hasCriteria ? 0 : await AsyncExecuter.CountAsync(query);
+        var ordered = query.OrderByDescending(row => row.CreationTime);
+        // Only criteria requests need complete DTO display values; ordinary requests remain provider-paged.
+        var items = await AsyncExecuter.ToListAsync(hasCriteria ? ordered : ordered.Skip(skip).Take(pageSize));
 
-        var counts = await feeAdjustmentRepository.GetStatusCountsAsync(
-            input.BoardId, input.EducationMediumId, input.AcademicYearId, input.StandardId, input.DivisionId);
-        var items = await feeAdjustmentRepository.GetListForApplicationsAsync(
-            input.BoardId, input.EducationMediumId, input.AcademicYearId, input.Status,
-            input.CompletedOnly, input.Filter, input.StandardId, input.DivisionId, skip, pageSize);
-        var total = await feeAdjustmentRepository.CountForApplicationsAsync(
-            input.BoardId, input.EducationMediumId, input.AcademicYearId, input.Status,
-            input.CompletedOnly, input.Filter, input.StandardId, input.DivisionId);
-
-        // Batch-load related entities
-        var studentIds = items.Select(i => i.StudentId).Distinct().ToList();
+        var studentIds = items.Select(item => item.StudentId).Distinct().ToList();
+        // Project scalars: materializing Student roots would load the configured profile/academic AutoInclude graph.
         var students = studentIds.Count > 0
-            ? await studentRepository.GetListAsync(s => studentIds.Contains(s.Id)) : [];
-        var studentMap = students.ToDictionary(s => s.Id);
-
-        var standardIds = students.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
-        var divisionIds = students.Where(s => s.DivisionId.HasValue).Select(s => s.DivisionId!.Value).Distinct().ToList();
-        var standards = standardIds.Count > 0 ? await standardRepository.GetListAsync(s => standardIds.Contains(s.Id)) : [];
-        var divisions = divisionIds.Count > 0 ? await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id)) : [];
-        var standardMap = standards.ToDictionary(s => s.Id, s => s.Name);
-        var divisionMap = divisions.ToDictionary(d => d.Id, d => d.Name);
-
-        var userIds = items.Where(i => i.CreatorId.HasValue).Select(i => i.CreatorId!.Value).Distinct().ToList();
-        var users = userIds.Count > 0 ? await identityUserRepository.GetListAsync(u => userIds.Contains(u.Id)) : [];
-        var userMap = users.ToDictionary(u => u.Id, u => u.Name ?? u.UserName ?? string.Empty);
-
+            ? await AsyncExecuter.ToListAsync((await studentRepository.GetQueryableAsync())
+                .Where(student => studentIds.Contains(student.Id) && student.TenantId == CurrentTenant.Id)
+                .Select(student => new
+                {
+                    student.Id, student.FirstName, student.MiddleName, student.LastName,
+                    student.GrNo, student.RollNo, student.StandardId, student.DivisionId
+                })) : [];
+        var studentMap = students.ToDictionary(student => student.Id);
+        var standardIds = students.Where(student => student.StandardId.HasValue).Select(student => student.StandardId!.Value).Distinct().ToList();
+        var divisionIds = students.Where(student => student.DivisionId.HasValue).Select(student => student.DivisionId!.Value).Distinct().ToList();
+        var standards = standardIds.Count > 0
+            ? await AsyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync())
+                .Where(standard => standardIds.Contains(standard.Id)).Select(standard => new { standard.Id, standard.Name })) : [];
+        var divisions = divisionIds.Count > 0
+            ? await AsyncExecuter.ToListAsync((await divisionRepository.GetQueryableAsync())
+                .Where(division => divisionIds.Contains(division.Id)).Select(division => new { division.Id, division.Name })) : [];
+        var standardMap = standards.ToDictionary(standard => standard.Id, standard => standard.Name);
+        var divisionMap = divisions.ToDictionary(division => division.Id, division => division.Name);
+        var userIds = items.Where(item => item.CreatorId.HasValue).Select(item => item.CreatorId!.Value).Distinct().ToList();
+        var users = userIds.Count > 0
+            ? await AsyncExecuter.ToListAsync((await identityUserRepository.GetQueryableAsync())
+                .Where(user => userIds.Contains(user.Id)).Select(user => new { user.Id, user.Name, user.UserName })) : [];
+        var userMap = users.ToDictionary(user => user.Id, user => user.Name ?? user.UserName ?? string.Empty);
+        var dtos = items.Select(request =>
+        {
+            studentMap.TryGetValue(request.StudentId, out var student);
+            return new FeeAdjustmentApplicationItemDto
+            {
+                Id = request.Id, StudentId = request.StudentId,
+                StudentName = student == null ? string.Empty
+                    : $"{student.FirstName}{(string.IsNullOrEmpty(student.MiddleName) ? " " : $" {student.MiddleName} ")}{student.LastName}".Trim(),
+                GrNumber = student?.GrNo?.ToString() ?? string.Empty,
+                RollNo = student?.RollNo?.ToString() ?? string.Empty,
+                StandardName = student?.StandardId is Guid sid && standardMap.TryGetValue(sid, out var sn) ? sn : string.Empty,
+                DivisionName = student?.DivisionId is Guid did && divisionMap.TryGetValue(did, out var dn) ? dn : string.Empty,
+                RequestedAmount = request.RequestedAmount, AppliedAmount = request.AppliedAmount,
+                RemainingAmount = request.RemainingAmount, Status = request.Status,
+                StatusName = FormatStatus(request.Status),
+                RequestedByName = request.CreatorId.HasValue && userMap.TryGetValue(request.CreatorId.Value, out var un) ? un : string.Empty,
+                CreatedAt = request.CreationTime,
+            };
+        }).ToList();
+        if (hasCriteria)
+        {
+            if (!string.IsNullOrEmpty(tableQuery.Search))
+            {
+                var requests = items.ToDictionary(request => request.Id);
+                dtos = dtos.Where(row => MatchesListSearch(row, requests[row.Id], tableQuery.Search)).ToList();
+            }
+            dtos = tableQuery.Apply(dtos.AsQueryable(), ListFilterFields).ToList();
+            total = dtos.Count;
+            dtos = dtos.Skip(skip).Take(pageSize).ToList();
+        }
         return new FeeAdjustmentApplicationsDto
         {
             PendingCount = counts.GetValueOrDefault(FeeAdjustmentStatus.Pending),
@@ -118,27 +164,8 @@ public partial class FeeAdjustmentAppService
             AppliedCount = counts.GetValueOrDefault(FeeAdjustmentStatus.Applied),
             RejectedCount = counts.GetValueOrDefault(FeeAdjustmentStatus.Rejected),
             CancelledCount = counts.GetValueOrDefault(FeeAdjustmentStatus.Cancelled),
-            TotalCount = total,
-            CurrentPage = input.Page, PageSize = pageSize,
-            TotalPages = (int)Math.Ceiling(total / (double)pageSize),
-            Items = items.Select(r =>
-            {
-                studentMap.TryGetValue(r.StudentId, out var student);
-                return new FeeAdjustmentApplicationItemDto
-                {
-                    Id = r.Id, StudentId = r.StudentId,
-                    StudentName = FormatStudentName(student),
-                    GrNumber = student?.GrNo?.ToString() ?? string.Empty,
-                    RollNo = student?.RollNo?.ToString() ?? string.Empty,
-                    StandardName = student?.StandardId is Guid sid && standardMap.TryGetValue(sid, out var sn) ? sn : string.Empty,
-                    DivisionName = student?.DivisionId is Guid did && divisionMap.TryGetValue(did, out var dn) ? dn : string.Empty,
-                    RequestedAmount = r.RequestedAmount, AppliedAmount = r.AppliedAmount,
-                    RemainingAmount = r.RemainingAmount, Status = r.Status,
-                    StatusName = FormatStatus(r.Status),
-                    RequestedByName = r.CreatorId.HasValue && userMap.TryGetValue(r.CreatorId.Value, out var un) ? un : string.Empty,
-                    CreatedAt = r.CreationTime,
-                };
-            }).ToList(),
+            TotalCount = total, CurrentPage = page, PageSize = pageSize,
+            TotalPages = (int)Math.Ceiling(total / (double)pageSize), Items = dtos,
         };
     }
 }

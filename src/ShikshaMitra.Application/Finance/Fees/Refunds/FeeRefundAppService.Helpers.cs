@@ -86,7 +86,7 @@ public partial class FeeRefundAppService
 
 		return new FeeRefundRequestDto
 		{
-			Id = r.Id, StudentId = r.StudentId, FinanceFeeAccountId = r.FinanceFeeAccountId, AcademicYearId = r.AcademicYearId,
+			Id = r.Id, ConcurrencyStamp = r.ConcurrencyStamp, StudentId = r.StudentId, FinanceFeeAccountId = r.FinanceFeeAccountId, AcademicYearId = r.AcademicYearId,
 			AcademicYearName = year?.Name,
 			AcademicYearStartDate = year == null ? null : DateTime.SpecifyKind(year.StartDate, DateTimeKind.Utc),
 			AcademicYearEndDate = year == null ? null : DateTime.SpecifyKind(year.EndDate, DateTimeKind.Utc),
@@ -143,6 +143,7 @@ public partial class FeeRefundAppService
 		if (request.WorkflowVersion == 1)
 			return request.Status switch
 			{
+				FeeRefundStatus.Submitted when request.CanEdit => ["edit", "approve", "reject"],
 				FeeRefundStatus.Submitted => ["approve", "reject"],
 				FeeRefundStatus.Approved when request.Settlements.Count == 0 => ["recordPayout", "reject"],
 				FeeRefundStatus.Approved => ["recordPayout"],
@@ -166,6 +167,7 @@ public partial class FeeRefundAppService
 	{
 		var required = new Dictionary<string, string>
 		{
+			["edit"] = ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Edit,
 			["approve"] = ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve,
 			["reject"] = ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reject,
 			["recordPayout"] = ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Process,
@@ -177,6 +179,7 @@ public partial class FeeRefundAppService
 		var filtered = new List<string>();
 		foreach (var action in dto.AvailableActions)
 		{
+			if (action == "edit" && !request.CanEdit) continue;
 			if (!required.TryGetValue(action, out var permission) ||
 				!await AuthorizationService.IsGrantedAsync(permission)) continue;
 			if ((action == "approve" || action == "reject") &&
@@ -188,6 +191,20 @@ public partial class FeeRefundAppService
 		}
 		dto.AvailableActions = filtered;
 	}
+
+    private static Dictionary<string, object?>? PreserveMaskedPaymentDetails(FeeRefundRequest request,
+        string? method, Dictionary<string, object?>? input)
+    {
+        if (input == null || method != request.RefundMethod) return input;
+        var saved = MapRefundPaymentDetailsToDict(request.RefundPaymentDetails);
+        if (saved == null) return input;
+        var result = new Dictionary<string, object?>(input);
+        foreach (var key in new[] { "beneficiaryAccountNumber", "upiId", "chequeNumber", "ddNumber" })
+            if (saved.TryGetValue(key, out var original) && original != null &&
+                result.TryGetValue(key, out var submitted) && submitted?.ToString() == Mask(original.ToString()!))
+                result[key] = original;
+        return result;
+    }
 
 	private static Dictionary<string, object?>? MaskPaymentDetails(Dictionary<string, object?>? source)
 	{

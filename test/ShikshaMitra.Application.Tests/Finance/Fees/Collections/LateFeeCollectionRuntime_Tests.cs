@@ -216,7 +216,7 @@ public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTes
 				new ProrationPolicyUpdateModel("Current policy name", "PROR-TEST", null,
 					ProrationPolicyStatus.Active, false,
 					[new ProrationPolicyRuleModel(Guid.NewGuid(), feeHeadId,
-						ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null, null)]));
+						ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null)]));
 			await _prorationPolicyRepo.InsertAsync(policy, autoSave: true);
 			prorationVersionId = Guid.NewGuid();
 			await _policyVersionRepo.InsertAsync(new FinancePolicyVersion(prorationVersionId.Value,

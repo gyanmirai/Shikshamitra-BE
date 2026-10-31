@@ -27,7 +27,7 @@ namespace ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 
 [Authorize]
 [RemoteService(false)]
-public class PaymentTermAppService(
+public partial class PaymentTermAppService(
 	IRepository<PaymentTerm, Guid> paymentTermRepository,
 	IRepository<FeeStructure, Guid> feeStructureRepository,
 	IRepository<EducationBoard, Guid> boardRepository,
@@ -66,6 +66,7 @@ public class PaymentTermAppService(
 			query = query.Where(t => t.Name.Contains(search) || t.Code.Contains(search));
 		}
 
+		query = await ApplyListFiltersAsync(query, input.Filters);
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		query = query.OrderByDescending(t => t.CreationTime)
 			.Skip(input.SkipCount)

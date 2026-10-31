@@ -342,7 +342,10 @@ public class SalaryTemplateAppService(
 		if (result.EmployeeStateInsurance.IsConfigured && !result.EmployeeStateInsurance.CanCalculate)
 			throw new BusinessException("HR:Payroll:SalaryTemplateSampleBlocked")
 				.WithData("issues", result.EmployeeStateInsurance.IssueCodes)
-				.WithData("message", "Resolve the statutory blockers before calculating this sample.");
+				.WithData("effectiveMonth", result.EffectiveMonth.ToString("yyyy-MM"))
+				.WithData("message", result.EmployeeStateInsurance.IssueCodes.Contains(EsiStatutoryCalculator.WageClassificationIssue)
+					? "ESIC treatment is missing for the preview month. Review earning classifications, then preview again."
+					: "ESIC setup blocks this salary preview. Review statutory settings, then preview again.");
 	}
 
 	private Task<SalaryTemplateCalculationDto> CalculatePreviewAsync(PreviewSalaryTemplateRequestDto input) =>

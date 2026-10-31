@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Templates;
+using ShikshaMitra.HR.Payroll.Statutory;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -25,6 +26,60 @@ public class SalaryTemplateComposerAppService_Tests
 		_earningRepository = GetRequiredService<IRepository<EarningComponent, Guid>>();
 		_deductionRepository = GetRequiredService<IRepository<DeductionComponent, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
+	}
+
+	[Fact]
+	public async Task Bug6534_November_treatment_does_not_satisfy_October_preview_and_same_month_correction_allows_retry()
+	{
+		using (_currentTenant.Change(Guid.NewGuid()))
+		{
+			var tenant = _currentTenant.Id;
+			var basic = await WithUnitOfWorkAsync(() => InsertEarningAsync("Synthetic custom earning"));
+			var policy = new EsiPolicy(Guid.NewGuid(), tenant, "Synthetic ESIC", "SYNTHETIC", true);
+			await WithUnitOfWorkAsync(async () =>
+			{
+				await GetRequiredService<IRepository<EsiPolicy, Guid>>().InsertAsync(policy);
+				await GetRequiredService<IRepository<StatutoryRuleVersion, Guid>>().InsertAsync(new(
+					Guid.NewGuid(), tenant, "ESI", "IN-GJ", 1, new(2026, 1, 1), null, 10, 21000m, 25000m,
+					0.75m, 3.25m, 50m, 15m, StatutoryRoundingPolicy.NextHigherRupee,
+					"https://example.invalid/synthetic", new(2026, 1, 1), esiPolicyId: policy.Id,
+					calculationSettings: new()));
+				await GetRequiredService<EsiPayrollConfigurationResolver>().EnsureDefaultAsync();
+				await GetRequiredService<IRepository<EsiPayrollConfiguration, Guid>>().InsertAsync(new(
+					Guid.NewGuid(), tenant, new(2026, 11, 1), true, null, null, "synthetic-november",
+					treatments: new System.Collections.Generic.Dictionary<Guid, StatutoryWageTreatment> { [basic.Id] = StatutoryWageTreatment.Included }));
+			});
+			var input = new PreviewSalaryTemplateRequestDto
+			{
+				SalaryBasis = "GROSS", MonthlyAmount = 10000m, EffectiveMonth = new(2026, 10, 1),
+				EsiManagementMode = "IN_PLATFORM", EsiPolicyId = policy.Id,
+				Rules = [new() { ComponentId = basic.Id, LineKind = "EARNING", SemanticType = "BASIC", FormulaType = "PERCENTAGE_OF_GROSS", Value = 100m }]
+			};
+			for (var attempt = 0; attempt < 2; attempt++)
+			{
+				var blocked = await Should.ThrowAsync<BusinessException>(() => _appService.PreviewAsync(input));
+				blocked.Code.ShouldBe("HR:Payroll:SalaryTemplateSampleBlocked");
+				blocked.Data["effectiveMonth"].ShouldBe("2026-10");
+				((System.Collections.Generic.IEnumerable<string>)blocked.Data["issues"]!).ShouldContain("ESI_WAGE_CLASSIFICATION_REQUIRED");
+				blocked.Data["message"].ToString()!.ShouldContain("ESIC treatment is missing for the preview month");
+			}
+			input.EffectiveMonth = new(2026, 11, 1);
+			var november = await _appService.PreviewAsync(input);
+			november.Calculation.EmployeeStateInsurance.CanCalculate.ShouldBeTrue();
+			november.Calculation.EmployeeStateInsurance.EmployeeContribution.ShouldBe(75m);
+			november.Calculation.EmployeeStateInsurance.EmployerContribution.ShouldBe(325m);
+			await WithUnitOfWorkAsync(async () =>
+				await GetRequiredService<IRepository<EsiPayrollConfiguration, Guid>>().InsertAsync(new(
+					Guid.NewGuid(), tenant, new(2026, 10, 1), true, null, null, "synthetic-october",
+					treatments: new System.Collections.Generic.Dictionary<Guid, StatutoryWageTreatment> { [basic.Id] = StatutoryWageTreatment.Included })));
+			input.EffectiveMonth = new(2026, 10, 1);
+			var corrected = await _appService.PreviewAsync(input);
+			corrected.PreviewToken.ShouldNotBeNullOrWhiteSpace();
+			corrected.Calculation.GrossSalary.ShouldBe(10000m);
+			corrected.Calculation.EmployeeStateInsurance.EmployeeContribution.ShouldBe(75m);
+			corrected.Calculation.EmployeeStateInsurance.EmployerContribution.ShouldBe(325m);
+			(await _appService.GetListAsync()).Items.ShouldBeEmpty();
+		}
 	}
 
 	[Fact]

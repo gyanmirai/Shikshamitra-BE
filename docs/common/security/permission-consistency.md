@@ -20,7 +20,9 @@ The existing configured administrator data-scope exception remains server-contro
 Student uses the user-approved three-action contract: View, Add (displayed as Add/Update), and supported Delete.
 All Student sensitive commands use the owning Add permission; action permission is always independent of teacher-assignment scope.
 Student has no Development authorization bypass or Academic assignment-to-action fallback.
-The canonical Student catalogue has 36 features and 106 action leaves; Overrides and Guardian Access have no Delete leaf.
+The canonical Student catalogue has 37 features and 108 action leaves; Overrides, Guardian Access, and Portal Profile Photo have no Delete leaf.
+Portal Profile Photo adds only `Students.Portal.ProfilePhoto.View` and `.Add` (displayed as Add/Update).
+Its mobile Student profile entry has no configurable staff module-visibility flag: the explicit empty navigation mapping preserves the API-only assignment rule. The web role editor groups these actions under Student List for administration only; that grouping does not grant access to a staff route or require staff Records permissions. Persisted student/guardian associations and the exact photo action govern portal access.
 Retired specialized positive grants are inert until an administrator explicitly assigns canonical access, while retired explicit user denials conservatively map to canonical actions.
 See [Student API permissions](../../modules/student/api.md#student-action-permissions) for the coordinated rollout and denial compatibility rules.
 

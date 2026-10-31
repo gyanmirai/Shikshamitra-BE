@@ -3,7 +3,7 @@ module: mobile-academics
 domain: contracts
 content_type: Reference
 status: canonical
-updated_on: 2026-10-30
+updated_on: 2026-10-31
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -14,10 +14,58 @@ All module routes require bearer authentication and a current tenant. Reads and 
 
 JSON success uses the existing `Result<T>` envelope (`success`, `data`). ABP supplies HTTP validation, authorization, business, and not-found errors; clients must treat failed HTTP responses as failures. Downloads return binary content with the filename and MIME type. Deletes return 204.
 
+## Dashboard class teacher
+
+`GET /api/mobile/v1/academics/dashboard?studentId={id}&academicYearId={id}`
+includes nullable `classTeacher: { teacherId, teacherName }` alongside the existing
+dashboard fields. `teacherId` is the employee identifier used by the web class
+teacher workspace; `teacherName` follows `Employee.EmployeeName` (first/last name).
+No employee contact, photo, payroll or other HR profile fields are returned.
+
+The dashboard resolves persisted self/guardian access and enrollment before the
+reader matches the current tenant, standard, division and medium. Only Active
+assignments for the resolved year or a null year, joined to active teaching
+employees in the same tenant, qualify. Yearless mappings remain supported because
+the validated class hierarchy establishes their year. Soft-deleted records remain
+excluded. Identical teacher mappings are deduplicated; missing/ineligible teachers
+or conflicting distinct teachers return null. Conflicts produce a server warning
+with scope identifiers; database errors propagate normally. The reader projects
+only employee IDs and name components and does not hydrate HR profiles.
+
+This is an additive response change with no new endpoint, staff permission or
+migration. Deploy it before the mobile header update. See the
+[mobile binding guide](../../../../Gyanmirai-Mobile/docs/mobile-academics.md#dashboard-class-teacher)
+for the shared header/body state.
+
+## Module reads
+
 Paged endpoints return `studentId`, `academicYearId`, `items`, `totalCount`, `pageNumber`, and `pageSize`. Pages start at 1; size defaults to 20 and is limited to 100. Supported filtering is implemented in each service, not every list: homework has search/status/tab/subject/date; chapters have search/status; exams and results have search/status; leave has status. Calendar takes numeric `year` and `month`. Dates use ISO `yyyy-MM-dd`; half-day times use `HH:mm:ss`.
 
 `GET /api/mobile/v1/academics/homework/subjects` returns `data` as an array of `{ id, name, code }`, sorted by name, for the student's published class subjects and locked elective selections, including subjects without tasks.
+
+`GET /api/mobile/v1/academics/homework/counts?studentId={id}&academicYearId={id}`
+returns `{ studentId, academicYearId, pendingHomework, calculatedAt }` inside the
+existing `Result<T>` envelope. The count combines homework and assignments eligible
+for a first submission, without date, search, subject or paging filters. It includes
+drafts, legacy pre-created unsubmitted rows and overdue first submissions still
+allowed by school policy. It excludes submitted responses even while editable,
+reviewed/excused responses, closed work and unsupported submission types.
+
+The count reader shares the list's tenant, year-specific placement, published
+division and assigned-subject predicates, and the submission command's first-write
+eligibility expression. It executes database aggregates rather than hydrating task
+bodies, attachments, teachers or submission content. `calculatedAt` is UTC; the
+server captures the publication-check clock once per read. All calls validate the
+persisted self/guardian association and academic year before counting.
+
+Dashboard `pendingHomework` uses the same definition and reader. The legacy
+`tab=pending` list retains its existing inclusion of editable submitted responses;
+its membership is distinct from the first-submission badge. No permission seeding,
+new permission or schema migration is required. Deploy the endpoint before the
+mobile count consumer.
 Homework and assignment reads include older records with a null academic-year field only within the student's validated year-specific class and division; explicit mismatching years remain excluded.
+
+Homework list `date` filtering (and `tab=today`) includes every school calendar date from `assignedDate` through `dueDate`, inclusive, using Asia/Kolkata. The publication and due days both match regardless of their time of day. Without a date/tab filter, the list remains unrestricted by this date range. Existing publication, placement, subject, and status filters still apply.
 Legacy class-subject assignment IDs are resolved to canonical subject IDs in task responses, names, codes, and subject filtering.
 Division publication and publish-time checks continue to apply to task reads.
 

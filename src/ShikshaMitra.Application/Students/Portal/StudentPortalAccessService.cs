@@ -24,10 +24,12 @@ public class StudentPortalAccessService(
 	IStudentRepository students,
 	IDataFilter dataFilter) : ApplicationService, ITransientDependency
 {
-	public async Task<IReadOnlyList<StudentPortalAccountDto>> GetMyStudentsAsync()
+	public Task<IReadOnlyList<StudentPortalAccountDto>> GetMyStudentsAsync() => GetStudentsForUserAsync(CurrentUser.Id);
+
+	internal async Task<IReadOnlyList<StudentPortalAccountDto>> GetStudentsForUserAsync(Guid? userId)
 	{
-		if (!CurrentTenant.Id.HasValue || !CurrentUser.Id.HasValue) throw new AbpAuthorizationException();
-		var user = await users.FindAsync(x => x.Id == CurrentUser.Id.Value && x.TenantId == CurrentTenant.Id);
+		if (!CurrentTenant.Id.HasValue || !userId.HasValue) throw new AbpAuthorizationException();
+		var user = await users.FindAsync(x => x.Id == userId.Value && x.TenantId == CurrentTenant.Id);
 		if (user == null || !user.IsActive || !user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email) || user.ShouldChangePasswordOnNextLogin) throw new AbpAuthorizationException();
 
 		var activeLinks = await links.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id &&

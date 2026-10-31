@@ -40,7 +40,13 @@ public class StudentRecordsAccessService(
 
 	public async Task<StudentRecordsAccess> EnsureReadableAsync(Guid studentId)
 	{
-		var student = await GetScopedStudentAsync(studentId);
+		return await EvaluateEligibilityAsync(await GetScopedStudentAsync(studentId));
+	}
+
+	// Internal: caller must first establish its own tenant and association boundary.
+	internal async Task<StudentRecordsAccess> EvaluateEligibilityAsync(Student student)
+	{
+		var studentId = student.Id;
 		var policy = (await policies.ResolveAsync(student.AcademicYearId)).Policy;
 		var caseQuery = await cases.GetQueryableAsync();
 		var currentProvisioning = await AsyncExecuter.AnyAsync(caseQuery.Where(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId &&

@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.Net;
+using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -29,6 +31,10 @@ public partial class PermissionConsistencyApi_Tests
 		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.View);
 		studentActions.ShouldNotContain("Students.Records.Overrides.Delete");
 		studentActions.ShouldNotContain("Students.Records.GuardianAccess.Delete");
+		studentActions.Length.ShouldBe(108);
+		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View);
+		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add);
+		studentActions.ShouldNotContain("Students.Portal.ProfilePhoto.Delete");
 	}
 
 	[Fact]
@@ -53,6 +59,8 @@ public partial class PermissionConsistencyApi_Tests
 	[InlineData(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	[InlineData(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add)]
 	[InlineData(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Delete)]
+	[InlineData(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View)]
+	[InlineData(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add)]
 	public async Task Student_actions_follow_exact_role_grants_user_overrides_and_revocation(string action)
 	{
 		var (role, user) = await CreateTargetAsync();
@@ -62,7 +70,9 @@ public partial class PermissionConsistencyApi_Tests
 		foreach (var other in new[] {
 			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View,
 			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add,
-			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Delete }.Where(name => name != action))
+			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Delete,
+			ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View,
+			ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add }.Where(name => name != action))
 			await AssertRealCheckerAsync(user, role, other, false);
 		await SetOverridesAsync(user, (action, "deny"));
 		await AssertRealCheckerAsync(user, role, action, false);
@@ -74,6 +84,27 @@ public partial class PermissionConsistencyApi_Tests
 		await AssertRealCheckerAsync(user, role, action, true);
 		await SetOverridesAsync(user, (action, "inherit"));
 		await AssertRealCheckerAsync(user, role, action, false);
+	}
+
+	[Fact]
+	public async Task Portal_photo_grants_require_no_staff_navigation_and_reject_unsupported_delete_atomically()
+	{
+		var (role, user) = await CreateTargetAsync();
+		var url = Url("R", role);
+		var view = ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View;
+		var add = ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add;
+		await SetAsync(url, (view, true));
+		await AssertRealCheckerAsync(user, role, view, true);
+		await AssertRealCheckerAsync(user, role, add, false);
+		await AssertRealCheckerAsync(user, role, ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add, false);
+		var grants = await ReadAsync(url);
+		grants.Single(item => item.Name == ShikshaMitraModulePermissions.Students).IsGranted.ShouldBeFalse();
+		grants.Single(item => item.Name == ShikshaMitraSubModulePermissions.Records).IsGranted.ShouldBeFalse();
+		using var rejected = await Client.PutAsJsonAsync(url, new { permissions = new[] {
+			new { name = add, isGranted = true }, new { name = "Students.Portal.ProfilePhoto.Delete", isGranted = true } } });
+		rejected.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await rejected.Content.ReadAsStringAsync());
+		await AssertRealCheckerAsync(user, role, add, false);
+		await AssertRealCheckerAsync(user, role, view, true);
 	}
 
 	[Theory]

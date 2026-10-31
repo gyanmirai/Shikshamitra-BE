@@ -1,6 +1,9 @@
 {
   "culture": "hi",
   "texts": {
+    "Students:Records:PhotoChangePending": "फ़ोटो में बदलाव की मंज़ूरी या लागू होने की प्रक्रिया पहले से लंबित है।",
+    "Permission:Students.Portal.ProfilePhoto.View": "पोर्टल पर विद्यार्थी की प्रोफ़ाइल फ़ोटो देखें",
+    "Permission:Students.Portal.ProfilePhoto.Add": "पोर्टल पर विद्यार्थी की प्रोफ़ाइल फ़ोटो जोड़ें या बदलें",
     "Students:Family:MainContactInvalid": "स्कूल के मुख्य संपर्क के लिए सहेजे गए माता-पिता या अभिभावक को चुनें। प्रवेश अंतिम करने से पहले परिवार की जानकारी जाँचें।",
     "Students.Onboarding.FinalizationNotReady": "प्रवेश अभी अंतिम नहीं किया जा सकता। इन जाँचों की समीक्षा करें: {Blockers}।",
     "Finance:ProrationPolicy:010001": "इस विद्यालय में अनुपातिक शुल्क नीति उपलब्ध नहीं है। नीति सूची रीफ़्रेश करें।",

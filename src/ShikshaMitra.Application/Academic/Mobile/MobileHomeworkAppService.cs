@@ -21,6 +21,7 @@ public class MobileHomeworkAppService(
 	IRepository<HomeworkAssignmentEntity, Guid> homework,
 	IRepository<AssignmentEntity, Guid> assignments,
 	IRepository<StudentSubmissionEntity, Guid> submissions,
+	MobileHomeworkCountReader counts,
 	MobileHomeworkSubmissionService writer,
 	IRepository<Subject, Guid> subjects,
 	MobileAttachmentStore files, IRepository<AssessmentRubric, Guid> rubrics,
@@ -38,13 +39,9 @@ public class MobileHomeworkAppService(
 		var selected = subjectIds.Keys.ToArray();
 		// ResolveAsync already validates that this class belongs to the selected academic year.
 		// Web homework creation historically left AcademicYearId null.
-		var hq = (await homework.WithDetailsAsync(x => x.DivisionSchedules)).Where(x => x.TenantId == CurrentTenant.Id &&
-			x.StandardId == p.StandardId && (!x.AcademicYearId.HasValue || x.AcademicYearId == p.Year.Id) && Enumerable.Contains(selected, x.SubjectId) &&
-			((!x.DivisionSchedules.Any() && x.DivisionId == p.DivisionId && x.IsPublished) ||
-			 x.DivisionSchedules.Any(s => s.DivisionId == p.DivisionId && s.IsPublished && (!s.PublishedAt.HasValue || s.PublishedAt <= Clock.Now))));
-		var aq = (await assignments.WithDetailsAsync(x => x.DivisionSchedules)).Where(x => x.TenantId == CurrentTenant.Id &&
-			x.StandardId == p.StandardId && (!x.AcademicYearId.HasValue || x.AcademicYearId == p.Year.Id) && Enumerable.Contains(selected, x.SubjectId) &&
-			x.DivisionSchedules.Any(s => s.DivisionId == p.DivisionId && s.IsPublished && (!s.PublishedAt.HasValue || s.PublishedAt <= Clock.Now)));
+		var now = Clock.Now;
+		var hq = MobileHomeworkVisibility.Homework(await homework.WithDetailsAsync(x => x.DivisionSchedules), p, CurrentTenant.Id, selected, now);
+		var aq = MobileHomeworkVisibility.Assignments(await assignments.WithDetailsAsync(x => x.DivisionSchedules), p, CurrentTenant.Id, selected, now);
 		var hs = await AsyncExecuter.ToListAsync(hq);
 		var ass = await AsyncExecuter.ToListAsync(aq);
 		return hs.Select(x => new Work(x.Id, subjectIds[x.SubjectId], x.Title, x.Description, "homework", x.SubmissionType,
@@ -67,6 +64,12 @@ public class MobileHomeworkAppService(
 		return assigned.Where(x => names.ContainsKey(x.SubjectId))
 			.Select(x => new MobileHomeworkSubjectDto(x.SubjectId, names[x.SubjectId], x.SubjectCode))
 			.OrderBy(x => x.Name).ThenBy(x => x.Id).ToList();
+	}
+
+	public async Task<MobileHomeworkCountsDto> GetCountsAsync(MobileAcademicInput input)
+	{
+		var placement = await context.ResolveAsync(input);
+		return await counts.ReadAsync(placement, Clock.Now);
 	}
 
 	public async Task<MobilePage<MobileHomeworkDto>> GetListAsync(MobileListInput input)
@@ -98,7 +101,7 @@ public class MobileHomeworkAppService(
 		if (input.Tab == "today" || input.Date.HasValue)
 		{
 			var date = input.Date ?? DateOnly.FromDateTime(MobileAcademicContextAppService.SchoolToday);
-			rows = rows.Where(x => SchoolDate(x.AssignedDate) == date || SchoolDate(x.DueDate) == date);
+			rows = rows.Where(x => SchoolDate(x.AssignedDate) <= date && date <= SchoolDate(x.DueDate));
 		}
 		return MobileAcademicContextAppService.Page(rows, input, p);
 	}

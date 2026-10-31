@@ -29,6 +29,8 @@
     <PackageReference Include="HtmlSanitizer" Version="9.0.892" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
     <PackageReference Include="QuestPDF" Version="2026.9.1" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="Volo.Abp.Account.Application" Version="9.0.0" />
     <PackageReference Include="Volo.Abp.Identity.Application" Version="9.0.0" />

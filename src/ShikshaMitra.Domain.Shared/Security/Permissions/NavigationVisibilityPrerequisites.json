@@ -213,6 +213,7 @@
   "Students.Notification.RegistrationManagement": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Notification"]],
   "Students.Notification.StudentRecordManagement": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Notification"]],
   "Students.Onboarding": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Onboarding"]],
+  "Students.Portal.ProfilePhoto": [],
   "Students.Records.Certificates": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Records"]],
   "Students.Records.Changes": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Records"]],
   "Students.Records.GuardianAccess": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Records"]],

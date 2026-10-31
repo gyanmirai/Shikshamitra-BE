@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.Students.Portal;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using System.Text.Json;
 using Volo.Abp;
@@ -33,7 +34,16 @@ public class StudentRecordChangeApplication(IRepository<StudentRecordChange, Gui
 	{
 		try
 		{
-			using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+			Guid? photoStudentId;
+			using (var read = UnitOfWorkManager.Begin(requiresNew: true, isTransactional: false))
+			{
+				photoStudentId = await AsyncExecuter.FirstOrDefaultAsync((await changes.GetQueryableAsync())
+					.Where(x => x.Id == id && x.TenantId == CurrentTenant.Id && x.Section == "photo").Select(x => (Guid?)x.StudentId));
+				await read.CompleteAsync();
+			}
+			using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true,
+				IsolationLevel = photoStudentId.HasValue ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable }, requiresNew: true);
+			if (photoStudentId.HasValue) await LazyServiceProvider.LazyGetRequiredService<IStudentPhotoChangeLock>().AcquireAsync(CurrentTenant.Id, photoStudentId.Value);
 			var item = await changes.GetAsync(x => x.Id == id && x.TenantId == CurrentTenant.Id);
 			if (item.Status is not ("Approved" or "Scheduled")) return;
 			var now = new DateTimeOffset(Clock.Now.ToUniversalTime());
@@ -45,12 +55,18 @@ public class StudentRecordChangeApplication(IRepository<StudentRecordChange, Gui
 				await work.CompleteAsync();
 				return;
 			}
-			var allowed = await access.EnsureWritableAsync(item.StudentId, item.Section == "placement");
-			if (StudentRecordVisibility.IsMasked(allowed.Policy, item.Section, await access.GetDatabaseRoleNamesAsync()))
-				throw new BusinessException("Students:Records:RestrictedFields");
-			var permission = item.RequiredApprovals > 0 ? ShikshaMitraSubmodulePermissions.Students.Records_Changes.Approve
-				: ShikshaMitraSubmodulePermissions.Students.Records_Changes.Create;
-			if (!await permissions.IsGrantedAsync(permission)) throw new AbpAuthorizationException();
+			var portalPhoto = item.Section == "photo" && item.GetProperty<string>("Origin") == MobileStudentPhotoAppService.PortalOrigin;
+			if (portalPhoto)
+				await LazyServiceProvider.LazyGetRequiredService<StudentPortalPhotoAuthority>().EnsureAsync(item.StudentId, true, item.RequestedBy);
+			if (!portalPhoto || item.RequiredApprovals > 0)
+			{
+				var allowed = await access.EnsureWritableAsync(item.StudentId, item.Section == "placement");
+				if (StudentRecordVisibility.IsMasked(allowed.Policy, item.Section, await access.GetDatabaseRoleNamesAsync()))
+					throw new BusinessException("Students:Records:RestrictedFields");
+				var permission = item.RequiredApprovals > 0 ? ShikshaMitraSubmodulePermissions.Students.Records_Changes.Approve
+					: ShikshaMitraSubmodulePermissions.Students.Records_Changes.Create;
+				if (!await permissions.IsGrantedAsync(permission)) throw new AbpAuthorizationException();
+			}
 			var before = await payloads.CaptureAsync(item.StudentId, item.Section, item.Section == "custom-details" ? item.BeforeJson : null);
 			if (StudentRecordPayloadService.Hash(before) != StudentRecordPayloadService.Hash(item.BeforeJson))
 				throw new BusinessException("Students:Records:StaleSnapshot");

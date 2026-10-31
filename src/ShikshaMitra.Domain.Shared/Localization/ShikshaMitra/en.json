@@ -1,6 +1,7 @@
 {
     "Culture": "en",
     "Texts": {
+    "Students:Records:PhotoChangePending": "A photo change is already awaiting approval or application.",
         "Students:Family:MainContactInvalid": "Choose a saved parent or guardian as the main school contact. Review the family details before finalizing admission.",
         "Students.Onboarding.FinalizationNotReady": "Admission cannot be finalized yet. Review these checks: {Blockers}.",
         "Admissions:JourneyResumeBlocked": "{Reason}",
@@ -855,6 +856,8 @@
         "Students:Records:LibraryClearanceRequired": "Return the outstanding library books before continuing.",
         "Students:Records:TransportClearanceRequired": "Close the current Transport route assignment before continuing.",
         "Students:Records:CorrectionAlreadyExists": "An existing correction already governs this transition.",
+        "Permission:Students.Portal.ProfilePhoto.View": "View portal student profile photos",
+        "Permission:Students.Portal.ProfilePhoto.Add": "Add or update portal student profile photos",
         "Permission:Students.Records.GuardianAccess.View": "View guardian access reviews",
         "Permission:Students.Records.GuardianAccess.Add": "Add or update guardian access reviews",
         "Permission:Students.Records.GuardianAccess.Manage": "Resolve guardian access reviews",

@@ -1,4 +1,4 @@
-﻿---
+---
 module: student
 domain: workflows
 content_type: Reference
@@ -412,3 +412,11 @@ Room-derived class capacity is configured by assigning Institute Setup rooms to 
 7. Resolve permitted Records approvals through the owning maker-checker/stage/masking predicate and Admission decisions through the active supported decision stage. Inquiry reminders and pending leave retain their owning scope and date rules.
 8. Evaluate today's registers from one batched Attendance-owned calendar, enrollment, observation and approved-leave snapshot. It shares candidature, expected-membership, credits and roster revision evaluators with individual registers. Missing, draft and submitted-needing-review rows feed both the summary and the paginated pending-register worklist; outside-year and provisional calendar states remain explicit.
 9. Follow the filtered owning workspace to review evidence or perform work under its existing action authorization. Dashboard counts do not activate, approve, send credentials or record attendance. Client refresh repeats live reads; Reporting snapshot refresh remains a separate command workflow.
+
+### Portal profile photo submission and approval
+
+A verified persisted guardian or student-self association can upload and submit when Photo View/Add are currently granted, Records eligibility allows writes, and Identity masking permits the caller. The server stores a normal Records photo draft owned by the real requester, snapshots the school Photo policy/stages and current canonical photo, and creates a normal Records change with server-only portal-origin metadata. Client input cannot select an origin, requester, approval mode or role.
+
+Portal and standalone staff photo submissions/application acquire a tenant/student PostgreSQL transaction row fence before querying active requests or the snapshot. They use ReadCommitted so a waiting request sees the prior commit. The fence is a no-op update of the Student concurrency stamp: it holds the row lock and creates an MVCC version without changing semantic fields. Admission photo review joins its existing transaction; a prior Serializable snapshot aborts safely with ConcurrencyConflict if another photo transaction committed first. Other sections retain their existing isolation and approval actor checks. The immutable approval policy decides Pending versus immediate application. The shared application path rechecks the portal requester's live account, association, View/Add grants, eligibility and masking, including when a staff reviewer applies the approved change. Revocation or stale state becomes Conflict and retains the previous official image.
+
+No delete endpoint, grant reseeding, administrator impersonation, schema migration or parallel photo store is introduced. Drafts and previously applied blobs remain available to existing Records history; this feature does not delete referenced assets. Image selection/cropping and local cache handling belong to the mobile client; the backend accepts only the constrained upload contract.

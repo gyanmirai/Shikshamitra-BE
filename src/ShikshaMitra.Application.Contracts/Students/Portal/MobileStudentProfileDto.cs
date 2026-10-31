@@ -9,6 +9,7 @@ namespace ShikshaMitra.Students.Portal;
 
 public class MobileStudentProfileDto
 {
+	public StudentPhotoInfoDto? Photo { get; set; }
 	public Guid StudentId { get; set; }
 	public MobileProfileYearDto? AcademicYear { get; set; }
 	public MobileProfileSummaryDto Summary { get; set; } = new();

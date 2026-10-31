@@ -29,6 +29,80 @@ public class SalaryTemplateComposerAppService_Tests
 	}
 
 	[Fact]
+	public async Task Bug6539_partial_classification_identifies_HRA_and_does_not_unlock_October_or_relax_CTC_reconciliation()
+	{
+		using (_currentTenant.Change(Guid.NewGuid()))
+		{
+			var tenant = _currentTenant.Id;
+			var basic = await WithUnitOfWorkAsync(() => InsertEarningAsync("Synthetic Basic"));
+			var hra = await WithUnitOfWorkAsync(() => InsertEarningAsync("Synthetic HRA"));
+			var policy = new EsiPolicy(Guid.NewGuid(), tenant, "Synthetic ESIC", "SYNTHETIC", true);
+			await WithUnitOfWorkAsync(async () =>
+			{
+				await GetRequiredService<IRepository<EsiPolicy, Guid>>().InsertAsync(policy);
+				await GetRequiredService<IRepository<StatutoryRuleVersion, Guid>>().InsertAsync(new(
+					Guid.NewGuid(), tenant, "ESI", "IN-GJ", 1, new(2026, 1, 1), null, 10, 21000m, 25000m,
+					0.75m, 3.25m, 50m, 15m, StatutoryRoundingPolicy.NextHigherRupee,
+					"https://example.invalid/synthetic", new(2026, 1, 1), esiPolicyId: policy.Id, calculationSettings: new()));
+				await GetRequiredService<EsiPayrollConfigurationResolver>().EnsureDefaultAsync();
+				await GetRequiredService<IRepository<EsiPayrollConfiguration, Guid>>().InsertAsync(new(
+					Guid.NewGuid(), tenant, new(2026, 11, 1), true, null, null, "synthetic-november-complete",
+					treatments: new System.Collections.Generic.Dictionary<Guid, StatutoryWageTreatment> { [basic.Id] = StatutoryWageTreatment.Included, [hra.Id] = StatutoryWageTreatment.Included }));
+			});
+			var input = new PreviewSalaryTemplateRequestDto
+			{
+				SalaryBasis = "GROSS", MonthlyAmount = 10000m, EffectiveMonth = new(2026, 10, 1),
+				EsiManagementMode = "IN_PLATFORM", EsiPolicyId = policy.Id,
+				Rules = [new() { ComponentId = basic.Id, LineKind = "EARNING", SemanticType = "BASIC", FormulaType = "FIXED_AMOUNT", Value = 6000m },
+					new() { ComponentId = hra.Id, LineKind = "EARNING", SemanticType = "ORDINARY", FormulaType = "FIXED_AMOUNT", Value = 4000m, DisplayOrder = 1 }]
+			};
+			var both = await Should.ThrowAsync<BusinessException>(() => _appService.PreviewAsync(input));
+			both.Code.ShouldBe("HR:Payroll:SalaryTemplateSampleBlocked");
+			using (var data = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(both.Data["unclassifiedEarnings"])))
+				data.RootElement.GetArrayLength().ShouldBe(2);
+			await ClassifyAsync([basic.Id]);
+			for (var attempt = 0; attempt < 2; attempt++)
+			{
+				var partial = await Should.ThrowAsync<BusinessException>(() => _appService.PreviewAsync(input));
+				partial.Code.ShouldBe("HR:Payroll:SalaryTemplateSampleBlocked");
+				partial.Data["effectiveMonth"].ShouldBe("2026-10");
+				using var data = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(partial.Data["unclassifiedEarnings"]));
+				var earning = data.RootElement.EnumerateArray().ShouldHaveSingleItem();
+				earning.GetProperty("componentId").GetGuid().ShouldBe(hra.Id);
+				earning.GetProperty("name").GetString().ShouldBe("Synthetic HRA");
+				earning.EnumerateObject().Count().ShouldBe(2); // No salary amounts or raw diagnostic text.
+			}
+			input.EffectiveMonth = new(2026, 11, 1);
+			(await _appService.PreviewAsync(input)).Calculation.EmployeeStateInsurance.CanCalculate.ShouldBeTrue();
+			input.EffectiveMonth = new(2026, 10, 1);
+			await ClassifyAsync([hra.Id]);
+			var complete = await _appService.PreviewAsync(input);
+			complete.Calculation.EmployeeStateInsurance.UnclassifiedEarnings.ShouldBeEmpty();
+			complete.Calculation.GrossSalary.ShouldBe(10000m);
+			complete.Calculation.EmployeeStateInsurance.EmployeeContribution.ShouldBe(75m);
+			complete.Calculation.EmployerCost.ShouldBe(10325m);
+			input.SalaryBasis = "EMPLOYER_COST";
+			input.MonthlyAmount = 15000m;
+			(await Should.ThrowAsync<BusinessException>(() => _appService.PreviewAsync(input))).Code.ShouldBe(HRErrorCodes.CompensationTargetNotSolvable);
+			(await _appService.GetListAsync()).Items.ShouldBeEmpty();
+
+			async Task ClassifyAsync(Guid[] ids) => await WithUnitOfWorkAsync(async () =>
+			{
+				var current = (await GetRequiredService<EsiPayrollConfigurationResolver>().ResolveAsync(new(2026, 10, 1)))!;
+				var treatments = current.GetTreatments();
+				foreach (var id in ids) treatments[id] = StatutoryWageTreatment.Included;
+				if (current.EffectiveMonth == new DateTime(2026, 10, 1))
+				{
+					current.Cancel("Synthetic same-month correction");
+					await GetRequiredService<IRepository<EsiPayrollConfiguration, Guid>>().UpdateAsync(current, autoSave: true);
+				}
+				await GetRequiredService<IRepository<EsiPayrollConfiguration, Guid>>().InsertAsync(new(
+					Guid.NewGuid(), tenant, new(2026, 10, 1), true, null, null, Guid.NewGuid().ToString(), treatments: treatments));
+			});
+		}
+	}
+
+	[Fact]
 	public async Task Bug6534_November_treatment_does_not_satisfy_October_preview_and_same_month_correction_allows_retry()
 	{
 		using (_currentTenant.Change(Guid.NewGuid()))

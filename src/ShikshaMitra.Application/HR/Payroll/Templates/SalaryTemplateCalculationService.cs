@@ -178,6 +178,8 @@ public class SalaryTemplateCalculationService(
 				GovernmentContribution = esiResult?.GovernmentContribution ?? 0m,
 				RuleId = esiPolicy?.Rule.Id,
 				RuleVersion = esiPolicy?.Rule.Version,
+				UnclassifiedEarnings = esiResult?.UnclassifiedEarnings.Select(x => new SalaryTemplateUnclassifiedEarningDto
+					{ ComponentId = x.ComponentId, Name = x.Name }).ToList() ?? [],
 				IssueCodes = issueCodes.Concat(esiResolution.Warnings).Distinct().ToList()
 			},
 			Earnings = evaluation.Earnings,

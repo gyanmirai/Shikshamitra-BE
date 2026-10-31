@@ -14,6 +14,30 @@ namespace ShikshaMitra.HR.Payroll;
 public class EsiStatutoryCalculator_Tests
 {
 	[Theory]
+	[InlineData("CLASSIFIED_EARNINGS", "GROSS", 10000, true)]
+	[InlineData("GROSS", "CLASSIFIED_EARNINGS", 10000, true)]
+	[InlineData("COMPONENT", "CLASSIFIED_EARNINGS", 10000, true)]
+	[InlineData("GROSS", "GROSS", 10000, false)]
+	[InlineData("GROSS", "CLASSIFIED_EARNINGS", 30000, false)]
+	public void Missing_classification_metadata_names_only_the_earnings_required_by_the_selected_bases(
+		string eligibility, string calculation, decimal gross, bool blocked)
+	{
+		var basic = Guid.NewGuid();
+		var hra = Guid.NewGuid();
+		var result = EsiStatutoryCalculator.Calculate(new(2026, 10, 1), BuildRule(), BuildActiveEstablishment(), null,
+			[new(basic, "Basic", gross / 2, StatutoryWageTreatment.Included),
+			 new(hra, "HRA", gross / 2, StatutoryWageTreatment.Unclassified)],
+			calculationSettings: new() { EligibilityBasis = eligibility, CalculationBasis = calculation, EligibilityComponentId = eligibility == "COMPONENT" ? basic : null });
+		result.CanCalculate.ShouldBe(!blocked);
+		if (blocked)
+		{
+			result.IssueCodes.ShouldContain(EsiStatutoryCalculator.WageClassificationIssue);
+			result.UnclassifiedEarnings.ShouldBe([new UnclassifiedEsiEarning(hra, "HRA")]);
+		}
+		else result.UnclassifiedEarnings.ShouldBeEmpty();
+	}
+
+	[Theory]
 	[InlineData(20000, 5000, 20000, 150, 650, "WITHIN_WAGE_CEILING")]
 	[InlineData(20000, 24000, 22000, 165, 715, "WITHIN_WAGE_CEILING")]
 	[InlineData(30000, 5000, 30000, 0, 0, "ABOVE_WAGE_CEILING")]

@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-29
+updated_on: 2026-10-31
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -267,6 +267,7 @@ It is employee-independent and does not persist templates, versions, employee st
 It returns `isSample`, `calculation`, `previewToken`, and `expiresAt`.
 An unreachable monthly target returns HTTP 400 with `HR:Payroll:CompensationTargetNotSolvable`, an actionable explanation, and `data.field=monthlyAmount` / `data.relatedField=rules`.
 An uncalculable configured ESIC sample returns HTTP 400 with `HR:Payroll:SalaryTemplateSampleBlocked`, `data.issues`, and `data.effectiveMonth` (`yyyy-MM`). Missing wage classification receives concise earning-treatment guidance. A treatment effective in November does not satisfy an October sample; the classification and statutory validation remain mandatory, and a successful preview still does not persist a template.
+`data.unclassifiedEarnings` identifies the unresolved earnings as `{ componentId, name }`, without salary amounts or raw diagnostics. The calculator supplies only classifications required by the selected eligibility/contribution bases. Classifying Basic does not classify HRA; every fresh preview rechecks the remaining earnings and effective month. The calculation DTO also exposes `employeeStateInsurance.unclassifiedEarnings`. These additive diagnostics do not change eligibility, contributions, preview proof, or CTC reconciliation.
 When fixed earnings alone exceed an employer-cost target, safe numeric data includes `target`, `fixedEarnings`, and `reason=FIXED_EARNINGS_EXCEED_EMPLOYER_COST`.
 Employer cost includes gross plus employer contributions; employee deductions cannot make an over-budget template valid. A fixed-only template needs a target matching its actual employer cost, not an arbitrary higher amount.
 Each create/update carries `previewToken`, `sampleMonthlyAmount`, `sampleEffectiveMonth`, an idempotency key, expected active version, and concurrency stamp.

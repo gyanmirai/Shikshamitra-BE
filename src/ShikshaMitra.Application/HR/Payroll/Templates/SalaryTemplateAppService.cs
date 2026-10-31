@@ -342,6 +342,8 @@ public class SalaryTemplateAppService(
 		if (result.EmployeeStateInsurance.IsConfigured && !result.EmployeeStateInsurance.CanCalculate)
 			throw new BusinessException("HR:Payroll:SalaryTemplateSampleBlocked")
 				.WithData("issues", result.EmployeeStateInsurance.IssueCodes)
+				.WithData("unclassifiedEarnings", result.EmployeeStateInsurance.UnclassifiedEarnings
+					.Select(x => new { componentId = x.ComponentId, name = x.Name }).ToArray())
 				.WithData("effectiveMonth", result.EffectiveMonth.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture))
 				.WithData("message", result.EmployeeStateInsurance.IssueCodes.Contains(EsiStatutoryCalculator.WageClassificationIssue)
 					? "ESIC treatment is missing for the preview month. Review earning classifications, then preview again."

@@ -22,7 +22,10 @@ public partial class ReceiptBookAppService
 
 		query = query.Where(x => x.AcademicYearId == academicYearId);
 		if (!string.IsNullOrWhiteSpace(search))
-			query = query.Where(x => x.Name.Contains(search));
+		{
+			var normalizedSearch = search.Trim().ToLowerInvariant();
+			query = query.Where(x => x.Name.ToLower().Contains(normalizedSearch));
+		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		if (totalCount == 0)

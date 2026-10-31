@@ -29,8 +29,12 @@ public partial class AccountsActivityAppService
         var year = await academicYears.GetAsync(academicYearId);
         var detail = new AccountsActivityDetailDto { Id = id, AcademicYearId = academicYearId, AcademicYearName = year.Name, CanOpenSource = true };
         var transaction = await transactionRepository.FindAsync(id);
+        var recognizedTransactions = AccountsRecognitionQuery.ExcludeNone(await transactionRepository.GetQueryableAsync(),
+            await categoryRepository.GetQueryableAsync());
         if (transaction != null)
         {
+            if (!await AsyncExecuter.AnyAsync(recognizedTransactions.Where(t => t.Id == id)))
+                throw new AbpAuthorizationException();
             var expectedSource = transaction.IsAutomatic ? (income ? "collection" : "refund") : (income ? "income" : "expense");
             if (transaction.TenantId != CurrentTenant.Id || transaction.AcademicYearId != academicYearId || !transaction.IsConfirmed ||
                 transaction.TransactionType != (income ? TransactionType.Income : TransactionType.Expense) || source != expectedSource)
@@ -62,9 +66,9 @@ public partial class AccountsActivityAppService
             }
             else
             {
-                var all = await transactionRepository.GetListAsync(t => t.SourceId == transaction.SourceId && t.IsConfirmed &&
+                var all = await AsyncExecuter.ToListAsync(recognizedTransactions.Where(t => t.SourceId == transaction.SourceId && t.IsConfirmed &&
                     t.AcademicYearId == academicYearId && t.StudentId == transaction.StudentId &&
-                    t.FinanceFeeAccountId == transaction.FinanceFeeAccountId && t.TransactionType == transaction.TransactionType);
+                    t.FinanceFeeAccountId == transaction.FinanceFeeAccountId && t.TransactionType == transaction.TransactionType));
                 detail.CategoryAmounts = all.Select(t => new AccountsCategoryAmountDto(t.CategoryNameSnapshot ?? "Unavailable",
                     t.Amount, t.BankLabelSnapshot)).ToList();
             }
@@ -93,6 +97,10 @@ public partial class AccountsActivityAppService
         {
             var entry = await refundEntryRepository.FindAsync(id);
             var refund = await refundRepository.GetAsync(entry?.RefundRequestId ?? id);
+            var recognizedRefunds = AccountsRecognitionQuery.ExcludeNone(await refundRepository.GetQueryableAsync(),
+                await categoryRepository.GetQueryableAsync());
+            if (!await AsyncExecuter.AnyAsync(recognizedRefunds.Where(r => r.Id == refund.Id)))
+                throw new AbpAuthorizationException();
             if (entry == null && refund.Status is FeeRefundStatus.Processed or FeeRefundStatus.Reversed or FeeRefundStatus.Failed)
                 entry = (await refundEntryRepository.GetListAsync(x => x.RefundRequestId == refund.Id)).OrderByDescending(x => x.PostedAt).FirstOrDefault();
             if (refund.TenantId != CurrentTenant.Id || refund.AcademicYearId != academicYearId ||

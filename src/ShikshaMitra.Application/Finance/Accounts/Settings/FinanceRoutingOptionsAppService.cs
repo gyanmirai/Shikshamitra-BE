@@ -40,9 +40,7 @@ public class FinanceRoutingOptionsAppService(IRepository<TransactionCategory, Gu
    var bankRows = operation == "cash-expense" ? [] : await banks.GetListAsync(x => x.TenantId == CurrentTenant.Id &&
      x.AcademicYearId == academicYearId && x.IsActive);
    // Evaluate DateTimeOffset windows after tenant/year filtering for provider parity.
-   var includeNone = operation is "fee-head" or "refund-policy";
-   categoryRows.RemoveAll(x => x.EffectiveFrom > instant || x.EffectiveTo < instant ||
-     (!includeNone && x.IsSystemCategory));
+   categoryRows.RemoveAll(x => x.EffectiveFrom > instant || x.EffectiveTo < instant);
    bankRows.RemoveAll(x => x.EffectiveFrom > instant || x.EffectiveTo < instant);
    var income = operation is "income-entry" or "collection" or "collection-policy" or "fee-head" or "charge-category";
    var expense = operation is "expense-entry" or "cash-expense" or "refund" or "refund-policy";

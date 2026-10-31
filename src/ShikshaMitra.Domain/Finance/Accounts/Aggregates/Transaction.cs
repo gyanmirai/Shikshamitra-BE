@@ -165,7 +165,8 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		decimal amount,
 		int paymentMethod,
 		DateTime paymentDate,
-		string? notes)
+		string? notes,
+		string? categoryNameSnapshot = null)
 	{
 		if (IsAutomatic) throw new BusinessException("Finance:AutomaticEntryImmutable");
 		if (CashCollectionId.HasValue) throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.Immutable);
@@ -176,6 +177,7 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PaymentMethod = paymentMethod;
 		PaymentDate = paymentDate;
 		Notes = notes;
+		if (categoryNameSnapshot != null) CategoryNameSnapshot = categoryNameSnapshot;
 
 		if (categoryTags != null)
 			SetCategoryTags(categoryTags);

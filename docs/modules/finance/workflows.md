@@ -3,7 +3,7 @@ module: finance
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-10-31
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -20,6 +20,35 @@ for the request, compatibility, permission, rounding, error and receipt-evidence
 TL;DR: use this page to understand how Finance changes affect due rows, approvals, receipts, and reports.
 
 ## Core workflows
+
+### Admission to Finance assignment
+
+A confirmed admission selection is intent; a prepared Finance account contains priced dues;
+a student/year assignment is the completed handoff. Reading context never creates these records.
+
+New preview and assignment require at least one included fee head. An optional-only structure
+with nothing selected is invalid and creates no assignment or dues. An explicitly included variable
+fee of zero remains valid with its required reason; the guard checks selection, not payable total.
+
+| State | Behavior |
+|---|---|
+| Unassigned | Offer published structures matching the scoped active student |
+| Selected | Carry the confirmed structure, optional selections, verified joining date and Finance default proration into preview |
+| Prepared | Review the saved snapshot/current balances; explicit assignment links existing dues without regenerating them |
+| Assigned | View the existing student/year assignment; reject another new preview |
+| NeedsAttention | Resolve ambiguous/mismatched admission facts or prepared evidence before assignment |
+
+Admission and Finance use the same calculation engine. Client Registration dates are assertions
+checked against the source; AcademicYear input cannot bypass an applicable admission rule.
+One-time/full-charge heads retain their treatment, service sources and authorized billing overrides
+remain explicit, and payment-term due dates are unchanged.
+
+Direct Finance assignment for an admission-linked student also binds the unique admission account.
+The existing tenant/application/year account key and tenant/student/year assignment key prevent
+duplicate creation across both entry points. New accounts are flushed inside the transaction before
+reciprocal assignment links. Prepared handoff preserves due IDs, payments, receipts and policy versions;
+it never reprices from a newer default. Context uses Structure Assign View, while preview/commit use
+Structure Assign Add and existing scope checks. Used joining dates retain the established correction flow.
 
 ### Registration joining date and withdrawal proration
 

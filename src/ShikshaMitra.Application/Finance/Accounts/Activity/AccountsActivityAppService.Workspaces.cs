@@ -68,7 +68,9 @@ public partial class AccountsActivityAppService
             await transactionRepository.GetQueryableAsync(), input.AcademicYearId);
         var categories = await categoryRepository.GetQueryableAsync();
         var type = income ? TransactionType.Income : TransactionType.Expense;
+        // Suppress receipt/refund fallbacks using ALL routing evidence, including None.
         var automatic = transactions.Where(x => x.SourceKey != null);
+        transactions = AccountsRecognitionQuery.ExcludeNone(transactions, categories);
         Guid[]? partyFilterIds = null;
         Guid[] partySearchIds = [];
         if (tableQuery.Filters.Any(f => f.Column == "counterparty") || !string.IsNullOrWhiteSpace(input.Search))
@@ -142,7 +144,7 @@ public partial class AccountsActivityAppService
         }
         else
         {
-            var refunds = await refundRepository.GetQueryableAsync();
+            var refunds = AccountsRecognitionQuery.ExcludeNone(await refundRepository.GetQueryableAsync(), categories);
             var entries = await refundEntryRepository.GetQueryableAsync();
             // Approval only reserves refundable money. Expenses begin with paid evidence.
             // Historical subledger timestamps are DateTimeOffset; materialize only the

@@ -12,6 +12,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.Students;
@@ -60,6 +61,9 @@ public partial class StudentFeeStructureAppService(
 	public async Task<StudentFeeAssignmentPreviewDto> PreviewAsync(AssignStudentFeeStructureDto input)
 	{
 		using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
+		await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, false);
+		if (await studentFeeStructureRepository.AnyAsync(a => a.StudentId == input.StudentId && a.AcademicYearId == input.AcademicYearId))
+			throw new BusinessException(AssignmentErrorCodes.AlreadyAssigned);
 		var prepared = await PrepareAsync(input);
 		var expires = Clock.Now.AddMinutes(20);
 		prepared.Preview.PreviewExpiresAt = new DateTimeOffset(expires).ToUniversalTime();
@@ -127,15 +131,31 @@ public partial class StudentFeeStructureAppService(
 		var assignment = new StudentFeeStructure(id, CurrentTenant.Id, input.StudentId, structure.Id, input.AcademicYearId,
 			concessionPolicy?.PolicyId, concessionPolicy?.VersionId, concessionSnapshot?.FeeHeadScope ?? ConcessionFeeHeadScope.EntireFeeStructure, concessionSnapshot?.ApplicableFeeHeadIds ?? [],
 			policies["collection"].PolicyId, policies["collection"].VersionId, policies.GetValueOrDefault("refund")?.PolicyId, policies.GetValueOrDefault("refund")?.VersionId,
-			policies.GetValueOrDefault("proration")?.PolicyId, policies.GetValueOrDefault("proration")?.VersionId, prepared.Preview.ChargeStartDate, prepared.Preview.ChargeEndDate);
+			policies.GetValueOrDefault("proration")?.PolicyId, policies.GetValueOrDefault("proration")?.VersionId, prepared.Preview.ChargeStartDate, prepared.Preview.ChargeEndDate,
+			financeFeeAccountId: prepared.Account?.Id);
+		if (prepared.Account != null)
+			await LazyServiceProvider.LazyGetRequiredService<AdmissionFeeCollectionAppService>()
+				.LinkForAssignmentAsync(prepared.AdmissionSource!, prepared.Account);
 		for (var i = 0; i < prepared.Dues.Count; i++)
 		{
 			prepared.Dues[i].BindAssignment(id);
 			prepared.Preview.Lines[i].DueFeeId = prepared.Dues[i].Id;
 		}
 		assignment.CaptureAssignment(commandFingerprint, JsonSerializer.Serialize(prepared.Preview));
+		if (prepared.Account != null && !prepared.ReuseDues)
+			prepared.Account.CaptureAssignment(structure.Id, prepared.Preview.RevisionNumber, JsonSerializer.Serialize(prepared.Preview), commandFingerprint);
+		if (prepared.NewAccount)
+			// Flush the account before adding the reciprocal assignment link. Both
+			// writes remain inside this transaction, without a circular INSERT graph.
+			await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().InsertAsync(prepared.Account!, true);
 		await studentFeeStructureRepository.InsertAsync(assignment, autoSave: false);
-		await dueFeeRepository.InsertManyAsync(prepared.Dues, autoSave: false);
+		if (!prepared.ReuseDues) await dueFeeRepository.InsertManyAsync(prepared.Dues, autoSave: false);
+		else await dueFeeRepository.UpdateManyAsync(prepared.Dues, autoSave: false);
+		if (prepared.Account != null)
+		{
+			prepared.Account.BindStudentAssignment(id);
+			await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().UpdateAsync(prepared.Account, false);
+		}
 		var student = await studentRepository.GetForFeeAssignmentAsync(input.StudentId)
 			?? throw new BusinessException(AssignmentErrorCodes.EnrollmentRequired);
 		if (student.AcademicYearId == input.AcademicYearId) student.AssignFeeStructure(structure.Id);
@@ -189,5 +209,6 @@ public partial class StudentFeeStructureAppService(
 		input.ChargePeriodSource, input.ChargePeriodSourceReferenceId, input.ChargePeriodOverrideReason, input.OverrideReason,
 		Policies = input.Policies.OrderBy(x => x.Family).ToArray(), input.PolicyOverrideReason });
 	private sealed record PreviewAssertion(Guid? TenantId, Guid? UserId, string Command, string Prepared, DateTime Expires);
-	private sealed record PreparedAssignment(FeeStructure Structure, StudentFeeAssignmentPreviewDto Preview, List<DueFee> Dues, string Fingerprint);
+	private sealed record PreparedAssignment(FeeStructure Structure, StudentFeeAssignmentPreviewDto Preview, List<DueFee> Dues, string Fingerprint,
+		FinanceFeeAccount? Account = null, AdmissionFinanceContext? AdmissionSource = null, bool ReuseDues = false, bool NewAccount = false);
 }

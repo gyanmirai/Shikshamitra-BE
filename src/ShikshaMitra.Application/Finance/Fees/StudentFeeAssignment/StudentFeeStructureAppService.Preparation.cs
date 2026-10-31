@@ -14,8 +14,6 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 public partial class StudentFeeStructureAppService
 {
-	private Task<PreparedAssignment> PrepareAsync(AssignStudentFeeStructureDto input) => PrepareForContextAsync(input, null);
-
 	private async Task<PreparedAssignment> PrepareForContextAsync(AssignStudentFeeStructureDto input, AdmissionAssignmentContext? admission)
 	{
 		ValidateInput(input, admission != null);
@@ -32,7 +30,7 @@ public partial class StudentFeeStructureAppService
 		var structure = await feeStructureRepository.GetAsync(input.StandardFeeStructureId);
 		var metadata = await feeStructureMetadataRepository.GetAsync(structure.FeeStructureMetadataId);
 		if (!structure.IsLocked || structure.StandardId != standardId || metadata.AcademicYearId != input.AcademicYearId ||
-			(admission != null && (metadata.AcademicBoardId != admission.BoardId || metadata.AcademicMediumId != admission.MediumId || structure.RevisionNumber != admission.StructureRevision)))
+			(admission != null && (metadata.AcademicBoardId != admission.BoardId || metadata.AcademicMediumId != admission.MediumId || admission.StructureRevision.HasValue && structure.RevisionNumber != admission.StructureRevision)))
 			throw new BusinessException(AssignmentErrorCodes.StructureMismatch);
 		var year = await academicYearRepository.GetAsync(input.AcademicYearId);
 		var details = (await feeStructureDetailRepository.GetListAsync(x => x.FeeStructureId == structure.Id)).OrderBy(x => x.Id).ToList();
@@ -41,6 +39,9 @@ public partial class StudentFeeStructureAppService
 			input.FeeHeadDetails.Any(x => !details.Any(d => d.FeeHeadId == x.FeeHeadId && !d.IsVariable && (!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId)))) ||
 			input.ServicePeriods.Any(x => !details.Any(d => d.FeeHeadId == x.FeeHeadId && (!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId)))))
 			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+		if (!details.Any(d => !d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId)))
+			throw new BusinessException(AssignmentErrorCodes.InvalidInput)
+				.WithData("Reason", "Select at least one fee before assigning.");
 		if (input.VariableFeeHeads.Any(x => !details.Any(d => d.FeeHeadId == x.FeeHeadId && d.IsVariable &&
                 (!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId)))))
             throw new BusinessException(AssignmentErrorCodes.InvalidInput);
@@ -70,7 +71,7 @@ public partial class StudentFeeStructureAppService
 		var headIds = details.Select(d => d.FeeHeadId).ToList();
 		var headRecords = (await feeHeadRepository.GetListAsync(h => headIds.Contains(h.Id))).ToDictionary(h => h.Id);
 		var applicableProration = prorationRules?.Rules.Any(r => details.Any(d => d.FeeHeadId == r.FeeHeadId && !d.IsOneTime &&
-			(!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId))) && (r.ApplyOnAdmission || r.ApplyOnEarlyWithdrawal)) == true;
+			(!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId))) && r.ApplyOnAdmission && r.RuleType != ProrationRuleType.FullCharge) == true;
 		if (admission != null && applicableProration && !admission.JoiningDate.HasValue)
 			throw new BusinessException(ProrationPolicyErrorCodes.JoiningDateRequired);
 		if (admission?.JoiningDate?.Date > year.EndDate.Date)
@@ -78,6 +79,7 @@ public partial class StudentFeeStructureAppService
 		var admissionStart = admission?.JoiningDate?.Date > year.StartDate.Date ? admission.JoiningDate.Value.Date : year.StartDate.Date;
 		var names = headRecords.ToDictionary(h => h.Key, h => h.Value.Name);
 		var preview = new StudentFeeAssignmentPreviewDto {
+			AssignmentSource = admission == null ? "Finance" : "Admission", ApplicationId = admission?.ApplicationId,
 			StudentId = studentId, AcademicYearId = year.Id, EnrollmentId = enrollment?.Id,
 			StructureId = structure.Id, StructureName = structure.Name, RevisionNumber = structure.RevisionNumber,
 			RegistrationJoiningDate = admission?.JoiningDate,
@@ -128,11 +130,23 @@ public partial class StudentFeeStructureAppService
 					StartDate = input.ChargeStartDate, EndDate = input.ChargeEndDate, SourceReferenceId = input.ChargePeriodSourceReferenceId, Reason = input.ChargePeriodOverrideReason };
 			if (requested.Source == "TransportService" && (detail.IsVariable || headRecords[detail.FeeHeadId].Module != ShikshaMitra.Finance.Fees.Settings.FeeHeadModule.Transport))
 				throw new BusinessException(AssignmentErrorCodes.InvalidInput);
-			if (admission != null && requested.Source != "AcademicYear") throw new BusinessException(AssignmentErrorCodes.SourceUnavailable);
-			var fact = await ResolveServiceAsync(input.StudentId, requested, year);
+			if (admission != null && !admission.IsFinanceAssignment && requested.Source != "AcademicYear") throw new BusinessException(AssignmentErrorCodes.SourceUnavailable);
 			var admissionRule = prorationRules?.Rules.FirstOrDefault(r => r.FeeHeadId == detail.FeeHeadId);
-			if (admission != null && !detail.IsOneTime && admissionRule is { ApplyOnAdmission: true } && admissionRule.RuleType != ProrationRuleType.FullCharge) fact = (new AssignmentServicePeriodDto { FeeHeadId = detail.FeeHeadId,
-				Source = "Registration", StartDate = DateTime.SpecifyKind(admissionStart, DateTimeKind.Utc), EndDate = DateTime.SpecifyKind(year.EndDate.Date, DateTimeKind.Utc) }, "Verified registration joining date", admission.SourceRevision);
+			var useAdmission = admission != null && !detail.IsOneTime && admissionRule is { ApplyOnAdmission: true } && admissionRule.RuleType != ProrationRuleType.FullCharge;
+			(AssignmentServicePeriodDto Period, string Verification, string? Revision) fact;
+			if (useAdmission && requested.Source is "AcademicYear" or "Registration")
+			{
+				if (requested.Source == "AcademicYear") await ResolveServiceAsync(input.StudentId, requested, year);
+				if (requested.Source == "Registration" &&
+					(requested.SourceReferenceId != admission!.ApplicationId ||
+					 requested.StartDate.HasValue && requested.StartDate.Value.Date != admissionStart ||
+					 requested.EndDate.HasValue && requested.EndDate.Value.Date != year.EndDate.Date))
+					throw new BusinessException(AssignmentErrorCodes.SourceUnavailable);
+				fact = (new AssignmentServicePeriodDto { FeeHeadId = detail.FeeHeadId, Source = "Registration", SourceReferenceId = admission!.ApplicationId,
+					StartDate = DateTime.SpecifyKind(admissionStart, DateTimeKind.Utc), EndDate = DateTime.SpecifyKind(year.EndDate.Date, DateTimeKind.Utc) },
+					"Verified admission joining date", admission.SourceRevision);
+			}
+			else fact = await ResolveServiceAsync(input.StudentId, requested, year);
 			head.ServicePeriod = fact.Period;
 			head.Verification = detail.IsVariable ? "Student amount entered during assignment; " + fact.Verification : fact.Verification;
 			head.SourceRevision = fact.Revision;

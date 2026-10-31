@@ -84,9 +84,11 @@ public partial class StudentFeeStructureAppService
 				(x.RollNumber.HasValue && x.RollNumber.Value.ToString().Contains(search)));
 		}
 		rows = tableQuery.Apply(rows, AssignmentFields);
-		return new PagedResultDto<AssignmentStudentDto>(await AsyncExecuter.CountAsync(rows),
-			await AsyncExecuter.ToListAsync(tableQuery.Order(rows, AssignmentFields, "studentName", false, x => x.EnrollmentId)
-				.Skip(input.SkipCount).Take(input.MaxResultCount)));
+		var count = await AsyncExecuter.CountAsync(rows);
+		var page = await AsyncExecuter.ToListAsync(tableQuery.Order(rows, AssignmentFields, "studentName", false, x => x.EnrollmentId)
+			.Skip(input.SkipCount).Take(input.MaxResultCount));
+		await PopulateAssignmentStatesAsync(page, input.AcademicYearId);
+		return new PagedResultDto<AssignmentStudentDto>(count, page);
 	}
 
 	[Authorize(AssignPermission)]
@@ -174,6 +176,7 @@ public partial class StudentFeeStructureAppService
 			line.OutstandingAmount = due.OutstandingAmount;
 		}
 		snapshot.OriginalPolicies = snapshot.Policies.ToList();
+		if (assignment.FinanceFeeAccountId.HasValue) snapshot.AssignmentSource = "Admission";
 		var currentVersions = new[] { assignment.ConcessionPolicyVersionId, assignment.CollectionPolicyVersionId, assignment.RefundPolicyVersionId, assignment.ProrationPolicyVersionId }
 			.Where(x => x.HasValue).Select(x => x!.Value).ToList();
 		var currentPolicies = await financePolicyVersionRepository.GetListAsync(x => currentVersions.Contains(x.Id));

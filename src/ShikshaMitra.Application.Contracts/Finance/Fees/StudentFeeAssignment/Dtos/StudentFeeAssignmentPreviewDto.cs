@@ -6,6 +6,8 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 
 public class StudentFeeAssignmentPreviewDto
 {
+	public string AssignmentSource { get; set; } = "Finance";
+	public Guid? ApplicationId { get; set; }
 	public string? PolicyOverrideReason { get; set; }
 	public List<AssignmentPolicyDto> OriginalPolicies { get; set; } = [];
 	public string? OverrideReason { get; set; }

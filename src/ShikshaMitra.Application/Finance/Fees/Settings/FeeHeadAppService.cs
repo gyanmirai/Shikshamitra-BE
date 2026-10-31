@@ -89,7 +89,8 @@ public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            query = query.Where(x => x.Name.Contains(search));
+            var normalizedSearch = search.Trim().ToLowerInvariant();
+            query = query.Where(x => x.Name.ToLower().Contains(normalizedSearch));
         }
 
         var totalCount = await feeHeadRepository.AsyncExecuter.CountAsync(query);

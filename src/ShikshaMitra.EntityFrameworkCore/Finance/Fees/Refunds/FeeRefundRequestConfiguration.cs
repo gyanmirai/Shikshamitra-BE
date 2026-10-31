@@ -59,6 +59,8 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
             lb.ToTable("Finance_FeeRefundLines", ShikshaMitraConsts.DbSchema);
             lb.WithOwner().HasForeignKey("FeeRefundRequestId");
             lb.HasKey(l => l.Id);
+            // The domain assigns replacement line IDs; EF must insert these new owned rows.
+            lb.Property(l => l.Id).ValueGeneratedNever();
             lb.Property(l => l.FeeHeadName).HasMaxLength(200);
             lb.Property(l => l.InstallmentLabel).HasMaxLength(200);
             lb.Property(l => l.SettledPaidAmount).HasColumnType("numeric(18,2)");

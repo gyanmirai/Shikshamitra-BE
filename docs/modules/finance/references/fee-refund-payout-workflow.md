@@ -3,7 +3,7 @@ module: finance
 domain: accounts
 content_type: Reference
 status: active
-updated_on: 2026-10-30
+updated_on: 2026-10-31
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -27,6 +27,14 @@ Recording payment writes one immutable entry to `Finance_FeeRefundAccountingEntr
 Focused coverage in `FeeRefundApi_Tests` checks direct cash/bank completion, one expense after retry, invalid routing rollback, pending-payment compatibility, and returned payments. `RefundPaymentDialog.test.tsx` and approval form coverage belong to the [frontend workflow](../../../../../Shikshamitra-FE/docs/finance/references/fee-refund-payout-workflow.md).
 
 ## Edit a Pending request
+
+The staff worklist and detail drawer offer Reject while Pending, and offer payment recording after approval.
+The compatibility rejection endpoint retains its existing before-payout transition checks.
+
+The detail response's fee-head breakdown is projected from this request's saved lines and source-payment snapshots.
+Only referenced dues are read for their original totals/status; other installments and student-wide cumulative refunds are excluded.
+Rows use the stored calculated, approved or processed amount for the request stage, and allocations of the same installment are combined.
+`totalRefundedAmount` is this request's processed amount less its reversals; an Approved unpaid request has zero refunded.
 
 `PUT /api/fee-refunds/{id}` requires the existing Refund Edit permission and current student/account scope.
 Workflow version 1 requests can be edited only while Submitted (Pending), with no reservations or settlements; concession-generated refunds remain protected.

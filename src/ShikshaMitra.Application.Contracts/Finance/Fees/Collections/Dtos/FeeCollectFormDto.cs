@@ -133,6 +133,10 @@ public class FeeLedgerLineDto
     public double RefundAmount { get; set; }
     public string? RefundDescription { get; set; }
 
+	/// <summary>Approved principal refunds awaiting payout; separate from cumulative paid refunds.</summary>
+	public decimal PendingRefundAmount { get; set; }
+	public string PendingRefundDescription { get; set; } = string.Empty;
+
 	public FeeCollectionStatus Status { get; set; }
 
 	/// <summary>

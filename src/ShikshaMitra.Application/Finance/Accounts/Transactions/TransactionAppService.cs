@@ -66,6 +66,7 @@ public partial class TransactionAppService : ApplicationService, ITransactionApp
 		var transactionQuery = await financeScopeAccessService.FilterPooledCashTransactionsAsync(
 			await transactionRepository.GetQueryableAsync(), academicYearId);
 		var categoryQuery    = await transactionCategoryRepository.GetQueryableAsync();
+		transactionQuery = AccountsRecognitionQuery.ExcludeNone(transactionQuery, categoryQuery);
 
 		var joinedQuery =
 			from t in transactionQuery
@@ -198,6 +199,9 @@ public partial class TransactionAppService : ApplicationService, ITransactionApp
 		await EnsureTransactionYearAsync(transaction);
 		EnsureTransactionType(transaction, transactionType);
 		if (!transaction.IsConfirmed) throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidSource);
+		if (!await AsyncExecuter.AnyAsync(AccountsRecognitionQuery.ExcludeNone(await transactionRepository.GetQueryableAsync(),
+			await transactionCategoryRepository.GetQueryableAsync()).Where(t => t.Id == transactionId)))
+			throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Transaction), transactionId);
 		await financeScopeAccessService.EnsurePooledCashTransactionAccessibleAsync(transaction);
 
 		var category = await transactionCategoryRepository.GetAsync(transaction.CategoryId);
@@ -205,6 +209,8 @@ public partial class TransactionAppService : ApplicationService, ITransactionApp
 		var scopedAccountIds = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
 		var transactionQuery = await financeScopeAccessService.FilterPooledCashTransactionsAsync(
 			await transactionRepository.GetQueryableAsync(), transaction.AcademicYearId);
+		transactionQuery = AccountsRecognitionQuery.ExcludeNone(transactionQuery,
+			await transactionCategoryRepository.GetQueryableAsync());
 		var relatedTransactions = await AsyncExecuter.ToListAsync(
 			transactionQuery.Where(x =>
 				x.IsConfirmed && (x.FinanceFeeAccountId.HasValue ? scopedAccountIds.Contains(x.FinanceFeeAccountId.Value) : x.StudentId == null || scopedStudentIds.Contains(x.StudentId.Value)) && x.CategoryId == transaction.CategoryId &&
@@ -247,7 +253,7 @@ public partial class TransactionAppService : ApplicationService, ITransactionApp
 		EnsureCategoryAvailable(category, transaction.AcademicYearId, input.PaymentDate, transactionType);
 
 		transaction.Update(input.CategoryId, input.Name, input.CategoryTags,
-			input.Amount, input.PaymentMethod, input.PaymentDate, input.Notes);
+			input.Amount, input.PaymentMethod, input.PaymentDate, input.Notes, category.Name);
 		await transactionRepository.UpdateAsync(transaction, autoSave: true);
 		return MapToCreateUpdateResponse(transaction, category);
 	}

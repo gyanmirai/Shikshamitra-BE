@@ -66,7 +66,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         }
         var draft = await _feeStructures.CreateAsync(metadataId, new() { StandardId = standardId, StandardFeeStructures = candidate });
         draft.FeeHeads.Single(x => x.FeeHeadId == head.FeeHeadId).IsVariable.ShouldBe(variable);
-        draft.FeeHeads.Single(x => x.FeeHeadId == head.FeeHeadId).Amount.ShouldBe(head.Amount);
+        draft.FeeHeads.Single(x => x.FeeHeadId == head.FeeHeadId).Amount.ShouldBe(variable ? null : Math.Ceiling(fixedAmount));
         var structure = await _feeStructures.PublishAsync(draft.Id, new() { ConcurrencyStamp = draft.ConcurrencyStamp });
         var metadata = await _metadataRepo.GetAsync(metadataId);
         var standard = await _standardRepo.GetAsync(standardId);
@@ -91,10 +91,18 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         if (selected) input.SelectedOptionalFeeHeadIds.Add(headId);
         if (variable && included) input.VariableFeeHeads.Add(new() { FeeHeadId = headId, Amount = 1234.01m });
         var service = GetRequiredService<IStudentFeeStructureAppService>();
+        if (!included)
+        {
+            (await Should.ThrowAsync<BusinessException>(() => service.PreviewAsync(input))).Code.ShouldBe(AssignmentErrorCodes.InvalidInput);
+            await Should.ThrowAsync<BusinessException>(() => service.AssignAsync(input));
+            (await GetRequiredService<IRepository<DueFee, Guid>>().GetListAsync(x => x.StudentId == input.StudentId)).ShouldBeEmpty();
+            (await GetRequiredService<IRepository<StudentFeeStructure, Guid>>().GetListAsync(x => x.StudentId == input.StudentId)).ShouldBeEmpty();
+            return;
+        }
         var preview = await service.PreviewAsync(input);
         preview.Heads.Single().Included.ShouldBe(included);
-        preview.Heads.Single().ConfiguredAmount.ShouldBe(variable ? null : 1000.01m);
-        preview.ProratedTotal.ShouldBe(included ? variable ? 1234.01m : 1000.01m : 0m);
+        preview.Heads.Single().ConfiguredAmount.ShouldBe(variable ? null : 1001m);
+        preview.ProratedTotal.ShouldBe(included ? variable ? 1235m : 1001m : 0m);
         input.PreviewToken = preview.PreviewToken;
         var result = await service.AssignAsync(input);
         result.AssignmentId.ShouldNotBe(Guid.Empty);

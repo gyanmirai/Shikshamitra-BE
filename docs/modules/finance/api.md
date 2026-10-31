@@ -3,12 +3,30 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-30
+updated_on: 2026-10-31
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Use Finance backend APIs
+
+## Admission assignment context
+
+`POST /api/student-fee-structure/contexts` is a read-only batch query requiring
+`Finance.Fees.StructureAssign.View`. Body: `academicYearId` and 1–100 distinct `studentIds`.
+Every student must be accessible in that year. The response resolves `Unassigned`, `Selected`,
+`Prepared`, `Assigned` or `NeedsAttention`, plus source, assignment/application/account references,
+confirmed structure, joining date, bounded charge dates, applicable admission head IDs,
+proration policy/version, optional selections, variable amounts, blocker and prepared evidence.
+It performs no assignment writes. Student list rows also expose `assignmentState` and `assignmentSource`.
+
+Existing `/preview` and `/assign` commands accept the confirmed student/year selection. `Registration`
+service periods are verified against Admission, including source reference and exact calendar dates;
+omitted periods resolve on the server. Proration cannot be chosen through the policy override array.
+An existing assignment rejects new preview with `Finance:Assignment:AlreadyAssigned`. Prepared accounts
+use the saved calculation and reuse dues on commit; changed financial inputs return `SourceUnavailable`
+and require review/correction. Existing preview-token and retry validation remains active. Preview
+evidence includes `assignmentSource`, `applicationId` and `registrationJoiningDate`.
 
 ## Combined configuration lists
 
@@ -35,6 +53,18 @@ including future Payment Term installments. The student `fee-details` response's
 are separate. Sorting, numeric filters and summary exports consume the full pending balance.
 The mobile overview retains its generated-bill `pendingFee` and separate future partition
 described below; staff pending semantics do not change that contract.
+
+### Installment refunds
+
+The collect-form ledger keeps `refundAmount` as cumulative completed principal
+refunds, separately from the additive decimal `pendingRefundAmount`. The latter
+sums approved but unpaid principal lines from workflow version 1 requests in
+Approved or Processing state, using `max(0, approvedAmount - processedAmount)`.
+`pendingRefundDescription` identifies those requests by voucher and reason.
+Failed requests do not contribute because their reservations are released; a
+replacement contributes only after its own approval. Approval alone changes
+neither paid refunds nor the installment's paid/outstanding balance. Queries
+retain tenant filters and restrict pending requests to the student and academic year.
 
 ## Fee structure copy policy preflight
 
@@ -648,6 +678,8 @@ The Fee Structure metadata, Concession Type, Charge Category, Income Category, E
 
 Bank account number, IFSC and UPI header criteria match the masked table values; hidden bank fragments are not searchable through masked headers. Concession document criteria match document names. Fee Structure board/medium and configured-class criteria match their displayed text, including the configured/total fraction. Display-only mappings require materializing the complete authorized candidate set before returning matching IDs for count and pagination; production-scale performance requires separate measurement.
 
-Receipt and reconciliation list header filters: `GET /api/v1/fee-receipts` and `GET /api/v1/finance/reconciliations` accept optional serialized `filters` with the existing Finance table operators. Receipt fields cover displayed identity/kind/method/verification/roll, paid amount and date; the six reconciliation methods expose their displayed student/academic/instrument/status/amount/date fields. Method-specific allowlists reject unsupported or malformed criteria, including empty-result searches. Header filters intersect the existing tenant, student/applicant, academic context, month/status and global search scopes before count/page. Only filtered requests materialize complete authorized candidates; unfiltered requests keep provider pagination. This has no first-100 cap, but filtered-request cost scales with candidate volume; production load is not verified.
+Receipt and reconciliation list header filters: `GET /api/v1/fee-receipts` and `GET /api/v1/finance/reconciliations` accept optional serialized `filters` with the existing Finance table operators. Receipt fields cover displayed identity/kind/method/verification/roll, paid amount and date; the six reconciliation methods expose their displayed student/academic/instrument/status/amount/date fields. Method-specific allowlists reject unsupported or malformed criteria, including empty-result searches. Header filters intersect the existing tenant, student/applicant, academic context, month/status and global search scopes before count/page. Bank Transfer account-holder and Credit/Debit Card holder/digit criteria match the table’s displayed dash for missing values; explicitly empty holder text remains blank, and card digits remain masked. Only filtered requests materialize complete authorized candidates; unfiltered requests keep provider pagination. This has no first-100 cap, but filtered-request cost scales with candidate volume; production load is not verified.
 
-Fee Head and Receipt Book list endpoints accept an optional appended `filters` query parameter and forward it unchanged with existing year/category/search/paging context. Their allowlists match displayed text, numeric ranges and active-state values; malformed criteria fail before an empty result. Header filtering counts the complete authorized match before paging, while ordinary lists retain provider pagination. Adjustment applications add `Filters` alongside existing global `Filter`; the query intersects tenant, scoped student IDs and year/board/medium/class/division before status counts and rows. Search preserves voucher/reason and includes displayed identity/GR/roll/requester/amount/date/status. Text/header requests filter complete authorized candidates before count/page; ordinary requests remain provider-paged. Existing adjustment wire states are unchanged. No command or lifecycle transition is modified.
+Fee Head and Receipt Book list endpoints accept an optional appended `filters` query parameter and forward it unchanged with existing year/category/search/paging context. Their allowlists match displayed text, numeric ranges and active-state values; malformed criteria fail before an empty result. Header filtering counts the complete authorized match before paging, while ordinary lists retain provider pagination.
+Fee Head and Receipt Book name search trims surrounding whitespace and ignores case; it remains limited to the existing name field.
+Adjustment applications add `Filters` alongside existing global `Filter`; the query intersects tenant, scoped student IDs and year/board/medium/class/division before status counts and rows. Search preserves voucher/reason and includes displayed identity/GR/roll/requester/amount/date/status. Text/header requests filter complete authorized candidates before count/page; ordinary requests remain provider-paged. Existing adjustment wire states are unchanged. No command or lifecycle transition is modified.

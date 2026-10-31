@@ -34,10 +34,10 @@ public partial class ReconciliationAppService
 			["transactionId"] = (Expression<Func<ReconciliationListItemDto, string?>>)(r =>
 				Detail(r, r.PaymentMethod == PaymentMethodEnum.BankTransfer ? "transactionReferenceNumber" : "transactionId")),
 			["transferDate"] = (Expression<Func<ReconciliationListItemDto, DateTimeOffset?>>)(r => DetailDate(r, "transferDate")),
-			["accountHolderName"] = (Expression<Func<ReconciliationListItemDto, string?>>)(r => Detail(r, "accountHolderName")),
+			["accountHolderName"] = (Expression<Func<ReconciliationListItemDto, string?>>)(r => Detail(r, "accountHolderName") ?? "-"),
 			["bankLabel"] = (Expression<Func<ReconciliationListItemDto, string>>)(r => DisplayOrDash(r.BankLabel)),
-			["cardHolderName"] = (Expression<Func<ReconciliationListItemDto, string?>>)(r => Detail(r, "cardHolderName")),
-			["last4Digits"] = (Expression<Func<ReconciliationListItemDto, string?>>)(r => CardDisplay(r)),
+			["cardHolderName"] = (Expression<Func<ReconciliationListItemDto, string?>>)(r => Detail(r, "cardHolderName") ?? "-"),
+			["last4Digits"] = (Expression<Func<ReconciliationListItemDto, string?>>)(r => CardDisplay(r) ?? "-"),
 			["upiId"] = (Expression<Func<ReconciliationListItemDto, string>>)(r => DisplayOrDash(Detail(r, "upiId"))),
 			["upiTransactionId"] = (Expression<Func<ReconciliationListItemDto, string>>)(r => DisplayOrDash(Detail(r, "upiTransactionId"))),
 			["receiptDate"] = (Expression<Func<ReconciliationListItemDto, DateTime>>)(r =>

@@ -131,7 +131,7 @@ public partial class FeeRefundAppService
                 $"refund:{payout.Id:N}", request.Id, request.StudentId, paymentDate: payout.SettlementDate.UtcDateTime,
                 financeFeeAccountId: request.FinanceFeeAccountId);
         await WriteAuditAsync(request, FinanceAuditActions.Refund,
-            $"Refund {request.VoucherNumber} completed and recorded as an expense.",
+            $"Refund {request.VoucherNumber} completed.",
             context: new { PayoutId = payout.Id, request.ExpenseCategoryId, request.PayingBankAccountId });
         await eventBus.PublishAsync(new FeeRefundApprovedEto
         {

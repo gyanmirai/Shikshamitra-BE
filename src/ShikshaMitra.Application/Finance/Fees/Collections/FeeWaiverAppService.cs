@@ -165,7 +165,7 @@ public class FeeWaiverAppService(
 	{
 		if (string.Equals(value?.Trim(), "LateFee", StringComparison.OrdinalIgnoreCase)) return "LateFee";
 		if (string.Equals(value?.Trim(), "Charge", StringComparison.OrdinalIgnoreCase)) return "Charge";
-		throw new BusinessException(FeeWaiverErrorCodes.UnsupportedSource).WithData("sourceType", value);
+		throw new BusinessException(FeeWaiverErrorCodes.UnsupportedSource).WithData("sourceType", value!);
 	}
 
 	private static FeeWaiverResultDto ToResult(LateFeeWaiverApplication entity) => new()

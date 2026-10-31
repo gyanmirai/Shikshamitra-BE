@@ -40,7 +40,11 @@ public class RoomReservation : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUs
     Guid? IUserScopedEntity.StandardId => StandardId;
     Guid? IUserScopedEntity.DivisionId => DivisionId;
 
-    private RoomReservation() { }
+    private RoomReservation()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        Purpose = null!;
+    }
 
     public RoomReservation(
         Guid id,

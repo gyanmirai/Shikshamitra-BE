@@ -24717,9 +24717,15 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<Guid?>("LeaderEnrollmentId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("LogoUrl")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<long>("MembershipRevision")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -24733,6 +24739,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AcademicMediumId");
+
+                    b.HasIndex("LeaderEnrollmentId");
 
                     b.ToTable("AppHouseSettings", (string) null);
                 });
@@ -32943,6 +32951,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
+                    b.Property<Guid?>("HouseId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -32980,9 +32991,13 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("HouseId");
+
                     b.HasIndex("OnboardingCaseId");
 
                     b.HasIndex("StudentId");
+
+                    b.HasIndex("TenantId", "HouseId");
 
                     b.HasIndex("TenantId", "OnboardingCaseId")
                         .IsUnique()
@@ -33781,6 +33796,12 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<Guid?>("LeaderEnrollmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("LeadershipRevision")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -33804,6 +33825,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("LeaderEnrollmentId");
 
                     b.HasIndex("RoomId");
 
@@ -41448,6 +41471,14 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.Records.Settings.HouseSettings", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", null)
+                        .WithMany()
+                        .HasForeignKey("LeaderEnrollmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.Records.StudentCertificate", b =>
                 {
                     b.HasOne("ShikshaMitra.Students.Student", null)
@@ -42747,6 +42778,11 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", b =>
                 {
+                    b.HasOne("ShikshaMitra.Students.Records.Settings.HouseSettings", null)
+                        .WithMany()
+                        .HasForeignKey("HouseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingCase", null)
                         .WithMany()
                         .HasForeignKey("OnboardingCaseId")
@@ -43550,6 +43586,11 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.Divisions.Division", b =>
                 {
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.StudentEnrollment", null)
+                        .WithMany()
+                        .HasForeignKey("LeaderEnrollmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.Rooms.Room", null)
                         .WithMany()
                         .HasForeignKey("RoomId")

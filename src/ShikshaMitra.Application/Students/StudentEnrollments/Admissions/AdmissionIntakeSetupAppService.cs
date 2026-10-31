@@ -14,15 +14,32 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [Authorize]
-public class AdmissionIntakeSetupAppService(
-	IRepository<AdmissionIntakeSetup, Guid> setups,
-	IRepository<AdmissionIntakeProfile, Guid> profiles,
-	IRepository<AdmissionOffering, Guid> offerings,
-	IRepository<AdmissionPublicInquiryLink, Guid> publicLinks,
-	IAdmissionIntakeProfileAppService profileService,
-	AdmissionInquiryPeopleService people)
+public class AdmissionIntakeSetupAppService
 	: ApplicationService, IAdmissionIntakeSetupAppService
 {
+	private readonly IRepository<AdmissionIntakeSetup, Guid> setups;
+	private readonly IRepository<AdmissionIntakeProfile, Guid> profiles;
+	private readonly IRepository<AdmissionOffering, Guid> offerings;
+	private readonly IRepository<AdmissionPublicInquiryLink, Guid> publicLinks;
+	private readonly AdmissionInquiryPeopleService people;
+
+	public AdmissionIntakeSetupAppService(
+		IRepository<AdmissionIntakeSetup, Guid> setups,
+		IRepository<AdmissionIntakeProfile, Guid> profiles,
+		IRepository<AdmissionOffering, Guid> offerings,
+		IRepository<AdmissionPublicInquiryLink, Guid> publicLinks,
+		IAdmissionIntakeProfileAppService profileService,
+		AdmissionInquiryPeopleService people
+	)
+	{
+		this.setups = setups;
+		this.profiles = profiles;
+		this.offerings = offerings;
+		this.publicLinks = publicLinks;
+		_ = profileService;
+		this.people = people;
+	}
+
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
 	{
 		PropertyNameCaseInsensitive = true

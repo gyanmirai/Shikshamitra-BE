@@ -6,13 +6,13 @@ namespace ShikshaMitra.Academic.Examination.Settings;
 
 public class GradingScaleDto : EntityDto<Guid>
 {
-    public string Name { get; set; }
-    public string TotalMarks { get; set; }
+    public string Name { get; set; } = null!; // The response mapper populates these members after construction.
+    public string TotalMarks { get; set; } = null!;
     public double? PassMarks { get; set; }
     public string? Description { get; set; }
     public bool IsDefault { get; set; }
     public SettingStatus Status { get; set; }
     public int UsageCount { get; set; }
-    public List<GradeRangeDto> GradingScale { get; set; }
+    public List<GradeRangeDto> GradingScale { get; set; } = null!;
     public DateTime CreatedAt { get; set; }
 }

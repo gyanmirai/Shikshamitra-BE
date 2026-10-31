@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Diagnostics.CodeAnalysis;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -21,12 +22,16 @@ public class ElectiveGroup : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? ArchiveReason { get; private set; }
 	public virtual ICollection<ElectiveGroupComponent> Subjects { get; set; }
 	public Guid AcademicMediumId { get; set; }
-	public EducationMedium AcademicMedium { get; set; }
+	public EducationMedium AcademicMedium { get; set; } = null!; // Populated by EF relationship materialization.
 	#endregion
 
 	#region Constructors
 	private ElectiveGroup()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Color = null!;
+		Name = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 		Subjects = new HashSet<ElectiveGroupComponent>();
 	}
@@ -54,12 +59,14 @@ public class ElectiveGroup : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	#endregion
 
 	#region Methods
+	[MemberNotNull(nameof(Name))]
 	public void SetName(string name)
 	{
 		Check.NotNullOrWhiteSpace(name, nameof(name));
 		Name = name;
 	}
 
+	[MemberNotNull(nameof(Color))]
 	public void SetColor(string color)
 	{
 		Check.NotNullOrWhiteSpace(color, nameof(color));

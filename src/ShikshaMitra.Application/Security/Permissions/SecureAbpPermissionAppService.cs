@@ -7,15 +7,27 @@ using Volo.Abp.SimpleStateChecking;
 
 namespace ShikshaMitra.Security.Permissions;
 
-public class SecureAbpPermissionAppService(
-	IPermissionManager permissionManager,
-	IPermissionDefinitionManager permissionDefinitionManager,
-	IOptions<PermissionManagementOptions> options,
-	ISimpleStateCheckerManager<PermissionDefinition> simpleStateCheckerManager,
-	IPermissionChecker permissionChecker,
-	ShikshaMitraPermissionAppService permissions)
-	: PermissionAppService(permissionManager, permissionDefinitionManager, options, simpleStateCheckerManager)
+public class SecureAbpPermissionAppService
+	: PermissionAppService
 {
+	private readonly IOptions<PermissionManagementOptions> options;
+	private readonly IPermissionChecker permissionChecker;
+	private readonly ShikshaMitraPermissionAppService permissions;
+
+	public SecureAbpPermissionAppService(
+		IPermissionManager permissionManager,
+		IPermissionDefinitionManager permissionDefinitionManager,
+		IOptions<PermissionManagementOptions> options,
+		ISimpleStateCheckerManager<PermissionDefinition> simpleStateCheckerManager,
+		IPermissionChecker permissionChecker,
+		ShikshaMitraPermissionAppService permissions
+	) : base(permissionManager, permissionDefinitionManager, options, simpleStateCheckerManager)
+	{
+		this.options = options;
+		this.permissionChecker = permissionChecker;
+		this.permissions = permissions;
+	}
+
 	public override Task<GetPermissionListResultDto> GetAsync(string providerName, string providerKey) =>
 		permissions.GetAsync(providerName, providerKey);
 

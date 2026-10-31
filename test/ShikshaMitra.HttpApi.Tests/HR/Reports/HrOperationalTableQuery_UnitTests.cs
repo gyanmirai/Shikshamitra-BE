@@ -50,7 +50,7 @@ public class HrOperationalTableQuery_UnitTests(ITestOutputHelper output)
 	[InlineData("employee-onboarding-table", "candidate", "{\"fullName\":\"Zulu\",\"email\":\"unique@example.test\",\"mobileNo\":\"hidden-phone\"}", "unique@example.test", "Zulu")]
 	[InlineData("employee-onboarding-table", "candidate", "{\"fullName\":\"Zulu\",\"email\":null,\"mobileNo\":\"unique-phone\"}", "unique-phone", "Zulu")]
 	[InlineData("employee-onboarding-table", "candidate", "{\"fullName\":\"Zulu\",\"applicationNumber\":\"unique-application\"}", "unique-application", "Zulu")]
-	[InlineData("employee-onboarding-table", "position", "{\"positionAppliedFor\":\"Teacher\",\"departmentAppliedFor\":\"unique-department\"}", "unique-department", "Teacher")]
+	[InlineData("employee-onboarding-table", "position", "{\"positionAppliedFor\":\"Teacher\",\"departmentAppliedFor\":\"unique-department\",\"workAssignmentDisplay\":\"Legacy department: unique-department\"}", "unique-department", "Teacher")]
 	[InlineData("hr-attendance-register", "employeeName", "{\"employeeName\":\"Zulu\",\"employeeCode\":\"unique-code\",\"educationMediumStageName\":\"unique-division\"}", "unique-division", "Zulu")]
 	[InlineData("hr-manual-attendance", "fullName", "{\"fullName\":\"Zulu\",\"employeeCode\":\"unique-code\"}", "unique-code", "Zulu")]
 	[InlineData("hr-attendance-import-rows", "employeeName", "{\"employeeName\":\"Zulu\",\"employeeCode\":\"unique-code\"}", "unique-code", "Zulu")]
@@ -69,7 +69,7 @@ public class HrOperationalTableQuery_UnitTests(ITestOutputHelper output)
 		var rows = new[] { new Dictionary<string, object?> { [column] = projected } };
 		new HrReportingTableQuery(new() { Filters = [Filter(column, "contains", visible)] }, [field], "Asia/Kolkata").Apply(rows, item => item).Count().ShouldBe(1);
 		new HrReportingTableQuery(new() { Search = visible }, [field], "Asia/Kolkata").Apply(rows, item => item).Count().ShouldBe(1);
-		Convert.ToString(HrTableExportProjection.Value(table, column, row)).ShouldContain(visible);
+		Convert.ToString(HrTableExportProjection.Value(table, column, row)).ShouldNotBeNull().ShouldContain(visible);
 		new HrReportingTableQuery(new() { Search = "hidden-phone" }, [field], "Asia/Kolkata").Apply(rows, item => item).ShouldBeEmpty();
 	}
 	[Theory]

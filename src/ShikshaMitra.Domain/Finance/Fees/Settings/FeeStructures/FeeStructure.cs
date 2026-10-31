@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+﻿using System.Diagnostics.CodeAnalysis;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using System;
 using ShikshaMitra.Domain.Finance.Policies;
 using System.Collections.Generic;
@@ -48,6 +49,8 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	protected FeeStructure()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Name = null!;
 	}
 
 	public FeeStructure(
@@ -66,6 +69,7 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RevisionRootId = id;
 	}
 
+	[MemberNotNull(nameof(Name))]
 	public void ChangeName(string name)
 	{
 		EnsureNotLocked();

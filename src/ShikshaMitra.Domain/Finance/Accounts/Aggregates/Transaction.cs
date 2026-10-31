@@ -40,7 +40,7 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
  public void Confirm() => IsConfirmed = true;
 	public const string OriginalCashGrossAmountKey = "OriginalCashGrossAmount";
 	public decimal GetOriginalCashIncomeAmount() => ExtraProperties.TryGetValue(OriginalCashGrossAmountKey, out var gross)
-		? gross is decimal amount ? amount : decimal.Parse(gross.ToString()!, System.Globalization.CultureInfo.InvariantCulture) : Amount;
+		? gross is decimal amount ? amount : decimal.Parse(gross!.ToString()!, System.Globalization.CultureInfo.InvariantCulture) : Amount;
 	public void ApproveCashIncome(Guid bankId, string bankLabel, decimal? depositedAmount = null)
 	{
 		if (PaymentMethod != 0 || TransactionType != TransactionType.Income || IsConfirmed ||
@@ -100,6 +100,9 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	protected Transaction()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Name = null!;
+
 		/* ORM / deserialization */
 	}
 

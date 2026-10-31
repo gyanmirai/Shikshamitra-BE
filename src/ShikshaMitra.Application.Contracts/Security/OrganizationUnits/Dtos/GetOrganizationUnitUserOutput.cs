@@ -6,7 +6,7 @@ public class GetOrganizationUnitUserOutput
 {
     public Guid Id { get; set; }
 
-    public string UserName { get; set; }
+    public string UserName { get; set; } = null!; // The response mapper populates these members after construction.
 
-    public string Email { get; set; }
+    public string? Email { get; set; }
 }

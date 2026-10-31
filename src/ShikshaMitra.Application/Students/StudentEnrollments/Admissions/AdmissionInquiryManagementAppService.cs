@@ -15,17 +15,40 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [Authorize]
-public class AdmissionInquiryManagementAppService(
-	AdmissionInquiryScopeAccessService access,
-	AdmissionInquiryRuntimeService runtime,
-	AdmissionInquiryAssignmentService assignments,
-	AdmissionOfferingRuntimeService offeringRuntime,
-	AdmissionInquiryAvailabilityService availability,
-	IRepository<AdmissionInquiry, Guid> inquiries,
-	IRepository<AdmissionInquiryManagement, Guid> management,
-	IRepository<AdmissionInquiryFollowUp, Guid> followUps,
-	IRepository<AdmissionActivity, Guid> activities) : ApplicationService, IAdmissionInquiryManagementAppService
+public class AdmissionInquiryManagementAppService : ApplicationService, IAdmissionInquiryManagementAppService
 {
+	private readonly AdmissionInquiryScopeAccessService access;
+	private readonly AdmissionInquiryRuntimeService runtime;
+	private readonly AdmissionOfferingRuntimeService offeringRuntime;
+	private readonly AdmissionInquiryAvailabilityService availability;
+	private readonly IRepository<AdmissionInquiry, Guid> inquiries;
+	private readonly IRepository<AdmissionInquiryManagement, Guid> management;
+	private readonly IRepository<AdmissionInquiryFollowUp, Guid> followUps;
+	private readonly IRepository<AdmissionActivity, Guid> activities;
+
+	public AdmissionInquiryManagementAppService(
+		AdmissionInquiryScopeAccessService access,
+		AdmissionInquiryRuntimeService runtime,
+		AdmissionInquiryAssignmentService assignments,
+		AdmissionOfferingRuntimeService offeringRuntime,
+		AdmissionInquiryAvailabilityService availability,
+		IRepository<AdmissionInquiry, Guid> inquiries,
+		IRepository<AdmissionInquiryManagement, Guid> management,
+		IRepository<AdmissionInquiryFollowUp, Guid> followUps,
+		IRepository<AdmissionActivity, Guid> activities
+	)
+	{
+		this.access = access;
+		this.runtime = runtime;
+		_ = assignments;
+		this.offeringRuntime = offeringRuntime;
+		this.availability = availability;
+		this.inquiries = inquiries;
+		this.management = management;
+		this.followUps = followUps;
+		this.activities = activities;
+	}
+
 	private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)]
@@ -245,6 +268,8 @@ public class AdmissionInquiryManagementAppService(
 		var (inquiry, state, policy) = await GetMutableAsync(inquiryId, input.ConcurrencyStamp);
 		EnsureActor(policy, inquiry);
 		ValidateAnswers(policy, input);
+		if (input.Outcome == AdmissionInquiryQualificationOutcome.Qualified && inquiry.ApplicantId.HasValue)
+			AdmissionPrimaryContactSelection.EnsureReady(await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionApplicant, Guid>>().GetAsync(inquiry.ApplicantId.Value));
 		if (input.Outcome == AdmissionInquiryQualificationOutcome.FollowUp &&
 			!await followUps.AnyAsync(item => item.InquiryId == inquiry.Id && item.Status == AdmissionInquiryFollowUpStatus.Scheduled))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.QualificationRequired,

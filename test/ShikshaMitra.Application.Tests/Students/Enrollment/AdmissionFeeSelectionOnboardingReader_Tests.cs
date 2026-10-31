@@ -44,7 +44,7 @@ public class AdmissionFeeSelectionOnboardingReader_Tests
 		var repository = Substitute.For<IRepository<StudentFeeStructure, Guid>>();
 		repository.FindAsync(Arg.Any<Expression<Func<StudentFeeStructure, bool>>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(assignment);
 		var reader = new AdmissionFeeSelectionOnboardingReader(repository, Substitute.For<IAdmissionFinanceIntegration>());
-		(await reader.GetBlockerAsync(application)).ShouldContain(matches ? "Confirm" : "Finance");
+		(await reader.GetBlockerAsync(application)).ShouldNotBeNull().ShouldContain(matches ? "Confirm" : "Finance");
 		(await reader.GetBlockerAsync(application, false) == null).ShouldBe(matches);
 		application.ConfirmOnboardingFeeSelection(Guid.NewGuid(), DateTimeOffset.UtcNow);
 		(await reader.GetBlockerAsync(application) == null).ShouldBe(matches);
@@ -88,7 +88,7 @@ public class AdmissionFeeSelectionOnboardingReader_Tests
 		finance.IsSettledForOnboardingAsync(application.Id).Returns(true);
 		var reader = new AdmissionFeeSelectionOnboardingReader(Substitute.For<IRepository<StudentFeeStructure, Guid>>(), finance);
 		(await reader.IsConfirmedAsync(application)).ShouldBeFalse();
-		(await reader.GetBlockerAsync(application)).ShouldContain("Confirm");
+		(await reader.GetBlockerAsync(application)).ShouldNotBeNull().ShouldContain("Confirm");
 		finance.ReceivedCalls().ShouldBeEmpty();
 	}
 
@@ -103,7 +103,7 @@ public class AdmissionFeeSelectionOnboardingReader_Tests
 		finance.IsSettledForOnboardingAsync(application.Id).Returns(true);
 		var reader = new AdmissionFeeSelectionOnboardingReader(repository, finance);
 		(await reader.IsConfirmedAsync(application)).ShouldBeFalse();
-		(await reader.GetBlockerAsync(application)).ShouldContain("Finance assignment differs");
+		(await reader.GetBlockerAsync(application)).ShouldNotBeNull().ShouldContain("Finance assignment differs");
 		finance.ReceivedCalls().ShouldBeEmpty();
 	}
 

@@ -38,7 +38,7 @@ public class StudentCertificateApi_Tests : ShikshaMitraApiTestBase
 		placeholdersResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await placeholdersResponse.Content.ReadAsStringAsync());
 		var placeholders = await placeholdersResponse.Content.ReadFromJsonAsync<Result<List<string>>>(JsonOptions);
 		placeholders.ShouldNotBeNull();
-		placeholders.Data.ShouldContain("StudentName");
+		placeholders.Data.ShouldNotBeNull().ShouldContain("StudentName");
 		placeholders.Data.ShouldContain("Reason");
 
 		var templateResponse = await Client.PutAsJsonAsync(
@@ -148,7 +148,7 @@ public class StudentCertificateApi_Tests : ShikshaMitraApiTestBase
 		updatedHistoryResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updatedHistoryResponse.Content.ReadAsStringAsync());
 		var updatedHistory = await updatedHistoryResponse.Content.ReadFromJsonAsync<Result<List<StudentCertificateHistoryDto>>>(JsonOptions);
 		updatedHistory.ShouldNotBeNull();
-		updatedHistory.Data.Count.ShouldBe(2);
+		updatedHistory.Data.ShouldNotBeNull().Count.ShouldBe(2);
 
 		var pdfResponse = await Client.GetAsync($"{BaseUrl}/{generated.Data.CertificateId}/pdf");
 		pdfResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await pdfResponse.Content.ReadAsStringAsync());

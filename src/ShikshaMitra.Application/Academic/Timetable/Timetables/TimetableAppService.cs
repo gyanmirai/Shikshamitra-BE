@@ -1098,7 +1098,7 @@ public partial class TimetableAppService(
                 throw new BusinessException("Academic:Timetable:WeeklyLectureMismatch")
                     .WithData("StandardId", timetable.StandardId)
                     .WithData("DivisionId", timetable.DivisionId)
-                    .WithData("SubjectOrElectiveGroupId", referenceId)
+                    .WithData("SubjectOrElectiveGroupId", referenceId!)
                     .WithData("RequiredWeeklyLectures", requirement.WeeklyLectures)
                     .WithData("AssignedWeeklyLectures", assigned);
             }

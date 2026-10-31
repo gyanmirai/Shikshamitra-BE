@@ -8,7 +8,7 @@ public class CreateUpdateDivisionDto
 {
 	[Required]
 	[StringLength(DivisionConsts.MaxNameLength)]
-	public string Name { get; set; }
+	public string Name { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
 	[Required]
 	[Range(1, DivisionConsts.MaxStrengthCount)]

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves;
@@ -112,7 +112,7 @@ public partial class HrPolicyAppService_Tests
 		assessment.Preview.LeaveImpact!.Completeness.ShouldBe("partial");
 		assessment.Preview.LeaveImpact.Measures["payrollExposure"].Count.ShouldBeNull();
 		assessment.Preview.LeaveImpact.Measures["payrollExposure"].Status.ShouldBe("unavailable");
-		assessment.Preview.LeaveImpact.Measures["payrollExposure"].AvailabilityReason.ShouldContain("invalid month");
+		assessment.Preview.LeaveImpact.Measures["payrollExposure"].AvailabilityReason.ShouldNotBeNull().ShouldContain("invalid month");
 		assessment.Preview.LeaveImpact.PayrollPeriods.Count.ShouldBe(1); // Explicitly partial known periods.
 		assessment.Preview.LeaveImpact.Measures["effectiveStaff"].Status.ShouldBe("calculated");
 		assessment.Preview.ConfirmationToken.ShouldBeNull();

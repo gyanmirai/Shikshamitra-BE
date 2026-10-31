@@ -14,13 +14,13 @@ public class FeeStructureCreateResponse : StandardFeeStructureResponseItem { }
 public class FeeStructureDetailsResponse : EntityDto<Guid>
 {
 	public List<FeeStructureClassOptionDto> Classes { get; set; } = [];
-    public string Name { get; set; }
+    public string? Name { get; set; }
     public Guid AcademicYearId { get; set; }
-    public string AcademicYearName { get; set; }
+    public string? AcademicYearName { get; set; }
     public Guid BoardId { get; set; }
-    public string BoardName { get; set; }
+    public string? BoardName { get; set; }
     public Guid MediumId { get; set; }
-    public string MediumName { get; set; }
+    public string? MediumName { get; set; }
     public Guid? ReceiptBookId { get; set; }
     public string? ReceiptBookName { get; set; }
     public int TotalClasses { get; set; }
@@ -33,14 +33,14 @@ public class FeeStructureMetadataListResponse
     public int CurrentPage { get; set; }
     public int PageSize { get; set; }
     public int TotalPages { get; set; }
-    public List<FeeStructureDetailsResponse> Items { get; set; }
+    public List<FeeStructureDetailsResponse> Items { get; set; } = null!; // The response mapper populates these members after construction.
 }
 
 public class StandardFeeStructureResponse
 {
     public Guid StandardId { get; set; }
-    public string StandardName { get; set; }
-    public List<StandardFeeStructureResponseItem> StandardFeeStructures { get; set; }
+    public string StandardName { get; set; } = null!; // The response mapper populates these members after construction.
+    public List<StandardFeeStructureResponseItem> StandardFeeStructures { get; set; } = null!;
 }
 
 public class StandardFeeStructureResponseItem : EntityDto<Guid>
@@ -54,9 +54,9 @@ public class StandardFeeStructureResponseItem : EntityDto<Guid>
 	public Guid? ReceiptBookId { get; set; }
 	public DateTime CreationTime { get; set; }
 	public DateTime? LastModificationTime { get; set; }
-    public string Name { get; set; }
+    public string Name { get; set; } = null!; // The response mapper populates these members after construction.
 	public FeeStructureStatus Status { get; set; }
-	public List<FeeHeadAssignmentResponse> FeeHeads { get; set; }
+	public List<FeeHeadAssignmentResponse> FeeHeads { get; set; } = null!;
 	public Guid? CollectionPolicyId { get; set; }
 	public Guid? CollectionPolicyVersionId { get; set; }
 	public Guid? ConcessionPolicyId { get; set; }
@@ -73,8 +73,8 @@ public class FeeHeadAssignmentResponse
 	public Guid Id { get; set; }
 	public List<ScheduleOverrideDto> InstallmentOverrides { get; set; } = [];
     public Guid FeeHeadId { get; set; }
-    public string FeeHeadName { get; set; }
-    public string CategoryName { get; set; }
+    public string FeeHeadName { get; set; } = null!; // The response mapper populates these members after construction.
+    public string CategoryName { get; set; } = null!;
     public decimal? Amount { get; set; }
     public bool IsVariable { get; set; }
     public bool IsOneTime { get; set; }

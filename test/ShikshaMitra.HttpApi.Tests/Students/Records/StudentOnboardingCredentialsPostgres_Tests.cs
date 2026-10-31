@@ -45,7 +45,7 @@ public sealed partial class StudentRecordsApplicationPostgres_Tests
 		var settingsBefore = await CredentialsPostgresSettingsSnapshotAsync();
 		var rulesBefore = await InTenantAsync(async services =>
 			(await services.GetRequiredService<IRepository<StudentOnboardingCase, Guid>>().GetAsync(fixture.CaseId))
-				.ExtraProperties["ReadinessRulesSnapshot"].ToString());
+				.ExtraProperties["ReadinessRulesSnapshot"].ShouldNotBeNull().ToString());
 		var trigger = "credentials_gate_" + Guid.NewGuid().ToString("N");
 		factory.Barrier.ProviderFailures.Clear();
 		try
@@ -99,7 +99,7 @@ public sealed partial class StudentRecordsApplicationPostgres_Tests
 			(await services.GetRequiredService<IRepository<StudentOnboardingServiceHandoff, Guid>>().GetAsync(fixture.HandoffId))
 				.Status.ShouldBe(StudentOnboardingServiceHandoffStatus.Acknowledged);
 			var item = await services.GetRequiredService<IRepository<StudentOnboardingCase, Guid>>().GetAsync(fixture.CaseId);
-			item.Status.ShouldBe(StudentOnboardingStatus.Completed); item.ExtraProperties["ReadinessRulesSnapshot"].ToString().ShouldBe(rulesBefore);
+			item.Status.ShouldBe(StudentOnboardingStatus.Completed); item.ExtraProperties["ReadinessRulesSnapshot"].ShouldNotBeNull().ToString().ShouldBe(rulesBefore);
 			(await services.GetRequiredService<IRepository<StudentEnrollment, Guid>>().CountAsync(enrollment => enrollment.StudentId == fixture.StudentId)).ShouldBe(1);
 			var events = await services.GetRequiredService<IRepository<StudentOnboardingEvent, Guid>>().GetListAsync(row => row.OnboardingCaseId == fixture.CaseId);
 			events.Count(row => row.EventType == "PortalAccountLinked").ShouldBe(1);

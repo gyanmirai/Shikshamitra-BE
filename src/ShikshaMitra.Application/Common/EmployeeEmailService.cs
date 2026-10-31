@@ -44,7 +44,7 @@ public class EmployeeEmailService : IEmployeeEmailService, ITransientDependency
 	/// <param name="password">Generated password</param>
 	/// <returns>Task representing the async operation</returns>
 	public async Task SendWelcomeEmailAsync(
-		string employeeEmail,
+		string? employeeEmail,
 		string employeeName,
 		string username,
 		string password)

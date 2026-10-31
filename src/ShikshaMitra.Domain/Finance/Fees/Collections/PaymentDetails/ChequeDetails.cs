@@ -13,8 +13,6 @@ public class ChequeDetails : PaymentDetails
     public string BranchName { get; private set; }
     public DateOnly ChequeDate { get; private set; }
 
-    private ChequeDetails() { /* For ORM */ }
-
     public ChequeDetails(string chequeNumber, string bankName, string branchName, DateOnly chequeDate)
     {
         ChequeNumber = chequeNumber;

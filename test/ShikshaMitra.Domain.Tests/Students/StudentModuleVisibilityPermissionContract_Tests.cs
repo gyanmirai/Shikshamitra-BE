@@ -10,6 +10,20 @@ namespace ShikshaMitra.Students;
 public class StudentModuleVisibilityPermissionContract_Tests
 {
 	[Fact]
+	public void House_management_registers_exactly_three_canonical_actions()
+	{
+		ShikshaMitraSubmodulePermissions.Students.Submodules.Count.ShouldBe(33);
+		var actions = ShikshaMitraSubmodulePermissions.Students.Submodules.Values.SelectMany(item => item.Permissions).ToArray();
+		actions.Length.ShouldBe(111);
+		actions.Distinct().Count().ShouldBe(actions.Length);
+		const string feature = "Students.Records.HouseManagement";
+		ShikshaMitraSubmodulePermissions.Students.Submodules.ShouldContainKey(feature);
+		var submodule = ShikshaMitraSubmodulePermissions.Students.Submodules[feature];
+		submodule.Permissions.ShouldBe(new[] { feature + ".View", feature + ".Add", feature + ".Delete" });
+		submodule.DisplayNames.Keys.ShouldBe(submodule.Permissions);
+	}
+
+	[Fact]
 	public void Student_Module_Should_Register_All_Top_Level_Visibility_Permissions()
 	{
 		var expected = new[]
@@ -46,10 +60,20 @@ public class StudentModuleVisibilityPermissionContract_Tests
 	{
 		foreach (var (submoduleName, submodule) in ShikshaMitraSubmodulePermissions.Students.Submodules)
 		{
-			var expected = submoduleName is "Students.Records.Overrides" or "Students.Records.GuardianAccess" or "Students.Portal.ProfilePhoto"
-				? new[] { $"{submoduleName}.View", $"{submoduleName}.Add" }
-				: new[] { $"{submoduleName}.View", $"{submoduleName}.Add", $"{submoduleName}.Delete" };
-			submodule.Permissions.ShouldBe(expected);
+			if (submoduleName == "Students.Records.StudentList")
+			{
+				submodule.Permissions.Length.ShouldBe(16);
+				submodule.Permissions.All(name => name.EndsWith(".View") || name.EndsWith(".Add") || name.EndsWith(".Delete")).ShouldBeTrue();
+				submodule.Permissions.ShouldNotContain("Students.Records.Overrides.Delete");
+				submodule.Permissions.ShouldNotContain("Students.Records.GuardianAccess.Delete");
+			}
+			else
+			{
+				var expected = submoduleName == "Students.Portal.ProfilePhoto"
+					? new[] { $"{submoduleName}.View", $"{submoduleName}.Add" }
+					: new[] { $"{submoduleName}.View", $"{submoduleName}.Add", $"{submoduleName}.Delete" };
+				submodule.Permissions.ShouldBe(expected);
+			}
 			submodule.DisplayNames.Keys.ShouldBe(submodule.Permissions);
 		}
 	}
@@ -57,8 +81,8 @@ public class StudentModuleVisibilityPermissionContract_Tests
 	[Fact]
 	public void Portal_Photo_Adds_One_Feature_And_Two_Leaves_Without_Staff_Visibility()
 	{
-		ShikshaMitraSubmodulePermissions.Students.Submodules.Count.ShouldBe(37);
-		ShikshaMitraSubmodulePermissions.Students.Submodules.Values.Sum(item => item.Permissions.Length).ShouldBe(108);
+		ShikshaMitraSubmodulePermissions.Students.Submodules.Count.ShouldBe(33);
+		ShikshaMitraSubmodulePermissions.Students.Submodules.Values.Sum(item => item.Permissions.Length).ShouldBe(111);
 		ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.All.ShouldBe(new[] {
 			"Students.Portal.ProfilePhoto.View", "Students.Portal.ProfilePhoto.Add" });
 		// Mobile Student profile is association-based; it has no configurable staff navigation flag.

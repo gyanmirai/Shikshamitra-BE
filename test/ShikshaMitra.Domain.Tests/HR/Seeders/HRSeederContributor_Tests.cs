@@ -82,15 +82,44 @@ public class HRSeederContributor_Tests
 	}
 
 	[Fact]
-	public void Seeded_Login_Emails_Should_Have_Employee_Profiles()
+	public void Seeded_Staff_Login_Emails_Should_Have_Employee_Profiles()
 	{
 		var profiles = HRSeederContributor.BuildSuratSeedEmployeeProfiles();
-		var loginEmails = UserSeederContributor.BuildSeededLoginEmails()
-			.Concat(TestLoginSeederContributor.BuildSeededLoginEmails())
+		var loginEmails = UserSeederContributor.BuildSeededLoginRolesByEmail()
+			.Where(login => login.Value is not ("Student" or "Parent"))
+			.Select(login => login.Key)
+			.Concat(TestLoginSeederContributor.BuildSeededEmployeeProfileLoginEmails())
 			.Distinct(StringComparer.OrdinalIgnoreCase)
 			.ToList();
 
 		loginEmails.ShouldAllBe(email => profiles.ContainsKey(email));
+	}
+
+	[Fact]
+	public void Baseline_Student_And_Parent_Logins_Should_Not_Have_Employee_Profiles()
+	{
+		var profiles = HRSeederContributor.BuildSuratSeedEmployeeProfiles();
+		var portalLogins = UserSeederContributor.BuildSeededLoginRolesByEmail()
+			.Where(login => login.Value is "Student" or "Parent")
+			.Select(login => login.Key)
+			.ToList();
+
+		portalLogins.ShouldBe(["student-demo@ddvs.com", "parent-demo@ddvs.com"], ignoreOrder: true);
+		portalLogins.ShouldAllBe(email => !profiles.ContainsKey(email));
+	}
+
+	[Fact]
+	public void Identity_Only_Crm_Negative_Control_Should_Remain_A_Login_Without_An_Employee_Profile()
+	{
+		var loginEmails = TestLoginSeederContributor.BuildSeededLoginEmails();
+		var employeeProfileLoginEmails = TestLoginSeederContributor.BuildSeededEmployeeProfileLoginEmails();
+		var profiles = HRSeederContributor.BuildSuratSeedEmployeeProfiles();
+
+		loginEmails.ShouldContain("student-crm-denied@ddvs.com");
+		loginEmails.Except(employeeProfileLoginEmails, StringComparer.OrdinalIgnoreCase)
+			.ShouldBe(["student-crm-denied@ddvs.com"]);
+		employeeProfileLoginEmails.ShouldAllBe(email => loginEmails.Contains(email));
+		profiles.ContainsKey("student-crm-denied@ddvs.com").ShouldBeFalse();
 	}
 
 	[Fact]

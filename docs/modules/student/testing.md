@@ -3,14 +3,60 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-29
+updated_on: 2026-10-31
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
 
+## Student Records permission menu alignment
+
+The October 30 menu fix keeps the existing permission identifiers and workflow enforcement, grouping five internal profile workflows under Student List.
+Final local checks pass 71 Domain security/catalogue/seeding cases, 15 Academic scope synchronization cases, 84 permission HTTP cases and one PostgreSQL permission/upgrade case, all with zero failures and zero skips.
+The PostgreSQL gate ran against a newly created marked disposable database, which was removed after the run; real school grants and data were untouched.
+
+Full-source EF compilation now passes with normal nullable checks and analyzers, including every migration designer.
+The October 31 warning cleanup passes the complete 15-project backend solution build with zero warnings and zero errors.
+The complete migration model still matches the unchanged snapshot/latest target, and the five provider/fallback time-mapping cases pass.
+The [serialized local build helper](../../common/development/backend-builds.md) removes insufficient child-process heap caps without excluding source or changing application settings.
+Final binary hashes and source timestamps confirm all seven production project outputs are current.
+
+The PostgreSQL startup failure was caused by scope synchronization materializing a large AutoInclude hierarchy graph.
+Scalar hierarchy projections preserve required filtered parents, tenant/soft-delete filters, teacher eligibility, manual scopes and cache behavior.
+Six added cases cover deleted parents and foreign-tenant references; the original nine synchronization cases also pass.
+The first corrected PostgreSQL run completed scope seeding in 1535 ms, and a second run against the settled build also passed; these local observations do not establish production latency.
+
+See [frontend verification](../../../../Shikshamitra-FE/docs/security/testing.md#student-three-action-permission-contract) for the 253-case Security gate, additional Student contact test repairs and synthetic role/user browser checks.
+These focused suites and relevant full project builds do not certify every solution test, GitHub Actions, deployed role configuration or staging/production acceptance.
+The subsequent Domain-fixture repair passes the full suite: 1650 tests, zero failures and zero skips.
+Assessment rejection now tests unsupported versions 0/3 rather than supported version 2; normalization must retain the requested version before the reader rejects it.
+Fee expectations retain fractional input and follow the documented whole-rupee round-up rule; timetable conflict priority/details are verified in explicit colon/dot cultures with culture restoration.
+Staff-profile assertions use the baseline role catalogue and explicit internal test-persona metadata, preserving Student/Parent portals and the existing identity-only CRM negative actor without creating employee profiles or changing roles, aliases, grants or scopes.
+All existing seeder execution bodies remain unchanged, and four compiled before/after catalogue comparisons have zero differences.
+The fresh post-repair 15-project Debug solution build passes with zero warnings/errors. Final selections pass the full 1650-case Domain suite, 37 Application cases, 196 HTTP cases, six migration-model/provider cases and one real PostgreSQL permission/upgrade case, all without skips.
+The first PostgreSQL attempt overlapped the other suites and timed out in FeeCollection demo-startup standard loading before permission assertions; an unchanged isolated rerun passed. Both marked disposable databases were removed. Parallel-load startup reliability remains unverified; these results do not certify every solution test, a fresh Release build or deployed acceptance.
+
+## House Management security checks
+
+`StudentModuleVisibilityPermissionContract_Tests` pins the 33-feature-group/111-action catalogue and exact House View/Add/Delete leaves. `StudentRecordsPermissionMenu_Tests` verifies that Student List contains all 16 existing profile-workflow actions without five extra feature groups or renamed permission identifiers. `NavigationVisibilityPrerequisiteContract_Tests` requires the existing Student and Student Records visibility flags for all three House actions. `PermissionConsistencyApi_Tests` covers exact grants, denial/Follow role, revocation, no teacher/development fallback and atomic visibility prerequisites.
+
+```powershell
+dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~StudentModuleVisibilityPermissionContract_Tests|FullyQualifiedName~NavigationVisibilityPrerequisiteContract_Tests"
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~House_actions_require|FullyQualifiedName~Students_catalogue_contains|FullyQualifiedName~Student_actions_follow|FullyQualifiedName~Teacher_assignment_and_development_environment"
+```
+
+Run `HouseManagementDomain_Tests`, `HouseManagement_Tests` and `HouseManagementApi_Tests` in addition to these catalogue checks. They cover house validation, independent leaders, preview/stamp conflicts, scoped and mixed-batch authorization, same-year placement cleanup, legacy deletion safeguards and endpoint contracts. Local SQLite/synthetic tests do not establish PostgreSQL concurrency, live persistence, migration deployment or authenticated school acceptance.
+
+```powershell
+dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~HouseManagementDomain_Tests"
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~House_management"
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~HouseManagementApi_Tests|FullyQualifiedName~HouseSettingsApi_Tests"
+```
+
 ## Configured Inquiry capture
+
+Primary-contact regression coverage includes `AdmissionPrimaryContactSelection_Tests`, `AdmissionInquiryConfiguredFields_Tests`, `AdmissionFormDefinitionValidation_Tests`, `AdmissionFirstParentContactMapping_Tests` and `AdmissionWorkflowRuntimeIntegration_PrimaryContact_Tests`. They exercise required generic versus optional structured ownership, hidden email definitions, explicit clears, parent-only sibling proof, public-parent aliases and pending/confirmed Guardian transitions. Journey configuration and name prefill are covered by `AdmissionJourneyIdentityConfiguration_Tests`, `AdmissionStructuredNamePrefill_Tests`, `AdmissionWorkflowRuntimeIntegration_JourneyIdentity_Tests` and existing initial-values/finalization-contact suites. Family writes include `StudentRecordMainContact_Tests` and owning Registration/Domain contact tests. Fresh source-linked helper checks do not replace current Application/Contracts compilation and service integration execution.
 
 The configured-field helper and runtime integration suites cover Inquiry-only publication minima, full/split names, coherent generic/Father/Mother contacts, explicit parent selection, registered-binding ownership, legacy captured-role edits, preservation of unconfigured email, configured blank values, public source attribution and absence of staff-account provenance, scoped duplicate reference metadata, and rejection of forged sibling-role changes. Run the Inquiry-specific visibility-validator regressions as well: hidden-step questions cannot block capture, while visible required questions retain validation. Preserve the existing Registration validator path. These tests do not establish staging deployment or email delivery; normal Application/Contracts compilation and isolated test-only dependency compilation must be reported separately.
 
@@ -333,6 +379,10 @@ The HTTP filter is `FullyQualifiedName~One_click_credentials_postgres_outbox_fai
 These checks freshly compiled current Application, Contracts, Domain, EF, HttpApi and Host dependencies to isolated outputs with serialized builds and analyzers disabled. The validation-only target excludes generated migration `*.Designer.cs` files for memory reasons while retaining migration classes and the current model. This is not a normal full-solution/analyzer or migration-history pass. No schema migration, Finance source change, real portal account/password/email, normal school-data mutation, deployment or inbox delivery was performed. Existing development servers were not stopped or restarted. Latest-source authenticated browser acceptance remains unverified because the frontend localhost port was unavailable; [frontend testing](../../../../Shikshamitra-FE/docs/student/testing.md) records focused UI results and the four unrelated retired readiness-screen fixture failures.
 
 ## Inline retained Registration form (2026-10-13)
+
+`Inline_form_parent_contact_edit_creates_contact_only_parent_and_preserves_original` covers adding a mother's mobile number through the retained form when no mother profile/name exists, both with and without an existing family profile. Its retained schema also includes unanswered `Identity.DocumentName` and profile-photo questions. Current form projection must supply `null` for these absent answers before validation/mapping without adding answers to the original submission. It verifies Applied status, contact-only profile reload, preservation of the existing father, current-value projection and unchanged original evidence. Run with `FullyQualifiedName~Inline_form_parent_contact_edit`; this isolated Application test does not establish a successful save in a deployed school database.
+
+`Inline_form_postgres_http_creates_contact_only_mother_preserves_father_submission_and_audit` exercises the actual HTTP snapshot/save/replay/readback endpoints using a fresh loopback database through `StudentRecordsApplicationPostgresTestFactory`. It preserves the existing father, empty guardian, main-contact selection and immutable submission, and asserts one Applied correction and guardian review. The self-contained frozen form includes unanswered document-name and photo questions. Optional `STUDENT_RECORDS_INLINE_FORM_DEFINITION` accepts schema-only diagnostic metadata; fixture IDs and defaults are replaced and all answers remain synthetic. This current-model HTTP gate does not validate deployed migrations, Azure assemblies or a live school save.
 
 The focused Application gates passed **27 existing custom-record regression cases** and **18 final inline-form/action-permission cases**, with no final failures or skips. The latter contains ten inline scenarios, three direct-form permission denials and five canonical document action denials. It covers atomic mapped/custom save, immutable original submissions, actor/reason/before/after audit, stable retry, stale snapshot rejection, unchanged generic approval policy, retained schema across year context, masked-field storage preservation, repeated hidden answers, nullable/identity/placement preservation, binary summaries, newly-required row rules and empty required structured answers.
 
@@ -1257,9 +1307,23 @@ The focused Host publish succeeds with isolated outputs and analyzers disabled; 
 
 Run Domain `AdmissionFormInheritanceComposer_Tests`, Application `AdmissionFormInheritance_Tests`, `AdmissionEffectiveFormStore_Tests`, `Inherited_registration_*`, `StudentRecordInheritedIdentity_Tests` and the retained-schema Records regression. HTTP `AdmissionFormInheritanceApiContract_Tests` checks endpoint contracts and existing authorization grants. Include existing form validation, prefill, application-start concurrency, correction, family ownership and Records suites when reviewing the integrated change.
 
-Required cases include source-specific labels/options/translations, semantic-identity deduplication, unrelated custom-code collisions, effective conditional rules, repeatable groups, requiredness strengthening, unsupported fields, readonly context, corrupt snapshot rejection, save/clear persistence, start retry and retained submission/Records evidence. Application tests verify persistence through their configured provider; they do not establish PostgreSQL production concurrency or browser behavior. Run the full Release solution build with the pinned SDK and isolated artifacts before handoff.
+Required cases include source-first sections/steps and columns, source-specific labels/options/translations, semantic-identity and reserved-starter deduplication, unrelated custom-code collisions, locked source requirements/validation/placement, effective conditional rules, repeatable groups, unsupported fields, readonly full-name/context references, corrupt snapshot rejection, save/clear persistence, start retry and retained submission/Records evidence. Full-name references must not retain a conditional required rule that could create an unanswered disabled control. Application tests verify persistence through their configured provider; they do not establish PostgreSQL production concurrency or browser behavior. Run the full Release solution build with the pinned SDK and isolated artifacts before handoff.
 
 Local verification on 30 October 2026 passed the full Release solution build with the pinned .NET 9 SDK, isolated artifacts and analyzers enabled: zero errors, 898 warnings. Fresh post-build selections passed 20 Domain composition tests, 49 Application inheritance/runtime/identity tests, one retained-schema Records integration test and four HTTP contract tests, with no skips. The earlier separate 58-case existing validation/prefill/contact regression selection also passed. The runtime integration selection verifies exact source labels, prefill, explicit clears, required effective fields, unknown-write denial, start idempotency and immutable schema persistence; the Records case retains inherited questions and submitted answers. These provider tests do not establish production PostgreSQL concurrency.
+
+## Inquiry identity mapping recovery
+
+Publication hardening tests reject alias-only/custom mappings, custom aliases shadowing system identity, incorrect input types and incomplete selected-parent contacts behind a generic pair. An actual `PublishAsync` call rejects an alias-only student mapping and preserves the draft, field count and binding key. Existing published forms are exercised through real create/edit services with `FIELD_1` explicitly bound to Student name and historical code aliases; raw answers and field counts remain stable. No runtime identity questions or tenant form migration are introduced.
+
+The final focused selection passes 59 cases with no skips. The selector cases failed before the runtime/publication ownership rules were aligned. The isolated test compilation excludes EF migration designer/snapshot files and disables analyzers; it does not execute migrations or establish deployed PostgreSQL acceptance.
+
+The separate normal Application project build with analyzers enabled passes with zero errors and 796 warnings. It uses no focused-test compile exclusion and does not claim a full solution/migration build.
+
+The focused `AdmissionInquiryConfiguredFields_Tests` and configured/partial Inquiry runtime selection passes 46 cases with no skips. Coverage includes partial Father/Mother mobile ownership, legacy generic DTO compatibility, optional published identity, same-Offering edit preservation, verified sibling name recovery, forged-role denial, public attribution and publication minimums. Unmapped custom questions are not relabelled or reinterpreted as identity.
+
+The isolated focused test build uses the pinned SDK and excludes unchanged EF migration designers/model snapshot from that test dependency compilation under local memory pressure; analyzers are disabled for that test run. It is not a full migration/solution build or deployed-tenant acceptance. No schema migration or tenant form repair is part of this change.
+
+The separate normal Application project build, without the focused-test exclusion and with analyzers enabled, passes with zero errors and 796 warnings. This does not claim a full solution/migration build.
 
 The verified localhost API uses the same Release Application assembly as the post-build tests and the existing loopback launch configuration; migrations, seeders and delivery workers are disabled. Authenticated browser checks verify source discovery/preview and an isolated Registration draft's two approvals and requiredness surviving full reload. No active Offering or applicant journey was changed; see [frontend browser evidence](../../../../Shikshamitra-FE/docs/student/testing.md#inquiry-inheritance-checks). Student docs validate under PowerShell 7; Windows PowerShell 5.1 misreads the existing BOM-less UTF-8 pages and reports false mojibake. Local checks do not establish staging or production acceptance.
 
@@ -1275,3 +1339,12 @@ dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~MobileS
 ```
 
 Application fixtures use SQLite with transactions disabled. StudentPhotoConcurrencyPostgres_Tests separately exercises the real EF row fence against an explicitly configured disposable loopback photo_tests_* PostgreSQL database, including ReadCommitted contention and an admission-style prior Serializable snapshot. Set STUDENT_PHOTO_POSTGRES only to that isolated test database. Image validation requires SkiaSharp SKCodec.GetPixels to return Success after PNG chunk/CRC and JPEG complete-scan framing checks, with a 4096-by-4096 pixel allocation bound. SkiaSharp and its Linux NoDependencies native assets are pinned to 4.153.1; Windows assets arrive through the main package. Tests include valid JPEG/PNG, CRC-repaired corrupt PNG pixels, an empty JPEG scan, and nonzero truncated JPEG input. Local tests and source checks do not establish deployed permission/association revocation or live deployment acceptance.
+## Inherited Inquiry presentation (30 October 2026)
+
+The focused Domain composer suite passes 25 tests, including all four Inquiry/Registration layout combinations, preserved multi-section source steps and source columns, immutable input definitions, and dormant single-page step rules on shared questions. The inheritance/effective-form Application selection passes 45 tests, including output DTO serialization of source columns for frozen runtime schemas. Existing snapshots are not migrated. Browser component QA does not establish actual applicant persistence or deployment acceptance.
+
+### Inquiry-first locked definitions
+
+The current composer selection passes 33 cases and the Application composition selection passes 16 cases. They cover recommended-template overlaps with reserved legacy aliases, original source provenance, source-first sections/steps/grid, locked source requirements/validation/placement, read-only full-name reference beside structured Registration names, original Inquiry immutability, incompatible types and rules, source switching, and JSON roundtrip of the saved Registration policy. Originally empty authored Registration sections/steps remain available; only sections emptied by duplicate suppression disappear. Matching does not use labels or translations.
+
+These gates used the pinned SDK and isolated `inquiry-first-runtime` artifacts. The final Domain test build used `BuildProjectReferences=false`, `RunAnalyzers=false` and `-m:1` against already compiled dependencies; Application composition tests ran through `dotnet vstest` against the settled test assembly. The focused dependency compilation excluded unchanged EF migration designers/model snapshot under memory pressure; these gates are not a full migration/solution build or live browser acceptance. Original frozen application schemas remain unchanged. See the frontend testing page for the separate actual save/reopen check.

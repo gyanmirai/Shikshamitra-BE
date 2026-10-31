@@ -9,7 +9,7 @@ namespace ShikshaMitra.Finance.Fees.Settings.GeneralSetting.FeeHead;
 
 public class FeeHeadDto : AuditedEntityDto<Guid>
 {
-	public string FeeHeadName { get; set; }
+	public string? FeeHeadName { get; set; }
 }
 
 

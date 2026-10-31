@@ -17,17 +17,37 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 [Authorize]
 [RemoteService(false)]
-public class FeeCategoryAppService(
-	IRepository<FeeCategory, Guid> feeCategoryRepository,
-	IRepository<FeeHead, Guid> feeHeadRepository,
-	IRepository<FeeStructure, Guid> feeStructureRepository,
-	IRepository<TransactionCategory, Guid> incomeCategoryRepository,
-	IRepository<AccountHead, Guid> accountHeadRepository,
-	FeeCategoryManager feeCategoryManager,
-	FeeHeadAccountingManager accountingManager,
-	FeeHeadDependencyQuery dependencyQuery
-) : ApplicationService, IFeeCategoryAppService
+public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
 {
+	private readonly IRepository<FeeCategory, Guid> feeCategoryRepository;
+	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
+	private readonly IRepository<TransactionCategory, Guid> incomeCategoryRepository;
+	private readonly IRepository<AccountHead, Guid> accountHeadRepository;
+	private readonly FeeCategoryManager feeCategoryManager;
+	private readonly FeeHeadAccountingManager accountingManager;
+	private readonly FeeHeadDependencyQuery dependencyQuery;
+
+	public FeeCategoryAppService(
+		IRepository<FeeCategory, Guid> feeCategoryRepository,
+		IRepository<FeeHead, Guid> feeHeadRepository,
+		IRepository<FeeStructure, Guid> feeStructureRepository,
+		IRepository<TransactionCategory, Guid> incomeCategoryRepository,
+		IRepository<AccountHead, Guid> accountHeadRepository,
+		FeeCategoryManager feeCategoryManager,
+		FeeHeadAccountingManager accountingManager,
+		FeeHeadDependencyQuery dependencyQuery
+	)
+	{
+		this.feeCategoryRepository = feeCategoryRepository;
+		this.feeHeadRepository = feeHeadRepository;
+		_ = feeStructureRepository;
+		this.incomeCategoryRepository = incomeCategoryRepository;
+		this.accountHeadRepository = accountHeadRepository;
+		this.feeCategoryManager = feeCategoryManager;
+		this.accountingManager = accountingManager;
+		this.dependencyQuery = dependencyQuery;
+	}
+
 	[UnitOfWork(isTransactional: true)]
 	public async Task<FeeCategoryResponse> CreateAsync(Guid academicYearId, FeeCategoryCreateRequest input)
 	{
@@ -380,7 +400,7 @@ public class FeeCategoryAppService(
 		return (await dependencyQuery.GetAsync(feeHeadIds)).Where(x => x.Value.IsBlocked).Select(x => x.Key).ToHashSet();
 	}
 
-	private async Task<FeeCategoryResponse> MapToResponseAsync(FeeCategory feeCategory, List<FeeHead> feeHeads, HashSet<Guid> usedFeeHeadIds = null)
+	private async Task<FeeCategoryResponse> MapToResponseAsync(FeeCategory feeCategory, List<FeeHead> feeHeads, HashSet<Guid>? usedFeeHeadIds = null)
 	{
 		usedFeeHeadIds ??= await GetUsedFeeHeadIdsAsync(feeHeads.Select(x => x.Id).ToList());
 		var incomeCategoryIds = feeHeads.Select(x => x.IncomeCategoryId).Distinct().ToList();

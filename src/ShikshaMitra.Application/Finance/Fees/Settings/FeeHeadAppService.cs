@@ -19,17 +19,37 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 [Authorize]
 [RemoteService(false)]
-public partial class FeeHeadAppService(
-	IRepository<FeeHead, Guid> feeHeadRepository,
-	IRepository<FeeCategory, Guid> feeCategoryRepository,
-	IRepository<FeeStructure, Guid> feeStructureRepository,
-	IRepository<TransactionCategory, Guid> incomeCategoryRepository,
-	IRepository<AccountHead, Guid> accountHeadRepository,
-	FeeCategoryManager feeCategoryManager,
-	FeeHeadAccountingManager accountingManager,
-	FeeHeadDependencyQuery dependencyQuery
-) : ApplicationService, IFeeHeadAppService
+public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 {
+	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
+	private readonly IRepository<FeeCategory, Guid> feeCategoryRepository;
+	private readonly IRepository<TransactionCategory, Guid> incomeCategoryRepository;
+	private readonly IRepository<AccountHead, Guid> accountHeadRepository;
+	private readonly FeeCategoryManager feeCategoryManager;
+	private readonly FeeHeadAccountingManager accountingManager;
+	private readonly FeeHeadDependencyQuery dependencyQuery;
+
+	public FeeHeadAppService(
+		IRepository<FeeHead, Guid> feeHeadRepository,
+		IRepository<FeeCategory, Guid> feeCategoryRepository,
+		IRepository<FeeStructure, Guid> feeStructureRepository,
+		IRepository<TransactionCategory, Guid> incomeCategoryRepository,
+		IRepository<AccountHead, Guid> accountHeadRepository,
+		FeeCategoryManager feeCategoryManager,
+		FeeHeadAccountingManager accountingManager,
+		FeeHeadDependencyQuery dependencyQuery
+	)
+	{
+		this.feeHeadRepository = feeHeadRepository;
+		this.feeCategoryRepository = feeCategoryRepository;
+		_ = feeStructureRepository;
+		this.incomeCategoryRepository = incomeCategoryRepository;
+		this.accountHeadRepository = accountHeadRepository;
+		this.feeCategoryManager = feeCategoryManager;
+		this.accountingManager = accountingManager;
+		this.dependencyQuery = dependencyQuery;
+	}
+
 	[UnitOfWork(isTransactional: true)]
 	public async Task<FeeHeadResponse> CreateAsync(Guid academicYearId, FeeHeadCreateRequest input)
     {
@@ -54,7 +74,7 @@ public partial class FeeHeadAppService(
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.View)]
-    public async Task<FeeHeadListResponse> GetListAsync(Guid academicYearId, Guid? feeCategoryId = null, string search = null, int page = 1, int pageSize = 10, string? filters = null)
+    public async Task<FeeHeadListResponse> GetListAsync(Guid academicYearId, Guid? feeCategoryId = null, string? search = null, int page = 1, int pageSize = 10, string? filters = null)
     {
         var tableQuery = ListFilters.Parse(filters);
         var hasHeaderFilters = tableQuery.Filters.Count > 0;

@@ -20,6 +20,25 @@ namespace ShikshaMitra.Security.Permissions;
 public partial class PermissionConsistencyApi_Tests
 {
 	[Fact]
+	public async Task House_actions_require_existing_student_and_records_visibility_before_assignment()
+	{
+		const string action = "Students.Records.HouseManagement.Add";
+		const string student = "ShikshaMitra.Module.Students";
+		const string records = "ShikshaMitra.Module.Students.Records";
+		var (role, _) = await CreateTargetAsync();
+		var url = Url("R", role);
+		using var rejected = await Client.PutAsJsonAsync(url, new { permissions = new[] {
+			new { name = student, isGranted = true }, new { name = action, isGranted = true } } });
+		rejected.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await rejected.Content.ReadAsStringAsync());
+		(await rejected.Content.ReadAsStringAsync()).ShouldContain("VISIBILITY_PREREQUISITE_MISSING");
+		var after = await ReadAsync(url);
+		after.Single(item => item.Name == student).IsGranted.ShouldBeFalse();
+		after.Single(item => item.Name == action).IsGranted.ShouldBeFalse();
+		await SetAsync(url, (action, true), (records, true), (student, true));
+		(await ReadAsync(url)).Single(item => item.Name == action).IsGranted.ShouldBeTrue();
+	}
+
+	[Fact]
 	public async Task Students_catalogue_contains_only_canonical_actions()
 	{
 		var (role, _) = await CreateTargetAsync();
@@ -29,9 +48,11 @@ public partial class PermissionConsistencyApi_Tests
 		studentActions.ShouldNotBeEmpty();
 		studentActions.ShouldAllBe(name => name.EndsWith(".View") || name.EndsWith(".Add") || name.EndsWith(".Delete"));
 		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.View);
+		studentActions.Where(name => name.StartsWith("Students.Records.HouseManagement.", StringComparison.Ordinal))
+			.OrderBy(name => name).ShouldBe(new[] { "Students.Records.HouseManagement.Add", "Students.Records.HouseManagement.Delete", "Students.Records.HouseManagement.View" });
 		studentActions.ShouldNotContain("Students.Records.Overrides.Delete");
 		studentActions.ShouldNotContain("Students.Records.GuardianAccess.Delete");
-		studentActions.Length.ShouldBe(108);
+		studentActions.Length.ShouldBe(111);
 		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View);
 		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add);
 		studentActions.ShouldNotContain("Students.Portal.ProfilePhoto.Delete");
@@ -48,7 +69,10 @@ public partial class PermissionConsistencyApi_Tests
 			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add,
 			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Delete,
 			ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add,
-			ShikshaMitraSubmodulePermissions.Students.Records_Changes.Add
+			ShikshaMitraSubmodulePermissions.Students.Records_Changes.Add,
+			"Students.Records.HouseManagement.View",
+			"Students.Records.HouseManagement.Add",
+			"Students.Records.HouseManagement.Delete"
 		})
 			await AssertRealCheckerAsync(user, role, permission, false);
 		// Existing Academic assignment-derived behavior remains unchanged.
@@ -61,6 +85,25 @@ public partial class PermissionConsistencyApi_Tests
 	[InlineData(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Delete)]
 	[InlineData(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View)]
 	[InlineData(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add)]
+	[InlineData("Students.Records.HouseManagement.View")]
+	[InlineData("Students.Records.HouseManagement.Add")]
+	[InlineData("Students.Records.HouseManagement.Delete")]
+	[InlineData("Students.Records.StudentList.View")]
+	[InlineData("Students.Records.StudentList.Add")]
+	[InlineData("Students.Records.StudentList.Delete")]
+	[InlineData("Students.Records.Changes.View")]
+	[InlineData("Students.Records.Changes.Add")]
+	[InlineData("Students.Records.Changes.Delete")]
+	[InlineData("Students.Records.Transitions.View")]
+	[InlineData("Students.Records.Transitions.Add")]
+	[InlineData("Students.Records.Transitions.Delete")]
+	[InlineData("Students.Records.Overrides.View")]
+	[InlineData("Students.Records.Overrides.Add")]
+	[InlineData("Students.Records.GuardianAccess.View")]
+	[InlineData("Students.Records.GuardianAccess.Add")]
+	[InlineData("Students.IdentityCompliance.View")]
+	[InlineData("Students.IdentityCompliance.Add")]
+	[InlineData("Students.IdentityCompliance.Delete")]
 	public async Task Student_actions_follow_exact_role_grants_user_overrides_and_revocation(string action)
 	{
 		var (role, user) = await CreateTargetAsync();
@@ -72,7 +115,8 @@ public partial class PermissionConsistencyApi_Tests
 			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add,
 			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Delete,
 			ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View,
-			ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add }.Where(name => name != action))
+			ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add,
+			"Students.Records.HouseManagement.View", "Students.Records.HouseManagement.Add", "Students.Records.HouseManagement.Delete" }.Where(name => name != action))
 			await AssertRealCheckerAsync(user, role, other, false);
 		await SetOverridesAsync(user, (action, "deny"));
 		await AssertRealCheckerAsync(user, role, action, false);

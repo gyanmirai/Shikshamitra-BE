@@ -12,6 +12,16 @@ audience: humans-and-agents
 
 TL;DR: setup commands produce validated offering defaults, while inquiry and application runtime commands consume only offerings that are open and ready.
 
+## Manage houses and student leadership
+
+1. Select an accessible medium and read its houses, scoped students and divisions.
+2. With Add and sufficient configuration scope, create or update a house.
+3. Select eligible enrolled students and preview assignment or removal. Review affected house leaders, then submit the current preview atomically.
+4. Select or clear a house leader from eligible members, or independently select or clear a division leader. Replacements require the current concurrency stamp and authority over the affected records.
+5. Delete only an empty house using Delete authority. Legacy House Settings retains the same population safeguard.
+
+Server commands recheck the current tenant, active actor, exact action grant, scope and reviewed state. A failed batch commits no partial membership changes. There is no automatic year carry-forward. See the [API contract](./api.md#house-management) and [frontend workflow](../../../../Shikshamitra-FE/docs/student/workflows.md#house-management).
+
 ## Resume an End Journey withdrawal
 
 1. Staff opens the Withdrawn application in Applications and requests its resume preview under existing scope/permissions.
@@ -300,6 +310,8 @@ Once the inquiry is handed off, its details and qualification remain locked and 
    A required stage cannot enable ordinary manual skip. Stage types without a runtime-ready handler are publication errors, not advisory warnings.
 
 Admission forms use the same controlled rule foundation for section visibility, field visibility, and conditional requiredness. The form runtime supports 100 canonical Student field bindings: 15 original Applicant, Guardian, and Address bindings plus 85 additional profile, family, address, previous-school, health, eligibility, identity, and admission-preference bindings. Financial assistance fields are excluded from the expanded catalogue. The original bindings update admission identity and contact properties. Additional bindings persist on the applicant, prefill registration after inquiry, and are copied to the Student record's captured admission fields during finalization. Staff can review those captured values on the onboarding case detail; they are not automatically treated as verified SIS profile values. Clearing an additional answer removes its applicant value before finalization.
+
+Class-interest publication validates one custom question across the reserved starter code and the exact **Class interested in / Interested Class** aliases, using Select with the Standards source. Inheritance matches that question across Inquiry and Registration independently of custom UUIDs and labels, while retaining Inquiry settings and original answer provenance. Class applying for, previous class, explicitly linked Student fields and static information remain separate. Duplicate legacy source questions cause a compatibility issue for new composition rather than silently discarding answers; existing frozen applicant definitions are unchanged. A corrected Inquiry version is required before allowing that source for new reuse.
 
 Every new form version carries an Inquiry or Registration purpose. Clone and new-version operations preserve it, and changing it is allowed only on a Draft. Earlier Correction and Consent values may remain on existing test records but cannot be used for new forms. Workflow publication requires a published Registration form on each Form stage and a published Inquiry form for any configured workflow default. Offering readiness rejects a purpose mismatch before activation.
 5. Validate reachability, dead ends, duplicate routes, cycles, terminal reachability, published form references, and every enabled managed-stage policy. Form, Assessment and Documents policies are parsed with the same domain validators used by runtime, so malformed or out-of-range settings cannot pass publication validation.

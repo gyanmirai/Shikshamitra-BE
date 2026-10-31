@@ -23,7 +23,7 @@ public class AllocatedTeacher : FullAuditedEntity
 	/// <summary>
 	/// Navigation property to the associated TeacherSubjectAllocation.
 	/// </summary>
-	public TeacherSubjectAllocation Allocation { get; set; }
+	public TeacherSubjectAllocation Allocation { get; set; } = null!; // Populated by EF relationship materialization.
 
 	#endregion
 

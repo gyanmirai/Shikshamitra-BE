@@ -19,7 +19,12 @@ public class AdmissionFormDefinition : FullAuditedAggregateRoot<Guid>, IMultiTen
 	public Guid? ParentVersionId { get; private set; }
 	public DateTime? PublishedAt { get; private set; }
 	public Guid? PublishedBy { get; private set; }
-	protected AdmissionFormDefinition() { }
+	protected AdmissionFormDefinition()
+	{
+		// EF materializes these required columns after this ORM constructor.
+		Code = null!;
+		Name = null!;
+	}
 	public AdmissionFormDefinition(Guid id, Guid? tenantId, string name, string code, AdmissionFormLayoutType layoutType, int version = 1, Guid? parentVersionId = null, string? description = null, int fieldsPerRow = 1, AdmissionFormPurpose purpose = AdmissionFormPurpose.Registration) : base(id)
 	{
 		TenantId = tenantId;

@@ -1029,7 +1029,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	{
 		using var principal = await ChangeToAdminPrincipalAsync();
 		var rules = new List<SalaryTemplateRuleDto>();
-		foreach (var line in contract.EarningComponents)
+		foreach (var line in contract.EarningComponents.ShouldNotBeNull())
 		{
 			var componentId = line.ComponentId ?? (await CreateEarningComponentAsync($"Basic {Guid.NewGuid():N}", line.Amount!.Value)).Id;
 			rules.Add(new SalaryTemplateRuleDto

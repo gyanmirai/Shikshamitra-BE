@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -81,7 +82,11 @@ public class Group : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public ICollection<GroupMember> Members { get; private set; } = new List<GroupMember>();
 
-    protected Group() { }
+    protected Group()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        Name = null!;
+    }
 
     internal Group(
         Guid id,
@@ -132,6 +137,7 @@ public class Group : FullAuditedAggregateRoot<Guid>, IMultiTenant
         return group;
     }
 
+    [MemberNotNull(nameof(Name))]
     public void SetName(string name)
     {
         Name = Check.NotNullOrWhiteSpace(name, nameof(name), maxLength: 256);

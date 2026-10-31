@@ -6,7 +6,7 @@ public class SubjectLiteDto
 {
     public SubjectType SubjectType { get; set; }
     public Guid SubjectId { get; set; }
-    public string SubjectName { get; set; }
-    public string SubjectCode { get; set; }
-    public string Color { get; set; }
+    public string? SubjectName { get; set; }
+    public string SubjectCode { get; set; } = null!;
+    public string? Color { get; set; }
 }

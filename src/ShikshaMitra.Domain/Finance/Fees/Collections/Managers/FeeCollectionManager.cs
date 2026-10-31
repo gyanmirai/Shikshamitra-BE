@@ -22,23 +22,54 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 /// All monetary invariants (payment details validation, DueFee allocation) live here
 /// so that the application service remains a thin coordinator.
 /// </summary>
-public class FeeCollectionManager(
-	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
-	IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository,
-	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
-	IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
-	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
-	IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
-	IDueFeeRepository dueFeeRepository,
-	IRepository<FeeHead, Guid> feeHeadRepository,
-	IFeePaymentReceiptRepository feePaymentReceiptRepository,
-	FeeReceiptManager feeReceiptManager,
-	IReceiptNumberSequenceRepository receiptNumberSequenceRepository,
-	IClock clock,
-	ICurrentTenant currentTenant,
-	ICurrentUser currentUser
-) : DomainService
+public class FeeCollectionManager : DomainService
 {
+	private readonly IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository;
+	private readonly IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository;
+	private readonly IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository;
+	private readonly IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository;
+	private readonly IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository;
+	private readonly IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository;
+	private readonly IDueFeeRepository dueFeeRepository;
+	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
+	private readonly IFeePaymentReceiptRepository feePaymentReceiptRepository;
+	private readonly FeeReceiptManager feeReceiptManager;
+	private readonly IReceiptNumberSequenceRepository receiptNumberSequenceRepository;
+	private readonly IClock clock;
+	private readonly ICurrentTenant currentTenant;
+
+	public FeeCollectionManager(
+		IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
+		IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository,
+		IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+		IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
+		IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
+		IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
+		IDueFeeRepository dueFeeRepository,
+		IRepository<FeeHead, Guid> feeHeadRepository,
+		IFeePaymentReceiptRepository feePaymentReceiptRepository,
+		FeeReceiptManager feeReceiptManager,
+		IReceiptNumberSequenceRepository receiptNumberSequenceRepository,
+		IClock clock,
+		ICurrentTenant currentTenant,
+		ICurrentUser currentUser
+	)
+	{
+		this.feeRecordMetadataRepository = feeRecordMetadataRepository;
+		this.feeCollectionRecordRepository = feeCollectionRecordRepository;
+		this.chargeCollectionRecordRepository = chargeCollectionRecordRepository;
+		this.paymentMethodRecordRepository = paymentMethodRecordRepository;
+		this.dueFeeAllocationRepository = dueFeeAllocationRepository;
+		this.lateFeeAllocationRepository = lateFeeAllocationRepository;
+		this.dueFeeRepository = dueFeeRepository;
+		this.feeHeadRepository = feeHeadRepository;
+		this.feePaymentReceiptRepository = feePaymentReceiptRepository;
+		this.feeReceiptManager = feeReceiptManager;
+		this.receiptNumberSequenceRepository = receiptNumberSequenceRepository;
+		this.clock = clock;
+		this.currentTenant = currentTenant;
+	}
+
 	public sealed record CollectFeeTransactionCommand(
 		Guid? StudentId,
 		Guid AcademicYearId,

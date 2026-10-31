@@ -15,7 +15,11 @@ public class RoomRecurringConfig : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public bool ExcludeExamDays { get; private set; }
     public bool SkipConflictDates { get; private set; }
 
-    private RoomRecurringConfig() { }
+    private RoomRecurringConfig()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        RepeatType = null!;
+    }
 
     public RoomRecurringConfig(
         Guid id,

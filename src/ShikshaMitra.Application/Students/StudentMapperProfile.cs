@@ -60,11 +60,11 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.InquiryNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.InquiryNo : null))
 			.ForMember(dest => dest.StudentName, opt => opt.MapFrom(src =>
 				$"{src.FirstName} {src.MiddleName} {src.LastName}".Trim()))
-			.ForMember(dest => dest.AcademicYearName, opt => opt.MapFrom(src => src.AcademicYear.Name))
-			.ForMember(dest => dest.AcademicBoardName, opt => opt.MapFrom(src => src.AcademicBoard.Type.ToString()))
-			.ForMember(dest => dest.AcademicMediumName, opt => opt.MapFrom(src => src.AcademicMedium.Name))
-			.ForMember(dest => dest.Standard, opt => opt.MapFrom(src => src.Standard.Name))
-			.ForMember(dest => dest.Division, opt => opt.MapFrom(src => src.Division.Name))
+			.ForMember(dest => dest.AcademicYearName, opt => opt.MapFrom(src => src.AcademicYear!.Name))
+			.ForMember(dest => dest.AcademicBoardName, opt => opt.MapFrom(src => src.AcademicBoard!.Type.ToString()))
+			.ForMember(dest => dest.AcademicMediumName, opt => opt.MapFrom(src => src.AcademicMedium!.Name))
+			.ForMember(dest => dest.Standard, opt => opt.MapFrom(src => src.Standard!.Name))
+			.ForMember(dest => dest.Division, opt => opt.MapFrom(src => src.Division!.Name))
 			.ForMember(dest => dest.DateOfBirth, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfBirth : null))
 			.ForMember(dest => dest.Age, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfBirth : null))
 			.ForMember(dest => dest.DateOfInquiry, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.DateOfInquiry : null))
@@ -100,8 +100,8 @@ public class StudentMapperProfile : Profile
 			.ForMember(dest => dest.InquiryPreferenceId, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.InquiryPreferenceId : null))
 			.ForMember(dest => dest.InquiryPreference, opt => opt.MapFrom(src => src.AdditionalDetail != null && src.AdditionalDetail.InquiryPreference != null ? src.AdditionalDetail.InquiryPreference.PreferenceName : null))
 			.ForMember(dest => dest.FormNo, opt => opt.MapFrom(src => src.AdditionalDetail != null ? src.AdditionalDetail.RegistrationFormNo : null))
-			.ForMember(dest => dest.NextReminderDate, opt => opt.MapFrom(src => src.Notes.OrderByDescending(x => x.CreationTime).FirstOrDefault().NextReminderDate))
-			.ForMember(dest => dest.InquiryStatus, opt => opt.MapFrom(src => src.Notes.OrderByDescending(x => x.CreationTime).FirstOrDefault().Status))
+			.ForMember(dest => dest.NextReminderDate, opt => opt.MapFrom(src => src.Notes.OrderByDescending(x => x.CreationTime).FirstOrDefault()!.NextReminderDate))
+			.ForMember(dest => dest.InquiryStatus, opt => opt.MapFrom(src => src.Notes.OrderByDescending(x => x.CreationTime).FirstOrDefault()!.Status))
 			.ForMember(dest => dest.Progress, opt => opt.MapFrom(src => src.AdditionalDetail != null
 				? ((double)src.AdditionalDetail.StudentRegistrationState / (Enum.GetValues<StudentRegistrationStateEnum>().Length - 1))*100
 				: 0))

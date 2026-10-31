@@ -17,7 +17,12 @@ public class RoomMaintenanceBlock : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public string? Remarks { get; private set; }
     public MaintenanceStatus Status { get; private set; }
 
-    private RoomMaintenanceBlock() { }
+    private RoomMaintenanceBlock()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        Reason = null!;
+        Title = null!;
+    }
 
     public RoomMaintenanceBlock(
         Guid id,

@@ -262,7 +262,7 @@ public class ClassTeacherAssignmentAppService(
 			// Class-teacher assignments are a first-class source of user scope. Persist
 			// the replacement set before synchronizing so the synchronizer sees both
 			// additions and removals in the same transaction.
-			await CurrentUnitOfWork.SaveChangesAsync();
+			await CurrentUnitOfWork!.SaveChangesAsync();
 			if (!input.SaveAsDraft)
 			{
 				await academicPermissionUserScopeSyncer.SyncAsync();

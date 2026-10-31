@@ -143,8 +143,8 @@ public class AdmissionOfferingReadService(
 			select new AdmissionOfferingReadRow
 			{
 				Name = offering.Name == "" ? offering.Code : offering.Name,
-				EffectiveOpenDate = offering.OpenDate.HasValue ? offering.OpenDate.Value.Date : cycle.StartDate.Date,
-				EffectiveCloseDate = offering.CloseDate.HasValue ? offering.CloseDate.Value.Date : cycle.EndDate.Date,
+				EffectiveOpenDate = offering.OpenDate.HasValue ? offering.OpenDate!.Value.Date : cycle.StartDate.Date,
+				EffectiveCloseDate = offering.CloseDate.HasValue ? offering.CloseDate!.Value.Date : cycle.EndDate.Date,
 				Offering = offering,
 				Campus = campus,
 				Cycle = cycle,

@@ -8,7 +8,7 @@ public class CreateUpdateRoomDto
 {
 	[Required]
 	[StringLength(RoomConsts.MaxRoomNameLength)]
-	public string RoomName { get; set; }
+	public string RoomName { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
 	[Required]
 	[Range(0, int.MaxValue)]

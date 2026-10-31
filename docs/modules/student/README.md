@@ -28,6 +28,8 @@ Use [frontend Student documentation](../../../../Shikshamitra-FE/docs/student/RE
 
 ## Student Records
 
+House Management adds medium-wise houses, cross-class enrolled membership, one optional house leader and an independent optional division leader. See [product rules](./product.md#house-management), [API](./api.md#house-management) and [frontend integration](../../../../Shikshamitra-FE/docs/student/routes.md#house-management).
+
 The Records implementation connects completed onboarding to a permanent profile, governed changes, documents and IDs, year-end transitions, reports, and published school policy. Initial enrollment activation remains owned by Onboarding. Use the six canonical pages below for backend behavior; frontend routes and presentation remain owned by [frontend Student documentation](../../../../Shikshamitra-FE/docs/student/README.md).
 
 | Source | Location |

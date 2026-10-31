@@ -46,7 +46,7 @@ public class AdmissionDocumentFileService(IBlobContainer blobs, AdmissionDocumen
 				requirement.Name, requirement.MaxFileSizeMb, formats);
 			if (documentType != null) DocumentFileValidator.Validate(file.FileName ?? string.Empty, file.ContentType, content.LongLength, content, documentType);
 		}
-		catch (BusinessException exception) { throw Invalid("The document does not match the allowed format, file content, or size.").WithData("ValidationCode", exception.Code); }
+		catch (BusinessException exception) { throw Invalid("The document does not match the allowed format, file content, or size.").WithData("ValidationCode", exception.Code!); }
 		if (validation.SafeFileName.Length > 255) throw Invalid("Use a document filename of at most 255 characters.");
 		var blobName = $"admission-evidence/{CurrentTenant.Id:N}/{context.Application.Id:N}/{evidenceId:N}";
 		await blobs.SaveAsync(blobName, content, overrideExisting: false);

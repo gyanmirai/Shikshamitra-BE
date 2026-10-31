@@ -13,11 +13,31 @@ namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 [RemoteService(false)]
 [Authorize(Permissions.StudentOnboarding.View)]
-public class OnboardingWorkflowDocumentsAppService(IStudentOnboardingAppService onboarding,
-	IRepository<StudentOnboardingCase, Guid> cases, AdmissionDocumentReadService reader,
-	AdmissionDocumentCommandService commands, IRepository<AdmissionDocumentEvidence, Guid> evidence,
-	OnboardingRequirementSnapshotService snapshots) : ApplicationService, IOnboardingWorkflowDocumentsAppService
+public class OnboardingWorkflowDocumentsAppService : ApplicationService, IOnboardingWorkflowDocumentsAppService
 {
+	private readonly IStudentOnboardingAppService onboarding;
+	private readonly IRepository<StudentOnboardingCase, Guid> cases;
+	private readonly AdmissionDocumentReadService reader;
+	private readonly AdmissionDocumentCommandService commands;
+	private readonly IRepository<AdmissionDocumentEvidence, Guid> evidence;
+
+	public OnboardingWorkflowDocumentsAppService(
+		IStudentOnboardingAppService onboarding,
+		IRepository<StudentOnboardingCase, Guid> cases,
+		AdmissionDocumentReadService reader,
+		AdmissionDocumentCommandService commands,
+		IRepository<AdmissionDocumentEvidence, Guid> evidence,
+		OnboardingRequirementSnapshotService snapshots
+	)
+	{
+		this.onboarding = onboarding;
+		this.cases = cases;
+		this.reader = reader;
+		this.commands = commands;
+		this.evidence = evidence;
+		_ = snapshots;
+	}
+
 	public async Task<List<AdmissionDocumentVerificationDto>> GetAsync(Guid id)
 	{
 		await onboarding.EnsureCaseAccessAsync(id);

@@ -215,7 +215,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await WithUnitOfWorkAsync(() => _studentEnrollmentRepository.GetAsync(e => e.TenantId == TestTenantId && e.StudentId == fixture.Student.Id))).IsActive.ShouldBeFalse();
 		var certificate = await certificates.GenerateAsync(request); certificate.TransitionId.ShouldBe(transition.Id);
 		var frozen = (await certificates.GetAsync(certificate.CertificateId!.Value)).CertificateData["_ExitTransition"];
-		frozen.ShouldContain("Graduate"); frozen.ShouldContain("Applied");
+		frozen.ShouldNotBeNull().ShouldContain("Graduate"); frozen.ShouldNotBeNull().ShouldContain("Applied");
 		var blocked = await fixture.Service.CorrectAsync(transition.Id, new() { ConcurrencyStamp = transition.ConcurrencyStamp, IdempotencyKey = "graduation-correction-held", Reason = "Graduation entry requires a reviewed correction", PreviewOnly = false });
 		blocked.Ready.ShouldBeFalse(); blocked.TransitionId.ShouldBeNull(); blocked.Issues.ShouldContain(x => x.Code == "Students:Records:DownstreamDependency");
 		(await certificates.VoidAsync(certificate.CertificateId.Value, new() { Reason = "Leaving Certificate voided before correcting graduation" })).Status.ShouldBe("Cancelled");

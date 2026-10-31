@@ -15,10 +15,28 @@ using P = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.St
 namespace ShikshaMitra.Students.Dashboard;
 
 [RemoteService(false)]
-public class StudentModuleDashboardRecordsReader(IStudentRepository students,
-	StudentRecordsEnrollmentScopeService scope, IRepository<StudentOnboardingCase, Guid> cases,
-	IRepository<StudentRecordLegacyOverride, Guid> overrides, IRepository<StudentEnrollment, Guid> allEnrollments) : ApplicationService
+public class StudentModuleDashboardRecordsReader : ApplicationService
 {
+	private readonly IStudentRepository students;
+	private readonly StudentRecordsEnrollmentScopeService scope;
+	private readonly IRepository<StudentRecordLegacyOverride, Guid> overrides;
+	private readonly IRepository<StudentEnrollment, Guid> allEnrollments;
+
+	public StudentModuleDashboardRecordsReader(
+		IStudentRepository students,
+		StudentRecordsEnrollmentScopeService scope,
+		IRepository<StudentOnboardingCase, Guid> cases,
+		IRepository<StudentRecordLegacyOverride, Guid> overrides,
+		IRepository<StudentEnrollment, Guid> allEnrollments
+	)
+	{
+		this.students = students;
+		this.scope = scope;
+		_ = cases;
+		this.overrides = overrides;
+		this.allEnrollments = allEnrollments;
+	}
+
 	public async Task FillAsync(StudentModuleDashboardSectionDto result)
 	{
 		await AuthorizationService.CheckAsync(P.Records_StudentList.View);

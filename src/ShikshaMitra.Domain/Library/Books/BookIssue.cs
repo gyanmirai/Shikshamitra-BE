@@ -35,7 +35,11 @@ public class BookIssue : AuditedAggregateRoot<Guid>, IMultiTenant
 
     public string? Remarks { get; set; }
 
-    protected BookIssue() { }
+    protected BookIssue()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        AccessionNumber = null!;
+    }
 
     public BookIssue(
         Guid id,

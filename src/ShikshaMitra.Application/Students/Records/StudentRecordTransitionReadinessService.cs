@@ -38,17 +38,79 @@ public sealed class StudentRecordTransitionSnapshot
 }
 
 [RemoteService(false)]
-public class StudentRecordTransitionReadinessService(StudentRecordsAccessService access, StudentScopeAccessService scope,
-	IRepository<StudentEnrollment, Guid> enrollments, IRepository<AcademicYear, Guid> years,
-	IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions,
-	IRepository<StudentSeatReservation, Guid> reservations, IRepository<StudentOnboardingCase, Guid> onboarding,
-	IRepository<ExamResultDetail, Guid> results, IRepository<ExamResultHeader, Guid> headers, IRepository<Exam, Guid> exams,
-	IRepository<LibraryMember, Guid> members, IRepository<BookIssue, Guid> bookIssues,
-	IRepository<TransportMember, Guid> transportMembers, StudentTransitionFinanceClearanceReader finance,
-	IRepository<StudentRecordTransition, Guid> transitions, StudentOnboardingRollRuleReader rollRules, StudentOnboardingRollNumberAllocator rollAllocator,
-	IRepository<AdmissionApplication, Guid> admissionApplications, IRepository<StudentIdentifierAllocation, Guid> identifiers, OnboardingFeeReadinessReader feeReadiness, StudentRecordsEnrollmentScopeService recordScope)
+public class StudentRecordTransitionReadinessService
 	: ApplicationService, ITransientDependency
 {
+	private readonly StudentRecordsAccessService access;
+	private readonly StudentScopeAccessService scope;
+	private readonly IRepository<StudentEnrollment, Guid> enrollments;
+	private readonly IRepository<AcademicYear, Guid> years;
+	private readonly IRepository<Standard, Guid> standards;
+	private readonly IRepository<Division, Guid> divisions;
+	private readonly IRepository<StudentSeatReservation, Guid> reservations;
+	private readonly IRepository<StudentOnboardingCase, Guid> onboarding;
+	private readonly IRepository<ExamResultDetail, Guid> results;
+	private readonly IRepository<ExamResultHeader, Guid> headers;
+	private readonly IRepository<Exam, Guid> exams;
+	private readonly IRepository<LibraryMember, Guid> members;
+	private readonly IRepository<BookIssue, Guid> bookIssues;
+	private readonly IRepository<TransportMember, Guid> transportMembers;
+	private readonly StudentTransitionFinanceClearanceReader finance;
+	private readonly IRepository<StudentRecordTransition, Guid> transitions;
+	private readonly StudentOnboardingRollRuleReader rollRules;
+	private readonly StudentOnboardingRollNumberAllocator rollAllocator;
+	private readonly OnboardingFeeReadinessReader feeReadiness;
+	private readonly StudentRecordsEnrollmentScopeService recordScope;
+
+	public StudentRecordTransitionReadinessService(
+		StudentRecordsAccessService access,
+		StudentScopeAccessService scope,
+		IRepository<StudentEnrollment, Guid> enrollments,
+		IRepository<AcademicYear, Guid> years,
+		IRepository<Standard, Guid> standards,
+		IRepository<Division, Guid> divisions,
+		IRepository<StudentSeatReservation, Guid> reservations,
+		IRepository<StudentOnboardingCase, Guid> onboarding,
+		IRepository<ExamResultDetail, Guid> results,
+		IRepository<ExamResultHeader, Guid> headers,
+		IRepository<Exam, Guid> exams,
+		IRepository<LibraryMember, Guid> members,
+		IRepository<BookIssue, Guid> bookIssues,
+		IRepository<TransportMember, Guid> transportMembers,
+		StudentTransitionFinanceClearanceReader finance,
+		IRepository<StudentRecordTransition, Guid> transitions,
+		StudentOnboardingRollRuleReader rollRules,
+		StudentOnboardingRollNumberAllocator rollAllocator,
+		IRepository<AdmissionApplication, Guid> admissionApplications,
+		IRepository<StudentIdentifierAllocation, Guid> identifiers,
+		OnboardingFeeReadinessReader feeReadiness,
+		StudentRecordsEnrollmentScopeService recordScope
+	)
+	{
+		this.access = access;
+		this.scope = scope;
+		this.enrollments = enrollments;
+		this.years = years;
+		this.standards = standards;
+		this.divisions = divisions;
+		this.reservations = reservations;
+		this.onboarding = onboarding;
+		this.results = results;
+		this.headers = headers;
+		this.exams = exams;
+		this.members = members;
+		this.bookIssues = bookIssues;
+		this.transportMembers = transportMembers;
+		this.finance = finance;
+		this.transitions = transitions;
+		this.rollRules = rollRules;
+		this.rollAllocator = rollAllocator;
+		_ = admissionApplications;
+		_ = identifiers;
+		this.feeReadiness = feeReadiness;
+		this.recordScope = recordScope;
+	}
+
 	public async Task<List<StudentRecordTransitionInput>> OrderCohortAsync(List<StudentRecordTransitionInput> inputs)
 	{
 		var ordered = new List<StudentRecordTransitionInput>();

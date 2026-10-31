@@ -33,7 +33,11 @@ public class GroupEmployeeRule : Entity<Guid>
     /// </summary>
     public string Value { get; private set; }
 
-    protected GroupEmployeeRule() { }
+    protected GroupEmployeeRule()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        Value = null!;
+    }
 
     public GroupEmployeeRule(
         Guid id,

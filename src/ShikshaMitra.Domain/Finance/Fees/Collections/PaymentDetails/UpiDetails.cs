@@ -13,8 +13,6 @@ public class UpiDetails : PaymentDetails
     /// <summary>E.g. GPay, PhonePe, Paytm.</summary>
     public string? AppName { get; private set; }
 
-    private UpiDetails() { /* For ORM */ }
-
     public UpiDetails(string upiTransactionId, string upiId, string? appName = null)
     {
         UpiTransactionId = upiTransactionId;
@@ -22,10 +20,11 @@ public class UpiDetails : PaymentDetails
         AppName = appName;
     }
 
-    protected override IEnumerable<object?> GetAtomicValues()
+    // ABP equality atoms intentionally include null for absent optional values.
+    protected override IEnumerable<object> GetAtomicValues()
     {
         yield return UpiTransactionId;
         yield return UpiId;
-        yield return AppName;
+        yield return AppName!;
     }
 }

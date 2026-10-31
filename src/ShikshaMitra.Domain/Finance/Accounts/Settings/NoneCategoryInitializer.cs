@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -22,7 +23,7 @@ public class NoneCategoryInitializer(
 			foreach (var type in new[] { TransactionType.Income, TransactionType.Expense })
 			{
 				if (await categories.AnyAsync(x => x.TenantId == year.TenantId && x.AcademicYearId == year.Id &&
-					x.CategoryType == type && (x.NormalizedName == "NONE" || x.Name.ToUpper() == "NONE"))) continue;
+					x.CategoryType == type && (x.NormalizedName == "NONE" || Enumerable.Contains(new[] { "NONE" }, x.Name.ToUpper())))) continue;
 				var id = GuidGenerator.Create();
 				await categories.InsertAsync(new TransactionCategory(id, year.TenantId, year.Id, type,
 					"None", $"No specific {type.ToString().ToLowerInvariant()} category.", code: id.ToString("N").ToUpperInvariant()));

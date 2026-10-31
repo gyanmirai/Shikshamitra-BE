@@ -44,7 +44,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var workspace = await service.GetCredentialsAsync(fixture.Case.Id);
 			workspace.StudentAccessEnabled.ShouldBeFalse(); workspace.CanEnableStudentAccess.ShouldBeTrue();
 			fixture.Case.Status.ShouldBe(StudentOnboardingStatus.Completed);
-			var beforeRules = await WithUnitOfWorkAsync(async () => (string)(await cases.GetAsync(workspace.CaseId)).ExtraProperties["ReadinessRulesSnapshot"]);
+			var beforeRules = await WithUnitOfWorkAsync(async () => (string)(await cases.GetAsync(workspace.CaseId)).ExtraProperties["ReadinessRulesSnapshot"].ShouldNotBeNull());
 			var beforeSettings = (await service.GetSettingsAsync(fixture.Case.AcademicYearId)).Single(value => value.AcademicYearId == fixture.Case.AcademicYearId).ConfigurationJson;
 			var beforeHandoffs = (await service.GetServiceHandoffsAsync(workspace.CaseId)).Select(value => value.Id).Order().ToArray();
 			workspace = await service.EnableStudentAppAccessAsync(workspace.CaseId, new() { Reason = "Student requested app access", ConcurrencyStamp = workspace.ConcurrencyStamp });
@@ -55,11 +55,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await WithUnitOfWorkAsync(async () =>
 			{
 				var item = await cases.GetAsync(workspace.CaseId);
-				JsonNode.DeepEquals(expected, JsonNode.Parse((string)item.ExtraProperties["ReadinessRulesSnapshot"])).ShouldBeTrue();
+				JsonNode.DeepEquals(expected, JsonNode.Parse((string)item.ExtraProperties["ReadinessRulesSnapshot"].ShouldNotBeNull())).ShouldBeTrue();
 				item.Status.ShouldBe(StudentOnboardingStatus.Completed);
 				var audit = (await events.GetListAsync(value => value.OnboardingCaseId == item.Id && value.EventType == "StudentAppAccessEnabled")).ShouldHaveSingleItem();
 				audit.CreatorId.ShouldBe(TestUserId); audit.Description.ShouldContain("Student requested app access");
-				audit.MetadataJson.ShouldContain("Previous"); audit.MetadataJson.ShouldContain("optional");
+				audit.MetadataJson.ShouldNotBeNull().ShouldContain("Previous"); audit.MetadataJson.ShouldNotBeNull().ShouldContain("optional");
 				(await requests.GetListAsync(value => value.CaseId == item.Id)).ShouldBeEmpty();
 			});
 			(await service.GetPortalAccountsAsync(workspace.CaseId)).ShouldBeEmpty();
@@ -85,11 +85,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var service = GetRequiredService<IStudentOnboardingAppService>();
 		var repository = GetRequiredService<IRepository<StudentOnboardingCase, Guid>>();
 		var workspace = await service.GetCredentialsAsync(fixture.Case.Id);
-		var before = await WithUnitOfWorkAsync(async () => (string)(await repository.GetAsync(fixture.Case.Id)).ExtraProperties["ReadinessRulesSnapshot"]);
+		var before = await WithUnitOfWorkAsync(async () => (string)(await repository.GetAsync(fixture.Case.Id)).ExtraProperties["ReadinessRulesSnapshot"].ShouldNotBeNull());
 		var result = await service.EnableStudentAppAccessAsync(workspace.CaseId, new() { Reason = "Confirm existing access", ConcurrencyStamp = workspace.ConcurrencyStamp });
 		result.StudentAccessEnabled.ShouldBeTrue(); result.CanEnableStudentAccess.ShouldBeFalse();
 		result.ConcurrencyStamp.ShouldBe(workspace.ConcurrencyStamp);
-		(await WithUnitOfWorkAsync(async () => (string)(await repository.GetAsync(fixture.Case.Id)).ExtraProperties["ReadinessRulesSnapshot"])).ShouldBe(before);
+		(await WithUnitOfWorkAsync(async () => (string)(await repository.GetAsync(fixture.Case.Id)).ExtraProperties["ReadinessRulesSnapshot"].ShouldNotBeNull())).ShouldBe(before);
 		(await service.GetAsync(fixture.Case.Id)).Status.ShouldBe(fixture.Case.Status);
 	});
 
@@ -103,11 +103,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var users = GetRequiredService<IdentityUserManager>();
 		var links = GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>();
 		var requests = GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>();
-		var identityBefore = await WithUnitOfWorkAsync(async () => { var user = await users.FindByIdAsync(parent.UserId.ToString()); return (user.Email, user.PasswordHash, user.ConcurrencyStamp); });
+		var identityBefore = await WithUnitOfWorkAsync(async () => { var user = (await users.FindByIdAsync(parent.UserId.ToString())).ShouldNotBeNull(); return (user.Email, user.PasswordHash, user.ConcurrencyStamp); });
 		var linksBefore = await WithUnitOfWorkAsync(async () => (await links.GetListAsync(value => value.UserId == parent.UserId)).Select(value => value.Id).Order().ToArray());
 		var requestBefore = await WithUnitOfWorkAsync(() => requests.GetAsync(value => value.CaseId == workspace.CaseId));
 		await service.EnableStudentAppAccessAsync(workspace.CaseId, new() { Reason = "Student requested separate login", ConcurrencyStamp = workspace.ConcurrencyStamp });
-		(await WithUnitOfWorkAsync(async () => { var user = await users.FindByIdAsync(parent.UserId.ToString()); return (user.Email, user.PasswordHash, user.ConcurrencyStamp); })).ShouldBe(identityBefore);
+		(await WithUnitOfWorkAsync(async () => { var user = (await users.FindByIdAsync(parent.UserId.ToString())).ShouldNotBeNull(); return (user.Email, user.PasswordHash, user.ConcurrencyStamp); })).ShouldBe(identityBefore);
 		(await WithUnitOfWorkAsync(async () => (await links.GetListAsync(value => value.UserId == parent.UserId)).Select(value => value.Id).Order().ToArray())).ShouldBe(linksBefore);
 		var requestAfter = await WithUnitOfWorkAsync(() => requests.GetAsync(value => value.CaseId == workspace.CaseId));
 		requestAfter.Id.ShouldBe(requestBefore.Id); requestAfter.Email.ShouldBe(requestBefore.Email); requestAfter.Status.ShouldBe(requestBefore.Status);

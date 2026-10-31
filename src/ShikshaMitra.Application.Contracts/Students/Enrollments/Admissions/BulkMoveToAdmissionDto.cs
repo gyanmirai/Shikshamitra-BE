@@ -8,7 +8,7 @@ namespace ShikshaMitra.Students.Enrollments.Admissions;
 /// </summary>
 public class BulkMoveToAdmissionDto
 {
-	public List<Guid> StudentIds { get; set; }
+	public List<Guid> StudentIds { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
 	/// <summary>
 	/// The academic year for which the students are being admitted
@@ -24,8 +24,8 @@ public class BulkMoveResultDto
 	public int TotalRequested { get; set; }
 	public int SuccessCount { get; set; }
 	public int FailureCount { get; set; }
-	public List<StudentSummaryDto> SucceededStudents { get; set; }
-	public List<FailedStudentDto> FailedStudents { get; set; }
+	public List<StudentSummaryDto>? SucceededStudents { get; set; }
+	public List<FailedStudentDto>? FailedStudents { get; set; }
 }
 
 /// <summary>
@@ -34,7 +34,7 @@ public class BulkMoveResultDto
 public class StudentSummaryDto
 {
 	public Guid StudentId { get; set; }
-	public string StudentName { get; set; }
+	public string? StudentName { get; set; }
 }
 
 /// <summary>
@@ -43,6 +43,6 @@ public class StudentSummaryDto
 public class FailedStudentDto
 {
 	public Guid StudentId { get; set; }
-	public string StudentName { get; set; }
-	public string Reason { get; set; }
+	public string? StudentName { get; set; }
+	public string? Reason { get; set; }
 }

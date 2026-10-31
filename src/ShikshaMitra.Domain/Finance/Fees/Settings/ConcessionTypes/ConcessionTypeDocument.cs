@@ -17,6 +17,9 @@ public class ConcessionTypeDocument : Entity<Guid>
 
     private ConcessionTypeDocument()
     {
+        // EF materializes these required columns after this ORM constructor.
+        DocumentName = null!;
+
         /* This constructor is for deserialization / ORM purpose */
     }
 

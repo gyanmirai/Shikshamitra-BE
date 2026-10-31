@@ -6,10 +6,10 @@ namespace ShikshaMitra.Library.Setting.ChargeCategory.Dtos;
 public class LibraryChargeCategoryDto
 {
 	public Guid Id { get; set; }
-	public string Name { get; set; }
+	public string Name { get; set; } = null!; // The response mapper populates these members after construction.
 	public decimal Amount { get; set; }
 	public bool IsFixed { get; set; }
-	public string Description { get; set; }
+	public string Description { get; set; } = null!;
 }
 
 public class PaginatedLibraryChargeCategoryResponse

@@ -17,7 +17,7 @@ public class BookCopyItem
     public int CopyNumber { get; set; }
 
     [Required]
-    public string AccessionNumber { get; set; }
+    public string AccessionNumber { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
     [Required]
     public Guid SectionId { get; set; }

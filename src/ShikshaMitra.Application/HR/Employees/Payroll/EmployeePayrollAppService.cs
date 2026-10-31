@@ -168,7 +168,7 @@ public class EmployeePayrollAppService(
 			earningComponentIdByName,
 			deductionComponentIdByName);
 		var statutory = await statutoryProfiles.GetProjectionAsync(employeeId);
-		response.SalaryDetails.EpfNumber = statutory.Profile.PfNumber;
+		response.SalaryDetails!.EpfNumber = statutory.Profile.PfNumber;
 		response.SalaryDetails.UanNumber = statutory.Profile.UanNumber;
 		return response;
 	}

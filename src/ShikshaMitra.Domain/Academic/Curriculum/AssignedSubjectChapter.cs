@@ -103,7 +103,11 @@ public class AssignedSubjectChapter : FullAuditedEntity<Guid>, IMultiTenant
 	#region Constructors
 
 	// Default constructor
-	protected AssignedSubjectChapter() { }
+	protected AssignedSubjectChapter()
+	{
+		// EF materializes these required columns after this ORM constructor.
+		ChapterName = null!;
+	}
 
 	// Parameterized constructor
 	public AssignedSubjectChapter(

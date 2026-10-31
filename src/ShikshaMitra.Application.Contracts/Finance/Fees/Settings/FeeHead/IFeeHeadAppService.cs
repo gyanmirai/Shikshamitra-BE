@@ -9,7 +9,7 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 public interface IFeeHeadAppService : IApplicationService
 {
     Task<FeeHeadResponse> CreateAsync(Guid academicYearId, FeeHeadCreateRequest input);
-    Task<FeeHeadListResponse> GetListAsync(Guid academicYearId, Guid? feeCategoryId = null, string search = null, int page = 1, int pageSize = 10, string? filters = null);
+    Task<FeeHeadListResponse> GetListAsync(Guid academicYearId, Guid? feeCategoryId = null, string? search = null, int page = 1, int pageSize = 10, string? filters = null);
 	Task<List<ActiveFeeHeadLookupDto>> GetActiveAsync(Guid academicYearId);
     Task<FeeHeadResponse> GetByIdAsync(Guid id);
     Task<FeeHeadResponse> UpdateAsync(Guid feeHeadId, FeeHeadUpdateRequest input);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -143,9 +143,9 @@ public class StudentAppService(
 				(s.FirstName != null && s.FirstName.ToLower().Contains(normalizedSearchTerm)) ||
 				(s.MiddleName != null && s.MiddleName.ToLower().Contains(normalizedSearchTerm)) ||
 				(s.LastName != null && s.LastName.ToLower().Contains(normalizedSearchTerm)) ||
-				(s.GrNo.HasValue && s.GrNo.ToString().Contains(normalizedSearchTerm)) ||
+				(s.GrNo.HasValue && s.GrNo.ToString()!.Contains(normalizedSearchTerm)) ||
 				(s.GrNumber != null && s.GrNumber.ToLower().Contains(normalizedSearchTerm)) ||
-				(s.RollNo.HasValue && s.RollNo.ToString().Contains(normalizedSearchTerm))
+				(s.RollNo.HasValue && s.RollNo.ToString()!.Contains(normalizedSearchTerm))
 			);
 		}
 

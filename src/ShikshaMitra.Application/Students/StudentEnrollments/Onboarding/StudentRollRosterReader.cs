@@ -113,5 +113,5 @@ public class StudentRollRosterReader(IStudentRepository students, IRepository<St
 		return new(json, policy, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(basis))), rows, path.Name + " / " + division.Name, policySnapshot.VersionId);
 	}
 	private static JsonElement ParseElement(string json) { using var doc = JsonDocument.Parse(json); return doc.RootElement.Clone(); }
-	private static bool Locked(IDictionary<string, object> values, string key) => values.TryGetValue(key, out var value) && bool.TryParse(value?.ToString(), out var locked) && locked;
+	private static bool Locked(IDictionary<string, object?> values, string key) => values.TryGetValue(key, out var value) && bool.TryParse(value?.ToString(), out var locked) && locked;
 }

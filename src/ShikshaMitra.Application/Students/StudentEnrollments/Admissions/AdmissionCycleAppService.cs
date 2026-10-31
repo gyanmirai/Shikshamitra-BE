@@ -88,7 +88,7 @@ public class AdmissionCycleAppService(
 		await cycleRepository.InsertAsync(cycle, autoSave: false);
 		await RecordHistoryAsync(cycle, AdmissionCycleHistoryAction.Created, null, cycle.Status,
 			"Admission cycle draft created.");
-		await CurrentUnitOfWork.SaveChangesAsync();
+		await CurrentUnitOfWork!.SaveChangesAsync();
 		return Map(cycle, await LoadMapContextAsync([cycle]));
 	}
 
@@ -105,7 +105,7 @@ public class AdmissionCycleAppService(
 		await cycleRepository.UpdateAsync(cycle, autoSave: false);
 		await RecordHistoryAsync(cycle, AdmissionCycleHistoryAction.Updated, cycle.Status, cycle.Status,
 			"Admission cycle draft details updated.");
-		await CurrentUnitOfWork.SaveChangesAsync();
+		await CurrentUnitOfWork!.SaveChangesAsync();
 		return Map(cycle, await LoadMapContextAsync([cycle]));
 	}
 
@@ -126,7 +126,7 @@ public class AdmissionCycleAppService(
 		await cycleRepository.UpdateAsync(cycle, autoSave: false);
 		await RecordHistoryAsync(cycle, AdmissionCycleHistoryAction.Published, previous, cycle.Status,
 			"Admission cycle published.");
-		await CurrentUnitOfWork.SaveChangesAsync();
+		await CurrentUnitOfWork!.SaveChangesAsync();
 		return Map(cycle, await LoadMapContextAsync([cycle]));
 	}
 
@@ -148,7 +148,7 @@ public class AdmissionCycleAppService(
 		await cycleRepository.UpdateAsync(cycle, autoSave: false);
 		await RecordHistoryAsync(cycle, AdmissionCycleHistoryAction.Closed, previous, cycle.Status,
 			"Admission cycle closed. New applications are no longer accepted.", input.Reason);
-		await CurrentUnitOfWork.SaveChangesAsync();
+		await CurrentUnitOfWork!.SaveChangesAsync();
 		return Map(cycle, await LoadMapContextAsync([cycle]));
 	}
 
@@ -175,7 +175,7 @@ public class AdmissionCycleAppService(
 		await cycleRepository.UpdateAsync(cycle, autoSave: false);
 		await RecordHistoryAsync(cycle, AdmissionCycleHistoryAction.Reopened, previous, cycle.Status,
 			"Admission cycle reopened.", input.Reason);
-		await CurrentUnitOfWork.SaveChangesAsync();
+		await CurrentUnitOfWork!.SaveChangesAsync();
 		return Map(cycle, await LoadMapContextAsync([cycle]));
 	}
 
@@ -197,7 +197,7 @@ public class AdmissionCycleAppService(
 		await cycleRepository.UpdateAsync(cycle, autoSave: false);
 		await RecordHistoryAsync(cycle, AdmissionCycleHistoryAction.Archived, previous, cycle.Status,
 			"Admission cycle archived.", input.Reason);
-		await CurrentUnitOfWork.SaveChangesAsync();
+		await CurrentUnitOfWork!.SaveChangesAsync();
 		return Map(cycle, await LoadMapContextAsync([cycle]));
 	}
 
@@ -227,7 +227,7 @@ public class AdmissionCycleAppService(
 		await cycleRepository.InsertAsync(clone, autoSave: false);
 		await RecordHistoryAsync(clone, AdmissionCycleHistoryAction.Cloned, null, clone.Status,
 			$"Admission cycle cloned from {source.Code}.");
-		await CurrentUnitOfWork.SaveChangesAsync();
+		await CurrentUnitOfWork!.SaveChangesAsync();
 		return Map(clone, await LoadMapContextAsync([clone]));
 	}
 
@@ -242,7 +242,7 @@ public class AdmissionCycleAppService(
 		await cycleRepository.UpdateAsync(cycle, autoSave: false);
 		await RecordHistoryAsync(cycle, AdmissionCycleHistoryAction.Updated, cycle.Status, cycle.Status,
 			"Published admission window revised.", input.Reason);
-		await CurrentUnitOfWork.SaveChangesAsync();
+		await CurrentUnitOfWork!.SaveChangesAsync();
 		return Map(cycle, await LoadMapContextAsync([cycle]));
 	}
 
@@ -271,7 +271,7 @@ public class AdmissionCycleAppService(
 		await cycleRepository.UpdateAsync(cycle, autoSave: false);
 		await RecordHistoryAsync(cycle, AdmissionCycleHistoryAction.ScheduleChanged, cycle.Status, cycle.Status,
 			"Admission cycle publication or closure schedule updated.");
-		await CurrentUnitOfWork.SaveChangesAsync();
+		await CurrentUnitOfWork!.SaveChangesAsync();
 		return Map(cycle, await LoadMapContextAsync([cycle]));
 	}
 
@@ -354,7 +354,7 @@ public class AdmissionCycleAppService(
 			previousCapacity.HasValue
 				? $"Seat capacity for {offering.Code} changed from {previousCapacity.Value} to {input.Capacity}."
 				: $"Seat capacity for {offering.Code} set to {input.Capacity}.", reason);
-		try { await CurrentUnitOfWork.SaveChangesAsync(); }
+		try { await CurrentUnitOfWork!.SaveChangesAsync(); }
 		catch (AbpDbConcurrencyException)
 		{
 			throw new BusinessException(AdmissionErrorCodes.CycleConcurrencyConflict,

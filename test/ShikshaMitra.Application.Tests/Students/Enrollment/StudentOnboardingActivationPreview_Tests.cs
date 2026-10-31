@@ -129,7 +129,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var service = GetRequiredService<IStudentOnboardingAppService>();
 		var preview = await service.PreviewActivationAsync(item.Id);
 		preview.Status.ShouldNotBe(StudentOnboardingStatus.ReadyForActivation);
-		preview.LastError.ShouldContain("The seat reservation has expired.");
+		preview.LastError.ShouldNotBeNull().ShouldContain("The seat reservation has expired.");
 		(await Should.ThrowAsync<BusinessException>(() => service.ActivateAsync(item.Id,
 			new() { ConcurrencyStamp = preview.ConcurrencyStamp, IdempotencyKey = "preview-expired-seat-activate" }))).Code.ShouldBe(StudentOnboardingErrorCodes.RequiredStepsIncomplete);
 		(await WithUnitOfWorkAsync(() => _studentEnrollmentRepository.CountAsync(e => e.OnboardingCaseId == item.Id))).ShouldBe(0);

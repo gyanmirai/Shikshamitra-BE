@@ -9,6 +9,9 @@ public class Country
 
 	private Country()
 	{
+		// Preserve deferred null defaults until materialization populates these properties.
+		Name = null!;
+		IsoCode = null!;
 	}
 
 	public Country(string name, string isoCode)

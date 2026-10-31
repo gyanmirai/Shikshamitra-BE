@@ -17,7 +17,7 @@ public class StudentFeeStructureResponseDto
 
 	public Guid StandardId { get; set; }
 
-	public string StructureName { get; set; }
+	public string StructureName { get; set; } = null!; // The response mapper populates these members after construction.
 	public Guid AcademicYearId { get; set; }
 	public Guid? ConcessionPolicyId { get; set; }
 	public Guid? ConcessionPolicyVersionId { get; set; }

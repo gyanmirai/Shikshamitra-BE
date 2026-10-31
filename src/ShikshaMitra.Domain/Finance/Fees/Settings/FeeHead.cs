@@ -30,11 +30,15 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public string? DeactivationReason { get; private set; }
 
-	public FeeCategory FeeCategory { get; private set; }
+	public FeeCategory FeeCategory { get; private set; } = null!; // Populated by EF relationship materialization.
 
-	public TransactionCategory IncomeCategory { get; private set; }
+	public TransactionCategory IncomeCategory { get; private set; } = null!; // Populated by EF relationship materialization.
 
-    protected FeeHead() { }
+    protected FeeHead()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        Name = null!;
+    }
 
     public FeeHead(
         Guid id,

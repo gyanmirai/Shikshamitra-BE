@@ -29,6 +29,8 @@ public class ParentGuardianDetails : ValueObject
 
 	private ParentGuardianDetails()
 	{
+		// EF materializes the required owned-value column after this constructor.
+		FullName = null!;
 		/* For ORM/Serialization */
 	}
 
@@ -63,20 +65,21 @@ public class ParentGuardianDetails : ValueObject
 		LocalAddress = localAddress;
 	}
 
-	protected override IEnumerable<object?> GetAtomicValues()
+	// ABP equality atoms intentionally include null for absent optional values.
+	protected override IEnumerable<object> GetAtomicValues()
 	{
 		yield return FullName;
-		yield return DateOfBirth;
-		yield return Occupation;
-		yield return Email;
-		yield return ContactNo;
-		yield return OfficeNo;
-		yield return Qualification;
-		yield return YearOfPassing;
-		yield return Designation;
-		yield return Organization;
-		yield return AadharNo;
-		yield return OfficeAddress;
-		yield return LocalAddress;
+		yield return DateOfBirth!;
+		yield return Occupation!;
+		yield return Email!;
+		yield return ContactNo!;
+		yield return OfficeNo!;
+		yield return Qualification!;
+		yield return YearOfPassing!;
+		yield return Designation!;
+		yield return Organization!;
+		yield return AadharNo!;
+		yield return OfficeAddress!;
+		yield return LocalAddress!;
 	}
 }

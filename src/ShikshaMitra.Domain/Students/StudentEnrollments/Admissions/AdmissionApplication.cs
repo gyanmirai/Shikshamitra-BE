@@ -89,7 +89,11 @@ public partial class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMul
 	public Guid? CurrentStageInstanceId { get; private set; }
 	public DateTime? LastSavedAt { get; private set; }
 	public DateTime? SubmittedAt { get; private set; }
-	protected AdmissionApplication() { }
+	protected AdmissionApplication()
+	{
+		// EF materializes these required columns after this ORM constructor.
+		ApplicationNumber = null!;
+	}
 
 	public AdmissionApplication(Guid id, Guid? tenantId, string applicationNumber, Guid applicantId, Guid? inquiryId,
 		Guid cycleId, Guid offeringId, Guid workflowDefinitionId, Guid formDefinitionId) : base(id)

@@ -63,7 +63,7 @@ public sealed class AcademicReportPostgresSmoke_Tests(ITestOutputHelper output)
         var db = await services.GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
         var fixture = await SeedAsync(factory, services, db, tenantId);
         db.ChangeTracker.Clear();
-        var studentIds = await db.Set<Student>().Where(student => student.FirstName.StartsWith("Provider"))
+        var studentIds = await db.Set<Student>().Where(student => student.FirstName!.StartsWith("Provider"))
             .Select(student => student.Id).ToListAsync();
         studentIds.Count.ShouldBe(2);
         var fixtureStudents = (await services.GetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync())

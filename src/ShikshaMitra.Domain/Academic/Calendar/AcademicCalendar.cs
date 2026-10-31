@@ -23,6 +23,9 @@ public class AcademicCalendar : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     private AcademicCalendar()
     {
+        // EF materializes these required columns after this ORM constructor.
+        Name = null!;
+
         /* ORM */
         Days = new List<AcademicCalendarDay>();
     }

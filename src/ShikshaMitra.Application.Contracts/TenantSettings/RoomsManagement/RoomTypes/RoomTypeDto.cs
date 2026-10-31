@@ -5,6 +5,6 @@ namespace ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes;
 
 public class RoomTypeDto : AuditedEntityDto<Guid>
 {
-	public string RoomTypeName { get; set; }
-	public string ShortName { get; set; }
+	public string RoomTypeName { get; set; } = null!; // The response mapper populates these members after construction.
+	public string ShortName { get; set; } = null!;
 }

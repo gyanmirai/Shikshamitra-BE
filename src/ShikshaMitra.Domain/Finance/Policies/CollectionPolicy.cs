@@ -76,11 +76,11 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Stored in the existing JSON extension column, so historical rows remain Legacy.
 	[NotMapped]
 	public CollectionAllocationBasis AllocationBasis => Enum.Parse<CollectionAllocationBasis>(
-		this.GetProperty<string>(nameof(AllocationBasis), nameof(CollectionAllocationBasis.Legacy)));
+		this.GetProperty<string>(nameof(AllocationBasis), nameof(CollectionAllocationBasis.Legacy))!);
 
 	[NotMapped]
 	public CollectionReceiptGrouping ReceiptGrouping => Enum.Parse<CollectionReceiptGrouping>(
-		this.GetProperty<string>(nameof(ReceiptGrouping), nameof(CollectionReceiptGrouping.Separate)));
+		this.GetProperty<string>(nameof(ReceiptGrouping), nameof(CollectionReceiptGrouping.Separate))!);
 
 	public int Version { get; protected set; }
 

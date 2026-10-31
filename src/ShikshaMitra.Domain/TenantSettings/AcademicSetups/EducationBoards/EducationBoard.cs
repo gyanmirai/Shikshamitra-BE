@@ -24,8 +24,8 @@ public class EducationBoard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid AcademicYearId { get; }
 
 	// Navigation properties
-	public AcademicYear AcademicYear { get; }
-	public ICollection<EducationMedium> EducationMediums { get; }
+	public AcademicYear AcademicYear { get; } = null!; // Populated by EF relationship materialization.
+	public ICollection<EducationMedium> EducationMediums { get; } = null!; // Populated by EF relationship materialization.
 
 	private EducationBoard()
 	{

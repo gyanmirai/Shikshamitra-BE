@@ -65,7 +65,7 @@ public partial class StudentFeeStructureAppService
 			from division in divisionGroup.DefaultIfEmpty()
 			select new AssignmentStudentDto { EnrollmentId = e.Id, StudentId = s.Id, StandardId = e.StandardId, DivisionId = e.DivisionId,
 				StudentName = ((s.FirstName ?? "") + (s.MiddleName == null || s.MiddleName == "" ? "" : " " + s.MiddleName) + " " + (s.LastName ?? "")).Trim(),
-				GrNumber = s.GrNumber ?? (s.GrNo.HasValue ? s.GrNo.Value.ToString() : ""),
+				GrNumber = s.GrNumber ?? (s.GrNo.HasValue ? s.GrNo!.Value.ToString() : ""),
 				RollNumber = e.RollNumber,
 				ClassName = standard == null ? "" : standard.Name,
 				DivisionName = division == null ? "" : division.Name,

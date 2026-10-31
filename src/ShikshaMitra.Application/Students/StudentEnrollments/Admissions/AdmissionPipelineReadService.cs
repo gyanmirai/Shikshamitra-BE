@@ -15,23 +15,57 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 /// <summary>Batch projection of existing admission progress; never mutates workflow state.</summary>
 [RemoteService(false)]
-public class AdmissionPipelineReadService(
-	IRepository<AdmissionApplicant, Guid> applicants,
-	IRepository<AdmissionInquiry, Guid> inquiries,
-	IRepository<AdmissionFamily, Guid> families,
-	IRepository<AdmissionGuardian, Guid> guardians,
-	IRepository<AdmissionCycle, Guid> cycles,
-	IRepository<AdmissionApplicationStageInstance, Guid> stages,
-	IRepository<AdmissionApplicationWorkflowInstance, Guid> workflows,
-	IRepository<AdmissionWorkflowStageDefinition, Guid> definitions,
-	IRepository<AdmissionInquiryFollowUp, Guid> followUps,
-	IRepository<AdmissionIntakeProfile, Guid> profiles,
-	IRepository<Standard, Guid> standards,
-	AdmissionApplicationScopeAccessService access,
-	AdmissionApplicationWorkspaceQueryService workspace,
-	AdmissionInquiryPeopleService people,
-	IUserScopeAccessService userScopes) : ApplicationService, ITransientDependency
+public class AdmissionPipelineReadService : ApplicationService, ITransientDependency
 {
+	private readonly IRepository<AdmissionApplicant, Guid> applicants;
+	private readonly IRepository<AdmissionInquiry, Guid> inquiries;
+	private readonly IRepository<AdmissionFamily, Guid> families;
+	private readonly IRepository<AdmissionGuardian, Guid> guardians;
+	private readonly IRepository<AdmissionCycle, Guid> cycles;
+	private readonly IRepository<AdmissionApplicationStageInstance, Guid> stages;
+	private readonly IRepository<AdmissionApplicationWorkflowInstance, Guid> workflows;
+	private readonly IRepository<AdmissionWorkflowStageDefinition, Guid> definitions;
+	private readonly IRepository<AdmissionInquiryFollowUp, Guid> followUps;
+	private readonly IRepository<Standard, Guid> standards;
+	private readonly AdmissionApplicationScopeAccessService access;
+	private readonly AdmissionApplicationWorkspaceQueryService workspace;
+	private readonly AdmissionInquiryPeopleService people;
+
+	public AdmissionPipelineReadService(
+		IRepository<AdmissionApplicant, Guid> applicants,
+		IRepository<AdmissionInquiry, Guid> inquiries,
+		IRepository<AdmissionFamily, Guid> families,
+		IRepository<AdmissionGuardian, Guid> guardians,
+		IRepository<AdmissionCycle, Guid> cycles,
+		IRepository<AdmissionApplicationStageInstance, Guid> stages,
+		IRepository<AdmissionApplicationWorkflowInstance, Guid> workflows,
+		IRepository<AdmissionWorkflowStageDefinition, Guid> definitions,
+		IRepository<AdmissionInquiryFollowUp, Guid> followUps,
+		IRepository<AdmissionIntakeProfile, Guid> profiles,
+		IRepository<Standard, Guid> standards,
+		AdmissionApplicationScopeAccessService access,
+		AdmissionApplicationWorkspaceQueryService workspace,
+		AdmissionInquiryPeopleService people,
+		IUserScopeAccessService userScopes
+	)
+	{
+		this.applicants = applicants;
+		this.inquiries = inquiries;
+		this.families = families;
+		this.guardians = guardians;
+		this.cycles = cycles;
+		this.stages = stages;
+		this.workflows = workflows;
+		this.definitions = definitions;
+		this.followUps = followUps;
+		_ = profiles;
+		this.standards = standards;
+		this.access = access;
+		this.workspace = workspace;
+		this.people = people;
+		_ = userScopes;
+	}
+
 	public async Task<PagedResultDto<AdmissionPipelineItemDto>> GetListAsync(AdmissionPipelineListInput input)
 	{
 		var query = await GetQueryAsync(input);

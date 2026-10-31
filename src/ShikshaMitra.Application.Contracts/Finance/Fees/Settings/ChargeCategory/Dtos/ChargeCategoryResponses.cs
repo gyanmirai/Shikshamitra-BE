@@ -6,7 +6,7 @@ namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
 public class ChargeCategoryResponse
 {
     public Guid Id { get; set; }
-    public string Name { get; set; }
+    public string Name { get; set; } = null!; // The response mapper populates these members after construction.
     public bool IsApprovalRequired { get; set; }
     public string? Description { get; set; }
 	public Guid? IncomeCategoryId { get; set; }
@@ -24,5 +24,5 @@ public class PaginatedChargeCategoryResponse
     public int CurrentPage { get; set; }
     public int PageSize { get; set; }
     public int TotalPages { get; set; }
-    public List<ChargeCategoryResponse> Items { get; set; }
+    public List<ChargeCategoryResponse> Items { get; set; } = null!; // The response mapper populates these members after construction.
 }

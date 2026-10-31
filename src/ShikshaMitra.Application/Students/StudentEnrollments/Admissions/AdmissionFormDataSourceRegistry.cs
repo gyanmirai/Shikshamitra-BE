@@ -60,11 +60,21 @@ public sealed class AdmissionFormDataSourceRegistry(
 					? item.StageId == parentId : !parentId.HasValue || item.ParentId == parentId);
 			var duplicateNames = options.GroupBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
 				.Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
-			return options.Select((item, index) => new AdmissionFormOptionDto
+			var mediums = hierarchy.Mediums.ToDictionary(item => item.Id);
+			var boards = hierarchy.Boards.ToDictionary(item => item.Id);
+			var stages = hierarchy.Stages.ToDictionary(item => item.Id);
+			return options.Select((item, index) =>
 			{
-				Value = item.Id.ToString(), Label = duplicateNames.Contains(item.Name) && source.Key != "DivisionsByStandard"
-					? $"{item.Name} ({hierarchy.Mediums.FirstOrDefault(medium => medium.Id == item.ParentId)?.Name} / {hierarchy.Stages.FirstOrDefault(stage => stage.Id == item.StageId)?.Name})" : item.Name,
-				DisplayOrder = index
+				var isClass = source.Key != "DivisionsByStandard";
+				var medium = isClass && item.ParentId.HasValue ? mediums.GetValueOrDefault(item.ParentId.Value) : null;
+				var board = medium?.ParentId is Guid boardId ? boards.GetValueOrDefault(boardId) : null;
+				return new AdmissionFormOptionDto
+				{
+					Value = item.Id.ToString(), Label = duplicateNames.Contains(item.Name) && isClass
+						? $"{item.Name} ({medium?.Name} / {(item.StageId.HasValue ? stages.GetValueOrDefault(item.StageId.Value)?.Name : null)})" : item.Name,
+					DisplayOrder = index, BoardId = source.Key == "Standards" ? board?.Id : null,
+					BoardLabel = source.Key == "Standards" ? board?.Name : null
+				};
 			}).ToList();
 		}
 		if (source.Key == "StudentSiblings")

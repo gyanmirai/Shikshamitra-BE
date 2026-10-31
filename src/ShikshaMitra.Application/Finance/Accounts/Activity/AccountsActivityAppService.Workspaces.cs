@@ -78,8 +78,8 @@ public partial class AccountsActivityAppService
             var manualParties = await AsyncExecuter.ToListAsync(transactions.Where(t =>
                 t.AcademicYearId == input.AcademicYearId && t.TransactionType == type && t.IsConfirmed &&
                 t.SourceKey == null && t.PaymentDate >= period.StartUtc && t.PaymentDate < period.EndUtc &&
-                ((t.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(t.FinanceFeeAccountId.Value)) ||
-                 (!t.FinanceFeeAccountId.HasValue && (t.StudentId == null || scopedStudents.Contains(t.StudentId.Value)))))
+                ((t.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(t.FinanceFeeAccountId!.Value)) ||
+                 (!t.FinanceFeeAccountId.HasValue && (t.StudentId == null || scopedStudents.Contains(t.StudentId!.Value)))))
                 .Select(t => new { t.Id, t.ExtraProperties }));
             var partyRows = manualParties.Select(t => new WorkspaceRecord
             {
@@ -103,8 +103,8 @@ public partial class AccountsActivityAppService
                     join a in accounts on t.FinanceFeeAccountId equals (Guid?)a.Id into accountGroup
                     from a in accountGroup.DefaultIfEmpty()
                     where t.AcademicYearId == input.AcademicYearId && t.TransactionType == type && t.IsConfirmed &&
-                        ((t.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(t.FinanceFeeAccountId.Value)) ||
-                         (!t.FinanceFeeAccountId.HasValue && (t.StudentId == null || scopedStudents.Contains(t.StudentId.Value))))
+                        ((t.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(t.FinanceFeeAccountId!.Value)) ||
+                         (!t.FinanceFeeAccountId.HasValue && (t.StudentId == null || scopedStudents.Contains(t.StudentId!.Value))))
                     select new WorkspaceRecord
                     {
                         Id = t.Id, SourceId = t.SourceId ?? t.Id, StudentId = t.StudentId, FinanceFeeAccountId = t.FinanceFeeAccountId,
@@ -126,8 +126,8 @@ public partial class AccountsActivityAppService
                         join a in accounts on r.FinanceFeeAccountId equals (Guid?)a.Id into accountGroup
                         from a in accountGroup.DefaultIfEmpty()
                         where r.AcademicYearId == input.AcademicYearId &&
-                            ((r.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(r.FinanceFeeAccountId.Value)) ||
-                             (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudents.Contains(r.StudentId.Value))) &&
+                            ((r.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(r.FinanceFeeAccountId!.Value)) ||
+                             (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudents.Contains(r.StudentId!.Value))) &&
                             !automatic.Any(t => t.SourceId == c.Id) &&
                             (c.Status == FeeCollectionStatus.Paid || c.Status == FeeCollectionStatus.Partial) &&
                             (r.ReceiptKind == FeeReceiptKind.FinalFee || r.ReceiptKind == FeeReceiptKind.FinalCharge)
@@ -154,8 +154,8 @@ public partial class AccountsActivityAppService
                 join a in accounts on r.FinanceFeeAccountId equals (Guid?)a.Id into accountGroup
                 from a in accountGroup.DefaultIfEmpty()
                 where r.AcademicYearId == input.AcademicYearId &&
-                    ((r.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(r.FinanceFeeAccountId.Value)) ||
-                     (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudents.Contains(r.StudentId.Value))) &&
+                    ((r.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(r.FinanceFeeAccountId!.Value)) ||
+                     (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudents.Contains(r.StudentId!.Value))) &&
                     !automatic.Any(t => t.SourceId == r.Id)
                 select new { e.Id, e.RefundRequestId, e.Amount, e.IsCorrection, e.PostedAt, e.BankAccountId,
                     r.StudentId, r.FinanceFeeAccountId, r.VoucherNumber, r.ExpenseCategoryId, r.ExpenseCategoryName, r.PayingBankLabel,

@@ -42,7 +42,7 @@ public class AcademicOrganizationScopeAccessService(
 			return;
 		}
 
-		var names = nonGuidDivisions.Select(d => d.RoomId.Trim().ToUpperInvariant()).Distinct().ToArray();
+		var names = nonGuidDivisions.Select(d => d.RoomId!.Trim().ToUpperInvariant()).Distinct().ToArray();
 		var rooms = await AsyncExecuter.ToListAsync((await roomRepository.GetQueryableAsync())
 			.Where(r => r.TenantId == CurrentTenant.Id && Enumerable.Contains(names, r.RoomName.Trim().ToUpper()))
 			.Select(r => new { r.Id, r.RoomName }));
@@ -51,7 +51,7 @@ public class AcademicOrganizationScopeAccessService(
 
 		foreach (var division in nonGuidDivisions)
 		{
-			var searchRoomId = division.RoomId.Trim();
+			var searchRoomId = division.RoomId!.Trim();
 			if (roomsByName.TryGetValue(searchRoomId, out var roomId))
 			{
 				division.RoomId = roomId.ToString();

@@ -13,6 +13,89 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Theory]
+	[InlineData("father")]
+	[InlineData("mother")]
+	public Task Public_primary_parent_handoff_does_not_create_a_duplicate_guardian_or_parent_account_authority(string role) =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var offering = await CreateOptionalIntakeOfferingAsync();
+			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
+			var input = ManagedInquiryInput(offering);
+			input.ApplicantLastName = "Patel";
+			var inquiry = await inquiries.CreateAsync(input);
+			inquiry = await inquiries.UpdateAsync(inquiry.Id, InquiryStatusUpdate(inquiry, AdmissionInquiryStatus.Interested));
+			var application = await _applicationAppService.StartAsync(inquiry.ApplicantId!.Value, offering.Id, inquiry.Id);
+			(await _applicationAppService.SubmitAsync(application.Id)).ValidationErrors.ShouldBeEmpty();
+			application = await _applicationAppService.GetAsync(application.Id);
+			await _applicationAppService.ApproveAsync(application.Id, Decision(application, "Public parent identity review"));
+			await CompleteCertificationWorkflowAsync(application.Id);
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var applicant = await _applicantRepository.GetAsync(application.ApplicantId);
+				applicant.ExtraProperties.Remove("ParentAccountFlowVersion");
+				applicant.ExtraProperties.Remove("ParentAccountRelationship");
+				AdmissionPrimaryContactSelection.Capture(applicant, role, "Public Primary Parent", "9876543210", "parent@example.test",
+					false, null, DateTime.UtcNow, isPublic: true);
+				AdmissionSiblingParentSelection.IsParentFlow(applicant).ShouldBeFalse();
+				await _applicantRepository.UpdateAsync(applicant, true);
+			});
+			var finalized = await FinalizeAsync(await _applicationAppService.GetAsync(application.Id), true, "public-primary-parent-handoff");
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var student = (await _studentRepository.GetWithDetailsAsync(finalized.StudentId)).ShouldNotBeNull();
+				StudentFamilyContactSelection.Resolve(student).ShouldBe(role);
+				(role == "father" ? student.FamilyDetail!.FatherDetails : student.FamilyDetail!.MotherDetails)
+					.ShouldNotBeNull().FullName.ShouldBe("Public Primary Parent");
+				student.FamilyDetail.GuardianDetails.ShouldBeNull();
+				AdmissionSiblingParentSelection.IsParentFlow(await _applicantRepository.GetAsync(application.ApplicantId)).ShouldBeFalse();
+			});
+		});
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Explicit_guardian_responsibility_must_be_confirmed_before_finalization_and_preserves_the_guardian(bool confirmed) =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var offering = await CreateOptionalIntakeOfferingAsync();
+			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
+			var input = ManagedInquiryInput(offering);
+			input.ApplicantLastName = "Patel";
+			var inquiry = await inquiries.CreateAsync(input);
+			inquiry = await inquiries.UpdateAsync(inquiry.Id, InquiryStatusUpdate(inquiry, AdmissionInquiryStatus.Interested));
+			var application = await _applicationAppService.StartAsync(inquiry.ApplicantId!.Value, offering.Id, inquiry.Id);
+			(await _applicationAppService.SubmitAsync(application.Id)).ValidationErrors.ShouldBeEmpty();
+			application = await _applicationAppService.GetAsync(application.Id);
+			await _applicationAppService.ApproveAsync(application.Id, Decision(application, "Guardian identity review"));
+			await CompleteCertificationWorkflowAsync(application.Id);
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var applicant = await _applicantRepository.GetAsync(application.ApplicantId);
+				AdmissionPrimaryContactSelection.Capture(applicant, "guardian", "Nani Guardian", "9876543210", "nani@example.test",
+					confirmed, confirmed ? TestUserId : null, DateTime.UtcNow, isPublic: !confirmed);
+				await _applicantRepository.UpdateAsync(applicant, true);
+			});
+			var preview = await _applicationAppService.GetFinalizationPreviewAsync(application.Id);
+			if (!confirmed)
+			{
+				preview.IsReady.ShouldBeFalse();
+				preview.Items.ShouldContain(item => item.Key == "guardian_responsibility" && !item.Passed);
+				(await _applicationAppService.GetAsync(application.Id)).StudentId.ShouldBeNull();
+				return;
+			}
+			preview.IsReady.ShouldBeTrue();
+			var finalized = await FinalizeAsync(await _applicationAppService.GetAsync(application.Id), true, "explicit-guardian-handoff");
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var student = (await _studentRepository.GetWithDetailsAsync(finalized.StudentId)).ShouldNotBeNull();
+				StudentFamilyContactSelection.Resolve(student).ShouldBe("guardian");
+				student.FamilyDetail!.GuardianDetails.ShouldNotBeNull().FullName.ShouldBe("Nani Guardian");
+				student.FamilyDetail.FatherDetails.ShouldBeNull();
+				student.FamilyDetail.MotherDetails.ShouldBeNull();
+			});
+		});
+
+	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
 	public Task Finalization_main_contact_preview_and_handoff_preserve_legacy_guardian_or_block_explicit_missing_parent(bool explicitSelection) =>

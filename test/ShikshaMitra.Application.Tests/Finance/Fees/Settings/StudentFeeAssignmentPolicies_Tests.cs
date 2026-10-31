@@ -95,7 +95,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		var aggregate = await assignments.GetAsync(saved.AssignmentId);
 		aggregate.AssignmentSnapshotJson.ShouldBe(originalSnapshot);
 		aggregate.ProrationPolicyVersionId.ShouldBe(originalProrationVersion);
-		aggregate.ExtraProperties["AssignedPolicyHistory"].ToString().ShouldContain("Student policy exception");
+		aggregate.ExtraProperties["AssignedPolicyHistory"].ShouldNotBeNull().ToString().ShouldNotBeNull().ShouldContain("Student policy exception");
 		(await dues.GetListAsync(x => x.StudentFeeStructureId == saved.AssignmentId)).Select(x => x.Id).Order().ShouldBe(before.Select(x => x.Id).Order());
 		(await Should.ThrowAsync<BusinessException>(() => service.UpdatePoliciesAsync(input.StudentId, update))).Code.ShouldBe(AssignmentErrorCodes.StalePreview);
 	}

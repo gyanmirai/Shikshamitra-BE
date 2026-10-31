@@ -20,7 +20,7 @@ public class ElectiveGroupComponent : Entity
 	/// <summary>
 	/// Navigation property to the ElectiveGroup.
 	/// </summary>
-	public virtual ElectiveGroup ElectiveGroup { get; set; }
+	public virtual ElectiveGroup ElectiveGroup { get; set; } = null!; // Populated by EF relationship materialization.
 
 	/// <summary>
 	/// Foreign key for the Subject.
@@ -31,7 +31,7 @@ public class ElectiveGroupComponent : Entity
 	/// <summary>
 	/// Navigation property to the Subject.
 	/// </summary>
-	public virtual Subject Subject { get; set; }
+	public virtual Subject Subject { get; set; } = null!; // Populated by EF relationship materialization.
 	#endregion
 
 	#region Constructors
@@ -39,7 +39,7 @@ public class ElectiveGroupComponent : Entity
 
 	internal ElectiveGroupComponent(Guid ElectiveGroupId, Guid subjectId)
 	{
-		ElectiveGroupId = ElectiveGroupId;
+		// Preserve the legacy constructor: the shadowed self-assignment had no effect.
 		SubjectId = subjectId;
 	}
 	#endregion

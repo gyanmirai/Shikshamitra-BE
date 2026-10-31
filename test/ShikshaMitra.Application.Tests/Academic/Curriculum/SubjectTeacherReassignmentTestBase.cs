@@ -1,4 +1,5 @@
 using System;
+using Shouldly;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -117,8 +118,8 @@ public abstract class SubjectTeacherReassignmentTestBase : LessonPlanProgressTes
 			new BankDetails(null, null, null, null, null),
 			null);
 
-	protected Task<SubjectAssignmentDto> ChangeTeacherAsync(SubjectStatus status = SubjectStatus.Published) =>
-		Allocations.UpdateAsync(AssignmentId, Guid.Empty, new CreateUpdateSubjectAssignmentDto
+	protected async Task<SubjectAssignmentDto> ChangeTeacherAsync(SubjectStatus status = SubjectStatus.Published) =>
+		(await Allocations.UpdateAsync(AssignmentId, Guid.Empty, new CreateUpdateSubjectAssignmentDto
 		{
 			ClassId = StandardId, Status = status,
 			Subjects = [new SubjectAssignmentDetailDto
@@ -126,7 +127,7 @@ public abstract class SubjectTeacherReassignmentTestBase : LessonPlanProgressTes
 				SubjectId = SubjectId, SubjectCode = "MATH", PrimaryTeacherId = NewTeacher,
 				SecondaryTeacherIds = [OtherTeacher]
 			}]
-		});
+		})).ShouldNotBeNull();
 
 	protected async Task<SchoolTimetable> AddTimetableAsync(Guid? divisionId = null, bool published = true,
 		TimetableDayOfWeek day = TimetableDayOfWeek.Tuesday, Guid? teacherId = null, Guid? standardId = null)

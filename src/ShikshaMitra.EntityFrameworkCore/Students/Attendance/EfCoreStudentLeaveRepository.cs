@@ -311,7 +311,7 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 		{
 			query = query.Where(x =>
 				(x.Student != null && ((x.Student.FirstName + " " + x.Student.LastName).Contains(filterText) ||
-					x.Student.FirstName.Contains(filterText) || x.Student.LastName.Contains(filterText))) ||
+					x.Student.FirstName!.Contains(filterText) || x.Student.LastName!.Contains(filterText))) ||
 				(x.StudentLeaveType != null && x.StudentLeaveType.LeaveTypeName.Contains(filterText)) ||
 				(x.Description != null && x.Description.Contains(filterText)) ||
 				(x.Remarks != null && x.Remarks.Contains(filterText)) ||

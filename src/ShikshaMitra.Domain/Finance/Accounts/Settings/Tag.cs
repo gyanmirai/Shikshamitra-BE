@@ -11,7 +11,11 @@ public class Tag : ValueObject
 
     public string Value { get; private set; }
 
-    protected Tag() { }
+    protected Tag()
+    {
+        // EF materializes the required owned-value column after this constructor.
+        Value = null!;
+    }
 
     public Tag(string value)
     {

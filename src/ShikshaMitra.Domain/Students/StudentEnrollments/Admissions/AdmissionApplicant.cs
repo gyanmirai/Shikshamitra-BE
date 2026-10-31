@@ -3,7 +3,11 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionApplicant : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; } public Guid FamilyId { get; private set; } public string FirstName { get; private set; } public string? MiddleName { get; private set; } public string? LastName { get; private set; } public DateTime? DateOfBirth { get; private set; } public string? Gender { get; private set; } public Guid? ExistingStudentId { get; private set; } public string? AddressLine1 { get; private set; } public string? AddressLine2 { get; private set; } public string? City { get; private set; } public string? State { get; private set; } public string? Country { get; private set; } public string? PostalCode { get; private set; } public AdmissionApplicantStatus Status { get; private set; }
-	protected AdmissionApplicant() { }
+	protected AdmissionApplicant()
+	{
+		// EF materializes these required columns after this ORM constructor.
+		FirstName = null!;
+	}
 	/// <summary>Immutable identity for a future new Student; this is not a Student foreign key.</summary>
 	public Guid ReservedStudentId { get; private set; }
 

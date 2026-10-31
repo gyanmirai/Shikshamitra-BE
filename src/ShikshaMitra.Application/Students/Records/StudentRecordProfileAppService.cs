@@ -16,12 +16,38 @@ namespace ShikshaMitra.Students.Records;
 
 [RemoteService(false)]
 [Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
-public class StudentRecordProfileAppService(IStudentRepository students, StudentRecordsAccessService access,
-	IRepository<StudentEnrollment, Guid> enrollments, IRepository<AcademicYear, Guid> years,
-	IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions, StudentRecordsEnrollmentScopeService enrollmentScope,
-	StudentRecordRegistrationReader registrationReader)
+public class StudentRecordProfileAppService
 	: ApplicationService, IStudentRecordProfileAppService
 {
+	private readonly IStudentRepository students;
+	private readonly StudentRecordsAccessService access;
+	private readonly IRepository<AcademicYear, Guid> years;
+	private readonly IRepository<Standard, Guid> standards;
+	private readonly IRepository<Division, Guid> divisions;
+	private readonly StudentRecordsEnrollmentScopeService enrollmentScope;
+	private readonly StudentRecordRegistrationReader registrationReader;
+
+	public StudentRecordProfileAppService(
+		IStudentRepository students,
+		StudentRecordsAccessService access,
+		IRepository<StudentEnrollment, Guid> enrollments,
+		IRepository<AcademicYear, Guid> years,
+		IRepository<Standard, Guid> standards,
+		IRepository<Division, Guid> divisions,
+		StudentRecordsEnrollmentScopeService enrollmentScope,
+		StudentRecordRegistrationReader registrationReader
+	)
+	{
+		this.students = students;
+		this.access = access;
+		_ = enrollments;
+		this.years = years;
+		this.standards = standards;
+		this.divisions = divisions;
+		this.enrollmentScope = enrollmentScope;
+		this.registrationReader = registrationReader;
+	}
+
 	public async Task<StudentRecordProfileDto> GetAsync(Guid studentId, Guid? academicYearId = null)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);

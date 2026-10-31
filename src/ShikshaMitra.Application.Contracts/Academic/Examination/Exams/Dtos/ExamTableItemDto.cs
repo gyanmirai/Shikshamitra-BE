@@ -18,10 +18,10 @@ public class ExamListResultDto : PagedResultDto<ExamTableItemDto>
 public class ExamTableItemDto
 {
     public Guid ExamId { get; set; }
-    public string ExamName { get; set; }
-    public string ExamTypeName { get; set; }
+    public string ExamName { get; set; } = null!; // The response mapper populates these members after construction.
+    public string ExamTypeName { get; set; } = null!;
     public Guid StandardId { get; set; }
-    public string StandardName { get; set; }
+    public string StandardName { get; set; } = null!;
     public List<string> Divisions { get; set; } = new();
     public Guid? CreatedBy { get; set; }
     public string? CreatorName { get; set; }

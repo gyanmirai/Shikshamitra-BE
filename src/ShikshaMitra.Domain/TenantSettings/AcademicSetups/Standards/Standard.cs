@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.TenantSettings.Divisions;
+﻿using System.Diagnostics.CodeAnalysis;
+using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
@@ -20,10 +21,13 @@ public class Standard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public Guid? ShiftId { get; internal set; }
 
-	public ShiftManagement Shift { get; set; }
+	public ShiftManagement? Shift { get; set; }
 
 	private Standard()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Name = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -43,6 +47,7 @@ public class Standard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ShiftId = shiftId;
 	}
 
+	[MemberNotNull(nameof(Name))]
 	internal Standard SetName(string name)
 	{
 		Name = Check.NotNullOrWhiteSpace(name, nameof(name), maxLength: StandardConsts.MaxNameLength);
@@ -52,6 +57,6 @@ public class Standard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal void SetSortOrder(int sortOrder) => SortOrder = Check.Range(sortOrder, nameof(sortOrder), 0, int.MaxValue);
 
 	// Navigation property
-	public EducationMediumStage EducationMediumStage { get; set; }
-	public ICollection<Division> Divisions { get; set; }
+	public EducationMediumStage EducationMediumStage { get; set; } = null!; // Populated by EF relationship materialization.
+	public ICollection<Division> Divisions { get; set; } = null!; // Populated by EF relationship materialization.
 }

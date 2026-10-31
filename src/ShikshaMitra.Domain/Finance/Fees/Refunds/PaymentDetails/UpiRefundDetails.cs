@@ -42,13 +42,14 @@ public sealed class UpiRefundDetails : RefundPaymentDetails
         Remarks           = remarks;
     }
 
-    protected override IEnumerable<object?> GetAtomicValues()
+    // ABP equality atoms intentionally include null for absent optional values.
+    protected override IEnumerable<object> GetAtomicValues()
     {
         yield return RefundDate;
         yield return SourceBankAccount;
         yield return BeneficiaryName;
         yield return UpiId;
-        yield return TransactionId;
-        yield return Remarks;
+        yield return TransactionId!;
+        yield return Remarks!;
     }
 }

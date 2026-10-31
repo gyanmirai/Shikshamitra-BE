@@ -168,7 +168,11 @@ public class AcademicPermissionUserScopeSyncer(
 			}
 		}
 
-		var boards = (await educationBoardRepository.GetListAsync()).ToDictionary(x => x.Id);
+		// Read hierarchy keys without materializing the AutoInclude collection graph.
+		// The year scalar preserves the required parent's filtered visibility from the old board query.
+		var boards = (await AsyncExecuter.ToListAsync((await educationBoardRepository.GetQueryableAsync())
+			.Select(x => new { x.Id, x.AcademicYearId, AcademicYearTenantId = x.AcademicYear.TenantId })))
+			.ToDictionary(x => x.Id);
 		var boardPermissions = await educationBoardPermissionRepository.GetListAsync();
 		logger.LogInformation(
 			"[AcademicPermissionUserScopeSyncer] Loaded board permissions. Count={PermissionCount}",
@@ -181,7 +185,8 @@ public class AcademicPermissionUserScopeSyncer(
 			}
 		}
 
-		var mediums = (await educationMediumRepository.GetListAsync()).ToDictionary(x => x.Id);
+		var mediums = (await AsyncExecuter.ToListAsync((await educationMediumRepository.GetQueryableAsync())
+			.Select(x => new { x.Id, x.EducationBoardId }))).ToDictionary(x => x.Id);
 		var mediumPermissions = await educationMediumPermissionRepository.GetListAsync();
 		logger.LogInformation(
 			"[AcademicPermissionUserScopeSyncer] Loaded medium permissions. Count={PermissionCount}",
@@ -196,7 +201,8 @@ public class AcademicPermissionUserScopeSyncer(
 			}
 		}
 
-		var stages = (await educationMediumStageRepository.GetListAsync()).ToDictionary(x => x.Id);
+		var stages = (await AsyncExecuter.ToListAsync((await educationMediumStageRepository.GetQueryableAsync())
+			.Select(x => new { x.Id, x.EducationMediumId }))).ToDictionary(x => x.Id);
 		var stagePermissions = await educationMediumStagePermissionRepository.GetListAsync();
 		logger.LogInformation(
 			"[AcademicPermissionUserScopeSyncer] Loaded stage permissions. Count={PermissionCount}",
@@ -233,8 +239,9 @@ public class AcademicPermissionUserScopeSyncer(
 			"[AcademicPermissionUserScopeSyncer] Loaded division permissions. Count={PermissionCount}",
 			divisionPermissions.Count);
 		var standards = standardPermissions.Count == 0 && divisionPermissions.Count == 0 && classTeacherAssignments.Count == 0
-			? new Dictionary<Guid, Standard>()
-			: (await standardRepository.GetListAsync()).ToDictionary(x => x.Id);
+			? new Dictionary<Guid, StandardScopeRead>()
+			: (await AsyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync())
+				.Select(x => new StandardScopeRead(x.Id, x.EducationMediumStageId)))).ToDictionary(x => x.Id);
 		foreach (var permission in standardPermissions)
 		{
 			if (permission.UserId.HasValue &&
@@ -248,8 +255,9 @@ public class AcademicPermissionUserScopeSyncer(
 		}
 
 		var divisions = divisionPermissions.Count == 0
-			? new Dictionary<Guid, Division>()
-			: (await divisionRepository.GetListAsync()).ToDictionary(x => x.Id);
+			? new Dictionary<Guid, DivisionScopeRead>()
+			: (await AsyncExecuter.ToListAsync((await divisionRepository.GetQueryableAsync())
+				.Select(x => new DivisionScopeRead(x.Id, x.StandardId)))).ToDictionary(x => x.Id);
 		foreach (var permission in divisionPermissions)
 		{
 			if (permission.UserId.HasValue &&
@@ -287,6 +295,9 @@ public class AcademicPermissionUserScopeSyncer(
 
 		return scopes;
 	}
+
+	private sealed record StandardScopeRead(Guid Id, Guid EducationMediumStageId);
+	private sealed record DivisionScopeRead(Guid Id, Guid StandardId);
 
 	private sealed record ScopeKey(
 		Guid UserId,

@@ -7,11 +7,18 @@ using Volo.Abp.Guids;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
 
-public class ExamManager(
-    IRepository<Exam, Guid> examRepository,
-    IGuidGenerator guidGenerator
-) : DomainService
+public class ExamManager : DomainService
 {
+	private readonly IGuidGenerator guidGenerator;
+
+	public ExamManager(
+		IRepository<Exam, Guid> examRepository,
+		IGuidGenerator guidGenerator
+	)
+	{
+		this.guidGenerator = guidGenerator;
+	}
+
     public Exam Create(Guid examTypeId, string examName, Guid standardId, List<Guid> divisionIds, List<Guid> subjectIds, Guid? gradingScaleId = null)
     {
         var exam = new Exam(guidGenerator.Create(), examTypeId, examName, standardId, CurrentTenant.Id, gradingScaleId);

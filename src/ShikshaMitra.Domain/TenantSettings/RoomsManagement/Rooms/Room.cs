@@ -8,7 +8,7 @@ namespace ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 public class Room : AuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; set; }
-	public string RoomName { get; set; }
+	public string RoomName { get; set; } = null!; // Required persisted column; populated by EF or the owning create flow.
 	[System.ComponentModel.DataAnnotations.Schema.NotMapped]
 	public bool HasImage => ExtraProperties.TryGetValue("RoomImageBlob", out var image) && !string.IsNullOrEmpty(image?.ToString());
 	public int Capacity { get; set; }

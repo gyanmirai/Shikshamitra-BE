@@ -252,7 +252,7 @@ public partial class SubstitutionAppService(
                 entity.Id);
 
         entity.Assign(
-                selected.TeacherId,
+                selected!.TeacherId,
                 selected.TeacherName,
                 input.AssignedRoomId,
                 input.AssignedRoomName,
@@ -401,7 +401,7 @@ public partial class SubstitutionAppService(
         }
 
         entity.Assign(
-            selected.TeacherId,
+            selected!.TeacherId,
             selected.TeacherName,
             input.AssignedRoomId,
             input.AssignedRoomName,

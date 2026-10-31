@@ -331,8 +331,8 @@ public partial class ConcessionRequestAppService
 			x => x.AcademicBoard!, x => x.AcademicMedium!, x => x.Standard!, x => x.Division!);
 		var student = await AsyncExecuter.FirstOrDefaultAsync(students.Where(x => x.Id == studentId))
 			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
-		var standard = student?.Standard?.Name;
-		var division = student?.Division?.Name;
+		var standard = student.Standard?.Name;
+		var division = student.Division?.Name;
 
 		var typeIds  = page.Select(r => r.ConcessionTypeId).Distinct().ToList();
 		var types    = typeIds.Count > 0

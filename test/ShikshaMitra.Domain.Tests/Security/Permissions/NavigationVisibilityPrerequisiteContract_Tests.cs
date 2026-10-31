@@ -5,6 +5,17 @@ namespace ShikshaMitra.Security.Permissions;
 
 public class NavigationVisibilityPrerequisiteContract_Tests
 {
+	[Theory]
+	[InlineData("View")]
+	[InlineData("Add")]
+	[InlineData("Delete")]
+	public void House_management_actions_require_existing_student_and_records_visibility(string action)
+	{
+		var paths = NavigationVisibilityPrerequisites.GetPaths($"Students.Records.HouseManagement.{action}");
+		paths.Length.ShouldBe(1);
+		paths[0].ShouldBe(new[] { "ShikshaMitra.Module.Students", "ShikshaMitra.Module.Students.Records" });
+	}
+
 	[Fact]
 	public void Employee_actions_require_module_and_feature_visibility()
 	{

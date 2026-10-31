@@ -65,7 +65,12 @@ public class SchoolIdentityPostgresFactory : ShikshaMitraApiTestFactory
 		db.GetService<IRelationalDatabaseCreator>().CreateTables();
 		db.Database.ExecuteSqlRaw("DROP TABLE \"AppSchoolIdentityRevisions\", \"AppSchoolIdentityProfiles\", \"AppSchoolIdentityAssets\";");
 		foreach (var table in new[] { "AppAcademicTerms", "AppStudentManagementSettings", "AppStudentRollNumberAssignments" })
-			db.Database.ExecuteSqlRaw($"CREATE TABLE \"{table}\" (\"Id\" uuid PRIMARY KEY, \"Sentinel\" text NOT NULL); INSERT INTO \"{table}\" VALUES ('11111111-1111-1111-1111-111111111111', 'preserve');");
+		{
+			var identifier = db.GetService<ISqlGenerationHelper>().DelimitIdentifier(table);
+			var sql = "CREATE TABLE " + identifier + " (\"Id\" uuid PRIMARY KEY, \"Sentinel\" text NOT NULL); INSERT INTO " +
+				identifier + " VALUES ('11111111-1111-1111-1111-111111111111', 'preserve');";
+			db.Database.ExecuteSqlRaw(sql);
+		}
 		var migrations = db.GetService<IMigrationsAssembly>().Migrations.Keys.OrderBy(id => id).ToList();
 		PredecessorId = migrations.Last(id => string.CompareOrdinal(id, MigrationId) < 0);
 		db.Database.ExecuteSqlRaw("CREATE TABLE \"__EFMigrationsHistory\" (\"MigrationId\" varchar(150) NOT NULL PRIMARY KEY, \"ProductVersion\" varchar(32) NOT NULL);");

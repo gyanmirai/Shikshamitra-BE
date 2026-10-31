@@ -45,7 +45,7 @@ public class StudentRollNumberBatch : FullAuditedAggregateRoot<Guid>, IMultiTena
 		if (Rows().Count == 0 || Rows().Any(x => x.Issue != null || x.ProposedRollNumber is not > 0)) throw new BusinessException(StudentRollNumberErrorCodes.BatchBlocked);
 		if (Operation == "renumber" && string.IsNullOrWhiteSpace(reason)) throw new BusinessException(StudentRollNumberErrorCodes.InvalidBatch);
 		SubmissionKey = Check.NotNullOrWhiteSpace(key, nameof(key), 100);
-		Reason = Operation == "renumber" ? Check.NotNullOrWhiteSpace(reason, nameof(reason), 1000).Trim() : Check.Length(reason.Trim(), nameof(reason), 1000);
+		Reason = Operation == "renumber" ? Check.NotNullOrWhiteSpace(reason, nameof(reason), 1000).Trim() : Check.Length(reason.Trim(), nameof(reason), 1000)!;
 		ApprovalStagesJson = stagesJson;
 		using var stages = JsonDocument.Parse(stagesJson);
 		Status = stages.RootElement.GetArrayLength() == 0 ? "Approved" : "PendingApproval";

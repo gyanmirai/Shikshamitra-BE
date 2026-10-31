@@ -12,9 +12,11 @@ internal static class AdmissionInquiryConfiguredFields
 	internal const string MissingStudent = "Add a required Student name field before publishing.";
 	internal const string MissingParent = "Add a required Parent / Guardian name field before publishing.";
 	internal const string MissingMobile = "Add a required Parent / Guardian mobile field before publishing.";
-	internal const string MissingSelector = "Add a required Primary parent selector when both Father and Mother contacts are configured.";
-	internal const string InvalidSelector = "Configure a required Primary parent selector with Father and Mother choices before publishing.";
+	internal const string MissingSelector = "Add a required Primary contact selector when both Father and Mother contacts are configured.";
+	internal const string InvalidSelector = "Configure a required Primary contact selector with Father, Mother, and Guardian choices before publishing.";
 	internal const string MixedNames = "Use either Student name or separate student name fields before publishing.";
+	internal const string ExplicitMapping = "Connect inquiry fields to their matching Student fields before publishing.";
+	internal const string ConflictingEmail = "Show only one email field for the selected primary contact; keep the other parent's email separate.";
 	private static readonly Dictionary<string, string[]> Aliases = new(StringComparer.OrdinalIgnoreCase)
 	{
 		["Applicant.Name"] = ["STUDENT_NAME", "APPLICANT_NAME", "CHILD_NAME"],
@@ -52,24 +54,43 @@ internal static class AdmissionInquiryConfiguredFields
 		IReadOnlyCollection<AdmissionFormSectionDefinition> sections, ISet<Guid>? repeatedSections = null)
 	{
 		var issues = new List<string>();
+		// Publishing requires explicit system connections. Find/Read retain the code
+		// aliases separately for forms that were already published by older clients.
+		AdmissionFormFieldDefinition? Mapped(string key) => fields.FirstOrDefault(field =>
+			field.BindingType == AdmissionFormBindingType.System && string.Equals(field.BindingKey, key, StringComparison.OrdinalIgnoreCase));
+		var identityKeys = Aliases.Keys.Concat(new[] { "Inquiry.ParentRelationship", "Inquiry.Source", "Inquiry.SourceDetail", "Inquiry.PreferredLanguageCode" }).ToArray();
+		if (fields.Any(field => identityKeys.Any(key => Find([field], key) != null) &&
+			!(field.BindingType == AdmissionFormBindingType.System && identityKeys.Contains(field.BindingKey, StringComparer.OrdinalIgnoreCase))))
+			issues.Add(ExplicitMapping);
 		bool Safe(AdmissionFormFieldDefinition? field) => field != null && field.Required && !field.ReadOnly &&
+			field.FieldType == (field.BindingKey!.EndsWith(".Mobile", StringComparison.OrdinalIgnoreCase) ? AdmissionFormFieldType.Phone :
+				field.BindingKey.Equals("Inquiry.ParentRelationship", StringComparison.OrdinalIgnoreCase) ? AdmissionFormFieldType.Select : AdmissionFormFieldType.Text) &&
 			Unconditional(field.VisibilityRuleJson) && repeatedSections?.Contains(field.SectionId) != true &&
 			sections.Any(section => section.Id == field.SectionId && Unconditional(section.VisibilityRuleJson) && Unconditional(section.StepVisibilityRuleJson));
-		bool Pair(string prefix) => Find(fields, prefix == "Guardian" ? "Guardian.FirstName" : prefix + ".Name") != null && Find(fields, prefix + ".Mobile") != null;
-		bool SafeName(string prefix) => Safe(Find(fields, prefix == "Guardian" ? "Guardian.FirstName" : prefix + ".Name"));
-		bool SafePhone(string prefix) => Safe(Find(fields, prefix + ".Mobile"));
-		if (!Safe(Find(fields, "Applicant.FirstName")) && !Safe(Find(fields, "Applicant.Name"))) issues.Add(MissingStudent);
-		if (Find(fields, "Applicant.Name") != null && new[] { "Applicant.FirstName", "Applicant.MiddleName", "Applicant.LastName" }.Any(key => Find(fields, key) != null))
+		bool Pair(string prefix) => Mapped(prefix == "Guardian" ? "Guardian.FirstName" : prefix + ".Name") != null && Mapped(prefix + ".Mobile") != null;
+		bool SafeName(string prefix) => Safe(Mapped(prefix == "Guardian" ? "Guardian.FirstName" : prefix + ".Name"));
+		bool SafePhone(string prefix) => Safe(Mapped(prefix + ".Mobile"));
+		if (!Safe(Mapped("Applicant.FirstName")) && !Safe(Mapped("Applicant.Name"))) issues.Add(MissingStudent);
+		if (Mapped("Applicant.Name") != null && new[] { "Applicant.FirstName", "Applicant.MiddleName", "Applicant.LastName" }.Any(key => Mapped(key) != null))
 			issues.Add(MixedNames);
 		var generic = Pair("Guardian");
 		var father = Pair("Father");
 		var mother = Pair("Mother");
-		var selector = Find(fields, "Inquiry.ParentRelationship");
+		var selector = Mapped("Inquiry.ParentRelationship");
+		var genericEmail = Mapped("Guardian.Email");
+		if (genericEmail != null && selector != null)
+			foreach (var (role, prefix) in new[] { ("father", "Father"), ("mother", "Mother") })
+			{
+				var ownEmail = Mapped(prefix + ".Email");
+				if (ownEmail != null && VisibleForRole(genericEmail, selector.Code, role, sections) && VisibleForRole(ownEmail, selector.Code, role, sections))
+					issues.Add(ConflictingEmail);
+			}
 		if (selector != null)
 		{
-			if (!Safe(selector) || selector.FieldType != AdmissionFormFieldType.Select || !HasBothParentChoices(selector.OptionsJson) ||
-				!(father ? SafeName("Father") && SafePhone("Father") : generic && SafeName("Guardian") && SafePhone("Guardian")) ||
-				!(mother ? SafeName("Mother") && SafePhone("Mother") : generic && SafeName("Guardian") && SafePhone("Guardian")))
+			if (!Safe(selector) || selector.FieldType != AdmissionFormFieldType.Select || !HasPrimaryContactChoices(selector.OptionsJson) ||
+				(HasGuardianChoice(selector.OptionsJson) && !(generic && SafeName("Guardian") && SafePhone("Guardian"))) ||
+				!(generic && SafeName("Guardian") && SafePhone("Guardian") || SafeName("Father") && SafePhone("Father")) ||
+				!(generic && SafeName("Guardian") && SafePhone("Guardian") || SafeName("Mother") && SafePhone("Mother")))
 				issues.Add(InvalidSelector);
 			// A selector owns each chosen contact path. Optional generic questions are not
 			// another required primary contact when both structured paths are complete.
@@ -77,6 +98,7 @@ internal static class AdmissionInquiryConfiguredFields
 		}
 		if (generic)
 		{
+			if (father && mother) issues.Add(MissingSelector);
 			if (!SafeName("Guardian")) issues.Add(MissingParent);
 			if (!SafePhone("Guardian")) issues.Add(MissingMobile);
 		}
@@ -95,17 +117,29 @@ internal static class AdmissionInquiryConfiguredFields
 	}
 
 	public static AdmissionInquiryConfiguredContact ResolveContact(IReadOnlyCollection<AdmissionFormFieldDefinition> fields,
-		IReadOnlyDictionary<string, string> answers, string? savedRelationship = null, bool allowLegacySplitContact = false)
+		IReadOnlyDictionary<string, string> answers, string? savedRelationship = null, bool allowLegacySplitContact = false,
+		IReadOnlySet<string>? activeFieldCodes = null)
 	{
+		var evaluator = new AdmissionWorkflowConditionEvaluator();
+		fields = fields.Where(field => (activeFieldCodes?.Contains(field.Code) ?? evaluator.Evaluate(field.VisibilityRuleJson, answers)) ||
+			allowLegacySplitContact && field.ReadOnly && answers.ContainsKey(field.Code)).ToList();
 		bool Pair(string prefix) => Find(fields, prefix == "Guardian" ? "Guardian.FirstName" : prefix + ".Name") != null && Find(fields, prefix + ".Mobile") != null;
+		bool RequiredPair(string prefix) => Find(fields, prefix == "Guardian" ? "Guardian.FirstName" : prefix + ".Name")?.Required == true && Find(fields, prefix + ".Mobile")?.Required == true;
+		bool Part(string prefix) => Find(fields, prefix == "Guardian" ? "Guardian.FirstName" : prefix + ".Name") != null || Find(fields, prefix + ".Mobile") != null;
+		bool OwnsIdentity(string key) => Find(fields, key) is { } field &&
+			(!allowLegacySplitContact || field.Required || answers.ContainsKey(field.Code));
 		AdmissionInquiryConfiguredContact Contact(string prefix, string? relationship) => new(relationship,
 			Read(fields, answers, prefix == "Guardian" ? "Guardian.FirstName" : prefix + ".Name"),
 			prefix == "Guardian" ? Read(fields, answers, "Guardian.LastName") : null,
 			Read(fields, answers, prefix + ".Mobile"),
-			Find(fields, prefix + ".Email") != null ? Read(fields, answers, prefix + ".Email") : Read(fields, answers, "Guardian.Email"), true,
+			Find(fields, prefix + ".Email") != null ? Read(fields, answers, prefix + ".Email") : Read(fields, answers, "Guardian.Email"),
+			!allowLegacySplitContact || Find(fields, "Inquiry.ParentRelationship") != null ||
+				OwnsIdentity(prefix == "Guardian" ? "Guardian.FirstName" : prefix + ".Name") || OwnsIdentity(prefix + ".Mobile"),
 			Find(fields, prefix + ".Email") != null || Find(fields, "Guardian.Email") != null,
-			prefix == "Guardian" && Find(fields, "Guardian.LastName") != null,
-			prefix != "Guardian");
+			prefix == "Guardian" && OwnsIdentity("Guardian.LastName"),
+			prefix != "Guardian" && OwnsIdentity(prefix + ".Name"),
+			OwnsIdentity(prefix == "Guardian" ? "Guardian.FirstName" : prefix + ".Name"),
+			OwnsIdentity(prefix + ".Mobile"));
 		var generic = Pair("Guardian");
 		// Historical locked primary contact fields remain the owner during edits.
 		if (generic && allowLegacySplitContact && Find(fields, "Guardian.Mobile")?.ReadOnly == true)
@@ -114,12 +148,31 @@ internal static class AdmissionInquiryConfiguredFields
 		if (selector != null)
 		{
 			var selected = Read(fields, answers, "Inquiry.ParentRelationship");
-			if (!AdmissionSiblingParentSelection.IsRelationship(selected)) return new(null, null, null, null, null, true);
-			var prefix = selected == "father" ? "Father" : "Mother";
-			if (Pair(prefix)) return Contact(prefix, selected);
-			return generic ? Contact("Guardian", selected) : new(selected, null, null, null, null, true);
+			if (!AdmissionPrimaryContactSelection.IsRelationship(selected)) return new(null, null, null, null, null, true);
+			var prefix = selected == "father" ? "Father" : selected == "mother" ? "Mother" : "Guardian";
+			if (generic && (selected == "guardian" || Find(fields, "Guardian.FirstName")?.Required == true && Find(fields, "Guardian.Mobile")?.Required == true))
+			{
+				var contact = Contact("Guardian", selected);
+				return prefix != "Guardian" && Find(fields, prefix + ".Email") != null
+					? contact with { Email = Read(fields, answers, prefix + ".Email"), EmailIsConfigured = true } : contact;
+			}
+			if (Part(prefix)) return Contact(prefix, selected);
+			return Part("Guardian") ? Contact("Guardian", selected) : new(selected, null, null, null, null, true);
 		}
-		if (generic) return Contact("Guardian", AdmissionSiblingParentSelection.IsRelationship(savedRelationship) ? savedRelationship : null);
+		if (generic)
+		{
+			if (!RequiredPair("Guardian"))
+			{
+				if (AdmissionSiblingParentSelection.IsRelationship(savedRelationship))
+				{
+					var savedPrefix = savedRelationship == "father" ? "Father" : "Mother";
+					return Pair(savedPrefix) ? Contact(savedPrefix, savedRelationship) : Contact("Guardian", savedRelationship);
+				}
+				if (savedRelationship != "guardian" && RequiredPair("Father") != RequiredPair("Mother"))
+					return RequiredPair("Father") ? Contact("Father", "father") : Contact("Mother", "mother");
+			}
+			return Contact("Guardian", AdmissionPrimaryContactSelection.IsRelationship(savedRelationship) ? savedRelationship : null);
+		}
 		var father = Pair("Father");
 		var mother = Pair("Mother");
 		if (father != mother) return Contact(father ? "Father" : "Mother", father ? "father" : "mother");
@@ -132,8 +185,18 @@ internal static class AdmissionInquiryConfiguredFields
 				return new(savedRelationship, Read(fields, answers, "Guardian.FirstName"), Read(fields, answers, "Guardian.LastName"),
 					Read(fields, answers, prefix + ".Mobile"), Read(fields, answers, prefix + ".Email") ?? Read(fields, answers, "Guardian.Email"), true,
 					Find(fields, prefix + ".Email") != null || Find(fields, "Guardian.Email") != null,
-					Find(fields, "Guardian.LastName") != null);
+					Find(fields, "Guardian.LastName") != null, false, true, true);
 		}
+		// Legacy generic capture resolves each Guardian binding independently and retains
+		// its DTO identity fallback. Only edits need the partial contact ownership flags.
+		if (Part("Guardian")) return allowLegacySplitContact
+			? Contact("Guardian", AdmissionPrimaryContactSelection.IsRelationship(savedRelationship) ? savedRelationship : null)
+			: new(null, null, null, null, null, false);
+		if (AdmissionSiblingParentSelection.IsRelationship(savedRelationship) && Part(savedRelationship == "father" ? "Father" : "Mother"))
+			return Contact(savedRelationship == "father" ? "Father" : "Mother", savedRelationship);
+		var fatherPart = Part("Father");
+		var motherPart = Part("Mother");
+		if (fatherPart != motherPart) return Contact(fatherPart ? "Father" : "Mother", fatherPart ? "father" : "mother");
 		return new(null, null, null, null, null, false);
 	}
 
@@ -180,18 +243,46 @@ internal static class AdmissionInquiryConfiguredFields
 	private static bool HasOwnedBinding(string? key) => key != null && AdmissionFormBindingRegistry.Metadata.ContainsKey(key);
 	private static string Normalize(string value) => string.Concat(value.Where(char.IsLetterOrDigit)).ToUpperInvariant();
 	private static bool Unconditional(string? rule) => string.IsNullOrWhiteSpace(rule);
-	private static bool HasBothParentChoices(string? options)
+	internal static bool HasPrimaryContactChoices(string? options)
 	{
 		if (string.IsNullOrWhiteSpace(options)) return true; // Registry supplies the bounded default choices.
 		try
 		{
 			using var json = JsonDocument.Parse(options);
-			return json.RootElement.ValueKind == JsonValueKind.Array && json.RootElement.GetArrayLength() == 2 &&
-				json.RootElement.EnumerateArray().Select(option => option.GetProperty("value").GetString()).ToHashSet().SetEquals(["father", "mother"]);
+			return json.RootElement.ValueKind == JsonValueKind.Array && json.RootElement.GetArrayLength() is 2 or 3 &&
+				json.RootElement.EnumerateArray().Select(option => option.GetProperty("value").GetString()).ToHashSet() is var choices && (choices.SetEquals(["father", "mother"]) || choices.SetEquals(["father", "mother", "guardian"]));
 		}
 		catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException) { return false; }
+	}
+
+	private static bool HasGuardianChoice(string? options)
+	{
+		if (string.IsNullOrWhiteSpace(options)) return true;
+		try
+		{
+			using var json = JsonDocument.Parse(options);
+			return json.RootElement.ValueKind == JsonValueKind.Array && json.RootElement.EnumerateArray().Any(option =>
+				option.ValueKind == JsonValueKind.Object && option.TryGetProperty("value", out var value) && value.GetString() == "guardian");
+		}
+		catch (Exception error) when (error is JsonException or InvalidOperationException) { return false; }
+	}
+
+	private static bool VisibleForRole(AdmissionFormFieldDefinition field, string selectorCode, string role,
+		IReadOnlyCollection<AdmissionFormSectionDefinition> sections)
+	{
+		var section = sections.FirstOrDefault(item => item.Id == field.SectionId);
+		var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [selectorCode] = role };
+		var evaluator = new AdmissionWorkflowConditionEvaluator();
+		return Evaluate(field.VisibilityRuleJson) && Evaluate(section?.VisibilityRuleJson) && Evaluate(section?.StepVisibilityRuleJson);
+		bool Evaluate(string? rule)
+		{
+			if (string.IsNullOrWhiteSpace(rule)) return true;
+			try { return evaluator.Evaluate(rule, values); }
+			catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException) { return true; }
+		}
 	}
 }
 
 internal sealed record AdmissionInquiryConfiguredContact(string? Relationship, string? Name, string? LastName, string? Mobile, string? Email, bool IsConfigured,
-	bool EmailIsConfigured = false, bool LastNameIsConfigured = false, bool WholeNameIsConfigured = false);
+	bool EmailIsConfigured = false, bool LastNameIsConfigured = false, bool WholeNameIsConfigured = false,
+	bool NameIsConfigured = false, bool MobileIsConfigured = false);

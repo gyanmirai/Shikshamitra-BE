@@ -12,16 +12,33 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
-public class StudentGeneralInfoAppService(
-	IStudentRepository studentRepository,
-	IRepository<Standard, Guid> standardRepository,
-	IRepository<Division, Guid> divisionRepository,
-	EntityValidationService validationService,
-	StudentScopeAccessService studentScopeAccessService,
-	StudentIdentityComplianceAppService identityComplianceAppService
-) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
+public class StudentGeneralInfoAppService : StudentRegistrationBaseAppService,
 	IStudentGeneralInfoAppService
 {
+	private readonly IStudentRepository studentRepository;
+	private readonly IRepository<Standard, Guid> standardRepository;
+	private readonly IRepository<Division, Guid> divisionRepository;
+	private readonly EntityValidationService validationService;
+	private readonly StudentScopeAccessService studentScopeAccessService;
+	private readonly StudentIdentityComplianceAppService identityComplianceAppService;
+
+	public StudentGeneralInfoAppService(
+		IStudentRepository studentRepository,
+		IRepository<Standard, Guid> standardRepository,
+		IRepository<Division, Guid> divisionRepository,
+		EntityValidationService validationService,
+		StudentScopeAccessService studentScopeAccessService,
+		StudentIdentityComplianceAppService identityComplianceAppService
+	) : base(studentRepository, validationService, studentScopeAccessService)
+	{
+		this.studentRepository = studentRepository;
+		this.standardRepository = standardRepository;
+		this.divisionRepository = divisionRepository;
+		this.validationService = validationService;
+		this.studentScopeAccessService = studentScopeAccessService;
+		this.identityComplianceAppService = identityComplianceAppService;
+	}
+
 	public async Task<StudentGeneralDetailsDto> GetRegistrationGeneralDetailsByIdAsync(Guid studentId)
 	{
 		var student = await GetScopedRegistrationStudentAsync(

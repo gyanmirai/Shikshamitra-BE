@@ -10,7 +10,7 @@ public class AcademicCalendarDto : EntityDto<Guid>
 {
     public Guid? AcademicMediumId { get; set; }
     public Guid? AcademicYearId { get; set; }
-    public string Name { get; set; }
+    public string Name { get; set; } = null!; // The response mapper populates these members after construction.
     public string? Description { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
@@ -35,7 +35,7 @@ public class AcademicCalendarDayDto : EntityDto<Guid>
     public DateTime? EndDate { get; set; }
     public DayType DayType { get; set; }
     public HolidayCategory? HolidayCategory { get; set; }
-    public string Title { get; set; }
+    public string Title { get; set; } = null!; // The response mapper populates these members after construction.
     public string? Description { get; set; }
     public bool AppliesToAll { get; set; }
     public Guid? StandardId { get; set; }
@@ -62,7 +62,7 @@ public class AcademicCalendarDayDto : EntityDto<Guid>
 public class EmergencyClosureListItemDto : EntityDto<Guid>
 {
     public Guid AcademicCalendarId { get; set; }
-    public string CalendarName { get; set; }
+    public string CalendarName { get; set; } = null!; // The response mapper populates these members after construction.
     public DateTime Date { get; set; }
     public TimeSpan? StartTime { get; set; }
     public TimeSpan? EndTime { get; set; }
@@ -74,7 +74,7 @@ public class EmergencyClosureListItemDto : EntityDto<Guid>
     public string? PtmMode { get; set; }
     public Guid? RoomId { get; set; }
     public string? MeetingLink { get; set; }
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
     public string? Description { get; set; }
     public bool AppliesToAll { get; set; }
     public Guid? StandardId { get; set; }
@@ -140,9 +140,9 @@ public class CalendarImpactLogDto : EntityDto<Guid>
     public Guid AcademicCalendarDayId { get; set; }
     public CalendarImpactType ImpactType { get; set; }
     public Guid? AffectedEntityId { get; set; }
-    public string AffectedEntityName { get; set; }
+    public string AffectedEntityName { get; set; } = null!; // The response mapper populates these members after construction.
     public DateTime AffectedDate { get; set; }
-    public string Message { get; set; }
+    public string Message { get; set; } = null!;
     public CalendarImpactStatus Status { get; set; }
     public DateTime? SuggestedNewDate { get; set; }
     public bool IsResolved { get; set; }
@@ -238,7 +238,7 @@ public class CreateCalendarDto
 {
     public Guid AcademicMediumId { get; set; }
     public Guid? AcademicYearId { get; set; }
-    public string Name { get; set; }
+    public string Name { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
     public string? Description { get; set; }
     public DateTimeOffset StartDate { get; set; }
     public DateTimeOffset EndDate { get; set; }
@@ -247,7 +247,7 @@ public class CreateCalendarDto
 
 public class UpdateCalendarDto
 {
-    public string Name { get; set; }
+    public string Name { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
     public string? Description { get; set; }
     public bool IsDefault { get; set; }
 }
@@ -258,7 +258,7 @@ public class CreateCalendarDayDto
     public DateTimeOffset? EndDate { get; set; }
     public DayType DayType { get; set; }
     public HolidayCategory? HolidayCategory { get; set; }
-    public string Title { get; set; }
+    public string Title { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
     public string? Description { get; set; }
     public bool AppliesToAll { get; set; }
     public Guid? StandardId { get; set; }
@@ -281,7 +281,7 @@ public class CreateCalendarDayDto
 
 public class CreateCalendarDaysBulkDto
 {
-    public List<CreateCalendarDayDto> Days { get; set; }
+    public List<CreateCalendarDayDto> Days { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 }
 
 public class CreateEmergencyClosureDto
@@ -292,7 +292,7 @@ public class CreateEmergencyClosureDto
     public DateTimeOffset? EndDate { get; set; }
     public TimeSpan? StartTime { get; set; }
     public TimeSpan? EndTime { get; set; }
-    public string Title { get; set; }
+    public string Title { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
     public string? Description { get; set; }
     public bool AppliesToAll { get; set; }
     public List<Guid>? StandardIds { get; set; }
@@ -310,7 +310,7 @@ public class UpdateEmergencyClosureDto
     public DateTimeOffset? EndDate { get; set; }
     public TimeSpan? StartTime { get; set; }
     public TimeSpan? EndTime { get; set; }
-    public string Title { get; set; }
+    public string Title { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
     public string? Description { get; set; }
     public bool AppliesToAll { get; set; }
     public List<Guid>? StandardIds { get; set; }
@@ -328,7 +328,7 @@ public class ResolveImpactLogDto
 
 public class IgnoreImpactLogDto
 {
-    public string Reason { get; set; }
+    public string Reason { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 }
 
 public class RescheduleImpactLogDto
@@ -343,7 +343,8 @@ public class CheckDateQueryDto
     public Guid? AcademicMediumId { get; set; }
     public Guid? StandardId { get; set; }
     public Guid? DivisionId { get; set; }
-    public string ValidationType { get; set; } // Timetable, HomeworkDueDate, ExamSchedule, etc.
+    public string ValidationType { get; set; } = null!; // Timetable, HomeworkDueDate, ExamSchedule, etc.
+    // Request binding defers initialization; retain the null default and existing validation.
 }
 
 public class CheckDateResponseDto
@@ -352,7 +353,7 @@ public class CheckDateResponseDto
     public DateTime Date { get; set; }
     public DayType? DayType { get; set; }
     public string? Title { get; set; }
-    public string Message { get; set; }
+    public string Message { get; set; } = null!; // The response mapper populates these members after construction.
     public string? BlockingReason { get; set; }
     public DateTime? SuggestedNextWorkingDate { get; set; }
 }

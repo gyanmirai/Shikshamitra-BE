@@ -38,7 +38,7 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
     /// <summary>Structure-specific schedule overrides (populated only when ScheduleMode is Customized).</summary>
     public ICollection<FeeStructureDetailScheduleOverride> ScheduleOverrides { get; private set; } = new List<FeeStructureDetailScheduleOverride>();
 
-	public FeeHead FeeHead { get; private set; }
+	public FeeHead FeeHead { get; private set; } = null!; // Populated by EF relationship materialization.
 
 	protected FeeStructureDetail() { }
 

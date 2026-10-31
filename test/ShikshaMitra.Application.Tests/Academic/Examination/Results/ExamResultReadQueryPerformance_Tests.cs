@@ -2,6 +2,8 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.Examination.Results.Dtos;
 using ShikshaMitra.Academic.Reports;
@@ -61,7 +63,9 @@ public partial class ExamResultAppService_ElectiveSubjects_Tests
                 { ExamId = fixture.Exam.Id, DivisionId = fixture.Division.Id });
                 var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
                 var table = db.Model.FindEntityType(typeof(ExamResultDetail))!.GetTableName();
-                await db.Database.ExecuteSqlRawAsync($"UPDATE \"{table}\" SET \"Percentage\" = {{0}}, \"ResultStatus\" = {{1}} WHERE \"ResultHeaderId\" = {{2}} AND \"StudentId\" = {{3}}",
+                var quotedTable = db.GetService<ISqlGenerationHelper>().DelimitIdentifier(table.ShouldNotBeNull());
+                var updateSql = "UPDATE " + quotedTable + " SET \"Percentage\" = {0}, \"ResultStatus\" = {1} WHERE \"ResultHeaderId\" = {2} AND \"StudentId\" = {3}";
+                await db.Database.ExecuteSqlRawAsync(updateSql,
                     55.5, (int)status, generated.Id, fixture.ComputerScienceStudent.Id);
                 db.ChangeTracker.Clear();
                 using var capture = new AcademicReportPerformance_Tests.ReportQueryCapture(db.Database.GetDbConnection());

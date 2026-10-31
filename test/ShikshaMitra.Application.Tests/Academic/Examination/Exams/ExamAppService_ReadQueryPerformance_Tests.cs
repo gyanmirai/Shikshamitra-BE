@@ -2,6 +2,8 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Examination.Exams.Dtos;
 using ShikshaMitra.Academic.Reports;
@@ -70,7 +72,9 @@ public partial class ExamAppService_ScheduleStatus_Tests
                 var latest = DateTime.UtcNow.AddDays(1);
                 var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
                 var markTable = db.Model.FindEntityType(typeof(ExamMark))!.GetTableName();
-                await db.Database.ExecuteSqlRawAsync($"UPDATE \"{markTable}\" SET \"LastModificationTime\" = {{0}}, \"LastModifierId\" = {{1}} WHERE \"Id\" = {{2}}",
+                var quotedTable = db.GetService<ISqlGenerationHelper>().DelimitIdentifier(markTable.ShouldNotBeNull());
+                var updateSql = "UPDATE " + quotedTable + " SET \"LastModificationTime\" = {0}, \"LastModifierId\" = {1} WHERE \"Id\" = {2}";
+                await db.Database.ExecuteSqlRawAsync(updateSql,
                     latest, FakeAdminUserId, marks[^1].Id);
                 db.ChangeTracker.Clear();
                 using var capture = new AcademicReportPerformance_Tests.ReportQueryCapture(db.Database.GetDbConnection());

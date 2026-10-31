@@ -9,7 +9,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 internal static class AdmissionAcademicFormOptions
 {
 	internal static string SerializeOptions(IEnumerable<AdmissionFormOptionDto> options) => JsonSerializer.Serialize(options.Select(option =>
-		new { value = option.Value, label = option.Label, displayOrder = option.DisplayOrder, isActive = option.IsActive }));
+		new { value = option.Value, label = option.Label, displayOrder = option.DisplayOrder, isActive = option.IsActive,
+			boardId = option.BoardId, boardLabel = option.BoardLabel }));
 
 	internal static string? OptionsJson(string code, AdmissionFormFieldType type, string? configured)
 	{

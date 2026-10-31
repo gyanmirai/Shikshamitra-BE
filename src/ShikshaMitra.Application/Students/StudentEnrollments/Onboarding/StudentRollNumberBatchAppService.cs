@@ -131,5 +131,5 @@ public partial class StudentRollNumberBatchAppService(IRepository<StudentRollNum
 		if (fresh.Hash != item.RosterHash || fresh.Rows.Any(x => x.Issue != null) || !fresh.Rows.SequenceEqual(item.Rows())) throw new BusinessException(StudentRollNumberErrorCodes.StalePreview);
 	}
 	private static IReadOnlyList<Guid>? TargetCaseIds(StudentRollNumberBatch item) =>
-		item.ExtraProperties.TryGetValue("TargetCaseIds", out var value) ? JsonSerializer.Deserialize<List<Guid>>(value.ToString()!) : null;
+		item.ExtraProperties.TryGetValue("TargetCaseIds", out var value) ? JsonSerializer.Deserialize<List<Guid>>(value!.ToString()!) : null;
 }

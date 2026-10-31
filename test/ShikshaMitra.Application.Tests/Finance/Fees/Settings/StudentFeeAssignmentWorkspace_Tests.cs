@@ -216,7 +216,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		var categories = GetRequiredService<IFeeCategoryAppService>();
 		var category = await categories.GetByIdAsync(head.FeeCategoryId);
 		var removal = await Should.ThrowAsync<BusinessException>(() => categories.UpdateAsync(category.Id,
-			new Dtos.FeeCategoryUpdateRequest { Name = category.Name, Description = category.Description,
+			new Dtos.FeeCategoryUpdateRequest { Name = category.Name, Description = category.Description!,
 				FeeHeads = [new() { Name = "Replacement", IncomeCategoryId = head.IncomeCategoryId }] }));
 		removal.Code.ShouldBe(FinanceFeeHeadErrorCodes.CannotDeleteInUse);
 		removal.Data["Name"].ShouldBe(head.Name);

@@ -40,14 +40,15 @@ public class AddressDetails : ValueObject
 		Country = country;
 	}
 
-	protected override IEnumerable<object?> GetAtomicValues()
+	// ABP equality atoms intentionally include null for absent optional values.
+	protected override IEnumerable<object> GetAtomicValues()
 	{
-		yield return Address1;
-		yield return Address2;
-		yield return Address3;
-		yield return State;
-		yield return City;
-		yield return Pincode;
-		yield return Country;
+		yield return Address1!;
+		yield return Address2!;
+		yield return Address3!;
+		yield return State!;
+		yield return City!;
+		yield return Pincode!;
+		yield return Country!;
 	}
 }

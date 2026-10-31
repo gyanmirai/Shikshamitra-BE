@@ -43,7 +43,7 @@ public class StudentEnrollmentManager(
 		CancellationToken cancellationToken = default)
 	{
 		bool exists = await studentRepository.AnyAsync(
-			s => s.AdditionalDetail.RegistrationFormNo == formNumber && s.AcademicYearId == academicYearId,
+			s => s.AdditionalDetail!.RegistrationFormNo == formNumber && s.AcademicYearId == academicYearId,
 			cancellationToken);
 		if (exists)
 		{

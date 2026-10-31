@@ -2,6 +2,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Volo.Abp.EntityFrameworkCore;
 
 namespace ShikshaMitra.EntityFrameworkCore.Students.StudentEnrollments.Admissions;
 
@@ -15,7 +16,10 @@ internal static class AdmissionEntityConfigurationExtensions
 	internal static void ConfigureUtcInstants<TEntity>(this EntityTypeBuilder<TEntity> builder,
 		params string[] properties) where TEntity : class
 	{
-		if (!new ModelBuilder(builder.Metadata.Model).IsUsingPostgreSql())
+		// ABP 9's GetDatabaseProvider reads this model annotation. Read it through
+		// public metadata instead of EF's infrastructure-only ModelBuilder constructor.
+		var provider = (EfCoreDatabaseProvider?)builder.Metadata.Model["_Abp_DatabaseProvider"];
+		if (provider != EfCoreDatabaseProvider.PostgreSql)
 		{
 			AdmissionEventTimeConfiguration.Configure(builder, properties);
 			return;

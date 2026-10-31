@@ -30,27 +30,66 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 [Authorize]
 [RemoteService(false)]
-public partial class FeeStructureAppService(
-	IRepository<FeeStructure, Guid> feeStructureRepository,
-	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
-	IStandardRepository standardRepository,
-	IAcademicYearRepository academicYearRepository,
-	IRepository<PaymentTerm, Guid> paymentTermRepository,
-	IRepository<FeeHead, Guid> feeHeadRepository,
-	IRepository<ConcessionPolicy, Guid> concessionPolicyRepository,
-	IRepository<RefundPolicy, Guid> refundPolicyRepository,
-	IRepository<CollectionPolicy, Guid> collectionPolicyRepository,
-	IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository,
-	IRepository<EducationMediumStage, Guid> stageRepository,
-	IRepository<EducationMedium, Guid> mediumRepository,
-	IRepository<EducationBoard, Guid> boardRepository,
-	IRepository<StudentFeeStructure, Guid> studentStructureRepository,
-	IDataFilter dataFilter,
-	IUserScopeAccessService scopeAccess,
-	FeeHeadAccountingManager accountingManager,
-	PaymentTermScheduleResolver scheduleResolver
-) : ApplicationService, IFeeStructureAppService
+public partial class FeeStructureAppService : ApplicationService, IFeeStructureAppService
 {
+	private readonly IRepository<FeeStructure, Guid> feeStructureRepository;
+	private readonly IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository;
+	private readonly IStandardRepository standardRepository;
+	private readonly IAcademicYearRepository academicYearRepository;
+	private readonly IRepository<PaymentTerm, Guid> paymentTermRepository;
+	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
+	private readonly IRepository<ConcessionPolicy, Guid> concessionPolicyRepository;
+	private readonly IRepository<RefundPolicy, Guid> refundPolicyRepository;
+	private readonly IRepository<CollectionPolicy, Guid> collectionPolicyRepository;
+	private readonly IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository;
+	private readonly IRepository<EducationBoard, Guid> boardRepository;
+	private readonly IRepository<StudentFeeStructure, Guid> studentStructureRepository;
+	private readonly IDataFilter dataFilter;
+	private readonly IUserScopeAccessService scopeAccess;
+	private readonly FeeHeadAccountingManager accountingManager;
+	private readonly PaymentTermScheduleResolver scheduleResolver;
+
+	public FeeStructureAppService(
+		IRepository<FeeStructure, Guid> feeStructureRepository,
+		IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
+		IStandardRepository standardRepository,
+		IAcademicYearRepository academicYearRepository,
+		IRepository<PaymentTerm, Guid> paymentTermRepository,
+		IRepository<FeeHead, Guid> feeHeadRepository,
+		IRepository<ConcessionPolicy, Guid> concessionPolicyRepository,
+		IRepository<RefundPolicy, Guid> refundPolicyRepository,
+		IRepository<CollectionPolicy, Guid> collectionPolicyRepository,
+		IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository,
+		IRepository<EducationMediumStage, Guid> stageRepository,
+		IRepository<EducationMedium, Guid> mediumRepository,
+		IRepository<EducationBoard, Guid> boardRepository,
+		IRepository<StudentFeeStructure, Guid> studentStructureRepository,
+		IDataFilter dataFilter,
+		IUserScopeAccessService scopeAccess,
+		FeeHeadAccountingManager accountingManager,
+		PaymentTermScheduleResolver scheduleResolver
+	)
+	{
+		this.feeStructureRepository = feeStructureRepository;
+		this.feeStructureMetadataRepository = feeStructureMetadataRepository;
+		this.standardRepository = standardRepository;
+		this.academicYearRepository = academicYearRepository;
+		this.paymentTermRepository = paymentTermRepository;
+		this.feeHeadRepository = feeHeadRepository;
+		this.concessionPolicyRepository = concessionPolicyRepository;
+		this.refundPolicyRepository = refundPolicyRepository;
+		this.collectionPolicyRepository = collectionPolicyRepository;
+		this.financePolicyVersionRepository = financePolicyVersionRepository;
+		_ = stageRepository;
+		_ = mediumRepository;
+		this.boardRepository = boardRepository;
+		this.studentStructureRepository = studentStructureRepository;
+		this.dataFilter = dataFilter;
+		this.scopeAccess = scopeAccess;
+		this.accountingManager = accountingManager;
+		this.scheduleResolver = scheduleResolver;
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Add)]
 	public async Task<FeeStructureCreateResponse> CreateAsync(Guid feeStructureMetadataId, StandardFeeStructureSaveRequest input)
 	{

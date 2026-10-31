@@ -25,13 +25,13 @@ public class RoomAvailabilityFilterDto
 public class RoomAvailabilityDto
 {
     public Guid RoomId { get; set; }
-    public string RoomName { get; set; }
-    public string BuildingName { get; set; }
-    public string FloorName { get; set; }
-    public string Type { get; set; }
+    public string RoomName { get; set; } = null!; // The response mapper populates these members after construction.
+    public string BuildingName { get; set; } = null!;
+    public string FloorName { get; set; } = null!;
+    public string Type { get; set; } = null!;
     public int Capacity { get; set; }
     public List<string> Facilities { get; set; } = new();
-    public string Status { get; set; } // "available", "occupied", "reserved", "maintenance", "conflict"
+    public string Status { get; set; } = null!; // "available", "occupied", "reserved", "maintenance", "conflict"
     public string? OccupiedBy { get; set; }
     public string? ConflictReason { get; set; }
     public string? ConflictSeverity { get; set; }
@@ -122,7 +122,7 @@ public class SuggestedRoomRequestDto
 public class SuggestedRoomDto
 {
     public Guid RoomId { get; set; }
-    public string RoomName { get; set; }
+    public string RoomName { get; set; } = null!; // The response mapper populates these members after construction.
     public Guid BuildingId { get; set; }
     public string BuildingName { get; set; } = string.Empty;
     public Guid FloorId { get; set; }
@@ -143,7 +143,7 @@ public class CreateRoomReservationDto
     public DateTime Date { get; set; }
     public TimeSpan StartTime { get; set; }
     public TimeSpan EndTime { get; set; }
-    public string Purpose { get; set; }
+    public string Purpose { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
     public RoomReservationType ReservationType { get; set; }
     public Guid? TeacherId { get; set; }
     public Guid? StandardId { get; set; }

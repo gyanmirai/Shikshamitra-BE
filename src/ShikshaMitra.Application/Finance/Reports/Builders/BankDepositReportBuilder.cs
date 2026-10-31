@@ -37,8 +37,8 @@ public class BankDepositReportBuilder(
         // 2. Fetch Receipts
         var receiptQuery = FinanceReportPayerQueryService.FilterReceipts(await receiptRepository.GetQueryableAsync(), payers)
             .WhereIf(receiptBookIds.Any(), r => r.ReceiptBookId.HasValue && receiptBookIds.Contains(r.ReceiptBookId.Value))
-            .WhereIf(fromDate.HasValue, r => r.ReceiptDate >= DateOnly.FromDateTime(fromDate.Value))
-            .WhereIf(toDate.HasValue, r => r.ReceiptDate <= DateOnly.FromDateTime(toDate.Value));
+            .WhereIf(fromDate.HasValue, r => r.ReceiptDate >= DateOnly.FromDateTime(fromDate!.Value))
+            .WhereIf(toDate.HasValue, r => r.ReceiptDate <= DateOnly.FromDateTime(toDate!.Value));
 
         var receipts = await asyncExecuter.ToListAsync(receiptQuery);
         if (!receipts.Any())

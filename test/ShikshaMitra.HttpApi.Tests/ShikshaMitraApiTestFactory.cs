@@ -415,7 +415,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	private sealed class NoOpEmployeeEmailService : IEmployeeEmailService
 	{
 		public Task SendWelcomeEmailAsync(
-			string employeeEmail,
+			string? employeeEmail,
 			string employeeName,
 			string username,
 			string password)

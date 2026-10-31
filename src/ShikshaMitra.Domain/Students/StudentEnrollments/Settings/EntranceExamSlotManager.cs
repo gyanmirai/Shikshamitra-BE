@@ -127,7 +127,7 @@ public class EntranceExamSlotManager(
 		{
 			throw new BusinessException("SM:EntranceExamSlot:004")
 				.WithData("existingSlotId", existingSlot.Id)
-				.WithData("existingSlotName", existingSlot.SlotName)
+				.WithData("existingSlotName", existingSlot.SlotName!)
 				.WithData("existingStartDate", existingSlot.StartDate)
 				.WithData("existingEndDate", existingSlot.EndDate)
 				.WithData("requestedStartDate", startDate)

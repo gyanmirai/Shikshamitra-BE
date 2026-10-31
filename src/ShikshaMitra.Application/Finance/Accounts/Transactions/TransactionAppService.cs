@@ -17,16 +17,34 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Finance.Accounts.Transactions;
 
 [RemoteService(false)]
-public partial class TransactionAppService(
-	IRepository<Transaction, Guid> transactionRepository,
-	IRepository<TransactionCategory, Guid> transactionCategoryRepository,
-	IRepository<AccountHead, Guid> accountHeadRepository,
-	ITransactionCategoryReferenceLock referenceLock,
-	FinanceScopeAccessService financeScopeAccessService,
-    FinanceRoutingManager routingManager,
-    IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid> academicYears
-) : ApplicationService, ITransactionAppService
+public partial class TransactionAppService : ApplicationService, ITransactionAppService
 {
+	private readonly IRepository<Transaction, Guid> transactionRepository;
+	private readonly IRepository<TransactionCategory, Guid> transactionCategoryRepository;
+	private readonly ITransactionCategoryReferenceLock referenceLock;
+	private readonly FinanceScopeAccessService financeScopeAccessService;
+	private readonly FinanceRoutingManager routingManager;
+	private readonly IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid> academicYears;
+
+	public TransactionAppService(
+		IRepository<Transaction, Guid> transactionRepository,
+		IRepository<TransactionCategory, Guid> transactionCategoryRepository,
+		IRepository<AccountHead, Guid> accountHeadRepository,
+		ITransactionCategoryReferenceLock referenceLock,
+		FinanceScopeAccessService financeScopeAccessService,
+		FinanceRoutingManager routingManager,
+		IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid> academicYears
+	)
+	{
+		this.transactionRepository = transactionRepository;
+		this.transactionCategoryRepository = transactionCategoryRepository;
+		_ = accountHeadRepository;
+		this.referenceLock = referenceLock;
+		this.financeScopeAccessService = financeScopeAccessService;
+		this.routingManager = routingManager;
+		this.academicYears = academicYears;
+	}
+
 	public async Task<TransactionListResponse> GetListAsync(Guid academicYearId, GetTransactionsRequest input, TransactionType transactionType)
 	{
 		await CheckPermissionAsync(transactionType, "View");
@@ -147,8 +165,8 @@ public partial class TransactionAppService(
 
 		if (category.CategoryType != transactionType)
 			throw new BusinessException("ShikshaMitra:TransactionCategoryTypeMismatch")
-				.WithData("CategoryId", category.Id).WithData("Expected", transactionType).WithData("Actual", category.CategoryType);
-		await EnsureCategoryAvailableAsync(category, academicYearId, paymentDate, transactionType);
+				.WithData("CategoryId", category.Id).WithData("Expected", transactionType).WithData("Actual", category.CategoryType!);
+		EnsureCategoryAvailable(category, academicYearId, paymentDate, transactionType);
 
 		var transaction = new Transaction(
 			input.IdempotencyKey ?? GuidGenerator.Create(), CurrentTenant.Id, academicYearId, input.CategoryId,
@@ -225,8 +243,8 @@ public partial class TransactionAppService(
 
 		if (category.CategoryType.HasValue && category.CategoryType.Value != transactionType)
 			throw new BusinessException("ShikshaMitra:TransactionCategoryTypeMismatch")
-				.WithData("CategoryId", category.Id).WithData("Expected", transactionType).WithData("Actual", category.CategoryType);
-		await EnsureCategoryAvailableAsync(category, transaction.AcademicYearId, input.PaymentDate, transactionType);
+				.WithData("CategoryId", category.Id).WithData("Expected", transactionType).WithData("Actual", category.CategoryType!);
+		EnsureCategoryAvailable(category, transaction.AcademicYearId, input.PaymentDate, transactionType);
 
 		transaction.Update(input.CategoryId, input.Name, input.CategoryTags,
 			input.Amount, input.PaymentMethod, input.PaymentDate, input.Notes);
@@ -248,7 +266,7 @@ public partial class TransactionAppService(
 		return new TransactionDeleteResponse { Success = true, Message = "Transaction deleted successfully" };
 	}
 
-	private async Task EnsureCategoryAvailableAsync(TransactionCategory category, Guid academicYearId,
+	private void EnsureCategoryAvailable(TransactionCategory category, Guid academicYearId,
 		DateTime paymentDate, TransactionType transactionType)
 	{
 		var postingTime = new DateTimeOffset(DateTime.SpecifyKind(paymentDate, DateTimeKind.Utc));

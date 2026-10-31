@@ -13,5 +13,5 @@ public class EducationBoardDto : AuditedEntityDto<Guid>
 	public Guid AcademicYearId { get; set; }
 	public DateTime StartDate { get; set; }
 	public DateTime EndDate { get; set; }
-	public List<EducationMediumDto> EducationMediums { get; set; }
+	public List<EducationMediumDto> EducationMediums { get; set; } = null!; // The response mapper populates these members after construction.
 }

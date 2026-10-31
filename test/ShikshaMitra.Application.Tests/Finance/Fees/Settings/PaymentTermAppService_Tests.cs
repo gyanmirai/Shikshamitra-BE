@@ -409,8 +409,8 @@ public class PaymentTermAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 			.GetListAsync(e => e.EntityId == second.Id && e.EntityType == FinanceAuditEntityTypes.PaymentTerm);
 		events.Count.ShouldBe(1);
 		events[0].SubModuleCode.ShouldBe(FinanceAuditSubModuleCodes.PaymentTerms);
-		events[0].ContextJson.ShouldContain("Half-Yearly");
-		events[0].ContextJson.ShouldContain("Monthly");
+		events[0].ContextJson.ShouldNotBeNull().ShouldContain("Half-Yearly");
+		events[0].ContextJson.ShouldNotBeNull().ShouldContain("Monthly");
 		(await _paymentTerms.GetAsync(first.Id)).Versions.Single().Id.ShouldBe(first.Versions.Single().Id);
 	}
 

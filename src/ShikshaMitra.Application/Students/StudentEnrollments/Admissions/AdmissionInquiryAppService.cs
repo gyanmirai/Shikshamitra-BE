@@ -18,36 +18,95 @@ using Volo.Abp.Identity;
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [Authorize, RemoteService(false)]
-public class AdmissionInquiryAppService(
-	IRepository<AdmissionInquiry, Guid> inquiryRepository,
-	IRepository<AdmissionApplication, Guid> applicationRepository,
-	IRepository<AdmissionCycle, Guid> cycleRepository,
-	IRepository<AdmissionOffering, Guid> offeringRepository,
-	IRepository<Standard, Guid> standardRepository,
-	IRepository<AdmissionFamily, Guid> familyRepository,
-	IRepository<AdmissionGuardian, Guid> guardianRepository,
-	IRepository<AdmissionApplicant, Guid> applicantRepository,
-	AdmissionOfferingRuntimeService offeringRuntimeService,
-	IRepository<AdmissionFormDefinition, Guid> formRepository,
-	IRepository<AdmissionFormFieldDefinition, Guid> formFieldRepository,
-	IRepository<AdmissionFormSectionDefinition, Guid> formSectionRepository,
-	AdmissionApplicationFormValidator formValidator,
-	IRepository<AdmissionActivity, Guid> activityRepository,
-	IRepository<AdmissionInquiryManagement, Guid> managementRepository,
-	IRepository<AdmissionInquiryFollowUp, Guid> followUpRepository,
-	IAdmissionReferenceSequenceRepository referenceSequenceRepository,
-	AdmissionInquiryScopeAccessService scopeAccess,
-	AdmissionApplicationScopeAccessService applicationScope,
-	AdmissionDirectFamilyMatchService familyMatchService,
-	AdmissionInquiryPolicyResolver policyResolver,
-	AdmissionInquiryRuntimeService inquiryRuntime,
-	AdmissionInquiryAssignmentService assignmentService,
-	AdmissionIntakeAssignmentService intakeAssignmentService,
-	AdmissionInquiryPeopleService peopleService,
-	AdmissionInquiryFormEditService formEditService,
-	AdmissionInquiryAvailabilityService inquiryAvailability,
-	ICommunicationAppService communicationService) : ApplicationService, IAdmissionInquiryAppService
+public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryAppService
 {
+	private readonly IRepository<AdmissionInquiry, Guid> inquiryRepository;
+	private readonly IRepository<AdmissionApplication, Guid> applicationRepository;
+	private readonly IRepository<AdmissionCycle, Guid> cycleRepository;
+	private readonly IRepository<AdmissionOffering, Guid> offeringRepository;
+	private readonly IRepository<Standard, Guid> standardRepository;
+	private readonly IRepository<AdmissionFamily, Guid> familyRepository;
+	private readonly IRepository<AdmissionGuardian, Guid> guardianRepository;
+	private readonly IRepository<AdmissionApplicant, Guid> applicantRepository;
+	private readonly AdmissionOfferingRuntimeService offeringRuntimeService;
+	private readonly IRepository<AdmissionFormDefinition, Guid> formRepository;
+	private readonly IRepository<AdmissionFormFieldDefinition, Guid> formFieldRepository;
+	private readonly IRepository<AdmissionFormSectionDefinition, Guid> formSectionRepository;
+	private readonly AdmissionApplicationFormValidator formValidator;
+	private readonly IRepository<AdmissionActivity, Guid> activityRepository;
+	private readonly IRepository<AdmissionInquiryManagement, Guid> managementRepository;
+	private readonly IRepository<AdmissionInquiryFollowUp, Guid> followUpRepository;
+	private readonly IAdmissionReferenceSequenceRepository referenceSequenceRepository;
+	private readonly AdmissionInquiryScopeAccessService scopeAccess;
+	private readonly AdmissionApplicationScopeAccessService applicationScope;
+	private readonly AdmissionDirectFamilyMatchService familyMatchService;
+	private readonly AdmissionInquiryPolicyResolver policyResolver;
+	private readonly AdmissionInquiryRuntimeService inquiryRuntime;
+	private readonly AdmissionInquiryFormEditService formEditService;
+	private readonly AdmissionInquiryAvailabilityService inquiryAvailability;
+	private readonly ICommunicationAppService communicationService;
+
+	public AdmissionInquiryAppService(
+		IRepository<AdmissionInquiry, Guid> inquiryRepository,
+		IRepository<AdmissionApplication, Guid> applicationRepository,
+		IRepository<AdmissionCycle, Guid> cycleRepository,
+		IRepository<AdmissionOffering, Guid> offeringRepository,
+		IRepository<Standard, Guid> standardRepository,
+		IRepository<AdmissionFamily, Guid> familyRepository,
+		IRepository<AdmissionGuardian, Guid> guardianRepository,
+		IRepository<AdmissionApplicant, Guid> applicantRepository,
+		AdmissionOfferingRuntimeService offeringRuntimeService,
+		IRepository<AdmissionFormDefinition, Guid> formRepository,
+		IRepository<AdmissionFormFieldDefinition, Guid> formFieldRepository,
+		IRepository<AdmissionFormSectionDefinition, Guid> formSectionRepository,
+		AdmissionApplicationFormValidator formValidator,
+		IRepository<AdmissionActivity, Guid> activityRepository,
+		IRepository<AdmissionInquiryManagement, Guid> managementRepository,
+		IRepository<AdmissionInquiryFollowUp, Guid> followUpRepository,
+		IAdmissionReferenceSequenceRepository referenceSequenceRepository,
+		AdmissionInquiryScopeAccessService scopeAccess,
+		AdmissionApplicationScopeAccessService applicationScope,
+		AdmissionDirectFamilyMatchService familyMatchService,
+		AdmissionInquiryPolicyResolver policyResolver,
+		AdmissionInquiryRuntimeService inquiryRuntime,
+		AdmissionInquiryAssignmentService assignmentService,
+		AdmissionIntakeAssignmentService intakeAssignmentService,
+		AdmissionInquiryPeopleService peopleService,
+		AdmissionInquiryFormEditService formEditService,
+		AdmissionInquiryAvailabilityService inquiryAvailability,
+		ICommunicationAppService communicationService
+	)
+	{
+		this.inquiryRepository = inquiryRepository;
+		this.applicationRepository = applicationRepository;
+		this.cycleRepository = cycleRepository;
+		this.offeringRepository = offeringRepository;
+		this.standardRepository = standardRepository;
+		this.familyRepository = familyRepository;
+		this.guardianRepository = guardianRepository;
+		this.applicantRepository = applicantRepository;
+		this.offeringRuntimeService = offeringRuntimeService;
+		this.formRepository = formRepository;
+		this.formFieldRepository = formFieldRepository;
+		this.formSectionRepository = formSectionRepository;
+		this.formValidator = formValidator;
+		this.activityRepository = activityRepository;
+		this.managementRepository = managementRepository;
+		this.followUpRepository = followUpRepository;
+		this.referenceSequenceRepository = referenceSequenceRepository;
+		this.scopeAccess = scopeAccess;
+		this.applicationScope = applicationScope;
+		this.familyMatchService = familyMatchService;
+		this.policyResolver = policyResolver;
+		this.inquiryRuntime = inquiryRuntime;
+		_ = assignmentService;
+		_ = intakeAssignmentService;
+		_ = peopleService;
+		this.formEditService = formEditService;
+		this.inquiryAvailability = inquiryAvailability;
+		this.communicationService = communicationService;
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)]
 	public async Task<PagedResultDto<AdmissionInquiryDto>> GetListAsync(AdmissionInquiryListInput input)
 	{
@@ -114,6 +173,8 @@ public class AdmissionInquiryAppService(
 		{
 			result.ApplicantFirstName = applicant.FirstName; result.ApplicantLastName = applicant.LastName; result.ApplicantDateOfBirth = applicant.DateOfBirth;
 			result.ParentRelationship = AdmissionSiblingParentSelection.ReadRelationship(applicant);
+			result.PrimaryContactRelationship = AdmissionPrimaryContactSelection.ReadRelationship(applicant);
+			result.GuardianResponsibilityConfirmed = AdmissionPrimaryContactSelection.GuardianResponsibilityConfirmed(applicant);
 		}
 		if (guardian != null)
 		{
@@ -247,6 +308,7 @@ public class AdmissionInquiryAppService(
 		var values = input.FormValues.ToDictionary(x => x.FieldCode, x => UnwrapValue(x.ValueJson), StringComparer.OrdinalIgnoreCase);
 		var returningContact = returningStudent == null ? null : new { input.GuardianFirstName, input.GuardianLastName, input.GuardianPhone, input.GuardianEmail };
 		var inquiryFields = new List<AdmissionFormFieldDefinition>();
+		IReadOnlySet<string>? inquiryVisibleFieldCodes = null;
 		var managedPolicy = await policyResolver.ResolveAsync(offering?.Id);
 		var inquiryFormId = offering?.InquiryFormDefinitionId ?? publicFormDefinitionId;
 		if (inquiryFormId.HasValue)
@@ -272,11 +334,15 @@ public class AdmissionInquiryAppService(
 				var sections = await formSectionRepository.GetListAsync(section => section.FormDefinitionId == inquiryFormId.Value);
 				var validation = formValidator.ValidateInquiry(fields, sections, values);
 				var visibleFields = formValidator.GetVisibleInquiryFieldCodes(fields, sections, values);
+				inquiryVisibleFieldCodes = visibleFields;
 				await LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryAcademicOptionsService>()
 					.ValidateAsync(fields.Where(field => visibleFields.Contains(field.Code)).ToList(), values, offering!, cycle.AcademicYearId, isPublic);
 				if (validation.Errors.Count > 0)
 					throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed)
 						.WithData("Fields", string.Join(", ", validation.FieldErrors.Keys));
+				// Hidden answers are not an identity or primary-contact selection.
+				foreach (var hiddenCode in values.Keys.Where(code => !visibleFields.Contains(code)).ToList()) values.Remove(hiddenCode);
+				input.FormValues.RemoveAll(answer => !visibleFields.Contains(answer.FieldCode));
 			}
 		}
 		input.ApplicantName = AdmissionInquiryIdentityFieldResolver.Resolve(values, inquiryFields,
@@ -304,7 +370,7 @@ public class AdmissionInquiryAppService(
 		else if (!string.IsNullOrWhiteSpace(configuredFirstName))
 			input.ApplicantName = string.Join(" ", new[] { input.ApplicantFirstName,
 				AdmissionInquiryConfiguredFields.Read(inquiryFields, values, "Applicant.MiddleName"), input.ApplicantLastName }.Where(value => !string.IsNullOrWhiteSpace(value)));
-		var configuredContact = AdmissionInquiryConfiguredFields.ResolveContact(inquiryFields, values, input.ParentRelationship);
+		var configuredContact = AdmissionInquiryConfiguredFields.ResolveContact(inquiryFields, values, input.ParentRelationship, activeFieldCodes: inquiryVisibleFieldCodes);
 		if (configuredContact.IsConfigured)
 		{
 			if (input.ExistingParentApplicantId.HasValue && input.ParentRelationship != null && configuredContact.Relationship != null &&
@@ -315,7 +381,7 @@ public class AdmissionInquiryAppService(
 			input.GuardianPhone = configuredContact.Mobile ?? string.Empty;
 			input.GuardianEmail = configuredContact.Email;
 			input.Email = configuredContact.Email;
-			input.ParentRelationship = configuredContact.Relationship;
+			input.ParentRelationship = AdmissionSiblingParentSelection.IsRelationship(configuredContact.Relationship) ? configuredContact.Relationship : null;
 		}
 		AdmissionInquiryConfiguredFields.ApplyOperationalValues(inquiryFields, values, input, isPublic);
 		input.Email ??= input.GuardianEmail;
@@ -332,7 +398,7 @@ public class AdmissionInquiryAppService(
 		var missingIdentity = new[]
 		{
 			(string.IsNullOrWhiteSpace(input.ApplicantFirstName), "Applicant.FirstName"),
-			(string.IsNullOrWhiteSpace(input.GuardianFirstName), "Guardian.FirstName"),
+			(string.IsNullOrWhiteSpace(input.GuardianFirstName) && !(input.ExistingParentApplicantId.HasValue && !configuredContact.NameIsConfigured), "Guardian.FirstName"),
 			(string.IsNullOrWhiteSpace(input.GuardianPhone), "Guardian.Mobile")
 		}.Where(item => item.Item1).Select(item => item.Item2).ToList();
 		if (missingIdentity.Count > 0)
@@ -378,6 +444,11 @@ public class AdmissionInquiryAppService(
 				selectedParent = await familyMatchService.ResolveParentAsync(existingFamily.Id, input.ExistingParentApplicantId.Value,
 					input.ParentRelationship, phone, input.GuardianEmail, AdmissionErrorCodes.InquiryFamilyMismatch);
 				// Only the verified saved parent may supply contact data absent from the configured form.
+				if (!configuredContact.NameIsConfigured)
+				{
+					input.GuardianFirstName = selectedParent.FirstName;
+					input.GuardianLastName = selectedParent.LastName;
+				}
 				if (!configuredContact.EmailIsConfigured)
 					input.GuardianEmail = input.Email = selectedParent.Email;
 			}
@@ -453,7 +524,12 @@ public class AdmissionInquiryAppService(
 				.GroupBy(field => field.BindingKey!, StringComparer.OrdinalIgnoreCase)
 				.ToDictionary(group => group.Key, group => values[group.Last().Code], StringComparer.OrdinalIgnoreCase), guardian);
 		}
+		if (returningStudent == null && selectedParent == null && configuredContact.Relationship != null)
+			AdmissionPrimaryContactSelection.Capture(applicant, configuredContact.Relationship,
+				string.Join(" ", new[] { input.GuardianFirstName, input.GuardianLastName }.Where(value => !string.IsNullOrWhiteSpace(value))),
+				phone, input.GuardianEmail, input.GuardianResponsibilityConfirmed, CurrentUser.Id, Clock.Now, isPublic);
 		AdmissionFamilyContactCapture.Capture(applicant, input.FamilyContacts, input.ParentRelationship);
+		AdmissionPrimaryContactSelection.CaptureMainGuardian(applicant, input.FamilyContacts, input.GuardianResponsibilityConfirmed, CurrentUser.Id, Clock.Now, isPublic);
 		if (!input.ExistingFamilyId.HasValue) await familyRepository.InsertAsync(family, autoSave: false);
 		if (newGuardian) await guardianRepository.InsertAsync(guardian!, autoSave: false);
 		await applicantRepository.InsertAsync(applicant, autoSave: false);

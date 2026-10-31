@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
+﻿using System.Diagnostics.CodeAnalysis;
+using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using System;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
@@ -7,7 +8,7 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.TenantSettings.Divisions;
 
-public class Division : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class Division : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; }
 	public string Name { get; internal set; }
@@ -30,11 +31,15 @@ public class Division : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid StandardId { get; }
 
 	// Navigation property
-	public Standard Standard { get; }
+	public Standard Standard { get; } = null!; // Populated by EF relationship materialization.
 
 
 	private Division()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Name = null!;
+		RoomNumber = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -54,6 +59,7 @@ public class Division : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RoomNumber = roomNumber ?? string.Empty;
 	}
 
+	[MemberNotNull(nameof(Name))]
 	internal Division SetName(string name)
 	{
 		Name = Check.NotNullOrWhiteSpace(name, nameof(name), maxLength: DivisionConsts.MaxNameLength);

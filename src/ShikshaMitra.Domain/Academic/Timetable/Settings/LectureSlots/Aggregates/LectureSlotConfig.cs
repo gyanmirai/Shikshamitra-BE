@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System;
 using System.Collections.Generic;
 using Volo.Abp;
@@ -19,6 +20,9 @@ public class LectureSlotConfig : FullAuditedAggregateRoot<Guid>, IMultiTenant
     #region Constructors
     private LectureSlotConfig()
     {
+        // EF materializes these required columns after this ORM constructor.
+        SchoolHours = null!;
+
         /* This constructor is for deserialization / ORM purpose */
         SlotGroups = new List<LectureSlotGroup>();
     }
@@ -40,6 +44,7 @@ public class LectureSlotConfig : FullAuditedAggregateRoot<Guid>, IMultiTenant
     #endregion
 
     #region Methods
+    [MemberNotNull(nameof(SchoolHours))]
     public void SetSchoolHours(string schoolHours)
     {
         SchoolHours = Check.NotNullOrWhiteSpace(schoolHours, nameof(schoolHours),

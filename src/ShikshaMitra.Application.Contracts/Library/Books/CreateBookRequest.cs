@@ -7,19 +7,19 @@ namespace ShikshaMitra.Library.Books;
 public class CreateBookRequest
 {
     [Required]
-    public string Title { get; set; }
+    public string Title { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
     [Required]
-    public string Isbn { get; set; }
+    public string Isbn { get; set; } = null!;
 
     [Required]
-    public string Author { get; set; }
+    public string Author { get; set; } = null!;
 
-    public string Publisher { get; set; }
+    public string Publisher { get; set; } = null!;
 
-    public string Edition { get; set; }
+    public string Edition { get; set; } = null!;
 
-    public string Subject { get; set; }
+    public string Subject { get; set; } = null!;
 
     [Required]
     public Guid CategoryId { get; set; }
@@ -27,7 +27,7 @@ public class CreateBookRequest
     [Required]
     public Language Language { get; set; }
 
-    public string ApplicableAge { get; set; }
+    public string ApplicableAge { get; set; } = null!;
 
     public decimal Price { get; set; }
 
@@ -45,19 +45,19 @@ public class CreateBookRequest
 public class UpdateBookRequest
 {
     [Required]
-    public string Title { get; set; }
+    public string Title { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
     [Required]
-    public string Isbn { get; set; }
+    public string Isbn { get; set; } = null!;
 
     [Required]
-    public string Author { get; set; }
+    public string Author { get; set; } = null!;
 
-    public string Publisher { get; set; }
+    public string Publisher { get; set; } = null!;
 
-    public string Edition { get; set; }
+    public string Edition { get; set; } = null!;
 
-    public string Subject { get; set; }
+    public string Subject { get; set; } = null!;
 
     [Required]
     public Guid CategoryId { get; set; }
@@ -65,7 +65,7 @@ public class UpdateBookRequest
     [Required]
     public Language Language { get; set; }
 
-    public string ApplicableAge { get; set; }
+    public string ApplicableAge { get; set; } = null!;
 
     public decimal Price { get; set; }
 

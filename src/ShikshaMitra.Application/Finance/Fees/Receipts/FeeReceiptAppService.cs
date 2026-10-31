@@ -23,21 +23,49 @@ namespace ShikshaMitra.Finance.Fees.Receipts;
 
 [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_InvoiceReceipt.View)]
 [RemoteService(false)]
-public partial class FeeReceiptAppService(
-    IFeePaymentReceiptRepository receiptRepository,
-    FeeReceiptBlobManager blobManager,
-    IFeeReceiptPdfGenerator pdfGenerator,
-    FinanceScopeAccessService financeScopeAccessService,
-    IReadOnlyRepository<Student, Guid> studentRepository,
-    IReadOnlyRepository<AcademicYear, Guid> academicYearRepository,
-    IReadOnlyRepository<EducationBoard, Guid> boardRepository,
-    IReadOnlyRepository<EducationMedium, Guid> mediumRepository,
-    IReadOnlyRepository<Standard, Guid> standardRepository,
-    IReadOnlyRepository<Division, Guid> divisionRepository,
-    IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
-    IDueFeeRepository dueFeeRepository
-) : ApplicationService, IFeeReceiptAppService
+public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppService
 {
+	private readonly IFeePaymentReceiptRepository receiptRepository;
+	private readonly FeeReceiptBlobManager blobManager;
+	private readonly IFeeReceiptPdfGenerator pdfGenerator;
+	private readonly FinanceScopeAccessService financeScopeAccessService;
+	private readonly IReadOnlyRepository<AcademicYear, Guid> academicYearRepository;
+	private readonly IReadOnlyRepository<EducationBoard, Guid> boardRepository;
+	private readonly IReadOnlyRepository<EducationMedium, Guid> mediumRepository;
+	private readonly IReadOnlyRepository<Standard, Guid> standardRepository;
+	private readonly IReadOnlyRepository<Division, Guid> divisionRepository;
+	private readonly IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository;
+	private readonly IDueFeeRepository dueFeeRepository;
+
+	public FeeReceiptAppService(
+		IFeePaymentReceiptRepository receiptRepository,
+		FeeReceiptBlobManager blobManager,
+		IFeeReceiptPdfGenerator pdfGenerator,
+		FinanceScopeAccessService financeScopeAccessService,
+		IReadOnlyRepository<Student, Guid> studentRepository,
+		IReadOnlyRepository<AcademicYear, Guid> academicYearRepository,
+		IReadOnlyRepository<EducationBoard, Guid> boardRepository,
+		IReadOnlyRepository<EducationMedium, Guid> mediumRepository,
+		IReadOnlyRepository<Standard, Guid> standardRepository,
+		IReadOnlyRepository<Division, Guid> divisionRepository,
+		IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
+		IDueFeeRepository dueFeeRepository
+	)
+	{
+		this.receiptRepository = receiptRepository;
+		this.blobManager = blobManager;
+		this.pdfGenerator = pdfGenerator;
+		this.financeScopeAccessService = financeScopeAccessService;
+		_ = studentRepository;
+		this.academicYearRepository = academicYearRepository;
+		this.boardRepository = boardRepository;
+		this.mediumRepository = mediumRepository;
+		this.standardRepository = standardRepository;
+		this.divisionRepository = divisionRepository;
+		this.dueFeeAllocationRepository = dueFeeAllocationRepository;
+		this.dueFeeRepository = dueFeeRepository;
+	}
+
     public async Task<PagedResultDto<FeeReceiptListItemDto>> GetListAsync(
         GetFeeReceiptListInput input,
         CancellationToken cancellationToken = default)

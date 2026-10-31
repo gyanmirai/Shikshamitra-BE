@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json;
 using Shouldly;
 using Xunit;
@@ -11,6 +12,25 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionAcademicOptionsUnit_Tests
 {
+	[Fact]
+	public void Publication_rejects_class_alias_duplicates_and_manual_class_choices()
+	{
+		AdmissionFormFieldDefinition Question(string code, string label, string options) => new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+			code, label, AdmissionFormFieldType.Select, AdmissionFormBindingType.Custom, code, false, false, 0, null, null, null, null, null, options);
+		var first = Question("CLASS_INTERESTED", "Class interested in", "{\"source\":\"Standards\"}");
+		var duplicate = Question("FIELD_1", "Interested Class", "[\"Class 1\"]");
+		var result = new AdmissionFormValidationResultDto();
+		AdmissionFormAppService.ValidateClassInterestQuestions([first, duplicate], result);
+		result.Errors.ShouldContain(AdmissionClassInterestQuestion.DuplicateMessage);
+		result.Errors.ShouldContain(AdmissionClassInterestQuestion.ConfigurationMessage);
+		var valid = new AdmissionFormValidationResultDto();
+		AdmissionFormAppService.ValidateClassInterestQuestions([first, Question("CLASS_APPLYING_FOR", "Class applying for", "{\"source\":\"Standards\"}")], valid);
+		valid.Errors.ShouldBeEmpty();
+		var heading = new AdmissionFormFieldDefinition(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "CLASS_HEADING", "Interested Class",
+			AdmissionFormFieldType.Static, AdmissionFormBindingType.Custom, "CLASS_HEADING", false, false, 0, null, null, null, null, null, null);
+		AdmissionFormAppService.ValidateClassInterestQuestions([first, heading], valid);
+		valid.Errors.ShouldBeEmpty();
+	}
 	[Fact]
 	public async Task Runtime_academic_reads_accept_the_owning_View_without_opening_other_form_sources()
 	{
@@ -42,6 +62,18 @@ public class AdmissionAcademicOptionsUnit_Tests
 		source.ShouldBe(key);
 		AdmissionAcademicFormOptions.OptionsJson("HOUSE", AdmissionFormFieldType.Select, original).ShouldBe(original);
 		AdmissionAcademicFormOptions.OptionsJson("CLASS", AdmissionFormFieldType.Text, original).ShouldBe(original);
+	}
+
+	[Fact]
+	public void Resolved_class_choices_preserve_board_context_without_changing_class_IDs()
+	{
+		var boardId = Guid.NewGuid();
+		var option = JsonSerializer.Deserialize<AdmissionFormOptionDto>(
+			$"{{\"Value\":\"class-id\",\"Label\":\"Class 6\",\"BoardId\":\"{boardId}\",\"BoardLabel\":\"CBSE\"}}")!;
+		using var json = JsonDocument.Parse(AdmissionAcademicFormOptions.SerializeOptions([option]));
+		json.RootElement[0].GetProperty("boardId").GetGuid().ShouldBe(boardId);
+		json.RootElement[0].GetProperty("boardLabel").GetString().ShouldBe("CBSE");
+		json.RootElement[0].GetProperty("value").GetString().ShouldBe("class-id");
 	}
 
 	[Fact]

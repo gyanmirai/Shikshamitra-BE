@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Diagnostics.CodeAnalysis;
+using System;
 using System.Collections.Generic;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
@@ -18,6 +19,9 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private EducationMediumStage()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Name = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -36,6 +40,7 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetName(name);
 	}
 
+	[MemberNotNull(nameof(Name))]
 	internal EducationMediumStage SetName(string name)
 	{
 		Name = Check.NotNullOrWhiteSpace(
@@ -49,6 +54,6 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal void SetSortOrder(int sortOrder) => SortOrder = Check.Range(sortOrder, nameof(sortOrder), 0, int.MaxValue);
 
 	// Navigation property
-	public EducationMedium EducationMedium { get; set; }
-	public ICollection<Standard> Standards { get; set; }
+	public EducationMedium EducationMedium { get; set; } = null!; // Populated by EF relationship materialization.
+	public ICollection<Standard> Standards { get; set; } = null!; // Populated by EF relationship materialization.
 }

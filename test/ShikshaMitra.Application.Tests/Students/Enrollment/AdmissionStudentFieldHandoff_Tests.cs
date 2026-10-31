@@ -137,7 +137,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Values = [new() { FieldCode = "BLOOD_GROUP", ValueJson = "\"O+\"" }]
 			});
 			(await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(applicant.Id)))
-				.ExtraProperties["AdmissionStudentField.Medical.BloodGroup"].ToString().ShouldBe("O+");
+				.ExtraProperties["AdmissionStudentField.Medical.BloodGroup"].ShouldNotBeNull().ToString().ShouldBe("O+");
 
 			application = await _applicationAppService.GetAsync(application.Id);
 			await _applicationAppService.UpdateFormValuesAsync(application.Id, new()
@@ -164,9 +164,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 
 			var result = await FinalizeAsync(fixture.Application, true, "student-fields-handoff");
-			var student = await WithUnitOfWorkAsync(() => _studentRepository.GetWithDetailsAsync(result.StudentId));
-			student.ExtraProperties["AdmissionStudentField.Medical.BloodGroup"].ToString().ShouldBe("O+");
-			student.ExtraProperties["AdmissionStudentField.PreviousSchool.Name"].ToString().ShouldBe("Sample School");
+			var student = (await WithUnitOfWorkAsync(() => _studentRepository.GetWithDetailsAsync(result.StudentId))).ShouldNotBeNull();
+			student.ExtraProperties["AdmissionStudentField.Medical.BloodGroup"].ShouldNotBeNull().ToString().ShouldBe("O+");
+			student.ExtraProperties["AdmissionStudentField.PreviousSchool.Name"].ShouldNotBeNull().ToString().ShouldBe("Sample School");
 			student.MedicalRecord!.BloodGroup.ShouldBe("O+");
 			student.PreviousSchoolDetail!.SchoolName.ShouldBe("Sample School");
 			var onboarding = await GetRequiredService<IStudentOnboardingAppService>().GetAsync(result.OnboardingCaseId);
@@ -191,8 +191,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var result = await FinalizeAsync(fixture.Application, false, "student-fields-existing-handoff");
 			result.ReusedExistingStudent.ShouldBeTrue();
 			result.StudentId.ShouldBe(fixture.ExistingStudentId!.Value);
-			var student = await WithUnitOfWorkAsync(() => _studentRepository.GetWithDetailsAsync(result.StudentId));
-			student.ExtraProperties["AdmissionStudentField.Medical.BloodGroup"].ToString().ShouldBe("B+");
+			var student = (await WithUnitOfWorkAsync(() => _studentRepository.GetWithDetailsAsync(result.StudentId))).ShouldNotBeNull();
+			student.ExtraProperties["AdmissionStudentField.Medical.BloodGroup"].ShouldNotBeNull().ToString().ShouldBe("B+");
 			student.MedicalRecord?.BloodGroup.ShouldBeNull();
 		});
 

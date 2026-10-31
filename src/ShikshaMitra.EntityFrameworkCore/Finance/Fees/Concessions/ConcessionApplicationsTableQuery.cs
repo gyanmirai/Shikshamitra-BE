@@ -54,8 +54,8 @@ internal static class ConcessionApplicationsTableQuery
         {
             Request = request,
             StudentIdentity = (fullName == "" ? "-" : fullName) +
-                (student != null && student.GrNo.HasValue ? " (" + student.GrNo.Value.ToString() + ")" : ""),
-            RollNo = student != null && student.RollNo.HasValue ? student.RollNo.Value.ToString() : "",
+                (student != null && student.GrNo.HasValue ? " (" + student.GrNo!.Value.ToString() + ")" : ""),
+            RollNo = student != null && student.RollNo.HasValue ? student.RollNo!.Value.ToString() : "",
             ClassDivision = (standard == null ? "-" : standard.Name) + " (" + (division == null ? "-" : division.Name) + ")",
             TypeName = type == null ? "" : type.Name,
             Amount = request.ConcessionFeeHeadMappings.Sum(m => m.FeeHeadConcessionAmount)

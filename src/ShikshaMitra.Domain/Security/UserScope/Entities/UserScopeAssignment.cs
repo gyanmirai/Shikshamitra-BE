@@ -90,7 +90,7 @@ public class UserScopeAssignment : FullAuditedAggregateRoot<Guid>, IMultiTenant,
     /// <summary>
     /// Soft delete flag (ABP standard).
     /// </summary>
-    public bool IsDeleted { get; set; }
+    public new bool IsDeleted { get; set; }
 
     // Private constructor for ORM
     private UserScopeAssignment()

@@ -32,30 +32,76 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.Finance.Fees.Collections;
 
 [RemoteService(false)]
-public partial class CollectFeeWorkflow(
-	IReadOnlyRepository<Student, Guid> studentRepository,
-	IDueFeeRepository dueFeeRepository,
-	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
-	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
-	IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
-	IRepository<FeeHead, Guid> feeHeadRepository,
-	IRepository<Charge, Guid> chargeRepository,
-	IRepository<AcademicYear, Guid> academicYearRepository,
-	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
-	ShikshaMitra.Domain.Finance.Accounts.Settings.FinanceRoutingManager routingManager,
- ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions,
- LateFeeBalanceService lateFeeBalanceService,
-	CollectionPolicyResolver policyResolver,
-	FeeCollectionManager feeCollectionManager,
-	FinanceAuditWriter financeAuditWriter,
-	FinanceScopeAccessService financeScopeAccessService,
-	IFeeReceiptPdfGenerator pdfGenerator,
-	FeeReceiptBlobManager blobManager,
-	IDistributedEventBus eventBus,
-	IClock clock,
-	IUnitOfWorkManager unitOfWorkManager
-) : ApplicationService, ITransientDependency
+public partial class CollectFeeWorkflow : ApplicationService, ITransientDependency
 {
+	private readonly IDueFeeRepository dueFeeRepository;
+	private readonly IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository;
+	private readonly IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository;
+	private readonly IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository;
+	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
+	private readonly IRepository<Charge, Guid> chargeRepository;
+	private readonly IRepository<AcademicYear, Guid> academicYearRepository;
+	private readonly IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository;
+	private readonly ShikshaMitra.Domain.Finance.Accounts.Settings.FinanceRoutingManager routingManager;
+	private readonly ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions;
+	private readonly LateFeeBalanceService lateFeeBalanceService;
+	private readonly CollectionPolicyResolver policyResolver;
+	private readonly FeeCollectionManager feeCollectionManager;
+	private readonly FinanceAuditWriter financeAuditWriter;
+	private readonly FinanceScopeAccessService financeScopeAccessService;
+	private readonly IFeeReceiptPdfGenerator pdfGenerator;
+	private readonly FeeReceiptBlobManager blobManager;
+	private readonly IDistributedEventBus eventBus;
+	private readonly IClock clock;
+	private readonly IUnitOfWorkManager unitOfWorkManager;
+
+	public CollectFeeWorkflow(
+		IReadOnlyRepository<Student, Guid> studentRepository,
+		IDueFeeRepository dueFeeRepository,
+		IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
+		IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+		IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
+		IRepository<FeeHead, Guid> feeHeadRepository,
+		IRepository<Charge, Guid> chargeRepository,
+		IRepository<AcademicYear, Guid> academicYearRepository,
+		IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
+		ShikshaMitra.Domain.Finance.Accounts.Settings.FinanceRoutingManager routingManager,
+		ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions,
+		LateFeeBalanceService lateFeeBalanceService,
+		CollectionPolicyResolver policyResolver,
+		FeeCollectionManager feeCollectionManager,
+		FinanceAuditWriter financeAuditWriter,
+		FinanceScopeAccessService financeScopeAccessService,
+		IFeeReceiptPdfGenerator pdfGenerator,
+		FeeReceiptBlobManager blobManager,
+		IDistributedEventBus eventBus,
+		IClock clock,
+		IUnitOfWorkManager unitOfWorkManager
+	)
+	{
+		_ = studentRepository;
+		this.dueFeeRepository = dueFeeRepository;
+		this.feeRecordMetadataRepository = feeRecordMetadataRepository;
+		this.chargeCollectionRecordRepository = chargeCollectionRecordRepository;
+		this.chargeWaiverRepository = chargeWaiverRepository;
+		this.feeHeadRepository = feeHeadRepository;
+		this.chargeRepository = chargeRepository;
+		this.academicYearRepository = academicYearRepository;
+		this.studentFeeStructureRepository = studentFeeStructureRepository;
+		this.routingManager = routingManager;
+		this.automaticTransactions = automaticTransactions;
+		this.lateFeeBalanceService = lateFeeBalanceService;
+		this.policyResolver = policyResolver;
+		this.feeCollectionManager = feeCollectionManager;
+		this.financeAuditWriter = financeAuditWriter;
+		this.financeScopeAccessService = financeScopeAccessService;
+		this.pdfGenerator = pdfGenerator;
+		this.blobManager = blobManager;
+		this.eventBus = eventBus;
+		this.clock = clock;
+		this.unitOfWorkManager = unitOfWorkManager;
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.Add)]
 	public async Task<CollectFeeOutput> CollectFeeAsync(CollectFeeInput input)
 	{

@@ -72,8 +72,8 @@ public class AttendanceEntry : FullAuditedEntity<Guid>, IMultiTenant
 	public Guid MarkedByUserId { get; private set; }
 
 	// Navigation properties
-	public virtual AttendanceDay AttendanceDay { get; set; }
-	public virtual Student Student { get; set; }
+	public virtual AttendanceDay AttendanceDay { get; set; } = null!; // Populated by EF relationship materialization.
+	public virtual Student Student { get; set; } = null!; // Populated by EF relationship materialization.
 
 	private AttendanceEntry()
 	{

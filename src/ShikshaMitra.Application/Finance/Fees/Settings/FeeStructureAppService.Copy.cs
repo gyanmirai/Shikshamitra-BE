@@ -35,19 +35,19 @@ public partial class FeeStructureAppService
 			{
 				var policy = await collectionPolicyRepository.FindAsync(policyId.Value);
 				if (policy?.AcademicYearId == metadata.AcademicYearId)
-					master = (policy.PolicyName, policy.Version, policy.Status == CollectionPolicyStatus.Active);
+					master = (policy!.PolicyName, policy.Version, policy.Status == CollectionPolicyStatus.Active);
 			}
 			else if (family == "refund")
 			{
 				var policy = await refundPolicyRepository.FindAsync(policyId.Value);
 				if (policy?.AcademicYearId == metadata.AcademicYearId)
-					master = (policy.PolicyName, policy.Version, policy.Status == RefundPolicyStatus.Active);
+					master = (policy!.PolicyName, policy.Version, policy.Status == RefundPolicyStatus.Active);
 			}
 			else if (family == "concession")
 			{
 				var policy = await concessionPolicyRepository.FindAsync(policyId.Value);
 				if (policy?.AcademicYearId == metadata.AcademicYearId)
-					master = (policy.PolicyName, policy.Version, policy.Status == ConcessionPolicyStatus.Active);
+					master = (policy!.PolicyName, policy.Version, policy.Status == ConcessionPolicyStatus.Active);
 			}
 			var current = master is { Active: true } ? snapshots.SingleOrDefault(x => x.VersionNumber == master.Value.Version && x.Status == "Active") : null;
 			result.Add(new FeeStructureCopyPolicyDto

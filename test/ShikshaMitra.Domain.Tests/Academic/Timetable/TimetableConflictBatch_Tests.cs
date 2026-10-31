@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text.Json;
@@ -55,24 +56,36 @@ public class TimetableConflictBatch_Tests
 		await _repository.DidNotReceive().GetAllWithSlotsAsync();
 	}
 
-	[Fact]
-	public async Task Validation_Should_Preserve_Teacher_First_Error_And_Conflict_Details()
+	[Theory]
+	[InlineData("en-US", "09:15", "10:00")]
+	[InlineData("fi-FI", "09.15", "10.00")]
+	public async Task Validation_Should_Preserve_Teacher_First_Error_And_Conflict_Details(
+		string culture, string expectedStartTime, string expectedEndTime)
 	{
-		var candidate = Candidate(TimetableDayOfWeek.Monday, new TimeOnly(9, 15), new TimeOnly(10, 0));
-		SetCandidates(candidate);
+		var previousCulture = CultureInfo.CurrentCulture;
+		try
+		{
+			CultureInfo.CurrentCulture = new CultureInfo(culture, useUserOverride: false);
+			var candidate = Candidate(TimetableDayOfWeek.Monday, new TimeOnly(9, 15), new TimeOnly(10, 0));
+			SetCandidates(candidate);
 
-		var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
-			Guid.NewGuid(), Guid.NewGuid(), [CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 30)]));
+			var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
+				Guid.NewGuid(), Guid.NewGuid(), [CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 30)]));
 
-		error.Code.ShouldBe(TimetableErrorCodes.TeacherConflict);
-		error.Data["message"].ShouldBe(
-			"Teacher conflict: selected teacher is already assigned to another class Division another division for assigned subject on Monday 09:15-10:00.");
-		using var json = JsonDocument.Parse((string)error.Data["ConflictDetails"]!);
-		var detail = json.RootElement[0];
-		detail.GetProperty("Type").GetString().ShouldBe("teacher");
-		detail.GetProperty("ResourceId").GetGuid().ShouldBe(_teacherId);
-		detail.GetProperty("ConflictingStandardId").GetGuid().ShouldBe(candidate.StandardId);
-		detail.GetProperty("ConflictingDivisionId").GetGuid().ShouldBe(candidate.DivisionId);
+			error.Code.ShouldBe(TimetableErrorCodes.TeacherConflict);
+			error.Data["message"].ShouldBe(
+				$"Teacher conflict: selected teacher is already assigned to another class Division another division for assigned subject on Monday {expectedStartTime}-{expectedEndTime}.");
+			using var json = JsonDocument.Parse((string)error.Data["ConflictDetails"]!);
+			var detail = json.RootElement[0];
+			detail.GetProperty("Type").GetString().ShouldBe("teacher");
+			detail.GetProperty("ResourceId").GetGuid().ShouldBe(_teacherId);
+			detail.GetProperty("ConflictingStandardId").GetGuid().ShouldBe(candidate.StandardId);
+			detail.GetProperty("ConflictingDivisionId").GetGuid().ShouldBe(candidate.DivisionId);
+		}
+		finally
+		{
+			CultureInfo.CurrentCulture = previousCulture;
+		}
 	}
 
 	[Fact]
@@ -87,20 +100,32 @@ public class TimetableConflictBatch_Tests
 			[CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 60)]);
 	}
 
-	[Fact]
-	public async Task Validation_Should_Report_First_Submitted_Period_Before_Later_Teacher_Conflict()
+	[Theory]
+	[InlineData("en-US", "09:00")]
+	[InlineData("fi-FI", "09.00")]
+	public async Task Validation_Should_Report_First_Submitted_Period_Before_Later_Teacher_Conflict(
+		string culture, string expectedStartTime)
 	{
-		SetCandidates(
-			Candidate(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), new TimeOnly(10, 0)) with { TeacherId = null },
-			Candidate(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), new TimeOnly(11, 0)));
+		var previousCulture = CultureInfo.CurrentCulture;
+		try
+		{
+			CultureInfo.CurrentCulture = new CultureInfo(culture, useUserOverride: false);
+			SetCandidates(
+				Candidate(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), new TimeOnly(10, 0)) with { TeacherId = null },
+				Candidate(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), new TimeOnly(11, 0)));
 
-		var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
-			Guid.NewGuid(), Guid.NewGuid(),
-			[CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 60),
-			 CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), 60)]));
+			var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
+				Guid.NewGuid(), Guid.NewGuid(),
+				[CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 60),
+				 CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), 60)]));
 
-		error.Code.ShouldBe(TimetableErrorCodes.RoomConflict);
-		error.Data["StartTime"].ShouldBe("09:00");
+			error.Code.ShouldBe(TimetableErrorCodes.RoomConflict);
+			error.Data["StartTime"].ShouldBe(expectedStartTime);
+		}
+		finally
+		{
+			CultureInfo.CurrentCulture = previousCulture;
+		}
 	}
 
 	[Fact]

@@ -29,7 +29,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			state.ContactCount.ShouldBe(0);
 			state.CanStartApplication.ShouldBeFalse();
 			state.Blockers.ShouldNotBeEmpty();
-			state.Policy.ApplicationStartRequirement.ShouldBe(AdmissionInquiryApplicationStartRequirement.Captured);
+			state.Policy.ShouldNotBeNull().ApplicationStartRequirement.ShouldBe(AdmissionInquiryApplicationStartRequirement.Captured);
 			var immediate = await inquiries.CreateAsync(ManagedInquiryInput(offering));
 			(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.StartAsync(immediate.ApplicantId!.Value, offering.Id, immediate.Id)))
 				.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.QualificationRequired);

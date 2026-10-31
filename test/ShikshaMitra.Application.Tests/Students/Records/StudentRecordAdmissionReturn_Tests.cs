@@ -235,11 +235,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		finalized.StudentId.ShouldBe(fixture.Student.Id); finalized.ReusedExistingStudent.ShouldBeTrue(); finalized.OnboardingCaseId.ShouldNotBe(original.Case.Id);
 		var item = await onboarding.GetAsync(finalized.OnboardingCaseId);
 		item.AdmissionRoute.ShouldBe("Returning student");
-		(await WithUnitOfWorkAsync(() => _onboardingCaseRepository.GetAsync(item.Id))).ExtraProperties["RecordReturnTransitionId"].ToString().ShouldBe(returned.TransitionId.Value.ToString("D"));
+		(await WithUnitOfWorkAsync(() => _onboardingCaseRepository.GetAsync(item.Id))).ExtraProperties["RecordReturnTransitionId"].ShouldNotBeNull().ToString().ShouldBe(returned.TransitionId.ShouldNotBeNull().ToString("D"));
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var student = await _studentRepository.GetAsync(fixture.Student.Id); student.Status.ShouldBe(StudentLifeCycleStatusEnum.Left);
-			student.ExtraProperties["AdmissionStudentField.Medical.BloodGroup"].ToString().ShouldBe("A+"); student.GrNumber.ShouldBe("PERMANENT-RETURN-GR");
+			student.ExtraProperties["AdmissionStudentField.Medical.BloodGroup"].ShouldNotBeNull().ToString().ShouldBe("A+"); student.GrNumber.ShouldBe("PERMANENT-RETURN-GR");
 			var guardian = await _guardianRepository.GetAsync(original.Guardian.Id); guardian.Mobile.ShouldBe(original.Guardian.Mobile);
 			(await _familyRepository.GetAsync(original.Family.Id)).PrimaryGuardianId.ShouldBe(original.Guardian.Id);
 			(await _applicantRepository.GetAsync(original.Sibling.Id)).FamilyId.ShouldBe(original.Family.Id);

@@ -283,7 +283,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			{
 				throw new BusinessException("ShikshaMitra.Assignment:StudentNotInAssignedDivision")
 					.WithData("StudentId", studentId)
-					.WithData("DivisionId", student.DivisionId);
+					.WithData("DivisionId", student.DivisionId!);
 			}
 			await EnsureCurrentUserCanAccessDivisionAsync(assignment, divisionSchedule.DivisionId, nameof(GiveFeedbackAsync));
 

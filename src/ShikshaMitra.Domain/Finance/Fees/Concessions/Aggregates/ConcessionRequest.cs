@@ -355,7 +355,7 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			: ConcessionRequestStatus.PartiallyReversed;
 	}
 
-	public void Cancel(Guid actorId, string reason, DateTime cancelledOn)
+	public void Cancel(Guid actorId, string? reason, DateTime cancelledOn)
 	{
 		if (Status is not (ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending))
 		{

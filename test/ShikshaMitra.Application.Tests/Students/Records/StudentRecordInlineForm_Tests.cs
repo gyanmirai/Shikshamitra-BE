@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.Students.ValueObjects;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -21,6 +22,65 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		foreach (var value in values) payload["sources"]![0]!["values"]![value.Code] = value.Value;
 		return new() { ClientKey = Guid.NewGuid().ToString("N"), Reason = "Correct retained Registration form details", ExpectedSnapshot = snapshot.Snapshot, Payload = JsonSerializer.SerializeToElement(payload) };
 	}
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Inline_form_parent_contact_edit_creates_contact_only_parent_and_preserves_original(bool existingFamily) => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await CustomRecordFixtureAsync();
+		if (existingFamily) await WithUnitOfWorkAsync(async () =>
+		{
+			var repository = GetRequiredService<IRepository<StudentFamilyDetail, Guid>>();
+			var family = await repository.FindAsync(fixture.Student.Id) ?? await repository.InsertAsync(new(fixture.Student.Id, TestTenantId));
+			family.UpdateFatherDetails(new ParentGuardianDetails("Saved father", null, null, "saved.father@example.test", "9000000002", null, null, null, null, null, null, null, null));
+			await repository.UpdateAsync(family, autoSave: true);
+		});
+		var originalJson = await WithUnitOfWorkAsync(async () =>
+		{
+			var family = await GetRequiredService<IRepository<StudentFamilyDetail, Guid>>().FindAsync(fixture.Student.Id);
+			(family?.MotherDetails).ShouldBeNull();
+			return (await GetRequiredService<IRepository<AdmissionFormSubmission, Guid>>().GetAsync(fixture.SubmissionId)).SnapshotJson;
+		});
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var source = (await GetRequiredService<StudentRecordRegistrationReader>().GetAsync(fixture.Student.Id)).Single();
+			await GetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>().InsertAsync(new(Guid.NewGuid(), fixture.DefinitionId,
+				source.Definition!.Sections.Single().Id, "MOTHER_MOBILE", "Mother's mobile", AdmissionFormFieldType.Phone, AdmissionFormBindingType.System,
+				"Mother.Mobile", false, false, 10, null, null, null, null, null, null));
+			await GetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>().InsertAsync(new(Guid.NewGuid(), fixture.DefinitionId,
+				source.Definition.Sections.Single().Id, "IDENTITY_DOCUMENTNAME", "Document name", AdmissionFormFieldType.Text, AdmissionFormBindingType.System,
+				"Identity.DocumentName", false, false, 11, null, null, null, null, null, null));
+			await GetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>().InsertAsync(new(Guid.NewGuid(), fixture.DefinitionId,
+				source.Definition.Sections.Single().Id, "APPLICANT_PROFILEPHOTO", "Profile photo", AdmissionFormFieldType.File, AdmissionFormBindingType.System,
+				"Applicant.ProfilePhoto", false, false, 12, null, null, null, null, null, null));
+		});
+		var service = GetRequiredService<IStudentRecordFormAppService>();
+		var snapshot = await service.GetSnapshotAsync(fixture.Student.Id);
+		var result = await service.SaveAsync(fixture.Student.Id, InlineFormEdit(snapshot, ("MOTHER_MOBILE", JsonValue.Create("9000000001"))));
+		result.Status.ShouldBe("Applied");
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var family = await GetRequiredService<IRepository<StudentFamilyDetail, Guid>>().GetAsync(fixture.Student.Id);
+			family.MotherDetails!.ContactNo.ShouldBe("9000000001");
+			family.MotherDetails.FullName.ShouldBe(string.Empty);
+			if (existingFamily)
+			{
+				family.FatherDetails!.FullName.ShouldBe("Saved father");
+				family.FatherDetails.Email.ShouldBe("saved.father@example.test");
+				family.FatherDetails.ContactNo.ShouldBe("9000000002");
+			}
+		});
+		var current = (await GetRequiredService<IStudentRecordDetailsAppService>().GetAsync(fixture.Student.Id)).FormSources.Single();
+		current.CurrentValues["MOTHER_MOBILE"].GetString().ShouldBe("9000000001");
+		current.OriginalValues.ShouldNotContainKey("MOTHER_MOBILE");
+		foreach (var code in new[] { "IDENTITY_DOCUMENTNAME", "APPLICANT_PROFILEPHOTO" })
+		{
+			current.CurrentValues[code].ValueKind.ShouldBe(JsonValueKind.Null);
+			current.OriginalValues.ShouldNotContainKey(code);
+		}
+		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<AdmissionFormSubmission, Guid>>().GetAsync(fixture.SubmissionId))).SnapshotJson.ShouldBe(originalJson);
+	});
 
 	[Fact]
 	public Task Inline_form_save_applies_mapped_and_custom_answers_atomically_without_changing_original_or_generic_approval() => RunCertificationScenarioAsync(async () =>

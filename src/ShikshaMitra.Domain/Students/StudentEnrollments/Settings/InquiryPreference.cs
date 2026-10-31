@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Diagnostics.CodeAnalysis;
+using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -49,7 +50,11 @@ public class InquiryPreference : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// ORM constructor
 	/// </summary>
-	protected InquiryPreference() { }
+	protected InquiryPreference()
+	{
+		// EF materializes these required columns after this ORM constructor.
+		PreferenceName = null!;
+	}
 
 	/// <summary>
 	/// Creates a new inquiry preference
@@ -96,6 +101,7 @@ public class InquiryPreference : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Sets the preference name with validation
 	/// </summary>
+	[MemberNotNull(nameof(PreferenceName))]
 	private InquiryPreference SetPreferenceName(string preferenceName)
 	{
 		PreferenceName = Check.NotNullOrWhiteSpace(

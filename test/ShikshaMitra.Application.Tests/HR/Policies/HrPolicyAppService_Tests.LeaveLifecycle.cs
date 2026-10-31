@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -59,7 +59,7 @@ public partial class HrPolicyAppService_Tests
 		var history = await _policyVersions.GetListAsync("leave", context.LeavePolicy.Id, new());
 		history.Items.Count.ShouldBe(2);
 		history.Items.Single(x => x.VersionNumber == 1).ChangeAction.ShouldBe("baseline");
-		history.Items.Single(x => x.VersionNumber == 1).ChangeReason.ShouldContain("earlier history is unavailable");
+		history.Items.Single(x => x.VersionNumber == 1).ChangeReason.ShouldNotBeNull().ShouldContain("earlier history is unavailable");
 		var old = history.Items.Single(x => x.VersionNumber == 1);
 		var diff = await _policyVersions.CompareAsync("leave", context.LeavePolicy.Id, old.Id, history.Items.Single(x => x.VersionNumber == 2).Id);
 		diff.Differences.ShouldContain(x => x.FieldKey.Contains("leaveCount"));

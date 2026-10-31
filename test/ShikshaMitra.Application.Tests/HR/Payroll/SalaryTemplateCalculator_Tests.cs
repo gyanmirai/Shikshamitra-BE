@@ -43,7 +43,7 @@ public class SalaryTemplateCalculator_Tests
 		error.Data["target"].ShouldBe(50000m);
 		error.Data["field"].ShouldBe("monthlyAmount");
 		error.Data["relatedField"].ShouldBe("rules");
-		error.Data["message"].ToString()!.ShouldContain("INR 2000.00");
+		error.Data["message"].ShouldNotBeNull().ToString()!.ShouldContain("INR 2000.00");
 		// A synthetic 12% PF on Basic adds 240; this is not the live DM PF rule.
 		var correctedCost = applyPf ? 52240m : 52000m;
 		var result = SalaryTemplateCalculator.Calculate(SalaryInputBasis.EmployerCost, correctedCost,

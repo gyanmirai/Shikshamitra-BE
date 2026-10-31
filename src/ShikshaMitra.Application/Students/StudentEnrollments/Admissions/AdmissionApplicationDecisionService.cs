@@ -241,8 +241,9 @@ public class AdmissionApplicationDecisionService(
 		{
 			if (await studentRepository.AnyAsync(item => item.Id == context.Applicant.ReservedStudentId))
 				throw new BusinessException(AdmissionApplicantErrorCodes.ReservedStudentIdConflict);
-			await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationFormService>()
-				.RecoverFirstParentContactAsync(context.Application, context.Applicant);
+			if (!AdmissionPrimaryContactSelection.HasSelection(context.Applicant))
+				await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationFormService>()
+					.RecoverFirstParentContactAsync(context.Application, context.Applicant);
 			student = CreateStudent(context);
 			await studentRepository.InsertAsync(student, false);
 			await ApplyNewProfileAsync(context.Applicant, student);
@@ -476,6 +477,11 @@ public class AdmissionApplicationDecisionService(
 			Item("duplicate_resolution", "Student identity resolved", applicant.ExistingStudentId.HasValue || matches.Count == 0,
 				applicant.ExistingStudentId.HasValue ? "Existing Student is already linked." : matches.Count == 0 ? "No exact identity matches found." : $"{matches.Count} possible match(es) require a staff decision.")
 		];
+		try { AdmissionPrimaryContactSelection.EnsureReady(applicant); }
+		catch (BusinessException exception) when (exception.Code == AdmissionInquiryManagementErrorCodes.InvalidInput)
+		{
+			items.Add(Item("guardian_responsibility", "Guardian responsibility confirmed", false, exception.Message));
+		}
 		// Typed-parent records may still recover accepted answers during finalization. Only project
 		// unambiguous new legacy identities here; preview must never mutate the tracked applicant.
 		if (identityReady && guardianReady && !applicant.ExistingStudentId.HasValue && matches.Count == 0 &&
@@ -515,7 +521,9 @@ public class AdmissionApplicationDecisionService(
 			state: string.IsNullOrWhiteSpace(applicant.State) ? null : new State(applicant.State, string.Empty),
 			country: string.IsNullOrWhiteSpace(applicant.Country) ? null : new Country(applicant.Country, string.Empty),
 			pincode: applicant.PostalCode);
-		if (!AdmissionSiblingParentSelection.IsParentFlow(applicant))
+		var explicitParent = AdmissionPrimaryContactSelection.HasSelection(applicant) &&
+			AdmissionPrimaryContactSelection.ReadRelationship(applicant) is "father" or "mother";
+		if (!AdmissionSiblingParentSelection.IsParentFlow(applicant) && !explicitParent)
 			student.UpdateFamilyInfo(null, null, new ParentGuardianDetails(
 				$"{guardian.FirstName} {guardian.LastName}".Trim(), null, null, guardian.Email, guardian.Mobile,
 				null, null, null, null, null, null, null, null), null);

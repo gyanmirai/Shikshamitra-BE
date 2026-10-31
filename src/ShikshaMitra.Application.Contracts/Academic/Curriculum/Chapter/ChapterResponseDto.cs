@@ -22,7 +22,7 @@ public class ChapterResponseDto
 	/// <summary>
 	/// Chapter name/title
 	/// </summary>
-	public string ChapterName { get; set; }
+	public string? ChapterName { get; set; }
 
 	/// <summary>
 	/// Chapter description (HTML content)

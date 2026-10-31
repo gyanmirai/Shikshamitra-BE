@@ -22,43 +22,116 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 [Authorize]
-public partial class StudentOnboardingAppService(
-	IRepository<StudentOnboardingCase, Guid> caseRepository,
-	IRepository<StudentOnboardingStep, Guid> stepRepository,
-	IRepository<StudentOnboardingEvent, Guid> eventRepository,
-	IRepository<StudentOnboardingPolicy, Guid> policyRepository,
-	IRepository<StudentOnboardingSettings, Guid> settingsRepository,
-	OnboardingConfigurationManager configurationManager,
-	ShikshaMitra.Security.UserScope.IUserScopeService userScopeService,
-	OnboardingFeeReadinessReader feeReadinessReader,
-	AdmissionFeeSelectionOnboardingReader admissionFeeSelectionReader,
-	IRepository<StudentSeatReservation, Guid> reservationRepository,
-	IRepository<StudentIdentifierSeries, Guid> seriesRepository,
-	IRepository<StudentIdentifierAllocation, Guid> allocationRepository,
-	IRepository<StudentOnboardingServiceHandoff, Guid> handoffRepository,
-	IRepository<AdmissionApplication, Guid> applicationRepository,
-	IRepository<AdmissionOffering, Guid> offeringRepository,
-	IRepository<AdmissionCampus, Guid> campusRepository,
-	IRepository<AdmissionCycle, Guid> cycleRepository,
-	IRepository<AcademicYear, Guid> academicYearRepository,
-	IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationBoard, Guid> boardRepository,
-	IRepository<ShikshaMitra.TenantSettings.EducationMediums.EducationMedium, Guid> mediumRepository,
-	IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage, Guid> mediumStageRepository,
-	IRepository<Standard, Guid> standardRepository,
-	IRepository<Division, Guid> divisionRepository,
-	IRepository<StudentEnrollment, Guid> enrollmentRepository,
-	IStudentRepository studentRepository,
-	StudentDocumentManager studentDocumentManager,
-	AdmissionStudentEvidenceReader admissionEvidenceReader,
-	IIdentityUserRepository identityUserRepository,
-	IdentityUserManager portalUserManager,
-	IdentityRoleManager portalRoleManager,
-	IRepository<ShikshaMitra.Students.Portal.StudentPortalAccountLink, Guid> portalLinkRepository,
-	ShikshaMitra.Students.Portal.StudentPortalAccessService portalAccess,
-	IDistributedEventBus distributedEventBus,
-	IUnitOfWorkManager unitOfWorkManager)
+public partial class StudentOnboardingAppService
 	: ApplicationService, IStudentOnboardingAppService
 {
+	private readonly IRepository<StudentOnboardingCase, Guid> caseRepository;
+	private readonly IRepository<StudentOnboardingStep, Guid> stepRepository;
+	private readonly IRepository<StudentOnboardingEvent, Guid> eventRepository;
+	private readonly IRepository<StudentOnboardingPolicy, Guid> policyRepository;
+	private readonly IRepository<StudentOnboardingSettings, Guid> settingsRepository;
+	private readonly OnboardingConfigurationManager configurationManager;
+	private readonly ShikshaMitra.Security.UserScope.IUserScopeService userScopeService;
+	private readonly AdmissionFeeSelectionOnboardingReader admissionFeeSelectionReader;
+	private readonly IRepository<StudentSeatReservation, Guid> reservationRepository;
+	private readonly IRepository<StudentIdentifierSeries, Guid> seriesRepository;
+	private readonly IRepository<StudentIdentifierAllocation, Guid> allocationRepository;
+	private readonly IRepository<StudentOnboardingServiceHandoff, Guid> handoffRepository;
+	private readonly IRepository<AdmissionApplication, Guid> applicationRepository;
+	private readonly IRepository<AdmissionOffering, Guid> offeringRepository;
+	private readonly IRepository<AdmissionCampus, Guid> campusRepository;
+	private readonly IRepository<AdmissionCycle, Guid> cycleRepository;
+	private readonly IRepository<AcademicYear, Guid> academicYearRepository;
+	private readonly IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationBoard, Guid> boardRepository;
+	private readonly IRepository<ShikshaMitra.TenantSettings.EducationMediums.EducationMedium, Guid> mediumRepository;
+	private readonly IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage, Guid> mediumStageRepository;
+	private readonly IRepository<Standard, Guid> standardRepository;
+	private readonly IRepository<Division, Guid> divisionRepository;
+	private readonly IRepository<StudentEnrollment, Guid> enrollmentRepository;
+	private readonly IStudentRepository studentRepository;
+	private readonly StudentDocumentManager studentDocumentManager;
+	private readonly AdmissionStudentEvidenceReader admissionEvidenceReader;
+	private readonly IIdentityUserRepository identityUserRepository;
+	private readonly IdentityUserManager portalUserManager;
+	private readonly IdentityRoleManager portalRoleManager;
+	private readonly IRepository<ShikshaMitra.Students.Portal.StudentPortalAccountLink, Guid> portalLinkRepository;
+	private readonly ShikshaMitra.Students.Portal.StudentPortalAccessService portalAccess;
+	private readonly IDistributedEventBus distributedEventBus;
+	private readonly IUnitOfWorkManager unitOfWorkManager;
+
+	public StudentOnboardingAppService(
+		IRepository<StudentOnboardingCase, Guid> caseRepository,
+		IRepository<StudentOnboardingStep, Guid> stepRepository,
+		IRepository<StudentOnboardingEvent, Guid> eventRepository,
+		IRepository<StudentOnboardingPolicy, Guid> policyRepository,
+		IRepository<StudentOnboardingSettings, Guid> settingsRepository,
+		OnboardingConfigurationManager configurationManager,
+		ShikshaMitra.Security.UserScope.IUserScopeService userScopeService,
+		OnboardingFeeReadinessReader feeReadinessReader,
+		AdmissionFeeSelectionOnboardingReader admissionFeeSelectionReader,
+		IRepository<StudentSeatReservation, Guid> reservationRepository,
+		IRepository<StudentIdentifierSeries, Guid> seriesRepository,
+		IRepository<StudentIdentifierAllocation, Guid> allocationRepository,
+		IRepository<StudentOnboardingServiceHandoff, Guid> handoffRepository,
+		IRepository<AdmissionApplication, Guid> applicationRepository,
+		IRepository<AdmissionOffering, Guid> offeringRepository,
+		IRepository<AdmissionCampus, Guid> campusRepository,
+		IRepository<AdmissionCycle, Guid> cycleRepository,
+		IRepository<AcademicYear, Guid> academicYearRepository,
+		IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationBoard, Guid> boardRepository,
+		IRepository<ShikshaMitra.TenantSettings.EducationMediums.EducationMedium, Guid> mediumRepository,
+		IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage, Guid> mediumStageRepository,
+		IRepository<Standard, Guid> standardRepository,
+		IRepository<Division, Guid> divisionRepository,
+		IRepository<StudentEnrollment, Guid> enrollmentRepository,
+		IStudentRepository studentRepository,
+		StudentDocumentManager studentDocumentManager,
+		AdmissionStudentEvidenceReader admissionEvidenceReader,
+		IIdentityUserRepository identityUserRepository,
+		IdentityUserManager portalUserManager,
+		IdentityRoleManager portalRoleManager,
+		IRepository<ShikshaMitra.Students.Portal.StudentPortalAccountLink, Guid> portalLinkRepository,
+		ShikshaMitra.Students.Portal.StudentPortalAccessService portalAccess,
+		IDistributedEventBus distributedEventBus,
+		IUnitOfWorkManager unitOfWorkManager
+	)
+	{
+		this.caseRepository = caseRepository;
+		this.stepRepository = stepRepository;
+		this.eventRepository = eventRepository;
+		this.policyRepository = policyRepository;
+		this.settingsRepository = settingsRepository;
+		this.configurationManager = configurationManager;
+		this.userScopeService = userScopeService;
+		_ = feeReadinessReader;
+		this.admissionFeeSelectionReader = admissionFeeSelectionReader;
+		this.reservationRepository = reservationRepository;
+		this.seriesRepository = seriesRepository;
+		this.allocationRepository = allocationRepository;
+		this.handoffRepository = handoffRepository;
+		this.applicationRepository = applicationRepository;
+		this.offeringRepository = offeringRepository;
+		this.campusRepository = campusRepository;
+		this.cycleRepository = cycleRepository;
+		this.academicYearRepository = academicYearRepository;
+		this.boardRepository = boardRepository;
+		this.mediumRepository = mediumRepository;
+		this.mediumStageRepository = mediumStageRepository;
+		this.standardRepository = standardRepository;
+		this.divisionRepository = divisionRepository;
+		this.enrollmentRepository = enrollmentRepository;
+		this.studentRepository = studentRepository;
+		this.studentDocumentManager = studentDocumentManager;
+		this.admissionEvidenceReader = admissionEvidenceReader;
+		this.identityUserRepository = identityUserRepository;
+		this.portalUserManager = portalUserManager;
+		this.portalRoleManager = portalRoleManager;
+		this.portalLinkRepository = portalLinkRepository;
+		this.portalAccess = portalAccess;
+		this.distributedEventBus = distributedEventBus;
+		this.unitOfWorkManager = unitOfWorkManager;
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<PagedResultDto<StudentOnboardingCaseDto>> GetListAsync(StudentOnboardingListInput input)
 	{

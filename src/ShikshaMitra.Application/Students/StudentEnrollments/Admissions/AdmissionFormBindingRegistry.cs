@@ -26,7 +26,7 @@ internal static class AdmissionFormBindingRegistry
 			["Guardian.LastName"] = new() { Key = "Guardian.LastName", DisplayName = "Guardian last name", Description = "The primary guardian's last name.", FieldType = AdmissionFormFieldType.Text },
 			["Guardian.Mobile"] = new() { Key = "Guardian.Mobile", DisplayName = "Guardian mobile", Description = "The primary guardian's mobile number.", FieldType = AdmissionFormFieldType.Phone },
 			["Guardian.Email"] = new() { Key = "Guardian.Email", DisplayName = "Guardian email", Description = "The primary guardian's email address.", FieldType = AdmissionFormFieldType.Email },
-			["Inquiry.ParentRelationship"] = new() { Key = "Inquiry.ParentRelationship", DisplayName = "Primary parent", Description = "Choose which configured parent's contact belongs to this inquiry.", FieldType = AdmissionFormFieldType.Select, OptionsJson = "[{\"value\":\"father\",\"label\":\"Father\"},{\"value\":\"mother\",\"label\":\"Mother\"}]" },
+			["Inquiry.ParentRelationship"] = new() { Key = "Inquiry.ParentRelationship", DisplayName = "Primary contact", Description = "Choose the adult responsible for school contact.", FieldType = AdmissionFormFieldType.Select, OptionsJson = "[{\"value\":\"father\",\"label\":\"Father\"},{\"value\":\"mother\",\"label\":\"Mother\"},{\"value\":\"guardian\",\"label\":\"Guardian\"}]" },
 			["Inquiry.Source"] = new() { Key = "Inquiry.Source", DisplayName = "Source", Description = "How this inquiry reached the school.", FieldType = AdmissionFormFieldType.Select, OptionsJson = "[{\"value\":\"0\",\"label\":\"Website\"},{\"value\":\"1\",\"label\":\"Walk-in\"},{\"value\":\"2\",\"label\":\"Phone\"},{\"value\":\"3\",\"label\":\"Referral\"},{\"value\":\"4\",\"label\":\"Campaign\"},{\"value\":\"5\",\"label\":\"Import\"},{\"value\":\"6\",\"label\":\"WhatsApp\"},{\"value\":\"7\",\"label\":\"Existing parent\"},{\"value\":\"8\",\"label\":\"Manual\"},{\"value\":\"9\",\"label\":\"Other\"},{\"value\":\"10\",\"label\":\"QR code\"},{\"value\":\"11\",\"label\":\"School fair\"},{\"value\":\"12\",\"label\":\"Social media\"}]" },
 			["Inquiry.SourceDetail"] = new() { Key = "Inquiry.SourceDetail", DisplayName = "Source details", Description = "Optional source context, up to 128 characters.", FieldType = AdmissionFormFieldType.Text },
 			["Inquiry.PreferredLanguageCode"] = new() { Key = "Inquiry.PreferredLanguageCode", DisplayName = "Communication language", Description = "Preferred language for contact; independent of form display language.", FieldType = AdmissionFormFieldType.Select, OptionsJson = "[{\"value\":\"en\",\"label\":\"English\"},{\"value\":\"hi\",\"label\":\"Hindi\"},{\"value\":\"mr\",\"label\":\"Marathi\"},{\"value\":\"gu\",\"label\":\"Gujarati\"},{\"value\":\"bn\",\"label\":\"Bengali\"},{\"value\":\"pa\",\"label\":\"Punjabi\"},{\"value\":\"ta\",\"label\":\"Tamil\"},{\"value\":\"te\",\"label\":\"Telugu\"},{\"value\":\"kn\",\"label\":\"Kannada\"},{\"value\":\"ml\",\"label\":\"Malayalam\"},{\"value\":\"ur\",\"label\":\"Urdu\"}]" },
@@ -61,7 +61,7 @@ internal static class AdmissionFormBindingRegistry
 		return key switch
 		{
 			"Applicant.Name" => string.Join(" ", new[] { applicant.FirstName, applicant.MiddleName, applicant.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))),
-			"Inquiry.ParentRelationship" => AdmissionSiblingParentSelection.ReadRelationship(applicant),
+			"Inquiry.ParentRelationship" => AdmissionPrimaryContactSelection.ReadRelationship(applicant),
 			"Applicant.FirstName" => applicant.FirstName,
 			"Applicant.MiddleName" => applicant.MiddleName,
 			"Applicant.LastName" => applicant.LastName,
@@ -88,7 +88,7 @@ internal static class AdmissionFormBindingRegistry
 		{
 			case "Applicant.Name": UpdateApplicant(applicant, value, null, null, applicant.DateOfBirth, applicant.Gender); return true;
 			// Inquiry operational answers are persisted in the form snapshot and applied by inquiry services.
-			case "Inquiry.ParentRelationship": return AdmissionSiblingParentSelection.IsRelationship(value);
+			case "Inquiry.ParentRelationship": return AdmissionPrimaryContactSelection.IsRelationship(value);
 			case "Inquiry.Source": case "Inquiry.SourceDetail": case "Inquiry.PreferredLanguageCode": return true;
 			case "Applicant.FirstName": UpdateApplicant(applicant, value, applicant.MiddleName, applicant.LastName, applicant.DateOfBirth, applicant.Gender); return true;
 			case "Applicant.MiddleName": UpdateApplicant(applicant, applicant.FirstName, value, applicant.LastName, applicant.DateOfBirth, applicant.Gender); return true;

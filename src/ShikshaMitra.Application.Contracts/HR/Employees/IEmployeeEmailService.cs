@@ -17,7 +17,7 @@ public interface IEmployeeEmailService
     /// <param name="password">Generated password</param>
     /// <returns>Task representing the async operation</returns>
     Task SendWelcomeEmailAsync(
-        string employeeEmail,
+        string? employeeEmail,
         string employeeName,
         string username,
         string password);

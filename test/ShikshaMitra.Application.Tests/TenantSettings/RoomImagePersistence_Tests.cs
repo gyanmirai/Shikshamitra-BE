@@ -36,7 +36,7 @@ public class RoomImagePersistence_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		});
 		var created = await service.CreateAsync(input);
 		created.HasImage.ShouldBeTrue();
-		(await service.GetImageAsync(created.Id))!.Content.ShouldBe(input.Image.Content);
+		(await service.GetImageAsync(created.Id))!.Content.ShouldBe(input.Image.ShouldNotBeNull().Content);
 		input.Image = null;
 		(await service.UpdateAsync(created.Id, input)).HasImage.ShouldBeTrue();
 		input.Image = new RoomImageInput { FileName = "room.jpg", Content = [255, 216, 255, 224, 0, 0, 0, 0, 0, 0, 0, 0] };

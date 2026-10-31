@@ -38,7 +38,7 @@ public class FontService(IHttpClientFactory httpClientFactory) : IFontService, I
 		response.EnsureSuccessStatusCode();
 		var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
 		stream.Seek(0, SeekOrigin.Begin);
-		FontManager.RegisterFont(stream);
+		FontManager.RegisterFontFromStream(stream);
 		_loadedFonts.Add(uri.AbsoluteUri);
 	}
 }

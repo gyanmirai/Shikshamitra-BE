@@ -15,6 +15,9 @@ public class GradeRange : Entity<Guid>
 
     private GradeRange()
     {
+        // EF materializes these required columns after this ORM constructor.
+        Grade = null!;
+
         /* This constructor is for deserialization / ORM purpose */
     }
 

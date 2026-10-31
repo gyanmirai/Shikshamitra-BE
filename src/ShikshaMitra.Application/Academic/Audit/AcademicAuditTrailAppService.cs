@@ -133,7 +133,7 @@ public partial class AcademicAuditTrailAppService(
 					|| x.Field.EndsWith("CreatorId", StringComparison.OrdinalIgnoreCase)
 					|| x.Field.EndsWith("ModifierId", StringComparison.OrdinalIgnoreCase))
 				.SelectMany(x => new[] { x.OldValue, x.NewValue })
-				.Where(x => Guid.TryParse(x, out _)).Select(Guid.Parse))
+				.Where(x => Guid.TryParse(x, out _)).Select(value => Guid.Parse(value!)))
 			.Distinct().ToList();
 		if (userIds.Count == 0) return;
 

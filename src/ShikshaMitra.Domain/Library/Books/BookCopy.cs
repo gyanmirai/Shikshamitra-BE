@@ -19,7 +19,11 @@ public class BookCopy : Entity<Guid>
 
     public string? Remarks { get; set; }
 
-    protected BookCopy() { }
+    protected BookCopy()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        AccessionNumber = null!;
+    }
 
     public BookCopy(Guid id, Guid bookId, int copyNumber, string accessionNumber, Guid sectionId, Guid shelfId)
         : base(id)

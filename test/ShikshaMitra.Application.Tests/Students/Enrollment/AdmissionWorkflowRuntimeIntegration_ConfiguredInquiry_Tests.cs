@@ -12,6 +12,129 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Fact]
+	public Task Inquiry_publication_rejects_alias_only_identity_without_rewriting_the_draft() => RunCertificationScenarioAsync(async () =>
+	{
+		var form = new AdmissionFormDefinition(Guid.NewGuid(), TestTenantId, "Unmapped legacy inquiry", $"BINDING_{Guid.NewGuid():N}"[..25], AdmissionFormLayoutType.SinglePage, purpose: AdmissionFormPurpose.Inquiry);
+		var section = new AdmissionFormSectionDefinition(Guid.NewGuid(), form.Id, "DETAILS", "Details", 0, null);
+		await GetRequiredService<IRepository<AdmissionFormDefinition, Guid>>().InsertAsync(form, false);
+		await GetRequiredService<IRepository<AdmissionFormSectionDefinition, Guid>>().InsertAsync(section, false);
+		var fields = new[]
+		{
+			new AdmissionFormFieldDefinition(Guid.NewGuid(), form.Id, section.Id, "APPLICANT_FIRST_NAME", "Full Name", AdmissionFormFieldType.Text, AdmissionFormBindingType.Custom, "FIELD_1", true, false, 0, null, null, null, null, null),
+			new AdmissionFormFieldDefinition(Guid.NewGuid(), form.Id, section.Id, "PARENT", "Parent name", AdmissionFormFieldType.Text, AdmissionFormBindingType.System, "Guardian.FirstName", true, false, 1, null, null, null, null, null),
+			new AdmissionFormFieldDefinition(Guid.NewGuid(), form.Id, section.Id, "PHONE", "Parent mobile", AdmissionFormFieldType.Phone, AdmissionFormBindingType.System, "Guardian.Mobile", true, false, 2, null, null, null, null, null)
+		};
+		await GetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>().InsertManyAsync(fields, true);
+		var service = GetRequiredService<IAdmissionFormAppService>();
+		var validation = await service.ValidateAsync(form.Id);
+		validation.Errors.ShouldContain(AdmissionInquiryConfiguredFields.ExplicitMapping);
+		validation.Errors.ShouldContain(AdmissionInquiryConfiguredFields.MissingStudent);
+		var before = await service.GetAsync(form.Id);
+		(await Should.ThrowAsync<BusinessException>(() => service.PublishAsync(form.Id, before.ConcurrencyStamp))).Code.ShouldBe(AdmissionFormErrorCodes.InvalidDefinition);
+		var after = await service.GetAsync(form.Id);
+		after.Status.ShouldBe(AdmissionFormStatus.Draft);
+		after.Sections.SelectMany(item => item.Fields).Count().ShouldBe(3);
+		after.Sections.SelectMany(item => item.Fields).Single(field => field.Code == "APPLICANT_FIRST_NAME").BindingKey.ShouldBe("FIELD_1");
+	});
+
+	[Theory]
+	[InlineData("FIELD_1", false)]
+	[InlineData("APPLICANT_FIRST_NAME", true)]
+	public Task Existing_published_inquiry_create_and_edit_preserve_explicit_or_legacy_student_mapping(string studentCode, bool legacyBinding) => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateConfiguredInquiryOfferingAsync(requiredIdentity: false, studentCode: studentCode, legacyStudentBinding: legacyBinding);
+		List<AdmissionFormValueDto> Answers(string student) => ConfiguredInquiryAnswers().Select(answer => answer.FieldCode == "CHILD" ? new AdmissionFormValueDto { FieldCode = studentCode, ValueJson = JsonSerializer.Serialize(student) } : answer).ToList();
+		var service = GetRequiredService<IAdmissionInquiryAppService>();
+		var created = await service.CreateAsync(new CreateAdmissionInquiryDto
+		{
+			AdmissionCycleId = offering.AdmissionCycleId, AdmissionOfferingId = offering.Id,
+			BoardId = offering.BoardId, MediumId = offering.MediumId, StandardId = offering.StandardId, FormValues = Answers("Mapped student")
+		});
+		created = await service.GetAsync(created.Id);
+		created.ApplicantName.ShouldBe("Mapped student");
+		created.FormDefinition!.Sections.SelectMany(section => section.Fields).Count().ShouldBe(4);
+		created.FormValues.Single(answer => answer.FieldCode == studentCode).ValueJson.ShouldBe(JsonSerializer.Serialize("Mapped student"));
+		var updated = await service.UpdateAsync(created.Id, new UpdateAdmissionInquiryDto
+		{
+			ApplicantName = created.ApplicantName, Phone = created.NormalizedPhone, Email = created.Email,
+			Source = created.Source, PreferredLanguageCode = created.PreferredLanguageCode, ConcurrencyStamp = created.ConcurrencyStamp, FormValues = Answers("Edited student")
+		});
+		updated.ApplicantName.ShouldBe("Edited student");
+		updated.FormValues.Single(answer => answer.FieldCode == studentCode).ValueJson.ShouldBe(JsonSerializer.Serialize("Edited student"));
+	});
+
+	[Fact]
+	public Task Partial_inquiry_rejects_only_the_actual_missing_parent_name_and_does_not_trust_unconfigured_input() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateConfiguredInquiryOfferingAsync(requiredIdentity: false);
+		await RemoveInquiryParentNameAsync(offering, false);
+		var error = await Should.ThrowAsync<BusinessException>(() => GetRequiredService<IAdmissionInquiryAppService>().CreateAsync(new CreateAdmissionInquiryDto
+		{
+			AdmissionCycleId = offering.AdmissionCycleId, AdmissionOfferingId = offering.Id,
+			BoardId = offering.BoardId, MediumId = offering.MediumId, StandardId = offering.StandardId,
+			GuardianFirstName = "Unconfigured client name", FormValues = ConfiguredInquiryAnswers().Where(answer => answer.FieldCode != "ADULT").ToList()
+		}));
+		error.Code.ShouldBe(AdmissionErrorCodes.InquiryIdentityIncomplete);
+		error.Data["Fields"].ShouldBe("Guardian.FirstName");
+	});
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Existing_partial_inquiry_edit_preserves_trusted_parent_name_and_updates_owned_mobile(bool genericContact) => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateConfiguredInquiryOfferingAsync(genericContact: genericContact, requiredIdentity: false);
+		var service = GetRequiredService<IAdmissionInquiryAppService>();
+		var created = await service.CreateAsync(new CreateAdmissionInquiryDto
+		{
+			AdmissionCycleId = offering.AdmissionCycleId, AdmissionOfferingId = offering.Id,
+			BoardId = offering.BoardId, MediumId = offering.MediumId, StandardId = offering.StandardId, FormValues = ConfiguredInquiryAnswers()
+		});
+		await RemoveInquiryParentNameAsync(offering, genericContact);
+		created = await service.GetAsync(created.Id);
+		var updated = await service.UpdateAsync(created.Id, new UpdateAdmissionInquiryDto
+		{
+			ApplicantName = created.ApplicantName, Phone = created.NormalizedPhone, Email = created.Email,
+			Source = created.Source, PreferredLanguageCode = created.PreferredLanguageCode, ConcurrencyStamp = created.ConcurrencyStamp,
+			FormValues = ConfiguredInquiryAnswers(mobile: "9876543211").Where(answer => answer.FieldCode != "ADULT").ToList()
+		});
+		updated.GuardianFirstName.ShouldBe("Amit Shah");
+		updated.NormalizedPhone.ShouldBe("9876543211");
+	});
+
+	[Fact]
+	public Task Partial_inquiry_can_reuse_a_verified_saved_parent_when_name_question_is_absent() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateConfiguredInquiryOfferingAsync(requiredIdentity: false);
+		var service = GetRequiredService<IAdmissionInquiryAppService>();
+		var first = await service.CreateAsync(new CreateAdmissionInquiryDto
+		{
+			AdmissionCycleId = offering.AdmissionCycleId, AdmissionOfferingId = offering.Id,
+			BoardId = offering.BoardId, MediumId = offering.MediumId, StandardId = offering.StandardId, FormValues = ConfiguredInquiryAnswers()
+		});
+		await RemoveInquiryParentNameAsync(offering, false);
+		var answers = ConfiguredInquiryAnswers().Where(answer => answer.FieldCode != "ADULT").ToList();
+		answers.Single(answer => answer.FieldCode == "CHILD").ValueJson = "\"Another child\"";
+		var second = await service.CreateAsync(new CreateAdmissionInquiryDto
+		{
+			AdmissionCycleId = offering.AdmissionCycleId, AdmissionOfferingId = offering.Id,
+			BoardId = offering.BoardId, MediumId = offering.MediumId, StandardId = offering.StandardId, FormValues = answers,
+			ExistingFamilyId = first.FamilyId, ExistingParentApplicantId = first.ApplicantId, ParentRelationship = "father"
+		});
+		second = await service.GetAsync(second.Id);
+		second.FamilyId.ShouldBe(first.FamilyId);
+		second.GuardianFirstName.ShouldBe("Amit Shah");
+		second.NormalizedPhone.ShouldBe("9876543210");
+	});
+
+	private Task RemoveInquiryParentNameAsync(AdmissionOffering offering, bool genericContact) => WithUnitOfWorkAsync(async () =>
+	{
+		var fields = GetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>();
+		var definitions = await fields.GetListAsync(field => field.FormDefinitionId == offering.InquiryFormDefinitionId && field.BindingKey == (genericContact ? "Guardian.FirstName" : "Father.Name"));
+		foreach (var field in definitions) await fields.DeleteAsync(field, true);
+	});
+
 	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
@@ -252,7 +375,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await forms.GetAsync(form.Id)).Status.ShouldBe(AdmissionFormStatus.Draft);
 	});
 
-	private async Task<AdmissionOffering> CreateConfiguredInquiryOfferingAsync(bool includeEmail = true, bool genericContact = false, bool hiddenReadonlyEmail = false, bool requiredIdentity = true)
+	private async Task<AdmissionOffering> CreateConfiguredInquiryOfferingAsync(bool includeEmail = true, bool genericContact = false, bool hiddenReadonlyEmail = false, bool requiredIdentity = true, string studentCode = "CHILD", bool legacyStudentBinding = false)
 	{
 		var offering = await CreateOptionalIntakeOfferingAsync();
 		var form = new AdmissionFormDefinition(Guid.NewGuid(), TestTenantId, "Configured inquiry", $"CONFIGURED_{Guid.NewGuid():N}"[..25], AdmissionFormLayoutType.SinglePage, purpose: AdmissionFormPurpose.Inquiry);
@@ -271,7 +394,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		{
 			if (!includeEmail && code == "EMAIL") continue;
 			var key = genericContact ? binding switch { "Father.Name" => "Guardian.FirstName", "Father.Mobile" => "Guardian.Mobile", "Father.Email" => "Guardian.Email", _ => binding } : binding;
-			await GetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>().InsertAsync(new(Guid.NewGuid(), form.Id, section.Id, code, label, type, AdmissionFormBindingType.System, key, required && requiredIdentity, hiddenReadonlyEmail && code == "EMAIL", 0, null, null, null, null,
+			if (code == "CHILD" && legacyStudentBinding) key = "Legacy.StudentName";
+			await GetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>().InsertAsync(new(Guid.NewGuid(), form.Id, section.Id, code == "CHILD" ? studentCode : code, label, type, code == "CHILD" && legacyStudentBinding ? AdmissionFormBindingType.Custom : AdmissionFormBindingType.System, key, required && requiredIdentity, hiddenReadonlyEmail && code == "EMAIL", 0, null, null, null, null,
 				hiddenReadonlyEmail && code == "EMAIL" ? "{\"field\":\"SHOW_EMAIL\",\"operator\":\"equals\",\"value\":\"yes\"}" : null), false);
 		}
 		if (hiddenReadonlyEmail)

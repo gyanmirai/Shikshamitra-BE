@@ -105,6 +105,8 @@ public class StudentRecordFormProjection(StudentRecordCurrentRuleReader currentR
 			}
 			foreach (var field in Fields(source))
 			{
+				// A retained question may never have had a submitted answer; the current form still includes it.
+				source.CurrentValues.TryAdd(field.Code, JsonSerializer.SerializeToElement<object?>(null));
 				if (source.FormMaskedFieldCodes.Contains(field.Code))
 				{
 					field.DefaultValue = null;

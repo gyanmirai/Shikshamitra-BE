@@ -12,11 +12,34 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.Attendance;
 
 [RemoteService(false)]
-public class AttendanceReportService(AttendanceRosterService rosters, AttendanceApplicabilityResolver applicability,
-	IRepository<AcademicYear, Guid> years,
-	IAttendanceDayRepository days, IAttendanceEntryRepository entries, IStudentRepository students,
-	StudentScopeAccessService scope) : ApplicationService, ITransientDependency
+public class AttendanceReportService : ApplicationService, ITransientDependency
 {
+	private readonly AttendanceApplicabilityResolver applicability;
+	private readonly IRepository<AcademicYear, Guid> years;
+	private readonly IAttendanceDayRepository days;
+	private readonly IAttendanceEntryRepository entries;
+	private readonly IStudentRepository students;
+	private readonly StudentScopeAccessService scope;
+
+	public AttendanceReportService(
+		AttendanceRosterService rosters,
+		AttendanceApplicabilityResolver applicability,
+		IRepository<AcademicYear, Guid> years,
+		IAttendanceDayRepository days,
+		IAttendanceEntryRepository entries,
+		IStudentRepository students,
+		StudentScopeAccessService scope
+	)
+	{
+		_ = rosters;
+		this.applicability = applicability;
+		this.years = years;
+		this.days = days;
+		this.entries = entries;
+		this.students = students;
+		this.scope = scope;
+	}
+
 	public async Task<(DateTime Start, DateTime End)> RangeAsync(Guid yearId, DateTime start, DateTime end)
 	{
 		var year = await AsyncExecuter.SingleOrDefaultAsync((await years.GetQueryableAsync()).Where(y => y.Id == yearId)

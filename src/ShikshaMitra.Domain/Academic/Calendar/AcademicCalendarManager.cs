@@ -137,7 +137,7 @@ public class AcademicCalendarManager : DomainService, IAcademicCalendarManager
                         description: "System generated weekend holiday",
                         appliesToAll: true
                     );
-                    calendar.Days.Add(day);
+                    calendar.Days!.Add(day); // Every AcademicCalendar constructor initializes Days.
                 }
             }
         }

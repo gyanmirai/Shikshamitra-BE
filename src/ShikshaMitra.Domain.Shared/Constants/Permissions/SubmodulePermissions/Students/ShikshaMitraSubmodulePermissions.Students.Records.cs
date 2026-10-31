@@ -9,6 +9,25 @@ public static partial class ShikshaMitraSubmodulePermissions
 {
 	public static partial class Students
 	{
+		/// <summary>Medium-wise houses, membership, and student leadership.</summary>
+		public static class Records_HouseManagement
+		{
+			private const string SubmoduleName = $"{ModuleName}.Records.HouseManagement";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Records.HouseManagement";
+
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Delete = $"{SubmoduleName}.Delete";
+
+			public static readonly string[] All = { View, Add, Delete };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
 		/// <summary>
 		/// Student Records - Student List permissions
 		/// </summary>

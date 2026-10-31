@@ -70,6 +70,7 @@ public static class StudentFamilyContactSelection
 			{
 				value.Remove("mainContactRelationship");
 				value.Remove("guardianRelationship");
+				value.Remove("guardianResponsibilityConfirmed");
 			}
 			return !JsonNode.DeepEquals(before, after);
 		}

@@ -9,7 +9,7 @@ public class SectionDto
 	public string? SectionName { get; set; }
 	public int NumberOfShelf { get; set; }
 
-	public List<ShelfDetailDto> ShelfDetails { get; set; }
+	public List<ShelfDetailDto> ShelfDetails { get; set; } = null!; // The response mapper populates these members after construction.
 }
 
 public class ShelfDetailDto

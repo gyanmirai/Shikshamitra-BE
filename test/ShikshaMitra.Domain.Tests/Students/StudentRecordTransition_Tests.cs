@@ -92,7 +92,7 @@ public class StudentRecordTransition_Tests
 		OnboardingRuleConfiguration.Boolean(rule.Value, "requireApproval").ShouldBeTrue();
 		var item = Request(0); item.CaptureOnboardingRollRule(rule.Value.GetRawText());
 		Should.Throw<BusinessException>(() => item.CaptureOnboardingRollRule("null"));
-		item.Schedule(); item.GetOnboardingRollRule().ShouldContain("target");
+		item.Schedule(); item.GetOnboardingRollRule().ShouldNotBeNull().ShouldContain("target");
 	}
 	[Fact] public void Pending_renewal_cancellation_requires_coordinator_proof_and_preserves_link()
 	{

@@ -16,11 +16,11 @@ public class StudentSubmissionEntity : FullAuditedEntity<Guid>, IMultiTenant, IH
 
 	// For Homework submissions (null when this is an assignment submission)
 	public Guid? HomeworkAssignmentId { get; set; }
-	public HomeworkAssignmentEntity HomeworkAssignment { get; set; }
+	public HomeworkAssignmentEntity? HomeworkAssignment { get; set; }
 
 	// For Assignment submissions (nullable for backward compatibility)
 	public Guid? AssignmentId { get; set; }
-	public AssignmentEntity Assignment { get; set; }
+	public AssignmentEntity? Assignment { get; set; }
 
 	public Guid StudentId { get; set; }
 	public Guid DivisionId { get; set; }

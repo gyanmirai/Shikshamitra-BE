@@ -19,6 +19,7 @@ public class AdmissionInquiryRuntimeService(
 	public async Task UpdateStatusAsync(AdmissionInquiry inquiry, AdmissionInquiryStatus status, string? reason)
 	{
 		EnsureValidStatusChange(inquiry, status, reason);
+		if (status == AdmissionInquiryStatus.Interested) await EnsurePrimaryContactReadyAsync(inquiry);
 		if (inquiry.Status == status) return;
 		var state = await EnsureManagementAsync(inquiry);
 		if (state != null)
@@ -69,6 +70,7 @@ public class AdmissionInquiryRuntimeService(
 
 	public async Task EnsureCanStartApplicationAsync(Guid offeringId, AdmissionInquiry? inquiry)
 	{
+		if (inquiry != null) await EnsurePrimaryContactReadyAsync(inquiry);
 		if (inquiry != null && inquiry.Status != AdmissionInquiryStatus.Interested)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.QualificationRequired,
 				"Mark the inquiry Interested before moving to the next stage.");
@@ -83,6 +85,12 @@ public class AdmissionInquiryRuntimeService(
 		}
 		if (await EnsureManagementAsync(inquiry) == null)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
+	}
+
+	private async Task EnsurePrimaryContactReadyAsync(AdmissionInquiry inquiry)
+	{
+		if (inquiry.ApplicantId.HasValue)
+			AdmissionPrimaryContactSelection.EnsureReady(await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionApplicant, Guid>>().GetAsync(inquiry.ApplicantId.Value));
 	}
 
 	public async Task<AdmissionInquiryManagement?> EnsureStageCompleteAsync(AdmissionApplication application,

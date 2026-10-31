@@ -6,7 +6,7 @@ namespace ShikshaMitra.Finance.Fees.Settings.ConcessionType.Dtos;
 
 public class ConcessionTypeResponse : EntityDto<Guid>
 {
-	public string Name { get; set; }
+	public string Name { get; set; } = null!; // The response mapper populates these members after construction.
 	public bool IsDocumentRequired { get; set; }
 	public List<ConcessionTypeDocumentDto> Documents { get; set; } = new List<ConcessionTypeDocumentDto>();
 	public string? Description { get; set; }

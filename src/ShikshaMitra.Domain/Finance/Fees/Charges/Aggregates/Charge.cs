@@ -47,6 +47,9 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private Charge()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		PurposeDescription = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 

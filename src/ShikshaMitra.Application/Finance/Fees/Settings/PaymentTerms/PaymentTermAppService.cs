@@ -137,7 +137,7 @@ public partial class PaymentTermAppService(
 			from detail in structure.FeeStructureDetails
 			join standard in standards on structure.StandardId equals standard.StandardId
 			where detail.PaymentTermId.HasValue && Enumerable.Contains(ids, detail.PaymentTermId.Value)
-			select new { TermId = detail.PaymentTermId.Value, Assignment = new PaymentTermUsageAssignmentDto {
+			select new { TermId = detail.PaymentTermId!.Value, Assignment = new PaymentTermUsageAssignmentDto {
 				ClassId = standard.StandardId!.Value, ClassName = standard.Name, FeeStructureId = structure.Id,
 				FeeStructureName = structure.Name, FeeHeadId = detail.FeeHeadId, FeeHeadName = detail.FeeHead.Name,
 				VersionId = detail.PaymentTermVersionId

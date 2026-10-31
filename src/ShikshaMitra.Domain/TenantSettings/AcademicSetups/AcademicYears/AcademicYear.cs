@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Onboarding.AcademicYears;
+﻿using System.Diagnostics.CodeAnalysis;
+using ShikshaMitra.Onboarding.AcademicYears;
 using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -15,6 +16,9 @@ public class AcademicYear : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private AcademicYear()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Name = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -32,6 +36,7 @@ public class AcademicYear : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 
+	[MemberNotNull(nameof(Name))]
 	internal AcademicYear SetName(string name)
 	{
 		Name = Check.NotNullOrWhiteSpace(name, nameof(name), maxLength: AcademicYearConsts.MaxNameLength);

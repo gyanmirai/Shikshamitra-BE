@@ -259,7 +259,7 @@ public partial class ChargeAppService
 				ProcessedCount = approvedLines.Count,
 				RemainingPendingCount = await chargeRepository.CountAsync(
 					c => c.ChargeRequestId == chargeId && c.Status == ChargeStatus.Pending),
-				ApprovedBy = currentUser.Id.Value,
+				ApprovedBy = currentUser.Id!.Value,
 				ApprovedByName = currentUser.Name ?? currentUser.UserName ?? string.Empty,
 				ApprovedOn = Clock.Now,
 				ApprovalNotes = input.Reason

@@ -199,7 +199,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var password = user.PasswordHash;
 		workspace = await service.UpdateCredentialsEmailAsync(workspace.CaseId, EmailEdit(workspace, owner, "cancelled@example.test"));
 		user = await WithUnitOfWorkAsync(() => manager.GetByIdAsync(link.UserId));
-		using var state = System.Text.Json.JsonDocument.Parse(user.ExtraProperties["StudentPortalEmailChange"].ToString()!);
+		using var state = System.Text.Json.JsonDocument.Parse(user.ExtraProperties["StudentPortalEmailChange"].ShouldNotBeNull().ToString()!);
 		var requestId = state.RootElement.GetProperty("RequestId").GetGuid();
 		var input = EmailEdit(workspace, workspace.Recipients.Single(x => x.Relationship == "self"), string.Empty);
 		input.CancelPendingChange = true;
@@ -233,7 +233,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	{
 		var manager = GetRequiredService<IdentityUserManager>();
 		var user = await WithUnitOfWorkAsync(() => manager.GetByIdAsync(userId));
-		using var state = System.Text.Json.JsonDocument.Parse(user.ExtraProperties["StudentPortalEmailChange"].ToString()!);
+		using var state = System.Text.Json.JsonDocument.Parse(user.ExtraProperties["StudentPortalEmailChange"].ShouldNotBeNull().ToString()!);
 		var requestId = state.RootElement.GetProperty("RequestId").GetGuid();
 		var provider = GetRequiredService<IServiceProvider>();
 		var sender = Substitute.For<IEmailSender>();

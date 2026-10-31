@@ -18,7 +18,7 @@ public class TransactionCreateRequest
 	public Guid CategoryId { get; set; }
 
 	[Required]
-	public string Name { get; set; }
+	public string Name { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
 	public List<string> CategoryTags { get; set; } = [];
 
@@ -42,7 +42,7 @@ public class TransactionUpdateRequest
 	public Guid CategoryId { get; set; }
 
 	[Required]
-	public string Name { get; set; }
+	public string Name { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
 	public List<string> CategoryTags { get; set; } = [];
 

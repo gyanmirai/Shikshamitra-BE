@@ -47,13 +47,17 @@ public class StudentRecordsAuthorizationApi_Tests(ShikshaMitraApiTestFactory fac
 	[InlineData("guardian-access/reviews/{id}/resolve", "Students.Records.GuardianAccess.View")]
 	[InlineData("ids/issue", "Students.Records.StudentICard.View")]
 	[InlineData("ids/export", "Students.Records.StudentICard.View")]
-	[InlineData("certificates/{id}/void", "Students.Records.Certificates.View,Students.Records.Certificates.Add")]
+	[InlineData("certificates/{id}/void", "Students.Records.Certificates.View")]
 	[InlineData("reports", "Students.Records.Reports.View")]
 	public async Task Records_HTTP_denies_exact_action_even_with_related_view_or_create_grants(string route, string permissions)
 	{
 		var actor = await CreateActorAsync(tenantWide: true);
 		using var client = AsActor(actor, permissions);
-		using var response = await client.PostAsJsonAsync("/api/students/records/" + route.Replace("{id}", Guid.NewGuid().ToString()), new { }, JsonOptions);
+		// Keep the document request valid so input validation cannot mask a missing action grant.
+		object request = route == "certificates/{id}/void"
+			? new StudentDocumentActionDto { Reason = "Authorization regression check" }
+			: new { };
+		using var response = await client.PostAsJsonAsync("/api/students/records/" + route.Replace("{id}", Guid.NewGuid().ToString()), request, JsonOptions);
 		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
 	}
 

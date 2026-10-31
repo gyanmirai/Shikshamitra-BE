@@ -8,7 +8,7 @@ public class EmployeeBasicDto
 	public string Kind { get; set; } = "Employee";
 	public string? Email { get; set; }
 	public int? Status { get; set; }
-	public string EmployeeCode { get; set; } = string.Empty;
-	public string FullName { get; set; } = string.Empty;
+	public string? EmployeeCode { get; set; } = string.Empty;
+	public string? FullName { get; set; } = string.Empty;
 	public string? Designation { get; set; }
 }

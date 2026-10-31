@@ -20,8 +20,8 @@ public partial class RoomAppService
 		if (!room.HasImage) return null;
 		return new RoomImageDto
 		{
-			ContentType = room.GetProperty<string>("RoomImageContentType"),
-			Content = await ImageBlobs.GetAllBytesAsync(room.GetProperty<string>("RoomImageBlob"))
+			ContentType = room.GetProperty<string>("RoomImageContentType")!,
+			Content = await ImageBlobs.GetAllBytesAsync(room.GetProperty<string>("RoomImageBlob")!)
 		};
 	}
 

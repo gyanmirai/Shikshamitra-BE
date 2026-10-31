@@ -14,28 +14,70 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
-public class AdmissionOfferingConfigurationValidator(
-	IRepository<AdmissionOffering, Guid> offeringRepository,
-	IRepository<AdmissionApplication, Guid> applicationRepository,
-	IRepository<AdmissionCampus, Guid> campusRepository,
-	IRepository<AdmissionCycle, Guid> cycleRepository,
-	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
-	IRepository<AdmissionFormDefinition, Guid> formRepository,
-	IRepository<AdmissionIntakeProfile, Guid> intakeProfileRepository,
-	IRepository<AdmissionIntakeSetup, Guid> intakeSetupRepository,
-	IRepository<AdmissionWorkflowStageDefinition, Guid> workflowStageRepository,
-	IEducationBoardRepository boardRepository,
-	IEducationMediumRepository mediumRepository,
-	IEducationMediumStageRepository stageRepository,
-	IStandardRepository standardRepository,
-	AcademicOrganizationScopeAccessService scopeAccessService,
-	AdmissionEligibilityOfferingValidator eligibilityValidator,
-	AdmissionInquiryOfferingValidator inquiryValidator,
-	AdmissionInquiryPeopleService people,
-	AdmissionReviewOfferingValidator reviewValidator,
-	AdmissionOfferingWorkflowConfigurationResolver workflowConfiguration)
+public class AdmissionOfferingConfigurationValidator
 	: ApplicationService, ITransientDependency
 {
+	private readonly IRepository<AdmissionOffering, Guid> offeringRepository;
+	private readonly IRepository<AdmissionApplication, Guid> applicationRepository;
+	private readonly IRepository<AdmissionCampus, Guid> campusRepository;
+	private readonly IRepository<AdmissionCycle, Guid> cycleRepository;
+	private readonly IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository;
+	private readonly IRepository<AdmissionFormDefinition, Guid> formRepository;
+	private readonly IRepository<AdmissionIntakeProfile, Guid> intakeProfileRepository;
+	private readonly IRepository<AdmissionWorkflowStageDefinition, Guid> workflowStageRepository;
+	private readonly IEducationBoardRepository boardRepository;
+	private readonly IEducationMediumRepository mediumRepository;
+	private readonly IEducationMediumStageRepository stageRepository;
+	private readonly IStandardRepository standardRepository;
+	private readonly AcademicOrganizationScopeAccessService scopeAccessService;
+	private readonly AdmissionEligibilityOfferingValidator eligibilityValidator;
+	private readonly AdmissionInquiryOfferingValidator inquiryValidator;
+	private readonly AdmissionReviewOfferingValidator reviewValidator;
+	private readonly AdmissionOfferingWorkflowConfigurationResolver workflowConfiguration;
+
+	public AdmissionOfferingConfigurationValidator(
+		IRepository<AdmissionOffering, Guid> offeringRepository,
+		IRepository<AdmissionApplication, Guid> applicationRepository,
+		IRepository<AdmissionCampus, Guid> campusRepository,
+		IRepository<AdmissionCycle, Guid> cycleRepository,
+		IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
+		IRepository<AdmissionFormDefinition, Guid> formRepository,
+		IRepository<AdmissionIntakeProfile, Guid> intakeProfileRepository,
+		IRepository<AdmissionIntakeSetup, Guid> intakeSetupRepository,
+		IRepository<AdmissionWorkflowStageDefinition, Guid> workflowStageRepository,
+		IEducationBoardRepository boardRepository,
+		IEducationMediumRepository mediumRepository,
+		IEducationMediumStageRepository stageRepository,
+		IStandardRepository standardRepository,
+		AcademicOrganizationScopeAccessService scopeAccessService,
+		AdmissionEligibilityOfferingValidator eligibilityValidator,
+		AdmissionInquiryOfferingValidator inquiryValidator,
+		AdmissionInquiryPeopleService people,
+		AdmissionReviewOfferingValidator reviewValidator,
+		AdmissionOfferingWorkflowConfigurationResolver workflowConfiguration
+	)
+	{
+		this.offeringRepository = offeringRepository;
+		this.applicationRepository = applicationRepository;
+		this.campusRepository = campusRepository;
+		this.cycleRepository = cycleRepository;
+		this.workflowRepository = workflowRepository;
+		this.formRepository = formRepository;
+		this.intakeProfileRepository = intakeProfileRepository;
+		_ = intakeSetupRepository;
+		this.workflowStageRepository = workflowStageRepository;
+		this.boardRepository = boardRepository;
+		this.mediumRepository = mediumRepository;
+		this.stageRepository = stageRepository;
+		this.standardRepository = standardRepository;
+		this.scopeAccessService = scopeAccessService;
+		this.eligibilityValidator = eligibilityValidator;
+		this.inquiryValidator = inquiryValidator;
+		_ = people;
+		this.reviewValidator = reviewValidator;
+		this.workflowConfiguration = workflowConfiguration;
+	}
+
 	private static readonly HashSet<string> IncompleteConfigurationCodes =
 	[
 		AdmissionOfferingValidationCodes.CycleUnavailable,
@@ -54,14 +96,17 @@ public class AdmissionOfferingConfigurationValidator(
 		var existing = excludingOfferingId.HasValue ? await offeringRepository.FindAsync(excludingOfferingId.Value) : null;
 		var preserveRouting = existing != null && await applicationRepository.AnyAsync(application => application.AdmissionOfferingId == existing.Id);
 		await workflowConfiguration.ResolveAsync(input, existing, preserveRouting);
-		return await ValidateCoreAsync(admissionCycleId, input, excludingOfferingId, enforceUserScope: true);
+		var changedJourney = existing == null || existing.WorkflowDefinitionId != input.WorkflowDefinitionId ||
+			existing.InquiryFormDefinitionId != input.InquiryFormDefinitionId || existing.ApplicationFormDefinitionId != input.ApplicationFormDefinitionId ||
+			existing.EntryMode != input.EntryMode;
+		return await ValidateCoreAsync(admissionCycleId, input, excludingOfferingId, enforceUserScope: true, validateJourneyIdentity: changedJourney);
 	}
 
 	internal Task<AdmissionOfferingValidationResult> ValidateResolvedAsync(Guid admissionCycleId, AdmissionOfferingWriteDto input) =>
 		ValidateCoreAsync(admissionCycleId, input, null, enforceUserScope: true);
 
 	private async Task<AdmissionOfferingValidationResult> ValidateCoreAsync(Guid admissionCycleId,
-		AdmissionOfferingWriteDto input, Guid? excludingOfferingId, bool enforceUserScope)
+		AdmissionOfferingWriteDto input, Guid? excludingOfferingId, bool enforceUserScope, bool validateJourneyIdentity = true)
 	{
 		var errors = new List<AdmissionOfferingValidationError>();
 		var cycle = await cycleRepository.FindAsync(admissionCycleId);
@@ -83,6 +128,7 @@ public class AdmissionOfferingConfigurationValidator(
 			errors.Add(Error(AdmissionOfferingValidationCodes.RteRequiresDirectRegistration,
 				"RTE offerings must start with Registration, without an Inquiry."));
 		await ValidatePublishedConfigurationAsync(input, errors);
+		if (validateJourneyIdentity) await ValidateJourneyIdentityAsync(input, errors);
 		await ValidateAssessmentProfilesAsync(input, errors);
 		await ValidateIntakeProfilesAsync(cycle, input, errors);
 		errors.AddRange(await inquiryValidator.ValidateAsync(cycle, input));
@@ -94,11 +140,14 @@ public class AdmissionOfferingConfigurationValidator(
 	public Task<AdmissionOfferingValidationResult> ValidateStoredAsync(AdmissionOffering offering) =>
 		ValidateStoredCoreAsync(offering, enforceUserScope: true);
 
+	public Task<AdmissionOfferingValidationResult> ValidateForActivationAsync(AdmissionOffering offering) =>
+		ValidateStoredCoreAsync(offering, enforceUserScope: true, validateJourneyIdentity: true);
+
 	// The public inquiry caller has already resolved the offering under its verified link's tenant and cycle.
 	internal Task<AdmissionOfferingValidationResult> ValidateStoredForPublicAsync(AdmissionOffering offering) =>
 		ValidateStoredCoreAsync(offering, enforceUserScope: false);
 
-	private Task<AdmissionOfferingValidationResult> ValidateStoredCoreAsync(AdmissionOffering offering, bool enforceUserScope) =>
+	private Task<AdmissionOfferingValidationResult> ValidateStoredCoreAsync(AdmissionOffering offering, bool enforceUserScope, bool validateJourneyIdentity = false) =>
 		ValidateCoreAsync(offering.AdmissionCycleId, new CreateAdmissionOfferingDto
 		{
 			Name = offering.Name,
@@ -119,7 +168,7 @@ public class AdmissionOfferingConfigurationValidator(
 			InquiryIntakeProfileId = offering.InquiryIntakeProfileId,
 			CounsellorAssignmentProfileId = offering.CounsellorAssignmentProfileId,
 			IsActive = offering.IsActive
-		}, offering.Id, enforceUserScope);
+		}, offering.Id, enforceUserScope, validateJourneyIdentity);
 
 	public static void EnsureCanSave(AdmissionOfferingValidationResult validation, bool isActive)
 	{
@@ -263,6 +312,65 @@ public class AdmissionOfferingConfigurationValidator(
 					"Direct Registration needs questions in its Registration form because no Inquiry supplies inherited questions.", activationOnly: true));
 		}
 	}
+
+	private async Task ValidateJourneyIdentityAsync(AdmissionOfferingWriteDto input, ICollection<AdmissionOfferingValidationError> errors)
+	{
+		if (!input.ApplicationFormDefinitionId.HasValue) return;
+		var registrationEntity = await formRepository.FindAsync(input.ApplicationFormDefinitionId.Value);
+		if (registrationEntity is not { Status: AdmissionFormStatus.Published, Purpose: AdmissionFormPurpose.Registration }) return;
+		var inheritance = LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>();
+		var registration = await inheritance.ReadDefinitionAsync(registrationEntity.Id);
+		var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		if (input.EntryMode is AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both && input.InquiryFormDefinitionId.HasValue)
+		{
+			var inquiryEntity = await formRepository.FindAsync(input.InquiryFormDefinitionId.Value);
+			if (inquiryEntity is { Status: AdmissionFormStatus.Published, Purpose: AdmissionFormPurpose.Inquiry })
+			{
+				var inquiry = await inheritance.ReadDefinitionAsync(inquiryEntity.Id);
+				var effective = registration;
+				if (registration.Inheritance?.Enabled == true)
+				{
+					var preview = AdmissionFormInheritanceService.Compose(registration, inquiry, requireApprovedSource: true);
+					if (!preview.IsValid)
+					{
+						errors.Add(Error(AdmissionFormInheritanceErrorCodes.IncompatibleSource,
+							string.Join("; ", preview.Issues.Select(issue => issue.Message)), activationOnly: true));
+						return;
+					}
+					effective = preview.Definition;
+				}
+				missing.UnionWith(AdmissionJourneyIdentityConfiguration.MissingBindings(ToSchema(effective), InquiryIdentitySchema(inquiry)));
+			}
+		}
+		if (input.EntryMode is AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both)
+			missing.UnionWith(AdmissionJourneyIdentityConfiguration.MissingBindings(ToSchema(registration), null,
+				AdmissionJourneyIdentityConfiguration.DirectEntryCapturedBindings));
+		if (missing.Count > 0)
+			errors.Add(Error(AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete,
+				"Before activating this Offering, configure required, reachable student identity fields across its Inquiry and Registration journey: " +
+				string.Join(", ", AdmissionJourneyIdentityConfiguration.CoreBindings.Where(missing.Contains)) + ". A full-name question does not replace separate first name and surname fields. Keep a full-name reference read-only when collecting separate name parts.", activationOnly: true));
+	}
+
+	private static AdmissionFormSchema InquiryIdentitySchema(AdmissionFormDto inquiry)
+	{
+		var schema = ToSchema(inquiry);
+		var fields = AdmissionEffectiveFormResolver.MaterializeFields(inquiry);
+		foreach (var key in AdmissionJourneyIdentityConfiguration.CoreBindings)
+		{
+			var captured = AdmissionInquiryConfiguredFields.Find(fields, key);
+			// Inquiry's historical structured name and DOB aliases are still read by its
+			// capture service. Arbitrary custom questions (including Gender aliases) are not.
+			if (captured == null || key == "Applicant.Gender" &&
+				(captured.BindingType != AdmissionFormBindingType.System || captured.BindingKey != key)) continue;
+			var source = schema.Sections.SelectMany(section => section.Fields).Single(field => field.Id == captured.Id);
+			source.BindingType = AdmissionFormBindingType.System;
+			source.BindingKey = key;
+		}
+		return schema;
+	}
+
+	private static AdmissionFormSchema ToSchema(AdmissionFormDto form) =>
+		JsonSerializer.Deserialize<AdmissionFormSchema>(JsonSerializer.Serialize(form))!;
 
 	private async Task ValidateAssessmentProfilesAsync(AdmissionOfferingWriteDto input, ICollection<AdmissionOfferingValidationError> errors)
 	{

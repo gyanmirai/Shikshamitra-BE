@@ -14,18 +14,41 @@ using Volo.Abp.Linq;
 namespace ShikshaMitra.Finance.Reports.Builders;
 
 [Volo.Abp.DependencyInjection.ExposeServices(typeof(IFinanceReportBuilder))]
-public class FeeRegisterAllStudentBuilder(
-    FinanceReportPayerQueryService payerService,
-    IRepository<FeeRecordMetadata, Guid> feeRecordRepository,
-    IRepository<PaymentMethodRecord, Guid> paymentMethodRepository,
-    IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
-    IRepository<DueFee, Guid> dueFeeRepository,
-    IRepository<FeeHead, Guid> feeHeadRepository,
-    IRepository<Standard, Guid> standardRepository,
-    IRepository<Division, Guid> divisionRepository,
-    IAsyncQueryableExecuter asyncExecuter)
+public class FeeRegisterAllStudentBuilder
     : IFinanceReportBuilder, ITransientDependency
 {
+	private readonly FinanceReportPayerQueryService payerService;
+	private readonly IRepository<FeeRecordMetadata, Guid> feeRecordRepository;
+	private readonly IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository;
+	private readonly IRepository<DueFee, Guid> dueFeeRepository;
+	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
+	private readonly IRepository<Standard, Guid> standardRepository;
+	private readonly IRepository<Division, Guid> divisionRepository;
+	private readonly IAsyncQueryableExecuter asyncExecuter;
+
+	public FeeRegisterAllStudentBuilder(
+		FinanceReportPayerQueryService payerService,
+		IRepository<FeeRecordMetadata, Guid> feeRecordRepository,
+		IRepository<PaymentMethodRecord, Guid> paymentMethodRepository,
+		IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
+		IRepository<DueFee, Guid> dueFeeRepository,
+		IRepository<FeeHead, Guid> feeHeadRepository,
+		IRepository<Standard, Guid> standardRepository,
+		IRepository<Division, Guid> divisionRepository,
+		IAsyncQueryableExecuter asyncExecuter
+	)
+	{
+		this.payerService = payerService;
+		this.feeRecordRepository = feeRecordRepository;
+		_ = paymentMethodRepository;
+		this.allocationRepository = allocationRepository;
+		this.dueFeeRepository = dueFeeRepository;
+		this.feeHeadRepository = feeHeadRepository;
+		this.standardRepository = standardRepository;
+		this.divisionRepository = divisionRepository;
+		this.asyncExecuter = asyncExecuter;
+	}
+
     public string ReportType => FinanceReportTypes.FeeRegisterAllStudent;
 
     public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)

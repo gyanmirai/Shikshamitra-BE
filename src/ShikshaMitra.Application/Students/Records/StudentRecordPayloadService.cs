@@ -9,6 +9,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using ShikshaMitra.Students.Enrollments.Registrations;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Validation;
@@ -96,7 +97,23 @@ public class StudentRecordPayloadService(
 		}
 		catch (JsonException) { throw new BusinessException("Students:Records:InvalidPayload"); }
 	}
-	public Task ValidateImpactAsync(Guid studentId, string section, string json) => section == "placement" ? placement.ValidateImpactAsync(studentId, Deserialize<StudentRecordPlacementPayload>(json)) : Task.CompletedTask;
+	public async Task ValidateImpactAsync(Guid studentId, string section, string json)
+	{
+		if (section == "placement") await placement.ValidateImpactAsync(studentId, Deserialize<StudentRecordPlacementPayload>(json));
+		if (section == "family")
+		{
+			var input = Deserialize<UpdateFamilyInfoDto>(json);
+			bool Present(ParentGuardianDto? person) => person != null &&
+				(!string.IsNullOrWhiteSpace(person.FullName) || !string.IsNullOrWhiteSpace(person.Email) || !string.IsNullOrWhiteSpace(person.ContactNo));
+			var implicitGuardian = input.GuardianResponsibilityConfirmed != true && input.MainContactRelationship == null &&
+				!Present(input.FatherDetails) && !Present(input.MotherDetails) && Present(input.GuardianDetails) &&
+				string.IsNullOrEmpty((await students.GetAsync(studentId)).GetProperty<string>(StudentFamilyContactSelection.SelectionKey));
+			if ((input.MainContactRelationship == "guardian" || implicitGuardian) && input.GuardianResponsibilityConfirmed != true &&
+				(await family.GetFamilyInfoAsync(studentId)).MainContactRelationship != "guardian")
+				throw new BusinessException("Students:Family:GuardianResponsibilityConfirmationRequired",
+					"Confirm that neither parent is handling school-contact responsibility before choosing Guardian.");
+		}
+	}
 	public async Task ApplyAsync(Guid studentId, string section, string json, Guid? changeRequestId = null)
 	{
 		using var applying = context.Begin(studentId, section);

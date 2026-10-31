@@ -72,6 +72,11 @@ public class AdmissionInquiryFormEditService(
 			if (validation.Errors.Count > 0)
 				throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed).WithData("Fields", string.Join(", ", validation.FieldErrors.Keys));
 			var mappingValues = new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase);
+			foreach (var hidden in definitions.Where(field => !visibleFieldCodes.Contains(field.Code)))
+			{
+				mappingValues.Remove(hidden.Code);
+				values.Remove(hidden.Code);
+			}
 			if (!changedOffering)
 				foreach (var hidden in definitions.Where(field => field.ReadOnly && !visibleFieldCodes.Contains(field.Code) && !values.ContainsKey(field.Code)))
 				{
@@ -79,7 +84,9 @@ public class AdmissionInquiryFormEditService(
 					if (original.TryGetValue(key, out var raw)) mappingValues[hidden.Code] = AdmissionApplicationValueConverter.Unwrap(raw);
 				}
 			var contact = AdmissionInquiryConfiguredFields.ResolveContact(definitions, mappingValues,
-				applicant == null ? null : AdmissionSiblingParentSelection.ReadRelationship(applicant), allowLegacySplitContact: !changedOffering);
+				applicant == null ? null : AdmissionPrimaryContactSelection.ReadRelationship(applicant), allowLegacySplitContact: !changedOffering, activeFieldCodes: visibleFieldCodes);
+			if (confirmedSibling && contact.Relationship != null && contact.Relationship != AdmissionSiblingParentSelection.ReadRelationship(applicant!))
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "The confirmed sibling parent cannot be replaced through an inquiry form.");
 			foreach (var definition in definitions.Where(field => field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey)))
 			{
 				if (applicant == null || !values.TryGetValue(definition.Code, out var value)) continue;
@@ -102,26 +109,38 @@ public class AdmissionInquiryFormEditService(
 			if (applicant != null) AdmissionInquiryConfiguredFields.ApplyApplicantName(applicant, definitions, mappingValues);
 			if (applicant != null && guardian != null && !applicant.ExistingStudentId.HasValue && !confirmedSibling && contact.IsConfigured)
 			{
-				if (string.IsNullOrWhiteSpace(contact.Name) || string.IsNullOrWhiteSpace(contact.Mobile))
+				var previousRole = AdmissionPrimaryContactSelection.ReadRelationship(applicant);
+				var canReuseSavedContact = !changedOffering &&
+					(AdmissionInquiryConfiguredFields.Find(definitions, "Inquiry.ParentRelationship") == null || contact.Relationship != null) &&
+					(contact.Relationship == null || contact.Relationship == previousRole);
+				var name = !contact.NameIsConfigured && canReuseSavedContact ? guardian.FirstName : contact.Name;
+				var enteredMobile = !contact.MobileIsConfigured && canReuseSavedContact ? guardian.Mobile : contact.Mobile;
+				if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(enteredMobile))
 					throw new BusinessException(AdmissionErrorCodes.InquiryIdentityIncomplete, "Complete the configured primary parent name and mobile.");
-				var mobile = AdmissionInquiryPhoneValidator.NormalizeAndValidateIndianMobile(contact.Mobile);
-				var previousRole = AdmissionSiblingParentSelection.ReadRelationship(applicant);
+				var mobile = AdmissionInquiryPhoneValidator.NormalizeAndValidateIndianMobile(enteredMobile);
 				var roleChanged = previousRole != null && contact.Relationship != null && previousRole != contact.Relationship;
-				var savedEmail = roleChanged ? AdmissionStudentProfileMapping.Read(applicant, contact.Relationship == "father" ? "Father.Email" : "Mother.Email") : guardian.Email;
+				var savedEmail = roleChanged ? AdmissionStudentProfileMapping.Read(applicant, contact.Relationship == "father" ? "Father.Email" : contact.Relationship == "mother" ? "Mother.Email" : "Guardian.Email") : guardian.Email;
 				var email = contact.EmailIsConfigured ? contact.Email : savedEmail;
-				var lastName = contact.LastNameIsConfigured || contact.WholeNameIsConfigured ? contact.LastName : guardian.LastName;
-				guardian.UpdateContact(contact.Name, lastName, mobile, email);
+				var lastName = contact.LastNameIsConfigured || contact.WholeNameIsConfigured || roleChanged ? contact.LastName : guardian.LastName;
+				guardian.UpdateContact(name, lastName, mobile, email);
 				input.Phone = mobile;
 				input.Email = contact.EmailIsConfigured || roleChanged ? email : inquiry.Email;
 				if (contact.Relationship != null)
-					AdmissionSiblingParentSelection.CaptureParent(applicant, contact.Relationship, string.Join(" ", new[] { contact.Name, lastName }.Where(value => !string.IsNullOrWhiteSpace(value))), mobile, email);
+				{
+					var fullName = string.Join(" ", new[] { name, lastName }.Where(value => !string.IsNullOrWhiteSpace(value)));
+					if (AdmissionPrimaryContactSelection.HasAdditionalMainGuardian(applicant) && AdmissionInquiryConfiguredFields.Find(definitions, "Inquiry.ParentRelationship") == null &&
+						AdmissionSiblingParentSelection.IsRelationship(contact.Relationship))
+						AdmissionSiblingParentSelection.CaptureParent(applicant, contact.Relationship, fullName, mobile, email);
+					else AdmissionPrimaryContactSelection.Capture(applicant, contact.Relationship, fullName, mobile, email,
+						input.GuardianResponsibilityConfirmed, CurrentUser.Id, Clock.Now, false);
+				}
 			}
 			var operational = new CreateAdmissionInquiryDto { Source = input.Source, SourceDetail = input.SourceDetail, PreferredLanguageCode = input.PreferredLanguageCode };
 			AdmissionInquiryConfiguredFields.ApplyOperationalValues(definitions, mappingValues, operational, false);
 			input.Source = operational.Source;
 			input.SourceDetail = operational.SourceDetail;
 			input.PreferredLanguageCode = operational.PreferredLanguageCode;
-			if (applicant != null)
+			if (applicant != null && !AdmissionPrimaryContactSelection.HasSelection(applicant))
 				AdmissionFirstParentContactMapping.Apply(applicant, definitions
 					.Where(field => field.BindingType == AdmissionFormBindingType.System && field.BindingKey != null && values.ContainsKey(field.Code))
 					.GroupBy(field => field.BindingKey!, StringComparer.OrdinalIgnoreCase)
@@ -147,6 +166,9 @@ public class AdmissionInquiryFormEditService(
 			throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed, "Complete the selected offering's inquiry form before changing the admission option.");
 		if (applicant != null)
 		{
+			if (input.FormValues == null && input.GuardianResponsibilityConfirmed && AdmissionPrimaryContactSelection.ReadRelationship(applicant) == "guardian" && guardian != null)
+				AdmissionPrimaryContactSelection.Capture(applicant, "guardian", string.Join(" ", new[] { guardian.FirstName, guardian.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))),
+					input.Phone, input.Email, true, CurrentUser.Id, Clock.Now, false);
 			if (input.FormValues == null && !string.Equals(input.ApplicantName.Trim(), inquiry.ApplicantName, StringComparison.Ordinal))
 				applicant.UpdateProfile(input.ApplicantName, null, null, applicant.DateOfBirth, applicant.Gender, applicant.AddressLine1, applicant.AddressLine2, applicant.City, applicant.State, applicant.Country, applicant.PostalCode);
 			await applicants.UpdateAsync(applicant, false);

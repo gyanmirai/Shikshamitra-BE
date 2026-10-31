@@ -25,6 +25,10 @@ public class CalendarImpactLog : FullAuditedEntity<Guid>, IMultiTenant
 
     private CalendarImpactLog()
     {
+        // EF materializes these required columns after this ORM constructor.
+        AffectedEntityName = null!;
+        Message = null!;
+
         /* ORM */
     }
 

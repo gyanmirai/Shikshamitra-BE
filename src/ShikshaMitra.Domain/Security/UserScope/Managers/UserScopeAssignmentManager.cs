@@ -122,8 +122,8 @@ public class UserScopeAssignmentManager : DomainService
 			    cancellationToken))
 		{
 			throw new BusinessException(UserScopeErrorCodes.AlreadyExists)
-				.WithData("UserId", userId)
-				.WithData("RoleName", normalizedRoleName);
+				.WithData("UserId", userId!)
+				.WithData("RoleName", normalizedRoleName!);
 		}
 	}
 

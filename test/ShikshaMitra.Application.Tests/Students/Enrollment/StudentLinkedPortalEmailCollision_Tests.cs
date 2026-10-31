@@ -169,7 +169,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	private async Task<(StudentPortalEmailChangeService Dispatcher, IEmailSender Sender, StudentPortalEmailChangeJobArgs Args)> EmailVerificationDispatcherForTestAsync(Guid userId)
 	{
 		var user = await WithUnitOfWorkAsync(() => GetRequiredService<IdentityUserManager>().GetByIdAsync(userId));
-		using var state = JsonDocument.Parse(user.ExtraProperties["StudentPortalEmailChange"].ToString()!);
+		using var state = JsonDocument.Parse(user.ExtraProperties["StudentPortalEmailChange"].ShouldNotBeNull().ToString()!);
 		var provider = GetRequiredService<IServiceProvider>(); var sender = Substitute.For<IEmailSender>();
 		sender.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<AdditionalEmailSendingArgs?>()).Returns(Task.CompletedTask);
 		var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["App:ClientUrl"] = "https://school.example.test" }).Build();

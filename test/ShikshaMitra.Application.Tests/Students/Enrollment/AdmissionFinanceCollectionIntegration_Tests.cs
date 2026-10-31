@@ -499,9 +499,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
             });
             var summary = await fees.GetSummaryAsync(fixture.Application.Id);
             summary.ConfirmedPaidAmount.ShouldBe(200m);
-            summary.OutstandingAmount.ShouldBe(800m);
+            summary.OutstandingAmount.ShouldBe(700m);
             summary.FeeHeads.Single().PaidAmount.ShouldBe(200m);
-            summary.FeeHeads.Single().OutstandingAmount.ShouldBe(800m);
+            summary.FeeHeads.Single().OutstandingAmount.ShouldBe(700m);
             summary.HasPaymentEvidence.ShouldBeTrue();
         });
 

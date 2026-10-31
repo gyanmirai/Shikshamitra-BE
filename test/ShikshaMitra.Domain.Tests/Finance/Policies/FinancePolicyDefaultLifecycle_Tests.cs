@@ -63,7 +63,8 @@ public class FinancePolicyDefaultLifecycle_Tests
 			default:
 				var prorationModel = new ProrationPolicyUpdateModel("Proration", "PRO", null,
 					ProrationPolicyStatus.Active, true,
-					[new(Guid.NewGuid(), Guid.NewGuid(), ProrationRuleType.Daily, ProrationRoundingMode.Currency, 0, null, null)]);
+					[new(Guid.NewGuid(), Guid.NewGuid(), ProrationRuleType.Daily, ProrationRoundingMode.Currency,
+						CutoffDay: null, AfterCutoffAction: null)]);
 				var proration = new ProrationPolicy(id, null, year, prorationModel);
 				return new(() => proration.Update(prorationModel with { IsDefault = false }),
 					() => proration.Update(prorationModel with { Status = ProrationPolicyStatus.Draft, IsDefault = false }),

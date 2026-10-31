@@ -24,6 +24,54 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 
 public class ConcessionRequestPreview_Tests
 {
+	[Fact]
+	public async Task Percentage_maximum_is_shared_across_installments_for_preview_and_creation()
+	{
+		var (manager, student, type, assignment, policy, version, dues) = BuildManager(percentage: true, maximumPercentage: 50m);
+		DueFeeConcessionInput[] inputs = [new(dues[1].Id, dues[1].FeeHeadId, 30m), new(dues[2].Id, dues[2].FeeHeadId, 30m)];
+		var previewError = await Assert.ThrowsAsync<BusinessException>(() => manager.PreviewAsync(null,
+			policy.AcademicYearId, student.Id, policy.PolicyId, version.Id, type.Id, [], assignment.Id, inputs));
+		Assert.Equal(ConcessionPolicyErrorCodes.LimitExceeded, previewError.Code);
+		var createError = await Assert.ThrowsAsync<BusinessException>(() => manager.CreatePendingAsync(null,
+			policy.AcademicYearId, student.Id, policy.PolicyId, version.Id, type.Id, null, [], assignment.Id,
+			dueFeeConcessions: inputs));
+		Assert.Equal(ConcessionPolicyErrorCodes.LimitExceeded, createError.Code);
+		Assert.All(dues, due => Assert.Equal(0m, due.ConcessionAmount));
+	}
+
+	[Theory]
+	[InlineData(30, 20)]
+	[InlineData(16.67, 33.33)]
+	public async Task Percentage_entries_at_the_request_maximum_can_be_submitted(decimal first, decimal second)
+	{
+		var (manager, student, type, assignment, policy, version, dues) = BuildManager(percentage: true, maximumPercentage: 50m);
+		DueFeeConcessionInput[] inputs = [new(dues[1].Id, dues[1].FeeHeadId, first), new(dues[2].Id, dues[2].FeeHeadId, second)];
+		var preview = await manager.PreviewAsync(null, policy.AcademicYearId, student.Id, policy.PolicyId,
+			version.Id, type.Id, [], assignment.Id, inputs);
+		var request = await manager.CreatePendingAsync(null, policy.AcademicYearId, student.Id, policy.PolicyId,
+			version.Id, type.Id, null, [], assignment.Id, dueFeeConcessions: inputs);
+		var submitted = await manager.EvaluateSubmittedAsync(request);
+		Assert.Equal(preview.Mappings.Sum(x => x.FeeHeadConcessionAmount), submitted.Mappings.Sum(x => x.FeeHeadConcessionAmount));
+	}
+
+	[Fact]
+	public async Task Percentage_maximum_is_shared_across_fee_heads_and_draft_updates()
+	{
+		var (manager, student, type, assignment, policy, version, dues) = BuildManager(
+			percentage: true, maximumPercentage: 50m, separateFeeHeads: true);
+		FeeHeadConcessionInput[] heads = [new(dues[0].FeeHeadId, DiscountBasis.Percentage, 30m),
+			new(dues[1].FeeHeadId, DiscountBasis.Percentage, 30m)];
+		var previewError = await Assert.ThrowsAsync<BusinessException>(() => manager.PreviewAsync(null,
+			policy.AcademicYearId, student.Id, policy.PolicyId, version.Id, type.Id, heads, assignment.Id));
+		Assert.Equal(ConcessionPolicyErrorCodes.LimitExceeded, previewError.Code);
+		var request = await manager.CreatePendingAsync(null, policy.AcademicYearId, student.Id, policy.PolicyId,
+			version.Id, type.Id, null, [], assignment.Id, allowIncomplete: true);
+		DueFeeConcessionInput[] inputs = [new(dues[0].Id, dues[0].FeeHeadId, 30m), new(dues[1].Id, dues[1].FeeHeadId, 30m)];
+		var updateError = await Assert.ThrowsAsync<BusinessException>(() => manager.ReplaceFeeHeadMappingsAsync(
+			request, policy.PolicyId, version.Id, [], dueFeeConcessions: inputs));
+		Assert.Equal(ConcessionPolicyErrorCodes.LimitExceeded, updateError.Code);
+		Assert.Empty(request.ConcessionFeeHeadMappings);
+	}
 	[Theory]
 	[InlineData(ConcessionRequestStatus.Pending, "Finance:Concession:010010")]
 	[InlineData(ConcessionRequestStatus.Approved, "Finance:Concession:010034")]
@@ -132,7 +180,7 @@ public class ConcessionRequestPreview_Tests
 
 	private static (ConcessionRequestManager Manager, Student Student, ConcessionType Type,
 		StudentFeeStructure Assignment, ConcessionPolicySnapshot Policy, FinancePolicyVersion Version, List<DueFee> Dues) BuildManager(bool percentage = false, bool policyFixed = false, ConcessionPolicyStatus status = ConcessionPolicyStatus.Active,
-		ConcessionRequestStatus? existingStatus = null)
+		ConcessionRequestStatus? existingStatus = null, decimal maximumPercentage = 100m, bool separateFeeHeads = false)
 	{
 		var yearId = Guid.NewGuid();
 		var student = new Student(Guid.NewGuid(), null, "Synthetic", null, "Student", yearId,
@@ -142,7 +190,7 @@ public class ConcessionRequestPreview_Tests
 		var policy = new ConcessionPolicySnapshot(Guid.NewGuid(), yearId, "8th test policy", "TEST", status,
 			false, ConcessionValueSource.RequestEnteredWithinLimits,
 			percentage ? ConcessionCalculationMethod.Percentage : ConcessionCalculationMethod.FixedAmount,
-			null, null, percentage ? 100m : null, percentage ? null : 11111m,
+			null, null, percentage ? maximumPercentage : null, percentage ? null : 11111m,
 			ConcessionApplyOn.AllOutstanding, RoundingMethodType.RoundUp, 19);
 		if (policyFixed) policy = policy with
 		{
@@ -158,7 +206,7 @@ public class ConcessionRequestPreview_Tests
 		var secondHead = new FeeHead(Guid.NewGuid(), null, yearId, head.FeeCategoryId, "Activity", null, true, null, Guid.NewGuid());
 		var dues = (policyFixed ? new[] { 58166m, 717m } : new[] { 1m, 30000m, 29197m }).Select((amount, index) =>
 		{
-			var due = new DueFee(Guid.NewGuid(), null, student.Id, policyFixed && index == 1 ? secondHead.Id : head.Id,
+			var due = new DueFee(Guid.NewGuid(), null, student.Id, (policyFixed || separateFeeHeads) && index == 1 ? secondHead.Id : head.Id,
 				(MonthEnum)(index + 1), 2026, false, amount, new DateTime(2026, index + 1, 1));
 			due.BindAssignment(assignment.Id);
 			if (policyFixed) due.ApplyPayment(index == 1 ? amount : 1000m);

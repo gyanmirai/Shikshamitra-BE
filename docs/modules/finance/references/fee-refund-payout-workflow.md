@@ -3,7 +3,7 @@ module: finance
 domain: accounts
 content_type: Reference
 status: active
-updated_on: 2026-10-24
+updated_on: 2026-10-30
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -25,3 +25,19 @@ Every payout command checks student scope and exact action permission. The old `
 Recording payment writes one immutable entry to `Finance_FeeRefundAccountingEntries` and one confirmed automatic Expense keyed by `refund:{settlementId}` in the same transaction as the fee updates. They retain the selected category/bank, source receipt and allocation breakdown, method, reference, amount, and actor. Invalid routing or a failed write rolls the entire command back. A late return writes compensating entries in the fee ledger, refund subledger and Expenses. The net subledger amount equals the request's processed amount less reversals and the net of its lines. This is a refund subledger and operational expense, not a General Accounts journal posting.
 
 Focused coverage in `FeeRefundApi_Tests` checks direct cash/bank completion, one expense after retry, invalid routing rollback, pending-payment compatibility, and returned payments. `RefundPaymentDialog.test.tsx` and approval form coverage belong to the [frontend workflow](../../../../../Shikshamitra-FE/docs/finance/references/fee-refund-payout-workflow.md).
+
+## Edit a Pending request
+
+`PUT /api/fee-refunds/{id}` requires the existing Refund Edit permission and current student/account scope.
+Workflow version 1 requests can be edited only while Submitted (Pending), with no reservations or settlements; concession-generated refunds remain protected.
+Legacy Draft editing remains supported.
+Available actions include `edit` only for an eligible state and an authorized caller.
+
+The detail response supplies `concurrencyStamp`, required on version 1 updates; a missing or stale stamp produces a concurrency conflict.
+The serializable update rechecks receipt-linked eligibility and the pinned policy, then replaces lines, beneficiary details, reason and calculation evidence on the same request.
+Stored student, account, academic year, original receipt and policy identity cannot be changed through the edit payload.
+Unchanged masked payment identifiers are restored from saved values only when the payout method remains the same; new identifiers undergo ordinary validation.
+
+Saving keeps the request Pending and records the editor as the submitting maker, so that editor cannot approve their own changes.
+Administrator editing does not invoke the administrator creation exception.
+Editing creates no reservations, settlement, expense or accounting entry, and Approved or Completed requests reject updates.

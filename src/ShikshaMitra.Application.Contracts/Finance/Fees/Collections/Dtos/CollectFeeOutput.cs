@@ -44,6 +44,10 @@ public class CollectFeeOutput
     /// Null when no fee lines were present.
     /// </summary>
     public string? FeeReceiptNumber { get; set; }
+    /// <summary>Actual immutable amount on the returned fee/combined document.</summary>
+    public decimal? FeeReceiptAmount { get; set; }
+    /// <summary>Actual immutable amount on the returned charge document, including its late fees.</summary>
+    public decimal? ChargeReceiptAmount { get; set; }
     public string? FeeReceiptPdfFileName { get; set; }
     public string? ChargeReceiptPdfFileName { get; set; }
 

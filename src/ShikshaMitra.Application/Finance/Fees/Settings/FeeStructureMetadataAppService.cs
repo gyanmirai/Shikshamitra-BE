@@ -21,7 +21,7 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 [Authorize]
 [RemoteService(false)]
-public class FeeStructureMetadataAppService(
+public partial class FeeStructureMetadataAppService(
 	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
 	IRepository<FeeStructure, Guid> feeStructureRepository,
 	IAcademicYearRepository academicYearRepository,
@@ -35,8 +35,9 @@ public class FeeStructureMetadataAppService(
 		Guid? EducationMediumStageId, Guid? StandardId, Guid? DivisionId = null) : IUserScopedEntity;
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.View)]
-	public async Task<FeeStructureMetadataListResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
+	public async Task<FeeStructureMetadataListResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null, string? filters = null)
 	{
+		var tableQuery = ListFilter.Parse(filters);
 		if (page < 1 || pageSize < 1 || pageSize > 100) throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 		var scope = await scopeAccess.GetCurrentUserScopeAsync();
 		var query = await feeStructureMetadataRepository.GetQueryableAsync();
@@ -67,20 +68,7 @@ public class FeeStructureMetadataAppService(
 			.OrderBy(c => c.StageSortOrder).ThenBy(c => c.StageName).ThenBy(c => c.StageId).ThenBy(c => c.SortOrder).ThenBy(c => c.Name).ThenBy(c => c.StandardId)
 			.Select(c => new FeeStructureClassOptionDto { Id = c.StandardId, Name = c.Name }).ToList());
 		var visible = all.Where(x => accessible[x.Id].Count > 0).ToList();
-		var totalCount = visible.Count;
-		var items = visible.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-
-		if (!items.Any())
-			return new FeeStructureMetadataListResponse
-			{
-				TotalCount = totalCount,
-				CurrentPage = page,
-				PageSize = pageSize,
-				TotalPages = (int) Math.Ceiling(totalCount / (double) pageSize),
-				Items = new List<FeeStructureDetailsResponse>()
-			};
-
-		var metadataIds = items.Select(x => x.Id).ToList();
+		var metadataIds = visible.Select(x => x.Id).ToList();
 
 		var feeStructures = await AsyncExecuter.ToListAsync(
 			(await feeStructureRepository.GetQueryableAsync())
@@ -90,7 +78,7 @@ public class FeeStructureMetadataAppService(
 		var responseItems = new List<FeeStructureDetailsResponse>();
 
 		// I want to calculate total classes and configured classes for each metadata
-		foreach (var metadata in items)
+		foreach (var metadata in visible)
 		{
 			var structuresForMetadata = feeStructures.Where(x => x.FeeStructureMetadataId == metadata.Id).ToList();
 			var classes = accessible[metadata.Id];
@@ -101,6 +89,10 @@ public class FeeStructureMetadataAppService(
 			item.Classes = classes;
 			responseItems.Add(item);
 		}
+
+		var filtered = ListFilter.Apply(responseItems.AsQueryable(), tableQuery).ToList();
+		var totalCount = filtered.Count;
+		responseItems = filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
 		return new FeeStructureMetadataListResponse
 		{

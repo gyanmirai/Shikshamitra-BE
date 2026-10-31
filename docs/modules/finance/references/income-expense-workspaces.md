@@ -47,7 +47,7 @@ Unavailable legacy facts remain unavailable.
 Verified non-cash collections appear in Income; provisional/rejected collections do not.
 Cash collections and manual cash Income stay hidden while pending.
 Pending cash may fund actual paid expenses; final approval deposits and recognizes only the remaining net amount.
-For collection 10000 and paid expense 2000, Income is8000 and Expense remains2000; the official receipt remains 10000.
+For collection 10000 and paid expense 2000, Income is8000 and Expense remains2000; the receipt remains 10000.
 Fully spent cash finalizes with count 0 and no visible zero Income row or deposit.
 Previously confirmed Income and legacy deposit/credit history retain their amounts.
 See [Cash Management](./cash-management.md) for original-gross audit evidence, exact retries and final-deposit authority.

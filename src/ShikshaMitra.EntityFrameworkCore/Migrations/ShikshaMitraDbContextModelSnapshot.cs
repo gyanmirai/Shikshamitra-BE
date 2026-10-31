@@ -9838,17 +9838,11 @@ namespace ShikshaMitra.Migrations
                     b.Property<int?>("EarlyWithdrawalCutoffDay")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("EarlyWithdrawalMinimumChargeDays")
-                        .HasColumnType("integer");
-
                     b.Property<int?>("EarlyWithdrawalRuleType")
                         .HasColumnType("integer");
 
                     b.Property<Guid>("FeeHeadId")
                         .HasColumnType("uuid");
-
-                    b.Property<int?>("MinimumChargeDays")
-                        .HasColumnType("integer");
 
                     b.Property<Guid>("ProrationPolicyId")
                         .HasColumnType("uuid");

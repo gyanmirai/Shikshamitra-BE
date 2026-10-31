@@ -155,7 +155,8 @@ public partial class FeeCollectionSummaryQueryService
 					(s.FirstName  != null && s.FirstName.ToLower().Contains(term))  ||
 					(s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) ||
 					(s.LastName   != null && s.LastName.ToLower().Contains(term))   ||
-					(s.RollNo     != null && s.RollNo.ToString()!.Contains(term)));
+					(s.RollNo     != null && s.RollNo.ToString()!.Contains(term)) ||
+					(s.GrNo       != null && s.GrNo.ToString()!.Contains(term)));
 			}
 			else if (terms.Length > 1)
 			{
@@ -165,7 +166,8 @@ public partial class FeeCollectionSummaryQueryService
 					studentQ = studentQ.Where(s =>
 						(s.FirstName  != null && s.FirstName.ToLower().Contains(term))  ||
 						(s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) ||
-						(s.LastName   != null && s.LastName.ToLower().Contains(term)));
+						(s.LastName   != null && s.LastName.ToLower().Contains(term)) ||
+						(s.GrNo       != null && s.GrNo.ToString()!.Contains(term)));
 				}
 			}
 		}

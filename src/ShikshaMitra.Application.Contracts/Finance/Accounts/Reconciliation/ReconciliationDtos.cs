@@ -181,6 +181,9 @@ public class GetReconciliationListInput
     /// <summary>Free-text search across student name, GR number, receipt number.</summary>
     public string? Search { get; set; }
 
+	/// <summary>Optional Finance table criteria over the displayed reconciliation columns.</summary>
+	public string? Filters { get; set; }
+
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 50;
 }

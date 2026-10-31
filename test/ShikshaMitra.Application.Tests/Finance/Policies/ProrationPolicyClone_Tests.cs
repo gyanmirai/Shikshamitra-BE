@@ -32,7 +32,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 			{
 				FeeHeadId = extraHead.Id, RuleType = "MonthlyCutoff", CutoffDay = 13,
 				AfterCutoffAction = "NoCharge", ApplyOnAdmission = true, ApplyOnEarlyWithdrawal = true,
-				EarlyWithdrawalRuleType = "Daily", EarlyWithdrawalMinimumChargeDays = number
+				EarlyWithdrawalRuleType = "Daily"
 			});
 		}
 		var source = await service.CreateAsync(input);
@@ -172,9 +172,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		FeeHeadRules = [new()
 		{
 			FeeHeadId = head,
-			RuleType = "Daily",
-			MinimumChargeDays = 7,
-			RoundingMode = "RoundUpRupee",
+			RuleType = "Daily",			RoundingMode = "RoundUpRupee",
 			ApplyOnAdmission = true,
 			ApplyOnEarlyWithdrawal = true,
 			EarlyWithdrawalRuleType = "MonthlyCutoff",

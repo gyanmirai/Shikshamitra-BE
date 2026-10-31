@@ -25,8 +25,8 @@ public class OfficialReceiptFlow_Tests
         => Assert.Equal(FeeReceiptKind.ProvisionalFee, FeeReceiptPaymentPolicy.DetermineFeeReceiptKind([], true));
 
     [Theory]
-    [InlineData(FeeReceiptKind.FinalFee, FeeReceiptScope.Fee, "Official Receipt (Fee)", "Official-Receipt_Fee_FIN-2026-000001_2026-10-23.pdf")]
-    [InlineData(FeeReceiptKind.FinalCharge, FeeReceiptScope.Charge, "Official Receipt (Charge)", "Official-Receipt_Charge_FIN-2026-000001_2026-10-23.pdf")]
+    [InlineData(FeeReceiptKind.FinalFee, FeeReceiptScope.Fee, "Receipt (Fee)", "Receipt_Fee_FIN-2026-000001_2026-10-23.pdf")]
+    [InlineData(FeeReceiptKind.FinalCharge, FeeReceiptScope.Charge, "Receipt (Charge)", "Receipt_Charge_FIN-2026-000001_2026-10-23.pdf")]
     [InlineData(FeeReceiptKind.ProvisionalCharge, FeeReceiptScope.Charge, "Provisional Receipt (Charge)", "Provisional-Receipt_Charge_FIN-2026-000001_2026-10-23.pdf")]
     [InlineData(FeeReceiptKind.ProvisionalFee, FeeReceiptScope.Combined, "Provisional Receipt (Fees and Charges)", "Provisional-Receipt_Fees-And-Charges_FIN-2026-000001_2026-10-23.pdf")]
     public void Labels_And_Downloads_Distinguish_Status_And_Scope(FeeReceiptKind kind, FeeReceiptScope scope, string label, string filename)

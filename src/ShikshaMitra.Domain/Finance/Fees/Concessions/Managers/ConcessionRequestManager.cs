@@ -488,6 +488,9 @@ public class ConcessionRequestManager(
 			? DiscountBasis.Percentage : DiscountBasis.FlatAmount;
 		if (policy.CalculationMethod == ConcessionCalculationMethod.FullWaiver)
 			throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
+		if (basis == DiscountBasis.Percentage &&
+			inputs.Sum(x => x.Amount) > Math.Min(100m, policy.MaximumPercentage ?? 100m))
+			throw new BusinessException(ConcessionPolicyErrorCodes.LimitExceeded);
 		if (basis == DiscountBasis.FlatAmount && policy.MaximumFixedAmount.HasValue &&
 			inputs.Sum(x => x.Amount) > policy.MaximumFixedAmount.Value)
 			throw new BusinessException(ConcessionPolicyErrorCodes.LimitExceeded);
@@ -563,6 +566,10 @@ public class ConcessionRequestManager(
 			policy.CalculationMethod == ConcessionCalculationMethod.FixedAmount;
 		var policyFixedTotal = policy.ValueSource == ConcessionValueSource.PolicyFixed &&
 			policy.CalculationMethod == ConcessionCalculationMethod.FixedAmount;
+		if (policy.ValueSource == ConcessionValueSource.RequestEnteredWithinLimits &&
+			policy.CalculationMethod == ConcessionCalculationMethod.Percentage &&
+			inputs.Sum(x => x.Amount) > Math.Min(100m, policy.MaximumPercentage ?? 100m))
+			throw new BusinessException(ConcessionPolicyErrorCodes.LimitExceeded);
 		if (requestEnteredFixed && inputs.Any(x =>
 			x.BasedOn != DiscountBasis.FlatAmount || (!allowIncomplete && x.Amount <= 0m)))
 			throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);

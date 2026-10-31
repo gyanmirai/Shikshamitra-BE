@@ -33,9 +33,10 @@ public class FeeHeadController(
         [FromQuery] Guid? feeCategoryId = null,
         [FromQuery] string search = null,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10)
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? filters = null)
     {
-        return feeHeadAppService.GetListAsync(academicYearId, feeCategoryId, search, page, pageSize);
+        return feeHeadAppService.GetListAsync(academicYearId, feeCategoryId, search, page, pageSize, filters);
     }
 
 	[HttpGet("active")]

@@ -92,11 +92,16 @@ public class ReceiptGroupingReconciliationApi_Tests : ShikshaMitraApiTestBase
 			if (!reject)
 			{
 				receipts.Where(r => r.LinkedProvisionalReceiptId != null).Sum(r => (decimal)r.TotalPaidAmount).ShouldBe(135m);
+				foreach (var final in receipts.Where(r => r.LinkedProvisionalReceiptId != null))
+				{
+					var original = originals.Single(r => r.Id == final.LinkedProvisionalReceiptId);
+					final.LateFeePaidAmount.ShouldBe(original.LateFeePaidAmount);
+				}
 				if (grouping == CollectionReceiptGrouping.Combined)
 				{
 					var final = receipts.Single(r => r.LinkedProvisionalReceiptId != null);
-					final.FeePaidAmount.ShouldBe(110m);
-					final.ChargePaidAmount.ShouldBe(25m);
+					final.FeePaidAmount.ShouldBe(100m);
+					final.ChargePaidAmount.ShouldBe(35m);
 				}
 			}
 			var metadata = await scope.ServiceProvider.GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().GetAsync(transactionId);

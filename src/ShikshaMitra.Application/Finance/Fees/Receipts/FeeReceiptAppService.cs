@@ -44,6 +44,8 @@ public partial class FeeReceiptAppService(
     {
         ValidateListInput(input);
         FinanceClassDivisionFilterValidator.Validate(input);
+		var tableQuery = ParseListFilters(input.Filters);
+		var hasHeaderFilters = tableQuery.Filters.Count > 0;
 
         var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
         var filter = new FeeReceiptListFilter
@@ -56,8 +58,9 @@ public partial class FeeReceiptAppService(
             Search                = input.Search,
             StandardId            = input.StandardId,
             DivisionId            = input.DivisionId,
-            SkipCount             = input.SkipCount,
-            MaxResultCount        = input.MaxResultCount,
+            // Display filters must see every already-authorized candidate before count/page.
+            SkipCount             = hasHeaderFilters ? 0 : input.SkipCount,
+            MaxResultCount        = hasHeaderFilters ? int.MaxValue : input.MaxResultCount,
             ScopedStudentIdsQuery = scopedStudentIds,
             ScopedAccountIdsQuery = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync(),
         };
@@ -118,6 +121,13 @@ public partial class FeeReceiptAppService(
                 FeeCollectionTransactionId = r.FeeCollectionTransactionId,
             };
         }).ToList();
+
+		if (hasHeaderFilters)
+		{
+			var matching = tableQuery.Apply(items.AsQueryable(), ListFilterFields).ToList();
+			return new PagedResultDto<FeeReceiptListItemDto>(matching.Count,
+				matching.Skip(input.SkipCount).Take(input.MaxResultCount).ToList());
+		}
 
         return new PagedResultDto<FeeReceiptListItemDto>(totalCount, items);
     }

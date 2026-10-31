@@ -97,7 +97,7 @@ public partial class ReconciliationAppService
             BankLabel                  = row.BankLabel,
             InstrumentDetails          = ParseInstrumentDetails(row.PaymentDetailsJson),
             Status                     = statusInt,
-            StatusLabel                = row.VerificationStatus == FeeReceiptVerificationStatus.NotApplicable ? "Official receipt issued" : statusLabel,
+            StatusLabel                = row.VerificationStatus == FeeReceiptVerificationStatus.NotApplicable ? "Receipt issued" : statusLabel,
             VerificationStatus         = row.VerificationStatus,
             FinalReceiptNumber         = row.VerificationStatus == FeeReceiptVerificationStatus.NotApplicable ? row.ReceiptNumber : row.LinkedFinalReceiptNumber,
             ReceiptDate                = row.ReceiptDate,

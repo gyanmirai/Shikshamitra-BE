@@ -110,7 +110,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		CreateUpdateProrationPolicyDto Input(string name) => new()
 		{
 			AcademicYearId = year, PolicyName = name,
-			FeeHeadRules = [new() { FeeHeadId = head, RuleType = "Daily", MinimumChargeDays = 0 }]
+			FeeHeadRules = [new() { FeeHeadId = head, RuleType = "Daily" }]
 		};
 		var draft = await service.CreateAsync(Input("Current proration"));
 		var active = await service.CreateAsync(Input("Active proration"));

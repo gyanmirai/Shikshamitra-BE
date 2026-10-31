@@ -1,9 +1,9 @@
----
+﻿---
 module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-29
+updated_on: 2026-10-30
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -17,6 +17,24 @@ Management tables set it to `true` and omit `status` to return Draft, Active and
 An explicit `status` still narrows the result, including Archived-only queries; tenant and academic-year scope remain enforced.
 Callers omitting `includeArchived` retain the existing current-record behavior, including attachment pickers.
 Fee and Charge Category lists support all statuses by omitting `isActive`; Concession Type uses `includeInactive=true`; Payment Terms already support `includeArchived=true`.
+
+## Collection receipt amounts
+
+Collection results add nullable decimal `feeReceiptAmount` and `chargeReceiptAmount`, the
+actual totals on the returned documents. A missing receipt has no amount. Idempotent replay
+of an older saved response reads these totals from its original issued receipts, preserving
+historical late-fee attribution. New Separate collections put principal on Fee receipts and
+all additional charges, including late fees, on Charge receipts; Combined returns one total.
+
+## Staff collection pending balances
+
+`GET /api/fee-collections` returns `pendingFees` as all outstanding academic-year principal,
+including future Payment Term installments. The student `fee-details` response's
+`feeOverview.pendingFee` and fee-head `pendingAmount` use the same full balance as
+`collect-form.summary.pendingFee`. Overdue principal remains a subset; pending charges
+are separate. Sorting, numeric filters and summary exports consume the full pending balance.
+The mobile overview retains its generated-bill `pendingFee` and separate future partition
+described below; staff pending semantics do not change that contract.
 
 ## Fee structure copy policy preflight
 
@@ -38,6 +56,15 @@ to today. Reconciliation adds nullable `paymentDate` from the linked payment rec
 legacy instruments without an entered payment date to show their recorded collection date.
 Receipt issuance date is a separate fact. No schema migration or historical rewrite occurs;
 previously discarded entered dates or substituted issue dates cannot be reconstructed.
+
+## Card collection evidence
+
+Credit/debit card details preserve optional `cardHolderName` and the final four digits in the
+existing payment-details JSON. Collection accepts the form's `last4Digits` alias; an explicitly
+provided `cardLast4` takes precedence. Reconciliation returns the stored values as
+`instrumentDetails.cardHolderName` and `instrumentDetails.cardLast4`. Historical records without
+a holder remain null. This adds no schema migration or historical rewrite; evidence discarded
+by the old mapper cannot be reconstructed.
 
 ## Paid charges in refund requests
 
@@ -351,7 +378,7 @@ Concession Apply On retains the canonical enum contract: `0 = AllOutstanding`, `
 
 Bank transfer collection details retain `transactionReferenceNumber`, `transferDate` (the entered calendar date), and `accountHolderName` in the original payment instrument JSON. Collection also accepts the existing `transactionId` input alias; a nonblank canonical reference takes precedence. The selected receiving bank remains the validated payment-level `bankAccountId`, with a masked `bankLabel` snapshot captured during collection.
 
-Reconciliation list rows expose the stored evidence in `instrumentDetails` and the original receiving bank through `bankAccountId` and `bankLabel`. Receipt detail responses expose the same evidence in `paymentInstruments[]`, including method, amount, collection timestamp, bank snapshot and instrument details. Provisional and official receipt PDFs show the bank transfer reference, transfer date, account holder and masked receiving bank for fee, charge and combined receipts. Verification reads the original payment instrument rather than recreating its evidence.
+Reconciliation list rows expose the stored evidence in `instrumentDetails` and the original receiving bank through `bankAccountId` and `bankLabel`. Receipt detail responses expose the same evidence in `paymentInstruments[]`, including method, amount, collection timestamp, bank snapshot and instrument details. Provisional and receipt PDFs show the bank transfer reference, transfer date, account holder and masked receiving bank for fee, charge and combined receipts. Verification reads the original payment instrument rather than recreating its evidence.
 
 Missing historical transfer dates and account holder names remain unknown; receipt or collection dates must not be substituted for the entered transfer date. Previously discarded references or names cannot be recovered without independent evidence. This change uses the existing JSONB column and requires no schema migration or automatic backfill. Receipt PDF cache version `v3` regenerates earlier cached documents from the available original evidence without altering amounts, payment status or receipt numbering. Existing tenant, academic scope and action permissions continue to apply.
 
@@ -386,7 +413,7 @@ fixed two-decimal string; due dates are date-only, activity timestamps UTC insta
 | `context` | `Finance.Fees.FeeCollections.View` | Linked student, enrolled years, selected year, section/action capabilities and disabled reasons |
 | `overview`, `installments`, `payments`, `transactions` | `Finance.Fees.FeeCollections.View` | Collection-account summary, obligations and payment history; embedded receipt details additionally require Receipts View; transaction refund/return rows additionally require Refund View |
 | `charges` | `Finance.Fees.Charges.View` | Detailed approved/voided child/year charges |
-| `receipts`, `receipts/{receiptId}/pdf` | `Finance.Fees.InvoiceReceipt.View` | Official receipts and PDF after tenant/student/year ownership checks |
+| `receipts`, `receipts/{receiptId}/pdf` | `Finance.Fees.InvoiceReceipt.View` | Receipts and PDF after tenant/student/year ownership checks |
 | `requests?kind=concession` | `Finance.Fees.Concession.View` | Authorized concession history |
 | `requests?kind=refund` | `Finance.Fees.Refund.View` | Authorized refund history |
 | `requests?kind=adjustment` | `Finance.Fees.Adjustment.View` | Authorized adjustment history |
@@ -604,3 +631,23 @@ Exports read all matching rows in the same repeatable-read snapshot, ignoring ta
 More than 5000 matching rows fails with `Finance:BankActivity:ExportLimit`; no truncation or page-only export is presented as complete.
 Unsupported queries fail with `Finance:BankActivity:InvalidQuery`.
 The read adapter uses PostgreSQL and fails explicitly on unsupported providers rather than silently loading history into memory.
+
+
+## Collection and charge table search
+
+`GET /api/fee-collections` applies its existing search rules to student names, roll numbers and GR numbers before counting and paging.
+Multiple search terms may combine name and GR tokens; tenant, academic scope and student access predicates still apply.
+
+`GET /api/charges` accepts the optional `filters` JSON query parameter and forwards it to the existing allowlisted charge column-filter parser.
+The same criteria apply to list totals, lifecycle counts and paging; invalid criteria retain the parser’s existing validation behavior.
+
+
+### Finance settings table filters (2026-10-30)
+
+The Fee Structure metadata, Concession Type, Charge Category, Income Category, Expense Category and Bank Account GET lists accept optional `filters` JSON, using the same column criteria serialized by their Finance tables. Criteria apply before filtered totals and pagination; same-column alternatives use OR and different columns use AND. Invalid fields, shapes, operators and enum values raise validation errors. Existing scope, tenant, academic-year, status and permission rules remain in force.
+
+Bank account number, IFSC and UPI header criteria match the masked table values; hidden bank fragments are not searchable through masked headers. Concession document criteria match document names. Fee Structure board/medium and configured-class criteria match their displayed text, including the configured/total fraction. Display-only mappings require materializing the complete authorized candidate set before returning matching IDs for count and pagination; production-scale performance requires separate measurement.
+
+Receipt and reconciliation list header filters: `GET /api/v1/fee-receipts` and `GET /api/v1/finance/reconciliations` accept optional serialized `filters` with the existing Finance table operators. Receipt fields cover displayed identity/kind/method/verification/roll, paid amount and date; the six reconciliation methods expose their displayed student/academic/instrument/status/amount/date fields. Method-specific allowlists reject unsupported or malformed criteria, including empty-result searches. Header filters intersect the existing tenant, student/applicant, academic context, month/status and global search scopes before count/page. Only filtered requests materialize complete authorized candidates; unfiltered requests keep provider pagination. This has no first-100 cap, but filtered-request cost scales with candidate volume; production load is not verified.
+
+Fee Head and Receipt Book list endpoints accept an optional appended `filters` query parameter and forward it unchanged with existing year/category/search/paging context. Their allowlists match displayed text, numeric ranges and active-state values; malformed criteria fail before an empty result. Header filtering counts the complete authorized match before paging, while ordinary lists retain provider pagination. Adjustment applications add `Filters` alongside existing global `Filter`; the query intersects tenant, scoped student IDs and year/board/medium/class/division before status counts and rows. Search preserves voucher/reason and includes displayed identity/GR/roll/requester/amount/date/status. Text/header requests filter complete authorized candidates before count/page; ordinary requests remain provider-paged. Existing adjustment wire states are unchanged. No command or lifecycle transition is modified.

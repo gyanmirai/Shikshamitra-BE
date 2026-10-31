@@ -53,7 +53,7 @@ public static class AssignmentAmountCalculator
 			var factor = eligibleStart.Day <= cutoff ? 1m : rule.AfterCutoffAction == ProrationAfterCutoffAction.HalfCharge ? .5m : 0m;
 			raw += amount / periods.Count * factor;
 		}
-		var result = calculator.Calculate(rule with { RuleType = ProrationRuleType.Daily, MinimumChargeDays = 0 },
+		var result = calculator.Calculate(rule with { RuleType = ProrationRuleType.Daily },
 			amount, coverageStart, coverageEnd, start, end);
 		var rounded = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(raw);
 		return result with { ProratedAmount = rounded, RawAmount = raw,

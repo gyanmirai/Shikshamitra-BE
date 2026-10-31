@@ -26,13 +26,13 @@ Optional deposit evidence uses the existing tenant database file storage in the 
 
 The following sections describe compatible legacy endpoints and accounting behavior. Where an older selected-source expense or approval workflow is described, the current automatic pooled expense/direct deposit flow above is the staff workflow.
 
-Cash Management owns the custody balance for newly accepted cash. It does not change the meaning of an official receipt or the student's paid allocations. Historical receipts and confirmed register entries are not replayed into new cash balances.
+Cash Management owns the custody balance for newly accepted cash. It does not change the meaning of a receipt or the student's paid allocations. Historical receipts and confirmed register entries are not replayed into new cash balances.
 
 ## Operational contract
 
 | Action | Receipt/student effect | Register effect | Cash effect |
 | --- | --- | --- | --- |
-| Accept cash fee/charge payment | Issue the existing official receipt; settle allocations immediately | Create unconfirmed category Income rows | Create one pending cash source per instrument |
+| Accept cash fee/charge payment | Issue the existing receipt; settle allocations immediately | Create unconfirmed category Income rows | Create one pending cash source per instrument |
 | Record manual cash Income | No student receipt/dues mutation | Keep the manual entry unconfirmed | Create a linked pending source |
 | Add paid cash expense | No student payment mutation | One paid Expense through the existing owning action | Automatically consume accessible sources in collection order |
 | Deposit all available cash | Keep original receipt and allocations | Confirm pending Income at the deposited net amount | Immediately credit every remaining accessible source in the selected academic year |

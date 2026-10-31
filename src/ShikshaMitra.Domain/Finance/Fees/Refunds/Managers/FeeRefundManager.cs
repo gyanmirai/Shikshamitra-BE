@@ -65,11 +65,11 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
         return await repository.InsertAsync(request, autoSave: false);
     }
 
-    public async Task UpdateDraftAsync(FeeRefundRequest request, IReadOnlyCollection<RefundLineSpec> lines,
+    public async Task UpdateEditableRequestAsync(FeeRefundRequest request, IReadOnlyCollection<RefundLineSpec> lines,
         string? method, RefundPaymentDetails? details, string? reason,
-        string calculationSnapshot, string calculationHash)
+        string calculationSnapshot, string calculationHash, Guid editorId)
     {
-        if (request.Status != FeeRefundStatus.Draft)
+        if (!request.CanEdit)
             throw new BusinessException(FeeRefundErrorCodes.CannotModifyNonPendingRefund);
         if (!request.StudentFeeStructureId.HasValue && !request.FinanceFeeAccountId.HasValue)
             throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
@@ -79,6 +79,8 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
         request.UpdatePaymentDetails(method, details);
         request.UpdateReason(reason);
         request.UpdateEvidence(calculationSnapshot, calculationHash);
+        if (request.WorkflowVersion == 1 && request.Status == FeeRefundStatus.Submitted)
+            request.RecordPendingEdit(editorId);
     }
 
     public async Task ApproveAsync(FeeRefundRequest request, Guid userId, string? notes)

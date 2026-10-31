@@ -48,7 +48,7 @@ public class FeeCollectionSummaryItemDto
 	/// <summary>Sum of all fee-collection record amounts for the student.</summary>
 	public double PaidFees { get; set; }
 
-	/// <summary>TotalFees − PaidFees (clamped to zero).</summary>
+	/// <summary>All outstanding principal, including future installments, after payments and non-cash credits.</summary>
 	public double PendingFees { get; set; }
 
 	/// <summary>

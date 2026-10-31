@@ -12,13 +12,11 @@ public class ProrationPolicyRuleDto
 	public string? FeeHeadName { get; set; }
 	public string RuleType { get; set; } = "FullCharge";
 	public string RoundingMode { get; set; } = "RoundUpRupee";
-	public int? MinimumChargeDays { get; set; }
 	public int? CutoffDay { get; set; }
 	public string? AfterCutoffAction { get; set; }
 	public bool ApplyOnAdmission { get; set; } = true;
 	public bool ApplyOnEarlyWithdrawal { get; set; } = true;
 	public string? EarlyWithdrawalRuleType { get; set; }
-	public int? EarlyWithdrawalMinimumChargeDays { get; set; }
 	public int? EarlyWithdrawalCutoffDay { get; set; }
 	public string? EarlyWithdrawalBeforeCutoffAction { get; set; }
 }
@@ -94,15 +92,11 @@ public class ProrationPolicyRuleDtoValidator : AbstractValidator<ProrationPolicy
 		RuleFor(x => x.FeeHeadId).NotEmpty();
 		RuleFor(x => x.RuleType).Must(x => EnumValue(x, "FullCharge", "Daily", "MonthlyCutoff", "FullMonthCharge"));
 		RuleFor(x => x.RoundingMode).Must(x => EnumValue(x, "Currency", "NearestRupee", "RoundUpRupee", "RoundDownRupee"));
-		RuleFor(x => x.MinimumChargeDays).InclusiveBetween(0, 366)
-			.When(x => x.ApplyOnAdmission && EnumValue(x.RuleType, "Daily"));
 		RuleFor(x => x.CutoffDay).NotNull().InclusiveBetween(1, 31)
 			.When(x => x.ApplyOnAdmission && EnumValue(x.RuleType, "MonthlyCutoff"));
 		RuleFor(x => x.AfterCutoffAction).NotNull().Must(x => EnumValue(x, "NoCharge", "HalfCharge"))
 			.When(x => x.ApplyOnAdmission && EnumValue(x.RuleType, "MonthlyCutoff"));
 		RuleFor(x => x.EarlyWithdrawalRuleType).Must(x => x == null || EnumValue(x, "FullCharge", "Daily", "MonthlyCutoff", "FullMonthCharge"));
-		RuleFor(x => x.EarlyWithdrawalMinimumChargeDays).InclusiveBetween(0, 366)
-			.When(x => x.ApplyOnEarlyWithdrawal && EnumValue(x.EarlyWithdrawalRuleType, "Daily"));
 		RuleFor(x => x.EarlyWithdrawalCutoffDay).NotNull().InclusiveBetween(1, 31)
 			.When(x => x.ApplyOnEarlyWithdrawal && EnumValue(x.EarlyWithdrawalRuleType, "MonthlyCutoff"));
 		RuleFor(x => x.EarlyWithdrawalBeforeCutoffAction).NotNull().Must(x => EnumValue(x, "NoCharge", "HalfCharge"))

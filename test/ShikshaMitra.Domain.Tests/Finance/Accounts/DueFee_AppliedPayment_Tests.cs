@@ -35,7 +35,7 @@ public class DueFee_AppliedPayment_Tests
 	}
 
 	[Fact]
-	public void Refunds_reduce_excess_first_and_then_reopen_principal()
+	public void Refunds_reduce_retained_cash_without_reopening_principal()
 	{
 		var due = CreateDue();
 		due.ApplyConcession(37_500m);
@@ -45,7 +45,8 @@ public class DueFee_AppliedPayment_Tests
 		Assert.Equal(0m, due.OverpaymentAmount);
 		due.ApplyRefund(2_500m);
 		Assert.Equal(10_000m, due.AppliedPaymentAmount);
-		Assert.Equal(2_500m, due.OutstandingAmount);
+		Assert.Equal(0m, due.OutstandingAmount);
+		Assert.Equal(FeeStatus.Paid, due.Status);
 		due.ReverseRefund(2_500m);
 		Assert.Equal(12_500m, due.AppliedPaymentAmount);
 	}

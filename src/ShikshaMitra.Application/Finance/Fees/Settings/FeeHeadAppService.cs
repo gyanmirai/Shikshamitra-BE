@@ -19,7 +19,7 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 [Authorize]
 [RemoteService(false)]
-public class FeeHeadAppService(
+public partial class FeeHeadAppService(
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<FeeCategory, Guid> feeCategoryRepository,
 	IRepository<FeeStructure, Guid> feeStructureRepository,
@@ -53,8 +53,11 @@ public class FeeHeadAppService(
         return await MapToResponseAsync(feeHead);
     }
 
-    public async Task<FeeHeadListResponse> GetListAsync(Guid academicYearId, Guid? feeCategoryId = null, string search = null, int page = 1, int pageSize = 10)
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeHead.View)]
+    public async Task<FeeHeadListResponse> GetListAsync(Guid academicYearId, Guid? feeCategoryId = null, string search = null, int page = 1, int pageSize = 10, string? filters = null)
     {
+        var tableQuery = ListFilters.Parse(filters);
+        var hasHeaderFilters = tableQuery.Filters.Count > 0;
         var query = await feeHeadRepository.GetQueryableAsync();
 
         query = query.Where(x => x.AcademicYearId == academicYearId);
@@ -71,9 +74,9 @@ public class FeeHeadAppService(
 
         var totalCount = await feeHeadRepository.AsyncExecuter.CountAsync(query);
 
-        query = query.OrderByDescending(x => x.CreationTime)
-                     .Skip((page - 1) * pageSize)
-                     .Take(pageSize);
+        query = query.OrderByDescending(x => x.CreationTime);
+        if (!hasHeaderFilters)
+            query = query.Skip((page - 1) * pageSize).Take(pageSize);
 
         var items = await feeHeadRepository.AsyncExecuter.ToListAsync(query);
 
@@ -99,6 +102,13 @@ public class FeeHeadAppService(
             response.IsUsedInDownstream = response.Dependencies.IsBlocked;
             return response;
         }).ToList();
+
+        if (hasHeaderFilters)
+        {
+            dtos = ListFilters.Apply(dtos.AsQueryable(), tableQuery).ToList();
+            totalCount = dtos.Count;
+            dtos = dtos.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        }
 
         return new FeeHeadListResponse
         {

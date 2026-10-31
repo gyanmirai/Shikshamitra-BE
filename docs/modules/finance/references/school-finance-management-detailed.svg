@@ -145,7 +145,7 @@
 <text x="128" y="3551" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
 <tspan x="128" dy="0">REFUND  Eligible source/head, paid charge/late fee, partial cap,</tspan>
 <tspan x="128" dy="26.25">deductions, payout modes, approver, evidence and reversal window.</tspan>
-<tspan x="128" dy="26.25">PRORATION  Head, cutoff, minimum days, rounding, after-cutoff rule.</tspan>
+<tspan x="128" dy="26.25">PRORATION  Head, cutoff, rounding, after-cutoff rule.</tspan>
 <tspan x="128" dy="26.25">RULE  After demand, create a traceable reduction/reversal; no overwrite.</tspan>
 <tspan x="128" dy="26.25">ACTION  Simulate, publish version, retire.</tspan>
 </text>

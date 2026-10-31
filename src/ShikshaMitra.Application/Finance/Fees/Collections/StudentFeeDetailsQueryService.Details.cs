@@ -99,7 +99,7 @@ public partial class StudentFeeDetailsQueryService
 			var principal = FeePrincipalOverview.Calculate(group, clock.Now, (decimal)reconByFeeHead.GetValueOrDefault(group.Key, 0d));
 			var total = (double)principal.TotalFee;
 			var paid = (double)principal.PaidFee;
-			var pending = (double)principal.PendingFee;
+			var pending = (double)principal.TotalOutstandingFee;
 			var recon = reconByFeeHead.GetValueOrDefault(group.Key, 0d);
 			return new FeeHeadSummaryDto
 			{
@@ -177,7 +177,7 @@ public partial class StudentFeeDetailsQueryService
 			&& metadataIds.Contains(r.FeeCollectionTransactionId));
 		var receiptsByMetadata = receipts.GroupBy(r => r.FeeCollectionTransactionId)
 			.ToDictionary(g => g.Key, g => g
-				// A verified provisional document is replaced by its linked official receipt.
+				// A verified provisional document is replaced by its linked receipt.
 				.Where(r => !r.LinkedFinalReceiptId.HasValue)
 				.OrderBy(r => r.ReceiptNumber)
 				.Select(r => new FeePaymentHistoryReceiptDto

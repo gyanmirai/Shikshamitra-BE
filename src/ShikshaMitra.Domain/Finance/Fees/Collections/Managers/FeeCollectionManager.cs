@@ -166,21 +166,20 @@ public class FeeCollectionManager(
 		var chargeLinesTotal = chargeCollectionRecords.Sum(r => r.Amount);
 		var lateFeeLinesTotal = lateFeeAllocations.Sum(a => a.Amount);
 
-		// Known gap (implementation plan Phase 3): late fee is folded into the fee receipt's
-		// total rather than itemized as its own line — a separate PDF line item requires
-		// touching FeeReceiptManager's template, deferred to keep this session's change to the
-		// live collection transaction as small and additive as possible.
+		// Receipt grouping follows the ledger: principal is fees; late fees are charges.
 		var receipts = await feeReceiptManager.CreateReceiptsForTransactionAsync(
 			feeCollectionTransactionId: metadata.Id,
 			studentId: command.StudentId,
 			academicYearId: command.AcademicYearId,
 			boardId: command.BoardId,
 			educationMediumId: command.EducationMediumId,
-			feeLinesTotal: feeLinesTotal + lateFeeLinesTotal,
+			feeLinesTotal: feeLinesTotal,
 			chargeLinesTotal: chargeLinesTotal,
 			paymentMethods: command.Payments.Select(p => p.Method).ToList(),
 			bankReceiptConfirmed: command.BankReceiptConfirmed,
-			remarks: command.Notes, financeFeeAccountId: command.FinanceFeeAccountId, receiptGrouping: command.ReceiptGrouping);
+			remarks: command.Notes, financeFeeAccountId: command.FinanceFeeAccountId,
+			receiptGrouping: command.ReceiptGrouping,
+			lateFeeLinesTotal: lateFeeAllocations.Sum(a => (decimal)a.Amount));
 
 		if (receipts.Count > 0)
 			await feePaymentReceiptRepository.InsertManyAsync(receipts, autoSave: false);
@@ -400,13 +399,15 @@ public class FeeCollectionManager(
 
 			PaymentMethodEnum.CreditCard => new CreditCardDetails(
 				transactionId: Get("transactionId"),
-				cardLast4: Get("cardLast4"),
-				bankName: Get("bankName")),
+				cardLast4: string.IsNullOrWhiteSpace(Get("cardLast4")) ? Get("last4Digits") : Get("cardLast4"),
+				bankName: Get("bankName"),
+				cardHolderName: details.ContainsKey("cardHolderName") ? Get("cardHolderName") : null),
 
 			PaymentMethodEnum.DebitCard => new CreditCardDetails(
 				transactionId: Get("transactionId"),
-				cardLast4: Get("cardLast4"),
-				bankName: Get("bankName")),
+				cardLast4: string.IsNullOrWhiteSpace(Get("cardLast4")) ? Get("last4Digits") : Get("cardLast4"),
+				bankName: Get("bankName"),
+				cardHolderName: details.ContainsKey("cardHolderName") ? Get("cardHolderName") : null),
 
 			_ => null,
 		};

@@ -37,6 +37,8 @@ public class AdmissionFormDefinitionValidation_Tests
 	}
 	[Theory]
 	[InlineData("Applicant.Gender", "[{\"value\":\"Male\",\"label\":\"Male\"},{\"value\":\"Female\",\"label\":\"Female\"}]", false)]
+	[InlineData("Applicant.Gender", "[{\"value\":\"Other\",\"label\":\"अन्य\"}]", false)]
+	[InlineData("Applicant.Gender", "[{\"value\":\"OPTION_3\",\"label\":\"Other\"}]", true)]
 	[InlineData("Applicant.Gender", "[{\"value\":\"1\",\"label\":\"Male\"}]", true)]
 	[InlineData("Inquiry.ParentRelationship", "[{\"value\":\"father\"},{\"value\":\"mother\"},{\"value\":\"guardian\"}]", false)]
 	[InlineData("Inquiry.ParentRelationship", "[{\"value\":\"father\"},{\"value\":\"mother\"},{\"value\":\"uncle\"}]", true)]

@@ -83,12 +83,19 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await WithUnitOfWorkAsync(() => _applicantRepository.FindAsync(input.RequestId))).ShouldBeNull();
 	});
 
-	[Fact]
-	public Task Special_registration_finalizes_through_common_decision_and_onboarding() => RunCertificationScenarioAsync(async () =>
+	[Theory]
+	[InlineData("Female", GenderEnum.Female)]
+	[InlineData("Other", GenderEnum.Other)]
+	[InlineData("other", GenderEnum.Other)]
+	[InlineData("2", GenderEnum.Other)]
+	public Task Special_registration_finalizes_through_common_decision_and_onboarding(string inputGender, GenderEnum expectedGender) => RunCertificationScenarioAsync(async () =>
 	{
 		var offering = await CreateSpecialRegistrationOfferingAsync();
 		var input = SpecialRegistrationInput(offering.Id);
+		input.ApplicantGender = inputGender;
 		var application = await _applicationAppService.StartDirectRegistrationAsync(input);
+		(await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(application.ApplicantId))).Gender.ShouldBe(expectedGender.ToString());
+		(await _applicationAppService.StartDirectRegistrationAsync(input)).Id.ShouldBe(application.Id);
 		var frozen = await _applicationAppService.GetWorkflowAsync(application.Id);
 		var reservedStudentId = (await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(application.ApplicantId))).ReservedStudentId;
 		(await _applicationAppService.SubmitAsync(application.Id)).ValidationErrors.ShouldBeEmpty();
@@ -116,6 +123,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var finalized = await _applicationAppService.FinalizeAsync(application.Id, finalInput);
 		(await _applicationAppService.FinalizeAsync(application.Id, finalInput)).StudentId.ShouldBe(finalized.StudentId);
 		finalized.StudentId.ShouldBe(reservedStudentId);
+		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<Student, Guid>>().GetAsync(finalized.StudentId))).AdditionalDetail!.Gender.ShouldBe(expectedGender);
 		finalized.Application.Status.ShouldBe(AdmissionApplicationStatus.AdmissionFinalized);
 		(await WithUnitOfWorkAsync(() => _onboardingCaseRepository.GetAsync(finalized.OnboardingCaseId)))
 			.ApplicationId.ShouldBe(application.Id);

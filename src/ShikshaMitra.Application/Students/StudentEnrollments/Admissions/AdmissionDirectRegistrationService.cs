@@ -151,7 +151,7 @@ public class AdmissionDirectRegistrationService
 
 		var applicant = new AdmissionApplicant(input.RequestId, CurrentTenant.Id, family.Id,
 			input.ApplicantFirstName, input.ApplicantMiddleName, input.ApplicantLastName,
-			input.ApplicantDateOfBirth, input.ApplicantGender, existingStudentId: returningStudent?.Id,
+			input.ApplicantDateOfBirth, gender.ToString(), existingStudentId: returningStudent?.Id,
 			reservedStudentId: GuidGenerator.Create());
 		if (selectedParent != null)
 			AdmissionSiblingParentSelection.Confirm(applicant, selectedParent, CurrentUser.Id!.Value, Clock.Now.ToUniversalTime(), phone, input.GuardianEmail);
@@ -215,7 +215,7 @@ public class AdmissionDirectRegistrationService
 			!string.Equals(applicant.MiddleName, Normalize(input.ApplicantMiddleName), StringComparison.OrdinalIgnoreCase) ||
 			!string.Equals(applicant.LastName, Normalize(input.ApplicantLastName), StringComparison.OrdinalIgnoreCase) ||
 			applicant.DateOfBirth?.Date != input.ApplicantDateOfBirth?.Date ||
-			!string.Equals(applicant.Gender, Normalize(input.ApplicantGender), StringComparison.OrdinalIgnoreCase) ||
+			!string.Equals(NormalizeGender(applicant.Gender), NormalizeGender(input.ApplicantGender), StringComparison.Ordinal) ||
 			(!input.ExistingFamilyId.HasValue &&
 				(!string.Equals(guardian?.FirstName, input.GuardianFirstName?.Trim(), StringComparison.OrdinalIgnoreCase) ||
 				 !string.Equals(guardian?.LastName, Normalize(input.GuardianLastName), StringComparison.OrdinalIgnoreCase) ||
@@ -230,5 +230,8 @@ public class AdmissionDirectRegistrationService
 
 	private static string? Normalize(string? value) =>
 		string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+	private static string? NormalizeGender(string? value) =>
+		Enum.TryParse<GenderEnum>(value, true, out var gender) && Enum.IsDefined(gender) ? gender.ToString() : Normalize(value);
 
 }

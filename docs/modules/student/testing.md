@@ -3,12 +3,28 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-31
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Admission gender choices
+
+`AdmissionGender_Tests` covers canonical Other submission, Applicant binding through the final Student factory, unchanged Male/Female enum numbers, profile validation, narrow draft repair, nonmutating table readiness, validation-before-publication, stale-stamp rejection, preserved field IDs and historical immutability. Repair retains defaults, translated choices and field/section/step conditions, including array and comma-separated `In`/`NotIn` values. `AdmissionFormDefinitionValidation_Tests` accepts translated labels with canonical Other and rejects arbitrary values.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AdmissionGender_Tests|FullyQualifiedName~AdmissionFormDefinitionValidation_Tests|FullyQualifiedName~AdmissionSubmissionIdentityValidator_Tests" --artifacts-path .artifacts/admission-gender
+```
+
+These focused source tests do not establish a deployed Inquiry/Registration/Student browser walkthrough.
+
+November 2 verification passes 92 focused cases with zero failures/skips, including Journey/Submission identity regressions and the database-backed `Inquiry_Form_Values_Should_Update_Identity_And_Prefill_Application` and `Special_registration_finalizes_through_common_decision_and_onboarding` cases. They cover persisted Inquiry-to-Registration prefill, canonical Other through finalization, and replay of `Other`, `other` and numeric `2` direct-entry input. Changed Domain/Contracts/Application and test sources were compiled using the pinned SDK with isolated artifacts; the final focused run reused the unchanged EF dependency binary and disabled analyzers for that local build. The Application build has zero errors and five existing warnings outside these changes. Student docs and diff checks pass. This is not a complete solution/analyzer or deployed acceptance gate.
+
+The subsequent local API restart compiles changed Domain/Contracts/Application sources with normal analyzers and builds HttpApi and Host successfully (zero errors; the latter two projects report zero warnings). It reuses the unchanged EF dependency. The Development host is healthy on the original local ports, with HTTP 200 from application configuration and current assemblies loaded. The [frontend live checks](../../../../Shikshamitra-FE/docs/student/testing.md#gender-and-form-publication-recovery) exercise real authenticated form saves, partial-publication recovery, retries and table publication for Inquiry and Registration, followed by reload. Only clearly named QA form definitions were created/published; no applicant or production records were changed.
+
+Separate downstream limitation: gender-grouped Roll Number ordering still rejects Other in `StudentRollOrdering`; mixed ordering is unaffected. Choosing Other's position within boys-first/girls-first groups requires a separate product decision.
 
 ## Student Records permission menu alignment
 

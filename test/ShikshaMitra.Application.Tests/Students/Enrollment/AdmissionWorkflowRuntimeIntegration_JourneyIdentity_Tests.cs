@@ -8,6 +8,26 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Fact]
+	public Task Journey_identity_activation_allows_a_student_without_a_surname() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateOptionalIntakeOfferingAsync();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var formIds = new[] { offering.ApplicationFormDefinitionId!.Value, offering.InquiryFormDefinitionId!.Value };
+			var fields = await _formFieldRepository.GetListAsync(field => Enumerable.Contains(formIds, field.FormDefinitionId) && field.BindingKey == "Applicant.LastName");
+			foreach (var field in fields) await _formFieldRepository.DeleteAsync(field, true);
+		});
+		var validation = await WithUnitOfWorkAsync(async () =>
+			await _offeringValidator.ValidateForActivationAsync(await _offeringRepository.GetAsync(offering.Id)));
+		validation.Errors.ShouldNotContain(error => error.Code == AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete);
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var stored = await _offeringRepository.GetAsync(offering.Id);
+			var result = await GetRequiredService<AdmissionOfferingCommandService>().ActivateAsync(stored.Id, stored.ConcurrencyStamp);
+			result.IsActive.ShouldBeTrue();
+		});
+	});
 	[Theory]
 	[InlineData(AdmissionEntryMode.DirectRegistration, false)]
 	[InlineData(AdmissionEntryMode.Both, true)]
@@ -57,7 +77,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var activation = await WithUnitOfWorkAsync(async () =>
 			await _offeringValidator.ValidateForActivationAsync(await _offeringRepository.GetAsync(offering.Id)));
 		var missing = activation.Errors.Single(error => error.Code == AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete);
-		missing.Message.ShouldContain("Applicant.LastName");
+		missing.Message.ShouldNotContain("Applicant.LastName");
 		missing.Message.ShouldContain("Applicant.Gender");
 		missing.ActivationOnly.ShouldBeTrue();
 		AdmissionOfferingConfigurationValidator.GetBlockingErrors(new([missing]), isActive: false).ShouldBeEmpty();

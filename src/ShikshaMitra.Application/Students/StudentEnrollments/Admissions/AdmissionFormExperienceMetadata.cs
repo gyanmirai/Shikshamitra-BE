@@ -84,6 +84,15 @@ internal static class AdmissionFormMetadataStore
 		if (!string.IsNullOrWhiteSpace(json)) target.SetProperty(ExperienceKey, json);
 	}
 
+	internal static void RepairDraftGenderTranslations(AdmissionFormDefinition form, ISet<string> repairedCodes)
+	{
+		var metadata = ReadExperience(form);
+		foreach (var section in metadata.Sections.Values)
+			foreach (var field in section.Fields.Where(field => repairedCodes.Contains(field.Key)))
+				AdmissionGenderChoices.NormalizeTranslations(field.Value);
+		form.SetProperty(ExperienceKey, JsonSerializer.Serialize(metadata, JsonOptions));
+	}
+
 	public static List<AdmissionFormAuditEntryDto> ReadAudit(AdmissionFormDefinition form) =>
 		Deserialize(form.GetProperty<string>(AuditKey), new List<AdmissionFormAuditEntryDto>());
 

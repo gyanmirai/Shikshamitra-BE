@@ -347,15 +347,20 @@ public class AdmissionOfferingConfigurationValidator
 				AdmissionJourneyIdentityConfiguration.DirectEntryCapturedBindings));
 		if (missing.Count > 0)
 			errors.Add(Error(AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete,
-				"Before activating this Offering, configure required, reachable student identity fields across its Inquiry and Registration journey: " +
-				string.Join(", ", AdmissionJourneyIdentityConfiguration.CoreBindings.Where(missing.Contains)) + ". A full-name question does not replace separate first name and surname fields. Keep a full-name reference read-only when collecting separate name parts.", activationOnly: true));
+				"Before activating this Offering, configure these required Student fields in its published Inquiry or Registration form: " +
+				string.Join(", ", AdmissionJourneyIdentityConfiguration.CoreBindings.Where(missing.Contains).Select(key => key switch
+				{
+					"Applicant.FirstName" => "Student name (Applicant.FirstName or Applicant.Name)",
+					"Applicant.DateOfBirth" => "Date of birth (Applicant.DateOfBirth)",
+					_ => "Gender (Applicant.Gender)"
+				})) + ". Use the matching Student field connection, keep the question visible and editable, and use supported Gender choices. Last name is optional. When collecting separate name parts, keep a full-name reference read-only.", activationOnly: true));
 	}
 
 	private static AdmissionFormSchema InquiryIdentitySchema(AdmissionFormDto inquiry)
 	{
 		var schema = ToSchema(inquiry);
 		var fields = AdmissionEffectiveFormResolver.MaterializeFields(inquiry);
-		foreach (var key in AdmissionJourneyIdentityConfiguration.CoreBindings)
+		foreach (var key in AdmissionJourneyIdentityConfiguration.CoreBindings.Append("Applicant.Name"))
 		{
 			var captured = AdmissionInquiryConfiguredFields.Find(fields, key);
 			// Inquiry's historical structured name and DOB aliases are still read by its

@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-30
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -118,7 +118,7 @@ Restricted portal access returns no student records. Association-query failures 
 The profile resolves associations once and batches context reads for all linked students. Legacy `studentContexts` is derived from the successful results. `/api/student/onboarding/portal/my-students` remains available for older consumers.
 Deploy this additive backend contract before the updated mobile client. The updated client uses only this profile endpoint for login/shared student details and treats a missing/unsupported `portalSession` as a contract error. Authentication and academic feature endpoints remain separate.
 Profile diagnostics record association/context durations, record counts and failure categories; they do not log bearer tokens or profile payloads. Compare staging latency distributions before claiming a transport or database stall is resolved.
-Each context's `student` includes nullable `gender` (`0` Male, `1` Female; null when unrecorded), `mediumId`, `mediumName`, `stageId`, and `stageName`, alongside its existing identity, standard, division, and roll number fields.
+Each context's `student` includes nullable `gender` (`0` Male, `1` Female, `2` Other; null when unrecorded), `mediumId`, `mediumName`, `stageId`, and `stageName`, alongside its existing identity, standard, division, and roll number fields.
 Medium and stage come from the validated current class placement and remain null when no current academic year, active enrollment, or complete class assignment is available.
 The same student fields are returned by `GET /api/mobile/v1/academics/timetable/context`.
 Existing confirmed student/guardian association and tenant checks apply; revoked or unauthorized links are excluded from the profile.

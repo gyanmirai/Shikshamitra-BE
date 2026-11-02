@@ -32,9 +32,12 @@ Student name, date of birth and a supported gender are checked against saved ide
 Partial drafts remain allowed.
 Single-name students are supported: system-bound Middle name and Last name questions are optional, including historical required flags; custom questions and adult identity rules retain their configured validation.
 Finalization and Onboarding use the same core identity rule.
+Admission and Student gender supports canonical `Male`, `Female`, and `Other` values; persisted Student enum values remain `0`, `1`, and `2` respectively. Configured display labels may be translated without changing those values. Unknown values remain invalid.
+Draft writes and publication repair only the known System `Applicant.Gender` choice-editor mistake: exactly canonical Male/Female choices plus `OPTION_3` labeled `Other`. Readiness validates a temporary normalized view without writing; publication repairs the draft only after all validation succeeds under its concurrency stamp. Historical published definitions, pinned schemas, answers, and custom survey choices are never rewritten.
+
+Repair keeps the draft's translated choice labels, default and field/section/step conditions aligned with canonical Other. Direct Registration stores canonical enum names for accepted input, and retries compare the same normalized gender without creating another applicant. Genuine stale form revisions remain rejected before repair or persistence.
 Surname-first roll ordering uses the available saved name for single-name students without inventing a surname or renumbering existing students.
-Workflow publication and Offering activation do not require a combined Inquiry/Registration identity-question route.
-Submission, finalization and Onboarding retain their runtime identity checks.
+Explicit Offering activation and new or changed journey configuration require reachable, required, correctly mapped Student name, DOB and Gender questions across the published Inquiry and effective Registration forms. A required full-name question can supply the Student name without splitting it; surname is optional. Writable full-name and separate-name Registration questions cannot compete. Existing active Offering runtime remains compatible, and submission, finalization and Onboarding retain their saved-identity checks.
 
 ## Parents and the main school contact
 

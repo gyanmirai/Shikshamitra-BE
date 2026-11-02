@@ -121,6 +121,7 @@ public class AdmissionFormAppService(
 	public async Task<AdmissionFormDto> CreateAsync(CreateUpdateAdmissionFormDto input)
 	{
 		EnsureSupportedPurpose(input.Purpose);
+		AdmissionGenderChoices.NormalizeDraftDefinition(input);
 		var id = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "FORM", id);
 		await EnsureCodeAvailableAsync(code, null);
@@ -140,6 +141,7 @@ public class AdmissionFormAppService(
 		EnsureSupportedPurpose(input.Purpose);
 		var form = await GetFormAsync(id);
 		EnsureConcurrency(form, input.ConcurrencyStamp);
+		AdmissionGenderChoices.NormalizeDraftDefinition(input);
 		var code = AdmissionSettingsCode.ForUpdate(input.Code, form.Code);
 		if (!string.Equals(code, form.Code, StringComparison.Ordinal))
 			await EnsureCodeAvailableAsync(code, id);
@@ -230,6 +232,35 @@ public class AdmissionFormAppService(
 		EnsureConcurrency(form, concurrencyStamp);
 		var validation = await ValidateDefinitionAsync(id);
 		if (!validation.IsValid) throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition).WithData("Errors", string.Join(";", validation.Errors));
+		if (form.Status == AdmissionFormStatus.Draft)
+		{
+			var fields = await GetFieldsAsync(id);
+			var repairedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (var field in fields)
+			{
+				var options = AdmissionGenderChoices.NormalizeDraftOptions(field.BindingType, field.BindingKey, field.FieldType, field.OptionsJson);
+				if (options == field.OptionsJson) continue;
+				field.UpdateDraftChoices(form, options, field.DefaultValue == "OPTION_3" ? "Other" : field.DefaultValue);
+				repairedCodes.Add(field.Code);
+				await fieldRepository.UpdateAsync(field, autoSave: false);
+			}
+			if (repairedCodes.Count > 0)
+			{
+				AdmissionFormMetadataStore.RepairDraftGenderTranslations(form, repairedCodes);
+				foreach (var field in fields)
+				{
+					field.UpdateDraftRules(form, AdmissionGenderChoices.NormalizeRule(field.VisibilityRuleJson, repairedCodes),
+						AdmissionGenderChoices.NormalizeRule(field.RequiredRuleJson, repairedCodes));
+					await fieldRepository.UpdateAsync(field, autoSave: false);
+				}
+				foreach (var section in await GetSectionsAsync(id))
+				{
+					section.UpdateDraftRules(form, AdmissionGenderChoices.NormalizeRule(section.VisibilityRuleJson, repairedCodes),
+						AdmissionGenderChoices.NormalizeRule(section.StepVisibilityRuleJson, repairedCodes));
+					await sectionRepository.UpdateAsync(section, autoSave: false);
+				}
+			}
+		}
 		form.Publish(CurrentUser.Id);
 		AdmissionFormMetadataStore.AddAudit(form, "Published", CurrentUser.Id);
 		await formRepository.UpdateAsync(form, autoSave: true);
@@ -336,7 +367,7 @@ public class AdmissionFormAppService(
 	{
 		var form = await GetFormAsync(id);
 		var sections = await GetSectionsAsync(id);
-		var fields = await GetFieldsAsync(id);
+		var fields = (await GetFieldsAsync(id)).Select(field => AdmissionGenderChoices.ForValidation(field, form.Status)).ToList();
 		var result = new AdmissionFormValidationResultDto();
 		ValidateClassInterestQuestions(fields, result);
 		ValidateApplicantNameMappings(form.Purpose, fields, result);
@@ -457,7 +488,7 @@ public class AdmissionFormAppService(
 						? valueProperty.GetString()
 						: null;
 				if (string.IsNullOrWhiteSpace(value) || !values.Add(value)) result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}");
-				if (field.BindingType == AdmissionFormBindingType.System && field.BindingKey == "Applicant.Gender" && value is not ("Male" or "Female"))
+				if (field.BindingType == AdmissionFormBindingType.System && field.BindingKey == "Applicant.Gender" && value is not ("Male" or "Female" or "Other"))
 					result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}");
 				if (option.ValueKind == JsonValueKind.Object && option.TryGetProperty("label", out var labelProperty) &&
 					(labelProperty.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(labelProperty.GetString())))

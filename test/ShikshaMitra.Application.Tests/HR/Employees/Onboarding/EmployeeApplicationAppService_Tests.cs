@@ -723,6 +723,22 @@ public partial class EmployeeApplicationAppService_Tests : ShikshaMitraApplicati
 		var history = await compensation.GetListAsync(first.Employee.Id);
 		history.Items.Count.ShouldBe(1);
 		history.Items[0].QuotedMonthlyAmount.ShouldBe(50000m);
+		// Unsaved preview support must not bypass persisted-profile concurrency or employee access.
+		var profile = await GetRequiredService<EmployeeStatutoryProfileAppService>().GetAsync(first.Employee.Id, input.Salary.EffectiveMonth.ToString("yyyy-MM"));
+		var preview = new CalculateSalaryTemplateRequestDto
+		{
+			EmployeeId = first.Employee.Id, SalaryBasis = "GROSS", MonthlyAmount = 50000m,
+			EffectiveMonth = input.Salary.EffectiveMonth, PfApplicable = false, PfEnrollment = input.Salary.PfEnrollment,
+			EsiManagementMode = "EXTERNAL", EsiExternalReason = input.Salary.EsiExternalReason,
+			StatutoryProfileOverride = profile.Profile, StatutoryProfileConcurrencyStamp = "synthetic-stale"
+		};
+		var templates = GetRequiredService<ISalaryTemplateAppService>();
+		(await Should.ThrowAsync<BusinessException>(() => templates.CalculateAsync(input.Salary.TemplateVersionId, preview))).Code
+			.ShouldBe("HR:Payroll:StatutoryProfileConflict");
+		preview.StatutoryProfileConcurrencyStamp = profile.ConcurrencyStamp;
+		(await templates.CalculateAsync(input.Salary.TemplateVersionId, preview)).TargetResult.IsExact.ShouldBeTrue();
+		preview.EmployeeId = Guid.NewGuid();
+		await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(() => templates.CalculateAsync(input.Salary.TemplateVersionId, preview));
 		// Existing employee salary editing stays on the canonical revision service.
 		input.Salary.ExpectedRevision = 1;
 		input.Salary.IdempotencyKey = Guid.NewGuid().ToString("N");
@@ -742,6 +758,28 @@ public partial class EmployeeApplicationAppService_Tests : ShikshaMitraApplicati
 		await Should.ThrowAsync<AbpValidationException>(() => _applications.FinalizeAsync(submitted.Id, new() { PersonalInfo = personal }));
 		(await _employeeRepository.GetListAsync(x => x.Email == personal.Email)).ShouldBeEmpty();
 		(await _applicationRepository.GetAsync(submitted.Id)).FinalizedEmployeeId.ShouldBeNull();
+	}
+
+	// The ordinary application harness deliberately disables transactions. Use its
+	// isolated PostgreSQL mode to exercise the real finalization rollback boundary.
+	[FamilyFinancePostgresFact]
+	public async Task Bug6564_failed_salary_save_rolls_back_staff_and_leaves_application_retryable()
+	{
+		using var admin = GetRequiredService<ICurrentPrincipalAccessor>().Change(await BuildAdminPrincipalAsync());
+		await CreateDefaultPoliciesAsync();
+		var submitted = await CreateSubmittedApplicationAsync("failed-salary");
+		var personal = await BuildPersonalInfoAsync();
+		var salary = await BuildSalaryAsync();
+		var versionId = salary.TemplateVersionId;
+		salary.TemplateVersionId = Guid.NewGuid();
+		await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(() =>
+			_applications.FinalizeAsync(submitted.Id, new() { PersonalInfo = personal, Salary = salary }));
+		(await _employeeRepository.GetListAsync(x => x.Email == personal.Email)).ShouldBeEmpty();
+		(await _applicationRepository.GetAsync(submitted.Id)).FinalizedEmployeeId.ShouldBeNull();
+		salary.TemplateVersionId = versionId;
+		var result = await _applications.FinalizeAsync(submitted.Id, new() { PersonalInfo = personal, Salary = salary });
+		result.Employee.EmployeeStatusType.ShouldBe(EmployeeStatusType.Inactive);
+		(await GetRequiredService<ICompensationRevisionAppService>().GetListAsync(result.Employee.Id)).Items.Count.ShouldBe(1);
 	}
 
 	private static PublicEmployeeApplicationSubmitDto BuildSubmitDto(string email) =>
@@ -867,7 +905,7 @@ public partial class EmployeeApplicationAppService_Tests : ShikshaMitraApplicati
 
 	private async Task<Guid> CreateAcademicYearAsync()
 	{
-		using var uow = _unitOfWorkManager.Begin(requiresNew: true);
+		using var uow = _unitOfWorkManager.Begin(requiresNew: true, isTransactional: true);
 		var created = await _academicYearManager.CreateAsync(
 			$"OnboardingAY-{Guid.NewGuid():N}",
 			new DateTime(2026, 4, 1),

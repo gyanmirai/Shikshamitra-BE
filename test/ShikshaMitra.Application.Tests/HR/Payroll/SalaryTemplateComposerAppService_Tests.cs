@@ -408,6 +408,105 @@ public class SalaryTemplateComposerAppService_Tests
 		active.Items.ShouldNotContain(x => x.Id == first.Id);
 	}
 
+	[Theory]
+	[InlineData(true, true)]
+	[InlineData(true, false)]
+	[InlineData(false, true)]
+	[InlineData(false, false)]
+	public async Task Bug6564_unsaved_onboarding_previews_complete_draft_without_writing_staff_or_salary(bool applyPf, bool applyEsic)
+	{
+		using (_currentTenant.Change(Guid.NewGuid()))
+		{
+			var (versionId, input) = await BuildOnboardingPreviewAsync();
+			input.StatutoryProfileOverride = new() { ApplyPf = applyPf, ApplyEsic = applyEsic,
+				PfDisabledReason = applyPf ? null : "Synthetic PF decision", EsicDisabledReason = applyEsic ? null : "Synthetic ESIC decision" };
+			for (var attempt = 0; attempt < 2; attempt++)
+			{
+				var result = await _appService.CalculateAsync(versionId, input);
+				result.StatutoryApplication.ShouldNotBeNull();
+				result.StatutoryApplication.Profile.ApplyPf.ShouldBe(applyPf);
+				result.StatutoryApplication.Profile.ApplyEsic.ShouldBe(applyEsic);
+				result.StatutoryApplication.Profile.VersionId.ShouldBeNull();
+				result.StatutoryApplication.ProvidentFund.AppliedEmployeeAmount.ShouldBe(applyPf ? 1200m : 0m);
+				result.StatutoryApplication.EmployeeStateInsurance.AppliedEmployeeAmount.ShouldBe(applyEsic ? 75m : 0m);
+				result.GrossSalary.ShouldBe(10000m);
+				result.EmployerCost.ShouldBe(10000m + (applyPf ? 1200m : 0m) + (applyEsic ? 325m : 0m));
+				result.TargetResult.IsExact.ShouldBeTrue();
+			}
+			(await GetRequiredService<ShikshaMitra.HR.Employees.IEmployeeRepository>().GetListAsync()).ShouldBeEmpty();
+			(await GetRequiredService<IRepository<EmployeeStatutoryProfileVersion, Guid>>().GetListAsync()).ShouldBeEmpty();
+			(await GetRequiredService<IRepository<ShikshaMitra.HR.Payroll.Compensation.EmployeeCompensationRevision, Guid>>().GetListAsync()).ShouldBeEmpty();
+		}
+	}
+
+	[Fact]
+	public async Task Bug6564_rejects_invalid_drafts_and_employee_bound_updates_then_allows_corrected_retry()
+	{
+		using (_currentTenant.Change(Guid.NewGuid()))
+		{
+			var (versionId, input) = await BuildOnboardingPreviewAsync();
+			foreach (var invalid in new PayrollStatutoryProfile[] {
+				new() { ApplyPf = false }, new() { ApplyEsic = false },
+				new() { PfDisabledReason = new string('x', 501) }, new() { EsicDisabledReason = new string('x', 501) },
+				new() { UanNumber = "invalid" }, new() { PfNumber = "<invalid>" }, new() { EsicInsuranceNumber = "<invalid>" } })
+			{
+				input.StatutoryProfileOverride = invalid;
+				(await Should.ThrowAsync<BusinessException>(() => _appService.CalculateAsync(versionId, input))).Code.ShouldBe("HR:Payroll:StatutoryProfileInvalid");
+			}
+			input.StatutoryProfileOverride = new();
+			input.StatutoryProfileUpdatePf = false;
+			await RequiresEmployeeAsync();
+			input.StatutoryProfileUpdatePf = true;
+			input.StatutoryProfileUpdateEsic = false;
+			await RequiresEmployeeAsync();
+			input.StatutoryProfileUpdateEsic = true;
+			input.StatutoryProfileConcurrencyStamp = "synthetic-stamp";
+			await RequiresEmployeeAsync();
+			input.StatutoryProfileConcurrencyStamp = null;
+			input.StatutoryProfileOverride = new() { VersionId = Guid.NewGuid() };
+			await RequiresEmployeeAsync();
+			input.StatutoryProfileOverride = new();
+			(await _appService.CalculateAsync(versionId, input)).TargetResult.IsExact.ShouldBeTrue();
+			async Task RequiresEmployeeAsync() => (await Should.ThrowAsync<BusinessException>(() => _appService.CalculateAsync(versionId, input)))
+				.Code.ShouldBe("HR:Payroll:StatutoryProfileEmployeeRequired");
+		}
+	}
+
+	private async Task<(Guid, CalculateSalaryTemplateRequestDto)> BuildOnboardingPreviewAsync()
+	{
+		var basic = await InsertEarningAsync("Synthetic onboarding Basic");
+		var deduction = await InsertDeductionAsync("Synthetic onboarding PF");
+		var pf = new ProvidentFund(Guid.NewGuid(), _currentTenant.Id, "SYNTHETIC", "Synthetic PF", 12m, 12m,
+			PfContributionBasis.Basic, 15000m, new(2026, 1, 1));
+		var policy = new EsiPolicy(Guid.NewGuid(), _currentTenant.Id, "Synthetic ESIC", "SYNTHETIC", true);
+		await WithUnitOfWorkAsync(async () =>
+		{
+			await GetRequiredService<IRepository<ProvidentFund, Guid>>().InsertAsync(pf);
+			await GetRequiredService<IRepository<EsiPolicy, Guid>>().InsertAsync(policy);
+			await GetRequiredService<IRepository<StatutoryRuleVersion, Guid>>().InsertAsync(new(
+				Guid.NewGuid(), _currentTenant.Id, "ESI", "IN-GJ", 1, new(2026, 1, 1), null, 10, 21000m, 25000m,
+				0.75m, 3.25m, 50m, 15m, StatutoryRoundingPolicy.NextHigherRupee,
+				"https://example.invalid/synthetic", new(2026, 1, 1), esiPolicyId: policy.Id, calculationSettings: new()));
+			await GetRequiredService<IRepository<EsiPayrollConfiguration, Guid>>().InsertAsync(new(
+				Guid.NewGuid(), _currentTenant.Id, new(2026, 1, 1), true, null, null, "synthetic-onboarding",
+				treatments: new System.Collections.Generic.Dictionary<Guid, StatutoryWageTreatment> { [basic.Id] = StatutoryWageTreatment.Included }));
+		});
+		var save = Save("Synthetic onboarding template", [
+			new() { ComponentId = basic.Id, LineKind = "EARNING", SemanticType = "BASIC", FormulaType = "PERCENTAGE_OF_GROSS", Value = 100m },
+			new() { ComponentId = deduction.Id, LineKind = "DEDUCTION", SemanticType = "EMPLOYEE_PROVIDENT_FUND", FormulaType = "EMPLOYEE_PROVIDENT_FUND", DisplayOrder = 1 }]);
+		save.DefaultSalaryBasis = "GROSS";
+		save.DefaultPfApplicable = true;
+		save.DefaultPfRuleId = pf.Id;
+		save.DefaultEsiManagementMode = "IN_PLATFORM";
+		save.DefaultEsiPolicyId = policy.Id;
+		save.DefaultEsiExternalReason = null;
+		var template = await CreatePreviewedAsync(save);
+		return (template.EditableVersion.Id, new() { EmployeeId = null, SalaryBasis = "GROSS", MonthlyAmount = 10000m,
+			EffectiveMonth = new(2026, 11, 1), PfApplicable = true, PfRuleId = pf.Id,
+			EsiManagementMode = "IN_PLATFORM", EsiPolicyId = policy.Id,
+			StatutoryProfileUpdatePf = true, StatutoryProfileUpdateEsic = true, StatutoryProfileOverride = new() });
+	}
+
 	private async Task<SalaryTemplateDto> CreatePreviewedAsync(SaveSalaryTemplateDto input)
 	{
 		await AttachPreviewAsync(input);

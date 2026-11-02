@@ -59,9 +59,17 @@ public partial class InitialSetupApi_Tests(InitialSetupTestFactory factory) : Sh
 		(await retryResponse.Content.ReadAsStringAsync()).ShouldNotContain("Synthetic-Staff-39!");
 		(await retryResponse.Content.ReadFromJsonAsync<InitialSetupDto>())!.CreatedUsers.Count.ShouldBe(1);
 		saved = await PutAsync(school, "advance", new AdvanceSetupInput { Step = 4, ConcurrencyStamp = saved.ConcurrencyStamp });
+		saved.CurrentStep.ShouldBe(5);
+		(await GetAsync(school)).CurrentStep.ShouldBe(5);
+		// Skipping identity does not require identity permissions or any uploaded assets.
+		school.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			"InstituteSetup.BasicInformation.Edit,InstituteSetup.AcademicSetup.Add");
+		saved = await PutAsync(school, "advance", new AdvanceSetupInput { Step = 5, ConcurrencyStamp = saved.ConcurrencyStamp });
+		saved.CurrentStep.ShouldBe(6);
+		school.DefaultRequestHeaders.Remove(AlwaysGrantPermissionChecker.TestPermissionsHeader);
 		// A saved draft is not a committed profile; reviewing an edit cannot silently finish with old data.
 		saved.Draft.Profile.City = "Changed after profile save";
-		saved = await PutAsync(school, "draft", new SaveInitialSetupDraftInput { CurrentStep = 5, Draft = saved.Draft, ConcurrencyStamp = saved.ConcurrencyStamp });
+		saved = await PutAsync(school, "draft", new SaveInitialSetupDraftInput { CurrentStep = 6, Draft = saved.Draft, ConcurrencyStamp = saved.ConcurrencyStamp });
 		saved.PendingSteps.ShouldContain(1);
 		(await school.PutAsJsonAsync(Url + "/complete", new SetupConcurrencyInput { ConcurrencyStamp = saved.ConcurrencyStamp })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		profile = saved.Draft.Profile;
@@ -69,9 +77,9 @@ public partial class InitialSetupApi_Tests(InitialSetupTestFactory factory) : Sh
 			ConcurrencyStamp = saved.ConcurrencyStamp, InstituteName = profile.InstituteName, Email = profile.Email,
 			ContactNumber = profile.ContactNumber, Address1 = profile.Address1, City = profile.City,
 			State = profile.State, Country = profile.Country, PostalCode = profile.PostalCode });
-		saved.FurthestStep.ShouldBe(5); saved.AcademicYearId.ShouldNotBeNull(); saved.DivisionId.ShouldNotBeNull();
+		saved.FurthestStep.ShouldBe(6); saved.AcademicYearId.ShouldNotBeNull(); saved.DivisionId.ShouldNotBeNull();
 		saved.PendingSteps.ShouldBeEmpty();
-		saved = await PutAsync(school, "draft", new SaveInitialSetupDraftInput { CurrentStep = 5, Draft = saved.Draft, ConcurrencyStamp = saved.ConcurrencyStamp });
+		saved = await PutAsync(school, "draft", new SaveInitialSetupDraftInput { CurrentStep = 6, Draft = saved.Draft, ConcurrencyStamp = saved.ConcurrencyStamp });
 		var finished = await PutAsync(school, "complete", new SetupConcurrencyInput { ConcurrencyStamp = saved.ConcurrencyStamp });
 		finished.IsCompleted.ShouldBeTrue(); finished.CompletedAt.ShouldNotBeNull();
 		(await PutAsync(school, "complete", new SetupConcurrencyInput { ConcurrencyStamp = saved.ConcurrencyStamp })).IsCompleted.ShouldBeTrue();

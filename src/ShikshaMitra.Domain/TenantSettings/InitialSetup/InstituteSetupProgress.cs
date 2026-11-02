@@ -29,7 +29,7 @@ public class InstituteSetupProgress : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public void Advance(int fromStep)
 	{
 		EnsureIncomplete();
-		if (fromStep < 0 || fromStep > FurthestStep || fromStep > 4)
+		if (fromStep < 0 || fromStep > FurthestStep || fromStep > 5)
 			throw new BusinessException(InitialSetupErrorCodes.EarlierStepsRequired);
 		FurthestStep = Math.Max(FurthestStep, fromStep + 1);
 		CurrentStep = fromStep + 1;
@@ -48,15 +48,15 @@ public class InstituteSetupProgress : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public void Complete(DateTime now, Guid userId)
 	{
 		if (CompletedAt.HasValue) return;
-		if (FurthestStep < 5) throw new BusinessException(InitialSetupErrorCodes.ReviewRequired);
+		if (FurthestStep < 6) throw new BusinessException(InitialSetupErrorCodes.ReviewRequired);
 		CompletedAt = now;
 		CompletedBy = userId;
-		CurrentStep = FurthestStep = 6;
+		CurrentStep = FurthestStep = 7;
 	}
 	public void PreserveLegacyCompletion(DateTime now)
 	{
 		CompletedAt = now;
-		CurrentStep = FurthestStep = 6;
+		CurrentStep = FurthestStep = 7;
 	}
 	private void EnsureIncomplete()
 	{

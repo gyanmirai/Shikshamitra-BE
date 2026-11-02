@@ -55,18 +55,41 @@ public partial class StudentModuleDashboardAdminReader
 			(!filter.BoardId.HasValue || c.IntendedBoardId == filter.BoardId) && (!filter.MediumId.HasValue || c.IntendedMediumId == filter.MediumId) &&
 			(!filter.StandardId.HasValue || c.IntendedStandardId == filter.StandardId) && (!filter.DivisionId.HasValue || c.DivisionId == filter.DivisionId));
 		var unfinished = await onboarding.FilterDashboardQueueAsync(query, "unfinished");
-		var ready = await onboarding.FilterDashboardQueueAsync(query, "ready");
-		var attention = await onboarding.FilterDashboardQueueAsync(query, "attention");
-		result.AttentionTotalCount = await AsyncExecuter.CountAsync(attention);
-		result.Metrics.Add(Metric("setup", "Unfinished onboarding", await AsyncExecuter.CountAsync(unfinished), filter.Link("/student/onboarding/setup", "unfinished"), P.StudentOnboarding.View));
-		result.Metrics.Add(Metric("ready", "Ready for activation review", await AsyncExecuter.CountAsync(ready), filter.Link("/student/onboarding/setup", "ready"), P.StudentOnboarding.View, "success"));
+		var now = Clock.Now;
+		var attention = await onboarding.FilterDashboardQueueAsync(query, "attention", now);
+		var studentQuery = await students.GetQueryableWithoutAutoIncludesAsync();
+		var stepQuery = await LazyServiceProvider.LazyGetRequiredService<IRepository<StudentOnboardingStep, Guid>>().GetQueryableAsync();
+		var counts = await AsyncExecuter.FirstOrDefaultAsync(unfinished.GroupBy(_ => 1).Select(group => new
+		{
+			Total = group.Count(),
+			Ready = group.Count(item => item.Status == StudentOnboardingStatus.ReadyForActivation && !item.StudentEnrollmentId.HasValue),
+			Attention = group.Count(item => item.Status == StudentOnboardingStatus.NeedsAttention || item.DueAt < now),
+			Division = group.Count(item => !item.DivisionId.HasValue),
+			Roll = group.Count(item => !item.RollNumber.HasValue),
+			Gr = group.Count(item => !item.IdentifierAllocationId.HasValue && studentQuery.Any(student =>
+				student.Id == item.StudentId && student.GrNumber == null && !student.GrNo.HasValue)),
+			Documents = group.Count(item => stepQuery.Any(step => step.OnboardingCaseId == item.Id && step.Required &&
+				step.Key == StudentOnboardingStepKeys.Documents && (step.Status == StudentOnboardingStepStatus.Pending ||
+					step.Status == StudentOnboardingStepStatus.Blocked || step.Status == StudentOnboardingStepStatus.InProgress)))
+		}));
+		result.AttentionTotalCount = counts?.Attention ?? 0;
+		result.Metrics.Add(Metric("setup", "Unfinished onboarding", counts?.Total ?? 0, filter.Link("/student/onboarding/setup", "unfinished"), P.StudentOnboarding.View));
+		result.Metrics.Add(Metric("ready", "Ready for activation review", counts?.Ready ?? 0, filter.Link("/student/onboarding/setup", "ready"), P.StudentOnboarding.View, "success"));
 		result.Metrics.Add(Metric("attention", "Setup needing attention", result.AttentionTotalCount, filter.Link("/student/onboarding/setup", "attention"), P.StudentOnboarding.View, "warning"));
 		foreach (var task in new[] { ("division", "Division assignment"), ("gr-number", "GR number"), ("roll-number", "Roll number"),
 			("documents", "Required documents"), ("credentials", "App access and credentials"), ("ready", "Activation review") })
 		{
-			var taskQuery = await onboarding.FilterDashboardQueueAsync(query, task.Item1);
+			var value = task.Item1 switch
+			{
+				"division" => counts?.Division ?? 0,
+				"gr-number" => counts?.Gr ?? 0,
+				"roll-number" => counts?.Roll ?? 0,
+				"documents" => counts?.Documents ?? 0,
+				"ready" => counts?.Ready ?? 0,
+				_ => await AsyncExecuter.CountAsync(await onboarding.FilterDashboardQueueAsync(query, task.Item1))
+			};
 			var id = task.Item1 switch { "gr-number" => "gr", "roll-number" => "roll", _ => task.Item1 };
-			result.OnboardingTasks.Add(Metric(id, task.Item2, await AsyncExecuter.CountAsync(taskQuery), filter.Link("/student/onboarding/setup", task.Item1), P.StudentOnboarding.View, task.Item1 == "ready" ? "success" : "warning"));
+			result.OnboardingTasks.Add(Metric(id, task.Item2, value, filter.Link("/student/onboarding/setup", task.Item1), P.StudentOnboarding.View, task.Item1 == "ready" ? "success" : "warning"));
 		}
 		var selected = attention.OrderBy(c => c.DueAt).ThenBy(c => c.Id).Take(4);
 		var standards = await LazyServiceProvider.LazyGetRequiredService<IRepository<Standard, Guid>>().GetQueryableAsync();

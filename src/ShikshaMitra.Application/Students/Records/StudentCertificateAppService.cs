@@ -176,7 +176,12 @@ public partial class StudentCertificateAppService(
 		var rows = await AsyncExecuter.ToListAsync(
 			queryable
 				.Where(x => x.StudentId == studentId && x.TenantId == CurrentTenant.Id)
-				.OrderByDescending(x => x.CreationTime));
+				.OrderByDescending(x => x.CreationTime)
+				.Select(x => new
+				{
+					x.Id, x.CertificateNumber, x.CertificateType, x.IssueDate, x.GeneratedByUserId,
+					x.Status, x.CreationTime, x.TransitionId, x.SourceCertificateId
+				}));
 
 		return rows.Select(x => new StudentCertificateHistoryDto
 		{

@@ -103,7 +103,7 @@ public class StudentRecordProfileAppService
 				result.DivisionId = selected?.DivisionId; result.DivisionName = selected?.DivisionName; result.RollNo = selected?.RollNumber;
 				var projection = await AsyncExecuter.FirstOrDefaultAsync((await enrollmentScope.GetDirectoryProjectionAsync())
 					.Where(x => x.Enrollment.StudentId == studentId && x.Enrollment.AcademicYearId == academicYearId)
-					.OrderByDescending(x => x.Enrollment.CreationTime));
+					.OrderByDescending(x => x.Enrollment.CreationTime).Select(x => new { x.MediumId, x.MediumName }));
 				result.AcademicMediumId = projection?.MediumId ?? Guid.Empty; result.AcademicMediumName = projection?.MediumName;
 			}
 		}

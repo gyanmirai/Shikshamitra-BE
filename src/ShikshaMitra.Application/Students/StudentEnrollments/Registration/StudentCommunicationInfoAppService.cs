@@ -1,6 +1,7 @@
 using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.StudentEnrollments.Helpers;
 using System;
+using ShikshaMitra.Students.Records;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,7 +18,9 @@ public class StudentCommunicationInfoAppService(
 ) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
     IStudentCommunicationInfoAppService
 {
-    public async Task<StudentCommunicationInfoDto> GetCommunicationInfoAsync(Guid studentId)
+    public Task<StudentCommunicationInfoDto> GetCommunicationInfoAsync(Guid studentId) => ReadAsync(studentId, null);
+    internal Task<StudentCommunicationInfoDto> GetCommunicationInfoAsync(Guid studentId, StudentRecordSectionReadScope scope) => ReadAsync(studentId, scope);
+    private async Task<StudentCommunicationInfoDto> ReadAsync(Guid studentId, StudentRecordSectionReadScope? scope)
     {
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
@@ -25,7 +28,9 @@ public class StudentCommunicationInfoAppService(
             StudentRegistrationErrorCodes.InvalidStudentStatusForCommunicationInfo,
             includeStudentRecords: true);
 
-        var communicationDetail = await studentCommunicationDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
+        scope?.RequireContext(studentId, CurrentTenant.Id, CurrentUser.Id, CurrentUnitOfWork);
+        var communicationDetail = scope == null ? await studentCommunicationDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId) :
+            await scope.ReadAsync("communication", () => studentCommunicationDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId));
 
         return new StudentCommunicationInfoDto
         {

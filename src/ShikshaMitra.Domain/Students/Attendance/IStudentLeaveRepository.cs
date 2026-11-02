@@ -11,8 +11,32 @@ namespace ShikshaMitra.Students.Attendance;
 /// </summary>
 public interface IStudentLeaveRepository : IRepository<StudentLeave, Guid>
 {
+	Task<StudentLeavePortalPage> GetPortalPageAsync(Guid tenantId, Guid studentId, DateTimeOffset start,
+		DateTimeOffset endExclusive, StudentLeaveStatusEnum? status, int skipCount, int maxResultCount,
+		CancellationToken cancellationToken = default);
+	Task<StudentLeavePortalItem?> FindPortalItemAsync(Guid tenantId, Guid studentId, Guid id,
+		CancellationToken cancellationToken = default);
+	Task<List<StudentLeavePortalCalendarItem>> GetPortalCalendarAsync(Guid tenantId, Guid studentId,
+		DateTimeOffset start, DateTimeOffset endExclusive, CancellationToken cancellationToken = default);
+	Task<bool> HasPortalOverlapAsync(Guid tenantId, Guid studentId, Guid? excludedId,
+		DateTimeOffset start, DateTimeOffset endInclusive, CancellationToken cancellationToken = default);
 	Task<List<AttendanceApprovedLeave>> GetApprovedForAttendanceAsync(IReadOnlyCollection<Guid> studentIds,
 		DateTimeOffset start, DateTimeOffset endExclusive, Guid? tenantId, CancellationToken cancellationToken = default);
+
+	Task<List<StudentLeaveStatusCount>> GetStatusCountsAsync(
+		string? filterText = null, Guid? studentId = null, Guid? educationMediumId = null,
+		Guid? standardId = null, Guid? divisionId = null, Guid? studentLeaveTypeId = null,
+		DateTimeOffset? startDate = null, DateTimeOffset? endDate = null,
+		IReadOnlyCollection<Guid>? studentIds = null, Guid? tenantId = null,
+		CancellationToken cancellationToken = default, IReadOnlyList<StudentLeaveTableFilter>? tableFilters = null);
+
+	Task<List<StudentLeaveListItem>> GetListProjectionAsync(
+		string? filterText = null, Guid? studentId = null, Guid? educationMediumId = null,
+		Guid? standardId = null, Guid? divisionId = null, Guid? studentLeaveTypeId = null,
+		StudentLeaveStatusEnum? status = null, DateTimeOffset? startDate = null, DateTimeOffset? endDate = null,
+		string? sorting = null, int maxResultCount = int.MaxValue, int skipCount = 0,
+		IReadOnlyCollection<Guid>? studentIds = null, Guid? tenantId = null,
+		CancellationToken cancellationToken = default, IReadOnlyList<StudentLeaveTableFilter>? tableFilters = null);
 
 	/// <summary>
 	/// Gets a filtered, sorted, and paginated list of student leaves
@@ -83,6 +107,8 @@ public interface IStudentLeaveRepository : IRepository<StudentLeave, Guid>
 }
 
 public sealed record StudentLeaveTableFilter(string Column, string Type, string? Value, string? Min, string? Max);
+
+public sealed record StudentLeaveStatusCount(StudentLeaveStatusEnum Status, long Count);
 
 public sealed record AttendanceApprovedLeave(Guid Id, Guid StudentId, bool IsHalfDay,
 	DateTimeOffset LeaveDate, DateTimeOffset? EndDate, string ConcurrencyStamp);

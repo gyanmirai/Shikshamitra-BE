@@ -47,7 +47,9 @@ public partial class StudentRecordTransitionAppService(IRepository<StudentRecord
 		var total = await AsyncExecuter.CountAsync(query);
 		var items = await AsyncExecuter.ToListAsync(query.OrderByDescending(x => x.CreationTime).Skip(input.SkipCount).Take(Math.Clamp(input.MaxResultCount, 1, 100)));
 		var result = new List<StudentRecordTransitionDto>();
-		foreach (var item in items) result.Add(await MapAsync(item));
+		if (items.Count == 0) return new(total, result);
+		var context = await ReadListContextAsync(items);
+		foreach (var item in items) result.Add(await MapAsync(item, context));
 		return new(total, result);
 	}
 	public async Task<StudentRecordTransitionDto> GetAsync(Guid id) => await MapAsync(await GetScopedAsync(id));
@@ -72,16 +74,42 @@ public partial class StudentRecordTransitionAppService(IRepository<StudentRecord
 		if (placement.TargetDivisionId.HasValue) await scope.EnsureCanAccessDivisionAsync(placement.TargetDivisionId.Value, "transition target division");
 		return item;
 	}
-	private async Task<StudentRecordTransitionDto> MapAsync(StudentRecordTransition item)
+	private sealed record TransitionListReadContext(Dictionary<Guid, StudentRecordsAccess> Records,
+		Dictionary<Guid, StudentRecordsPolicy> YearPolicies, List<string> Roles,
+		ILookup<Guid, StudentRecordTransitionEvent> History, bool CanApprove, bool CanAdd, bool CanApply, bool CanCreate,
+		bool CanViewAdmissionApplication, bool CanViewAdmissionInquiry);
+
+	private async Task<TransitionListReadContext> ReadListContextAsync(List<StudentRecordTransition> items)
 	{
-		var record = await access.EnsureReadableAsync(item.StudentId);
-		var yearPolicy = (await policies.ResolveAsync(item.AcademicYearId)).Policy;
-		var roles = await access.GetDatabaseRoleNamesAsync();
+		// Eligibility belongs to the permanent Student, not the transition year. Reuse it only
+		// for that same Student inside this read; command and readiness owners still revalidate.
+		var records = new Dictionary<Guid, StudentRecordsAccess>();
+		foreach (var studentId in items.Select(x => x.StudentId).Distinct())
+			records[studentId] = await access.EnsureReadableAsync(studentId);
+		var yearPolicies = new Dictionary<Guid, StudentRecordsPolicy>();
+		foreach (var yearId in items.Select(x => x.AcademicYearId).Distinct())
+			yearPolicies[yearId] = (await policies.ResolveAsync(yearId)).Policy;
+		var ids = items.Select(x => x.Id).ToArray();
+		var history = await events.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(ids, x.TransitionId));
+		return new(records, yearPolicies, await access.GetDatabaseRoleNamesAsync(), history.ToLookup(x => x.TransitionId),
+			await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Approve),
+			await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Add),
+			await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Apply),
+			await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Create),
+			await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View),
+			await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View));
+	}
+
+	private async Task<StudentRecordTransitionDto> MapAsync(StudentRecordTransition item, TransitionListReadContext? context = null)
+	{
+		var record = context != null ? context.Records[item.StudentId] : await access.EnsureReadableAsync(item.StudentId);
+		var yearPolicy = context != null ? context.YearPolicies[item.AcademicYearId] : (await policies.ResolveAsync(item.AcademicYearId)).Policy;
+		var roles = context?.Roles ?? await access.GetDatabaseRoleNamesAsync();
 		var masks = StudentRecordsPolicy.SensitiveGroups.Where(group => record.Policy.IsMasked(group, roles) || yearPolicy.IsMasked(group, roles)).ToList();
 		var privateText = masks.Count > 0;
 		var input = JsonSerializer.Deserialize<StudentRecordTransitionInput>(item.InputJson)!;
-		var history = await events.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.TransitionId == item.Id);
-		var canStage = await IsStageApproverAsync(item);
+		var history = context != null ? context.History[item.Id].ToList() : await events.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.TransitionId == item.Id);
+		var canStage = await IsStageApproverAsync(item, context);
 		var handoff = item.ReturnHandoffId.HasValue ? await admissionReturns.GetHandoffAsync(item) : null;
 		StudentRecordTransitionPreviewRowDto? exitReadiness = null;
 		if (StudentSchoolExitOutstanding.IsExit(item.Outcome) && item.Status is "Submitted" or "Approved" or "Scheduled" or "Exception")
@@ -90,8 +118,8 @@ public partial class StudentRecordTransitionAppService(IRepository<StudentRecord
 		{
 			OutstandingOverrideRequired = exitReadiness?.OutstandingItems.Count > 0,
 			OutstandingItems = exitReadiness?.OutstandingItems ?? [],
-			AdmissionApplicationId = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View) ? handoff?.AdmissionApplicationId : null,
-			AdmissionInquiryId = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View) ? handoff?.AdmissionInquiryId : null,
+			AdmissionApplicationId = (context?.CanViewAdmissionApplication ?? await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)) ? handoff?.AdmissionApplicationId : null,
+			AdmissionInquiryId = (context?.CanViewAdmissionInquiry ?? await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)) ? handoff?.AdmissionInquiryId : null,
 			Id = item.Id, BatchId = item.BatchId, StudentId = item.StudentId, AcademicYearId = item.AcademicYearId,
 			StudentName = masks.Contains("Identity") ? null : string.Join(" ", new[] { record.Student.FirstName, record.Student.MiddleName, record.Student.LastName }.Where(x => !string.IsNullOrWhiteSpace(x))),
 			Outcome = item.Outcome, Status = item.Status, Reason = privateText ? "" : item.Reason, EffectiveDate = item.EffectiveDate,
@@ -99,17 +127,17 @@ public partial class StudentRecordTransitionAppService(IRepository<StudentRecord
 			CurrentApprovalStage = item.CurrentApprovalStage, ApprovalStageCount = item.ApprovalStageCount, ConcurrencyStamp = item.ConcurrencyStamp,
 			RenewalCaseId = item.RenewalCaseId, CorrectionOfId = item.CorrectionOfId, LastError = item.LastError,
 			CanApprove = canStage,
-			CanCancel = ((item.Status is "Submitted" or "Approved" or "Scheduled" or "Exception") || await renewals.CanCancelAsync(item)) && CurrentUser.Id == item.RequestedBy && await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Add),
-			CanApply = (item.Status is "Approved" or "Scheduled" or "Exception") && await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Apply),
-			CanCorrect = item.Status == "Applied" && !item.ReturnHandoffId.HasValue && !item.CorrectionOfId.HasValue && record.Access == "Full" && record.PlacementEditable && await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Create) && (await corrections.PreviewAsync(item)).Ready,
+			CanCancel = ((item.Status is "Submitted" or "Approved" or "Scheduled" or "Exception") || await renewals.CanCancelAsync(item)) && CurrentUser.Id == item.RequestedBy && (context?.CanAdd ?? await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Add)),
+			CanApply = (item.Status is "Approved" or "Scheduled" or "Exception") && (context?.CanApply ?? await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Apply)),
+			CanCorrect = item.Status == "Applied" && !item.ReturnHandoffId.HasValue && !item.CorrectionOfId.HasValue && record.Access == "Full" && record.PlacementEditable && (context?.CanCreate ?? await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Create)) && (await corrections.PreviewAsync(item)).Ready,
 			History = history.OrderBy(x => x.CreationTime).Select(x => new StudentRecordTransitionEventDto { Action = x.Action, ActorId = x.ActorId, Stage = x.Stage, Remarks = privateText ? "" : x.Remarks, OccurredAt = x.CreationTime }).ToList()
 		};
 	}
-	private async Task<bool> IsStageApproverAsync(StudentRecordTransition item)
+	private async Task<bool> IsStageApproverAsync(StudentRecordTransition item, TransitionListReadContext? context = null)
 	{
-		if (item.Status != "Submitted" || CurrentUser.Id == item.RequestedBy || !await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Approve)) return false;
+		if (item.Status != "Submitted" || CurrentUser.Id == item.RequestedBy || !(context?.CanApprove ?? await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Approve))) return false;
 		var rule = JsonSerializer.Deserialize<StudentRecordsChangeRule>(item.ApprovalRuleJson)!;
-		return rule.Stages[item.CurrentApprovalStage].RoleNames.Intersect(await access.GetDatabaseRoleNamesAsync(), StringComparer.OrdinalIgnoreCase).Any();
+		return rule.Stages[item.CurrentApprovalStage].RoleNames.Intersect(context?.Roles ?? await access.GetDatabaseRoleNamesAsync(), StringComparer.OrdinalIgnoreCase).Any();
 	}
 	private static void Match(StudentRecordTransition item, string stamp)
 	{
@@ -125,8 +153,7 @@ public partial class StudentRecordTransitionAppService(IRepository<StudentRecord
 		var targetIds = await GetVisiblePlacementIdsAsync();
 		query = query.Where(x => Enumerable.Contains(targetIds.Standards, x.StandardId) && Enumerable.Contains(targetIds.Divisions, x.DivisionId));
 		var count = await AsyncExecuter.CountAsync(query); var rows = await AsyncExecuter.ToListAsync(query.OrderByDescending(x => x.CreationTime).Skip(input.SkipCount).Take(Math.Clamp(input.MaxResultCount, 1, 100)));
-		var mapped = new List<StudentRecordRenewalDto>(); foreach (var item in rows) mapped.Add(await renewals.GetAsync(item.Id));
-		return new(count, mapped);
+		return new(count, await renewals.GetManyAsync(rows));
 	}
 	public Task<StudentRecordRenewalDto> GetRenewalAsync(Guid id) => renewals.GetAsync(id);
 	private async Task<(Guid[] Standards, Guid[] Divisions)> GetVisiblePlacementIdsAsync()

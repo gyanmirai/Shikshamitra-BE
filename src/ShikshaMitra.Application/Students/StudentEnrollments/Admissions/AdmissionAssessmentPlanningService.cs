@@ -173,7 +173,7 @@ public class AdmissionAssessmentPlanningService(
 				slot ??= availableSlots.Where(value => !plan.Appointments.GetValueOrDefault(candidate.ApplicantId, []).Any(appointment => appointment.Start < value.UtcDateTime.AddMinutes(session.SlotDurationMinutes!.Value) && appointment.End > value.UtcDateTime)).Select(value => (DateTimeOffset?)value).FirstOrDefault();
 				if (!slot.HasValue || !booking.SlotStartsAt.HasValue && !availableSlots.Remove(slot.Value)) throw AdmissionAssessmentSchedulingService.Invalid("A selected interview slot is no longer free or was selected twice.");
 			}
-			await commands.BookAsync(booking.ApplicationId, booking.StageInstanceId, new() { SessionId = session.Id, ConcurrencyStamp = booking.ConcurrencyStamp, SlotStartsAt = slot });
+			await commands.BookForBatchAsync(booking.ApplicationId, booking.StageInstanceId, new() { SessionId = session.Id, ConcurrencyStamp = booking.ConcurrencyStamp, SlotStartsAt = slot });
 		}
 		await batches.InsertAsync(new AdmissionAssessmentBookingBatch(input.IdempotencyKey, CurrentTenant.Id, session.Id,
 			CurrentUser.Id ?? throw AdmissionAssessmentSchedulingService.Invalid("An authenticated staff account is required."), requestFingerprint, input.Bookings.Count), true);

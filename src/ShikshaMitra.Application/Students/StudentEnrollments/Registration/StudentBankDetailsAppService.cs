@@ -1,5 +1,6 @@
 using ShikshaMitra.Students.Enrollments.Registrations;
 using System;
+using ShikshaMitra.Students.Records;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
 
@@ -13,7 +14,9 @@ public class StudentBankDetailsAppService(
 ) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
     IStudentBankDetailsAppService
 {
-    public async Task<StudentBankDetailsDto> GetBankDetailsAsync(Guid studentId)
+    public Task<StudentBankDetailsDto> GetBankDetailsAsync(Guid studentId) => ReadAsync(studentId, null);
+    internal Task<StudentBankDetailsDto> GetBankDetailsAsync(Guid studentId, StudentRecordSectionReadScope scope) => ReadAsync(studentId, scope);
+    private async Task<StudentBankDetailsDto> ReadAsync(Guid studentId, StudentRecordSectionReadScope? scope)
     {
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
@@ -21,7 +24,9 @@ public class StudentBankDetailsAppService(
             StudentRegistrationErrorCodes.InvalidStudentStatusForBankDetails,
             includeStudentRecords: true);
 
-        var bankDetail = await studentBankDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
+        scope?.RequireContext(studentId, CurrentTenant.Id, CurrentUser.Id, CurrentUnitOfWork);
+        var bankDetail = scope == null ? await studentBankDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId) :
+            await scope.ReadAsync("bank", () => studentBankDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId));
 
         return new StudentBankDetailsDto
         {

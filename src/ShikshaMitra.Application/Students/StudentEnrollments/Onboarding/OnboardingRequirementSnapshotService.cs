@@ -54,20 +54,27 @@ public class OnboardingRequirementSnapshotService(OnboardingConfigurationManager
 		var workflow = await workflows.FindAsync(w => w.ApplicationId == application.Id);
 		var snapshots = new List<OnboardingDocumentPolicySnapshot>();
 		if (workflow != null)
-			foreach (var stage in await stages.GetListAsync(s => s.WorkflowInstanceId == workflow.Id && s.StageType == AdmissionWorkflowStageType.DocumentVerification && s.Status != AdmissionRuntimeStageStatus.Pending))
+		{
+			var visited = await stages.GetListAsync(stage => stage.WorkflowInstanceId == workflow.Id && stage.StageType == AdmissionWorkflowStageType.DocumentVerification && stage.Status != AdmissionRuntimeStageStatus.Pending);
+			var definitionIds = visited.Select(stage => stage.DefinitionStageId).Distinct().ToArray();
+			var definitionRows = definitionIds.Length == 0 ? new Dictionary<Guid, AdmissionWorkflowStageDefinition>() :
+				(await definitions.GetListAsync(definition => Enumerable.Contains(definitionIds, definition.Id))).ToDictionary(definition => definition.Id);
+			// Freeze the stored published policy, including legacy collection modes, instead of editor normalization.
+			var plan = AdmissionDocumentEvaluationService.ReadPolicies(visited, definitionRows,
+				definition => AdmissionDocumentPolicy.Read(definition.ConfigurationJson));
+			using var evaluations = (await evaluator.EnumerateManyAsync(application, plan.Requests)).GetEnumerator();
+			foreach (var request in plan.Requests)
 			{
-				// Freeze the stored published policy, including legacy collection modes, instead of editor normalization.
-                var policy = AdmissionDocumentPolicy.Read((await definitions.GetAsync(stage.DefinitionStageId)).ConfigurationJson);
-				if (policy != null)
-				{
-					var evaluation = await evaluator.EvaluateAsync(application, stage.Id, policy);
-					if (evaluation.Requirements.Any(r => r.ConditionStatus == "undetermined"))
-						throw new BusinessException(AdmissionDocumentErrorCodes.EvidenceRequired, "Complete the admission information needed to determine document requirements before transferring to Onboarding.");
-					var applicable = evaluation.Requirements.Where(r => r.ConditionStatus != "notMatched")
-						.Select(r => r.Requirement with { Requirement = r.IsRequired ? "required" : "optional", ConditionJson = null, StandardIds = null }).ToList();
-					snapshots.Add(new(stage.Id, policy with { AllowWaivers = false, Requirements = applicable }));
-				}
+				evaluations.MoveNext();
+				var evaluation = evaluations.Current;
+				if (evaluation.Requirements.Any(requirement => requirement.ConditionStatus == "undetermined"))
+					throw new BusinessException(AdmissionDocumentErrorCodes.EvidenceRequired, "Complete the admission information needed to determine document requirements before transferring to Onboarding.");
+				var applicable = evaluation.Requirements.Where(requirement => requirement.ConditionStatus != "notMatched")
+					.Select(requirement => requirement.Requirement with { Requirement = requirement.IsRequired ? "required" : "optional", ConditionJson = null, StandardIds = null }).ToList();
+				snapshots.Add(new(request.StageId, request.Policy with { AllowWaivers = false, Requirements = applicable }));
 			}
+			plan.Error?.Throw();
+		}
 		return JsonSerializer.Serialize(snapshots);
 	}
 
@@ -83,8 +90,21 @@ public class OnboardingRequirementSnapshotService(OnboardingConfigurationManager
 
 	public async Task<bool> DocumentsReadyAsync(StudentOnboardingCase item, AdmissionApplication application)
 	{
+		var requests = new List<(Guid StageId, AdmissionDocumentPolicy Policy)>();
+		System.Runtime.ExceptionServices.ExceptionDispatchInfo? rowError = null;
 		foreach (var snapshot in Read(item))
-			if ((await evaluator.EvaluateAsync(application, snapshot.StageId, snapshot.Policy)).Blockers.Count != 0) return false;
+		{
+			try { requests.Add((snapshot.StageId, snapshot.Policy)); }
+			catch (NullReferenceException exception)
+			{
+				// A later malformed row must not precede an earlier blocked requirement.
+				rowError = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception);
+				break;
+			}
+		}
+		foreach (var evaluation in await evaluator.EnumerateManyAsync(application, requests))
+			if (evaluation.Blockers.Count != 0) return false;
+		rowError?.Throw();
 		return true;
 	}
 }

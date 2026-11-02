@@ -42,10 +42,7 @@ public class OnboardingWorkflowDocumentsAppService : ApplicationService, IOnboar
 	{
 		await onboarding.EnsureCaseAccessAsync(id);
 		var item = await cases.GetAsync(id);
-		var result = new List<AdmissionDocumentVerificationDto>();
-		foreach (var policy in OnboardingRequirementSnapshotService.Read(item))
-			result.Add(await reader.GetAsync(item.ApplicationId, policy.StageId, onboarding: true));
-		return result;
+		return await reader.GetManyAsync(item.ApplicationId, OnboardingRequirementSnapshotService.Read(item).Select(policy => policy.StageId).ToArray(), onboarding: true);
 	}
 
 	[Authorize(Permissions.StudentOnboarding.Edit)]

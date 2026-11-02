@@ -13,8 +13,8 @@ public static class AutomaticOnboardingReadinessRules
 		item.Status is not (StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled);
 
 	public static bool HasCompleteIdentity(Student student) =>
-		!string.IsNullOrWhiteSpace(student.FirstName) && !string.IsNullOrWhiteSpace(student.LastName) &&
-		student.AdditionalDetail?.DateOfBirth.HasValue == true && student.AdditionalDetail.Gender.HasValue;
+		StudentCoreIdentityRules.IsComplete(student.FirstName, student.AdditionalDetail?.DateOfBirth?.Date,
+			student.AdditionalDetail?.Gender);
 
 	public static JsonElement Resolve(OnboardingRuleConfiguration? configuration)
 	{

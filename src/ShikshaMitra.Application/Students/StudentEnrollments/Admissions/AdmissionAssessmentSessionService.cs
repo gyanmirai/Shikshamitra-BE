@@ -23,10 +23,13 @@ public class AdmissionAssessmentSessionService(
 	{
 		var offerings = await AsyncExecuter.ToListAsync(await access.GetScopedOfferingsAsync());
 		var standardIds = offerings.Select(item => item.StandardId).Distinct().ToArray();
-		var classNames = (await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.TenantSettings.Standards.Standard, Guid>>()
-			.GetListAsync(item => Enumerable.Contains(standardIds, item.Id))).ToDictionary(item => item.Id, item => item.Name);
+		var classQuery = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.TenantSettings.Standards.Standard, Guid>>().GetQueryableAsync();
+		var yearQuery = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid>>().GetQueryableAsync();
+		var classNames = (await AsyncExecuter.ToListAsync(AdmissionStandardLabelQuery.ForList(classQuery, yearQuery).Where(item => Enumerable.Contains(standardIds, item.Id))
+			.Select(item => new { item.Id, item.Name }))).ToDictionary(item => item.Id, item => item.Name);
 		var cycleIds = offerings.Select(item => item.AdmissionCycleId).Distinct().ToList();
-		var academicYears = (await cycles.GetListAsync(item => cycleIds.Contains(item.Id)))
+		var academicYears = (await AsyncExecuter.ToListAsync((await cycles.GetQueryableAsync()).Where(item => Enumerable.Contains(cycleIds, item.Id))
+			.Select(item => new { item.Id, item.AcademicYearId })))
 			.ToDictionary(item => item.Id, item => item.AcademicYearId);
 		var offeringIds = offerings.Select(item => item.Id).ToList();
 		var applicationQuery = await applications.GetQueryableAsync();
@@ -34,9 +37,9 @@ public class AdmissionAssessmentSessionService(
 			.Select(item => new { item.AdmissionOfferingId, item.WorkflowDefinitionId }).Distinct());
 		var workflowIds = offerings.Where(item => item.WorkflowDefinitionId.HasValue).Select(item => item.WorkflowDefinitionId!.Value)
 			.Concat(pinned.Select(item => item.WorkflowDefinitionId)).Distinct().ToList();
-		var workflowRows = (await workflows.GetListAsync(item => workflowIds.Contains(item.Id) &&
+		var workflowRows = (await AsyncExecuter.ToListAsync((await workflows.GetQueryableAsync()).Where(item => Enumerable.Contains(workflowIds, item.Id) &&
 			(item.Status == AdmissionWorkflowStatus.Published || item.Status == AdmissionWorkflowStatus.Superseded ||
-			 item.Status == AdmissionWorkflowStatus.Archived))).ToDictionary(item => item.Id);
+			 item.Status == AdmissionWorkflowStatus.Archived)).Select(item => new { item.Id, item.Name, item.Version }))).ToDictionary(item => item.Id);
 		var stageRows = await definitions.GetListAsync(item => workflowIds.Contains(item.WorkflowDefinitionId) && item.StageType == AdmissionWorkflowStageType.Assessment);
 		var result = new List<AdmissionAssessmentScopeDto>();
 		foreach (var offering in offerings)
@@ -113,7 +116,7 @@ public class AdmissionAssessmentSessionService(
 			if (session.StartsAt <= DateTime.UtcNow || attemptRows.Any(item => item.Status != "pending" || item.Attendance != "pending"))
 				throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Started or completed assessment evidence cannot be cancelled in bulk.");
 			foreach (var attempt in attemptRows)
-				await LazyServiceProvider.LazyGetRequiredService<AdmissionAssessmentCommandService>().CancelAsync(attempt.Id,
+				await LazyServiceProvider.LazyGetRequiredService<AdmissionAssessmentCommandService>().CancelForBatchAsync(attempt.Id,
 					new AdmissionAssessmentActionInput { ConcurrencyStamp = attempt.ConcurrencyStamp, Notes = input.Notes ?? "Assessment session cancelled." });
 		}
 		session.Cancel();

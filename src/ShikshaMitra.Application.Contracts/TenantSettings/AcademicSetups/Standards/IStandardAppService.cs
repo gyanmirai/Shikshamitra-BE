@@ -13,6 +13,7 @@ public interface IStandardAppService :
         PagedAndSortedResultRequestDto,
         CreateUpdateStandardDto>
 {
+	Task<ListResultDto<StandardLookupDto>> GetLookupAsync();
 	Task<List<StandardDto>> GetStandardsByEducationMediumId(Guid educationMediumId);
 	Task ReorderAsync(Guid educationMediumStageId, ReorderAcademicChildrenDto input);
 }

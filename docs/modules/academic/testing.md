@@ -3,7 +3,7 @@ module: academic
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-30
+updated_on: 2026-11-01
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -81,6 +81,19 @@ It reads a task before and after an active student with a pending legacy approva
 
 ```powershell
 dotnet test test/ShikshaMitra.Application.Tests --filter FullyQualifiedName~FeedbackStudentRoster_Tests -p:RunAnalyzers=false -p:UseSharedCompilation=false -m:1
+```
+
+## Class timetable lookup reads
+
+`TimetableClassReadPerformance_Tests` checks the real application/SQLite response before and after unrelated subject, elective-component and room catalogues grow.
+It compares the complete serialized DTO, literal slot/summary behavior, database-reader rows and tracked lookup entities.
+The configured and saved-only variants explicitly restore their test cultures and retain colon/dot time formatting.
+Coverage includes archived/inactive labels, draft saved allocations, complete published summaries, selected-but-unsaved subjects without an assignment, empty configured placeholders, missing-reference fallbacks and existing negative remaining-slot totals.
+The companion elective cases protect newly selected subjects from inheriting another subject's saved teacher or room.
+These checks do not establish PostgreSQL query plans, production latency or deployed acceptance.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~TimetableClassReadPerformance_Tests|FullyQualifiedName~TimetableElectiveAssignments_Tests|FullyQualifiedName~TimetableSettingsReadPerformance_Tests" --artifacts-path .artifacts/timetable-class-read-tests -p:RunAnalyzers=false -p:UseSharedCompilation=false -m:1
 ```
 
 ## Concurrency and provider limits

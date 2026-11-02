@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -45,12 +47,19 @@ public class AdmissionSeatRuntimeService(
 		if (workflow == null) return;
 		var visited = await stages.GetListAsync(item => item.WorkflowInstanceId == workflow.Id &&
 			item.StageType == AdmissionWorkflowStageType.Seat && item.Status != AdmissionRuntimeStageStatus.Pending);
+		if (visited.Count == 0) return;
+		var definitionIds = visited.Select(stage => stage.DefinitionStageId).Distinct().ToArray();
+		var definitionRows = (await definitions.GetListAsync(definition => Enumerable.Contains(definitionIds, definition.Id))).ToDictionary(definition => definition.Id);
+		var stageIds = visited.Select(stage => stage.Id).ToArray();
+		Dictionary<Guid, AdmissionSeatReservation>? reservationRows = null;
 		foreach (var stage in visited)
 		{
-			var policy = AdmissionSeatAccessService.ReadPolicy(await definitions.GetAsync(stage.DefinitionStageId));
+			var definition = definitionRows.GetValueOrDefault(stage.DefinitionStageId) ?? throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), stage.DefinitionStageId);
+			var policy = AdmissionSeatAccessService.ReadPolicy(definition);
 			if (policy == null) continue;
-			var reservation = await reservations.FindAsync(item => item.ApplicationId == application.Id &&
-				item.StageInstanceId == stage.Id);
+			reservationRows ??= (await reservations.GetListAsync(reservation => reservation.ApplicationId == application.Id &&
+				Enumerable.Contains(stageIds, reservation.StageInstanceId))).ToDictionary(reservation => reservation.StageInstanceId);
+			var reservation = reservationRows.GetValueOrDefault(stage.Id);
 			if (reservation?.Status != AdmissionSeatReservationStatus.Confirmed)
 				throw new BusinessException(AdmissionSeatStageErrorCodes.CompletionRequired,
 					"A confirmed admission seat is required before finalization.");

@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -38,13 +40,52 @@ public class AdmissionDocumentEvaluationService(IRepository<AdmissionDocumentEvi
 	IRepository<AdmissionOffering, Guid> offerings) : ITransientDependency
 {
 	public async Task<AdmissionDocumentEvaluation> EvaluateAsync(AdmissionApplication application, Guid stageId, AdmissionDocumentPolicy policy)
+		=> (await EvaluateManyAsync(application, [(stageId, policy)])).Single();
+
+	internal async Task<List<AdmissionDocumentEvaluation>> EvaluateManyAsync(AdmissionApplication application,
+		IReadOnlyCollection<(Guid StageId, AdmissionDocumentPolicy Policy)> requests)
+		=> (await EnumerateManyAsync(application, requests)).ToList();
+
+	// Evidence is read in sets, while evaluations stay lazy so completion/readiness callers
+	// retain their original first-blocker behavior for later malformed historical policies.
+	internal async Task<IEnumerable<AdmissionDocumentEvaluation>> EnumerateManyAsync(AdmissionApplication application,
+		IReadOnlyCollection<(Guid StageId, AdmissionDocumentPolicy Policy)> requests)
 	{
+		if (requests.Count == 0) return [];
 		var values = await runtimeValues.ReadAsync(application, protectManagedFacts: true);
-		var offering = policy.Requirements.Any(item => item.StandardIds != null)
+		var offering = requests.Any(request => request.Policy?.Requirements?.Any(item => item?.StandardIds != null) == true)
 			? await offerings.FindAsync(application.AdmissionOfferingId) : null;
-		var rows = await evidence.GetListAsync(item => item.ApplicationId == application.Id && item.StageInstanceId == stageId);
-		var decisions = await reviews.GetListAsync(item => item.ApplicationId == application.Id && item.StageInstanceId == stageId);
-		return new(policy.Requirements.Select(requirement => Evaluate(requirement, policy, values, rows, decisions, offering?.StandardId)).ToList(), values);
+		var stageIds = requests.Select(request => request.StageId).Distinct().ToArray();
+		var rows = (await evidence.GetListAsync(item => item.ApplicationId == application.Id && Enumerable.Contains(stageIds, item.StageInstanceId))).ToLookup(item => item.StageInstanceId);
+		var decisions = (await reviews.GetListAsync(item => item.ApplicationId == application.Id && Enumerable.Contains(stageIds, item.StageInstanceId))).ToLookup(item => item.StageInstanceId);
+		return requests.Select(request =>
+		{
+			var stageRows = rows[request.StageId].ToList();
+			var stageDecisions = decisions[request.StageId].ToList();
+			return new AdmissionDocumentEvaluation(request.Policy.Requirements.Select(requirement =>
+				Evaluate(requirement, request.Policy, values, stageRows, stageDecisions, offering?.StandardId)).ToList(), values);
+		});
+	}
+
+	internal static (List<(Guid StageId, AdmissionDocumentPolicy Policy)> Requests, ExceptionDispatchInfo? Error) ReadPolicies(
+		IEnumerable<AdmissionApplicationStageInstance> stageRows, IReadOnlyDictionary<Guid, AdmissionWorkflowStageDefinition> definitions,
+		Func<AdmissionWorkflowStageDefinition, AdmissionDocumentPolicy?> read)
+	{
+		var requests = new List<(Guid, AdmissionDocumentPolicy)>();
+		foreach (var stage in stageRows)
+		{
+			try
+			{
+				var definition = definitions.GetValueOrDefault(stage.DefinitionStageId) ??
+					throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), stage.DefinitionStageId);
+				if (read(definition) is { } policy) requests.Add((stage.Id, policy));
+			}
+			catch (Exception exception) when (exception is BusinessException or EntityNotFoundException or ArgumentException or System.Text.Json.JsonException or InvalidOperationException)
+			{
+				return (requests, ExceptionDispatchInfo.Capture(exception));
+			}
+		}
+		return (requests, null);
 	}
 
 	private static AdmissionDocumentRequirementEvaluation Evaluate(AdmissionDocumentRequirement requirement, AdmissionDocumentPolicy policy,

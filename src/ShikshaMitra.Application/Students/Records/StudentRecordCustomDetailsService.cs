@@ -23,12 +23,18 @@ public class StudentRecordCustomDetailsService(StudentRecordRegistrationReader r
 	: ApplicationService, ITransientDependency
 {
 	private static JsonElement Null => JsonSerializer.SerializeToElement<object?>(null);
-	public async Task<List<StudentRecordRegistrationSourceDto>> ReadAsync(Guid studentId)
+	public Task<List<StudentRecordRegistrationSourceDto>> ReadAsync(Guid studentId) => ReadCoreAsync(studentId, null);
+	internal Task<List<StudentRecordRegistrationSourceDto>> ReadAsync(Guid studentId, StudentRecordRegistrationReadScope scope) => ReadCoreAsync(studentId, scope);
+	internal Task<List<StudentRecordRegistrationSourceDto>> ReadAsync(Guid studentId, StudentRecordSectionReadScope scope) => ReadCoreAsync(studentId, null, scope);
+	private async Task<List<StudentRecordRegistrationSourceDto>> ReadCoreAsync(Guid studentId, StudentRecordRegistrationReadScope? scope, StudentRecordSectionReadScope? sectionScope = null)
 	{
-		var sources = await reader.GetAsync(studentId);
+		var sources = scope == null ? await reader.GetAsync(studentId) : await reader.GetAsync(studentId, scope);
 		await PopulateCurrentValuesAsync(studentId, sources);
 		if (sources.Any(x => StudentRecordCurrentRuleReader.ReferencedFields(x).Count > 0) && !await IsMaskedAsync(studentId))
-			await currentRules.RefreshAsync(studentId, sources);
+		{
+			if (sectionScope == null) await currentRules.RefreshAsync(studentId, sources);
+			else await currentRules.RefreshAsync(studentId, sources, sectionScope);
+		}
 		return sources;
 	}
 	internal async Task PopulateCurrentValuesAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources)
@@ -85,7 +91,11 @@ public class StudentRecordCustomDetailsService(StudentRecordRegistrationReader r
 		}
 		return Serialize(ToPayload(sources));
 	}
-	public async Task<string> ValidateAndNormalizeAsync(Guid studentId, JsonElement payload, bool recordedSourceSet = false, bool registrationForm = false)
+	public Task<string> ValidateAndNormalizeAsync(Guid studentId, JsonElement payload, bool recordedSourceSet = false, bool registrationForm = false) =>
+		ValidateAndNormalizeCoreAsync(studentId, payload, recordedSourceSet, registrationForm, null);
+	internal Task<string> ValidateAndNormalizeAsync(Guid studentId, JsonElement payload, StudentRecordRegistrationReadScope scope, bool recordedSourceSet = false, bool registrationForm = false) =>
+		ValidateAndNormalizeCoreAsync(studentId, payload, recordedSourceSet, registrationForm, scope);
+	private async Task<string> ValidateAndNormalizeCoreAsync(Guid studentId, JsonElement payload, bool recordedSourceSet, bool registrationForm, StudentRecordRegistrationReadScope? scope)
 	{
 		await access.EnsureWritableAsync(studentId);
 		if (!registrationForm && await IsMaskedAsync(studentId)) throw new BusinessException("Students:Records:RestrictedFields");
@@ -93,7 +103,7 @@ public class StudentRecordCustomDetailsService(StudentRecordRegistrationReader r
 		try { input = JsonSerializer.Deserialize<StudentRecordCustomDetailsPayload>(payload.GetRawText(), StudentRecordPayloadService.JsonOptions)!; }
 		catch (JsonException) { throw new BusinessException("Students:Records:InvalidPayload"); }
 		if (input?.Sources == null || input.Sources.Any(x => x == null || x.Values == null)) throw new BusinessException("Students:Records:InvalidPayload");
-		var sources = await ReadAsync(studentId);
+		var sources = await ReadCoreAsync(studentId, scope);
 		if (registrationForm) await LazyServiceProvider.LazyGetRequiredService<StudentRecordFormProjection>().PopulateAsync(studentId, sources, true);
 		if (recordedSourceSet) sources = sources.Where(x => input.Sources.Any(p => p.SubmissionId == x.SubmissionId)).ToList();
 		if (sources.Count == 0 || input.Sources.Count != sources.Count || input.Sources.Select(x => x.SubmissionId).Distinct().Count() != sources.Count)
@@ -179,12 +189,14 @@ public class StudentRecordCustomDetailsService(StudentRecordRegistrationReader r
 		IEnumerable<AdmissionFormFieldDto> Fields(StudentRecordRegistrationSourceDto source) => registrationForm ? StudentRecordFormProjection.Fields(source) : CustomFields(source);
 		List<string> Editable(StudentRecordRegistrationSourceDto source) => registrationForm ? source.FormEditableFieldCodes : source.EditableFieldCodes;
 	}
-	public async Task ApplyAsync(Guid studentId, string json, bool registrationForm = false)
+	public Task ApplyAsync(Guid studentId, string json, bool registrationForm = false) => ApplyCoreAsync(studentId, json, registrationForm, null);
+	internal Task ApplyAsync(Guid studentId, string json, StudentRecordRegistrationReadScope scope, bool registrationForm = false) => ApplyCoreAsync(studentId, json, registrationForm, scope);
+	private async Task ApplyCoreAsync(Guid studentId, string json, bool registrationForm, StudentRecordRegistrationReadScope? scope)
 	{
 		// Revalidate captured provenance and server definitions at application time as well as request creation.
-		var normalized = await ValidateAndNormalizeAsync(studentId, JsonSerializer.Deserialize<JsonElement>(json), recordedSourceSet: true, registrationForm: registrationForm);
+		var normalized = await ValidateAndNormalizeCoreAsync(studentId, JsonSerializer.Deserialize<JsonElement>(json), true, registrationForm, scope);
 		var input = JsonSerializer.Deserialize<StudentRecordCustomDetailsPayload>(normalized, StudentRecordPayloadService.JsonOptions)!;
-		var sources = (await ReadAsync(studentId)).Where(x => input.Sources.Any(p => p.SubmissionId == x.SubmissionId)).ToList();
+		var sources = (await ReadCoreAsync(studentId, scope)).Where(x => input.Sources.Any(p => p.SubmissionId == x.SubmissionId)).ToList();
 		// Display redaction must never become stored current truth for fields this caller cannot edit.
 		var baselineValues = BaselineValues(sources);
 		if (registrationForm)

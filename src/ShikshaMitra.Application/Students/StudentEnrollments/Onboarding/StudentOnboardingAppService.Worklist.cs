@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 
@@ -26,7 +27,7 @@ public partial class StudentOnboardingAppService
 		var students = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
 		var owners = await LazyServiceProvider.LazyGetRequiredService<IRepository<IdentityUser, Guid>>().GetQueryableAsync();
 		var divisions = await divisionRepository.GetQueryableAsync();
-		var standards = await standardRepository.GetQueryableAsync();
+		var standards = AdmissionStandardLabelQuery.ForDetail(await standardRepository.GetQueryableAsync(), await boardRepository.GetQueryableAsync());
 		var query = from item in cases
 			join student in students on item.StudentId equals student.Id into studentGroup
 			from student in studentGroup.DefaultIfEmpty()
@@ -49,6 +50,7 @@ public partial class StudentOnboardingAppService
 				DivisionName = division == null ? "" : division!.Name
 			};
 		query = FilterWorklistText(query, input.StudentNameFilter, input.StudentNameOperator, false);
+		query = FilterWorklistText(query, input.OwnerNameFilter, input.OwnerNameOperator, true);
 
 		if (input.RollNumberFilter.HasValue || input.RollNumberMin.HasValue || input.RollNumberMax.HasValue)
 		{

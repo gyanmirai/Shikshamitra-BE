@@ -18,10 +18,12 @@ namespace ShikshaMitra.Students.Records;
 public class StudentRecordCurrentRuleReader(IStudentRepository students, IPermissionChecker permissions) : ApplicationService, ITransientDependency
 {
 	public Task RefreshAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources, bool allFields = false) =>
-		RefreshCoreAsync(studentId, sources, allFields, null);
+		RefreshCoreAsync(studentId, sources, allFields, null, null);
+	internal Task RefreshAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources, StudentRecordSectionReadScope scope, bool allFields = false) =>
+		RefreshCoreAsync(studentId, sources, allFields, null, scope);
 	internal Task RefreshForPortalAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources, Func<string, Task<JsonObject>> readSection) =>
-		RefreshCoreAsync(studentId, sources, true, readSection);
-	private async Task RefreshCoreAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources, bool allFields, Func<string, Task<JsonObject>>? readSection)
+		RefreshCoreAsync(studentId, sources, true, readSection, null);
+	private async Task RefreshCoreAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources, bool allFields, Func<string, Task<JsonObject>>? readSection, StudentRecordSectionReadScope? scope)
 	{
 		var values = new Dictionary<string, JsonObject>();
 		var canReadCompliance = await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.IdentityCompliance.View);
@@ -52,11 +54,11 @@ public class StudentRecordCurrentRuleReader(IStudentRepository students, IPermis
 					// Lazy lookup avoids a DI cycle: Capture's structured branches never call custom Read.
 					section = readSection != null ? await readSection(target.Value.Section) : target.Value.Section == "general" && !IsComplianceField(field.BindingKey)
 						? await ReadBasicGeneralAsync(studentId)
-						: JsonNode.Parse(await LazyServiceProvider.LazyGetRequiredService<StudentRecordPayloadService>().CaptureAsync(studentId, target.Value.Section))!.AsObject();
+						: JsonNode.Parse(await CaptureSectionAsync(studentId, target.Value.Section, scope))!.AsObject();
 					values[target.Value.Section] = section;
 				}
 				if (target.Value.Section == "general" && IsComplianceField(field.BindingKey) && !section.ContainsKey("aadharNo"))
-					section = readSection != null ? await readSection("general") : JsonNode.Parse(await LazyServiceProvider.LazyGetRequiredService<StudentRecordPayloadService>().CaptureAsync(studentId, "general"))!.AsObject();
+					section = readSection != null ? await readSection("general") : JsonNode.Parse(await CaptureSectionAsync(studentId, "general", scope))!.AsObject();
 				JsonNode? node = section;
 				foreach (var part in target.Value.Path.Split('.')) node = node is JsonObject obj ? obj[part] : null;
 				source.CurrentValues[field.Code] = allFields && IsLocationField(field) && node is JsonObject
@@ -78,6 +80,11 @@ public class StudentRecordCurrentRuleReader(IStudentRepository students, IPermis
 				if (field.BindingKey is "Eligibility.IsBPL" or "Applicant.HasDisability" or "Family.IsSingleChild" or "Family.IsSingleParentChild")
 					source.CurrentValues[field.Code] = JsonSerializer.SerializeToElement(flag);
 			}
+	}
+	private Task<string> CaptureSectionAsync(Guid studentId, string section, StudentRecordSectionReadScope? scope)
+	{
+		var payloads = LazyServiceProvider.LazyGetRequiredService<StudentRecordPayloadService>();
+		return scope == null ? payloads.CaptureAsync(studentId, section) : payloads.CaptureAsync(studentId, section, scope);
 	}
 	private static bool IsComplianceField(string? binding) => binding is "Identity.AadhaarNumber" or "Identity.ApaarId" or "Identity.PenNumber" or "Identity.UdiseStudentCode";
 	private static bool IsLocationField(AdmissionFormFieldDto field)

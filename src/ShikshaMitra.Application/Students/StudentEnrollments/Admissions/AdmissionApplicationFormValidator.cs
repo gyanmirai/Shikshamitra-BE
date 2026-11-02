@@ -107,7 +107,8 @@ public class AdmissionApplicationFormValidator(AdmissionWorkflowConditionEvaluat
 		var visible = IsVisible(field.VisibilityRuleJson, values) && IsVisible(sectionRule, values);
 		var value = values.GetValueOrDefault(field.Code, string.Empty);
 		var conditionallyRequired = visible && !string.IsNullOrWhiteSpace(field.RequiredRuleJson) && IsVisible(field.RequiredRuleJson, values);
-		if (visible && (field.Required || conditionallyRequired) && string.IsNullOrWhiteSpace(value))
+		if (visible && !AdmissionSubmissionIdentityValidator.IsOptionalNamePart(field) &&
+			(field.Required || conditionallyRequired) && string.IsNullOrWhiteSpace(value))
 		{
 			var message = Message(field, "required", $"{field.Code} is required.");
 			errors.Add(message);

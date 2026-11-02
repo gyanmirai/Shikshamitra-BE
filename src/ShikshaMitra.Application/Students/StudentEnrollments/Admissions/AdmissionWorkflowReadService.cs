@@ -78,14 +78,12 @@ public class AdmissionWorkflowReadService(
 		var offeringCounts = await GetOfferingCountsAsync(ids);
 		var campusCounts = await GetCampusCountsAsync(ids);
 		var applicationCounts = await GetApplicationCountsAsync(ids);
-		var result = new List<AdmissionWorkflowDto>(versions.Count);
-		foreach (var version in versions)
+		var result = await definitionStore.GetDtosAsync(versions);
+		foreach (var dto in result)
 		{
-			var dto = await definitionStore.GetDtoAsync(version);
-			dto.OfferingCount = offeringCounts.GetValueOrDefault(version.Id);
-			dto.CampusCount = campusCounts.GetValueOrDefault(version.Id);
-			dto.ApplicationCount = applicationCounts.GetValueOrDefault(version.Id);
-			result.Add(dto);
+			dto.OfferingCount = offeringCounts.GetValueOrDefault(dto.Id);
+			dto.CampusCount = campusCounts.GetValueOrDefault(dto.Id);
+			dto.ApplicationCount = applicationCounts.GetValueOrDefault(dto.Id);
 		}
 		return result;
 	}
@@ -123,14 +121,16 @@ public class AdmissionWorkflowReadService(
 	private async Task<AdmissionWorkflowRuntimeAnalyticsDto> GetRuntimeAnalyticsAsync(Guid workflowId)
 	{
 		var workflowQuery = await workflowInstanceRepository.GetQueryableAsync();
-		var instances = await AsyncExecuter.ToListAsync(
-			workflowQuery.Where(instance => instance.WorkflowDefinitionId == workflowId));
+		var matchingInstances = workflowQuery.Where(instance => instance.WorkflowDefinitionId == workflowId);
+		var instances = await AsyncExecuter.ToListAsync(matchingInstances
+			.Select(instance => new { instance.Status, instance.StartedAt, instance.CompletedAt }));
 		if (instances.Count == 0) return new AdmissionWorkflowRuntimeAnalyticsDto();
 
-		var instanceIds = instances.Select(instance => instance.Id).ToList();
 		var stageQuery = await stageInstanceRepository.GetQueryableAsync();
 		var stageInstances = await AsyncExecuter.ToListAsync(
-			stageQuery.Where(stage => instanceIds.Contains(stage.WorkflowInstanceId)));
+			stageQuery.Where(stage => matchingInstances.Any(instance => instance.Id == stage.WorkflowInstanceId))
+				.Select(stage => new { stage.DefinitionStageId, stage.Code, stage.Name, stage.StageType,
+					stage.DisplayOrder, stage.Status, stage.EnteredAt, stage.CompletedAt }));
 		var completedInstances = instances
 			.Where(instance => instance.Status == AdmissionWorkflowInstanceStatus.Completed)
 			.ToList();

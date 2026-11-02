@@ -58,7 +58,11 @@ public class StudentRecordReportGenerator(IStudentDirectoryAppService directory,
 		var query = from d in await documents.GetQueryableAsync() join s in studentQuery on d.StudentId equals s.Id
 			where d.TenantId == CurrentTenant.Id && (!input.StudentId.HasValue || d.StudentId == input.StudentId) &&
 			(!input.AcademicYearId.HasValue || d.AcademicYearId == input.AcademicYearId) && (input.Status == null || d.Action == input.Status)
-			select new { Document = d, Student = s };
+			select new
+			{
+				Document = new { d.Id, d.AcademicYearId, d.DocumentType, d.Action, d.CreationTime, d.Reason },
+				Student = new { s.AcademicYearId, s.FirstName, s.LastName }
+			};
 		result.TotalCount = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query.OrderByDescending(x => x.Document.CreationTime).ThenBy(x => x.Document.Id).Skip(input.SkipCount).Take(input.MaxResultCount));
 		var roleNames = await access.GetDatabaseRoleNamesAsync();

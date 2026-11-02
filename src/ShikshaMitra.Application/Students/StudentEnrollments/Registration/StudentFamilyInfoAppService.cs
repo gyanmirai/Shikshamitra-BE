@@ -1,6 +1,7 @@
 ﻿using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.StudentEnrollments.Helpers;
 using System;
+using ShikshaMitra.Students.Records;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -34,7 +35,9 @@ public class StudentFamilyInfoAppService : StudentRegistrationBaseAppService,
 		this.studentScopeAccessService = studentScopeAccessService;
 	}
 
-    public async Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId)
+    public Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId) => ReadAsync(studentId, null);
+    internal Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId, StudentRecordSectionReadScope scope) => ReadAsync(studentId, scope);
+    private async Task<StudentFamilyInfoDto> ReadAsync(Guid studentId, StudentRecordSectionReadScope? scope)
     {
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
@@ -42,7 +45,9 @@ public class StudentFamilyInfoAppService : StudentRegistrationBaseAppService,
             StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyInfo,
             includeStudentRecords: true);
 
-        var familyDetail = await familyDetailRepository.FindAsync(studentId);
+        scope?.RequireContext(studentId, CurrentTenant.Id, CurrentUser.Id, CurrentUnitOfWork);
+        var familyDetail = scope == null ? await familyDetailRepository.FindAsync(studentId) :
+            await scope.ReadAsync("family", () => familyDetailRepository.FindAsync(studentId));
 
         var result = new StudentFamilyInfoDto
         {

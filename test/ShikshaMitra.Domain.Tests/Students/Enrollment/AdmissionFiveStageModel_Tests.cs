@@ -45,15 +45,25 @@ public class AdmissionFiveStageModel_Tests
 	}
 
 	[Theory]
-	[InlineData(0)]
-	[InlineData(3)]
-	public void Unknown_policy_version_is_rejected_instead_of_silently_downgraded(int version)
+	[InlineData(1)]
+	[InlineData(2)]
+	public void Supported_assessment_policy_versions_are_preserved_when_normalized(int version)
+	{
+		var json = AdmissionStageConfiguration.Normalize(AdmissionWorkflowStageType.Assessment,
+			JsonSerializer.Serialize(new { assessment = new { version, maxAttempts = 1 } }));
+		var policy = AdmissionAssessmentPolicy.Read(json);
+		policy.ShouldNotBeNull();
+		policy.Version.ShouldBe(version);
+		policy.Enabled.ShouldBeTrue();
+		policy.MaxAttempts.ShouldBe(1);
+	}
+
+	[Fact]
+	public void Unknown_policy_version_is_rejected_instead_of_silently_downgraded()
 	{
 		// Versions 1 and 2 are supported; keep this a genuinely unknown-version fixture.
 		var json = AdmissionStageConfiguration.Normalize(AdmissionWorkflowStageType.Assessment,
-			JsonSerializer.Serialize(new { assessment = new { version, maxAttempts = 1 } }));
-		using var normalized = JsonDocument.Parse(json!);
-		normalized.RootElement.GetProperty("assessment").GetProperty("version").GetInt32().ShouldBe(version);
+			"{\"assessment\":{\"version\":3,\"maxAttempts\":1}}");
 		Should.Throw<ArgumentException>(() => AdmissionAssessmentPolicy.Read(json));
 	}
 

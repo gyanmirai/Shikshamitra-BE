@@ -23,6 +23,7 @@ public class StudentRecordFieldOptionsService(AdmissionFormDataSourceRegistry re
 	public async Task PopulateAsync(StudentRecordRegistrationSourceDto source, bool canEdit, bool fullForm = false)
 	{
 		var cache = new Dictionary<string, List<AdmissionFormOptionDto>>();
+		var catalogues = new Dictionary<(string SourceKey, Guid? ParentId), FieldOptionsCatalogue>();
 		StudentDirectoryOptionsDto? permitted = null;
 		foreach (var section in source.Definition!.Sections)
 			foreach (var field in section.Fields)
@@ -48,7 +49,7 @@ public class StudentRecordFieldOptionsService(AdmissionFormDataSourceRegistry re
 					{
 						var cacheKey = $"{key}:{parentId}:{available}:{string.Join(',', selected.Order())}";
 						if (!cache.TryGetValue(cacheKey, out var result))
-							cache[cacheKey] = result = await ResolveAsync(source.AcademicYearId, key, parentId, selected, available, null, 0, 20, permitted);
+							cache[cacheKey] = result = await ResolveAsync(source.AcademicYearId, key, parentId, selected, available, null, 0, 20, permitted, catalogues);
 						return result;
 					}
 				}
@@ -92,7 +93,8 @@ public class StudentRecordFieldOptionsService(AdmissionFormDataSourceRegistry re
 	}
 
 	private async Task<List<AdmissionFormOptionDto>> ResolveAsync(Guid year, string key, Guid? parent, List<Guid> selected, bool available,
-		string? search, int skip, int max, StudentDirectoryOptionsDto? permitted = null)
+		string? search, int skip, int max, StudentDirectoryOptionsDto? permitted = null,
+		Dictionary<(string SourceKey, Guid? ParentId), FieldOptionsCatalogue>? catalogues = null)
 	{
 		key = AdmissionFormDataSourceRegistry.Metadata.First(x => x.Key.Equals(key, StringComparison.OrdinalIgnoreCase)).Key;
 		if (key.Equals("StudentSiblings", StringComparison.OrdinalIgnoreCase))
@@ -120,18 +122,18 @@ public class StudentRecordFieldOptionsService(AdmissionFormDataSourceRegistry re
 			return Merge(choices, await SiblingLabelsAsync(selected));
 		}
 		permitted ??= await directoryOptions.GetAsync(year);
-		var permittedStandardIds = permitted.Standards.Select(x => x.Id).ToArray();
-		var allowedIds = key switch
+		var catalogue = catalogues?.GetValueOrDefault((key, parent));
+		if (catalogue == null)
 		{
-			"EducationBoards" => permitted.Boards.Select(x => x.Id).ToHashSet(),
-			"EducationMediums" => permitted.Mediums.Where(x => x.ParentId == parent).Select(x => x.Id).ToHashSet(),
-			"Standards" => permitted.Standards.Where(x => !parent.HasValue || x.ParentId == parent).Select(x => x.Id).ToHashSet(),
-			"StandardsByMedium" => permitted.Standards.Where(x => x.ParentId == parent).Select(x => x.Id).ToHashSet(),
-			"DivisionsByStandard" => permitted.Divisions.Where(x => x.ParentId == parent).Select(x => x.Id).ToHashSet(),
-			"StandardsByMediumStage" => (await AsyncExecuter.ToListAsync((await standards.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id &&
-				x.EducationMediumStageId == parent && Enumerable.Contains(permittedStandardIds, x.Id)).Select(x => x.Id))).ToHashSet(), _ => []
-		};
-		var options = (await registry.GetOptionsAsync(key, parent, year)).Where(x => Guid.TryParse(x.Value, out var id) && allowedIds.Contains(id)).ToList();
+			catalogue = await ReadCatalogueAsync(year, key, parent, permitted, catalogues != null);
+			if (catalogues != null) catalogues[(key, parent)] = catalogue;
+		}
+		var allowedIds = catalogue.AllowedIds;
+		// Distinct final selections retain independent DTO instances, as with independent registry reads.
+		var options = catalogues == null ? catalogue.Options : catalogue.Options.Select(option => new AdmissionFormOptionDto
+		{
+			Value = option.Value, Label = option.Label, DisplayOrder = option.DisplayOrder, IsActive = option.IsActive
+		}).ToList();
 		// Resolve reviewed proposals even when their parent differs from today's parent.
 		var knownLabels = key switch
 		{
@@ -146,6 +148,27 @@ public class StudentRecordFieldOptionsService(AdmissionFormDataSourceRegistry re
 		if (!available) return labels;
 		if (!string.IsNullOrWhiteSpace(search)) options = options.Where(x => x.Label.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
 		return Merge(options, labels);
+	}
+
+	private sealed record FieldOptionsCatalogue(HashSet<Guid> AllowedIds, List<AdmissionFormOptionDto> Options);
+
+	private async Task<FieldOptionsCatalogue> ReadCatalogueAsync(Guid year, string key, Guid? parent, StudentDirectoryOptionsDto permitted, bool reuseHierarchy)
+	{
+		var permittedStandardIds = permitted.Standards.Select(x => x.Id).ToArray();
+		var allowedIds = key switch
+		{
+			"EducationBoards" => permitted.Boards.Select(x => x.Id).ToHashSet(),
+			"EducationMediums" => permitted.Mediums.Where(x => x.ParentId == parent).Select(x => x.Id).ToHashSet(),
+			"Standards" => permitted.Standards.Where(x => !parent.HasValue || x.ParentId == parent).Select(x => x.Id).ToHashSet(),
+			"StandardsByMedium" => permitted.Standards.Where(x => x.ParentId == parent).Select(x => x.Id).ToHashSet(),
+			"DivisionsByStandard" => permitted.Divisions.Where(x => x.ParentId == parent).Select(x => x.Id).ToHashSet(),
+			"StandardsByMediumStage" => (await AsyncExecuter.ToListAsync((await standards.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id &&
+				x.EducationMediumStageId == parent && Enumerable.Contains(permittedStandardIds, x.Id)).Select(x => x.Id))).ToHashSet(), _ => []
+		};
+		var options = reuseHierarchy && AdmissionAcademicFormOptions.IsAcademic(key)
+			? AdmissionFormDataSourceRegistry.MapAcademicOptions(key, parent, permitted)
+			: await registry.GetOptionsAsync(key, parent, year);
+		return new(allowedIds, options.Where(x => Guid.TryParse(x.Value, out var id) && allowedIds.Contains(id)).ToList());
 	}
 
 	private async Task<List<AdmissionFormOptionDto>> SiblingLabelsAsync(IReadOnlyCollection<Guid> ids)

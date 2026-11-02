@@ -153,6 +153,14 @@ dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~Admissio
 
 `AdmissionAcademicOptionsUnit_Tests` covers legacy academic descriptors, the lowercase public-choice JSON contract, and owning View permissions without opening unrelated form sources. `Academic_form_choices_use_Institute_Setup_IDs_and_parent_membership` verifies configured class/division GUIDs, year/medium/class boundaries, public-offering choices and rejection of former hardcoded labels. Retain `Custom_record_dynamic_choices_are_record_bound_and_read_only_lookup_returns_only_selected_labels` when changing Records choice projection. These checks use the test database; they do not establish acceptance by a previously running Host process.
 
+`StudentRecordFieldOptionsReadPerformance_Tests.cs` covers per-operation catalogue reuse in `StudentRecordFieldOptionsService` with one versus four distinct selected rows and complete canonical-query JSON parity.
+The scoped catalogue and parent membership are shared only within one retained source projection; row-specific labels, availability, original parents, ordering and masks remain intact, while standalone option queries and saved-change validation stay fresh.
+The fixture also checks missing parents, independent option DTOs, later catalogue changes and actor revocation.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Records_field_options_"
+```
+
 ## Onboarding App Login (28 October 2026)
 
 The final owning Application regression passes **125/125**, zero skips, across existing credential/dispatcher/sibling/email-edit/validation scenarios and the new Onboarding-only Parent confirmation cases. Domain outbox checks pass **8/8**. After the final policy/mailbox projection correction, a separate focused gate passes **6/6**; the full regression was not repeated solely for these narrow guards.
@@ -606,6 +614,25 @@ On 26 October 2026, 28 distinct focused cases passed across the dispatcher, temp
 Focused local compile/test results and remaining acceptance limits must be reported separately from deployment readiness.
 
 ## Student Attendance verification
+
+Read-performance regressions live under `test/ShikshaMitra.Application.Tests/Students/Attendance/`.
+`AttendanceReadPerformance_Tests` covers grouped leave counters, exact persisted leave-page/audit parity without attachment or Student aggregate hydration, shared report reads across divisions, submitted credits, moved enrollments and partial scope.
+Its raw legacy dashboard fixtures retain same-date ties and non-midnight placement paths without relying on saved entries to recover missing membership.
+The complete-class Directory fixture compares 1/201 pupils with canonical paged Directory results, preserves the selected-year Identity mask when the current-year policy differs, and checks dated recorded statuses, eligibility and count/policy query growth.
+`AttendancePlacementReadAllocation_Tests` measures repeated dated membership reads and verifies cache invalidation, raw legacy ties and date boundaries.
+`AttendanceSummaryQueryCompatibility_Tests` preserves the literal legacy correction JSON used for durable retries.
+The HTTP `Daily_facts_opt_out_skips_annual_report_queries_and_preserves_roster_and_action_capabilities` fixture compares the default and daily-only responses and checks that the opt-out emits no annual entry-range query.
+The supporting `StandardLookupApi_Tests` fixture compares the upload screens' scalar lookup with the existing full Standard list across more than ten classes, multiple years, order changes, deleted ancestry and explicit Standard/Division scope; it also preserves the existing authenticated action-policy behavior.
+
+Follow the repository [build and run guidance](../../../AGENTS.md#build--run) before running these focused gates:
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter 'FullyQualifiedName~AttendanceReadPerformance_Tests|FullyQualifiedName~AttendancePlacementPathParity_Tests|FullyQualifiedName~AttendancePlacementReadAllocation_Tests|FullyQualifiedName~AttendanceSummaryQueryCompatibility_Tests'
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~Daily_facts_opt_out_skips_annual_report_queries_and_preserves_roster_and_action_capabilities
+```
+
+Synthetic SQLite query/allocation checks and HTTP fixtures do not establish PostgreSQL page-plan equivalence, authenticated browser acceptance or staging/production latency.
+Compare generated provider SQL and the final local runtime separately, retaining exact required-parent paging and scope behavior.
 
 | Gate | Focus |
 |---|---|
@@ -1331,11 +1358,13 @@ The verified localhost API uses the same Release Application assembly as the pos
 
 `MobileStudentPhoto_Tests` covers parent/self submissions, exact retry and stale snapshot behavior, live View/Add denial, revoked association access, school approval and application conflict retaining the previous photo, and upload type/size boundaries. `MobileStudentPhotoApiContract_Tests` covers the five-route permission contract, preservation of the profile read, an oversized stream with a false reported length, and exact-limit HTTP delegation.
 
+`StudentUploadSwaggerApi_Tests` checks the real Student Swagger document, mobile binary `file` schema, existing upload routes and unavailable-student/unknown-tenant denial. `StudentPhotoMultipartApi_Tests` retains MVC/auth middleware and substitutes only the application boundary to verify the exact multipart field, binary metadata, 3 MiB limit, extra/missing/empty file rejection and View/Add denial. Direct `IFormFile` parameters use inferred file binding, as required by the installed [Swashbuckle 6.8.1 upload guidance](https://github.com/domaindrivendev/Swashbuckle.AspNetCore/blob/v6.8.1/README.md#handle-forms-and-file-uploads); form DTO and scalar bindings remain explicit.
+
 Run pinned .NET 9 focused checks:
 
 ```powershell
 dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Portal_photo|FullyQualifiedName~Mobile_profile|FullyQualifiedName~Record_photo"
-dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~MobileStudentPhotoApiContract_Tests|FullyQualifiedName~MobileStudentProfileApiContract_Tests"
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~MobileStudentPhotoApiContract_Tests|FullyQualifiedName~MobileStudentProfileApiContract_Tests|FullyQualifiedName~StudentUploadSwaggerApi_Tests|FullyQualifiedName~StudentPhotoMultipartApi_Tests"
 ```
 
 Application fixtures use SQLite with transactions disabled. StudentPhotoConcurrencyPostgres_Tests separately exercises the real EF row fence against an explicitly configured disposable loopback photo_tests_* PostgreSQL database, including ReadCommitted contention and an admission-style prior Serializable snapshot. Set STUDENT_PHOTO_POSTGRES only to that isolated test database. Image validation requires SkiaSharp SKCodec.GetPixels to return Success after PNG chunk/CRC and JPEG complete-scan framing checks, with a 4096-by-4096 pixel allocation bound. SkiaSharp and its Linux NoDependencies native assets are pinned to 4.153.1; Windows assets arrive through the main package. Tests include valid JPEG/PNG, CRC-repaired corrupt PNG pixels, an empty JPEG scan, and nonzero truncated JPEG input. Local tests and source checks do not establish deployed permission/association revocation or live deployment acceptance.

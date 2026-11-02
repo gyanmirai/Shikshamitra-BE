@@ -70,11 +70,32 @@ public partial class TimetableAppService(
             .GroupBy(a => a.SubjectId)
             .ToDictionary(g => g.Key, g => g.First().Id);
         var selectedElectiveSubjectIdsByGroup = await GetSelectedElectiveSubjectIdsByGroupAsync(standardId, divisionId);
-        var needsSubjectData = hasSavedData || assignedSubjects.Count > 0;
+        var savedSubjects = timetable?.Slots.SelectMany(slot => slot.Subjects).ToList() ?? [];
+        var savedElectiveGroupIds = timetable?.Slots
+            .Where(slot => slot.ElectiveGroupId.HasValue)
+            .Select(slot => slot.ElectiveGroupId!.Value)
+            .Distinct().ToArray() ?? [];
+        // Division selections can synthesize an unsaved subject with no allocation.
+        // Retain raw saved references too, including allocations being revised as Draft.
+        var subjectIds = savedSubjects.Select(subject => subject.SubjectId)
+            .Concat(assignedSubjects.Select(assignment => assignment.SubjectId))
+            .Concat(selectedElectiveSubjectIdsByGroup
+                .Where(selection => Enumerable.Contains(savedElectiveGroupIds, selection.Key))
+                .SelectMany(selection => selection.Value))
+            .Distinct().ToArray();
+        var electiveGroupIds = savedElectiveGroupIds
+            .Concat(assignedSubjects.Where(assignment => assignment.ElectiveGroupId.HasValue)
+                .Select(assignment => assignment.ElectiveGroupId!.Value))
+            .Distinct().ToArray();
+        var roomIds = savedSubjects.Where(subject => subject.RoomId.HasValue)
+            .Select(subject => subject.RoomId!.Value).Distinct().ToArray();
 
-        var subjects = needsSubjectData ? await subjectRepository.GetListAsync() : [];
-        var electiveGroups = needsSubjectData ? await electiveGroupRepository.GetListAsync() : [];
-        var rooms = hasSavedData ? await roomRepository.GetListAsync() : [];
+        var subjects = subjectIds.Length > 0
+            ? await subjectRepository.GetListAsync(subject => Enumerable.Contains(subjectIds, subject.Id)) : [];
+        var electiveGroups = electiveGroupIds.Length > 0
+            ? await electiveGroupRepository.GetListAsync(group => Enumerable.Contains(electiveGroupIds, group.Id)) : [];
+        var rooms = roomIds.Length > 0
+            ? await roomRepository.GetListAsync(room => Enumerable.Contains(roomIds, room.Id)) : [];
 
         var teacherIds = hasSavedData
             ? timetable!.Slots.SelectMany(s => s.Subjects).Select(sub => sub.TeacherId).Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList()

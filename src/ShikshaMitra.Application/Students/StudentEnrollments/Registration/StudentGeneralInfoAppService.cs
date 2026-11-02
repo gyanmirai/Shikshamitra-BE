@@ -1,4 +1,5 @@
 using System;
+using ShikshaMitra.Students.Records;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
@@ -40,6 +41,9 @@ public class StudentGeneralInfoAppService : StudentRegistrationBaseAppService,
 	}
 
 	public async Task<StudentGeneralDetailsDto> GetRegistrationGeneralDetailsByIdAsync(Guid studentId)
+		=> (await ReadAsync(studentId, null)).Details;
+	internal Task<StudentRecordGeneralSection> GetRecordsSectionAsync(Guid studentId, StudentRecordSectionReadScope scope) => ReadAsync(studentId, scope);
+	private async Task<StudentRecordGeneralSection> ReadAsync(Guid studentId, StudentRecordSectionReadScope? scope)
 	{
 		var student = await GetScopedRegistrationStudentAsync(
 			studentId,
@@ -47,10 +51,11 @@ public class StudentGeneralInfoAppService : StudentRegistrationBaseAppService,
 			StudentRegistrationErrorCodes.InvalidStatusForRegistrationView,
 			includeStudentRecords: true);
 
+		scope?.RequireContext(studentId, CurrentTenant.Id, CurrentUser.Id, CurrentUnitOfWork);
 		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
 		await ApplyComplianceMaskAsync(studentId, result);
 
-		return result;
+		return new(result, student.DivisionId, student.AdditionalDetail?.ProfilePictureUrl);
 	}
 
 	public async Task<StudentGeneralDetailsDto> UpdateGeneralInfoAsync(Guid studentId, UpdateGeneralInfoDto input)

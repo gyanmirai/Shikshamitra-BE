@@ -108,6 +108,10 @@ public class AdmissionApplicationAppService(
 		Guid id,
 		UpdateAdmissionApplicationFormValuesDto input) => formService.UpdateAsync(id, input);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit)]
+	public Task<AdmissionApplicationFormDto> CorrectFormAsync(Guid id, CorrectAdmissionApplicationFormDto input) =>
+		formService.CorrectAsync(id, input);
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Submit)]
 	public Task<AdmissionApplicationSubmitResultDto> SubmitAsync(Guid id) => formService.SubmitAsync(id);
 

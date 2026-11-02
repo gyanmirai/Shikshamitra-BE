@@ -22,10 +22,12 @@ public class VariableFeePricing_Tests
         Assert.Throws<BusinessException>(() => detail.UpdateAmount(100));
         detail.SetPricing(false, 100.01m);
         Assert.False(detail.IsVariable);
-        // Fixed fee pricing rounds valid currency input upward to whole rupees.
         Assert.Equal(101m, detail.Amount);
+        Assert.Equal(optional, detail.IsOptional);
         detail.SetPricing(true, null);
         Assert.Null(detail.Amount);
+        Assert.True(detail.IsVariable);
+        Assert.Equal(optional, detail.IsOptional);
     }
 
     [Fact]

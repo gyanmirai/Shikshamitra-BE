@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -41,6 +42,7 @@ public partial class StudentOnboardingAppService
 			OnboardingRuleConfiguration.Text(config.Root.GetProperty("grNumber"), "assignmentMode") == "automatic"))
 			throw OnboardingRuleConfiguration.Invalid("Manual GR entry is not allowed by the published rule.");
 		long sequence; string value;
+		var collisionRead = new GrCollisionReadContext();
 		if (manual)
 		{
 			sequence = input.ManualSequence ?? 0; value = input.ManualValue!.Trim();
@@ -53,10 +55,10 @@ public partial class StudentOnboardingAppService
 			if (!automaticByLock && config != null && OnboardingRuleConfiguration.Text(config.Root.GetProperty("grNumber"), "assignmentMode") == "manual")
 				throw OnboardingRuleConfiguration.Invalid("Enter a GR number under the manual assignment rule.");
 			do { (sequence, value) = series.Allocate(Clock.Now); }
-			while (await GrValueExistsAsync(value, student.Id, existing?.Id));
+			while (await GrValueExistsAsync(value, student.Id, existing?.Id, collisionRead));
 			await seriesRepository.UpdateAsync(series, false);
 		}
-		if (value.Length > 100 || await GrValueExistsAsync(value, student.Id, existing?.Id))
+		if (value.Length > 100 || await GrValueExistsAsync(value, student.Id, existing?.Id, collisionRead))
 			throw new BusinessException(StudentOnboardingErrorCodes.IdentifierAlreadyAllocated);
 		if (existing == null)
 		{
@@ -74,18 +76,42 @@ public partial class StudentOnboardingAppService
 		var result = await MapCaseAsync(item, true); await work.CompleteAsync(); return result;
 	}
 
-	private async Task<bool> GrValueExistsAsync(string value, Guid studentId, Guid? allocationId)
+	private sealed class GrCollisionReadContext
+	{
+		public HashSet<int>? ReservedNumbers { get; set; }
+		public HashSet<int>? AssignedNumbers { get; set; }
+	}
+
+	private async Task<bool> GrValueExistsAsync(string value, Guid studentId, Guid? allocationId, GrCollisionReadContext read)
 	{
 		var numeric = int.TryParse(value, out var number) ? (int?)number : null;
-        if (await allocationRepository.AnyAsync(a => a.Id != allocationId && a.IdentifierType == StudentIdentifierType.GrNumber && a.Value == value) ||
-            await studentRepository.AnyAsync(s => s.Id != studentId && (s.GrNumber == value || numeric.HasValue && s.GrNo == numeric))) return true;
-        if (!numeric.HasValue) return false;
-        var reservedValues = await AsyncExecuter.ToListAsync((await allocationRepository.GetQueryableAsync())
-            .Where(a => a.Id != allocationId && a.IdentifierType == StudentIdentifierType.GrNumber).Select(a => a.Value));
-        if (reservedValues.Any(v => int.TryParse(v, out var reservedNumber) && reservedNumber == numeric.Value)) return true;
-        var canonicalValues = await AsyncExecuter.ToListAsync((await studentRepository.GetQueryableWithoutAutoIncludesAsync())
-            .Where(s => s.Id != studentId && s.GrNumber != null).Select(s => s.GrNumber));
-        return canonicalValues.Any(v => int.TryParse(v, out var assignedNumber) && assignedNumber == numeric.Value);
+		if (await allocationRepository.AnyAsync(a => a.Id != allocationId && a.IdentifierType == StudentIdentifierType.GrNumber && a.Value == value) ||
+			await studentRepository.AnyAsync(s => s.Id != studentId && (s.GrNumber == value || numeric.HasValue && s.GrNo == numeric))) return true;
+		if (!numeric.HasValue) return false;
+		// The caller owns one Serializable allocation transaction. Keep its indexed exact
+		// checks, but parse unchanged numeric-equivalence metadata only once per operation.
+		if (read.ReservedNumbers == null)
+		{
+			var values = await AsyncExecuter.ToListAsync((await allocationRepository.GetQueryableAsync())
+				.Where(a => a.Id != allocationId && a.IdentifierType == StudentIdentifierType.GrNumber).Select(a => a.Value));
+			read.ReservedNumbers = NumericValues(values);
+		}
+		if (read.ReservedNumbers.Contains(numeric.Value)) return true;
+		if (read.AssignedNumbers == null)
+		{
+			var values = await AsyncExecuter.ToListAsync((await studentRepository.GetQueryableWithoutAutoIncludesAsync())
+				.Where(s => s.Id != studentId && s.GrNumber != null).Select(s => s.GrNumber));
+			read.AssignedNumbers = NumericValues(values);
+		}
+		return read.AssignedNumbers.Contains(numeric.Value);
+	}
+
+	private static HashSet<int> NumericValues(IEnumerable<string?> values)
+	{
+		var numbers = new HashSet<int>();
+		foreach (var value in values)
+			if (int.TryParse(value, out var number)) numbers.Add(number);
+		return numbers;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]

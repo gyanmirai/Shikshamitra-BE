@@ -18,6 +18,6 @@ public class StudentIdCardConfiguration : IEntityTypeConfiguration<StudentIdCard
 	public void Configure(EntityTypeBuilder<StudentIdCardTemplate> b)
 	{
 		b.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentIdCardTemplates", ShikshaMitraConsts.DbSchema); b.ConfigureByConvention();
-		b.Property(x => x.ConfigurationJson).HasColumnType("jsonb").IsRequired(); b.HasIndex(x => x.TenantId).IsUnique();
+		b.Property(x => x.ConfigurationJson).HasColumnType("jsonb").IsRequired(); b.HasIndex(x => x.TenantId);
 	}
 }

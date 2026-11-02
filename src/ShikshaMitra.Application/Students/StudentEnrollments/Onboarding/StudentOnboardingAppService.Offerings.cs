@@ -22,31 +22,27 @@ public partial class StudentOnboardingAppService
         var cycles = await cycleRepository.GetListAsync(c =>
             (!academicYearId.HasValue || c.AcademicYearId == academicYearId.Value) &&
             (yearScope.HasAllAcademicYears || Enumerable.Contains(yearIds, c.AcademicYearId)));
+        // Reuse the tenant and academic-scope reader without requiring a separate Admissions menu permission.
+        var offerings = (await reader.GetCatalogueAsync(cycles.Select(cycle => cycle.Id).ToArray()))
+            .ToLookup(item => item.Row.AdmissionCycleId);
         var result = new List<OnboardingAvailableOfferingDto>();
         foreach (var cycle in cycles)
         {
-            var skip = 0;
-            while (true)
+            foreach (var item in offerings[cycle.Id])
             {
-                // Reuse the tenant and academic-scope reader without requiring the separate Admissions menu permission.
-                var page = await reader.GetListAsync(new AdmissionOfferingListInput { AdmissionCycleId = cycle.Id, SkipCount = skip, MaxResultCount = 1000 });
-                var ids = page.Items.Select(o => o.Id).ToArray();
-                var offeringById = (await offeringRepository.GetListAsync(o => Enumerable.Contains(ids, o.Id))).ToDictionary(o => o.Id);
-                foreach (var row in page.Items)
-                    result.Add(new OnboardingAvailableOfferingDto
-                    {
-                        Id = row.Id, Name = row.Name, Code = row.Code, AdmissionCycleId = row.AdmissionCycleId,
-                        AdmissionCycleName = row.AdmissionCycleName, AcademicYearId = cycle.AcademicYearId,
-                        CampusId = row.CampusId, CampusName = row.CampusName, BoardId = row.BoardId, BoardName = row.BoardName,
-                        MediumId = row.MediumId, MediumName = row.MediumName, StageId = row.StageId, StageName = row.StageName,
-                        StandardId = row.StandardId, StandardName = row.StandardName, Track = row.Track, EntryMode = row.EntryMode,
-                        IsActive = row.IsActive, WorkflowName = row.WorkflowName, WorkflowVersion = row.WorkflowVersion,
-                        WorkflowDefinitionId = offeringById[row.Id].WorkflowDefinitionId,
-                        EffectiveOpenDate = row.EffectiveOpenDate, EffectiveCloseDate = row.EffectiveCloseDate,
-                        AvailabilityStatus = row.AvailabilityStatus, ConfigurationStatus = row.ConfigurationStatus, ApplicationCount = row.ApplicationCount
-                    });
-                skip += page.Items.Count;
-                if (skip >= page.TotalCount || page.Items.Count == 0) break;
+                var row = item.Row;
+                result.Add(new OnboardingAvailableOfferingDto
+                {
+                    Id = row.Id, Name = row.Name, Code = row.Code, AdmissionCycleId = row.AdmissionCycleId,
+                    AdmissionCycleName = row.AdmissionCycleName, AcademicYearId = cycle.AcademicYearId,
+                    CampusId = row.CampusId, CampusName = row.CampusName, BoardId = row.BoardId, BoardName = row.BoardName,
+                    MediumId = row.MediumId, MediumName = row.MediumName, StageId = row.StageId, StageName = row.StageName,
+                    StandardId = row.StandardId, StandardName = row.StandardName, Track = row.Track, EntryMode = row.EntryMode,
+                    IsActive = row.IsActive, WorkflowName = row.WorkflowName, WorkflowVersion = row.WorkflowVersion,
+                    WorkflowDefinitionId = item.WorkflowDefinitionId,
+                    EffectiveOpenDate = row.EffectiveOpenDate, EffectiveCloseDate = row.EffectiveCloseDate,
+                    AvailabilityStatus = row.AvailabilityStatus, ConfigurationStatus = row.ConfigurationStatus, ApplicationCount = row.ApplicationCount
+                });
             }
         }
         return result.OrderBy(o => o.Name).ToList();

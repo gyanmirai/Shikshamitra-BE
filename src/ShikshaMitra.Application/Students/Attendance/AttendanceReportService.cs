@@ -12,7 +12,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.Attendance;
 
 [RemoteService(false)]
-public class AttendanceReportService : ApplicationService, ITransientDependency
+public partial class AttendanceReportService : ApplicationService, ITransientDependency
 {
 	private readonly AttendanceApplicabilityResolver applicability;
 	private readonly IRepository<AcademicYear, Guid> years;
@@ -57,28 +57,50 @@ public class AttendanceReportService : ApplicationService, ITransientDependency
 		DateTime start, DateTime end, IReadOnlyCollection<StudentEnrollment> members, bool includeDaily)
 	{
 		await scope.EnsureCanAccessAttendanceScopeAsync(yearId, standardId, divisionId, "attendance report");
-		var context = await applicability.LoadAsync(yearId, standardId, divisionId, start, end, members.Select(e => e.Id).ToArray());
+		return (await BuildAuthorizedAsync(yearId, start, end, [new(standardId, divisionId, members)], includeDaily)).Single().Rows;
+	}
+
+	private async Task<List<AttendanceReportSlice>> BuildAuthorizedAsync(Guid yearId, DateTime start, DateTime end,
+		IReadOnlyCollection<AttendanceReportSliceRequest> requests, bool includeDaily)
+	{
+		var contexts = await applicability.LoadManyAsync(yearId, requests.Select(request => (request.StandardId, request.DivisionId)).Distinct().ToArray(), start, end);
+		var ids = requests.SelectMany(request => request.Members).Select(member => member.StudentId).Distinct().ToArray();
+		var identities = (await AsyncExecuter.ToListAsync((await students.GetQueryableWithoutAutoIncludesAsync())
+			.Where(s => s.TenantId == CurrentTenant.Id && Enumerable.Contains(ids, s.Id))
+			.Select(s => new AttendanceReportIdentity(s.Id, s.FirstName, s.MiddleName, s.LastName)))).ToDictionary(s => s.Id);
+		var dayQuery = FilterPaths(await days.GetQueryableAsync(), requests);
+		var entryQuery = await entries.GetQueryableAsync();
+		var records = await AsyncExecuter.ToListAsync(from entry in entryQuery
+			join day in dayQuery on entry.AttendanceDayId equals day.Id
+			where day.TenantId == CurrentTenant.Id && day.AcademicYearId == yearId &&
+				day.Date >= start && day.Date <= end && Enumerable.Contains(ids, entry.StudentId)
+			select new AttendanceReportRecord(new AttendanceReportEntry(entry.StudentId, entry.EnrollmentId, entry.Status,
+				entry.Late, entry.HalfDay, entry.Remarks, entry.ExpectedAtSubmission, entry.ExcludedFromPercentage,
+				entry.PresentCredit, entry.DenominatorCredit, entry.PolicySnapshotJson != null), day.Date, day.IsSubmitted, day.StandardId, day.DivisionId));
+		var recordsByPath = records.ToLookup(record => (record.StandardId, record.DivisionId));
+		return requests.Select(request => new AttendanceReportSlice(request.StandardId, request.DivisionId,
+			BuildRows(yearId, request.StandardId, request.DivisionId, start, end, request.Members, includeDaily,
+				contexts[request.DivisionId], identities, recordsByPath[(request.StandardId, request.DivisionId)]))).ToList();
+	}
+
+	private List<AttendanceSummaryDto> BuildRows(Guid yearId, Guid standardId, Guid divisionId, DateTime start, DateTime end,
+		IReadOnlyCollection<StudentEnrollment> members, bool includeDaily, AttendanceApplicabilityContext context,
+		IReadOnlyDictionary<Guid, AttendanceReportIdentity> identities, IEnumerable<AttendanceReportRecord> records)
+	{
 		var options = new Dictionary<DateTime, AttendancePolicyOptions>();
 		for (var date = start; date <= end; date = date.AddDays(1))
 		{
 			options[date] = new AttendancePolicyOptions();
 		}
-		var ids = members.Select(e => e.StudentId).ToArray();
-		var identities = await AsyncExecuter.ToListAsync((await students.GetQueryableWithoutAutoIncludesAsync()).Where(s => s.TenantId == CurrentTenant.Id && Enumerable.Contains(ids, s.Id)));
-		var dayQuery = await days.GetQueryableAsync(); var entryQuery = await entries.GetQueryableAsync();
-		var records = await AsyncExecuter.ToListAsync(from entry in entryQuery
-			join day in dayQuery on entry.AttendanceDayId equals day.Id
-			where day.TenantId == CurrentTenant.Id && day.AcademicYearId == yearId && day.StandardId == standardId && day.DivisionId == divisionId &&
-				day.Date >= start && day.Date <= end && Enumerable.Contains(ids, entry.StudentId)
-			select new AttendanceReportRecord(entry, day.Date, day.IsSubmitted));
+		var recordsByStudent = records.ToLookup(record => record.Entry.StudentId);
 		var result = new List<AttendanceSummaryDto>();
 		foreach (var member in members)
 		{
-			var student = identities.SingleOrDefault(s => s.Id == member.StudentId); if (student == null) continue;
+			if (!identities.TryGetValue(member.StudentId, out var student)) continue;
 			var row = new AttendanceSummaryDto { StudentId = student.Id, EnrollmentId = member.Id, AcademicYearId = yearId,
 				LowAttendanceThreshold = options[end].LowAttendanceThreshold,
 				FullName = string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }.Where(s => !string.IsNullOrWhiteSpace(s))), RollNo = member.AttendancePlacementOn(end)?.RollNumber ?? member.RollNumber };
-			var memberRecords = records.Where(r => r.Entry.StudentId == member.StudentId && (!r.Entry.EnrollmentId.HasValue || r.Entry.EnrollmentId == member.Id))
+			var memberRecords = recordsByStudent[member.StudentId].Where(r => !r.Entry.EnrollmentId.HasValue || r.Entry.EnrollmentId == member.Id)
 				.GroupBy(r => r.Date.Date).ToDictionary(g => g.Key, g => g.ToList());
 			var daily = new List<AttendanceSummaryDayDto>();
 			for (var date = start; date <= end; date = date.AddDays(1))
@@ -99,7 +121,7 @@ public class AttendanceReportService : ApplicationService, ITransientDependency
 					HalfDay = entry?.HalfDay ?? false, Remarks = entry?.Remarks, Expected = expected,
 					Recorded = !ambiguous && expected && entry?.Status is AttendanceStatus.Present or AttendanceStatus.Absent,
 					PresentCredit = entry?.PresentCredit ?? (entry?.Status == AttendanceStatus.Present ? 1 : 0), DenominatorCredit = entry?.DenominatorCredit ?? 1,
-					IsProvisional = ambiguous || expected && (record?.Submitted != true || entry?.PolicySnapshotJson == null) || !member.AttendanceStartDate.HasValue ||
+					IsProvisional = ambiguous || expected && (record?.Submitted != true || entry?.HasPolicySnapshot != true) || !member.AttendanceStartDate.HasValue ||
 						!recordedApplicability && memberExpected && date <= AttendanceSchoolDate.Today(options[date], Clock.Now) && applicable.IsProvisional,
 					ExclusionReason = ambiguous ? "Conflicting historical attendance records require review" : expected ? null : entry?.ExcludedFromPercentage == true ? "Approved leave excluded by recorded policy" : !memberExpected ? "No confirmed attendance membership" : date > AttendanceSchoolDate.Today(options[date], Clock.Now) ? "Future date" : applicable.Reason });
 			}
@@ -119,4 +141,7 @@ public class AttendanceReportService : ApplicationService, ITransientDependency
 		row.IsBelowThreshold = result.Percentage.HasValue && (decimal)result.Percentage.Value < row.LowAttendanceThreshold;
 	}
 }
-internal sealed record AttendanceReportRecord(AttendanceEntry Entry, DateTime Date, bool Submitted);
+internal sealed record AttendanceReportEntry(Guid StudentId, Guid? EnrollmentId, AttendanceStatus Status, bool Late, bool HalfDay,
+	string? Remarks, bool? ExpectedAtSubmission, bool ExcludedFromPercentage, double? PresentCredit, double DenominatorCredit, bool HasPolicySnapshot);
+internal sealed record AttendanceReportIdentity(Guid Id, string? FirstName, string? MiddleName, string? LastName);
+internal sealed record AttendanceReportRecord(AttendanceReportEntry Entry, DateTime Date, bool Submitted, Guid StandardId, Guid DivisionId);

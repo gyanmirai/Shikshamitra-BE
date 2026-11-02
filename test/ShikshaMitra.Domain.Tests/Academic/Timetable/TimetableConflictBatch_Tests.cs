@@ -57,35 +57,30 @@ public class TimetableConflictBatch_Tests
 	}
 
 	[Theory]
-	[InlineData("en-US", "09:15", "10:00")]
-	[InlineData("fi-FI", "09.15", "10.00")]
-	public async Task Validation_Should_Preserve_Teacher_First_Error_And_Conflict_Details(
-		string culture, string expectedStartTime, string expectedEndTime)
+	[InlineData(":")]
+	[InlineData(".")]
+	public async Task Validation_Should_Preserve_Teacher_First_Error_And_Conflict_Details(string timeSeparator)
 	{
-		var previousCulture = CultureInfo.CurrentCulture;
-		try
-		{
-			CultureInfo.CurrentCulture = new CultureInfo(culture, useUserOverride: false);
-			var candidate = Candidate(TimetableDayOfWeek.Monday, new TimeOnly(9, 15), new TimeOnly(10, 0));
-			SetCandidates(candidate);
+		using var culture = new CultureScope(timeSeparator);
+		var candidate = Candidate(TimetableDayOfWeek.Monday, new TimeOnly(9, 15), new TimeOnly(10, 0));
+		SetCandidates(candidate);
 
 			var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
 				Guid.NewGuid(), Guid.NewGuid(), [CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 30)]));
 
-			error.Code.ShouldBe(TimetableErrorCodes.TeacherConflict);
-			error.Data["message"].ShouldBe(
-				$"Teacher conflict: selected teacher is already assigned to another class Division another division for assigned subject on Monday {expectedStartTime}-{expectedEndTime}.");
-			using var json = JsonDocument.Parse((string)error.Data["ConflictDetails"]!);
-			var detail = json.RootElement[0];
-			detail.GetProperty("Type").GetString().ShouldBe("teacher");
-			detail.GetProperty("ResourceId").GetGuid().ShouldBe(_teacherId);
-			detail.GetProperty("ConflictingStandardId").GetGuid().ShouldBe(candidate.StandardId);
-			detail.GetProperty("ConflictingDivisionId").GetGuid().ShouldBe(candidate.DivisionId);
-		}
-		finally
-		{
-			CultureInfo.CurrentCulture = previousCulture;
-		}
+		error.Code.ShouldBe(TimetableErrorCodes.TeacherConflict);
+		error.Data["message"].ShouldBe(
+			"Teacher conflict: selected teacher is already assigned to another class Division another division for assigned subject on Monday 09:15-10:00.");
+		using var json = JsonDocument.Parse((string)error.Data["ConflictDetails"]!);
+		var detail = json.RootElement[0];
+		detail.GetProperty("Type").GetString().ShouldBe("teacher");
+		detail.GetProperty("ResourceId").GetGuid().ShouldBe(_teacherId);
+		detail.GetProperty("ConflictingStandardId").GetGuid().ShouldBe(candidate.StandardId);
+		detail.GetProperty("ConflictingDivisionId").GetGuid().ShouldBe(candidate.DivisionId);
+		detail.GetProperty("StartTime").GetString().ShouldBe("09:15");
+		detail.GetProperty("EndTime").GetString().ShouldBe("10:00");
+		error.Data["StartTime"].ShouldBe("09:15");
+		error.Data["EndTime"].ShouldBe("10:00");
 	}
 
 	[Fact]
@@ -101,31 +96,23 @@ public class TimetableConflictBatch_Tests
 	}
 
 	[Theory]
-	[InlineData("en-US", "09:00")]
-	[InlineData("fi-FI", "09.00")]
-	public async Task Validation_Should_Report_First_Submitted_Period_Before_Later_Teacher_Conflict(
-		string culture, string expectedStartTime)
+	[InlineData(":")]
+	[InlineData(".")]
+	public async Task Validation_Should_Report_First_Submitted_Period_Before_Later_Teacher_Conflict(string timeSeparator)
 	{
-		var previousCulture = CultureInfo.CurrentCulture;
-		try
-		{
-			CultureInfo.CurrentCulture = new CultureInfo(culture, useUserOverride: false);
-			SetCandidates(
-				Candidate(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), new TimeOnly(10, 0)) with { TeacherId = null },
-				Candidate(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), new TimeOnly(11, 0)));
+		using var culture = new CultureScope(timeSeparator);
+		SetCandidates(
+			Candidate(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), new TimeOnly(10, 0)) with { TeacherId = null },
+			Candidate(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), new TimeOnly(11, 0)));
 
 			var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
 				Guid.NewGuid(), Guid.NewGuid(),
 				[CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 60),
 				 CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), 60)]));
 
-			error.Code.ShouldBe(TimetableErrorCodes.RoomConflict);
-			error.Data["StartTime"].ShouldBe(expectedStartTime);
-		}
-		finally
-		{
-			CultureInfo.CurrentCulture = previousCulture;
-		}
+		error.Code.ShouldBe(TimetableErrorCodes.RoomConflict);
+		error.Data["StartTime"].ShouldBe("09:00");
+		error.Data["EndTime"].ShouldBe("10:00");
 	}
 
 	[Fact]
@@ -139,6 +126,20 @@ public class TimetableConflictBatch_Tests
 
 		await _repository.DidNotReceiveWithAnyArgs().GetConflictCandidatesAsync(
 			default, default, [], default, default, [], []);
+	}
+
+	private sealed class CultureScope : IDisposable
+	{
+		private readonly CultureInfo previousCulture = CultureInfo.CurrentCulture;
+
+		public CultureScope(string timeSeparator)
+		{
+			var culture = (CultureInfo)CultureInfo.GetCultureInfo("en-US").Clone();
+			culture.DateTimeFormat.TimeSeparator = timeSeparator;
+			CultureInfo.CurrentCulture = culture;
+		}
+
+		public void Dispose() => CultureInfo.CurrentCulture = previousCulture;
 	}
 
 	private TimetableSlot CreateSlot(TimetableDayOfWeek day, TimeOnly start, int duration)

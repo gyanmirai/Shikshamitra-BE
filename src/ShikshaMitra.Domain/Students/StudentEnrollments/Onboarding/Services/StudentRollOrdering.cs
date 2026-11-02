@@ -36,8 +36,6 @@ public sealed class StudentRollOrdering
 	{
 		if (Grouping != "mixed" && student.Gender is not (GenderEnum.Male or GenderEnum.Female))
 			return "Correct the student's saved gender before using gender-based numbering.";
-		if (fields.Any(x => x.Field == "studentName") && NameFormat == "surname-first" && string.IsNullOrWhiteSpace(student.LastName))
-			return "Add the student's surname before using surname-first numbering.";
 		foreach (var field in fields)
 			if (string.IsNullOrWhiteSpace(Key(student, field.Field))) return field.Field switch {
 				"grNumber" => "Assign a GR number before using GR-number ordering.",

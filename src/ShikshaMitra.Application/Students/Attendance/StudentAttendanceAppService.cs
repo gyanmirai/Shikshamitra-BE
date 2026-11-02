@@ -30,9 +30,13 @@ public class StudentAttendanceAppService(AttendanceRosterService rosters, Attend
 		await AttendanceActionAuthorization.EnsureAsync(permissions, ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.View);
 		await workspaceAccess.EnsureCanReadClassAsync(input.AcademicYearId, input.StandardId, input.DivisionId);
 		var roster = await rosters.LoadAsync(input.AcademicYearId, input.StandardId, input.DivisionId, input.Date);
-		var range = await reports.RangeAsync(input.AcademicYearId, default, input.Date);
-		var cumulative = (await register.BuildRowsAsync(input.AcademicYearId, range.Start, range.End,
-			roster.DailyMembers.Select(r => r.Enrollment).ToList(), includeDaily: false)).ToDictionary(r => r.StudentId);
+		Dictionary<Guid, AttendanceSummaryDto> cumulative = [];
+		if (input.IncludeCumulativeSummary != false)
+		{
+			var range = await reports.RangeAsync(input.AcademicYearId, default, input.Date);
+			cumulative = (await register.BuildRowsAsync(input.AcademicYearId, range.Start, range.End,
+				roster.DailyMembers.Select(r => r.Enrollment).ToList(), includeDaily: false)).ToDictionary(r => r.StudentId);
+		}
 		var students = roster.DailyMembers.Select(r => new StudentAttendanceDto {
 			StudentId = r.Student.Id, EnrollmentId = r.Enrollment.Id, GrNo = r.Student.GrNo,
 			GrNumber = r.Student.GrNumber ?? r.Student.GrNo?.ToString(System.Globalization.CultureInfo.InvariantCulture), RollNo = r.RollNumber,

@@ -3,7 +3,7 @@ module: academic
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-01
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -94,6 +94,13 @@ These checks do not establish PostgreSQL query plans, production latency or depl
 
 ```powershell
 dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~TimetableClassReadPerformance_Tests|FullyQualifiedName~TimetableElectiveAssignments_Tests|FullyQualifiedName~TimetableSettingsReadPerformance_Tests" --artifacts-path .artifacts/timetable-class-read-tests -p:RunAnalyzers=false -p:UseSharedCompilation=false -m:1
+## Timetable conflict lifecycle
+
+`TimetableConflictQuery_Tests` covers draft and `NotCreated` exclusion, published overlap detection, parent soft deletion, current-class exclusion, adjacent periods and tenant isolation for teacher and room reservations. `TimetableGhostConflict_Tests` exercises validation, saving and direct teacher assignment against draft versus published competing timetables, including saved-assignment readback. Existing elective and teacher reassignment suites protect real conflicts and same-period duplicate assignments.
+
+```powershell
+dotnet test test/ShikshaMitra.EntityFrameworkCore.Tests --filter FullyQualifiedName~TimetableConflictQuery_Tests -p:RunAnalyzers=false -p:UseSharedCompilation=false -m:1
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~TimetableGhostConflict_Tests|FullyQualifiedName~TimetableElectiveAssignments_Tests|FullyQualifiedName~SubjectTeacherReassignmentSafety_Tests" -p:RunAnalyzers=false -p:UseSharedCompilation=false -m:1
 ```
 
 ## Concurrency and provider limits
@@ -103,6 +110,15 @@ Simultaneous HTTP transactions fail in provider transaction creation before the 
 The suite covers two clients with pre-visit snapshots and injects an optimistic repository collision into the real visit service to verify its fresh-UOW retry contract.
 Run a disposable PostgreSQL acceptance check before claiming provider-level parallel-visitor evidence.
 Do not repurpose a deployed school database for that test.
+
+## Room calendar regression
+
+`RoomCalendarContext_Tests.cs` covers the 31 October 2026 ghost-vacation regression across direct checks, room lists, timeline periods, recurring sessions and saved bookings, including selected-medium isolation, live day deletion and adjacent-date boundaries.
+Run it with the surrounding room regressions:
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~RoomAvailabilityAppService_Tests" -p:RunAnalyzers=false
+```
 
 ## Security gate and known baseline
 

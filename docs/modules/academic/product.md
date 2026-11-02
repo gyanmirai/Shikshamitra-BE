@@ -3,7 +3,7 @@ module: academic
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-30
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -62,7 +62,20 @@ Homework schedules remain UTC instants in storage. Calendar matching and conflic
 
 Calendar selection follows the picker: non-archived calendars for the homework medium covering the selected school date; published calendars take priority, followed by a default draft and then other drafts, with newest creation and ID breaking ties. Only active markers from that selected calendar and the matching class/division scope can block homework. Holidays, vacations and emergency closures block due dates; another division's marker does not apply merely because its class matches. Publish timestamps retain instant ordering and are not blocked by the due-date calendar policy.
 
+## Room reservation calendar context
+
+Dated room availability, timelines and reservation checks use the requested academic medium; a class-bound request resolves its medium from the server hierarchy.
+The calendar must cover the exact requested date and be non-archived: published calendars take priority, followed by a default draft and then other drafts, with newest creation time and ID breaking ties.
+Only active, applicable blocking markers from that calendar can restrict the date; working-day markers cannot hide a simultaneous closure.
+Reservation creation retains the medium in `ExtraProperties.CalendarMediumId` for updates and approval, including recurring children, without a schema migration.
+Admission assessment bookings retain their server-owned medium and year checks and require a published calendar.
+Older callers without medium or class context retain tenant-wide calendar selection with the same deterministic ordering.
+
 ## Data integrity
+
+Timetable teacher and room conflicts reserve resources only from non-deleted, published competing timetables in the current tenant. Draft and `NotCreated` timetables do not reserve resources across classes or divisions. Validation, save, direct resource assignment, management conflict counts and recurring room occupations use this publication boundary. Duplicate teacher or room assignments within the submitted timetable remain invalid. Publication revalidates competing published schedules before saving.
+
+Timetable setup readiness is separate from the saved timetable status. `Not Ready` means prerequisites are missing; it does not establish that no saved slots exist. A saved draft may remain after its class setup is removed and must not block another class's teacher assignment.
 
 Homework and assignment feedback rosters include every non-deleted student whose operational status is `Enrolled` in the selected medium, class and division.
 The legacy admission approval flag is not an eligibility requirement: current onboarding activates enrollment independently of that flag.

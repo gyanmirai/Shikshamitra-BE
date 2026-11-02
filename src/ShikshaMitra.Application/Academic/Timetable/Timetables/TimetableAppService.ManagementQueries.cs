@@ -21,7 +21,7 @@ public partial class TimetableAppService
 			return Array.Empty<ManagementConflictRow>().ToLookup(row => (row.Day, row.StartTime, row.EndTime));
 		var query = await timetableRepository.GetQueryableAsync();
 		var candidates = from timetable in query
-			where timetable.Status != TimetableStatus.NotCreated
+			where timetable.Status == TimetableStatus.Published
 			from slot in timetable.Slots
 			// The legacy check ignored later duplicate slots with the same exact timing.
 			where slot.Id == timetable.Slots.Where(other => other.Day == slot.Day && other.StartTime == slot.StartTime && other.EndTime == slot.EndTime)

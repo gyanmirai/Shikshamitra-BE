@@ -22,14 +22,14 @@ public partial class RoomConflictService
         var requestedStandards = windows.Where(window => window.StandardId.HasValue).Select(window => window.StandardId!.Value).Distinct().ToArray();
         var rooms = await _roomRepository.GetListAsync(room => Enumerable.Contains(roomIds, room.Id));
         var roomLookup = rooms.ToDictionary(room => room.Id, room => new RoomConflictRoom(room.Id, room.RoomName));
-        var calendars = await _calendarRepository.GetListAsync(calendar => calendar.Status == CalendarStatus.Published &&
+        var calendars = await _calendarRepository.GetListAsync(calendar => calendar.Status != CalendarStatus.Archived &&
             calendar.StartDate.Date <= lastDate && calendar.EndDate.Date >= firstDate);
         var calendarIds = calendars.Select(calendar => calendar.Id).ToArray();
         var finalCalendarDate = calendars.Count == 0 ? lastDate : calendars.Max(calendar => calendar.EndDate.Date);
         // Next-working-day suggestions may extend beyond the last requested occurrence.
         var days = calendars.Count == 0 ? [] : await _calendarDayRepository.GetListAsync(day =>
             Enumerable.Contains(calendarIds, day.AcademicCalendarId) && day.Date.Date >= firstDate && day.Date.Date <= finalCalendarDate &&
-            day.Status == CalendarDayStatus.Active && (day.AppliesToAll || (day.StandardId.HasValue && Enumerable.Contains(requestedStandards, day.StandardId.Value))));
+            day.Status == CalendarDayStatus.Active);
         var rangeStart = firstDate.Add(firstTime);
         var rangeEnd = lastDate.Add(lastTime);
         var maintenance = await _maintenanceRepository.GetListAsync(row => Enumerable.Contains(roomIds, row.RoomId) &&
@@ -54,9 +54,20 @@ public partial class RoomConflictService
             group => group.ToLookup(row => row.RoomId!.Value));
         var emptyDays = Array.Empty<AcademicCalendarDay>().ToLookup(row => row.Date.Date);
         var emptyOccupations = Array.Empty<TimetableConflictCandidate>().ToLookup(row => row.RoomId!.Value);
-        var contexts = windows.Select(window => window.Date.Date).Distinct().ToDictionary(date => date, date =>
+        var calendarMediums = (await AsyncExecuter.ToListAsync((await _standardRepository.GetQueryableAsync())
+            .Where(row => Enumerable.Contains(requestedStandards, row.Id))
+            .Select(row => new { row.Id, row.EducationMediumStage.EducationMediumId })))
+            .ToDictionary(row => row.Id, row => row.EducationMediumId);
+        await ValidateCalendarMediumsAsync(windows.Select(window =>
+                window.StandardId.HasValue && calendarMediums.TryGetValue(window.StandardId.Value, out var medium)
+                    ? (Guid?)medium : window.AcademicMediumId)
+            .Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToArray());
+        var contexts = windows.Distinct().ToDictionary(window => window, window =>
         {
-            var calendar = calendars.FirstOrDefault(row => date >= row.StartDate.Date && date <= row.EndDate.Date);
+            var date = window.Date.Date;
+            var mediumId = window.StandardId.HasValue && calendarMediums.TryGetValue(window.StandardId.Value, out var standardMedium)
+                ? standardMedium : window.AcademicMediumId;
+            var calendar = SelectRoomCalendar(calendars, date, mediumId);
             var dateReservations = reservationsByDate[date].ToList();
             return new RoomConflictReadContext(calendar, calendar == null ? emptyDays : daysByCalendar[calendar.Id],
                 maintenanceLookup, dateReservations.ToLookup(row => row.RoomId),
@@ -64,6 +75,6 @@ public partial class RoomConflictService
                 roomLookup, divisions, standardLookup, dateReservations.Where(row => row.TeacherId.HasValue).ToLookup(row => row.TeacherId!.Value));
         });
         return new RoomConflictSession(windows, window => CheckConflictsAsync(window.RoomId, window.Date, window.StartTime, window.EndTime,
-            window.CurrentReservationId, window.TeacherId, window.StandardId, window.DivisionId, contexts[window.Date.Date]));
+            window.CurrentReservationId, window.TeacherId, window.StandardId, window.DivisionId, contexts[window]));
     }
 }

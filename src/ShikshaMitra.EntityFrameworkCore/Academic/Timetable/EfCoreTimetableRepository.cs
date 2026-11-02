@@ -77,7 +77,7 @@ public class EfCoreTimetableRepository(
         var roomIdArray = roomIds.ToArray();
         var dbSet = await GetDbSetAsync();
         var query = from timetable in dbSet.AsNoTracking()
-                    where timetable.Status != TimetableStatus.NotCreated
+                    where timetable.Status == TimetableStatus.Published
                     from slot in timetable.Slots
                     where slot.Day == day && slot.StartTime < endTime && slot.EndTime > startTime
                     from subject in slot.Subjects
@@ -115,7 +115,7 @@ public class EfCoreTimetableRepository(
         var dbSet = await GetDbSetAsync();
         var query = from timetable in dbSet.AsNoTracking()
                     where (timetable.StandardId != standardId || timetable.DivisionId != divisionId) &&
-                          timetable.Status != TimetableStatus.NotCreated
+                          timetable.Status == TimetableStatus.Published
                     from slot in timetable.Slots
                     where days.Contains(slot.Day) && slot.StartTime < endTime && slot.EndTime > startTime
                     from subject in slot.Subjects

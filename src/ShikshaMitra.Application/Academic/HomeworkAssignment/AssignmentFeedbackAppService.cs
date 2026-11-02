@@ -164,7 +164,8 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				Percentage = CalculatePercentage(submission?.Marks, submission?.TotalMarks ?? assignment.TotalMarks),
 				SubmittedContent = submission?.SubmittedContent,
 				SubmittedDocumentUrl = submission?.SubmittedDocumentUrl,
-				OriginalFileName = submission?.OriginalFileName
+				OriginalFileName = submission?.OriginalFileName,
+				SubmissionAttachments = SubmissionAttachmentMapper.Map(submission)
 			};
 
 			submissionDtos.Add(dto);

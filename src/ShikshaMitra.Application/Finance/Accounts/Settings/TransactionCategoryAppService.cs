@@ -82,8 +82,11 @@ public partial class TransactionCategoryAppService(
 		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(academicYearId, null, null, null, null))
 			return new PaginatedTransactionCategoryResponse { TotalCount = 0, CurrentPage = page, PageSize = pageSize, TotalPages = 0, Items = [] };
 		var query = await categoryRepository.GetQueryableAsync();
-		query = query.Where(x => x.AcademicYearId == academicYearId && x.CategoryType == categoryType &&
-			x.Name.Trim().ToUpper() != "NONE");
+		query = from category in query
+			where category.AcademicYearId == academicYearId && category.CategoryType == categoryType
+			let normalizedName = category.Name.Trim().ToUpper()
+			where normalizedName != "NONE"
+			select category;
 		if (!includeInactive) query = query.Where(x => x.IsActive);
 		if (!string.IsNullOrWhiteSpace(search))
 		{

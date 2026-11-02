@@ -120,6 +120,7 @@ public partial class StudentFeeDetailsQueryService(
 					|| c.Status == ConcessionRequestStatus.PartiallyReversed));
 
 			var refundByDueFee = await GetRefundsByDueFeeAsync(studentId);
+			var pendingRefundByDueFee = await GetPendingRefundsByDueFeeAsync(studentId, academicYearId);
 
 			// ── Collection Policy resolution + late fee (Phase 3) ──────────────
 			// One resolution for the whole collect-form call, not per due line — the policy
@@ -204,6 +205,8 @@ public partial class StudentFeeDetailsQueryService(
 							ReconciliationAmount = reconByDueFee.GetValueOrDefault(d.Id, 0d),
 							RefundAmount = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Amount,
 							RefundDescription = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Description,
+							PendingRefundAmount = pendingRefundByDueFee.GetValueOrDefault(d.Id, (Amount: 0m, Description: string.Empty)).Amount,
+							PendingRefundDescription = pendingRefundByDueFee.GetValueOrDefault(d.Id, (Amount: 0m, Description: string.Empty)).Description,
 							Status = DueFeeCollectionStatusResolver.Resolve(d, today, reconByDueFee.GetValueOrDefault(d.Id, 0d)),
 							LateFeeAmount = 0,
 							LateFeeExplanation = string.Empty,
@@ -322,6 +325,15 @@ public partial class StudentFeeDetailsQueryService(
 				Amount: Convert.ToDouble(g.Sum(x => x.Amount)),
 				Description: string.Join("; ", g.Select(x => x.Reason).Where(d => !string.IsNullOrWhiteSpace(d)).Distinct())
 			));
+	}
+
+	private async Task<Dictionary<Guid, (decimal Amount, string Description)>> GetPendingRefundsByDueFeeAsync(
+		Guid studentId, Guid academicYearId)
+	{
+		var refunds = await feeRefundRepository.GetListAsync(r => r.StudentId == studentId &&
+			r.AcademicYearId == academicYearId && r.WorkflowVersion == 1 &&
+			(r.Status == FeeRefundStatus.Approved || r.Status == FeeRefundStatus.Processing));
+		return PendingFeeRefundProjection.Build(refunds);
 	}
 
 }

@@ -46,6 +46,8 @@ public class AssignmentStudentDto
 	public string DivisionName { get; set; } = "";
 	public bool IsActive { get; set; }
 	public bool IsFeeStructureAssigned { get; set; }
+	public string AssignmentState { get; set; } = "Unassigned";
+	public string AssignmentSource { get; set; } = "Finance";
 }
 
 public class AssignmentCandidateDto

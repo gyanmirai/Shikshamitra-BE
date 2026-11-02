@@ -20,6 +20,17 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 [ExposeServices(typeof(AdmissionFeeCollectionAppService), typeof(IAdmissionFeeCollectionAppService), typeof(IAdmissionFinanceIntegration))]
 public partial class AdmissionFeeCollectionAppService : IAdmissionFinanceIntegration
 {
+    // Called only inside the scoped assignment write transaction. Reuses the same
+    // identity handoff for dues, allocations, payments and immutable receipts.
+    [RemoteService(false)]
+    public async Task LinkForAssignmentAsync(AdmissionFinanceContext source, FinanceFeeAccount account)
+    {
+        await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.Add);
+        if (!source.StudentId.HasValue) throw new BusinessException(AdmissionFeeCollectionErrorCodes.InvalidState);
+        EnsureHandoffContext(source, account, source.StudentId.Value);
+        await LinkAccountStudentAsync(source, account, source.StudentId.Value);
+    }
+
     public async Task<bool> IsSettledForOnboardingAsync(Guid applicationId)
     {
         // Context resolution enforces the caller's Student/Finance read permission,

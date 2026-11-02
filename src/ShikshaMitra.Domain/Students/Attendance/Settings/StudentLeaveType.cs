@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Diagnostics.CodeAnalysis;
+using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -30,6 +31,10 @@ public class StudentLeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private StudentLeaveType()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Color = null!;
+		LeaveTypeName = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -50,6 +55,7 @@ public class StudentLeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Updates the leave type name with validation
 	/// </summary>
+	[MemberNotNull(nameof(LeaveTypeName))]
 	public void SetLeaveTypeName(string leaveTypeName)
 	{
 		LeaveTypeName = Check.NotNullOrWhiteSpace(leaveTypeName, nameof(leaveTypeName), StudentLeaveTypeConsts.MaxLeaveTypeNameLength);
@@ -65,6 +71,7 @@ public class StudentLeaveType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Updates the color with validation
 	/// </summary>
+	[MemberNotNull(nameof(Color))]
 	public void SetColor(string color)
 	{
 		Color = Check.NotNullOrWhiteSpace(color, nameof(color), StudentLeaveTypeConsts.MaxColorLength);

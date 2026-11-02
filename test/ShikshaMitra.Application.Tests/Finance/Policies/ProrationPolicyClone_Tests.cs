@@ -172,7 +172,8 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		FeeHeadRules = [new()
 		{
 			FeeHeadId = head,
-			RuleType = "Daily",			RoundingMode = "RoundUpRupee",
+			RuleType = "Daily",
+			RoundingMode = "RoundUpRupee",
 			ApplyOnAdmission = true,
 			ApplyOnEarlyWithdrawal = true,
 			EarlyWithdrawalRuleType = "MonthlyCutoff",
@@ -201,6 +202,6 @@ public class ProrationPolicyRecoveryResource_Tests
 		using var messages = JsonDocument.Parse(resource);
 		messages.RootElement.GetProperty("Texts").TryGetProperty("Finance:ProrationPolicy:" + rule, out var message)
 			.ShouldBeTrue("The business error must have a localized recovery message.");
-		message.GetString().ShouldContain(action);
+		message.GetString().ShouldNotBeNull().ShouldContain(action);
 	}
 }

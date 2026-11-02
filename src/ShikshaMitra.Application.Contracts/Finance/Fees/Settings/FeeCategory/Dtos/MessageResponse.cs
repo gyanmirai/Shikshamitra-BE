@@ -2,5 +2,5 @@
 
 public class MessageResponse
 {
-    public string Message { get; set; }
+    public string Message { get; set; } = null!; // The response mapper populates these members after construction.
 }

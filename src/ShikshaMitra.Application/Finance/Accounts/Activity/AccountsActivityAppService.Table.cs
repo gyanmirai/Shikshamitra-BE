@@ -58,7 +58,7 @@ public partial class AccountsActivityAppService
                select new WorkspaceStudent
                {
                    Id = student.Id,
-                   GrNumber = student.GrNumber ?? (student.GrNo.HasValue ? student.GrNo.Value.ToString() : ""),
+                   GrNumber = student.GrNumber ?? (student.GrNo.HasValue ? student.GrNo!.Value.ToString() : ""),
                    ClassDivision = standard == null && division == null ? "" :
                        (standard == null ? "—" : standard.Name) + " - " + (division == null ? "—" : division.Name)
                };

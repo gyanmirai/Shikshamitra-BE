@@ -132,7 +132,8 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 		);
 
 		groupPermission.AddChild(
-			ShikshaMitraPermissions.Group.Create,
+			// Keep the legacy permission identity registered alongside Add.
+			ShikshaMitraPermissions.Group.Default + ".Create",
 			displayName: L("Permission:Group.Create")
 		);
 

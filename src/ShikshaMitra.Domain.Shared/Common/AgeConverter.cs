@@ -7,7 +7,8 @@ public class AgeConverter : ITypeConverter<DateTimeOffset?, string>
 	public string Convert(DateTimeOffset? source, string destination, ResolutionContext context)
 	{
 		if (!source.HasValue)
-			return null;
+			// Preserve the legacy missing-DOB result under the existing converter contract.
+			return null!;
 
 		var today = DateTimeOffset.Now;
 		var age = today - source.Value;

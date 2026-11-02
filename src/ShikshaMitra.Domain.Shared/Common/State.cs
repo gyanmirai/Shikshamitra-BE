@@ -8,6 +8,9 @@ public class State
 
 	private State()
 	{
+		// Preserve deferred null defaults until materialization populates these properties.
+		Name = null!;
+		IsoCode = null!;
 	}
 	public State(string name, string isoCode)
 	{

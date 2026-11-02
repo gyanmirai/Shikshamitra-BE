@@ -91,6 +91,14 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         if (selected) input.SelectedOptionalFeeHeadIds.Add(headId);
         if (variable && included) input.VariableFeeHeads.Add(new() { FeeHeadId = headId, Amount = 1234.01m });
         var service = GetRequiredService<IStudentFeeStructureAppService>();
+        if (!included)
+        {
+            (await Should.ThrowAsync<BusinessException>(() => service.PreviewAsync(input))).Code.ShouldBe(AssignmentErrorCodes.InvalidInput);
+            await Should.ThrowAsync<BusinessException>(() => service.AssignAsync(input));
+            (await GetRequiredService<IRepository<DueFee, Guid>>().GetListAsync(x => x.StudentId == input.StudentId)).ShouldBeEmpty();
+            (await GetRequiredService<IRepository<StudentFeeStructure, Guid>>().GetListAsync(x => x.StudentId == input.StudentId)).ShouldBeEmpty();
+            return;
+        }
         var preview = await service.PreviewAsync(input);
         preview.Heads.Single().Included.ShouldBe(included);
         preview.Heads.Single().ConfiguredAmount.ShouldBe(variable ? null : 1001m);

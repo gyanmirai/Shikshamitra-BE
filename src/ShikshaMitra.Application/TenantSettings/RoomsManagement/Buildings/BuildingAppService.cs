@@ -69,7 +69,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 			await floorRepository.InsertAsync(floor, autoSave: false);
 		}
 
-		await UnitOfWorkManager.Current.SaveChangesAsync();
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
 
 		return await GetAsync(createdBuilding.Id);
 	}
@@ -149,7 +149,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 			await floorRepository.InsertAsync(newFloor, autoSave: false);
 		}
 
-		await UnitOfWorkManager.Current.SaveChangesAsync();
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
 
 		return await GetAsync(id);
 	}
@@ -176,6 +176,6 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 
 		await buildingRepository.DeleteAsync(id, autoSave: false);
 
-		await UnitOfWorkManager.Current.SaveChangesAsync();
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
 	}
 }

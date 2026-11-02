@@ -105,7 +105,12 @@ public sealed class MobileAcademicPostgresFactory : ShikshaMitraApiTestFactory
 		// Recreate the predecessor column state in this new test database, then apply the actual migration.
 		var migration = new MobileAcademicResponses { ActiveProvider = "Npgsql.EntityFrameworkCore.PostgreSQL" };
 		foreach (var operation in migration.UpOperations.Cast<Microsoft.EntityFrameworkCore.Migrations.Operations.AddColumnOperation>())
-			db.Database.ExecuteSqlRaw($"ALTER TABLE \"{operation.Table}\" DROP COLUMN \"{operation.Name}\"");
+		{
+			var identifiers = db.GetService<Microsoft.EntityFrameworkCore.Storage.ISqlGenerationHelper>();
+			var sql = "ALTER TABLE " + identifiers.DelimitIdentifier(operation.Table) +
+				" DROP COLUMN " + identifiers.DelimitIdentifier(operation.Name);
+			db.Database.ExecuteSqlRaw(sql);
+		}
 		foreach (var command in db.GetService<IMigrationsSqlGenerator>().Generate(migration.UpOperations, db.Model))
 			db.Database.ExecuteSqlRaw(command.CommandText);
 		var history = db.GetService<IHistoryRepository>();

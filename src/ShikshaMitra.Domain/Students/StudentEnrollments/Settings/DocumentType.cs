@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Diagnostics.CodeAnalysis;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Volo.Abp;
@@ -63,6 +64,7 @@ public class DocumentType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Sets the accepted formats from a list of enums
 	/// </summary>
+	[MemberNotNull(nameof(AcceptedFormatsData))]
 	private void SetAcceptedFormats(List<AcceptedFileFormat> formats)
 	{
 		if (formats == null || formats.Count == 0)
@@ -82,6 +84,10 @@ public class DocumentType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	private DocumentType()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		AcceptedFormatsData = null!;
+		Name = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -127,6 +133,7 @@ public class DocumentType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Sets the document type name with validation
 	/// </summary>
+	[MemberNotNull(nameof(Name))]
 	private DocumentType SetName(string name)
 	{
 		Name = Check.NotNullOrWhiteSpace(

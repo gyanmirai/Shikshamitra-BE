@@ -12,18 +12,30 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [RemoteService(false)]
-public class AdmissionApplicationCounsellorService(
-	IRepository<AdmissionApplication, Guid> applications,
-	IRepository<AdmissionActivity, Guid> activities,
-	IRepository<AdmissionInquiry, Guid> inquiries,
-	IRepository<AdmissionInquiryFollowUp, Guid> followUps,
-	AdmissionApplicationScopeAccessService scope,
-	AdmissionInquiryPeopleService people,
-	AdmissionApplicationReadService reader) : ApplicationService, ITransientDependency
+public class AdmissionApplicationCounsellorService : ApplicationService, ITransientDependency
 {
-	public async Task<List<AdmissionInquiryCounsellorDto>> GetAssignableAsync(Guid? offeringId, string? filter)
+	public AdmissionApplicationCounsellorService(
+		IRepository<AdmissionApplication, Guid> applications,
+		IRepository<AdmissionActivity, Guid> activities,
+		IRepository<AdmissionInquiry, Guid> inquiries,
+		IRepository<AdmissionInquiryFollowUp, Guid> followUps,
+		AdmissionApplicationScopeAccessService scope,
+		AdmissionInquiryPeopleService people,
+		AdmissionApplicationReadService reader
+	)
 	{
-		return [];
+		_ = applications;
+		_ = activities;
+		_ = inquiries;
+		_ = followUps;
+		_ = scope;
+		_ = people;
+		_ = reader;
+	}
+
+	public Task<List<AdmissionInquiryCounsellorDto>> GetAssignableAsync(Guid? offeringId, string? filter)
+	{
+		return Task.FromResult(new List<AdmissionInquiryCounsellorDto>());
 	}
 
 	public Task<AdmissionApplicationDto> AssignAsync(Guid applicationId, AssignAdmissionApplicationCounsellorDto input)

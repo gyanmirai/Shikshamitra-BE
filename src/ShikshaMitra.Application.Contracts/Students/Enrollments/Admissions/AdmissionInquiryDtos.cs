@@ -10,6 +10,8 @@ public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 {
 	public AdmissionSchoolContactDto? MainSchoolContact { get; set; }
 	public string? ParentRelationship { get; set; }
+	public string? PrimaryContactRelationship { get; set; }
+	public bool GuardianResponsibilityConfirmed { get; set; }
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public string InquiryNumber { get; set; } = string.Empty;
 	public Guid AdmissionCycleId { get; set; }
@@ -64,6 +66,7 @@ public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 
 public class CreateAdmissionInquiryDto
 {
+	public bool GuardianResponsibilityConfirmed { get; set; }
 	public AdmissionFamilyContactsDto? FamilyContacts { get; set; }
 	public Guid? ExistingFamilyId { get; set; }
 	public Guid? ExistingParentApplicantId { get; set; }
@@ -136,6 +139,7 @@ public class AdmissionInquiryListInput : PagedAndSortedResultRequestDto
 
 public class UpdateAdmissionInquiryDto
 {
+	public bool GuardianResponsibilityConfirmed { get; set; }
 	public Guid? AdmissionOfferingId { get; set; }
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }

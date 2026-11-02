@@ -61,6 +61,7 @@ public class AdmissionFiveStageModel_Tests
 	[Fact]
 	public void Unknown_policy_version_is_rejected_instead_of_silently_downgraded()
 	{
+		// Versions 1 and 2 are supported; keep this a genuinely unknown-version fixture.
 		var json = AdmissionStageConfiguration.Normalize(AdmissionWorkflowStageType.Assessment,
 			"{\"assessment\":{\"version\":3,\"maxAttempts\":1}}");
 		Should.Throw<ArgumentException>(() => AdmissionAssessmentPolicy.Read(json));

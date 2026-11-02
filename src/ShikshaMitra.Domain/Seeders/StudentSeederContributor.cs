@@ -325,7 +325,7 @@ public class StudentSeederContributor : BaseSeederContributor
 
 	internal async Task CreateUserForStudentAsync(Student student, string roleName, string mediumName, string className)
 	{
-		var baseUsername = $"student-{UsernameSegment(mediumName)}-{UsernameSegment(className)}-{UsernameSegment(student.FirstName)}-{UsernameSegment(student.LastName)}";
+		var baseUsername = $"student-{UsernameSegment(mediumName)}-{UsernameSegment(className)}-{UsernameSegment(student.FirstName!)}-{UsernameSegment(student.LastName!)}";
 		var username = baseUsername;
 		var suffix = 2;
 		while (await _userManager.FindByNameAsync(username) != null)

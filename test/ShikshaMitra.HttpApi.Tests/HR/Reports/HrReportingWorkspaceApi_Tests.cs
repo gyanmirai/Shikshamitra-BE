@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -120,7 +120,7 @@ public class HrReportingWorkspaceApi_Tests(ShikshaMitraApiTestFactory factory) :
 		var response = await Client.GetAsync(Root + "/library"); response.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var templates = await response.Content.ReadFromJsonAsync<List<HrReportLibraryTemplateDto>>(JsonOptions);
 		templates!.Count(x => x.IsBuiltIn).ShouldBe(20);
-		templates.ShouldContain(x => x.Id == "builtin:in-out" && x.Definition.Parameters.Contains("period"));
+		templates.ShouldNotBeNull().ShouldContain(x => x.Id == "builtin:in-out" && x.Definition.Parameters.Contains("period"));
 	}
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]

@@ -83,7 +83,7 @@ public class StudentElectiveAssignmentAppService(
 			studentsQuery = studentsQuery.Where(s =>
 				(s.FirstName != null && s.FirstName.ToLower().Contains(searchLower)) ||
 				(s.LastName != null && s.LastName.ToLower().Contains(searchLower)) ||
-				(s.RollNo != null && s.RollNo.ToString().Contains(searchLower))
+				(s.RollNo != null && s.RollNo.ToString()!.Contains(searchLower))
 			);
 		}
 

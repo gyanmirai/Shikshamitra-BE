@@ -43,6 +43,23 @@ public class DirectFinanceTableFilterApi_Tests(FinanceRoutingApiTestFactory fact
 	private static object Criterion(string column, string type, object value) => new { column, type, value };
 
 	[Fact]
+	public async Task Direct_settings_name_search_ignores_case_and_surrounding_whitespace_before_paging()
+	{
+		var context = await SeedSettingsAsync(TenantId);
+		foreach (var (route, target) in new[] { ("fee-heads", context.HeadId), ("receipt-books", context.BookId) })
+		{
+			var url = $"/api/{route}?academicYearId={context.YearId}&pageSize=1";
+			foreach (var search in new[] { "direct TARGET", "DIRECT TARGET", "  direct target  " })
+				await AssertAsync(Client, url + "&search=" + Uri.EscapeDataString(search), 1, target);
+			await AssertAsync(Client, url + "&search=direct%20TARGET", 1, target, Criterion("isActive", "equals", 0));
+			await AssertAsync(Client, url + "&search=direct%20TARGET", 0, null, Criterion("isActive", "equals", 1));
+			await AssertAsync(Client, url + "&search=direct%20TARGET&page=2", 1, null);
+			await AssertAsync(Client, url + "&search=absent", 0, null);
+			await AssertAsync(Client, $"/api/{route}?academicYearId={Guid.NewGuid()}&search=direct%20TARGET", 0, null);
+		}
+	}
+
+	[Fact]
 	public async Task Fee_head_headers_filter_display_values_before_count_and_page_and_preserve_year()
 	{
 		var context = await SeedSettingsAsync(TenantId);

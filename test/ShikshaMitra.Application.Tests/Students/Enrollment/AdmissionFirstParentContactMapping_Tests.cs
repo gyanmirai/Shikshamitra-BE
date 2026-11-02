@@ -9,6 +9,29 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionFirstParentContactMapping_Tests
 {
+	[Fact]
+	public void Main_guardian_choice_does_not_redirect_existing_parent_registration_aliases_to_guardian()
+	{
+		var applicant = Applicant();
+		AdmissionSiblingParentSelection.CaptureParent(applicant, "father", "Father", "9876543210", "old@example.com");
+		AdmissionPrimaryContactSelection.CaptureMainGuardian(applicant, new() { MainContactRelationship = "guardian" }, true, Guid.NewGuid(), DateTime.UtcNow, false);
+		AdmissionFirstParentContactMapping.Apply(applicant, new Dictionary<string, string> { ["Guardian.Email"] = "father@example.com" });
+		AdmissionStudentProfileMapping.Read(applicant, "Father.Email").ShouldBe("father@example.com");
+		AdmissionStudentProfileMapping.Read(applicant, "Guardian.Email").ShouldBeNull();
+		AdmissionPrimaryContactSelection.ReadRelationship(applicant).ShouldBe("guardian");
+	}
+	[Theory]
+	[InlineData("father", "Father")]
+	[InlineData("mother", "Mother")]
+	public void Public_primary_parent_accepts_later_registration_aliases_without_gaining_sibling_account_authority(string role, string prefix)
+	{
+		var applicant = Applicant();
+		AdmissionPrimaryContactSelection.Capture(applicant, role, "Primary adult", "9876543210", null, false, null, DateTime.UtcNow, true);
+		AdmissionFirstParentContactMapping.Apply(applicant, new Dictionary<string, string> { ["Guardian.Email"] = "public-parent@example.com" });
+		AdmissionStudentProfileMapping.Read(applicant, prefix + ".Email").ShouldBe("public-parent@example.com");
+		AdmissionSiblingParentSelection.HasParentFlowProvenance(applicant).ShouldBeFalse();
+		AdmissionSiblingParentSelection.ReadConfirmation(applicant).ShouldBeNull();
+	}
 	[Theory]
 	[InlineData("father", "Father")]
 	[InlineData("mother", "Mother")]

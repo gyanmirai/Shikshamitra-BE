@@ -91,7 +91,7 @@ public class StudentCacheManager(
         var key = StudentCacheKeyProvider.ById(studentId);
         return await cache.GetOrAddAsync(
             key,
-            async () => await BuildCacheItemAsync(studentId, cancellationToken),
+            async () => (await BuildCacheItemAsync(studentId, cancellationToken))!,
             () => CacheOptions,
             token: cancellationToken);
     }

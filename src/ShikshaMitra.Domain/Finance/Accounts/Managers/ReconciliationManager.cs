@@ -21,25 +21,56 @@ namespace ShikshaMitra.Finance.Accounts.Reconciliation;
 /// Domain manager that orchestrates the reconciliation approve/reject workflow for both
 /// provisional fee receipts (KFE) and provisional charge receipts (KCH).
 /// </summary>
-public class ReconciliationManager(
-	IFeePaymentReceiptRepository receiptRepository,
-	IRepository<FeeRecordMetadata, Guid> metadataRepository,
-	IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
-	IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
-	IDueFeeRepository dueFeeRepository,
-	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
-	IRepository<Charge, Guid> chargeRepository,
-	IRepository<Student, Guid> studentRepository,
-	IRepository<AcademicYear, Guid> academicYearRepository,
-	FeeReceiptManager feeReceiptManager,
-	FeeCollectionManager feeCollectionManager,
-	IFeeReceiptPdfGenerator pdfGenerator,
-	FeeReceiptBlobManager blobManager,
-	ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions,
-	IClock clock,
-	ICurrentTenant currentTenant
-) : DomainService
+public class ReconciliationManager : DomainService
 {
+	private readonly IFeePaymentReceiptRepository receiptRepository;
+	private readonly IRepository<FeeRecordMetadata, Guid> metadataRepository;
+	private readonly IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository;
+	private readonly IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository;
+	private readonly IDueFeeRepository dueFeeRepository;
+	private readonly IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository;
+	private readonly IRepository<Charge, Guid> chargeRepository;
+	private readonly IRepository<AcademicYear, Guid> academicYearRepository;
+	private readonly FeeReceiptManager feeReceiptManager;
+	private readonly FeeCollectionManager feeCollectionManager;
+	private readonly IFeeReceiptPdfGenerator pdfGenerator;
+	private readonly FeeReceiptBlobManager blobManager;
+	private readonly ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions;
+
+	public ReconciliationManager(
+		IFeePaymentReceiptRepository receiptRepository,
+		IRepository<FeeRecordMetadata, Guid> metadataRepository,
+		IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
+		IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
+		IDueFeeRepository dueFeeRepository,
+		IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+		IRepository<Charge, Guid> chargeRepository,
+		IRepository<Student, Guid> studentRepository,
+		IRepository<AcademicYear, Guid> academicYearRepository,
+		FeeReceiptManager feeReceiptManager,
+		FeeCollectionManager feeCollectionManager,
+		IFeeReceiptPdfGenerator pdfGenerator,
+		FeeReceiptBlobManager blobManager,
+		ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions,
+		IClock clock,
+		ICurrentTenant currentTenant
+	)
+	{
+		this.receiptRepository = receiptRepository;
+		this.metadataRepository = metadataRepository;
+		this.paymentMethodRecordRepository = paymentMethodRecordRepository;
+		this.allocationRepository = allocationRepository;
+		this.dueFeeRepository = dueFeeRepository;
+		this.chargeCollectionRecordRepository = chargeCollectionRecordRepository;
+		this.chargeRepository = chargeRepository;
+		this.academicYearRepository = academicYearRepository;
+		this.feeReceiptManager = feeReceiptManager;
+		this.feeCollectionManager = feeCollectionManager;
+		this.pdfGenerator = pdfGenerator;
+		this.blobManager = blobManager;
+		this.automaticTransactions = automaticTransactions;
+	}
+
 	/// <summary>
 	/// Approves a provisional receipt (KFE or KCH):
 	/// - KFE → creates FIN-* final fee receipt, updates DueFee allocation statuses

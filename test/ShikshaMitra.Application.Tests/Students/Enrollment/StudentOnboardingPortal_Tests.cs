@@ -218,7 +218,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			{
 				var caseRepo = GetRequiredService<IRepository<StudentOnboardingCase, Guid>>();
 				var beforeRules = await WithUnitOfWorkAsync(async () =>
-					(await caseRepo.GetAsync(item.Id)).ExtraProperties["ReadinessRulesSnapshot"].ToString()!);
+					(await caseRepo.GetAsync(item.Id)).ExtraProperties["ReadinessRulesSnapshot"].ShouldNotBeNull().ToString()!);
 				var beforeSettings = (await service.GetSettingsAsync(cycle.AcademicYearId)).Single().ConfigurationJson;
 				await Should.ThrowAsync<AbpValidationException>(() => service.EnableGuardianCredentialEmailAsync(item.Id,
 					new() { Reason = "", ConcurrencyStamp = item.ConcurrencyStamp }));
@@ -233,7 +233,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				var expectedRules = System.Text.Json.Nodes.JsonNode.Parse(beforeRules)!;
 				expectedRules["sendGuardianCredentialEmail"] = true;
 				var afterRules = await WithUnitOfWorkAsync(async () =>
-					(await caseRepo.GetAsync(item.Id)).ExtraProperties["ReadinessRulesSnapshot"].ToString()!);
+					(await caseRepo.GetAsync(item.Id)).ExtraProperties["ReadinessRulesSnapshot"].ShouldNotBeNull().ToString()!);
 				System.Text.Json.Nodes.JsonNode.DeepEquals(expectedRules, System.Text.Json.Nodes.JsonNode.Parse(afterRules)).ShouldBeTrue();
 				(await service.GetSettingsAsync(cycle.AcademicYearId)).Single().ConfigurationJson.ShouldBe(beforeSettings);
 				await service.EnableGuardianCredentialEmailAsync(item.Id,

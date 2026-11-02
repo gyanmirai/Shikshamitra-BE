@@ -87,7 +87,7 @@ public class AdmissionPaymentCompletionReader_Tests
 		var finance = Substitute.For<IAdmissionFinanceIntegration>();
 		finance.IsSettledForOnboardingAsync(application.Id).Returns(Task.FromException<bool>(new BusinessException("Finance:NotPrepared")));
 		var result = await Reader(finance, Substitute.For<IAdmissionFeeCollectionAppService>()).ReadAsync(application, stage, true);
-		result.CanComplete.ShouldBeFalse(); result.CanDeferCollection.ShouldBeTrue(); result.Blocker.ShouldContain("could not verify");
+		result.CanComplete.ShouldBeFalse(); result.CanDeferCollection.ShouldBeTrue(); result.Blocker.ShouldNotBeNull().ShouldContain("could not verify");
 	}
 
 	[Fact]

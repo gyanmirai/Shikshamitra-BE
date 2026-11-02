@@ -439,7 +439,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
                     visibleUserIds);
         }
 
-        var configIds = dtos.Where(d => d.RecurringConfigId.HasValue).Select(d => d.RecurringConfigId.Value).Distinct().ToList();
+        var configIds = dtos.Where(d => d.RecurringConfigId.HasValue).Select(d => d.RecurringConfigId!.Value).Distinct().ToList();
         if (configIds.Any())
         {
             var configs = await _recurringConfigRepository.GetListAsync(c => configIds.Contains(c.Id));
@@ -992,7 +992,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
             new { Period = "P18", Time = "11:00 PM - 12:00 AM", Start = new TimeSpan(23,0,0), End = new TimeSpan(23,59,59) }
         };
 
-        var conflictsByPeriod = await _conflictService.CheckRoomPeriodsAsync(room, date,
+        var conflictsByPeriod = await _conflictService.CheckRoomPeriodsAsync(room!, date,
             slotsConfig.Select(cfg => (cfg.Start, cfg.End)).ToList());
 
         for (var index = 0; index < slotsConfig.Length; index++)

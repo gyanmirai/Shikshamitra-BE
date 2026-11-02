@@ -7,7 +7,7 @@ namespace ShikshaMitra.HR.Reports;
 
 internal static class PayrollIssuedReportBoundary
 {
-	internal static bool IsSalaryDocument(string source) => source is HrReportDataSources.PayrollRegister or
+	internal static bool IsSalaryDocument(string? source) => source is HrReportDataSources.PayrollRegister or
 		HrReportDataSources.PayrollStatement;
 
 	internal static void EnsureCaptured(string source, HrReportingResult result)

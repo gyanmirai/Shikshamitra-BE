@@ -15,6 +15,10 @@ public class StudentFeeStructureController(
 	IStudentFeeStructureAppService studentFeeStructureAppService
 ) : AbpController
 {
+	[HttpPost("contexts")]
+	public Task<List<AssignmentContextDto>> GetContextsAsync([FromBody] AssignmentContextsInput input) =>
+		studentFeeStructureAppService.GetContextsAsync(input);
+
 	[HttpGet("policy-options")]
 	public Task<List<AssignmentPolicyDto>> GetPolicyOptionsAsync(Guid studentId, Guid academicYearId) => studentFeeStructureAppService.GetPolicyOptionsAsync(studentId, academicYearId);
 

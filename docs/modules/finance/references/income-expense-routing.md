@@ -3,7 +3,7 @@ module: finance
 domain: accounts
 content_type: Reference
 status: active
-updated_on: 2026-10-24
+updated_on: 2026-10-31
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -16,9 +16,10 @@ Account Heads are retired from active account settings. Fee Heads remain, and ea
 
 Every tenant/academic-year context has two stored `TransactionCategory` records named None, one
 Income and one Expense. These are valid category selections with real IDs and normal routing
-validation; a missing/empty ID remains invalid. Only the `fee-head` Income Category lookup and
-`refund-policy` Expense Category lookup offer None, always first. Master category lists and all
-other routing lookups exclude it. Existing tenant, year, type and permission filters still apply.
+validation; a missing/empty ID remains invalid. All Finance category routing lookups offer None,
+always first, including manual income/expense, cash expenses, collections, refunds, policies,
+fee heads and charge categories. Master category administration lists exclude it.
+Existing tenant, year, type and permission filters still apply.
 Category responses expose `isSystemCategory`. None cannot be edited, deactivated or deleted.
 
 The data-only `AddNoneTransactionCategories` migration backfills existing non-deleted years and
@@ -58,6 +59,16 @@ Charge create/update DTOs include `chargeCategoryId`; the backend resolves its I
 
 `Finance_Transactions` stores automatic category entries with unique `SourceKey`, `SourceId`, student, category-name snapshot, bank snapshot, and confirmation state. These are operational Income/Expense records. General Accounts journal posting remains unavailable; the register continues to label journal status as `Not posted`.
 
+Selecting None excludes the corresponding amount from Accounts Income, Expenses and Activity,
+including totals, category filters, related category amounts and direct detail reads. The shared
+`AccountsRecognitionQuery` checks both the saved category snapshot and the category master,
+including legacy rows without a snapshot. Refund subledger fallbacks apply the same exclusion.
+Internal transaction evidence remains stored with its original amount, source key and payment
+confirmation: cash gross/net allocation, bank movement, receipt evidence, idempotency and payout
+corrections still require those facts. Receipt/refund fallback suppression uses all automatic
+evidence before exclusion, so an all-None source cannot reappear as an uncategorized header.
+Mixed-category payments contribute only their non-None shares to Accounts registers.
+
 `FinanceIncomeAllocator` attributes each cent to a category and instrument in stable source order. It rejects nonpositive values, more than two decimal places, and unequal totals. Collection retries retain the existing command fingerprint and serializable unit of work. Automatic entry source keys have a unique database index. Generic manual-entry update and delete operations reject automatic entries, and student scope applies to automatic entry reads.
 
 Non-cash reconciliation confirms the existing hidden income rows. Cash uses [final net deposit approval](./cash-management.md); generic reconciliation cannot release it. Rejected deferred payments never become Income. The existing collection validator rejects deferred transactions with multiple instruments or both fee and charge receipts: receipt-level reconciliation cannot safely decide such payments. Confirmed split payments remain supported.
@@ -73,6 +84,10 @@ Review unmapped pending charges and active policies before processing new paymen
 ## Validation
 
 Run the Finance domain suite, `AccountSettingsPermissionApi_Tests`, `AccountSettingsSimplificationApi_Tests`, and collection input validators. `IncomeExpenseRouting_Tests` covers cent conservation for split payments, invalid amounts, pending recognition, immutable automatic entries, and signed compensations. The API tests cover independent category/bank creation, owning-action lookup permissions, retired endpoints, and non-destructive migration operations.
+
+`AccountsRecognitionQuery_Tests` covers None exclusion, mixed totals, unchanged confirmation and
+legacy manual category updates. `NoneCategoryApi_Tests` covers every lookup operation, protected
+defaults, register/activity/detail exclusion and retained source evidence.
 
 PostgreSQL migration application, payout replay/concurrency, and authenticated browser payment scenarios must be verified in a disposable test environment before release. Never use a production collection or payout as a smoke test.
 

@@ -31,7 +31,13 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? FormResponseSnapshotJson => this.GetProperty<string>(FormResponseSnapshotProperty);
 	public Guid? FormResponseDefinitionId => this.GetProperty<Guid?>("AdmissionFormResponseDefinitionId");
 
-	protected AdmissionInquiry() { }
+	protected AdmissionInquiry()
+	{
+		// EF materializes these required columns after this ORM constructor.
+		ApplicantName = null!;
+		InquiryNumber = null!;
+		NormalizedPhone = null!;
+	}
 
 	public AdmissionInquiry(Guid id, Guid? tenantId, string inquiryNumber, Guid admissionCycleId, Guid? admissionOfferingId,
 		string applicantName, string phone, string? email, AdmissionInquirySource source, string? sourceDetail)

@@ -22,7 +22,7 @@ public class FeeStructureMetadataController(
 		[FromQuery] Guid academicYearId,
 		[FromQuery] int page = 1,
 		[FromQuery] int pageSize = 10,
-		[FromQuery] string search = null,
+		[FromQuery] string? search = null,
 		[FromQuery] string? filters = null)
 	{
 		return await feeStructureMetadataAppService.GetListAsync(academicYearId, page, pageSize, search, filters);

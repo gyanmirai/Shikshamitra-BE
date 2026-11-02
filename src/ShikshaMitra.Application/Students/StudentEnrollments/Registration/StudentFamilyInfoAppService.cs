@@ -113,12 +113,26 @@ public class StudentFamilyInfoAppService : StudentRegistrationBaseAppService,
             ? mappingHelper.MapDtoToParentGuardianDetails(input.GuardianDetails) : null;
 
         var existingFamilyDetail = await familyDetailRepository.FindAsync(studentId);
+        var selectsGuardian = input.MainContactRelationship == "guardian" || input.MainContactRelationship == null &&
+            string.IsNullOrEmpty(student.GetProperty<string>(StudentFamilyContactSelection.SelectionKey)) &&
+            !StudentFamilyContactSelection.Present(fatherDetails) && !StudentFamilyContactSelection.Present(motherDetails) &&
+            StudentFamilyContactSelection.Present(guardianDetails);
+        var confirmGuardian = selectsGuardian &&
+            StudentFamilyContactSelection.Resolve(student, existingFamilyDetail) != "guardian";
+        if (confirmGuardian && (input.GuardianResponsibilityConfirmed != true || !CurrentUser.Id.HasValue || CurrentUser.Id == Guid.Empty))
+            throw new BusinessException("Students:Family:GuardianResponsibilityConfirmationRequired",
+                "Confirm that neither parent is handling school-contact responsibility before choosing Guardian.");
         var familyDetail = existingFamilyDetail ?? new StudentFamilyDetail(student.Id, student.TenantId);
         var shouldCreateFamilyDetail = existingFamilyDetail == null;
         // Omitted sibling IDs are a contact edit, never an instruction to remove sibling links.
         familyDetail.UpdateFamilyInformation(fatherDetails, motherDetails, guardianDetails, input.SiblingStudentIds ?? familyDetail.SiblingStudentIds);
         if (input.MainContactRelationship != null)
             StudentFamilyContactSelection.Select(student, input.MainContactRelationship, familyDetail);
+        if (confirmGuardian)
+        {
+            student.SetProperty("SchoolContactGuardianResponsibilityConfirmedBy", CurrentUser.Id!.Value.ToString("D"));
+            student.SetProperty("SchoolContactGuardianResponsibilityConfirmedAt", Clock.Now.ToUniversalTime().ToString("O"));
+        }
         if (input.GuardianRelationship != null)
         {
             if (input.GuardianRelationship.Trim().Length > 128)

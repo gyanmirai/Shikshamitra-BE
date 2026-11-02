@@ -88,7 +88,12 @@ public class AttendanceImportLogReader(
 		{
 			staffScopes.EnsureHasConcreteHrAccess(scope, nameof(GetRowsAsync));
 			var authorized = await staffScopes.BuildScopedEmployeeQueryAsync(scope);
-			query = query.Where(row => authorized.Any(employee => employee.EmployeeCode != null && employee.EmployeeCode.ToUpper() == row.EmployeeCode.ToUpper()));
+			query = query.Where(row => (from employee in authorized
+				where employee.EmployeeCode != null
+				let normalizedEmployeeCode = employee.EmployeeCode!.ToUpper()
+				let normalizedImportCode = row.EmployeeCode.ToUpper()
+				where normalizedEmployeeCode == normalizedImportCode
+				select employee).Any());
 		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);

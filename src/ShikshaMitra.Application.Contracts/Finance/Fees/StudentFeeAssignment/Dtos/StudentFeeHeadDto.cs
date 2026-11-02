@@ -7,9 +7,9 @@ public class StudentFeeHeadDto
 {
 	public Guid FeeHeadId { get; set; }
 
-	public string FeeHeadName { get; set; }
+	public string FeeHeadName { get; set; } = null!; // The response mapper populates these members after construction.
 
-	public string CategoryName { get; set; }
+	public string? CategoryName { get; set; }
 
 	public decimal Amount { get; set; }
 

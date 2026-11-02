@@ -13,7 +13,7 @@ public class ChapterDocumentDto
 	/// </summary>
 	[Required(ErrorMessage = "Document name is required")]
 	[StringLength(ChapterConsts.MaxFileNameLength)]
-	public string Name { get; set; }
+	public string Name { get; set; } = null!; // The response mapper populates these members after construction.
 
 	/// <summary>
 	/// Document URL (from blob storage/CDN)
@@ -21,5 +21,5 @@ public class ChapterDocumentDto
 	[Required(ErrorMessage = "Document URL is required")]
 	[Url(ErrorMessage = "Document URL must be valid")]
 	[StringLength(ChapterConsts.MaxFileUrlLength)]
-	public string Url { get; set; }
+	public string Url { get; set; } = null!;
 }

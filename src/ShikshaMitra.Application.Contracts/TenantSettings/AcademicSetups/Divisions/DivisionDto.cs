@@ -5,7 +5,7 @@ namespace ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 
 public class DivisionDto : AuditedEntityDto<Guid>
 {
-	public string Name { get; set; }
+	public string Name { get; set; } = null!; // The response mapper populates these members after construction.
 
 	public int HeadCount { get; set; }
 
@@ -16,9 +16,9 @@ public class DivisionDto : AuditedEntityDto<Guid>
 	public int MaleCount { get; set; }
 	public int FemaleCount { get; set; }
 
-	public string RoomNumber { get; set; }
+	public string? RoomNumber { get; set; }
 
-	public string RoomId { get; set; }
+	public string? RoomId { get; set; }
 
 	public Guid StandardId { get; set; }
 }

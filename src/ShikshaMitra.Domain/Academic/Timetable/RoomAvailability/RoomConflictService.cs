@@ -421,7 +421,7 @@ public partial class RoomConflictService : DomainService
             ? context.Divisions.Where(d => d.RoomNumber != null && d.RoomNumber != string.Empty).ToList()
             : await ReadRoomDivisionsAsync((await _divisionRepository.GetQueryableAsync()).Where(d => d.RoomNumber != null && d.RoomNumber != string.Empty));
         var matchedDivisions = divisions
-            .Where(d => IsAssignedToRoom(d.RoomNumber, room))
+            .Where(d => IsAssignedToRoom(d.RoomNumber!, room))
             .ToList();
 
         if (!matchedDivisions.Any())

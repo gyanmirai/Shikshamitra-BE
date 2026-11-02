@@ -7,12 +7,12 @@ namespace ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 
 public class StandardDto : AuditedEntityDto<Guid>
 {
-	public string Name { get; set; }
+	public string Name { get; set; } = null!; // The response mapper populates these members after construction.
 
 	public int AgeLowerLimit { get; set; }
 	public int SortOrder { get; set; }
 
-	public List<DivisionDto> Divisions { get; set; }
+	public List<DivisionDto> Divisions { get; set; } = null!;
 
 	public Guid EducationMediumStageId { get; set; }
 	public Guid? ShiftId { get; set; }

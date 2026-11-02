@@ -23,13 +23,14 @@ public static class AdmissionFormInheritanceComposer
 			return result;
 		}
 		var targetFields = result.Definition.Sections.SelectMany(section => section.Fields).ToList();
+		var authoredEmptySections = result.Definition.Sections.Where(section => section.Fields.Count == 0).Select(section => section.Id).ToHashSet();
 		if (targetFields.GroupBy(field => field.Code, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
 		{
 			Issue(result, "DuplicateRegistrationCode", "Give each Registration question a unique field code.");
 			return result;
 		}
 		var targetsByCode = targetFields.ToDictionary(field => field.Code, StringComparer.OrdinalIgnoreCase);
-		var targetGroups = targetFields.GroupBy(field => Identity(field, registration.Id), StringComparer.OrdinalIgnoreCase).ToList();
+		var targetGroups = targetFields.GroupBy(field => MatchIdentity(field, registration.Id), StringComparer.OrdinalIgnoreCase).ToList();
 		if (targetGroups.Any(group => group.Count() > 1))
 		{
 			Issue(result, "DuplicateRegistrationIdentity", "The Registration form includes the same question more than once.");
@@ -45,7 +46,7 @@ public static class AdmissionFormInheritanceComposer
 			var source = sourceFields.SingleOrDefault(field => string.Equals(field.Code, mapping.SourceFieldCode, StringComparison.OrdinalIgnoreCase));
 			if (source == null || !targetsByCode.TryGetValue(mapping.RegistrationFieldCode, out var target) ||
 				source.BindingType != AdmissionFormBindingType.Custom || target.BindingType != AdmissionFormBindingType.Custom ||
-				!mappings.TryAdd(source.Code, Identity(target, registration.Id)))
+				!mappings.TryAdd(source.Code, MatchIdentity(target, registration.Id)))
 			{
 				Issue(result, "InvalidMapping", "Choose one existing custom question on each side when confirming a shared question.");
 			}
@@ -56,27 +57,29 @@ public static class AdmissionFormInheritanceComposer
 		var seenSourceIdentities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var field in sourceFields)
 		{
-			var identity = mappings.GetValueOrDefault(field.Code) ?? Identity(field, inquiry.Id);
+			var identity = mappings.GetValueOrDefault(field.Code) ?? MatchIdentity(field, inquiry.Id);
 			identities[field.Code] = identity;
 			if (!seenSourceIdentities.Add(identity))
 				Issue(result, "DuplicateSourceIdentity", "The Inquiry form includes the same question more than once.", identity);
 			codeMap[field.Code] = targets.TryGetValue(identity, out var target) ? target.Code : UniqueCode(field.Code, usedCodes);
 		}
 		if (result.Issues.Count > 0) return result;
-		if (sourcePolicy.RequiredFieldIdentities.Any(identity => !seenSourceIdentities.Contains(identity)) ||
-			sourcePolicy.Layouts.Any(layout => !seenSourceIdentities.Contains(layout.FieldIdentity)))
-		{
-			Issue(result, "UnknownOverrideField", "Review overrides that refer to questions missing from this Inquiry version.");
-			return result;
-		}
+		// Legacy requiredness/placement overrides remain readable policy metadata, but cannot
+		// alter Inquiry-owned definitions. Frozen application schemas are never recomposed.
+		var inquiryStepper = inquiry.LayoutType == AdmissionFormLayoutType.Stepper;
+		var combinedStepper = registration.LayoutType == AdmissionFormLayoutType.Stepper || inquiryStepper;
+		result.Definition.LayoutType = combinedStepper ? AdmissionFormLayoutType.Stepper : AdmissionFormLayoutType.SinglePage;
+		if (registration.LayoutType == AdmissionFormLayoutType.SinglePage)
+			foreach (var section in result.Definition.Sections)
+				SetSinglePageStep(section, registration, combinedStepper, registration.Id, "REGISTRATION_PAGE", 0);
 		var languages = registration.SupportedLanguages.Concat(inquiry.SupportedLanguages).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 		var sectionCodes = result.Definition.Sections.Select(section => section.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
-		var nextSectionOrder = result.Definition.Sections.Select(section => section.DisplayOrder).DefaultIfEmpty(-1).Max() + 1;
-		var nextStepOrder = result.Definition.Sections.Select(section => section.StepDisplayOrder ?? section.DisplayOrder).DefaultIfEmpty(-1).Max() + 1;
-		var sourceStepOrders = inquiry.Sections.Where(section => section.StepId.HasValue)
-			.GroupBy(section => section.StepId!.Value).OrderBy(group => group.Min(section => section.StepDisplayOrder ?? section.DisplayOrder))
+		var nextSectionOrder = 0;
+		var nextStepOrder = 0;
+		var sourceSectionIds = new HashSet<Guid>();
+		var sourceStepOrders = inquiry.Sections
+			.GroupBy(section => section.StepId ?? section.Id).OrderBy(group => group.Min(section => section.StepDisplayOrder ?? section.DisplayOrder))
 			.Select((group, index) => new { group.Key, Order = nextStepOrder + index }).ToDictionary(item => item.Key, item => item.Order);
-		var repeatedDestinations = new Dictionary<Guid, AdmissionFormSchemaSection>();
 		foreach (var repeated in inquiry.Sections.Where(section => section.IsRepeatable))
 		{
 			var dataFields = repeated.Fields.Where(field => field.FieldType != AdmissionFormFieldType.Static).ToList();
@@ -90,7 +93,6 @@ public static class AdmissionFormInheritanceComposer
 				Issue(result, "RepeatableGroupConflict", "Keep this complete repeated Inquiry section together, or map all of its questions into one matching repeated Registration section.");
 				return result;
 			}
-			repeatedDestinations[repeated.Id] = destinations[0];
 		}
 		foreach (var sourceSection in inquiry.Sections.OrderBy(section => section.DisplayOrder))
 		{
@@ -98,17 +100,22 @@ public static class AdmissionFormInheritanceComposer
 			inheritedSection.FormDefinitionId = registration.Id;
 			inheritedSection.Code = UniqueCode("INQ_" + sourceSection.Code, sectionCodes);
 			inheritedSection.Id = StableId(registration.Id, inquiry.Id, inheritedSection.Code);
+			sourceSectionIds.Add(inheritedSection.Id);
 			inheritedSection.DisplayOrder = nextSectionOrder++;
+			inheritedSection.FieldsPerRow = inquiry.FieldsPerRow;
 			inheritedSection.Fields = [];
 			FillTranslations(inheritedSection.Translations, inquiry.DefaultLanguage, languages, sourceSection.Name, null, null);
 			inheritedSection.VisibilityRuleJson = Rewrite(sourceSection.VisibilityRuleJson, codeMap);
 			inheritedSection.StepVisibilityRuleJson = Rewrite(sourceSection.StepVisibilityRuleJson, codeMap);
-			if (sourceSection.StepId.HasValue)
+			if (inquiryStepper)
 			{
-				inheritedSection.StepId = StableId(registration.Id, inquiry.Id, "STEP:" + sourceSection.StepId);
-				inheritedSection.StepCode = "INQ_" + sourceSection.StepCode;
-				inheritedSection.StepDisplayOrder = sourceStepOrders[sourceSection.StepId.Value];
+				inheritedSection.StepId = StableId(registration.Id, inquiry.Id, "STEP:" + (sourceSection.StepId ?? sourceSection.Id));
+				inheritedSection.StepCode = "INQ_" + (sourceSection.StepCode ?? sourceSection.Code);
+				inheritedSection.StepName = sourceSection.StepName ?? sourceSection.Name;
+				inheritedSection.StepDisplayOrder = sourceStepOrders[sourceSection.StepId ?? sourceSection.Id];
 			}
+			else
+				SetSinglePageStep(inheritedSection, inquiry, combinedStepper, registration.Id, "INQUIRY_PAGE", nextStepOrder);
 			var contextSection = Clone(inheritedSection);
 			foreach (var source in sourceSection.Fields.OrderBy(field => field.DisplayOrder))
 			{
@@ -135,10 +142,8 @@ public static class AdmissionFormInheritanceComposer
 					(ReferencesContext(source.OptionsJson, contextCodes) || ReferencesContext(source.ValidationJson, contextCodes)))
 					Issue(result, "ContextDependencyUnsupported", "An editable Registration question cannot use an Inquiry-only detail as an option or validation dependency. Use an editable source question instead.", identity);
 				FillTranslations(inherited.Translations, inquiry.DefaultLanguage, languages, source.Label, source.Placeholder, source.HelpText);
-				var requireOverride = sourcePolicy.RequiredFieldIdentities.Contains(identity, StringComparer.OrdinalIgnoreCase);
-				if ((requireOverride || target?.Required == true) && (source.ReadOnly || target?.ReadOnly == true) && !source.Required)
-					Issue(result, "ReadonlyRequiredOverride", "A read-only inherited question cannot be made newly required in Registration.", identity);
-				inherited.Required = source.Required || target?.Required == true || requireOverride;
+				// The source definition owns all answer requirements and settings.
+				inherited.Required = source.Required;
 				if (source.BindingKey?.StartsWith("Inquiry.", StringComparison.OrdinalIgnoreCase) == true)
 				{
 					inherited.ReadOnly = true;
@@ -148,56 +153,48 @@ public static class AdmissionFormInheritanceComposer
 				}
 				if (source.FieldType == AdmissionFormFieldType.File)
 					Issue(result, "UnsupportedField", "This Inquiry includes a field format unavailable in Registration.", identity);
-				var destination = source.FieldType == AdmissionFormFieldType.Static && repeatedDestinations.TryGetValue(sourceSection.Id, out var repeatedDestination)
-					? repeatedDestination : inheritedSection;
-				if (target == null && destination != inheritedSection)
-					inherited.VisibilityRuleJson = Combine("ALL", inherited.VisibilityRuleJson,
-						Rewrite(sourceSection.VisibilityRuleJson, codeMap), Rewrite(sourceSection.StepVisibilityRuleJson, codeMap));
 				if (target != null)
 				{
-					destination = result.Definition.Sections.Single(section => section.Fields.Contains(target));
+					var targetSection = result.Definition.Sections.Single(section => section.Fields.Contains(target));
 					if (source.FieldType != target.FieldType)
 						Issue(result, "FieldTypeConflict", "The linked question has incompatible answer types. Correct its definition before enabling inheritance.", identity);
 					if (IsChoice(source.FieldType) && !EquivalentOptions(inherited.OptionsJson, target.OptionsJson))
 						Issue(result, "OptionsConflict", "The linked question has different option values. Review the source question before enabling inheritance.", identity);
-					if (sourceSection.IsRepeatable != destination.IsRepeatable ||
-						(sourceSection.IsRepeatable && (sourceSection.MinEntries != destination.MinEntries || sourceSection.MaxEntries != destination.MaxEntries)))
+					if (sourceSection.IsRepeatable != targetSection.IsRepeatable ||
+						(sourceSection.IsRepeatable && (sourceSection.MinEntries != targetSection.MinEntries || sourceSection.MaxEntries != targetSection.MaxEntries)))
 						Issue(result, "RepeatableConflict", "A shared question must retain the same repeatable-entry structure.", identity);
-					if (!string.IsNullOrWhiteSpace(destination.VisibilityRuleJson) || !string.IsNullOrWhiteSpace(destination.StepVisibilityRuleJson) ||
+					if (!string.IsNullOrWhiteSpace(targetSection.VisibilityRuleJson) || !string.IsNullOrWhiteSpace(targetSection.StepVisibilityRuleJson) ||
 						(!string.IsNullOrWhiteSpace(target.VisibilityRuleJson) && !string.Equals(target.VisibilityRuleJson, inherited.VisibilityRuleJson, StringComparison.Ordinal)))
 						Issue(result, "VisibilityConflict", "Move this shared question to an unconditional Registration section so its Inquiry visibility stays authoritative.", identity);
-					inherited.VisibilityRuleJson = Combine("ALL", inherited.VisibilityRuleJson,
-						Rewrite(sourceSection.VisibilityRuleJson, codeMap), Rewrite(sourceSection.StepVisibilityRuleJson, codeMap));
-					inherited.RequiredRuleJson = Combine("ANY", inherited.RequiredRuleJson, target.RequiredRuleJson);
-					inherited.ValidationJson = MergeValidation(inherited.ValidationJson, target.ValidationJson, result, identity);
-					inherited.ReadOnly |= target.ReadOnly;
-					inherited.DisplayOrder = target.DisplayOrder;
-					destination.Fields.Remove(target);
-				}
-				var layout = sourcePolicy.Layouts.SingleOrDefault(item => string.Equals(item.FieldIdentity, identity, StringComparison.OrdinalIgnoreCase));
-				if (layout != null)
-				{
-					if (!string.IsNullOrWhiteSpace(layout.TargetSectionCode))
+					if (!string.IsNullOrWhiteSpace(target.RequiredRuleJson) && !EquivalentJson(target.RequiredRuleJson, inherited.RequiredRuleJson))
+						Issue(result, "RequiredRuleConflict", "The Registration question has a different conditional requirement. Keep the Inquiry rule unchanged before reusing it.", identity);
+					if (!string.IsNullOrWhiteSpace(target.ValidationJson) && !EquivalentJson(target.ValidationJson, inherited.ValidationJson))
+						Issue(result, "ValidationConflict", "The Registration question has different validation. Keep the Inquiry validation unchanged before reusing it.", identity);
+					// Historical starter fields can be custom while the Registration slot uses
+					// a canonical Student binding. Keep the original source key for prefill.
+					if (source.BindingType == AdmissionFormBindingType.Custom && target.BindingType == AdmissionFormBindingType.System)
 					{
-						var requested = result.Definition.Sections.SingleOrDefault(section => string.Equals(section.Code, layout.TargetSectionCode, StringComparison.OrdinalIgnoreCase));
-						if (requested == null || sourceSection.IsRepeatable || requested.IsRepeatable ||
-							!string.IsNullOrWhiteSpace(requested.VisibilityRuleJson) || !string.IsNullOrWhiteSpace(requested.StepVisibilityRuleJson))
-							Issue(result, "InvalidLayout", "Choose a compatible Registration section without changing the source question's applicability.", identity);
-						else
-						{
-							destination = requested;
-							inherited.VisibilityRuleJson = Combine("ALL", inherited.VisibilityRuleJson,
-								Rewrite(sourceSection.VisibilityRuleJson, codeMap), Rewrite(sourceSection.StepVisibilityRuleJson, codeMap));
-						}
+						inherited.BindingType = target.BindingType;
+						inherited.BindingKey = target.BindingKey;
 					}
-					if (layout.DisplayOrder.HasValue) inherited.DisplayOrder = layout.DisplayOrder.Value;
+					targetSection.Fields.Remove(target);
 				}
-				inherited.SectionId = destination.Id;
-				destination.Fields.Add(inherited);
+				if (identity == "system:APPLICANT.NAME" && targetFields.Any(field => MatchIdentity(field, registration.Id) is
+					"system:APPLICANT.FIRSTNAME" or "system:APPLICANT.MIDDLENAME" or "system:APPLICANT.LASTNAME"))
+				{
+					// A captured full name is useful historical context; never split it into
+					// structured Student names or ask the applicant to enter it again.
+					inherited.ReadOnly = true;
+					inherited.Required = false;
+					inherited.RequiredRuleJson = null;
+				}
+				inherited.SectionId = inheritedSection.Id;
+				inheritedSection.Fields.Add(inherited);
 			}
 			if (inheritedSection.Fields.Count > 0) result.Definition.Sections.Add(inheritedSection);
 			if (contextSection.Fields.Count > 0) result.InquiryContextSections.Add(contextSection);
 		}
+		OrderInquiryFirst(result.Definition, sourceSectionIds, authoredEmptySections);
 		result.Definition.SupportedLanguages = languages;
 		return result;
 	}
@@ -206,6 +203,62 @@ public static class AdmissionFormInheritanceComposer
 		field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey)
 			? "system:" + field.BindingKey.Trim().ToUpperInvariant()
 			: !string.IsNullOrWhiteSpace(field.FieldIdentity) ? field.FieldIdentity : "custom:" + formId.ToString("N") + ":" + field.Code.ToUpperInvariant();
+
+	private static string MatchIdentity(AdmissionFormSchemaField field, Guid formId)
+	{
+		if (field.FieldType != AdmissionFormFieldType.Static && AdmissionClassInterestQuestion.Matches(field.Code, field.Label, field.BindingType, field.BindingKey))
+			return AdmissionClassInterestQuestion.Identity;
+		if (field.BindingType == AdmissionFormBindingType.System ||
+			(!string.IsNullOrWhiteSpace(field.BindingKey) && !string.Equals(field.BindingKey, field.Code, StringComparison.OrdinalIgnoreCase)))
+			return Identity(field, formId);
+		// These are the published starter-code aliases already supported by Inquiry
+		// capture. Labels, translations and arbitrary custom names are not matches.
+		var binding = field.Code.Trim().ToUpperInvariant() switch
+		{
+			"STUDENT_NAME" or "APPLICANT_NAME" or "CHILD_NAME" => "APPLICANT.NAME",
+			"STUDENT_FIRST_NAME" or "APPLICANT_FIRST_NAME" or "FIRST_NAME" => "APPLICANT.FIRSTNAME",
+			"STUDENT_MIDDLE_NAME" or "APPLICANT_MIDDLE_NAME" or "MIDDLE_NAME" => "APPLICANT.MIDDLENAME",
+			"STUDENT_LAST_NAME" or "APPLICANT_LAST_NAME" or "LAST_NAME" => "APPLICANT.LASTNAME",
+			"DATE_OF_BIRTH" or "DOB" or "STUDENT_DOB" or "APPLICANT_DOB" => "APPLICANT.DATEOFBIRTH",
+			"GUARDIAN_FIRST_NAME" or "PARENT_FIRST_NAME" or "GUARDIAN_NAME" or "PARENT_NAME" => "GUARDIAN.FIRSTNAME",
+			"GUARDIAN_LAST_NAME" or "PARENT_LAST_NAME" => "GUARDIAN.LASTNAME",
+			"GUARDIAN_MOBILE" or "GUARDIAN_PHONE" or "PARENT_MOBILE" or "PARENT_PHONE" => "GUARDIAN.MOBILE",
+			"GUARDIAN_EMAIL" or "PARENT_EMAIL" => "GUARDIAN.EMAIL",
+			"GUARDIAN_RELATION" => "GUARDIAN.RELATIONSHIP",
+			_ => null
+		};
+		return binding == null ? Identity(field, formId) : "system:" + binding;
+	}
+
+	private static void OrderInquiryFirst(AdmissionFormSchema definition, IReadOnlySet<Guid> sourceSectionIds, IReadOnlySet<Guid> authoredEmptySections)
+	{
+		var source = definition.Sections.Where(section => sourceSectionIds.Contains(section.Id)).OrderBy(section => section.DisplayOrder).ToList();
+		var registration = definition.Sections.Where(section => !sourceSectionIds.Contains(section.Id) &&
+			(section.Fields.Count > 0 || authoredEmptySections.Contains(section.Id)))
+			.OrderBy(section => section.DisplayOrder).ToList();
+		definition.Sections = source.Concat(registration).ToList();
+		for (var index = 0; index < definition.Sections.Count; index++) definition.Sections[index].DisplayOrder = index;
+		if (definition.LayoutType != AdmissionFormLayoutType.Stepper) return;
+		var stepOrder = 0;
+		foreach (var owner in new[] { source, registration })
+			foreach (var group in owner.GroupBy(section => section.StepId ?? section.Id)
+				.OrderBy(group => group.Min(section => section.StepDisplayOrder ?? section.DisplayOrder)))
+			{
+				foreach (var section in group) section.StepDisplayOrder = stepOrder;
+				stepOrder++;
+			}
+	}
+
+	private static void SetSinglePageStep(AdmissionFormSchemaSection section, AdmissionFormSchema form,
+		bool stepper, Guid registrationId, string code, int order)
+	{
+		section.StepId = stepper ? StableId(registrationId, form.Id, code) : null;
+		section.StepCode = stepper ? code : null;
+		section.StepName = stepper ? form.Name : null;
+		section.StepDisplayOrder = stepper ? order : null;
+		// Dormant step rules on a single-page source must not hide its sections.
+		section.StepVisibilityRuleJson = null;
+	}
 
 	private static string UniqueCode(string code, HashSet<string> used)
 	{
@@ -253,28 +306,18 @@ public static class AdmissionFormInheritanceComposer
 	}
 	private static bool IsFieldReference(string key) => key is "field" or "parentField" or "countryField" or "stateField";
 
-	private static string? Combine(string operation, params string?[] rules)
+	private static bool EquivalentJson(string? first, string? second)
 	{
-		var nodes = rules.Where(rule => !string.IsNullOrWhiteSpace(rule)).Distinct().Select(rule => JsonNode.Parse(rule!)).ToList();
-		return nodes.Count switch { 0 => null, 1 => nodes[0]?.ToJsonString(), _ => new JsonObject { ["operator"] = operation, ["conditions"] = new JsonArray(nodes.ToArray()) }.ToJsonString() };
-	}
-
-	private static string? MergeValidation(string? source, string? target, AdmissionFormInheritanceComposition result, string identity)
-	{
-		if (string.IsNullOrWhiteSpace(target)) return source;
-		if (string.IsNullOrWhiteSpace(source)) return target;
 		try
 		{
-			var sourceNode = JsonNode.Parse(source) as JsonObject;
-			var targetNode = JsonNode.Parse(target) as JsonObject;
-			if (sourceNode == null || targetNode == null) return source;
-			foreach (var item in targetNode)
-				if (!sourceNode.ContainsKey(item.Key)) sourceNode[item.Key] = item.Value?.DeepClone();
-				else if (!JsonNode.DeepEquals(sourceNode[item.Key], item.Value))
-					Issue(result, "ValidationConflict", "The linked question has conflicting validation rules. Review the definitions before enabling inheritance.", identity);
-			return sourceNode.ToJsonString();
+			static JsonNode? Parse(string? value)
+			{
+				var node = string.IsNullOrWhiteSpace(value) ? null : JsonNode.Parse(value);
+				return node is JsonObject { Count: 0 } ? null : node;
+			}
+			return JsonNode.DeepEquals(Parse(first), Parse(second));
 		}
-		catch (JsonException) { Issue(result, "InvalidRule", "Review this question's validation rules.", identity); return source; }
+		catch (JsonException) { return false; }
 	}
 
 	private static bool IsChoice(AdmissionFormFieldType type) => type is AdmissionFormFieldType.Select or AdmissionFormFieldType.MultiSelect or AdmissionFormFieldType.Radio;

@@ -17,7 +17,12 @@ public class RoomAuditLog : Entity<Guid>, IMultiTenant
     public string? NewValue { get; private set; } // JSON
     public string? Remarks { get; private set; }
 
-    private RoomAuditLog() { }
+    private RoomAuditLog()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        Action = null!;
+        UserName = null!;
+    }
 
     public RoomAuditLog(
         Guid id,

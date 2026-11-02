@@ -136,7 +136,7 @@ public partial class HomeworkAppService(
     {
         var query = await homeworkRepository.WithDetailsAsync(
             h => h.DivisionSchedules,
-            h => h.HomeworkType
+            h => h.HomeworkType!
         );
 
         query = query
@@ -278,7 +278,7 @@ public partial class HomeworkAppService(
     {
         var q = await homeworkRepository.WithDetailsAsync(
             h => h.DivisionSchedules,
-            h => h.HomeworkType
+            h => h.HomeworkType!
         );
 
         var homework = await asyncExecuter.FirstOrDefaultAsync(
@@ -1061,7 +1061,7 @@ public partial class HomeworkAppService(
 
         var chapterNames = chapterIds
             .Select(id => chapterLookup.GetValueOrDefault(id))
-            .Where(name => name != null)
+            .Where(name => name != null).Select(name => name!)
             .ToList()!;
 
         string? chapterName = chapterNames.Any() ? string.Join(", ", chapterNames) : null;

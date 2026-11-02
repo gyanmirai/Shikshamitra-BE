@@ -198,7 +198,7 @@ public class StudentLeaveApi_Tests : ShikshaMitraApiTestBase
         {
             new { column = "studentName", type = "contains", value = earlier.StudentName.Split(' ')[0], min = (string?)null, max = (string?)null },
             new { column = "formattedLeaveDate", type = "equals", value = earlierDate.ToString("dd-MM-yyyy"),
-                min = schoolDayStart.ToUniversalTime().ToString("O"), max = schoolDayStart.AddDays(1).ToUniversalTime().ToString("O") }
+                min = (string?)schoolDayStart.ToUniversalTime().ToString("O"), max = (string?)schoolDayStart.AddDays(1).ToUniversalTime().ToString("O") }
         }));
         var filtered = await Client.GetFromJsonAsync<PagedResultDto<StudentLeaveDto>>(
             $"{LeaveBaseUrl}?studentId={student.StudentId}&tableFilters={filters}&skipCount=0&maxResultCount=1", JsonOptions);

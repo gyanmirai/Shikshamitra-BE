@@ -87,7 +87,7 @@ public class AcademicYearManager(IAcademicYearRepository academicYearRepository,
 	/// <param name="currentName">The current name of the academic year, if any (optional).</param>
 	/// <exception cref="AlreadyExistsException">Thrown if an academic year with the same name already exists.</exception>
 	/// <exception cref="InvalidAcademicYearDatesException">Thrown if the end date is before the start date.</exception>
-	private async Task ValidateAcademicYearAsync(string name, string currentName = null)
+	private async Task ValidateAcademicYearAsync(string name, string? currentName = null)
 	{
 		// Check if the name is unique (if it's different from the current name).
 		if (currentName != name && await academicYearRepository.FindByNameAsync(name) != null)

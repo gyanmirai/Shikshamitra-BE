@@ -174,8 +174,8 @@ public partial class FeeCollectionSummaryQueryService
 		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
 		return studentQ
 			.Where(s => scopedStudentIds.Contains(s.Id))
-			.OrderBy(s => s.Standard.CreationTime)
-			.ThenBy(s => s.Division.CreationTime)
+			.OrderBy(s => s.Standard!.CreationTime)
+			.ThenBy(s => s.Division!.CreationTime)
 			.ThenBy(s => s.RollNo);
 	}
 

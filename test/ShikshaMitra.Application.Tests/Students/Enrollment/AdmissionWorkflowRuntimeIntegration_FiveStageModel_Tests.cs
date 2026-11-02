@@ -130,8 +130,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var next = await _applicationAppService.AdvanceWorkflowAsync(application.Id, command);
 		(await _applicationAppService.AdvanceWorkflowAsync(application.Id, command)).CurrentStageInstanceId.ShouldBe(next.CurrentStageInstanceId);
 		next.Stages.Single(s => s.Id == stage).Status.ShouldBe(AdmissionRuntimeStageStatus.Completed);
-		next.History.Single(h => h.FromStageInstanceId == stage).ConditionEvaluationSnapshotJson.ShouldContain("collectionDeferred");
-		next.History.Single(h => h.FromStageInstanceId == stage).ConditionEvaluationSnapshotJson.ShouldNotContain("feeStructureConfirmed");
+		next.History.Single(h => h.FromStageInstanceId == stage).ConditionEvaluationSnapshotJson.ShouldNotBeNull().ShouldContain("collectionDeferred");
+		next.History.Single(h => h.FromStageInstanceId == stage).ConditionEvaluationSnapshotJson.ShouldNotBeNull().ShouldNotContain("feeStructureConfirmed");
 		var deferred = (await fees.GetAsync(application.Id)).FeeCollectionDeferral!;
 		var nextConcurrencyStamp = (await fees.GetAsync(application.Id)).ConcurrencyStamp;
 		(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.AdvanceWorkflowAsync(application.Id,

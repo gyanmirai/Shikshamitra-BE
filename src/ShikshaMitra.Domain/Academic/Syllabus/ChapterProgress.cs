@@ -44,7 +44,7 @@ public class ChapterProgress : FullAuditedEntity<Guid>
 	/// <summary>
 	/// Navigation property to the chapter.
 	/// </summary>
-	public AssignedSubjectChapter Chapter { get; set; }
+	public AssignedSubjectChapter Chapter { get; set; } = null!; // Populated by EF relationship materialization.
 
 	#endregion
 

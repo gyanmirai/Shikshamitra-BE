@@ -14,7 +14,12 @@ namespace ShikshaMitra.Library.Setting.GeneralSetting.BookCategory
 
 		public string Description { get; set; }
 
-		protected BookCategory() { }
+		protected BookCategory()
+		{
+			// EF materializes these required columns after this ORM constructor.
+			Description = null!;
+			Name = null!;
+		}
 
 		public BookCategory(string name, string description, Guid? academicYearId = null, Guid? tenantId = null)
 		{

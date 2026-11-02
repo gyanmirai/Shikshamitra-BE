@@ -23,7 +23,7 @@ public class AccountSettingsPermissionApi_Tests(FinanceRoutingApiTestFactory fac
 	{
 		using var client = RestrictedClient("ShikshaMitra.Module.Finance.Accounts.Settings");
 		var response = await client.GetAsync($"/api/{route}?academicYearId={Factory.SeededAcademicYearId}");
-		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, $"The module grant must not grant {setting} view access.");
 	}
 
 	[Theory]

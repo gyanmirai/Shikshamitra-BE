@@ -91,6 +91,8 @@ public class StudentRecordPlacementService(
 			(enrollment.DivisionId != input.DivisionId || enrollment.RollNumber != input.RollNumber))
 			await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>().RecordIssuedAsync(
 				enrollment.AcademicYearId, enrollment.StandardId.Value, enrollment.DivisionId.Value, enrollment.RollNumber.Value);
+		await LazyServiceProvider.LazyGetRequiredService<HouseManagement.HouseManagementPlacementService>()
+			.DepartAsync(enrollment, medium.Id, division.Id);
 		enrollment.ChangePlacement(standard.Id, division.Id, input.RollNumber, attendanceDate);
 		student.UpdateAcademicPlacement(input.AcademicYearId, medium.EducationBoardId, medium.Id, stage.Id, standard.Id, division.Id);
 		student.AssignRollNo(input.RollNumber);

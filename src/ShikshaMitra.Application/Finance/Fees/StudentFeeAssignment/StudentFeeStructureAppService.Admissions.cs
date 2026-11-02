@@ -32,16 +32,16 @@ public partial class StudentFeeStructureAppService
 		};
 		var proration = await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Policies.AdmissionProrationPolicyResolver>().ResolveAsync(source.AcademicYearId);
 		var prepared = await PrepareForContextAsync(input, new(accountId, source.StudentId, source.StandardId, source.BoardId,
-			source.MediumId, source.StructureRevision.Value, source.SourceRevision, source.JoiningDate, proration));
+			source.MediumId, source.StructureRevision.Value, source.SourceRevision, source.JoiningDate, proration, source.ApplicationId));
 		for (var i = 0; i < prepared.Dues.Count; i++) prepared.Preview.Lines[i].DueFeeId = prepared.Dues[i].Id;
 		var fingerprint = Hash(new { source.StructureId, source.StructureRevision,
 			Heads = source.OptionalHeadIds.Order().ToArray(), Variables = variableHeads.OrderBy(h => h.FeeHeadId).ToArray(), source.JoiningDate, ProrationVersion = proration?.Id });
 		return new(prepared.Structure, prepared.Preview, prepared.Dues, fingerprint);
 	}
 
-	private sealed record AdmissionAssignmentContext(Guid AccountId, Guid? StudentId, Guid StandardId,
-		Guid BoardId, Guid MediumId, int StructureRevision, string SourceRevision, DateTime? JoiningDate,
-		ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion? Proration);
+	private sealed record AdmissionAssignmentContext(Guid? AccountId, Guid? StudentId, Guid StandardId,
+		Guid BoardId, Guid MediumId, int? StructureRevision, string SourceRevision, DateTime? JoiningDate,
+		ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion? Proration, Guid ApplicationId, bool IsFinanceAssignment = false);
 }
 
 public sealed record AdmissionAssignmentPreparation(FeeStructure Structure, StudentFeeAssignmentPreviewDto Preview,

@@ -31,7 +31,7 @@ public class FeeHeadController(
     public Task<FeeHeadListResponse> GetListAsync(
         [FromQuery] Guid academicYearId,
         [FromQuery] Guid? feeCategoryId = null,
-        [FromQuery] string search = null,
+        [FromQuery] string? search = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
         [FromQuery] string? filters = null)

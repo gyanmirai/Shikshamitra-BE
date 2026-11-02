@@ -10,6 +10,8 @@ public sealed record StatutoryWageLine(
 	decimal Amount,
 	StatutoryWageTreatment Treatment, bool IsAdditional = false, bool IsBasic = false);
 
+public sealed record UnclassifiedEsiEarning(Guid ComponentId, string Name);
+
 public sealed record EsiStatutoryCalculationResult(
 	bool IsCovered,
 	bool CanCalculate,
@@ -34,6 +36,7 @@ public sealed record EsiStatutoryCalculationResult(
 	public decimal EmployeePercentage { get; init; }
 	public decimal EmployerPercentage { get; init; }
 	public EsiCalculationSettings CalculationSettings { get; init; } = new();
+	public IReadOnlyList<UnclassifiedEsiEarning> UnclassifiedEarnings { get; init; } = [];
 }
 
 public static class EsiStatutoryCalculator
@@ -110,7 +113,10 @@ public static class EsiStatutoryCalculator
 		if (eligibilityWageLines.Any(x => x.Treatment == StatutoryWageTreatment.Unclassified))
 		{
 			issueCodes.Add(WageClassificationIssue);
-			return Empty("WAGE_CLASSIFICATION_REQUIRED", wageCeiling, periodStart, periodEnd, issueCodes);
+			return Empty("WAGE_CLASSIFICATION_REQUIRED", wageCeiling, periodStart, periodEnd, issueCodes) with
+			{
+				UnclassifiedEarnings = MissingClassifications(eligibilityWageLines)
+			};
 		}
 
 		var activeOverrides = (overrides ?? [])
@@ -168,7 +174,9 @@ public static class EsiStatutoryCalculator
 			{
 				IsCovered = true,
 				EligibilityWages = coverageWages,
-				CalculationSettings = calculationSettings
+				CalculationSettings = calculationSettings,
+				UnclassifiedEarnings = calculationIssue == WageClassificationIssue
+					? MissingClassifications(wageLines.Concat(fullMonthCalculationWageLines)) : []
 			};
 		}
 		var (totalRemuneration, includedWages, specifiedExclusions, exclusionAddBack, inKindWages, statutoryWages)
@@ -254,6 +262,10 @@ public static class EsiStatutoryCalculator
 		return (totalRemuneration, includedWages, specifiedExclusions, exclusionAddBack, inKindWages,
 			RoundMoney(includedWages + exclusionAddBack + inKindWages));
 	}
+
+	private static IReadOnlyList<UnclassifiedEsiEarning> MissingClassifications(IEnumerable<StatutoryWageLine> lines) =>
+		lines.Where(x => x.Treatment == StatutoryWageTreatment.Unclassified)
+			.DistinctBy(x => x.ComponentId).Select(x => new UnclassifiedEsiEarning(x.ComponentId, x.Name)).ToList();
 
 	private static EsiStatutoryCalculationResult Empty(
 		string decision,

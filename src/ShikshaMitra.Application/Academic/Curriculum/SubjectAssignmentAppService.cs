@@ -323,7 +323,7 @@ public partial class SubjectAssignmentAppService(
 		var subjectsDict = (await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id)))
 						   .ToDictionary(s => s.Id);
 
-		var electiveGroupIds = assignments.Where(x => x.ElectiveGroupId.HasValue).Select(x => x.ElectiveGroupId.Value).Distinct().ToList();
+		var electiveGroupIds = assignments.Where(x => x.ElectiveGroupId.HasValue).Select(x => x.ElectiveGroupId!.Value).Distinct().ToList();
 		var electiveGroupsDict = (await electiveGroupRepository.GetListAsync(g => electiveGroupIds.Contains(g.Id)))
 								 .ToDictionary(g => g.Id);
 
@@ -366,14 +366,14 @@ public partial class SubjectAssignmentAppService(
 				.ToList();
 			var primaryTeacherNames = primaryTeacherEntries
 				.Select(t => teacherNamesDict.GetValueOrDefault(t.TeacherId))
-				.Where(name => !string.IsNullOrWhiteSpace(name))
+				.Where(name => !string.IsNullOrWhiteSpace(name)).Select(name => name!)
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.ToList();
 			var primaryTeacherEntry = primaryTeacherEntries.FirstOrDefault();
 			var teacherNames = coreAssignment.Teachers
 				.Select(teacher => teacherDisplayNamesDict.GetValueOrDefault(teacher.TeacherId)
 					?? teacherNamesDict.GetValueOrDefault(teacher.TeacherId))
-				.Where(name => !string.IsNullOrWhiteSpace(name))
+				.Where(name => !string.IsNullOrWhiteSpace(name)).Select(name => name!)
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.ToList();
 			var usageParts = BuildAssignmentUsageParts(usage,
@@ -421,9 +421,9 @@ public partial class SubjectAssignmentAppService(
 		foreach (var group in groupedByElective)
 		{
 			var first = group.First();
-			electiveGroupsDict.TryGetValue(first.ElectiveGroupId.Value, out var electiveGroup);
+			electiveGroupsDict.TryGetValue(first.ElectiveGroupId!.Value, out var electiveGroup);
 			var groupMetrics = group.Select(a => GetReadMetrics(readMetrics, a)).ToList();
-			var electiveTotalSlots = weeklyLecturesByElective.GetValueOrDefault(first.ElectiveGroupId.Value, 0);
+			var electiveTotalSlots = weeklyLecturesByElective.GetValueOrDefault(first.ElectiveGroupId!.Value, 0);
 			var electiveOccupiedSlots = group.Sum(a => occupiedBySubject.GetValueOrDefault(a.SubjectId, 0));
 			var avgHealth = groupMetrics.Count > 0 ? (int) groupMetrics.Average(a => a.SetupHealthScore) : 0;
 			var primaryTeacherEntries = group
@@ -432,7 +432,7 @@ public partial class SubjectAssignmentAppService(
 				.ToList();
 			var primaryTeacherNames = primaryTeacherEntries
 				.Select(t => teacherNamesDict.GetValueOrDefault(t.TeacherId))
-				.Where(name => !string.IsNullOrWhiteSpace(name))
+				.Where(name => !string.IsNullOrWhiteSpace(name)).Select(name => name!)
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.ToList();
 			var firstPrimary = primaryTeacherEntries.FirstOrDefault();
@@ -440,7 +440,7 @@ public partial class SubjectAssignmentAppService(
 				.SelectMany(assignment => assignment.Teachers)
 				.Select(teacher => teacherDisplayNamesDict.GetValueOrDefault(teacher.TeacherId)
 					?? teacherNamesDict.GetValueOrDefault(teacher.TeacherId))
-				.Where(name => !string.IsNullOrWhiteSpace(name))
+				.Where(name => !string.IsNullOrWhiteSpace(name)).Select(name => name!)
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.ToList();
 			var subjectIdsInGroup = group.Select(a => a.SubjectId).ToList();
@@ -735,7 +735,7 @@ public partial class SubjectAssignmentAppService(
 		return Math.Max(months, 0);
 	}
 
-	public async Task<SubjectAssignmentDto> UpdateAsync(
+	public async Task<SubjectAssignmentDto?> UpdateAsync(
 		Guid assignmentId,
 		Guid academicMediumId,
 		CreateUpdateSubjectAssignmentDto input
@@ -2044,14 +2044,14 @@ public partial class SubjectAssignmentAppService(
 		{
 			throw new BusinessException("SubjectAssignment:ArchivedAssignmentCannotBeReopened")
 				.WithData("AssignmentId", assignment.Id)
-				.WithData("SubjectName", assignment.Subject?.Name);
+				.WithData("SubjectName", (assignment.Subject?.Name)!);
 		}
 
 		if (assignment.Status == SubjectStatus.Inactive && targetStatus == SubjectStatus.Published)
 		{
 			throw new BusinessException("SubjectAssignment:InactiveAssignmentCannotBePublished")
 				.WithData("AssignmentId", assignment.Id)
-				.WithData("SubjectName", assignment.Subject?.Name);
+				.WithData("SubjectName", (assignment.Subject?.Name)!);
 		}
 	}
 
@@ -2064,7 +2064,7 @@ public partial class SubjectAssignmentAppService(
 		{
 			throw new BusinessException("SubjectAssignment:PublishReadinessFailed")
 				.WithData("AssignmentId", assignment.Id)
-				.WithData("SubjectName", assignment.Subject?.Name)
+				.WithData("SubjectName", (assignment.Subject?.Name)!)
 				.WithData("Blockers", blockers);
 		}
 	}

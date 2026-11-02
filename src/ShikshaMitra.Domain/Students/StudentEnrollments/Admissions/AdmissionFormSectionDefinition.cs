@@ -6,7 +6,12 @@ public class AdmissionFormSectionDefinition : Entity<Guid>
 {
 	public Guid FormDefinitionId { get; private set; } public string Code { get; private set; } public string Name { get; private set; } public int DisplayOrder { get; private set; } public string? VisibilityRuleJson { get; private set; }
 	public Guid? StepId { get; private set; } public string? StepCode { get; private set; } public string? StepName { get; private set; } public int? StepDisplayOrder { get; private set; } public string? StepVisibilityRuleJson { get; private set; }
-	protected AdmissionFormSectionDefinition() { }
+	protected AdmissionFormSectionDefinition()
+	{
+		// EF materializes these required columns after this ORM constructor.
+		Code = null!;
+		Name = null!;
+	}
 	public AdmissionFormSectionDefinition(Guid id, Guid formDefinitionId, string code, string name, int displayOrder, string? visibilityRuleJson,
 		Guid? stepId = null, string? stepCode = null, string? stepName = null, int? stepDisplayOrder = null, string? stepVisibilityRuleJson = null) : base(id)
 	{

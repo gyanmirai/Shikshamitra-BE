@@ -143,18 +143,18 @@ public class LateFeeBalanceService(
 								&& (x.CreationTime > date || x.LastModificationTime > date || x.DeletionTime > date)))
 							await AccrueAsync(before, date);
 				await AccrueAsync(due.OutstandingAmount, asOfDate);
-				result[due.Id] = new Balance(total, paid.GetValueOrDefault(due.Id), waived.GetValueOrDefault(due.Id), explanation, reconciliation.GetValueOrDefault(due.Id));
+				result[due.Id] = new Balance(total, paid.GetValueOrDefault(due.Id), waived.GetValueOrDefault(due.Id), explanation!, reconciliation.GetValueOrDefault(due.Id));
 				if (preserveAssessment && total > due.GetAssessedLateFeeAmount())
 				{
 					due.PreserveLateFeeAssessment(total, new DateTimeOffset(DateTime.SpecifyKind(asOfDate, DateTimeKind.Utc)),
-						context.VersionId, explanation);
+						context.VersionId, explanation!);
 					changed.Add(due);
 				}
 			}
 		}
 		foreach (var due in dues.Where(x => !result.ContainsKey(x.Id)))
 			result[due.Id] = new Balance(Math.Max(due.GetAssessedLateFeeAmount(), paid.GetValueOrDefault(due.Id) + waived.GetValueOrDefault(due.Id)),
-				paid.GetValueOrDefault(due.Id), waived.GetValueOrDefault(due.Id), due.GetLateFeeAssessmentExplanation(), reconciliation.GetValueOrDefault(due.Id));
+				paid.GetValueOrDefault(due.Id), waived.GetValueOrDefault(due.Id), due.GetLateFeeAssessmentExplanation()!, reconciliation.GetValueOrDefault(due.Id));
 		if (changed.Count > 0) await dueFeeRepository.UpdateManyAsync(changed, autoSave: false);
 		return result;
 	}

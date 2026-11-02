@@ -56,6 +56,7 @@ public class AdmissionApplicationLifecycleService(
 			AdmissionDirectRegistrationEntryPolicy.EnsureAllowed(offering);
 		inquiryId = await ResolveInquiryAsync(applicantId, offeringId, inquiryId);
 		var inquiry = await EnsureInquiryMatchesAsync(inquiryId, applicantId, offering);
+		if (inquiry != null) AdmissionPrimaryContactSelection.EnsureReady(applicant);
 		if (inquiry != null)
 		{
 			// A concurrent handoff may have committed while this request waited for the inquiry lock.
@@ -170,6 +171,12 @@ public class AdmissionApplicationLifecycleService(
 	internal static string? ResolveFrozenInitialValue(AdmissionFormFieldDto field, AdmissionApplicant applicant,
 		AdmissionGuardian? guardian, IReadOnlyDictionary<string, string> inquiryValues)
 	{
+		// A full Inquiry name shown beside structured Registration names is historical
+		// reference, not a live reconstruction of the applicant's corrected name parts.
+		if (field.ReadOnly && field.BindingType == AdmissionFormBindingType.System &&
+			string.Equals(field.BindingKey, "Applicant.Name", StringComparison.OrdinalIgnoreCase) &&
+			field.InheritedFrom is { SourceReadOnly: false })
+			return AdmissionEffectiveFormStore.ReadInquiryValue(field, inquiryValues);
 		var protectedContact = (applicant.ExistingStudentId.HasValue || AdmissionSiblingParentSelection.ReadConfirmation(applicant) != null) &&
 			(field.BindingKey?.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase) == true ||
 			 field.BindingKey?.StartsWith("Father.", StringComparison.OrdinalIgnoreCase) == true ||
@@ -180,7 +187,7 @@ public class AdmissionApplicationLifecycleService(
 			if (source != null) return source;
 		}
 		if (field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey))
-			return JsonSerializer.Serialize(AdmissionApplicationMapper.GetBoundValue(field.BindingKey, applicant, guardian));
+			return InitialSystemValue(field.BindingKey, applicant, guardian, inquiryValues);
 		return field.DefaultValue;
 	}
 
@@ -192,9 +199,17 @@ public class AdmissionApplicationLifecycleService(
 		IReadOnlyDictionary<string, string> inquiryValues)
 	{
 		if (field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey))
-			return JsonSerializer.Serialize(AdmissionApplicationMapper.GetBoundValue(field.BindingKey, applicant, guardian));
+			return InitialSystemValue(field.BindingKey, applicant, guardian, inquiryValues);
 		return AdmissionInquiryFormPrefill.ResolveCustomValue(field, inquiryFields, inquiryValues)
 			?? field.DefaultValue;
+	}
+
+	private static string? InitialSystemValue(string key, AdmissionApplicant applicant, AdmissionGuardian? guardian,
+		IReadOnlyDictionary<string, string> inquiryValues)
+	{
+		if (!applicant.ExistingStudentId.HasValue && string.Equals(key, "Applicant.FirstName", StringComparison.OrdinalIgnoreCase))
+			return JsonSerializer.Serialize(AdmissionStructuredNamePrefill.FirstName(applicant.FirstName, inquiryValues));
+		return JsonSerializer.Serialize(AdmissionApplicationMapper.GetBoundValue(key, applicant, guardian));
 	}
 
 	private static IReadOnlyDictionary<string, string> ReadInquiryValues(string? snapshotJson)

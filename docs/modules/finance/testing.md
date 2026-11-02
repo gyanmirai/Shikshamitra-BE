@@ -3,12 +3,25 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-30
+updated_on: 2026-10-31
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Finance backend changes
+
+## Admission assignment context and handoff
+
+`AdmissionFinanceAssignmentContext_Tests.cs` extends the runtime Admission integration fixture.
+Run its `Finance_assignment_*`, `Finance_handoff_reuses_prepared_*`,
+`Finance_does_not_preview_a_second_*`, `Finance_preview_verifies_admission_*` and
+`Finance_full_charge_and_withdrawal_*` scenarios. They cover direct Finance/admission calculation
+parity, exact source-date verification, stale previews, tenant/year isolation, read-only context,
+one assignment per year and preservation of prepared dues/payments/receipts/version after a default
+policy revision. Retain `AdmissionProrationIntegration_Tests`, assignment retry/bulk/policy tests and
+domain admission/withdrawal calculation suites. SQLite proves integration behavior; production
+uniqueness is enforced by the existing account and assignment indexes, and real PostgreSQL concurrent
+writer behavior remains a separate validation boundary.
 
 Late-fee receipt grouping: run `LateFeeReceiptGrouping_Tests`, `CollectionReceiptGrouping_Tests`,
 `RefundReceiptEvidencePolicy_Tests`, `FeeReceiptPdfGenerator_Tests` and
@@ -328,13 +341,34 @@ Finish with the signed-in local Finance tables and distinguish live tenant evide
 
 Settings filter regressions: `SettingsTableFilters_Tests` (including `SettingsTableFilters.ScopeTests.cs`) exercise all six list services, exact masked/document/fraction values, scope/tenant/year intersections and filtered counts before pagination. `SettingsTableFilterBinding_Tests` verifies the six optional query bindings and forwarding. Execution results are recorded in the local Finance QA report; authored tests are not evidence of a passing run.
 
-Finance table query regressions: `ReceiptReconciliationHeaderFilterApi_Tests` and `ReceiptReconciliationHeaderScopeApi_Tests` exercise actual HTTP binding, complete results beyond the former page cap, display/identifier/mask/date criteria, malformed input and restricted/foreign-tenant scope. The selected 12-case transport run including Charges and settings bindings passed on 2026-10-30. `DirectFinanceTableFilterApi_Tests` covers Fee Head/Receipt Book/Adjustment full-result queries and scope; `DirectFinanceTableFilterBinding_Tests` checks optional MVC binding, unchanged context forwarding and Adjustment input criteria. Keep host-startup failures distinct from behavioral assertions. The focused external runner excludes one unrelated pre-existing invalid Domain test only for verification; normal full-suite compilation still requires that existing error to be resolved.
+Finance table query regressions: `ReceiptReconciliationHeaderFilterApi_Tests` and `ReceiptReconciliationHeaderScopeApi_Tests` exercise actual HTTP binding, complete results beyond the former page cap, display/identifier/mask/date criteria, malformed input and restricted/foreign-tenant scope. The selected 12-case transport run including Charges and settings bindings passed on 2026-10-30. `DirectFinanceTableFilterApi_Tests` covers Fee Head/Receipt Book/Adjustment full-result queries and scope; `DirectFinanceTableFilterBinding_Tests` checks optional MVC binding, unchanged context forwarding and Adjustment input criteria. Keep host-startup failures distinct from behavioral assertions.
+`DirectFinanceTableFilterApi_Tests.Direct_settings_name_search_ignores_case_and_surrounding_whitespace_before_paging` covers mixed-case and padded name search for both direct settings lists, header intersections, filtered count/page behavior and academic-year exclusion.
+ The focused external runner excludes one unrelated pre-existing invalid Domain test only for verification; normal full-suite compilation still requires that existing error to be resolved.
 
 Adjustment table lookup regression: the unchanged 103-student HTTP fact passed after replacing entity lookups with scalar projections. Keep student, class, division and requester display formatting and the tenant/student/context intersections intact. Entity AutoInclude graphs must not be reintroduced into table label lookup queries. The nine distinct direct-table cases have passing evidence across separate recorded runs; this does not establish live DDVS browser acceptance.
 
 ## Pending refund editing
 
+`RefundRequestDetailProjection_Tests` verifies request-only fee heads, stage-specific saved amounts, exclusion of previous refunds, selected-allocation grouping, returns and separate paid-charge/late-fee groups without a database.
+
 `FeeRefundRequestLifecycle_Tests` covers Pending mutation, preserved identity/policy, recalculated amounts, editor attribution, unchanged status and protection after approval.
 `FeeRefundApi.EditTests.cs` extends `FeeRefundApi_Tests` with same-request editing, ignored identity reassignment, stale-stamp conflicts, editor/checker separation and rejection of updates after approval.
 HTTP workflow tests require `SHIKSHAMITRA_REFUND_TEST_DB` pointing to a migrated disposable loopback PostgreSQL database accepted by `FeeRefundApiTestFactory`.
 Do not treat an absent database or a host compilation failure as passing API coverage.
+
+`FeeRefundLineTracking_Tests` exercises the production refund EF configuration without opening a database connection.
+It covers reason-only and amount-changing Pending edits for fee, charge and paid late-fee lines, verifies deletion/insertion tracking, and retains the request's concurrency-token configuration.
+Refund-line IDs are assigned by the domain and mapped with `ValueGeneratedNever` in `FeeRefundRequestConfiguration`; new replacement rows must be tracked as Added.
+Generated migration sources and full HTTP persistence coverage remain separate build and database checks.
+
+## Collection refund context
+
+`PendingFeeRefundProjection_Tests` separates historical completed refunds from a
+new approved payout, covers multiple requests and capped approved amounts, and
+checks confirmation, cancellation, failure/replacement, return, legacy and
+non-principal sources. `FeeRefundApi_Tests` also asserts the collect-form's pending
+amount after approval and its removal after payout. Keep projection test results,
+HTTP execution, and signed-in browser evidence distinct; an authored API assertion
+does not establish that the HTTP suite ran.
+
+`ReconciliationDisplayFilter_Tests` exercises the production reconciliation allowlist and filter expressions for missing/null holders, explicitly blank holders, case-insensitive named holders, and missing/empty/masked card digits. These focused cases do not start an HTTP host; signed-in browser acceptance is recorded separately.

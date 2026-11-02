@@ -13,7 +13,7 @@ public class MobileAnswerSanitizer_Tests
 	{
 		var answer = sanitizer.Sanitize(new() { TextAnswerHtml = "<p onclick='bad()' style='color:red'>A &amp; B</p><ul><li><u>Item</u></li></ul><pre>code</pre><script>bad()</script>" });
 		answer.Text.ShouldBe("A & B\nItem\ncode");
-		answer.Html.ShouldNotContain("onclick"); answer.Html.ShouldNotContain("style"); answer.Html.ShouldNotContain("script");
+		answer.Html.ShouldNotBeNull().ShouldNotContain("onclick"); answer.Html.ShouldNotBeNull().ShouldNotContain("style"); answer.Html.ShouldNotBeNull().ShouldNotContain("script");
 		answer.Html.ShouldContain("<u>Item</u>");
 	}
 	[Fact]

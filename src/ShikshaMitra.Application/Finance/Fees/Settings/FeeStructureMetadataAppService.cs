@@ -50,9 +50,9 @@ public partial class FeeStructureMetadataAppService(
 		// Project scalars instead of materializing the recursively auto-included academic graph.
 		var all = await AsyncExecuter.ToListAsync(query.OrderByDescending(x => x.CreationTime).Select(x => new FeeStructureDetailsResponse
 		{
-			Id = x.Id, Name = x.Name, AcademicYearId = x.AcademicYearId!.Value, AcademicYearName = x.AcademicYear.Name,
-			BoardId = x.AcademicBoardId!.Value, BoardName = x.AcademicBoard.Type.ToString(),
-			MediumId = x.AcademicMediumId!.Value, MediumName = x.AcademicMedium.Name,
+			Id = x.Id, Name = x.Name, AcademicYearId = x.AcademicYearId!.Value, AcademicYearName = x.AcademicYear!.Name,
+			BoardId = x.AcademicBoardId!.Value, BoardName = x.AcademicBoard!.Type.ToString(),
+			MediumId = x.AcademicMediumId!.Value, MediumName = x.AcademicMedium!.Name,
 			ReceiptBookId = x.ReceiptBookId, ReceiptBookName = x.ReceiptBook == null ? null : x.ReceiptBook.Name
 		}));
 		var mediumIds = all.Select(x => x.MediumId).Distinct().ToList();

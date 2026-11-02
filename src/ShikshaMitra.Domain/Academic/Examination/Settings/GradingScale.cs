@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,6 +22,10 @@ public class GradingScale : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     private GradingScale()
     {
+        // EF materializes these required columns after this ORM constructor.
+        Name = null!;
+        TotalMarks = null!;
+
         /* This constructor is for deserialization / ORM purpose */
         GradeRanges = new List<GradeRange>();
     }
@@ -50,12 +55,14 @@ public class GradingScale : FullAuditedAggregateRoot<Guid>, IMultiTenant
         GradeRanges = new List<GradeRange>();
     }
 
+    [MemberNotNull(nameof(Name))]
     public void SetName(string name)
     {
         Check.NotNullOrWhiteSpace(name, nameof(name));
         Name = name;
     }
 
+    [MemberNotNull(nameof(TotalMarks))]
     public void SetTotalMarks(string totalMarks)
     {
         Check.NotNullOrWhiteSpace(totalMarks, nameof(totalMarks));

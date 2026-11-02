@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using System;
 using ShikshaMitra.Localization;
 using Volo.Abp;
 using Volo.Abp.ExceptionHandling;
@@ -7,6 +9,16 @@ namespace ShikshaMitra.Security.Permissions.Exceptions;
 
 public class VisibilityPrerequisiteMissingException : BusinessException, ILocalizeErrorMessage
 {
+	public VisibilityPrerequisiteMissingException(
+		string? code,
+		string? message,
+		string? details,
+		Exception? innerException,
+		LogLevel logLevel)
+		: base(code, message, details, innerException, logLevel)
+	{
+	}
+
 	public VisibilityPrerequisiteMissingException(string permissionName)
 		: base(SecurityPermissionErrorCodes.VisibilityPrerequisiteMissing,
 			$"Cannot grant permission for '{permissionName}' because Navigation Visibility is revoked for this user/role.")

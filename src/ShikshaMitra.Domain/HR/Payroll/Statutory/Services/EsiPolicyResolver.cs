@@ -41,6 +41,6 @@ public class EsiPolicyResolver(IRepository<EsiPolicy, Guid> policies,
 		return selected;
 	}
 	public static BusinessException NotEffective(Guid? policyId, DateTime month) =>
-		new BusinessException(HRErrorCodes.EsiPolicyNotEffective).WithData("policyId", policyId)
+		new BusinessException(HRErrorCodes.EsiPolicyNotEffective).WithData("policyId", policyId!)
 			.WithData("month", month.ToString("yyyy-MM"));
 }

@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 
+using System.Linq;
+
 namespace ShikshaMitra.Constants.Permissions;
 
 /// <summary>
@@ -65,19 +67,15 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Students.Admissions.Reviews", new SubmoduleInfo(AdmissionReviews.All, AdmissionReviews.DisplayNames) },
 			{ "Students.Admissions.Applicants", new SubmoduleInfo(AdmissionApplicants.All, AdmissionApplicants.DisplayNames) },
 			{ "Students.Onboarding", new SubmoduleInfo(StudentOnboarding.All, StudentOnboarding.DisplayNames) },
-			{ "Students.IdentityCompliance", new SubmoduleInfo(IdentityCompliance.All, IdentityCompliance.DisplayNames) },
 			{ "Students.Portal.ProfilePhoto", new SubmoduleInfo(Portal_ProfilePhoto.All, Portal_ProfilePhoto.DisplayNames) },
 
 			// Records submodules (defined in Students.Records.cs)
-			{ "Students.Records.StudentList", new SubmoduleInfo(Records_StudentList.All, Records_StudentList.DisplayNames) },
+			{ "Students.Records.StudentList", StudentListPermissionBundle() },
+			{ "Students.Records.HouseManagement", new SubmoduleInfo(Records_HouseManagement.All, Records_HouseManagement.DisplayNames) },
 			{ "Students.Records.StudentICard", new SubmoduleInfo(Records_StudentICard.All, Records_StudentICard.DisplayNames) },
 			{ "Students.Records.Certificates", new SubmoduleInfo(Records_Certificates.All, Records_Certificates.DisplayNames) },
 			{ "Students.Records.Reports", new SubmoduleInfo(Records_Reports.All, Records_Reports.DisplayNames) },
 			{ "Students.Records.Settings", new SubmoduleInfo(Records_Settings.All, Records_Settings.DisplayNames) },
-			{ "Students.Records.Changes", new SubmoduleInfo(Records_Changes.All, Records_Changes.DisplayNames) },
-			{ "Students.Records.Transitions", new SubmoduleInfo(Records_Transitions.All, Records_Transitions.DisplayNames) },
-			{ "Students.Records.Overrides", new SubmoduleInfo(Records_Overrides.All, Records_Overrides.DisplayNames) },
-			{ "Students.Records.GuardianAccess", new SubmoduleInfo(Records_GuardianAccess.All, Records_GuardianAccess.DisplayNames) },
 
 			// Attendance submodules (defined in Students.Attendance.cs)
 			{ "Students.Attendance.MarkAttendance", new SubmoduleInfo(Attendance_MarkAttendance.All, Attendance_MarkAttendance.DisplayNames) },
@@ -95,5 +93,22 @@ public static partial class ShikshaMitraSubmodulePermissions
 			// Reports submodules (defined in Students.Reports.cs)
 			{ "Students.Reports", new SubmoduleInfo(Reports.All, Reports.DisplayNames) }
 		};
+
+		// Group profile workflows under the visible Student List feature. Keep every
+		// exact permission registered so saved grants, denials and API guards are unchanged.
+		private static SubmoduleInfo StudentListPermissionBundle()
+		{
+			var features = new[]
+			{
+				new SubmoduleInfo(Records_StudentList.All, Records_StudentList.DisplayNames),
+				new SubmoduleInfo(Records_Changes.All, Records_Changes.DisplayNames),
+				new SubmoduleInfo(Records_Transitions.All, Records_Transitions.DisplayNames),
+				new SubmoduleInfo(Records_Overrides.All, Records_Overrides.DisplayNames),
+				new SubmoduleInfo(Records_GuardianAccess.All, Records_GuardianAccess.DisplayNames),
+				new SubmoduleInfo(IdentityCompliance.All, IdentityCompliance.DisplayNames)
+			};
+			return new SubmoduleInfo(features.SelectMany(feature => feature.Permissions).ToArray(),
+				features.SelectMany(feature => feature.DisplayNames).ToDictionary(entry => entry.Key, entry => entry.Value));
+		}
 	}
 }

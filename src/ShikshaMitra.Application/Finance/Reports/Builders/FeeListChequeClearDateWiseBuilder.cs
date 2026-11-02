@@ -37,8 +37,8 @@ public class FeeListChequeClearDateWiseBuilder(
         // We look for FinalFee receipts that have a linked provisional receipt (meaning it was a cleared non-cash instrument)
         var receiptQuery = FinanceReportPayerQueryService.FilterReceipts(await receiptRepository.GetQueryableAsync(), payers)
             .Where(r => r.ReceiptKind == FeeReceiptKind.FinalFee && r.LinkedProvisionalReceiptId != null)
-            .WhereIf(fromDate.HasValue, r => r.ReceiptDate >= DateOnly.FromDateTime(fromDate.Value))
-            .WhereIf(toDate.HasValue, r => r.ReceiptDate <= DateOnly.FromDateTime(toDate.Value));
+            .WhereIf(fromDate.HasValue, r => r.ReceiptDate >= DateOnly.FromDateTime(fromDate!.Value))
+            .WhereIf(toDate.HasValue, r => r.ReceiptDate <= DateOnly.FromDateTime(toDate!.Value));
 
         var receipts = await asyncExecuter.ToListAsync(receiptQuery);
         if (!receipts.Any())

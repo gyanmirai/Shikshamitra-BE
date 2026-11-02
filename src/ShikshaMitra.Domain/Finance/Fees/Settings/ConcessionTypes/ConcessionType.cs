@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Common;
+﻿using System.Diagnostics.CodeAnalysis;
+using ShikshaMitra.Common;
 using ShikshaMitra.Finance.Fees.Concessions;
 using System;
 using System.Collections.Generic;
@@ -29,6 +30,10 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private ConcessionType()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Name = null!;
+		NormalizedName = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -141,6 +146,7 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 	}
 
+	[MemberNotNull(nameof(Name), nameof(NormalizedName))]
 	private void SetDetails(string name, string? description)
 	{
 		var displayName = ConcessionTypeConsts.NormalizeDisplayName(name);

@@ -51,7 +51,8 @@ public sealed class BankTransferRefundDetails : RefundPaymentDetails
         Remarks                   = remarks;
     }
 
-    protected override IEnumerable<object?> GetAtomicValues()
+    // ABP equality atoms intentionally include null for absent optional values.
+    protected override IEnumerable<object> GetAtomicValues()
     {
         yield return TransferDate;
         yield return SourceBankAccount;
@@ -59,7 +60,7 @@ public sealed class BankTransferRefundDetails : RefundPaymentDetails
         yield return BeneficiaryBankName;
         yield return BeneficiaryAccountNumber;
         yield return IfscCode;
-        yield return TransactionId;
-        yield return Remarks;
+        yield return TransactionId!;
+        yield return Remarks!;
     }
 }

@@ -9,12 +9,12 @@ namespace ShikshaMitra.Students.Enrollments.EntranceExams;
 public class EntranceExamDetailDto
 {
 	public Guid StudentId { get; set; }
-	public string StudentName { get; set; }
-	public string InquiryNo { get; set; }
-	public string RegistrationFormNo { get; set; }
-	public string EducationBoard { get; set; }
-	public string EducationMedium { get; set; }
-	public string Standard { get; set; }
+	public string? StudentName { get; set; }
+	public string? InquiryNo { get; set; }
+	public string? RegistrationFormNo { get; set; }
+	public string? EducationBoard { get; set; }
+	public string? EducationMedium { get; set; }
+	public string? Standard { get; set; }
 
 	// Exam Schedule
 	public bool ExamScheduled { get; set; }

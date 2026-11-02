@@ -37,7 +37,11 @@ public class LessonPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserSco
     Guid? IUserScopedEntity.StandardId => StandardId;
     Guid? IUserScopedEntity.DivisionId => DivisionId;
 
-    protected LessonPlan() { }
+    protected LessonPlan()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        Topic = null!;
+    }
 
     public LessonPlan(
         Guid id,

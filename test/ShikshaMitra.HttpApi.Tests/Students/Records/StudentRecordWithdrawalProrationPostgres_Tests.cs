@@ -60,7 +60,7 @@ public sealed partial class StudentRecordMidnightSchedule_Tests
 			due.RefundedAmount.ShouldBe(0m); due.GetWithdrawalProrationCredit().ShouldBe(finance.ExpectedCredit);
 			due.GetWithdrawalProrationSource().ShouldBe(item.Id);
 			var events = await services.GetRequiredService<IRepository<FinanceAuditEvent, Guid>>().GetListAsync(x => x.Id == item.Id);
-			events.Count.ShouldBe(1); events[0].ActorUserId.ShouldBe(fixture.Actor); events[0].ContextJson.ShouldContain("policyVersion");
+			events.Count.ShouldBe(1); events[0].ActorUserId.ShouldBe(fixture.Actor); events[0].ContextJson.ShouldNotBeNull().ShouldContain("policyVersion");
 			return true;
 		});
 		// The normal named correction asks Finance to reverse the linked non-cash credit atomically.
@@ -74,7 +74,7 @@ public sealed partial class StudentRecordMidnightSchedule_Tests
 			var due = await services.GetRequiredService<IRepository<DueFee, Guid>>().GetAsync(finance.DueId);
 			due.GetWithdrawalProrationCredit().ShouldBe(0m); due.PaidAmount.ShouldBe(finance.Paid); due.OriginalAmount.ShouldBe(finance.Original);
 			var audit = await services.GetRequiredService<IRepository<FinanceAuditEvent, Guid>>().GetListAsync(x => x.StudentId == fixture.Student && x.Action == "withdrawal_proration_reversed");
-			audit.Count.ShouldBe(1); audit[0].ContextJson.ShouldContain(item.Id.ToString());
+			audit.Count.ShouldBe(1); audit[0].ContextJson.ShouldNotBeNull().ShouldContain(item.Id.ToString());
 			return true;
 		});
 	}

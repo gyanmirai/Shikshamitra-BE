@@ -65,8 +65,8 @@ public class TimetableConflictBatch_Tests
 		var candidate = Candidate(TimetableDayOfWeek.Monday, new TimeOnly(9, 15), new TimeOnly(10, 0));
 		SetCandidates(candidate);
 
-		var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
-			Guid.NewGuid(), Guid.NewGuid(), [CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 30)]));
+			var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
+				Guid.NewGuid(), Guid.NewGuid(), [CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 30)]));
 
 		error.Code.ShouldBe(TimetableErrorCodes.TeacherConflict);
 		error.Data["message"].ShouldBe(
@@ -105,10 +105,10 @@ public class TimetableConflictBatch_Tests
 			Candidate(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), new TimeOnly(10, 0)) with { TeacherId = null },
 			Candidate(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), new TimeOnly(11, 0)));
 
-		var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
-			Guid.NewGuid(), Guid.NewGuid(),
-			[CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 60),
-			 CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), 60)]));
+			var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
+				Guid.NewGuid(), Guid.NewGuid(),
+				[CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 60),
+				 CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), 60)]));
 
 		error.Code.ShouldBe(TimetableErrorCodes.RoomConflict);
 		error.Data["StartTime"].ShouldBe("09:00");

@@ -8,7 +8,7 @@ public abstract class BuildingMutationDtoBase
 {
 	[Required]
 	[StringLength(BuildingConsts.MaxNameLength)]
-	public string BuildingName { get; set; }
+	public string BuildingName { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
 	[Required]
 	[Range(1, int.MaxValue, ErrorMessage = "Total floors must be at least 1")]
@@ -41,7 +41,7 @@ public abstract class FloorMutationDtoBase
 
 	[Required]
 	[StringLength(FloorConsts.MaxFloorNameLength)]
-	public string FloorName { get; set; }
+	public string FloorName { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
 	[Required]
 	[Range(FloorConsts.MinTotalRoom, FloorConsts.MaxTotalRoom)]

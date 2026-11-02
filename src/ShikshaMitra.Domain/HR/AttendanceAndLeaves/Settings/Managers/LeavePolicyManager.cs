@@ -57,7 +57,7 @@ public class LeavePolicyManager : DomainService
 			description
 		);
 
-		policy.ReplaceRules(await BuildRulesAsync(policy.Id, rules));
+		policy.ReplaceRules(BuildRules(policy.Id, rules));
 		return policy;
 	}
 
@@ -92,7 +92,7 @@ public class LeavePolicyManager : DomainService
 		var referencedRuleIds = await _employeeLeaveRepository.GetReferencedRuleIdsAsync(
 			leavePolicy.Rules.Select(rule => rule.Id).ToList());
 		leavePolicy.SyncRules(
-			await BuildRulesAsync(leavePolicy.Id, rules),
+			BuildRules(leavePolicy.Id, rules),
 			referencedRuleIds);
 	}
 
@@ -182,7 +182,7 @@ public class LeavePolicyManager : DomainService
 		}
 	}
 
-	private async Task<List<LeavePolicyRule>> BuildRulesAsync(
+	private List<LeavePolicyRule> BuildRules(
 		Guid leavePolicyId,
 		IEnumerable<LeavePolicyRuleInput> rules)
 	{

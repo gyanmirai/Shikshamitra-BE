@@ -11,14 +11,30 @@ using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Security.Roles;
 
-public class SchoolIdentityRoleAppService(
-	IdentityRoleManager roleManager,
-	IIdentityRoleRepository roles,
-	IRepository<IdentityUser, Guid> users,
-	IRepository<Employee, Guid> employees,
-	IRoleDeletionLock deletionLock,
-	IDataFilter dataFilter) : IdentityRoleAppService(roleManager, roles)
+public class SchoolIdentityRoleAppService : IdentityRoleAppService
 {
+	private readonly IIdentityRoleRepository roles;
+	private readonly IRepository<IdentityUser, Guid> users;
+	private readonly IRepository<Employee, Guid> employees;
+	private readonly IRoleDeletionLock deletionLock;
+	private readonly IDataFilter dataFilter;
+
+	public SchoolIdentityRoleAppService(
+		IdentityRoleManager roleManager,
+		IIdentityRoleRepository roles,
+		IRepository<IdentityUser, Guid> users,
+		IRepository<Employee, Guid> employees,
+		IRoleDeletionLock deletionLock,
+		IDataFilter dataFilter
+	) : base(roleManager, roles)
+	{
+		this.roles = roles;
+		this.users = users;
+		this.employees = employees;
+		this.deletionLock = deletionLock;
+		this.dataFilter = dataFilter;
+	}
+
 	[Authorize(IdentityPermissions.Roles.Delete)]
 	[UnitOfWork(isTransactional: true)]
 	public override async Task DeleteAsync(Guid id)

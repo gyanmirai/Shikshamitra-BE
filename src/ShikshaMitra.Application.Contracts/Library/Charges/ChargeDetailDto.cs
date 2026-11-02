@@ -7,7 +7,7 @@ public class ChargeDetailDto
     public Guid Id { get; set; }
 
     public Guid MemberId { get; set; }
-    public string MemberName { get; set; }
+    public string? MemberName { get; set; }
     public int Role { get; set; }
     public string? Avatar { get; set; }
     public string? ClassDivision { get; set; }
@@ -16,7 +16,7 @@ public class ChargeDetailDto
     public string? ContactNo { get; set; }
 
     public Guid ChargeCategoryId { get; set; }
-    public string ChargeType { get; set; }
+    public string ChargeType { get; set; } = null!;
 
     public Guid? BookIssueId { get; set; }
     public string? BookTitle { get; set; }

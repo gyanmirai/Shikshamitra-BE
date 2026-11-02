@@ -1,7 +1,6 @@
 using ShikshaMitra.Finance;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Transactions;
-using ShikshaMitra.Finance;
 using System;
 using System.Collections.Generic;
 using System.Linq;

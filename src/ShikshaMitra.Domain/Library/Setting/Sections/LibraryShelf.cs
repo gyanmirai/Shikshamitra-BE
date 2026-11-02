@@ -6,7 +6,7 @@ namespace ShikshaMitra.Library.Setting.Sections
 	public class LibraryShelf : Entity<Guid>
 	{
 		public Guid SectionId { get; set; }
-		public LibrarySection Section { get; set; }
+		public LibrarySection Section { get; set; } = null!; // Populated by EF relationship materialization.
 
 		public string? ShelfName { get; set; }
 

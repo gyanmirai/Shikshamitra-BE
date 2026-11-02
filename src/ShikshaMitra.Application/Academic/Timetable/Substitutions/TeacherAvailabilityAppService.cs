@@ -165,7 +165,7 @@ public partial class TeacherAvailabilityAppService(
         var entity = new TeacherAvailability(
             GuidGenerator.Create(),
             CurrentTenant.Id,
-            input.TeacherName,
+            input.TeacherName!,
             availabilityDate,
             startTime,
             endTime,

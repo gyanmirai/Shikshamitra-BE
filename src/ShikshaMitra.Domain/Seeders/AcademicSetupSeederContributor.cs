@@ -66,10 +66,10 @@ public class AcademicSetupSeederContributor : BaseSeederContributor
 
 		var yearsByName = existing.Years.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);
 		var boardsByKey = existing.Boards.ToDictionary(x => (x.AcademicYearId, x.Type));
-		var mediumsByKey = existing.Mediums.ToDictionary(x => (x.EducationBoardId, Name: x.Name), GuidStringKeyComparer.Instance);
-		var stagesByKey = existing.Stages.ToDictionary(x => (x.EducationMediumId, Name: x.Name), GuidStringKeyComparer.Instance);
-		var standardsByKey = existing.Standards.ToDictionary(x => (x.EducationMediumStageId, Name: x.Name), GuidStringKeyComparer.Instance);
-		var divisionsByKey = existing.Divisions.ToDictionary(x => (x.StandardId, Name: x.Name), GuidStringKeyComparer.Instance);
+		var mediumsByKey = existing.Mediums.ToDictionary(x => (x.EducationBoardId, x.Name), GuidStringKeyComparer.Instance);
+		var stagesByKey = existing.Stages.ToDictionary(x => (x.EducationMediumId, x.Name), GuidStringKeyComparer.Instance);
+		var standardsByKey = existing.Standards.ToDictionary(x => (x.EducationMediumStageId, x.Name), GuidStringKeyComparer.Instance);
+		var divisionsByKey = existing.Divisions.ToDictionary(x => (x.StandardId, x.Name), GuidStringKeyComparer.Instance);
 
 		var yearsToInsert = new List<AcademicYear>();
 		var boardsToInsert = new List<EducationBoard>();

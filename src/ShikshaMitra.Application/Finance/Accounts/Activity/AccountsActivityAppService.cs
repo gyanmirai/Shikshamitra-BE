@@ -137,7 +137,8 @@ public partial class AccountsActivityAppService(
         if (canViewFees && (source is null or "refund"))
         {
             var entries = await refundEntryRepository.GetQueryableAsync();
-            var refunds = await refundRepository.GetQueryableAsync();
+            var refunds = AccountsRecognitionQuery.ExcludeNone(await refundRepository.GetQueryableAsync(),
+                await categoryRepository.GetQueryableAsync());
             var query = from entry in entries
                         join refund in refunds on entry.RefundRequestId equals refund.Id
                         where !automaticEntries.Any(x=>x.SourceId == refund.Id) && refund.AcademicYearId == input.AcademicYearId
@@ -180,6 +181,7 @@ public partial class AccountsActivityAppService(
             var transactions = await scopeAccessService.FilterPooledCashTransactionsAsync(
                 await transactionRepository.GetQueryableAsync(), input.AcademicYearId);
             var categories = await categoryRepository.GetQueryableAsync();
+            transactions = AccountsRecognitionQuery.ExcludeNone(transactions, categories);
             var query = from transaction in transactions
                         join category in categories on transaction.CategoryId equals category.Id
                         where transaction.AcademicYearId == input.AcademicYearId && transaction.IsConfirmed

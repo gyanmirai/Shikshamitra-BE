@@ -8,12 +8,12 @@ public class TeacherInfoDto
 	/// <summary>
 	/// Teacher ID (as string for FE)
 	/// </summary>
-	public string Id { get; set; }
+	public string Id { get; set; } = null!; // The response mapper populates these members after construction.
 
 	/// <summary>
 	/// Teacher full name
 	/// </summary>
-	public string Name { get; set; }
+	public string Name { get; set; } = null!;
 
 	/// <summary>
 	/// Stable employee identifier shown with the teacher name to disambiguate similar names.

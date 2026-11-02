@@ -156,7 +156,7 @@ public class EmployeeUserRoleManager(
 			"The selected role is not available for the selected staff group.")
 			.WithData("roleId", role.Id)
 			.WithData("roleName", roleName)
-			.WithData("employeeGroup", employeeGroup)
+			.WithData("employeeGroup", employeeGroup!)
 			.WithData(
 				"employeeGroupAudience",
 				EmployeeGroupAudience.ResolveOrDefault(groupAudience));

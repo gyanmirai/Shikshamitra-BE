@@ -733,13 +733,15 @@ public partial class FeeRefundApi_Tests : ShikshaMitraApiTestBase
             Client, Factory.Services, 1000d);
         await FeeRefundTestHelper.EnrollStudentForCollectionSummaryAsync(Factory.Services, studentId);
 
-        async Task AssertPaidAsync(decimal refunded)
+        async Task AssertPaidAsync(decimal refunded, decimal pendingRefund = 0m)
         {
             var form = (await Client.GetFromJsonAsync<FeeCollectFormDto>(
                 $"/api/fee-collections/{studentId}/collect-form?academicYearId={FeeRefundTestHelper.DefaultAcademicYearId}", JsonOptions))!;
             var line = form.Ledger.SelectMany(x => x.Items).Single(x => x.DueFeeId == dueFeeId);
             line.Due.ShouldBe(0d);
             line.Status.ShouldBe(FeeCollectionStatus.Paid);
+            line.RefundAmount.ShouldBe((double)refunded);
+            line.PendingRefundAmount.ShouldBe(pendingRefund);
             form.Summary.PendingFee.ShouldBe(0d);
             var details = (await Client.GetFromJsonAsync<StudentFeeDetailsDto>(
                 $"/api/fee-collections/{studentId}/fee-details?academicYearId={FeeRefundTestHelper.DefaultAcademicYearId}", JsonOptions))!;
@@ -764,7 +766,7 @@ public partial class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         var approval = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve",
             new FeeRefundActionDto { Notes = "Approved refund of settled fees" }, JsonOptions);
         approval.StatusCode.ShouldBe(HttpStatusCode.OK, await approval.Content.ReadAsStringAsync());
-        await AssertPaidAsync(0m);
+        await AssertPaidAsync(0m, 200m);
         var payout = await Client.PostAsJsonAsync($"{BaseUrl}/{request.Id}/payout", new RecordRefundPayoutDto
         {
             ExpenseCategoryId = await FeeRefundTestHelper.SeedRefundExpenseCategoryAsync(Factory.Services),

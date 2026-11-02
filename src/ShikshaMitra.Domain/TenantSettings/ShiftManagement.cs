@@ -9,7 +9,7 @@ namespace ShikshaMitra.TenantSettings;
 public class ShiftManagement : AggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; set; }
-	public string ShiftName { get; set; }
+	public string ShiftName { get; set; } = null!; // Required persisted column; populated by EF or the owning create flow.
 	public TimeOnly StartTime { get; set; }
 	public TimeOnly EndTime { get; set; }
 

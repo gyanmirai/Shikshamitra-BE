@@ -35,7 +35,7 @@ public class SmtpCommunicationChannelGateway_Tests
 			.ThrowsAsync(new InvalidOperationException("sensitive provider configuration"));
 		var result = await new SmtpCommunicationChannelGateway(sender).SendAsync(new CommunicationSendRequest());
 		result.Status.ShouldBe(CommunicationDeliveryStatus.Failed);
-		result.ErrorMessage.ShouldNotContain("sensitive");
+		result.ErrorMessage.ShouldNotBeNull().ShouldNotContain("sensitive");
 	}
 
 	[Fact]

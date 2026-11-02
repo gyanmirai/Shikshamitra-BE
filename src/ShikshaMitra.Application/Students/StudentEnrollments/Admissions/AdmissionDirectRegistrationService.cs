@@ -11,22 +11,52 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [RemoteService(false)]
-public class AdmissionDirectRegistrationService(
-	IRepository<AdmissionApplicant, Guid> applicantRepository,
-	IRepository<AdmissionFamily, Guid> familyRepository,
-	IRepository<AdmissionGuardian, Guid> guardianRepository,
-	IRepository<AdmissionOffering, Guid> offeringRepository,
-	IRepository<AdmissionApplication, Guid> applicationRepository,
-	IRepository<AdmissionActivity, Guid> activityRepository,
-	IAdmissionReferenceSequenceRepository referenceSequenceRepository,
-	AdmissionOfferingRuntimeService offeringRuntime,
-	AdmissionApplicationScopeAccessService applicationScope,
-	AdmissionDirectFamilyMatchService familyMatchService,
-	AdmissionInquiryPeopleService peopleService,
-	AdmissionIntakeAssignmentService intakeAssignmentService,
-	AdmissionApplicationLifecycleService lifecycleService)
+public class AdmissionDirectRegistrationService
 	: ApplicationService, ITransientDependency
 {
+	private readonly IRepository<AdmissionApplicant, Guid> applicantRepository;
+	private readonly IRepository<AdmissionFamily, Guid> familyRepository;
+	private readonly IRepository<AdmissionGuardian, Guid> guardianRepository;
+	private readonly IRepository<AdmissionOffering, Guid> offeringRepository;
+	private readonly IRepository<AdmissionApplication, Guid> applicationRepository;
+	private readonly IRepository<AdmissionActivity, Guid> activityRepository;
+	private readonly IAdmissionReferenceSequenceRepository referenceSequenceRepository;
+	private readonly AdmissionOfferingRuntimeService offeringRuntime;
+	private readonly AdmissionApplicationScopeAccessService applicationScope;
+	private readonly AdmissionDirectFamilyMatchService familyMatchService;
+	private readonly AdmissionApplicationLifecycleService lifecycleService;
+
+	public AdmissionDirectRegistrationService(
+		IRepository<AdmissionApplicant, Guid> applicantRepository,
+		IRepository<AdmissionFamily, Guid> familyRepository,
+		IRepository<AdmissionGuardian, Guid> guardianRepository,
+		IRepository<AdmissionOffering, Guid> offeringRepository,
+		IRepository<AdmissionApplication, Guid> applicationRepository,
+		IRepository<AdmissionActivity, Guid> activityRepository,
+		IAdmissionReferenceSequenceRepository referenceSequenceRepository,
+		AdmissionOfferingRuntimeService offeringRuntime,
+		AdmissionApplicationScopeAccessService applicationScope,
+		AdmissionDirectFamilyMatchService familyMatchService,
+		AdmissionInquiryPeopleService peopleService,
+		AdmissionIntakeAssignmentService intakeAssignmentService,
+		AdmissionApplicationLifecycleService lifecycleService
+	)
+	{
+		this.applicantRepository = applicantRepository;
+		this.familyRepository = familyRepository;
+		this.guardianRepository = guardianRepository;
+		this.offeringRepository = offeringRepository;
+		this.applicationRepository = applicationRepository;
+		this.activityRepository = activityRepository;
+		this.referenceSequenceRepository = referenceSequenceRepository;
+		this.offeringRuntime = offeringRuntime;
+		this.applicationScope = applicationScope;
+		this.familyMatchService = familyMatchService;
+		_ = peopleService;
+		_ = intakeAssignmentService;
+		this.lifecycleService = lifecycleService;
+	}
+
 	public Task<AdmissionApplicationDto> StartAsync(StartAdmissionDirectRegistrationDto input) =>
 		StartCoreAsync(input, null);
 
@@ -128,7 +158,12 @@ public class AdmissionDirectRegistrationService(
 		else if (input.ParentRelationship != null)
 			AdmissionSiblingParentSelection.CaptureParent(applicant, input.ParentRelationship,
 				string.Join(" ", new[] { input.GuardianFirstName, input.GuardianLastName }.Where(value => !string.IsNullOrWhiteSpace(value))), phone, input.GuardianEmail);
+		else if (returningStudent == null && input.GuardianRelationship != AdmissionGuardianRelationship.Parent)
+			AdmissionPrimaryContactSelection.Capture(applicant, "guardian",
+				string.Join(" ", new[] { input.GuardianFirstName, input.GuardianLastName }.Where(value => !string.IsNullOrWhiteSpace(value))), phone, input.GuardianEmail,
+				input.GuardianResponsibilityConfirmed, CurrentUser.Id, Clock.Now, false);
 		AdmissionFamilyContactCapture.Capture(applicant, input.FamilyContacts, input.ParentRelationship);
+		AdmissionPrimaryContactSelection.CaptureMainGuardian(applicant, input.FamilyContacts, input.GuardianResponsibilityConfirmed, CurrentUser.Id, Clock.Now, false);
 		await applicantRepository.InsertAsync(applicant, autoSave: true);
 		var application = returningStudent == null
 			? await lifecycleService.StartForSpecialRegistrationAsync(applicant.Id, offering.Id)

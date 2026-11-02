@@ -35,6 +35,9 @@ public class AcademicCalendarDay : FullAuditedEntity<Guid>, IMultiTenant
 
     private AcademicCalendarDay()
     {
+        // EF materializes these required columns after this ORM constructor.
+        Title = null!;
+
         /* ORM */
     }
 

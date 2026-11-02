@@ -247,10 +247,12 @@ public class ChapterProgressAppService(
 			// Build pattern for case-insensitive LIKE search
 			var searchPattern = $"%{search}%";
 
-			chaptersQuery = chaptersQuery.Where(c =>
-				c.ChapterName.ToLower().Contains(search.ToLower()) ||
-				(isNumericSearch && c.ChapterNumber == searchNumber)
-			);
+			chaptersQuery = from chapter in chaptersQuery
+				let normalizedName = chapter.ChapterName.ToLower()
+				let normalizedSearch = search.ToLower()
+				where normalizedName.Contains(normalizedSearch) ||
+					(isNumericSearch && chapter.ChapterNumber == searchNumber)
+				select chapter;
 		}
 
 		var chapters = await AsyncExecuter.ToListAsync(chaptersQuery.OrderBy(c => c.ChapterNumber));

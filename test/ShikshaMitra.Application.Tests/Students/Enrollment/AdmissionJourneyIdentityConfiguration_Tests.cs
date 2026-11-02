@@ -10,10 +10,19 @@ public class AdmissionJourneyIdentityConfiguration_Tests
 	private static readonly string[] DirectCapturedBindings = ["Applicant.FirstName", "Applicant.DateOfBirth", "Applicant.Gender"];
 
 	[Fact]
-	public void A_writable_registration_full_name_can_erase_the_structured_inquiry_name()
+	public void A_required_registration_full_name_can_supply_a_single_student_name()
 	{
 		AdmissionJourneyIdentityConfiguration.MissingBindings(Form("Applicant.Name"), CompleteForm())
-			.ShouldBe(new[] { "Applicant.FirstName", "Applicant.LastName" });
+			.ShouldBeEmpty();
+	}
+
+	[Fact]
+	public void An_optional_registration_full_name_cannot_erase_the_required_inquiry_name()
+	{
+		var registration = Form("Applicant.Name");
+		registration.Sections[0].Fields[0].Required = false;
+		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, CompleteForm())
+			.ShouldBe(new[] { "Applicant.FirstName" });
 	}
 
 	[Fact]
@@ -22,7 +31,7 @@ public class AdmissionJourneyIdentityConfiguration_Tests
 		var registration = CompleteForm();
 		registration.Sections.AddRange(Form("Applicant.Name").Sections);
 		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, CompleteForm())
-			.ShouldBe(new[] { "Applicant.FirstName", "Applicant.LastName" });
+			.ShouldBe(new[] { "Applicant.FirstName" });
 	}
 
 	[Fact]
@@ -40,7 +49,7 @@ public class AdmissionJourneyIdentityConfiguration_Tests
 	public void A_writable_full_name_cannot_rely_on_the_fixed_direct_entry_first_name()
 	{
 		AdmissionJourneyIdentityConfiguration.MissingBindings(Form("Applicant.Name", "Applicant.LastName"), null, DirectCapturedBindings)
-			.ShouldBe(new[] { "Applicant.FirstName", "Applicant.LastName" });
+			.ShouldBe(new[] { "Applicant.FirstName" });
 	}
 
 	[Fact]
@@ -61,12 +70,27 @@ public class AdmissionJourneyIdentityConfiguration_Tests
 	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
-	public void Fixed_direct_entry_does_not_guarantee_an_omitted_or_optional_surname(bool optional)
+	public void Fixed_direct_entry_allows_an_omitted_or_optional_surname(bool optional)
 	{
 		var registration = optional ? Form("Applicant.LastName") : Form();
 		if (optional) registration.Sections[0].Fields[0].Required = false;
 		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, null, DirectCapturedBindings)
-			.ShouldBe(new[] { "Applicant.LastName" });
+			.ShouldBeEmpty();
+	}
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public void A_required_first_name_date_of_birth_and_gender_allow_a_single_name(bool includeOptionalSurname)
+	{
+		var registration = Form("Applicant.FirstName", "Applicant.DateOfBirth", "Applicant.Gender");
+		if (includeOptionalSurname)
+		{
+			var surname = Form("Applicant.LastName").Sections[0];
+			surname.Fields[0].Required = false;
+			registration.Sections.Add(surname);
+		}
+		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, null).ShouldBeEmpty();
 	}
 
 	[Fact]
@@ -75,15 +99,37 @@ public class AdmissionJourneyIdentityConfiguration_Tests
 		var registration = Form("Applicant.LastName");
 		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, null, DirectCapturedBindings).ShouldBeEmpty();
 		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, Form("Applicant.Name"))
-			.ShouldBe(new[] { "Applicant.FirstName", "Applicant.DateOfBirth", "Applicant.Gender" });
+			.ShouldBe(new[] { "Applicant.DateOfBirth", "Applicant.Gender" });
 	}
 
 	[Fact]
-	public void A_full_name_inquiry_does_not_supply_structured_registration_identity()
+	public void A_required_full_name_inquiry_supplies_student_name_without_splitting_it()
 	{
 		var inquiry = Form("Applicant.Name");
 		AdmissionJourneyIdentityConfiguration.MissingBindings(Form(), inquiry)
-			.ShouldBe(new[] { "Applicant.FirstName", "Applicant.LastName", "Applicant.DateOfBirth", "Applicant.Gender" });
+			.ShouldBe(new[] { "Applicant.DateOfBirth", "Applicant.Gender" });
+	}
+
+	[Theory]
+	[InlineData("Applicant.Name")]
+	[InlineData("Applicant.FirstName")]
+	public void A_single_name_can_be_collected_in_either_published_form(string nameBinding)
+	{
+		var registration = Form("Applicant.DateOfBirth", "Applicant.Gender");
+		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, Form(nameBinding)).ShouldBeEmpty();
+		registration.Sections.AddRange(Form(nameBinding).Sections);
+		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, null).ShouldBeEmpty();
+	}
+
+	[Theory]
+	[InlineData("Applicant.FirstName")]
+	[InlineData("Applicant.Gender")]
+	public void Custom_questions_with_identity_labels_do_not_supply_system_identity(string binding)
+	{
+		var registration = CompleteForm();
+		var field = registration.Sections.SelectMany(section => section.Fields).Single(field => field.BindingKey == binding);
+		field.BindingType = AdmissionFormBindingType.Custom;
+		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, null).ShouldBe(new[] { binding });
 	}
 
 	[Fact]
@@ -111,8 +157,8 @@ public class AdmissionJourneyIdentityConfiguration_Tests
 	{
 		var registration = CompleteForm();
 		MakeUnusable(registration, mode);
-		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, Form("Applicant.Name"))
-			.ShouldBe(new[] { "Applicant.LastName" });
+		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, Form())
+			.ShouldBe(new[] { "Applicant.FirstName" });
 	}
 
 	[Theory]
@@ -127,8 +173,8 @@ public class AdmissionJourneyIdentityConfiguration_Tests
 		var inquiry = CompleteForm();
 		MakeUnusable(inquiry, mode);
 		var registration = CompleteForm();
-		registration.Sections.SelectMany(section => section.Fields).Single(field => field.BindingKey == "Applicant.LastName").Required = false;
-		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, inquiry).ShouldBe(new[] { "Applicant.LastName" });
+		registration.Sections.SelectMany(section => section.Fields).Single(field => field.BindingKey == "Applicant.FirstName").Required = false;
+		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, inquiry).ShouldBe(new[] { "Applicant.FirstName" });
 	}
 
 	[Fact]
@@ -143,22 +189,22 @@ public class AdmissionJourneyIdentityConfiguration_Tests
 	public void A_direct_registration_path_cannot_depend_on_an_inquiry()
 	{
 		AdmissionJourneyIdentityConfiguration.MissingBindings(Form("Applicant.FirstName"), null)
-			.ShouldBe(new[] { "Applicant.LastName", "Applicant.DateOfBirth", "Applicant.Gender" });
+			.ShouldBe(new[] { "Applicant.DateOfBirth", "Applicant.Gender" });
 	}
 
 	[Fact]
 	public void Registration_bindings_must_match_the_case_sensitive_runtime_registry_key()
 	{
 		var registration = CompleteForm();
-		registration.Sections[1].Fields[0].BindingKey = "applicant.lastname";
-		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, null).ShouldBe(new[] { "Applicant.LastName" });
+		registration.Sections[0].Fields[0].BindingKey = "applicant.firstname";
+		AdmissionJourneyIdentityConfiguration.MissingBindings(registration, null).ShouldBe(new[] { "Applicant.FirstName" });
 	}
 
 	[Fact]
 	public void Constant_true_visibility_and_required_rules_remain_reachable()
 	{
 		var registration = CompleteForm();
-		var field = registration.Sections[1].Fields[0];
+		var field = registration.Sections[0].Fields[0];
 		field.Required = false;
 		field.RequiredRuleJson = "{\"operator\":\"ALL\",\"conditions\":[]}";
 		field.VisibilityRuleJson = field.RequiredRuleJson;
@@ -179,6 +225,7 @@ public class AdmissionJourneyIdentityConfiguration_Tests
 	[InlineData("[{\"value\":\"boy\"},{\"value\":\"girl\"}]")]
 	[InlineData("[{\"value\":\"1\"}]")]
 	[InlineData("[]")]
+	[InlineData("[{\"value\":\"Male\"},{\"value\":\"Prefer not to say\"}]")]
 	public void Gender_choices_must_supply_a_supported_identity_value(string options)
 	{
 		var registration = CompleteForm();
@@ -188,7 +235,7 @@ public class AdmissionJourneyIdentityConfiguration_Tests
 
 	private static void MakeUnusable(AdmissionFormSchema form, string mode)
 	{
-		var section = form.Sections.Single(section => section.Fields.Any(field => field.BindingKey == "Applicant.LastName"));
+		var section = form.Sections.Single(section => section.Fields.Any(field => field.BindingKey == "Applicant.FirstName"));
 		var field = section.Fields[0];
 		switch (mode)
 		{

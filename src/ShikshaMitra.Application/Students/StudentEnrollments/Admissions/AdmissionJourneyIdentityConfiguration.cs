@@ -7,7 +7,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 internal static class AdmissionJourneyIdentityConfiguration
 {
-	internal static readonly string[] CoreBindings = ["Applicant.FirstName", "Applicant.LastName", "Applicant.DateOfBirth", "Applicant.Gender"];
+	internal static readonly string[] CoreBindings = ["Applicant.FirstName", "Applicant.DateOfBirth", "Applicant.Gender"];
 	// AdmissionDirectRegistrationService requires these fixed-entry answers before
 	// creating the applicant. Surname remains an optional fixed-entry answer.
 	internal static readonly string[] DirectEntryCapturedBindings = ["Applicant.FirstName", "Applicant.DateOfBirth", "Applicant.Gender"];
@@ -15,15 +15,21 @@ internal static class AdmissionJourneyIdentityConfiguration
 	internal static IReadOnlyList<string> MissingBindings(AdmissionFormSchema registration, AdmissionFormSchema? inquiry,
 		IReadOnlyCollection<string>? guaranteedCapturedBindings = null)
 	{
-		// The full-name setter replaces FirstName and clears the other name parts.
-		// Registration saves may send it after the structured fields, so neither an
-		// upstream answer nor required split questions guarantee a safe name result.
-		var rewritesName = registration.Sections.SelectMany(section => section.Fields).Any(field =>
+		// A full-name question stores the name without splitting it. It must not
+		// compete with writable name parts or clear a required upstream name with
+		// an optional/unreachable Registration answer.
+		var fields = registration.Sections.SelectMany(section => section.Fields).ToArray();
+		var rewritesName = fields.Any(field =>
 			!field.ReadOnly && field.BindingType == AdmissionFormBindingType.System && field.BindingKey == "Applicant.Name");
-		return CoreBindings.Where(key => rewritesName && key is "Applicant.FirstName" or "Applicant.LastName" ||
+		var unsafeName = rewritesName && (fields.Any(field => !field.ReadOnly && field.BindingType == AdmissionFormBindingType.System &&
+			field.BindingKey is "Applicant.FirstName" or "Applicant.MiddleName" or "Applicant.LastName") || !Supplies(registration, "Applicant.Name"));
+		return CoreBindings.Where(key => unsafeName && key == "Applicant.FirstName" ||
 			guaranteedCapturedBindings?.Contains(key, StringComparer.Ordinal) != true &&
-			!Supplies(registration, key) && (inquiry == null || !Supplies(inquiry, key))).ToArray();
+			!SuppliesIdentity(registration, key) && (inquiry == null || !SuppliesIdentity(inquiry, key))).ToArray();
 	}
+
+	private static bool SuppliesIdentity(AdmissionFormSchema form, string key) => Supplies(form, key) ||
+		key == "Applicant.FirstName" && Supplies(form, "Applicant.Name");
 
 	private static bool Supplies(AdmissionFormSchema form, string key) => form.Sections.Any(section =>
 		!section.IsRepeatable && AlwaysTrue(section.VisibilityRuleJson) && AlwaysTrue(section.StepVisibilityRuleJson) &&
@@ -41,7 +47,7 @@ internal static class AdmissionJourneyIdentityConfiguration
 
 	private static bool SupportedGenderChoices(string? json)
 	{
-		// An absent override uses the binding registry's Male/Female choices.
+		// An absent override uses the binding registry's canonical gender choices.
 		if (string.IsNullOrWhiteSpace(json)) return true;
 		try
 		{
@@ -57,7 +63,8 @@ internal static class AdmissionJourneyIdentityConfiguration
 		var value = option.ValueKind == JsonValueKind.String ? option.GetString() :
 			option.ValueKind == JsonValueKind.Object && option.TryGetProperty("value", out var property) && property.ValueKind == JsonValueKind.String
 				? property.GetString() : null;
-		return string.Equals(value, "Male", StringComparison.OrdinalIgnoreCase) || string.Equals(value, "Female", StringComparison.OrdinalIgnoreCase);
+		return string.Equals(value, "Male", StringComparison.OrdinalIgnoreCase) || string.Equals(value, "Female", StringComparison.OrdinalIgnoreCase) ||
+			string.Equals(value, "Other", StringComparison.OrdinalIgnoreCase);
 	}
 
 	private static bool AlwaysTrue(string? json)

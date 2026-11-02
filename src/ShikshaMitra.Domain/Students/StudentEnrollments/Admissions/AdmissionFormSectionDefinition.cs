@@ -12,6 +12,13 @@ public class AdmissionFormSectionDefinition : Entity<Guid>
 		Code = null!;
 		Name = null!;
 	}
+	public void UpdateDraftRules(AdmissionFormDefinition form, string? visibilityRuleJson, string? stepVisibilityRuleJson)
+	{
+		if (form.Id != FormDefinitionId || form.Status != AdmissionFormStatus.Draft)
+			throw new BusinessException(AdmissionFormErrorCodes.PublishedImmutable);
+		VisibilityRuleJson = visibilityRuleJson;
+		StepVisibilityRuleJson = stepVisibilityRuleJson;
+	}
 	public AdmissionFormSectionDefinition(Guid id, Guid formDefinitionId, string code, string name, int displayOrder, string? visibilityRuleJson,
 		Guid? stepId = null, string? stepCode = null, string? stepName = null, int? stepDisplayOrder = null, string? stepVisibilityRuleJson = null) : base(id)
 	{

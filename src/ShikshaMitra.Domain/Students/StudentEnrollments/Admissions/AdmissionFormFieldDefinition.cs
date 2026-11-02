@@ -11,5 +11,19 @@ public class AdmissionFormFieldDefinition : Entity<Guid>
 		Code = null!;
 		Label = null!;
 	}
+	public void UpdateDraftChoices(AdmissionFormDefinition form, string? optionsJson, string? defaultValue)
+	{
+		if (form.Id != FormDefinitionId || form.Status != AdmissionFormStatus.Draft)
+			throw new BusinessException(AdmissionFormErrorCodes.PublishedImmutable);
+		OptionsJson = string.IsNullOrWhiteSpace(optionsJson) ? null : optionsJson.Trim();
+		DefaultValue = defaultValue;
+	}
+	public void UpdateDraftRules(AdmissionFormDefinition form, string? visibilityRuleJson, string? requiredRuleJson)
+	{
+		if (form.Id != FormDefinitionId || form.Status != AdmissionFormStatus.Draft)
+			throw new BusinessException(AdmissionFormErrorCodes.PublishedImmutable);
+		VisibilityRuleJson = visibilityRuleJson;
+		RequiredRuleJson = requiredRuleJson;
+	}
 	public AdmissionFormFieldDefinition(Guid id, Guid formDefinitionId, Guid sectionId, string code, string label, AdmissionFormFieldType fieldType, AdmissionFormBindingType bindingType, string? bindingKey, bool required, bool readOnly, int displayOrder, string? placeholder, string? helpText, string? defaultValue, string? validationJson, string? visibilityRuleJson, string? optionsJson = null, string? requiredRuleJson = null) : base(id) { FormDefinitionId = Check.NotDefaultOrNull<Guid>(formDefinitionId, nameof(formDefinitionId)); SectionId = Check.NotDefaultOrNull<Guid>(sectionId, nameof(sectionId)); Code = Check.NotNullOrWhiteSpace(code, nameof(code)).Trim().ToUpperInvariant(); Label = Check.NotNullOrWhiteSpace(label, nameof(label)).Trim(); FieldType = fieldType; BindingType = bindingType; BindingKey = string.IsNullOrWhiteSpace(bindingKey) ? null : bindingKey.Trim(); Required = required; ReadOnly = readOnly; DisplayOrder = displayOrder; Placeholder = placeholder; HelpText = helpText; DefaultValue = defaultValue; ValidationJson = validationJson; VisibilityRuleJson = visibilityRuleJson; OptionsJson = string.IsNullOrWhiteSpace(optionsJson) ? null : optionsJson.Trim(); RequiredRuleJson = string.IsNullOrWhiteSpace(requiredRuleJson) ? null : requiredRuleJson.Trim(); }
 }

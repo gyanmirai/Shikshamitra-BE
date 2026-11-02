@@ -79,9 +79,19 @@ public class SalaryTemplateCalculationService(
 		PayrollStatutoryProfile? applicationProfile = input.EmployeeId.HasValue ? await profileResolver.ResolveAsync(input.EmployeeId.Value, effectiveMonth) : null;
 		if (input.StatutoryProfileOverride != null)
 		{
-			if (!input.EmployeeId.HasValue) throw new BusinessException("HR:Payroll:StatutoryProfileEmployeeRequired");
-			applicationProfile = await profileService.ValidateDraftAsync(input.EmployeeId.Value, effectiveMonth, input.StatutoryProfileOverride,
-				input.StatutoryProfileConcurrencyStamp, input.StatutoryProfileUpdatePf, input.StatutoryProfileUpdateEsic);
+			if (input.EmployeeId.HasValue)
+				applicationProfile = await profileService.ValidateDraftAsync(input.EmployeeId.Value, effectiveMonth, input.StatutoryProfileOverride,
+					input.StatutoryProfileConcurrencyStamp, input.StatutoryProfileUpdatePf, input.StatutoryProfileUpdateEsic);
+			else
+			{
+				// An unsaved onboarding draft has no stored profile to merge or concurrency-check.
+				// Partial updates and persisted-profile references still require an employee.
+				if (!input.StatutoryProfileUpdatePf || !input.StatutoryProfileUpdateEsic ||
+					input.StatutoryProfileConcurrencyStamp != null || input.StatutoryProfileOverride.VersionId.HasValue)
+					throw new BusinessException("HR:Payroll:StatutoryProfileEmployeeRequired");
+				EmployeeStatutoryProfileVersion.Validate(input.StatutoryProfileOverride);
+				applicationProfile = input.StatutoryProfileOverride with { EffectiveMonth = effectiveMonth };
+			}
 		}
 		if (input.EsiManagementMode == EsiManagement.External && applicationProfile != null)
 			applicationProfile = applicationProfile with { ApplyEsic = false, EsicDisabledReason = input.EsiExternalReason?.Trim() };

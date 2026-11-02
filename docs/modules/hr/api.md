@@ -257,6 +257,7 @@ Fixed monthly inputs are normalized to two decimals, attendance is applied once,
 Basic at 100 percent with PF does not require Special Allowance; ESIC is calculated from the employee assignment and effective policy when managed in ShikshaMitra.
 Active versions are immutable and carry a default salary basis, derived protection target, PF applicability, and PF rule.
 The calculate endpoint accepts Monthly salary (GROSS) or Monthly cost to school (EMPLOYER_COST), an effective month, and optional employee context.
+With no employee ID, a statutory override must be a complete onboarding draft (`statutoryProfileUpdatePf` and `statutoryProfileUpdateEsic` both true), without a concurrency stamp or persisted profile version ID. The shared statutory domain validator checks numbers and required off-reasons, and calculation applies the draft without writing an employee, profile version or compensation revision. Partial updates or persisted-profile references without employee context return `HR:Payroll:StatutoryProfileEmployeeRequired`. Existing employee scope, scheme permissions and concurrency checks remain mandatory; finalization recalculates and saves in its existing transaction.
 It returns earnings, employee deductions, employer contributions, ESI coverage and contribution details, statutory references, target variance, warnings, and a formula trace.
 `GET /api/payroll/salary-templates/active` exposes only valid active templates to Compensation Manage users.
 The settings list returns Active, Needs setup, and Archived templates to Salary Template View users.

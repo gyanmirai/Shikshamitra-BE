@@ -170,7 +170,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				Percentage = CalculatePercentage(submission?.Marks, submission?.TotalMarks ?? taskRubric?.TotalMarks),
 				SubmittedContent = submission?.SubmittedContent,
 				SubmittedDocumentUrl = submission?.SubmittedDocumentUrl,
-				OriginalFileName = submission?.OriginalFileName
+				OriginalFileName = submission?.OriginalFileName,
+				SubmissionAttachments = SubmissionAttachmentMapper.Map(submission)
 			};
 
 			submissionDtos.Add(dto);

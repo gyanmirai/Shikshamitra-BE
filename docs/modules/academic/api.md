@@ -3,7 +3,7 @@ module: academic
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-30
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -73,6 +73,13 @@ A setting key requires that exact setting's View action.
 Only the first successful writer receives `firstVisit: true`.
 The stored actor identifier is never returned.
 
+## Room calendar requests
+
+For dated room operations under `api/academics/timetable`, `room-availability` and `room-availability/schedule` accept an optional `academicMediumId` query parameter.
+Reservation create/update, conflict-check and room-suggestion request bodies accept the same optional field.
+Physical room occupation, maintenance, tenant isolation and reservation access checks apply independently of the calendar medium.
+See [room calendar context](product.md#room-reservation-calendar-context) for calendar selection and saved-booking rules.
+
 ## Progress and response
 
 ```json
@@ -125,6 +132,15 @@ Module visibility is separate from action authorization.
 | `rubrics` | `homework` | `HomeworkAndAssignment.Settings.RubricConfig` |
 | `grading-scales` | `examination` | `Examination.Settings.GradeScaling` |
 | `exam-types` | `examination` | `Examination.Settings.ExamTypes` |
+
+## Student submission attachments
+
+`GET /api/homework/submissions` and `GET /api/assignments/submissions` return `submissionAttachments` on each student row.
+Each item contains `id`, `name`, `url`, `contentType`, and `size`; legacy single-file uploads may have null metadata.
+The list maps every persisted mobile attachment, falls back to the legacy submitted file, and is empty for drafts or absent files.
+URLs target the existing authenticated `GET /api/files/{fileName}` endpoint, which resolves storage within the current tenant.
+Stored mobile blob paths must match the submission tenant before they are converted to file identifiers.
+No new evaluation endpoint or migration is required.
 
 ## Security and context
 

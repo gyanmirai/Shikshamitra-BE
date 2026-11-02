@@ -14,6 +14,9 @@ public class RoomAvailabilityController(IRoomAvailabilityAppService service) : S
 {
     private readonly IRoomAvailabilityAppService _service = service;
 
+    [HttpGet("room-availability/buildings/lookup")]
+    public Task<List<RoomBuildingLookupDto>> GetBuildingLookupAsync() => _service.GetBuildingLookupAsync();
+
     [HttpGet]
     [Route("room-availability")]
     public async Task<List<RoomAvailabilityDto>> GetAvailabilityAsync([FromQuery] RoomAvailabilityFilterDto input)
@@ -119,9 +122,10 @@ public class RoomAvailabilityController(IRoomAvailabilityAppService service) : S
 
     [HttpGet]
     [Route("room-availability/schedule")]
-    public async Task<RoomScheduleDto> GetRoomScheduleAsync([FromQuery] Guid roomId, [FromQuery] DateTime date)
+    public async Task<RoomScheduleDto> GetRoomScheduleAsync([FromQuery] Guid roomId, [FromQuery] DateTime date,
+        [FromQuery] Guid? academicMediumId = null)
     {
-        return await _service.GetRoomScheduleAsync(roomId, date);
+        return await _service.GetRoomScheduleAsync(roomId, date, academicMediumId);
     }
 
     private static string ExtractReason(JsonElement input)

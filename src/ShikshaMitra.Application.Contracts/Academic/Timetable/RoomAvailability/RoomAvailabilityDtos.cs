@@ -6,6 +6,7 @@ namespace ShikshaMitra.Academic.Timetable.RoomAvailability;
 
 public class RoomAvailabilityFilterDto
 {
+    public Guid? AcademicMediumId { get; set; }
     public DateTime Date { get; set; }
     [EnumDataType(typeof(TimetableDayOfWeek))]
     public TimetableDayOfWeek? WeeklyTimetableDay { get; set; }
@@ -55,6 +56,7 @@ public class RoomAvailabilitySummaryDto
 
 public class CheckConflictRequestDto
 {
+    public Guid? AcademicMediumId { get; set; }
     public Guid RoomId { get; set; }
     public DateTime Date { get; set; }
     public TimeSpan StartTime { get; set; }
@@ -108,6 +110,7 @@ public class ConflictItemDto
 
 public class SuggestedRoomRequestDto
 {
+    public Guid? AcademicMediumId { get; set; }
     public DateTime Date { get; set; }
     public TimeSpan StartTime { get; set; }
     public TimeSpan EndTime { get; set; }
@@ -139,6 +142,7 @@ public class SuggestedRoomDto
 
 public class CreateRoomReservationDto
 {
+    public Guid? AcademicMediumId { get; set; }
     public Guid RoomId { get; set; }
     public DateTime Date { get; set; }
     public TimeSpan StartTime { get; set; }

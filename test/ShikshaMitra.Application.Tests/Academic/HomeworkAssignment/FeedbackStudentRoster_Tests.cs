@@ -106,6 +106,34 @@ public class FeedbackStudentRoster_Tests : SubjectTeacherReassignmentTestBase
 				result.Data[1].EvaluationStatus.ShouldBe("Not Started");
 				result.Summary.TotalStudents.ShouldBe(2);
 				result.Summary.NotSubmitted.ShouldBe(2);
+
+				var files = new[]
+				{
+					new Mobile.MobileStoredAttachment(Guid.NewGuid(), "work.jpg", $"files/{TenantId}/first.jpg", "image/jpeg", 120),
+					new Mobile.MobileStoredAttachment(Guid.NewGuid(), "answers.pdf", $"files/{TenantId}/second.pdf", "application/pdf", 240)
+				};
+				var submission = assignment
+					? new StudentSubmissionEntity(Guid.NewGuid(), taskId, seeded.Id, DivisionId, DateTime.UtcNow.AddDays(1), TenantId, true)
+					: new StudentSubmissionEntity(Guid.NewGuid(), taskId, seeded.Id, DivisionId, DateTime.UtcNow.AddDays(1), TenantId);
+				submission.SaveMobileResponse("Completed work", Mobile.MobileAttachmentStore.Serialize(files.ToList()),
+					"first.jpg", "work.jpg", false, DateTimeOffset.UtcNow, acknowledged: true);
+				await GetRequiredService<IRepository<StudentSubmissionEntity, Guid>>().InsertAsync(submission, autoSave: true);
+				var submittedRow = (await ReadAsync()).Data.Single(row => row.StudentId == seeded.Id);
+				submittedRow.SubmissionAttachments.Count.ShouldBe(2);
+				submittedRow.SubmissionAttachments[1].Name.ShouldBe("answers.pdf");
+				submittedRow.SubmissionAttachments[1].Url.ShouldBe("/api/files/second.pdf");
+				submittedRow.SubmissionAttachments[1].ContentType.ShouldBe("application/pdf");
+				submittedRow.SubmissionAttachments[1].Size.ShouldBe(240);
+				(await ReadAsync()).Data.Single(row => row.StudentId == admitted.Id).SubmissionAttachments.ShouldBeEmpty();
+
+				submission.SaveMobileResponse("Legacy response", null, "legacy.pdf", "Original.pdf", false, DateTimeOffset.UtcNow);
+				await GetRequiredService<IRepository<StudentSubmissionEntity, Guid>>().UpdateAsync(submission, autoSave: true);
+				var legacy = (await ReadAsync()).Data.Single(row => row.StudentId == seeded.Id).SubmissionAttachments.Single();
+				legacy.Name.ShouldBe("Original.pdf");
+				legacy.Url.ShouldBe("/api/files/legacy.pdf");
+				submission.OriginalFileName = null;
+				await GetRequiredService<IRepository<StudentSubmissionEntity, Guid>>().UpdateAsync(submission, autoSave: true);
+				(await ReadAsync()).Data.Single(row => row.StudentId == seeded.Id).SubmissionAttachments.Single().Name.ShouldBe("legacy.pdf");
 			}
 		});
 	}

@@ -50,8 +50,10 @@ public class StudentRecordDuplicateAppService(IRepository<StudentRecordDuplicate
 	private async Task<bool> IsVisibleAsync(Guid id, List<string> roles)
 	{
 		var record = await access.EnsureReadableAsync(id);
-		return record.Access == "Full" && !record.Policy.Access.Masks.Any(x => record.Policy.IsMasked(x.FieldGroup, roles));
+		return IsVisible(record, roles);
 	}
+	private static bool IsVisible(StudentRecordsAccess record, List<string> roles) =>
+		record.Access == "Full" && !record.Policy.Access.Masks.Any(x => record.Policy.IsMasked(x.FieldGroup, roles));
 	private async Task EnsureVisibleAsync(Guid id)
 	{
 		if (!await IsVisibleAsync(id, await access.GetDatabaseRoleNamesAsync())) throw new BusinessException("Students:Records:RestrictedFields");
@@ -59,8 +61,12 @@ public class StudentRecordDuplicateAppService(IRepository<StudentRecordDuplicate
 	private async Task<StudentRecordDuplicateDto> MapAsync(StudentRecordDuplicateReview review)
 	{
 		var roles = await access.GetDatabaseRoleNamesAsync();
-		var visible = await IsVisibleAsync(review.StudentId, roles) && await IsVisibleAsync(review.OtherStudentId, roles);
-		var first = await access.GetScopedStudentAsync(review.StudentId); var other = await access.GetScopedStudentAsync(review.OtherStudentId);
+		var firstRecord = await access.EnsureReadableAsync(review.StudentId);
+		var otherRecord = IsVisible(firstRecord, roles) ? await access.EnsureReadableAsync(review.OtherStudentId) : null;
+		var visible = otherRecord != null && IsVisible(otherRecord, roles);
+		var first = firstRecord.Student;
+		// A masked first student still scopes the second, without evaluating its eligibility.
+		var other = otherRecord?.Student ?? await access.GetScopedStudentAsync(review.OtherStudentId);
 		return new() { Id = review.Id, StudentId = review.StudentId, OtherStudentId = review.OtherStudentId,
 			StudentName = visible ? $"{first.FirstName} {first.LastName}".Trim() : "Restricted student",
 			OtherStudentName = visible ? $"{other.FirstName} {other.LastName}".Trim() : "Restricted student",

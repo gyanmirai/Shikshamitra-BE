@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Students.StudentEnrollments.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization.Permissions;
@@ -17,36 +18,68 @@ public class AdmissionDocumentReadService(AdmissionDocumentAccessService access,
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionDocumentVerificationDto> GetAsync(Guid applicationId, Guid stageId, bool onboarding = false)
+		=> (await GetManyAsync(applicationId, [stageId], onboarding)).Single();
+
+	internal async Task<List<AdmissionDocumentVerificationDto>> GetManyAsync(Guid applicationId, IReadOnlyCollection<Guid> stageIds, bool onboarding = false)
 	{
-		var context = await access.GetContextAsync(applicationId, stageId, false, onboarding);
+		var contexts = await access.GetReadContextsAsync(applicationId, stageIds, onboarding);
+		var policyContexts = contexts.Where(context => context.Policy != null).ToList();
+		var grants = new Dictionary<string, bool>();
+		var mappings = new Dictionary<Guid, DocumentType>();
+		ILookup<Guid, AdmissionWorkflowTransitionDefinition> routes = Array.Empty<AdmissionWorkflowTransitionDefinition>().ToLookup(route => route.FromStageId);
+		var evaluations = new List<AdmissionDocumentEvaluation>();
+		var canDefer = false;
+		if (policyContexts.Count > 0)
+		{
+			evaluations = await evaluator.EvaluateManyAsync(policyContexts[0].Application,
+				policyContexts.Select(context => (context.Stage.Id, context.Policy!)).ToList());
+			foreach (var permission in Permissions.All) grants[permission] = await permissions.IsGrantedAsync(permission);
+			if (onboarding && !await permissions.IsGrantedAsync(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit))
+				foreach (var permission in new[] { Permissions.Upload, Permissions.RecordOriginal, Permissions.Review, Permissions.Waive }) grants[permission] = false;
+			mappings = await access.ReadMappingTypesAsync(policyContexts.SelectMany(context => context.Policy!.Requirements));
+			if (!onboarding && policyContexts.Any(context => context.IsActive && context.Application.Status != AdmissionApplicationStatus.Draft))
+				canDefer = await onboardingRequirements.CanDeferAsync(policyContexts[0].Application);
+			var definitionIds = policyContexts.Where((context, index) => !onboarding && context.IsActive &&
+				context.Application.Status != AdmissionApplicationStatus.Draft && (evaluations[index].Blockers.Count == 0 || canDefer))
+				.Select(context => context.Definition.Id).Distinct().ToArray();
+			if (definitionIds.Length > 0)
+				routes = (await transitions.GetListAsync(route => Enumerable.Contains(definitionIds, route.FromStageId))).ToLookup(route => route.FromStageId);
+		}
+		var result = new List<AdmissionDocumentVerificationDto>();
+		var evaluationIndex = 0;
+		foreach (var context in contexts)
+			result.Add(Build(context, context.Policy == null ? null : evaluations[evaluationIndex++], onboarding, grants, mappings, routes, canDefer));
+		return result;
+	}
+
+	private AdmissionDocumentVerificationDto Build(AdmissionDocumentContext context, AdmissionDocumentEvaluation? suppliedEvaluation,
+		bool onboarding, Dictionary<string, bool> grants, IReadOnlyDictionary<Guid, DocumentType> mappings,
+		ILookup<Guid, AdmissionWorkflowTransitionDefinition> routes, bool sharedCanDefer)
+	{
 		var result = new AdmissionDocumentVerificationDto
 		{
-			ApplicationId = applicationId, StageInstanceId = stageId, Policy = context.Policy,
+			ApplicationId = context.Application.Id, StageInstanceId = context.Stage.Id, Policy = context.Policy,
 			DocumentVerificationEnabled = context.Policy != null, IsActive = context.IsActive,
 			CanCollectDuringForm = context.CanCollectDuringForm,
 			ConcurrencyStamp = context.Application.ConcurrencyStamp
 		};
 		if (context.Policy == null) return result;
-		var evaluation = await evaluator.EvaluateAsync(context.Application, stageId, context.Policy);
+		var evaluation = suppliedEvaluation!;
 		result.Blockers = evaluation.Blockers;
 		if (!context.IsActive) result.Blockers.Add(context.CanPrepare
 			? "Documents can be prepared now. Continue admission from the current journey stage."
 			: "This document verification stage is read-only.");
 		else if (context.Application.Status == AdmissionApplicationStatus.Draft) result.Blockers.Add("Submit the application before completing document verification.");
-		var canDefer = !onboarding && context.IsActive && context.Application.Status != AdmissionApplicationStatus.Draft && await onboardingRequirements.CanDeferAsync(context.Application);
+		var canDefer = !onboarding && context.IsActive && context.Application.Status != AdmissionApplicationStatus.Draft && sharedCanDefer;
         var routeReady = false;
 		if (!onboarding && (result.Blockers.Count == 0 || canDefer))
 		{
 			var values = new Dictionary<string, string>(evaluation.Values, StringComparer.OrdinalIgnoreCase);
 			foreach (var fact in evaluation.Facts) values[fact.Key] = fact.Value;
-			try { selector.Select(await transitions.GetListAsync(item => item.FromStageId == context.Definition.Id), values, null, false); routeReady = true; }
+			try { selector.Select(routes[context.Definition.Id].ToList(), values, null, false); routeReady = true; }
 			catch (BusinessException) { result.Blockers.Add("Configure an eligible next-stage route before completing document verification."); }
 		}
 		result.CanComplete = !onboarding && routeReady && (result.Blockers.Count == 0 || canDefer);
-		var grants = new Dictionary<string, bool>();
-		foreach (var permission in Permissions.All) grants[permission] = await permissions.IsGrantedAsync(permission);
-		if (onboarding && !await permissions.IsGrantedAsync(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit))
-			foreach (var permission in new[] { Permissions.Upload, Permissions.RecordOriginal, Permissions.Review, Permissions.Waive }) grants[permission] = false;
 		result.Requirements = evaluation.Requirements.Select(item => MapRequirement(item, context, grants)).ToList();
 		foreach (var row in result.Requirements)
 		{
@@ -55,7 +88,7 @@ public class AdmissionDocumentReadService(AdmissionDocumentAccessService access,
 			row.MaxFileSizeMb = requirement.MaxFileSizeMb;
 			try
 			{
-				var mapped = await access.ValidateMappingAsync(requirement);
+				var mapped = access.ValidateMapping(requirement, requirement.DocumentTypeId.HasValue ? mappings.GetValueOrDefault(requirement.DocumentTypeId.Value) : null);
 				row.AllowedExtensions = requirement.AllowedExtensions.Where(extension => mapped == null || mapped.GetAcceptedFormats().Any(format => format.ToString().Equals(extension, StringComparison.OrdinalIgnoreCase))).ToArray();
 				row.MaxFileSizeMb = Math.Min(requirement.MaxFileSizeMb, mapped?.MaxSizeMB ?? requirement.MaxFileSizeMb);
 			}

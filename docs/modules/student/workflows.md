@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-29
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,16 @@ audience: humans-and-agents
 # Trace Student Enrollment Admissions workflows
 
 TL;DR: setup commands produce validated offering defaults, while inquiry and application runtime commands consume only offerings that are open and ready.
+
+## Correct a form while retaining an admission decision
+
+1. Staff reads the saved application form and its server correction capability under existing scope. An open pre-finalized application with Edit authority can be corrected, including an Approved case whose workflow is Completed.
+2. Staff changes editable answers in the pinned definition and supplies an audit reason. The command sends the current application stamp and an exact retry key/payload.
+3. The server rechecks permission, tenant/scope, application/finalization links and workflow state, then validates the complete merged answers and master data before any binding writes. Existing inherited/read-only rules, linked-adult protection and Finance joining-date locks continue to apply.
+4. Current answers and their existing Applicant/Guardian/Inquiry bindings save atomically with the new correction history/activity. The approval, original submissions, workflow, application number and Finance ledger/receipts are retained; no Submit, Reopen or workflow replay occurs.
+5. Read fresh finalization readiness before finalizing the corrected application. A stale or mismatched retry requires deliberate review of current state. An exact successful replay performs no second correction, even if the application subsequently finalized.
+
+See the [correction API](./api.md#correct-an-application-before-finalization) and [frontend workflow](../../../../Shikshamitra-FE/docs/student/workflows.md) for the owned contracts and presentation.
 
 ## Resume an End Journey withdrawal
 

@@ -2,6 +2,7 @@ using ShikshaMitra.Students.Attendance;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Students.Attendance;
@@ -22,6 +23,11 @@ public class GetStudentsForAttendanceInput
 
 	[Required]
 	public DateTime Date { get; set; }
+
+	// Omission preserves the legacy cumulative response. Do not add a null field
+	// to durable correction request JSON, which inherits this query contract.
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public bool? IncludeCumulativeSummary { get; set; }
 }
 
 /// <summary>

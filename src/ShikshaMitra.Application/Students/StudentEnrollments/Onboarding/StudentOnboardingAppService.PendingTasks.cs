@@ -42,9 +42,10 @@ public partial class StudentOnboardingAppService
 				(h.ServiceKey == "student-account" || h.ServiceKey == "guardian-account") && h.Status != StudentOnboardingServiceHandoffStatus.Acknowledged);
 			var emails = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Students.Portal.StudentCredentialEmailRequest, Guid>>()
 				.GetListAsync(e => Enumerable.Contains(caseIds, e.CaseId));
+			var parentFlows = await SiblingParents.ReadParentFlowsAsync(scoped);
 			foreach (var item in scoped)
 			{
-				var manualParent = await SiblingParents.IsParentFlowAsync(item);
+				var manualParent = parentFlows.IsParentFlow(item);
 				var reusedParent = manualParent && SiblingParents.WasReused(item);
 				var rules = AutomaticOnboardingReadinessRules.CanAdopt(item)
 					? AutomaticOnboardingReadinessRules.Resolve(configurations[item.AcademicYearId])
@@ -65,12 +66,12 @@ public partial class StudentOnboardingAppService
 		var ids = pending.ToArray(); return query.Where(c => Enumerable.Contains(ids, c.Id));
 	}
 
-	internal async Task<IQueryable<StudentOnboardingCase>> FilterDashboardQueueAsync(IQueryable<StudentOnboardingCase> query, string? queue)
+	internal async Task<IQueryable<StudentOnboardingCase>> FilterDashboardQueueAsync(IQueryable<StudentOnboardingCase> query, string? queue, DateTime? asOf = null)
 	{
 		if (string.IsNullOrWhiteSpace(queue)) return query;
 		query = query.Where(c => c.Status != StudentOnboardingStatus.Completed && c.Status != StudentOnboardingStatus.Cancelled);
 		if (queue == "unfinished") return query;
-		if (queue == "attention") { var now = Clock.Now; return query.Where(c => c.Status == StudentOnboardingStatus.NeedsAttention || c.DueAt < now); }
+		if (queue == "attention") { var now = asOf ?? Clock.Now; return query.Where(c => c.Status == StudentOnboardingStatus.NeedsAttention || c.DueAt < now); }
 		if (queue == "ready") return query.Where(c => c.Status == StudentOnboardingStatus.ReadyForActivation && !c.StudentEnrollmentId.HasValue);
 		if (queue == "documents")
 		{
@@ -81,13 +82,15 @@ public partial class StudentOnboardingAppService
 		return await FilterPendingTaskAsync(query, queue);
 	}
 
-	private async Task<JsonElement?> ReadSavedRulesAsync(StudentOnboardingCase item)
+	private async Task<JsonElement?> ReadSavedRulesAsync(StudentOnboardingCase item,
+		IReadOnlyDictionary<Guid, OnboardingRuleConfiguration?>? configurations = null)
 	{
 		if (item.ExtraProperties.TryGetValue("ReadinessRulesSnapshot", out var snapshot) && snapshot is string text)
 		{
 			using var document = JsonDocument.Parse(text); return document.RootElement.Clone();
 		}
-		var configuration = await configurationManager.GetAsync(item.AcademicYearId);
+		var configuration = configurations != null && configurations.TryGetValue(item.AcademicYearId, out var cached)
+			? cached : await configurationManager.GetAsync(item.AcademicYearId);
 		return AutomaticOnboardingReadinessRules.CanAdopt(item)
 			? AutomaticOnboardingReadinessRules.Resolve(configuration)
 			: configuration?.Root.GetProperty("readinessAccess");
@@ -101,15 +104,27 @@ public partial class StudentOnboardingAppService
 	}
 
 	private async Task<(bool Pending, bool? RequiredDeliveryConfirmed)> ReadCredentialReadinessAsync(
-		StudentOnboardingCase item, JsonElement? rules, bool requiredOnly = false)
+		StudentOnboardingCase item, JsonElement? rules, bool requiredOnly = false, OnboardingListReadContext? listReadContext = null)
 	{
 		if (item.Status == StudentOnboardingStatus.Cancelled || !rules.HasValue) return (false, null);
 		var types = new[] { "student", "guardian" }.Where(type => !requiredOnly || StudentPortalAccountRules.IsRequired(rules.Value, type)).ToArray();
 		if (!item.StudentEnrollmentId.HasValue && types.Any(type => OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "studentAccount" : "guardianAccount"))) return (true, null);
-		var accountsPending = await handoffRepository.AnyAsync(h => h.OnboardingCaseId == item.Id && h.Required && (h.ServiceKey == "student-account" || h.ServiceKey == "guardian-account") && h.Status != StudentOnboardingServiceHandoffStatus.Acknowledged);
-		var requests = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Students.Portal.StudentCredentialEmailRequest, Guid>>().GetListAsync(e => e.CaseId == item.Id);
-		var manualParent = await SiblingParents.IsParentFlowAsync(item);
-		var reusedParent = await SiblingParents.IsReusedAsync(item.Id, "guardian");
+		if (listReadContext?.CredentialMetadata == null) listReadContext = null;
+		var accountsPending = listReadContext != null
+			? listReadContext.RequiredHandoffs[item.Id].Any(h => h.Required && (h.ServiceKey == "student-account" || h.ServiceKey == "guardian-account") && h.Status != StudentOnboardingServiceHandoffStatus.Acknowledged)
+			: await handoffRepository.AnyAsync(h => h.OnboardingCaseId == item.Id && h.Required && (h.ServiceKey == "student-account" || h.ServiceKey == "guardian-account") && h.Status != StudentOnboardingServiceHandoffStatus.Acknowledged);
+		var metadata = listReadContext != null ? await listReadContext.CredentialMetadata!.Value : null;
+		var requests = metadata != null ? metadata.Requests[item.Id].ToList()
+			: await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Students.Portal.StudentCredentialEmailRequest, Guid>>().GetListAsync(e => e.CaseId == item.Id);
+		var manualParent = metadata != null ? metadata.ParentFlows.IsParentFlow(item) : await SiblingParents.IsParentFlowAsync(item);
+		bool reusedParent;
+		if (metadata != null)
+		{
+			var wasReused = SiblingParents.WasReused(item);
+			reusedParent = StudentSiblingParentService.IsReusedCore(wasReused,
+				wasReused && StudentSiblingParentService.HasOnboardingConfirmation(item), manualParent);
+		}
+		else reusedParent = await SiblingParents.IsReusedAsync(item.Id, "guardian");
 		var applicableRequests = requests.Where(request => (request.AccountType != "guardian" || !reusedParent) &&
 			(request.RequiresSavedOwnerValidation() || StudentPortalAccountRules.Access(rules.Value, request.AccountType) == StudentPortalAccountRules.Optional)).ToList();
 		var configuredRequired = new[] { "student", "guardian" }.Where(type => (type != "guardian" || !manualParent && !reusedParent) &&

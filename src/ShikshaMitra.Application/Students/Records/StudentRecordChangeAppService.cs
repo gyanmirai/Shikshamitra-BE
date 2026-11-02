@@ -47,16 +47,20 @@ public partial class StudentRecordChangeAppService(
 		var result = new List<StudentRecordChangeDto>();
 		var roles = await access.GetDatabaseRoleNamesAsync();
 		var studentIds = items.Select(x => x.StudentId).Distinct().ToArray();
-		var pageStudents = (await AsyncExecuter.ToListAsync(studentQuery.Where(x => Enumerable.Contains(studentIds, x.Id)))).ToDictionary(x => x.Id);
+		var pageStudents = (await AsyncExecuter.ToListAsync(studentQuery.Where(x => Enumerable.Contains(studentIds, x.Id))
+			.Select(x => new ChangeStudentIdentity(x.Id, x.AcademicYearId, x.FirstName, x.LastName)))).ToDictionary(x => x.Id);
 		var itemIds = items.Select(x => x.Id).ToArray();
 		var pageDecisions = await decisions.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(itemIds, x.ChangeId));
 		var yearPolicies = new Dictionary<Guid, StudentRecordsPolicy>();
-		foreach (var year in items.Select(x => x.AcademicYearId).Distinct()) yearPolicies[year] = (await policies.ResolveAsync(year)).Policy;
+		foreach (var year in items.Select(x => x.AcademicYearId).Concat(pageStudents.Values.Where(x => x.AcademicYearId.HasValue)
+			.Select(x => x.AcademicYearId!.Value)).Distinct()) yearPolicies[year] = (await policies.ResolveAsync(year)).Policy;
+		var defaultPolicy = pageStudents.Values.Any(x => !x.AcademicYearId.HasValue) ? (await policies.ResolveAsync(null)).Policy : null;
 		var canApprove = await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Approve);
 		var canCancel = await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Cancel);
 		var actorNames = await GetActorNamesAsync(items.Select(x => x.RequestedBy).Concat(pageDecisions.Select(x => x.ActorId)).Distinct().ToArray());
 		foreach (var item in items) result.Add(await MapAsync(item, includePayload: false, pageStudents[item.StudentId],
-			yearPolicies[item.AcademicYearId], roles, pageDecisions.Where(x => x.ChangeId == item.Id).ToList(), canApprove, canCancel, actorNames));
+			yearPolicies[item.AcademicYearId], roles, pageDecisions.Where(x => x.ChangeId == item.Id).ToList(), canApprove, canCancel, actorNames,
+			pageStudents[item.StudentId].AcademicYearId is { } currentYear ? yearPolicies[currentYear] : defaultPolicy));
 		return new(count, result);
 	}
 	public async Task<StudentRecordChangeDto> GetAsync(Guid id) => await MapAsync(await GetScopedAsync(id), true);
@@ -206,11 +210,14 @@ public partial class StudentRecordChangeAppService(
 		return IsStageApprover(item, await access.GetDatabaseRoleNamesAsync(), await decisions.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.ChangeId == item.Id));
 	}
 	private bool IsStageApprover(StudentRecordChange item, List<string> roles, List<StudentRecordChangeDecision> history)
+		=> IsStageApprover(item.Status, item.RequestedBy, item.ApprovalCount, item.ApprovalStagesJson, roles, history);
+	private bool IsStageApprover(string status, Guid requestedBy, int approvalCount, string approvalStagesJson,
+		List<string> roles, List<StudentRecordChangeDecision> history)
 	{
-		if (item.Status != "Pending" || item.RequestedBy == CurrentUser.Id) return false;
-		var stages = JsonSerializer.Deserialize<List<StudentRecordsApprovalStage>>(item.ApprovalStagesJson, StudentRecordPayloadService.JsonOptions)!;
-		if (item.ApprovalCount >= stages.Count) return false;
-		if (!roles.Intersect(stages[item.ApprovalCount].RoleNames, StringComparer.OrdinalIgnoreCase).Any()) return false;
+		if (status != "Pending" || requestedBy == CurrentUser.Id) return false;
+		var stages = JsonSerializer.Deserialize<List<StudentRecordsApprovalStage>>(approvalStagesJson, StudentRecordPayloadService.JsonOptions)!;
+		if (approvalCount >= stages.Count) return false;
+		if (!roles.Intersect(stages[approvalCount].RoleNames, StringComparer.OrdinalIgnoreCase).Any()) return false;
 		return !history.Any(x => x.ActorId == CurrentUser.Id);
 	}
 	private static void EnsureSectionBoundaries(string section, string beforeJson, string proposedJson)

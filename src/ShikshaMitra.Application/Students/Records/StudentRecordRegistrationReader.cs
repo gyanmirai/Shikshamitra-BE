@@ -82,29 +82,40 @@ public class StudentRecordRegistrationReader(
 			x.ApplicationId == row.ApplicationId && (!row.FinalizedAt.HasValue || x.SubmittedAt <= row.FinalizedAt)).OrderByDescending(x => x.AttemptNumber)
 			.ThenByDescending(x => x.SubmittedAt).Select(x => x.Id).FirstOrDefault()).Where(id => id != Guid.Empty).ToHashSet());
 	}
-	public Task<List<StudentRecordRegistrationSourceDto>> GetAsync(Guid studentId) => ReadAsync(studentId, true);
+	public Task<List<StudentRecordRegistrationSourceDto>> GetAsync(Guid studentId) => ReadAsync(studentId, true, null);
+	internal Task<List<StudentRecordRegistrationSourceDto>> GetAsync(Guid studentId, StudentRecordRegistrationReadScope scope) =>
+		ReadAsync(studentId, true, scope);
 	internal async Task<List<StudentRecordRegistrationSourceDto>> GetForPortalAsync(Guid studentId)
 	{
 		await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Portal.StudentPortalAccessService>().ResolveStudentAsync(studentId);
-		return await ReadAsync(studentId, false);
+		return await ReadAsync(studentId, false, null);
 	}
-	private async Task<List<StudentRecordRegistrationSourceDto>> ReadAsync(Guid studentId, bool scoped)
+	private async Task<List<StudentRecordRegistrationSourceDto>> ReadAsync(Guid studentId, bool scoped, StudentRecordRegistrationReadScope? readScope)
 	{
+		readScope?.RequireContext(studentId, CurrentTenant.Id, CurrentUser.Id, CurrentUnitOfWork);
+		// Scope and provenance remain fresh; only immutable material behind the exact
+		// authorized source IDs can be shared inside the save transaction.
 		var rows = await AsyncExecuter.ToListAsync(await GetSourceRowsAsync(studentId, scoped));
 		if (rows.Count == 0) return [];
 		// A narrower user's visible returning admission must never become a new baseline.
 		var baseline = await AsyncExecuter.FirstOrDefaultAsync((await GetSourceRowsAsync(studentId, false)).Select(x => (Guid?)x.ApplicationId));
 		var instanceIds = rows.Select(x => x.FormInstanceId).Distinct().ToArray();
-		var sourceInstances = (await instances.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(instanceIds, x.Id)))
+		var sourceInstances = (await ReadImmutableAsync(readScope, StudentRecordRegistrationReadScope.Key("instances", instanceIds),
+			() => instances.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(instanceIds, x.Id))))
 			.ToDictionary(instance => instance.Id);
-		var submissionRows = await submissions.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(instanceIds, x.FormInstanceId));
+		var submissionRows = await ReadImmutableAsync(readScope, StudentRecordRegistrationReadScope.Key("submissions", instanceIds),
+			() => submissions.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(instanceIds, x.FormInstanceId)));
 		var definitionIds = rows.Select(x => x.FormDefinitionId).Distinct().ToArray();
-		var definitions = (await forms.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(definitionIds, x.Id))).ToDictionary(x => x.Id);
+		var definitions = (await ReadImmutableAsync(readScope, StudentRecordRegistrationReadScope.Key("definitions", definitionIds),
+			() => forms.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(definitionIds, x.Id)))).ToDictionary(x => x.Id);
 		// Tenant-bounded scalar ancestry resolves real version families; labels and reused codes are not identity.
-		var lineage = await AsyncExecuter.ToListAsync((await forms.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id).Select(x => new { x.Id, x.ParentVersionId }));
+		var lineage = await ReadImmutableAsync(readScope, "lineage", async () => await AsyncExecuter.ToListAsync(
+			(await forms.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id).Select(x => new { x.Id, x.ParentVersionId })));
 		var parents = lineage.ToDictionary(x => x.Id, x => x.ParentVersionId);
-		var sectionRows = await sections.GetListAsync(x => Enumerable.Contains(definitionIds, x.FormDefinitionId));
-		var fieldRows = await fields.GetListAsync(x => Enumerable.Contains(definitionIds, x.FormDefinitionId));
+		var sectionRows = await ReadImmutableAsync(readScope, StudentRecordRegistrationReadScope.Key("sections", definitionIds),
+			() => sections.GetListAsync(x => Enumerable.Contains(definitionIds, x.FormDefinitionId)));
+		var fieldRows = await ReadImmutableAsync(readScope, StudentRecordRegistrationReadScope.Key("fields", definitionIds),
+			() => fields.GetListAsync(x => Enumerable.Contains(definitionIds, x.FormDefinitionId)));
 		var result = new List<StudentRecordRegistrationSourceDto>();
 		foreach (var row in rows.DistinctBy(x => x.ApplicationId))
 		{
@@ -131,6 +142,8 @@ public class StudentRecordRegistrationReader(
 		}
 		return result;
 	}
+	private static Task<T> ReadImmutableAsync<T>(StudentRecordRegistrationReadScope? scope, string key, Func<Task<T>> read) =>
+		scope == null ? read() : scope.ReadImmutableAsync(key, read);
 
 	public async Task<List<StudentRecordAdmissionOnboardingDto>> GetSummaryAsync(Guid studentId, Guid? yearId = null)
 	{

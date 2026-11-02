@@ -59,9 +59,10 @@ public class StudentRecordFormAppService(StudentRecordCustomDetailsService custo
 			}
 			else
 			{
-				var before = await CaptureAsync(studentId);
+				var readScope = new StudentRecordRegistrationReadScope(studentId, CurrentTenant.Id, CurrentUser.Id, work);
+				var before = await CaptureAsync(studentId, readScope);
 				if (StudentRecordPayloadService.Hash(before) != input.ExpectedSnapshot) throw new BusinessException("Students:Records:StaleSnapshot");
-				var json = await customDetails.ValidateAndNormalizeAsync(studentId, input.Payload, registrationForm: true);
+				var json = await customDetails.ValidateAndNormalizeAsync(studentId, input.Payload, readScope, registrationForm: true);
 				if (StudentRecordPayloadService.Canonical(before) == json) throw new BusinessException("Students:Records:NoChanges");
 				var year = record.Student.AcademicYearId ?? throw new BusinessException("Students:Records:EnrollmentMissing");
 				var policy = await policies.ResolveAsync(year);
@@ -70,8 +71,8 @@ public class StudentRecordFormAppService(StudentRecordCustomDetailsService custo
 					"registration-form", "Correction", input.ClientKey, input.Reason, before, json, policy.Policy.ToJson(), policy.VersionId, "[]", 0, now);
 				item.SetProperty("FormRequestHash", rawHash);
 				await changes.InsertAsync(item);
-				var guardianChanged = await HasGuardianChangesAsync(studentId, before, json);
-				await customDetails.ApplyAsync(studentId, json, registrationForm: true);
+				var guardianChanged = await HasGuardianChangesAsync(studentId, before, json, readScope);
+				await customDetails.ApplyAsync(studentId, json, readScope, registrationForm: true);
 				if (guardianChanged) await guardianReviews.CaptureAsync(studentId, item.Id, item.PolicyJson);
 				item.Apply(now);
 				await changes.UpdateAsync(item);
@@ -87,19 +88,19 @@ public class StudentRecordFormAppService(StudentRecordCustomDetailsService custo
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.View);
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Create);
 	}
-	private async Task<bool> HasGuardianChangesAsync(Guid studentId, string beforeJson, string afterJson)
+	private async Task<bool> HasGuardianChangesAsync(Guid studentId, string beforeJson, string afterJson, StudentRecordRegistrationReadScope readScope)
 	{
 		var before = JsonSerializer.Deserialize<StudentRecordCustomDetailsPayload>(beforeJson, StudentRecordPayloadService.JsonOptions)!;
 		var after = JsonSerializer.Deserialize<StudentRecordCustomDetailsPayload>(afterJson, StudentRecordPayloadService.JsonOptions)!;
-		foreach (var source in await customDetails.ReadAsync(studentId))
+		foreach (var source in await customDetails.ReadAsync(studentId, readScope))
 			foreach (var field in StudentRecordFormProjection.Fields(source).Where(f => f.BindingType == AdmissionFormBindingType.System && StudentRecordFormProjection.Target(f.BindingKey)?.Section == "family"))
 				if (!StudentRecordCustomDetailsService.Equal(before.Sources.Single(x => x.SubmissionId == source.SubmissionId).Values[field.Code],
 					after.Sources.Single(x => x.SubmissionId == source.SubmissionId).Values[field.Code])) return true;
 		return false;
 	}
-	private async Task<string> CaptureAsync(Guid studentId)
+	private async Task<string> CaptureAsync(Guid studentId, StudentRecordRegistrationReadScope? readScope = null)
 	{
-		var sources = await customDetails.ReadAsync(studentId);
+		var sources = readScope == null ? await customDetails.ReadAsync(studentId) : await customDetails.ReadAsync(studentId, readScope);
 		if (sources.Count == 0) throw new BusinessException("Students:Records:InvalidCustomSource");
 		await projection.PopulateAsync(studentId, sources, true);
 		if (!sources.Any(x => x.FormEditableFieldCodes.Count > 0)) throw new BusinessException("Students:Records:ReadOnly");

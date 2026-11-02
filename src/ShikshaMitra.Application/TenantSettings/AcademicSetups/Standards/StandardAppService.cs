@@ -6,6 +6,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.Divisions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,6 +17,7 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.Uow;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.TenantSettings.Standards;
 
@@ -61,6 +63,24 @@ public class StandardAppService(
 		var query = await queryScope.StandardsAsync(await base.CreateFilteredQueryAsync(input));
 		var total = await AsyncExecuter.CountAsync(query);
 		return new(total, await hierarchy.ReadStandardsAsync(ApplyPaging(ApplySorting(query, input), input)));
+	}
+	public async Task<ListResultDto<StandardLookupDto>> GetLookupAsync()
+	{
+		await CheckGetListPolicyAsync();
+		var query = await queryScope.StandardsAsync(await base.CreateFilteredQueryAsync(new PagedAndSortedResultRequestDto()));
+		var result = await AsyncExecuter.ToListAsync(ApplySorting(query, new PagedAndSortedResultRequestDto())
+			.Select(standard => new StandardLookupDto { Id = standard.Id, Name = standard.Name }));
+		if (result.Count == 0) return new(result);
+		var standardIds = result.Select(standard => standard.Id).ToArray();
+		var divisionRepository = LazyServiceProvider.LazyGetRequiredService<IRepository<Division, Guid>>();
+		var divisionQuery = await queryScope.DivisionsAsync(await divisionRepository.GetQueryableAsync());
+		var children = await AsyncExecuter.ToListAsync(divisionQuery.Where(division => Enumerable.Contains(standardIds, division.StandardId))
+			.OrderBy(division => division.SortOrder).ThenBy(division => division.Name).ThenBy(division => division.Id)
+			.Select(division => new { division.StandardId, division.Id, division.Name }));
+		var byStandard = children.ToLookup(division => division.StandardId);
+		foreach (var standard in result)
+			standard.Divisions = byStandard[standard.Id].Select(division => new StandardDivisionLookupDto { Id = division.Id, Name = division.Name }).ToList();
+		return new(result);
 	}
 	public override async Task<StandardDto> CreateAsync(CreateUpdateStandardDto input)
 	{
@@ -115,15 +135,15 @@ public class StandardAppService(
 		}
 
 		List<Standard> standards = [];
+		var stageIds = educationMediumsStages.Select(stage => stage.Id).ToArray();
+		var allStandards = await AsyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync())
+			.Where(standard => Enumerable.Contains(stageIds, standard.EducationMediumStageId))
+			.OrderBy(standard => standard.SortOrder).ThenBy(standard => standard.Name).ThenBy(standard => standard.Id));
+		var standardsByStage = allStandards.ToLookup(standard => standard.EducationMediumStageId);
 
 		foreach (EducationMediumStage educationMediumStage in educationMediumsStages)
 		{
-			List<Standard> standardsForEducationMedium =
-				await standardRepository.GetStandardsByEducationMediumStageIdAsync(
-					educationMediumStage.Id
-				);
-
-			foreach (Standard standard in standardsForEducationMedium)
+			foreach (Standard standard in standardsByStage[educationMediumStage.Id])
 			{
 				standard.Divisions = standard.Divisions.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).ToList();
 				standards.Add(standard);

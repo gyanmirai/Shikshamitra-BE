@@ -66,7 +66,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         }
         var draft = await _feeStructures.CreateAsync(metadataId, new() { StandardId = standardId, StandardFeeStructures = candidate });
         draft.FeeHeads.Single(x => x.FeeHeadId == head.FeeHeadId).IsVariable.ShouldBe(variable);
-        draft.FeeHeads.Single(x => x.FeeHeadId == head.FeeHeadId).Amount.ShouldBe(head.Amount);
+        draft.FeeHeads.Single(x => x.FeeHeadId == head.FeeHeadId).Amount.ShouldBe(variable ? null : decimal.Ceiling(fixedAmount));
         var structure = await _feeStructures.PublishAsync(draft.Id, new() { ConcurrencyStamp = draft.ConcurrencyStamp });
         var metadata = await _metadataRepo.GetAsync(metadataId);
         var standard = await _standardRepo.GetAsync(standardId);
@@ -93,13 +93,15 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         var service = GetRequiredService<IStudentFeeStructureAppService>();
         var preview = await service.PreviewAsync(input);
         preview.Heads.Single().Included.ShouldBe(included);
-        preview.Heads.Single().ConfiguredAmount.ShouldBe(variable ? null : 1000.01m);
-        preview.ProratedTotal.ShouldBe(included ? variable ? 1234.01m : 1000.01m : 0m);
+        preview.Heads.Single().ConfiguredAmount.ShouldBe(variable ? null : 1001m);
+        preview.Heads.Single().EffectiveAmount.ShouldBe(included ? variable ? 1234.01m : 1001m : null);
+        preview.ProratedTotal.ShouldBe(included ? variable ? 1235m : 1001m : 0m);
         input.PreviewToken = preview.PreviewToken;
         var result = await service.AssignAsync(input);
         result.AssignmentId.ShouldNotBe(Guid.Empty);
         var dues = await GetRequiredService<IRepository<DueFee, Guid>>().GetListAsync(x => x.StudentId == input.StudentId);
         dues.Count.ShouldBe(included ? 2 : 0);
+        dues.ShouldAllBe(x => x.OriginalAmount == decimal.Truncate(x.OriginalAmount));
         dues.Sum(x => x.OriginalAmount).ShouldBe(preview.ProratedTotal);
         (await service.AssignAsync(input)).Outcome.ShouldBe("AlreadyAssigned");
         (await GetRequiredService<IRepository<DueFee, Guid>>().GetListAsync(x => x.StudentId == input.StudentId)).Count.ShouldBe(dues.Count);

@@ -32,6 +32,13 @@ public class AdmissionInquiryAvailabilityService(
 		var availability = AdmissionOfferingAvailabilityEvaluator.Evaluate(offering, cycle,
 			validation.IsValid, new DateTimeOffset(Clock.Now.ToUniversalTime()));
 		var capacity = await capacityReader.ReadAsync(offering, cycle);
+		return await ReadEvaluatedAsync(offering, availability, capacity);
+	}
+
+	// Only shares a result already read in this scoped staff request. Public/write guards still use ReadCoreAsync.
+	internal async Task<AdmissionInquiryAvailability> ReadEvaluatedAsync(AdmissionOffering offering, AdmissionOfferingAvailability availability,
+		AdmissionClassCapacityDto capacity)
+	{
 		if (!availability.IsAvailable || offering.EntryMode == AdmissionEntryMode.DirectRegistration)
 			return new(false, availability.ReasonMessage ?? "Admission is not open for this class.", capacity, false);
 		var seatStages = offering.WorkflowDefinitionId.HasValue
@@ -58,7 +65,7 @@ public class AdmissionInquiryAvailabilityService(
 		EnsureAvailable(availability);
 	}
 
-	private static void EnsureAvailable(AdmissionInquiryAvailability availability)
+	internal static void EnsureAvailable(AdmissionInquiryAvailability availability)
 	{
 		if (!availability.CanCreateInquiry)
 			throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable, availability.Reason);

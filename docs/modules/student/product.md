@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-29
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -17,6 +17,16 @@ TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that 
 Resume admission restores an eligible End Journey withdrawal within its original offering, cycle and unended academic year. The application ID/number, pinned workflow/form, completed or skipped evidence and Finance records remain unchanged. End Journey saves a versioned immutable decision-history snapshot; Resume appends its own actor/reason/closure event. Earlier withdrawal history is retained.
 
 Closed/unavailable intake, expired offers, finalized/enrolled cases and cancelled Records return handoffs are blocked. Legacy withdrawals are reconstructed only from unambiguous recorded pre-decision stage/form evidence; unclear cases require review. Seat resources are reacquired through the seat owner under current capacity and saved policy. Cancelled assessment bookings and follow-ups remain cancelled.
+
+## Student identity at runtime
+
+Student name, date of birth and a supported gender are checked against saved identity when the admission form is submitted.
+Partial drafts remain allowed.
+Single-name students are supported: system-bound Middle name and Last name questions are optional, including historical required flags; custom questions and adult identity rules retain their configured validation.
+Finalization and Onboarding use the same core identity rule.
+Surname-first roll ordering uses the available saved name for single-name students without inventing a surname or renumbering existing students.
+Workflow publication and Offering activation do not require a combined Inquiry/Registration identity-question route.
+Submission, finalization and Onboarding retain their runtime identity checks.
 
 ## Parents and the main school contact
 
@@ -404,7 +414,7 @@ One dashboard serves all authorized identities. Persisted roles select admin, le
 | Section | Definitions |
 |---|---|
 | Records | Enrolled, inactive and left permanent records eligible through activated enrollment, completed onboarding or approved legacy override; selected-year scoped enrollment membership. Access-pending activated students remain visible. Left legacy records without enrollment retain their own-year directory fallback. Class strength counts distinct eligible active students in active scoped enrollments, bounded to the 12 largest classes. |
-| Admissions | Open inquiry statuses New/Contacted/Interested/FollowUp; selected-year scoped cycles. Active applications in scoped offerings exclude terminal outcomes. Admin/leadership summarize allowed scope; other staff inquiry and setup counts additionally require assignment to the current identity. Applications remain scoped and are labelled as visible applications. |
+| Admissions | Open inquiry statuses New/Contacted/Interested/FollowUp; selected-year scoped cycles. Active applications in scoped offerings exclude terminal outcomes. All staff modes summarize their permitted tenant and academic scope; retired counsellor/case assignments do not restrict dashboard visibility, and ownerless rows remain eligible. Applications remain scoped and are labelled as visible applications. |
 | Student setup | Unfinished excludes Completed/Cancelled; ready means ReadyForActivation; attention means NeedsAttention or an overdue unfinished case. Provisioning remains unfinished. |
 | Attendance | Saved register counts grouped by submitted/draft status and pending leave requests within selected-year enrollment/division scope. These are year work summaries, not daily completeness or attendance percentages. |
 

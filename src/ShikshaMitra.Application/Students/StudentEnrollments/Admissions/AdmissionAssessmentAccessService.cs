@@ -97,8 +97,11 @@ public class AdmissionAssessmentAccessService(
 	}
 
 	public static AdmissionAssessmentPolicy? ResolvePolicy(AdmissionAssessmentPolicy? policy, AdmissionOffering offering)
+		=> ResolvePolicy(policy, offering.BoardId, offering.MediumId, offering.StandardId);
+
+	internal static AdmissionAssessmentPolicy? ResolvePolicy(AdmissionAssessmentPolicy? policy, Guid boardId, Guid mediumId, Guid standardId)
 	{
-		try { return policy?.Resolve(offering.BoardId, offering.MediumId, offering.StandardId); }
+		try { return policy?.Resolve(boardId, mediumId, standardId); }
 		catch (ArgumentException exception) { throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidPolicy, exception.Message); }
 	}
 

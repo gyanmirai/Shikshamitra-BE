@@ -64,6 +64,22 @@ public partial class StudentSiblingParentService(IRepository<AdmissionApplicant,
 		return applicant != null && applicant.TenantId == CurrentTenant.Id && AdmissionSiblingParentSelection.IsParentFlow(applicant);
 	}
 
+	internal async Task<ParentFlowReadContext> ReadParentFlowsAsync(IReadOnlyCollection<StudentOnboardingCase> items)
+	{
+		var ids = items.Select(item => item.ApplicantId).Distinct().ToArray();
+		var rows = ids.Length == 0 ? [] : await applicants.GetListAsync(applicant =>
+			applicant.TenantId == CurrentTenant.Id && Enumerable.Contains(ids, applicant.Id), includeDetails: true);
+		return new(CurrentTenant.Id, rows.ToDictionary(applicant => applicant.Id));
+	}
+
+	internal sealed class ParentFlowReadContext(Guid? tenantId, IReadOnlyDictionary<Guid, AdmissionApplicant> applicants)
+	{
+		// Keep evaluation in the caller's original per-case order. Only persisted input
+		// material is batched; no parent access or identity authorization result is cached.
+		internal bool IsParentFlow(StudentOnboardingCase item) => applicants.TryGetValue(item.ApplicantId, out var applicant) &&
+			applicant.TenantId == tenantId && AdmissionSiblingParentSelection.IsParentFlow(applicant);
+	}
+
 	public async Task<StudentSiblingParentContextDto> GetAsync(StudentOnboardingCase item) => (await ReadAsync(item)).Context;
 
 	private sealed class ParentRead
@@ -283,11 +299,15 @@ public partial class StudentSiblingParentService(IRepository<AdmissionApplicant,
 	}
 	public bool UsesHistoricalParentSource(StudentOnboardingCase item) => item.GetProperty<string>(SourceRelationshipKey) == "guardian";
 	public bool WasReused(StudentOnboardingCase item) => item.TenantId == CurrentTenant.Id && item.GetProperty<bool>(ReuseKey);
+	internal static bool IsReusedCore(bool wasReused, bool hasOnboardingConfirmation, bool parentFlow) =>
+		wasReused && (hasOnboardingConfirmation || parentFlow);
 	public async Task<bool> IsReusedAsync(Guid caseId, string accountType)
 	{
 		if (accountType != "guardian") return false;
 		var item = await cases.FindAsync(caseId);
-		return item != null && WasReused(item) && (HasOnboardingConfirmation(item) || await IsParentFlowAsync(item));
+		var wasReused = item != null && WasReused(item);
+		var confirmed = wasReused && HasOnboardingConfirmation(item!);
+		return IsReusedCore(wasReused, confirmed, wasReused && !confirmed && await IsParentFlowAsync(item!));
 	}
 	public async Task<bool> IsManualParentCaseAsync(Guid caseId, string accountType)
 	{

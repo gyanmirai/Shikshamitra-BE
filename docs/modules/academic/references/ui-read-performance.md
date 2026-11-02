@@ -3,7 +3,7 @@ module: academic
 domain: read-contracts
 content_type: Reference
 status: active
-updated_on: 2026-10-30
+updated_on: 2026-11-01
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -21,6 +21,7 @@ Controllers delegate authorization and scoped reads to their application service
 
 | Method and route | Input and result |
 |---|---|
+| `GET /api/app/standard/lookup` | Complete `items` of class `id`, `name`, and scoped `divisions` containing `id`, `name`. Uses the existing authenticated Standard-list policy, Academic hierarchy predicates and academic ordering, including explicit Standard-only scope. It adds no academic-year filter or result cap; existing Standard CRUD/list responses remain unchanged. |
 | `GET /api/class-management/class-teacher-assignments/workspace` | `organizationId`; returns assignment `items`, `summary` and `eligibleTeachers` together. |
 | `GET /api/academic-mediums/{academicMediumId}/subjects/lookup` | Optional `searchTerm`, `includeArchived` (default false); lightweight subject options without operational usage enrichment. |
 | `GET /api/academic/curriculum/chapters/lookup` | Required `standardId`, `subjectId`, optional `divisionId`; chapter ID, number and name options. |
@@ -29,6 +30,7 @@ Controllers delegate authorization and scoped reads to their application service
 | `GET /api/academic/rubrics/{id}/evaluations/submission/{submissionId}` | Required `studentId`; returns only the selected student's submission evaluation, or no content. |
 | `POST /api/class-management/student-elective-assignments/selection-counts` | Body: `academicMediumId`, `classId`, `divisionIds`, `electiveGroupIds`; counts grouped by elective group, division and subject. |
 | `GET /api/class-management/student-elective-assignments` | Existing context/search plus `includeSelectableSubjects` (default true); pass false to omit per-student option arrays and use the shared `subjectOptions` response. Each record includes `isLocked`; response `isLocked` requires every student in the full context roster to have a locked selection, independently of search. |
+| `GET /api/academics/timetable/by-standard/{standardId}/division/{divisionId}` | Existing complete class timetable and subject summary. Subject, elective-group and room lookup reads select referenced IDs instead of complete tenant catalogues; action permission and resource scope remain unchanged. |
 | `GET /api/academics/timetable/room-reservations/page` | `skipCount`, `maxResultCount`, `sorting`, optional created date, room, approval view, status group, search and JSON filters; page plus status counts. |
 | `GET /api/academics/timetable/room-availability` | Dated checks use `date`. Weekly planning sends `weeklyTimetableDay` (`Monday` through `Saturday`), period times and current class/division instead; it checks recurring timetable and class-shift allocations, excludes the current timetable, and ignores date-specific calendar closures, reservations and maintenance. Existing tenant filters, metadata filters and `includeOccupied` apply to both modes. |
 | `GET /api/academics/timetable/room-reservations/summary` | Existing reservation context; status counts for badges without loading reservation details. |
@@ -50,6 +52,7 @@ Student list validation caps `maxResultCount` at 100 in `src/ShikshaMitra.Applic
 | Academic audit | Default time-ordered reads merge bounded event keys from relevant authorized sources before hydrating page context. Search, rendered values and alternate ordering can require broader narrow metadata. No history cutoff removes older events. |
 | Room audit | Page selection precedes full snapshot loading; snapshots and inline differences remain complete for the selected events. |
 | Legacy substitution year | GET infers the effective academic year without saving. A separate non-remote repair service provides bounded, authorized, locked and audited writes for maintenance. |
+| Class timetable lookups | Subjects include raw saved-slot IDs, every published assignment subject, and division-selected subjects for saved elective groups, including synthesized unsaved subjects without an allocation. Groups include saved-slot and published-assignment references; rooms include raw saved-slot references. Existing repository filters/includes, archived or inactive labels, draft saved allocations, complete summaries, per-day/config ordering, culture-sensitive time strings and missing-reference fallbacks remain unchanged. No new year/status/medium filter or result cap applies. |
 
 These changes bound graph hydration, rather than guaranteeing constant SQL work for every query.
 Student name/culture ordering, rendered audit search, rubric date/culture matching and subject-allocation group order retain narrow metadata fallbacks where required for compatibility.
@@ -85,6 +88,7 @@ Paths are relative to the backend repository root.
 | Student list summaries, culture/search parity, bounded details and scope | `test/ShikshaMitra.Application.Tests/Academic/StudentAcademic360/StudentAcademic360Read_Tests.cs` |
 | Standard preview/page/export parity and dynamic projections | `test/ShikshaMitra.Application.Tests/Academic/Reports/*Preview*.cs`, `test/ShikshaMitra.Application.Tests/Academic/Reports/AcademicDynamicReportProjection_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Reports/AcademicLearningTaskExportParity_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Reports/AcademicExamExportParity_Tests.cs` |
 | Dashboard sections, timetable settings and calendar batching | `test/ShikshaMitra.Application.Tests/Academic/Dashboard/AcademicDashboardSectionQueries_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Timetable/TimetableSettingsReadPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Calendar/AcademicCalendarReadPerformance_Tests.cs` |
+| Class timetable catalogue hydration and elective response parity | `test/ShikshaMitra.Application.Tests/Academic/Timetable/TimetableClassReadPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Timetable/TimetableElectiveAssignments_Tests.cs` |
 | PostgreSQL translation, HTTP commands and plans | `test/ShikshaMitra.HttpApi.Tests/Academic/Performance/AcademicReportPostgresSmoke_Tests.cs`, `test/ShikshaMitra.HttpApi.Tests/Academic/Performance/AcademicPostgresPerformance_Tests.cs` |
 
 Run focused suites from `Shikshamitra-BE` with its pinned SDK:

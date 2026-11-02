@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using FluentValidation;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -80,6 +81,24 @@ public class AdmissionApplicationDecisionDtoValidator : AbstractValidator<Admiss
 		RuleFor(input => input.Reason).MaximumLength(512);
 		RuleFor(input => input.CounsellorId).NotEqual(Guid.Empty)
 			.When(input => input.CounsellorId.HasValue);
+	}
+}
+
+public class CorrectAdmissionApplicationFormDtoValidator : AbstractValidator<CorrectAdmissionApplicationFormDto>
+{
+	public CorrectAdmissionApplicationFormDtoValidator()
+	{
+		RuleFor(input => input.ConcurrencyStamp).NotEmpty();
+		RuleFor(input => input.Reason).NotEmpty().MaximumLength(512);
+		RuleFor(input => input.IdempotencyKey).NotEmpty().MaximumLength(80);
+		RuleFor(input => input.Values).NotEmpty();
+		RuleForEach(input => input.Values).ChildRules(value =>
+		{
+			value.RuleFor(item => item.FieldCode).NotEmpty().MaximumLength(128);
+		});
+		RuleForEach(input => input.Values).NotNull();
+		RuleFor(input => input.Values).Must(values => values == null || values.All(value => value != null) && values.Select(value => value.FieldCode).Distinct(StringComparer.OrdinalIgnoreCase).Count() == values.Count)
+			.WithMessage("Include each form field only once.");
 	}
 }
 

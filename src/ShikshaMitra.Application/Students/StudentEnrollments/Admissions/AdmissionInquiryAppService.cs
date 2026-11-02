@@ -72,7 +72,9 @@ public class AdmissionInquiryAppService(
 		var offerings = (await offeringRepository.GetListAsync(offering => offeringIds.Contains(offering.Id)))
 			.ToDictionary(offering => offering.Id);
 		var standardIds = offerings.Values.Select(offering => offering.StandardId).Distinct().ToArray();
-		var standardNames = (await standardRepository.GetListAsync(standard => Enumerable.Contains(standardIds, standard.Id)))
+		var yearQuery = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid>>().GetQueryableAsync();
+		var standardNames = (await AsyncExecuter.ToListAsync(AdmissionStandardLabelQuery.ForList(await standardRepository.GetQueryableAsync(), yearQuery)
+			.Where(standard => Enumerable.Contains(standardIds, standard.Id)).Select(standard => new { standard.Id, standard.Name })))
 			.ToDictionary(standard => standard.Id, standard => standard.Name);
 		var managementByInquiry = managementRows.ToDictionary(state => state.InquiryId);
 		var followUpsByInquiry = openFollowUps.GroupBy(followUp => followUp.InquiryId)
@@ -105,7 +107,9 @@ public class AdmissionInquiryAppService(
 		if (inquiry.AdmissionOfferingId.HasValue && await offeringRepository.FindAsync(inquiry.AdmissionOfferingId.Value) is { } offering)
 		{
 			result.BoardId = offering.BoardId; result.MediumId = offering.MediumId; result.StandardId = offering.StandardId;
-			result.StandardName = (await standardRepository.FindAsync(offering.StandardId))?.Name;
+			var boardQuery = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationBoard, Guid>>().GetQueryableAsync();
+			result.StandardName = await AsyncExecuter.FirstOrDefaultAsync(AdmissionStandardLabelQuery.ForDetail(await standardRepository.GetQueryableAsync(), boardQuery)
+				.Where(standard => standard.Id == offering.StandardId).Select(standard => standard.Name));
 		}
 		var applicant = inquiry.ApplicantId.HasValue ? await applicantRepository.FindAsync(inquiry.ApplicantId.Value) : null;
 		var family = inquiry.FamilyId.HasValue ? await familyRepository.FindAsync(inquiry.FamilyId.Value) : null;

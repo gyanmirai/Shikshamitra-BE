@@ -91,8 +91,21 @@ public partial class StudentDirectoryQueryService(
 		return query;
 	}
 
-	public async Task<PagedResultDto<StudentDirectoryItemDto>> GetAsync(StudentDirectoryRequest input, bool legacyCandidates = false, Guid[]? permittedDivisionIds = null,
-		bool includeAttendanceIdentifiers = false)
+	public Task<PagedResultDto<StudentDirectoryItemDto>> GetAsync(StudentDirectoryRequest input, bool legacyCandidates = false, Guid[]? permittedDivisionIds = null,
+		bool includeAttendanceIdentifiers = false) => GetCoreAsync(input, legacyCandidates, permittedDivisionIds, includeAttendanceIdentifiers, false);
+
+	internal Task<PagedResultDto<StudentDirectoryItemDto>> GetCompleteAttendanceClassAsync(Guid yearId, Guid standardId, Guid divisionId)
+	{
+		if (yearId == Guid.Empty || standardId == Guid.Empty || divisionId == Guid.Empty)
+			throw new BusinessException("Students:Records:InvalidDirectoryQuery");
+		// The daily register already requires the complete class. Keep the canonical
+		// scope, eligibility and masking pipeline while avoiding repeated page setup.
+		return GetCoreAsync(new() { AcademicYearId = yearId, StandardId = standardId, DivisionId = divisionId,
+			Population = "Active", MaxResultCount = 100 }, false, null, false, true);
+	}
+
+	private async Task<PagedResultDto<StudentDirectoryItemDto>> GetCoreAsync(StudentDirectoryRequest input, bool legacyCandidates,
+		Guid[]? permittedDivisionIds, bool includeAttendanceIdentifiers, bool completeAttendanceClass)
 	{
 		StudentDirectoryColumnFilters.Validate(input.ColumnFilters);
 		var query = await GetPopulationAsync(input, legacyCandidates, permittedDivisionIds);
@@ -150,7 +163,8 @@ public partial class StudentDirectoryQueryService(
 			"identity masked" => query.OrderBy(s => s.Id),
 			_ => throw new BusinessException("Students:Records:InvalidDirectorySort")
 		};
-		var rows = await AsyncExecuter.ToListAsync(query.Skip(input.SkipCount).Take(input.MaxResultCount).Select(s => new StudentDirectoryItemDto
+		var pageQuery = completeAttendanceClass ? query : query.Skip(input.SkipCount).Take(input.MaxResultCount);
+		var rows = await AsyncExecuter.ToListAsync(pageQuery.Select(s => new StudentDirectoryItemDto
 		{
 			Id = s.Id, StudentId = s.Id, FirstName = s.FirstName, MiddleName = s.MiddleName, LastName = s.LastName,
 			GrNumber = s.GrNumber, GrNo = s.GrNo, RollNo = s.RollNo, Status = s.Status, AcademicYearId = s.AcademicYearId,
@@ -170,15 +184,17 @@ public partial class StudentDirectoryQueryService(
 				where p.Enrollment.AcademicYearId == input.AcademicYearId && Enumerable.Contains(studentIds, p.Enrollment.StudentId)
 				join d in divisionQuery.Where(d => d.TenantId == CurrentTenant.Id) on p.Enrollment.DivisionId equals (Guid?)d.Id into divisionRows
 				from d in divisionRows.DefaultIfEmpty()
-				select new { p.Enrollment, p.StandardName, p.MediumId, p.MediumName, DivisionName = d != null ? d.Name : null });
+				select new { p.Enrollment.StudentId, p.Enrollment.AcademicYearId, p.Enrollment.StandardId,
+					p.Enrollment.DivisionId, p.Enrollment.RollNumber, p.StandardName, p.MediumId, p.MediumName,
+					DivisionName = d != null ? d.Name : null });
 			foreach (var row in rows)
 			{
-				var placement = placements.FirstOrDefault(p => p.Enrollment.StudentId == row.StudentId);
+				var placement = placements.FirstOrDefault(p => p.StudentId == row.StudentId);
 				if (placement == null) continue;
-				row.AcademicYearId = placement.Enrollment.AcademicYearId;
-				row.StandardId = placement.Enrollment.StandardId; row.StandardName = placement.StandardName;
-				row.DivisionId = placement.Enrollment.DivisionId; row.DivisionName = placement.DivisionName;
-				row.RollNo = placement.Enrollment.RollNumber; row.AcademicMediumId = placement.MediumId; row.AcademicMediumName = placement.MediumName;
+				row.AcademicYearId = placement.AcademicYearId;
+				row.StandardId = placement.StandardId; row.StandardName = placement.StandardName;
+				row.DivisionId = placement.DivisionId; row.DivisionName = placement.DivisionName;
+				row.RollNo = placement.RollNumber; row.AcademicMediumId = placement.MediumId; row.AcademicMediumName = placement.MediumName;
 			}
 		}
 		foreach (var row in rows)

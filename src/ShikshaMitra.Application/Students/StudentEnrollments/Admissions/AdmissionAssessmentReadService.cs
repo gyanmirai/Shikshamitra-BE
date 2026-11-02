@@ -85,13 +85,21 @@ public class AdmissionAssessmentReadService(
 	/// <summary>Evidence and configured route readiness, without allocating history/action DTOs for off-page candidates.</summary>
 	public List<string> GetBlockers(AdmissionAssessmentContext context, AdmissionAssessmentAttempt? latest,
 		IReadOnlyCollection<AdmissionWorkflowTransitionDefinition> routes, IReadOnlyDictionary<string, string> facts)
+		=> GetBlockers(context.Policy, context.IsActive, context.CanPrepare, context.Definition.IsTerminalStage, latest, routes, facts);
+
+	internal List<string> GetActiveBlockers(AdmissionWorkflowStageDefinition definition, AdmissionAssessmentPolicy? policy,
+		AdmissionAssessmentAttempt? latest, IReadOnlyCollection<AdmissionWorkflowTransitionDefinition> routes, IReadOnlyDictionary<string, string> facts)
+		=> GetBlockers(policy, true, true, definition.IsTerminalStage, latest, routes, facts);
+
+	private List<string> GetBlockers(AdmissionAssessmentPolicy? policy, bool active, bool canPrepare, bool terminal,
+		AdmissionAssessmentAttempt? latest, IReadOnlyCollection<AdmissionWorkflowTransitionDefinition> routes, IReadOnlyDictionary<string, string> facts)
 	{
-		var blockers = context.Policy == null ? new List<string> { "This stage uses the existing manual assessment process." } :
+		var blockers = policy == null ? new List<string> { "This stage uses the existing manual assessment process." } :
 			AdmissionAssessmentEvidence.GetBlockers(latest);
-		if (!context.CanPrepare && !context.IsActive) blockers.Add("Assessment history is read-only for this stage.");
-		if (latest?.Status == "completed" && context.IsActive)
+		if (!canPrepare && !active) blockers.Add("Assessment history is read-only for this stage.");
+		if (latest?.Status == "completed" && active)
 		{
-			try { AdmissionAssessmentEvidence.EnsureRoute(latest, context.Definition.IsTerminalStage ? null : selector.Select(routes, facts), facts); }
+			try { AdmissionAssessmentEvidence.EnsureRoute(latest, terminal ? null : selector.Select(routes, facts), facts); }
 			catch (BusinessException exception)
 			{
 				blockers.Add(exception.Code == AdmissionAssessmentErrorCodes.RouteRequired ? exception.Message :

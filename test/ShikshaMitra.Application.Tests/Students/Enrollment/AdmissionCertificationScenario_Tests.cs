@@ -462,7 +462,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		bool campusScoped = false,
 		Guid? existingStudentId = null,
 		AdmissionApplicant? existingApplicant = null,
-		bool currentWorkflow = true)
+		bool currentWorkflow = true,
+		Guid? academicStageId = null)
 	{
 		var workflow = currentWorkflow
 			? await CreateCurrentCertificationWorkflowAsync()
@@ -476,7 +477,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				workflow.Stages.Single(stage => stage.StageType == AdmissionWorkflowStageType.Form).ConfigurationJson!);
 			registrationFormId = configuration.RootElement.GetProperty("formDefinitionId").GetGuid();
 		}
-		var offering = await CreateAvailableOfferingAsync(workflow.Id, campusScoped: campusScoped, registrationFormId: registrationFormId);
+		var offering = await CreateAvailableOfferingAsync(workflow.Id, campusScoped: campusScoped, registrationFormId: registrationFormId, academicStageId: academicStageId);
 		if (linkExistingStudent)
 			existingStudentId = (await CreateExistingStudentAsync(offering, firstName, "Patel")).Id;
 		var applicant = existingApplicant ?? await CreateCertificationApplicantAsync(

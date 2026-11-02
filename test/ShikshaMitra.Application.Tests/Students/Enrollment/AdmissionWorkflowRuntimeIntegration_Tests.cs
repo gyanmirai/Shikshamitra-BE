@@ -1088,7 +1088,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	}
 
 	private Task<AdmissionOffering> CreateAvailableOfferingAsync(
-		Guid workflowId, bool assertValid = true, bool campusScoped = false, Guid? registrationFormId = null) =>
+		Guid workflowId, bool assertValid = true, bool campusScoped = false, Guid? registrationFormId = null, Guid? academicStageId = null) =>
 		WithUnitOfWorkAsync(async () =>
 	{
 		var userRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
@@ -1096,7 +1096,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await userRepository.InsertAsync(new IdentityUser(
 				TestUserId, $"workflow-admin-{TestUserId:N}", "workflow-admin@example.test", TestTenantId),
 				autoSave: true);
-		var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+		var stageId = academicStageId ?? await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 		var stage = await _stageRepository.GetAsync(stageId);
 		var medium = await _mediumRepository.GetAsync(stage.EducationMediumId);
 		var board = await _boardRepository.GetAsync(medium.EducationBoardId);

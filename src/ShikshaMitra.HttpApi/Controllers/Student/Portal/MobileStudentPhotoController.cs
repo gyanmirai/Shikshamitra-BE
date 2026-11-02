@@ -30,7 +30,7 @@ public class MobileStudentPhotoController(IMobileStudentPhotoAppService service)
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add)]
 	[RequestSizeLimit(MaxBytes + 64 * 1024)]
 	[RequestFormLimits(MultipartBodyLengthLimit = MaxBytes + 64 * 1024)]
-	public async Task<Result<StudentRecordPhotoDraftDto>> UploadAsync(Guid studentId, [FromForm] IFormFile file)
+	public async Task<Result<StudentRecordPhotoDraftDto>> UploadAsync(Guid studentId, IFormFile file)
 	{
 		if (Request.HasFormContentType && (await Request.ReadFormAsync(HttpContext.RequestAborted)).Files.Count != 1)
 			throw new BusinessException("Students:Records:InvalidPhoto");

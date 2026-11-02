@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -188,7 +189,7 @@ public class TimetableManager(
 
     private static string FormatTime(TimeOnly time)
     {
-        return time.ToString("HH:mm");
+        return time.ToString("HH:mm", CultureInfo.InvariantCulture);
     }
 
     private sealed record ConflictRow(

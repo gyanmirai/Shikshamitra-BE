@@ -476,16 +476,21 @@ public class AdmissionCycleAppService(
 
 	private async Task<AdmissionCycleImpactDto> GetImpactInternalAsync(Guid id)
 	{
-		var offerings = await offeringRepository.GetListAsync(x => x.AdmissionCycleId == id);
-		var applications = await applicationRepository.GetListAsync(x => x.AdmissionCycleId == id);
+		var offerings = await AsyncExecuter.FirstOrDefaultAsync((await offeringRepository.GetQueryableAsync())
+			.Where(item => item.AdmissionCycleId == id).GroupBy(item => item.AdmissionCycleId)
+			.Select(group => new { Count = group.Count(), ActiveCount = group.Count(item => item.IsActive) }));
+		var applications = await AsyncExecuter.FirstOrDefaultAsync((await applicationRepository.GetQueryableAsync())
+			.Where(item => item.AdmissionCycleId == id).GroupBy(item => item.AdmissionCycleId)
+			.Select(group => new { Count = group.Count(), DraftCount = group.Count(item => item.Status == AdmissionApplicationStatus.Draft),
+				SubmittedCount = group.Count(item => item.Status == AdmissionApplicationStatus.Submitted) }));
 		return new AdmissionCycleImpactDto
 		{
 			AdmissionCycleId = id,
-			LinkedOfferingCount = offerings.Count,
-			ActiveOfferingCount = offerings.Count(x => x.IsActive),
-			ApplicationCount = applications.Count,
-			DraftApplicationCount = applications.Count(x => x.Status == AdmissionApplicationStatus.Draft),
-			SubmittedApplicationCount = applications.Count(x => x.Status == AdmissionApplicationStatus.Submitted)
+			LinkedOfferingCount = offerings?.Count ?? 0,
+			ActiveOfferingCount = offerings?.ActiveCount ?? 0,
+			ApplicationCount = applications?.Count ?? 0,
+			DraftApplicationCount = applications?.DraftCount ?? 0,
+			SubmittedApplicationCount = applications?.SubmittedCount ?? 0
 		};
 	}
 
@@ -511,21 +516,24 @@ public class AdmissionCycleAppService(
 		var yearIds = cycles.Select(x => x.AcademicYearId).ToHashSet();
 		var years = yearIds.Count == 0
 			? []
-			: await academicYearRepository.GetListAsync(x => yearIds.Contains(x.Id));
+			: await AsyncExecuter.ToListAsync((await academicYearRepository.GetQueryableAsync()).Where(x => Enumerable.Contains(yearIds, x.Id))
+				.Select(x => new { x.Id, x.Name }));
 		var scopedOfferings = await applicationScope.GetScopedOfferingsAsync();
 		var offerings = cycleIds.Count == 0
 			? []
-			: await AsyncExecuter.ToListAsync(scopedOfferings.Where(x => cycleIds.Contains(x.AdmissionCycleId)));
+			: await AsyncExecuter.ToListAsync(scopedOfferings.Where(x => Enumerable.Contains(cycleIds, x.AdmissionCycleId))
+				.GroupBy(x => x.AdmissionCycleId).Select(group => new { Id = group.Key, Count = group.Count(), ActiveCount = group.Count(x => x.IsActive) }));
 		var applications = cycleIds.Count == 0
 			? []
 			: await AsyncExecuter.ToListAsync((await applicationScope.GetScopedApplicationsAsync()).Where(x =>
-				cycleIds.Contains(x.AdmissionCycleId) && scopedOfferings.Any(offering => offering.Id == x.AdmissionOfferingId)));
+				Enumerable.Contains(cycleIds, x.AdmissionCycleId) && scopedOfferings.Any(offering => offering.Id == x.AdmissionOfferingId))
+				.GroupBy(x => x.AdmissionCycleId).Select(group => new { Id = group.Key, Count = group.Count() }));
 
 		return new AdmissionCycleMapContext(
 			years.ToDictionary(x => x.Id, x => x.Name),
-			offerings.GroupBy(x => x.AdmissionCycleId).ToDictionary(x => x.Key, x => x.Count()),
-			offerings.Where(x => x.IsActive).GroupBy(x => x.AdmissionCycleId).ToDictionary(x => x.Key, x => x.Count()),
-			applications.GroupBy(x => x.AdmissionCycleId).ToDictionary(x => x.Key, x => x.Count()),
+			offerings.ToDictionary(x => x.Id, x => x.Count),
+			offerings.ToDictionary(x => x.Id, x => x.ActiveCount),
+			applications.ToDictionary(x => x.Id, x => x.Count),
 			AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now));
 	}
 

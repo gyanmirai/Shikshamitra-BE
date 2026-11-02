@@ -32,9 +32,11 @@ public class StudentRecordDetailsAppService(StudentRecordsAccessService access, 
 		var canReadCompliance = await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.IdentityCompliance.View);
 		var result = new StudentRecordDetailsDto { StudentId = studentId, RecordsAccess = record.Access };
 		if (record.Access != "Full") return result;
-		var sources = await customDetails.ReadAsync(studentId);
+		var readScope = CurrentUnitOfWork == null ? null : new StudentRecordSectionReadScope(studentId, CurrentTenant.Id, CurrentUser.Id, CurrentUnitOfWork);
+		var sources = readScope == null ? await customDetails.ReadAsync(studentId) : await customDetails.ReadAsync(studentId, readScope);
 		var formSources = JsonSerializer.Deserialize<List<StudentRecordRegistrationSourceDto>>(JsonSerializer.Serialize(sources, StudentRecordPayloadService.JsonOptions), StudentRecordPayloadService.JsonOptions)!;
-		await formProjection.PopulateAsync(studentId, formSources, canCreate);
+		if (readScope == null) await formProjection.PopulateAsync(studentId, formSources, canCreate);
+		else await formProjection.PopulateAsync(studentId, formSources, canCreate, readScope);
 		foreach (var source in formSources) await fieldOptions.PopulateAsync(source, canCreate, fullForm: true);
 		// The retained profile schema survives promotion; year context only filters the legacy journey evidence below.
 		result.FormSources = formSources;
@@ -57,7 +59,7 @@ public class StudentRecordDetailsAppService(StudentRecordsAccessService access, 
 			var row = new StudentRecordStructuredSectionDto { Section = section, IsMasked = masked, CanEdit = !masked && canCreate };
 			if (!masked)
 			{
-				var data = JsonNode.Parse(await payloads.CaptureAsync(studentId, section))!.AsObject();
+				var data = JsonNode.Parse(readScope == null ? await payloads.CaptureAsync(studentId, section) : await payloads.CaptureAsync(studentId, section, readScope))!.AsObject();
 				if (section is "additional" or "medical") data["haveDisability"] = JsonSerializer.SerializeToNode(knownFlags.HaveDisability);
 				if (section == "additional")
 				{

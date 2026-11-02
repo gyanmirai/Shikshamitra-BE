@@ -23,7 +23,8 @@ public class StudentRecordPayloadService(
 	IStudentBankDetailsAppService bank, IStudentRepository students, IObjectValidator validator,
 	StudentRecordApplyContext context, StudentRecordPlacementService placement,
 	IRepository<StudentRecordPhotoDraft, Guid> photoDrafts,
-	IRepository<StudentRecordChange, Guid> changes, StudentRecordCustomDetailsService customDetails) : ITransientDependency
+	IRepository<StudentRecordChange, Guid> changes, StudentRecordCustomDetailsService customDetails,
+	StudentRecordSectionReader sectionReader) : ITransientDependency
 {
 	public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
 	{
@@ -41,7 +42,9 @@ public class StudentRecordPayloadService(
 		"custom-details" => "Correction",
 		_ => throw new BusinessException("Students:Records:InvalidSection")
 	};
-	public async Task<string> CaptureAsync(Guid studentId, string section, string? recordedSourceSet = null)
+	public Task<string> CaptureAsync(Guid studentId, string section, string? recordedSourceSet = null) => CaptureCoreAsync(studentId, section, recordedSourceSet, null);
+	internal Task<string> CaptureAsync(Guid studentId, string section, StudentRecordSectionReadScope scope) => CaptureCoreAsync(studentId, section, null, scope);
+	private async Task<string> CaptureCoreAsync(Guid studentId, string section, string? recordedSourceSet, StudentRecordSectionReadScope? scope)
 	{
 		if (section == "custom-details") return await customDetails.CaptureAsync(studentId, recordedSourceSet);
 		if (section == "photo")
@@ -50,7 +53,10 @@ public class StudentRecordPayloadService(
 			return Canonical(JsonSerializer.Serialize(new { photoDraftId = (Guid?)null, currentBlobName = student.PhotoBlobName,
 				photoUrl = student.PhotoBlobName == null ? null : $"/api/students/records/{studentId}/photo" }, ValueJsonOptions));
 		}
-		object value = section switch
+		var supplied = scope == null ? null : await sectionReader.ReadAsync(studentId, section, scope);
+		object value;
+		if (supplied != null) value = supplied.Value;
+		else value = section switch
 		{
 			"general" => await general.GetRegistrationGeneralDetailsByIdAsync(studentId),
 			"family" => await family.GetFamilyInfoAsync(studentId),
@@ -69,9 +75,17 @@ public class StudentRecordPayloadService(
 			node["formNumber"] = node["formNo"]?.DeepClone() ?? JsonValue.Create(string.Empty);
 			node["aadharNo"] = node["adharNo"]?.DeepClone();
 			node["apparId"] = node["apparId"]?.DeepClone();
-			var student = await students.GetRegistrationAggregateAsync(studentId);
-			node["divisionId"] = JsonSerializer.SerializeToNode(student!.DivisionId);
-			node["profilePictureUrl"] = JsonSerializer.SerializeToNode(student.AdditionalDetail?.ProfilePictureUrl);
+			if (supplied?.HasGeneralFields == true)
+			{
+				node["divisionId"] = JsonSerializer.SerializeToNode(supplied.DivisionId);
+				node["profilePictureUrl"] = JsonSerializer.SerializeToNode(supplied.ProfilePictureUrl);
+			}
+			else
+			{
+				var student = await students.GetRegistrationAggregateAsync(studentId);
+				node["divisionId"] = JsonSerializer.SerializeToNode(student!.DivisionId);
+				node["profilePictureUrl"] = JsonSerializer.SerializeToNode(student.AdditionalDetail?.ProfilePictureUrl);
+			}
 		}
 		var output = new JsonObject();
 		foreach (var prop in PayloadType(section).GetProperties().OrderBy(x => x.Name, StringComparer.Ordinal))

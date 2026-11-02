@@ -1,6 +1,7 @@
 ﻿using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.StudentEnrollments.Helpers;
 using System;
+using ShikshaMitra.Students.Records;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,16 +11,33 @@ using Volo.Abp.Data;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
-public class StudentFamilyInfoAppService(
-    IStudentRepository studentRepository,
-    IRepository<StudentFamilyDetail, Guid> familyDetailRepository,
-    EntityValidationService validationService,
-    StudentRegistrationMappingHelper mappingHelper,
-    StudentScopeAccessService studentScopeAccessService
-) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
+public class StudentFamilyInfoAppService : StudentRegistrationBaseAppService,
     IStudentFamilyInfoAppService
 {
-    public async Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId)
+	private readonly IStudentRepository studentRepository;
+	private readonly IRepository<StudentFamilyDetail, Guid> familyDetailRepository;
+	private readonly EntityValidationService validationService;
+	private readonly StudentRegistrationMappingHelper mappingHelper;
+	private readonly StudentScopeAccessService studentScopeAccessService;
+
+	public StudentFamilyInfoAppService(
+		IStudentRepository studentRepository,
+		IRepository<StudentFamilyDetail, Guid> familyDetailRepository,
+		EntityValidationService validationService,
+		StudentRegistrationMappingHelper mappingHelper,
+		StudentScopeAccessService studentScopeAccessService
+	) : base(studentRepository, validationService, studentScopeAccessService)
+	{
+		this.studentRepository = studentRepository;
+		this.familyDetailRepository = familyDetailRepository;
+		this.validationService = validationService;
+		this.mappingHelper = mappingHelper;
+		this.studentScopeAccessService = studentScopeAccessService;
+	}
+
+    public Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId) => ReadAsync(studentId, null);
+    internal Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId, StudentRecordSectionReadScope scope) => ReadAsync(studentId, scope);
+    private async Task<StudentFamilyInfoDto> ReadAsync(Guid studentId, StudentRecordSectionReadScope? scope)
     {
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
@@ -27,7 +45,9 @@ public class StudentFamilyInfoAppService(
             StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyInfo,
             includeStudentRecords: true);
 
-        var familyDetail = await familyDetailRepository.FindAsync(studentId);
+        scope?.RequireContext(studentId, CurrentTenant.Id, CurrentUser.Id, CurrentUnitOfWork);
+        var familyDetail = scope == null ? await familyDetailRepository.FindAsync(studentId) :
+            await scope.ReadAsync("family", () => familyDetailRepository.FindAsync(studentId));
 
         var result = new StudentFamilyInfoDto
         {

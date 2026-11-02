@@ -12,6 +12,7 @@ using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Uow;
 using Volo.Abp.BlobStoring;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
 
 namespace ShikshaMitra.Students.Records;
 
@@ -22,19 +23,21 @@ public partial class StudentIdCardAppService
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add);
 		EnsureTenant(); ValidateStudents(input);
 		if (input.CardsPerPage is < 1 or > 10) throw new BusinessException("Students:Records:InvalidIdTemplate");
-		var template = await LoadTemplateAsync();
+		StudentIdCardTemplateDto? template = null;
+		var identitySnapshots = new Dictionary<IdentityReadKey, SchoolIdentityDocumentSnapshotDto>();
 		var cards = new List<(StudentIdCardDto Card, byte[]? Photo, byte[]? Logo)>();
 		foreach (var studentId in input.StudentIds)
 		{
 			var snapshot = await snapshots.CaptureAsync(studentId);
+			template ??= await LoadTemplateAsync(input.TemplateId);
 			var photo = await LoadPhotoAsync(template, snapshot.Fields);
-			var frozen = await CaptureIdentityTemplateAsync(template, snapshot);
+			var frozen = await CaptureIdentityTemplateAsync(template, snapshot, identitySnapshots);
 			var logo = (await schoolIdentity.LoadAsync(frozen.SchoolIdentity)).Logo;
 			cards.Add((new StudentIdCardDto { StudentId = studentId, HasPhoto = photo != null,
 				StudentSnapshot = PublicFields(snapshot.Fields), TemplateSnapshot = frozen }, photo, logo));
 		}
 		QuestPDF.Settings.License = LicenseType.Community;
-		var vertical = template.Orientation == "Vertical";
+		var vertical = template!.Orientation == "Vertical";
 		var perPage = Math.Min(input.CardsPerPage, vertical ? 9 : 10);
 		var content = Document.Create(container =>
 		{

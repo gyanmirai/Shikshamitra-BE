@@ -50,7 +50,7 @@ public class StudentLeaveAppService(
 			CurrentTenant.Id,
 			tableFilters: tableFilters);
 
-		var leaves = await studentLeaveRepository.GetListWithDetailsAsync(
+		var leaves = await studentLeaveRepository.GetListProjectionAsync(
 			input.FilterText,
 			input.StudentId,
 			input.EducationMediumId,
@@ -78,25 +78,24 @@ public class StudentLeaveAppService(
 		var scopedStudentIds = await GetScopedStudentIdsAsync(input);
 		var tableFilters = ParseTableFilters(input.TableFilters)
 			.Where(filter => !filter.Column.Equals("status", StringComparison.OrdinalIgnoreCase)).ToList();
-		async Task<long> CountAsync(StudentLeaveStatusEnum status) => await studentLeaveRepository.GetCountAsync(
+		var counts = (await studentLeaveRepository.GetStatusCountsAsync(
 			input.FilterText,
 			input.StudentId,
 			input.EducationMediumId,
 			input.StandardId,
 			input.DivisionId,
 			input.StudentLeaveTypeId,
-			status,
 			input.StartDate,
 			input.EndDate,
 			scopedStudentIds,
 			CurrentTenant.Id,
-			tableFilters: tableFilters);
+			tableFilters: tableFilters)).ToDictionary(row => row.Status, row => row.Count);
 
 		return new StudentLeaveStatusCountsDto
 		{
-			PendingCount = await CountAsync(StudentLeaveStatusEnum.Pending),
-			ApprovedCount = await CountAsync(StudentLeaveStatusEnum.Approved),
-			RejectedCount = await CountAsync(StudentLeaveStatusEnum.Rejected)
+			PendingCount = counts.GetValueOrDefault(StudentLeaveStatusEnum.Pending),
+			ApprovedCount = counts.GetValueOrDefault(StudentLeaveStatusEnum.Approved),
+			RejectedCount = counts.GetValueOrDefault(StudentLeaveStatusEnum.Rejected)
 		};
 	}
 
@@ -129,13 +128,12 @@ public class StudentLeaveAppService(
 		{
 			scopedStudents = scopedStudents.Where(s => s.AcademicMediumStageId == input.OrganizationId.Value);
 		}
-		var scopedStudentIds = await AsyncExecuter.ToListAsync(scopedStudents.Select(s => s.Id));
 		if (input.AcademicYearId.HasValue)
 		{
 			await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(input.AcademicYearId.Value, "read attendance leave requests");
 			var year = await years.GetAsync(y => y.Id == input.AcademicYearId.Value && y.TenantId == CurrentTenant.Id);
-			var membership = await enrollments.GetListAsync(e => e.TenantId == CurrentTenant.Id && e.AcademicYearId == year.Id);
-			scopedStudentIds = scopedStudentIds.Intersect(membership.Select(e => e.StudentId)).ToList();
+			var membership = (await enrollments.GetQueryableAsync()).Where(e => e.TenantId == CurrentTenant.Id && e.AcademicYearId == year.Id);
+			scopedStudents = scopedStudents.Where(student => membership.Any(enrollment => enrollment.StudentId == student.Id));
 			var policy = await attendancePolicies.ResolveAsync(year.Id, Clock.Now.Date);
 			var zone = TimeZoneInfo.FindSystemTimeZoneById(policy.Options.SchoolTimeZone);
 			var yearStart = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(year.StartDate.Date, DateTimeKind.Unspecified), zone));
@@ -144,7 +142,7 @@ public class StudentLeaveAppService(
 			input.EndDate = input.EndDate.HasValue && input.EndDate < yearEnd ? input.EndDate : yearEnd;
 		}
 
-		return scopedStudentIds;
+		return await AsyncExecuter.ToListAsync(scopedStudents.Select(s => s.Id));
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
@@ -337,9 +335,16 @@ public class StudentLeaveAppService(
 		};
 	}
 
-	/// <summary>
-	/// Maps StudentLeave entity to DTO with computed fields
-	/// </summary>
+	private static StudentLeaveDto MapToDto(StudentLeaveListItem leave) => new() {
+		Id = leave.Id, StudentId = leave.StudentId, StudentName = $"{leave.FirstName} {leave.LastName}".Trim(),
+		OrganizationName = leave.OrganizationName, ClassName = leave.ClassName, DivisionName = leave.DivisionName,
+		StudentLeaveTypeId = leave.StudentLeaveTypeId, LeaveTypeName = leave.LeaveTypeName ?? string.Empty, LeaveTypeColor = leave.LeaveTypeColor ?? "#000000",
+		IsHalfDay = leave.IsHalfDay, LeaveDate = leave.LeaveDate, EndDate = leave.EndDate, TotalDays = leave.TotalDays,
+		Description = leave.Description, Remarks = leave.Remarks, Status = leave.Status, RejectionReason = leave.RejectionReason,
+		HasAttachment = leave.HasAttachment, AttachmentFileName = leave.AttachmentFileName, CreationTime = leave.CreationTime,
+		CreatorId = leave.CreatorId, LastModificationTime = leave.LastModificationTime, LastModifierId = leave.LastModifierId };
+
+	/// <summary>Maps a detail or mutation result, whose aggregate/attachment read is required by that operation.</summary>
 	private StudentLeaveDto MapToDto(StudentLeave leave) => new StudentLeaveDto
 	{
 		Id = leave.Id,

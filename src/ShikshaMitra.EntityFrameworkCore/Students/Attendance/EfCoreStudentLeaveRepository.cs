@@ -15,7 +15,7 @@ namespace ShikshaMitra.Students.Attendance;
 /// <summary>
 /// EF Core repository implementation for StudentLeave entity
 /// </summary>
-public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbContext, StudentLeave, Guid>, IStudentLeaveRepository
+public partial class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbContext, StudentLeave, Guid>, IStudentLeaveRepository
 {
 	public EfCoreStudentLeaveRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
 		: base(dbContextProvider)
@@ -126,6 +126,32 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 		return await query.LongCountAsync(GetCancellationToken(cancellationToken));
 	}
 
+	public async Task<List<StudentLeaveStatusCount>> GetStatusCountsAsync(
+		string? filterText = null, Guid? studentId = null, Guid? educationMediumId = null,
+		Guid? standardId = null, Guid? divisionId = null, Guid? studentLeaveTypeId = null,
+		DateTimeOffset? startDate = null, DateTimeOffset? endDate = null,
+		IReadOnlyCollection<Guid>? studentIds = null, Guid? tenantId = null,
+		CancellationToken cancellationToken = default, IReadOnlyList<StudentLeaveTableFilter>? tableFilters = null)
+	{
+		var isSqlite = (await GetDbContextAsync()).Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
+		var query = ApplyFilter(await GetQueryableAsync(), filterText, studentId, educationMediumId,
+			standardId, divisionId, studentLeaveTypeId, null, isSqlite ? null : startDate,
+			isSqlite ? null : endDate, studentIds, tenantId, tableFilters, isSqlite);
+		if (isSqlite && (startDate.HasValue || endDate.HasValue || HasDeferredTableFilters(tableFilters)))
+		{
+			// SQLite cannot compare DateTimeOffset. Keep its established predicates while
+			// reading the cohort metadata once for every status, without attachment bytes.
+			var rows = await query.Select(x => new { x.Status, x.LeaveDate, x.EndDate, x.IsHalfDay, x.TotalDays })
+				.ToListAsync(GetCancellationToken(cancellationToken));
+			return rows.Where(x => (!startDate.HasValue || (x.IsHalfDay ? x.LeaveDate : x.EndDate ?? x.LeaveDate) >= startDate.Value) &&
+				(!endDate.HasValue || x.LeaveDate <= endDate.Value) &&
+				MatchesDeferredTableFilters(x.LeaveDate, x.EndDate, x.IsHalfDay, x.TotalDays, tableFilters))
+				.GroupBy(x => x.Status).Select(group => new StudentLeaveStatusCount(group.Key, group.LongCount())).ToList();
+		}
+		return await query.GroupBy(x => x.Status).Select(group => new StudentLeaveStatusCount(group.Key, group.LongCount()))
+			.ToListAsync(GetCancellationToken(cancellationToken));
+	}
+
 	public async Task<StudentLeave?> GetWithDetailsAsync(
 		Guid id,
 		CancellationToken cancellationToken = default)
@@ -201,6 +227,42 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 			tableFilters);
 	}
 
+	public async Task<List<StudentLeaveListItem>> GetListProjectionAsync(
+		string? filterText = null, Guid? studentId = null, Guid? educationMediumId = null,
+		Guid? standardId = null, Guid? divisionId = null, Guid? studentLeaveTypeId = null,
+		StudentLeaveStatusEnum? status = null, DateTimeOffset? startDate = null, DateTimeOffset? endDate = null,
+		string? sorting = null, int maxResultCount = int.MaxValue, int skipCount = 0,
+		IReadOnlyCollection<Guid>? studentIds = null, Guid? tenantId = null,
+		CancellationToken cancellationToken = default, IReadOnlyList<StudentLeaveTableFilter>? tableFilters = null)
+	{
+		var isSqlite = (await GetDbContextAsync()).Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
+		var query = ApplyFilter(await GetQueryableAsync(), filterText, studentId, educationMediumId, standardId,
+			divisionId, studentLeaveTypeId, status, isSqlite ? null : startDate, isSqlite ? null : endDate,
+			studentIds, tenantId, tableFilters, isSqlite);
+		if (!isSqlite)
+			return await ProjectList(ApplySorting(query, sorting).Skip(skipCount).Take(maxResultCount))
+				.ToListAsync(GetCancellationToken(cancellationToken));
+		var pageIds = await GetSqlitePageIdsAsync(query, sorting, maxResultCount, skipCount, startDate, endDate, cancellationToken, tableFilters);
+		if (pageIds.Count == 0) return [];
+		var rows = await ProjectList(query.Where(leave => pageIds.Contains(leave.Id))).ToListAsync(GetCancellationToken(cancellationToken));
+		var byId = rows.ToDictionary(row => row.Id);
+		return pageIds.Where(byId.ContainsKey).Select(id => byId[id]).ToList();
+	}
+
+	private static IQueryable<StudentLeaveListItem> ProjectList(IQueryable<StudentLeave> query) => query.Select(leave => new StudentLeaveListItem {
+		Id = leave.Id, StudentId = leave.StudentId,
+		FirstName = leave.Student != null ? leave.Student.FirstName : null, LastName = leave.Student != null ? leave.Student.LastName : null,
+		OrganizationName = leave.Student != null && leave.Student.AcademicMedium != null ? leave.Student.AcademicMedium.Name : null,
+		ClassName = leave.Student != null && leave.Student.Standard != null ? leave.Student.Standard.Name : null,
+		DivisionName = leave.Student != null && leave.Student.Division != null ? leave.Student.Division.Name : null,
+		StudentLeaveTypeId = leave.StudentLeaveTypeId,
+		LeaveTypeName = leave.StudentLeaveType != null ? leave.StudentLeaveType.LeaveTypeName : null,
+		LeaveTypeColor = leave.StudentLeaveType != null ? leave.StudentLeaveType.Color : null,
+		IsHalfDay = leave.IsHalfDay, LeaveDate = leave.LeaveDate, EndDate = leave.EndDate, TotalDays = leave.TotalDays,
+		Description = leave.Description, Remarks = leave.Remarks, Status = leave.Status, RejectionReason = leave.RejectionReason,
+		HasAttachment = leave.Attachment != null && leave.Attachment.Length > 0, AttachmentFileName = leave.AttachmentFileName,
+		CreationTime = leave.CreationTime, CreatorId = leave.CreatorId, LastModificationTime = leave.LastModificationTime, LastModifierId = leave.LastModifierId });
+
 	private async Task<List<StudentLeave>> ApplySortingAndPagingAsync(
 		IQueryable<StudentLeave> query,
 		string? sorting,
@@ -235,6 +297,17 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 		CancellationToken cancellationToken,
 		IReadOnlyList<StudentLeaveTableFilter>? tableFilters)
 	{
+		var pageIds = await GetSqlitePageIdsAsync(query, sorting, maxResultCount, skipCount, startDate, endDate, cancellationToken, tableFilters);
+		if (pageIds.Count == 0) return [];
+		var leaves = await query.Where(leave => pageIds.Contains(leave.Id)).ToListAsync(GetCancellationToken(cancellationToken));
+		var leavesById = leaves.ToDictionary(leave => leave.Id);
+		return pageIds.Where(leavesById.ContainsKey).Select(id => leavesById[id]).ToList();
+	}
+
+	private async Task<List<Guid>> GetSqlitePageIdsAsync(IQueryable<StudentLeave> query, string? sorting,
+		int maxResultCount, int skipCount, DateTimeOffset? startDate, DateTimeOffset? endDate,
+		CancellationToken cancellationToken, IReadOnlyList<StudentLeaveTableFilter>? tableFilters)
+	{
 		var rows = await query
 			.Select(l => new StudentLeavePageKey(
 				l.Id,
@@ -252,28 +325,13 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 				l.StudentLeaveType != null ? l.StudentLeaveType.LeaveTypeName : null))
 			.ToListAsync(GetCancellationToken(cancellationToken));
 
-		var pageIds = ApplyInMemorySorting(rows.Where(x =>
+		return ApplyInMemorySorting(rows.Where(x =>
 				(!startDate.HasValue || (x.IsHalfDay ? x.LeaveDate : x.EndDate ?? x.LeaveDate) >= startDate.Value) &&
 				(!endDate.HasValue || x.LeaveDate <= endDate.Value) &&
 				MatchesDeferredTableFilters(x.LeaveDate, x.EndDate, x.IsHalfDay, x.TotalDays, tableFilters)), sorting)
 			.Skip(skipCount)
 			.Take(maxResultCount)
 			.Select(l => l.Id)
-			.ToList();
-
-		if (pageIds.Count == 0)
-		{
-			return [];
-		}
-
-		var leaves = await query
-			.Where(l => pageIds.Contains(l.Id))
-			.ToListAsync(GetCancellationToken(cancellationToken));
-		var leavesById = leaves.ToDictionary(l => l.Id);
-
-		return pageIds
-			.Where(leavesById.ContainsKey)
-			.Select(id => leavesById[id])
 			.ToList();
 	}
 

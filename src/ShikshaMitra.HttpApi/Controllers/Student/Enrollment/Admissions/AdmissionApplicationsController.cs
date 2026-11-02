@@ -97,6 +97,10 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit)]
 	public async Task<Result<AdmissionApplicationFormDto>> UpdateFormValuesAsync(Guid id, UpdateAdmissionApplicationFormValuesDto input) => Result.Success(await service.UpdateFormValuesAsync(id, input));
 
+	[HttpPost("{id:guid}/form/corrections")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit)]
+	public async Task<Result<AdmissionApplicationFormDto>> CorrectFormAsync(Guid id, [FromBody] CorrectAdmissionApplicationFormDto input) => Result.Success(await service.CorrectFormAsync(id, input));
+
 	[HttpPost("{id:guid}/submit")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Submit)]
 	public async Task<Result<AdmissionApplicationSubmitResultDto>> SubmitAsync(Guid id) => Result.Success(await service.SubmitAsync(id));

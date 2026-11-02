@@ -1,3 +1,4 @@
+using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -226,7 +227,7 @@ public partial class SubstitutionAppService(
             input.SubjectName,
             input.Remarks);
 
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-create");
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-create");
         await substitutionRepository.InsertAsync(entity, autoSave: true);
         await WriteAuditAsync(entity.Id, "Created", "Substitution request created.");
 
@@ -261,7 +262,7 @@ public partial class SubstitutionAppService(
                 ParseConflict(selected.ConflictSeverity),
                 selected.ConflictReason,
                 input.SendNotification);
-            entity.MarkNotificationSent();
+        entity.MarkNotificationSent();
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(entity.Id, "Assigned", $"Assigned to {input.SubstituteTeacherName}.");
 
@@ -272,7 +273,7 @@ public partial class SubstitutionAppService(
     {
         await EnsureAdminAsync("update substitutions");
         var entity = await substitutionRepository.GetAsync(id);
-		await EnsureCanViewSubstitutionAsync(entity);
+        await EnsureCanViewSubstitutionAsync(entity);
         if (entity.Status is SubstitutionStatus.Completed or SubstitutionStatus.Cancelled)
         {
             throw new UserFriendlyException("Completed or cancelled substitutions cannot be edited.");
@@ -349,7 +350,7 @@ public partial class SubstitutionAppService(
             input.OriginalRoomId,
             input.SubjectName,
             input.Remarks);
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-update");
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-update");
 
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(id, "Updated", "Substitution details updated.");
@@ -365,7 +366,7 @@ public partial class SubstitutionAppService(
         }
 
         var entity = await substitutionRepository.GetAsync(id);
-		await EnsureCanViewSubstitutionAsync(entity);
+        await EnsureCanViewSubstitutionAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot assign a substitute after the period has ended.");
         var employees = await employeeRepository.GetListAsync();
         var substituteTeacher = ResolveEmployeeByTeacherReference(
@@ -422,7 +423,7 @@ public partial class SubstitutionAppService(
     {
         await EnsureAdminAsync("send reminders");
         var entity = await substitutionRepository.GetAsync(id);
-		await EnsureCanViewSubstitutionAsync(entity);
+        await EnsureCanViewSubstitutionAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot send a reminder after the period has ended.");
         if (string.IsNullOrWhiteSpace(entity.SubstituteTeacherName))
         {
@@ -461,7 +462,7 @@ public partial class SubstitutionAppService(
     {
         await EnsureAdminAsync("cancel substitutions");
         var entity = await substitutionRepository.GetAsync(id);
-		await EnsureCanViewSubstitutionAsync(entity);
+        await EnsureCanViewSubstitutionAsync(entity);
         entity.Cancel(input.Reason);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(id, "Cancelled", input.Reason);
@@ -854,7 +855,7 @@ public partial class SubstitutionAppService(
             x.AvailabilityDate == date &&
             !x.IsCancelled);
         var unavailable = new List<TeacherAvailability>();
-        var attendanceShifts = await attendanceWindowResolver.LoadShiftsAsync(employees);
+        var attendanceShifts = await attendanceWindowResolver.LoadShiftsAsync(employees, DateOnly.FromDateTime(date), DateOnly.FromDateTime(date));
         foreach (var row in availabilityRows)
         {
             var window = (Start: row.StartTime, End: row.EndTime);
@@ -864,7 +865,8 @@ public partial class SubstitutionAppService(
                 var employee = ResolveEmployeeByTeacherReference(employees, row.TeacherId, row.TeacherName);
                 if (employee != null)
                 {
-                    var shift = employee.ShiftId is Guid shiftId ? attendanceShifts.GetValueOrDefault(shiftId) : null;
+                    var assignment = attendanceShifts.SingleOrDefault(x => x.EmployeeId == employee.Id && x.Covers(DateOnly.FromDateTime(date)));
+                    var shift = assignment == null ? null : EmployeeShiftResolver.Snapshot(assignment);
                     usesConfiguredShift = shift != null && shift.EndTime > shift.StartTime;
                     window = AttendanceAvailabilityWindowResolver.Resolve(
                         shift, row.IsFullDay, row.StartTime, row.EndTime);
@@ -1592,7 +1594,7 @@ public partial class SubstitutionAppService(
 
     private async Task EnsureAdminAsync(string action)
     {
-		if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
+        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
             throw new UserFriendlyException($"Only administrators can {action}.");
         }
@@ -1665,10 +1667,10 @@ public partial class SubstitutionAppService(
         return visibleTeacherIds;
     }
 
-	private Task<bool> HasClassTeacherAccessAsync() =>
-		CurrentUser.Id.HasValue
-			? classTeacherAccessService.HasAssignmentAsync(CurrentUser.Id.Value)
-			: Task.FromResult(false);
+    private Task<bool> HasClassTeacherAccessAsync() =>
+        CurrentUser.Id.HasValue
+            ? classTeacherAccessService.HasAssignmentAsync(CurrentUser.Id.Value)
+            : Task.FromResult(false);
 
     private async Task EnsureCanActAsSubstituteAsync(SubstitutionRequest entity)
     {

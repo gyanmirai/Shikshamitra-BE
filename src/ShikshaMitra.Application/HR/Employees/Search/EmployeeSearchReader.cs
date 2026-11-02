@@ -1,3 +1,5 @@
+﻿using System.Collections.Generic;
+using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,7 +16,7 @@ public class EmployeeSearchReader(
 	IEmployeeRepository employeeRepository,
 	EmployeeOrganizationScopeResolver organizationScopeResolver,
 	EmployeeSearchVisibilityService visibilityService,
-	IUserScopeAssignmentRepository scopeAssignmentRepository)
+	IUserScopeAssignmentRepository scopeAssignmentRepository, EmployeeShiftResolver shiftResolver)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<EmployeeOptionsResponse> GetOptionsAsync(GetEmployeeListInput input)
@@ -43,7 +45,7 @@ public class EmployeeSearchReader(
 				Id = row.Id,
 				FullName = string.Join(" ", new[] { row.FirstName, row.LastName }
 					.Where(part => !string.IsNullOrWhiteSpace(part))),
-				Status = (int)(row.EmployeeStatusType ?? EmployeeStatusType.Active)
+				Status = (int) (row.EmployeeStatusType ?? EmployeeStatusType.Active)
 			}).ToList()
 		};
 	}
@@ -64,8 +66,14 @@ public class EmployeeSearchReader(
 			.Take(input.MaxResultCount)
 			.Select(EmployeeSearchProjection.Summary));
 
+		var effectiveShifts = await shiftResolver.ForDateAsync(employees.Select(x => x.Id), await shiftResolver.TodayAsync());
+		foreach (var employee in employees)
+		{
+			var shift = effectiveShifts.GetValueOrDefault(employee.Id);
+			employee.Shift = shift == null ? null : new ShiftInfo { Id = shift.Id, Name = shift.ShiftName, StartTime = shift.StartTime.ToString("HH:mm:ss"), EndTime = shift.EndTime.ToString("HH:mm:ss") };
+		}
 		var organizationsByUserId = await organizationScopeResolver.GetOrganizationsByUserIdsAsync(
-			employees.Select(x => x.UserId));
+				  employees.Select(x => x.UserId));
 		var pageSize = input.MaxResultCount > 0 ? input.MaxResultCount : 10;
 		foreach (var employee in employees)
 		{
@@ -77,7 +85,7 @@ public class EmployeeSearchReader(
 			TotalCount = totalCount,
 			CurrentPage = (input.SkipCount / pageSize) + 1,
 			PageSize = pageSize,
-			TotalPages = (int)Math.Ceiling((double)totalCount / pageSize),
+			TotalPages = (int) Math.Ceiling((double) totalCount / pageSize),
 			Items = employees
 		};
 	}

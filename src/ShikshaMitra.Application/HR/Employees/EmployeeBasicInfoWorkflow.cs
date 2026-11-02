@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings;
@@ -19,7 +20,7 @@ public class EmployeeBasicInfoWorkflow(
 	EmployeeCreationContactGuard contactGuard,
 	EmployeeIdentityCreationWorkflow identityCreationWorkflow,
 	IEmployeeEmailService emailService,
-	ShiftReferenceValidator shiftReferenceValidator) : ApplicationService, ITransientDependency
+	WorkShiftReferenceValidator shiftReferenceValidator, EmployeeShiftAssignmentManager shiftAssignments) : ApplicationService, ITransientDependency
 {
 	public async Task<EmployeeDto> CreateAsync(CreateEmployeeBasicInfoDto input)
 	{
@@ -36,6 +37,8 @@ public class EmployeeBasicInfoWorkflow(
 		input.PanNo = EmployeeIdentifierNormalizer.NormalizePan(input.PanNo);
 		input.AdharNo = EmployeeIdentifierNormalizer.NormalizeAdhar(input.AdharNo);
 		await identifierUniquenessService.EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo);
+		if (input.InitialWorkShiftAssignment == null) throw new BusinessException(HRErrorCodes.WorkShiftInvalid, "An initial work shift assignment is required.");
+		input.ShiftId = input.InitialWorkShiftAssignment.WorkShiftId;
 		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
 
 		using var uow = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true });
@@ -84,7 +87,8 @@ public class EmployeeBasicInfoWorkflow(
 				pinCode: input.PinCode,
 				shiftId: input.ShiftId);
 
-			employee = await employeeRepository.InsertAsync(employee);
+			employee = await employeeRepository.InsertAsync(employee, autoSave: true);
+			await shiftAssignments.InitializeAsync(employee, input.InitialWorkShiftAssignment!.WorkShiftId, input.InitialWorkShiftAssignment.EffectiveFrom);
 
 			logger.LogInformation(
 				"Staff record created successfully: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}, UserId={UserId}",
@@ -132,7 +136,7 @@ public class EmployeeBasicInfoWorkflow(
 		input.PanNo = EmployeeIdentifierNormalizer.NormalizePan(input.PanNo);
 		input.AdharNo = EmployeeIdentifierNormalizer.NormalizeAdhar(input.AdharNo);
 		await identifierUniquenessService.EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo, employeeId);
-		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
+
 
 		var employee = await employeeManager.UpdateEmployeeAsync(
 			employeeId,
@@ -167,7 +171,7 @@ public class EmployeeBasicInfoWorkflow(
 			state: input.State,
 			country: input.Country,
 			pinCode: input.PinCode,
-			shiftId: input.ShiftId);
+			shiftId: (await employeeRepository.GetAsync(employeeId)).ShiftId);
 
 		employee = await employeeRepository.UpdateAsync(employee);
 		return ObjectMapper.Map<Employee, EmployeeDto>(employee);

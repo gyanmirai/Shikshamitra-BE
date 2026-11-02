@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-29
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -1171,3 +1171,12 @@ The chunk-boundary scenario verifies global filtering, stable ordering, filtered
 Run `HrOperationalTableQuery_UnitTests` and `HrOperationalTableQueryApi_Tests`. They cover 10,000/25,000-row bounded captures, changed/incomplete/over-cap failures, typed values, raw enums, ESI single-model reuse, real HTTP pagination/counts across a 100-row source boundary, tenant and restricted-role scope, anonymous/unsupported-field denial and a complete filtered Excel download. The API fixture retains the real HTTP/EF/authorization/owning-service pipeline with a disposable synthetic tenant and no unrelated background workers. The general all-module fixture exceeded the local inactivity bound before its first API case; this is not recorded as a passing API run.
 
 The 26 October local completion run, including the final offset correction, passed all 34 operational API/unit cases and 46 existing `HrTableExport_Tests`, `HrReportingTableQuery_Tests` and `EsiStatutoryPreviewProjection_Tests` cases with the pinned .NET 9 SDK. The offset case uses an isolated 130-row tenant and compares empty and active criteria at offset 1 / size 5, then a size-500 request across source pages. The existing 125-row fixture and twelve-match export assertions remain unchanged. The HTTP host and both test assemblies compiled. HR documentation validation reports the same two issues as an exact-main archive under this checkout layout (including the unavailable sibling frontend link); no issue was added. Authenticated tenant browser acceptance and PostgreSQL performance/serializable-concurrency acceptance remain separate checks; synthetic reader allocation measurements do not establish production latency.
+
+## Work shift regression checks
+
+Run domain EmployeeWorkShift_Tests, HTTP EmployeeWorkShiftApi_Tests and PostgreSQL EmployeeWorkShiftPostgres_Tests.
+The PostgreSQL test requires SHIFT_TEST_POSTGRES pointing at a new loopback shift_isolation_tests_* database.
+Run existing attendance availability, payroll overtime/late-arrival, HR setup readiness and starter-policy regressions after changing these consumers.
+Verify catalogue independence, date boundaries, missing assignments, stale writes, future replacement/cancellation, tenant/scope denial and recorded-history protection.
+Reconcile migration mappings and exercise PostgreSQL overlap enforcement with real concurrent writes before production cutover.
+Run both repositories' reusable Security Regression commands locally and the all-module documentation validator.

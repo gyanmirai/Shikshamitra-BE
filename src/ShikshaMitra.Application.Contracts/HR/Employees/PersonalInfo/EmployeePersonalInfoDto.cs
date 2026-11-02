@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Common;
+﻿using ShikshaMitra.HR.WorkShifts;
+using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.HR.Employees;
 using System;
@@ -118,7 +119,7 @@ public class EmployeePersonalInfoDto : EntityDto<Guid>
 
 	public Guid? ShiftId { get; set; }
 
-	public ShiftManagementDto? Shift { get; set; }
+	public EmployeeWorkShiftDto? Shift { get; set; }
 
 	public List<Guid> OrganizationIds { get; set; } = [];
 

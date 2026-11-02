@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -109,7 +110,8 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 	public async Task EnsureAccessAsync(HrTableExportRequest request)
 	{
 		Validate(request);
-		if (request.Table == "hr-generated-report") {
+		if (request.Table == "hr-generated-report")
+		{
 			var run = await CapturedRunAsync(request);
 			_ = new HrReportingTableQuery(ReportingCriteria(request), run.Columns, run.Parameters.TimeZone);
 			return;
@@ -190,7 +192,8 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 				throw HrReportingEngine.Invalid("Choose supported salary document columns.");
 			return selected.Select(id => fields.Single(field => field.Id == id)).ToList();
 		}
-		return Fields[request.Table].Select(id => {
+		return Fields[request.Table].Select(id =>
+		{
 			var field = HrTableExportProjection.Field(new() { Id = id, Label = id });
 			if (id is "status" or "statusVal" or "statusValue" or "isTeaching" or "employeeGroup" or "genderValue" or "paidType" or "sourceType" or "changeAction" or "earningType" or "deductionType" or "calculationType" or "contributionBasis" or "orientation" or "staffCategory" or "boardType" or "issueFilter" or "enrollmentStatus" or "attendanceStatus" or "visibleInPayslip" or "isActive" or "deductInCessationMonth" or "isBatchLocked") field.Type = "enum";
 			if (id is "startTime" or "endTime" or "inTime" or "outTime" or "timeIn" or "timeOut") field.Type = "clock";
@@ -202,13 +205,15 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		Validate(request);
 		// These legacy readers enforce view access in their HTTP controllers.
 		// Reapply the exact screen policy because exports call the reader directly.
-		var screenPermission = request.Table switch {
+		var screenPermission = request.Table switch
+		{
 			"hr-earning-components" => ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsEarningComponents.View,
 			"hr-deduction-components" => ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsDeductionComponents.View,
 			"hr-shifts" => ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_Setting_ShiftManagement.View,
 			"hr-pf-rules" => ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsPfRule.View,
 			"hr-professional-tax" => ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsProfessionalTax.View,
-			_ => null };
+			_ => null
+		};
 		if (screenPermission != null) await Service<IAuthorizationService>().CheckAsync(screenPermission);
 		if (request.Table is ("hr-attendance-imports" or "hr-attendance-import-rows") &&
 			!await Service<IAuthorizationService>().IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.View))
@@ -222,7 +227,8 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			if (criteria.HasCriteria)
 			{
 				var key = request.Query.GetRawText();
-				if (_capturedQuery != key) {
+				if (_capturedQuery != key)
+				{
 					_capturedRows = await service.GetExportRowsAsync(id, criteria);
 					_capturedQuery = key;
 				}
@@ -260,7 +266,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			"hr-deduction-components" => await Service<IDeductionComponentAppService>().GetFilteredListAsync(offset, size, q["search"]?.ToString()),
 			"hr-attendance-import-rows" => await Service<IAttendanceImportLogAppService>().GetRowsAsync(RequiredId("importId"), Input<GetAttendanceImportRowsInput>()),
 			"hr-attendance-imports" => await Service<IAttendanceImportLogAppService>().GetListAsync(Input<GetAttendanceImportLogListInput>()),
-			"hr-shifts" => await Service<IShiftManagementAppService>().GetListAsync(Input<PagedAndSortedResultRequestDto>()),
+			"hr-shifts" => await Service<IEmployeeWorkShiftAppService>().GetListAsync(Input<PagedAndSortedResultRequestDto>()),
 			"hr-document-settings" => await Service<IDocumentSettingAppService>().GetDocumentListAsync(offset / size + 1, size),
 			"hr-employee-documents" => await Service<IEmployeeDocumentAppService>().GetChecklistAsync(RequiredId("employeeId"), offset / size + 1, size, q["search"]?.ToString()),
 			"hr-icard-templates" => await Service<IEmployeeICardTemplateAppService>().GetListAsync(OptionalId("academicYearId"), OptionalId("mediumStageId"), offset / size + 1, size, q["search"]?.ToString()),
@@ -294,12 +300,15 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 				var node = JsonNode.Parse(rows[index].GetRawText())!.AsObject();
 				if (request.Table == "hr-icard-templates")
 				{
-					if (Guid.TryParse(node["mediumStageId"]?.ToString(), out var organizationId)) {
+					if (Guid.TryParse(node["mediumStageId"]?.ToString(), out var organizationId))
+					{
 						if (!_organizationNames.ContainsKey(organizationId)) _organizationNames[organizationId] = (await Service<IRepository<EducationMediumStage, Guid>>().FindAsync(organizationId))?.Name;
 						node["organization"] = _organizationNames[organizationId] ?? "Unavailable organization";
-					} else node["organization"] = "All organizations";
+					}
+					else node["organization"] = "All organizations";
 				}
-				else if (Guid.TryParse(node["workCalendarPolicyId"]?.ToString(), out var calendarId)) {
+				else if (Guid.TryParse(node["workCalendarPolicyId"]?.ToString(), out var calendarId))
+				{
 					if (!_calendarNames.ContainsKey(calendarId)) _calendarNames[calendarId] = (await Service<IWorkCalendarPolicyAppService>().GetAsync(calendarId)).Name;
 					node["workCalendarPolicyName"] = _calendarNames[calendarId];
 				}
@@ -328,10 +337,17 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			_esiPopulation = await Service<IEsiStatutoryAppService>().GetTablePopulationAsync(input);
 			_esiQuery = key;
 		}
-		return new StatutoryImpactPreviewDto { MonthYear = _esiPopulation!.MonthYear, Summary = _esiPopulation.Summary,
-			TotalCount = _esiPopulation.TotalCount, Page = offset / size, PageSize = size,
-			Items = _esiPopulation.Items.Skip(offset).Take(size).ToList(), GeneratedAtUtc = _esiPopulation.GeneratedAtUtc,
-			PreviewFingerprint = _esiPopulation.PreviewFingerprint };
+		return new StatutoryImpactPreviewDto
+		{
+			MonthYear = _esiPopulation!.MonthYear,
+			Summary = _esiPopulation.Summary,
+			TotalCount = _esiPopulation.TotalCount,
+			Page = offset / size,
+			PageSize = size,
+			Items = _esiPopulation.Items.Skip(offset).Take(size).ToList(),
+			GeneratedAtUtc = _esiPopulation.GeneratedAtUtc,
+			PreviewFingerprint = _esiPopulation.PreviewFingerprint
+		};
 	}
 	private static HrReportTableQueryDto ReportingCriteria(HrTableExportRequest request) =>
 		request.Query.TryGetProperty("criteria", out var criteria) ? HrReportTableQueryDto.Parse(criteria.GetRawText()) : new();
@@ -357,24 +373,48 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		}
 		var sumAllNumbers = request.Table is "payroll-monthly-workbench-table" or "esi-employee-impact" or "hr-salary-documents" or "hr-attendance-register" or "hr-attendance-imports";
 		if (!sumAllNumbers) return [];
-		return result.Columns.Where(x => x.Type is "number" or "money").ToDictionary(x => x.Id, x => {
-			var available = result.Rows.Select(row => row.GetValueOrDefault(x.Id)).Where(value => value != null).Select(value => decimal.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Number, CultureInfo.InvariantCulture, out var number) ? (decimal?)number : null).Where(value => value.HasValue).ToList();
+		return result.Columns.Where(x => x.Type is "number" or "money").ToDictionary(x => x.Id, x =>
+		{
+			var available = result.Rows.Select(row => row.GetValueOrDefault(x.Id)).Where(value => value != null).Select(value => decimal.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Number, CultureInfo.InvariantCulture, out var number) ? (decimal?) number : null).Where(value => value.HasValue).ToList();
 			return available.Count > 0 ? available.Sum() : null;
 		});
 	}
 	public async Task<(string Name, HrReportParametersDto Parameters, string Context)> PresentationAsync(HrTableExportRequest request, string timezone)
 	{
 		var query = request.Query;
-		var name = request.Table switch { "employee-table" => "Staff directory", "employee-onboarding-table" => "Staff onboarding",
-			"hr-attendance-register" => "Staff attendance register", "hr-manual-attendance" => "Daily attendance",
-			"payroll-monthly-workbench-table" => "Payroll register", "hr-payroll-registration-readiness" => "Payroll registration readiness",
-			"esi-employee-impact" => "ESIC staff register", "hr-policy-calendar" => "Work calendars", "hr-policy-payroll" => "Payroll policies",
-			"hr-policy-attendance" => "Attendance policies", "hr-policy-leave" => "Leave policies", "hr-leave-requests" => "Leave requests",
-			"hr-generated-report-history" => "Generated reports", "hr-salary-documents" => "Salary documents",
-            "hr-policy-versions" => "Policy versions", "hr-policy-assignments" => "Policy assignments", "hr-performance-cycles" => "Performance review cycles", "hr-performance-templates" => "Performance templates",
-            "hr-earning-components" => "Earning components", "hr-deduction-components" => "Deduction components", "hr-attendance-imports" => "Attendance imports",
-            "hr-shifts" => "Staff shifts", "hr-pf-rules" => "Provident fund rules", "hr-professional-tax" => "Professional tax ranges", "hr-document-settings" => "Staff document types", "hr-employee-documents" => "Staff document checklist", "hr-attendance-import-rows" => "Attendance import review",
-            "hr-icard-templates" => "Staff identity card templates", "hr-self-leave-history" => "My leave history", _ => "HR table" };
+		var name = request.Table switch
+		{
+			"employee-table" => "Staff directory",
+			"employee-onboarding-table" => "Staff onboarding",
+			"hr-attendance-register" => "Staff attendance register",
+			"hr-manual-attendance" => "Daily attendance",
+			"payroll-monthly-workbench-table" => "Payroll register",
+			"hr-payroll-registration-readiness" => "Payroll registration readiness",
+			"esi-employee-impact" => "ESIC staff register",
+			"hr-policy-calendar" => "Work calendars",
+			"hr-policy-payroll" => "Payroll policies",
+			"hr-policy-attendance" => "Attendance policies",
+			"hr-policy-leave" => "Leave policies",
+			"hr-leave-requests" => "Leave requests",
+			"hr-generated-report-history" => "Generated reports",
+			"hr-salary-documents" => "Salary documents",
+			"hr-policy-versions" => "Policy versions",
+			"hr-policy-assignments" => "Policy assignments",
+			"hr-performance-cycles" => "Performance review cycles",
+			"hr-performance-templates" => "Performance templates",
+			"hr-earning-components" => "Earning components",
+			"hr-deduction-components" => "Deduction components",
+			"hr-attendance-imports" => "Attendance imports",
+			"hr-shifts" => "Staff shifts",
+			"hr-pf-rules" => "Provident fund rules",
+			"hr-professional-tax" => "Professional tax ranges",
+			"hr-document-settings" => "Staff document types",
+			"hr-employee-documents" => "Staff document checklist",
+			"hr-attendance-import-rows" => "Attendance import review",
+			"hr-icard-templates" => "Staff identity card templates",
+			"hr-self-leave-history" => "My leave history",
+			_ => "HR table"
+		};
 		var p = new HrReportParametersDto { TimeZone = timezone };
 		if (query.TryGetProperty("academicYearId", out var year) && year.ValueKind == JsonValueKind.String && Guid.TryParse(year.GetString(), out var yearId)) p.AcademicYearId = yearId;
 		if (request.Table == "hr-generated-report") { var original = await Service<IHrReportingWorkspaceAppService>().GetAsync(query.GetProperty("runId").GetGuid()); return (original.Name, original.Parameters, "Captured report rows matching table search and filters; visible ordered data columns. Original report totals are omitted for filtered exports."); }

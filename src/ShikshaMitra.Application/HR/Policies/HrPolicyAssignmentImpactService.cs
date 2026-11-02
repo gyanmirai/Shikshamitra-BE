@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -22,7 +23,7 @@ public class HrPolicyAssignmentImpactService(
 	HrPolicyAssignmentOverlapChecker overlapChecker,
 	HrPolicyEmployeeOverrideImpactCounter employeeOverrideImpactCounter,
 	IRepository<HrPolicyAssignment, Guid> assignmentRepository,
-	IAsyncQueryableExecuter asyncExecuter)
+	IAsyncQueryableExecuter asyncExecuter, EmployeeShiftResolver shiftResolver)
 	: ITransientDependency
 {
 	public const string EmployeeOverrideUpsertAction = "employee-override-upsert";
@@ -55,16 +56,17 @@ public class HrPolicyAssignmentImpactService(
 			await referenceWarningService.AddReferenceWarningsAsync(preview, assignment);
 		var affectedEmployees = await ResolveAffectedEmployeesAsync(targetType, targetKey, isDelete);
 		preview.AffectedEmployeeCount = affectedEmployees.Count;
+		var currentShifts = await shiftResolver.ForDateAsync(affectedEmployees.Sample.Select(x => x.Id), await shiftResolver.TodayAsync());
 		preview.AffectedEmployees = affectedEmployees.Sample
-			.Select(HrPolicyAssignmentProjection.MapAffectedEmployee)
+			.Select(employee => HrPolicyAssignmentProjection.MapAffectedEmployee(employee, currentShifts.GetValueOrDefault(employee.Id)?.Id))
 			.ToList();
 		if (await AssignmentChangeCanAffectPayrollAsync(
-			    action,
-			    assignmentId,
-			    targetType,
-			    targetKey,
-			    assignment,
-			    isDelete))
+				action,
+				assignmentId,
+				targetType,
+				targetKey,
+				assignment,
+				isDelete))
 		{
 			await AddAssignmentPayrollRiskAsync(preview, affectedEmployees, assignment);
 		}
@@ -301,14 +303,14 @@ public class HrPolicyAssignmentImpactService(
 		}
 
 		return existing.AcademicYearId != assignment.AcademicYearId ||
-		       existing.TargetType != targetType ||
-		       !string.Equals(existing.TargetKey, targetKey, StringComparison.OrdinalIgnoreCase) ||
-		       existing.AttendancePolicyId != assignment.AttendancePolicyId ||
-		       existing.PayrollPolicyId != assignment.PayrollPolicyId ||
-		       existing.EffectiveFrom.Date != assignment.EffectiveFrom.Date ||
-		       existing.EffectiveTo?.Date != assignment.EffectiveTo?.Date ||
-		       existing.IsActive != assignment.IsActive ||
-		       existing.Priority != assignment.Priority;
+			   existing.TargetType != targetType ||
+			   !string.Equals(existing.TargetKey, targetKey, StringComparison.OrdinalIgnoreCase) ||
+			   existing.AttendancePolicyId != assignment.AttendancePolicyId ||
+			   existing.PayrollPolicyId != assignment.PayrollPolicyId ||
+			   existing.EffectiveFrom.Date != assignment.EffectiveFrom.Date ||
+			   existing.EffectiveTo?.Date != assignment.EffectiveTo?.Date ||
+			   existing.IsActive != assignment.IsActive ||
+			   existing.Priority != assignment.Priority;
 	}
 
 	private static bool IsExistingAssignmentUpdate(string action) =>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using FluentValidation;
 using Volo.Abp.Timing;
@@ -19,8 +19,7 @@ public class UpdateEmployeePersonalInfoDtoValidator : AbstractValidator<UpdateEm
 
 		RuleFor(x => x.RoleId).NotEmpty();
 
-		RuleFor(x => x.ShiftId).Must(id => id.HasValue && id.Value != Guid.Empty)
-			.WithMessage("Shift is required.");
+
 		RuleFor(x => x.MiddleName).MaximumLength(256);
 		RuleFor(x => x.ShortName).MaximumLength(128);
 		RuleFor(x => x.FamilyCaste).MaximumLength(128);
@@ -72,8 +71,8 @@ public class UpdateEmployeePersonalInfoDtoValidator : AbstractValidator<UpdateEm
 
 		RuleFor(x => x)
 			.Must(x => !x.DateOfJoining.HasValue ||
-			           !x.DateOfBirth.HasValue ||
-			           CalculateAge(x.DateOfBirth.Value, x.DateOfJoining.Value) >= 18)
+					   !x.DateOfBirth.HasValue ||
+					   CalculateAge(x.DateOfBirth.Value, x.DateOfJoining.Value) >= 18)
 			.WithMessage("Staff must be at least 18 years old at the time of joining.");
 
 		RuleFor(x => x.DateOfJoining)

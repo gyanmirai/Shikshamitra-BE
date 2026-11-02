@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using FluentValidation;
@@ -58,8 +58,7 @@ public class CreateEmployeePersonalInfoDtoValidator : AbstractValidator<CreateEm
 		RuleFor(x => x.Address2).MaximumLength(512);
 		RuleFor(x => x.Address3).MaximumLength(512);
 		RuleFor(x => x.City).MaximumLength(128);
-		RuleFor(x => x.ShiftId).Must(s => s.HasValue && s.Value != Guid.Empty)
-			.WithMessage("Shift is required.");
+		RuleFor(x => x.InitialWorkShiftAssignment).NotNull().WithMessage("An initial work shift assignment is required.");
 		RuleFor(x => x.SecondaryMobileNo)
 			.Must((dto, secondary) => string.IsNullOrWhiteSpace(secondary) ||
 				NormalizeDigits(dto.MobileNo) != NormalizeDigits(secondary))

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -46,7 +46,10 @@ public class FirstEmployeeReportingManagerApi_Tests(InitialSetupTestFactory fact
 			(await services.GetRequiredService<HR.Employees.IEmployeeRepository>().GetCountAsync()).ShouldBe(0);
 			var shift = await services.GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(new ShiftManagement
 			{
-				TenantId = tenant.Id, ShiftName = "Synthetic first staff shift", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(16, 0)
+				TenantId = tenant.Id,
+				ShiftName = "Synthetic first staff shift",
+				StartTime = new TimeOnly(8, 0),
+				EndTime = new TimeOnly(16, 0)
 			}, autoSave: true);
 			shiftId = shift.Id;
 		});
@@ -56,7 +59,7 @@ public class FirstEmployeeReportingManagerApi_Tests(InitialSetupTestFactory fact
 		options.Count.ShouldBe(1);
 		options[0].Id.ShouldBe(adminId); options[0].Kind.ShouldBe("TenantAdministrator");
 		var request = HR.Employees.EmployeeTestHelper.BuildPersonalInfoRequest("FirstSyntheticHR");
-		request.RoleId = hrRoleId; request.ShiftId = shiftId; request.IsTeaching = false;
+		request.RoleId = hrRoleId; request.InitialWorkShiftAssignment!.WorkShiftId = shiftId; request.IsTeaching = false;
 		using var content = new MultipartFormDataContent();
 		content.Add(new StringContent(JsonSerializer.Serialize(request, JsonOptions)), "data");
 		var created = await school.PostAsync("/api/employees/personal-info", content);
@@ -151,7 +154,7 @@ public class FirstEmployeeReportingManagerApi_Tests(InitialSetupTestFactory fact
 			shiftId = shift.Id;
 			// Persist a synthetic legacy profile with different employee and login IDs.
 			// No production creation path or identity memberships are changed.
-			var employee = (HR.Employees.Employee)Activator.CreateInstance(typeof(HR.Employees.Employee), nonPublic: true)!;
+			var employee = (HR.Employees.Employee) Activator.CreateInstance(typeof(HR.Employees.Employee), nonPublic: true)!;
 			void Set(string name, object value) => typeof(HR.Employees.Employee).GetProperty(name)!.SetValue(employee, value);
 			Set("Id", adminEmployeeId); Set("TenantId", tenant.Id); Set("UserId", adminId); Set("RoleId", adminRole.Id);
 			Set("EmployeeCode", "EXISTING-ADMIN"); Set("FirstName", "Existing"); Set("LastName", "Administrator");
@@ -164,7 +167,7 @@ public class FirstEmployeeReportingManagerApi_Tests(InitialSetupTestFactory fact
 		options.ShouldContain(option => option.Id == adminEmployeeId && option.Kind == "Employee");
 		options.ShouldNotContain(option => option.Id == adminId);
 		var request = HR.Employees.EmployeeTestHelper.BuildPersonalInfoRequest("ExistingTenantHR");
-		request.RoleId = hrRoleId; request.ShiftId = shiftId; request.IsTeaching = false;
+		request.RoleId = hrRoleId; request.InitialWorkShiftAssignment!.WorkShiftId = shiftId; request.IsTeaching = false;
 		using var content = new MultipartFormDataContent(); content.Add(new StringContent(JsonSerializer.Serialize(request, JsonOptions)), "data");
 		var created = await school.PostAsync("/api/employees/personal-info", content);
 		created.StatusCode.ShouldBe(HttpStatusCode.OK, await created.Content.ReadAsStringAsync());
@@ -221,9 +224,20 @@ public class FirstEmployeeReportingManagerApi_Tests(InitialSetupTestFactory fact
 		using var unit = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
 		await action(scope.ServiceProvider); await unit.CompleteAsync();
 	}
-	private static CreateHostTenantInput Input(string code) => new() { Name = code, InstituteName = "Synthetic Host School", Email = code + "@example.test",
-		ContactNumber = "9876543210", Address1 = "Synthetic Test Road", City = "Surat", State = "Gujarat", Country = "India", PostalCode = "395001",
-		AdminEmailAddress = "admin@" + code + ".example.test", AdminPassword = Password };
+	private static CreateHostTenantInput Input(string code) => new()
+	{
+		Name = code,
+		InstituteName = "Synthetic Host School",
+		Email = code + "@example.test",
+		ContactNumber = "9876543210",
+		Address1 = "Synthetic Test Road",
+		City = "Surat",
+		State = "Gujarat",
+		Country = "India",
+		PostalCode = "395001",
+		AdminEmailAddress = "admin@" + code + ".example.test",
+		AdminPassword = Password
+	};
 	private async Task<HostTenantDto> CreateAsync(HttpClient host, string? code = null)
 	{
 		var response = await host.PostAsJsonAsync(Url, Input(code ?? "host" + Guid.NewGuid().ToString("N")));

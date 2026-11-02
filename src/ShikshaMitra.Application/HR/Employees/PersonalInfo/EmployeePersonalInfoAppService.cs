@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
@@ -22,8 +22,7 @@ public class EmployeePersonalInfoAppService(
 	EmployeeManager employeeManager,
 	EmployeePersonalInfoCreationWorkflow creationWorkflow,
 	EmployeeIdentityUniquenessChecker identityUniquenessChecker,
-	EmployeePersonalInfoProjection personalInfoProjection,
-	ShiftReferenceValidator shiftReferenceValidator
+	EmployeePersonalInfoProjection personalInfoProjection
 )
 	: ApplicationService, IEmployeePersonalInfoAppService
 {
@@ -57,7 +56,7 @@ public class EmployeePersonalInfoAppService(
 		var panNo = ResolvePanNo(input.PanNo, existingEmployee.PanNo);
 		var adharNo = ResolveAdharNo(input.AdharNo, existingEmployee.AdharNo);
 		await identityUniquenessChecker.EnsurePanAndAdharAreUniqueAsync(panNo, adharNo, id);
-		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
+
 
 		var employee = await employeeManager.UpdateEmployeeAsync(
 			employeeId: id,
@@ -92,7 +91,7 @@ public class EmployeePersonalInfoAppService(
 			state: input.State,
 			country: input.Country,
 			pinCode: input.Pincode,
-			shiftId: input.ShiftId
+			shiftId: existingEmployee.ShiftId
 		);
 
 		employee = await employeeRepository.UpdateAsync(employee);

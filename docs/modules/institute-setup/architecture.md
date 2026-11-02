@@ -3,7 +3,7 @@ module: institute-setup
 domain: architecture
 content_type: Conceptual
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -94,7 +94,7 @@ Start with the smallest source set that answers the change.
 
 ## Shift tenant boundary
 
-`TenantSettings/ShiftManagement` implements `IMultiTenant`, enabling ABP filtering in repositories and navigation queries. `ShiftManagementAppService` also uses explicit ownership predicates for list and ID access. ABP's CRUD creation path assigns the server tenant, and `HRSeederContributor.Shifts` sets it for seeded shifts. `ShiftReferenceValidator` checks server ownership for standard and employee assignments.
+`TenantSettings/ShiftManagement` implements `IMultiTenant`, enabling ABP filtering in repositories and navigation queries. `ShiftManagementAppService` also uses explicit ownership predicates for list and ID access. ABP's CRUD creation path assigns the server tenant, and `HRSeederContributor.Shifts` sets it for seeded shifts. `ShiftReferenceValidator` checks server ownership for standard assignments.
 
 Migration `20261014063540_AddShiftTenantIsolation` adds only `academic_ShiftManagements.TenantId` and its index. It preserves legacy rows without inferring ownership. Its designer and snapshot retain the preceding migration's unrelated legacy student-table definitions.
 
@@ -120,3 +120,9 @@ Migration `20261014053153_AddSchoolIdentity` adds only assets, profiles and revi
 Migration `20261021055405_AddOrganizationSchoolIdentity` adds nullable `OrganizationId` columns to identity profiles and assets. Apply it before deploying organization image management or running its legacy banner importer. Existing school, board and medium scope keys remain unchanged; organization keys are unique within each tenant. Document snapshots additionally capture the organization when available.
 
 Document consumers enforce their own document action and record scope before using `SchoolIdentityDocumentService`. Configuration read permissions do not replace document authorization. The common template-asset service validates tenant/kind/origin scope and retains custom files.
+
+## Independent employee schedules
+
+The existing school-shift table and class references remain unchanged.
+Employee baseline references now target HR_WorkShifts; HR calculations resolve EmployeeShiftAssignment snapshots by date.
+The school-shift service no longer checks employee dependencies before deletion.

@@ -182,3 +182,11 @@ Document Passed, Failed, and Not run cases explicitly.
 Local synthetic tests do not prove deployed acceptance.
 Keep deployed DDVS verification read-only unless writes are separately authorized.
 An exposed database credential remains an outstanding security risk until rotation is verified.
+
+## School and employee shift boundaries
+
+School-shift CRUD enforces InstituteSetup.ShiftManagement actions.
+HR work-shift CRUD enforces HR.AttendanceAndLeave.Setting.ShiftManagement actions.
+Employee shift assignment reads/writes additionally enforce the owning employee action and employee scope.
+The minimal active HR shift lookup is available to authorized employee creators/editors without catalogue administration.
+No migration or seeder copies grants between these namespaces.

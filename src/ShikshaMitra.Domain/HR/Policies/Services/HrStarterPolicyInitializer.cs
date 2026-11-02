@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -21,7 +22,7 @@ public class HrStarterPolicyInitializer(
 	IRepository<PayrollPolicy, Guid> payroll,
 	IRepository<AttendancePolicy, Guid> attendance,
 	IRepository<LeavePolicy, Guid> leave,
-	IRepository<ShiftManagement, Guid> shifts) : DomainService
+	IRepository<EmployeeWorkShift, Guid> shifts) : DomainService
 {
 	[UnitOfWork(isTransactional: true)]
 	public virtual async Task InitializeAsync(AcademicYear year)

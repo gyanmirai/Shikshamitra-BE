@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Common;
+﻿using ShikshaMitra.HR.WorkShifts;
+using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings;
 using System;
 using System.Collections.Generic;
@@ -70,7 +71,7 @@ public class EmployeeDto : EntityDto<Guid>
 	// Profile Picture stored in blob storage
 	public string? ProfilePictureBlobName { get; set; }
 
-	public ShiftManagementDto Shift { get; set; } = new();
+	public EmployeeWorkShiftDto? Shift { get; set; }
 
 	public List<Guid> OrganizationIds { get; set; } = [];
 	public List<EmployeeOrganizationDto> Organizations { get; set; } = [];

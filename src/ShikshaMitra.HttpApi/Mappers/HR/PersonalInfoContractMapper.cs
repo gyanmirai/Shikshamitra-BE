@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR;
 using Volo.Abp;
@@ -33,7 +33,7 @@ public static partial class PersonalInfoContractMapper
 			Qualification = request.Qualification,
 			IdentificationMark1 = request.IdentificationMark1,
 			RoleId = request.RoleId,
-			ShiftId = request.ShiftId,
+			InitialWorkShiftAssignment = request.InitialWorkShiftAssignment,
 			Address1 = request.Address1,
 			Address2 = request.Address2,
 			Address3 = request.Address3,
@@ -82,7 +82,7 @@ public static partial class PersonalInfoContractMapper
 			Qualification = request.Qualification,
 			IdentificationMark1 = request.IdentificationMark1,
 			RoleId = request.RoleId,
-			ShiftId = request.ShiftId,
+
 			Address1 = request.Address1,
 			Address2 = request.Address2,
 			Address3 = request.Address3,

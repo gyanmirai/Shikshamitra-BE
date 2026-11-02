@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings;
 using System;
@@ -61,7 +62,7 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Tenant administrators can have a login without a staff profile.
 	public Guid? ReportingManagerUserId { get; private set; }
 	public virtual IdentityRole? Role { get; private set; }
-	public virtual ShiftManagement? Shift { get; private set; }
+	public virtual EmployeeWorkShift? Shift { get; private set; }
 	public virtual Employee? ReportingManager { get; private set; }
 	public virtual IdentityUser? ReportingManagerUser { get; private set; }
 	public virtual EmployeeAdditionalDetails? AdditionalDetails { get; private set; }

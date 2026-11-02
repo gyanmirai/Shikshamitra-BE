@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -248,29 +249,29 @@ public class HRSeederContributor_Tests
 		deductionComponents.ShouldAllBe(x => x.CalculationType == CalculationType.Amount && x.Amount.HasValue && x.Amount.Value > 0m);
 
 		foreach (var name in new[]
-		         {
-			         "Basic Salary",
-			         "House Rent Allowance (HRA)",
-			         "Dearness Allowance (DA)",
-			         "Transport Allowance",
-			         "Medical Allowance",
-			         "Special Allowance",
-			         "Performance Bonus",
-			         "Incentive"
-		         })
+				 {
+					 "Basic Salary",
+					 "House Rent Allowance (HRA)",
+					 "Dearness Allowance (DA)",
+					 "Transport Allowance",
+					 "Medical Allowance",
+					 "Special Allowance",
+					 "Performance Bonus",
+					 "Incentive"
+				 })
 		{
 			earningComponents.ShouldContain(x => x.Name == name);
 		}
 
 		foreach (var name in new[]
-		         {
-			         "Provident Fund (PF)",
-			         "Professional Tax",
-			         "Income Tax (TDS)",
-			         "Loan Repayment",
-			         "Advance Salary Deduction",
-			         "Loss of Pay (LOP)"
-		         })
+				 {
+					 "Provident Fund (PF)",
+					 "Professional Tax",
+					 "Income Tax (TDS)",
+					 "Loan Repayment",
+					 "Advance Salary Deduction",
+					 "Loss of Pay (LOP)"
+				 })
 		{
 			deductionComponents.ShouldContain(x => x.Name == name);
 		}
@@ -368,10 +369,10 @@ public class HRSeederContributor_Tests
 		var bytes = HRSeederContributor.BuildSeedPdfBytes("Joining Letter", profile);
 
 		bytes.Length.ShouldBeGreaterThan(4);
-		bytes[0].ShouldBe((byte)'%');
-		bytes[1].ShouldBe((byte)'P');
-		bytes[2].ShouldBe((byte)'D');
-		bytes[3].ShouldBe((byte)'F');
+		bytes[0].ShouldBe((byte) '%');
+		bytes[1].ShouldBe((byte) 'P');
+		bytes[2].ShouldBe((byte) 'D');
+		bytes[3].ShouldBe((byte) 'F');
 
 		FileValidationService.ValidateDocumentUpload(
 			"joining-letter.pdf",
@@ -486,17 +487,5 @@ public class HRSeederContributor_Tests
 		holidays.ShouldNotContain(new DateOnly(2026, 6, 1));
 	}
 
-	private static ShiftManagement BuildShift(Guid id, string name)
-	{
-		var shift = new ShiftManagement
-		{
-			ShiftName = name,
-			StartTime = new TimeOnly(7, 0),
-			EndTime = new TimeOnly(17, 30)
-		};
-		var idProperty = typeof(ShiftManagement).GetProperty(nameof(ShiftManagement.Id))
-			?? throw new InvalidOperationException("ShiftManagement.Id property was not found.");
-		idProperty.SetValue(shift, id);
-		return shift;
-	}
+	private static EmployeeWorkShift BuildShift(Guid id, string name) => new(id, Guid.NewGuid(), name, new TimeOnly(7, 0), new TimeOnly(17, 30));
 }

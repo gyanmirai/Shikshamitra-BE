@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
@@ -22,7 +23,8 @@ public class EmployeePersonalInfoCreationWorkflow(
 	EmployeePersonalInfoPostCommitEffects postCommitEffects,
 	EmployeePersonalInfoPolicyOverrideWriter policyOverrideWriter,
 	EmployeeCreationContactGuard contactGuard,
-	ShiftReferenceValidator shiftReferenceValidator,
+	WorkShiftReferenceValidator shiftReferenceValidator,
+ EmployeeShiftAssignmentManager shiftAssignments,
 	ICurrentTenant currentTenant,
 	IUnitOfWorkManager unitOfWorkManager,
 	ILogger<EmployeePersonalInfoCreationWorkflow> logger) : ITransientDependency
@@ -74,6 +76,8 @@ public class EmployeePersonalInfoCreationWorkflow(
 		input.MobileNo = contact.MobileNo;
 		input.PanNo = EmployeeIdentityUniquenessChecker.NormalizePan(input.PanNo)!;
 		await identityUniquenessChecker.EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo);
+		if (input.InitialWorkShiftAssignment == null) throw new BusinessException(HRErrorCodes.WorkShiftInvalid, "An initial work shift assignment is required.");
+		input.ShiftId = input.InitialWorkShiftAssignment.WorkShiftId;
 		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
 
 		Employee employee;
@@ -180,6 +184,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 			shiftId: input.ShiftId);
 
 		employee = await employeeRepository.InsertAsync(employee, autoSave: true);
+		await shiftAssignments.InitializeAsync(employee, input.InitialWorkShiftAssignment!.WorkShiftId, input.InitialWorkShiftAssignment.EffectiveFrom);
 		if (input.PolicyOverride != null)
 		{
 			await policyOverrideWriter.ApplyAsync(employee, input.PolicyOverride);

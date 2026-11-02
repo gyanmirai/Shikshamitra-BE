@@ -3,7 +3,7 @@ module: hr
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-10-19
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -88,3 +88,9 @@ npm run docs:hr:check
 ## Shared table export reference
 
 Use [complete HR table exports](./references/hr-table-exports.md) for the current capture and authorization contract.
+
+## Employee work shifts
+
+HR owns employee work shifts and effective-dated assignments.
+School shifts remain in Institute Setup.
+Start with [product behavior](product.md#employee-work-shifts), then [API contracts](api.md#employee-work-shift-apis) and [migration and cutover](workflows.md#employee-work-shift-cutover).

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.HR.WorkShifts;
+using System;
 using System.Data.Common;
 using System.Collections.Generic;
 using System.Linq;
@@ -116,18 +117,18 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			await EnsureTestAuthUserHasTenantWideScopeAsync(services, tenantId);
 			if (includeHrFixtures)
 			{
-			var payslipSettings = services.GetRequiredService<IRepository<ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings, Guid>>();
-			if (await payslipSettings.FindAsync(tenantId) == null)
-			{
-				var school = new ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings(tenantId);
-				school.Configure("Synthetic Payroll Test School", "Synthetic Test Road, Ahmedabad, Gujarat", false, Guid.NewGuid());
-				await payslipSettings.InsertAsync(school);
-			}
+				var payslipSettings = services.GetRequiredService<IRepository<ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings, Guid>>();
+				if (await payslipSettings.FindAsync(tenantId) == null)
+				{
+					var school = new ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings(tenantId);
+					school.Configure("Synthetic Payroll Test School", "Synthetic Test Road, Ahmedabad, Gujarat", false, Guid.NewGuid());
+					await payslipSettings.InsertAsync(school);
+				}
 
-			var shiftRepo = services.GetRequiredService<IRepository<ShiftManagement, Guid>>();
-			var fullDayShift = await (await shiftRepo.GetQueryableAsync()).AsNoTracking()
-				.FirstOrDefaultAsync(s => s.ShiftName == "Full Day Shift");
-			SeededShiftId = fullDayShift?.Id ?? Guid.Empty;
+				var shiftRepo = services.GetRequiredService<IRepository<EmployeeWorkShift, Guid>>();
+				var fullDayShift = await (await shiftRepo.GetQueryableAsync()).AsNoTracking()
+					.FirstOrDefaultAsync(s => s.ShiftName == "Full Day Shift");
+				SeededShiftId = fullDayShift?.Id ?? Guid.Empty;
 			}
 
 

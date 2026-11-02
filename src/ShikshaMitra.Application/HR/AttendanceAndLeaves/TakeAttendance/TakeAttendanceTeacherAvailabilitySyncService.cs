@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Timetable.Substitutions;
@@ -82,7 +82,7 @@ public class TakeAttendanceTeacherAvailabilitySyncService(
 			employee,
 			isFullDay,
 			new TimeOnly(9, 0),
-			isFullDay ? new TimeOnly(14, 15) : new TimeOnly(12, 0));
+			isFullDay ? new TimeOnly(14, 15) : new TimeOnly(12, 0), attendance.AttendanceDate);
 		var startTime = window.Start.ToString("HH:mm");
 		var endTime = window.End.ToString("HH:mm");
 		var reason = isFullDay

@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Net;
 using System.Net.Http;
@@ -205,7 +206,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			Doj = DateTime.UtcNow.AddMonths(-3),
 			IsTeaching = false,
 			RoleId = created.RoleId,
-			ShiftId = EmployeeTestHelper.DefaultShiftId,
+			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = EmployeeTestHelper.DefaultShiftId, EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow) },
 			Email = created.Email,
 			PanNo = TestDataHelper.UniquePan(),
 			AdharNo = TestDataHelper.UniqueAdhar(),
@@ -236,7 +237,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			Doj = created.Doj,
 			IsTeaching = created.IsTeaching,
 			RoleId = created.RoleId,
-			ShiftId = created.ShiftId,
+			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = created.ShiftId, EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow) },
 			Email = created.Email,
 			Gender = created.Gender,
 			Department = "Identity Preserve"

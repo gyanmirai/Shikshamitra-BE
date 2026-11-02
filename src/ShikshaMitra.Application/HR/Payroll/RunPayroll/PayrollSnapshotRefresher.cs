@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
@@ -24,7 +25,7 @@ public class PayrollSnapshotRefresher(
 	IEmployeeRepository employeeRepository,
 	IEmployeePayrollDetailsRepository payrollDetailsRepository,
 	IEmployeePayrollComponentRepository payrollComponentRepository,
-	IRepository<ShiftManagement, Guid> shiftRepository,
+	EmployeeShiftResolver shiftResolver,
 	ISalarySlipRepository salarySlipRepository,
 	HrPolicyResolver hrPolicyResolver,
 	PayrollCalendarResolver payrollCalendarResolver,
@@ -177,7 +178,7 @@ public class PayrollSnapshotRefresher(
 		}
 		var payrollDetailsByEmployee = await payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
 		var componentsByEmployee = await payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
-		var shiftsById = await GetShiftsByIdAsync(scopedEmployees);
+		var shiftsById = await GetShiftsByIdAsync(scopedEmployees, year, month);
 		var resolvedComponentsByEmployee = await componentVersionResolver.ResolveByEmployeeAsync(
 			componentsByEmployee,
 			internalMonthYear);
@@ -287,7 +288,8 @@ public class PayrollSnapshotRefresher(
 						pfRule,
 						professionalTaxSlabs,
 						EmployeeLifecycleEligibility.IsEmploymentCessationMonth(employee, year, month),
-						esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id) { StatutoryProfile = applicationProfiles.GetValueOrDefault(employee.Id) },
+						esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id)
+					{ StatutoryProfile = applicationProfiles.GetValueOrDefault(employee.Id) },
 					revision));
 			}
 		}
@@ -382,7 +384,8 @@ public class PayrollSnapshotRefresher(
 					pfRule,
 					professionalTaxSlabs,
 					EmployeeLifecycleEligibility.IsEmploymentCessationMonth(employee, year, month),
-					esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id) { StatutoryProfile = applicationProfiles.GetValueOrDefault(employee.Id) },
+					esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id)
+				{ StatutoryProfile = applicationProfiles.GetValueOrDefault(employee.Id) },
 				revision
 			));
 			if (reportProgress != null && (computedItems.Count % 25 == 0 || computedItems.Count == scopedEmployees.Count))
@@ -404,8 +407,11 @@ public class PayrollSnapshotRefresher(
 			if (item.StatutoryApplicationJson != null)
 			{
 				var application = System.Text.Json.JsonSerializer.Deserialize<PayrollStatutoryApplication>(item.StatutoryApplicationJson)!;
-				application = application with { ProvidentFund = application.ProvidentFund with
-					{ Eligible = decision.Status is "MANDATORY" or "CONTINUING_MEMBER" || application.ProvidentFund.Eligible } };
+				application = application with
+				{
+					ProvidentFund = application.ProvidentFund with
+					{ Eligible = decision.Status is "MANDATORY" or "CONTINUING_MEMBER" || application.ProvidentFund.Eligible }
+				};
 				item.StatutoryApplicationJson = System.Text.Json.JsonSerializer.Serialize(application);
 			}
 			if (decision.IssueCode != null)
@@ -452,34 +458,18 @@ public class PayrollSnapshotRefresher(
 			month);
 	}
 
-	private async Task<Dictionary<Guid, ShiftManagement>> GetShiftsByIdAsync(IEnumerable<Employee> employees)
+	private async Task<Dictionary<Guid, EmployeeWorkSchedule>> GetShiftsByIdAsync(IEnumerable<Employee> employees, int year, int month)
 	{
-		var shiftIds = employees
-			.Where(employee => employee.ShiftId.HasValue)
-			.Select(employee => employee.ShiftId!.Value)
-			.Distinct()
-			.ToList();
-		if (shiftIds.Count == 0)
-		{
-			return new Dictionary<Guid, ShiftManagement>();
-		}
-
-		var shifts = await shiftRepository.GetListAsync(shift => shiftIds.Contains(shift.Id));
-		return shifts.ToDictionary(shift => shift.Id);
+		var from = new DateOnly(year, month, 1);
+		var rows = await shiftResolver.LoadAsync(employees.Select(x => x.Id), from, from.AddMonths(1).AddDays(-1));
+		return rows.GroupBy(x => x.EmployeeId).ToDictionary(x => x.Key, x => new EmployeeWorkSchedule(x.ToList()));
 	}
 
-	private static ShiftManagement? ResolveShift(
+	private static EmployeeWorkSchedule? ResolveShift(
 		Employee employee,
-		IReadOnlyDictionary<Guid, ShiftManagement> shiftsById)
+		IReadOnlyDictionary<Guid, EmployeeWorkSchedule> shiftsById)
 	{
-		if (employee.Shift != null)
-		{
-			return employee.Shift;
-		}
-
-		return employee.ShiftId.HasValue && shiftsById.TryGetValue(employee.ShiftId.Value, out var shift)
-			? shift
-			: null;
+		return shiftsById.GetValueOrDefault(employee.Id);
 	}
 
 	private sealed record PayrollEmployeeComputationContext(

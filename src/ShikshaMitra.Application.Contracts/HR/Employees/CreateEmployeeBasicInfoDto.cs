@@ -1,3 +1,5 @@
+﻿using ShikshaMitra.HR.WorkShifts;
+using System.Text.Json.Serialization;
 using ShikshaMitra.Common;
 using System;
 
@@ -65,5 +67,6 @@ public class CreateEmployeeBasicInfoDto
 
 	public string? Address3 { get; set; }
 
-	public Guid? ShiftId { get; set; }
+	[JsonIgnore] public Guid? ShiftId { get; set; }
+	public InitialWorkShiftInput? InitialWorkShiftAssignment { get; set; }
 }

@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,7 +14,7 @@ namespace ShikshaMitra.HR.Employees.PersonalInfo;
 
 public class EmployeePersonalInfoProjection(
 	EmployeeOrganizationScopeResolver organizationScopeResolver,
-	IRepository<ShiftManagement, Guid> shiftRepository,
+	EmployeeShiftResolver shiftResolver,
 	IObjectMapper objectMapper) : ITransientDependency
 {
 	public async Task<EmployeePersonalInfoDto> ToPersonalInfoDtoAsync(Employee employee)
@@ -27,6 +28,8 @@ public class EmployeePersonalInfoProjection(
 	public async Task<EmployeeDto> ToEmployeeDtoAsync(Employee employee)
 	{
 		var dto = objectMapper.Map<Employee, EmployeeDto>(employee);
+		var shift = await shiftResolver.FindShiftAsync(employee.Id, await shiftResolver.TodayAsync());
+		dto.Shift = ToShiftDto(shift);
 		await PopulateScopedOrganizationsAsync(dto, employee.UserId);
 		return dto;
 	}
@@ -59,13 +62,10 @@ public class EmployeePersonalInfoProjection(
 
 	private async Task PopulateShiftAsync(EmployeePersonalInfoDto dto, Employee employee)
 	{
-		if (dto.Shift != null || !employee.ShiftId.HasValue)
-		{
-			return;
-		}
-
-		var shift = await shiftRepository.FindAsync(employee.ShiftId.Value);
+		var today = await shiftResolver.TodayAsync();
+		var shift = await shiftResolver.FindShiftAsync(employee.Id, today);
 		dto.Shift = ToShiftDto(shift);
+		dto.ShiftId = shift?.Id;
 	}
 
 	public void PopulateFamilyDetails(EmployeeDto dto, IReadOnlyCollection<EmployeeFamilyMember> familyMembers)
@@ -122,10 +122,10 @@ public class EmployeePersonalInfoProjection(
 			OrganizationNames = []
 		};
 
-	private static ShiftManagementDto? ToShiftDto(ShiftManagement? shift) =>
+	private static EmployeeWorkShiftDto? ToShiftDto(EmployeeWorkShift? shift) =>
 		shift == null
 			? null
-			: new ShiftManagementDto
+			: new EmployeeWorkShiftDto
 			{
 				Id = shift.Id,
 				ShiftName = shift.ShiftName,

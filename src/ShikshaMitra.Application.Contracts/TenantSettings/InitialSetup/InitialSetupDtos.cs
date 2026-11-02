@@ -70,7 +70,7 @@ public class SetupConcurrencyInput
 }
 public class SaveInitialSetupDraftInput : SetupConcurrencyInput
 {
-	[Range(0, 5)] public int CurrentStep { get; set; }
+	[Range(0, 6)] public int CurrentStep { get; set; }
 	[Required] public InitialSetupDraftDto Draft { get; set; } = new();
 }
 public class SaveSetupProfileInput : HostTenantDetailsInput
@@ -91,7 +91,7 @@ public class SaveSetupStructureInput : SetupConcurrencyInput
 }
 public class AdvanceSetupInput : SetupConcurrencyInput
 {
-	[Range(0, 4)] public int Step { get; set; }
+	[Range(0, 5)] public int Step { get; set; }
 }
 public interface IInitialSetupAppService
 {

@@ -33,7 +33,7 @@ public partial class InitialSetupAppService(
 	public async Task<InitialSetupDto> AdvanceAsync(AdvanceSetupInput input)
 	{
 		var progress = await EditableAsync(input);
-		if (input.Step != 0 && input.Step != 4) throw new BusinessException(InitialSetupErrorCodes.SaveStepRequired);
+		if (input.Step != 0 && input.Step != 4 && input.Step != 5) throw new BusinessException(InitialSetupErrorCodes.SaveStepRequired);
 		progress.Advance(input.Step);
 		return await SaveAsync(progress);
 	}

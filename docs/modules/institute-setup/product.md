@@ -3,7 +3,7 @@ module: institute-setup
 domain: product
 content_type: Conceptual
 status: canonical
-updated_on: 2026-10-26
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -61,6 +61,8 @@ Creation and updates store metadata and private database blobs in the same trans
 Expiry/reminder tracking, renewals, verification and academic hierarchy links are outside this feature. Categories are organizational labels, not a claim that a particular authority requires them.
 
 ## School Identity
+
+Initial setup includes optional School Identity after Users and Access and before Review. Continuing without assets requires only the existing setup permissions. Asset reads, uploads and saves retain the School Identity permissions and scope rules; setup access grants no extra identity access. Identity is saved in the existing school-default profile, independently of the setup draft. Missing assets are not a completion requirement. Existing completed schools remain completed; unfinished schools at the former review step can continue through the optional step without re-entering earlier data. No schema migration is required.
 
 School Identity has no Delete permission or profile deletion endpoint. Its action catalogue contains View, ManageDefaults, ManageOverrides and AccessSignature. The shared permission editor keeps Delete disabled by design; this is working as intended. Use configuration updates to hide an asset or reset an override to Inherit. These changes preserve revision history and retained files referenced by issued documents.
 

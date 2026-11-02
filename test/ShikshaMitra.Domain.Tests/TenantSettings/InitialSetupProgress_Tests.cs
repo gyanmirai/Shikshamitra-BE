@@ -9,6 +9,18 @@ namespace ShikshaMitra.TenantSettings;
 public class InitialSetupProgress_Tests
 {
 	[Fact]
+	public void Optional_identity_can_be_skipped_before_review_without_any_assets()
+	{
+		var progress = Prepared(review: false);
+		Should.Throw<BusinessException>(() => progress.Complete(DateTime.UtcNow, Guid.NewGuid()))
+			.Code.ShouldBe(InitialSetupErrorCodes.ReviewRequired);
+		progress.Advance(5);
+		progress.CurrentStep.ShouldBe(6);
+		progress.SaveDraft(6, "{}");
+		progress.Complete(DateTime.UtcNow, Guid.NewGuid());
+		progress.CompletedAt.ShouldNotBeNull();
+	}
+	[Fact]
 	public void Future_steps_and_unreviewed_completion_are_rejected()
 	{
 		var progress = new InstituteSetupProgress(Guid.NewGuid());
@@ -23,7 +35,7 @@ public class InitialSetupProgress_Tests
 	{
 		var progress = Prepared(); var year = progress.AcademicYearId; var division = progress.DivisionId;
 		progress.SaveDraft(1, "{\"profile\":{\"city\":\"Surat\"}}");
-		progress.CurrentStep.ShouldBe(1); progress.FurthestStep.ShouldBe(5);
+		progress.CurrentStep.ShouldBe(1); progress.FurthestStep.ShouldBe(6);
 		progress.AcademicYearId.ShouldBe(year); progress.DivisionId.ShouldBe(division);
 		progress.SaveDraft(5, progress.DraftJson); progress.CurrentStep.ShouldBe(5);
 	}
@@ -41,15 +53,16 @@ public class InitialSetupProgress_Tests
 		var progress = Prepared(); var operatorId = Guid.NewGuid(); var time = DateTime.UtcNow;
 		progress.Complete(time, operatorId); progress.Complete(time.AddHours(1), Guid.NewGuid());
 		progress.CompletedBy.ShouldBe(operatorId); progress.CompletedAt.ShouldBe(time);
-		progress.CurrentStep.ShouldBe(6);
+		progress.CurrentStep.ShouldBe(7);
 		Should.Throw<BusinessException>(() => progress.SaveDraft(1, "{}"))
 			.Code.ShouldBe(InitialSetupErrorCodes.AlreadyCompleted);
 	}
-	private static InstituteSetupProgress Prepared()
+	private static InstituteSetupProgress Prepared(bool review = true)
 	{
 		var progress = new InstituteSetupProgress(Guid.NewGuid());
 		progress.Advance(0); progress.Advance(1); progress.SelectYear(Guid.NewGuid());
 		progress.Advance(2); progress.SelectDivision(Guid.NewGuid()); progress.Advance(3); progress.Advance(4);
+		if (review) progress.Advance(5);
 		return progress;
 	}
 }

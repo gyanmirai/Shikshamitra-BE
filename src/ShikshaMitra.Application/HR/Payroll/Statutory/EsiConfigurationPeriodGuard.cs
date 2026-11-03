@@ -16,6 +16,15 @@ public class EsiConfigurationPeriodGuard(IRepository<PayrollRunItemSnapshot, Gui
 	IRepository<SalarySlip, Guid> slips, IRepository<PayrollRunReview, Guid> reviews,
 	IAsyncQueryableExecuter executor) : ITransientDependency
 {
+	public async Task EnsureEditableAsync(DateTime from)
+	{
+		var firstMonth = from.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+		if (await snapshots.AnyAsync(x => x.IsLocked && string.Compare(x.MonthYear, firstMonth) >= 0) ||
+			await slips.AnyAsync(x => (x.Status == SalarySlipStatus.Finalized || x.Status == SalarySlipStatus.Paid) &&
+				string.Compare(x.MonthYear, firstMonth) >= 0))
+			throw new BusinessException(HRErrorCodes.EsiConfigurationLocked);
+	}
+
 	public async Task InvalidateAsync(DateTime from, DateTime? until, IReadOnlyCollection<Guid>? affectedEmployeeIds = null)
 	{
 		var firstMonth = from.ToString("yyyy-MM", CultureInfo.InvariantCulture);

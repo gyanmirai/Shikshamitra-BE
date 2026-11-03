@@ -8,6 +8,10 @@ owner: backend-team
 audience: humans-and-agents
 ---
 
+## Historical ESIC configuration
+
+`EsiHistoricalConfigurationApi_Tests` calls the real save endpoint under a controlled clock for June initial setup, earning classification, unlocked updates, stale/retried requests, version ordering, protected payroll, invalidation and the Indian month boundary. `EsiHistoricalConfigurationPostgres_Tests` repeats persistence cases and checks finalization fencing and rollback after an injected invalidation failure. Set `ESI_HISTORICAL_TEST_POSTGRES` to a separate empty disposable loopback `payroll_tests_*` database; the fixture refuses other targets and never resets existing databases. Run the existing `EsiConfigurationPostgres_Tests`, `EsiStatutoryApi_Tests` and `EsiPolicyApi_Tests` alongside these cases. Synthetic fixtures do not certify tenant policy history or live acceptance.
+
 ## HR setup readiness
 
 Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~HrSetupReadinessApi_Tests` for clean-school HTTP and direct-service authorization coverage.

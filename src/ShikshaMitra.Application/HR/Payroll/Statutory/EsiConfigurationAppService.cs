@@ -59,7 +59,9 @@ public class EsiConfigurationAppService(IRepository<EsiPayrollConfiguration, Gui
 		}
 		var month = input.EffectiveMonth == null ? CurrentMonth() :
 			DateTime.ParseExact(input.EffectiveMonth, "yyyy-MM", CultureInfo.InvariantCulture);
-		if (month < CurrentMonth()) throw new BusinessException("HR:Payroll:EsiConfigurationPastMonth");
+		// Earlier configuration can affect later contribution-period continuity too.
+		// Check the full horizon under the same transaction fence as payroll finalization.
+		if (month < CurrentMonth()) await periodGuard.EnsureEditableAsync(month);
 		var current = await resolver.ResolveAsync(month);
 		if ((input.CalculationSettings.EligibilityComponentId is { } eligibilityId && !await earnings.AnyAsync(x => x.Id == eligibilityId && x.IsActive)) ||
 			(input.CalculationSettings.CalculationComponentId is { } calculationId && !await earnings.AnyAsync(x => x.Id == calculationId && x.IsActive)))

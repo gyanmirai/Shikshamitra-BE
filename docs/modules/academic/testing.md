@@ -3,7 +3,7 @@ module: academic
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-02
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -94,9 +94,13 @@ These checks do not establish PostgreSQL query plans, production latency or depl
 
 ```powershell
 dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~TimetableClassReadPerformance_Tests|FullyQualifiedName~TimetableElectiveAssignments_Tests|FullyQualifiedName~TimetableSettingsReadPerformance_Tests" --artifacts-path .artifacts/timetable-class-read-tests -p:RunAnalyzers=false -p:UseSharedCompilation=false -m:1
+```
+
 ## Timetable conflict lifecycle
 
 `TimetableConflictQuery_Tests` covers draft and `NotCreated` exclusion, published overlap detection, parent soft deletion, current-class exclusion, adjacent periods and tenant isolation for teacher and room reservations. `TimetableGhostConflict_Tests` exercises validation, saving and direct teacher assignment against draft versus published competing timetables, including saved-assignment readback. Existing elective and teacher reassignment suites protect real conflicts and same-period duplicate assignments.
+
+The cross-board/medium cases create a published GSEB/Gujarati competing timetable and verify that teacher and room errors identify its year, board and medium. These cases must continue to reject the overlap, even when the caller is editing another academic context.
 
 ```powershell
 dotnet test test/ShikshaMitra.EntityFrameworkCore.Tests --filter FullyQualifiedName~TimetableConflictQuery_Tests -p:RunAnalyzers=false -p:UseSharedCompilation=false -m:1

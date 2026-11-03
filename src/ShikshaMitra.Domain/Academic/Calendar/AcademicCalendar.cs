@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -52,6 +53,14 @@ public class AcademicCalendar : FullAuditedAggregateRoot<Guid>, IMultiTenant
         IsDefault = isDefault;
         Status = CalendarStatus.Draft;
         Days = new List<AcademicCalendarDay>();
+    }
+
+    internal void SetDateRange(DateTime startDate, DateTime endDate)
+    {
+        if (endDate <= startDate) throw new BusinessException(AcademicCalendarConsts.InvalidDateRange);
+        AddLocalEvent(new AcademicCalendarDatesChanged(Id, Name, StartDate, EndDate, startDate, endDate));
+        StartDate = startDate;
+        EndDate = endDate;
     }
 
     public void UpdateInfo(string name, string? description, bool isDefault)

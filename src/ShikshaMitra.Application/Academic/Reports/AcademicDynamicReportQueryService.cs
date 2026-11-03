@@ -86,8 +86,23 @@ public class AcademicDynamicReportQueryService(
 			Page = 1,
 			PageSize = projectedRows.Count,
 			Columns = selectedColumns,
-			Rows = projectedRows
+			Rows = projectedRows,
+			NormalizedFilters = new()
+			{
+				AcademicYearId = scope.AcademicYearId,
+				ClassIds = ResolveBrandingClassIds(plan.Filters, snapshot)
+			}
 		};
+	}
+
+	private static List<Guid> ResolveBrandingClassIds(AcademicDynamicReportFilterDto filters,
+		AcademicDynamicReportCatalogSnapshot snapshot)
+	{
+		var selected = Resolve(filters.ClassTokens, snapshot.Classes, item => item.Token, item => item.Id)
+			.Concat(Resolve(filters.DivisionTokens, snapshot.Divisions, item => item.Token, item => item.StandardId))
+			.Concat(Resolve(filters.ChapterTokens, snapshot.Chapters, item => item.Token, item => item.StandardId))
+			.Distinct().ToList();
+		return selected.Count > 0 ? selected : snapshot.Classes.Select(item => item.Id).ToList();
 	}
 
 	private async Task<List<Dictionary<string, string?>>> LoadCurriculumRowsAsync(

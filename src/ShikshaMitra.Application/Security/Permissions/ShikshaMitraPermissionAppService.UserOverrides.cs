@@ -12,7 +12,9 @@ public partial class ShikshaMitraPermissionAppService
     {
         var key = userId.ToString();
         var catalogue = await GetAsync("U", key);
-        var result = new UserPermissionOverridesDto { EntityDisplayName = catalogue.EntityDisplayName, Groups = catalogue.Groups };
+        var result = new UserPermissionOverridesDto { EntityDisplayName = catalogue.EntityDisplayName, Groups = catalogue.Groups,
+            IsReadOnly = await IsProtectedAdminAsync("U", key) };
+        if (result.IsReadOnly) return result;
         var denied = await _denies.GetDeniedAsync(userId);
         foreach (var permission in catalogue.Groups.SelectMany(group => group.Permissions))
         {
@@ -31,6 +33,7 @@ public partial class ShikshaMitraPermissionAppService
         try
         {
             await CheckProviderPolicy("U", userId.ToString());
+            await CheckAdminPermissionsEditableAsync("U", userId.ToString());
             if (input?.Permissions == null || input.Permissions.Any(item => item == null || item.State is not ("inherit" or "allow" or "deny")))
                 throw InvalidPermissions();
             await UpdatePermissionsAsync("U", userId.ToString(), new UpdatePermissionsDto

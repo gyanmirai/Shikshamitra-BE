@@ -5,6 +5,7 @@ namespace ShikshaMitra.Security.Permissions;
 
 public class UserPermissionOverridesDto : GetPermissionListResultDto
 {
+    public bool IsReadOnly { get; set; }
     public Dictionary<string, string> Overrides { get; set; } = new();
 }
 

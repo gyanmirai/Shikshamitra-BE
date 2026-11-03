@@ -1,5 +1,6 @@
 using ShikshaMitra.Extensions;
 using ShikshaMitra.Onboarding.AcademicYears;
+using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
@@ -13,7 +14,9 @@ namespace ShikshaMitra.TenantSettings.AcademicSetups;
 /// <summary>
 /// Manages operations related to the EducationBoard entity, including creating and updating education boards.
 /// </summary>
-public class EducationBoardManager(IEducationBoardRepository educationBoardRepository) : DomainService
+public class EducationBoardManager(
+	IEducationBoardRepository educationBoardRepository,
+	AcademicCalendarDateSynchronizer calendarDates) : DomainService
 {
 	/// <summary>
 	/// Gets the name of the entity managed by this class.
@@ -81,6 +84,7 @@ public class EducationBoardManager(IEducationBoardRepository educationBoardRepos
 		// Update start and end dates if provided.
 		if (startDate.HasValue && endDate.HasValue)
 		{
+			await calendarDates.SynchronizeBoardAsync(educationBoard, startDate.Value, endDate.Value);
 			educationBoard.SetDates(startDate.Value, endDate.Value);
 		}
 

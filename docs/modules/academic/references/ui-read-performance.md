@@ -3,7 +3,7 @@ module: academic
 domain: read-contracts
 content_type: Reference
 status: active
-updated_on: 2026-11-02
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -72,6 +72,12 @@ Export jobs retain the existing create/status routes under `/api/app/academic-re
 The frontend consumes a native Blob and can download a completed file without regenerating it.
 Export history returns the latest 100 jobs for the current user and tenant.
 
+Academic PDF downloads resolve saved School Identity assets in organization, medium, board, then school-default order.
+A configured banner replaces the school letterhead; otherwise the resolved logo and school name appear above the report title.
+Hidden asset choices remain hidden. Reports spanning organizations use their nearest shared medium, board or school context.
+Standard reports derive context from class filters, or division filters when classes are absent. Dynamic reports retain resolved class IDs from their validated catalogue, including class, division and chapter tokens, so an explicit board/medium does not skip organization branding.
+Image bytes remain internal to PDF generation; on-screen previews and spreadsheet exports retain their existing behavior.
+
 ## Focused validation map
 
 Tests below are executable coverage, not a claim that a provider or deployment passed.
@@ -88,6 +94,7 @@ Paths are relative to the backend repository root.
 | Complete audit history, key ordering and scope | `test/ShikshaMitra.Application.Tests/Academic/Audit/AcademicAuditReadPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Audit/AcademicAuditKeyParity_Tests.cs` |
 | Student list summaries, culture/search parity, bounded details and scope | `test/ShikshaMitra.Application.Tests/Academic/StudentAcademic360/StudentAcademic360Read_Tests.cs` |
 | Standard preview/page/export parity and dynamic projections | `test/ShikshaMitra.Application.Tests/Academic/Reports/*Preview*.cs`, `test/ShikshaMitra.Application.Tests/Academic/Reports/AcademicDynamicReportProjection_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Reports/AcademicLearningTaskExportParity_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Reports/AcademicExamExportParity_Tests.cs` |
+| PDF organization branding, shared fallback, hidden assets, tenant boundaries and dynamic class context | `test/ShikshaMitra.Application.Tests/TenantSettings/SchoolIdentityIntegration_Tests.AcademicReports.cs`, `test/ShikshaMitra.Application.Tests/Academic/Reports/AcademicDynamicReportBranding_Tests.cs` |
 | Dashboard sections, timetable settings and calendar batching | `test/ShikshaMitra.Application.Tests/Academic/Dashboard/AcademicDashboardSectionQueries_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Timetable/TimetableSettingsReadPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Calendar/AcademicCalendarReadPerformance_Tests.cs` |
 | Class timetable catalogue hydration and elective response parity | `test/ShikshaMitra.Application.Tests/Academic/Timetable/TimetableClassReadPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Timetable/TimetableElectiveAssignments_Tests.cs` |
 | PostgreSQL translation, HTTP commands and plans | `test/ShikshaMitra.HttpApi.Tests/Academic/Performance/AcademicReportPostgresSmoke_Tests.cs`, `test/ShikshaMitra.HttpApi.Tests/Academic/Performance/AcademicPostgresPerformance_Tests.cs` |

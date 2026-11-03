@@ -74,7 +74,8 @@ public class AcademicCalendarManager : DomainService, IAcademicCalendarManager
         return Task.CompletedTask;
     }
 
-    public async Task GenerateWeekendDaysAsync(AcademicCalendar calendar, WeekendRule rule)
+    public async Task GenerateWeekendDaysAsync(
+        AcademicCalendar calendar, WeekendRule rule, DateTime? startDate = null, DateTime? endDate = null)
     {
         if (rule == WeekendRule.Custom)
         {
@@ -82,7 +83,11 @@ public class AcademicCalendarManager : DomainService, IAcademicCalendarManager
         }
 
         var weekendDays = new List<AcademicCalendarDay>();
-        for (var date = calendar.StartDate.Date; date <= calendar.EndDate.Date; date = date.AddDays(1))
+        var rangeStart = startDate.HasValue && startDate.Value.Date > calendar.StartDate.Date
+            ? startDate.Value.Date : calendar.StartDate.Date;
+        var rangeEnd = endDate.HasValue && endDate.Value.Date < calendar.EndDate.Date
+            ? endDate.Value.Date : calendar.EndDate.Date;
+        for (var date = rangeStart; date <= rangeEnd; date = date.AddDays(1))
         {
             bool isWeekend = false;
             string title = "Weekend";

@@ -39,6 +39,7 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 
 	private readonly ICurrentUser _currentUser;
 	private readonly IUserPermissionDenyStore _denies;
+	private readonly AdminPermissionAccess _admins;
 	private readonly IClassTeacherAccessService _classTeacherAccessService;
 	private readonly IReportingManagerAccessService _reportingManagerAccessService;
 
@@ -51,18 +52,20 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 		ICurrentUser currentUser,
 		IClassTeacherAccessService classTeacherAccessService,
 		IReportingManagerAccessService reportingManagerAccessService,
-		IUserPermissionDenyStore denies)
+		IUserPermissionDenyStore denies,
+		AdminPermissionAccess admins)
 		: base(currentPrincipalAccessor, permissionDefinitionManager, currentTenant, permissionValueProviderManager, stateCheckerManager)
 	{
 		_currentUser = currentUser;
 		_denies = denies;
+		_admins = admins;
 		_classTeacherAccessService = classTeacherAccessService;
 		_reportingManagerAccessService = reportingManagerAccessService;
 	}
 
 	public override async Task<bool> IsGrantedAsync(string name)
 	{
-		if (_currentUser.Id.HasValue && (await _denies.GetDeniedAsync(_currentUser.Id.Value)).Contains(name)) return false;
+		if (_currentUser.Id.HasValue && !await _admins.IsAdminAsync(_currentUser.Id.Value) && (await _denies.GetDeniedAsync(_currentUser.Id.Value)).Contains(name)) return false;
 		// Student actions require their exact role/user grant. Teacher assignments only scope data.
 		if (IsStudentPermission(name)) return await base.IsGrantedAsync(name);
 
@@ -128,7 +131,7 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 
 	public override async Task<bool> IsGrantedAsync(ClaimsPrincipal? claimsPrincipal, string name)
 	{
-		if (TryGetUserId(claimsPrincipal, out var deniedUser) && (await _denies.GetDeniedAsync(deniedUser)).Contains(name)) return false;
+		if (TryGetUserId(claimsPrincipal, out var deniedUser) && !await _admins.IsAdminAsync(deniedUser) && (await _denies.GetDeniedAsync(deniedUser)).Contains(name)) return false;
 		if (IsStudentPermission(name)) return await base.IsGrantedAsync(claimsPrincipal, name);
 
 		if (await base.IsGrantedAsync(claimsPrincipal, name))
@@ -206,7 +209,8 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 		Func<string[], Task<MultiplePermissionGrantResult>> checkBasePermissions,
 		Guid? userId)
 	{
-		var denied = userId.HasValue ? await _denies.GetDeniedAsync(userId.Value) : new HashSet<string>();
+		var denied = userId.HasValue && !await _admins.IsAdminAsync(userId.Value)
+			? await _denies.GetDeniedAsync(userId.Value) : new HashSet<string>();
 		var distinctNames = names.Distinct(StringComparer.Ordinal).ToArray();
 		var aliases = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 		var aliasNames = new HashSet<string>(StringComparer.Ordinal);

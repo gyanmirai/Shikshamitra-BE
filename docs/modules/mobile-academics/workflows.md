@@ -3,7 +3,7 @@ module: mobile-academics
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-30
+updated_on: 2026-10-31
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -21,7 +21,7 @@ Mobile disposes student-scoped request state on account/child changes. Details f
 
 ## Elective preference and school approval
 
-1. The mobile timetable checks all required elective groups in the published weekly timetable. Missing choices, unlocked assignments and invalid configuration return guided availability states without periods.
+1. Subject Preferences lists published electives assigned to the enrolled class, including groups with no timetable slot, alongside scheduled elective groups. The mobile timetable separately checks only the groups required by its published weekly slots. Missing scheduled choices, unlocked assignments and invalid scheduled configuration return guided availability states without periods.
 2. A student or linked guardian reads the preference endpoint. Only `canSubmit` groups show choices. Confirmation submits one group and one `clientRequestId`; an uncertain retry retains that ID.
 3. The server rechecks tenant, active portal ownership, current enrollment and offered subject, then atomically records immutable submission history and an unlocked school assignment. Another linked account cannot submit a replacement. Existing school assignments are never overwritten by this API.
 4. The school reads/saves through its existing assignment API. Its lock action still requires all students in the class/division/group to have assignments and locks that group in bulk. This is the approval signal; there is no new mobile approval endpoint.

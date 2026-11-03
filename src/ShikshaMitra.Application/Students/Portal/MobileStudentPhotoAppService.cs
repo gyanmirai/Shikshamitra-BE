@@ -22,7 +22,7 @@ namespace ShikshaMitra.Students.Portal;
 
 [Authorize]
 [RemoteService(false)]
-public class MobileStudentPhotoAppService(StudentPortalAccessService portal, StudentPortalPhotoAuthority authority,
+public class MobileStudentPhotoAppService(StudentPortalPhotoAuthority authority,
 	IRepository<StudentRecordPhotoDraft, Guid> drafts, IRepository<StudentRecordChange, Guid> changes,
 	IRepository<StudentRecordChangeDecision, Guid> decisions, IBlobContainer blobs, StudentRecordPayloadService payloads,
 	StudentRecordsPolicyResolver policies, StudentRecordChangeApplication application, IStudentPhotoChangeLock photoLock)
@@ -31,33 +31,26 @@ public class MobileStudentPhotoAppService(StudentPortalAccessService portal, Stu
 	internal const string PortalOrigin = "PortalProfilePhoto";
 	public async Task<StudentPhotoInfoDto> GetInfoAsync(Guid studentId)
 	{
-		await portal.ResolveStudentAsync(studentId);
-		StudentRecordsAccess allowed;
-		try { allowed = await authority.EnsureAsync(studentId, false); }
-		catch (AbpAuthorizationException) { return new(); }
-		catch (BusinessException ex) when (ex.Code is "Students:Records:OnboardingIncomplete" or "Students:Records:ReadOnly") { return new(); }
-		var canUpdate = false;
-		try { await authority.EnsureAsync(studentId, true); canUpdate = true; }
-		catch (AbpAuthorizationException) { }
-		catch (BusinessException ex) when (ex.Code == "Students:Records:ReadOnly") { }
+		var student = await authority.EnsureAsync(studentId, false);
 		var snapshot = StudentRecordPayloadService.Hash(await payloads.CaptureAsync(studentId, "photo"));
-		var photoChanges = (await changes.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.Section == "photo");
-		var pending = await AsyncExecuter.FirstOrDefaultAsync(photoChanges.Where(x => x.Status == "Pending" || x.Status == "Approved" || x.Status == "Scheduled")
+		var photoChanges = (await changes.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.Section == "photo" && x.RequiredApprovals == 0);
+		var active = await AsyncExecuter.ToListAsync(photoChanges.Where(x => x.Status == "Approved" || x.Status == "Scheduled")
 			.OrderByDescending(x => x.CreationTime).ThenByDescending(x => x.Id));
+		var pending = active.FirstOrDefault(x => x.GetProperty<string>("Origin") == PortalOrigin);
 		if (pending == null)
 		{
 			var latest = await AsyncExecuter.FirstOrDefaultAsync(photoChanges.OrderByDescending(x => x.CreationTime).ThenByDescending(x => x.Id));
 			if (latest?.RequestedBy == CurrentUser.Id && latest.GetProperty<string>("Origin") == PortalOrigin) pending = latest;
 		}
-		return new() { CanView = true, CanUpdate = canUpdate,
-			HasPhoto = !string.IsNullOrWhiteSpace(allowed.Student.PhotoBlobName), Url = allowed.Student.PhotoBlobName == null ? null : PhotoUrl(studentId),
-			Version = allowed.Student.PhotoBlobName == null ? null : snapshot, ExpectedSnapshot = snapshot,
-			RequiresApproval = allowed.Policy.Changes["Photo"].RequiresApproval(false, false, false), PendingChange = pending == null ? null : await MapAsync(pending) };
+		return new() { CanView = true, CanUpdate = true,
+			HasPhoto = !string.IsNullOrWhiteSpace(student.PhotoBlobName), Url = student.PhotoBlobName == null ? null : PhotoUrl(studentId),
+			Version = student.PhotoBlobName == null ? null : snapshot, ExpectedSnapshot = snapshot,
+			RequiresApproval = false, PendingChange = pending == null ? null : await MapAsync(pending) };
 	}
 
 	public async Task<StudentPhotoDownloadDto?> GetPhotoAsync(Guid studentId)
 	{
-		var student = (await authority.EnsureAsync(studentId, false)).Student;
+		var student = await authority.EnsureAsync(studentId, false);
 		if (string.IsNullOrWhiteSpace(student.PhotoBlobName)) return null;
 		return await DownloadAsync(student.PhotoBlobName, ContentType(student.PhotoBlobName));
 	}
@@ -113,18 +106,18 @@ public class MobileStudentPhotoAppService(StudentPortalAccessService portal, Stu
 			}
 			else
 			{
-				if (await changes.AnyAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.Section == "photo" &&
-					(x.Status == "Pending" || x.Status == "Approved" || x.Status == "Scheduled"))) throw new BusinessException("Students:Records:PhotoChangePending");
+				var active = await changes.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.Section == "photo" && x.RequiredApprovals == 0 &&
+					(x.Status == "Approved" || x.Status == "Scheduled"));
+				if (active.Any(x => x.GetProperty<string>("Origin") == PortalOrigin)) throw new BusinessException("Students:Records:PhotoChangePending");
 				await payloads.EnsurePhotoDraftAsync(studentId, CurrentUser.GetId(), json);
 				var before = await payloads.CaptureAsync(studentId, "photo");
 				if (StudentRecordPayloadService.Hash(before) != input.ExpectedSnapshot) throw new BusinessException("Students:Records:StaleSnapshot");
-				var year = allowed.Student.AcademicYearId ?? throw new BusinessException("Students:Records:EnrollmentMissing");
+				var year = allowed.AcademicYearId ?? throw new BusinessException("Students:Records:EnrollmentMissing");
 				var policy = await policies.ResolveAsync(year);
-				var rule = policy.Policy.Changes["Photo"];
-				var stages = rule.RequiresApproval(false, false, false) ? rule.Stages : [];
+				// Retain the policy snapshot for audit; mobile photos never require school approval.
 				var item = new StudentRecordChange(GuidGenerator.Create(), CurrentTenant.Id, studentId, year, CurrentUser.GetId(), "photo", "Photo",
 					input.ClientKey, "Portal profile photo update", before, json, policy.Policy.ToJson(), policy.VersionId,
-					JsonSerializer.Serialize(stages, StudentRecordPayloadService.JsonOptions), stages.Count, new DateTimeOffset(Clock.Now.ToUniversalTime()));
+					"[]", 0, new DateTimeOffset(Clock.Now.ToUniversalTime()));
 				item.SetProperty("Origin", PortalOrigin);
 				await changes.InsertAsync(item);
 				id = item.Id;
@@ -133,7 +126,9 @@ public class MobileStudentPhotoAppService(StudentPortalAccessService portal, Stu
 			await work.CompleteAsync();
 		}
 		if (applyImmediately) await application.ApplyOrScheduleAsync(id);
-		return await GetChangeAsync(studentId, id);
+		var result = await GetChangeAsync(studentId, id);
+		if (result.Status != "Applied") throw new BusinessException(result.ExceptionCode ?? "Students:Records:PhotoNotApplied");
+		return result;
 	}
 
 	public async Task<StudentPhotoChangeDto> GetChangeAsync(Guid studentId, Guid changeId)

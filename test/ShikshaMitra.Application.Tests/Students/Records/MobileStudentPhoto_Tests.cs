@@ -19,6 +19,9 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Identity;
+using Volo.Abp.Data;
+using Volo.Abp.MultiTenancy;
+using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -93,42 +96,39 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	});
 
 	[Theory]
-	[InlineData(false)]
-	[InlineData(true)]
-	public Task Portal_photo_requires_live_view_and_add_permissions(bool denyView) => RunCertificationScenarioAsync(async () =>
+	[InlineData(false, false)]
+	[InlineData(false, true)]
+	[InlineData(true, false)]
+	[InlineData(true, true)]
+	public Task Portal_photo_ownership_allows_access_when_legacy_permissions_are_denied(bool parent, bool denyView) => RunCertificationScenarioAsync(async () =>
 	{
 		var fixture = await CustomRecordFixtureAsync();
-		var account = await LinkProfilePortalAsync(fixture.Student.Id, true);
+		var account = await LinkProfilePortalAsync(fixture.Student.Id, parent);
 		using var principal = _principalAccessor.Change(ProfilePrincipal(account.UserId));
 		var checker = Substitute.For<IPermissionChecker>();
 		checker.IsGrantedAsync(Arg.Any<ClaimsPrincipal>(), Arg.Any<string>()).Returns(true);
 		checker.IsGrantedAsync(Arg.Any<ClaimsPrincipal>(), denyView ? ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View : ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add).Returns(false);
-		var authority = ActivatorUtilities.CreateInstance<StudentPortalPhotoAuthority>(ServiceProvider, checker);
+		var provider = Substitute.For<IServiceProvider>();
+		provider.GetService(Arg.Any<Type>()).Returns(call => (Type)call[0] == typeof(IPermissionChecker) ? checker : ServiceProvider.GetService((Type)call[0]));
+		var authority = ActivatorUtilities.CreateInstance<StudentPortalPhotoAuthority>(provider);
 		authority.LazyServiceProvider = new AbpLazyServiceProvider(ServiceProvider);
-		await WithUnitOfWorkAsync(async () => await Should.ThrowAsync<AbpAuthorizationException>(() => authority.EnsureAsync(fixture.Student.Id, true)));
+		await WithUnitOfWorkAsync(async () => (await authority.EnsureAsync(fixture.Student.Id, true)).ShouldNotBeNull());
 	});
 
 	[Theory]
-	[InlineData(false, false)]
-	[InlineData(true, false)]
-	[InlineData(false, true)]
-	public Task Portal_photo_school_approval_rechecks_requester_and_preserves_old_photo_on_revocation(bool revoked, bool rejected) => RunCertificationScenarioAsync(async () =>
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Portal_photo_applies_immediately_despite_school_approval_and_masking(bool parent) => RunCertificationScenarioAsync(async () =>
 	{
 		var fixture = await CustomRecordFixtureAsync();
 		var policy = StudentRecordsPolicy.Starter();
 		policy.Changes["Photo"].Mode = "Approval";
 		policy.Changes["Photo"].Stages = [new() { RoleNames = ["PortalPhotoReviewer"] }];
+		policy.Access.Masks = [new() { FieldGroup = "Identity", AllowedRoleNames = ["school-staff"] }];
 		await SetInlineFormPolicyAsync(policy, 2);
-		var account = await LinkProfilePortalAsync(fixture.Student.Id, true);
-		var reviewer = Guid.NewGuid();
-		await EnsureTestIdentityUserAsync(reviewer, $"portal-photo-review-{reviewer:N}");
+		var account = await LinkProfilePortalAsync(fixture.Student.Id, parent);
 		await WithUnitOfWorkAsync(async () =>
 		{
-			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: reviewer), true);
-			var roles = GetRequiredService<IdentityRoleManager>();
-			(await roles.CreateAsync(new IdentityRole(Guid.NewGuid(), "PortalPhotoReviewer", TestTenantId))).Succeeded.ShouldBeTrue();
-			var users = GetRequiredService<IdentityUserManager>();
-			(await users.AddToRoleAsync((await users.FindByIdAsync(reviewer.ToString()))!, "PortalPhotoReviewer")).Succeeded.ShouldBeTrue();
 			var student = await _studentRepository.GetAsync(fixture.Student.Id);
 			student.SetPhotoBlobName("synthetic/old.png");
 			await _studentRepository.UpdateAsync(student, true);
@@ -138,36 +138,123 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		{
 			var photos = GetRequiredService<IMobileStudentPhotoAppService>();
 			var info = await photos.GetInfoAsync(fixture.Student.Id);
-			info.RequiresApproval.ShouldBeTrue();
+			info.CanView.ShouldBeTrue(); info.CanUpdate.ShouldBeTrue();
+			info.RequiresApproval.ShouldBeFalse();
 			var draft = await photos.UploadAsync(fixture.Student.Id, new() { FileName = "photo.png", ContentType = "image/png", Content = PortalPhotoPng });
 			var input = new SubmitStudentPhotoChangeDto { PhotoDraftId = draft.Id, ExpectedSnapshot = info.ExpectedSnapshot!, ClientKey = Guid.NewGuid().ToString("N") };
 			change = await photos.SubmitAsync(fixture.Student.Id, input);
-			change.Status.ShouldBe("Pending");
-			input.ClientKey = Guid.NewGuid().ToString("N");
-			(await Should.ThrowAsync<BusinessException>(() => photos.SubmitAsync(fixture.Student.Id, input))).Code.ShouldBe("Students:Records:PhotoChangePending");
+			change.Status.ShouldBe("Applied");
+			(await photos.SubmitAsync(fixture.Student.Id, input)).Id.ShouldBe(change.Id);
 		}
-		if (revoked) await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().DeleteAsync(account.LinkId, true));
-		using (_principalAccessor.Change(ProfilePrincipal(reviewer)))
+		using (_principalAccessor.Change(ProfilePrincipal(account.UserId)))
 		{
-			var records = GetRequiredService<IStudentRecordChangeAppService>();
-			var request = await records.GetAsync(change.Id);
-			var decision = new StudentRecordDecisionDto { ConcurrencyStamp = request.ConcurrencyStamp, Reason = rejected ? "Please choose a clearer photo" : "Verified profile photo" };
-			var applied = rejected ? await records.RejectAsync(change.Id, decision) : await records.ApproveAsync(change.Id, decision);
-			applied.Status.ShouldBe(rejected ? "Rejected" : revoked ? "Conflict" : "Applied");
-		}
-		if (!revoked)
-		{
-			using var parent = _principalAccessor.Change(ProfilePrincipal(account.UserId));
 			var info = await GetRequiredService<IMobileStudentPhotoAppService>().GetInfoAsync(fixture.Student.Id);
-			info.PendingChange!.Status.ShouldBe(rejected ? "Rejected" : "Applied");
-			if (rejected) info.PendingChange.RejectionReason.ShouldBe("Please choose a clearer photo");
+			info.PendingChange!.Status.ShouldBe("Applied");
 		}
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var student = await _studentRepository.GetAsync(fixture.Student.Id);
-			if (revoked || rejected) student.PhotoBlobName.ShouldBe("synthetic/old.png");
-			else student.PhotoBlobName.ShouldNotBe("synthetic/old.png");
+			student.PhotoBlobName.ShouldNotBe("synthetic/old.png");
+			(await GetRequiredService<IRepository<StudentRecordChange, Guid>>().GetAsync(change.Id)).RequiredApprovals.ShouldBe(0);
 		});
+	});
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Portal_photo_does_not_require_completed_records_onboarding(bool parent) => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await CustomRecordFixtureAsync();
+		var policy = StudentRecordsPolicy.Starter();
+		policy.Provisioning.Mode = "Summary";
+		await SetInlineFormPolicyAsync(policy, 2);
+		await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentOnboardingCase, Guid>>().DeleteAsync(x => x.StudentId == fixture.Student.Id, true));
+		await WithUnitOfWorkAsync(async () =>
+		{
+			(await Should.ThrowAsync<BusinessException>(() => GetRequiredService<StudentRecordsAccessService>().EnsureWritableAsync(fixture.Student.Id)))
+				.Code.ShouldBe("Students:Records:OnboardingIncomplete");
+		});
+		var account = await LinkProfilePortalAsync(fixture.Student.Id, parent);
+		using var principal = _principalAccessor.Change(ProfilePrincipal(account.UserId));
+		var photos = GetRequiredService<IMobileStudentPhotoAppService>();
+		var info = await photos.GetInfoAsync(fixture.Student.Id);
+		info.CanView.ShouldBeTrue(); info.CanUpdate.ShouldBeTrue(); info.ExpectedSnapshot.ShouldNotBeNullOrWhiteSpace();
+		var draft = await photos.UploadAsync(fixture.Student.Id, new() { FileName = "photo.png", ContentType = "image/png", Content = PortalPhotoPng });
+		(await photos.SubmitAsync(fixture.Student.Id, new() { PhotoDraftId = draft.Id, ExpectedSnapshot = info.ExpectedSnapshot!, ClientKey = Guid.NewGuid().ToString("N") })).Status.ShouldBe("Applied");
+	});
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Portal_photo_denies_inactive_account_and_foreign_tenant(bool parent) => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await CustomRecordFixtureAsync();
+		var account = await LinkProfilePortalAsync(fixture.Student.Id, parent);
+		using var principal = _principalAccessor.Change(ProfilePrincipal(account.UserId));
+		var photos = GetRequiredService<IMobileStudentPhotoAppService>();
+		using (GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid()))
+			await Should.ThrowAsync<AbpAuthorizationException>(() => photos.GetInfoAsync(fixture.Student.Id));
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var users = GetRequiredService<IRepository<IdentityUser, Guid>>();
+			var user = await users.GetAsync(account.UserId);
+			user.SetIsActive(false);
+			await users.UpdateAsync(user, true);
+		});
+		await Should.ThrowAsync<AbpAuthorizationException>(() => photos.GetInfoAsync(fixture.Student.Id));
+		await Should.ThrowAsync<AbpAuthorizationException>(() => photos.UploadAsync(fixture.Student.Id, new() { FileName = "photo.png", ContentType = "image/png", Content = PortalPhotoPng }));
+	});
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Portal_photo_old_approval_requests_do_not_block_or_overwrite_new_photo(bool portalOrigin) => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await CustomRecordFixtureAsync();
+		var account = await LinkProfilePortalAsync(fixture.Student.Id, true);
+		var reviewer = Guid.NewGuid();
+		await EnsureTestIdentityUserAsync(reviewer, $"legacy-photo-review-{reviewer:N}");
+		await WithUnitOfWorkAsync(async () =>
+		{
+			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: reviewer), true);
+			var roles = GetRequiredService<IdentityRoleManager>();
+			(await roles.CreateAsync(new IdentityRole(Guid.NewGuid(), "PortalPhotoReviewer", TestTenantId))).Succeeded.ShouldBeTrue();
+			(await GetRequiredService<IdentityUserManager>().AddToRoleAsync((await GetRequiredService<IdentityUserManager>().FindByIdAsync(reviewer.ToString()))!, "PortalPhotoReviewer")).Succeeded.ShouldBeTrue();
+		});
+		var oldId = Guid.NewGuid();
+		var photos = GetRequiredService<IMobileStudentPhotoAppService>();
+		using (_principalAccessor.Change(ProfilePrincipal(account.UserId)))
+		{
+			var oldDraft = await photos.UploadAsync(fixture.Student.Id, new() { FileName = "old.png", ContentType = "image/png", Content = PortalPhotoPng });
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var old = new StudentRecordChange(oldId, TestTenantId, fixture.Student.Id, fixture.Student.AcademicYearId!.Value, account.UserId,
+					"photo", "Photo", Guid.NewGuid().ToString("N"), "Legacy approval photo", await GetRequiredService<StudentRecordPayloadService>().CaptureAsync(fixture.Student.Id, "photo"),
+					System.Text.Json.JsonSerializer.Serialize(new StudentRecordPhotoPayload { PhotoDraftId = oldDraft.Id }, StudentRecordPayloadService.JsonOptions),
+					StudentRecordsPolicy.Starter().ToJson(), null, "[{\"roleNames\":[\"PortalPhotoReviewer\"]}]", 1, DateTimeOffset.UtcNow.AddMinutes(-1));
+				if (portalOrigin) old.SetProperty("Origin", MobileStudentPhotoAppService.PortalOrigin);
+				await GetRequiredService<IRepository<StudentRecordChange, Guid>>().InsertAsync(old, true);
+			});
+			var info = await photos.GetInfoAsync(fixture.Student.Id);
+			info.PendingChange.ShouldBeNull();
+			var draft = await photos.UploadAsync(fixture.Student.Id, new() { FileName = "new.png", ContentType = "image/png", Content = PortalPhotoPng });
+			(await photos.SubmitAsync(fixture.Student.Id, new() { PhotoDraftId = draft.Id, ExpectedSnapshot = info.ExpectedSnapshot!, ClientKey = Guid.NewGuid().ToString("N") })).Status.ShouldBe("Applied");
+		}
+		string? official = null;
+		await WithUnitOfWorkAsync(async () =>
+		{
+			official = (await _studentRepository.GetAsync(fixture.Student.Id)).PhotoBlobName;
+			(await GetRequiredService<IRepository<StudentRecordChange, Guid>>().GetAsync(oldId)).Status.ShouldBe("Pending");
+		});
+		using (_principalAccessor.Change(ProfilePrincipal(reviewer)))
+		{
+			var records = GetRequiredService<IStudentRecordChangeAppService>();
+			var pending = await records.GetAsync(oldId);
+			var result = await records.ApproveAsync(oldId, new() { ConcurrencyStamp = pending.ConcurrencyStamp, Reason = "Reviewed legacy photo" });
+			result.Status.ShouldBe("Conflict");
+			result.ExceptionCode.ShouldBe("Students:Records:StaleSnapshot");
+		}
+		await WithUnitOfWorkAsync(async () => (await _studentRepository.GetAsync(fixture.Student.Id)).PhotoBlobName.ShouldBe(official));
 	});
 
 	[Theory]

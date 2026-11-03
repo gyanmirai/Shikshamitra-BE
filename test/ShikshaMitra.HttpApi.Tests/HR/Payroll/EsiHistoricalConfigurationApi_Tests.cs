@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Text.Json;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
@@ -133,23 +134,32 @@ public class EsiHistoricalConfigurationApi_Tests : ShikshaMitraApiTestBase, ICla
 		await InTenantAsync(async services => {
 			var employee = Guid.NewGuid();
 			if (protection == "locked") {
-				var snapshot = new PayrollRunItemSnapshot(Guid.NewGuid(), TenantId, month, employee);
+				var snapshot = new PayrollRunItemSnapshot(Guid.NewGuid(), TenantId, month, employee) {
+					GrossSalary = 20000m, FullGrossSalary = 20000m, NetPay = 19650m, TotalDeduction = 350m,
+					EmployerContributionTotal = 650m, EmployerCost = 20650m,
+					EsiConfigurationId = Guid.NewGuid(), StatutoryApplicationJson = "{\"synthetic\":true}",
+					EsiCalculationDetailsJson = "{\"wages\":20000}",
+					EarningComponentsJson = "[{\"name\":\"Basic\",\"amount\":20000}]"
+				};
 				snapshot.MarkLocked();
 				await services.GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>().InsertAsync(snapshot);
 			} else {
 				var slip = (SalarySlip)Activator.CreateInstance(typeof(SalarySlip), BindingFlags.Instance | BindingFlags.NonPublic,
-					null, new object?[] { Guid.NewGuid(), TenantId, employee, month, new List<SalarySlipLineItem>(),
-						new List<SalarySlipLineItem>(), DateTime.UtcNow, null }, null)!;
+					null, new object?[] { Guid.NewGuid(), TenantId, employee, month,
+						new List<SalarySlipLineItem> { new("Basic", 20000m) },
+						new List<SalarySlipLineItem> { new("ESIC", 150m), new("Professional tax", 200m) }, DateTime.UtcNow, null }, null)!;
 				slip.FinalizeSlip();
 				if (protection == "paid") slip.RecordPayment(DateTimeOffset.UtcNow, "SYNTHETIC", Guid.NewGuid(), Guid.NewGuid());
 				await services.GetRequiredService<IRepository<SalarySlip, Guid>>().InsertAsync(slip);
 			}
 		});
 		var before = await GetAndReadAsync<EsiConfigurationSettingsDto>(Url);
+		var payrollBefore = await StoredPayrollAsync();
 		var response = await Client.PutAsJsonAsync(Url, draft);
 		response.StatusCode.ShouldBe(HttpStatusCode.Conflict, await response.Content.ReadAsStringAsync());
 		(await response.Content.ReadAsStringAsync()).ShouldContain(HRErrorCodes.EsiConfigurationLocked);
 		(await GetAndReadAsync<EsiConfigurationSettingsDto>(Url)).History.Count.ShouldBe(before.History.Count);
+		(await StoredPayrollAsync()).ShouldBe(payrollBefore);
 	}
 
 	[Fact]
@@ -212,19 +222,43 @@ public class EsiHistoricalConfigurationApi_Tests : ShikshaMitraApiTestBase, ICla
 		(await Client.PutAsJsonAsync(Url, await DraftAsync("2026-06"))).StatusCode.ShouldBe(HttpStatusCode.OK);
 		draft = await DraftAsync("2026-06");
 		var before = await GetAndReadAsync<EsiConfigurationSettingsDto>(Url);
+		var rollbackEmployee = Guid.NewGuid();
 		await InTenantAsync(async services => {
-			var employee = Guid.NewGuid();
+			var employee = rollbackEmployee;
 			await services.GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>().InsertAsync(
-				new PayrollRunItemSnapshot(Guid.NewGuid(), TenantId, "2026-06", employee));
+				new PayrollRunItemSnapshot(Guid.NewGuid(), TenantId, "2026-06", employee) {
+					GrossSalary = 20000m, NetPay = 19650m, TotalDeduction = 350m,
+					StatutoryApplicationJson = "{\"syntheticRollbackEvidence\":true}"
+				});
 			await services.GetRequiredService<IRepository<PayrollRunReview, Guid>>().InsertAsync(
 				new PayrollRunReview(Guid.NewGuid(), TenantId, "2026-06", employee, Guid.NewGuid(), DateTime.UtcNow));
 		});
-		((PayrollPostgresTestFactory)Factory).Barrier.FailNextCommand("HR_PayrollRunReviews");
-		(await Client.PutAsJsonAsync(Url, draft)).IsSuccessStatusCode.ShouldBeFalse();
+		var payrollBefore = await StoredPayrollAsync();
+		var failure = ((EsiHistoricalPostgresFactory)Factory).CommitFailure;
+		failure.Arm(rollbackEmployee);
+		// ABP commits after response generation; the injected commit failure aborts the response stream.
+		var aborted = await Should.ThrowAsync<System.Net.Http.HttpRequestException>(() => Client.PutAsJsonAsync(Url, draft));
+		aborted.GetBaseException().Message.ShouldBe("Synthetic ESIC failure after snapshot/review writes and before commit.");
+		failure.ObservedDeletedSnapshot.ShouldBeTrue("Snapshot deletion executed inside the failing transaction.");
+		failure.ObservedDeletedReview.ShouldBeTrue("Review deletion executed inside the failing transaction.");
 		var after = await GetAndReadAsync<EsiConfigurationSettingsDto>(Url);
 		after.History.Count.ShouldBe(before.History.Count);
 		after.Current!.Id.ShouldBe(before.Current!.Id);
 		after.Current.IsCancelled.ShouldBeFalse();
+		(await StoredPayrollAsync()).ShouldBe(payrollBefore);
 		(await Client.PutAsJsonAsync(Url, draft)).StatusCode.ShouldBe(HttpStatusCode.OK);
+	}
+
+	private async Task<string> StoredPayrollAsync()
+	{
+		string? result = null;
+		await InTenantAsync(async services => {
+			result = JsonSerializer.Serialize(new {
+				Snapshots = (await services.GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>().GetListAsync()).OrderBy(x => x.Id),
+				Reviews = (await services.GetRequiredService<IRepository<PayrollRunReview, Guid>>().GetListAsync()).OrderBy(x => x.Id),
+				Slips = (await services.GetRequiredService<IRepository<SalarySlip, Guid>>().GetListAsync()).OrderBy(x => x.Id)
+			}, JsonOptions);
+		});
+		return result!;
 	}
 }

@@ -40,17 +40,17 @@ public class AdmissionClassCapacityAppService(
 			var term = search.Trim();
 			roomQuery = roomQuery.Where(room => room.RoomName.Contains(term));
 		}
-		var rooms = await AsyncExecuter.ToListAsync(roomQuery.OrderBy(room => room.RoomName).Take(100));
-		var roomIds = rooms.Select(room => room.Id).ToList();
-		var assigned = roomIds.Count == 0 ? [] : await allocationRepository.GetListAsync(item =>
-			item.AcademicYearId == cycle.AcademicYearId && roomIds.Contains(item.RoomId));
-		var allocatedElsewhere = assigned.Where(item => item.StandardId != offering.StandardId)
-			.Select(item => item.RoomId).ToHashSet();
-		return rooms.Select(room => new AdmissionRoomChoiceDto
+		var rooms = await AsyncExecuter.ToListAsync(roomQuery.OrderBy(room => room.RoomName).Take(100).Select(room => new AdmissionRoomChoiceDto
 		{
-			RoomId = room.Id, RoomName = room.RoomName, Capacity = room.Capacity,
-			IsAllocatedToAnotherClass = allocatedElsewhere.Contains(room.Id)
-		}).ToList();
+			RoomId = room.Id, RoomName = room.RoomName, Capacity = room.Capacity
+		}));
+		var roomIds = rooms.Select(room => room.RoomId).ToArray();
+		var assigned = roomIds.Length == 0 ? [] : await AsyncExecuter.ToListAsync((await allocationRepository.GetQueryableAsync()).Where(item =>
+			item.AcademicYearId == cycle.AcademicYearId && item.StandardId != offering.StandardId && Enumerable.Contains(roomIds, item.RoomId))
+			.Select(item => item.RoomId));
+		var allocatedElsewhere = assigned.ToHashSet();
+		foreach (var room in rooms) room.IsAllocatedToAnotherClass = allocatedElsewhere.Contains(room.RoomId);
+		return rooms;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]

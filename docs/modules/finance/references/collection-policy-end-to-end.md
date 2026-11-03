@@ -21,7 +21,14 @@ School staff configure the policy once, verify it with an impact preview, activa
 
 ## Receipt grouping for fees and charges
 
-`receiptGrouping` belongs to the academic-year Collection Policy and its immutable version: `Separate` preserves existing behavior; `Combined` issues one document when a collection includes both fees and charges. Late fees belong to the fee component. A fees-only or charges-only collection produces one document in either mode. Older rows and version JSON without this field retain `Separate`; omitted update fields preserve the saved value. Cloning copies the choice. No database schema migration or historical receipt rewrite is required because the policy and amount breakdown use existing extension JSON.
+`receiptGrouping` belongs to the academic-year Collection Policy and its immutable version. For new collections, `Separate` issues a principal-fee receipt and a receipt for all additional charges, including late fees, when both components are paid. `Combined` issues one document containing both components. A principal-only or charges-only collection produces one document in either mode; late-fee-only collection produces a Charge receipt. Older policy rows and version JSON without this field retain `Separate`; omitted update fields preserve the saved value. Cloning copies the choice. Existing issued receipts retain their original amounts, scope and late-fee attribution. No database schema migration or historical receipt rewrite is required because the policy and amount breakdown use existing extension JSON.
+
+New receipts store nullable decimal `LateFeePaidAmount`: zero on principal-only documents,
+the included late-fee amount on Charge/Combined documents, and null on historical documents.
+It is immutable, nonnegative and cannot exceed the document's charge component. Reconciliation
+copies it to linked final receipts. Refund lookup uses it to select the correct document,
+while null preserves historical attribution. Principal of INR 20,000 plus late fees of INR 60,600
+produces INR 20,000 Fee and INR 60,600 Charge receipts in Separate mode, or one INR 80,600 receipt in Combined mode.
 
 | Contract | Implemented behavior |
 |---|---|

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
@@ -14,7 +15,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 /// <summary>Public reads are bounded by the already authorized offering, never by anonymous staff scope.</summary>
 [RemoteService(false)]
 public class AdmissionInquiryAcademicOptionsService(AdmissionFormDataSourceRegistry sources,
-	IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions) : ApplicationService, ITransientDependency
+	IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions,
+	IRepository<EducationBoard, Guid> boards) : ApplicationService, ITransientDependency
 {
 	internal async Task<List<AdmissionFormOptionDto>> ForPublicOfferingAsync(string key, AdmissionOffering offering, Guid? parent = null)
 	{
@@ -31,7 +33,10 @@ public class AdmissionInquiryAcademicOptionsService(AdmissionFormDataSourceRegis
 		}
 		if (parent.HasValue && (key.Equals("StandardsByMediumStage", StringComparison.OrdinalIgnoreCase)
 			? parent != standard.EducationMediumStageId : parent != offering.MediumId)) return [];
-		return [new() { Value = standard.Id.ToString(), Label = standard.Name }];
+		if (!key.Equals("Standards", StringComparison.OrdinalIgnoreCase))
+			return [new() { Value = standard.Id.ToString(), Label = standard.Name }];
+		var board = await boards.FindAsync(item => item.Id == offering.BoardId && item.TenantId == CurrentTenant.Id);
+		return [new() { Value = standard.Id.ToString(), Label = standard.Name, BoardId = board?.Id, BoardLabel = board?.Type.ToString() }];
 	}
 
 	internal async Task ValidateAsync(IEnumerable<AdmissionFormFieldDefinition> fields, IReadOnlyDictionary<string, string> values,

@@ -16,7 +16,7 @@ public class WithdrawalProration_Tests
 	{
 		var calculator = new ProrationPolicyCalculationService();
 		var rule = new ProrationPolicyRuleSnapshot(Guid.NewGuid(), ProrationRuleType.FullMonthCharge,
-			ProrationRoundingMode.RoundUpRupee, null, null, null, true, true, ProrationRuleType.FullMonthCharge);
+			ProrationRoundingMode.RoundUpRupee, null, null, true, true, ProrationRuleType.FullMonthCharge);
 		var admission = AssignmentAmountCalculator.Calculate(calculator, rule, 10000m, new(2026, 6, 1), new(2027, 3, 31), new(2026, 8, 1), new(2027, 3, 31));
 		var withdrawal = AssignmentAmountCalculator.Calculate(calculator, rule, 10000m, new(2026, 6, 1), new(2027, 3, 31), new(2026, 8, 1), new(2026, 12, 31));
 		Assert.Equal(8000m, admission.ProratedAmount);
@@ -76,7 +76,7 @@ public class WithdrawalProration_Tests
 	{
 		var calculator = new ProrationPolicyCalculationService();
 		var rule = new ProrationPolicyRuleSnapshot(Guid.NewGuid(), ProrationRuleType.Daily,
-			ProrationRoundingMode.RoundUpRupee, 0, null, null, true, true, ProrationRuleType.Daily);
+			ProrationRoundingMode.RoundUpRupee, null, null, true, true, ProrationRuleType.Daily);
 		Assert.Equal(3040m, calculator.Calculate(rule, 3040m, new(2026, 6, 1), new(2027, 3, 31), new(2026, 6, 1), new(2027, 3, 31)).ProratedAmount);
 		Assert.Equal(10m, calculator.Calculate(rule, 3040m, new(2026, 6, 1), new(2027, 3, 31), new(2026, 6, 2), new(2026, 6, 2)).ProratedAmount);
 	}

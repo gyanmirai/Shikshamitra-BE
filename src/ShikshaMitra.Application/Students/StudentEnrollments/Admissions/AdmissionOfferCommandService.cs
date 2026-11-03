@@ -12,16 +12,37 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [RemoteService(false)]
-public class AdmissionOfferCommandService(
-	IRepository<AdmissionApplication, Guid> applications,
-	IRepository<AdmissionApplicationDecisionHistory, Guid> history,
-	IRepository<AdmissionActivity, Guid> activities,
-	AdmissionOfferAccessService access,
-	AdmissionOfferReadService reader,
-	AdmissionInquiryPeopleService people,
-	AdmissionReviewDecisionGuard reviewGuard,
-	AdmissionFeeSelectionAccessService feeSelection) : ApplicationService, ITransientDependency
+public class AdmissionOfferCommandService : ApplicationService, ITransientDependency
 {
+	private readonly IRepository<AdmissionApplication, Guid> applications;
+	private readonly IRepository<AdmissionApplicationDecisionHistory, Guid> history;
+	private readonly IRepository<AdmissionActivity, Guid> activities;
+	private readonly AdmissionOfferAccessService access;
+	private readonly AdmissionOfferReadService reader;
+	private readonly AdmissionReviewDecisionGuard reviewGuard;
+	private readonly AdmissionFeeSelectionAccessService feeSelection;
+
+	public AdmissionOfferCommandService(
+		IRepository<AdmissionApplication, Guid> applications,
+		IRepository<AdmissionApplicationDecisionHistory, Guid> history,
+		IRepository<AdmissionActivity, Guid> activities,
+		AdmissionOfferAccessService access,
+		AdmissionOfferReadService reader,
+		AdmissionInquiryPeopleService people,
+		AdmissionReviewDecisionGuard reviewGuard,
+		AdmissionFeeSelectionAccessService feeSelection
+	)
+	{
+		this.applications = applications;
+		this.history = history;
+		this.activities = activities;
+		this.access = access;
+		this.reader = reader;
+		_ = people;
+		this.reviewGuard = reviewGuard;
+		this.feeSelection = feeSelection;
+	}
+
 	public async Task<AdmissionOfferStageDto> IssueAsync(Guid applicationId, Guid stageId, IssueAdmissionOfferDto input)
 	{
 		var context = await ManagedAsync(applicationId, stageId);

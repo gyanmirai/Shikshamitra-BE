@@ -21,7 +21,11 @@ public class FeeCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public string? DeactivationReason { get; private set; }
 
-    protected FeeCategory() { }
+    protected FeeCategory()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        Name = null!;
+    }
 
     public FeeCategory(Guid id, Guid? tenantId, Guid academicYearId, string name, string? description) : base(id)
     {

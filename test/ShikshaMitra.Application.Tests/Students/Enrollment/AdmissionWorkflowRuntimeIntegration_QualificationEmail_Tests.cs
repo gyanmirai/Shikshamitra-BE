@@ -106,7 +106,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var result = await WithUnitOfWorkAsync(() => availability.ReadAsync(offering));
 			result.CanCreateInquiry.ShouldBeFalse();
 			result.WaitlistAllowed.ShouldBeFalse();
-			result.Reason.ShouldContain("filled");
+			result.Reason.ShouldNotBeNull().ShouldContain("filled");
 			await WithUnitOfWorkAsync(async () => await Should.ThrowAsync<Volo.Abp.BusinessException>(() => availability.EnsureAvailableAsync(offering)));
 		});
 }

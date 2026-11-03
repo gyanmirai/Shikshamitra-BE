@@ -90,7 +90,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		await ConfigureProrationAsync(fixture);
 		var service = GetRequiredService<IAdmissionFeeCollectionAppService>();
 		var summary = await service.GetSummaryAsync(fixture.Application.Id);
-		summary.CanCollect.ShouldBeFalse(); summary.Blocker.ShouldContain("actual joining date"); summary.TotalAmount.ShouldBeNull();
+		summary.CanCollect.ShouldBeFalse(); summary.Blocker.ShouldNotBeNull().ShouldContain("actual joining date"); summary.TotalAmount.ShouldBeNull();
 		(await Should.ThrowAsync<BusinessException>(() => service.PrepareAsync(fixture.Application.Id, new()))).Code.ShouldBe(ProrationPolicyErrorCodes.JoiningDateRequired);
 	});
 

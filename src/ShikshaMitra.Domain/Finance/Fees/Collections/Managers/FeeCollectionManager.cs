@@ -22,23 +22,54 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 /// All monetary invariants (payment details validation, DueFee allocation) live here
 /// so that the application service remains a thin coordinator.
 /// </summary>
-public class FeeCollectionManager(
-	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
-	IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository,
-	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
-	IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
-	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
-	IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
-	IDueFeeRepository dueFeeRepository,
-	IRepository<FeeHead, Guid> feeHeadRepository,
-	IFeePaymentReceiptRepository feePaymentReceiptRepository,
-	FeeReceiptManager feeReceiptManager,
-	IReceiptNumberSequenceRepository receiptNumberSequenceRepository,
-	IClock clock,
-	ICurrentTenant currentTenant,
-	ICurrentUser currentUser
-) : DomainService
+public class FeeCollectionManager : DomainService
 {
+	private readonly IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository;
+	private readonly IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository;
+	private readonly IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository;
+	private readonly IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository;
+	private readonly IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository;
+	private readonly IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository;
+	private readonly IDueFeeRepository dueFeeRepository;
+	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
+	private readonly IFeePaymentReceiptRepository feePaymentReceiptRepository;
+	private readonly FeeReceiptManager feeReceiptManager;
+	private readonly IReceiptNumberSequenceRepository receiptNumberSequenceRepository;
+	private readonly IClock clock;
+	private readonly ICurrentTenant currentTenant;
+
+	public FeeCollectionManager(
+		IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
+		IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository,
+		IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+		IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
+		IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
+		IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
+		IDueFeeRepository dueFeeRepository,
+		IRepository<FeeHead, Guid> feeHeadRepository,
+		IFeePaymentReceiptRepository feePaymentReceiptRepository,
+		FeeReceiptManager feeReceiptManager,
+		IReceiptNumberSequenceRepository receiptNumberSequenceRepository,
+		IClock clock,
+		ICurrentTenant currentTenant,
+		ICurrentUser currentUser
+	)
+	{
+		this.feeRecordMetadataRepository = feeRecordMetadataRepository;
+		this.feeCollectionRecordRepository = feeCollectionRecordRepository;
+		this.chargeCollectionRecordRepository = chargeCollectionRecordRepository;
+		this.paymentMethodRecordRepository = paymentMethodRecordRepository;
+		this.dueFeeAllocationRepository = dueFeeAllocationRepository;
+		this.lateFeeAllocationRepository = lateFeeAllocationRepository;
+		this.dueFeeRepository = dueFeeRepository;
+		this.feeHeadRepository = feeHeadRepository;
+		this.feePaymentReceiptRepository = feePaymentReceiptRepository;
+		this.feeReceiptManager = feeReceiptManager;
+		this.receiptNumberSequenceRepository = receiptNumberSequenceRepository;
+		this.clock = clock;
+		this.currentTenant = currentTenant;
+	}
+
 	public sealed record CollectFeeTransactionCommand(
 		Guid? StudentId,
 		Guid AcademicYearId,
@@ -166,21 +197,20 @@ public class FeeCollectionManager(
 		var chargeLinesTotal = chargeCollectionRecords.Sum(r => r.Amount);
 		var lateFeeLinesTotal = lateFeeAllocations.Sum(a => a.Amount);
 
-		// Known gap (implementation plan Phase 3): late fee is folded into the fee receipt's
-		// total rather than itemized as its own line — a separate PDF line item requires
-		// touching FeeReceiptManager's template, deferred to keep this session's change to the
-		// live collection transaction as small and additive as possible.
+		// Receipt grouping follows the ledger: principal is fees; late fees are charges.
 		var receipts = await feeReceiptManager.CreateReceiptsForTransactionAsync(
 			feeCollectionTransactionId: metadata.Id,
 			studentId: command.StudentId,
 			academicYearId: command.AcademicYearId,
 			boardId: command.BoardId,
 			educationMediumId: command.EducationMediumId,
-			feeLinesTotal: feeLinesTotal + lateFeeLinesTotal,
+			feeLinesTotal: feeLinesTotal,
 			chargeLinesTotal: chargeLinesTotal,
 			paymentMethods: command.Payments.Select(p => p.Method).ToList(),
 			bankReceiptConfirmed: command.BankReceiptConfirmed,
-			remarks: command.Notes, financeFeeAccountId: command.FinanceFeeAccountId, receiptGrouping: command.ReceiptGrouping);
+			remarks: command.Notes, financeFeeAccountId: command.FinanceFeeAccountId,
+			receiptGrouping: command.ReceiptGrouping,
+			lateFeeLinesTotal: lateFeeAllocations.Sum(a => (decimal)a.Amount));
 
 		if (receipts.Count > 0)
 			await feePaymentReceiptRepository.InsertManyAsync(receipts, autoSave: false);
@@ -400,13 +430,15 @@ public class FeeCollectionManager(
 
 			PaymentMethodEnum.CreditCard => new CreditCardDetails(
 				transactionId: Get("transactionId"),
-				cardLast4: Get("cardLast4"),
-				bankName: Get("bankName")),
+				cardLast4: string.IsNullOrWhiteSpace(Get("cardLast4")) ? Get("last4Digits") : Get("cardLast4"),
+				bankName: Get("bankName"),
+				cardHolderName: details.ContainsKey("cardHolderName") ? Get("cardHolderName") : null),
 
 			PaymentMethodEnum.DebitCard => new CreditCardDetails(
 				transactionId: Get("transactionId"),
-				cardLast4: Get("cardLast4"),
-				bankName: Get("bankName")),
+				cardLast4: string.IsNullOrWhiteSpace(Get("cardLast4")) ? Get("last4Digits") : Get("cardLast4"),
+				bankName: Get("bankName"),
+				cardHolderName: details.ContainsKey("cardHolderName") ? Get("cardHolderName") : null),
 
 			_ => null,
 		};

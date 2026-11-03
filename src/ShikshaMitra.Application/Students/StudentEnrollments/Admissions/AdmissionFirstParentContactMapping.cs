@@ -13,9 +13,9 @@ internal static class AdmissionFirstParentContactMapping
 	private const string AliasPrefix = "ParentAccountAliasContact.";
 
 	public static bool CanMap(AdmissionApplicant applicant) =>
-		AdmissionSiblingParentSelection.IsParentFlow(applicant) && !applicant.ExistingStudentId.HasValue &&
+		(AdmissionSiblingParentSelection.IsParentFlow(applicant) || AdmissionPrimaryContactSelection.HasSelection(applicant)) && !applicant.ExistingStudentId.HasValue &&
 		AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null &&
-		AdmissionSiblingParentSelection.IsRelationship(AdmissionSiblingParentSelection.ReadRelationship(applicant));
+		AdmissionSiblingParentSelection.IsRelationship(ParentRole(applicant));
 
 	public static Dictionary<string, string> ReadInquiryAnswers(AdmissionInquiry inquiry, IEnumerable<AdmissionFormFieldDefinition> definitions)
 	{
@@ -31,7 +31,8 @@ internal static class AdmissionFirstParentContactMapping
 		AdmissionGuardian? guardian = null, bool recoverSavedAnswers = false)
 	{
 		if (!CanMap(applicant)) return;
-		var prefix = AdmissionSiblingParentSelection.ReadRelationship(applicant) == "father" ? "Father" : "Mother";
+		if (recoverSavedAnswers && AdmissionPrimaryContactSelection.HasSelection(applicant)) return;
+		var prefix = ParentRole(applicant) == "father" ? "Father" : "Mother";
 		foreach (var suffix in new[] { "Name", "Mobile", "Email" })
 		{
 			var key = prefix + "." + suffix;
@@ -63,4 +64,6 @@ internal static class AdmissionFirstParentContactMapping
 			applicant.SetProperty(AliasPrefix + prefix + "." + suffix, true);
 		}
 	}
+
+	private static string? ParentRole(AdmissionApplicant applicant) => AdmissionSiblingParentSelection.ReadRelationship(applicant) ?? AdmissionPrimaryContactSelection.ReadRelationship(applicant);
 }

@@ -81,7 +81,70 @@ public class AdmissionFormInheritance_Tests
 		registration.Sections.Single().Fields.Single().Label.ShouldBe("Date of birth");
 	}
 
+	[Fact]
+	public void Saved_registration_policy_reopens_with_legacy_starter_matches_and_inquiry_first_presentation()
+	{
+		var registration = Definition(AdmissionFormPurpose.Registration, "Birth date", "REG_BIRTH");
+		var baseSection = registration.Sections[0];
+		baseSection.StepId = Guid.NewGuid();
+		baseSection.StepName = "Registration";
+		registration.LayoutType = AdmissionFormLayoutType.Stepper;
+		baseSection.Fields.Add(new() { Id = Guid.NewGuid(), FormDefinitionId = registration.Id, SectionId = baseSection.Id,
+			Code = "GUARDIAN_NAME", Label = "Parent or guardian name", BindingType = AdmissionFormBindingType.Custom,
+			BindingKey = "GUARDIAN_NAME", FieldType = AdmissionFormFieldType.Text, FieldIdentity = "custom:registration-parent" });
+		baseSection.Fields.Add(new() { Id = Guid.NewGuid(), FormDefinitionId = registration.Id, SectionId = baseSection.Id,
+			Code = "PREVIOUS_SCHOOL", Label = "Previous school", BindingType = AdmissionFormBindingType.Custom,
+			BindingKey = "PREVIOUS_SCHOOL", FieldType = AdmissionFormFieldType.Text, FieldIdentity = "custom:school" });
+		var inquiry = Definition(AdmissionFormPurpose.Inquiry, "DOB", "DATE_OF_BIRTH");
+		inquiry.FieldsPerRow = 3;
+		var sourceSection = inquiry.Sections[0];
+		sourceSection.Name = "Inquiry details";
+		sourceSection.Fields[0].BindingType = AdmissionFormBindingType.Custom;
+		sourceSection.Fields[0].BindingKey = "DATE_OF_BIRTH";
+		sourceSection.Fields[0].FieldIdentity = "custom:inquiry-birth";
+		sourceSection.Fields.Add(new() { Id = Guid.NewGuid(), FormDefinitionId = inquiry.Id, SectionId = sourceSection.Id,
+			Code = "GUARDIAN_NAME", Label = "Parent or guardian name", BindingType = AdmissionFormBindingType.Custom,
+			BindingKey = "GUARDIAN_NAME", FieldType = AdmissionFormFieldType.Text, FieldIdentity = "custom:inquiry-parent" });
+		registration.Inheritance = new() { Enabled = true, Sources = [new() { InquiryFormDefinitionId = inquiry.Id }] };
+		var saved = System.Text.Json.JsonSerializer.Serialize(registration);
+		var before = AdmissionFormInheritanceService.Compose(registration, inquiry, true);
+		var reopened = System.Text.Json.JsonSerializer.Deserialize<AdmissionFormDto>(saved)!;
+		var after = AdmissionFormInheritanceService.Compose(reopened, inquiry, true);
+
+		before.IsValid.ShouldBeTrue();
+		after.IsValid.ShouldBeTrue();
+		System.Text.Json.JsonSerializer.Serialize(after.Definition).ShouldBe(System.Text.Json.JsonSerializer.Serialize(before.Definition));
+		after.Definition.Sections.Select(section => section.Name).ShouldBe(new[] { "Inquiry details", "Details" });
+		after.Definition.Sections[0].FieldsPerRow.ShouldBe(3);
+		after.Definition.Sections.SelectMany(section => section.Fields).Count().ShouldBe(3);
+		after.Definition.Sections[0].Fields[0].InheritedFrom!.SourceBindingKey.ShouldBe("DATE_OF_BIRTH");
+		after.Definition.Sections[0].Fields[0].BindingKey.ShouldBe("Applicant.DateOfBirth");
+		System.Text.Json.JsonSerializer.Serialize(registration).ShouldBe(saved);
+	}
+
 	private static AdmissionFormDefinition Form() => new(Guid.NewGuid(), null, "Registration", "REG", AdmissionFormLayoutType.SinglePage);
+
+	[Fact]
+	public void Preview_contract_preserves_inquiry_presentation_for_frozen_runtime_definitions()
+	{
+		var registration = Definition(AdmissionFormPurpose.Registration, "Date of birth", "DATE");
+		registration.FieldsPerRow = 2;
+		registration.Sections.Clear();
+		var inquiry = Definition(AdmissionFormPurpose.Inquiry, "DOB", "BIRTH");
+		inquiry.LayoutType = AdmissionFormLayoutType.Stepper;
+		inquiry.FieldsPerRow = 3;
+		inquiry.Sections[0].StepId = Guid.NewGuid();
+		inquiry.Sections[0].StepCode = "STUDENT";
+		inquiry.Sections[0].StepName = "Student";
+		var result = AdmissionFormInheritanceService.Compose(registration, inquiry, false);
+		result.IsValid.ShouldBeTrue();
+		result.Definition.LayoutType.ShouldBe(AdmissionFormLayoutType.Stepper);
+		result.Definition.FieldsPerRow.ShouldBe(2);
+		result.Definition.Sections.Single().FieldsPerRow.ShouldBe(3);
+		result.Definition.Sections.Single().StepName.ShouldBe("Student");
+		var json = System.Text.Json.JsonSerializer.Serialize(result.Definition);
+		System.Text.Json.JsonSerializer.Deserialize<AdmissionFormDto>(json)!.Sections.Single().FieldsPerRow.ShouldBe(3);
+	}
 
 	[Fact]
 	public void Malformed_rule_in_an_unsaved_preview_reports_a_compatibility_issue()
@@ -123,7 +186,7 @@ public class AdmissionFormInheritance_Tests
 	}
 
 	[Fact]
-	public void Merged_validation_bounds_are_checked_after_composition()
+	public void Different_validation_bounds_are_reported_without_changing_source_validation()
 	{
 		var registration = Definition(AdmissionFormPurpose.Registration, "Marks", "MARKS");
 		var inquiry = Definition(AdmissionFormPurpose.Inquiry, "Score", "SCORE");
@@ -139,11 +202,12 @@ public class AdmissionFormInheritance_Tests
 		source.ValidationJson = "{\"min\":10}";
 		var result = AdmissionFormInheritanceService.Compose(registration, inquiry, false);
 		result.IsValid.ShouldBeFalse();
-		result.Issues.ShouldContain(issue => issue.Message.Contains(AdmissionFormErrorCodes.InvalidValidationRule));
+		result.Issues.ShouldContain(issue => issue.Code == "ValidationConflict");
+		result.Definition.Sections.SelectMany(section => section.Fields).Single().ValidationJson.ShouldBe(source.ValidationJson);
 	}
 
 	[Fact]
-	public void Required_rule_cycles_created_by_merging_two_individually_valid_schemas_are_rejected()
+	public void Conflicting_registration_required_rules_are_rejected_without_merging_into_source_rules()
 	{
 		var registration = Definition(AdmissionFormPurpose.Registration, "A", "A");
 		var inquiry = Definition(AdmissionFormPurpose.Inquiry, "A", "A");
@@ -160,7 +224,7 @@ public class AdmissionFormInheritance_Tests
 		registration.Sections.Single().Fields.Single(field => field.Code == "B").RequiredRuleJson = "{\"field\":\"A\",\"operator\":\"IsNotEmpty\"}";
 		var result = AdmissionFormInheritanceService.Compose(registration, inquiry, false);
 		result.IsValid.ShouldBeFalse();
-		result.Issues.ShouldContain(issue => issue.Message.Contains(AdmissionFormErrorCodes.DependencyCycle));
+		result.Issues.ShouldContain(issue => issue.Code == "RequiredRuleConflict");
 	}
 
 	[Fact]

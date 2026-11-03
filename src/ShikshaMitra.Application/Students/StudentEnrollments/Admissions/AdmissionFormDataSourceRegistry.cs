@@ -54,18 +54,7 @@ public sealed class AdmissionFormDataSourceRegistry(
 		{
 			if (!academicYearId.HasValue || !currentTenant.Id.HasValue) return [];
 			var hierarchy = await academicOptions.GetAsync(academicYearId);
-			var options = source.Key == "DivisionsByStandard"
-				? hierarchy.Divisions.Where(item => item.ParentId == parentId)
-				: hierarchy.Standards.Where(item => source.Key == "StandardsByMediumStage"
-					? item.StageId == parentId : !parentId.HasValue || item.ParentId == parentId);
-			var duplicateNames = options.GroupBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
-				.Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
-			return options.Select((item, index) => new AdmissionFormOptionDto
-			{
-				Value = item.Id.ToString(), Label = duplicateNames.Contains(item.Name) && source.Key != "DivisionsByStandard"
-					? $"{item.Name} ({hierarchy.Mediums.FirstOrDefault(medium => medium.Id == item.ParentId)?.Name} / {hierarchy.Stages.FirstOrDefault(stage => stage.Id == item.StageId)?.Name})" : item.Name,
-				DisplayOrder = index
-			}).ToList();
+			return MapAcademicOptions(source.Key, parentId, hierarchy);
 		}
 		if (source.Key == "StudentSiblings")
 		{
@@ -112,5 +101,30 @@ public sealed class AdmissionFormDataSourceRegistry(
 				.ToList(),
 			_ => []
 		};
+	}
+
+	// The caller supplies the scoped hierarchy for this operation; this mapper performs no reads or authorization caching.
+	internal static IReadOnlyList<AdmissionFormOptionDto> MapAcademicOptions(string sourceKey, Guid? parentId, StudentDirectoryOptionsDto hierarchy)
+	{
+		if (sourceKey != "Standards" && !parentId.HasValue) return [];
+		var options = sourceKey == "DivisionsByStandard"
+			? hierarchy.Divisions.Where(item => item.ParentId == parentId)
+			: hierarchy.Standards.Where(item => sourceKey == "StandardsByMediumStage"
+				? item.StageId == parentId : !parentId.HasValue || item.ParentId == parentId);
+		var duplicateNames = options.GroupBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+			.Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var mediums = hierarchy.Mediums.ToDictionary(item => item.Id);
+		var stages = hierarchy.Stages.ToDictionary(item => item.Id);
+		return options.Select((item, index) =>
+		{
+			var isClass = sourceKey != "DivisionsByStandard";
+			var medium = isClass && item.ParentId.HasValue ? mediums.GetValueOrDefault(item.ParentId.Value) : null;
+			return new AdmissionFormOptionDto
+			{
+				Value = item.Id.ToString(), Label = duplicateNames.Contains(item.Name) && isClass
+					? $"{item.Name} ({medium?.Name} / {(item.StageId.HasValue ? stages.GetValueOrDefault(item.StageId.Value)?.Name : null)})" : item.Name,
+				DisplayOrder = index
+			};
+		}).ToList();
 	}
 }

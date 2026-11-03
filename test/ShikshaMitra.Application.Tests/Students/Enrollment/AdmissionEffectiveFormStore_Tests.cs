@@ -159,7 +159,7 @@ public class AdmissionEffectiveFormStore_Tests
 		var frozen = AdmissionEffectiveFormStore.Read(instance)!;
 		frozen.InquiryContextSections.ShouldBeEmpty();
 		frozen.InquiryContextValues.ShouldBeEmpty();
-		frozen.Definition.Sections[0].Fields[0].VisibilityRuleJson.ShouldNotContain("CTX_FLAG");
+		frozen.Definition.Sections[0].Fields[0].VisibilityRuleJson.ShouldNotBeNull().ShouldNotContain("CTX_FLAG");
 		var validator = new AdmissionApplicationFormValidator(new AdmissionWorkflowConditionEvaluator());
 		validator.Validate(AdmissionEffectiveFormResolver.MaterializeFields(frozen.Definition),
 			AdmissionEffectiveFormResolver.MaterializeSections(frozen.Definition), new Dictionary<string, string>())

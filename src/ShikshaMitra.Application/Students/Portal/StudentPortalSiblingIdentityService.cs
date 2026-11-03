@@ -17,15 +17,14 @@ public class StudentPortalSiblingIdentityService(
 	public async Task<bool> HasVerifiedGuardianIdentityAsync(IdentityUser user)
 	{
 		if (!tenant.Id.HasValue || user.TenantId != tenant.Id || !user.IsActive) return false;
-		var guardianLinks = await links.GetListAsync(link => link.UserId == user.Id && link.AccountType == "guardian");
-		if (!guardianLinks.Any(link => link.VerifiedByUserId != Guid.Empty)) return false;
-		if (user.EmailConfirmed) return true;
+		if (user.EmailConfirmed)
+			return await links.AnyAsync(link => link.UserId == user.Id && link.AccountType == "guardian" && link.VerifiedByUserId != Guid.Empty);
 		// An arbitrary unconfirmed email match is insufficient. Only this exact current
 		// guardian identity/link's durable initial-setup request supplies provenance.
-		foreach (var link in guardianLinks.Where(link => link.VerifiedByUserId != Guid.Empty))
-			if (await requests.AnyAsync(row => row.UserId == user.Id && row.LinkId == link.Id && row.StudentId == link.StudentId &&
+		var requestQuery = await requests.GetQueryableAsync();
+		return await links.AnyAsync(link => link.UserId == user.Id && link.AccountType == "guardian" && link.VerifiedByUserId != Guid.Empty &&
+			requestQuery.Any(row => row.UserId == user.Id && row.LinkId == link.Id && row.StudentId == link.StudentId &&
 				row.AccountType == "guardian" && row.Email == user.Email &&
-				(row.Status == "Pending" || row.Status == "Processing" || row.Status == "Sent" || row.Status == "Failed"))) return true;
-		return false;
+				(row.Status == "Pending" || row.Status == "Processing" || row.Status == "Sent" || row.Status == "Failed")));
 	}
 }

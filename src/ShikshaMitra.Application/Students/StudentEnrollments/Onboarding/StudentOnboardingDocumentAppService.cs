@@ -17,18 +17,43 @@ using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePerm
 namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 [Authorize(Permissions.View)]
-public class StudentOnboardingDocumentAppService(
-	IRepository<StudentOnboardingCase, Guid> cases,
-	IRepository<AdmissionApplication, Guid> applications,
-	IRepository<DocumentType, Guid> documentTypes,
-	IRepository<StudentOnboardingEvent, Guid> events,
-	IStudentRepository students,
-	AdmissionApplicationScopeAccessService scope,
-	AdmissionStudentEvidenceReader admissionEvidence,
-	StudentDocumentManager documents,
-	IStudentOnboardingAppService onboardingService,
-	IPermissionChecker permissions) : ApplicationService, IStudentOnboardingDocumentAppService
+public class StudentOnboardingDocumentAppService : ApplicationService, IStudentOnboardingDocumentAppService
 {
+	private readonly IRepository<StudentOnboardingCase, Guid> cases;
+	private readonly IRepository<AdmissionApplication, Guid> applications;
+	private readonly IRepository<DocumentType, Guid> documentTypes;
+	private readonly IStudentRepository students;
+	private readonly AdmissionApplicationScopeAccessService scope;
+	private readonly AdmissionStudentEvidenceReader admissionEvidence;
+	private readonly StudentDocumentManager documents;
+	private readonly IStudentOnboardingAppService onboardingService;
+	private readonly IPermissionChecker permissions;
+
+	public StudentOnboardingDocumentAppService(
+		IRepository<StudentOnboardingCase, Guid> cases,
+		IRepository<AdmissionApplication, Guid> applications,
+		IRepository<DocumentType, Guid> documentTypes,
+		IRepository<StudentOnboardingEvent, Guid> events,
+		IStudentRepository students,
+		AdmissionApplicationScopeAccessService scope,
+		AdmissionStudentEvidenceReader admissionEvidence,
+		StudentDocumentManager documents,
+		IStudentOnboardingAppService onboardingService,
+		IPermissionChecker permissions
+	)
+	{
+		this.cases = cases;
+		this.applications = applications;
+		this.documentTypes = documentTypes;
+		_ = events;
+		this.students = students;
+		this.scope = scope;
+		this.admissionEvidence = admissionEvidence;
+		this.documents = documents;
+		this.onboardingService = onboardingService;
+		this.permissions = permissions;
+	}
+
 	public async Task<StudentOnboardingDocumentsDto> GetAsync(Guid caseId)
 	{
 		var (onboarding, student) = await GetContextAsync(caseId);

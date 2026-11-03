@@ -8,7 +8,7 @@ public class CreateUpdateStandardDto
 {
     [Required]
     [StringLength(StandardConsts.MaxNameLength)]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
 	[Range(1, int.MaxValue)]
 	public int AgeLowerLimit { get; set; }

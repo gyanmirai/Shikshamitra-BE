@@ -27,7 +27,7 @@ public static class DueFeeCollectionStatusResolver
 			return FeeCollectionStatus.InReconciliation;
 		if (due.OutstandingAmount <= 0m)
 			return FeeCollectionStatus.Paid;
-		return due.PaidAmount - due.RefundedAmount > 0m || due.ConcessionAmount > 0m || due.AdjustmentCreditAmount > 0m
+		return due.PaidAmount > 0m || due.ConcessionAmount > 0m || due.AdjustmentCreditAmount > 0m
 			? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending;
 	}
 }

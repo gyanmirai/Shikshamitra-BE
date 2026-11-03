@@ -100,11 +100,12 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string SubmoduleName = $"{ModuleName}.Policies";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Policies";
+			private const string LegacyCreateName = $"{SubmoduleName}.Create";
 
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			[System.Obsolete("Use Add instead")]
-			public const string Create = $"{SubmoduleName}.Create";
+			public const string Create = LegacyCreateName;
 			public const string Edit = $"{SubmoduleName}.Edit";
 			public const string Archive = $"{SubmoduleName}.Archive";
 			public const string SetDefault = $"{SubmoduleName}.SetDefault";
@@ -115,7 +116,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			public static readonly string[] All =
 			{
-				View, Add, Create, Edit, Archive, SetDefault, Assign, Clone, PreviewImpact, ViewAudit
+				View, Add, LegacyCreateName, Edit, Archive, SetDefault, Assign, Clone, PreviewImpact, ViewAudit
 			};
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
@@ -123,7 +124,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Create, $"{SubmoduleDisplayName}.Create" },
+				{ LegacyCreateName, $"{SubmoduleDisplayName}.Create" },
 				{ Edit, $"{SubmoduleDisplayName}.Edit" },
 				{ Archive, $"{SubmoduleDisplayName}.Archive" },
 				{ SetDefault, $"{SubmoduleDisplayName}.SetDefault" },

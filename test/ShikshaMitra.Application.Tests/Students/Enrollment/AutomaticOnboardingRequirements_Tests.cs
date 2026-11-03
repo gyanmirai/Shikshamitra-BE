@@ -84,7 +84,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			item.Steps.Single(s => s.Key == StudentOnboardingStepKeys.Documents).Required.ShouldBeTrue();
 			item.Steps.Single(s => s.Key == StudentOnboardingStepKeys.Documents).Status.ShouldBe(StudentOnboardingStepStatus.Blocked);
 			item.Steps.ShouldNotContain(s => s.Key == StudentOnboardingStepKeys.ApprovalReview && s.Required);
-			(await service.PreviewActivationAsync(item.Id)).LastError.ShouldContain("Documents and compliance");
+			(await service.PreviewActivationAsync(item.Id)).LastError.ShouldNotBeNull().ShouldContain("Documents and compliance");
 			(await Should.ThrowAsync<BusinessException>(() => service.ActivateAsync(item.Id,
 				new() { ConcurrencyStamp = item.ConcurrencyStamp, IdempotencyKey = "automatic-documents-blocked" })))
 				.Code.ShouldBe(StudentOnboardingErrorCodes.RequiredStepsIncomplete);

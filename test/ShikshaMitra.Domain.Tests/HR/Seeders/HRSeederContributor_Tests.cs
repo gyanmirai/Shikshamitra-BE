@@ -82,15 +82,69 @@ public class HRSeederContributor_Tests
 	}
 
 	[Fact]
-	public void Seeded_Login_Emails_Should_Have_Employee_Profiles()
+	public void Seeded_Staff_Login_Emails_Should_Have_Employee_Profiles()
 	{
 		var profiles = HRSeederContributor.BuildSuratSeedEmployeeProfiles();
-		var loginEmails = UserSeederContributor.BuildSeededLoginEmails()
-			.Concat(TestLoginSeederContributor.BuildSeededLoginEmails())
+		var baselineLoginEmails = UserSeederContributor.BuildSeededLoginEmails();
+		var testLoginEmails = TestLoginSeederContributor.BuildSeededLoginEmails();
+		var baselineRoles = UserSeederContributor.BuildSeededLoginRolesByEmail();
+		var portalLoginEmails = baselineRoles
+			.Where(login => login.Value is "Student" or "Parent")
+			.Select(login => login.Key)
+			.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+		baselineLoginEmails.Distinct(StringComparer.OrdinalIgnoreCase).Count().ShouldBe(baselineLoginEmails.Count);
+		testLoginEmails.Distinct(StringComparer.OrdinalIgnoreCase).Count().ShouldBe(testLoginEmails.Count);
+		portalLoginEmails.SetEquals(["student-demo@ddvs.com", "parent-demo@ddvs.com"]).ShouldBeTrue();
+
+		// Portal identities belong to Student/Parent. The CRM-denied login is an
+		// identity-only authorization fixture, despite its HR Manager role; it has
+		// no HR profile or legacy employee aliases. All other logins require HR data.
+		const string crmDeniedLoginEmail = "student-crm-denied@ddvs.com";
+		var staffLoginEmails = baselineLoginEmails
+			.Concat(testLoginEmails)
+			.Where(email => !portalLoginEmails.Contains(email) &&
+				!string.Equals(email, crmDeniedLoginEmail, StringComparison.OrdinalIgnoreCase))
 			.Distinct(StringComparer.OrdinalIgnoreCase)
 			.ToList();
 
-		loginEmails.ShouldAllBe(email => profiles.ContainsKey(email));
+		staffLoginEmails.Count.ShouldBe(14);
+		staffLoginEmails.ShouldAllBe(email => profiles.ContainsKey(email));
+		profiles.Values.Count(profile => staffLoginEmails.Contains(profile.Email, StringComparer.OrdinalIgnoreCase))
+			.ShouldBe(staffLoginEmails.Count);
+
+		portalLoginEmails.ShouldAllBe(email => !profiles.ContainsKey(email));
+		testLoginEmails.ShouldContain(crmDeniedLoginEmail);
+		TestLoginSeederContributor.BuildSeededLoginEmployeeAliasEmailsByEmail()[crmDeniedLoginEmail]
+			.ShouldBe([crmDeniedLoginEmail]);
+		profiles.ContainsKey(crmDeniedLoginEmail).ShouldBeFalse();
+	}
+
+	[Fact]
+	public void Baseline_Student_And_Parent_Logins_Should_Not_Have_Employee_Profiles()
+	{
+		var profiles = HRSeederContributor.BuildSuratSeedEmployeeProfiles();
+		var portalLogins = UserSeederContributor.BuildSeededLoginRolesByEmail()
+			.Where(login => login.Value is "Student" or "Parent")
+			.Select(login => login.Key)
+			.ToList();
+
+		portalLogins.ShouldBe(["student-demo@ddvs.com", "parent-demo@ddvs.com"], ignoreOrder: true);
+		portalLogins.ShouldAllBe(email => !profiles.ContainsKey(email));
+	}
+
+	[Fact]
+	public void Identity_Only_Crm_Negative_Control_Should_Remain_A_Login_Without_An_Employee_Profile()
+	{
+		var loginEmails = TestLoginSeederContributor.BuildSeededLoginEmails();
+		var employeeProfileLoginEmails = TestLoginSeederContributor.BuildSeededEmployeeProfileLoginEmails();
+		var profiles = HRSeederContributor.BuildSuratSeedEmployeeProfiles();
+
+		loginEmails.ShouldContain("student-crm-denied@ddvs.com");
+		loginEmails.Except(employeeProfileLoginEmails, StringComparer.OrdinalIgnoreCase)
+			.ShouldBe(["student-crm-denied@ddvs.com"]);
+		employeeProfileLoginEmails.ShouldAllBe(email => loginEmails.Contains(email));
+		profiles.ContainsKey("student-crm-denied@ddvs.com").ShouldBeFalse();
 	}
 
 	[Fact]

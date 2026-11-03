@@ -89,7 +89,11 @@ public partial class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMul
 	public Guid? CurrentStageInstanceId { get; private set; }
 	public DateTime? LastSavedAt { get; private set; }
 	public DateTime? SubmittedAt { get; private set; }
-	protected AdmissionApplication() { }
+	protected AdmissionApplication()
+	{
+		// EF materializes these required columns after this ORM constructor.
+		ApplicationNumber = null!;
+	}
 
 	public AdmissionApplication(Guid id, Guid? tenantId, string applicationNumber, Guid applicantId, Guid? inquiryId,
 		Guid cycleId, Guid offeringId, Guid workflowDefinitionId, Guid formDefinitionId) : base(id)
@@ -153,6 +157,13 @@ public partial class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMul
 	public void RecordWorkflowCompleted(Guid workflowInstanceId, Guid terminalStageInstanceId) =>
 		AddLocalEvent(new ApplicationWorkflowCompletedEvent(Id, workflowInstanceId, terminalStageInstanceId, TenantId));
 	public void SaveDraft() { if (Status != AdmissionApplicationStatus.Draft) throw new BusinessException(AdmissionApplicationErrorCodes.AlreadySubmitted); LastSavedAt = DateTime.UtcNow; }
+	public bool CanCorrectForm => CanEndJourney && Status != AdmissionApplicationStatus.Draft && !FinalizedAt.HasValue;
+	public void RecordFormCorrection(DateTime now)
+	{
+		if (!CanCorrectForm) throw new BusinessException(AdmissionFormCorrectionErrorCodes.Blocked,
+			"Only an open application before admission finalization can be corrected.");
+		LastSavedAt = now;
+	}
 	public void Submit() { if (Status != AdmissionApplicationStatus.Draft) throw new BusinessException(AdmissionApplicationErrorCodes.AlreadySubmitted); Status = AdmissionApplicationStatus.Submitted; SubmittedAt = DateTime.UtcNow; LastSavedAt = SubmittedAt; }
 	public void Reopen() { if (Status != AdmissionApplicationStatus.Submitted) throw new BusinessException(AdmissionApplicationErrorCodes.FormNotSubmitted); Status = AdmissionApplicationStatus.Draft; LastSavedAt = DateTime.UtcNow; }
 	public void ReopenForManagedReview()

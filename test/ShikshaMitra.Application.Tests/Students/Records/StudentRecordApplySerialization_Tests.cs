@@ -222,5 +222,10 @@ public class RecordApplyFaultRepository<TEntity> : DispatchProxy where TEntity :
 
 public sealed class RecordSerializationDbException : DbException
 {
+	public RecordSerializationDbException() { }
+	public RecordSerializationDbException(string? message) : base(message) { }
+	public RecordSerializationDbException(string? message, Exception? innerException) : base(message, innerException) { }
+	public RecordSerializationDbException(string? message, int errorCode) : base(message, errorCode) { }
+
 	public override string SqlState => "40001";
 }

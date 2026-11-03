@@ -46,12 +46,16 @@ public class StudentPortalLoginService(IdentityUserManager users, IRepository<Id
 				student.Status != StudentLifeCycleStatusEnum.Left &&
 				(link.AccountType == "guardian" || link.AccountType == "student" && link.Relationship == "self")
 			select link.Id)) return true;
-		var legacy = await students.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id && x.Status != StudentLifeCycleStatusEnum.Left);
+		var legacy = await AsyncExecuter.ToListAsync(studentQuery
+			.Where(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id && x.Status != StudentLifeCycleStatusEnum.Left)
+			.Select(x => x.Id));
 		if (legacy.Count == 0) return false;
 		using (dataFilter.Disable<ISoftDelete>())
 		{
-			var history = await links.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id && x.AccountType == "student" && x.Relationship == "self");
-			return legacy.Any(student => history.All(link => link.StudentId != student.Id));
+			var history = await AsyncExecuter.ToListAsync((await links.GetQueryableAsync())
+				.Where(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id && x.AccountType == "student" && x.Relationship == "self")
+				.Select(x => x.StudentId));
+			return legacy.Any(studentId => !history.Contains(studentId));
 		}
 	}
 }

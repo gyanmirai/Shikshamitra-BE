@@ -1209,7 +1209,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
 
         // Apply rules based on validation request type
         bool isBlocked = CalendarDayBlockingRules.Blocks(day.DayType, input.ValidationType);
-        string blockingReason = input.ValidationType.ToLowerInvariant() == "attendance"
+        string blockingReason = string.Equals(input.ValidationType.ToLowerInvariant(), "attendance", StringComparison.Ordinal)
             ? "AttendanceExemption"
             : day.DayType.ToString();
 
@@ -1838,7 +1838,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 .Where(x => x.FieldName.EndsWith("UserId", StringComparison.OrdinalIgnoreCase))
                 .SelectMany(x => new[] { x.OldValue, x.NewValue })
                 .Where(x => Guid.TryParse(x, out _))
-                .Select(Guid.Parse))
+                .Select(value => Guid.Parse(value!)))
             .Distinct()
             .ToList();
 

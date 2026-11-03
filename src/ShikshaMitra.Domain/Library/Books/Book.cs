@@ -39,7 +39,17 @@ public class Book : AuditedAggregateRoot<Guid>, IMultiTenant
 
     public List<BookCopy> Copies { get; set; } = new();
 
-    protected Book() { }
+    protected Book()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        ApplicableAge = null!;
+        Author = null!;
+        Edition = null!;
+        Isbn = null!;
+        Publisher = null!;
+        Subject = null!;
+        Title = null!;
+    }
 
     public Book(
         string title,

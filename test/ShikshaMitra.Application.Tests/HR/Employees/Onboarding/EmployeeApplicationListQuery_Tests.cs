@@ -142,7 +142,7 @@ public class EmployeeApplicationListQuery_Tests(ITestOutputHelper output)
 		output.WriteLine(sql);
 	}
 
-	private static EmployeeApplication Application(Guid tenantId, int index)
+	private new static EmployeeApplication Application(Guid tenantId, int index)
 	{
 		var now = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
 		var entity = new EmployeeApplication(Guid.NewGuid(), tenantId, $"SYNTHETIC-{index:D4}", Guid.NewGuid().ToString(), "synthetic-encrypted-token",

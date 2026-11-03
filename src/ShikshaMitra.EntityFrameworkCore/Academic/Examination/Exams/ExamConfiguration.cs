@@ -82,8 +82,8 @@ public class ExamSubjectDivisionConfiguration : IEntityTypeConfiguration<ExamSub
 
         builder.Property(e => e.RoomIds)
             .HasConversion(
-                v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions) null),
-                v => System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<System.Guid>>(v, (System.Text.Json.JsonSerializerOptions) null)
+                v => System.Text.Json.JsonSerializer.Serialize(v, (System.Text.Json.JsonSerializerOptions?) null),
+                v => System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<System.Guid>>(v, (System.Text.Json.JsonSerializerOptions?) null)!
             );
     }
 }

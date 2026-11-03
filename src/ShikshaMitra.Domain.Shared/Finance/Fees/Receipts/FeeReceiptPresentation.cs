@@ -10,7 +10,7 @@ public static class FeeReceiptPresentation
 		=> kind is FeeReceiptKind.ProvisionalFee or FeeReceiptKind.ProvisionalCharge;
 
 	public static string GetLabel(FeeReceiptKind kind, FeeReceiptScope scope)
-		=> $"{(IsProvisional(kind) ? "Provisional" : "Official")} Receipt ({GetScopeLabel(scope)})";
+		=> $"{(IsProvisional(kind) ? "Provisional Receipt" : "Receipt")} ({GetScopeLabel(scope)})";
 
 	public static string GetScopeLabel(FeeReceiptScope scope) => scope switch
 	{
@@ -32,6 +32,6 @@ public static class FeeReceiptPresentation
 	{
 		var safeNumber = Regex.Replace(number, "[^A-Za-z0-9_-]", "-");
 		var scopeName = scope == FeeReceiptScope.Combined ? "Fees-And-Charges" : GetScopeLabel(scope);
-		return $"{(IsProvisional(kind) ? "Provisional" : "Official")}-Receipt_{scopeName}_{safeNumber}_{date:yyyy-MM-dd}.pdf";
+		return $"{(IsProvisional(kind) ? "Provisional-Receipt" : "Receipt")}_{scopeName}_{safeNumber}_{date:yyyy-MM-dd}.pdf";
 	}
 }

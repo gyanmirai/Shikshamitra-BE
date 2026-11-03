@@ -25,6 +25,7 @@ public interface IAdmissionApplicationAppService : IApplicationService
 	Task<AdmissionApplicationWorkflowDto> GetWorkflowAsync(Guid id);
 	Task<AdmissionApplicationFormDto> GetFormAsync(Guid id);
 	Task<AdmissionApplicationFormDto> UpdateFormValuesAsync(Guid id, UpdateAdmissionApplicationFormValuesDto input);
+	Task<AdmissionApplicationFormDto> CorrectFormAsync(Guid id, CorrectAdmissionApplicationFormDto input);
 	Task<AdmissionApplicationSubmitResultDto> SubmitAsync(Guid id);
 	Task<AdmissionApplicationFormDto> ReopenFormAsync(Guid id);
 	Task<List<AdmissionFormChangeHistoryDto>> GetFormHistoryAsync(Guid id);

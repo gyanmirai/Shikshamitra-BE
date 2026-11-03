@@ -130,7 +130,7 @@ public class EfCoreUserScopeAssignmentRepository :
 
         var directUserIds = await matchingAssignments
             .Where(x => x.UserId.HasValue)
-            .Select(x => x.UserId.Value)
+            .Select(x => x.UserId!.Value)
             .ToListAsync(cancellationToken);
 
         var roleNames = await matchingAssignments
@@ -199,7 +199,7 @@ public class EfCoreUserScopeAssignmentRepository :
 
         var directUserIds = await matchingAssignments
             .Where(x => x.UserId.HasValue)
-            .Select(x => x.UserId.Value)
+            .Select(x => x.UserId!.Value)
             .ToListAsync(cancellationToken);
 
         var roleNames = await matchingAssignments
@@ -301,7 +301,7 @@ public class EfCoreUserScopeAssignmentRepository :
         var directUserIds = await baseQuery
             .Where(x => x.UserId.HasValue && x.IsActive && !x.IsDeleted)
             .Where(fieldPredicate)
-            .Select(x => x.UserId.Value)
+            .Select(x => x.UserId!.Value)
             .ToListAsync(cancellationToken);
 
         // Get role-based assignments

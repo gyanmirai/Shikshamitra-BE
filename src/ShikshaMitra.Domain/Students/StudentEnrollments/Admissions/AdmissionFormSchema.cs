@@ -25,6 +25,8 @@ public class AdmissionFormSchema
 
 public class AdmissionFormSchemaSection
 {
+	// Effective composition only; the source form owns inherited section columns.
+	public int? FieldsPerRow { get; set; }
 	public Guid Id { get; set; }
 	public Guid FormDefinitionId { get; set; }
 	public string Code { get; set; } = string.Empty;

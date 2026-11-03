@@ -175,6 +175,76 @@ public class AcademicPermissionUserScopeSyncer_Tests
 		}
 	}
 
+	[Theory]
+	[InlineData("AcademicYear")]
+	[InlineData("Board")]
+	[InlineData("Medium")]
+	[InlineData("Stage")]
+	[InlineData("Standard")]
+	public async Task SyncAsync_Should_Respect_Filtered_Parents_And_Preserve_Manual_Scopes(string parent)
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var user = await CreateUserAsync();
+			var hierarchy = await CreateAcademicHierarchyAsync();
+			await InsertDivisionPermissionAsync(user.Id, hierarchy.DivisionId);
+			await InsertManualScopeAsync(user.Id, Guid.NewGuid());
+			(await WithUnitOfWorkAsync(() => _syncer.SyncAsync())).ShouldBe(1);
+
+			await WithUnitOfWorkAsync(async () =>
+			{
+				switch (parent)
+				{
+					case "AcademicYear":
+						await _academicYearRepository.DeleteAsync(hierarchy.AcademicYearId, autoSave: true);
+						break;
+					case "Board":
+						await _boardRepository.DeleteAsync(hierarchy.BoardId, autoSave: true);
+						break;
+					case "Medium":
+						await _mediumRepository.DeleteAsync(hierarchy.MediumId, autoSave: true);
+						break;
+					case "Stage":
+						await _stageRepository.DeleteAsync(hierarchy.StageId, autoSave: true);
+						break;
+					case "Standard":
+						await _standardRepository.DeleteAsync(hierarchy.StandardId, autoSave: true);
+						break;
+				}
+			});
+
+			(await WithUnitOfWorkAsync(() => _syncer.SyncAsync())).ShouldBe(0);
+			var scopes = await _scopeRepository.GetListAsync(x => x.UserId == user.Id);
+			scopes.Single(x => x.DivisionId == hierarchy.DivisionId).IsActive.ShouldBeFalse();
+			scopes.Single(x => x.Description == "Manual test scope").IsActive.ShouldBeTrue();
+			// Parent filtering must not remove the source assignment or mutate manual access.
+			(await _divisionPermissionRepository.GetListAsync(x =>
+				x.UserId == user.Id && x.DivisionId == hierarchy.DivisionId)).Count.ShouldBe(1);
+		}
+	}
+
+	[Fact]
+	public async Task SyncAsync_Should_Not_Resolve_A_Hierarchy_From_Another_Tenant()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var user = await CreateUserAsync();
+			AcademicHierarchy foreignHierarchy;
+			using (_currentTenant.Change(Guid.NewGuid()))
+			{
+				foreignHierarchy = await CreateAcademicHierarchyAsync();
+				await InsertDivisionPermissionAsync(user.Id, foreignHierarchy.DivisionId);
+			}
+
+			// Neither another tenant's source permission nor a legacy cross-tenant reference
+			// from the current tenant may produce access through that tenant's hierarchy.
+			(await WithUnitOfWorkAsync(() => _syncer.SyncAsync())).ShouldBe(0);
+			await InsertDivisionPermissionAsync(user.Id, foreignHierarchy.DivisionId);
+			(await WithUnitOfWorkAsync(() => _syncer.SyncAsync())).ShouldBe(0);
+			(await _scopeRepository.GetListAsync(x => x.UserId == user.Id)).ShouldBeEmpty();
+		}
+	}
+
 	[Fact]
 	public async Task SyncAsync_Should_Deactivate_Obsolete_Derived_Scope_And_Preserve_Manual_Scope()
 	{

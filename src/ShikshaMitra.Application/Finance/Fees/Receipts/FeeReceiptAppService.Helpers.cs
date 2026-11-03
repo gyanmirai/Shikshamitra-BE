@@ -34,7 +34,7 @@ public partial class FeeReceiptAppService
             ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
         await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId, cancellationToken);
 
-        if (receipt.PdfBlobName != null && receipt.PdfBlobName.Contains("/v3/", StringComparison.Ordinal))
+        if (receipt.PdfBlobName != null && receipt.PdfBlobName.Contains("/v4/", StringComparison.Ordinal))
         {
             var cached = await blobManager.GetPdfOrNullAsync(receipt.PdfBlobName, cancellationToken);
             if (cached != null) return cached;
@@ -63,8 +63,8 @@ public partial class FeeReceiptAppService
 
     public static string GetKindLabel(FeeReceiptKind kind) => kind switch
     {
-        FeeReceiptKind.FinalFee          => "Official Receipt (Fee)",
-        FeeReceiptKind.FinalCharge       => "Official Receipt (Charge)",
+        FeeReceiptKind.FinalFee          => "Receipt (Fee)",
+        FeeReceiptKind.FinalCharge       => "Receipt (Charge)",
         FeeReceiptKind.ProvisionalFee    => "Provisional Receipt (Fee)",
         FeeReceiptKind.ProvisionalCharge => "Provisional Receipt (Charge)",
         _                               => kind.ToString(),

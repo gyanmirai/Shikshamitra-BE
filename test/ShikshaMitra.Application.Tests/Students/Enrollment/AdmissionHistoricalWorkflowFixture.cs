@@ -11,7 +11,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		{
 			// Persist historical graphs for snapshot/read tests. Retired operations remain denied.
 			var workflow = new AdmissionWorkflowDefinition(Guid.NewGuid(), TestTenantId,
-				input.Name, input.Code, description: input.Description);
+				input.Name, input.Code!, description: input.Description);
 			workflow.Publish(TestUserId);
 			await GetRequiredService<IRepository<AdmissionWorkflowDefinition, Guid>>().InsertAsync(workflow, false);
 			var stages = GetRequiredService<IRepository<AdmissionWorkflowStageDefinition, Guid>>();

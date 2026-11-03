@@ -21,6 +21,15 @@ public class AdmissionAssessmentCommandService(
 {
 	public async Task<AdmissionAssessmentDto> BookAsync(Guid applicationId, Guid stageId, AdmissionAssessmentBookingInput input)
 	{
+		await BookCoreAsync(applicationId, stageId, input);
+		return await reader.GetAsync(applicationId, stageId);
+	}
+
+	internal Task BookForBatchAsync(Guid applicationId, Guid stageId, AdmissionAssessmentBookingInput input) =>
+		BookCoreAsync(applicationId, stageId, input);
+
+	private async Task BookCoreAsync(Guid applicationId, Guid stageId, AdmissionAssessmentBookingInput input)
+	{
 		await LazyServiceProvider.LazyGetRequiredService<IAdmissionAssessmentResourceLock>().AcquireAsync(CurrentTenant.Id, [applicationId, input.SessionId.GetValueOrDefault()]);
 		var context = await access.GetContextAsync(applicationId, stageId, requireActive: false, requirePreparation: true);
 		AdmissionAssessmentAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
@@ -57,7 +66,7 @@ public class AdmissionAssessmentCommandService(
 			attempt.AssignInterviewSlot(input.SlotStartsAt.Value.UtcDateTime, input.SlotStartsAt.Value.UtcDateTime.AddMinutes(session.SlotDurationMinutes!.Value));
 		}
 		await attempts.InsertAsync(attempt, false);
-		return await SaveAsync(context, attempt, "AssessmentAttemptCreated");
+		await PersistAsync(context, attempt, "AssessmentAttemptCreated");
 	}
 
 	public Task<AdmissionAssessmentDto> RecordAttendanceAsync(Guid id, AdmissionAssessmentAttendanceInput input) =>
@@ -103,11 +112,16 @@ public class AdmissionAssessmentCommandService(
 		});
 
 	public Task<AdmissionAssessmentDto> CancelAsync(Guid id, AdmissionAssessmentActionInput input) =>
-		MutateAsync(id, input, "AssessmentAttemptCancelled", async (_, attempt) =>
-		{
-			attempt.Cancel(input.Notes);
-			await ReleaseSessionAsync(attempt);
-		});
+		MutateAsync(id, input, "AssessmentAttemptCancelled", (_, attempt) => CancelAttemptAsync(attempt, input));
+
+	internal Task CancelForBatchAsync(Guid id, AdmissionAssessmentActionInput input) =>
+		MutateCoreAsync(id, input, "AssessmentAttemptCancelled", (_, attempt) => CancelAttemptAsync(attempt, input));
+
+	private async Task CancelAttemptAsync(AdmissionAssessmentAttempt attempt, AdmissionAssessmentActionInput input)
+	{
+		attempt.Cancel(input.Notes);
+		await ReleaseSessionAsync(attempt);
+	}
 
 	public async Task<AdmissionAssessmentDto> WaiveAsync(Guid applicationId, Guid stageId, AdmissionAssessmentWaiverInput input)
 	{
@@ -134,6 +148,13 @@ public class AdmissionAssessmentCommandService(
 	private async Task<AdmissionAssessmentDto> MutateAsync(Guid id, AdmissionAssessmentActionInput input, string action,
 		Func<AdmissionAssessmentContext, AdmissionAssessmentAttempt, Task> change)
 	{
+		var context = await MutateCoreAsync(id, input, action, change);
+		return await reader.GetAsync(context.Application.Id, context.Stage.Id);
+	}
+
+	private async Task<AdmissionAssessmentContext> MutateCoreAsync(Guid id, AdmissionAssessmentActionInput input, string action,
+		Func<AdmissionAssessmentContext, AdmissionAssessmentAttempt, Task> change)
+	{
 		var attempt = await attempts.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionAssessmentAttempt), id);
 		var context = await access.GetContextAsync(attempt.ApplicationId, attempt.StageInstanceId, requireActive: false, requirePreparation: true);
 		context = context with { Policy = AdmissionAssessmentAccessService.ReadAttemptPolicy(attempt, context.Policy) };
@@ -142,10 +163,17 @@ public class AdmissionAssessmentCommandService(
 			throw Invalid("Only the latest assessment attempt can be changed.");
 		await change(context, attempt);
 		await attempts.UpdateAsync(attempt, false);
-		return await SaveAsync(context, attempt, action);
+		await PersistAsync(context, attempt, action);
+		return context;
 	}
 
 	private async Task<AdmissionAssessmentDto> SaveAsync(AdmissionAssessmentContext context, AdmissionAssessmentAttempt attempt, string action)
+	{
+		await PersistAsync(context, attempt, action);
+		return await reader.GetAsync(context.Application.Id, context.Stage.Id);
+	}
+
+	private async Task PersistAsync(AdmissionAssessmentContext context, AdmissionAssessmentAttempt attempt, string action)
 	{
 		await applications.UpdateAsync(context.Application, false);
 		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(action,
@@ -156,7 +184,6 @@ public class AdmissionAssessmentCommandService(
 				attempt.Marks, SubjectScores = attempt.GetSubjectScores(), attempt.RecordedBy, attempt.ReviewedBy, attempt.Notes, attempt.ReviewNotes
 			})), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
-		return await reader.GetAsync(context.Application.Id, context.Stage.Id);
 	}
 	private AdmissionAssessmentAttempt NewAttempt(AdmissionAssessmentContext context, Guid? sessionId, int number) =>
 		new(GuidGenerator.Create(), CurrentTenant.Id, context.Application.Id, context.Stage.Id, sessionId, number,

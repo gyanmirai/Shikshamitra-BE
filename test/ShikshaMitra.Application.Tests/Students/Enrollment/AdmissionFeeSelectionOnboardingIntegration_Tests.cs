@@ -77,7 +77,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
             item = await service.AssignGrNumberAsync(item.Id, new() { NumberSeriesId = series.Id, ConcurrencyStamp = item.ConcurrencyStamp });
             item.GrNumber.ShouldBe("1001");
             item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
-            (await service.PreviewActivationAsync(item.Id)).LastError.ShouldContain("fee structure");
+            (await service.PreviewActivationAsync(item.Id)).LastError.ShouldNotBeNull().ShouldContain("fee structure");
             await Should.ThrowAsync<BusinessException>(() => service.ActivateAsync(item.Id, new() { IdempotencyKey = "fee-reference-blocked", ConcurrencyStamp = item.ConcurrencyStamp }));
             item = await service.GetAsync(item.Id);
             var selection = await service.SaveFeeStructureAsync(item.Id, new() { StructureId = structure.Id, ConcurrencyStamp = item.ConcurrencyStamp });

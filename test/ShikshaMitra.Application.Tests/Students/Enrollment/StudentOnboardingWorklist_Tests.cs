@@ -90,7 +90,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				(await Should.ThrowAsync<AbpValidationException>(() => service.GetListAsync(input))).ValidationErrors.ShouldNotBeEmpty();
 		});
 
-	private async Task<OnboardingWorklistFixture> CreateOnboardingWorklistFixtureAsync()
+	private Task<OnboardingWorklistFixture> CreateOnboardingWorklistFixtureAsync() =>
+		WithUnitOfWorkAsync(CreateOnboardingWorklistFixtureWithinUnitOfWorkAsync);
+
+	private async Task<OnboardingWorklistFixture> CreateOnboardingWorklistFixtureWithinUnitOfWorkAsync()
 	{
 		var seed = await CreateAcademicFilterFixtureAsync();
 		var manager = GetRequiredService<DivisionManager>();

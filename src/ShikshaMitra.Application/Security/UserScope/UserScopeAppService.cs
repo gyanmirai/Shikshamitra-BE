@@ -259,12 +259,12 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
                 // Save all changes at once - this will fail if any constraint is violated
                 // Both deletions and insertions are in the same transaction
-                await CurrentUnitOfWork.SaveChangesAsync();
+                await CurrentUnitOfWork!.SaveChangesAsync();
 
                 await _employeeOrganizationAssignmentSyncer.SyncFromAcademicPermissionsAsync(
                     distinctUserIds,
                     [targetAcademicYearId]);
-                await CurrentUnitOfWork.SaveChangesAsync();
+                await CurrentUnitOfWork!.SaveChangesAsync();
 
                 // Invalidate cache for all affected users (only after successful save) - OPTIMIZED: Parallel
                 _logger.LogDebug(

@@ -83,15 +83,16 @@ public sealed class StudentRecordsInsertBarrier : DbCommandInterceptor
 	private int _arrived;
 	private string _writeSql = "INSERT INTO \"AppStudentRecordTransitions\"";
 	private IsolationLevel? _isolation = IsolationLevel.Serializable;
+	private bool _afterRead;
 	private TaskCompletionSource _reached = Signal();
 	private TaskCompletionSource _release = Signal();
 	public ConcurrentDictionary<int, byte> Connections { get; } = new();
 	public ConcurrentDictionary<int, IsolationLevel> ConnectionIsolations { get; } = new();
 	public ConcurrentDictionary<string, byte> ProviderFailures { get; } = new();
 	public Task Reached => _reached.Task;
-	public void Arm(string writeSql = "INSERT INTO \"AppStudentRecordTransitions\"", IsolationLevel? isolation = IsolationLevel.Serializable)
+	public void Arm(string writeSql = "INSERT INTO \"AppStudentRecordTransitions\"", IsolationLevel? isolation = IsolationLevel.Serializable, bool afterRead = false)
 	{
-		_writeSql = writeSql; _isolation = isolation; _arrived = 0; Connections.Clear(); ConnectionIsolations.Clear(); ProviderFailures.Clear();
+		_writeSql = writeSql; _isolation = isolation; _afterRead = afterRead; _arrived = 0; Connections.Clear(); ConnectionIsolations.Clear(); ProviderFailures.Clear();
 		_reached = Signal(); _release = Signal(); Interlocked.Exchange(ref _armed, 1);
 	}
 	public void Release() { Interlocked.Exchange(ref _armed, 0); _release.TrySetResult(); }
@@ -99,16 +100,26 @@ public sealed class StudentRecordsInsertBarrier : DbCommandInterceptor
 	public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
 		InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
 	{
-		if (Volatile.Read(ref _armed) == 1 && command.CommandText.Contains(_writeSql, StringComparison.Ordinal))
-		{
-			if (command.Transaction == null || _isolation.HasValue && command.Transaction.IsolationLevel != _isolation)
-				throw new InvalidOperationException("Records concurrency writes must use the application's expected transaction isolation.");
-			Connections.TryAdd(((NpgsqlConnection)command.Connection!).ProcessID, 0);
-			ConnectionIsolations.TryAdd(((NpgsqlConnection)command.Connection!).ProcessID, command.Transaction.IsolationLevel);
-			if (Interlocked.Increment(ref _arrived) == 2) _reached.TrySetResult();
-			await _release.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
-		}
+		if (!_afterRead) await WaitForCompetingCommandAsync(command, cancellationToken);
 		return result;
+	}
+	public override async ValueTask<DbDataReader> ReaderExecutedAsync(DbCommand command, CommandExecutedEventData eventData,
+		DbDataReader result, CancellationToken cancellationToken = default)
+	{
+		// Hold completed SELECTs without consuming or closing their readers. This
+		// fixes each Serializable snapshot before either caller can mutate its rows.
+		if (_afterRead) await WaitForCompetingCommandAsync(command, cancellationToken);
+		return result;
+	}
+	private async Task WaitForCompetingCommandAsync(DbCommand command, CancellationToken cancellationToken)
+	{
+		if (Volatile.Read(ref _armed) != 1 || !command.CommandText.Contains(_writeSql, StringComparison.Ordinal)) return;
+		if (command.Transaction == null || _isolation.HasValue && command.Transaction.IsolationLevel != _isolation)
+			throw new InvalidOperationException("Records concurrency commands must use the application's expected transaction isolation.");
+		Connections.TryAdd(((NpgsqlConnection)command.Connection!).ProcessID, 0);
+		ConnectionIsolations.TryAdd(((NpgsqlConnection)command.Connection!).ProcessID, command.Transaction.IsolationLevel);
+		if (Interlocked.Increment(ref _arrived) == 2) _reached.TrySetResult();
+		await _release.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
 	}
 	public override Task CommandFailedAsync(DbCommand command, CommandErrorEventData eventData, CancellationToken cancellationToken = default)
 	{

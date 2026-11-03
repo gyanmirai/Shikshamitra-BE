@@ -28,7 +28,7 @@ internal static class FeeRefundColumnFilterQuery
                    select new Row
                    {
                        Request = request,
-                       Name = student == null ? request.StudentId.ToString() :
+                       Name = student == null ? request.StudentId.ToString()! :
                            (student.FirstName + " " +
                            (student.MiddleName == null || student.MiddleName == "" ? "" : student.MiddleName + " ") +
                            student.LastName).Trim() + (student.GrNo == null ? "" : " (" + student.GrNo.ToString() + ")"),

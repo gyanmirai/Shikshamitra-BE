@@ -35,9 +35,10 @@ public class IncomeCategoryController(ITransactionCategoryAppService incomeCateg
 		[FromQuery] int page = 1,
 		[FromQuery] int pageSize = 10,
 		[FromQuery] string? search = null,
-		[FromQuery] bool includeInactive = true)
+		[FromQuery] bool includeInactive = true,
+		[FromQuery] string? filters = null)
 	{
-		return incomeCategoryAppService.GetListAsync(academicYearId, TransactionType.Income, page, pageSize, search, includeInactive);
+		return incomeCategoryAppService.GetListAsync(academicYearId, TransactionType.Income, page, pageSize, search, includeInactive, filters);
 	}
 
 	[HttpGet("{incomeCategoryId}")]

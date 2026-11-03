@@ -164,7 +164,8 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				Percentage = CalculatePercentage(submission?.Marks, submission?.TotalMarks ?? assignment.TotalMarks),
 				SubmittedContent = submission?.SubmittedContent,
 				SubmittedDocumentUrl = submission?.SubmittedDocumentUrl,
-				OriginalFileName = submission?.OriginalFileName
+				OriginalFileName = submission?.OriginalFileName,
+				SubmissionAttachments = SubmissionAttachmentMapper.Map(submission)
 			};
 
 			submissionDtos.Add(dto);
@@ -283,7 +284,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			{
 				throw new BusinessException("ShikshaMitra.Assignment:StudentNotInAssignedDivision")
 					.WithData("StudentId", studentId)
-					.WithData("DivisionId", student.DivisionId);
+					.WithData("DivisionId", student.DivisionId!);
 			}
 			await EnsureCurrentUserCanAccessDivisionAsync(assignment, divisionSchedule.DivisionId, nameof(GiveFeedbackAsync));
 

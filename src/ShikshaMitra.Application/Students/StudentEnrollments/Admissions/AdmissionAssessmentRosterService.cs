@@ -76,7 +76,15 @@ public class AdmissionAssessmentRosterService(
 						workflow.Status != AdmissionWorkflowInstanceStatus.Active || !Enumerable.Contains(activeStatuses, application.Status) ||
 						!attemptQuery.Any(newer => newer.ApplicationId == application.Id &&
 						newer.StageInstanceId == stage.Id && newer.Status != "cancelled" && newer.AttemptNumber > attempt.AttemptNumber))))
-			select new RosterContext { Application = application, Stage = stage, Definition = definition, Offering = offering, OfferingName = offering.Name, ClassName = standard == null ? string.Empty : standard.Name, WorkflowActive = workflow.Status == AdmissionWorkflowInstanceStatus.Active,
+			select new RosterContext
+			{
+				Application = new ApplicationSummary { Id = application.Id, ApplicationNumber = application.ApplicationNumber,
+					ApplicantId = application.ApplicantId, AdmissionOfferingId = application.AdmissionOfferingId, Status = application.Status },
+				Stage = new StageSummary { Id = stage.Id, Name = stage.Name, Status = stage.Status, EnteredAt = stage.EnteredAt },
+				Definition = definition, BoardId = offering.BoardId, MediumId = offering.MediumId, StandardId = offering.StandardId,
+				IsActive = workflow.Status == AdmissionWorkflowInstanceStatus.Active && application.CurrentStageInstanceId == stage.Id &&
+					stage.Status == AdmissionRuntimeStageStatus.Active && Enumerable.Contains(activeStatuses, application.Status),
+				OfferingName = offering.Name, ClassName = standard == null ? string.Empty : standard.Name, WorkflowActive = workflow.Status == AdmissionWorkflowInstanceStatus.Active,
 				ApplicantName = applicant == null ? "Applicant unavailable" : applicant.FirstName + " " + (applicant.LastName ?? string.Empty) };
 		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
@@ -87,7 +95,8 @@ public class AdmissionAssessmentRosterService(
 		var scopedContexts = await AsyncExecuter.ToListAsync(query);
 		var definitionPolicies = scopedContexts.GroupBy(row => row.Definition.Id).ToDictionary(group => group.Key,
 			group => AdmissionAssessmentAccessService.ReadPolicy(group.First().Definition));
-		var policies = scopedContexts.ToDictionary(row => row.Stage.Id, row => AdmissionAssessmentAccessService.ResolvePolicy(definitionPolicies[row.Definition.Id], row.Offering));
+		var policies = scopedContexts.ToDictionary(row => row.Stage.Id, row => AdmissionAssessmentAccessService.ResolvePolicy(
+			definitionPolicies[row.Definition.Id], row.BoardId, row.MediumId, row.StandardId));
 		var contexts = scopedContexts.Where(row => policies[row.Stage.Id] != null).ToList();
 		if (contexts.Count == 0) return new() { Items = [], TotalCount = 0 };
 		var applicationIds = contexts.Select(row => row.Application.Id).Distinct().ToArray();
@@ -106,11 +115,10 @@ public class AdmissionAssessmentRosterService(
 		var routes = await transitions.GetListAsync(transition => Enumerable.Contains(definitionIds, transition.FromStageId));
 		var workflowIds = contexts.Select(row => row.Definition.WorkflowDefinitionId).Distinct().ToArray();
 		var versions = (await workflowDefinitions.GetListAsync(item => Enumerable.Contains(workflowIds, item.Id))).ToDictionary(item => item.Id, item => item.Version);
-		var readinessContexts = contexts.Where(row => row.WorkflowActive).Select(row =>
-			new AdmissionAssessmentContext(row.Application, row.Stage, row.Definition, policies[row.Stage.Id]) { WorkflowStatus = AdmissionWorkflowInstanceStatus.Active })
-			.Where(context => context.IsActive && latestByStage.GetValueOrDefault(context.Stage.Id)?.Status == "completed").ToList();
+		var readinessContexts = contexts.Where(row => row.IsActive && latestByStage.GetValueOrDefault(row.Stage.Id)?.Status == "completed")
+			.Select(row => new AdmissionWorkflowRuntimeValueService.AssessmentFactsContext(row.Application.Id, row.Stage.Id, row.Application.Status)).ToList();
 		// Runtime facts choose by creation time, exactly as the individual workflow read does.
-		var readinessIds = readinessContexts.Select(context => context.Stage.Id).ToArray();
+		var readinessIds = readinessContexts.Select(context => context.StageId).ToArray();
 		var factRows = readinessIds.Length == 0 ? [] : await AsyncExecuter.ToListAsync(scopedAttempts.Where(attempt =>
 			Enumerable.Contains(readinessIds, attempt.StageInstanceId) && !attemptQuery.Any(newer =>
 				newer.ApplicationId == attempt.ApplicationId && newer.StageInstanceId == attempt.StageInstanceId && newer.Status != "cancelled" &&
@@ -131,11 +139,9 @@ public class AdmissionAssessmentRosterService(
 		var rows = contexts.Select(row =>
 		{
 			var policy = AdmissionAssessmentAccessService.ReadAttemptPolicy(latestByStage.GetValueOrDefault(row.Stage.Id), policies[row.Stage.Id])!;
-			var context = new AdmissionAssessmentContext(row.Application, row.Stage, row.Definition, policy)
-				{ WorkflowStatus = row.WorkflowActive ? AdmissionWorkflowInstanceStatus.Active : AdmissionWorkflowInstanceStatus.Cancelled };
-			var active = context.IsActive && row.WorkflowActive;
+			var active = row.IsActive;
 			var latest = latestByStage.GetValueOrDefault(row.Stage.Id);
-			var ready = active && latest?.Status == "completed" && reader.GetBlockers(context, latest, routes.Where(route => route.FromStageId == row.Definition.Id).ToList(),
+			var ready = active && latest?.Status == "completed" && reader.GetActiveBlockers(row.Definition, policy, latest, routes.Where(route => route.FromStageId == row.Definition.Id).ToList(),
 				factsByStage.GetValueOrDefault(row.Stage.Id) ?? []).Count == 0;
 			var sortSessionId = sortAttempts.GetValueOrDefault(row.Stage.Id)?.SessionId;
 			var appointmentStart = latest?.SlotStartsAt ?? (latest?.SessionId is Guid latestSessionId ? sessionRows.GetValueOrDefault(latestSessionId)?.StartsAt : null);
@@ -182,6 +188,12 @@ public class AdmissionAssessmentRosterService(
 		var page = Sort(filtered, input.Sorting).Skip(input.SkipCount).Take(input.MaxResultCount).ToList();
 		var pageIds = page.Select(row => row.Context.Stage.Id).ToArray();
 		var pageApplicationIds = page.Select(row => row.Context.Application.Id).ToArray();
+		// Queue/route counts use the complete authorized population; only the returned page needs complete action contexts.
+		var pageApplications = page.Count == 0 ? new Dictionary<Guid, AdmissionApplication>() :
+			(await AsyncExecuter.ToListAsync(applicationQuery.Where(application => Enumerable.Contains(pageApplicationIds, application.Id))))
+			.ToDictionary(application => application.Id);
+		var pageStages = page.Count == 0 ? new Dictionary<Guid, AdmissionApplicationStageInstance>() :
+			(await AsyncExecuter.ToListAsync(stageQuery.Where(stage => Enumerable.Contains(pageIds, stage.Id)))).ToDictionary(stage => stage.Id);
 		var history = pageIds.Length == 0 ? [] : await attempts.GetListAsync(attempt =>
 			Enumerable.Contains(pageApplicationIds, attempt.ApplicationId) && Enumerable.Contains(pageIds, attempt.StageInstanceId));
 		var historyByStage = history.ToLookup(attempt => attempt.StageInstanceId);
@@ -198,7 +210,7 @@ public class AdmissionAssessmentRosterService(
 		return new() { Counts = counts, StatusCounts = statusCounts, TotalCount = filtered.Count, Items = page.Select(summary =>
 		{
 			var row = summary.Context;
-			var context = new AdmissionAssessmentContext(row.Application, row.Stage, row.Definition, policies[row.Stage.Id])
+			var context = new AdmissionAssessmentContext(pageApplications[row.Application.Id], pageStages[row.Stage.Id], row.Definition, policies[row.Stage.Id])
 				{ WorkflowStatus = row.WorkflowActive ? AdmissionWorkflowInstanceStatus.Active : AdmissionWorkflowInstanceStatus.Cancelled };
 			var evidence = reader.Build(context, historyByStage[row.Stage.Id].ToList(), sessionRows, routes.Where(route => route.FromStageId == row.Definition.Id).ToList(),
 				factsByStage.GetValueOrDefault(row.Stage.Id) ?? [], grants, CurrentUser.Id, now);
@@ -256,14 +268,32 @@ public class AdmissionAssessmentRosterService(
 	}
 	private sealed class RosterContext
 	{
-		public AdmissionApplication Application { get; set; } = null!;
-		public AdmissionOffering Offering { get; set; } = null!;
-		public AdmissionApplicationStageInstance Stage { get; set; } = null!;
+		public ApplicationSummary Application { get; set; } = null!;
+		public StageSummary Stage { get; set; } = null!;
+		public Guid BoardId { get; set; }
+		public Guid MediumId { get; set; }
+		public Guid StandardId { get; set; }
+		public bool IsActive { get; set; }
 		public AdmissionWorkflowStageDefinition Definition { get; set; } = null!;
 		public string ClassName { get; set; } = string.Empty;
 		public string OfferingName { get; set; } = string.Empty;
 		public bool WorkflowActive { get; set; }
 		public string ApplicantName { get; set; } = string.Empty;
+	}
+	private sealed class ApplicationSummary
+	{
+		public Guid Id { get; set; }
+		public string ApplicationNumber { get; set; } = string.Empty;
+		public Guid ApplicantId { get; set; }
+		public Guid AdmissionOfferingId { get; set; }
+		public AdmissionApplicationStatus Status { get; set; }
+	}
+	private sealed class StageSummary
+	{
+		public Guid Id { get; set; }
+		public string Name { get; set; } = string.Empty;
+		public AdmissionRuntimeStageStatus Status { get; set; }
+		public DateTime? EnteredAt { get; set; }
 	}
 	private sealed class RosterSummary
 	{

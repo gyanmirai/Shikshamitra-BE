@@ -9,6 +9,13 @@ namespace ShikshaMitra.Students;
 public class StudentFamilyContactSelection_Tests
 {
 	[Fact]
+	public void Guardian_responsibility_acknowledgment_does_not_change_app_access_identity()
+	{
+		StudentFamilyContactSelection.RequiresAccessReview(
+			"{\"guardianDetails\":{\"fullName\":\"Aunt\"},\"mainContactRelationship\":\"father\"}",
+			"{\"guardianDetails\":{\"fullName\":\"Aunt\"},\"mainContactRelationship\":\"guardian\",\"guardianResponsibilityConfirmed\":true}").ShouldBeFalse();
+	}
+	[Fact]
 	public void Sole_parent_is_default_even_when_an_other_guardian_is_saved()
 	{
 		var student = StudentWithFamily();

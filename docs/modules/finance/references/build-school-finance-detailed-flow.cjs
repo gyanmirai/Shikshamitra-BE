@@ -144,7 +144,7 @@ const setup = [
   ['Refund and Proration Policies', [
     'REFUND  Eligible source/head, paid charge/late fee, partial cap,',
     'deductions, payout modes, approver, evidence and reversal window.',
-    'PRORATION  Head, cutoff, minimum days, rounding, after-cutoff rule.',
+    'PRORATION  Head, cutoff, rounding, after-cutoff rule.',
     'RULE  After demand, create a traceable reduction/reversal; no overwrite.',
     'ACTION  Simulate, publish version, retire.'
   ]],

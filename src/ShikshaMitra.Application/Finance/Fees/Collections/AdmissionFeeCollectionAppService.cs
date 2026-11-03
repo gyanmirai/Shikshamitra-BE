@@ -162,7 +162,7 @@ public partial class AdmissionFeeCollectionAppService(
 			PayableAmount = rows.Sum(x => Math.Max(0m, x.OriginalAmount - x.NetAmount)),
 			ExcessPaidAmount = rows.Sum(x => x.OverpaymentAmount),
 			Explanations = rows.Where(x => x.ScheduledAmount != x.OriginalAmount || x.GetWithdrawalProrationCredit() > 0m)
-				.Select(x => x.GetWithdrawalProrationCredit() > 0m ? x.GetWithdrawalProrationExplanation() : x.ProrationExplanation ?? string.Empty).Distinct().ToList()
+				.Select(x => x.GetWithdrawalProrationCredit() > 0m ? x.GetWithdrawalProrationExplanation()! : x.ProrationExplanation ?? string.Empty).Distinct().ToList()
 		};
 	}
 

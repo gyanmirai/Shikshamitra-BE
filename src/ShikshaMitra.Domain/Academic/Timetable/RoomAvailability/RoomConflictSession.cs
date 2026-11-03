@@ -5,7 +5,8 @@ using System.Threading.Tasks;
 namespace ShikshaMitra.Academic.Timetable.RoomAvailability;
 
 public sealed record RoomConflictWindow(Guid RoomId, DateTime Date, TimeSpan StartTime, TimeSpan EndTime,
-    Guid? CurrentReservationId = null, Guid? TeacherId = null, Guid? StandardId = null, Guid? DivisionId = null);
+    Guid? CurrentReservationId = null, Guid? TeacherId = null, Guid? StandardId = null, Guid? DivisionId = null,
+    Guid? AcademicMediumId = null);
 
 public sealed class RoomConflictSession
 {

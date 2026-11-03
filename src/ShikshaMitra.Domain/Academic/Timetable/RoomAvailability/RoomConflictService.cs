@@ -51,10 +51,11 @@ public partial class RoomConflictService : DomainService
         Guid? currentReservationId = null,
         Guid? teacherId = null,
         Guid? standardId = null,
-        Guid? divisionId = null)
+        Guid? divisionId = null,
+        Guid? academicMediumId = null)
     {
         return await CheckConflictsAsync(roomId, date, startTime, endTime, currentReservationId,
-            teacherId, standardId, divisionId, null);
+            teacherId, standardId, divisionId, null, academicMediumId: academicMediumId);
     }
 
     public Task<ConflictCheckResult> CheckScopedConflictsAsync(
@@ -70,19 +71,20 @@ public partial class RoomConflictService : DomainService
         TimeSpan startTime,
         TimeSpan endTime,
         Guid? standardId = null,
-        Guid? divisionId = null)
+        Guid? divisionId = null,
+        Guid? academicMediumId = null)
     {
         return await CheckRoomSnapshotsAsync(rooms.Select(room => new RoomConflictRoom(room.Id, room.RoomName)).ToList(),
-            date, startTime, endTime, standardId, divisionId);
+            date, startTime, endTime, standardId, divisionId, academicMediumId);
     }
 
     public async Task<IReadOnlyDictionary<Guid, ConflictCheckResult>> CheckRoomSnapshotsAsync(
         IReadOnlyCollection<RoomConflictRoom> rooms, DateTime date, TimeSpan startTime, TimeSpan endTime,
-        Guid? standardId = null, Guid? divisionId = null)
+        Guid? standardId = null, Guid? divisionId = null, Guid? academicMediumId = null)
     {
         if (rooms.Count == 0) return new Dictionary<Guid, ConflictCheckResult>();
 
-        var context = await BuildReadContextAsync(rooms, date, startTime, endTime, standardId, divisionId);
+        var context = await BuildReadContextAsync(rooms, date, startTime, endTime, standardId, divisionId, academicMediumId);
         var results = new Dictionary<Guid, ConflictCheckResult>();
         foreach (var room in rooms)
         {
@@ -97,12 +99,12 @@ public partial class RoomConflictService : DomainService
     public async Task<IReadOnlyList<ConflictCheckResult>> CheckRoomPeriodsAsync(
         Room room,
         DateTime date,
-        IReadOnlyList<(TimeSpan Start, TimeSpan End)> periods)
+        IReadOnlyList<(TimeSpan Start, TimeSpan End)> periods, Guid? academicMediumId = null)
     {
         if (periods.Count == 0) return [];
 
         var context = await BuildReadContextAsync([new RoomConflictRoom(room.Id, room.RoomName)], date,
-            periods.Min(period => period.Start), periods.Max(period => period.End), null, null);
+            periods.Min(period => period.Start), periods.Max(period => period.End), null, null, academicMediumId);
         var results = new List<ConflictCheckResult>(periods.Count);
         foreach (var period in periods)
         {
@@ -119,18 +121,18 @@ public partial class RoomConflictService : DomainService
         TimeSpan startTime,
         TimeSpan endTime,
         Guid? standardId,
-        Guid? divisionId)
+        Guid? divisionId, Guid? academicMediumId)
     {
         var roomIds = rooms.Select(room => room.Id).ToList();
-        var calendar = await _calendarRepository.FirstOrDefaultAsync(c =>
-            c.Status == CalendarStatus.Published && date.Date >= c.StartDate.Date && date.Date <= c.EndDate.Date);
+        var mediumId = await ResolveCalendarMediumAsync(standardId, academicMediumId);
+        var calendar = await ReadRoomCalendarAsync(date, mediumId);
         var days = calendar == null
             ? []
             : await _calendarDayRepository.GetListAsync(d => d.AcademicCalendarId == calendar.Id &&
                 d.Date.Date >= date.Date && d.Date.Date <= calendar.EndDate.Date && d.Status == CalendarDayStatus.Active &&
-                (d.AppliesToAll || (standardId.HasValue && d.StandardId == standardId.Value)));
-        var currentDay = days.FirstOrDefault(d => d.Date.Date == date.Date &&
-            (d.AppliesToAll || (!d.DivisionId.HasValue || (divisionId.HasValue && d.DivisionId == divisionId.Value))));
+                (d.AppliesToAll || (standardId.HasValue && d.StandardId == standardId.Value) ||
+                    (divisionId.HasValue && d.DivisionId == divisionId.Value)));
+        var currentDay = days.FirstOrDefault(d => d.Date.Date == date.Date && BlocksRoomDay(d, standardId, divisionId));
         var calendarAllowed = currentDay == null || !CalendarDayBlockingRules.Blocks(currentDay.DayType, "timetable");
         var requestedStart = date.Date.Add(startTime);
         var requestedEnd = date.Date.Add(endTime);
@@ -165,22 +167,15 @@ public partial class RoomConflictService : DomainService
         Guid? standardId,
         Guid? divisionId,
         RoomConflictReadContext? context,
-        RoomConflictAcademicScope? academicScope = null)
+        RoomConflictAcademicScope? academicScope = null, Guid? academicMediumId = null)
     {
         var result = new ConflictCheckResult();
         var conflicts = new List<ConflictItem>();
 
         // 1. Check Academic Calendar
-        var academicMediumId = academicScope?.AcademicMediumId;
-        var academicYearId = academicScope?.AcademicYearId;
-        var legacyCalendarYearMatches = academicYearId.HasValue && academicScope?.MediumAcademicYearId == academicYearId;
-        var calendar = context != null ? context.Calendar : await _calendarRepository.FirstOrDefaultAsync(c =>
-            (!academicMediumId.HasValue || c.AcademicMediumId == academicMediumId.Value) &&
-            (!academicYearId.HasValue || c.AcademicYearId == academicYearId.Value ||
-                c.AcademicYearId == null && legacyCalendarYearMatches) &&
-            c.Status == CalendarStatus.Published &&
-            date.Date >= c.StartDate.Date &&
-            date.Date <= c.EndDate.Date);
+        var mediumId = context != null ? null : academicScope?.AcademicMediumId ??
+            await ResolveCalendarMediumAsync(standardId, academicMediumId);
+        var calendar = context != null ? context.Calendar : await ReadRoomCalendarAsync(date, mediumId, academicScope);
 
         bool calAllowed = true;
         string? calMsg = null;
@@ -188,17 +183,11 @@ public partial class RoomConflictService : DomainService
 
         if (calendar != null)
         {
-            var day = context != null
-                ? context.Days[date.Date].FirstOrDefault(d =>
-                    (d.AppliesToAll || (standardId.HasValue && d.StandardId == standardId.Value &&
-                        (!d.DivisionId.HasValue || (divisionId.HasValue && d.DivisionId == divisionId.Value)))))
-                : await _calendarDayRepository.FirstOrDefaultAsync(d =>
-                d.AcademicCalendarId == calendar.Id &&
-                d.Date.Date == date.Date &&
-                d.Status == CalendarDayStatus.Active &&
-                (d.AppliesToAll || 
-                 (standardId.HasValue && d.StandardId == standardId.Value && 
-                  (!d.DivisionId.HasValue || (divisionId.HasValue && d.DivisionId == divisionId.Value)))));
+            var calendarDays = context != null ? null : await _calendarDayRepository.GetListAsync(d =>
+                d.AcademicCalendarId == calendar.Id && d.Date.Date >= date.Date &&
+                d.Date.Date <= calendar.EndDate.Date && d.Status == CalendarDayStatus.Active);
+            var day = (context != null ? context.Days[date.Date] : calendarDays!.Where(d => d.Date.Date == date.Date))
+                .Where(d => BlocksRoomDay(d, standardId, divisionId)).OrderBy(d => d.Id).FirstOrDefault();
 
             if (day != null)
             {
@@ -210,16 +199,11 @@ public partial class RoomConflictService : DomainService
 
                     // Suggest next working day
                     var nextWorking = date.AddDays(1);
-                    while (nextWorking <= calendar.EndDate)
+                    while (nextWorking.Date <= calendar.EndDate.Date)
                     {
-                        var nextDay = context != null
-                            ? context.Days[nextWorking.Date].FirstOrDefault(d =>
-                                (d.AppliesToAll || (standardId.HasValue && d.StandardId == standardId.Value)))
-                            : await _calendarDayRepository.FirstOrDefaultAsync(d =>
-                            d.AcademicCalendarId == calendar.Id &&
-                            d.Date.Date == nextWorking.Date &&
-                            d.Status == CalendarDayStatus.Active &&
-                            (d.AppliesToAll || (standardId.HasValue && d.StandardId == standardId.Value)));
+                        var nextDay = (context != null ? context.Days[nextWorking.Date] :
+                            calendarDays!.Where(d => d.Date.Date == nextWorking.Date))
+                            .FirstOrDefault(d => BlocksRoomDay(d, standardId, divisionId));
                         
                         bool nextBlocked = nextDay != null && CalendarDayBlockingRules.Blocks(nextDay.DayType, "timetable");
                         if (!nextBlocked)
@@ -228,7 +212,7 @@ public partial class RoomConflictService : DomainService
                         }
                         nextWorking = nextWorking.AddDays(1);
                     }
-                    suggestedNextWorking = nextWorking;
+                    suggestedNextWorking = nextWorking.Date <= calendar.EndDate.Date ? nextWorking : null;
                 }
             }
         }
@@ -421,7 +405,7 @@ public partial class RoomConflictService : DomainService
             ? context.Divisions.Where(d => d.RoomNumber != null && d.RoomNumber != string.Empty).ToList()
             : await ReadRoomDivisionsAsync((await _divisionRepository.GetQueryableAsync()).Where(d => d.RoomNumber != null && d.RoomNumber != string.Empty));
         var matchedDivisions = divisions
-            .Where(d => IsAssignedToRoom(d.RoomNumber, room))
+            .Where(d => IsAssignedToRoom(d.RoomNumber!, room))
             .ToList();
 
         if (!matchedDivisions.Any())

@@ -44,7 +44,14 @@ public class StudentRollOrdering_Tests
 		var first = Person(1, "Jay", "Shah", null); var second = Person(2, "Jay", "Shah", null);
 		Ordering().Order([second, first]).Select(x => x.StudentId).ShouldBe(Ordering().Order([first, second]).Select(x => x.StudentId));
 	}
-	[Fact] public void Missing_surname_is_not_invented() => Ordering(nameFormat: "surname-first").Issue(Person(1, "Jay", null, null)).ShouldNotBeNull();
+	[Fact] public void Single_name_uses_saved_name_in_surname_first_order_without_inventing_a_surname()
+	{
+		var person = Person(1, "Jay", null, null);
+		Ordering(nameFormat: "surname-first").Issue(person).ShouldBeNull();
+		var ordered = Ordering(nameFormat: "surname-first").Order([person, Person(2, "Anaya", "Desai", null)]);
+		ordered.Select(student => student.FirstName).ShouldBe(["Anaya", "Jay"]);
+		ordered.Last().LastName.ShouldBeNull();
+	}
 	[Theory][InlineData("grouping", "alternate")][InlineData("nameFormat", "random")][InlineData("arrangeBy", "phone")][InlineData("arrangeType", "random")]
 	public void Unsupported_rule_values_fail_closed(string property, string value) =>
 		Should.Throw<BusinessException>(() => new StudentRollOrdering(JsonSerializer.SerializeToElement(new System.Collections.Generic.Dictionary<string, string> { [property] = value }))).Code.ShouldBe(StudentRollNumberErrorCodes.InvalidRule);

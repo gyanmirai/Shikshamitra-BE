@@ -27,24 +27,58 @@ using DocumentTypeEntity = ShikshaMitra.Students.StudentEnrollments.Settings.Doc
 namespace ShikshaMitra.Students.Records;
 
 [RemoteService(false)]
-public class StudentListAppService(
-	IStudentRepository studentRepository,
-	IRepository<AttendanceEntry, Guid> attendanceEntryRepository,
-	IAttendanceDayRepository attendanceDayRepository,
-	IRepository<StudentEnrollment, Guid> enrollmentRepository,
-	IRepository<AcademicYear, Guid> academicYearRepository,
-	AttendanceReportService attendanceReports,
-	IRepository<StudentDocument, Guid> studentDocumentRepository,
-	IRepository<DocumentTypeEntity, Guid> documentTypeRepository,
-	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
-	IRepository<Charge, Guid> chargeRepository,
-	IRepository<global::ShikshaMitra.TenantSettings.Standards.Standard, Guid> standardRepository,
-	IRepository<global::ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisionRepository,
-	IBlobContainer blobContainer,
-	IUserScopeAccessService userScopeAccessService,
-	StudentScopeAccessService studentScopeAccessService
-) : ApplicationService, IStudentListAppService
+public class StudentListAppService : ApplicationService, IStudentListAppService
 {
+	private readonly IStudentRepository studentRepository;
+	private readonly IRepository<AttendanceEntry, Guid> attendanceEntryRepository;
+	private readonly IAttendanceDayRepository attendanceDayRepository;
+	private readonly IRepository<StudentEnrollment, Guid> enrollmentRepository;
+	private readonly IRepository<AcademicYear, Guid> academicYearRepository;
+	private readonly AttendanceReportService attendanceReports;
+	private readonly IRepository<StudentDocument, Guid> studentDocumentRepository;
+	private readonly IRepository<DocumentTypeEntity, Guid> documentTypeRepository;
+	private readonly IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository;
+	private readonly IRepository<Charge, Guid> chargeRepository;
+	private readonly IRepository<global::ShikshaMitra.TenantSettings.Standards.Standard, Guid> standardRepository;
+	private readonly IRepository<global::ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisionRepository;
+	private readonly IBlobContainer blobContainer;
+	private readonly StudentScopeAccessService studentScopeAccessService;
+
+	public StudentListAppService(
+		IStudentRepository studentRepository,
+		IRepository<AttendanceEntry, Guid> attendanceEntryRepository,
+		IAttendanceDayRepository attendanceDayRepository,
+		IRepository<StudentEnrollment, Guid> enrollmentRepository,
+		IRepository<AcademicYear, Guid> academicYearRepository,
+		AttendanceReportService attendanceReports,
+		IRepository<StudentDocument, Guid> studentDocumentRepository,
+		IRepository<DocumentTypeEntity, Guid> documentTypeRepository,
+		IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
+		IRepository<Charge, Guid> chargeRepository,
+		IRepository<global::ShikshaMitra.TenantSettings.Standards.Standard, Guid> standardRepository,
+		IRepository<global::ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisionRepository,
+		IBlobContainer blobContainer,
+		IUserScopeAccessService userScopeAccessService,
+		StudentScopeAccessService studentScopeAccessService
+	)
+	{
+		this.studentRepository = studentRepository;
+		this.attendanceEntryRepository = attendanceEntryRepository;
+		this.attendanceDayRepository = attendanceDayRepository;
+		this.enrollmentRepository = enrollmentRepository;
+		this.academicYearRepository = academicYearRepository;
+		this.attendanceReports = attendanceReports;
+		this.studentDocumentRepository = studentDocumentRepository;
+		this.documentTypeRepository = documentTypeRepository;
+		this.studentFeeStructureRepository = studentFeeStructureRepository;
+		this.chargeRepository = chargeRepository;
+		this.standardRepository = standardRepository;
+		this.divisionRepository = divisionRepository;
+		this.blobContainer = blobContainer;
+		_ = userScopeAccessService;
+		this.studentScopeAccessService = studentScopeAccessService;
+	}
+
 	public async Task<PagedResultDto<StudentDto>> GetStudentsByDivisionAsync(
 		Guid divisionId,
 		int skipCount = 0,
@@ -276,10 +310,12 @@ public class StudentListAppService(
 			await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(input.AcademicYearId.Value, "attendance dashboard");
 		var years = await AsyncExecuter.ToListAsync((await academicYearRepository.GetQueryableAsync()).Where(y =>
 			y.TenantId == CurrentTenant.Id && (!input.AcademicYearId.HasValue || y.Id == input.AcademicYearId) &&
-			y.StartDate <= endDate && y.EndDate >= startDate));
+			y.StartDate <= endDate && y.EndDate >= startDate).Select(y => new { y.Id, y.StartDate, y.EndDate }));
 		var slices = new List<AttendanceDashboardSlice>();
 		var partialEnrollments = new HashSet<Guid>();
 		var scopedDays = await studentScopeAccessService.ApplyCurrentUserAttendanceDayScopeAsync(await attendanceDayRepository.GetQueryableAsync());
+		// Dated placement behavior needs enrollment history, but this read never edits it.
+		using var enrollmentTracking = enrollmentRepository.DisableTracking();
 		foreach (var year in years)
 		{
 			var start = startDate > year.StartDate.Date ? startDate : year.StartDate.Date;
@@ -308,25 +344,17 @@ public class StudentListAppService(
 				join day in scopedDays on entry.AttendanceDayId equals day.Id
 				where day.TenantId == CurrentTenant.Id && day.AcademicYearId == year.Id && day.Date >= start && day.Date <= end
 				select new { entry.EnrollmentId, entry.StudentId, day.StandardId, day.DivisionId });
+			var membersById = members.ToDictionary(member => member.Id);
+			var membersByStudent = members.ToLookup(member => member.StudentId);
 			foreach (var item in historic)
 			{
-				var member = members.SingleOrDefault(e => item.EnrollmentId.HasValue ? e.Id == item.EnrollmentId : e.StudentId == item.StudentId);
+				var member = item.EnrollmentId.HasValue ? membersById.GetValueOrDefault(item.EnrollmentId.Value) : membersByStudent[item.StudentId].SingleOrDefault();
 				if (member != null) Add(item.StandardId, item.DivisionId, member.Id);
 			}
-			foreach (var path in paths)
-			{
-				try
-				{
-					var rows = await attendanceReports.BuildAsync(year.Id, path.Key.Standard, path.Key.Division, start, end,
-						members.Where(e => path.Value.Contains(e.Id)).ToList(), includeDaily: true);
-					slices.Add(new(path.Key.Standard, path.Key.Division, rows));
-				}
-				catch (BusinessException exception) when (exception.Code == UserScopeErrorCodes.AccessDenied)
-				{
-					// An enrollment's current path does not authorize its other historical paths.
-					partialEnrollments.UnionWith(path.Value);
-				}
-			}
+			var batch = await attendanceReports.BuildManyAsync(year.Id, start, end, paths.Select(path => new AttendanceReportSliceRequest(
+				path.Key.Standard, path.Key.Division, members.Where(member => path.Value.Contains(member.Id)).ToList())).ToList(), includeDaily: true);
+			slices.AddRange(batch.Slices.Select(slice => new AttendanceDashboardSlice(slice.StandardId, slice.DivisionId, slice.Rows)));
+			partialEnrollments.UnionWith(batch.PartialEnrollmentIds);
 		}
 		var standardIds = slices.Select(s => s.StandardId).Distinct().ToArray();
 		var divisionIds = slices.Select(s => s.DivisionId).Distinct().ToArray();

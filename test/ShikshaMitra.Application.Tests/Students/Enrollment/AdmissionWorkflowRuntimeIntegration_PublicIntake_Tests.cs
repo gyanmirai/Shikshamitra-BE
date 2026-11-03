@@ -140,7 +140,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			saved.AdmissionOfferingId.ShouldBe(offering.Id);
 			saved.AssignedCounsellorId.ShouldBeNull();
 			saved.FormResponseDefinitionId.ShouldBe(offering.InquiryFormDefinitionId);
-			saved.FormResponseSnapshotJson.ShouldContain("Enjoys reading");
+			saved.FormResponseSnapshotJson.ShouldNotBeNull().ShouldContain("Enjoys reading");
 			var detail = await GetRequiredService<IAdmissionInquiryAppService>().GetAsync(saved.Id);
 			detail.FormResponseDefinitionId.ShouldBe(offering.InquiryFormDefinitionId);
 			detail.FormAnswers.ShouldContain(answer => answer.FieldCode == "LEARNING_NOTES" &&
@@ -225,7 +225,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			matches.Single().AdmissionOfferingId.ShouldBe(offering.Id);
 			matches.Single().AssignedCounsellorId.ShouldBeNull();
 			matches.Single().Source.ShouldBe(AdmissionInquirySource.SchoolFair);
-			matches.Single().SourceDetail.ShouldContain("Grade 5");
+			matches.Single().SourceDetail.ShouldNotBeNull().ShouldContain("Grade 5");
 			var inquiryService = GetRequiredService<IAdmissionInquiryAppService>();
 			var confirmed = await inquiryService.GetAsync(matches.Single().Id);
 			confirmed.AdmissionOfferingId.ShouldBe(offering.Id);

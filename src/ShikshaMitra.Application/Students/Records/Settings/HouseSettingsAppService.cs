@@ -1,5 +1,7 @@
 ﻿using ShikshaMitra.TenantSettings.EducationMediums;
 using System;
+using System.Data;
+using Volo.Abp.Uow;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using System.Collections.Generic;
@@ -18,7 +20,9 @@ public class HouseSettingsAppService(
 	IRepository<HouseSettings, Guid> houseSettingsRepository,
 	IRepository<EducationMedium, Guid> academicMediumRepository,
 	IGuidGenerator guidGenerator,
-	StudentScopeAccessService studentScopeAccessService
+	StudentScopeAccessService studentScopeAccessService,
+	ShikshaMitra.Students.Records.HouseManagement.HouseDeletionGuard houseDeletionGuard,
+	IUnitOfWorkManager houseUnits
 ) : ApplicationService, IHouseSettingsAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Settings.Add)]
@@ -26,6 +30,7 @@ public class HouseSettingsAppService(
 	{
 		try
 		{
+			using var unit = houseUnits.Begin(requiresNew: true, isTransactional: true, isolationLevel: IsolationLevel.Serializable);
 			// validate academic medium exists
 			var academicMedium = await academicMediumRepository.GetAsync(academicMediumId) ?? throw new EntityNotFoundException("Academic medium not found.");
 			await studentScopeAccessService.EnsureCanManageMediumAsync(
@@ -45,6 +50,7 @@ public class HouseSettingsAppService(
 			);
 
 			await houseSettingsRepository.InsertAsync(houseSetting, autoSave: true);
+			await unit.CompleteAsync();
 		}
 		catch (EntityNotFoundException)
 		{
@@ -117,6 +123,7 @@ public class HouseSettingsAppService(
 	{
 		try
 		{
+			using var unit = houseUnits.Begin(requiresNew: true, isTransactional: true, isolationLevel: IsolationLevel.Serializable);
 			var houseSetting = await houseSettingsRepository.GetAsync(houseSettingsId) ?? throw new EntityNotFoundException("House setting not found.");
 			await studentScopeAccessService.EnsureCanManageMediumAsync(
 				houseSetting.AcademicMediumId,
@@ -133,6 +140,7 @@ public class HouseSettingsAppService(
 			);
 
 			await houseSettingsRepository.UpdateAsync(houseSetting, autoSave: true);
+			await unit.CompleteAsync();
 			return ObjectMapper.Map<HouseSettings, HouseSettingsDto>(houseSetting);
 		}
 		catch (EntityNotFoundException)
@@ -155,11 +163,15 @@ public class HouseSettingsAppService(
 
 		try
 		{
+			using var unit = houseUnits.Begin(requiresNew: true, isTransactional: true, isolationLevel: IsolationLevel.Serializable);
 			var houseSetting = await houseSettingsRepository.GetAsync(houseSettingsId) ?? throw new EntityNotFoundException("House setting not found.");
 			await studentScopeAccessService.EnsureCanManageMediumAsync(
 				houseSetting.AcademicMediumId,
 				nameof(DeleteHouseSettingsAsync));
+			await houseDeletionGuard.EnsureEmptyAsync(houseSetting.Id);
+			houseSetting.TouchMembership();
 			await houseSettingsRepository.DeleteAsync(houseSetting, autoSave: true);
+			await unit.CompleteAsync();
 		}
 		catch (EntityNotFoundException)
 		{

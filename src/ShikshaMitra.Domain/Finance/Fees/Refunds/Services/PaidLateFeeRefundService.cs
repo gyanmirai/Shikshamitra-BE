@@ -43,11 +43,14 @@ public class PaidLateFeeRefundService(IDueFeeRepository dues,
             x.AcademicYearId == academicYearId && (accountId.HasValue ? x.FinanceFeeAccountId == accountId
                 : x.StudentId == studentId && !x.FinanceFeeAccountId.HasValue) &&
             (!receiptId.HasValue || x.Id == receiptId) &&
-            (x.ReceiptScope == FeeReceiptScope.Fee || x.ReceiptScope == FeeReceiptScope.Combined) &&
-            (x.ReceiptKind == FeeReceiptKind.FinalFee || x.ReceiptKind == FeeReceiptKind.ProvisionalFee &&
+            (x.ReceiptKind == FeeReceiptKind.FinalFee || x.ReceiptKind == FeeReceiptKind.FinalCharge ||
+                (x.ReceiptKind == FeeReceiptKind.ProvisionalFee || x.ReceiptKind == FeeReceiptKind.ProvisionalCharge) &&
                 x.VerificationStatus == FeeReceiptVerificationStatus.Verified));
-        var receiptMap = evidence.GroupBy(x => x.FeeCollectionTransactionId).ToDictionary(g => g.Key,
-            g => g.OrderByDescending(x => x.ReceiptKind == FeeReceiptKind.FinalFee).ThenByDescending(x => x.CreationTime).First());
+        // The amount snapshot lives in ExtraProperties, so attribution is evaluated after materialization.
+        var receiptMap = evidence.Where(RefundReceiptEvidencePolicy.CoversLateFees)
+            .GroupBy(x => x.FeeCollectionTransactionId).ToDictionary(g => g.Key,
+            g => g.OrderByDescending(x => x.ReceiptKind is FeeReceiptKind.FinalFee or FeeReceiptKind.FinalCharge)
+                .ThenByDescending(x => x.CreationTime).First());
         var sourceCollectionIds = receiptMap.Keys.ToList();
         var paid = await allocations.GetListAsync(x => dueIds.Contains(x.DueFeeId) &&
             sourceCollectionIds.Contains(x.FeeRecordMetadataId) && x.Amount > 0);

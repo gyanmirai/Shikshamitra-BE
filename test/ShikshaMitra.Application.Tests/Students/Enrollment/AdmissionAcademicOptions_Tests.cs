@@ -29,8 +29,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 			var classes = await _formAppService.GetOptionsAsync("Standards", academicYearId: cycle.AcademicYearId);
 			classes.ShouldContain(option => option.Value == standard.Id.ToString() && option.Label == standard.Name);
+			using var configuredClass = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(
+				classes.Single(option => option.Value == standard.Id.ToString())));
+			configuredClass.RootElement.GetProperty("BoardId").GetGuid().ShouldBe(offering.BoardId);
+			configuredClass.RootElement.GetProperty("BoardLabel").GetString().ShouldNotBeNullOrWhiteSpace();
 			(await _formAppService.GetOptionsAsync("StandardsByMedium", offering.MediumId, cycle.AcademicYearId))
-				.ShouldContain(option => option.Value == standard.Id.ToString());
+				.ShouldContain(option => option.Value == standard.Id.ToString() && option.BoardId == null);
 			(await _formAppService.GetOptionsAsync("StandardsByMedium", Guid.NewGuid(), cycle.AcademicYearId)).ShouldBeEmpty();
 			(await _formAppService.GetOptionsAsync("Standards", academicYearId: Guid.NewGuid())).ShouldBeEmpty();
 			(await _formAppService.GetOptionsAsync("Standards")).ShouldBeEmpty();
@@ -44,8 +48,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await WithUnitOfWorkAsync(async () =>
 			{
 			var publicOptions = GetRequiredService<AdmissionInquiryAcademicOptionsService>();
-			(await publicOptions.ForPublicOfferingAsync("Standards", offering))
-				.ShouldContain(option => option.Value == standard.Id.ToString() && option.Label == standard.Name);
+			var publicClasses = await publicOptions.ForPublicOfferingAsync("Standards", offering);
+			publicClasses.Count.ShouldBe(1);
+			publicClasses.ShouldContain(option => option.Value == standard.Id.ToString() && option.Label == standard.Name && option.BoardId == offering.BoardId);
+			publicClasses[0].BoardLabel.ShouldNotBeNullOrWhiteSpace();
 			(await publicOptions.ForPublicOfferingAsync("DivisionsByStandard", offering, Guid.NewGuid())).ShouldBeEmpty();
 			(await publicOptions.ForPublicOfferingAsync("DivisionsByStandard", offering, standard.Id))
 				.ShouldContain(option => option.Value == division.Id.ToString());

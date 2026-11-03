@@ -10,7 +10,7 @@ audience: humans-and-agents
 
 # Understand the Finance backend module
 
-Receipt classification, approval, PDF format and naming: [Provisional and official receipts](./references/receipt-lifecycle.md).
+Receipt classification, approval, PDF format and naming: [Receipts and provisional receipts](./references/receipt-lifecycle.md).
 
 Pooled cash expenses, academic-year cash deposits and legacy bank credits: [Cash Management](./references/cash-management.md).
 

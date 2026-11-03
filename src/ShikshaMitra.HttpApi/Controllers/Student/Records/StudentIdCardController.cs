@@ -15,6 +15,16 @@ namespace ShikshaMitra.HttpApi.Controllers.Students.Records;
 [Route("api/students/records/ids")]
 public class StudentIdCardController(IStudentIdCardAppService service) : AbpController
 {
+	[HttpGet("templates/list")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
+	public async Task<Result<List<StudentIdCardTemplateDto>>> GetTemplatesAsync() => Result.Success(await service.GetTemplatesAsync());
+	[HttpGet("templates/{id:guid}")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
+	public async Task<Result<StudentIdCardTemplateDto>> GetTemplateByIdAsync(Guid id) => Result.Success(await service.GetTemplateByIdAsync(id));
+	[HttpPost("templates")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add)]
+	public async Task<Result<StudentIdCardTemplateDto>> CreateTemplateAsync([FromBody] StudentIdCardTemplateDto input) => Result.Success(await service.CreateTemplateAsync(input));
+	[HttpPut("templates/{id:guid}")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add)]
+	public async Task<Result<StudentIdCardTemplateDto>> UpdateTemplateAsync(Guid id, [FromBody] StudentIdCardTemplateDto input) => Result.Success(await service.UpdateTemplateAsync(id, input));
+	[HttpDelete("templates/{id:guid}")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Delete)]
+	public async Task DeleteTemplateAsync(Guid id) => await service.DeleteTemplateAsync(id);
 	[HttpGet("templates")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
 	public async Task<Result<StudentIdCardTemplateDto>> GetTemplateAsync() => Result.Success(await service.GetTemplateAsync());
 	[HttpPut("templates")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add)]

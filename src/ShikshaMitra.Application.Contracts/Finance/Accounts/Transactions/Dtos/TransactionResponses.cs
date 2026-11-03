@@ -23,9 +23,9 @@ public class TransactionListItem
     public string? BankLabel { get; set; }
 	public Guid Id { get; set; }
 	public Guid CategoryId { get; set; }
-	public string CategoryName { get; set; }
+	public string CategoryName { get; set; } = null!; // The response mapper populates these members after construction.
 	public List<string> CategoryTags { get; set; } = new();
-	public string Name { get; set; }
+	public string Name { get; set; } = null!;
 	public decimal Amount { get; set; }
 	public int PaymentMethod { get; set; }
 	public DateTime PaymentDate { get; set; }
@@ -40,16 +40,16 @@ public class TransactionCreateUpdateResponse
 {
 	public string? Message { get; set; }
 	public bool Success { get; set; } = true;
-	public TransactionResponseData Data { get; set; }
+	public TransactionResponseData Data { get; set; } = null!; // The response mapper populates these members after construction.
 }
 
 public class TransactionResponseData
 {
 	public Guid Id { get; set; }
 	public Guid CategoryId { get; set; }
-	public string CategoryName { get; set; }
+	public string CategoryName { get; set; } = null!; // The response mapper populates these members after construction.
 	public List<string> CategoryTags { get; set; } = new();
-	public string Name { get; set; }
+	public string Name { get; set; } = null!;
 	public decimal Amount { get; set; }
 	public int PaymentMethod { get; set; }
 	public DateTime PaymentDate { get; set; }
@@ -62,14 +62,14 @@ public class TransactionResponseData
 // ────────────────────────────────────────────────────────────────
 public class TransactionDetailsResponse
 {
-	public TransactionInformation TransactionInformation { get; set; }
+	public TransactionInformation TransactionInformation { get; set; } = null!; // The response mapper populates these members after construction.
 	public List<TransactionItem> TransactionList { get; set; } = new();
 }
 
 public class TransactionInformation
 {
 	public Guid TransactionCategoryId { get; set; }
-	public string TransactionCategoryName { get; set; }
+	public string TransactionCategoryName { get; set; } = null!; // The response mapper populates these members after construction.
 	public List<string> CategoryTags { get; set; } = new();
 	public decimal TotalAmountReceived { get; set; }
 }
@@ -77,7 +77,7 @@ public class TransactionInformation
 public class TransactionItem
 {
 	public Guid TransactionId { get; set; }
-	public string IncomeName { get; set; }
+	public string IncomeName { get; set; } = null!; // The response mapper populates these members after construction.
 	public DateTime ReceivedDate { get; set; }
 	public int PaymentMethod { get; set; }
 	public decimal Amount { get; set; }
@@ -89,5 +89,5 @@ public class TransactionItem
 public class TransactionDeleteResponse
 {
 	public bool Success { get; set; } = true;
-	public string Message { get; set; }
+	public string Message { get; set; } = null!; // The response mapper populates these members after construction.
 }

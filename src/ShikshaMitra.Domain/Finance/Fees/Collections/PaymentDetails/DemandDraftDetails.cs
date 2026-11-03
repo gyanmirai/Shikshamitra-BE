@@ -14,8 +14,6 @@ public class DemandDraftDetails : PaymentDetails
     public DateOnly? DDDate { get; private set; }
     public DateOnly? PaymentDate { get; private set; }
 
-    private DemandDraftDetails() { /* For ORM */ }
-
     public DemandDraftDetails(string ddNumber, string issuingBankName, string branchName, DateOnly? ddDate,
         DateOnly? paymentDate = null)
     {

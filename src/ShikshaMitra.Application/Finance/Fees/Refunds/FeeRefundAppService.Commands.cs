@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.Data;
 using Volo.Abp.Uow;
 using Volo.Abp.Users;
 
@@ -100,29 +101,35 @@ public partial class FeeRefundAppService
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Edit)]
+    [UnitOfWork(IsDisabled = true)]
     public async Task<FeeRefundRequestDto> UpdateAsync(Guid id, UpdateFeeRefundRequestDto input)
     {
+        using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
+            { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
-        if (request.ConcessionRequestId.HasValue)
-            throw new BusinessException(FeeRefundErrorCodes.CannotModifyNonPendingRefund);
         await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
+        if (!request.CanEdit)
+            throw new BusinessException(FeeRefundErrorCodes.CannotModifyNonPendingRefund);
+        if ((request.WorkflowVersion == 1 && string.IsNullOrWhiteSpace(input.ConcurrencyStamp)) ||
+            !string.IsNullOrWhiteSpace(input.ConcurrencyStamp) && input.ConcurrencyStamp != request.ConcurrencyStamp)
+            throw new AbpDbConcurrencyException("This refund request was changed by another user. Close and reopen it before editing.");
+        var paymentDetails = PreserveMaskedPaymentDetails(request, input.RefundMethod, input.PaymentDetails);
         var create = new CreateFeeRefundRequestDto
         {
             StudentId = request.StudentId, FinanceFeeAccountId = request.FinanceFeeAccountId, AcademicYearId = request.AcademicYearId,
             OriginalReceiptId = request.OriginalReceiptId ?? input.OriginalReceiptId,
             Lines = input.Lines, RefundMethod = input.RefundMethod,
-            PaymentDetails = input.PaymentDetails, Reason = input.Reason
+            PaymentDetails = paymentDetails, Reason = input.Reason
         };
         var prepared = await PrepareAsync(create, request.Id);
         if (prepared.AssignmentId != request.StudentFeeStructureId || prepared.PolicyVersionId != request.RefundPolicyVersionId)
             throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
-        using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true });
-        await feeRefundManager.UpdateDraftAsync(request, prepared.Lines, input.RefundMethod,
-            FeeRefundManager.MapRefundPaymentDetails(input.RefundMethod, input.PaymentDetails), input.Reason,
-            prepared.CalculationJson, prepared.Hash);
+        await feeRefundManager.UpdateEditableRequestAsync(request, prepared.Lines, input.RefundMethod,
+            FeeRefundManager.MapRefundPaymentDetails(input.RefundMethod, paymentDetails), input.Reason,
+            prepared.CalculationJson, prepared.Hash, currentUser.GetId());
         await feeRefundRepository.UpdateAsync(request, autoSave: false);
         await WriteAuditAsync(request, FinanceAuditActions.Update,
-            $"Refund request {request.VoucherNumber} draft updated.", input.Reason);
+            $"Refund request {request.VoucherNumber} updated while {request.Status}.", input.Reason);
         await uow.CompleteAsync();
         return await MapAsync(request);
     }

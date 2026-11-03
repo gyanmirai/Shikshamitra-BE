@@ -7,6 +7,7 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 public class FeeRefundRequestDto
 {
     public Guid Id { get; set; }
+    public string ConcurrencyStamp { get; set; } = string.Empty;
 
     public Guid? StudentId { get; set; }
     public Guid? FinanceFeeAccountId { get; set; }

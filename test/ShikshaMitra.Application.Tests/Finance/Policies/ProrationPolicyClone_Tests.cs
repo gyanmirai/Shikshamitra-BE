@@ -32,7 +32,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 			{
 				FeeHeadId = extraHead.Id, RuleType = "MonthlyCutoff", CutoffDay = 13,
 				AfterCutoffAction = "NoCharge", ApplyOnAdmission = true, ApplyOnEarlyWithdrawal = true,
-				EarlyWithdrawalRuleType = "Daily", EarlyWithdrawalMinimumChargeDays = number
+				EarlyWithdrawalRuleType = "Daily"
 			});
 		}
 		var source = await service.CreateAsync(input);
@@ -173,7 +173,6 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		{
 			FeeHeadId = head,
 			RuleType = "Daily",
-			MinimumChargeDays = 7,
 			RoundingMode = "RoundUpRupee",
 			ApplyOnAdmission = true,
 			ApplyOnEarlyWithdrawal = true,
@@ -203,6 +202,6 @@ public class ProrationPolicyRecoveryResource_Tests
 		using var messages = JsonDocument.Parse(resource);
 		messages.RootElement.GetProperty("Texts").TryGetProperty("Finance:ProrationPolicy:" + rule, out var message)
 			.ShouldBeTrue("The business error must have a localized recovery message.");
-		message.GetString().ShouldContain(action);
+		message.GetString().ShouldNotBeNull().ShouldContain(action);
 	}
 }

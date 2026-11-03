@@ -13,16 +13,16 @@ public class ReceiptBook : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid? TenantId { get; private set; }
 
     public Guid AcademicYearId { get; private set; }
-	public AcademicYear AcademicYear { get; private set; }
+	public AcademicYear AcademicYear { get; private set; } = null!; // Populated by EF relationship materialization.
 
 
 	public Guid BoardId { get; private set; }
-	public EducationBoard EducationBoard { get; private set; }
+	public EducationBoard EducationBoard { get; private set; } = null!; // Populated by EF relationship materialization.
 
 	public Guid MediumId { get; private set; }
-	public EducationMedium EducationMedium { get; private set; }
+	public EducationMedium EducationMedium { get; private set; } = null!; // Populated by EF relationship materialization.
 	public Guid MediumStageId { get; private set; }
-	public EducationMediumStage EducationMediumStage { get; private set; }
+	public EducationMediumStage EducationMediumStage { get; private set; } = null!; // Populated by EF relationship materialization.
 
     [Required]
     public string Name { get; private set; }
@@ -36,7 +36,14 @@ public class ReceiptBook : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public bool IsActive { get; private set; }
 
-    private ReceiptBook() { }
+    private ReceiptBook()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        Description = null!;
+        Name = null!;
+        Prefix = null!;
+        Suffix = null!;
+    }
 
     public ReceiptBook(
         Guid id,

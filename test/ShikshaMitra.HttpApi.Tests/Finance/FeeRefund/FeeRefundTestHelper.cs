@@ -98,6 +98,20 @@ public static class FeeRefundTestHelper
         await verificationUow.CompleteAsync();
     }
 
+    public static async Task EnrollStudentForCollectionSummaryAsync(IServiceProvider services, Guid studentId)
+    {
+        using var scope = services.CreateScope();
+        using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>()
+            .Change(Guid.Parse("11111111-1111-1111-1111-111111111111"));
+        using var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>()
+            .Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+        var repository = scope.ServiceProvider.GetRequiredService<IRepository<Student, Guid>>();
+        var student = await repository.GetAsync(studentId);
+        student.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
+        await repository.UpdateAsync(student);
+        await uow.CompleteAsync();
+    }
+
     private static async Task<Guid> SeedFeeHeadAsync(IServiceProvider services)
     {
         var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");

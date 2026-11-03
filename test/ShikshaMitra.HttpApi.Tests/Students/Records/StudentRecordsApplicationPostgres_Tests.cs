@@ -57,16 +57,36 @@ public sealed partial class StudentRecordsApplicationPostgres_Tests(StudentRecor
 		var draft = (await save.Content.ReadFromJsonAsync<Result<StudentRecordsSettingsDto>>(JsonOptions))!.Data!;
 		(await PostResultAsync<StudentRecordsSettingsDto>(Client, "/api/students/records/settings/publish",
 			new PublishStudentRecordsSettingsDto { ConcurrencyStamp = draft.ConcurrencyStamp! })).PublishedVersionId.ShouldNotBeNull();
-		using var numbering = await Client.PutAsJsonAsync("/api/student/onboarding/settings/configurations", new SaveStudentOnboardingSettingsDto
-		{
-			AcademicYearId = fixture.TargetYear,
-			ConfigurationJson = JsonSerializer.Serialize(new
+		string NumberingConfiguration(string status, bool active) => JsonSerializer.Serialize(new
 			{
 				readinessAccess = new { }, onboardingProfiles = Array.Empty<object>(), grNumber = new { configurations = Array.Empty<object>() }, divisionChange = new { configurations = Array.Empty<object>() },
-				rollNumber = new { assignmentMode = "automatic", configurations = new[] { new { id = "pg-records-roll", boardMode = "all", mediumMode = "all", stageMode = "all", classMode = "all", divisionMode = "all", startingNumber = 40, numberingScope = "class-division", arrangeBy = "studentName", arrangeType = "ascending", preserveExisting = true, midYearHandling = "next-available" } } }
-			})
+				rollNumber = new { assignmentMode = "automatic", configurations = new[] { new { id = "pg-records-roll", status, isActive = active, version = 1, boardMode = "all", mediumMode = "all", stageMode = "all", classMode = "all", divisionMode = "all", startingNumber = 40, numberingScope = "class-division", arrangeBy = "studentName", arrangeType = "ascending", preserveExisting = true, midYearHandling = "next-available" } } }
+			});
+		using var numberingDraftResponse = await Client.PutAsJsonAsync("/api/student/onboarding/settings/configurations", new SaveStudentOnboardingSettingsDto
+		{
+			AcademicYearId = fixture.TargetYear, ConfigurationJson = NumberingConfiguration("draft", false)
+		}, JsonOptions);
+		numberingDraftResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await numberingDraftResponse.Content.ReadAsStringAsync());
+		var numberingDraft = (await numberingDraftResponse.Content.ReadFromJsonAsync<Result<StudentOnboardingSettingsDto>>(JsonOptions))!.Data!;
+		numberingDraft.ConcurrencyStamp.ShouldNotBeNullOrWhiteSpace();
+		using var numbering = await Client.PutAsJsonAsync("/api/student/onboarding/settings/configurations", new SaveStudentOnboardingSettingsDto
+		{
+			AcademicYearId = fixture.TargetYear, ConcurrencyStamp = numberingDraft.ConcurrencyStamp,
+			ConfigurationJson = NumberingConfiguration("published", true)
 		}, JsonOptions);
 		numbering.StatusCode.ShouldBe(HttpStatusCode.OK, await numbering.Content.ReadAsStringAsync());
+		// The accepted roll contract starts each division at 1; retained legacy
+		// startingNumber=40 metadata does not override the owning reader's rule.
+		var capturedRule = await InTenantAsync(services => services.GetRequiredService<StudentOnboardingRollRuleReader>()
+			.CaptureAsync(fixture.Students[0], fixture.TargetYear, fixture.TargetStandard, fixture.TargetDivision));
+		using (var effectiveRule = JsonDocument.Parse(capturedRule))
+		{
+			effectiveRule.RootElement.GetProperty("id").GetString().ShouldBe("pg-records-roll");
+			effectiveRule.RootElement.GetProperty("status").GetString().ShouldBe("published");
+			effectiveRule.RootElement.GetProperty("assignmentMode").GetString().ShouldBe("automatic");
+			effectiveRule.RootElement.GetProperty("startingNumber").GetInt32().ShouldBe(1);
+			effectiveRule.RootElement.GetProperty("numberingScope").GetString().ShouldBe("class-division");
+		}
 		var commands = fixture.Students.Select(id => new StudentRecordTransitionBatchInput
 		{
 			AcademicYearId = fixture.SourceYear, IdempotencyKey = "pg-records-" + id.ToString("N"),
@@ -76,7 +96,7 @@ public sealed partial class StudentRecordsApplicationPostgres_Tests(StudentRecor
 		foreach (var command in commands)
 		{
 			var row = (await PostResultAsync<StudentRecordTransitionPreviewDto>(Client, Transitions + "/preview", command)).Items.Single();
-			row.Ready.ShouldBeTrue(string.Join("; ", row.Issues.Select(x => x.Code))); row.ProposedRollNumber.ShouldBe(40);
+			row.Ready.ShouldBeTrue(string.Join("; ", row.Issues.Select(x => x.Code))); row.ProposedRollNumber.ShouldBe(1);
 			command.Items[0].RollNumber = row.ProposedRollNumber; command.Items[0].StudentConcurrencyStamp = row.StudentConcurrencyStamp; command.Items[0].EnrollmentConcurrencyStamp = row.EnrollmentConcurrencyStamp;
 		}
 		var before = await InTenantAsync(async services =>
@@ -98,14 +118,14 @@ public sealed partial class StudentRecordsApplicationPostgres_Tests(StudentRecor
 			responses[loser].StatusCode.ShouldBe(HttpStatusCode.BadRequest, await responses[loser].Content.ReadAsStringAsync());
 			(await responses[loser].Content.ReadAsStringAsync()).ShouldContain("Students:Records:RollProposalChanged");
 			var result = (await responses[winner].Content.ReadFromJsonAsync<Result<StudentRecordTransitionBatchResultDto>>(JsonOptions))!.Data!;
-			result.Items.Single().Status.ShouldBe("Applied"); result.Items.Single().RollNumber.ShouldBe(40);
+			result.Items.Single().Status.ShouldBe("Applied"); result.Items.Single().RollNumber.ShouldBe(1);
 			var replay = await PostResultAsync<StudentRecordTransitionBatchResultDto>(Client, Transitions + "/batches", commands[winner]);
 			replay.BatchId.ShouldBe(result.BatchId); replay.Items.Single().Id.ShouldBe(result.Items.Single().Id);
 			await InTenantAsync(async services =>
 			{
 				var enrollments = services.GetRequiredService<IRepository<StudentEnrollment, Guid>>();
 				var target = await enrollments.GetListAsync(e => e.AcademicYearId == fixture.TargetYear && e.DivisionId == fixture.TargetDivision && e.IsActive);
-				target.Count.ShouldBe(1); target.Single().StudentId.ShouldBe(commands[winner].Items[0].StudentId); target.Single().RollNumber.ShouldBe(40);
+				target.Count.ShouldBe(1); target.Single().StudentId.ShouldBe(commands[winner].Items[0].StudentId); target.Single().RollNumber.ShouldBe(1);
 				var students = services.GetRequiredService<IStudentRepository>();
 				foreach (var studentId in fixture.Students) (await students.GetAsync(studentId)).GrNumber.ShouldBe(before[studentId].GrNumber);
 				var losingStudent = await students.GetAsync(commands[loser].Items[0].StudentId);

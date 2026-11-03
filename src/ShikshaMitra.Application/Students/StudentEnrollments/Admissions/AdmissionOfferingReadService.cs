@@ -50,7 +50,22 @@ public class AdmissionOfferingReadService(
 			pageRows.Select(row => MapList(row, read.Errors.GetValueOrDefault(row.Offering.Id))).ToList());
 	}
 
+	/// <summary>Complete choices for already selected cycles, using the same scoped validation and ordering as the list.</summary>
+	internal async Task<List<CatalogueItem>> GetCatalogueAsync(Guid[] cycleIds)
+	{
+		if (cycleIds.Length == 0) return [];
+		var read = await GetRowsQueryAsync(new AdmissionOfferingListInput(), cycleIds: cycleIds);
+		var rows = await AsyncExecuter.ToListAsync(ApplySorting(read.Query, null));
+		return rows.Select(row => new CatalogueItem(MapList(row, read.Errors.GetValueOrDefault(row.Offering.Id)),
+			row.Offering.WorkflowDefinitionId)).ToList();
+	}
+
+	internal sealed record CatalogueItem(AdmissionOfferingListDto Row, Guid? WorkflowDefinitionId);
+
 	public async Task<AdmissionOfferingDto> GetAsync(Guid id)
+		=> (await ReadDetailAsync(id)).Detail;
+
+	private async Task<(AdmissionOfferingReadRow Row, AdmissionOfferingDto Detail, AdmissionOfferingAvailability Availability)> ReadDetailAsync(Guid id)
 	{
 		var read = await GetRowsQueryAsync(new AdmissionOfferingListInput
 		{
@@ -63,19 +78,22 @@ public class AdmissionOfferingReadService(
 		var validation = await configurationValidator.ValidateStoredAsync(row.Offering);
 		detail.Configuration = MapValidation(validation);
 		detail.ConfigurationStatus = validation.Status;
-		detail.AvailabilityStatus = AdmissionOfferingAvailabilityEvaluator.Evaluate(
-			row.Offering, row.Cycle, validation.IsValid, new DateTimeOffset(Clock.Now.ToUniversalTime())).Status;
+		var availability = AdmissionOfferingAvailabilityEvaluator.Evaluate(
+			row.Offering, row.Cycle, validation.IsValid, new DateTimeOffset(Clock.Now.ToUniversalTime()));
+		detail.AvailabilityStatus = availability.Status;
 		detail.ClassCapacity = await classCapacityService.ReadForOfferingAsync(id);
-		return detail;
+		return (row, detail, availability);
 	}
 
 	public async Task<AdmissionOfferingAvailabilityDto> GetAvailabilityAsync(Guid id)
+		=> (await GetWithAvailabilityAsync(id)).Availability;
+
+	internal async Task<(AdmissionOfferingDto Offering, AdmissionOfferingAvailabilityDto Availability)> GetWithAvailabilityAsync(Guid id)
 	{
-		var detail = await GetAsync(id);
-		var offering = await AsyncExecuter.FirstAsync(
-			(await offeringRepository.GetQueryableAsync()).Where(item => item.Id == id));
-		var intake = await inquiryAvailability.ReadAsync(offering);
-		return new AdmissionOfferingAvailabilityDto
+		var read = await ReadDetailAsync(id);
+		var detail = read.Detail;
+		var intake = await inquiryAvailability.ReadEvaluatedAsync(read.Row.Offering, read.Availability, detail.ClassCapacity!);
+		return (detail, new AdmissionOfferingAvailabilityDto
 		{
 			ClassCapacity = detail.ClassCapacity,
 			IsAvailable = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open,
@@ -85,12 +103,13 @@ public class AdmissionOfferingReadService(
 			ReasonCode = detail.Configuration.IsValid ? StatusReasonCode(detail.AvailabilityStatus) : AdmissionErrorCodes.OfferingConfigurationIncomplete,
 			ReasonMessage = intake.Reason ?? (detail.Configuration.IsValid ? StatusReasonMessage(detail.AvailabilityStatus) :
 				detail.Configuration.Errors.FirstOrDefault()?.Message)
-		};
+		});
 	}
 
 	private async Task<AdmissionOfferingReadQuery> GetRowsQueryAsync(
 		AdmissionOfferingListInput input,
-		Guid? offeringId = null)
+		Guid? offeringId = null,
+		Guid[]? cycleIds = null)
 	{
 		var offerings = await offeringRepository.GetQueryableAsync();
 		var campuses = await campusRepository.GetQueryableAsync();
@@ -106,6 +125,7 @@ public class AdmissionOfferingReadService(
 		var divisions = await divisionRepository.GetQueryableAsync();
 		var scope = await scopeAccessService.GetCurrentUserScopeAsync();
 		offerings = AdmissionOfferingScopeQuery.Apply(offerings.Where(offering => offering.TenantId == CurrentTenant.Id), cycles, divisions, scope);
+		if (cycleIds != null) offerings = offerings.Where(offering => Enumerable.Contains(cycleIds, offering.AdmissionCycleId));
 
 		var query =
 			from offering in offerings
@@ -143,8 +163,8 @@ public class AdmissionOfferingReadService(
 			select new AdmissionOfferingReadRow
 			{
 				Name = offering.Name == "" ? offering.Code : offering.Name,
-				EffectiveOpenDate = offering.OpenDate.HasValue ? offering.OpenDate.Value.Date : cycle.StartDate.Date,
-				EffectiveCloseDate = offering.CloseDate.HasValue ? offering.CloseDate.Value.Date : cycle.EndDate.Date,
+				EffectiveOpenDate = offering.OpenDate.HasValue ? offering.OpenDate!.Value.Date : cycle.StartDate.Date,
+				EffectiveCloseDate = offering.CloseDate.HasValue ? offering.CloseDate!.Value.Date : cycle.EndDate.Date,
 				Offering = offering,
 				Campus = campus,
 				Cycle = cycle,

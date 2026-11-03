@@ -79,24 +79,17 @@ public class AttendanceWorkspaceQueryService(StudentDirectoryQueryService direct
 	public async Task AddDirectoryRowsAsync(List<StudentAttendanceDto> students, Guid yearId, Guid standardId, Guid divisionId, DateTime date)
 	{
 		var rows = new Dictionary<Guid, StudentAttendanceDto>(students.ToDictionary(s => s.StudentId));
-		var skip = 0;
-		while (true)
+		var page = await directory.GetCompleteAttendanceClassAsync(yearId, standardId, divisionId);
+		foreach (var item in page.Items)
 		{
-			var page = await directory.GetAsync(new StudentDirectoryRequest {
-				AcademicYearId = yearId, StandardId = standardId, DivisionId = divisionId, Population = "Active", SkipCount = skip, MaxResultCount = 100 });
-			foreach (var item in page.Items)
+			if (!rows.TryGetValue(item.StudentId, out var row))
 			{
-				if (!rows.TryGetValue(item.StudentId, out var row))
-				{
-					row = FromDirectory(item); students.Add(row); rows.Add(row.StudentId, row);
-				}
-				row.FirstName = item.FirstName; row.MiddleName = item.MiddleName; row.LastName = item.LastName; row.GrNo = item.GrNo;
-				row.GrNumber = item.GrNumber ?? item.GrNo?.ToString(System.Globalization.CultureInfo.InvariantCulture);
-				row.StandardId = item.StandardId; row.DivisionId = item.DivisionId;
-				row.StandardName = row.ClassName = item.StandardName; row.DivisionName = item.DivisionName;
+				row = FromDirectory(item); students.Add(row); rows.Add(row.StudentId, row);
 			}
-			skip += page.Items.Count;
-			if (skip >= page.TotalCount || page.Items.Count == 0) break;
+			row.FirstName = item.FirstName; row.MiddleName = item.MiddleName; row.LastName = item.LastName; row.GrNo = item.GrNo;
+			row.GrNumber = item.GrNumber ?? item.GrNo?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+			row.StandardId = item.StandardId; row.DivisionId = item.DivisionId;
+			row.StandardName = row.ClassName = item.StandardName; row.DivisionName = item.DivisionName;
 		}
 		await FillRecordedStatusesAsync(students.Where(s => !s.IsExpected && s.Status == AttendanceStatus.Pending).ToList(), yearId, date);
 	}

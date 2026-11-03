@@ -58,7 +58,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	// Stored in the aggregate's existing JSON extension column; independent of principal.
 	public decimal GetAssessedLateFeeAmount() => this.GetProperty<decimal>("AssessedLateFeeAmount", 0m);
-	public string GetLateFeeAssessmentExplanation() => this.GetProperty<string>("LateFeeAssessmentExplanation", string.Empty);
+	public string? GetLateFeeAssessmentExplanation() => this.GetProperty<string>("LateFeeAssessmentExplanation", string.Empty);
 
 	public void PreserveLateFeeAssessment(decimal amount, DateTimeOffset assessedAt, Guid policyVersionId, string explanation)
 	{
@@ -388,7 +388,7 @@ public DueFee(
 	// This is a non-cash reduction. Original obligation, receipts and paid amounts stay immutable.
 	public decimal GetWithdrawalProrationCredit() => this.GetProperty<decimal>("WithdrawalProrationCredit", 0m);
 	public Guid? GetWithdrawalProrationSource() => this.GetProperty<Guid?>("WithdrawalProrationSource");
-	public string GetWithdrawalProrationExplanation() => this.GetProperty<string>("WithdrawalProrationExplanation", string.Empty);
+	public string? GetWithdrawalProrationExplanation() => this.GetProperty<string>("WithdrawalProrationExplanation", string.Empty);
 
 	public void ApplyWithdrawalProration(Guid sourceId, decimal credit, string explanation)
 	{
@@ -425,11 +425,12 @@ public DueFee(
 
 	private void RecalculateBalancesAndStatus()
 	{
-		var netPaid = Math.Max(0m, PaidAmount - RefundedAmount);
-		OutstandingAmount = Math.Max(0m, OriginalAmount - netPaid - NetAmount);
+		// A refund returns settled cash; it does not create a new fee demand.
+		// Only a payment reversal removes settlement from the original obligation.
+		OutstandingAmount = Math.Max(0m, OriginalAmount - PaidAmount - NetAmount);
 		Status = OutstandingAmount <= 0m
 			? FeeStatus.Paid
-			: netPaid > 0m || NetAmount > 0m
+			: PaidAmount > 0m || NetAmount > 0m
 				? FeeStatus.Partial
 				: FeeStatus.Pending;
 	}

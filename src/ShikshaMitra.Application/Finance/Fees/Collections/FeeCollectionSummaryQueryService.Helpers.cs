@@ -155,7 +155,8 @@ public partial class FeeCollectionSummaryQueryService
 					(s.FirstName  != null && s.FirstName.ToLower().Contains(term))  ||
 					(s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) ||
 					(s.LastName   != null && s.LastName.ToLower().Contains(term))   ||
-					(s.RollNo     != null && s.RollNo.ToString()!.Contains(term)));
+					(s.RollNo     != null && s.RollNo.ToString()!.Contains(term)) ||
+					(s.GrNo       != null && s.GrNo.ToString()!.Contains(term)));
 			}
 			else if (terms.Length > 1)
 			{
@@ -165,15 +166,16 @@ public partial class FeeCollectionSummaryQueryService
 					studentQ = studentQ.Where(s =>
 						(s.FirstName  != null && s.FirstName.ToLower().Contains(term))  ||
 						(s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) ||
-						(s.LastName   != null && s.LastName.ToLower().Contains(term)));
+						(s.LastName   != null && s.LastName.ToLower().Contains(term)) ||
+						(s.GrNo       != null && s.GrNo.ToString()!.Contains(term)));
 				}
 			}
 		}
 		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
 		return studentQ
 			.Where(s => scopedStudentIds.Contains(s.Id))
-			.OrderBy(s => s.Standard.CreationTime)
-			.ThenBy(s => s.Division.CreationTime)
+			.OrderBy(s => s.Standard!.CreationTime)
+			.ThenBy(s => s.Division!.CreationTime)
 			.ThenBy(s => s.RollNo);
 	}
 

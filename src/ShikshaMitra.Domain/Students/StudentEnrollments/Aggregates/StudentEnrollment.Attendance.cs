@@ -10,6 +10,9 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 
 public partial class StudentEnrollment
 {
+	private AttendancePlacementReadCache? attendancePlacementReadCache;
+	private sealed record AttendancePlacementReadCache(string Json, IReadOnlyCollection<AttendanceEnrollmentPlacement> Rows);
+
 	public DateTime? AttendanceStartDate { get; private set; }
 	public string AttendancePlacementHistoryJson { get; private set; } = "[]";
 
@@ -56,8 +59,19 @@ public partial class StudentEnrollment
 		history.Add(new(date, StandardId, DivisionId, RollNumber, IsActive));
 		AttendancePlacementHistoryJson = JsonSerializer.Serialize(history.OrderBy(x => x.Date));
 	}
-	private List<AttendanceEnrollmentPlacement> ReadAttendancePlacements() =>
-		JsonSerializer.Deserialize<List<AttendanceEnrollmentPlacement>>(AttendancePlacementHistoryJson) ?? [];
+	private List<AttendanceEnrollmentPlacement> ReadAttendancePlacements()
+	{
+		var json = AttendancePlacementHistoryJson;
+		var cached = attendancePlacementReadCache;
+		if (cached == null || cached.Json != json)
+		{
+			cached = new(json, JsonSerializer.Deserialize<List<AttendanceEnrollmentPlacement>>(json) ?? []);
+			attendancePlacementReadCache = cached;
+		}
+		// Placement writers edit their local list before serializing the next snapshot.
+		// Never let one of those edits mutate an unchanged parsed snapshot in place.
+		return new(cached.Rows);
+	}
 }
 
 public sealed record AttendanceEnrollmentPlacement(DateTime Date, Guid? StandardId, Guid? DivisionId, int? RollNumber, bool IsActive);

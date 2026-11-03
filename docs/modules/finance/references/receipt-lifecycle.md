@@ -8,18 +8,18 @@ owner: product-and-engineering
 audience: humans-and-agents
 ---
 
-# Provisional and official receipts
+# Receipts and provisional receipts
 
 ## Operational flow
 
 | Collection method | At collection | Reconciliation | Receipts history |
 | --- | --- | --- | --- |
-| Cash | Issue an Official Receipt immediately for fees and/or charges | Pending cash may fund paid expenses; Cash Management approval confirms the final net deposit and releases only that remainder as Income | Original official document, payment method, amount, date, PDF |
+| Cash | Issue a Receipt immediately for fees and/or charges | Pending cash may fund paid expenses; Cash Management approval confirms the final net deposit and releases only that remainder as Income | Original receipt, payment method, amount, date, PDF |
 | Cheque, Demand Draft, UPI, Bank Transfer, Credit Card, Debit Card | Issue a Provisional Receipt immediately | Existing payment verification approval/rejection | Provisional document remains accessible while pending |
-| Non-cash approved | Create a new Official Receipt; link both documents | Original provisional row becomes Approved and points to the official number | Both numbers retained; one underlying payment |
-| Non-cash rejected | No official receipt issued | Existing rejection reverses the collection and requires remarks | Provisional document remains as rejected evidence |
+| Non-cash approved | Create a new Receipt; link both documents | Original provisional row becomes Approved and points to the official number | Both numbers retained; one underlying payment |
+| Non-cash rejected | No receipt issued | Existing rejection reverses the collection and requires remarks | Provisional document remains as rejected evidence |
 
-"Kachi" is displayed as **Provisional Receipt**; "Pakki" is displayed as **Official Receipt**. The enum values and historical receipt numbers remain unchanged. Fee, Charge, and Fees and Charges identify document scope separately from its provisional/official lifecycle.
+"Kachi" is displayed as **Provisional Receipt**; "Pakki" is displayed as **Receipt**. The enum values and historical receipt numbers remain unchanged. Fee, Charge, and Fees and Charges identify document scope separately from its provisional/official lifecycle.
 
 Non-cash approval uses the existing reconciliation command. For Cash, the original receipt remains final while [Cash Management](./cash-management.md) confirms the net bank deposit and Income together after paid pending expenses. Bank-statement import and automatic matching remain outside this delivery.
 
@@ -45,13 +45,18 @@ Permission names above identify source constant members; the constant values and
 
 ## Receipt PDF and download contract
 
+- Separate receipt grouping puts principal fees on the Fee receipt and all additional charges,
+  including late fees, on the Charge receipt. Charge-only and late-fee-only collections produce
+  one Charge receipt. Combined mode retains one document. New PDFs itemize the saved late-fee
+  portion separately from ordinary charges. Historical receipt numbers, totals and scope remain
+  intact; refund and reconciliation read the stored late-fee attribution.
 - A4 printable document with institution/tenant heading, clear lifecycle title, number/date, student or applicant, GR number, academic year, scope, recorded payment method, fee installment rows, total in INR, signatory and seal spaces, and page numbering.
 - Charge-only documents are titled with the same lifecycle as fee documents. Combined documents retain fee/charge amounts. Missing legacy payment evidence says "Not recorded"; it is never inferred to be cash.
 - Official documents created on approval identify their provisional predecessor and explain that the two documents represent the same payment.
-- Filename: `<Official|Provisional>-Receipt_<Fee|Charge|Fees-And-Charges>_<receipt-number>_<yyyy-MM-dd>.pdf`. Example: `Official-Receipt_Charge_FCH-2026-000006_2026-10-23.pdf`. Receipt numbers are sanitized for safe filenames; pupil names and bank identifiers are excluded.
+- Filename: `<Receipt|Provisional-Receipt>_<Fee|Charge|Fees-And-Charges>_<receipt-number>_<yyyy-MM-dd>.pdf`. Example: `Receipt_Charge_FCH-2026-000006_2026-10-23.pdf`. Receipt numbers are sanitized for safe filenames; pupil names and bank identifiers are excluded.
 - Reconciliation PDF previews use the same `/api/v1/fee-receipts/{id}/pdf` endpoint as Receipts, selecting the linked official ID after approval and retaining the server filename.
 - Download metadata is exposed as `pdfFileName`; `paymentMethodLabel` appears in receipt list and detail responses. The PDF endpoint returns the same filename in Content-Disposition.
-- PDF template blobs use `fee-receipts/{tenant}/v2/{kind}/{id}.pdf`. Old template blobs remain retained; the first download regenerates the new presentation from the original receipt and collection records, keeping its ID, number and date.
+- PDF template blobs use `fee-receipts/{tenant}/v4/{kind}/{id}.pdf`. Old template blobs remain retained; the first download regenerates the new presentation from the original receipt and collection records, keeping its ID, number and date.
 - Number prefixes (`FIN`, `FCH`, `KFE`, `KCH`) remain stable to preserve receipt-book references and existing sequences. Display terminology and filenames carry the new names.
 
 ## Source and acceptance

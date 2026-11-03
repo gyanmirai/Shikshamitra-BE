@@ -237,13 +237,11 @@ public class ProrationPolicyAppService(
 				FeeHeadId = x.FeeHeadId,
 				RuleType = x.RuleType.ToString(),
 				RoundingMode = x.RoundingMode.ToString(),
-				MinimumChargeDays = x.MinimumChargeDays,
 				CutoffDay = x.CutoffDay,
 				AfterCutoffAction = x.AfterCutoffAction?.ToString(),
 				ApplyOnAdmission = x.ApplyOnAdmission,
 				ApplyOnEarlyWithdrawal = x.ApplyOnEarlyWithdrawal,
 				EarlyWithdrawalRuleType = x.EarlyWithdrawalRuleType?.ToString(),
-				EarlyWithdrawalMinimumChargeDays = x.EarlyWithdrawalMinimumChargeDays,
 				EarlyWithdrawalCutoffDay = x.EarlyWithdrawalCutoffDay,
 				EarlyWithdrawalBeforeCutoffAction = x.EarlyWithdrawalBeforeCutoffAction?.ToString()
 			}).ToList()
@@ -303,7 +301,7 @@ public class ProrationPolicyAppService(
 		var entity = await GetRequiredAsync(id);
 		var rule = entity.Rules.FirstOrDefault(x => x.FeeHeadId == input.FeeHeadId)?.ToSnapshot()
 			?? new ProrationPolicyRuleSnapshot(input.FeeHeadId, ProrationRuleType.FullCharge,
-				ProrationRoundingMode.Currency, null, null, null);
+			ProrationRoundingMode.Currency, null, null);
 		var result = calculationService.Calculate(rule, input.ScheduledAmount, input.CoverageStartDate,
 			input.CoverageEndDate, input.ChargeStartDate, input.ChargeEndDate);
 		return ToCalculationDto(entity, input.FeeHeadId, result);

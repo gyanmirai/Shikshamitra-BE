@@ -13,14 +13,19 @@ public partial class ReceiptBookAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ReceiptBook.View)]
 	public async Task<ReceiptBookListResponse> GetListAsync(
-		Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
+		Guid academicYearId, int page = 1, int pageSize = 10, string? search = null, string? filters = null)
 	{
+		var tableQuery = ParseListFilters(filters);
+		var hasHeaderFilters = tableQuery.Filters.Count > 0;
 		var query = await receiptBookRepository.WithDetailsAsync(
 			x => x.EducationBoard, x => x.EducationMedium, x => x.EducationMediumStage);
 
 		query = query.Where(x => x.AcademicYearId == academicYearId);
 		if (!string.IsNullOrWhiteSpace(search))
-			query = query.Where(x => x.Name.Contains(search));
+		{
+			var normalizedSearch = search.Trim().ToLowerInvariant();
+			query = query.Where(x => x.Name.ToLower().Contains(normalizedSearch));
+		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		if (totalCount == 0)
@@ -30,17 +35,25 @@ public partial class ReceiptBookAppService
 				TotalPages = 0, Items = new List<ReceiptBookResponse>()
 			};
 
-		query = query.OrderByDescending(x => x.CreationTime)
-			.Skip((page - 1) * pageSize).Take(pageSize);
+		query = query.OrderByDescending(x => x.CreationTime);
+		if (!hasHeaderFilters)
+			query = query.Skip((page - 1) * pageSize).Take(pageSize);
 
 		var items = await AsyncExecuter.ToListAsync(query);
+		var dtos = items.Select(MapToResponse).ToList();
+		if (hasHeaderFilters)
+		{
+			dtos = tableQuery.Apply(dtos.AsQueryable(), ListFilterFields).ToList();
+			totalCount = dtos.Count;
+			dtos = dtos.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+		}
 		return new ReceiptBookListResponse
 		{
 			TotalCount  = totalCount,
 			CurrentPage = page,
 			PageSize    = pageSize,
 			TotalPages  = (int)Math.Ceiling(totalCount / (double)pageSize),
-			Items       = items.Select(MapToResponse).ToList(),
+			Items       = dtos,
 		};
 	}
 

@@ -199,8 +199,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		}
 	}
 
-	[Fact]
-	public async Task Inquiry_Form_Values_Should_Update_Identity_And_Prefill_Application()
+	[Theory]
+	[InlineData("Female")]
+	[InlineData("Other")]
+	public async Task Inquiry_Form_Values_Should_Update_Identity_And_Prefill_Application(string gender)
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
@@ -229,7 +231,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				[
 					new() { FieldCode = "APPLICANT_FIRST_NAME", ValueJson = "\"Aanya\"" },
 					new() { FieldCode = "APPLICANT_DOB", ValueJson = "\"2016-04-12T00:00:00+05:30\"" },
-					new() { FieldCode = "APPLICANT_GENDER", ValueJson = "\"Female\"" },
+					new() { FieldCode = "APPLICANT_GENDER", ValueJson = JsonSerializer.Serialize(gender) },
 					new() { FieldCode = "GUARDIAN_MOBILE", ValueJson = "\"9876543210\"" },
 					new() { FieldCode = "LEARNING_NOTES", ValueJson = "\"Benefits from visual learning prompts\"" }
 				]
@@ -239,7 +241,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var guardian = (await WithUnitOfWorkAsync(() => _guardianRepository.GetListAsync(x => x.FamilyId == applicant.FamilyId))).Single();
 			applicant.FirstName.ShouldBe("Aanya");
 			applicant.DateOfBirth.ShouldBe(new DateTime(2016, 4, 12));
-			applicant.Gender.ShouldBe("Female");
+			applicant.Gender.ShouldBe(gender);
 			applicant.ReservedStudentId.ShouldNotBe(Guid.Empty);
 			applicant.ReservedStudentId.ShouldNotBe(applicant.Id);
 			(await WithUnitOfWorkAsync(() => _studentRepository.FindAsync(applicant.ReservedStudentId)))
@@ -256,6 +258,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				.ShouldBeNull();
 			(await WithUnitOfWorkAsync(() => _studentRepository.CountAsync())).ShouldBe(studentCountBeforeInquiry);
 			var form = await _applicationAppService.GetFormAsync(application.Id);
+			form.Values.Single(value => value.FieldCode == "APPLICANT_GENDER").ValueJson.ShouldBe(JsonSerializer.Serialize(gender));
 			form.Values.Single(value => value.FieldCode == "LEARNING_NOTES").ValueJson
 				.ShouldBe("\"Benefits from visual learning prompts\"");
 
@@ -1088,7 +1091,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	}
 
 	private Task<AdmissionOffering> CreateAvailableOfferingAsync(
-		Guid workflowId, bool assertValid = true, bool campusScoped = false, Guid? registrationFormId = null) =>
+		Guid workflowId, bool assertValid = true, bool campusScoped = false, Guid? registrationFormId = null, Guid? academicStageId = null) =>
 		WithUnitOfWorkAsync(async () =>
 	{
 		var userRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
@@ -1096,7 +1099,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await userRepository.InsertAsync(new IdentityUser(
 				TestUserId, $"workflow-admin-{TestUserId:N}", "workflow-admin@example.test", TestTenantId),
 				autoSave: true);
-		var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+		var stageId = academicStageId ?? await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 		var stage = await _stageRepository.GetAsync(stageId);
 		var medium = await _mediumRepository.GetAsync(stage.EducationMediumId);
 		var board = await _boardRepository.GetAsync(medium.EducationBoardId);
@@ -1148,7 +1151,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		await _formFieldRepository.InsertAsync(new AdmissionFormFieldDefinition(Guid.NewGuid(), inquiryForm.Id,
 			inquirySection.Id, "APPLICANT_GENDER", "Applicant gender", AdmissionFormFieldType.Select,
 			AdmissionFormBindingType.System, "Applicant.Gender", true, false, 2, null, null, null, null, null,
-			"[{\"value\":\"Male\",\"label\":\"Male\"},{\"value\":\"Female\",\"label\":\"Female\"}]"), autoSave: true);
+			AdmissionFormBindingRegistry.Metadata["Applicant.Gender"].OptionsJson), autoSave: true);
 		await _formFieldRepository.InsertAsync(new AdmissionFormFieldDefinition(Guid.NewGuid(), inquiryForm.Id,
 			inquirySection.Id, "GUARDIAN_MOBILE", "Guardian mobile", AdmissionFormFieldType.Phone,
 			AdmissionFormBindingType.System, "Guardian.Mobile", false, false, 3, null, null, null, null, null), autoSave: true);
@@ -1169,7 +1172,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		await _formFieldRepository.InsertAsync(new AdmissionFormFieldDefinition(
 			Guid.NewGuid(), form.Id, section.Id, "APPLICANT_GENDER", "Applicant gender", AdmissionFormFieldType.Select,
 			AdmissionFormBindingType.System, "Applicant.Gender", true, false, 3, null, null, null, null, null,
-			"[{\"value\":\"Male\",\"label\":\"Male\"},{\"value\":\"Female\",\"label\":\"Female\"}]"), autoSave: true);
+			AdmissionFormBindingRegistry.Metadata["Applicant.Gender"].OptionsJson), autoSave: true);
 		await _formFieldRepository.InsertAsync(new AdmissionFormFieldDefinition(
 			Guid.NewGuid(), form.Id, section.Id, "GUARDIAN_MOBILE", "Guardian mobile", AdmissionFormFieldType.Phone,
 			AdmissionFormBindingType.System, "Guardian.Mobile", false, false, 4, null, null, null, null, null), autoSave: true);

@@ -68,7 +68,9 @@ public partial class AccountsActivityAppService
             await transactionRepository.GetQueryableAsync(), input.AcademicYearId);
         var categories = await categoryRepository.GetQueryableAsync();
         var type = income ? TransactionType.Income : TransactionType.Expense;
+        // Suppress receipt/refund fallbacks using ALL routing evidence, including None.
         var automatic = transactions.Where(x => x.SourceKey != null);
+        transactions = AccountsRecognitionQuery.ExcludeNone(transactions, categories);
         Guid[]? partyFilterIds = null;
         Guid[] partySearchIds = [];
         if (tableQuery.Filters.Any(f => f.Column == "counterparty") || !string.IsNullOrWhiteSpace(input.Search))
@@ -78,8 +80,8 @@ public partial class AccountsActivityAppService
             var manualParties = await AsyncExecuter.ToListAsync(transactions.Where(t =>
                 t.AcademicYearId == input.AcademicYearId && t.TransactionType == type && t.IsConfirmed &&
                 t.SourceKey == null && t.PaymentDate >= period.StartUtc && t.PaymentDate < period.EndUtc &&
-                ((t.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(t.FinanceFeeAccountId.Value)) ||
-                 (!t.FinanceFeeAccountId.HasValue && (t.StudentId == null || scopedStudents.Contains(t.StudentId.Value)))))
+                ((t.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(t.FinanceFeeAccountId!.Value)) ||
+                 (!t.FinanceFeeAccountId.HasValue && (t.StudentId == null || scopedStudents.Contains(t.StudentId!.Value)))))
                 .Select(t => new { t.Id, t.ExtraProperties }));
             var partyRows = manualParties.Select(t => new WorkspaceRecord
             {
@@ -103,8 +105,8 @@ public partial class AccountsActivityAppService
                     join a in accounts on t.FinanceFeeAccountId equals (Guid?)a.Id into accountGroup
                     from a in accountGroup.DefaultIfEmpty()
                     where t.AcademicYearId == input.AcademicYearId && t.TransactionType == type && t.IsConfirmed &&
-                        ((t.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(t.FinanceFeeAccountId.Value)) ||
-                         (!t.FinanceFeeAccountId.HasValue && (t.StudentId == null || scopedStudents.Contains(t.StudentId.Value))))
+                        ((t.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(t.FinanceFeeAccountId!.Value)) ||
+                         (!t.FinanceFeeAccountId.HasValue && (t.StudentId == null || scopedStudents.Contains(t.StudentId!.Value))))
                     select new WorkspaceRecord
                     {
                         Id = t.Id, SourceId = t.SourceId ?? t.Id, StudentId = t.StudentId, FinanceFeeAccountId = t.FinanceFeeAccountId,
@@ -126,8 +128,8 @@ public partial class AccountsActivityAppService
                         join a in accounts on r.FinanceFeeAccountId equals (Guid?)a.Id into accountGroup
                         from a in accountGroup.DefaultIfEmpty()
                         where r.AcademicYearId == input.AcademicYearId &&
-                            ((r.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(r.FinanceFeeAccountId.Value)) ||
-                             (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudents.Contains(r.StudentId.Value))) &&
+                            ((r.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(r.FinanceFeeAccountId!.Value)) ||
+                             (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudents.Contains(r.StudentId!.Value))) &&
                             !automatic.Any(t => t.SourceId == c.Id) &&
                             (c.Status == FeeCollectionStatus.Paid || c.Status == FeeCollectionStatus.Partial) &&
                             (r.ReceiptKind == FeeReceiptKind.FinalFee || r.ReceiptKind == FeeReceiptKind.FinalCharge)
@@ -142,7 +144,7 @@ public partial class AccountsActivityAppService
         }
         else
         {
-            var refunds = await refundRepository.GetQueryableAsync();
+            var refunds = AccountsRecognitionQuery.ExcludeNone(await refundRepository.GetQueryableAsync(), categories);
             var entries = await refundEntryRepository.GetQueryableAsync();
             // Approval only reserves refundable money. Expenses begin with paid evidence.
             // Historical subledger timestamps are DateTimeOffset; materialize only the
@@ -154,8 +156,8 @@ public partial class AccountsActivityAppService
                 join a in accounts on r.FinanceFeeAccountId equals (Guid?)a.Id into accountGroup
                 from a in accountGroup.DefaultIfEmpty()
                 where r.AcademicYearId == input.AcademicYearId &&
-                    ((r.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(r.FinanceFeeAccountId.Value)) ||
-                     (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudents.Contains(r.StudentId.Value))) &&
+                    ((r.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(r.FinanceFeeAccountId!.Value)) ||
+                     (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudents.Contains(r.StudentId!.Value))) &&
                     !automatic.Any(t => t.SourceId == r.Id)
                 select new { e.Id, e.RefundRequestId, e.Amount, e.IsCorrection, e.PostedAt, e.BankAccountId,
                     r.StudentId, r.FinanceFeeAccountId, r.VoucherNumber, r.ExpenseCategoryId, r.ExpenseCategoryName, r.PayingBankLabel,

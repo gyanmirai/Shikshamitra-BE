@@ -57,6 +57,6 @@ public class HrTableExportAppService(IRepository<HrReportRun, Guid> runs, HrTabl
 		await access.EnsureAsync(run);
 		return run;
 	}
-	internal static HrTableExportRequest Request(HrReportRun run) => JsonSerializer.Deserialize<HrTableExportRequest>(run.ExtraProperties["tableExportRequest"].ToString()!, HrReportingEngine.Json)!;
+	internal static HrTableExportRequest Request(HrReportRun run) => JsonSerializer.Deserialize<HrTableExportRequest>(run.ExtraProperties["tableExportRequest"]!.ToString()!, HrReportingEngine.Json)!;
 	internal static HrTableExportStatus Status(HrReportRun run) => new() { Id = run.Id, Name = run.Name, Status = run.Status, Error = run.ErrorMessage, RowCount = run.RowCount, ExpiresAt = run.ExpiresAt };
 }

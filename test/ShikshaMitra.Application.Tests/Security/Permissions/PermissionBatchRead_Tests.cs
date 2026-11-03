@@ -21,7 +21,7 @@ public class PermissionBatchRead_Tests : ShikshaMitraApplicationTestBase<Shiksha
 			[
 				ShikshaMitraModulePermissions.Academics,
 				ShikshaMitraPermissions.Group.Add,
-				ShikshaMitraPermissions.Group.Create,
+				ShikshaMitraPermissions.Group.Default + ".Create", // Retained legacy permission identifier.
 				"AbpIdentity.Users",
 				"AbpIdentity.Users.View",
 				"Unknown.Future.Permission"

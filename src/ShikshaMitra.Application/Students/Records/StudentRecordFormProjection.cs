@@ -41,7 +41,9 @@ public class StudentRecordFormProjection(StudentRecordCurrentRuleReader currentR
 		return false;
 	}
 
-	public async Task PopulateAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources, bool canEdit)
+	public Task PopulateAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources, bool canEdit) => PopulateAuthorizedAsync(studentId, sources, canEdit, null);
+	internal Task PopulateAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources, bool canEdit, StudentRecordSectionReadScope scope) => PopulateAuthorizedAsync(studentId, sources, canEdit, scope);
+	private async Task PopulateAuthorizedAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources, bool canEdit, StudentRecordSectionReadScope? scope)
 	{
 		var record = await access.EnsureReadableAsync(studentId);
 		var roles = await access.GetDatabaseRoleNamesAsync();
@@ -50,7 +52,7 @@ public class StudentRecordFormProjection(StudentRecordCurrentRuleReader currentR
 		var customMasked = !baselineReadable || StudentRecordVisibility.IsMasked(record.Policy, "custom-details", roles);
 		foreach (var year in await reader.GetSourceYearIdsAsync(studentId))
 			customMasked |= StudentRecordVisibility.IsMasked((await policies.ResolveAsync(year)).Policy, "custom-details", roles);
-		await PopulateCoreAsync(studentId, sources, canEdit, compliance, record.Access == "Full", record.Policy, roles, customMasked, null);
+		await PopulateCoreAsync(studentId, sources, canEdit, compliance, record.Access == "Full", record.Policy, roles, customMasked, null, scope);
 	}
 	internal async Task PopulateForPortalAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources, Func<string, Task<JsonObject>> readSection)
 	{
@@ -65,7 +67,7 @@ public class StudentRecordFormProjection(StudentRecordCurrentRuleReader currentR
 			await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.IdentityCompliance.View), true, policy, roles, masked, readSection);
 	}
 	private async Task PopulateCoreAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources, bool canEdit, bool compliance,
-		bool fullAccess, StudentRecordsPolicy recordPolicy, List<string> roles, bool customMasked, Func<string, Task<JsonObject>>? readSection)
+		bool fullAccess, StudentRecordsPolicy recordPolicy, List<string> roles, bool customMasked, Func<string, Task<JsonObject>>? readSection, StudentRecordSectionReadScope? scope = null)
 	{
 		foreach (var source in sources)
 		{
@@ -84,7 +86,11 @@ public class StudentRecordFormProjection(StudentRecordCurrentRuleReader currentR
 					source.FormEditableFieldCodes.Add(field.Code);
 			}
 		}
-		if (readSection == null) await currentRules.RefreshAsync(studentId, sources, allFields: true);
+		if (readSection == null)
+		{
+			if (scope == null) await currentRules.RefreshAsync(studentId, sources, allFields: true);
+			else await currentRules.RefreshAsync(studentId, sources, scope, allFields: true);
+		}
 		else await currentRules.RefreshForPortalAsync(studentId, sources, readSection);
 		var stored = await profiles.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId);
 		var atoms = stored == null ? new Dictionary<string, JsonElement>() : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(stored.ValuesJson) ?? [];
@@ -96,7 +102,7 @@ public class StudentRecordFormProjection(StudentRecordCurrentRuleReader currentR
 			var names = Fields(source).Where(f => !source.FormMaskedFieldCodes.Contains(f.Code) && f.BindingKey is "Guardian.FirstName" or "Guardian.LastName").ToList();
 			if (names.Count > 0)
 			{
-				family ??= readSection != null ? await readSection("family") : JsonNode.Parse(await LazyServiceProvider.LazyGetRequiredService<StudentRecordPayloadService>().CaptureAsync(studentId, "family"))!.AsObject();
+				family ??= readSection != null ? await readSection("family") : JsonNode.Parse(await CaptureSectionAsync(studentId, "family", scope))!.AsObject();
 				var name = family["guardianDetails"]?["fullName"]?.GetValue<string>() ?? "";
 				foreach (var field in names) source.CurrentValues[field.Code] = atoms.GetValueOrDefault(StudentRecordCustomDetailsService.Identity(source, field), source.OriginalValues.GetValueOrDefault(field.Code, JsonSerializer.SerializeToElement("")));
 				var combined = string.Join(' ', names.OrderBy(f => f.BindingKey == "Guardian.FirstName" ? 0 : 1).Select(f => StudentRecordCustomDetailsService.Unwrap(source.CurrentValues[f.Code])).Where(v => !string.IsNullOrWhiteSpace(v)));
@@ -105,6 +111,8 @@ public class StudentRecordFormProjection(StudentRecordCurrentRuleReader currentR
 			}
 			foreach (var field in Fields(source))
 			{
+				// A retained question may never have had a submitted answer; the current form still includes it.
+				source.CurrentValues.TryAdd(field.Code, JsonSerializer.SerializeToElement<object?>(null));
 				if (source.FormMaskedFieldCodes.Contains(field.Code))
 				{
 					field.DefaultValue = null;
@@ -128,6 +136,11 @@ public class StudentRecordFormProjection(StudentRecordCurrentRuleReader currentR
 						{ var raw = StudentRecordCustomDetailsService.Unwrap(value); values[field.Code] = JsonSerializer.SerializeToElement(raw.Length >= 4 ? "********" + raw[^4..] : "Restricted"); }
 			}
 		}
+	}
+	private Task<string> CaptureSectionAsync(Guid studentId, string section, StudentRecordSectionReadScope? scope)
+	{
+		var payloads = LazyServiceProvider.LazyGetRequiredService<StudentRecordPayloadService>();
+		return scope == null ? payloads.CaptureAsync(studentId, section) : payloads.CaptureAsync(studentId, section, scope);
 	}
 	private static JsonElement BinarySummary(JsonElement value) => value.ValueKind == JsonValueKind.Array
 		? JsonSerializer.SerializeToElement(value.EnumerateArray().Select(BinarySummary).ToArray())

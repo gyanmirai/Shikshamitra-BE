@@ -17,7 +17,7 @@ namespace ShikshaMitra.Finance.Accounts.Settings;
 
 [Authorize]
 [RemoteService(false)]
-public class BankAccountAppService(
+public partial class BankAccountAppService(
 	IRepository<BankAccount, Guid> bankAccountRepository,
 	IRepository<AccountHead, Guid> accountHeadRepository,
 	IRepository<ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundRequest, Guid> refundRequestRepository,
@@ -56,8 +56,9 @@ public class BankAccountAppService(
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Accounts_Settings_BankAccount.View)]
 	public async Task<PaginatedBankAccountResponse> GetListAsync(Guid academicYearId, int page = 1,
-		int pageSize = 10, string? search = null, bool includeInactive = true)
+		int pageSize = 10, string? search = null, bool includeInactive = true, string? filters = null)
 	{
+		var tableQuery = ListFilter.Parse(filters);
 		if (page < 1 || pageSize is < 1 or > 100) throw new BusinessException("Finance:Accounts:Settings:InvalidPaging");
 		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(academicYearId, null, null, null, null))
 			return new PaginatedBankAccountResponse { TotalCount = 0, CurrentPage = page, PageSize = pageSize, TotalPages = 0, Items = [] };
@@ -71,6 +72,7 @@ public class BankAccountAppService(
 				x.BankName.ToUpper().Contains(term) || x.BranchName.ToUpper().Contains(term) ||
 				x.AccountHolderName.ToUpper().Contains(term));
 		}
+		query = await ApplyListFiltersAsync(query, tableQuery);
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.BankName)
 			.Skip((page - 1) * pageSize).Take(pageSize));

@@ -39,7 +39,7 @@ public class ReportingManagerAppService(
 		}).ToList();
 		var administrators = (await administratorReader.GetEligibleAsync()).Select(ReportingManagerProjection.ToAdministrator);
 		if (!string.IsNullOrWhiteSpace(search))
-			administrators = administrators.Where(admin => admin.FullName.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase) ||
+			administrators = administrators.Where(admin => admin.FullName!.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase) ||
 				(admin.Email?.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false));
 		options.AddRange(administrators);
 		return options;

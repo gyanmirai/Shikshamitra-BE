@@ -41,11 +41,16 @@ public partial class StudentRecordTransitionApplication(IRepository<StudentRecor
 			await EnsureAuthorityAsync(item);
 			await authority.ValidateAsync(item);
 			var policy = StudentRecordsPolicy.FromJson(item.PolicyJson);
+			StudentRecordTransitionPreviewRowDto? currentExitReadiness = null;
 			if (StudentSchoolExitOutstanding.IsExit(item.Outcome))
 			{
-				var exitReadiness = await readiness.PreviewAsync(item.AcademicYearId, JsonSerializer.Deserialize<StudentRecordTransitionInput>(item.InputJson)!, policy, false, validateDate: false);
+				var exitInput = JsonSerializer.Deserialize<StudentRecordTransitionInput>(item.InputJson)!;
+				var exitReadiness = await readiness.PreviewAsync(item.AcademicYearId, exitInput, policy, false, validateDate: false);
 				if (!exitReadiness.Ready) throw new BusinessException(exitReadiness.Issues[0].Code);
 				await RequireOutstandingApprovalAsync(item, exitReadiness);
+				// Exit previews do not use target roll rules. Reuse only this exact row's
+				// preview inside the same Serializable transaction, never a sibling's state.
+				if (exitInput.Outcome == item.Outcome) currentExitReadiness = exitReadiness;
 			}
 			var today = AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now);
 			var removalOnApproval = (item.Outcome is "Graduate" or "Withdraw" or "Transfer") && policy.Transitions.RosterRemovalTiming == "Approval";
@@ -67,7 +72,7 @@ public partial class StudentRecordTransitionApplication(IRepository<StudentRecor
 				}
 			}
 			if (item.CorrectionOfId.HasValue) await corrections.ApplyAsync(item);
-			else await ApplyCoreAsync(item, policy);
+			else await ApplyCoreAsync(item, policy, currentExitReadiness);
 			await transitions.UpdateAsync(item);
 			await events.InsertAsync(new(GuidGenerator.Create(), CurrentTenant.Id!.Value, item.Id, CurrentUser.Id!.Value, item.Status == "AwaitingAdmission" ? "AdmissionOpened" : item.Status == "AwaitingRenewal" ? "RenewalOpened" : "Applied", item.CurrentApprovalStage, item.Reason));
 			await work.CompleteAsync();
@@ -79,11 +84,11 @@ public partial class StudentRecordTransitionApplication(IRepository<StudentRecor
 			ShikshaMitra.Finance.Fees.Collections.WithdrawalProrationService.IsSourceConflict(exception))
 		{ await MarkExceptionAsync(id, "Students:Records:ConcurrencyConflict"); }
 	}
-	private async Task ApplyCoreAsync(StudentRecordTransition item, StudentRecordsPolicy policy)
+	private async Task ApplyCoreAsync(StudentRecordTransition item, StudentRecordsPolicy policy, StudentRecordTransitionPreviewRowDto? currentExitReadiness = null)
 	{
 		if (item.ReturnHandoffId.HasValue) { await admissionReturns.StartApprovedAsync(item); return; }
 		var input = JsonSerializer.Deserialize<StudentRecordTransitionInput>(item.InputJson)!;
-		var row = await readiness.PreviewAsync(item.AcademicYearId, input, policy, false, validateDate: false, frozenRollRule: item.GetOnboardingRollRule());
+		var row = currentExitReadiness ?? await readiness.PreviewAsync(item.AcademicYearId, input, policy, false, validateDate: false, frozenRollRule: item.GetOnboardingRollRule());
 		if (!row.Ready) throw new BusinessException(row.Issues[0].Code).WithData("Issues", string.Join(" ", row.Issues.Select(x => x.Message)));
 		await RequireOutstandingApprovalAsync(item, row);
 		var source = await readiness.GetSourceAsync(item.StudentId, item.AcademicYearId);

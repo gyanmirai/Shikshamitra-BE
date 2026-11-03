@@ -95,7 +95,7 @@ public class SubjectAssignmentReadBatching_Tests : SubjectTeacherReassignmentTes
 				stored.Teachers.Single(teacher => teacher.TeacherType == SubjectTeacherType.Secondary)
 					.TeacherId.ShouldBe(NewTeacher);
 
-				var teachers = result.Subjects.Single().Teachers;
+				var teachers = result.ShouldNotBeNull().Subjects.Single().Teachers;
 				teachers.Select(teacher => teacher.Id).ShouldBe([
 					OldTeacher.ToString(),
 					NewTeacher.ToString()

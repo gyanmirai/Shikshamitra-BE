@@ -72,7 +72,7 @@ public class AdmissionOfferingCommandService(
 	{
 		var offering = await GetOfferingAsync(id);
 		EnsureConcurrency(offering, concurrencyStamp);
-		var validation = await configurationValidator.ValidateStoredAsync(offering);
+		var validation = await configurationValidator.ValidateForActivationAsync(offering);
 		AdmissionOfferingConfigurationValidator.EnsureCanSave(validation, isActive: true);
 		offering.Activate();
 		await offeringRepository.UpdateAsync(offering, autoSave: true);

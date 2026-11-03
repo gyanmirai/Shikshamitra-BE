@@ -22,43 +22,116 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 [Authorize]
-public partial class StudentOnboardingAppService(
-	IRepository<StudentOnboardingCase, Guid> caseRepository,
-	IRepository<StudentOnboardingStep, Guid> stepRepository,
-	IRepository<StudentOnboardingEvent, Guid> eventRepository,
-	IRepository<StudentOnboardingPolicy, Guid> policyRepository,
-	IRepository<StudentOnboardingSettings, Guid> settingsRepository,
-	OnboardingConfigurationManager configurationManager,
-	ShikshaMitra.Security.UserScope.IUserScopeService userScopeService,
-	OnboardingFeeReadinessReader feeReadinessReader,
-	AdmissionFeeSelectionOnboardingReader admissionFeeSelectionReader,
-	IRepository<StudentSeatReservation, Guid> reservationRepository,
-	IRepository<StudentIdentifierSeries, Guid> seriesRepository,
-	IRepository<StudentIdentifierAllocation, Guid> allocationRepository,
-	IRepository<StudentOnboardingServiceHandoff, Guid> handoffRepository,
-	IRepository<AdmissionApplication, Guid> applicationRepository,
-	IRepository<AdmissionOffering, Guid> offeringRepository,
-	IRepository<AdmissionCampus, Guid> campusRepository,
-	IRepository<AdmissionCycle, Guid> cycleRepository,
-	IRepository<AcademicYear, Guid> academicYearRepository,
-	IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationBoard, Guid> boardRepository,
-	IRepository<ShikshaMitra.TenantSettings.EducationMediums.EducationMedium, Guid> mediumRepository,
-	IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage, Guid> mediumStageRepository,
-	IRepository<Standard, Guid> standardRepository,
-	IRepository<Division, Guid> divisionRepository,
-	IRepository<StudentEnrollment, Guid> enrollmentRepository,
-	IStudentRepository studentRepository,
-	StudentDocumentManager studentDocumentManager,
-	AdmissionStudentEvidenceReader admissionEvidenceReader,
-	IIdentityUserRepository identityUserRepository,
-	IdentityUserManager portalUserManager,
-	IdentityRoleManager portalRoleManager,
-	IRepository<ShikshaMitra.Students.Portal.StudentPortalAccountLink, Guid> portalLinkRepository,
-	ShikshaMitra.Students.Portal.StudentPortalAccessService portalAccess,
-	IDistributedEventBus distributedEventBus,
-	IUnitOfWorkManager unitOfWorkManager)
+public partial class StudentOnboardingAppService
 	: ApplicationService, IStudentOnboardingAppService
 {
+	private readonly IRepository<StudentOnboardingCase, Guid> caseRepository;
+	private readonly IRepository<StudentOnboardingStep, Guid> stepRepository;
+	private readonly IRepository<StudentOnboardingEvent, Guid> eventRepository;
+	private readonly IRepository<StudentOnboardingPolicy, Guid> policyRepository;
+	private readonly IRepository<StudentOnboardingSettings, Guid> settingsRepository;
+	private readonly OnboardingConfigurationManager configurationManager;
+	private readonly ShikshaMitra.Security.UserScope.IUserScopeService userScopeService;
+	private readonly AdmissionFeeSelectionOnboardingReader admissionFeeSelectionReader;
+	private readonly IRepository<StudentSeatReservation, Guid> reservationRepository;
+	private readonly IRepository<StudentIdentifierSeries, Guid> seriesRepository;
+	private readonly IRepository<StudentIdentifierAllocation, Guid> allocationRepository;
+	private readonly IRepository<StudentOnboardingServiceHandoff, Guid> handoffRepository;
+	private readonly IRepository<AdmissionApplication, Guid> applicationRepository;
+	private readonly IRepository<AdmissionOffering, Guid> offeringRepository;
+	private readonly IRepository<AdmissionCampus, Guid> campusRepository;
+	private readonly IRepository<AdmissionCycle, Guid> cycleRepository;
+	private readonly IRepository<AcademicYear, Guid> academicYearRepository;
+	private readonly IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationBoard, Guid> boardRepository;
+	private readonly IRepository<ShikshaMitra.TenantSettings.EducationMediums.EducationMedium, Guid> mediumRepository;
+	private readonly IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage, Guid> mediumStageRepository;
+	private readonly IRepository<Standard, Guid> standardRepository;
+	private readonly IRepository<Division, Guid> divisionRepository;
+	private readonly IRepository<StudentEnrollment, Guid> enrollmentRepository;
+	private readonly IStudentRepository studentRepository;
+	private readonly StudentDocumentManager studentDocumentManager;
+	private readonly AdmissionStudentEvidenceReader admissionEvidenceReader;
+	private readonly IIdentityUserRepository identityUserRepository;
+	private readonly IdentityUserManager portalUserManager;
+	private readonly IdentityRoleManager portalRoleManager;
+	private readonly IRepository<ShikshaMitra.Students.Portal.StudentPortalAccountLink, Guid> portalLinkRepository;
+	private readonly ShikshaMitra.Students.Portal.StudentPortalAccessService portalAccess;
+	private readonly IDistributedEventBus distributedEventBus;
+	private readonly IUnitOfWorkManager unitOfWorkManager;
+
+	public StudentOnboardingAppService(
+		IRepository<StudentOnboardingCase, Guid> caseRepository,
+		IRepository<StudentOnboardingStep, Guid> stepRepository,
+		IRepository<StudentOnboardingEvent, Guid> eventRepository,
+		IRepository<StudentOnboardingPolicy, Guid> policyRepository,
+		IRepository<StudentOnboardingSettings, Guid> settingsRepository,
+		OnboardingConfigurationManager configurationManager,
+		ShikshaMitra.Security.UserScope.IUserScopeService userScopeService,
+		OnboardingFeeReadinessReader feeReadinessReader,
+		AdmissionFeeSelectionOnboardingReader admissionFeeSelectionReader,
+		IRepository<StudentSeatReservation, Guid> reservationRepository,
+		IRepository<StudentIdentifierSeries, Guid> seriesRepository,
+		IRepository<StudentIdentifierAllocation, Guid> allocationRepository,
+		IRepository<StudentOnboardingServiceHandoff, Guid> handoffRepository,
+		IRepository<AdmissionApplication, Guid> applicationRepository,
+		IRepository<AdmissionOffering, Guid> offeringRepository,
+		IRepository<AdmissionCampus, Guid> campusRepository,
+		IRepository<AdmissionCycle, Guid> cycleRepository,
+		IRepository<AcademicYear, Guid> academicYearRepository,
+		IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationBoard, Guid> boardRepository,
+		IRepository<ShikshaMitra.TenantSettings.EducationMediums.EducationMedium, Guid> mediumRepository,
+		IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage, Guid> mediumStageRepository,
+		IRepository<Standard, Guid> standardRepository,
+		IRepository<Division, Guid> divisionRepository,
+		IRepository<StudentEnrollment, Guid> enrollmentRepository,
+		IStudentRepository studentRepository,
+		StudentDocumentManager studentDocumentManager,
+		AdmissionStudentEvidenceReader admissionEvidenceReader,
+		IIdentityUserRepository identityUserRepository,
+		IdentityUserManager portalUserManager,
+		IdentityRoleManager portalRoleManager,
+		IRepository<ShikshaMitra.Students.Portal.StudentPortalAccountLink, Guid> portalLinkRepository,
+		ShikshaMitra.Students.Portal.StudentPortalAccessService portalAccess,
+		IDistributedEventBus distributedEventBus,
+		IUnitOfWorkManager unitOfWorkManager
+	)
+	{
+		this.caseRepository = caseRepository;
+		this.stepRepository = stepRepository;
+		this.eventRepository = eventRepository;
+		this.policyRepository = policyRepository;
+		this.settingsRepository = settingsRepository;
+		this.configurationManager = configurationManager;
+		this.userScopeService = userScopeService;
+		_ = feeReadinessReader;
+		this.admissionFeeSelectionReader = admissionFeeSelectionReader;
+		this.reservationRepository = reservationRepository;
+		this.seriesRepository = seriesRepository;
+		this.allocationRepository = allocationRepository;
+		this.handoffRepository = handoffRepository;
+		this.applicationRepository = applicationRepository;
+		this.offeringRepository = offeringRepository;
+		this.campusRepository = campusRepository;
+		this.cycleRepository = cycleRepository;
+		this.academicYearRepository = academicYearRepository;
+		this.boardRepository = boardRepository;
+		this.mediumRepository = mediumRepository;
+		this.mediumStageRepository = mediumStageRepository;
+		this.standardRepository = standardRepository;
+		this.divisionRepository = divisionRepository;
+		this.enrollmentRepository = enrollmentRepository;
+		this.studentRepository = studentRepository;
+		this.studentDocumentManager = studentDocumentManager;
+		this.admissionEvidenceReader = admissionEvidenceReader;
+		this.identityUserRepository = identityUserRepository;
+		this.portalUserManager = portalUserManager;
+		this.portalRoleManager = portalRoleManager;
+		this.portalLinkRepository = portalLinkRepository;
+		this.portalAccess = portalAccess;
+		this.distributedEventBus = distributedEventBus;
+		this.unitOfWorkManager = unitOfWorkManager;
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<PagedResultDto<StudentOnboardingCaseDto>> GetListAsync(StudentOnboardingListInput input)
 	{
@@ -102,11 +175,13 @@ public partial class StudentOnboardingAppService(
 		var cases = await AsyncExecuter.ToListAsync(SortWorklist(worklist, input.Sorting)
 			.Skip(input.SkipCount).Take(input.MaxResultCount).Select(row => row.Case));
 		var rows = new List<StudentOnboardingCaseDto>(cases.Count);
+		if (cases.Count == 0) return new PagedResultDto<StudentOnboardingCaseDto>(totalCount, rows);
 		var configurations = new Dictionary<Guid, OnboardingRuleConfiguration?>();
-		foreach (var year in cases.Where(item => !item.StudentEnrollmentId.HasValue).Select(item => item.AcademicYearId).Distinct())
+		foreach (var year in cases.Select(item => item.AcademicYearId).Distinct())
 			configurations[year] = await configurationManager.GetAsync(year);
+		var listReadContext = await LoadListReadContextAsync(cases, configurations);
 		foreach (var onboardingCase in cases)
-			rows.Add(await MapCaseAsync(onboardingCase, includeEvents: false, configurations: configurations));
+			rows.Add(await MapCaseAsync(onboardingCase, includeEvents: false, configurations: configurations, listReadContext: listReadContext));
 		return new PagedResultDto<StudentOnboardingCaseDto>(totalCount, rows);
 	}
 
@@ -169,24 +244,22 @@ public partial class StudentOnboardingAppService(
 	{
 		var query = await GetScopedCasesAsync();
 		var now = DateTime.UtcNow;
-		return new StudentOnboardingAnalyticsDto
+		return await AsyncExecuter.FirstOrDefaultAsync(query.GroupBy(_ => 1).Select(group => new StudentOnboardingAnalyticsDto
 		{
-			ActiveCases = await AsyncExecuter.CountAsync(query.Where(item =>
-				item.Status != StudentOnboardingStatus.Completed && item.Status != StudentOnboardingStatus.Cancelled)),
-			Pending = await AsyncExecuter.CountAsync(query.Where(item => item.Status == StudentOnboardingStatus.Pending)),
-			InProgress = await AsyncExecuter.CountAsync(query.Where(item => item.Status == StudentOnboardingStatus.InProgress)),
-			ReadyForActivation = await AsyncExecuter.CountAsync(query.Where(item => item.Status == StudentOnboardingStatus.ReadyForActivation)),
-			NeedsAttention = await AsyncExecuter.CountAsync(query.Where(item => item.Status == StudentOnboardingStatus.NeedsAttention)),
-			Overdue = await AsyncExecuter.CountAsync(query.Where(item =>
-				item.Status != StudentOnboardingStatus.Completed && item.Status != StudentOnboardingStatus.Cancelled && item.DueAt < now)),
-			Completed = await AsyncExecuter.CountAsync(query.Where(item => item.Status == StudentOnboardingStatus.Completed)),
-			Cancelled = await AsyncExecuter.CountAsync(query.Where(item => item.Status == StudentOnboardingStatus.Cancelled))
-		};
+			ActiveCases = group.Count(item => item.Status != StudentOnboardingStatus.Completed && item.Status != StudentOnboardingStatus.Cancelled),
+			Pending = group.Count(item => item.Status == StudentOnboardingStatus.Pending),
+			InProgress = group.Count(item => item.Status == StudentOnboardingStatus.InProgress),
+			ReadyForActivation = group.Count(item => item.Status == StudentOnboardingStatus.ReadyForActivation),
+			NeedsAttention = group.Count(item => item.Status == StudentOnboardingStatus.NeedsAttention),
+			Overdue = group.Count(item => item.Status != StudentOnboardingStatus.Completed && item.Status != StudentOnboardingStatus.Cancelled && item.DueAt < now),
+			Completed = group.Count(item => item.Status == StudentOnboardingStatus.Completed),
+			Cancelled = group.Count(item => item.Status == StudentOnboardingStatus.Cancelled)
+		})) ?? new StudentOnboardingAnalyticsDto();
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<StudentOnboardingCaseDto> GetAsync(Guid id) =>
-		await MapCaseAsync(await GetCaseAsync(id), includeEvents: true);
+		await MapCaseAsync(await GetCaseAsync(id), includeEvents: true, useDetailReadContext: true);
 
 	[RemoteService(false)]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
@@ -207,17 +280,26 @@ public partial class StudentOnboardingAppService(
 		var onboardingCase = await GetCaseAsync(id);
 		var divisionQuery = await LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>()
 			.ApplyCurrentUserDivisionScopeAsync(await divisionRepository.GetQueryableAsync(), onboardingCase.AcademicYearId);
-		var divisions = await AsyncExecuter.ToListAsync(divisionQuery.Where(item => item.StandardId == onboardingCase.IntendedStandardId));
+		var divisions = await AsyncExecuter.ToListAsync(divisionQuery.Where(item => item.StandardId == onboardingCase.IntendedStandardId)
+			.Select(item => new { item.Id, item.Name, item.Strength, item.SortOrder }));
+		if (divisions.Count == 0) return [];
+		var divisionIds = divisions.Select(item => item.Id).ToArray();
 		var now = DateTime.UtcNow;
+		var enrollmentCounts = (await AsyncExecuter.ToListAsync((await enrollmentRepository.GetQueryableAsync())
+			.Where(item => item.AcademicYearId == onboardingCase.AcademicYearId && item.DivisionId.HasValue &&
+				Enumerable.Contains(divisionIds, item.DivisionId.Value) && item.IsActive)
+			.GroupBy(item => item.DivisionId!.Value).Select(group => new { DivisionId = group.Key, Count = group.Count() })))
+			.ToDictionary(item => item.DivisionId, item => item.Count);
+		var reservationCounts = (await AsyncExecuter.ToListAsync((await reservationRepository.GetQueryableAsync())
+			.Where(item => item.AcademicYearId == onboardingCase.AcademicYearId && Enumerable.Contains(divisionIds, item.DivisionId) &&
+				item.Status == StudentSeatReservationStatus.Reserved && item.ExpiresAt > now)
+			.GroupBy(item => item.DivisionId).Select(group => new { DivisionId = group.Key, Count = group.Count() })))
+			.ToDictionary(item => item.DivisionId, item => item.Count);
 		var options = new List<StudentOnboardingPlacementOptionDto>(divisions.Count);
 		foreach (var division in divisions.OrderBy(item => item.SortOrder).ThenBy(item => item.Name).ThenBy(item => item.Id))
 		{
-			var activeEnrollments = await enrollmentRepository.CountAsync(item =>
-				item.AcademicYearId == onboardingCase.AcademicYearId && item.DivisionId == division.Id && item.IsActive);
-			var reservations = await reservationRepository.GetListAsync(item =>
-				item.AcademicYearId == onboardingCase.AcademicYearId && item.DivisionId == division.Id &&
-				item.Status == StudentSeatReservationStatus.Reserved);
-			var liveReservations = reservations.Count(item => item.IsLive(now));
+			var activeEnrollments = enrollmentCounts.GetValueOrDefault(division.Id);
+			var liveReservations = reservationCounts.GetValueOrDefault(division.Id);
 			options.Add(new StudentOnboardingPlacementOptionDto
 			{
 				Id = division.Id,
@@ -1347,7 +1429,8 @@ public partial class StudentOnboardingAppService(
 	private async Task<StudentOnboardingCaseDto> MapCaseAsync(
 		StudentOnboardingCase onboardingCase, bool includeEvents,
 		IReadOnlyCollection<StudentOnboardingStep>? loadedSteps = null,
-		IReadOnlyDictionary<Guid, OnboardingRuleConfiguration?>? configurations = null)
+		IReadOnlyDictionary<Guid, OnboardingRuleConfiguration?>? configurations = null,
+		OnboardingListReadContext? listReadContext = null, bool useDetailReadContext = false)
 	{
 		OnboardingRuleConfiguration? accountConfiguration = null;
 		if (!onboardingCase.StudentEnrollmentId.HasValue)
@@ -1360,46 +1443,58 @@ public partial class StudentOnboardingAppService(
 			await CurrentUnitOfWork!.SaveChangesAsync();
 			loadedSteps = currentSteps;
 		}
-		var application = await applicationRepository.FindAsync(onboardingCase.ApplicationId);
-		var offering = await offeringRepository.FindAsync(onboardingCase.OfferingId);
+		var application = listReadContext != null ? listReadContext.Applications.GetValueOrDefault(onboardingCase.ApplicationId)
+			: await applicationRepository.FindAsync(onboardingCase.ApplicationId);
+		var offering = listReadContext != null ? listReadContext.Offerings.GetValueOrDefault(onboardingCase.OfferingId)
+			: await offeringRepository.FindAsync(onboardingCase.OfferingId);
 		if (!onboardingCase.HasCampusSnapshot) onboardingCase.UseLegacyCampusId(offering?.CampusId);
-		var academicYear = await academicYearRepository.FindAsync(onboardingCase.AcademicYearId);
-		var board = await boardRepository.FindAsync(onboardingCase.IntendedBoardId);
-		var medium = await mediumRepository.FindAsync(onboardingCase.IntendedMediumId);
-		var standard = await standardRepository.FindAsync(onboardingCase.IntendedStandardId);
-		var division = onboardingCase.DivisionId.HasValue
+		var detailReadContext = useDetailReadContext ? await LoadDetailReadContextAsync(onboardingCase) : null;
+		var academicYear = listReadContext == null && detailReadContext == null ? await academicYearRepository.FindAsync(onboardingCase.AcademicYearId) : null;
+		var board = listReadContext == null && detailReadContext == null ? await boardRepository.FindAsync(onboardingCase.IntendedBoardId) : null;
+		var medium = listReadContext == null && detailReadContext == null ? await mediumRepository.FindAsync(onboardingCase.IntendedMediumId) : null;
+		var standard = listReadContext == null && detailReadContext == null ? await standardRepository.FindAsync(onboardingCase.IntendedStandardId) : null;
+		var division = listReadContext == null && detailReadContext == null && onboardingCase.DivisionId.HasValue
 			? await divisionRepository.FindAsync(onboardingCase.DivisionId.Value)
 			: null;
-		var student = includeEvents
+		var student = detailReadContext != null ? detailReadContext.Student : listReadContext != null ? null : includeEvents
 			? await studentRepository.GetWithDetailsAsync(onboardingCase.StudentId)
 			: await studentRepository.FindAsync(onboardingCase.StudentId);
-		var owner = onboardingCase.AssignedToUserId.HasValue
+		var listStudent = listReadContext?.Students.GetValueOrDefault(onboardingCase.StudentId);
+		var listDivision = onboardingCase.DivisionId.HasValue ? listReadContext?.Divisions.GetValueOrDefault(onboardingCase.DivisionId.Value) : null;
+		var readDivision = detailReadContext?.Division ?? listDivision;
+		var owner = listReadContext == null && onboardingCase.AssignedToUserId.HasValue
 			? await identityUserRepository.FindAsync(onboardingCase.AssignedToUserId.Value)
 			: null;
-		var steps = loadedSteps ?? await stepRepository.GetListAsync(item => item.OnboardingCaseId == onboardingCase.Id);
+		// Capture above must still run in its original per-case order. If it changed
+		// requirements, loadedSteps contains the freshly refreshed authoritative rows.
+		var steps = loadedSteps ?? (listReadContext != null ? listReadContext.Steps[onboardingCase.Id].ToList()
+			: await stepRepository.GetListAsync(item => item.OnboardingCaseId == onboardingCase.Id));
 		var events = includeEvents
 			? await eventRepository.GetListAsync(item => item.OnboardingCaseId == onboardingCase.Id)
 			: [];
-		var actorNames = await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.StudentEnrollments.Admissions.StudentJourneyActorReader>().ReadAsync(events.Select(item => item.CreatorId).Concat(steps.Select(item => item.CompletedByUserId)));
+		var actorNames = listReadContext != null && loadedSteps == null ? listReadContext.ActorNames
+			: await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.StudentEnrollments.Admissions.StudentJourneyActorReader>().ReadAsync(events.Select(item => item.CreatorId).Concat(steps.Select(item => item.CompletedByUserId)));
 		var feeSelection = application?.GetFeeSelection();
 		var feeConfirmed = application != null && await admissionFeeSelectionReader.IsConfirmedAsync(application);
 		// Readiness is derived from current evidence even for existing cases, without
 		// mutating tracked steps or creating a duplicate confirmation merely on view.
 		steps = ProjectFeeReadiness(steps, feeConfirmed);
-		var reservedIdentifier = string.IsNullOrWhiteSpace(student?.GrNumber) && student?.GrNo == null
-			? await allocationRepository.FindAsync(a => a.OnboardingCaseId == onboardingCase.Id &&
+		var reservedIdentifier = string.IsNullOrWhiteSpace(listStudent?.GrNumber ?? student?.GrNumber) && (listStudent?.GrNo ?? student?.GrNo) == null
+			? listReadContext != null ? listReadContext.ReservedIdentifiers.GetValueOrDefault(onboardingCase.Id)
+			: await allocationRepository.FindAsync(a => a.OnboardingCaseId == onboardingCase.Id &&
 				a.Status == StudentIdentifierAllocationStatus.Reserved)
 			: null;
 		var handoffs = onboardingCase.StudentEnrollmentId.HasValue
-			? (await handoffRepository.GetListAsync(h => h.OnboardingCaseId == onboardingCase.Id && h.Required))
+			? (listReadContext != null ? listReadContext.RequiredHandoffs[onboardingCase.Id].ToList()
+				: await handoffRepository.GetListAsync(h => h.OnboardingCaseId == onboardingCase.Id && h.Required))
 				.Where(handoff => IsApplicableServiceHandoff(onboardingCase, handoff)).ToList()
 			: [];
 		var requiredHandoffs = onboardingCase.Status != StudentOnboardingStatus.Completed ? handoffs : [];
 		var studentAccount = handoffs.Find(h => h.ServiceKey == "student-account");
 		var guardianAccount = handoffs.Find(h => h.ServiceKey == "guardian-account");
 		var accountPolicy = !onboardingCase.StudentEnrollmentId.HasValue ? await ResolvePolicyAsync(onboardingCase) : null;
-		var accountRules = await ReadSavedRulesAsync(onboardingCase);
-		var credentialReadiness = await ReadCredentialReadinessAsync(onboardingCase, accountRules);
+		var accountRules = await ReadSavedRulesAsync(onboardingCase, configurations);
+		var credentialReadiness = await ReadCredentialReadinessAsync(onboardingCase, accountRules, listReadContext: listReadContext);
 		var satisfied = steps.Count(step => IsSatisfied(step.Status));
 		var primaryBlocker = StudentOnboardingWorkSummary.PrimaryBlocker(steps, requiredHandoffs);
 		var progressTotal = steps.Count + requiredHandoffs.Count;
@@ -1424,8 +1519,10 @@ public partial class StudentOnboardingAppService(
 			FinanceReadinessDetail = feeConfirmed ? "Fee structure confirmed." : "Fees pending. Fee assignment and payment do not block activation.",
 			SelectedFeeStructureId = feeSelection?.StructureId,
 			FeeStructureConfirmed = feeConfirmed,
-			GrNumberLocked = onboardingCase.IsIdentifierLocked("gr") || student?.IsIdentifierLocked("gr") == true || await IsDivisionIdentifierGroupLockedAsync(onboardingCase.DivisionId, onboardingCase.AcademicYearId, "gr"),
-			RollNumberLocked = onboardingCase.IsIdentifierLocked("roll") || student?.IsIdentifierLocked("roll") == true || await IsDivisionIdentifierGroupLockedAsync(onboardingCase.DivisionId, onboardingCase.AcademicYearId, "roll"),
+			GrNumberLocked = onboardingCase.IsIdentifierLocked("gr") || (listStudent?.IsIdentifierLocked("gr") ?? student?.IsIdentifierLocked("gr")) == true ||
+				(listReadContext != null || detailReadContext != null ? readDivision?.IsIdentifierLocked(onboardingCase.AcademicYearId, "gr") == true : await IsDivisionIdentifierGroupLockedAsync(onboardingCase.DivisionId, onboardingCase.AcademicYearId, "gr")),
+			RollNumberLocked = onboardingCase.IsIdentifierLocked("roll") || (listStudent?.IsIdentifierLocked("roll") ?? student?.IsIdentifierLocked("roll")) == true ||
+				(listReadContext != null || detailReadContext != null ? readDivision?.IsIdentifierLocked(onboardingCase.AcademicYearId, "roll") == true : await IsDivisionIdentifierGroupLockedAsync(onboardingCase.DivisionId, onboardingCase.AcademicYearId, "roll")),
 			RollChangeReasonRequired = accountConfiguration?.ResolveRule("rollNumber", onboardingCase, Clock.Now) is { } rollSettings && OnboardingRuleConfiguration.Boolean(rollSettings, "requireChangeReason"),
 			GrManualEntryAllowed = accountConfiguration == null || accountConfiguration.ResolveRule("grNumber", onboardingCase, Clock.Now) is { } grSettings && OnboardingRuleConfiguration.Boolean(grSettings, "manualEntryAllowed"),
 			HasDocumentRequirementsSnapshot = onboardingCase.ExtraProperties.ContainsKey("DocumentPoliciesSnapshot"),
@@ -1442,31 +1539,32 @@ public partial class StudentOnboardingAppService(
 			ApplicationNumber = application?.ApplicationNumber ?? string.Empty,
 			ApplicantId = onboardingCase.ApplicantId,
 			StudentId = onboardingCase.StudentId,
-			StudentName = student == null ? string.Empty : string.Join(" ",
-				new[] { student.FirstName, student.MiddleName, student.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))),
+			StudentName = listStudent != null ? string.Join(" ", new[] { listStudent.FirstName, listStudent.MiddleName, listStudent.LastName }.Where(value => !string.IsNullOrWhiteSpace(value)))
+				: student == null ? string.Empty : string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))),
 			OfferingId = onboardingCase.OfferingId,
 			OfferingCode = offering?.Code ?? string.Empty,
 			CampusId = onboardingCase.GetCampusId(),
 			AcademicYearId = onboardingCase.AcademicYearId,
-			AcademicYearName = academicYear?.Name ?? string.Empty,
+			AcademicYearName = detailReadContext?.YearName ?? listReadContext?.YearNames.GetValueOrDefault(onboardingCase.AcademicYearId) ?? academicYear?.Name ?? string.Empty,
 			IntendedBoardId = onboardingCase.IntendedBoardId,
-			IntendedBoardName = board?.Type.ToString() ?? string.Empty,
+			IntendedBoardName = detailReadContext?.BoardName ?? listReadContext?.BoardNames.GetValueOrDefault(onboardingCase.IntendedBoardId) ?? board?.Type.ToString() ?? string.Empty,
 			IntendedMediumId = onboardingCase.IntendedMediumId,
-			IntendedMediumName = medium?.Name ?? string.Empty,
+			IntendedMediumName = detailReadContext?.MediumName ?? listReadContext?.MediumNames.GetValueOrDefault(onboardingCase.IntendedMediumId) ?? medium?.Name ?? string.Empty,
 			IntendedStageId = onboardingCase.IntendedStageId,
 			IntendedStandardId = onboardingCase.IntendedStandardId,
-			IntendedStandardName = standard?.Name ?? string.Empty,
+			IntendedStandardName = detailReadContext?.StandardName ?? listReadContext?.StandardNames.GetValueOrDefault(onboardingCase.IntendedStandardId) ?? standard?.Name ?? string.Empty,
 			Status = onboardingCase.Status,
 			AssignedToUserId = null,
 			AssignedToUserName = null,
 			DueAt = onboardingCase.DueAt,
 			IsHistoricalBackfill = onboardingCase.IsHistoricalBackfill,
 			DivisionId = onboardingCase.DivisionId,
-			DivisionName = division?.Name,
+			DivisionName = readDivision?.Name ?? division?.Name,
 			SeatReservationId = onboardingCase.SeatReservationId,
-			GrNumber = student?.GrNumber ?? student?.GrNo?.ToString() ?? reservedIdentifier?.Value,
+			GrNumber = listStudent?.GrNumber ?? student?.GrNumber ?? (listStudent?.GrNo ?? student?.GrNo)?.ToString() ?? reservedIdentifier?.Value,
 			RollNumber = onboardingCase.RollNumber,
-			RollAssignmentMode = await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>().GetAssignmentModeAsync(onboardingCase.AcademicYearId),
+			RollAssignmentMode = listReadContext != null ? listReadContext.RollAssignmentModes[onboardingCase.AcademicYearId]
+				: await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>().GetAssignmentModeAsync(onboardingCase.AcademicYearId),
 			StudentEnrollmentId = onboardingCase.StudentEnrollmentId,
 			StartedAt = onboardingCase.StartedAt,
 			ReadyAt = onboardingCase.ReadyAt,

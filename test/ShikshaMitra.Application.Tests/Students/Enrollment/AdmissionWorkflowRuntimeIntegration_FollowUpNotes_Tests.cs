@@ -221,7 +221,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var state = await service.RecordFollowUpNoteAsync(inquiry.Id,
 				NoteInput(inquiry, before, AdmissionInquiryStatus.NotInterested, DateTimeOffset.UtcNow.AddDays(1)));
 			state.FollowUps.Single().Status.ShouldBe(AdmissionInquiryFollowUpStatus.Cancelled);
-			state.FollowUps.Single().CompletionNote.ShouldContain("Not interested");
+			state.FollowUps.Single().CompletionNote.ShouldNotBeNull().ShouldContain("Not interested");
 			state.Notes.Single().Status.ShouldBe(AdmissionInquiryStatus.NotInterested);
 			state.Notes.Single().ReminderAt.ShouldBeNull();
 			(await GetRequiredService<IAdmissionInquiryAppService>().GetAsync(inquiry.Id)).Status.ShouldBe(AdmissionInquiryStatus.NotInterested);

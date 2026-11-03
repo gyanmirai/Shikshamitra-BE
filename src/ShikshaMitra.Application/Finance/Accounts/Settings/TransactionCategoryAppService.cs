@@ -21,7 +21,7 @@ namespace ShikshaMitra.Finance.Accounts.Settings;
 
 [Authorize]
 [RemoteService(false)]
-public class TransactionCategoryAppService(
+public partial class TransactionCategoryAppService(
 	IRepository<TransactionCategory, Guid> categoryRepository,
 	IRepository<AccountHead, Guid> accountHeadRepository,
 	IRepository<Transaction, Guid> transactionRepository,
@@ -74,15 +74,19 @@ public class TransactionCategoryAppService(
 
 	public async Task<PaginatedTransactionCategoryResponse> GetListAsync(Guid academicYearId,
 		TransactionType categoryType, int page = 1, int pageSize = 10, string? search = null,
-		bool includeInactive = true)
+		bool includeInactive = true, string? filters = null)
 	{
 		await CheckPermissionAsync(categoryType, "View");
+		var tableQuery = ListFilter.Parse(filters);
 		if (page < 1 || pageSize is < 1 or > 100) throw new BusinessException("Finance:Accounts:Settings:InvalidPaging");
 		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(academicYearId, null, null, null, null))
 			return new PaginatedTransactionCategoryResponse { TotalCount = 0, CurrentPage = page, PageSize = pageSize, TotalPages = 0, Items = [] };
 		var query = await categoryRepository.GetQueryableAsync();
-		query = query.Where(x => x.AcademicYearId == academicYearId && x.CategoryType == categoryType &&
-			x.Name.Trim().ToUpper() != "NONE");
+		query = from category in query
+			where category.AcademicYearId == academicYearId && category.CategoryType == categoryType
+			let normalizedName = category.Name.Trim().ToUpper()
+			where normalizedName != "NONE"
+			select category;
 		if (!includeInactive) query = query.Where(x => x.IsActive);
 		if (!string.IsNullOrWhiteSpace(search))
 		{
@@ -90,6 +94,7 @@ public class TransactionCategoryAppService(
 			query = query.Where(x => (x.NormalizedCode != null && x.NormalizedCode.Contains(term)) ||
 				(x.NormalizedName != null && x.NormalizedName.Contains(term)) || x.Name.ToUpper().Contains(term));
 		}
+		query = ListFilter.Apply(query, tableQuery);
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.Name)
 			.Skip((page - 1) * pageSize).Take(pageSize));

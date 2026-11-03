@@ -15,8 +15,6 @@ public class BankTransferDetails : PaymentDetails
     public DateOnly? TransferDate { get; private set; }
     public string? AccountHolderName { get; private set; }
 
-    private BankTransferDetails() { /* For ORM */ }
-
     public BankTransferDetails(string transactionReferenceNumber, string bankName, string? ifscCode = null,
         DateOnly? transferDate = null, string? accountHolderName = null)
     {
@@ -27,12 +25,13 @@ public class BankTransferDetails : PaymentDetails
         AccountHolderName = accountHolderName;
     }
 
-    protected override IEnumerable<object?> GetAtomicValues()
+    // ABP equality atoms intentionally include null for absent optional values.
+    protected override IEnumerable<object> GetAtomicValues()
     {
         yield return TransactionReferenceNumber;
         yield return BankName;
-        yield return IfscCode;
-        yield return TransferDate;
-        yield return AccountHolderName;
+        yield return IfscCode!;
+        yield return TransferDate!;
+        yield return AccountHolderName!;
     }
 }

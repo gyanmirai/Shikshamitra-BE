@@ -8,6 +8,10 @@ namespace ShikshaMitra.Students.Records;
 
 public class StudentIdCardTemplateDto
 {
+	public Guid? Id { get; set; }
+	// Omission on update preserves the saved cohort, including membership outside the editor's scope.
+	public StudentIdCardSelectionDto? Selection { get; set; }
+	public bool SelectionRestricted { get; set; }
 	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentitySelectionDto Logo { get; set; } = new();
 	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityDocumentSnapshotDto? SchoolIdentity { get; set; }
 	[StringLength(150)] public string Name { get; set; } = "Student I-Card";
@@ -26,8 +30,19 @@ public class StudentIdCardTemplateDto
 	public string? ConcurrencyStamp { get; set; }
 }
 
+public class StudentIdCardSelectionDto
+{
+	public Guid? AcademicYearId { get; set; }
+	public List<Guid> BoardIds { get; set; } = [];
+	public List<Guid> MediumIds { get; set; } = [];
+	public List<Guid> StandardIds { get; set; } = [];
+	public List<Guid> DivisionIds { get; set; } = [];
+	public List<Guid> StudentIds { get; set; } = [];
+}
+
 public class StudentIdCardPreviewRequestDto
 {
+	public Guid? TemplateId { get; set; }
 	public List<Guid> StudentIds { get; set; } = [];
 }
 public class IssueStudentIdCardsDto : StudentIdCardPreviewRequestDto
@@ -53,6 +68,11 @@ public class StudentIdCardDto
 
 public interface IStudentIdCardAppService : IApplicationService
 {
+	Task<List<StudentIdCardTemplateDto>> GetTemplatesAsync();
+	Task<StudentIdCardTemplateDto> GetTemplateByIdAsync(Guid id);
+	Task<StudentIdCardTemplateDto> CreateTemplateAsync(StudentIdCardTemplateDto input);
+	Task<StudentIdCardTemplateDto> UpdateTemplateAsync(Guid id, StudentIdCardTemplateDto input);
+	Task DeleteTemplateAsync(Guid id);
 	Task<StudentIdCardTemplateDto> GetTemplateAsync();
 	Task<StudentIdCardTemplateDto> SaveTemplateAsync(StudentIdCardTemplateDto input);
 	Task<List<StudentIdCardDto>> PreviewAsync(StudentIdCardPreviewRequestDto input);

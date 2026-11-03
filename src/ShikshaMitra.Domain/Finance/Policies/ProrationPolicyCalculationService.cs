@@ -42,7 +42,7 @@ public class ProrationPolicyCalculationService : DomainService
 				: rule.RuleType switch
 			{
 				ProrationRuleType.FullCharge => 1m,
-				ProrationRuleType.Daily => CalculateDailyFactor(actualDays, coverageDays, rule.MinimumChargeDays, out chargedDays),
+				ProrationRuleType.Daily => actualDays / (decimal)coverageDays,
 				ProrationRuleType.MonthlyCutoff => CalculateMonthlyFactor(
 					eligibleStart, rule.CutoffDay, rule.AfterCutoffAction),
 				_ => throw new BusinessException(ProrationPolicyErrorCodes.InvalidRule)
@@ -72,12 +72,7 @@ public class ProrationPolicyCalculationService : DomainService
 		var start = admission == ProrationRuleType.FullCharge || chargeStart < coverageStart ? coverageStart : chargeStart;
 		var end = withdrawal == ProrationRuleType.FullCharge || chargeEnd > coverageEnd ? coverageEnd : chargeEnd;
 		var coverageDays = (coverageEnd - coverageStart).Days + 1;
-		var minimumDays = Math.Max(admission == ProrationRuleType.Daily ? rule.MinimumChargeDays ?? 0 : 0,
-			withdrawal == ProrationRuleType.Daily ? rule.EarlyWithdrawalMinimumChargeDays ??
-				(rule.EarlyWithdrawalRuleType.HasValue ? 0 : rule.MinimumChargeDays ?? 0) : 0);
-		if (minimumDays is < 0 or > 366)
-			throw new BusinessException(ProrationPolicyErrorCodes.InvalidRule);
-		chargedDays = Math.Min(coverageDays, Math.Max((end - start).Days + 1, minimumDays));
+		chargedDays = (end - start).Days + 1;
 		if (admission is not (ProrationRuleType.MonthlyCutoff or ProrationRuleType.FullMonthCharge) &&
 			withdrawal is not (ProrationRuleType.MonthlyCutoff or ProrationRuleType.FullMonthCharge))
 			return chargedDays / (decimal)coverageDays;
@@ -111,14 +106,9 @@ public class ProrationPolicyCalculationService : DomainService
 			// In the same month the strongest reduction applies once.
 			total += Math.Min(fraction, cap) / monthCount;
 		}
-		return Math.Min(1m, Math.Max(total, minimumDays / (decimal)coverageDays));
+		return Math.Min(1m, total);
 	}
 
-	private static decimal CalculateDailyFactor(int actualDays, int coverageDays, int? minimumChargeDays, out int chargedDays)
-	{
-		chargedDays = Math.Min(coverageDays, Math.Max(actualDays, minimumChargeDays ?? 0));
-		return chargedDays / (decimal)coverageDays;
-	}
 
 	private static decimal CalculateMonthlyFactor(
 		DateTime eligibleStart,

@@ -23,7 +23,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var (application, _, _, offering) = await CreateCurrentJourneyApplicationAsync(AdmissionWorkflowStageType.Assessment);
 		(await _applicationAppService.GetListAsync(new() { AdmissionOfferingId = offering.Id, DecisionWorkspaceOnly = true })).TotalCount.ShouldBe(0);
 		(await _applicationAppService.GetPipelineAsync(new() { MyCases = false, AdmissionOfferingId = offering.Id })).Items.Single().Id.ShouldBe(application.Id);
-		await _applicationAppService.EndJourneyAsync(application.Id, new() { Reason = "Family withdrew before document review", ConcurrencyStamp = application.ConcurrencyStamp });
+		await _applicationAppService.EndJourneyAsync(application.Id, new() { Reason = "Family withdrew before document review", ConcurrencyStamp = application.ConcurrencyStamp.ShouldNotBeNull() });
 		var closed = await _applicationAppService.GetAsync(application.Id);
 		closed.Status.ShouldBe(AdmissionApplicationStatus.Withdrawn);
 		closed.HasReachedDecision.ShouldBe(false);

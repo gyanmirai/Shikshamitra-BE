@@ -199,6 +199,12 @@ public class SalaryTemplateTargetResultDto
 	public bool IsExact { get; set; }
 }
 
+public class SalaryTemplateUnclassifiedEarningDto
+{
+	public Guid ComponentId { get; set; }
+	public string Name { get; set; } = string.Empty;
+}
+
 public class SalaryTemplateEsiPreviewDto
 {
 	public Guid? PolicyId { get; set; }
@@ -222,6 +228,7 @@ public class SalaryTemplateEsiPreviewDto
 	public Guid? RuleId { get; set; }
 	public int? RuleVersion { get; set; }
 	public List<string> IssueCodes { get; set; } = [];
+	public List<SalaryTemplateUnclassifiedEarningDto> UnclassifiedEarnings { get; set; } = [];
 }
 
 public class SalaryTemplateCalculationDto

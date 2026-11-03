@@ -74,6 +74,10 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 
 	private StudentAdditionalDetail()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		FamilyCast = null!;
+		InquiryNo = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 

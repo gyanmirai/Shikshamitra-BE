@@ -20,6 +20,42 @@ namespace ShikshaMitra.Finance.Fees;
 public class FeeReceiptPdfGenerator_Tests
 {
     [Theory]
+    [InlineData(FeeReceiptScope.Fee, 20000)]
+    [InlineData(FeeReceiptScope.Charge, 60600)]
+    [InlineData(FeeReceiptScope.Combined, 80600)]
+    public async Task Renders_Principal_And_Late_Fees_On_Their_Selected_Receipt(FeeReceiptScope scope, int total)
+    {
+        var transactionId = Guid.NewGuid();
+        var line = new FeeCollectionDueFeeAllocation(Guid.NewGuid(), null, transactionId, Guid.NewGuid(), 20000);
+        line.SetScheduleSnapshot("School fees", "June 2026", null, null,
+            new DateTime(2026, 6, 5), ShikshaMitra.Finance.Fees.Settings.PaymentTerms.ScheduleSource.Legacy);
+        var allocations = Substitute.For<IReadOnlyRepository<FeeCollectionDueFeeAllocation, Guid>>();
+        allocations.GetListAsync(Arg.Any<Expression<Func<FeeCollectionDueFeeAllocation, bool>>>(),
+            Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(new List<FeeCollectionDueFeeAllocation> { line });
+        var receipt = new FeePaymentReceipt(Guid.NewGuid())
+        {
+            StudentId = Guid.NewGuid(), FeeCollectionTransactionId = transactionId,
+            ReceiptNumber = $"SPLIT-{scope}-2026", ReceiptScope = scope,
+            ReceiptKind = scope == FeeReceiptScope.Charge ? FeeReceiptKind.FinalCharge : FeeReceiptKind.FinalFee,
+            TotalPaidAmount = total, ReceiptDate = new DateOnly(2026, 10, 30),
+            Remarks = "Synthetic receipt grouping verification."
+        };
+        if (scope == FeeReceiptScope.Combined) receipt.SetAmountBreakdown(20000m, 60600m);
+        receipt.SetLateFeePaidAmount(scope == FeeReceiptScope.Fee ? 0m : 60600m);
+
+        var bytes = await new FeeReceiptPdfGenerator(allocations: allocations).GenerateAsync(receipt, null, null);
+
+        Assert.True(bytes.Length > 1000);
+        Assert.Equal("%PDF-", Encoding.ASCII.GetString(bytes, 0, 5));
+        var output = Environment.GetEnvironmentVariable("RECEIPT_PDF_QA_DIRECTORY");
+        if (!string.IsNullOrWhiteSpace(output))
+        {
+            Directory.CreateDirectory(output);
+            await File.WriteAllBytesAsync(Path.Combine(output, $"receipt-split-{scope}.pdf"), bytes);
+        }
+    }
+
+    [Theory]
     [InlineData(FeeReceiptKind.FinalFee, FeeReceiptScope.Fee, PaymentMethodEnum.Cash)]
     [InlineData(FeeReceiptKind.ProvisionalFee, FeeReceiptScope.Combined, PaymentMethodEnum.CreditCard)]
     [InlineData(FeeReceiptKind.FinalCharge, FeeReceiptScope.Charge, PaymentMethodEnum.CreditCard)]

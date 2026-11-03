@@ -3,7 +3,7 @@ module: institute-setup
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-26
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -230,7 +230,7 @@ Host identities cannot enter this school API.
 | PUT `profile` | Profile fields and stamp | Update the current tenant's whitelisted details and confirm step 1 |
 | PUT `academic-year` | Name, start/end dates, optional existingYearId, createNew, stamp | Create, select or update a tenant-owned year and confirm step 2 |
 | PUT `structure` | Typed draft and stamp | Create/reuse the academic branch and confirm step 3 |
-| PUT `advance` | Step and stamp | Advance only Welcome (0) or optional Users (4) |
+| PUT `advance` | Step and stamp | Advance Welcome (0), optional Users (4), or optional School Identity (5) |
 | POST `users` | Identity create input, requestId, stamp | Create optional staff through the standard Identity service |
 | PUT `complete` | Stamp | Verify readiness and record completion; already complete returns current status |
 
@@ -249,6 +249,7 @@ The school session context at `api/host/session-context` exposes `setupCompleted
 | Identity business errors | Password, username, email or role validation failure |
 
 Contracts live in `src/ShikshaMitra.Application.Contracts/TenantSettings/InitialSetup/InitialSetupDtos.cs`.
+Draft navigation accepts steps 0-6. Review is step 6 and completed progress is step 7. Identity uploads and profile saves reuse the School Identity API with its existing permissions and concurrency stamp; no identity fields are added to setup drafts. Frontend and backend step numbering must be released together.
 Localized error codes live in `src/ShikshaMitra.Domain.Shared/TenantSettings/InitialSetup/InitialSetupErrorCodes.cs`.
 
 ## Rooms Management endpoint families

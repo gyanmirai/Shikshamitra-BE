@@ -28,13 +28,12 @@ public class AdmissionDocumentRuntimeService(AdmissionDocumentAccessService acce
 		if (workflow == null) return;
 		var visited = await stages.GetListAsync(item => item.WorkflowInstanceId == workflow.Id &&
 			item.StageType == AdmissionWorkflowStageType.DocumentVerification && item.Status != AdmissionRuntimeStageStatus.Pending);
-		foreach (var stage in visited)
-		{
-			var definition = await definitions.GetAsync(stage.DefinitionStageId);
-			var policy = AdmissionDocumentAccessService.ReadPolicy(definition);
-			if (policy == null) continue;
-			(await evaluator.EvaluateAsync(application, stage.Id, policy)).EnsureComplete();
-		}
+		var definitionIds = visited.Select(stage => stage.DefinitionStageId).Distinct().ToArray();
+		var definitionRows = definitionIds.Length == 0 ? new Dictionary<Guid, AdmissionWorkflowStageDefinition>() :
+			(await definitions.GetListAsync(definition => Enumerable.Contains(definitionIds, definition.Id))).ToDictionary(definition => definition.Id);
+		var plan = AdmissionDocumentEvaluationService.ReadPolicies(visited, definitionRows, AdmissionDocumentAccessService.ReadPolicy);
+		foreach (var evaluation in await evaluator.EnumerateManyAsync(application, plan.Requests)) evaluation.EnsureComplete();
+		plan.Error?.Throw();
 	}
 
 	public async Task<IReadOnlyDictionary<string, string>> AddFactsAsync(AdmissionApplication application,

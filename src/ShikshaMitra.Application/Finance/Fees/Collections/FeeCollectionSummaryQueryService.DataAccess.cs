@@ -3,7 +3,6 @@ using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.FeeCollection;
-using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Students;
 using ShikshaMitra.Finance.Reports;
 using System;
@@ -87,8 +86,8 @@ public partial class FeeCollectionSummaryQueryService
 			if (!rowsByPayer.TryGetValue(FinanceReportPayerKey.From(due.StudentId, due.FinanceFeeAccountId), out var row)) continue;
 			row.TotalFees += (double)due.OriginalAmount;
 			row.PaidFees += (double)due.AppliedPaymentAmount;
-			if (due.ScheduleSource == ScheduleSource.Legacy || !due.DemandDate.HasValue || due.DemandDate.Value <= currentDate)
-				row.OutstandingFees += (double)due.OutstandingAmount;
+			// Pending includes every unpaid obligation, including installments not yet demanded.
+			row.OutstandingFees += (double)due.OutstandingAmount;
 			if (isOverdue(due)) row.OverdueFees += (double)due.OutstandingAmount;
 			row.TotalCharges += (double)lateBalances[due.Id].Total;
 			row.PendingCharges += (double)lateBalances[due.Id].PendingAmount;

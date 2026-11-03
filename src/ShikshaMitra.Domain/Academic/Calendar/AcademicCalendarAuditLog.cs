@@ -44,6 +44,10 @@ public class AcademicCalendarAuditLog : FullAuditedEntity<Guid>, IMultiTenant
 
     private AcademicCalendarAuditLog()
     {
+        // EF materializes these required columns after this ORM constructor.
+        NewValueJson = null!;
+        OldValueJson = null!;
+
         /* ORM */
     }
 

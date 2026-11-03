@@ -22,9 +22,12 @@ public class VariableFeePricing_Tests
         Assert.Throws<BusinessException>(() => detail.UpdateAmount(100));
         detail.SetPricing(false, 100.01m);
         Assert.False(detail.IsVariable);
-        Assert.Equal(100.01m, detail.Amount);
+        Assert.Equal(101m, detail.Amount);
+        Assert.Equal(optional, detail.IsOptional);
         detail.SetPricing(true, null);
         Assert.Null(detail.Amount);
+        Assert.True(detail.IsVariable);
+        Assert.Equal(optional, detail.IsOptional);
     }
 
     [Fact]

@@ -26,6 +26,10 @@ TL;DR: Admissions remains inside the Student modular-monolith boundary and separ
 
 ## Admissions sibling-parent provenance
 
+`AdmissionPrimaryContactSelection.cs` records the configured school-contact role and authenticated Guardian responsibility confirmation separately from `AdmissionSiblingParentSelection` account provenance. `AdmissionInquiryConfiguredFields` resolves only active primary-contact definitions, preserving saved/read-only ownership and legacy aliases. Create/edit, public intake and stage guards reuse that policy; Records family writes retain their separate reviewed transition acknowledgment.
+
+`AdmissionJourneyIdentityConfiguration.cs` validates combined reachable identity sources only for new/changed configuration and explicit activation. Direct entry's mandatory first name/DOB/gender capture is a trusted source; surname is not inferred. `AdmissionStructuredNamePrefill.cs` keeps a captured full Inquiry name from silently becoming an entire structured Registration first name. `ValidateStoredAsync` retains existing runtime semantics; activation uses `ValidateForActivationAsync`.
+
 Admissions parent matching is owned by `Application/Students/StudentEnrollments/Admissions/AdmissionDirectFamilyMatchService.cs`.
 It combines existing admission scope with exact saved contacts, current Student parent projections and a provider-backed pending JSON-parent contact predicate; it does not create accounts or send credentials.
 `Domain/Students/StudentEnrollments/Admissions/Repositories/IAdmissionApplicantRepository.cs` and `EntityFrameworkCore/Students/StudentEnrollments/Admissions/EfCoreAdmissionApplicantRepository.cs` own this composable PostgreSQL/SQLite query, with parameterized contact values and tenant/soft-delete boundaries retained.
@@ -72,6 +76,20 @@ Daily/correction/leave-approval transactions use serializable units of work and 
 Daily entry persistence reads existing rows once per day and batches inserts/updates.
 Submitted snapshots pin historical policy and eligibility. Removed policy and schedule configuration no longer affects new attendance.
 Tenant filters remain enabled; historical paths are independently scoped rather than authorized through a student's current placement.
+
+## House Management ownership
+
+| Concern | Source under `src/` |
+| --- | --- |
+| Contracts | `ShikshaMitra.Application.Contracts/Students/Records/HouseManagement/` |
+| Scoped reads, assignment preview/commit and leadership commands | `ShikshaMitra.Application/Students/Records/HouseManagement/` |
+| Existing house catalogue and membership/leader invariants | `ShikshaMitra.Domain/Students/Records/Settings/`, `ShikshaMitra.Domain/Students/StudentEnrollments/` |
+| Independent division leader and EF mapping | `ShikshaMitra.Domain/TenantSettings/AcademicSetups/Divisions/Division.Leadership.cs`, `ShikshaMitra.EntityFrameworkCore/Students/Records/HouseManagementConfiguration.cs` |
+| Additive persistence migration | `ShikshaMitra.EntityFrameworkCore/Migrations/20261030111330_AddHouseManagement.cs`; nullable enrollment/leader references, revision counters, indexes and restrictive foreign keys |
+| HTTP boundary | `ShikshaMitra.HttpApi/Controllers/Student/Records/HouseManagementController.cs` |
+| Permission catalogue and visibility prerequisites | `ShikshaMitra.Domain.Shared/Constants/Permissions/SubmodulePermissions/Students/`, `ShikshaMitra.Domain.Shared/Security/Permissions/NavigationVisibilityPrerequisites.json` |
+
+The feature reuses the House Settings catalogue and scoped enrollment projection. It introduces no Groups dependency or automatic role-grant restoration. Frontend routes and cache wiring belong to [Student frontend docs](../../../../Shikshamitra-FE/docs/student/README.md).
 
 ## Student Records ownership
 

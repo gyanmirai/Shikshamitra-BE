@@ -72,7 +72,7 @@ public class TenantSeederContributor(
 			input.MapExtraPropertiesTo(tenant);
 
 			await tenantRepository.InsertAsync(tenant);
-			await unitOfWork.SaveChangesAsync();
+			await CurrentUnitOfWork.SaveChangesAsync();
 
 			tenantIds.Add(tenant.Id);
 		}

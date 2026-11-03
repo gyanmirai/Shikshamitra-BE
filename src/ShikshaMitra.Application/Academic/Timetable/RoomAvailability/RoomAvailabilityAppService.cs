@@ -9,6 +9,7 @@ using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Users;
+using Volo.Abp.Data;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -104,7 +105,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
             ? await _conflictService.CheckWeeklyRoomSnapshotsAsync(roomSnapshots, input.WeeklyTimetableDay.Value,
                 timeStart, timeEnd, input.StandardId, input.DivisionId)
             : await _conflictService.CheckRoomSnapshotsAsync(roomSnapshots, input.Date,
-                timeStart, timeEnd, input.StandardId, input.DivisionId);
+                timeStart, timeEnd, input.StandardId, input.DivisionId, input.AcademicMediumId);
 
         foreach (var room in rooms)
         {
@@ -165,7 +166,8 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
             null,
             input.TeacherId,
             input.StandardId,
-            input.DivisionId
+            input.DivisionId,
+            input.AcademicMediumId
         );
 
         return ObjectMapper.Map<ConflictCheckResult, ConflictCheckResultDto>(result);
@@ -182,7 +184,8 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
             input.PreferredBuildingId,
             input.StandardId,
             input.Page,
-            input.Limit
+            input.Limit,
+            input.AcademicMediumId
         );
 
         var suggestions = ObjectMapper.Map<List<SuggestedRoom>, List<SuggestedRoomDto>>(result);
@@ -227,14 +230,15 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
         var dates = input.IsRecurring && input.RecurringConfig != null
             ? GenerateRecurringDates(input.Date, input.RecurringConfig) : new List<DateTime>();
         var mainWindow = new RoomConflictWindow(input.RoomId, input.Date, input.StartTime, input.EndTime,
-            null, input.TeacherId, input.StandardId, input.DivisionId);
+            null, input.TeacherId, input.StandardId, input.DivisionId, input.AcademicMediumId);
         var series = input.IsRecurring && input.RecurringConfig != null
             ? await _conflictService.CreateSessionAsync(dates.Select(date => mainWindow with { Date = date }).Prepend(mainWindow).ToList())
             : null;
         if (calendarScopes == null)
         {
             var conflicts = series != null ? await series.CheckAsync(mainWindow) : await _conflictService.CheckConflictsAsync(
-                input.RoomId, input.Date, input.StartTime, input.EndTime, null, input.TeacherId, input.StandardId, input.DivisionId);
+                input.RoomId, input.Date, input.StartTime, input.EndTime, null, input.TeacherId, input.StandardId, input.DivisionId,
+                input.AcademicMediumId);
             EnsureNoCriticalConflicts(conflicts, "Cannot complete booking");
         }
         else
@@ -283,6 +287,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
                     input.TeacherId, input.StandardId, input.DivisionId, input.SubjectId,
                     input.ReservedFor, input.Remarks, false, configId
                 );
+                subReservation.SetProperty("CalendarMediumId", input.AcademicMediumId);
 
                 if (isAdmin)
                 {
@@ -301,6 +306,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
             input.TeacherId, input.StandardId, input.DivisionId, input.SubjectId,
             input.ReservedFor, input.Remarks, input.IsRecurring, configId
         );
+        mainReservation.SetProperty("CalendarMediumId", input.AcademicMediumId);
 
         if (isAdmin)
         {
@@ -439,7 +445,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
                     visibleUserIds);
         }
 
-        var configIds = dtos.Where(d => d.RecurringConfigId.HasValue).Select(d => d.RecurringConfigId.Value).Distinct().ToList();
+        var configIds = dtos.Where(d => d.RecurringConfigId.HasValue).Select(d => d.RecurringConfigId!.Value).Distinct().ToList();
         if (configIds.Any())
         {
             var configs = await _recurringConfigRepository.GetListAsync(c => configIds.Contains(c.Id));
@@ -467,7 +473,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
 
         var conflicts = await _conflictService.CheckConflictsAsync(
             input.RoomId, input.Date, input.StartTime, input.EndTime, id,
-            input.TeacherId, input.StandardId, input.DivisionId
+            input.TeacherId, input.StandardId, input.DivisionId, input.AcademicMediumId ?? ReservationCalendarMedium(reservation)
         );
 
         if (conflicts.OverallSeverity == "critical")
@@ -477,6 +483,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
 
         var oldValJson = JsonSerializer.Serialize(reservation);
 
+        if (input.AcademicMediumId.HasValue) reservation.SetProperty("CalendarMediumId", input.AcademicMediumId);
         reservation.Update(
             input.RoomId,
             input.Date,
@@ -763,7 +770,8 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
             reservation.Id,
             reservation.TeacherId,
             reservation.StandardId,
-            reservation.DivisionId
+            reservation.DivisionId,
+            ReservationCalendarMedium(reservation)
         );
 
         EnsureNoCriticalConflicts(conflicts, "Cannot approve booking");
@@ -771,7 +779,11 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
 
     private static RoomConflictWindow ReservationWindow(RoomReservation reservation) => new(reservation.RoomId,
         reservation.Date, reservation.StartTime, reservation.EndTime, reservation.Id, reservation.TeacherId,
-        reservation.StandardId, reservation.DivisionId);
+        reservation.StandardId, reservation.DivisionId, ReservationCalendarMedium(reservation));
+
+    private static Guid? ReservationCalendarMedium(RoomReservation reservation) =>
+        reservation.ExtraProperties.TryGetValue("CalendarMediumId", out var value) &&
+        Guid.TryParse(value?.ToString(), out var mediumId) ? mediumId : null;
 
     private static void EnsureNoCriticalConflicts(ConflictCheckResult conflicts, string action)
     {
@@ -955,7 +967,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
         return reports;
     }
 
-    public async Task<RoomScheduleDto> GetRoomScheduleAsync(Guid roomId, DateTime date)
+    public async Task<RoomScheduleDto> GetRoomScheduleAsync(Guid roomId, DateTime date, Guid? academicMediumId = null)
     {
         var room = await _roomRepository.GetAsync(roomId);
         var reservations = await _reservationRepository.GetListAsync(r =>
@@ -993,7 +1005,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
         };
 
         var conflictsByPeriod = await _conflictService.CheckRoomPeriodsAsync(room, date,
-            slotsConfig.Select(cfg => (cfg.Start, cfg.End)).ToList());
+            slotsConfig.Select(cfg => (cfg.Start, cfg.End)).ToList(), academicMediumId);
 
         for (var index = 0; index < slotsConfig.Length; index++)
         {

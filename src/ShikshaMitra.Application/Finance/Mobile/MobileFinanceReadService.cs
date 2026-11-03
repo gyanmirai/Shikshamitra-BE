@@ -23,13 +23,44 @@ namespace ShikshaMitra.Finance.Mobile;
 
 [Authorize]
 [RemoteService(false)]
-public partial class MobileFinanceReadService(MobileFinanceAccessService access, IDueFeeRepository dues,
-	IRepository<FeeHead, Guid> heads, IRepository<FeeRecordMetadata, Guid> transactions,
-	IRepository<PaymentMethodRecord, Guid> methods, IFeePaymentReceiptRepository receipts,
-	LateFeeBalanceService lateFees,
-	IFeeReceiptPdfGenerator receiptPdf, IRepository<AcademicYear, Guid> years, IClock clock)
+public partial class MobileFinanceReadService
 	: ApplicationService, IMobileFinanceReadService, ITransientDependency
 {
+	private readonly MobileFinanceAccessService access;
+	private readonly IDueFeeRepository dues;
+	private readonly IRepository<FeeHead, Guid> heads;
+	private readonly IRepository<FeeRecordMetadata, Guid> transactions;
+	private readonly IRepository<PaymentMethodRecord, Guid> methods;
+	private readonly IFeePaymentReceiptRepository receipts;
+	private readonly LateFeeBalanceService lateFees;
+	private readonly IFeeReceiptPdfGenerator receiptPdf;
+	private readonly IClock clock;
+
+	public MobileFinanceReadService(
+		MobileFinanceAccessService access,
+		IDueFeeRepository dues,
+		IRepository<FeeHead, Guid> heads,
+		IRepository<FeeRecordMetadata, Guid> transactions,
+		IRepository<PaymentMethodRecord, Guid> methods,
+		IFeePaymentReceiptRepository receipts,
+		LateFeeBalanceService lateFees,
+		IFeeReceiptPdfGenerator receiptPdf,
+		IRepository<AcademicYear, Guid> years,
+		IClock clock
+	)
+	{
+		this.access = access;
+		this.dues = dues;
+		this.heads = heads;
+		this.transactions = transactions;
+		this.methods = methods;
+		this.receipts = receipts;
+		this.lateFees = lateFees;
+		this.receiptPdf = receiptPdf;
+		_ = years;
+		this.clock = clock;
+	}
+
 	[Authorize(Permissions.View)]
 	public async Task<MobileFinanceContext> ContextAsync(Guid studentId, Guid? academicYearId = null, CancellationToken cancellationToken = default)
 	{

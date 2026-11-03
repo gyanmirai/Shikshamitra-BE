@@ -17,7 +17,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		var source = await service.CreateAsync(new()
 		{
 			AcademicYearId = year, PolicyName = "Default proration", Status = "Active",
-			FeeHeadRules = [new() { FeeHeadId = head, RuleType = "Daily", MinimumChargeDays = 0 }]
+			FeeHeadRules = [new() { FeeHeadId = head, RuleType = "Daily" }]
 		});
 		source.IsDefault.ShouldBeTrue();
 		var first = await service.CloneAsync(source.Id, new());

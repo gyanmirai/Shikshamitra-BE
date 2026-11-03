@@ -6,10 +6,10 @@ namespace ShikshaMitra.Academic.Examination.Settings;
 public class CreateGradingScaleDto
 {
     [Required]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
     [Required]
-    public string TotalMarks { get; set; }
+    public string TotalMarks { get; set; } = null!;
 
     public double? PassMarks { get; set; }
 
@@ -19,5 +19,5 @@ public class CreateGradingScaleDto
 
     [Required]
     [MinLength(1)]
-    public List<GradeRangeDto> GradingScale { get; set; }
+    public List<GradeRangeDto> GradingScale { get; set; } = null!;
 }

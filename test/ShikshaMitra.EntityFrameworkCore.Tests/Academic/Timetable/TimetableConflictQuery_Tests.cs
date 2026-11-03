@@ -11,6 +11,46 @@ namespace ShikshaMitra.EntityFrameworkCore.Tests.Academic.Timetable;
 
 public class TimetableConflictQuery_Tests : ShikshaMitraEntityFrameworkCoreTestBase
 {
+	[Theory]
+	[InlineData(TimetableStatus.Draft, false, 0)]
+	[InlineData(TimetableStatus.NotCreated, false, 0)]
+	[InlineData(TimetableStatus.Published, false, 1)]
+	[InlineData(TimetableStatus.Published, true, 0)]
+	public async Task Only_Live_Published_Timetables_Should_Reserve_Teachers_And_Rooms(
+		TimetableStatus status, bool deleted, int expectedCount)
+	{
+		var repository = GetRequiredService<ITimetableRepository>();
+		var currentTenant = GetRequiredService<ICurrentTenant>();
+		var tenantId = Guid.NewGuid();
+		var teacherId = Guid.NewGuid();
+		var roomId = Guid.NewGuid();
+		var timetable = CreateTimetable(tenantId, Guid.NewGuid(), Guid.NewGuid(), teacherId, roomId);
+		typeof(ShikshaMitra.Academic.Timetable.Timetables.Timetable)
+			.GetProperty(nameof(timetable.Status))!.SetValue(timetable, status);
+
+		using (currentTenant.Change(tenantId))
+		{
+			await WithUnitOfWorkAsync(async () =>
+			{
+				await repository.InsertAsync(timetable, autoSave: true);
+				if (deleted) await repository.DeleteAsync(timetable, autoSave: true);
+			});
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var teachers = await repository.GetConflictCandidatesAsync(Guid.NewGuid(), Guid.NewGuid(),
+					[TimetableDayOfWeek.Monday], new TimeOnly(9, 30), new TimeOnly(10, 30), [teacherId], []);
+				var rooms = await repository.GetConflictCandidatesAsync(Guid.NewGuid(), Guid.NewGuid(),
+					[TimetableDayOfWeek.Monday], new TimeOnly(9, 30), new TimeOnly(10, 30), [], [roomId]);
+				var occupations = await repository.GetRoomOccupationsAsync([roomId], TimetableDayOfWeek.Monday,
+					new TimeOnly(9, 30), new TimeOnly(10, 30));
+
+				teachers.Count.ShouldBe(expectedCount);
+				rooms.Count.ShouldBe(expectedCount);
+				occupations.Count.ShouldBe(expectedCount);
+			});
+		}
+	}
+
 	[Fact]
 	public async Task Candidates_Should_Keep_Tenant_Isolation_And_Exclude_Current_Class_And_Unrelated_Slots()
 	{
@@ -111,6 +151,7 @@ public class TimetableConflictQuery_Tests : ShikshaMitraEntityFrameworkCoreTestB
 			start ?? new TimeOnly(9, 0), end ?? new TimeOnly(10, 0), SlotType.Period);
 		slot.AddSubject(new TimetableSlotSubject(Guid.NewGuid(), slot.Id, Guid.NewGuid(), teacherId, roomId));
 		timetable.AddSlot(slot);
+		timetable.Publish();
 		return timetable;
 	}
 }

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace ShikshaMitra.Finance.Fees.Settings.GeneralSetting.FeeHead;
 	public class CreateUpdateFeeHeadDto
 {
-	public string FeeHeadName { get; set; }
+	public string FeeHeadName { get; set; } = null!; // Retained mutation contract: initialized by request binding before validation.
 }
 
 

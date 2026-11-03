@@ -27,8 +27,7 @@ public class AdmissionInquiryCaptureAppService(
 {
 	public async Task<AdmissionInquiryCaptureContextDto> GetContextAsync(Guid offeringId)
 	{
-		var available = await offeringReader.GetAvailabilityAsync(offeringId);
-		var offering = await offeringReader.GetAsync(offeringId);
+		var (offering, available) = await offeringReader.GetWithAvailabilityAsync(offeringId);
 		// Resolve Institute Setup settings only after the offering's scope has been checked.
 		var standardQuery = await standards.GetQueryableAsync();
 		var ageSettings = await AsyncExecuter.FirstOrDefaultAsync(
@@ -78,18 +77,9 @@ public class AdmissionInquiryCaptureAppService(
 				MediumName = item.MediumName, StandardId = item.StandardId, StandardName = item.StandardName
 			}).ToList()
 		};
-		foreach (var period in periods)
-		{
-			for (var skip = 0; ; skip += 100)
-			{
-				var page = await offeringReader.GetListAsync(new AdmissionOfferingListInput
-				{
-					AdmissionCycleId = period.Id, MaxResultCount = 100, SkipCount = skip
-				});
-				result.Offerings.AddRange(page.Items.Where(item => item.EntryMode != AdmissionEntryMode.DirectRegistration));
-				if (skip + page.Items.Count >= page.TotalCount) break;
-			}
-		}
+		var offerings = (await offeringReader.GetCatalogueAsync(periods.Select(period => period.Id).ToArray()))
+			.Where(item => item.Row.EntryMode != AdmissionEntryMode.DirectRegistration).ToLookup(item => item.Row.AdmissionCycleId, item => item.Row);
+		foreach (var period in periods) result.Offerings.AddRange(offerings[period.Id]);
 		return result;
 	}
 }

@@ -27,9 +27,10 @@ public class ChargeCategoryController(
 		[FromQuery] int page = 1,
 		[FromQuery] int pageSize = 10,
 		[FromQuery] string? search = null,
-		[FromQuery] bool? isActive = null)
+		[FromQuery] bool? isActive = null,
+		[FromQuery] string? filters = null)
 	{
-		return chargeCategoryAppService.GetListAsync(academicYearId, page, pageSize, search, isActive);
+		return chargeCategoryAppService.GetListAsync(academicYearId, page, pageSize, search, isActive, filters);
 	}
 
 	[HttpGet("{chargeCategoryId}")]

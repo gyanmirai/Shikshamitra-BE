@@ -12,7 +12,11 @@ public class StudentNote : FullAuditedEntity<Guid>, IMultiTenant
     public DateTimeOffset NextReminderDate { get; private set; }
     public NoteStatusEnum Status { get; private set; }
 
-    private StudentNote() { }
+    private StudentNote()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        Note = null!;
+    }
 
     public StudentNote(Guid id, Guid? tenantId, Guid studentId, string note, DateTimeOffset nextReminderDate, NoteStatusEnum status)
         : base(id)

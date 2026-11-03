@@ -101,20 +101,25 @@ public class FeeReceiptManager(
 		bool? bankReceiptConfirmed = null,
 		string? remarks = null,
 		Guid? financeFeeAccountId = null,
-		CollectionReceiptGrouping receiptGrouping = CollectionReceiptGrouping.Separate)
+		CollectionReceiptGrouping receiptGrouping = CollectionReceiptGrouping.Separate,
+		decimal lateFeeLinesTotal = 0m)
 	{
 		var receipts = new List<FeePaymentReceipt>();
 		if (!Enum.IsDefined(receiptGrouping))
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidReceiptGrouping);
+		if (lateFeeLinesTotal < 0m)
+			throw new BusinessException(FeeCollectionErrorCodes.PaymentDetailsMismatch);
+		var allChargesTotal = (decimal)chargeLinesTotal + lateFeeLinesTotal;
 		var methods = paymentMethods.ToList();
 
 		var feeKind = FeeReceiptPaymentPolicy.DetermineFeeReceiptKind(methods, bankReceiptConfirmed);
-		if (receiptGrouping == CollectionReceiptGrouping.Combined && feeLinesTotal > 0 && chargeLinesTotal > 0)
+		if (receiptGrouping == CollectionReceiptGrouping.Combined && feeLinesTotal > 0 && allChargesTotal > 0m)
 		{
 			var number = await GenerateReceiptNumberAsync(feeKind);
 			var receipt = CreateReceipt(feeCollectionTransactionId, studentId, academicYearId, boardId, educationMediumId,
-				FeeReceiptScope.Combined, feeKind, (double)((decimal)feeLinesTotal + (decimal)chargeLinesTotal), number, remarks, financeFeeAccountId: financeFeeAccountId);
-			receipt.SetAmountBreakdown((decimal)feeLinesTotal, (decimal)chargeLinesTotal);
+				FeeReceiptScope.Combined, feeKind, (double)((decimal)feeLinesTotal + allChargesTotal), number, remarks, financeFeeAccountId: financeFeeAccountId);
+			receipt.SetAmountBreakdown((decimal)feeLinesTotal, allChargesTotal);
+			receipt.SetLateFeePaidAmount(lateFeeLinesTotal);
 			return [receipt];
 		}
 
@@ -127,7 +132,7 @@ public class FeeReceiptManager(
 				FeeReceiptScope.Fee, kind, feeLinesTotal, number, remarks, financeFeeAccountId: financeFeeAccountId));
 		}
 
-		if (chargeLinesTotal > 0)
+		if (allChargesTotal > 0m)
 		{
 			var chargeKind = feeKind == FeeReceiptKind.ProvisionalFee
 				? FeeReceiptKind.ProvisionalCharge
@@ -135,9 +140,11 @@ public class FeeReceiptManager(
 			var number = await GenerateReceiptNumberAsync(chargeKind);
 			receipts.Add(CreateReceipt(
 				feeCollectionTransactionId, studentId, academicYearId, boardId, educationMediumId,
-				FeeReceiptScope.Charge, chargeKind, chargeLinesTotal, number, remarks, financeFeeAccountId: financeFeeAccountId));
+				FeeReceiptScope.Charge, chargeKind, (double)allChargesTotal, number, remarks, financeFeeAccountId: financeFeeAccountId));
 		}
 
+		foreach (var receipt in receipts)
+			receipt.SetLateFeePaidAmount(receipt.ReceiptScope == FeeReceiptScope.Charge ? lateFeeLinesTotal : 0m);
 		return receipts;
 	}
 }

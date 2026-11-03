@@ -131,12 +131,14 @@ public class AdmissionPublicInquiryAppService(
 			context.AcademicOptions = await GetAcademicOptionsAsync(cycle);
 			await SetBrandingAsync(context, token, null, null, null, cycle.AcademicYearId);
 			var choices = await GetLinkOfferingsAsync(link);
+			var evaluatedAvailability = new Dictionary<Guid, AdmissionInquiryAvailability>();
 			foreach (var offering in choices.OrderBy(item => item.Name))
 			{
 				var academic = context.AcademicOptions.FirstOrDefault(item => item.StandardId == offering.StandardId &&
 					item.MediumId == offering.MediumId && item.BoardId == offering.BoardId);
 				if (academic == null) continue;
 				var available = await availabilityService.ReadForPublicAsync(offering);
+				evaluatedAvailability[offering.Id] = available;
 				context.Offerings.Add(new PublicAdmissionInquiryOfferingDto
 				{
 					Id = offering.Id, AdmissionCycleId = cycle.Id, AdmissionCycleName = cycle.Name,
@@ -151,7 +153,9 @@ public class AdmissionPublicInquiryAppService(
 			var selected = choices.FirstOrDefault(item => item.Id == offeringId.Value) ??
 				throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable,
 					"Admission is not open for this class.");
-			await availabilityService.EnsureAvailableForPublicAsync(selected);
+			if (evaluatedAvailability.TryGetValue(selected.Id, out var selectedAvailability))
+				AdmissionInquiryAvailabilityService.EnsureAvailable(selectedAvailability);
+			else await availabilityService.EnsureAvailableForPublicAsync(selected);
 			await SetBrandingAsync(context, token, offeringId, selected.BoardId, selected.MediumId, cycle.AcademicYearId);
 			var formId = selected.InquiryFormDefinitionId ??
 				throw new BusinessException(AdmissionErrorCodes.OfferingConfigurationIncomplete);

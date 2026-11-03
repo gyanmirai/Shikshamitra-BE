@@ -108,7 +108,7 @@ public class CompensationRevisionAppService(
 		{
 			throw new BusinessException("HR:Payroll:CompensationSaveConflict")
 				.WithData("effectiveMonth", effectiveMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture))
-				.WithData("currentRevision", effectiveForMonth?.RevisionNumber);
+				.WithData("currentRevision", (effectiveForMonth?.RevisionNumber)!);
 		}
 
 		if (input.StatutoryProfileOverride != null)
@@ -189,7 +189,7 @@ public class CompensationRevisionAppService(
 	private static void EnsureCalculationCanBeSaved(SalaryTemplateCalculationDto calculation)
 	{
 		if (calculation.PfEligibility is { CanSave: false } decision)
-			throw new BusinessException("HR:Payroll:PfEnrollmentBlocked").WithData("issueCode", decision.IssueCode);
+			throw new BusinessException("HR:Payroll:PfEnrollmentBlocked").WithData("issueCode", decision.IssueCode!);
 		if (!calculation.TargetResult.IsExact && !calculation.TargetResult.IsExplainedByEnrollment)
 		{
 			throw new BusinessException("HR:Payroll:CompensationTargetNotExact")

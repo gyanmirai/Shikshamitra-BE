@@ -20,7 +20,7 @@ namespace ShikshaMitra.Academic.Mobile;
 [RemoteService(false)]
 public class MobileAttendanceAppService(MobileAcademicContextAppService context,
 	IRepository<AttendanceEntry, Guid> entries, IRepository<AttendanceDay, Guid> days,
-	IRepository<StudentLeave, Guid> leaves, IRepository<StudentLeaveType, Guid> leaveTypes,
+	IStudentLeaveRepository leaves, IRepository<StudentLeaveType, Guid> leaveTypes,
 	StudentLeaveManager leaveManager, MobileCalendarAppService calendar, AttendancePolicyResolver policy,
 	AttendanceApplicabilityResolver applicability, MobileAttachmentStore files, IMobileLeaveRequestLock leaveLock) : ApplicationService, IMobileAttendanceAppService
 {
@@ -57,10 +57,8 @@ public class MobileAttendanceAppService(MobileAcademicContextAppService context,
 		var end = start.AddMonths(1).AddDays(-1);
 		var records = await ReadEntriesAsync(p, start, end);
 		var markers = await calendar.ReadDaysAsync(p, start, end);
-		var requests = (await leaves.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == p.Student.Id &&
-			x.Status != StudentLeaveStatusEnum.Cancelled && x.Status != StudentLeaveStatusEnum.Rejected)).Where(x =>
-			x.LeaveDate < new DateTimeOffset(end.AddDays(1), TimeSpan.FromHours(5.5)) &&
-			(x.EndDate ?? x.LeaveDate) >= new DateTimeOffset(start, TimeSpan.FromHours(5.5))).ToList();
+		var requests = await leaves.GetPortalCalendarAsync(CurrentTenant.Id!.Value, p.Student.Id,
+			new DateTimeOffset(start, TimeSpan.FromHours(5.5)), new DateTimeOffset(end.AddDays(1), TimeSpan.FromHours(5.5)));
 		var result = new List<MobileAttendanceDayDto>();
 		for (var date = start; date <= end; date = date.AddDays(1))
 		{
@@ -100,10 +98,22 @@ public class MobileAttendanceAppService(MobileAcademicContextAppService context,
 		// materializes them as UTC timestamps. Apply the school offset to an unspecified date.
 		var start = new DateTimeOffset(DateTime.SpecifyKind(p.Year.StartDate.Date, DateTimeKind.Unspecified), TimeSpan.FromHours(5.5));
 		var end = new DateTimeOffset(DateTime.SpecifyKind(p.Year.EndDate.Date.AddDays(1), DateTimeKind.Unspecified), TimeSpan.FromHours(5.5));
-		var list = (await leaves.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == p.Student.Id)).Where(x => x.LeaveDate >= start && x.LeaveDate < end);
-		var types = (await leaveTypes.GetListAsync(x => x.TenantId == CurrentTenant.Id)).ToDictionary(x => x.Id, x => x.LeaveTypeName);
-		var rows = list.OrderByDescending(x => x.CreationTime).Select(x => Map(x, types.GetValueOrDefault(x.StudentLeaveTypeId, ""), p));
-		return MobileAcademicContextAppService.Page(rows.Where(x => string.IsNullOrEmpty(input.Status) || x.Status == input.Status), input, p);
+		var result = MobileAcademicContextAppService.Page<MobileLeaveDto>([], input, p);
+		StudentLeaveStatusEnum? status = null;
+		if (!string.IsNullOrEmpty(input.Status))
+		{
+			// Preserve the existing exact lowercase status contract, including an empty
+			// result for unsupported/case-mismatched values rather than changing validation.
+			if (!Enum.TryParse<StudentLeaveStatusEnum>(input.Status, true, out var parsed) || parsed.ToString().ToLowerInvariant() != input.Status) return result;
+			status = parsed;
+		}
+		var page = await leaves.GetPortalPageAsync(CurrentTenant.Id!.Value, p.Student.Id, start, end, status,
+			(int)Math.Min((long)(input.PageNumber - 1) * input.PageSize, int.MaxValue), input.PageSize);
+		var types = (await AsyncExecuter.ToListAsync((await leaveTypes.GetQueryableAsync()).Where(type => type.TenantId == CurrentTenant.Id)
+			.Select(type => new { type.Id, type.LeaveTypeName }))).ToDictionary(type => type.Id, type => type.LeaveTypeName);
+		result.Items = page.Items.Select(item => Map(item, types.GetValueOrDefault(item.StudentLeaveTypeId, ""), p)).ToList();
+		result.TotalCount = checked((int)page.TotalCount);
+		return result;
 	}
 
 	private async Task<StudentLeave> FindAsync(Guid id, MobilePlacement p)
@@ -117,7 +127,9 @@ public class MobileAttendanceAppService(MobileAcademicContextAppService context,
 	public async Task<MobileLeaveDto> GetLeaveAsync(Guid id, MobileAcademicInput input)
 	{
 		var p = await context.ResolveAsync(input);
-		var leave = await FindAsync(id, p);
+		var leave = await leaves.FindPortalItemAsync(CurrentTenant.Id!.Value, p.Student.Id, id);
+		if (leave == null || SchoolDate(leave.LeaveDate) < p.Year.StartDate.Date || SchoolDate(leave.LeaveDate) > p.Year.EndDate.Date)
+			throw new EntityNotFoundException(typeof(StudentLeave), id);
 		return Map(leave, (await leaveTypes.GetAsync(leave.StudentLeaveTypeId)).LeaveTypeName, p);
 	}
 
@@ -137,8 +149,7 @@ public class MobileAttendanceAppService(MobileAcademicContextAppService context,
 		if (leave != null && leave.Status != StudentLeaveStatusEnum.Pending) throw MobileAcademicContextAppService.Invalid("Only pending leave can be edited.");
 		var startOffset = new DateTimeOffset(start, TimeSpan.FromHours(5.5));
 		var endOffset = new DateTimeOffset(end, TimeSpan.FromHours(5.5));
-		if ((await leaves.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == p.Student.Id && x.Id != id &&
-			(x.Status == StudentLeaveStatusEnum.Pending || x.Status == StudentLeaveStatusEnum.Approved))).Any(x => x.LeaveDate <= endOffset && (x.EndDate ?? x.LeaveDate) >= startOffset))
+		if (await leaves.HasPortalOverlapAsync(CurrentTenant.Id!.Value, p.Student.Id, id, startOffset, endOffset))
 			throw MobileAcademicContextAppService.Invalid("The leave dates overlap an existing request.");
 		var schoolDays = await applicability.LoadAsync(p.Year.Id, p.StandardId, p.DivisionId, start, end, []);
 		var duration = 0m;
@@ -197,6 +208,13 @@ public class MobileAttendanceAppService(MobileAcademicContextAppService context,
 		return await files.DownloadAsync(attachment);
 	}
 	private static MobileLeaveDto Map(StudentLeave l, string reason, MobilePlacement p) => new(l.Id, l.StudentLeaveTypeId, reason,
+		DateOnly.FromDateTime(SchoolDate(l.LeaveDate)), DateOnly.FromDateTime(SchoolDate(l.EndDate ?? l.LeaveDate)), l.TotalDays, l.IsHalfDay,
+		l.Description ?? "", l.Status.ToString().ToLowerInvariant(), l.CreationTime, l.Status == StudentLeaveStatusEnum.Pending ? null : l.LastModificationTime,
+		l.RejectionReason ?? l.Remarks, p.IsGuardian && l.Status == StudentLeaveStatusEnum.Pending, p.IsGuardian && l.Status == StudentLeaveStatusEnum.Pending,
+		MobileAttachmentStore.Read(l.MobileAttachmentsJson).Select(x => MobileAttachmentStore.Map(x,
+			$"/api/mobile/v1/academics/attendance/leave-requests/{l.Id}/attachments/{x.Id}/download?studentId={p.Student.Id}&academicYearId={p.Year.Id}")).ToList(),
+		MobileAcademicContextAppService.Name(p.Student), $"{p.StandardName} - {p.DivisionName}", l.HalfDayStartTime, l.HalfDayEndTime);
+	private static MobileLeaveDto Map(StudentLeavePortalItem l, string reason, MobilePlacement p) => new(l.Id, l.StudentLeaveTypeId, reason,
 		DateOnly.FromDateTime(SchoolDate(l.LeaveDate)), DateOnly.FromDateTime(SchoolDate(l.EndDate ?? l.LeaveDate)), l.TotalDays, l.IsHalfDay,
 		l.Description ?? "", l.Status.ToString().ToLowerInvariant(), l.CreationTime, l.Status == StudentLeaveStatusEnum.Pending ? null : l.LastModificationTime,
 		l.RejectionReason ?? l.Remarks, p.IsGuardian && l.Status == StudentLeaveStatusEnum.Pending, p.IsGuardian && l.Status == StudentLeaveStatusEnum.Pending,

@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-29
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,15 +12,38 @@ audience: humans-and-agents
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
 
+## House Management
+
+Houses belong to an academic medium and can contain any number of active enrolled students across its classes. Membership belongs to the operational enrollment. Each house has at most one optional leader, selected from its eligible members. Each division independently has at most one optional leader; that student need not hold a house role. Both positions may remain vacant, and one student may hold both independent roles.
+
+View reads scoped rosters, counts and visible leaders. Add/Update controls house configuration, membership changes and leader appointment, replacement or removal. Delete removes only empty houses. Medium-wide or broader scope is required to change shared house configuration; commands also validate affected students and any replaced leader. Tenant, active identity, academic scope and concurrency checks remain server enforced. No role receives automatic grants.
+
+Assignment previews identify departing house leaders. The reviewed batch applies atomically and clears a departing house leader while retaining independent division leadership. Stale previews require fresh review. The bounded assignment command is an operation limit, not house capacity. Existing House Settings remains compatible and cannot delete populated houses. There is no automatic balancing, year rollover, points or competition workflow.
+
 ## Resume an ended admission
 
 Resume admission restores an eligible End Journey withdrawal within its original offering, cycle and unended academic year. The application ID/number, pinned workflow/form, completed or skipped evidence and Finance records remain unchanged. End Journey saves a versioned immutable decision-history snapshot; Resume appends its own actor/reason/closure event. Earlier withdrawal history is retained.
 
 Closed/unavailable intake, expired offers, finalized/enrolled cases and cancelled Records return handoffs are blocked. Legacy withdrawals are reconstructed only from unambiguous recorded pre-decision stage/form evidence; unclear cases require review. Seat resources are reacquired through the seat owner under current capacity and saved policy. Cancelled assessment bookings and follow-ups remain cancelled.
 
+## Student identity at runtime
+
+Student name, date of birth and a supported gender are checked against saved identity when the admission form is submitted.
+Partial drafts remain allowed.
+Single-name students are supported: system-bound Middle name and Last name questions are optional, including historical required flags; custom questions and adult identity rules retain their configured validation.
+Finalization and Onboarding use the same core identity rule.
+Admission and Student gender supports canonical `Male`, `Female`, and `Other` values; persisted Student enum values remain `0`, `1`, and `2` respectively. Configured display labels may be translated without changing those values. Unknown values remain invalid.
+Draft writes and publication repair only the known System `Applicant.Gender` choice-editor mistake: exactly canonical Male/Female choices plus `OPTION_3` labeled `Other`. Readiness validates a temporary normalized view without writing; publication repairs the draft only after all validation succeeds under its concurrency stamp. Historical published definitions, pinned schemas, answers, and custom survey choices are never rewritten.
+
+Repair keeps the draft's translated choice labels, default and field/section/step conditions aligned with canonical Other. Direct Registration stores canonical enum names for accepted input, and retries compare the same normalized gender without creating another applicant. Genuine stale form revisions remain rejected before repair or persistence.
+Surname-first roll ordering uses the available saved name for single-name students without inventing a surname or renumbering existing students.
+Explicit Offering activation and new or changed journey configuration require reachable, required, correctly mapped Student name, DOB and Gender questions across the published Inquiry and effective Registration forms. A required full-name question can supply the Student name without splitting it; surname is optional. Writable full-name and separate-name Registration questions cannot compete. Existing active Offering runtime remains compatible, and submission, finalization and Onboarding retain their saved-identity checks.
+
 ## Parents and the main school contact
 
-Parents are the normal intake path: staff records Father or Mother and may add the other parent or an other guardian. Both parents are not compulsory. An explicitly selected other guardian can be the main school contact even when parent details are saved; the guardian's actual relationship is retained.
+Parents are the normal intake path; both parents are not compulsory. New Inquiry definitions retain required Student name and primary adult name/mobile questions and explicitly configure Primary contact as Father, Mother or Guardian. A new Guardian primary/main-contact choice requires authenticated staff acknowledgment that neither parent handles school-contact responsibility. Blank parent answers do not prove this condition. The UI uses a confirmation dialog, not a parents-unavailable checkbox. Existing saved Guardian selections and linked accounts remain readable; adding an unselected optional guardian does not itself change the primary contact.
+
+Primary-contact responsibility is separate from Father/Mother sibling-account provenance. Public capture can record configured parent details without establishing trusted sibling proof; a public Guardian contact remains pending staff confirmation and cannot qualify, start an application or finalize before confirmation. Visible selected-role email fields own their values, including clears; generic contact aliases are used only when that role's visible field is absent. Hidden and opposite-parent answers cannot supply primary contact data. New/changed journey configuration and explicit activation check combined Inquiry/Registration identity requirements; untouched active legacy Offering runtime remains compatible.
 
 The main-contact preference belongs to the child and never grants app access, changes a shared family identity, resets a password, or relabels an existing sibling relationship. Records changes keep the existing school approval policy and snapshot checks. A preference-only change or an added unlinked guardian does not suspend an unchanged linked parent's access; changing a linked person's identity/contact retains access review.
 
@@ -404,7 +427,7 @@ One dashboard serves all authorized identities. Persisted roles select admin, le
 | Section | Definitions |
 |---|---|
 | Records | Enrolled, inactive and left permanent records eligible through activated enrollment, completed onboarding or approved legacy override; selected-year scoped enrollment membership. Access-pending activated students remain visible. Left legacy records without enrollment retain their own-year directory fallback. Class strength counts distinct eligible active students in active scoped enrollments, bounded to the 12 largest classes. |
-| Admissions | Open inquiry statuses New/Contacted/Interested/FollowUp; selected-year scoped cycles. Active applications in scoped offerings exclude terminal outcomes. Admin/leadership summarize allowed scope; other staff inquiry and setup counts additionally require assignment to the current identity. Applications remain scoped and are labelled as visible applications. |
+| Admissions | Open inquiry statuses New/Contacted/Interested/FollowUp; selected-year scoped cycles. Active applications in scoped offerings exclude terminal outcomes. All staff modes summarize their permitted tenant and academic scope; retired counsellor/case assignments do not restrict dashboard visibility, and ownerless rows remain eligible. Applications remain scoped and are labelled as visible applications. |
 | Student setup | Unfinished excludes Completed/Cancelled; ready means ReadyForActivation; attention means NeedsAttention or an overdue unfinished case. Provisioning remains unfinished. |
 | Attendance | Saved register counts grouped by submitted/draft status and pending leave requests within selected-year enrollment/division scope. These are year work summaries, not daily completeness or attendance percentages. |
 
@@ -414,6 +437,6 @@ Student/Parent-only database roles receive names and relationships from persiste
 
 Inheritance is an explicit versioned Registration setting. Offering references still determine Inquiry and workflow; the workflow supplies the one Registration form. Multiple Inquiry forms can share Registration, and separate routes can use other Registration forms. Approved source versions are checked against the application's exact captured Inquiry, rather than names, class ranges or the latest published version.
 
-Composition includes only that source's questions plus common Registration questions. Registered Student binding identities are deduplicated; custom identities retain lineage or explicit reviewed equivalence. Source labels/translations, types, options, visibility and repeatable structure remain authoritative. Registration can strengthen requiredness and adjust compatible placement, but cannot independently delete, rename or change inherited types/options. A read-only field cannot become newly unanswerably required. Inquiry-only bindings remain read-only source context and do not become editable Student bindings.
+Composition includes only that source's questions first, followed by additional Registration questions. Registered Student bindings and the reserved legacy starter identity aliases are deduplicated; unrelated custom questions retain lineage or explicit reviewed equivalence, never label-only matches. Matched questions remain in the original Inquiry section and step, preserving source columns, labels/translations, types, options, order, requirements, validation, visibility and repeatable structure. Registration cannot delete, rename, relocate or strengthen inherited definitions; legacy requiredness/placement overrides cannot alter the effective source questions. Duplicate Registration controls and resulting empty sections are omitted from the effective schema without changing either base definition. A captured full Student name remains read-only reference when Registration has separate name parts; no automatic name splitting occurs. Inquiry-only bindings remain read-only source context and do not become editable Student bindings.
 
 Application start freezes the effective schema and safe source context in the existing form instance's extra properties. Rendering, writes, submission validation and retained Records evidence use that schema. Existing applications without a snapshot remain legacy; a corrupt enabled snapshot fails visibly. Registration edits and explicit clears are retained, source-only questions do not leak between paths, and later publications do not rewrite existing instances or submission history. No schema migration or automatic historical backfill is introduced.

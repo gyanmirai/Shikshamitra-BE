@@ -282,7 +282,7 @@ public partial class ConcessionRequestAppService
 					Id = r.Id, StudentId = r.StudentId, ConcessionTypeId = r.ConcessionTypeId,
 					RequesterId = r.CreatorId,
 					StudentName        = FormatStudentName(student),
-					GrNumber           = student?.GrNo?.ToString() ?? string.Empty,
+					GrNumber           = FormatStudentGrNumber(student),
 					RollNo             = student?.RollNo?.ToString() ?? string.Empty,
 					StandardName       = standardMap.GetValueOrDefault(r.StandardId, string.Empty),
 					DivisionName       = divisionMap.GetValueOrDefault(r.DivisionId, string.Empty),
@@ -331,8 +331,8 @@ public partial class ConcessionRequestAppService
 			x => x.AcademicBoard!, x => x.AcademicMedium!, x => x.Standard!, x => x.Division!);
 		var student = await AsyncExecuter.FirstOrDefaultAsync(students.Where(x => x.Id == studentId))
 			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
-		var standard = student?.Standard?.Name;
-		var division = student?.Division?.Name;
+		var standard = student.Standard?.Name;
+		var division = student.Division?.Name;
 
 		var typeIds  = page.Select(r => r.ConcessionTypeId).Distinct().ToList();
 		var types    = typeIds.Count > 0
@@ -377,7 +377,7 @@ public partial class ConcessionRequestAppService
 				StudentId    = student.Id,
 				Name         = FormatStudentName(student),
 				RollNo       = student.RollNo?.ToString() ?? string.Empty,
-				GrNumber     = student.GrNo?.ToString() ?? string.Empty,
+				GrNumber     = FormatStudentGrNumber(student),
 				StandardName = standard ?? string.Empty,
 				DivisionName = division ?? string.Empty,
 				BoardName = student.AcademicBoard?.Name ?? string.Empty,

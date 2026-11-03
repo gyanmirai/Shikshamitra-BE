@@ -30,7 +30,8 @@ public class ReconciliationController(
         [FromQuery] string? search,
         [FromQuery, Range(1, int.MaxValue)] int page = 1,
         [FromQuery, Range(1, 100)] int pageSize = 50,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+		[FromQuery] string? filters = null)
     {
         var input = new GetReconciliationListInput
         {
@@ -40,6 +41,7 @@ public class ReconciliationController(
             PaymentMethod      = paymentMethod,
             VerificationStatus = status,
             Search             = search,
+			Filters            = filters,
             Page               = page,
             PageSize           = pageSize,
         };

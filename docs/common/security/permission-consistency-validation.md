@@ -102,7 +102,8 @@ The approved implementation fixes behavior inside the existing Role/User screens
 Its acceptance suite performs local role grant/revoke/save/reopen round trips, direct-user grant removal with inherited access retained, search-hidden bulk operations, and unchanged-grant comparisons.
 It also covers failed reads/writes, keyboard operation, dirty Cancel/Escape/history, pending-save controls, focus return, contained scrolling, and measured 44px footer actions.
 The final Chromium, Firefox, WebKit, mobile Chrome emulation, and mobile Safari emulation projects each pass seven cases.
-The JSON report under frontend `e2e/security/.artifacts/security-browser/results.json` records 35 expected, zero unexpected, zero skipped, zero flaky, and no runner errors.
+The September 16 run recorded 35 expected, zero unexpected, zero skipped, zero flaky, and no runner errors.
+Its generated JSON report is not retained in the current checkout; use the [frontend browser configuration](../../../../Shikshamitra-FE/e2e/security/permission-consistency.config.ts) to locate the reporter and reproduce the suite against an explicitly enabled disposable local fixture.
 The mobile Safari project is slow on the local runner, taking five minutes for seven cases, but no retry or timeout extension was used in the final run.
 
 Authenticated Codex confirmation uses the same production UI and backend build and finishes with a fresh page read after the automated suite.

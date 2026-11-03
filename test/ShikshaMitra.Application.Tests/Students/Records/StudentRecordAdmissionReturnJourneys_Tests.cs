@@ -96,7 +96,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		finalized.StudentId.ShouldBe(fixture.Student.Id);
 		await WithUnitOfWorkAsync(async () =>
 		{
-			(await _onboardingCaseRepository.GetAsync(finalized.OnboardingCaseId)).ExtraProperties["RecordReturnTransitionId"].ToString().ShouldBe(returned.TransitionId.Value.ToString("D"));
+			(await _onboardingCaseRepository.GetAsync(finalized.OnboardingCaseId)).ExtraProperties["RecordReturnTransitionId"].ShouldNotBeNull().ToString().ShouldBe(returned.TransitionId.ShouldNotBeNull().ToString("D"));
 			(await _onboardingCaseRepository.CountAsync(x => x.StudentId == fixture.Student.Id && x.Status == StudentOnboardingStatus.Completed)).ShouldBe(1);
 			(await _studentEnrollmentRepository.GetAsync(x => x.StudentId == fixture.Student.Id)).IsActive.ShouldBeFalse();
 			(await _studentRepository.GetAsync(fixture.Student.Id)).FirstName.ShouldBe(fixture.Student.FirstName);

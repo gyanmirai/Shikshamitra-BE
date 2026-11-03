@@ -43,6 +43,20 @@ public class AdmissionWorkflowDefinitionStore(
 			await GetStagesAsync(workflow.Id),
 			await GetTransitionsAsync(workflow.Id));
 
+	internal async Task<List<AdmissionWorkflowDto>> GetDtosAsync(IReadOnlyList<AdmissionWorkflowDefinition> workflows)
+	{
+		if (workflows.Count == 0) return [];
+		var ids = workflows.Select(workflow => workflow.Id).ToArray();
+		var stages = await AsyncExecuter.ToListAsync((await stageRepository.GetQueryableAsync())
+			.Where(stage => Enumerable.Contains(ids, stage.WorkflowDefinitionId)).OrderBy(stage => stage.DisplayOrder));
+		var transitions = await AsyncExecuter.ToListAsync((await transitionRepository.GetQueryableAsync())
+			.Where(transition => Enumerable.Contains(ids, transition.WorkflowDefinitionId)).OrderBy(transition => transition.Priority));
+		var stagesByWorkflow = stages.ToLookup(stage => stage.WorkflowDefinitionId);
+		var transitionsByWorkflow = transitions.ToLookup(transition => transition.WorkflowDefinitionId);
+		return workflows.Select(workflow => AdmissionWorkflowMapper.ToDto(workflow,
+			stagesByWorkflow[workflow.Id], transitionsByWorkflow[workflow.Id])).ToList();
+	}
+
 	public async Task ReplaceChildrenAsync(Guid workflowId, CreateUpdateAdmissionWorkflowDto input)
 	{
 		EnsureSupportedStages(input);

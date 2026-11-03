@@ -12,7 +12,7 @@ audience: humans-and-agents
 
 ## Receipt lifecycle update (23 October 2026)
 
-The implemented receipt contract is now [Provisional and official receipts](receipt-lifecycle.md): cash issues official evidence immediately; every non-cash method issues provisional evidence, independent of cashier confirmation. Existing reconciliation approval issues linked official evidence. One non-cash instrument may cover combined or separate fee/charge documents, approved or rejected together. Multiple instruments remain blocked. The read-only Cash tab shows counter-issued official receipts. The historical observations and larger bank-matching target below do not override this current receipt contract; bank-statement import/matching remains outside this delivery.
+The implemented receipt contract is now [Receipts and provisional receipts](receipt-lifecycle.md): cash issues official evidence immediately; every non-cash method issues provisional evidence, independent of cashier confirmation. Existing reconciliation approval issues linked official evidence. One non-cash instrument may cover combined or separate fee/charge documents, approved or rejected together. Multiple instruments remain blocked. The read-only Cash tab shows counter-issued receipts. The historical observations and larger bank-matching target below do not override this current receipt contract; bank-statement import/matching remains outside this delivery.
 
 ## Decision and scope
 

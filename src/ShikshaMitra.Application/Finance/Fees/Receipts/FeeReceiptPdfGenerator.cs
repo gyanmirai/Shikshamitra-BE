@@ -55,7 +55,7 @@ public class FeeReceiptPdfGenerator(
             page.Header().BorderBottom(2).BorderColor(accent).PaddingBottom(12).Column(column =>
             {
                 column.Item().Text(currentTenant?.Name ?? "ShikshaMitra").FontSize(18).Bold();
-                column.Item().PaddingTop(6).Text(provisional ? "PROVISIONAL RECEIPT" : "OFFICIAL RECEIPT")
+                column.Item().PaddingTop(6).Text(provisional ? "PROVISIONAL RECEIPT" : "RECEIPT")
                     .FontSize(16).Bold().FontColor(accent);
                 column.Item().PaddingTop(6).Row(row =>
                 {
@@ -116,7 +116,12 @@ public class FeeReceiptPdfGenerator(
                     var remainder = feeTotal - feeLines.Sum(a => (decimal)a.Amount);
                     if (remainder > 0) Line(feeLines.Count == 0 ? "Fees (including applicable late fees)" : "Late fees / other fee allocations", "—", remainder);
                     if (receipt.ReceiptScope is FeeReceiptScope.Charge or FeeReceiptScope.Combined)
-                        Line("Charges", "—", receipt.ReceiptScope == FeeReceiptScope.Combined ? receipt.ChargePaidAmount : (decimal)receipt.TotalPaidAmount);
+                    {
+                        var lateFees = receipt.LateFeePaidAmount ?? 0m;
+                        var otherCharges = receipt.ChargePaidAmount - lateFees;
+                        if (lateFees > 0m) Line("Late fees", "—", lateFees);
+                        if (otherCharges > 0m) Line("Charges", "—", otherCharges);
+                    }
                 });
                 column.Item().Background(Colors.Grey.Lighten3).Padding(12).Row(row =>
                 {
@@ -124,12 +129,12 @@ public class FeeReceiptPdfGenerator(
                     row.AutoItem().Text(Money((decimal)receipt.TotalPaidAmount)).FontSize(14).Bold();
                 });
                 column.Item().Text(provisional
-                    ? "Subject to payment verification. An official receipt will be issued after approval in reconciliation. This document does not confirm bank clearance."
+                    ? "Subject to payment verification. A receipt will be issued after approval in reconciliation. This document does not confirm bank clearance."
                     : predecessor != null
-                        ? "Payment verified. This official receipt supersedes the provisional receipt referenced above; both documents represent the same payment."
+                        ? "Payment verified. This receipt supersedes the provisional receipt referenced above; both documents represent the same payment."
                         : payments.Count > 0 && payments.All(p => p.PaymentMethod == ShikshaMitra.Finance.Fees.Collections.PaymentMethodEnum.Cash)
-                            ? "Cash payment received. This official receipt acknowledges the amount shown above."
-                            : "This official receipt acknowledges the payment recorded above.")
+                            ? "Cash payment received. This receipt acknowledges the amount shown above."
+                            : "This receipt acknowledges the payment recorded above.")
                     .FontSize(9).FontColor(accent);
                 if (!string.IsNullOrWhiteSpace(receipt.Remarks)) column.Item().Text($"Remarks: {receipt.Remarks}").FontSize(9);
                 column.Item().PaddingTop(24).Row(row =>

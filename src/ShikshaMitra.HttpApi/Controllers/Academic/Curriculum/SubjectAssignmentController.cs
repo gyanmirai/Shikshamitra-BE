@@ -117,7 +117,7 @@ public class SubjectAssignmentController(
 	[ProducesResponseType(typeof(SubjectAssignmentDto), 200)]
 	[ProducesResponseType(400)]
 	[ProducesResponseType(404)]
-	public async Task<Result<SubjectAssignmentDto>> UpdateAsync(
+	public async Task<Result<SubjectAssignmentDto?>> UpdateAsync(
 		[FromRoute] Guid assignmentId,
 		[FromQuery] Guid academicMediumId,
 		[FromBody] CreateUpdateSubjectAssignmentDto input

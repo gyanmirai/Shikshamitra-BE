@@ -30,7 +30,7 @@ public class MobileStudentPhotoController(IMobileStudentPhotoAppService service)
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add)]
 	[RequestSizeLimit(MaxBytes + 64 * 1024)]
 	[RequestFormLimits(MultipartBodyLengthLimit = MaxBytes + 64 * 1024)]
-	public async Task<Result<StudentRecordPhotoDraftDto>> UploadAsync(Guid studentId, [FromForm] IFormFile file)
+	public async Task<Result<StudentRecordPhotoDraftDto>> UploadAsync(Guid studentId, IFormFile file)
 	{
 		if (Request.HasFormContentType && (await Request.ReadFormAsync(HttpContext.RequestAborted)).Files.Count != 1)
 			throw new BusinessException("Students:Records:InvalidPhoto");
@@ -40,7 +40,7 @@ public class MobileStudentPhotoController(IMobileStudentPhotoAppService service)
 		using var output = new MemoryStream();
 		var buffer = new byte[81920];
 		int read;
-		while ((read = await source.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, MaxBytes + 1 - (int)output.Length)), HttpContext.RequestAborted)) > 0)
+		while ((read = await source.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, MaxBytes + 1 - (int) output.Length)), HttpContext.RequestAborted)) > 0)
 		{
 			await output.WriteAsync(buffer.AsMemory(0, read), HttpContext.RequestAborted);
 			if (output.Length > MaxBytes) throw new BusinessException("Students:Records:PhotoTooLarge");

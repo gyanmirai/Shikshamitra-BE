@@ -202,7 +202,7 @@ public class LearningResourceAppService(
 				.WithData("StandardId", standardId)
 				.WithData("SubjectId", subjectId)
 				.WithData("ChapterId", chapterId)
-				.WithData("DivisionId", divisionId);
+				.WithData("DivisionId", divisionId!);
 		}
 	}
 

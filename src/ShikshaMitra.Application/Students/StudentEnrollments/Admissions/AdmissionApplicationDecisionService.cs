@@ -241,8 +241,9 @@ public class AdmissionApplicationDecisionService(
 		{
 			if (await studentRepository.AnyAsync(item => item.Id == context.Applicant.ReservedStudentId))
 				throw new BusinessException(AdmissionApplicantErrorCodes.ReservedStudentIdConflict);
-			await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationFormService>()
-				.RecoverFirstParentContactAsync(context.Application, context.Applicant);
+			if (!AdmissionPrimaryContactSelection.HasSelection(context.Applicant))
+				await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationFormService>()
+					.RecoverFirstParentContactAsync(context.Application, context.Applicant);
 			student = CreateStudent(context);
 			await studentRepository.InsertAsync(student, false);
 			await ApplyNewProfileAsync(context.Applicant, student);
@@ -383,50 +384,67 @@ public class AdmissionApplicationDecisionService(
 		_ => true
 	};
 
-	private async Task<List<Student>> FindPossibleMatchesAsync(AdmissionApplicant applicant)
+	private async Task<List<StudentMatchRow>> FindPossibleMatchesAsync(AdmissionApplicant applicant)
 	{
 		if (applicant.ExistingStudentId.HasValue)
 		{
 			var linked = await studentRepository.FindAsync(applicant.ExistingStudentId.Value);
 			if (linked != null) await LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>().EnsureCanAccessStudentAsync(linked, nameof(FindPossibleMatchesAsync));
-			return linked == null ? [] : [linked];
+			return linked == null ? [] : [new StudentMatchRow
+			{
+				Id = linked.Id, FirstName = linked.FirstName, MiddleName = linked.MiddleName, LastName = linked.LastName,
+				DateOfBirth = linked.AdditionalDetail?.DateOfBirth, Status = linked.Status,
+				GrNumber = linked.GrNumber, GrNo = linked.GrNo, AcademicYearId = linked.AcademicYearId
+			}];
 		}
 
 		var normalizedFirstName = applicant.FirstName.Trim().ToLower();
 		var normalizedLastName = applicant.LastName?.Trim().ToLower();
+		var normalizedFullName = string.Join(" ", new[] { applicant.FirstName, applicant.MiddleName, applicant.LastName }
+			.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!.Trim())).ToLowerInvariant();
 		var query = await LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>()
 			.ApplyCurrentUserScopeAsync(await studentRepository.GetQueryableWithoutAutoIncludesAsync());
+		var matchBirthDate = applicant.DateOfBirth.HasValue;
 		var candidates = await AsyncExecuter.ToListAsync(query.Where(student =>
 			student.FirstName != null && student.FirstName.ToLower() == normalizedFirstName &&
-			(normalizedLastName == null || student.LastName != null && student.LastName.ToLower() == normalizedLastName)));
+			(normalizedLastName == null || student.LastName != null && student.LastName.ToLower() == normalizedLastName) ||
+			// Compare complete names as well: a full-name answer must match an existing
+			// split-name identity, without guessing or changing anybody's saved name parts.
+			((student.FirstName ?? "").Trim() +
+				(student.MiddleName == null || student.MiddleName.Trim() == "" ? "" : " " + student.MiddleName.Trim()) +
+				(student.LastName == null || student.LastName.Trim() == "" ? "" : " " + student.LastName.Trim()))
+				.Trim().ToLower() == normalizedFullName)
+			// Preserve the existing first-25-before-DOB and first-10-without-DOB boundary.
+			.Take(matchBirthDate ? 25 : 10)
+			.Select(student => new StudentMatchRow
+			{
+				Id = student.Id, FirstName = student.FirstName, MiddleName = student.MiddleName, LastName = student.LastName,
+				// The old no-DOB path returned the bare Student query with AutoIncludes disabled.
+				DateOfBirth = matchBirthDate && student.AdditionalDetail != null ? student.AdditionalDetail.DateOfBirth : null,
+				Status = student.Status, GrNumber = student.GrNumber, GrNo = student.GrNo, AcademicYearId = student.AcademicYearId
+			}));
 
 		if (!applicant.DateOfBirth.HasValue)
-			return candidates.Take(10).ToList();
+			return candidates;
 		var applicantBirthDate = applicant.DateOfBirth.Value.Date;
-		var detailed = new List<Student>();
-		foreach (var candidate in candidates.Take(25))
-		{
-			var student = await studentRepository.GetWithDetailsAsync(candidate.Id);
-			if (student?.AdditionalDetail?.DateOfBirth?.Date == applicantBirthDate)
-				detailed.Add(student);
-		}
-		return detailed.Take(10).ToList();
+		return candidates.Where(candidate => candidate.DateOfBirth?.Date == applicantBirthDate).Take(10).ToList();
 	}
 
-	private static AdmissionStudentMatchDto ToMatchDto(Student student, bool canRequestReview) => new()
+	private static AdmissionStudentMatchDto ToMatchDto(StudentMatchRow student, bool canRequestReview) => new()
 	{
 		CanApplyProfileFieldsDirectly = CanApplyDirectly(student),
 		CanReviewProfileFields = CanApplyDirectly(student) || canRequestReview,
 		StudentId = student.Id,
 		StudentName = string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
 			.Where(value => !string.IsNullOrWhiteSpace(value))),
-		DateOfBirth = student.AdditionalDetail?.DateOfBirth?.UtcDateTime,
+		DateOfBirth = student.DateOfBirth?.UtcDateTime,
 		Status = student.Status,
 		GrNumber = student.GrNumber ?? student.GrNo?.ToString(),
 		AcademicYearId = student.AcademicYearId
 	};
 
 	private static bool CanApplyDirectly(Student student) => student.Status is StudentLifeCycleStatusEnum.Admission or StudentLifeCycleStatusEnum.Registration;
+	private static bool CanApplyDirectly(StudentMatchRow student) => student.Status is StudentLifeCycleStatusEnum.Admission or StudentLifeCycleStatusEnum.Registration;
 	private async Task ApplyNewProfileAsync(AdmissionApplicant applicant, Student student)
 	{
 		await ValidateCapturedSiblingsAsync(applicant, student);
@@ -453,14 +471,13 @@ public class AdmissionApplicationDecisionService(
 	}
 
 	private List<AdmissionFinalizationReadinessItemDto> BuildReadinessItems(
-		FinalizationContext context, IReadOnlyCollection<Student> matches)
+		FinalizationContext context, IReadOnlyCollection<StudentMatchRow> matches)
 	{
 		var application = context.Application;
 		var applicant = context.Applicant;
 		var decisionReady = application.Status == AdmissionApplicationStatus.Approved;
-		var identityReady = !string.IsNullOrWhiteSpace(applicant.FirstName) &&
-			!string.IsNullOrWhiteSpace(applicant.LastName) && applicant.DateOfBirth.HasValue &&
-			Enum.TryParse<GenderEnum>(applicant.Gender, true, out _);
+		var identityReady = StudentCoreIdentityRules.IsComplete(applicant.FirstName, applicant.DateOfBirth,
+			StudentCoreIdentityRules.ReadGender(applicant.Gender));
 		var guardianReady = context.Guardian != null &&
 			(AdmissionInquiryPhoneValidator.IsValidIndianMobile(context.Guardian.Mobile) ||
 			 MailAddress.TryCreate(context.Guardian.Email, out _));
@@ -471,11 +488,16 @@ public class AdmissionApplicationDecisionService(
 			Item("decision", "Admission approved", decisionReady,
 				decisionReady ? "Ready" : "Approve the admission decision before finalizing."),
 			Item("workflow", "Admission workflow completed", workflowReady, workflowReady ? "Ready" : "Complete the admission workflow first."),
-			Item("identity", "Core identity complete", identityReady, identityReady ? "Ready" : "Name, date of birth, and gender are required."),
+			Item("identity", "Core identity complete", identityReady, identityReady ? "Ready" : AdmissionSubmissionIdentityValidator.MissingDetails(applicant)),
 			Item("guardian", "Primary guardian contact valid", guardianReady, guardianReady ? "Verification confirmation is required when finalizing." : "Enter a valid 10-digit Indian mobile number or email for the primary guardian."),
 			Item("duplicate_resolution", "Student identity resolved", applicant.ExistingStudentId.HasValue || matches.Count == 0,
 				applicant.ExistingStudentId.HasValue ? "Existing Student is already linked." : matches.Count == 0 ? "No exact identity matches found." : $"{matches.Count} possible match(es) require a staff decision.")
 		];
+		try { AdmissionPrimaryContactSelection.EnsureReady(applicant); }
+		catch (BusinessException exception) when (exception.Code == AdmissionInquiryManagementErrorCodes.InvalidInput)
+		{
+			items.Add(Item("guardian_responsibility", "Guardian responsibility confirmed", false, exception.Message));
+		}
 		// Typed-parent records may still recover accepted answers during finalization. Only project
 		// unambiguous new legacy identities here; preview must never mutate the tracked applicant.
 		if (identityReady && guardianReady && !applicant.ExistingStudentId.HasValue && matches.Count == 0 &&
@@ -502,20 +524,22 @@ public class AdmissionApplicationDecisionService(
 
 	private Student CreateStudent(FinalizationContext context)
 	{
-		if (!context.Applicant.DateOfBirth.HasValue ||
-		    !Enum.TryParse<GenderEnum>(context.Applicant.Gender, true, out var gender) || context.Guardian == null)
+		var gender = StudentCoreIdentityRules.ReadGender(context.Applicant.Gender);
+		if (!context.Applicant.DateOfBirth.HasValue || !gender.HasValue || context.Guardian == null)
 			throw new BusinessException(StudentOnboardingErrorCodes.CoreIdentityIncomplete);
 		var applicant = context.Applicant;
 		var guardian = context.Guardian;
 		var student = Student.CreateDirectRegistration(applicant.ReservedStudentId, CurrentTenant.Id,
 			applicant.FirstName, applicant.MiddleName, applicant.LastName, context.Cycle.AcademicYearId,
 			context.Offering.BoardId, context.Offering.MediumId, context.Offering.StageId, null, null,
-			applicant.DateOfBirth.Value, gender, guardian.Mobile, email: guardian.Email,
+			applicant.DateOfBirth.Value, gender.Value, guardian.Mobile, email: guardian.Email,
 			address1: applicant.AddressLine1, address2: applicant.AddressLine2, city: applicant.City,
 			state: string.IsNullOrWhiteSpace(applicant.State) ? null : new State(applicant.State, string.Empty),
 			country: string.IsNullOrWhiteSpace(applicant.Country) ? null : new Country(applicant.Country, string.Empty),
 			pincode: applicant.PostalCode);
-		if (!AdmissionSiblingParentSelection.IsParentFlow(applicant))
+		var explicitParent = AdmissionPrimaryContactSelection.HasSelection(applicant) &&
+			AdmissionPrimaryContactSelection.ReadRelationship(applicant) is "father" or "mother";
+		if (!AdmissionSiblingParentSelection.IsParentFlow(applicant) && !explicitParent)
 			student.UpdateFamilyInfo(null, null, new ParentGuardianDetails(
 				$"{guardian.FirstName} {guardian.LastName}".Trim(), null, null, guardian.Email, guardian.Mobile,
 				null, null, null, null, null, null, null, null), null);
@@ -599,6 +623,19 @@ public class AdmissionApplicationDecisionService(
 		OnboardingCaseId = caseId,
 		ReusedExistingStudent = reusedExistingStudent
 	};
+
+	private sealed class StudentMatchRow
+	{
+		public Guid Id { get; init; }
+		public string? FirstName { get; init; }
+		public string? MiddleName { get; init; }
+		public string? LastName { get; init; }
+		public DateTimeOffset? DateOfBirth { get; init; }
+		public StudentLifeCycleStatusEnum Status { get; init; }
+		public string? GrNumber { get; init; }
+		public int? GrNo { get; init; }
+		public Guid? AcademicYearId { get; init; }
+	}
 
 	private sealed record FinalizationContext(
 		AdmissionApplication Application,

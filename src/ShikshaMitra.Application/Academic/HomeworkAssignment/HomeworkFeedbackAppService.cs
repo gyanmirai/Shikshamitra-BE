@@ -64,8 +64,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		// 1. Validate homework exists and belongs to medium
 		var homeworkQuery = await _homeworkRepository.WithDetailsAsync(
 			h => h.DivisionSchedules,
-			h => h.HomeworkType,
-			h => h.HomeworkAssignmentType
+			h => h.HomeworkType!,
+			h => h.HomeworkAssignmentType!
 		);
 		var homework = await _asyncExecuter.FirstOrDefaultAsync(
 			homeworkQuery.Where(h => h.Id == filter.HomeworkId && h.EducationMediumId == academicMediumId)
@@ -170,7 +170,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				Percentage = CalculatePercentage(submission?.Marks, submission?.TotalMarks ?? taskRubric?.TotalMarks),
 				SubmittedContent = submission?.SubmittedContent,
 				SubmittedDocumentUrl = submission?.SubmittedDocumentUrl,
-				OriginalFileName = submission?.OriginalFileName
+				OriginalFileName = submission?.OriginalFileName,
+				SubmissionAttachments = SubmissionAttachmentMapper.Map(submission)
 			};
 
 			submissionDtos.Add(dto);

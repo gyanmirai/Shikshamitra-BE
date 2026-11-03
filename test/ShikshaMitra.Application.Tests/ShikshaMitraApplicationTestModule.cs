@@ -110,12 +110,12 @@ public sealed class FakeEmployeeEmailService : IEmployeeEmailService
     public IReadOnlyCollection<SentEmployeeWelcomeEmail> Sent => _sent.ToList();
 
     public Task SendWelcomeEmailAsync(
-        string employeeEmail,
+        string? employeeEmail,
         string employeeName,
         string username,
         string password)
     {
-        _sent.Enqueue(new(employeeEmail, employeeName, username));
+        _sent.Enqueue(new(employeeEmail!, employeeName, username));
         return Task.CompletedTask;
     }
 

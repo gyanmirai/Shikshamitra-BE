@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Diagnostics.CodeAnalysis;
+using System;
 using System.ComponentModel.DataAnnotations.Schema;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp;
@@ -21,12 +22,16 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public int? SortOrder { get; set; }
 	public string? ArchiveReason { get; set; }
 	public Guid EducationMediumId { get; set; }
-	public EducationMedium EducationMedium { get; set; }
+	public EducationMedium EducationMedium { get; set; } = null!; // Populated by EF relationship materialization.
 	#endregion
 
 	#region Constructors
 	private Subject()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Color = null!;
+		Name = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -54,12 +59,14 @@ public class Subject : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	#endregion
 
 	#region Methods
+	[MemberNotNull(nameof(Name))]
 	public void SetName(string name)
 	{
 		Check.NotNullOrWhiteSpace(name, nameof(name));
 		Name = name;
 	}
 
+	[MemberNotNull(nameof(Color))]
 	public void SetColor(string color) => Color = color;
 
 	public void SetMasterDetails(

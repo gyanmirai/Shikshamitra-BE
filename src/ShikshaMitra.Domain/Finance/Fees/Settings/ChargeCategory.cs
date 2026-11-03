@@ -22,7 +22,11 @@ public class ChargeCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? IncomeAccountHeadId => this.GetProperty<Guid?>(IncomeAccountHeadIdProperty);
 	public bool IsAccountingReady => IncomeCategoryId.HasValue;
 
-    protected ChargeCategory() { }
+    protected ChargeCategory()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        Name = null!;
+    }
 
     public ChargeCategory(
         Guid id,

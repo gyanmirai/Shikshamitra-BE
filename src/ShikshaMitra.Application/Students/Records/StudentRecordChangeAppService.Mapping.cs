@@ -10,14 +10,21 @@ namespace ShikshaMitra.Students.Records;
 
 public partial class StudentRecordChangeAppService
 {
-	private async Task<StudentRecordChangeDto> MapAsync(StudentRecordChange item, bool includePayload, Student? suppliedStudent = null,
+	private sealed record ChangeStudentIdentity(Guid Id, Guid? AcademicYearId, string? FirstName, string? LastName);
+
+	private async Task<StudentRecordChangeDto> MapAsync(StudentRecordChange item, bool includePayload, ChangeStudentIdentity? suppliedStudent = null,
 		StudentRecordsPolicy? suppliedPolicy = null, List<string>? suppliedRoles = null,
 		List<StudentRecordChangeDecision>? suppliedDecisions = null, bool? suppliedCanApprove = null, bool? suppliedCanCancel = null,
-		Dictionary<Guid, string>? suppliedActorNames = null)
+		Dictionary<Guid, string>? suppliedActorNames = null, StudentRecordsPolicy? suppliedCurrentPolicy = null)
 	{
-		var student = suppliedStudent ?? await access.GetScopedStudentAsync(item.StudentId);
+		var student = suppliedStudent;
+		if (student == null)
+		{
+			var scoped = await access.GetScopedStudentAsync(item.StudentId);
+			student = new(scoped.Id, scoped.AcademicYearId, scoped.FirstName, scoped.LastName);
+		}
 		var policy = suppliedPolicy ?? (await policies.ResolveAsync(item.AcademicYearId)).Policy;
-		var currentPolicy = student.AcademicYearId == item.AcademicYearId ? policy : (await policies.ResolveAsync(student.AcademicYearId)).Policy;
+		var currentPolicy = suppliedCurrentPolicy ?? (student.AcademicYearId == item.AcademicYearId ? policy : (await policies.ResolveAsync(student.AcademicYearId)).Policy);
 		var roles = suppliedRoles ?? await access.GetDatabaseRoleNamesAsync();
 		var history = suppliedDecisions ?? await decisions.GetListAsync(x => x.ChangeId == item.Id && x.TenantId == CurrentTenant.Id);
 		var actorNames = suppliedActorNames ?? await GetActorNamesAsync(history.Select(x => x.ActorId).Append(item.RequestedBy).Distinct().ToArray());

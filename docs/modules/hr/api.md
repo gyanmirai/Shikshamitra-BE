@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-29
+updated_on: 2026-10-31
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -257,6 +257,7 @@ Fixed monthly inputs are normalized to two decimals, attendance is applied once,
 Basic at 100 percent with PF does not require Special Allowance; ESIC is calculated from the employee assignment and effective policy when managed in ShikshaMitra.
 Active versions are immutable and carry a default salary basis, derived protection target, PF applicability, and PF rule.
 The calculate endpoint accepts Monthly salary (GROSS) or Monthly cost to school (EMPLOYER_COST), an effective month, and optional employee context.
+With no employee ID, a statutory override must be a complete onboarding draft (`statutoryProfileUpdatePf` and `statutoryProfileUpdateEsic` both true), without a concurrency stamp or persisted profile version ID. The shared statutory domain validator checks numbers and required off-reasons, and calculation applies the draft without writing an employee, profile version or compensation revision. Partial updates or persisted-profile references without employee context return `HR:Payroll:StatutoryProfileEmployeeRequired`. Existing employee scope, scheme permissions and concurrency checks remain mandatory; finalization recalculates and saves in its existing transaction.
 It returns earnings, employee deductions, employer contributions, ESI coverage and contribution details, statutory references, target variance, warnings, and a formula trace.
 `GET /api/payroll/salary-templates/active` exposes only valid active templates to Compensation Manage users.
 The settings list returns Active, Needs setup, and Archived templates to Salary Template View users.
@@ -266,6 +267,8 @@ The settings list returns Active, Needs setup, and Archived templates to Salary 
 It is employee-independent and does not persist templates, versions, employee structures, or payroll records.
 It returns `isSample`, `calculation`, `previewToken`, and `expiresAt`.
 An unreachable monthly target returns HTTP 400 with `HR:Payroll:CompensationTargetNotSolvable`, an actionable explanation, and `data.field=monthlyAmount` / `data.relatedField=rules`.
+An uncalculable configured ESIC sample returns HTTP 400 with `HR:Payroll:SalaryTemplateSampleBlocked`, `data.issues`, and `data.effectiveMonth` (`yyyy-MM`). Missing wage classification receives concise earning-treatment guidance. A treatment effective in November does not satisfy an October sample; the classification and statutory validation remain mandatory, and a successful preview still does not persist a template.
+`data.unclassifiedEarnings` identifies the unresolved earnings as `{ componentId, name }`, without salary amounts or raw diagnostics. The calculator supplies only classifications required by the selected eligibility/contribution bases. Classifying Basic does not classify HRA; every fresh preview rechecks the remaining earnings and effective month. The calculation DTO also exposes `employeeStateInsurance.unclassifiedEarnings`. These additive diagnostics do not change eligibility, contributions, preview proof, or CTC reconciliation.
 When fixed earnings alone exceed an employer-cost target, safe numeric data includes `target`, `fixedEarnings`, and `reason=FIXED_EARNINGS_EXCEED_EMPLOYER_COST`.
 Employer cost includes gross plus employer contributions; employee deductions cannot make an over-budget template valid. A fixed-only template needs a target matching its actual employer cost, not an arbitrary higher amount.
 Each create/update carries `previewToken`, `sampleMonthlyAmount`, `sampleEffectiveMonth`, an idempotency key, expected active version, and concurrency stamp.

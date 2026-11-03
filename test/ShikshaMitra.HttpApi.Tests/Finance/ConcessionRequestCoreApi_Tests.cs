@@ -87,6 +87,25 @@ public class ConcessionRequestCoreApi_Tests : ConcessionRequestApiTestsBase
 		body.Data.Status.ShouldBe(ConcessionRequestStatus.Pending);
 	}
 
+	[Theory]
+	[InlineData("GR-000002AD", 123, "GR-000002AD")]
+	[InlineData("GR-000002AE", null, "GR-000002AE")]
+	[InlineData(null, 123, "123")]
+	[InlineData(null, null, "")]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Student_concession_details_use_profile_GR_number_with_legacy_fallback(
+		string? grNumber, int? legacyGrNo, string expected)
+	{
+		var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(
+			Factory.Services, grNumber: grNumber, legacyGrNo: legacyGrNo);
+		var response = await Client.GetAsync(
+			$"{ConcessionRequestsBaseUrl}/{studentId}?academicYearId={ConcessionRequestTestHelper.DefaultAcademicYearId}");
+		response.EnsureSuccessStatusCode();
+		var body = await response.Content.ReadFromJsonAsync<StudentConcessionRequestsDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.StudentDetails.GrNumber.ShouldBe(expected);
+	}
+
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Delete_Draft_Request_Returns_204()

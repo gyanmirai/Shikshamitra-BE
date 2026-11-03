@@ -60,7 +60,7 @@ public sealed partial class StudentRecordMidnightSchedule_Tests
 			due.RefundedAmount.ShouldBe(0m); due.GetWithdrawalProrationCredit().ShouldBe(finance.ExpectedCredit);
 			due.GetWithdrawalProrationSource().ShouldBe(item.Id);
 			var events = await services.GetRequiredService<IRepository<FinanceAuditEvent, Guid>>().GetListAsync(x => x.Id == item.Id);
-			events.Count.ShouldBe(1); events[0].ActorUserId.ShouldBe(fixture.Actor); events[0].ContextJson.ShouldContain("policyVersion");
+			events.Count.ShouldBe(1); events[0].ActorUserId.ShouldBe(fixture.Actor); events[0].ContextJson.ShouldNotBeNull().ShouldContain("policyVersion");
 			return true;
 		});
 		// The normal named correction asks Finance to reverse the linked non-cash credit atomically.
@@ -74,7 +74,7 @@ public sealed partial class StudentRecordMidnightSchedule_Tests
 			var due = await services.GetRequiredService<IRepository<DueFee, Guid>>().GetAsync(finance.DueId);
 			due.GetWithdrawalProrationCredit().ShouldBe(0m); due.PaidAmount.ShouldBe(finance.Paid); due.OriginalAmount.ShouldBe(finance.Original);
 			var audit = await services.GetRequiredService<IRepository<FinanceAuditEvent, Guid>>().GetListAsync(x => x.StudentId == fixture.Student && x.Action == "withdrawal_proration_reversed");
-			audit.Count.ShouldBe(1); audit[0].ContextJson.ShouldContain(item.Id.ToString());
+			audit.Count.ShouldBe(1); audit[0].ContextJson.ShouldNotBeNull().ShouldContain(item.Id.ToString());
 			return true;
 		});
 	}
@@ -202,7 +202,9 @@ public sealed partial class StudentRecordMidnightSchedule_Tests
 		var detail = new FeeStructureDetail(Guid.NewGuid(), TenantId, structure.Id, head.Id, 12000m, false, false, null, null); detail.AttachPaymentTerm(term.Id, termVersion.Id); structure.AddDetail(detail); structure.Lock();
 		await services.GetRequiredService<IRepository<FeeStructure, Guid>>().UpdateAsync(structure, true);
 		var policy = new ProrationPolicy(Guid.NewGuid(), TenantId, fixture.Year, new("Proration fixture " + suffix, "PRO-" + Guid.NewGuid().ToString("N")[..8], null, ProrationPolicyStatus.Active, false,
-			[new(Guid.NewGuid(), head.Id, ProrationRuleType.FullMonthCharge, ProrationRoundingMode.RoundUpRupee, null, null, null, true, true, ProrationRuleType.FullMonthCharge)]));
+			[new(Guid.NewGuid(), head.Id, ProrationRuleType.FullMonthCharge, ProrationRoundingMode.RoundUpRupee,
+				CutoffDay: null, AfterCutoffAction: null, ApplyOnAdmission: true, ApplyOnEarlyWithdrawal: true,
+				EarlyWithdrawalRuleType: ProrationRuleType.FullMonthCharge)]));
 		await services.GetRequiredService<IRepository<ProrationPolicy, Guid>>().InsertAsync(policy, true);
 		var version = await services.GetRequiredService<IRepository<FinancePolicyVersion, Guid>>().InsertAsync(new(Guid.NewGuid(), TenantId, "proration", policy.Id, fixture.Year, policy.Version, policy.PolicyName, "Active", JsonSerializer.Serialize(policy.ToSnapshot()), "created"), true);
 		var rule = policy.ToSnapshot().Rules.Single(); var calculator = new ProrationPolicyCalculationService();

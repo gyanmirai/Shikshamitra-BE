@@ -28,7 +28,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var student = await CreateExistingStudentAsync(offering, "IDOriginal", "Student"); await GrantCompletedRecordAsync(student);
 		var service = GetRequiredService<IStudentIdCardAppService>();
 		var identity = GetRequiredService<ISchoolIdentityAppService>();
-		var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII=");
+		var png = SchoolIdentityTestImage.Png(32, 32);
 		var logo = await identity.UploadAsync(SchoolIdentityAssetKind.Logo, null, null, "issued-logo.png", png);
 		var savedIdentity = await identity.UpdateAsync(new() { Choices = new() { Logo = new() { Mode = SchoolIdentityAssetMode.Custom, AssetId = logo.Id } } });
 		var bulkPdf = await service.ExportPdfAsync(new StudentIdCardsPdfRequestDto { StudentIds = [student.Id], CardsPerPage = 8 });
@@ -116,7 +116,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var service = GetRequiredService<IStudentCertificateAppService>();
 		var identity = GetRequiredService<ISchoolIdentityAppService>();
 		var signature = await identity.UploadAsync(SchoolIdentityAssetKind.Signature, null, null, "issued-signature.png",
-			Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII="));
+			SchoolIdentityTestImage.Png(32, 32));
 		var identitySaved = await identity.UpdateAsync(new() { Choices = new() { Signature = new()
 			{ Mode = SchoolIdentityAssetMode.Custom, AssetId = signature.Id, PrincipalName = "Original Principal", Designation = "Principal" } } });
 		var input = new CreateStudentCertificateDto { StudentId = student.Id, CertificateType = StudentCertificateType.Bonafide, IdempotencyKey = "certificate-stable-request" };
@@ -215,7 +215,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await WithUnitOfWorkAsync(() => _studentEnrollmentRepository.GetAsync(e => e.TenantId == TestTenantId && e.StudentId == fixture.Student.Id))).IsActive.ShouldBeFalse();
 		var certificate = await certificates.GenerateAsync(request); certificate.TransitionId.ShouldBe(transition.Id);
 		var frozen = (await certificates.GetAsync(certificate.CertificateId!.Value)).CertificateData["_ExitTransition"];
-		frozen.ShouldContain("Graduate"); frozen.ShouldContain("Applied");
+		frozen.ShouldNotBeNull().ShouldContain("Graduate"); frozen.ShouldNotBeNull().ShouldContain("Applied");
 		var blocked = await fixture.Service.CorrectAsync(transition.Id, new() { ConcurrencyStamp = transition.ConcurrencyStamp, IdempotencyKey = "graduation-correction-held", Reason = "Graduation entry requires a reviewed correction", PreviewOnly = false });
 		blocked.Ready.ShouldBeFalse(); blocked.TransitionId.ShouldBeNull(); blocked.Issues.ShouldContain(x => x.Code == "Students:Records:DownstreamDependency");
 		(await certificates.VoidAsync(certificate.CertificateId.Value, new() { Reason = "Leaving Certificate voided before correcting graduation" })).Status.ShouldBe("Cancelled");

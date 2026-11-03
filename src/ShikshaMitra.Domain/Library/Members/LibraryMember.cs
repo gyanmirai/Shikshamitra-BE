@@ -13,6 +13,9 @@ public class LibraryMember : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private LibraryMember()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		MemberIdentifier = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 

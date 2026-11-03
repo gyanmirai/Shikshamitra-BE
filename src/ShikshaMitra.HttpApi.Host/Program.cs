@@ -9,6 +9,9 @@ using System.Threading.Tasks;
 namespace ShikshaMitra;
 public class Program
 {
+	// WebApplicationFactory<Program> needs a non-static entry-point marker.
+	public Program() { }
+
 	public async static Task<int> Main(string[] args)
 	{
 		Log.Logger = new LoggerConfiguration()

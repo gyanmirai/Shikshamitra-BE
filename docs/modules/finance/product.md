@@ -37,6 +37,12 @@ for paid principal. It is `min(max(0, PaidAmount - RefundedAmount), NetPayableAm
 `NetPayableAmount = max(0, OriginalAmount - ConcessionAmount - AdjustmentCreditAmount)`.
 Excess retained cash remains `OverpaymentAmount`; it is never silently refunded or discarded.
 Fee Details exposes gross payments, processed refunds, adjustment credits and excess separately.
+Refund creation and approval reserve money without changing collection balances. A processed
+refund reduces retained cash and refund eligibility, but does not reopen the paid obligation.
+Collectible principal is `max(0, OriginalAmount - PaidAmount - NetAmount)`; a partially paid fee
+keeps its original unpaid remainder. Payment reversal can reopen principal. Migration
+`20261029120000_PreserveFeeSettlementAfterRefund` repairs existing refunded dues' derived
+outstanding amounts and statuses without changing payment, refund, credit or receipt history.
 For example, original fees of 50,000 and concessions of 37,500 leave 12,500 net fees. If recorded
 cash is 62,500 with no refunds, 12,500 applies to fees and 50,000 remains excess. A concession
 without a payment leaves paid principal at zero.
@@ -78,6 +84,14 @@ For specific-date rules, authors supply one explicit invoice date per generated 
 Payment Terms keep each invoice date on or after its installment start and on or before its payment due date. Coverage and schedule dates remain within the selected Education Board period. The days-before-due rule is limited by the smallest installment start-to-due gap; a same-day start and due date requires another invoice rule. These rules apply when saving drafts, publishing, previewing templates, and customizing resolved fee-structure schedules. Dates are calendar dates; valid historical schedules remain allowed for backfill without a today restriction. Existing published versions and downstream financial history are preserved. Due dates after the coverage end remain supported within the board period.
 
 ## Fee Ledger overdue classification
+
+Staff Collections **Pending Fees** and Fee Details **Pending fee** include all unpaid
+principal in the selected academic year, including installments with future demand dates.
+They sum canonical outstanding balances after payments, concessions and adjustment credits;
+additional charges remain separate. For total fees of INR 43,000 and paid fees of INR 13,224,
+with INR 3,306 currently due and INR 26,470 future unpaid, pending principal is INR 29,776.
+A future-only unpaid balance remains Pending. Demand dates still govern billed/current
+classification and overdue eligibility, including the mobile current/future partition.
 
 Collections summaries, student overdue totals, and the collect-form installment status share
 `DueFeeCollectionStatusResolver`. Overdue requires a positive outstanding principal balance,
@@ -147,7 +161,7 @@ change; it is not a policy-maximum error.
 
 Pending receipts may fund paid expenses through the existing Expense Add action.
 Approval requires the current remaining count and selected receiving bank, atomically deposits that remainder and confirms only the net amount as Income.
-Receipt 10000 minus paid expense 2000 therefore produces Income/deposit 8000, Expense 2000 and held cash 0 while the official receipt and settled dues retain 10000.
+Receipt 10000 minus paid expense 2000 therefore produces Income/deposit 8000, Expense 2000 and held cash 0 while the receipt and settled dues retain 10000.
 The user explicitly selected deposit-basis Income; generic Income-minus-Expense reports reflect that classification.
 Fully spent cash may be finalized with count 0 and produces no visible Income or bank deposit.
 Previously approved-held/in-transit history keeps its existing bank-credit workflow and posted Income amounts.

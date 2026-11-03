@@ -12,14 +12,27 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
-public class StudentRegistrationQueryAppService(
-    IStudentRepository studentRepository,
-    IRepository<StudentNote, Guid> studentNoteRepository,
-    EntityValidationService validationService,
-    StudentScopeAccessService studentScopeAccessService
-) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
+public class StudentRegistrationQueryAppService : StudentRegistrationBaseAppService,
     IStudentRegistrationQueryAppService
 {
+	private readonly IStudentRepository studentRepository;
+	private readonly IRepository<StudentNote, Guid> studentNoteRepository;
+	private readonly EntityValidationService validationService;
+	private readonly StudentScopeAccessService studentScopeAccessService;
+
+	public StudentRegistrationQueryAppService(
+		IStudentRepository studentRepository,
+		IRepository<StudentNote, Guid> studentNoteRepository,
+		EntityValidationService validationService,
+		StudentScopeAccessService studentScopeAccessService
+	) : base(studentRepository, validationService, studentScopeAccessService)
+	{
+		this.studentRepository = studentRepository;
+		this.studentNoteRepository = studentNoteRepository;
+		this.validationService = validationService;
+		this.studentScopeAccessService = studentScopeAccessService;
+	}
+
     public async Task<PagedResultDto<StudentDto>> GetRegistrationFormsByMediumAsync(
         Guid academicMediumId,
         int skipCount = 0,

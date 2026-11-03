@@ -39,7 +39,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 			var draft = await prorations.CreateAsync(new CreateUpdateProrationPolicyDto
 			{
 				AcademicYearId = year, PolicyName = "Proration default", Status = "Draft",
-				FeeHeadRules = [new() { FeeHeadId = head, RuleType = "Daily", MinimumChargeDays = 0 }]
+				FeeHeadRules = [new() { FeeHeadId = head, RuleType = "Daily" }]
 			});
 			draft.IsDefault.ShouldBeFalse();
 			var proration = await prorations.ActivateAsync(draft.Id);

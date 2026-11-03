@@ -87,7 +87,7 @@ public class StudentRecordsListApi_Tests : ShikshaMitraApiTestBase
         includedStudent.City.ShouldBe("Pune");
         includedStudent.State.ShouldNotBeNull();
         includedStudent.Country.ShouldNotBeNull();
-        includedStudent.Address.ShouldContain("Pune");
+        includedStudent.Address.ShouldNotBeNull().ShouldContain("Pune");
     }
 
     [Fact]

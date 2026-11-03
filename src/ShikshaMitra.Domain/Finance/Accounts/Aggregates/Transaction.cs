@@ -40,7 +40,7 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
  public void Confirm() => IsConfirmed = true;
 	public const string OriginalCashGrossAmountKey = "OriginalCashGrossAmount";
 	public decimal GetOriginalCashIncomeAmount() => ExtraProperties.TryGetValue(OriginalCashGrossAmountKey, out var gross)
-		? gross is decimal amount ? amount : decimal.Parse(gross.ToString()!, System.Globalization.CultureInfo.InvariantCulture) : Amount;
+		? gross is decimal amount ? amount : decimal.Parse(gross!.ToString()!, System.Globalization.CultureInfo.InvariantCulture) : Amount;
 	public void ApproveCashIncome(Guid bankId, string bankLabel, decimal? depositedAmount = null)
 	{
 		if (PaymentMethod != 0 || TransactionType != TransactionType.Income || IsConfirmed ||
@@ -100,6 +100,9 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	protected Transaction()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Name = null!;
+
 		/* ORM / deserialization */
 	}
 
@@ -162,7 +165,8 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		decimal amount,
 		int paymentMethod,
 		DateTime paymentDate,
-		string? notes)
+		string? notes,
+		string? categoryNameSnapshot = null)
 	{
 		if (IsAutomatic) throw new BusinessException("Finance:AutomaticEntryImmutable");
 		if (CashCollectionId.HasValue) throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.Immutable);
@@ -173,6 +177,7 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PaymentMethod = paymentMethod;
 		PaymentDate = paymentDate;
 		Notes = notes;
+		if (categoryNameSnapshot != null) CategoryNameSnapshot = categoryNameSnapshot;
 
 		if (categoryTags != null)
 			SetCategoryTags(categoryTags);

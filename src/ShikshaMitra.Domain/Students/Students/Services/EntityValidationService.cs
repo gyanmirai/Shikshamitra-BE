@@ -88,7 +88,7 @@ public class EntityValidationService(
 	/// </summary>
 	/// <param name="siblingStudentIds">The list of sibling student identifiers</param>
 	/// <exception cref="BusinessException">Thrown when any sibling student does not exist</exception>
-	public async Task ValidateSiblingStudentsExistAsync(List<Guid> siblingStudentIds)
+	public async Task ValidateSiblingStudentsExistAsync(List<Guid>? siblingStudentIds)
 	{
 		if (siblingStudentIds == null || !siblingStudentIds.Any())
 		{

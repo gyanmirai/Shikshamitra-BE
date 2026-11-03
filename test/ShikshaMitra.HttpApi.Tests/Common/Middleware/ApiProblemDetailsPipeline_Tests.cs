@@ -114,7 +114,7 @@ public class ApiProblemDetailsPipeline_Tests
 		using var response = await JsonDocument.ParseAsync(http.Response.Body);
 		response.RootElement.GetProperty("errorCode").GetString().ShouldBe(code);
 		var detail = response.RootElement.GetProperty("detail").GetString();
-		detail.ShouldContain(expectedDetail);
+		detail.ShouldNotBeNull().ShouldContain(expectedDetail);
 		detail.ShouldNotContain("One or more business rules were violated");
 		detail.ShouldNotContain("{Blockers}");
 	}
@@ -145,7 +145,7 @@ public class ApiProblemDetailsPipeline_Tests
 		http.Request.Path = "/api/finance/proration-policies/source/clone";
 		void AssertRecovery(string? detail)
 		{
-			detail.ShouldContain(recovery);
+			detail.ShouldNotBeNull().ShouldContain(recovery);
 			if (rule == "010005") detail.ShouldContain("Admission Copy");
 			if (rule == "010027") detail.ShouldContain("Transport Fee");
 			detail.ShouldNotContain("{FeeHeadNames}");
@@ -166,7 +166,7 @@ public class ApiProblemDetailsPipeline_Tests
 		{
 			http.Response.Body = new MemoryStream();
 			var exception = new BusinessException(code);
-			foreach (var pair in data) exception.WithData(pair.Key, pair.Value);
+			foreach (var pair in data) exception.WithData(pair.Key, pair.Value!);
 			await new ApiProblemDetailsMiddleware(_ => throw exception,
 				NullLogger<ApiProblemDetailsMiddleware>.Instance, resolver).InvokeAsync(http);
 			http.Response.StatusCode.ShouldBe(400);
@@ -197,7 +197,7 @@ public class ApiProblemDetailsPipeline_Tests
 				["Reason"] = "Select an academic year before saving academic permissions.",
 				["CorrelationId"] = "reference-123"
 			});
-		detail.ShouldContain(expectedDetail);
+		detail.ShouldNotBeNull().ShouldContain(expectedDetail);
 		detail.ShouldNotContain("One or more business rules were violated");
 		detail.ShouldNotContain("{Reason}");
 	}
@@ -240,7 +240,7 @@ public class ApiProblemDetailsPipeline_Tests
 		{
 			httpContext.Response.Body = new MemoryStream();
 			var exception = new BusinessException(code);
-			foreach (var pair in data) exception.WithData(pair.Key, pair.Value);
+			foreach (var pair in data) exception.WithData(pair.Key, pair.Value!);
 			await new ApiProblemDetailsMiddleware(_ => throw exception,
 				NullLogger<ApiProblemDetailsMiddleware>.Instance, resolver).InvokeAsync(httpContext);
 			httpContext.Response.StatusCode.ShouldBe(400);
@@ -375,8 +375,8 @@ public class ApiProblemDetailsPipeline_Tests
 		output.Status.ShouldBe(400);
 		output.Extensions["errorCode"].ShouldBe(code);
 		if (code != AdmissionErrorCodes.PublicInquiryExpiryInvalid)
-			output.Detail.ShouldContain("RTE");
-		output.Detail.ShouldContain(nextAction);
+			output.Detail.ShouldNotBeNull().ShouldContain("RTE");
+		output.Detail.ShouldNotBeNull().ShouldContain(nextAction);
 		output.Detail.ShouldNotContain("{PeriodName}");
 		output.Detail.ShouldNotContain("{SetupName}");
 	}

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -19,6 +20,9 @@ public class ExamType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     private ExamType()
     {
+        // EF materializes these required columns after this ORM constructor.
+        Name = null!;
+
         /* This constructor is for deserialization / ORM purpose */
     }
 
@@ -48,6 +52,7 @@ public class ExamType : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Status = SettingStatus.Active;
     }
 
+    [MemberNotNull(nameof(Name))]
     public void SetName(string name)
     {
         Check.NotNullOrWhiteSpace(name, nameof(name));

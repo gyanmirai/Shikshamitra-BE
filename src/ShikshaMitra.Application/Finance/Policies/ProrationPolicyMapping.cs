@@ -59,10 +59,10 @@ internal static class ProrationPolicyMapping
 			var type = ParseRuleType(x.RuleType);
 			return new ProrationPolicyRuleModel(
 				newId(), x.FeeHeadId, type, ParseRounding(x.RoundingMode),
-				x.MinimumChargeDays, x.CutoffDay, x.ApplyOnAdmission ? ParseAfterCutoff(x.AfterCutoffAction, type) : null,
+				x.CutoffDay, x.ApplyOnAdmission ? ParseAfterCutoff(x.AfterCutoffAction, type) : null,
 				x.ApplyOnAdmission, x.ApplyOnEarlyWithdrawal,
 				x.EarlyWithdrawalRuleType == null ? null : ParseRuleType(x.EarlyWithdrawalRuleType),
-				x.EarlyWithdrawalMinimumChargeDays, x.EarlyWithdrawalCutoffDay,
+				x.EarlyWithdrawalCutoffDay,
 				x.ApplyOnEarlyWithdrawal && x.EarlyWithdrawalRuleType != null ? ParseAfterCutoff(x.EarlyWithdrawalBeforeCutoffAction, ParseRuleType(x.EarlyWithdrawalRuleType)) : null);
 		}).ToList());
 
@@ -84,13 +84,11 @@ internal static class ProrationPolicyMapping
 			FeeHeadName = feeHeadNames?.GetValueOrDefault(x.FeeHeadId),
 			RuleType = x.RuleType.ToString(),
 			RoundingMode = x.RoundingMode.ToString(),
-			MinimumChargeDays = x.MinimumChargeDays,
 			CutoffDay = x.CutoffDay,
 			AfterCutoffAction = x.AfterCutoffAction?.ToString(),
 			ApplyOnAdmission = x.ApplyOnAdmission,
 			ApplyOnEarlyWithdrawal = x.ApplyOnEarlyWithdrawal,
 			EarlyWithdrawalRuleType = x.EarlyWithdrawalRuleType?.ToString(),
-			EarlyWithdrawalMinimumChargeDays = x.EarlyWithdrawalMinimumChargeDays,
 			EarlyWithdrawalCutoffDay = x.EarlyWithdrawalCutoffDay,
 			EarlyWithdrawalBeforeCutoffAction = x.EarlyWithdrawalBeforeCutoffAction?.ToString()
 		}).ToList(),

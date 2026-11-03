@@ -125,7 +125,7 @@ public partial class MobileAcademicAppService_Tests
 			ExpectedRevision = "0", ClientRequestId = Guid.NewGuid() };
 		var first = await service.SaveAsync(f.Assignment.Id, input, true, false);
 		first.Status.ShouldBe("draft"); first.TextAnswer.ShouldBe("Hello world");
-		first.TextAnswerHtml.ShouldNotContain("script"); first.TextAnswerHtml.ShouldNotContain("img");
+		first.TextAnswerHtml.ShouldNotBeNull().ShouldNotContain("script"); first.TextAnswerHtml.ShouldNotBeNull().ShouldNotContain("img");
 		first.TextAnswerHtml.ShouldContain("<strong>world</strong>");
 		first.SubmittedDate.ShouldBeNull(); first.SavedAt.ShouldNotBeNull(); first.Revision.ShouldNotBe("0");
 		var replay = await service.SaveAsync(f.Assignment.Id, input, true, false);

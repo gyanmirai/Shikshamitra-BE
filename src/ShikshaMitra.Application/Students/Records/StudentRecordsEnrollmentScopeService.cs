@@ -40,7 +40,7 @@ public class StudentRecordsEnrollmentScopeService(IUserScopeAccessService scopes
 			where scope.AcademicYearIds.Contains(e.AcademicYearId) &&
 				(scope.WildcardBoardAcademicYearIds.Contains(e.AcademicYearId) || scope.WildcardMediumBoardIds.Contains(board.Id) ||
 				 scope.WildcardMediumStageMediumIds.Contains(medium.Id) || scope.WildcardStandardMediumStageIds.Contains(stage.Id) ||
-				 scope.WildcardDivisionStandardIds.Contains(s.Id) || (e.DivisionId.HasValue && scope.DivisionIds.Contains(e.DivisionId.Value)))
+				 scope.WildcardDivisionStandardIds.Contains(s.Id) || (e.DivisionId.HasValue && scope.DivisionIds.Contains(e.DivisionId!.Value)))
 			select e;
 	}
 

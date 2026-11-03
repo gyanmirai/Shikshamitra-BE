@@ -27,7 +27,7 @@ using Volo.Abp.Uow;
 
 [Authorize]
 [RemoteService(false)]
-public class ConcessionTypeAppService(
+public partial class ConcessionTypeAppService(
 	IRepository<ConcessionType, Guid> concessionTypeRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<ConcessionRequest, Guid> concessionRequestRepository,
@@ -75,8 +75,9 @@ public class ConcessionTypeAppService(
 		int maxResultCount = 10,
 		string? searchTerm = null,
 		bool includeInactive = false,
-		bool? isActive = null)
+		bool? isActive = null, string? filters = null)
 	{
+		var tableQuery = ListFilter.Parse(filters);
 		if (academicYearId == Guid.Empty || skipCount < 0 || maxResultCount is < 1 or > MaxPageSize)
 			throw new BusinessException("Finance:ConcessionType:InvalidPaging");
 		var query = await concessionTypeRepository.GetQueryableAsync();
@@ -97,6 +98,7 @@ public class ConcessionTypeAppService(
 			query = query.Where(x => x.NormalizedName.Contains(normalizedSearch));
 		}
 
+		query = await ApplyListFiltersAsync(query, tableQuery);
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var result = await AsyncExecuter.ToListAsync(
 			query.OrderBy(x => x.Name)

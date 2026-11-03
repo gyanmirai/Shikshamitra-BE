@@ -1398,7 +1398,7 @@ public partial class ExamAppService(
 			}
 
 			ValidateSubjectScheduleValues(subject.SubjectId, subject.ExamDate, subject.StartTime, subject.EndTime, subject.TotalMarks, subject.PassingMarks);
-			await validateCalendarDate(subject.ExamDate.Value);
+			await validateCalendarDate(subject.ExamDate!.Value);
 		}
 
 		var electiveGroups = exam.ExamSubjects
@@ -1426,7 +1426,7 @@ public partial class ExamAppService(
 				}
 
 				ValidateSubjectScheduleValues(subject.SubjectId, subject.ExamDate, subject.StartTime, subject.EndTime, subject.TotalMarks, subject.PassingMarks);
-				await validateCalendarDate(subject.ExamDate.Value);
+				await validateCalendarDate(subject.ExamDate!.Value);
 			}
 		}
 
@@ -2944,7 +2944,7 @@ public partial class ExamAppService(
 		var subjectsDict = (await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id)))
 						   .ToDictionary(s => s.Id);
 
-		var electiveGroupIds = assignments.Where(x => x.ElectiveGroupId.HasValue).Select(x => x.ElectiveGroupId.Value).Distinct().ToList();
+		var electiveGroupIds = assignments.Where(x => x.ElectiveGroupId.HasValue).Select(x => x.ElectiveGroupId!.Value).Distinct().ToList();
 		var electiveGroupsDict = (await electiveGroupRepository.GetListAsync(g => electiveGroupIds.Contains(g.Id)))
 								 .ToDictionary(g => g.Id);
 

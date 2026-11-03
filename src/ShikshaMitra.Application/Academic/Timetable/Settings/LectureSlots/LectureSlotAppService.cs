@@ -58,7 +58,7 @@ public partial class LectureSlotAppService(
         var items = pagedConfigs.Select(config => MapToListDto(
             config,
             standardsDict.GetValueOrDefault(config.StandardId, string.Empty),
-            shiftInfos.GetValueOrDefault(config.StandardId),
+            shiftInfos.GetValueOrDefault(config.StandardId)!,
             roomNames,
             requiredLecturesDict.GetValueOrDefault(config.StandardId, 0))).ToList();
 

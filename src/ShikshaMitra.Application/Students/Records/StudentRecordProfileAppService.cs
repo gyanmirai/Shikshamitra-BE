@@ -16,12 +16,38 @@ namespace ShikshaMitra.Students.Records;
 
 [RemoteService(false)]
 [Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
-public class StudentRecordProfileAppService(IStudentRepository students, StudentRecordsAccessService access,
-	IRepository<StudentEnrollment, Guid> enrollments, IRepository<AcademicYear, Guid> years,
-	IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions, StudentRecordsEnrollmentScopeService enrollmentScope,
-	StudentRecordRegistrationReader registrationReader)
+public class StudentRecordProfileAppService
 	: ApplicationService, IStudentRecordProfileAppService
 {
+	private readonly IStudentRepository students;
+	private readonly StudentRecordsAccessService access;
+	private readonly IRepository<AcademicYear, Guid> years;
+	private readonly IRepository<Standard, Guid> standards;
+	private readonly IRepository<Division, Guid> divisions;
+	private readonly StudentRecordsEnrollmentScopeService enrollmentScope;
+	private readonly StudentRecordRegistrationReader registrationReader;
+
+	public StudentRecordProfileAppService(
+		IStudentRepository students,
+		StudentRecordsAccessService access,
+		IRepository<StudentEnrollment, Guid> enrollments,
+		IRepository<AcademicYear, Guid> years,
+		IRepository<Standard, Guid> standards,
+		IRepository<Division, Guid> divisions,
+		StudentRecordsEnrollmentScopeService enrollmentScope,
+		StudentRecordRegistrationReader registrationReader
+	)
+	{
+		this.students = students;
+		this.access = access;
+		_ = enrollments;
+		this.years = years;
+		this.standards = standards;
+		this.divisions = divisions;
+		this.enrollmentScope = enrollmentScope;
+		this.registrationReader = registrationReader;
+	}
+
 	public async Task<StudentRecordProfileDto> GetAsync(Guid studentId, Guid? academicYearId = null)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
@@ -77,7 +103,7 @@ public class StudentRecordProfileAppService(IStudentRepository students, Student
 				result.DivisionId = selected?.DivisionId; result.DivisionName = selected?.DivisionName; result.RollNo = selected?.RollNumber;
 				var projection = await AsyncExecuter.FirstOrDefaultAsync((await enrollmentScope.GetDirectoryProjectionAsync())
 					.Where(x => x.Enrollment.StudentId == studentId && x.Enrollment.AcademicYearId == academicYearId)
-					.OrderByDescending(x => x.Enrollment.CreationTime));
+					.OrderByDescending(x => x.Enrollment.CreationTime).Select(x => new { x.MediumId, x.MediumName }));
 				result.AcademicMediumId = projection?.MediumId ?? Guid.Empty; result.AcademicMediumName = projection?.MediumName;
 			}
 		}

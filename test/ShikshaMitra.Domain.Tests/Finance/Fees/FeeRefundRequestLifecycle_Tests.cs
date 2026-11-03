@@ -9,6 +9,53 @@ namespace ShikshaMitra.Domain.Finance.Fees;
 public class FeeRefundRequestLifecycle_Tests
 {
     [Fact]
+    public void Pending_simple_workflow_request_can_be_edited_without_changing_its_identity_or_status()
+    {
+        var request = CreateSubmittedRequest();
+        request.UseSimpleWorkflow(Guid.NewGuid(), "pending-edit");
+        var studentId = request.StudentId;
+        var yearId = request.AcademicYearId;
+        var receiptId = request.OriginalReceiptId;
+        var policyVersion = request.RefundPolicyVersionId;
+        var original = request.Lines.Single();
+        var line = new FeeRefundLine(Guid.NewGuid(), request.Id, original.DueFeeId,
+            original.SourceAllocationId, original.SourceReceiptId, original.FeeHeadId,
+            original.FeeHeadName, original.InstallmentLabel, 1000m, 250m, 250m);
+
+        request.ReplaceLines([line]);
+        request.UpdatePaymentDetails("Cash", new CashRefundDetails(DateOnly.FromDateTime(DateTime.UtcNow), "Updated Parent"));
+        request.UpdateReason("Corrected requested amount");
+        request.UpdateEvidence("{\"amount\":250}", new string('b', 64));
+        var editorId = Guid.NewGuid();
+        request.RecordPendingEdit(editorId);
+        Assert.Equal(editorId, request.SubmittedByUserId);
+
+        Assert.Equal(studentId, request.StudentId);
+        Assert.Equal(yearId, request.AcademicYearId);
+        Assert.Equal(receiptId, request.OriginalReceiptId);
+        Assert.Equal(policyVersion, request.RefundPolicyVersionId);
+        Assert.Equal(FeeRefundStatus.Submitted, request.Status);
+        Assert.Equal(250m, request.CalculatedAmount);
+        Assert.Equal(0m, request.ApprovedAmount);
+        Assert.Empty(request.Reservations);
+        Assert.Empty(request.Settlements);
+        Assert.Equal("Corrected requested amount", request.Reason);
+        Assert.Equal(new string('b', 64), request.CalculationHash);
+    }
+
+    [Fact]
+    public void Approved_simple_workflow_request_cannot_be_edited()
+    {
+        var request = CreateApprovedRequest();
+        Assert.Throws<BusinessException>(() => request.UpdateReason("Changed after approval"));
+        Assert.Throws<BusinessException>(() => request.UpdatePaymentDetails("UPI", null));
+        Assert.Throws<BusinessException>(() => request.ReplaceLines([]));
+        Assert.Throws<BusinessException>(() => request.UpdateEvidence("{}", new string('c', 64)));
+        Assert.Equal(FeeRefundStatus.Approved, request.Status);
+        Assert.Equal(500m, request.ApprovedAmount);
+    }
+
+    [Fact]
     public void Capped_refund_retains_zero_rounded_source_evidence_without_reserving_or_paying_it()
     {
         var request = new FeeRefundRequest(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),

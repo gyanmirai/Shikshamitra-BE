@@ -49,16 +49,16 @@ public class ProrationPolicyCalculationService_Tests
 	}
 
 	[Fact]
-	public void Minimum_charge_days_are_capped_at_coverage_days()
+	public void Daily_charge_uses_only_eligible_days()
 	{
 		var result = service.Calculate(
-			Rule(ProrationRuleType.Daily, minimumChargeDays: 45),
+			Rule(ProrationRuleType.Daily),
 			3000m,
 			new DateTime(2026, 4, 1), new DateTime(2026, 4, 30),
 			new DateTime(2026, 4, 30), new DateTime(2026, 4, 30));
 
-		Assert.Equal(30, result.ChargedDays);
-		Assert.Equal(3000m, result.ProratedAmount);
+		Assert.Equal(1, result.ChargedDays);
+		Assert.Equal(100m, result.ProratedAmount);
 	}
 
 	[Theory]
@@ -113,8 +113,7 @@ public class ProrationPolicyCalculationService_Tests
 	private static ProrationPolicyRuleSnapshot Rule(
 		ProrationRuleType type,
 		ProrationRoundingMode rounding = ProrationRoundingMode.Currency,
-		int? minimumChargeDays = null,
 		int? cutoffDay = null,
 		ProrationAfterCutoffAction? afterCutoffAction = null) =>
-		new(Guid.NewGuid(), type, rounding, minimumChargeDays, cutoffDay, afterCutoffAction);
+		new(Guid.NewGuid(), type, rounding, cutoffDay, afterCutoffAction);
 }

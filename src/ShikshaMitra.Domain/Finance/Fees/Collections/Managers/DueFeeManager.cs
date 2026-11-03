@@ -46,7 +46,7 @@ public class DueFeeManager(
 				studentId!.Value, academicYear.StartDate.Date, academicYear.EndDate.Date);
 		if (alreadyExists)
 			throw new BusinessException(DueFeeErrorCodes.DueFeesAlreadyGenerated)
-				.WithData("StudentId", studentId);
+				.WithData("StudentId", studentId!);
 
 		var assignmentChargeStart = (chargeStartDate ?? academicYear.StartDate).Date;
 		var assignmentChargeEnd = (chargeEndDate ?? academicYear.EndDate).Date;
@@ -97,14 +97,14 @@ public class DueFeeManager(
 		if (!schedule.IsValid || schedule.Installments.Count == 0)
 			throw new BusinessException(PaymentTermErrorCodes.VersionNotPublished)
 				.WithData("FeeStructureDetailId", detail.Id)
-				.WithData("PaymentTermId", detail.PaymentTermId);
+				.WithData("PaymentTermId", detail.PaymentTermId!);
 
 		var annualAmount = customDetail?.Amount ?? detail.Amount ?? throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 		var rows = new List<DueFee>();
         var weights = schedule.Installments.Select(x => x.AllocationPercentage).ToArray();
         var scheduled = AssignmentAmountCalculator.Allocate(annualAmount, weights);
         var rule = prorationPolicy?.Rules.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
-            ?? new ProrationPolicyRuleSnapshot(detail.FeeHeadId, ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null, null);
+            ?? new ProrationPolicyRuleSnapshot(detail.FeeHeadId, ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null);
         if (detail.IsOneTime) rule = rule with { RuleType = ProrationRuleType.FullCharge, ApplyOnAdmission = false, ApplyOnEarlyWithdrawal = false, EarlyWithdrawalRuleType = ProrationRuleType.FullCharge };
         var calculation = AssignmentAmountCalculator.Calculate(prorationCalculator, rule, annualAmount,
             academicYear.StartDate.Date, academicYear.EndDate.Date, chargeStartDate, chargeEndDate);
@@ -252,7 +252,7 @@ public class DueFeeManager(
 		var rule = policy?.Rules.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
 			?? new ProrationPolicyRuleSnapshot(
 				detail.FeeHeadId, ProrationRuleType.FullCharge,
-				ProrationRoundingMode.Currency, null, null, null);
+				ProrationRoundingMode.Currency, null, null);
 		if (detail.IsOneTime)
 			rule = rule with { RuleType = ProrationRuleType.FullCharge, ApplyOnAdmission = false, ApplyOnEarlyWithdrawal = false, EarlyWithdrawalRuleType = ProrationRuleType.FullCharge };
 		return prorationCalculator.Calculate(rule, scheduledAmount, coverageStart, coverageEnd, chargeStart, chargeEnd);

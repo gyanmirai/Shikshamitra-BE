@@ -8,17 +8,17 @@ public class FeeHeadResponse : EntityDto<Guid>
 	public FeeHeadDependenciesDto Dependencies { get; set; } = new();
     public Guid AcademicYearId { get; set; }
     public Guid FeeCategoryId { get; set; }
-    public string FeeCategoryName { get; set; }
+    public string? FeeCategoryName { get; set; }
     public Guid IncomeCategoryId { get; set; }
-    public string IncomeCategoryName { get; set; }
+    public string? IncomeCategoryName { get; set; }
     public Guid IncomeAccountHeadId { get; set; }
-    public string IncomeAccountHeadName { get; set; }
-    public string Name { get; set; }
+    public string? IncomeAccountHeadName { get; set; }
+    public string Name { get; set; } = null!;
     public FeeHeadModule? Module { get; set; }
     public bool IsConcessionApplied { get; set; }
-    public string Description { get; set; }
+    public string? Description { get; set; }
     public bool IsActive { get; set; }
-    public string DeactivationReason { get; set; }
+    public string? DeactivationReason { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 	public bool IsUsedInDownstream { get; set; } = false;

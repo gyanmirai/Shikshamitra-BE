@@ -72,13 +72,10 @@ public class AttendanceRegisterQueryService(IRepository<StudentEnrollment, Guid>
 			where day.TenantId == CurrentTenant.Id && day.AcademicYearId == yearId && day.Date >= start && day.Date <= end && Enumerable.Contains(memberIds, entry.EnrollmentId)
 			select new { entry.EnrollmentId, day.StandardId, day.DivisionId });
 		foreach (var path in historicPaths) Add(path.StandardId, path.DivisionId, path.EnrollmentId!.Value);
-		var slices = new List<AttendanceSummaryDto>(); var partial = new HashSet<Guid>();
-		foreach (var path in paths)
-		{
-			try { slices.AddRange(await reports.BuildAsync(yearId, path.Key.Standard, path.Key.Division, start, end, members.Where(e => path.Value.Contains(e.Id)).ToList(), includeDaily: true)); }
-			catch (BusinessException exception) when (exception.Code == ShikshaMitra.Security.UserScope.UserScopeErrorCodes.AccessDenied)
-			{ foreach (var id in path.Value) partial.Add(id); }
-		}
+		var batch = await reports.BuildManyAsync(yearId, start, end, paths.Select(path => new AttendanceReportSliceRequest(
+			path.Key.Standard, path.Key.Division, members.Where(member => path.Value.Contains(member.Id)).ToList())).ToList(), includeDaily: true);
+		var slices = batch.Slices.SelectMany(slice => slice.Rows);
+		var partial = batch.PartialEnrollmentIds;
 		return slices.GroupBy(s => s.EnrollmentId).Select(group =>
 		{
 			var row = group.First();

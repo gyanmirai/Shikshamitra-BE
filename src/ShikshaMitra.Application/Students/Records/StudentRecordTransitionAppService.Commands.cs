@@ -73,7 +73,7 @@ public partial class StudentRecordTransitionAppService
 		{
 			var row = preview.Items.Single(x => x.StudentId == inputRow.StudentId);
 			if (row.Ready && row.RollAssignmentMode == "automatic" && inputRow.RollNumber != row.ProposedRollNumber)
-				throw new BusinessException("Students:Records:RollProposalChanged").WithData("StudentId", inputRow.StudentId).WithData("ProposedRollNumber", row.ProposedRollNumber);
+				throw new BusinessException("Students:Records:RollProposalChanged").WithData("StudentId", inputRow.StudentId).WithData("ProposedRollNumber", row.ProposedRollNumber!);
 			if (inputRow.StudentConcurrencyStamp != row.StudentConcurrencyStamp || inputRow.EnrollmentConcurrencyStamp != row.EnrollmentConcurrencyStamp)
 			{
 				StudentRecordTransitionReadinessService.Add(row, "StaleSnapshot", "Refresh the student preview before submitting."); row.Ready = false;

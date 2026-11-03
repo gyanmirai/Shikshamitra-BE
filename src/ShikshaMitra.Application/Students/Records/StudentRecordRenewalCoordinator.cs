@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -47,15 +48,24 @@ public class StudentRecordRenewalCoordinator(IRepository<StudentRecordRenewalCas
 			transition.Id, transition.PolicyJson, rules, transition.BeforeJson, "transition:" + transition.Id.ToString("N"));
 		return await renewals.InsertAsync(item);
 	}
-	public async Task<StudentRecordRenewalDto> GetAsync(Guid id)
+	public Task<StudentRecordRenewalDto> GetAsync(Guid id) => ReadAsync(id, null);
+	internal async Task<List<StudentRecordRenewalDto>> GetManyAsync(IReadOnlyCollection<StudentRecordRenewalCase> items)
+	{
+		var context = new RenewalListReadContext();
+		var result = new List<StudentRecordRenewalDto>(items.Count);
+		foreach (var item in items) result.Add(await ReadAsync(item.Id, context));
+		return result;
+	}
+	private async Task<StudentRecordRenewalDto> ReadAsync(Guid id, RenewalListReadContext? context)
 	{
 		var item = await GetScopedAsync(id);
 		var policy = StudentRecordsPolicy.FromJson(item.PolicyJson);
 		var requirements = JsonSerializer.Deserialize<StudentRecordRenewalRequirements>(item.OnboardingRulesJson)!;
 		var student = await access.GetScopedStudentAsync(item.StudentId);
-		var currentPolicy = (await policies.ResolveAsync(student.AcademicYearId)).Policy;
-		var yearPolicy = (await policies.ResolveAsync(item.AcademicYearId)).Policy;
-		var roles = await access.GetDatabaseRoleNamesAsync();
+		var currentPolicy = await ReadDisplayPolicyAsync(student.AcademicYearId, context);
+		var yearPolicy = await ReadDisplayPolicyAsync(item.AcademicYearId, context);
+		var roles = context?.Roles ?? await access.GetDatabaseRoleNamesAsync();
+		if (context != null) context.Roles = roles;
 		return new()
 		{
 			Id = item.Id, StudentId = item.StudentId, AcademicYearId = item.AcademicYearId, StandardId = item.StandardId,
@@ -66,6 +76,20 @@ public class StudentRecordRenewalCoordinator(IRepository<StudentRecordRenewalCas
 			PortalReviewRequired = requirements.StudentAccount || requirements.GuardianAccount,
 			Issues = item.Status is "Completed" or "Cancelled" ? [] : await readiness.GetIssuesAsync(item, item.Status == "Provisioning")
 		};
+	}
+	private async Task<StudentRecordsPolicy> ReadDisplayPolicyAsync(Guid? yearId, RenewalListReadContext? context)
+	{
+		if (context == null) return (await policies.ResolveAsync(yearId)).Policy;
+		if (!yearId.HasValue) return context.DefaultPolicy ??= (await policies.ResolveAsync(null)).Policy;
+		if (!context.Policies.TryGetValue(yearId.Value, out var policy))
+			context.Policies[yearId.Value] = policy = (await policies.ResolveAsync(yearId)).Policy;
+		return policy;
+	}
+	private sealed class RenewalListReadContext
+	{
+		public Dictionary<Guid, StudentRecordsPolicy> Policies { get; } = [];
+		public StudentRecordsPolicy? DefaultPolicy { get; set; }
+		public List<string>? Roles { get; set; }
 	}
 	public async Task<StudentRecordRenewalCase> GetScopedAsync(Guid id)
 	{

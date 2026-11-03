@@ -80,6 +80,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var service = GetRequiredService<IAdmissionInquiryAppService>();
 		var input = ManagedInquiryInput(offering);
 		input.ParentRelationship = "father";
+		input.GuardianResponsibilityConfirmed = true;
 		input.GuardianEmail = "father@example.com";
 		input.FamilyContacts = new()
 		{

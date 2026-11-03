@@ -5,7 +5,7 @@ namespace ShikshaMitra.TenantSettings.AcademicSetups.AcademicYears;
 
 public class AcademicYearDto : AuditedEntityDto<Guid>
 {
-    public string Name { get; set; }
+    public string Name { get; set; } = null!; // The response mapper populates these members after construction.
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
     public DateTime StartYear { get; set; }

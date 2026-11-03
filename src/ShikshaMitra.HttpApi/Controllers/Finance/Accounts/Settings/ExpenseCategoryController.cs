@@ -36,9 +36,10 @@ public class ExpenseCategoryController(ITransactionCategoryAppService expenseCat
 		[FromQuery] int page = 1,
 		[FromQuery] int pageSize = 10,
 		[FromQuery] string? search = null,
-		[FromQuery] bool includeInactive = true)
+		[FromQuery] bool includeInactive = true,
+		[FromQuery] string? filters = null)
 	{
-		return expenseCategoryAppService.GetListAsync(academicYearId, TransactionType.Expense, page, pageSize, search, includeInactive);
+		return expenseCategoryAppService.GetListAsync(academicYearId, TransactionType.Expense, page, pageSize, search, includeInactive, filters);
 	}
 
 	[HttpGet("{expenseCategoryId}")]

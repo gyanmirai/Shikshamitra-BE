@@ -166,12 +166,18 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			_operationalQuery = key;
 		}
 		var selected = _operationalRows!.Skip(offset).Take(size).ToList();
-		return new(selected.Select(row => row.Export).ToList(), _operationalRows.Count)
+		return new(selected.Select(row => row.Export).ToList(), _operationalRows!.Count)
 		{
 			Envelope = HrOperationalTableQuery.Envelope(request.Table, _operationalEnvelope, selected, _operationalRows, offset, size, await OperationalColumnsAsync(request))
 		};
 	}
 	public async Task<List<HrReportFieldDto>> OperationalColumnsAsync(HrTableExportRequest request)
+	{
+		// Keep the existing async exception/cancellation contract for callers.
+		return await Task.FromResult(OperationalColumns(request));
+	}
+
+	private List<HrReportFieldDto> OperationalColumns(HrTableExportRequest request)
 	{
 		if (request.Table is "hr-generated-report" or "hr-generated-report-history") throw HrReportingEngine.Invalid("Use the captured reporting query for this table.");
 		if (request.Table == "hr-salary-documents")
@@ -220,7 +226,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 					_capturedRows = await service.GetExportRowsAsync(id, criteria);
 					_capturedQuery = key;
 				}
-				return new(_capturedRows!.Skip(offset).Take(size).Select(x => JsonSerializer.SerializeToElement(x, Json)).ToList(), _capturedRows.Count);
+				return new(_capturedRows!.Skip(offset).Take(size).Select(x => JsonSerializer.SerializeToElement(x, Json)).ToList(), _capturedRows!.Count);
 			}
 			var page = await service.GetRowsAsync(id, offset / size + 1, size, criteria);
 			return new(page.Rows.Select(x => JsonSerializer.SerializeToElement(x, Json)).ToList(), page.TotalCount);

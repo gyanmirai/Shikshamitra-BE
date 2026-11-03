@@ -1,4 +1,5 @@
 using System;
+using ShikshaMitra.Students.Records;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
@@ -12,17 +13,37 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
-public class StudentGeneralInfoAppService(
-	IStudentRepository studentRepository,
-	IRepository<Standard, Guid> standardRepository,
-	IRepository<Division, Guid> divisionRepository,
-	EntityValidationService validationService,
-	StudentScopeAccessService studentScopeAccessService,
-	StudentIdentityComplianceAppService identityComplianceAppService
-) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
+public class StudentGeneralInfoAppService : StudentRegistrationBaseAppService,
 	IStudentGeneralInfoAppService
 {
+	private readonly IStudentRepository studentRepository;
+	private readonly IRepository<Standard, Guid> standardRepository;
+	private readonly IRepository<Division, Guid> divisionRepository;
+	private readonly EntityValidationService validationService;
+	private readonly StudentScopeAccessService studentScopeAccessService;
+	private readonly StudentIdentityComplianceAppService identityComplianceAppService;
+
+	public StudentGeneralInfoAppService(
+		IStudentRepository studentRepository,
+		IRepository<Standard, Guid> standardRepository,
+		IRepository<Division, Guid> divisionRepository,
+		EntityValidationService validationService,
+		StudentScopeAccessService studentScopeAccessService,
+		StudentIdentityComplianceAppService identityComplianceAppService
+	) : base(studentRepository, validationService, studentScopeAccessService)
+	{
+		this.studentRepository = studentRepository;
+		this.standardRepository = standardRepository;
+		this.divisionRepository = divisionRepository;
+		this.validationService = validationService;
+		this.studentScopeAccessService = studentScopeAccessService;
+		this.identityComplianceAppService = identityComplianceAppService;
+	}
+
 	public async Task<StudentGeneralDetailsDto> GetRegistrationGeneralDetailsByIdAsync(Guid studentId)
+		=> (await ReadAsync(studentId, null)).Details;
+	internal Task<StudentRecordGeneralSection> GetRecordsSectionAsync(Guid studentId, StudentRecordSectionReadScope scope) => ReadAsync(studentId, scope);
+	private async Task<StudentRecordGeneralSection> ReadAsync(Guid studentId, StudentRecordSectionReadScope? scope)
 	{
 		var student = await GetScopedRegistrationStudentAsync(
 			studentId,
@@ -30,10 +51,11 @@ public class StudentGeneralInfoAppService(
 			StudentRegistrationErrorCodes.InvalidStatusForRegistrationView,
 			includeStudentRecords: true);
 
+		scope?.RequireContext(studentId, CurrentTenant.Id, CurrentUser.Id, CurrentUnitOfWork);
 		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
 		await ApplyComplianceMaskAsync(studentId, result);
 
-		return result;
+		return new(result, student.DivisionId, student.AdditionalDetail?.ProfilePictureUrl);
 	}
 
 	public async Task<StudentGeneralDetailsDto> UpdateGeneralInfoAsync(Guid studentId, UpdateGeneralInfoDto input)

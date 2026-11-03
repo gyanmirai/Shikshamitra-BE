@@ -116,7 +116,7 @@ public class ReceiptLifecycleApi_Tests : ShikshaMitraApiTestBase
         originals.Sum(r => r.TotalPaidAmount).ShouldBe(includeCharge ? 125d : 100d);
         foreach (var document in originals)
         {
-            document.ReceiptKindLabel.ShouldStartWith(cash ? "Official Receipt" : "Provisional Receipt");
+            document.ReceiptKindLabel.ShouldStartWith(cash ? "Receipt" : "Provisional Receipt");
             document.PaymentMethodLabel.ShouldBe(FeeReceiptPresentation.GetPaymentMethodLabel(method));
             document.VerificationStatus.ShouldBe(cash ? FeeReceiptVerificationStatus.NotApplicable : FeeReceiptVerificationStatus.PendingVerification);
             await CheckPdfAsync(document.Id, document.PdfFileName, !cash && method == PaymentMethodEnum.UPI && !includeCharge,
@@ -145,7 +145,7 @@ public class ReceiptLifecycleApi_Tests : ShikshaMitraApiTestBase
                     official.LinkedProvisionalReceiptId.ShouldBe(original.Id);
                     official.TotalPaidAmount.ShouldBe(original.TotalPaidAmount);
                     official.PaymentMethodLabel.ShouldBe(original.PaymentMethodLabel);
-                    official.ReceiptKindLabel.ShouldStartWith("Official Receipt");
+                    official.ReceiptKindLabel.ShouldStartWith("Receipt");
                     await CheckPdfAsync(official.Id, official.PdfFileName, method == PaymentMethodEnum.UPI && !includeCharge,
                         method == PaymentMethodEnum.BankTransfer);
                 }

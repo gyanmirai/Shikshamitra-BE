@@ -23,7 +23,7 @@ public partial class FeeRefundAppService
         var mapped = MobileFinanceCanonicalCommandProjection.Map(result);
         mapped.FormRules = new MobileRefundFormRules {
             AmountMode = policy.AmountMode.ToString(),
-            CanEditLineAmounts = policy.AllowPartialRefund && policy.AmountMode == RefundAmountMode.ManualUpToEligible,
+            CanEditLineAmounts = true,
             IncludePaidCharges = policy.IncludePaidCharges, IncludePaidLateFee = policy.IncludePaidLateFee,
             PercentageValue = policy.PercentageValue.HasValue ? MobileFinanceProjection.Money(policy.PercentageValue.Value) : null,
             FixedAmount = policy.FixedAmount.HasValue ? MobileFinanceProjection.Money(policy.FixedAmount.Value) : null
@@ -166,7 +166,7 @@ public partial class FeeRefundAppService
             AcademicYearId = academicYearId, StudentFeeStructureId = payer.AssignmentId,
             RefundPolicyId = version.PolicyId, RefundPolicyVersionId = version.Id, RefundPolicyName = policy.PolicyName,
             AllowedPayoutMethods = policy.AllowedPayoutMethods.Select(ToPayoutMethodLabel).ToList(),
-            ProcessingTargetDays = policy.ProcessingTargetDays, AllowPartialRefund = policy.AllowPartialRefund, TotalPaid = totalPaid,
+            ProcessingTargetDays = policy.ProcessingTargetDays, AllowPartialRefund = true, TotalPaid = totalPaid,
             TotalRefunded = totalCommitted, TotalRefundable = totalRefundable, FeeHeads = grouped,
             Receipts = rows.GroupBy(x => x.SourceReceiptId).Select(g =>
             {

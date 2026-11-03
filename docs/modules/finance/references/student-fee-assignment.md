@@ -3,7 +3,7 @@ module: finance
 domain: student-fee-assignment
 content_type: Reference
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -47,11 +47,11 @@ The abbreviated permission suffixes refer to `Finance.Fees.StructureAssign`. Amo
 |---|---|
 | Outcome/owner | Finance assignment owns the student's pinned Concession, Refund, Collection and Proration selections; fee structure and policy definitions are unchanged |
 | Actor/scope | Assignment `.Add` creates; `.View` reads; dedicated `.OverridePolicies` authorizes exceptions and later edits. Existing tenant/year/student/class UserScope checks apply |
-| Default/precedence | Omitted family inherits the exact structure version; explicit student version overrides concession, refund or collection; null explicitly clears an optional family. Collection cannot be cleared. New assignments do not inherit Proration Policy from Fee Structure. Historical assignment pins cannot be overridden. No academic-year default is substituted |
+| Default/precedence | Omitted concession, refund or collection inherits the exact structure version; explicit student selections override those families and null clears an optional family. Collection cannot be cleared. Proration independently uses the active academic-year default for new Admission preparation and Finance assignment, including students without an Admission link. Legacy structure proration pins are not inherited. Saved assignment pins cannot be overridden |
 | Fields | `policies: [{ family, versionId }]` (unique, at most three selectable families: concession, refund, collection); `policyOverrideReason` (1-500 characters when changed). Edit requires those three families, `academicYearId`, nonempty `concurrencyStamp`, and `reason`. A proration selection is rejected |
 | Preconditions | Current active/effective same-year version for newly selected policies; already-pinned historical versions may remain unchanged. Family/year mismatches, empty identifiers and unavailable versions fail closed |
 | State/correction | Assignment remains assigned; later changes supersede its current selections and append before/after version IDs, actor, timestamp and reason to persisted aggregate ExtraProperties |
-| Monetary equation | Policy selection alone applies no concession, penalty or refund. New assignments use the full configured service charge without a template proration policy; later edits leave original, paid and outstanding amounts unchanged |
+| Monetary equation | Policy selection alone applies no concession, penalty or refund. The Finance default proration rule calculates the included head entitlement from its selected service dates before installment allocation. Missing defaults and unmatched rules retain existing full-charge treatment. Later policy edits leave stored original, paid and outstanding amounts unchanged |
 | Side effects/history | No due, receipt, posting or payment mutation. `AssignmentSnapshotJson` remains immutable; read responses show original policies separately from current selections. Collection and refund evaluate assignment's current pinned versions on subsequent operations; existing transaction evidence stays pinned |
 | Failure/retry | Initial policy selections and reason are covered by command fingerprint and protected preview. Edit validates every selection before mutation, uses a transactional unit of work and checks the supplied aggregate concurrency stamp; identical selections are a no-op |
 | Evidence | `StudentFeeAssignmentPolicies_Tests`, assignment HTTP tests, frontend workflow and permission-group tests cover defaults, reasons, token invalidation, policy persistence, denied grants, stale edit and obligation preservation |
@@ -103,8 +103,30 @@ Multiple instances must share the application's protected key ring for previews 
 - Daily proration uses the academic-year service denominator. Monthly cutoff divides the annual total into service months independently of billing frequency. New policy versions configure admission and early withdrawal independently; legacy snapshots retain their existing withdrawal-month behavior. See [the event calculation contract](./proration-policy-end-to-end.md#independent-admission-and-early-withdrawal-contract).
 - Currency rounding is deterministic. The final installment absorbs the residual; very small totals redistribute excess rounding in reverse installment order to prevent negative dues. Installments always sum to the head total.
 - One-time heads and heads with no matching proration rule receive full charge. The review says so explicitly.
-- Collection, Refund and optional Concession use the resolved exact immutable policy versions. Missing inherited versions fail closed. Authorized student selections override concession, refund or collection attachments without substituting current defaults; new assignments do not inherit proration, even when legacy structure storage contains a pin.
+- Collection, Refund and optional Concession use the resolved exact immutable policy versions. Missing inherited versions fail closed. Authorized student selections override concession, refund or collection attachments without substituting current defaults. Proration uses the active same-tenant, same-year Finance default independently of legacy structure storage and does not require a student Admission link.
 - Snapshot evidence contains structure revision/name, all head selections, original/effective amounts, term name/version, policy versions/treatment, service periods, calculation version, schedule and due IDs. Current paid/outstanding amounts are read from `DueFee` on retrieval.
+
+New `assignment-v3` recurring obligations include only published installments whose coverage overlaps that head's verified service period, inclusive of both boundary dates.
+New Finance assignments automatically pin the same default Proration Policy used by Admission preparation; the context and preview label its source `FinanceDefault`.
+Finance manual/transport dates remain verified by their existing permissions and source adapters; selecting the whole academic year without a saved joining date does not imply a late admission.
+Changing the default policy or version invalidates an uncommitted preview, while saved assignment/account snapshots and idempotent retries retain their original version and obligations.
+The head entitlement still uses the academic-year denominator and pinned proration rules; full-charge and one-time pricing retain their existing meanings.
+The included installments retain their published IDs, sequence, coverage, demand and due dates.
+Their relative allocation percentages are normalized to 100 at six-decimal precision, with the final installment absorbing the percentage and monetary residuals.
+Saved scheduled amounts sum to the annual base, and saved obligations sum to the calculated head entitlement; withdrawal, collection and other consumers use those stored amounts and effective percentages.
+A service period without any overlapping positive-weight term fails with `Finance:Assignment:ConfigurationInvalid` rather than generating unrelated obligations.
+
+Automatic late-fee accrual excludes due dates before the latest known registration joining date, assignment charge start, or that fee head's service start, including stored due-level proration evidence.
+Date boundaries use calendar dates: a due date on the effective start date remains eligible for the normal grace and overdue rules.
+The canonical late-fee balance service applies this boundary to student and pre-enrollment account collections, payment validation, details, summaries and waivers.
+Previously recorded assessments, payments and waivers remain financial evidence and cannot cause a second common charge on a newly eligible installment.
+Historical payment recovery preserves the transaction timestamp's recorded calendar date; server-local offset conversion must not create an extra late day.
+This change requires no schema migration and does not rewrite existing assignment snapshots or dues during reads or retries.
+Already saved incorrect schedules or assessments require a reviewed financial correction; paid history must use the existing adjustment, reversal or refund workflows.
+Withdrawal recalculates each eligible head against its saved service start and the earlier of its saved service end and leaving date, preserving the academic-year denominator.
+Leaving before a head's service starts gives zero revised entitlement; leaving after its saved service end cannot extend the charged period.
+Older snapshots without head-level dates retain the recorded joining/assignment-period fallback.
+Proration result `joiningDate` stays null when no actual joining date is recorded; calculation/service-period fallbacks are never displayed as an actual joining date.
 
 ## Transactions, retries and integrity
 

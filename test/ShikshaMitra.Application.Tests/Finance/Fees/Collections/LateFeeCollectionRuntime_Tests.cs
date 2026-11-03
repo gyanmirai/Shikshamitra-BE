@@ -40,7 +40,7 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 /// this is what silently broke FeeCollectionAppServiceV2_Tests's pre-existing tests too
 /// (verified: they fail the same way, independent of this change).
 /// </summary>
-public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<LateFeeCollectionRuntimeTestModule>
 {
 	private static readonly Guid TestTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 	private static readonly Guid FakeAdminUserId = Guid.Parse("2e701e62-0953-4dd3-910b-dc6cc93ccb0d");
@@ -364,7 +364,7 @@ public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTes
 	}
 
 	[Fact]
-	public async Task Six_Fee_Items_Of_12396_Leave_Four_Unselected_100_Rupee_Charges_Pending()
+	public async Task Six_Fee_Items_Of_12396_Leave_One_Common_100_Rupee_Charge_Pending()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		{
@@ -381,7 +381,7 @@ public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTes
 				await _dueFeeRepo.InsertAsync(due, autoSave: true); dues.Add(due);
 			}
 			var initial = await GetSummaryRowAsync(yearId, studentId);
-			initial.TotalCharges.ShouldBe(400d); initial.PendingCharges.ShouldBe(400d);
+			initial.TotalCharges.ShouldBe(100d); initial.PendingCharges.ShouldBe(100d);
 			var fees = await _feeCollections.CollectFeeAsync(new CollectFeeInput
 			{
 				StudentId = studentId, AcademicYearId = yearId, IdempotencyKey = Guid.NewGuid().ToString("N"),
@@ -391,8 +391,8 @@ public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTes
 			});
 			fees.ReceivedAmount.ShouldBe(12396d, 0.000001d); fees.PaidDueFees.Count.ShouldBe(6); fees.PaidLateFees.ShouldBeEmpty();
 			var remaining = (await _feeCollections.GetCollectFormAsync(studentId, yearId)).Charges;
-			remaining.Count.ShouldBe(4); remaining.ShouldAllBe(c => c.PendingAmount == 100d && c.Status == FeeCollectionStatus.Pending);
-			(await GetSummaryRowAsync(yearId, studentId)).PendingCharges.ShouldBe(400d);
+			remaining.Count.ShouldBe(1); remaining.ShouldAllBe(c => c.PendingAmount == 100d && c.Status == FeeCollectionStatus.Pending);
+			(await GetSummaryRowAsync(yearId, studentId)).PendingCharges.ShouldBe(100d);
 		}
 	}
 
@@ -416,7 +416,8 @@ public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTes
 				AcademicYearId = yearId, BoardId = student.AcademicBoardId!.Value, EducationMediumId = student.AcademicMediumId,
 				Format = FeeCollectionExportFormat.Csv,
 			}));
-			csv.ShouldContain(",200,200,");
+			csv.ShouldContain("Total Charges,Paid Charges,Pending Charges");
+			csv.ShouldContain(",200,0,200,");
 		}
 	}
 
@@ -482,7 +483,7 @@ public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTes
 			await _waivers.ApplyAsync(new ApplyFeeWaiverInput
 			{ SourceType = "LateFee", SourceId = dueId, Reason = "Approved hardship", IdempotencyKey = Guid.NewGuid().ToString("N") });
 			var row = await GetSummaryRowAsync(yearId, studentId);
-			row.TotalCharges.ShouldBe(500d); row.PendingCharges.ShouldBe(0d);
+			row.TotalCharges.ShouldBe(0d); row.PendingCharges.ShouldBe(0d);
 			(await _feeCollections.GetCollectFormAsync(studentId, yearId)).Charges.Single().Status.ShouldBe(FeeCollectionStatus.Waived);
 		}
 	}

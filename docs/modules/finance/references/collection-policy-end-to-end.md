@@ -3,7 +3,7 @@ module: finance
 domain: collection-policy
 content_type: Reference
 status: active
-updated_on: 2026-10-23
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -338,6 +338,8 @@ Default-policy fallback is allowed only as a temporary, logged migration bridge 
 
 Let `D` be the due date and `C` the collection/calculation date, both normalized to the school's local date.
 
+Exclude terms whose due date is before the student's captured joining date or fee-applicability start. Same-day dues remain eligible. The immutable assignment snapshot owns captured dates; legacy assignments fall back to the canonical Admission joining-date reader. Never substitute record creation time for admission. Missing legacy admission evidence retains existing eligibility; conflicting admission evidence blocks calculation for review.
+
 ```text
 daysLate = max(0, C - D in whole calendar days)
 effectiveGrace = student custom grace if present, otherwise policy grace
@@ -368,7 +370,7 @@ chargeableDays = max(0, daysLate - effectiveGrace)
 
 | Type | Calculation |
 |---|---|
-| Flat | One amount per due row after grace, not once per payment attempt |
+| Flat | One amount across all overdue selected heads and months within the pinned assignment/rule group; never multiplied per row or payment attempt |
 | Percentage | `rate x selected base` |
 | Per day | `amount x chargeableDays` |
 | Per week | `amount x ceiling(chargeableDays / 7)` |
@@ -378,12 +380,16 @@ chargeableDays = max(0, daysLate - effectiveGrace)
 
 Every response exposes gross late fee, previously paid, waived, remaining, chargeable days, cap/rounding result, policy/version, and explanation.
 
+Selected fee heads define the common rule's applicability scope. Inherited heads share one calculation; explicit custom-rule overrides retain separate rule groups and `NoLateFee` overrides remain excluded. Daily, weekly and monthly rates count the union of eligible overdue calendar-day intervals, including evidenced principal settlement dates, so simultaneous heads do not multiply days. Grace applies before interval union; weekly/monthly periods remain started 7/30-day periods. Fully settled principal stops new accrual.
+
+`LateFeeBalanceService` loads the full same-academic-year payer scope even for single-row payment/waiver validation, then returns the requested rows. New common charges use a stable due reference and the label **Late Fee - Selected fee heads**. Existing assessed, paid and waived amounts stay on their original references; only growth above their combined floor is added to the common charge. Historical assessments are not automatically deleted or rewritten by this fix. Collection, summaries and bulk waivers use these canonical balances.
+
 ## Collection scenarios
 
 | Scenario | Required behavior |
 |---|---|
 | Before/on due date | Principal is collectable; late fee is zero |
-| After due date | Server returns late fee per eligible due row |
+| After due date | Server returns one common late fee across eligible selected heads and months per pinned assignment/rule group |
 | Partial principal payment | Post allocation; future percentage-based calculations use the policy's defined base |
 | Multiple partial payments | Never recollect already paid principal or late fee |
 | Full payment | Principal plus remaining late fee closes the due row |

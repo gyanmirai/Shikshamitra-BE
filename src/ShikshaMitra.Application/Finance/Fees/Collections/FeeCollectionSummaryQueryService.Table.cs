@@ -19,6 +19,7 @@ public partial class FeeCollectionSummaryQueryService
         ["overdueFees"] = new(FinanceTableValueType.Number),
         ["totalConcessionAmount"] = new(FinanceTableValueType.Number),
         ["totalCharges"] = new(FinanceTableValueType.Number),
+        ["paidCharges"] = new(FinanceTableValueType.Number),
         ["pendingCharges"] = new(FinanceTableValueType.Number),
         ["status"] = new(FinanceTableValueType.Enum, true, [0, 1, 2, 7])
     };
@@ -34,6 +35,7 @@ public partial class FeeCollectionSummaryQueryService
         ["overdueFees"] = (Expression<Func<FeeCollectionSummaryItemDto, double>>)(r => r.OverdueFees),
         ["totalConcessionAmount"] = (Expression<Func<FeeCollectionSummaryItemDto, double>>)(r => r.TotalConcessionAmount),
         ["totalCharges"] = (Expression<Func<FeeCollectionSummaryItemDto, double>>)(r => r.TotalCharges),
+        ["paidCharges"] = (Expression<Func<FeeCollectionSummaryItemDto, decimal>>)(r => r.PaidCharges),
         ["pendingCharges"] = (Expression<Func<FeeCollectionSummaryItemDto, double>>)(r => r.PendingCharges),
         ["status"] = (Expression<Func<FeeCollectionSummaryItemDto, int>>)(r => (int)r.Status)
     };

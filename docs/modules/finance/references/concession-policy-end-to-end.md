@@ -3,7 +3,7 @@ module: finance
 domain: concession-policy
 content_type: Reference
 status: active
-updated_on: 2026-10-30
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -188,7 +188,16 @@ They are audit evidence of the rules assigned at that time.
 
 ## Paid concession refund creation
 
+When a request explicitly selects a policy version, context loading uses that version's application scope for both due selection and eligible amounts.
+Selecting `AllFees` includes settled paid installments even when the assignment has an older unpaid-only policy or no legacy policy snapshot.
+Selecting an unpaid-only policy excludes paid installments; an unselected request retains its assignment-based context.
+These reads do not replace the assignment's historical policy snapshot.
+
 Approval stores immutable paid amounts by due row in the request's audited extra properties. When automatic creation is enabled, approval creates linked refunds atomically, grouped by settled fee receipt. When disabled, approval retains the overpayment and creates no refund request.
+
+Administrator Create and Submit flush approved changes inside the existing transaction before reading the response detail, so the immediate response includes the linked refund requests.
+
+Only the approved concession's paid portion creates a refund; an allocation against unpaid outstanding reduces the due without returning cash.
 
 `POST /api/concession-request/{id}/refund-requests` creates the manual linked requests using server-recorded paid amounts, reduced by any concession reversal. It requires Refund Add and Concession View, student scope, an approved/partially reversed request, a manual pinned policy, a current request stamp and an idempotency key. The same key replays the result; another creation is rejected. Receipt/allocation balance checks and transactional request concurrency protect against duplicate or excessive refunds. Once linked refunds exist, replacement/cancellation and concession reversal use the existing refund workflow.
 

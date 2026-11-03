@@ -101,7 +101,19 @@ public class DueFeeManager(
 
 		var annualAmount = customDetail?.Amount ?? detail.Amount ?? throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 		var rows = new List<DueFee>();
-        var weights = schedule.Installments.Select(x => x.AllocationPercentage).ToArray();
+		// Validate the published allocation before selecting this student's service terms.
+		_ = AssignmentAmountCalculator.Allocate(annualAmount, schedule.Installments.Select(x => x.AllocationPercentage).ToArray());
+		var installments = schedule.Installments.Where(x => detail.IsOneTime ||
+			x.CoverageStartDate.Date <= chargeEndDate.Date && x.CoverageEndDate.Date >= chargeStartDate.Date).ToList();
+		var weightTotal = installments.Sum(x => x.AllocationPercentage);
+		if (installments.Count == 0 || weightTotal <= 0m)
+			throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid)
+				.WithData("FeeHeadId", detail.FeeHeadId)
+				.WithData("Reason", "The service period must overlap a payment term with a positive allocation.");
+		// Persist effective weights at the database's six-decimal percentage precision.
+		// The final term absorbs the residual; both saved weights and money sum exactly.
+		var weights = installments.Select(x => decimal.Floor(x.AllocationPercentage * 100_000_000m / weightTotal) / 1_000_000m).ToArray();
+		weights[^1] = 100m - weights.Take(weights.Length - 1).Sum();
         var scheduled = AssignmentAmountCalculator.Allocate(annualAmount, weights);
         var rule = prorationPolicy?.Rules.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
             ?? new ProrationPolicyRuleSnapshot(detail.FeeHeadId, ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null);
@@ -109,9 +121,9 @@ public class DueFeeManager(
         var calculation = AssignmentAmountCalculator.Calculate(prorationCalculator, rule, annualAmount,
             academicYear.StartDate.Date, academicYear.EndDate.Date, chargeStartDate, chargeEndDate);
         var obligations = AssignmentAmountCalculator.Allocate(calculation.ProratedAmount, weights);
-		for (var i = 0; i < schedule.Installments.Count; i++)
+		for (var i = 0; i < installments.Count; i++)
 		{
-			var installment = schedule.Installments[i];
+			var installment = installments[i];
 			var scheduledAmount = scheduled[i];
 			var dueDate = installment.DueDate;
 			rows.Add(new DueFee(
@@ -136,7 +148,7 @@ public class DueFeeManager(
 				prorationRuleType: calculation.RuleType,
 				prorationRoundingMode: calculation.RoundingMode,
 				prorationExplanation: calculation.Explanation, financeFeeAccountId: financeFeeAccountId));
-			rows[^1].PreserveAllocation(installment.AllocationPercentage);
+			rows[^1].PreserveAllocation(weights[i]);
 		}
 
 		return rows;

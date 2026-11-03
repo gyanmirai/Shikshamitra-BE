@@ -3,7 +3,7 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-31
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -43,6 +43,20 @@ These cover full/partial refunds, the original unpaid remainder, refund reversal
 eligibility, collection-form/detail status and the idempotent historical balance correction.
 The refund HTTP fixture requires a disposable loopback PostgreSQL database in
 `SHIKSHAMITRA_REFUND_TEST_DB`; never point it at an operational database.
+
+`FeeRefundApi_Tests` adds explicit Cash completion on administrator creation and independent
+approval, denied Process authority including replay, invalid routing rollback, one expense and
+subledger entry after retries, previous partial refunds, approval-time annual caps and multi-receipt
+allocation ownership. Retain non-cash and historical Approved Cash payment-recording coverage.
+`RefundPolicyCalculationService_Tests` covers the deprecated partial-policy flag, partial payout
+ceilings after deductions/caps, and stable zero-request errors. Actual settlement dates must represent
+the current instant rather than relabelling local clock time as UTC.
+
+Charge summary cases in `LateFeeCollectionRuntime_ChargeSummary_Tests.cs` cover full/partial
+manual and system waivers, decimal paid amounts, reconciliation/reversal treatment, numeric
+filtering/sorting and CSV/XLSX parity. `CashActivitySummaryApi_Tests` covers event-date month
+boundaries, split bank credits and legacy credited aggregates, including unknown-date amounts
+that contribute only to All months. Keep cumulative academic-year cash availability unchanged.
 
 Stored None defaults: run `NoneCategory_Tests` and `NoneCategoryApi_Tests`, plus the existing account
 settings permission/simplification suites. Verify None is first in fee-head income and refund-policy
@@ -129,6 +143,9 @@ The persisted serializer fixture contains two collection rows, a payout, a legac
 | Gate | Coverage |
 |---|---|
 | Calendar and ledger equation | `WithdrawalProration_Tests`, `AssignmentAmountCalculator_Tests`, `ProrationEventCalculation_Tests` |
+| Per-head service-period terms, daily entitlement, effective percentage precision, original installment dates and idempotent assignment | `StudentFeeAssignmentServicePeriod_Tests` (partial `FeeStructureAppService_CollectionPolicy_Tests`) |
+| Automatic defaults in both preparation flows, unlinked-student context, full-year treatment, bulk student dates, version/replay and saved-period withdrawal | `StudentFeeAssignmentDefaultProration_Tests` (partial `FeeStructureAppService_CollectionPolicy_Tests`) |
+| Joining/service-start late-fee boundary, independent head dates, summary consistency and preservation without duplicate common charges | `LateFeeCollectionRuntime.ServicePeriodTests` (partial `LateFeeCollectionRuntime_Tests`) |
 | Registration/default/version/no-reduction/one-time behavior, paid-date lock, Onboarding activation continuity | `AdmissionProrationIntegration_Tests` (partial `AdmissionWorkflowRuntimeIntegration_Tests`) and existing Admission collection/handoff tests |
 | Real PostgreSQL permissions, source replay, correction and rollback | `StudentRecordWithdrawalProrationPostgres_Tests` (partial `StudentRecordMidnightSchedule_Tests`); fresh disposable loopback `records_tests_*` database through `STUDENT_RECORDS_APPLICATION_POSTGRES` |
 

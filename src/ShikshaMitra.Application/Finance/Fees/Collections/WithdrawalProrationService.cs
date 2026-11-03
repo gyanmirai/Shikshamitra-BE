@@ -84,17 +84,22 @@ public class WithdrawalProrationService(IRepository<StudentFeeStructure, Guid> a
 			if (lines.Any(x => x.ScheduleSource != ScheduleSource.PaymentTerm || !x.AllocationPercentage.HasValue ||
 				x.ProrationPolicyVersionId != version.Id || x.GetWithdrawalProrationSource().HasValue))
 				throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
-			var start = joining.Date > year.StartDate.Date ? joining.Date : year.StartDate.Date;
-			var calculated = AssignmentAmountCalculator.Calculate(calculator, rule, lines.Sum(x => x.ScheduledAmount),
-				year.StartDate, year.EndDate, start, leavingDate);
+			var start = head.ServicePeriod?.StartDate?.Date ?? (joining.Date > year.StartDate.Date ? joining.Date : year.StartDate.Date);
+			var serviceEnd = head.ServicePeriod?.EndDate?.Date ?? year.EndDate.Date;
+			if (start < year.StartDate.Date || serviceEnd > year.EndDate.Date || start > serviceEnd)
+				throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid);
+			var end = leavingDate.Date < serviceEnd ? leavingDate.Date : serviceEnd;
+			var calculated = end < start ? null : AssignmentAmountCalculator.Calculate(calculator, rule, lines.Sum(x => x.ScheduledAmount),
+				year.StartDate, year.EndDate, start, end);
+			var explanation = calculated?.Explanation ?? "Withdrawal precedes the saved service period; no service is chargeable.";
 			var credits = WithdrawalProrationAllocation.Credits(lines.Select(x => x.OriginalAmount).ToArray(),
-				lines.Select(x => x.NetAmount).ToArray(), lines.Select(x => x.AllocationPercentage!.Value).ToArray(), calculated.ProratedAmount,
+				lines.Select(x => x.NetAmount).ToArray(), lines.Select(x => x.AllocationPercentage!.Value).ToArray(), calculated?.ProratedAmount ?? 0m,
 				lines.Select(x => Math.Max(0m, x.PaidAmount - x.RefundedAmount)).ToArray());
 			for (var i = 0; i < lines.Count; i++)
 				if (credits[i] > 0m) plan.Lines.Add(new(lines[i].Id, credits[i], lines[i].PaidAmount, lines[i].RefundedAmount,
 					lines[i].NetAmount, lines[i].ConcessionAmount, lines[i].AdjustmentCreditAmount,
-					$"{head.FeeHeadName}: withdrawal on {leavingDate:yyyy-MM-dd}. {calculated.Explanation}"));
-			if (credits.Sum() > 0m) explanations.Add($"{head.FeeHeadName}: {calculated.Explanation}");
+					$"{head.FeeHeadName}: withdrawal on {leavingDate:yyyy-MM-dd}. {explanation}"));
+			if (credits.Sum() > 0m) explanations.Add($"{head.FeeHeadName}: {explanation}");
 		}
 		if (plan.Lines.Count == 0) return plan;
 		if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Recalculate))
@@ -104,7 +109,7 @@ public class WithdrawalProrationService(IRepository<StudentFeeStructure, Guid> a
 		plan.Result = new()
 		{
 			PolicyId = version.PolicyId, PolicyVersionId = version.Id,
-			PolicyName = version.PolicyName, PolicyVersion = version.VersionNumber, JoiningDate = joining,
+			PolicyName = version.PolicyName, PolicyVersion = version.VersionNumber, JoiningDate = evidence.RegistrationJoiningDate,
 			ChargeStartDate = evidence.ChargeStartDate, ChargeEndDate = DateTime.SpecifyKind(leavingDate.Date, DateTimeKind.Utc),
 			ScheduledAmount = rows.Sum(x => x.ScheduledAmount), AdmissionReduction = rows.Sum(x => x.ScheduledAmount - x.OriginalAmount),
 			WithdrawalCredit = plan.Lines.Sum(x => x.Credit), PayableAmount = rows.Sum(x => x.OriginalAmount - x.NetAmount - byDue.GetValueOrDefault(x.Id)),

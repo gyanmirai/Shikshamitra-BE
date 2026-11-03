@@ -936,6 +936,8 @@
         "Permission:Finance.Accounts.CashManagement.Deposit": "Record bank deposits",
         "Permission:Finance.Accounts.CashManagement.Reconcile": "Confirm bank credits",
         "ShikshaMitra:AcademicSetup:Invalid": "Choose a valid Academic setup stage, setting and school context before saving.",
-        "ShikshaMitra:AcademicSetup:InvalidStoredState": "The saved Academic setup guide state is invalid. Contact a school administrator to review it."
+        "ShikshaMitra:AcademicSetup:InvalidStoredState": "The saved Academic setup guide state is invalid. Contact a school administrator to review it.",
+        "ShikshaMitra:FinanceSetup:Invalid": "Choose a valid Finance setup guide stage, setting and deferred settings.",
+        "ShikshaMitra:FinanceSetup:InvalidStoredState": "The saved Finance setup guide state is invalid. Contact a school administrator to review it."
     }
 }

@@ -33,6 +33,7 @@ public partial class FeeRefundAppService
         var students = await BuildStudentMapAsync(items.Select(x => x.StudentId).Distinct());
         var accounts = await BuildAccountMapAsync(items.Select(x => x.FinanceFeeAccountId));
         var years = await BuildYearMapAsync(items.Select(x => x.AcademicYearId));
+        var receipts = await BuildSourceReceiptMapAsync(items);
         var itemIds = items.Select(x => x.Id).ToList();
         var replacements = itemIds.Count == 0 ? new Dictionary<Guid, Guid>() :
             (await feeRefundRepository.GetListAsync(x =>
@@ -41,7 +42,7 @@ public partial class FeeRefundAppService
         var dtos = new List<FeeRefundRequestDto>();
         foreach (var item in items)
         {
-            var dto = MapToDto(item, students, accounts, years);
+            var dto = MapToDto(item, students, accounts, years, receipts);
             await FilterAvailableActionsAsync(item, dto);
             if (replacements.TryGetValue(item.Id, out var replacementId))
             {
@@ -78,13 +79,13 @@ public partial class FeeRefundAppService
                 .Select(x => x.SourceAllocationId!.Value).Distinct().ToList();
             var allocations = await allocationRepository.GetListAsync(x => allocationIds.Contains(x.Id));
             var chargeSources = await paidChargeRefundService.GetSourcesAsync(request.StudentId, request.AcademicYearId,
-                request.FinanceFeeAccountId, request.OriginalReceiptId, request.Id);
+                request.FinanceFeeAccountId, null, request.Id);
             var chargeEvidenceValid = request.Lines.Where(x => x.ChargeId.HasValue).All(line =>
                 chargeSources.Any(source => source.ChargeId == line.ChargeId && source.AllocationId == line.SourceAllocationId &&
                     source.ReceiptId == line.SourceReceiptId && source.Paid >= line.ProcessedAmount - line.ReversedAmount));
             var lateSources = request.Lines.Any(x => x.LateFeeDueFeeId.HasValue)
                 ? await paidLateFeeRefundService.GetSourcesAsync(request.StudentId, request.AcademicYearId,
-                    request.FinanceFeeAccountId, request.OriginalReceiptId, request.Id, request.StudentFeeStructureId)
+                    request.FinanceFeeAccountId, null, request.Id, request.StudentFeeStructureId)
                 : [];
             var lateEvidenceValid = request.Lines.Where(x => x.LateFeeDueFeeId.HasValue).All(line =>
                 lateSources.Any(source => source.DueFeeId == line.LateFeeDueFeeId && source.AllocationId == line.SourceAllocationId &&
@@ -98,9 +99,10 @@ public partial class FeeRefundAppService
                 request.Lines.Where(line => line.DueFeeId.HasValue).All(line => line.SourceAllocationId.HasValue &&
                     allocations.Any(allocation => allocation.Id == line.SourceAllocationId.Value &&
                         allocation.DueFeeId == line.DueFeeId &&
-                        Convert.ToDecimal(allocation.Amount) >= line.ProcessedAmount - line.ReversedAmount) &&
-                    dues.Single(due => due.Id == line.DueFeeId).RefundedAmount >=
-                    line.ProcessedAmount - line.ReversedAmount);
+                        Convert.ToDecimal(allocation.Amount) >= line.ProcessedAmount - line.ReversedAmount)) &&
+                request.Lines.Where(line => line.DueFeeId.HasValue).GroupBy(line => line.DueFeeId!.Value)
+                    .All(group => dues.Single(due => due.Id == group.Key).RefundedAmount >=
+                        group.Sum(line => line.ProcessedAmount - line.ReversedAmount));
         }
         dto.ReplacedByRefundRequestId = (await feeRefundRepository
             .GetListAsync(x => x.ReplacesRefundRequestId == request.Id))
@@ -233,8 +235,9 @@ public partial class FeeRefundAppService
             StudentId = payer.StudentId, FinanceFeeAccountId = payer.FinanceFeeAccountId,
             AcademicYearId = academicYearId, StudentFeeStructureId = payer.AssignmentId,
             RefundPolicyId = version.PolicyId, RefundPolicyVersionId = version.Id, RefundPolicyName = policy.PolicyName,
+            DefaultExpenseCategoryId = policy.ExpenseCategoryId, DefaultPayingBankAccountId = policy.DefaultPayingBankAccountId,
             AllowedPayoutMethods = policy.AllowedPayoutMethods.Select(ToPayoutMethodLabel).ToList(),
-            ProcessingTargetDays = policy.ProcessingTargetDays, AllowPartialRefund = policy.AllowPartialRefund, TotalPaid = totalPaid,
+            ProcessingTargetDays = policy.ProcessingTargetDays, AllowPartialRefund = true, TotalPaid = totalPaid,
             TotalRefunded = totalCommitted, TotalRefundable = totalRefundable, FeeHeads = grouped,
             Receipts = rows.GroupBy(x => x.SourceReceiptId).Select(g =>
             {

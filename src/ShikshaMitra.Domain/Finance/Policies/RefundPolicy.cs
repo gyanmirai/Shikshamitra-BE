@@ -177,8 +177,6 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(RefundPolicyErrorCodes.InvalidAmountRule);
 		if (model.AmountMode == RefundAmountMode.Percentage && model.PercentageValue is null or <= 0 or > 100)
 			throw new BusinessException(RefundPolicyErrorCodes.InvalidAmountRule);
-		if (model.AmountMode == RefundAmountMode.ManualUpToEligible && !model.AllowPartialRefund)
-			throw new BusinessException(RefundPolicyErrorCodes.InvalidAmountRule);
 		if (model.DeductionType != RefundDeductionType.None)
 		{
 			if (model.DeductionValue is null or <= 0 || string.IsNullOrWhiteSpace(model.DeductionExplanation))

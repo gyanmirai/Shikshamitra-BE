@@ -41,8 +41,16 @@ public class CashPage
 	public int PageSize { get; set; }
 	public CashSummary Summary { get; set; } = new();
 	public CashSummary YearSummary { get; set; } = new();
+	/// <summary>Collection, expense and confirmed-credit activity in the selected month, before source collection-month filtering.</summary>
+	public CashActivitySummary ActivitySummary { get; set; } = new();
 	public decimal AvailableCash { get; set; }
 	public CashStatusCounts StatusCounts { get; set; } = new();
+}
+public class CashActivitySummary
+{
+	public decimal Collected { get; set; }
+	public decimal Spent { get; set; }
+	public decimal Deposited { get; set; }
 }
 public class CashStatusCounts
 {

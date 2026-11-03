@@ -27,6 +27,8 @@ public class RefundEligibilityDto
     public Guid? RefundPolicyId { get; set; }
     public Guid? RefundPolicyVersionId { get; set; }
     public string? RefundPolicyName { get; set; }
+    public Guid? DefaultExpenseCategoryId { get; set; }
+    public Guid? DefaultPayingBankAccountId { get; set; }
     public List<string> AllowedPayoutMethods { get; set; } = [];
     public int? ProcessingTargetDays { get; set; }
     public bool AllowPartialRefund { get; set; }

@@ -27,6 +27,8 @@ public partial class FeeRefundAppService
         var autoApprove = await userScopeService.IsAdminUserAsync(currentUser.GetId());
         if (autoApprove)
             await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve);
+        if (autoApprove && input.RefundMethod == "Cash")
+            await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Process);
         if (string.IsNullOrWhiteSpace(input.IdempotencyKey))
             throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
         var replay = (await feeRefundRepository.GetListAsync(x => x.RequestIdempotencyKey == input.IdempotencyKey)).SingleOrDefault();
@@ -38,9 +40,11 @@ public partial class FeeRefundAppService
                 replay.OriginalReceiptId != input.OriginalReceiptId ||
                 replay.ReplacesRefundRequestId != input.ReplacesRefundRequestId ||
                 replay.RefundMethod != input.RefundMethod || replay.Reason != input.Reason ||
+                (autoApprove && input.RefundMethod == "Cash" && input.ExpenseCategoryId.HasValue && replay.ExpenseCategoryId != input.ExpenseCategoryId) ||
+                (autoApprove && input.RefundMethod == "Cash" && input.BankAccountId.HasValue && replay.PayingBankAccountId != input.BankAccountId) ||
                 replay.Lines.Count != input.Lines.Count ||
                 input.Lines.Any(x => !replay.Lines.Any(y => y.ChargeId == x.ChargeId && y.DueFeeId == x.DueFeeId && y.LateFeeDueFeeId == x.LateFeeDueFeeId &&
-                    y.SourceAllocationId == x.SourceAllocationId && y.RequestedAmount == x.Amount)))
+                    y.SourceAllocationId == x.SourceAllocationId && y.SourceReceiptId == (x.SourceReceiptId ?? input.OriginalReceiptId) && y.RequestedAmount == x.Amount)))
                 throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
             var replayResult = await MapAsync(replay);
             await uow.CompleteAsync();
@@ -76,7 +80,8 @@ public partial class FeeRefundAppService
             await WriteAuditAsync(concessionReplacement, FinanceAuditActions.Create,
                 $"Linked refund replacement {concessionReplacement.VoucherNumber} submitted.", input.Reason);
             if (autoApprove)
-                await ApproveOnAdministratorSubmissionAsync(concessionReplacement, replaced);
+                await ApproveOnAdministratorSubmissionAsync(concessionReplacement, new FeeRefundActionDto
+                    { ExpenseCategoryId = input.ExpenseCategoryId, BankAccountId = input.BankAccountId });
             await uow.CompleteAsync();
             return await MapAsync(concessionReplacement);
         }
@@ -95,7 +100,8 @@ public partial class FeeRefundAppService
         await WriteAuditAsync(request, FinanceAuditActions.Create,
             $"Refund request {request.VoucherNumber} submitted for review.", input.Reason);
         if (autoApprove)
-            await ApproveOnAdministratorSubmissionAsync(request);
+            await ApproveOnAdministratorSubmissionAsync(request, new FeeRefundActionDto
+                { ExpenseCategoryId = input.ExpenseCategoryId, BankAccountId = input.BankAccountId });
         await uow.CompleteAsync();
         return await MapAsync(request);
     }
@@ -169,10 +175,11 @@ public partial class FeeRefundAppService
     }
 
     private async Task ApproveOnAdministratorSubmissionAsync(FeeRefundRequest request,
-        FeeRefundRequest? replaced = null)
+        FeeRefundActionDto? routing = null)
     {
         var method = request.RefundMethod ?? "Cash";
         EnsureSettlementMethodAllowed(request, method);
+        await EnsureApprovalWithinAnnualCapAsync(request);
         var existingReservationIds = request.Reservations.Select(x => x.Id).ToHashSet();
         await feeRefundManager.ApproveAsync(request, currentUser.GetId(),
             "Automatically approved on administrator submission.");
@@ -182,6 +189,7 @@ public partial class FeeRefundAppService
             $"Refund request {request.VoucherNumber} automatically approved and payment allocations reserved.",
             "Administrator submission; automatic approval.",
             new { request.ExpenseCategoryId, request.PayingBankAccountId, request.RefundMethod });
+        await CompleteCashOnApprovalAsync(request, routing);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.StartReview)]
@@ -209,6 +217,23 @@ public partial class FeeRefundAppService
         await EnsureMakerCheckerAsync(request);
         var method = input.Method ?? request.RefundMethod ?? "Cash";
         EnsureSettlementMethodAllowed(request, method);
+        if (request.WorkflowVersion == 1 && request.RefundMethod == "Cash")
+        {
+            await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Process);
+            if (method != "Cash") throw new BusinessException(FeeRefundErrorCodes.PayoutMethodNotAllowed);
+            if (request.Status == FeeRefundStatus.Processed && request.Settlements.Any(x =>
+                x.IdempotencyKey == $"cash-approval:{request.Id:N}" && x.Status == FeeRefundSettlementStatus.Processed))
+            {
+                if (input.ExpenseCategoryId.HasValue && input.ExpenseCategoryId != request.ExpenseCategoryId ||
+                    input.BankAccountId.HasValue && input.BankAccountId != request.PayingBankAccountId)
+                    throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
+                var replay = await MapAsync(request);
+                await uow.CompleteAsync();
+                return replay;
+            }
+        }
+        await ValidateRefundSourceEvidenceAsync(request);
+        await EnsureApprovalWithinAnnualCapAsync(request);
         var existingReservationIds = request.Reservations.Select(x => x.Id).ToHashSet();
         await feeRefundManager.ApproveAsync(request, currentUser.GetId(), input.Notes);
         await feeRefundRepository.StageNewReservationsAsync(
@@ -216,6 +241,7 @@ public partial class FeeRefundAppService
         await WriteAuditAsync(request, FinanceAuditActions.Approve,
             $"Refund request {request.VoucherNumber} approved and its payment allocations reserved.", input.Notes,
             new { request.ExpenseCategoryId, request.PayingBankAccountId, request.RefundMethod });
+        await CompleteCashOnApprovalAsync(request, input);
         await uow.CompleteAsync();
         return await MapAsync(request);
     }
@@ -350,7 +376,8 @@ public partial class FeeRefundAppService
         var map = await BuildStudentMapAsync([request.StudentId]);
         var accounts = await BuildAccountMapAsync([request.FinanceFeeAccountId]);
         var years = await BuildYearMapAsync([request.AcademicYearId]);
-        var dto = MapToDto(request, map, accounts, years);
+        var receipts = await BuildSourceReceiptMapAsync([request]);
+        var dto = MapToDto(request, map, accounts, years, receipts);
         await FilterAvailableActionsAsync(request, dto);
         return dto;
     }

@@ -39,7 +39,7 @@ public partial class StudentFeeDetailsQueryService
 				var balance = lateBalances[d.Id];
 				return new FeeChargeDetailDto
 				{
-					ChargeId = d.Id, Name = $"Late Fee - {names.GetValueOrDefault(d.FeeHeadId, string.Empty)} ({d.GetDisplayInstallmentLabel()})",
+					ChargeId = d.Id, Name = balance.IsCommonCharge ? "Late Fee - Selected fee heads" : $"Late Fee - {names.GetValueOrDefault(d.FeeHeadId, string.Empty)} ({d.GetDisplayInstallmentLabel()})",
 					Amount = (double)balance.Total, PaidAmount = (double)balance.PaidAmount,
 					PendingAmount = (double)balance.PendingAmount, WaivedAmount = (double)balance.WaivedAmount,
 					ReconciliationAmount = balance.ReconciliationAmount,

@@ -112,11 +112,12 @@ public partial class FeeRefundAppService
     private async Task CompleteRecordedPayoutAsync(FeeRefundRequest request, FeeRefundSettlement payout,
         string idempotencyKey, string evidenceReference)
     {
+        await ValidateRefundSourceEvidenceAsync(request);
         await feeRefundManager.ConfirmPayoutAsync(request, payout.Id, currentUser.GetId(),
             idempotencyKey, evidenceReference);
         var amount = request.Lines.Sum(x => x.ProcessedAmount - x.ReversedAmount);
         if (amount != request.ProcessedAmount || amount != payout.Amount ||
-            request.Lines.Any(x => x.SourceAllocationId == null || x.SourceReceiptId != request.OriginalReceiptId))
+            request.Lines.Any(x => x.SourceAllocationId == null || x.SourceReceiptId == null))
             throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
         await refundAccountingRepository.InsertAsync(new FeeRefundAccountingEntry(
             GuidGenerator.Create(), CurrentTenant.Id, request.Id, payout.Id,
@@ -216,6 +217,7 @@ public partial class FeeRefundAppService
             x.FeeHeadId,
             x.DueFeeId,
             x.ChargeId,
+            x.LateFeeDueFeeId,
             x.SourceAllocationId,
             x.SourceReceiptId,
             Amount = x.ProcessedAmount - x.ReversedAmount

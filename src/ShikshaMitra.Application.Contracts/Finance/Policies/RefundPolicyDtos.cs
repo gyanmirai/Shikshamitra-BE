@@ -121,8 +121,6 @@ public class CreateUpdateRefundPolicyDtoValidator : AbstractValidator<CreateUpda
 		RuleFor(x => x).Must(x => !x.MaximumPerRequest.HasValue || !x.MaximumPerStudentYear.HasValue ||
 			x.MaximumPerRequest <= x.MaximumPerStudentYear)
 			.WithMessage("Maximum per request cannot exceed maximum per student/year.");
-		RuleFor(x => x).Must(x => !EnumValue(x.AmountMode, "ManualUpToEligible") || x.AllowPartialRefund)
-			.WithMessage("Manual up to eligible requires partial refunds to be allowed.");
 	}
 
 	private static bool EnumValue(string? value, params string[] allowed) =>

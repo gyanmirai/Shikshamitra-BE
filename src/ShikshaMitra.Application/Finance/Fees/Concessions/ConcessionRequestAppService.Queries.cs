@@ -115,8 +115,15 @@ public partial class ConcessionRequestAppService
 				Blockers = ["Select the fee assignment for this concession request."],
 			};
 		}
+		if (concessionPolicyId.HasValue || concessionPolicyVersionId.HasValue)
+		{
+			var selected = activePolicies.FirstOrDefault(x => x.Id == concessionPolicyId);
+			if (selected is null || !currentVersionByPolicyId.TryGetValue(selected.Id, out var version) ||
+				version.Id != concessionPolicyVersionId)
+				throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
+		}
 		var context = await concessionRequestManager.GetContextAsync(
-			academicYearId, studentId, studentFeeStructureId);
+			academicYearId, studentId, studentFeeStructureId, concessionPolicyId, concessionPolicyVersionId);
 		var feeHeadIds = context.EligibleDueFees.Select(x => x.FeeHeadId).Distinct().ToList();
 		var feeHeads = feeHeadIds.Count == 0
 			? []
@@ -128,18 +135,12 @@ public partial class ConcessionRequestAppService
 		if (context.Assignment.ConcessionFeeHeadScope == ConcessionFeeHeadScope.SelectedFeeHeads)
 			concessionEnabledHeadIds.IntersectWith(context.Assignment.GetConcessionApplicableFeeHeadIds());
 		var eligibleDues = context.EligibleDueFees.Where(x => concessionEnabledHeadIds.Contains(x.FeeHeadId)).ToList();
-		var includePaid = context.Assignment.ConcessionPolicyId.HasValue &&
-			activePolicies.Any(x => x.Id == context.Assignment.ConcessionPolicyId.Value &&
-				x.ApplyOn == ConcessionApplyOn.AllFees);
+		var includePaid = context.ApplyOn == ConcessionApplyOn.AllFees;
 		var concessionTypes = await concessionTypeRepository.GetListAsync(x =>
 			x.AcademicYearId == academicYearId && x.IsActive);
 		if (concessionPolicyId.HasValue || concessionPolicyVersionId.HasValue)
 		{
-			var selected = activePolicies.FirstOrDefault(x => x.Id == concessionPolicyId);
-			if (selected is null || !currentVersionByPolicyId.TryGetValue(selected.Id, out var version) ||
-				version.Id != concessionPolicyVersionId)
-				throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
-			eligibleDues = ConcessionRequestManager.GetEligibleDueFees(eligibleDues, selected.ApplyOn);
+			eligibleDues = ConcessionRequestManager.GetEligibleDueFees(eligibleDues, context.ApplyOn);
 		}
 		var blockers = new List<string>();
 		if (eligibleDues.Count == 0)

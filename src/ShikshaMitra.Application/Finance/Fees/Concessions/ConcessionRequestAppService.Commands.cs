@@ -88,6 +88,7 @@ public partial class ConcessionRequestAppService
 		await RecordCommandReceiptAsync("create_submit", input.IdempotencyKey, input, request.Id);
 		try
 		{
+			if (autoApprove) await uow.SaveChangesAsync();
 			await uow.CompleteAsync();
 		}
 		catch (Exception exception) when (IsConstraintViolation(
@@ -168,6 +169,7 @@ public partial class ConcessionRequestAppService
 		await RecordCommandReceiptAsync("submit", input.IdempotencyKey, input, request.Id);
 		try
 		{
+			if (autoApprove) await uow.SaveChangesAsync();
 			await uow.CompleteAsync();
 		}
 		catch (Exception exception) when (IsConstraintViolation(

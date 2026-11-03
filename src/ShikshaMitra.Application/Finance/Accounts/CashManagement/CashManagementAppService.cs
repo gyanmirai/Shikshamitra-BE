@@ -45,6 +45,11 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 			var search = input.Search.Trim().ToLower();
 			query = query.Where(x => x.Reference.ToLower().Contains(search) || x.PayerName.ToLower().Contains(search));
 		}
+		// Activity follows each event's date, including expenses/credits against older sources.
+		// Register rows still follow the source collection month and keep their lifetime balances.
+		var activitySummary = await SummarizeActivityAsync(
+			input.Status.HasValue ? query.Where(x => x.Status == input.Status) : query, input);
+		query = await ApplyCollectionMonthAsync(query, input);
 		var statusCounts = await AsyncExecuter.ToListAsync(query.GroupBy(x => x.Status)
 			.Select(group => new { Status = group.Key, Count = group.Count() }));
 		var counts = new CashStatusCounts
@@ -69,7 +74,7 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 		var flags = await FlagsAsync();
 		return new CashPage { Items = page.Select(x => (CashRow)Map(x, flags)).ToList(), TotalCount = total,
 			Page = input.Page, PageSize = input.PageSize, Summary = totals, YearSummary = yearSummary,
-			AvailableCash = yearSummary.Remaining, StatusCounts = counts };
+			AvailableCash = yearSummary.Remaining, ActivitySummary = activitySummary, StatusCounts = counts };
 	}
 	public async Task<CashDetail> GetAsync(Guid id, Guid academicYearId)
 	{

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using ShikshaMitra.Students;
+using ShikshaMitra.Finance.Fees.Receipts;
 
 namespace ShikshaMitra.Finance.Fees.FeeRefund;
 
@@ -19,7 +20,8 @@ internal static class FeeRefundColumnFilterQuery
     }
 
     public static IQueryable<FeeRefundRequest> Apply(IQueryable<FeeRefundRequest> requests,
-        IQueryable<Student> students, IReadOnlyCollection<FeeRefundColumnFilter> filters)
+        IQueryable<Student> students, IReadOnlyCollection<FeeRefundColumnFilter> filters,
+        IQueryable<FeePaymentReceipt>? receipts = null)
     {
         if (filters.Count == 0) return requests;
         var rows = from request in requests
@@ -44,7 +46,7 @@ internal static class FeeRefundColumnFilterQuery
             Expression? alternatives = null;
             foreach (var filter in group)
             {
-                var predicate = Build(filter);
+                var predicate = Build(filter, receipts);
                 var body = new ReplaceParameter(predicate.Parameters[0], row).Visit(predicate.Body)!;
                 alternatives = alternatives == null ? body : Expression.OrElse(alternatives, body);
             }
@@ -53,8 +55,23 @@ internal static class FeeRefundColumnFilterQuery
         return rows.Select(row => row.Request);
     }
 
-    private static Expression<Func<Row, bool>> Build(FeeRefundColumnFilter filter)
+    private static Expression<Func<Row, bool>> Build(FeeRefundColumnFilter filter, IQueryable<FeePaymentReceipt>? receipts)
     {
+        if (filter.Column == "_receiptNumber" && receipts != null)
+        {
+            var number = filter.Value.GetString()!.ToLowerInvariant();
+            return filter.Type switch
+            {
+                "equals" => row => (row.Request.OriginalReceiptNumber ?? "").ToLower() == number || receipts.Any(receipt =>
+                    receipt.ReceiptNumber.ToLower() == number && row.Request.Lines.Any(line => line.SourceReceiptId == receipt.Id)),
+                "startsWith" => row => (row.Request.OriginalReceiptNumber ?? "").ToLower().StartsWith(number) || receipts.Any(receipt =>
+                    receipt.ReceiptNumber.ToLower().StartsWith(number) && row.Request.Lines.Any(line => line.SourceReceiptId == receipt.Id)),
+                "endsWith" => row => (row.Request.OriginalReceiptNumber ?? "").ToLower().EndsWith(number) || receipts.Any(receipt =>
+                    receipt.ReceiptNumber.ToLower().EndsWith(number) && row.Request.Lines.Any(line => line.SourceReceiptId == receipt.Id)),
+                _ => row => (row.Request.OriginalReceiptNumber ?? "").ToLower().Contains(number) || receipts.Any(receipt =>
+                    receipt.ReceiptNumber.ToLower().Contains(number) && row.Request.Lines.Any(line => line.SourceReceiptId == receipt.Id))
+            };
+        }
         if (filter.Column == "status")
         {
             var status = (FeeRefundStatus)int.Parse(filter.Value.ToString(), CultureInfo.InvariantCulture);

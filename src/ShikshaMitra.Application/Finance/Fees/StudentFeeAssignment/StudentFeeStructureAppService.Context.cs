@@ -47,7 +47,11 @@ public partial class StudentFeeStructureAppService
 		try
 		{
 			var facts = await ReadAssignmentAdmissionAsync(studentId, yearId, enrollment.StandardId);
-			if (facts == null) return result;
+			if (facts == null)
+			{
+				await PopulateDefaultProrationAsync(result);
+				return result;
+			}
 			result.Source = "Admission";
 			result.ApplicationId = facts.Application.Id;
 			result.FinanceFeeAccountId = facts.Account?.Id;
@@ -68,17 +72,9 @@ public partial class StudentFeeStructureAppService
 				return result;
 			}
 			result.Status = facts.Selection == null ? "Unassigned" : "Selected";
-			var policy = await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(yearId);
-			if (policy != null)
-			{
-				result.ProrationPolicy = ToAssignmentPolicy(policy);
-				result.ProrationPolicy.Source = "FinanceDefault";
-				var rules = JsonSerializer.Deserialize<ProrationPolicySnapshot>(policy.SnapshotJson)
-					?? throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
-				result.AdmissionFeeHeadIds = rules.Rules.Where(r => r.ApplyOnAdmission && r.RuleType != ProrationRuleType.FullCharge).Select(r => r.FeeHeadId).ToList();
-				if (!facts.JoiningDate.HasValue && facts.Selection?.Heads.Any(h => !h.IsOneTime && result.AdmissionFeeHeadIds.Contains(h.FeeHeadId)) == true)
-					throw new BusinessException(ProrationPolicyErrorCodes.JoiningDateRequired);
-			}
+			await PopulateDefaultProrationAsync(result);
+			if (!facts.JoiningDate.HasValue && facts.Selection?.Heads.Any(h => !h.IsOneTime && result.AdmissionFeeHeadIds.Contains(h.FeeHeadId)) == true)
+				throw new BusinessException(ProrationPolicyErrorCodes.JoiningDateRequired);
 			if (facts.JoiningDate?.Date > year.EndDate.Date) throw new BusinessException(ProrationPolicyErrorCodes.JoiningDateInvalid);
 		}
 		catch (BusinessException error)
@@ -89,9 +85,28 @@ public partial class StudentFeeStructureAppService
 				? "Confirm the actual joining date in Admission before preparing these fees."
 				: error.Code == ProrationPolicyErrorCodes.JoiningDateInvalid
 					? "Review the admission joining date for this academic year."
-					: "The admission selection or prepared financial records need review before assignment.";
+					: "The Finance policy configuration or prepared assignment records need review before assignment.";
 		}
 		return result;
+	}
+
+	private async Task PopulateDefaultProrationAsync(AssignmentContextDto result)
+	{
+		var policy = await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(result.AcademicYearId);
+		if (policy == null) return;
+		ProrationPolicySnapshot rules;
+		try
+		{
+			rules = JsonSerializer.Deserialize<ProrationPolicySnapshot>(policy.SnapshotJson)
+				?? throw new JsonException();
+			if (rules.Rules == null || rules.Rules.Any(rule => rule == null) ||
+				rules.PolicyId != policy.PolicyId || rules.AcademicYearId != result.AcademicYearId) throw new JsonException();
+		}
+		catch (JsonException) { throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid); }
+		result.ProrationPolicy = ToAssignmentPolicy(policy);
+		result.ProrationPolicy.Source = "FinanceDefault";
+		result.AdmissionFeeHeadIds = rules.Rules.Where(r => r.ApplyOnAdmission && r.RuleType != ProrationRuleType.FullCharge)
+			.Select(r => r.FeeHeadId).ToList();
 	}
 
 	private sealed record AssignmentAdmissionFacts(AdmissionApplication Application, AdmissionOffering Offering,

@@ -10,7 +10,7 @@ public sealed class FeeProrationResultDto
 	public Guid PolicyVersionId { get; set; }
 	public string PolicyName { get; set; } = string.Empty;
 	public int PolicyVersion { get; set; }
-	public DateTime JoiningDate { get; set; }
+	public DateTime? JoiningDate { get; set; }
 	public DateTime ChargeStartDate { get; set; }
 	public DateTime ChargeEndDate { get; set; }
 	public decimal ScheduledAmount { get; set; }

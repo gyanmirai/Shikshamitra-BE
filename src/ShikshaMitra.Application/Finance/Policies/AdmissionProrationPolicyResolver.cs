@@ -9,6 +9,7 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Policies;
 
+/// <summary>Shared academic-year default for Admission preparation and Finance structure assignment.</summary>
 public class AdmissionProrationPolicyResolver(IRepository<ProrationPolicy, Guid> policies,
 	IRepository<FinancePolicyVersion, Guid> versions, ICurrentTenant tenant) : ITransientDependency
 {

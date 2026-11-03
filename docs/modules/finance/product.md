@@ -13,7 +13,7 @@ audience: humans-and-agents
 TL;DR: Finance protects fee accuracy, payment history, concessions, refunds, adjustments, and account reconciliation.
 Treat incorrect Finance reports or due balances as production defects.
 
-Admission/Onboarding proration uses the Finance academic-year default and saved Registration actual joining date. Withdrawal uses its actual effective leaving date and the assignment's pinned policy. Student modules display results without configuring rules or calculating balances. See [the operational flow](./workflows.md#registration-joining-date-and-withdrawal-proration) for non-cash credits, corrections and refund boundaries.
+New Admission/Onboarding preparation and Finance structure assignment automatically pin the active Finance academic-year default Proration Policy. Admission uses its saved Registration joining date; Finance assignment uses its verified or authorized manual service periods, including for students without an Admission link. A full academic-year service period remains a full-year charge; attaching a default never invents a joining date. Withdrawal uses the actual leaving date, saved per-head service dates and pinned policy. Student modules display results without configuring rules or calculating balances. See [the operational flow](./workflows.md#registration-joining-date-and-withdrawal-proration) for non-cash credits, corrections and refund boundaries.
 
 ## Product areas
 
@@ -122,7 +122,7 @@ Update [api.md](./api.md) from current source instead of adding raw exports.
 
 ### Additional-charge balances in Fee Collection
 
-System late fees and approved manual charges contribute to Collections `TotalCharges` and `PendingCharges` before paging, sorting, status filtering, and export. The same `LateFeeBalanceService` supplies system-charge balances to the collection form, student fee details, collection validation, and waiver commands. `TotalCharges` retains assessed amounts after payment or waiver; `PendingCharges = max(0, assessed - non-reversed payments - applied waivers)`. Principal amounts remain separate and are not increased by these charges.
+System late fees and approved manual charges contribute to Collections `TotalCharges` and `PendingCharges` before paging, sorting, status filtering, and export. The same `LateFeeBalanceService` supplies system-charge balances to the collection form, student fee details, collection validation, and waiver commands. For each charge, `TotalCharges` includes `max(0, assessed - applied waivers)` and retains paid amounts; `PendingCharges` also subtracts non-reversed payments with a zero floor. A fully waived charge contributes zero to both totals. Detailed gross, paid and waived history remains separate. Principal amounts are not increased by these charges.
 
 Before a collection changes principal, it transactionally preserves the accrued late-fee assessment on the existing DueFee aggregate's `ExtraProperties` JSON column: decimal amount, assessment instant, pinned collection-policy version, and explanation. Assessments can increase through accrual but cannot decrease when principal is partially or fully paid, or when a later exception/exemption stops accrual. Paying fee items never allocates money to unselected charges. A remaining late fee is independently collectible or waivable after its principal is paid. Reads do not write assessments or generate receipts.
 

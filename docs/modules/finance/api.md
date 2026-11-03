@@ -3,12 +3,36 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-31
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Use Finance backend APIs
+
+## Finance setup guide
+
+| Endpoint | Contract |
+|---|---|
+| `GET /api/finance/setup/{academicYearId}` | Read the selected year's saved guide position and permitted configuration presence. |
+| `PUT /api/finance/setup/{academicYearId}/progress` | Save `concurrencyStamp`, `currentStageKey`, nullable `currentSettingKey`, `deferredSettingKeys` and `finishReview`. |
+
+Both endpoints require a current active tenant identity, the existing Finance year scope check, and at least one exact setup or operational View grant.
+Setup reads use each setting's own existing View permission; operational access covers StructureAssign, FeeCollections, Charges, Refund, Concession, InvoiceReceipt, IncomeTracking, ExpenseTracking, CashManagement, Reconciliation or Auditing View.
+No new permission or inferred grant is introduced.
+Each of the twelve settings returns `key`, `canView`, `canManage` and `configurationState` (`configured|empty|unavailable`).
+Manage means View plus that setting's existing Add or supported Edit; unavailable settings are never queried.
+Presence uses active records in the selected year, including valid system None categories, active fee categories with at least one active associated fee head, published payment-term versions in accessible boards and published nonempty fee structures in accessible classes.
+Presence is not full class coverage, policy applicability, effective-date validation or transaction readiness.
+The response also contains `academicYearId`, `concurrencyStamp`, `currentStageKey`, nullable `currentSettingKey`, visible `deferredSettingKeys` and nullable `reviewedAt`.
+
+Stages are `accounts, fees, policies, structures, assignment, operations, review`; the initial position is `accounts/income-categories`.
+The setting keys are `income-categories, expense-categories, bank-accounts, fee-categories, payment-terms, charge-categories, concession-types, collection-policy, refund-policy, concession-policy, proration-policy, fee-structures`.
+Settings must belong to their stage and be readable; deferred keys must be known, unique and readable.
+Hidden deferred keys survive another viewer's save and are omitted from that viewer's response.
+Progress is stored solely under `AcademicYear.ExtraProperties.FinanceSetupGuideProgressV1`, with optimistic concurrency (409 on stale stamp), without a migration.
+Invalid progress returns 400 with `ShikshaMitra:FinanceSetup:Invalid`; unsupported/corrupt saved metadata returns `ShikshaMitra:FinanceSetup:InvalidStoredState` without resetting it.
+`finishReview` is allowed only on review and records a review timestamp and actor; it never changes financial configuration or creates transactions.
 
 ## Admission assignment context
 
@@ -54,6 +78,10 @@ are separate. Sorting, numeric filters and summary exports consume the full pend
 The mobile overview retains its generated-bill `pendingFee` and separate future partition
 described below; staff pending semantics do not change that contract.
 
+### Staff collection charge balances
+
+Summary rows add decimal `paidCharges` for active collected additional-charge payments, including late fees and payments awaiting verification. Reversed payments and waivers do not contribute to paid amounts. `totalCharges` is net of applied waivers; `pendingCharges` deducts active payments from that net amount and clamps each source balance to zero. Waivers are deducted once. Sorting, numeric table filters and CSV/XLSX exports use these same server projections; exports place Paid Charges between Total Charges and Pending Charges. Tenant, academic-year and academic scope remain unchanged.
+
 ### Installment refunds
 
 The collect-form ledger keeps `refundAmount` as cumulative completed principal
@@ -95,6 +123,12 @@ provided `cardLast4` takes precedence. Reconciliation returns the stored values 
 `instrumentDetails.cardHolderName` and `instrumentDetails.cardLast4`. Historical records without
 a holder remain null. This adds no schema migration or historical rewrite; evidence discarded
 by the old mapper cannot be reconstructed.
+
+## Refund source receipts and cash approval
+
+Create and preview lines accept optional `sourceReceiptId`, with `originalReceiptId` as the legacy fallback. A request may include multiple settled source receipts in one authorized payer/year/assignment-policy context. Responses expose `sourceReceipts: [{ receiptId, receiptNumber }]`; `originalReceiptId` remains the immutable lead reference. The server checks each source allocation, receipt and remaining balance. The deprecated policy `allowPartialRefund` flag does not disable Partial requests.
+
+An administrator's explicit Cash creation requires Add, Approve and Process and returns Completed (7). An independent checker's Cash approval requires Approve and Process and completes atomically without a persisted Approved stage. Missing authority or invalid pinned/action payout routing rolls back all state and accounting. Non-cash approval and historical Approved Cash retain the existing payment-recording flow. See the [payout contract](./references/fee-refund-payout-workflow.md) for routing, retry and source evidence.
 
 ## Paid charges in refund requests
 
@@ -178,6 +212,8 @@ Contextual Admissions/Onboarding collections, nullable applicant payers and Fina
 ## Shared request rules
 
 Admission collection summary/prepare responses include nullable, output-only `proration` (`FeeProrationResultDto`): policy/version IDs, joining/service dates, scheduled fees, admission reduction, withdrawal credit, payable fees, excess paid and explanations. Collection requests accept neither policy choices nor computed totals. `FeeLedgerLineDto` separately exposes withdrawal credit/explanation without replacing original or paid totals.
+`FeeProrationResultDto.joiningDate` is nullable and contains only the recorded actual joining date; unknown dates remain null instead of being replaced by academic-year or manual service boundaries.
+New Finance structure assignments automatically pin the same active academic-year default Proration Policy as Admission preparation, including students without an Admission link; the context and preview identify it as `FinanceDefault`.
 
 Records withdrawal preview rows use the same Finance result. There is no new public recalculation endpoint. An actual monetary adjustment requires existing `Finance.Policies.ProrationPolicy.Recalculate` and the approved transition's serializable transaction; Collection View/Add and Records permissions stay unchanged. Stable `Finance:Proration:*` errors identify missing/invalid joining date, ambiguous default, unavailable version, invalid evidence, pending owner workflows, denied recalculation and adjustment conflicts.
 

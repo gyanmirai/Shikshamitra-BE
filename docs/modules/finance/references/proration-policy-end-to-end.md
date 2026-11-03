@@ -78,6 +78,9 @@ It does not own:
 ## Independent admission and early-withdrawal contract
 
 Create and activate a policy without student dates. Fee Structure no longer accepts a Proration Policy attachment, and new student assignment never inherits one from legacy structure storage. The assignment policy options and update command accept only concession, refund and collection selections.
+Both Admission preparation and Finance structure assignment automatically resolve the active academic-year default and pin its immutable version for new obligations, including Finance assignments without an Admission link.
+Admission uses its confirmed joining date; Finance uses its existing verified or authorized manual service period. A selected full-year period remains full-year service when no actual joining date is available.
+No default policy retains the existing no-proration behavior; an ambiguous default or missing active version fails closed. Existing prepared/assigned financial evidence is reused before consulting today's default.
 Supplying a proration selection is rejected as invalid input, including for callers with policy override permission.
 Editing other assigned policies preserves the previously pinned proration version.
 Actual admission or service-start and exit or service-end dates are supplied when calculating the student assignment.

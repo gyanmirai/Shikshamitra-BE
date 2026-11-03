@@ -116,7 +116,7 @@ public partial class AdmissionFeeCollectionAppService
     private static ChargeDetailDto AccountLateFeeCharge(DueFee due, string name, LateFeeBalanceService.Balance balance) => new()
     {
         ChargeId = due.Id, SourceId = due.Id, SourceType = "LateFee", IsSystemGenerated = true,
-        Name = $"Late Fee - {name} ({due.GetDisplayInstallmentLabel()})", Amount = (double)balance.Total,
+        Name = balance.IsCommonCharge ? "Late Fee - Selected fee heads" : $"Late Fee - {name} ({due.GetDisplayInstallmentLabel()})", Amount = (double)balance.Total,
         PaidAmount = (double)balance.PaidAmount, PendingAmount = (double)balance.PendingAmount,
         WaivedAmount = (double)balance.WaivedAmount, ReconciliationAmount = balance.ReconciliationAmount,
         Explanation = balance.Explanation, CanWaive = balance.PendingAmount > 0m,

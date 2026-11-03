@@ -91,11 +91,17 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
         var allocationIds = request.Lines.Where(x => x.SourceAllocationId.HasValue)
             .Select(x => x.SourceAllocationId!.Value).Distinct().ToList();
         var allocationCommitted = await repository.GetCommittedAllocationAmountsAsync(allocationIds, request.Id);
+        var principalAllocationIds = request.Lines.Where(x => x.DueFeeId.HasValue && x.SourceAllocationId.HasValue)
+            .Select(x => x.SourceAllocationId!.Value).Distinct().ToList();
+        var currentAllocations = principalAllocationIds.Count == 0
+            ? new Dictionary<Guid, FeeCollectionDueFeeAllocation>()
+            : (await LazyServiceProvider.LazyGetRequiredService<IRepository<FeeCollectionDueFeeAllocation, Guid>>()
+                .GetListAsync(x => Enumerable.Contains(principalAllocationIds, x.Id))).ToDictionary(x => x.Id);
         var charges = await paidChargeRefundService.GetSourcesAsync(request.StudentId, request.AcademicYearId,
-            request.FinanceFeeAccountId, request.OriginalReceiptId, request.Id);
+            request.FinanceFeeAccountId, null, request.Id);
         var lateFees = request.Lines.Any(x => x.LateFeeDueFeeId.HasValue)
             ? await paidLateFeeRefundService.GetSourcesAsync(request.StudentId, request.AcademicYearId,
-                request.FinanceFeeAccountId, request.OriginalReceiptId, request.Id, request.StudentFeeStructureId)
+                request.FinanceFeeAccountId, null, request.Id, request.StudentFeeStructureId)
             : [];
         var reservations = new List<FeeRefundReservation>();
         var dueRemaining = dues.ToDictionary(x => x.Key,
@@ -113,7 +119,7 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
             }
             if (line.ChargeId.HasValue)
             {
-                var source = charges.SingleOrDefault(x => x.ChargeId == line.ChargeId && x.AllocationId == line.SourceAllocationId);
+                var source = charges.SingleOrDefault(x => x.ChargeId == line.ChargeId && x.AllocationId == line.SourceAllocationId && x.ReceiptId == line.SourceReceiptId);
                 if (source == null || line.CalculatedAmount > source.Available)
                     throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
                 reservations.Add(new FeeRefundReservation(GuidGenerator.Create(), request.Id, line.Id,
@@ -128,7 +134,11 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
                     .WithData("DueFeeId", line.DueFeeId).WithData("Requested", line.CalculatedAmount).WithData("Available", available);
             if (line.SourceAllocationId.HasValue)
             {
-                var allocationAvailable = Math.Max(0m, line.SettledPaidAmount -
+                if (!currentAllocations.TryGetValue(line.SourceAllocationId.Value, out var source) || source.DueFeeId != line.DueFeeId)
+                    throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
+                // The saved settled amount is the request's net eligibility snapshot.
+                // Subtract current commitments once from the canonical gross allocation.
+                var allocationAvailable = Math.Max(0m, Convert.ToDecimal(source.Amount) -
                     allocationCommitted.GetValueOrDefault(line.SourceAllocationId.Value));
                 if (line.CalculatedAmount > allocationAvailable)
                     throw new BusinessException(FeeRefundErrorCodes.ReservationConflict)

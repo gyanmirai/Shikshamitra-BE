@@ -149,7 +149,7 @@ public partial class StudentFeeDetailsQueryService(
 								SourceType = "LateFee",
 								SourceId = d.Id,
 								IsSystemGenerated = true,
-								Name = $"Late Fee - {feeHeadName} ({installmentLabel})",
+								Name = balance.IsCommonCharge ? "Late Fee - Selected fee heads" : $"Late Fee - {feeHeadName} ({installmentLabel})",
 								Amount = lateFee.Amount + lateFee.PaidAmount + lateFee.WaivedAmount,
 								PaidAmount = lateFee.PaidAmount,
 								PendingAmount = lateFee.Amount,

@@ -47,7 +47,7 @@ public sealed partial class StudentRecordMidnightSchedule_Tests
 		preview.Ready.ShouldBeTrue(string.Join("; ", preview.Issues.Select(x => x.Message)));
 		preview.Proration.ShouldNotBeNull();
 		preview.Proration.WithdrawalCredit.ShouldBe(finance.ExpectedCredit);
-		preview.Proration.JoiningDate.Date.ShouldBe(finance.Joining.Date);
+		preview.Proration.JoiningDate!.Value.Date.ShouldBe(finance.Joining.Date);
 		preview.Proration.ExcessPaidAmount.ShouldBe(Math.Max(0m, finance.Paid - (finance.Original - finance.ExpectedCredit)));
 		command.Items[0].StudentConcurrencyStamp = preview.StudentConcurrencyStamp; command.Items[0].EnrollmentConcurrencyStamp = preview.EnrollmentConcurrencyStamp;
 		var item = (await PostAsync<StudentRecordTransitionBatchResultDto>(actor, Transitions + "/batches", command)).Items.Single();

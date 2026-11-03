@@ -102,9 +102,6 @@ public partial class FeeRefundAppService : IFamilyRefundService
 	private async Task<PreparedRefund> PrepareFamilyRefundAsync(Guid child, Guid year, MobileRefundInput input)
 	{
 		var prepared = await PrepareAsync(FamilyRefundInput(child, year, input), familyAuthorized: true);
-		if (!prepared.Policy.AllowPartialRefund && prepared.Policy.AmountMode == RefundAmountMode.ManualUpToEligible &&
-			prepared.Lines.Any(x => x.Amount != x.SettledPaidAmount))
-			throw new BusinessException(FeeRefundErrorCodes.RefundExceedsPolicyAmount);
 		return prepared;
 	}
 }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Audit;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Students;
@@ -30,10 +31,9 @@ public class BulkWaiverRequestAppService(
 	IRepository<DueFee, Guid> dueFeeRepository,
 	IRepository<LateFeeWaiverApplication, Guid> waiverRepository,
 	CollectionPolicyResolver policyResolver,
-	LateFeeCalculationService lateFeeCalculationService,
+	LateFeeBalanceService lateFeeBalances,
+	IRepository<ShikshaMitra.Domain.Finance.Fees.Settings.FeeHead, Guid> feeHeadRepository,
 	WaiverCalculationService waiverCalculationService,
-	ExceptionWindowResolver exceptionWindowResolver,
-	LateFeeWaiverLookupService waiverLookupService,
 	FinanceAuditWriter financeAuditWriter,
 	IClock clock
 ) : ApplicationService, IBulkWaiverRequestAppService
@@ -119,46 +119,31 @@ public class BulkWaiverRequestAppService(
 		}
 
 		var dueFees = await dueFeeRepository.GetListAsync(d => dueFeeIds.Contains(d.Id));
-		var waivedByDueFee = await waiverLookupService.GetAppliedWaivedAmountsAsync(dueFeeIds);
 		var today = clock.Now.Date;
+		var balances = await lateFeeBalances.GetBalancesAsync(dueFees, entity.AcademicYearId, today, preserveAssessment: true);
 
 		var created = new List<LateFeeWaiverApplication>();
 		foreach (var dueFee in dueFees)
 		{
-			if (!dueFee.StudentId.HasValue || dueFee.OutstandingAmount <= 0)
+			if (!dueFee.StudentId.HasValue)
 			{
 				continue;
 			}
 
-			var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == dueFee.StudentId);
+			var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == dueFee.StudentId &&
+				x.AcademicYearId == entity.AcademicYearId && (!dueFee.StudentFeeStructureId.HasValue || x.Id == dueFee.StudentFeeStructureId));
 			if (assignment is null)
 			{
 				continue;
 			}
 
-			var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(dueFee.StudentId.Value, assignment.FeeStructureStandardId);
+			var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(dueFee.StudentId.Value, assignment.FeeStructureStandardId, assignment.Id);
 			if (effective.Policy is null || !effective.Policy.EnableWaiver || effective.IsLateFeeExempt)
 			{
 				continue;
 			}
 
-			var activeWindow = await exceptionWindowResolver.ResolveActiveWindowAsync(
-				effective.Policy.AcademicYearId, assignment.FeeStructureStandardId, today);
-			var daysLate = (today - dueFee.DueDate.Date).Days;
-			var lateFeeResult = lateFeeCalculationService.Calculate(effective.Policy, new LateFeeCalculationInput(
-				Math.Max(0, daysLate),
-				(decimal)dueFee.OutstandingAmount,
-				(decimal)dueFee.OriginalAmount,
-				(decimal)dueFee.OutstandingAmount,
-				dueFee.FeeHeadId,
-				effective.IsLateFeeExempt,
-				effective.CustomGracePeriodDays,
-				activeWindow?.Effect,
-				activeWindow?.ExtensionDays,
-				activeWindow?.Label));
-
-			var alreadyWaived = waivedByDueFee.GetValueOrDefault(dueFee.Id, 0m);
-			var remainingLateFee = Math.Max(0, lateFeeResult.LateFee - alreadyWaived);
+			var remainingLateFee = balances[dueFee.Id].PendingAmount;
 			if (remainingLateFee <= 0)
 			{
 				continue;
@@ -250,50 +235,45 @@ public class BulkWaiverRequestAppService(
 		var candidateStudentIds = students.Select(s => s.Id).ToList();
 
 		var assignmentQuery = await studentFeeStructureRepository.GetQueryableAsync();
-		var assignments = assignmentQuery.Where(a => candidateStudentIds.Contains(a.StudentId));
+		var assignments = assignmentQuery.Where(a => candidateStudentIds.Contains(a.StudentId) && a.AcademicYearId == academicYearId);
 		if (scope == BulkWaiverScope.FeeStructure && scopeId is { } feeStructureId)
 		{
 			assignments = assignments.Where(a => a.FeeStructureStandardId == feeStructureId);
 		}
-		var assignmentMap = assignments.ToList().ToDictionary(a => a.StudentId, a => a.FeeStructureStandardId);
+		var assignmentRows = await AsyncExecuter.ToListAsync(assignments);
+		var assignmentIds = assignmentRows.Select(a => a.Id).ToArray();
+		var assignmentMap = assignmentRows.GroupBy(a => a.StudentId).ToDictionary(a => a.Key, a => a.ToList());
 		if (assignmentMap.Count == 0)
 		{
 			return new List<(DueFee, Guid, decimal)>();
 		}
 
 		var dueFeeQuery = await dueFeeRepository.GetQueryableAsync();
-		var dueFees = dueFeeQuery
-			.Where(d => d.StudentId.HasValue && assignmentMap.Keys.Contains(d.StudentId.Value) && d.OutstandingAmount > 0)
-			.ToList();
-
-		var waivedByDueFee = await waiverLookupService.GetAppliedWaivedAmountsAsync(dueFees.Select(d => d.Id).ToList());
+		var heads = await feeHeadRepository.GetQueryableAsync();
+		var studentIds = assignmentMap.Keys.ToArray();
+		var dueFees = await AsyncExecuter.ToListAsync(from due in dueFeeQuery
+			join head in heads on due.FeeHeadId equals head.Id
+			where head.AcademicYearId == academicYearId && due.StudentId.HasValue && Enumerable.Contains(studentIds, due.StudentId.Value) &&
+				(due.StudentFeeStructureId.HasValue ? Enumerable.Contains(assignmentIds, due.StudentFeeStructureId.Value) : due.FinanceFeeAccountId == null)
+			select due);
 		var today = clock.Now.Date;
+		var balances = await lateFeeBalances.GetBalancesAsync(dueFees, academicYearId, today);
 		var result = new List<(DueFee, Guid, decimal)>();
 
 		foreach (var dueFee in dueFees)
 		{
-			var structureId = assignmentMap[dueFee.StudentId!.Value];
-			var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(dueFee.StudentId.Value, structureId);
+			var candidates = assignmentMap[dueFee.StudentId!.Value];
+			var assignment = dueFee.StudentFeeStructureId.HasValue ? candidates.FirstOrDefault(a => a.Id == dueFee.StudentFeeStructureId)
+				: candidates.Count == 1 ? candidates[0] : null;
+			if (assignment is null) continue;
+			var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(dueFee.StudentId.Value,
+				assignment.FeeStructureStandardId, assignment.Id);
 			if (effective.Policy is null || !effective.Policy.EnableWaiver || effective.IsLateFeeExempt)
 			{
 				continue;
 			}
 
-			var activeWindow = await exceptionWindowResolver.ResolveActiveWindowAsync(academicYearId, structureId, today);
-			var daysLate = (today - dueFee.DueDate.Date).Days;
-			var lateFeeResult = lateFeeCalculationService.Calculate(effective.Policy, new LateFeeCalculationInput(
-				Math.Max(0, daysLate),
-				(decimal)dueFee.OutstandingAmount,
-				(decimal)dueFee.OriginalAmount,
-				(decimal)dueFee.OutstandingAmount,
-				dueFee.FeeHeadId,
-				effective.IsLateFeeExempt,
-				effective.CustomGracePeriodDays,
-				activeWindow?.Effect,
-				activeWindow?.ExtensionDays,
-				activeWindow?.Label));
-
-			var net = Math.Max(0, lateFeeResult.LateFee - waivedByDueFee.GetValueOrDefault(dueFee.Id, 0m));
+			var net = balances[dueFee.Id].PendingAmount;
 			if (net > 0)
 			{
 				result.Add((dueFee, dueFee.StudentId.Value, net));

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
+using ShikshaMitra.Finance.Policies;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 
@@ -47,7 +48,8 @@ public partial class StudentFeeStructureAppService
             throw new BusinessException(AssignmentErrorCodes.InvalidInput);
         foreach (var detail in details.Where(d => structure.FeeStructureDetails.All(x => x.Id != d.Id))) structure.AddDetail(detail);
 		var selectedPolicies = await ResolveAssignedPoliciesAsync(structure, year.Id, input.Policies, input.PolicyOverrideReason);
-		if (admission != null) selectedPolicies["proration"] = admission.Proration;
+		selectedPolicies["proration"] = admission != null ? admission.Proration :
+			await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(year.Id);
 		var collection = selectedPolicies["collection"];
 		var proration = selectedPolicies["proration"];
 		var refund = selectedPolicies["refund"];
@@ -79,6 +81,7 @@ public partial class StudentFeeStructureAppService
 		var admissionStart = admission?.JoiningDate?.Date > year.StartDate.Date ? admission.JoiningDate.Value.Date : year.StartDate.Date;
 		var names = headRecords.ToDictionary(h => h.Key, h => h.Value.Name);
 		var preview = new StudentFeeAssignmentPreviewDto {
+			CalculationVersion = "assignment-v3",
 			AssignmentSource = admission == null ? "Finance" : "Admission", ApplicationId = admission?.ApplicationId,
 			StudentId = studentId, AcademicYearId = year.Id, EnrollmentId = enrollment?.Id,
 			StructureId = structure.Id, StructureName = structure.Name, RevisionNumber = structure.RevisionNumber,
@@ -173,7 +176,7 @@ public partial class StudentFeeStructureAppService
 		{
 			var policy = new AssignmentPolicyDto { Family = version!.PolicyType, PolicyId = version.PolicyId, VersionId = version.Id,
 				Version = version.VersionNumber, Name = version.PolicyName };
-			policy.Source = admission != null && version.PolicyType == "proration" ? "FinanceDefault" : StructurePolicyVersions(structure)[version.PolicyType] == version.Id ? "FeeStructure" : "StudentOverride";
+			policy.Source = version.PolicyType == "proration" ? "FinanceDefault" : StructurePolicyVersions(structure)[version.PolicyType] == version.Id ? "FeeStructure" : "StudentOverride";
 			foreach (var head in preview.Heads)
 				policy.HeadTreatment[head.FeeHeadId] = !head.Included ? "Not included" : version.PolicyType switch {
 					"collection" => collectionRules.EnableLateFee && collectionRules.LateFeeApplyOnFeeHeads.Contains(head.FeeHeadId)

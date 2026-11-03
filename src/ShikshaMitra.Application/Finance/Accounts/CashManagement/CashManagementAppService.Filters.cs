@@ -11,6 +11,18 @@ public partial class CashManagementAppService
 {
 	private async Task<IQueryable<CashCollection>> ApplyDisplayFiltersAsync(IQueryable<CashCollection> query, CashQuery input)
 	{
+		if (input.BoardId.HasValue || input.MediumId.HasValue)
+		{
+			var accounts = (await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().GetQueryableAsync())
+				.Where(x => (!input.BoardId.HasValue || x.BoardId == input.BoardId) && (!input.MediumId.HasValue || x.EducationMediumId == input.MediumId)).Select(x => x.Id);
+			var students = (await LazyServiceProvider.LazyGetRequiredService<IRepository<Student, Guid>>().GetQueryableAsync())
+				.Where(x => (!input.BoardId.HasValue || x.AcademicBoardId == input.BoardId) && (!input.MediumId.HasValue || x.AcademicMediumId == input.MediumId)).Select(x => x.Id);
+			query = query.Where(x => x.FinanceFeeAccountId.HasValue ? accounts.Contains(x.FinanceFeeAccountId.Value) : x.StudentId.HasValue && students.Contains(x.StudentId.Value));
+		}
+		return query;
+	}
+	private async Task<IQueryable<CashCollection>> ApplyCollectionMonthAsync(IQueryable<CashCollection> query, CashQuery input)
+	{
 		var year = await years.GetAsync(input.AcademicYearId);
 		var period = AccountsRegisterPeriod.Resolve(year.StartDate, year.EndDate, input.Month, input.Year);
 		if (input.Month.HasValue)
@@ -23,14 +35,6 @@ public partial class CashManagementAppService
 			var dates = await AsyncExecuter.ToListAsync(query.Select(x => new { x.Id, x.CollectedAt }));
 			var ids = dates.Where(x => x.CollectedAt >= start && x.CollectedAt < end).Select(x => x.Id).ToArray();
 			query = query.Where(x => Enumerable.Contains(ids, x.Id));
-		}
-		if (input.BoardId.HasValue || input.MediumId.HasValue)
-		{
-			var accounts = (await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().GetQueryableAsync())
-				.Where(x => (!input.BoardId.HasValue || x.BoardId == input.BoardId) && (!input.MediumId.HasValue || x.EducationMediumId == input.MediumId)).Select(x => x.Id);
-			var students = (await LazyServiceProvider.LazyGetRequiredService<IRepository<Student, Guid>>().GetQueryableAsync())
-				.Where(x => (!input.BoardId.HasValue || x.AcademicBoardId == input.BoardId) && (!input.MediumId.HasValue || x.AcademicMediumId == input.MediumId)).Select(x => x.Id);
-			query = query.Where(x => x.FinanceFeeAccountId.HasValue ? accounts.Contains(x.FinanceFeeAccountId.Value) : x.StudentId.HasValue && students.Contains(x.StudentId.Value));
 		}
 		return query;
 	}

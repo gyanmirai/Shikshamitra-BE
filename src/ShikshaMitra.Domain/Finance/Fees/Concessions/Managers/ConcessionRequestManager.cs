@@ -232,23 +232,33 @@ public class ConcessionRequestManager(
 	public async Task<ConcessionRequestContextResult> GetContextAsync(
 		Guid academicYearId,
 		Guid studentId,
-		Guid? studentFeeStructureId = null)
+		Guid? studentFeeStructureId = null,
+		Guid? concessionPolicyId = null,
+		Guid? concessionPolicyVersionId = null)
 	{
 		var student = await LoadStudentAsync(studentId);
 		var assignment = await ResolveAssignmentAsync(studentId, academicYearId, studentFeeStructureId);
 		var feeStructure = await feeStructureRepository.GetAsync(assignment.FeeStructureStandardId);
-		var includePaid = false;
-		if (assignment.ConcessionPolicyId.HasValue && assignment.ConcessionPolicyVersionId.HasValue)
+		ConcessionPolicySnapshot? policy = null;
+		if (concessionPolicyId.HasValue || concessionPolicyVersionId.HasValue)
 		{
-			var policy = await LoadPolicySnapshotAsync(
-				assignment, assignment.ConcessionPolicyId.Value, assignment.ConcessionPolicyVersionId.Value);
-			includePaid = policy.ApplyOn == ConcessionApplyOn.AllFees;
+			if (!concessionPolicyId.HasValue || !concessionPolicyVersionId.HasValue)
+				throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
+			policy = await LoadPolicySnapshotAsync(assignment,
+				concessionPolicyId.Value, concessionPolicyVersionId.Value, requireActive: true);
 		}
+		else if (assignment.ConcessionPolicyId.HasValue && assignment.ConcessionPolicyVersionId.HasValue)
+		{
+			policy = await LoadPolicySnapshotAsync(
+				assignment, assignment.ConcessionPolicyId.Value, assignment.ConcessionPolicyVersionId.Value);
+		}
+		var applyOn = policy?.ApplyOn ?? ConcessionApplyOn.AllOutstanding;
+		var includePaid = applyOn == ConcessionApplyOn.AllFees;
 		var dueFees = await dueFeeRepository.GetListAsync(df =>
 			df.StudentId == studentId &&
 			df.StudentFeeStructureId == assignment.Id &&
 			(includePaid ? df.OriginalAmount > df.NetAmount : df.OutstandingAmount > 0m));
-		return new ConcessionRequestContextResult(student, assignment, feeStructure, dueFees);
+		return new ConcessionRequestContextResult(student, assignment, feeStructure, dueFees, applyOn);
 	}
 
 	public async Task<ConcessionRequestLiveEvaluation> EvaluateSubmittedAsync(ConcessionRequest request)
@@ -886,7 +896,8 @@ public record ConcessionRequestContextResult(
 	Student Student,
 	StudentFeeStructure Assignment,
 	FeeStructure FeeStructure,
-	IReadOnlyList<DueFee> EligibleDueFees);
+	IReadOnlyList<DueFee> EligibleDueFees,
+	ConcessionApplyOn ApplyOn = ConcessionApplyOn.AllOutstanding);
 
 public sealed record ConcessionTypeRequirementSnapshot(
 	Guid DocumentId,

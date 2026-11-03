@@ -44,7 +44,8 @@ public partial class FeeRefundApi_Tests
     public async Task Pending_editor_cannot_approve_their_changes_and_approved_refunds_cannot_be_edited()
     {
         var student = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services);
-        var saved = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, student.StudentId, student.DueFeeId, 200d);
+        var saved = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, student.StudentId, student.DueFeeId,
+            200d, "Bank Transfer (NEFT/RTGS/IMPS)");
         var editorId = Guid.NewGuid();
         await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, editorId);
         using var editor = CreateClientAs(editorId);

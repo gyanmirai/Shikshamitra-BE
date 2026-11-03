@@ -59,7 +59,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var collection = GetRequiredService<IAdmissionFeeCollectionAppService>();
 		var preview = await collection.GetSummaryAsync(fixture.Application.Id);
 		preview.AccountId.ShouldBeNull(); preview.Proration.ShouldNotBeNull();
-		preview.Proration.JoiningDate.Date.ShouldBe(joined.Date);
+		preview.Proration.JoiningDate!.Value.Date.ShouldBe(joined.Date);
 		preview.Proration.PolicyName.ShouldBe(policy.PolicyName);
 		preview.Proration.AdmissionReduction.ShouldBeGreaterThan(0m);
 		var prepared = await collection.PrepareAsync(fixture.Application.Id, new());

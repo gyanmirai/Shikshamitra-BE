@@ -9,6 +9,7 @@ using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.FeeCollectionTests;
 using ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
+using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.FeeCollection;
@@ -24,6 +25,7 @@ using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
@@ -98,6 +100,24 @@ public static class FeeRefundTestHelper
         await verificationUow.CompleteAsync();
     }
 
+    public static async Task SetAdministratorAsync(IServiceProvider services, Guid userId, bool enabled)
+    {
+        using var scope = services.CreateScope();
+        var provider = scope.ServiceProvider;
+        var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        using var tenant = provider.GetRequiredService<ICurrentTenant>().Change(tenantId);
+        using var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+        var role = provider.GetRequiredService<IOptions<UserScopeOptions>>().Value.AdminRoles.First();
+        var roles = provider.GetRequiredService<IdentityRoleManager>();
+        if (await roles.FindByNameAsync(role) is null)
+            await roles.CreateAsync(new IdentityRole(Guid.NewGuid(), role, tenantId));
+        var users = provider.GetRequiredService<IdentityUserManager>();
+        var user = await users.GetByIdAsync(userId);
+        var result = enabled ? await users.AddToRoleAsync(user, role) : await users.RemoveFromRoleAsync(user, role);
+        if (!result.Succeeded) throw new InvalidOperationException("Could not configure disposable refund administrator fixture.");
+        await uow.CompleteAsync();
+    }
+
     public static async Task EnrollStudentForCollectionSummaryAsync(IServiceProvider services, Guid studentId)
     {
         using var scope = services.CreateScope();
@@ -105,8 +125,9 @@ public static class FeeRefundTestHelper
             .Change(Guid.Parse("11111111-1111-1111-1111-111111111111"));
         using var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>()
             .Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
-        var repository = scope.ServiceProvider.GetRequiredService<IRepository<Student, Guid>>();
-        var student = await repository.GetAsync(studentId);
+        var repository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
+        var student = await repository.GetForFeeAssignmentAsync(studentId)
+            ?? throw new InvalidOperationException("Synthetic collection-summary student was not found.");
         student.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
         await repository.UpdateAsync(student);
         await uow.CompleteAsync();
@@ -192,6 +213,39 @@ public static class FeeRefundTestHelper
         return payout.Id;
     }
 
+    public static async Task SeedHistoricalCashDraftAsync(IServiceProvider services, Guid requestId, Guid creatorId)
+    {
+        using var scope = services.CreateScope();
+        using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>()
+            .Change(Guid.Parse("11111111-1111-1111-1111-111111111111"));
+        using var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>()
+            .Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+        var repository = scope.ServiceProvider.GetRequiredService<ShikshaMitra.Finance.Fees.FeeRefund.Repositories.IFeeRefundRepository>();
+        var request = (await repository.FindWithLinesAsync(requestId))!;
+        var context = scope.ServiceProvider.GetRequiredService<ShikshaMitraDbContext>();
+        // Reproduce the persisted metadata of the historical draft constructor;
+        // retain valid policy, receipt and line evidence from the synthetic request.
+        context.Entry(request).Property(x => x.WorkflowVersion).CurrentValue = 0;
+        context.Entry(request).Property(x => x.Status).CurrentValue = FeeRefundStatus.Draft;
+        context.Entry(request).Property(x => x.CreatorId).CurrentValue = creatorId;
+        await uow.CompleteAsync();
+    }
+
+    public static async Task SeedHistoricalApprovedCashAsync(IServiceProvider services, Guid requestId, Guid checkerId)
+    {
+        using var scope = services.CreateScope();
+        using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>()
+            .Change(Guid.Parse("11111111-1111-1111-1111-111111111111"));
+        using var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>()
+            .Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+        var repository = scope.ServiceProvider.GetRequiredService<ShikshaMitra.Finance.Fees.FeeRefund.Repositories.IFeeRefundRepository>();
+        var request = (await repository.FindWithLinesAsync(requestId))!;
+        if (request.RefundMethod != "Cash") throw new InvalidOperationException("Historical cash fixture needs a cash request.");
+        await scope.ServiceProvider.GetRequiredService<FeeRefundManager>().ApproveAsync(request, checkerId, "Historical approved cash fixture");
+        await repository.StageNewReservationsAsync(request.Reservations);
+        await uow.CompleteAsync();
+    }
+
     public static async Task<List<ShikshaMitra.Finance.Accounts.Incomes.Transaction>> GetRefundExpensesAsync(
         IServiceProvider services, Guid requestId)
     {
@@ -216,16 +270,18 @@ public static class FeeRefundTestHelper
         IServiceProvider services,
         double feeAmount = 1000d,
         IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods = null, bool includePaidCharges = false, bool allowPartialRefund = true, bool includePaidLateFee = false,
-        double lateFeeAmount = 0, decimal? maximumPerRequest = null)
+        double lateFeeAmount = 0, decimal? maximumPerRequest = null, Guid? expenseCategoryId = null, Guid? payingBankAccountId = null,
+        bool splitAcrossReceipts = false, decimal? maximumPerStudentYear = null, bool attachCollectionPolicy = false)
     {
         var studentId = await SeedStudentOnlyAsync(services);
         var feeHeadId = await SeedFeeHeadAsync(services);
 
         // Seed DueFee record first
         var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(services, studentId, feeHeadId, feeAmount);
-        await AttachRefundPolicyAsync(services, studentId, dueFeeId, allowedPayoutMethods, includePaidCharges, allowPartialRefund, includePaidLateFee, maximumPerRequest);
+        await AttachRefundPolicyAsync(services, studentId, dueFeeId, allowedPayoutMethods, includePaidCharges, allowPartialRefund, includePaidLateFee, maximumPerRequest, expenseCategoryId, payingBankAccountId, maximumPerStudentYear, attachCollectionPolicy);
 
-        await SeedSettledCollectionAsync(services, studentId, dueFeeId, feeAmount, lateFeeAmount);
+        await SeedSettledCollectionAsync(services, studentId, dueFeeId, splitAcrossReceipts ? feeAmount / 2 : feeAmount, lateFeeAmount);
+        if (splitAcrossReceipts) await SeedSettledCollectionAsync(services, studentId, dueFeeId, feeAmount / 2);
 
         return (studentId, dueFeeId);
     }
@@ -364,7 +420,8 @@ public static class FeeRefundTestHelper
     }
 
     private static async Task AttachRefundPolicyAsync(IServiceProvider services, Guid studentId, Guid dueFeeId,
-        IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods, bool includePaidCharges = false, bool allowPartialRefund = true, bool includePaidLateFee = false, decimal? maximumPerRequest = null)
+        IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods, bool includePaidCharges = false, bool allowPartialRefund = true, bool includePaidLateFee = false, decimal? maximumPerRequest = null,
+        Guid? expenseCategoryId = null, Guid? payingBankAccountId = null, decimal? maximumPerStudentYear = null, bool attachCollectionPolicy = false)
     {
         var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         using var scope = services.CreateScope();
@@ -385,15 +442,33 @@ public static class FeeRefundTestHelper
                 $"Refund policy {policyId:N}", ($"RP-{policyId:N}")[..20], "API test policy",
                 RefundPolicyStatus.Active, false, RefundFeeHeadScope.AllFeeHeads,
                 [], includePaidCharges, includePaidLateFee, allowPartialRefund,
-                allowPartialRefund ? RefundAmountMode.ManualUpToEligible : RefundAmountMode.RemainingPaidAmount, null, null, maximumPerRequest, null,
+                allowPartialRefund ? RefundAmountMode.ManualUpToEligible : RefundAmountMode.RemainingPaidAmount, null, null, maximumPerRequest, maximumPerStudentYear,
                 RoundingMethodType.None, RefundDeductionType.None, null, null, null,
-                allowedPayoutMethods ?? [RefundPayoutMethod.Cash, RefundPayoutMethod.BankTransfer], 2));
+                allowedPayoutMethods ?? [RefundPayoutMethod.Cash, RefundPayoutMethod.BankTransfer], 2, expenseCategoryId, payingBankAccountId));
         var snapshot = JsonSerializer.Serialize(policy.ToSnapshot());
         var version = new FinancePolicyVersion(versionId, tenantId, "refund", policyId,
             DefaultAcademicYearId, policy.Version, policy.PolicyName, policy.Status.ToString(),
             snapshot, "created", "API test setup");
+        Guid? collectionPolicyId = null;
+        Guid? collectionVersionId = null;
+        if (attachCollectionPolicy)
+        {
+            collectionPolicyId = Guid.NewGuid();
+            collectionVersionId = Guid.NewGuid();
+            var collection = new CollectionPolicy(collectionPolicyId.Value, tenantId, DefaultAcademicYearId,
+                new CollectionPolicySnapshot
+                {
+                    PolicyName = "Synthetic paid-ledger collection policy", PolicyCode = $"CP-{collectionPolicyId:N}"[..20],
+                    Status = CollectionPolicyStatus.Active, EnableLateFee = false, AllowOnlineCollection = true
+                }.ToUpdateModel());
+            await scope.ServiceProvider.GetRequiredService<IRepository<CollectionPolicy, Guid>>().InsertAsync(collection);
+            await versionRepository.InsertAsync(new FinancePolicyVersion(collectionVersionId.Value, tenantId,
+                "collection", collection.Id, DefaultAcademicYearId, collection.Version, collection.PolicyName,
+                collection.Status.ToString(), collection.ToSnapshot().Serialize(), "created", "Paid-ledger fixture setup"));
+        }
         var assignment = new StudentFeeStructure(assignmentId, tenantId, studentId, Guid.NewGuid(),
             DefaultAcademicYearId, null, null, ConcessionFeeHeadScope.EntireFeeStructure, [],
+            collectionPolicyId: collectionPolicyId, collectionPolicyVersionId: collectionVersionId,
             refundPolicyId: policyId, refundPolicyVersionId: versionId);
         var dueFee = await dueFeeRepository.GetAsync(dueFeeId);
         dueFee.BindAssignment(assignmentId);

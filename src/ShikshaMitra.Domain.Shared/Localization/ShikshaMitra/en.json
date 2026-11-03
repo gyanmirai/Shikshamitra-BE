@@ -1,6 +1,9 @@
 {
     "Culture": "en",
     "Texts": {
+        "Academic:Calendar:InvalidDateRange": "Calendar end date must be after its start date.",
+        "Academic:Calendar:DatesExcludeMarkers": "These dates would exclude active entries in {Calendar}. Move or cancel those entries before shortening the institute dates.",
+        "Academic:Calendar:BoardOutsideAcademicYear": "The dates for {Board} would fall outside the academic year. Update the board dates before shortening the academic year.",
     "Students:Records:PhotoChangePending": "A photo change is already awaiting approval or application.",
         "Students:Family:MainContactInvalid": "Choose a saved parent or guardian as the main school contact. Review the family details before finalizing admission.",
         "Students.Onboarding.FinalizationNotReady": "Admission cannot be finalized yet. Review these checks: {Blockers}.",

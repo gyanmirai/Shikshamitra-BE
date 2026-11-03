@@ -14,6 +14,39 @@ namespace ShikshaMitra.Academic.Examination.Exams;
 
 public partial class ExamAppService_ScheduleStatus_Tests
 {
+    [Fact]
+    public async Task Exam_List_Should_Accept_Pending_Status_And_Institution_Offset_Date_Range()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            using (_currentTenant.Change(TestTenantId))
+            {
+                var (exam, mediumId) = await CreateScheduledExamAsync(ExamStatus.Pending);
+                var date = new DateTime(2026, 11, 2);
+                foreach (var subject in exam.ExamSubjects)
+                    subject.UpdateSchedule(date, date.AddHours(10), date.AddHours(11), 100, 33, null);
+                await _examRepository.UpdateAsync(exam, autoSave: true);
+                var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+                db.ChangeTracker.Clear();
+
+                var result = await _examAppService.GetListAsync(new GetExamsInput
+                {
+                    AcademicMediumId = mediumId,
+                    Status = ExamStatus.Pending,
+                    StartDate = new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.FromMinutes(330)),
+                    EndDate = new DateTimeOffset(2026, 11, 7, 23, 59, 59, TimeSpan.FromMinutes(330)),
+                    SkipCount = 0,
+                    MaxResultCount = 10
+                });
+
+                result.TotalCount.ShouldBe(1);
+                result.PendingCount.ShouldBe(1);
+                result.Items.Single().ExamId.ShouldBe(exam.Id);
+                result.Items.Single().Status.ShouldBe(ExamStatus.Pending);
+            }
+        });
+    }
+
     [Theory]
     [InlineData(1234567, -1)]
     [InlineData(1234567, 0)]

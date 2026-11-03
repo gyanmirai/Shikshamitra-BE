@@ -688,10 +688,10 @@ public partial class ExamAppService(
 		var rangeBoundarySeconds = new[] { (rangeStartSecond + 86399) % 86400, rangeStartSecond, (rangeStartSecond + 1) % 86400 };
 		var boundaryIds = await AsyncExecuter.ToListAsync(query.Where(row => row.exam.ExamSubjects.Any(subject => subject.ExamDate.HasValue &&
 			((subject.ExamDate.Value.Date == todayInInstitution &&
-			  ((subject.StartTime.HasValue && currentBoundarySeconds.Contains(subject.StartTime.Value.Hour * 3600 + subject.StartTime.Value.Minute * 60 + subject.StartTime.Value.Second)) ||
-			   (subject.EndTime.HasValue && currentBoundarySeconds.Contains(subject.EndTime.Value.Hour * 3600 + subject.EndTime.Value.Minute * 60 + subject.EndTime.Value.Second)))) ||
+			  ((subject.StartTime.HasValue && Enumerable.Contains(currentBoundarySeconds, subject.StartTime.Value.Hour * 3600 + subject.StartTime.Value.Minute * 60 + subject.StartTime.Value.Second)) ||
+			   (subject.EndTime.HasValue && Enumerable.Contains(currentBoundarySeconds, subject.EndTime.Value.Hour * 3600 + subject.EndTime.Value.Minute * 60 + subject.EndTime.Value.Second)))) ||
 			 (subject.ExamDate.Value.Date == rangeStartDate && subject.EndTime.HasValue &&
-			  rangeBoundarySeconds.Contains(subject.EndTime.Value.Hour * 3600 + subject.EndTime.Value.Minute * 60 + subject.EndTime.Value.Second)))))
+			  Enumerable.Contains(rangeBoundarySeconds, subject.EndTime.Value.Hour * 3600 + subject.EndTime.Value.Minute * 60 + subject.EndTime.Value.Second)))))
 			.Select(row => row.exam.Id));
 		var boundaryRows = boundaryIds.Count == 0 ? new List<ExamListBoundaryCandidate>() : await AsyncExecuter.ToListAsync(query
 			.Where(row => boundaryIds.Contains(row.exam.Id)).Select(row => new ExamListBoundaryCandidate(row.exam.Id, row.exam.Status,

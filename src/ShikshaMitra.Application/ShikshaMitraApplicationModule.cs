@@ -29,7 +29,12 @@ public class ShikshaMitraApplicationModule : AbpModule
 	public override void ConfigureServices(ServiceConfigurationContext context)
 	{
 		context.Services.AddHttpContextAccessor();
-		Configure<AbpPermissionOptions>(options => options.ValueProviders.Add<UserPermissionDenyValueProvider>());
+		Configure<AbpPermissionOptions>(options =>
+		{
+			options.ValueProviders.Remove<RolePermissionValueProvider>();
+			options.ValueProviders.Add<DatabaseRolePermissionValueProvider>();
+			options.ValueProviders.Add<UserPermissionDenyValueProvider>();
+		});
 		context.Services.AddDataProtection();
 		context.Services.Replace(ServiceDescriptor.Transient<IPermissionAppService, ShikshaMitraPermissionAppService>());
 		context.Services.Replace(ServiceDescriptor.Transient<PermissionAppService, SecureAbpPermissionAppService>());

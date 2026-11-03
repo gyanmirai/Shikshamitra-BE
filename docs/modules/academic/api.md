@@ -3,7 +3,7 @@ module: academic
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-02
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -72,6 +72,10 @@ POST accepts a missing or null `settingKey`, or `welcome`, when any eligible con
 A setting key requires that exact setting's View action.
 Only the first successful writer receives `firstVisit: true`.
 The stored actor identifier is never returned.
+
+## Timetable conflict context
+
+Teacher and room validation errors retain their existing codes and serialized `data.ConflictDetails` array. Each detail also includes nullable `ConflictingAcademicYearName`, `ConflictingEducationBoardName`, and `ConflictingEducationMediumName`, resolved from the competing class's server-owned hierarchy. The contextual `data.message` includes the same labels. Older records with missing hierarchy labels retain the existing class/division fallback. Conflict checks continue across boards and media within the current tenant.
 
 ## Room calendar requests
 

@@ -12,7 +12,10 @@ Read it before changing permissions, navigation guards, identity, user scope, or
 
 All four concerns are separate.
 Hidden controls are not authorization.
-A role name must not bypass an action check.
+Action checks use enabled, tenancy-side-eligible catalogue definitions and allowed providers.
+The built-in `admin` role is the protected full-permission exception: its current database members receive every eligible role permission by default, including newly defined permissions. Token role claims alone do not establish membership.
+Admin role grants, member overrides, and module visibility are read-only. Flat and user-override writes reject the entire request with `ADMIN_PERMISSIONS_READ_ONLY`; nested reads expose the same effective grants. Old user denials are ignored while the user is an admin and take effect again if that membership is removed.
+Other roles, including `super-admin`, retain their existing configurable action grants. This permission rule does not change the separately configured administrator data-scope exception.
 The existing configured administrator data-scope exception remains server-controlled and uses current database role membership, never a client claim alone.
 
 ## Catalogue and editor
@@ -53,7 +56,7 @@ Bulk operations use the complete mapped navigation subtree, deduplicate names, a
 Expanding or collapsing a group never changes a grant.
 Only changed direct role grants or explicit user override states are submitted.
 Users follow live role grants by default. Multiple role grants combine; role edits affect only permissions without an explicit user override.
-A user Allow is a direct ABP user grant. A user Deny is an audited, tenant-scoped `UserPermissionDeny` record and takes precedence over role grants, aliases, and assignment-derived access in both single and batch checks.
+A user Allow is a direct ABP user grant. Except for protected admin members, a user Deny is an audited, tenant-scoped `UserPermissionDeny` record and takes precedence over role grants, aliases, and assignment-derived access in both single and batch checks.
 Follow role removes both the direct user grant and the denial. Role edits never rewrite these user exceptions.
 Overrides do not widen tenant or record scope. An authorized permission manager configures them; users cannot grant themselves access through the self-read exception.
 Explain both the role source and the effective result in the editor.
@@ -105,6 +108,7 @@ Employee-targeted ESI reads and writes require the exact ESI action plus employe
 
 Baseline grants belong only to the creation transaction of a new built-in role.
 An existing role must receive no automatic restoration of missing grants.
+Admin full access is evaluated by the runtime role provider; it does not restore or rewrite stored grants through seeding.
 A changed seeder version, missing marker, profile switch, or rerun is not authorization to widen access.
 Custom roles and administrator-managed grants remain untouched.
 For new databases, Clerk and Office Assistant receive only HR leave self-service: HR/leave navigation and Leave Center View, Add, and Delete.
@@ -161,7 +165,7 @@ Never use a database reset or blanket reseed as an access repair.
 ## Mandatory change checklist
 
 - Catalogue, editor, route/action guards, and API enforcement agree.
-- Preserve approved frontend grouping without inventing API permission names, role-name action bypasses, development bypasses, or blanket reseeding.
+- Preserve approved frontend grouping without inventing API permission names, action bypasses outside the protected admin policy, development bypasses, or blanket reseeding.
 - Allowed and denied action tests, direct/inherited grant round trips, invalid-batch rollback, tenant/scope tests, and upgrade-seeding tests pass.
 - Direct application calls are covered where controllers duplicate a security boundary.
 - `PermissionConsistencyApi_Tests` covers user overrides, role-update persistence, Follow role, invalid-batch rollback, management policy, tenant isolation, and real single/principal/batch checker denial precedence.

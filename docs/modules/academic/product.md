@@ -3,7 +3,7 @@ module: academic
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-11-02
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -76,6 +76,8 @@ Older callers without medium or class context retain tenant-wide calendar select
 Timetable teacher and room conflicts reserve resources only from non-deleted, published competing timetables in the current tenant. Draft and `NotCreated` timetables do not reserve resources across classes or divisions. Validation, save, direct resource assignment, management conflict counts and recurring room occupations use this publication boundary. Duplicate teacher or room assignments within the submitted timetable remain invalid. Publication revalidates competing published schedules before saving.
 
 Timetable setup readiness is separate from the saved timetable status. `Not Ready` means prerequisites are missing; it does not establish that no saved slots exist. A saved draft may remain after its class setup is removed and must not block another class's teacher assignment.
+
+Published timetables in another board or medium can reserve the same teacher or physical room. A class name and division are not a unique timetable context. Conflict messages identify the competing timetable's academic year, education board and medium, rather than implying that it belongs to the caller's selected context. Checking an empty CBSE/English Class 12 does not establish availability when the teacher is already teaching GSEB/Gujarati Class 12 at that time.
 
 Homework and assignment feedback rosters include every non-deleted student whose operational status is `Enrolled` in the selected medium, class and division.
 The legacy admission approval flag is not an eligibility requirement: current onboarding activates enrollment independently of that flag.

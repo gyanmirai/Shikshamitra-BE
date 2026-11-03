@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
@@ -21,7 +22,8 @@ public class TimetableManager(
     IRepository<Division, Guid> divisionRepository,
     IRepository<Subject, Guid> subjectRepository,
     IRepository<Room, Guid> roomRepository,
-    IRepository<Employee, Guid> employeeRepository) : DomainService
+    IRepository<Employee, Guid> employeeRepository,
+    IRepository<AcademicYear, Guid> academicYearRepository) : DomainService
 {
     /// <summary>Validates all submitted periods against one read of competing assignments.</summary>
     public async Task CheckConflictsAsync(
@@ -136,6 +138,12 @@ public class TimetableManager(
         var resourceIds = conflicts.Select(c => c.ResourceId).Distinct().ToList();
 
         var standards = await standardRepository.GetListAsync(s => standardIds.Contains(s.Id));
+        var academicYearIds = standards
+            .Select(standard => standard.EducationMediumStage?.EducationMedium?.EducationBoard?.AcademicYearId)
+            .Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
+        var academicYears = academicYearIds.Count > 0
+            ? await academicYearRepository.GetListAsync(year => academicYearIds.Contains(year.Id))
+            : [];
         var divisions = await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id));
         var subjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
         var rooms = type == "room" ? await roomRepository.GetListAsync(r => resourceIds.Contains(r.Id)) : [];
@@ -143,7 +151,11 @@ public class TimetableManager(
 
         return conflicts.Select(conflict =>
         {
-            var standardName = standards.FirstOrDefault(s => s.Id == conflict.Candidate.StandardId)?.Name ?? "another class";
+            var standard = standards.FirstOrDefault(s => s.Id == conflict.Candidate.StandardId);
+            var standardName = standard?.Name ?? "another class";
+            var medium = standard?.EducationMediumStage?.EducationMedium;
+            var board = medium?.EducationBoard;
+            var academicYear = academicYears.FirstOrDefault(year => year.Id == board?.AcademicYearId);
             var divisionName = divisions.FirstOrDefault(d => d.Id == conflict.Candidate.DivisionId)?.Name ?? "another division";
             var subjectName = subjects.FirstOrDefault(s => s.Id == conflict.Candidate.SubjectId)?.Name ?? "assigned subject";
             var resourceName = type == "room"
@@ -162,7 +174,10 @@ public class TimetableManager(
                 subjectName,
                 conflict.Candidate.Day.ToString(),
                 FormatTime(conflict.Candidate.StartTime),
-                FormatTime(conflict.Candidate.EndTime));
+                FormatTime(conflict.Candidate.EndTime),
+                academicYear?.Name,
+                board?.Name,
+                medium?.Name);
         }).ToList();
     }
 
@@ -174,8 +189,15 @@ public class TimetableManager(
         var first = details[0];
         var resourceLabel = first.Type == "room" ? "Room" : "Teacher";
         var extra = details.Count > 1 ? $" (+{details.Count - 1} more)" : string.Empty;
+        var academicContext = string.Join(" / ", new[]
+        {
+            first.ConflictingAcademicYearName,
+            first.ConflictingEducationBoardName,
+            first.ConflictingEducationMediumName
+        }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        var contextSuffix = academicContext.Length > 0 ? $" ({academicContext})" : string.Empty;
         var message =
-            $"{resourceLabel} conflict: {first.ResourceName} is already assigned to {first.ConflictingStandardName} Division {first.ConflictingDivisionName} for {first.ConflictingSubjectName} on {first.Day} {first.StartTime}-{first.EndTime}{extra}.";
+            $"{resourceLabel} conflict: {first.ResourceName} is already assigned to {first.ConflictingStandardName} Division {first.ConflictingDivisionName}{contextSuffix} for {first.ConflictingSubjectName} on {first.Day} {first.StartTime}-{first.EndTime}{extra}.";
 
         return new BusinessException(errorCode)
             .WithData("message", message)
@@ -208,5 +230,8 @@ public class TimetableManager(
         string ConflictingSubjectName,
         string Day,
         string StartTime,
-        string EndTime);
+        string EndTime,
+        string? ConflictingAcademicYearName,
+        string? ConflictingEducationBoardName,
+        string? ConflictingEducationMediumName);
 }

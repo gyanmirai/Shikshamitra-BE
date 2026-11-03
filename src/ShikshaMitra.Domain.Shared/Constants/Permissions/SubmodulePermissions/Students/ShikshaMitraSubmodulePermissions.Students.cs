@@ -67,6 +67,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Students.Admissions.Reviews", new SubmoduleInfo(AdmissionReviews.All, AdmissionReviews.DisplayNames) },
 			{ "Students.Admissions.Applicants", new SubmoduleInfo(AdmissionApplicants.All, AdmissionApplicants.DisplayNames) },
 			{ "Students.Onboarding", new SubmoduleInfo(StudentOnboarding.All, StudentOnboarding.DisplayNames) },
+			{ "Students.IdentityCompliance", new SubmoduleInfo(IdentityCompliance.All, IdentityCompliance.DisplayNames) },
 			{ "Students.Portal.ProfilePhoto", new SubmoduleInfo(Portal_ProfilePhoto.All, Portal_ProfilePhoto.DisplayNames) },
 
 			// Records submodules (defined in Students.Records.cs)

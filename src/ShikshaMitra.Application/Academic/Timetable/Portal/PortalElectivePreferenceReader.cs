@@ -13,7 +13,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Academic.Timetable.Portal;
 
-/// <summary>One whole-week approval policy; callers must resolve persisted portal ownership first.</summary>
+/// <summary>Class preferences and whole-week timetable approval; callers resolve persisted portal ownership first.</summary>
 [RemoteService(false)]
 public class PortalElectivePreferenceReader(
 	PortalStudentContextReader contexts, ITimetableRepository timetables,
@@ -22,7 +22,7 @@ public class PortalElectivePreferenceReader(
 	IRepository<StudentElectiveSelection, Guid> selections,
 	IRepository<StudentElectivePreferenceSubmission, Guid> submissions, IDataFilter filters) : ApplicationService
 {
-	internal async Task<PortalElectivePreferencesDto> ReadAsync(Student student, Guid academicYearId)
+	internal async Task<PortalElectivePreferencesDto> ReadAsync(Student student, Guid academicYearId, bool scheduledGroupsOnly = false)
 	{
 		var placement = (await contexts.ReadAsync([student.Id], academicYearId))[student.Id];
 		if (placement.Error != null) throw placement.Error;
@@ -33,18 +33,23 @@ public class PortalElectivePreferenceReader(
 		var timetable = await timetables.FindByStandardAndDivisionAsync(context.Student.StandardId!.Value, context.Student.DivisionId!.Value);
 		if (timetable?.Status != TimetableStatus.Published || timetable.TenantId != CurrentTenant.Id)
 		{ result.Availability = "noPublishedTimetable"; return result; }
-		var requiredIds = timetable.Slots.Where(x => x.ElectiveGroupId.HasValue).Select(x => x.ElectiveGroupId!.Value).Distinct().ToArray();
+		var scheduledIds = timetable.Slots.Where(x => x.ElectiveGroupId.HasValue).Select(x => x.ElectiveGroupId!.Value).Distinct().ToArray();
+		var assignmentRows = await publishedSubjects.GetListAsync(x => x.TenantId == CurrentTenant.Id &&
+			x.StandardId == context.Student.StandardId && x.Status == SubjectStatus.Published &&
+			x.SubjectType == SubjectType.Elective && x.ElectiveGroupId.HasValue);
+		// Published class electives exist independently of timetable scheduling.
+		// Schedule reads still apply approval only to the groups used in that timetable.
+		var requiredIds = scheduledGroupsOnly ? scheduledIds : scheduledIds
+			.Concat(assignmentRows.Select(x => x.ElectiveGroupId!.Value)).Distinct().ToArray();
 		if (requiredIds.Length == 0) { result.CanViewTimetable = true; return result; }
 		var groupRows = await AsyncExecuter.ToListAsync((await groups.WithDetailsAsync(x => x.Subjects))
 			.Where(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(requiredIds, x.Id)));
-		var assignmentRows = await publishedSubjects.GetListAsync(x => x.TenantId == CurrentTenant.Id &&
-			x.StandardId == context.Student.StandardId && x.Status == SubjectStatus.Published &&
-			x.SubjectType == SubjectType.Elective && x.ElectiveGroupId.HasValue && Enumerable.Contains(requiredIds, x.ElectiveGroupId.Value));
 		List<StudentElectiveSelection> selectionRows;
 		using (filters.Disable<ISoftDelete>())
 			selectionRows = await selections.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == student.Id && Enumerable.Contains(requiredIds, x.ElectiveGroupId));
 		var receipts = await submissions.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == student.Id && x.AcademicYearId == academicYearId);
 		var subjectIds = timetable.Slots.SelectMany(x => x.Subjects).Select(x => x.SubjectId)
+			.Concat(assignmentRows.Select(x => x.SubjectId))
 			.Concat(selectionRows.Select(x => x.SelectedSubjectId)).Distinct().ToArray();
 		var subjectRows = (await subjects.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(subjectIds, x.Id))).ToDictionary(x => x.Id);
 		foreach (var groupId in requiredIds)
@@ -76,7 +81,8 @@ public class PortalElectivePreferenceReader(
 		result.Availability = result.Groups.Any(x => x.Status == "schoolActionRequired") ? "electiveSetupRequired" :
 			result.Groups.Any(x => x.Status == "selectionRequired") ? "electivePreferenceRequired" :
 			result.Groups.Any(x => x.Status == "pendingApproval") ? "electiveApprovalPending" : "available";
-		result.CanViewTimetable = result.Availability == "available";
+		result.CanViewTimetable = result.Groups.Where(x => Enumerable.Contains(scheduledIds, x.ElectiveGroupId))
+			.All(x => x.Status == "approved");
 		result.Message = result.Availability switch {
 			"electiveSetupRequired" => "Please contact your school to review your elective assignments.",
 			"electivePreferenceRequired" => "Choose your elective preferences and wait for school approval to view your timetable.",

@@ -122,6 +122,88 @@ public class PortalElectivePreferenceAppService_Tests : ShikshaMitraApplicationT
 		state.Groups.ShouldBeEmpty();
 	});
 
+	[Theory]
+	[InlineData("selectionRequired")]
+	[InlineData("pendingApproval")]
+	[InlineData("approved")]
+	public Task Published_class_electives_without_slots_remain_visible_in_every_selection_state(string status) => WithUnitOfWorkAsync(async () =>
+	{
+		var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+		var f = await Seed(id); using var identity = SignIn(f.User.Id);
+		var group = await AddGroup(f, scheduled: false);
+		if (status != "selectionRequired")
+		{
+			var selection = new StudentElectiveSelection(Guid.NewGuid(), id, f.Student.Id, group.Id,
+				group.Subjects.First().SubjectId, f.Medium.Id, "Hindi");
+			if (status == "approved") selection.LockSelection();
+			await Insert(selection);
+		}
+		var state = await Service.GetAsync(f.Student.Id, f.Year.Id);
+		var choice = state.Groups.ShouldHaveSingleItem();
+		choice.ElectiveGroupId.ShouldBe(group.Id);
+		choice.Status.ShouldBe(status);
+		choice.CanSubmit.ShouldBe(status == "selectionRequired");
+		choice.Options.Select(x => x.Name).ShouldBe(new[] { "Gujarati", "Hindi" });
+		if (status != "selectionRequired") choice.AssignedSubjectId.ShouldBe(group.Subjects.First().SubjectId);
+		// Unscheduled preferences must not hide an otherwise valid published timetable.
+		state.CanViewTimetable.ShouldBeTrue();
+		var timetable = GetRequiredService<IPortalTimetableAppService>();
+		(await timetable.GetContextAsync(f.Student.Id, f.Year.Id)).Availability.ShouldBe("available");
+		(await timetable.GetScheduleAsync(f.Request)).Availability.ShouldBe("available");
+	});
+
+	[Fact]
+	public Task Unscheduled_elective_can_be_submitted_once_and_waits_for_school_approval() => WithUnitOfWorkAsync(async () =>
+	{
+		var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+		var f = await Seed(id, parent: true); using var identity = SignIn(f.User.Id);
+		var group = await AddGroup(f, scheduled: false);
+		var input = Input(f, group);
+		var state = await Service.SubmitAsync(input);
+		state.Groups.ShouldHaveSingleItem().Status.ShouldBe("pendingApproval");
+		state.Groups.Single().CanSubmit.ShouldBeFalse();
+		(await Service.SubmitAsync(input)).Groups.Single().Status.ShouldBe("pendingApproval");
+		(await GetRequiredService<IRepository<StudentElectivePreferenceSubmission, Guid>>().CountAsync()).ShouldBe(1);
+		(await GetRequiredService<IRepository<StudentElectiveSelection, Guid>>().GetListAsync()).Single().IsLocked.ShouldBeFalse();
+	});
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Unscheduled_choices_do_not_change_scheduled_group_approval_gating(bool locked) => WithUnitOfWorkAsync(async () =>
+	{
+		var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+		var f = await Seed(id); using var identity = SignIn(f.User.Id);
+		await AddGroup(f, scheduled: false);
+		var scheduled = await AddGroup(f, "Computer Studies");
+		var selection = new StudentElectiveSelection(Guid.NewGuid(), id, f.Student.Id, scheduled.Id,
+			scheduled.Subjects.First().SubjectId, f.Medium.Id);
+		if (locked) selection.LockSelection();
+		await Insert(selection);
+		var preferences = await Service.GetAsync(f.Student.Id, f.Year.Id);
+		preferences.Groups.Count.ShouldBe(2);
+		preferences.Availability.ShouldBe("electivePreferenceRequired");
+		preferences.CanViewTimetable.ShouldBe(locked);
+		var timetable = GetRequiredService<IPortalTimetableAppService>();
+		var availability = locked ? "available" : "electiveApprovalPending";
+		(await timetable.GetContextAsync(f.Student.Id, f.Year.Id)).Availability.ShouldBe(availability);
+		(await timetable.GetScheduleAsync(f.Request)).Availability.ShouldBe(availability);
+	});
+
+	[Fact]
+	public Task Unpublished_class_electives_without_slots_are_not_offered() => WithUnitOfWorkAsync(async () =>
+	{
+		var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+		var f = await Seed(id); using var identity = SignIn(f.User.Id);
+		var group = await AddGroup(f, scheduled: false);
+		foreach (var assignment in await GetRequiredService<IRepository<AssignedSubject, Guid>>().GetListAsync(x => x.ElectiveGroupId == group.Id))
+		{
+			assignment.ChangeStatus(SubjectStatus.Draft);
+			await GetRequiredService<IRepository<AssignedSubject, Guid>>().UpdateAsync(assignment, true);
+		}
+		(await Service.GetAsync(f.Student.Id, f.Year.Id)).Groups.ShouldBeEmpty();
+	});
+
 	private static PortalElectivePreferenceSubmitInput Input(Fixture f, ElectiveGroup group) => new() {
 		StudentId = f.Student.Id, AcademicYearId = f.Year.Id, ElectiveGroupId = group.Id,
 		PreferredSubjectId = group.Subjects.First().SubjectId, ClientRequestId = Guid.NewGuid() };
@@ -180,7 +262,7 @@ public class PortalElectivePreferenceAppService_Tests : ShikshaMitraApplicationT
         await GetRequiredService<IRepository<StudentElectiveSelection, Guid>>().DeleteAsync(selection, true);
         (await Service.GetAsync(f.Student.Id, f.Year.Id)).Groups.Single().Status.ShouldBe("schoolActionRequired");
     });
-    private async Task<ElectiveGroup> AddGroup(Fixture f, string name = "Languages")
+    private async Task<ElectiveGroup> AddGroup(Fixture f, string name = "Languages", bool scheduled = true)
     {
         var tenant = GetRequiredService<ICurrentTenant>().Id;
         var first = await Insert(new Subject(Guid.NewGuid(), tenant, "Hindi", "#008967", f.Medium.Id));
@@ -190,9 +272,12 @@ public class PortalElectivePreferenceAppService_Tests : ShikshaMitraApplicationT
         foreach (var subject in new[] { first, second })
             await Insert(new AssignedSubject(Guid.NewGuid(), tenant, f.Student.StandardId!.Value, subject.Id, subject.Name,
                 SubjectStatus.Published, SubjectType.Elective, group.Id));
-        var slot = new TimetableSlot(Guid.NewGuid(), f.Timetable.Id, TimetableDayOfWeek.Tuesday, 3, new(9,30), new(10,15), SlotType.Period, electiveGroupId: group.Id);
-        slot.AddSubject(new(Guid.NewGuid(), slot.Id, first.Id)); slot.AddSubject(new(Guid.NewGuid(), slot.Id, second.Id));
-        f.Timetable.AddSlot(slot); await GetRequiredService<IRepository<TimetableEntity, Guid>>().UpdateAsync(f.Timetable, true);
+        if (scheduled)
+        {
+            var slot = new TimetableSlot(Guid.NewGuid(), f.Timetable.Id, TimetableDayOfWeek.Tuesday, 3, new(9,30), new(10,15), SlotType.Period, electiveGroupId: group.Id);
+            slot.AddSubject(new(Guid.NewGuid(), slot.Id, first.Id)); slot.AddSubject(new(Guid.NewGuid(), slot.Id, second.Id));
+            f.Timetable.AddSlot(slot); await GetRequiredService<IRepository<TimetableEntity, Guid>>().UpdateAsync(f.Timetable, true);
+        }
         return group;
     }
     private async Task<T> Insert<T>(T entity) where T : class, Volo.Abp.Domain.Entities.IEntity<Guid> =>

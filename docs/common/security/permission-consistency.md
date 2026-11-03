@@ -18,11 +18,11 @@ The existing configured administrator data-scope exception remains server-contro
 ## Catalogue and editor
 
 Student uses the user-approved three-action contract: View, Add (displayed as Add/Update), and supported Delete.
-All Student sensitive commands use the owning Add permission; action permission is always independent of teacher-assignment scope.
+Staff Student sensitive commands use the owning Add permission; action permission is always independent of teacher-assignment scope.
 Student has no Development authorization bypass or Academic assignment-to-action fallback.
 The canonical Student registry has 33 feature groups and 111 distinct action leaves, including House Management and Portal Profile Photo; Overrides, Guardian Access, and Portal Profile Photo have no Delete leaf.
-Portal Profile Photo adds only `Students.Portal.ProfilePhoto.View` and `.Add` (displayed as Add/Update).
-Its mobile Student profile entry has no configurable staff module-visibility flag: the explicit empty navigation mapping preserves the API-only assignment rule. The web role editor groups these actions under Student List for administration only; that grouping does not grant access to a staff route or require staff Records permissions. Persisted student/guardian associations and the exact photo action govern portal access.
+The legacy `Students.Portal.ProfilePhoto.View` and `.Add` definitions remain for catalogue compatibility; their grants and explicit denials no longer govern mobile profile-photo access. Valid authenticated student-self and guardian associations grant the built-in capability to view/add/replace that child's photo, without staff permissions, Records onboarding/editability/masking gates, or school photo approval. Every operation revalidates the tenant, active portal account and persisted association; a role name alone grants nothing.
+The mobile photo entry retains an empty staff navigation mapping and grants no staff route access. Staff Records photo commands retain their existing permission, masking and approval rules. No grants are seeded or restored for this change. See [mobile photo contracts](../../modules/student/api.md#mobile-student-profile-photo).
 Student List groups its profile workflows (Changes, Transitions, Overrides, Guardian Access and Identity Compliance) without separate editor rows; Overrides and Guardian Access have no Delete leaf.
 Grouping does not rename permissions, migrate saved grants or change endpoint enforcement. The Student List editor controls manage the existing exact action names together; opening the editor preserves partial grants and user overrides.
 Retired specialized positive grants are inert until an administrator explicitly assigns canonical access, while retired explicit user denials conservatively map to canonical actions.

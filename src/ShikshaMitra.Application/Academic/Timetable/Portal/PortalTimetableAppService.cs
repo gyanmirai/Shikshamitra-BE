@@ -31,7 +31,7 @@ namespace ShikshaMitra.Academic.Timetable.Portal;
 public class PortalTimetableAppService(
     StudentPortalAccessService portalAccess,
     PortalStudentContextReader contextReader,
-    IPortalElectivePreferenceAppService electivePreferences,
+    PortalElectivePreferenceReader electivePreferences,
     ITimetableRepository timetables,
     ILectureSlotConfigRepository configs,
     IRepository<Subject, Guid> subjects,
@@ -53,7 +53,7 @@ public class PortalTimetableAppService(
         var context = result.Context!;
         if (context.Availability == "available" && context.CurrentAcademicYear != null)
         {
-            var preferenceState = await electivePreferences.GetAsync(student.Id, context.CurrentAcademicYear.Id);
+            var preferenceState = await electivePreferences.ReadAsync(student, context.CurrentAcademicYear.Id, scheduledGroupsOnly: true);
             context.Availability = preferenceState.Availability;
             context.Message = preferenceState.Message;
         }
@@ -87,7 +87,7 @@ public class PortalTimetableAppService(
         // schedule must not use the earlier context as a cached authorization.
         if (requiredGroups.Length > 0)
         {
-            var preferenceState = await electivePreferences.GetAsync(context.Student.Id, input.AcademicYearId);
+            var preferenceState = await electivePreferences.ReadAsync(await ResolveStudentAsync(context.Student.Id), input.AcademicYearId, scheduledGroupsOnly: true);
             if (preferenceState.Availability != "available")
             {
                 result.Availability = preferenceState.Availability;
@@ -103,7 +103,7 @@ public class PortalTimetableAppService(
         {
             // A school-side change between reads is conservative: never expose
             // periods using an unlocked, deleted or missing assignment.
-            var preferenceState = await electivePreferences.GetAsync(context.Student.Id, input.AcademicYearId);
+            var preferenceState = await electivePreferences.ReadAsync(await ResolveStudentAsync(context.Student.Id), input.AcademicYearId, scheduledGroupsOnly: true);
             result.Availability = preferenceState.Availability == "available" ? "electiveSetupRequired" : preferenceState.Availability;
             result.Message = preferenceState.Message ?? "Please contact your school to review your elective assignments.";
             return result;

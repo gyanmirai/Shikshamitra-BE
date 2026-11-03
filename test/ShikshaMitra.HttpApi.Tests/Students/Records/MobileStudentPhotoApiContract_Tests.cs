@@ -21,13 +21,13 @@ namespace ShikshaMitra.HttpApi.Tests.Students.Records;
 public class MobileStudentPhotoApiContract_Tests
 {
 	[Fact]
-	public void Photo_routes_preserve_profile_read_and_separate_view_from_add()
+	public void Photo_routes_require_authentication_without_configurable_photo_grants()
 	{
 		var controller = typeof(MobileStudentPhotoController);
 		controller.GetCustomAttribute<RouteAttribute>()!.Template.ShouldBe("api/mobile/v1/students/{studentId:guid}/profile/photo");
-		controller.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBe(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View);
+		controller.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBeNull();
 		foreach (var method in new[] { nameof(MobileStudentPhotoController.UploadAsync), nameof(MobileStudentPhotoController.SubmitAsync) })
-			controller.GetMethod(method)!.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBe(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add);
+			controller.GetMethod(method)!.GetCustomAttributes<AuthorizeAttribute>().ShouldAllBe(attribute => attribute.Policy == null);
 		controller.GetMethods().SelectMany(x => x.GetCustomAttributes<HttpDeleteAttribute>()).ShouldBeEmpty();
 		typeof(MobileStudentProfileController).GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBeNull();
 	}

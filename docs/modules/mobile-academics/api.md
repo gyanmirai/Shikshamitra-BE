@@ -168,7 +168,9 @@ GET and POST return `Result<PortalElectivePreferencesDto>` with `studentId`, `ac
 | `approved` | The valid school assignment is locked; read-only |
 | `schoolActionRequired` | Configuration is invalid or an assignment was removed after submission; resubmission is unavailable |
 
-Required groups come from the entire published class/division timetable, independent of the requested date. Options must be active group members published for that class and usable in the group's scheduled occurrences. Only the currently enrolled academic year is supported, as with the existing timetable API.
+The preference list includes published elective assignments for the enrolled class, plus groups referenced by the entire published class/division timetable, independent of the requested date. An elective does not need a timetable slot to appear or accept a preference. Options must be active group members published for that class; scheduled groups additionally require each option to be usable in every scheduled occurrence. Only the currently enrolled academic year is supported, as with the existing timetable API, and the published-timetable prerequisite is unchanged.
+
+Preference `availability` summarizes all returned groups. `canViewTimetable` and the timetable context/schedule approval checks depend only on groups used in the published timetable. An unscheduled elective can require selection or approval while the existing timetable remains available.
 
 POST creates the immutable receipt and unlocked legacy assignment in one transaction. It never overwrites an existing school assignment. An identical `clientRequestId` and payload replays current state after authorization; a different retry or second submission returns HTTP 409. The uniqueness boundary is tenant/student/year/group, shared by the student and every linked guardian. Revoked links cannot replay an earlier operation.
 

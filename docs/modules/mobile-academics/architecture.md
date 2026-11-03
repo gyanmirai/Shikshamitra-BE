@@ -3,7 +3,7 @@ module: mobile-academics
 domain: implementation
 content_type: Reference
 status: canonical
-updated_on: 2026-10-30
+updated_on: 2026-10-31
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -24,7 +24,7 @@ Mobile leave writes acquire a PostgreSQL advisory transaction lock keyed by tena
 
 ## Timetable elective preferences
 
-`IPortalElectivePreferenceAppService` and its DTOs live under `Application.Contracts/Academic/Timetable/Portal/`. `PortalElectivePreferenceController` is a thin authenticated controller. `PortalElectivePreferenceAppService` resolves persisted self/guardian access and owns submission transactions; `PortalElectivePreferenceReader` computes the whole-week choice/approval policy using the unchanged shared `PortalStudentContextReader`. Mobile timetable context and schedule consume that policy; profile/enrollment reads do not acquire elective gating semantics.
+`IPortalElectivePreferenceAppService` and its DTOs live under `Application.Contracts/Academic/Timetable/Portal/`. `PortalElectivePreferenceController` is a thin authenticated controller. `PortalElectivePreferenceAppService` resolves persisted self/guardian access and owns submission transactions; `PortalElectivePreferenceReader` combines published class elective assignments with scheduled groups using the unchanged shared `PortalStudentContextReader`. Mobile timetable context and schedule resolve persisted portal ownership and read the same policy with `scheduledGroupsOnly: true`, preserving whole-week approval gating without letting unscheduled electives block periods. Profile/enrollment reads do not acquire elective gating semantics.
 
 `Domain/Academic/Curriculum/Entities/StudentElectivePreferenceSubmission.cs` is permanent, year-scoped original preference history, independent of the mutable `StudentElectiveSelection`. It stores tenant/student/year/group, the subject ID/name snapshot, submitting user/time and request ID. Relational unique indexes enforce tenant/student/year/group and tenant/request identity. The original selection's existing uniqueness and staff mutation contracts are unchanged.
 

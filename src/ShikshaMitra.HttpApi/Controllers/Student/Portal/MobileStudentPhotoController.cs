@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common.Responses;
-using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Portal;
 using ShikshaMitra.Students.Records;
 using Volo.Abp;
@@ -14,7 +13,7 @@ using Volo.Abp.AspNetCore.Mvc;
 namespace ShikshaMitra.HttpApi.Controllers.Students.Portal;
 
 [ApiController]
-[Authorize(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View)]
+[Authorize]
 [Route("api/mobile/v1/students/{studentId:guid}/profile/photo")]
 public class MobileStudentPhotoController(IMobileStudentPhotoAppService service) : AbpController
 {
@@ -27,7 +26,6 @@ public class MobileStudentPhotoController(IMobileStudentPhotoAppService service)
 	}
 
 	[HttpPost("drafts")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add)]
 	[RequestSizeLimit(MaxBytes + 64 * 1024)]
 	[RequestFormLimits(MultipartBodyLengthLimit = MaxBytes + 64 * 1024)]
 	public async Task<Result<StudentRecordPhotoDraftDto>> UploadAsync(Guid studentId, IFormFile file)
@@ -51,7 +49,6 @@ public class MobileStudentPhotoController(IMobileStudentPhotoAppService service)
 	[HttpGet("drafts/{draftId:guid}")]
 	public async Task<IActionResult> GetDraftAsync(Guid studentId, Guid draftId) => Download(await service.GetDraftAsync(studentId, draftId));
 	[HttpPost("changes")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add)]
 	public async Task<Result<StudentPhotoChangeDto>> SubmitAsync(Guid studentId, [FromBody] SubmitStudentPhotoChangeDto input) => Result.Success(await service.SubmitAsync(studentId, input));
 	[HttpGet("changes/{changeId:guid}")]
 	public async Task<Result<StudentPhotoChangeDto>> GetChangeAsync(Guid studentId, Guid changeId) => Result.Success(await service.GetChangeAsync(studentId, changeId));

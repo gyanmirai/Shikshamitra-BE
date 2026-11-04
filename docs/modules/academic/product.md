@@ -3,7 +3,7 @@ module: academic
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-11-03
+updated_on: 2026-11-04
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -85,7 +85,11 @@ Students admitted after a task was created appear on the next roster request eve
 Inactive and departed students remain excluded.
 Student identifiers use `GrNumber` when available, with `GrNo` as the legacy fallback.
 
-Elective locks belong to individual student selections. A student admitted after the existing selections are locked has no selection and remains editable. Saving new selections does not unlock existing ones. Locking requires saved selections for the full class/division roster and locks only selections that are still unlocked. Attempts to change or delete an existing locked selection remain rejected by the server.
+Elective locks belong to individual student selections. A student admitted after the existing selections are locked has no selection and remains editable. Saving new selections does not unlock existing ones. Locking requires saved selections for the full class/division roster and locks only selections that are still unlocked. The ordinary save endpoint rejects changes or deletions to locked selections.
+
+Current database members of the tenant's protected `admin` role can correct a locked subject or preference through a separate preview/confirmation workflow. Other roles cannot use this exception, even with the elective Add permission. The backend validates the student/class/division/medium/group context and active subject membership, lists related exam eligibility, marks, results, seating, timetable setup, learning tasks and portal effects, then rechecks the reviewed state during confirmation. Changed, expired, altered or replayed reviews cannot authorize another correction.
+
+Corrections keep the selection locked and preserve marks, generated/published/frozen results, seating allocations, submissions and evaluations. These records require separate operational review; corrections never transfer marks or regenerate results/seating automatically. A preference override is stored on the selection; the original `StudentElectivePreferenceSubmission` remains immutable. The portal reads the effective override. `StudentElectiveCorrection` stores the actor, time, before/after values, reviewed impacts and optional reason in the same transaction as the correction.
 
 Authorization, active tenant identity and hierarchical scope are enforced on the server.
 Hidden frontend controls do not authorize a request.

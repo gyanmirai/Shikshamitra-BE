@@ -53,6 +53,17 @@ internal static class AdmissionFamilyContactCapture
 		if (contact != null) inquiry.SetProperty(InquiryContactKey, JsonSerializer.Serialize(contact));
 	}
 
+	/// <summary>Change this applicant's saved adult contact without rewriting a shared guardian or login.</summary>
+	internal static void ChangeEmail(AdmissionApplicant applicant, string relationship, string email)
+	{
+		if (applicant.ExistingStudentId.HasValue || AdmissionSiblingParentSelection.ReadConfirmation(applicant) != null)
+			throw Invalid("Update linked family contact details through the existing Student or family contact workflow.");
+		var prefix = relationship switch { "father" => "Father", "mother" => "Mother", "guardian" => "Guardian", _ => throw Invalid("Choose a saved parent or guardian.") };
+		applicant.SetProperty("AdmissionStudentField." + prefix + ".Email", email);
+		// A dedicated saved-contact correction takes precedence over historical first-parent aliases.
+		if (relationship is "father" or "mother") applicant.SetProperty("ParentAccountStructuredContact." + prefix + ".Email", true);
+	}
+
 	public static AdmissionSchoolContactDto? ReadMainContact(AdmissionInquiry inquiry)
 	{
 		var json = inquiry.GetProperty<string>(InquiryContactKey);

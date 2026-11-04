@@ -55,7 +55,9 @@ public class AdmissionDocumentEvidenceDto
 	public bool OriginalSeen { get; set; }
 	public Guid? OriginalSeenBy { get; set; }
 	public DateTime? OriginalSeenAt { get; set; }
-	public Guid SubmittedBy { get; set; }
+	public Guid? SubmittedBy { get; set; }
+	public Guid? ParentRegistrationId { get; set; }
+	public string? ParentContactJson { get; set; }
 	public DateTime SubmittedAt { get; set; }
 	public string? Notes { get; set; }
 	public string Status { get; set; } = string.Empty;

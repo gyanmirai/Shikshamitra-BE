@@ -55,6 +55,28 @@ public class StudentCredentialEmailDispatcher_Tests : ShikshaMitraApplicationTes
 		});
 	}
 	[Fact]
+	public async Task Successful_delivery_refreshes_onboarding_as_the_requesting_staff_member()
+	{
+		using var school = GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid());
+		var fixture = await CreateAsync(false);
+		fixture.Onboarding.GetAsync(fixture.Row.CaseId).Returns(new StudentOnboardingCaseDto { ConcurrencyStamp = "current-case-stamp" });
+		await fixture.Dispatcher.DispatchAsync(fixture.Row.Id);
+		(await ReadAsync(fixture.Row.Id)).Status.ShouldBe("Sent");
+		await fixture.Onboarding.Received(1).RefreshReadinessAsync(fixture.Row.CaseId, "current-case-stamp");
+	}
+	[Fact]
+	public async Task Failed_delivery_also_refreshes_onboarding_without_marking_the_email_sent()
+	{
+		using var school = GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid());
+		var fixture = await CreateAsync(false);
+		fixture.Onboarding.GetAsync(fixture.Row.CaseId).Returns(new StudentOnboardingCaseDto { ConcurrencyStamp = "current-case-stamp" });
+		fixture.Sender.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<AdditionalEmailSendingArgs?>())
+			.Returns(Task.FromException(new InvalidOperationException("Transport failed.")));
+		await fixture.Dispatcher.DispatchAsync(fixture.Row.Id);
+		(await ReadAsync(fixture.Row.Id)).Status.ShouldBe("Failed");
+		await fixture.Onboarding.Received(1).RefreshReadinessAsync(fixture.Row.CaseId, "current-case-stamp");
+	}
+	[Fact]
 	public async Task Sender_failure_retains_initial_password_and_retry_uses_the_same_password()
 	{
 		using var school = GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid());
@@ -256,7 +278,9 @@ public class StudentCredentialEmailDispatcher_Tests : ShikshaMitraApplicationTes
 		var resolver = Substitute.For<IStudentCredentialEmailEligibilityResolver>(); resolver.ResolveAsync(row.CaseId, "guardian", false).Returns(state);
 		resolver.ResolveExplicitAsync(row.CaseId, "guardian", false).Returns(state);
 		var sender = Substitute.For<IEmailSender>(); var permissions = Substitute.For<IPermissionChecker>(); permissions.IsGrantedAsync(Arg.Any<string>()).Returns(true);
-		var onboarding = Substitute.For<IStudentOnboardingAppService>(); onboarding.EnsureCaseAccessAsync(row.CaseId).Returns(Task.CompletedTask);
+		var onboarding = Substitute.For<IStudentOnboardingAppService>();
+		onboarding.EnsureCaseAccessAsync(row.CaseId).Returns(Task.CompletedTask);
+		onboarding.GetAsync(Arg.Any<Guid>()).Returns(call => Task.FromResult(new StudentOnboardingCaseDto { ConcurrencyStamp = "test-case-stamp" }));
 		var dispatcher = new StudentCredentialEmailDispatcher(GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>(), resolver, users, sender,
 			GetRequiredService<IStringEncryptionService>(), GetRequiredService<IUnitOfWorkManager>(), tenant,
 			GetRequiredService<IUserClaimsPrincipalFactory<IdentityUser>>(), GetRequiredService<ICurrentPrincipalAccessor>(), permissions,

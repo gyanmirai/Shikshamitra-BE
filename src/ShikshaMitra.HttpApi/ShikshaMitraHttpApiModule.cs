@@ -27,6 +27,10 @@ public class ShikshaMitraHttpApiModule : AbpModule
 		ConfigureLocalization();
 		Configure<Volo.Abp.AspNetCore.ExceptionHandling.AbpExceptionHttpStatusCodeOptions>(options =>
 		{
+			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Conflict, System.Net.HttpStatusCode.Conflict);
+			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Unavailable, System.Net.HttpStatusCode.NotFound);
+			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Invalid, System.Net.HttpStatusCode.BadRequest);
+			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Incomplete, System.Net.HttpStatusCode.BadRequest);
 			options.Map("MobileAcademics:SubmissionConflict", System.Net.HttpStatusCode.Conflict);
 			options.Map(Academic.Curriculum.ElectivePreferenceErrorCodes.Conflict, System.Net.HttpStatusCode.Conflict);
 			options.Map(Academic.Curriculum.ElectivePreferenceErrorCodes.InvalidRequest, System.Net.HttpStatusCode.BadRequest);

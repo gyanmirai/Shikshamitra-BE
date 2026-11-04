@@ -3,7 +3,7 @@ module: finance
 domain: admission-fee-collection
 content_type: Reference
 status: canonical
-updated_on: 2026-10-18
+updated_on: 2026-11-04
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -26,6 +26,8 @@ The base route is `api/fee-collections/admission-applications/{applicationId}`.
 Use the backend permission constants as the source of truth. Module-menu visibility grants are not required or automatically granted. Receipt links/downloads separately require Invoice Receipt View. The internal Student context reader verifies tenant, application/offering/cycle and current academic scope; it exposes only the facts Finance needs. It accepts exact Admissions/Onboarding lifecycle capabilities or exact Finance Collection read/write capabilities, without granting public Student detail access.
 
 `prepare` accepts only Finance-configured variable-head initial amounts; fixed fees and all due amounts are server-derived. `CollectAdmissionFeeInput` accepts decimal allocations, counter instruments and an idempotency key, without accepting payer identity, Student ID or academic-year overrides. It maps into the existing collection workflow after validation. Existing Student collection JSON cannot set the internal `FinanceFeeAccountId` field.
+
+The read-only admission collection summary includes nullable `prorationPolicy` metadata (`policyId`, `policyVersionId`, `policyName`, `policyVersion`, `source`) alongside the existing nullable `proration` result. A new fee calculation reports the active academic-year default even when its rules produce no joining-date reduction; when variable initial amounts are still needed, the active default can be identified before calculation. The joining-date state exposes current active policy options only when the application is editable and the caller has `Finance.Fees.StructureAssign.OverridePolicies`; it also identifies the academic-year default. The Payment UI reveals these options after an actual joining date is available. Preview and preparation accept the selected `prorationPolicyVersionId`, and Finance validates that the version remains active and current. A non-default selection requires the override permission. Preparation records the fixed server-side audit note `Selected by authorized staff during Admission fee preparation.` when staff do not provide a reason. The selected policy/version and audit note are retained in the prepared assignment snapshot; its source is `AdmissionOverride`. A null policy means no policy version is resolved (the existing full-charge behavior applies).
 
 ## One ledger and lifecycle handoff
 

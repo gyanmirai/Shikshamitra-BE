@@ -17,13 +17,17 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionApplicationFormService
 {
-	public async Task<AdmissionApplicationFormDto> CorrectAsync(Guid applicationId, CorrectAdmissionApplicationFormDto input)
+	public Task<AdmissionApplicationFormDto> CorrectAsync(Guid applicationId, CorrectAdmissionApplicationFormDto input) => CorrectCoreAsync(applicationId, input, true);
+
+	internal Task<AdmissionApplicationFormDto> CorrectParentProposalAsync(Guid applicationId, CorrectAdmissionApplicationFormDto input) => CorrectCoreAsync(applicationId, input, false);
+
+	private async Task<AdmissionApplicationFormDto> CorrectCoreAsync(Guid applicationId, CorrectAdmissionApplicationFormDto input, bool requiresNew)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit);
 		try
 		{
 			using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions
-			{ IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.Serializable }, requiresNew: true);
+			{ IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.Serializable }, requiresNew: requiresNew);
 			var application = await applicationReadService.GetEntityAsync(applicationId);
 			var inputValidation = new CorrectAdmissionApplicationFormDtoValidator().Validate(input);
 			if (!inputValidation.IsValid)

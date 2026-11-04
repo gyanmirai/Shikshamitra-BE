@@ -25,6 +25,18 @@ public class AdmissionPaymentJoiningDateDto
 	public string? LockReason { get; set; }
 	public DateTime AcademicYearStartDate { get; set; }
 	public DateTime AcademicYearEndDate { get; set; }
+	public bool CanSelectProrationPolicy { get; set; }
+	public Guid? DefaultProrationPolicyVersionId { get; set; }
+	public List<AdmissionProrationPolicyOptionDto> ProrationPolicies { get; set; } = [];
+}
+
+public class AdmissionProrationPolicyOptionDto
+{
+	public Guid PolicyId { get; set; }
+	public Guid PolicyVersionId { get; set; }
+	public string PolicyName { get; set; } = string.Empty;
+	public int PolicyVersion { get; set; }
+	public bool IsDefault { get; set; }
 }
 
 public class PreviewAdmissionPaymentJoiningDateDto
@@ -32,6 +44,7 @@ public class PreviewAdmissionPaymentJoiningDateDto
 	[Required, RegularExpression(@"^\d{4}-\d{2}-\d{2}$")]
 	public string JoiningDate { get; set; } = string.Empty;
 	public List<VariableFeeHeadAmountDto> VariableFeeHeads { get; set; } = [];
+	public Guid? ProrationPolicyVersionId { get; set; }
 }
 
 public class SaveAdmissionPaymentJoiningDateDto
@@ -49,5 +62,6 @@ public class AdmissionPaymentJoiningDatePreviewDto
 	public decimal ScheduledAmount { get; set; }
 	public decimal ReductionAmount { get; set; }
 	public FeeProrationResultDto? Proration { get; set; }
+	public AdmissionProrationPolicyDto? ProrationPolicy { get; set; }
 	public List<string> Warnings { get; set; } = [];
 }

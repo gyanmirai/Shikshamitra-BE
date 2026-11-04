@@ -49,12 +49,14 @@ public class AdmissionPaymentJoiningDateAppService(
 		var date = ValidateDate(input.JoiningDate, state.AcademicYearEndDate);
 		ValidateVariableAmounts(input);
 		var account = await accounts.FindAsync(a => a.ApplicationId == applicationId && a.TenantId == CurrentTenant.Id);
-		var calculated = await calculator.PrepareAdmissionAsync(source with { JoiningDate = date }, account?.Id ?? GuidGenerator.Create(), input.VariableFeeHeads);
+		var calculated = await calculator.PrepareAdmissionAsync(source with { JoiningDate = date }, account?.Id ?? GuidGenerator.Create(),
+			input.VariableFeeHeads, input.ProrationPolicyVersionId, requireOverrideReason: false);
 		return new()
 		{
 			JoiningDate = date, TotalAmount = calculated.Preview.ProratedTotal,
 			ScheduledAmount = calculated.Preview.ScheduledTotal, ReductionAmount = calculated.Preview.ReductionTotal,
 			Proration = AdmissionFeeCollectionAppService.ProrationResult(calculated.Preview, calculated.Dues),
+			ProrationPolicy = AdmissionFeeCollectionAppService.ProrationPolicy(calculated.Preview),
 			Warnings = calculated.Preview.Warnings
 		};
 	}
@@ -107,6 +109,11 @@ public class AdmissionPaymentJoiningDateAppService(
 		}
 		var canEdit = !locked && ownerEditable && active && source.CanCollect &&
 			await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.Add);
+		var canSelectPolicy = canEdit && await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.OverridePolicies);
+		var resolver = LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Policies.AdmissionProrationPolicyResolver>();
+		var defaultPolicy = await resolver.ResolveAsync(source.AcademicYearId);
+		var policyOptions = canSelectPolicy ? await resolver.GetActiveVersionsAsync(source.AcademicYearId) : [];
 		return new()
 		{
 			JoiningDate = await reader.ReadAsync(application), ConcurrencyStamp = application.ConcurrencyStamp,
@@ -115,7 +122,11 @@ public class AdmissionPaymentJoiningDateAppService(
 				!source.CanCollect ? source.Blocker : !active ? "Confirm the joining date during an open Payment or Onboarding step." :
 				!canEdit ? "You do not have permission to confirm the joining date." : null,
 			AcademicYearStartDate = DateTime.SpecifyKind(year.StartDate.Date, DateTimeKind.Utc),
-			AcademicYearEndDate = DateTime.SpecifyKind(year.EndDate.Date, DateTimeKind.Utc)
+			AcademicYearEndDate = DateTime.SpecifyKind(year.EndDate.Date, DateTimeKind.Utc),
+			CanSelectProrationPolicy = canSelectPolicy, DefaultProrationPolicyVersionId = defaultPolicy?.Id,
+			ProrationPolicies = policyOptions.Select(x => new AdmissionProrationPolicyOptionDto
+			{ PolicyId = x.PolicyId, PolicyVersionId = x.Id, PolicyName = x.PolicyName, PolicyVersion = x.VersionNumber,
+				IsDefault = x.Id == defaultPolicy?.Id }).ToList()
 		};
 	}
 

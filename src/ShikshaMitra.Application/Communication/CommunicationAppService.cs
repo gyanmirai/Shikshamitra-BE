@@ -191,6 +191,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 	public async Task<CommunicationCampaignDto> UpdateCampaignAsync(Guid id, CreateUpdateCommunicationCampaignDto input)
 	{
 		var campaign = await _campaignRepository.GetAsync(id);
+		if (campaign.SourceEntityType == ParentRegistrationSource) throw new BusinessException("Communication:IntegrationCampaignReadOnly");
 		await CheckCampaignPolicyAsync(
 			campaign.CampaignType,
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Add,
@@ -310,8 +311,10 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 		return await PublishCampaignCoreAsync(campaign);
 	}
 
-	private async Task<CommunicationCampaignDto> PublishCampaignCoreAsync(CommunicationCampaign campaign)
+	private async Task<CommunicationCampaignDto> PublishCampaignCoreAsync(CommunicationCampaign campaign, string? privateLink = null)
 	{
+		if (campaign.SourceEntityType == ParentRegistrationSource && privateLink == null)
+			throw new BusinessException("Communication:UseParentRegistrationDelivery");
 		if (campaign.PublishedAt.HasValue || await HasCampaignHistoryAsync(campaign.Id))
 		{
 			throw new BusinessException("Communication:CampaignAlreadyPublished");
@@ -331,6 +334,8 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 				.WithData("Issues", string.Join("; ", resolution.BlockingIssues));
 		}
 
+		if (campaign.SourceEntityType == ParentRegistrationSource && (resolution.Recipients.Count != 1 || resolution.Recipients[0].Email != audience.ExplicitRecipients.Single().Email ||
+			resolution.Recipients[0].RecipientId != audience.ExplicitRecipients.Single().RecipientId)) throw new BusinessException("Communication:RecipientChanged");
 		if (resolution.Recipients.Count == 0)
 		{
 			throw new BusinessException("Communication:AudienceEmpty");
@@ -343,6 +348,11 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 		}
 
 		var providers = await GetEnabledProvidersAsync(channels);
+		if (campaign.SourceEntityType == ParentRegistrationSource && !providers.ContainsKey(CommunicationChannelType.Email))
+		{
+			var schoolEmail = await ParentRegistrationEmailProviderAsync();
+			if (schoolEmail != null) providers[CommunicationChannelType.Email] = schoolEmail;
+		}
 		var missingProviderChannels = channels.Where(channel => !providers.ContainsKey(channel)).ToList();
 		if (missingProviderChannels.Count > 0)
 		{
@@ -379,7 +389,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 				{
 					MarkAttemptSkipped(attempt, "DESTINATION_MISSING", "Recipient does not have a usable destination for this channel.");
 				}
-				else if (campaign.SourceEntityType == InquiryQualificationSource &&
+				else if (campaign.SourceEntityType is InquiryQualificationSource or ParentRegistrationSource &&
 					await HasWithdrawnInquiryConsentAsync(recipient, channel, attempt.Destination))
 				{
 					MarkAttemptSkipped(attempt, "CONSENT_WITHDRAWN", "Recipient withdrew consent for inquiry notifications.");
@@ -399,7 +409,10 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 						Destination = attempt.Destination,
 						Subject = campaign.Subject,
 						Body = campaign.Body,
-						LinkUrl = campaign.LinkUrl,
+						HtmlBody = campaign.SourceEntityType == ParentRegistrationSource && privateLink != null &&
+							string.Equals(provider.ProviderName.Trim(), "SMTP", StringComparison.OrdinalIgnoreCase)
+							? ParentRegistrationEmailContent.Html(recipient.DisplayName, campaign.SourceReference, privateLink) : null,
+						LinkUrl = privateLink ?? campaign.LinkUrl,
 						LanguageCode = recipient.PreferredLanguageCode.IsNullOrWhiteSpace() ? campaign.LanguageCode : recipient.PreferredLanguageCode,
 						AttemptNumber = attempt.AttemptNumber
 					});

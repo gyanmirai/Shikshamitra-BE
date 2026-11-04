@@ -100,9 +100,61 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var fixture = await CreateCollectibleAdmissionAsync("RegularJoining", oneTime: oneTime);
 		var year = await ReadAsync<AcademicYear>(fixture.YearId);
 		await SaveJoiningAnswerAsync(fixture, (oneTime ? year.StartDate.AddMonths(2) : year.StartDate).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-		await ConfigureProrationAsync(fixture);
+		var policy = await ConfigureProrationAsync(fixture);
+		var joiningPreview = await GetRequiredService<IAdmissionPaymentJoiningDateAppService>().PreviewAsync(
+			fixture.Application.Id,
+			new() { JoiningDate = (oneTime ? year.StartDate.AddMonths(2) : year.StartDate).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) });
+		joiningPreview.Proration.ShouldBeNull();
+		joiningPreview.ProrationPolicy.ShouldNotBeNull().PolicyName.ShouldBe(policy.PolicyName);
+		joiningPreview.ProrationPolicy.PolicyVersion.ShouldBe(policy.Version);
 		var summary = await GetRequiredService<IAdmissionFeeCollectionAppService>().PrepareAsync(fixture.Application.Id, new());
 		summary.TotalAmount.ShouldBe(1000m); summary.Proration.ShouldBeNull();
+		summary.ProrationPolicy.ShouldNotBeNull().PolicyName.ShouldBe(policy.PolicyName);
+		summary.ProrationPolicy.PolicyVersion.ShouldBe(policy.Version);
+	});
+
+	[Fact]
+	public Task Proration_staff_override_is_previewed_and_pinned_to_the_admission_snapshot() => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await CreateCollectibleAdmissionAsync("ProrationOverride", amount: 12000m, oneTime: false);
+		var year = await ReadAsync<AcademicYear>(fixture.YearId);
+		var joiningDate = year.StartDate.AddMonths(2);
+		await SaveJoiningAnswerAsync(fixture, joiningDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+		var defaultPolicy = await ConfigureProrationAsync(fixture);
+		var versions = GetRequiredService<IRepository<FinancePolicyVersion, Guid>>();
+		var defaultVersion = await WithUnitOfWorkAsync(() => versions.GetAsync(x => x.PolicyId == defaultPolicy.Id && x.VersionNumber == defaultPolicy.Version));
+		var head = (await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<FeeStructureDetail, Guid>>().GetListAsync(x => x.FeeStructureId == fixture.StructureId))).Single();
+		var alternatePolicy = await GetRequiredService<IProrationPolicyAppService>().CreateAsync(new()
+		{
+			AcademicYearId = fixture.YearId, PolicyName = "Daily staff option", PolicyCode = $"PRO-{Guid.NewGuid():N}"[..20],
+			Status = "Active", IsDefault = false,
+			FeeHeadRules = [new() { FeeHeadId = head.FeeHeadId, RuleType = "Daily", ApplyOnAdmission = true, ApplyOnEarlyWithdrawal = true, EarlyWithdrawalRuleType = "Daily" }]
+		});
+		var joining = GetRequiredService<IAdmissionPaymentJoiningDateAppService>();
+		var state = await joining.GetAsync(fixture.Application.Id);
+		state.CanSelectProrationPolicy.ShouldBeTrue();
+		state.DefaultProrationPolicyVersionId.ShouldBe(defaultVersion.Id);
+		state.ProrationPolicies.Count.ShouldBe(2);
+		state.ProrationPolicies.Single(x => x.IsDefault).PolicyVersionId.ShouldBe(defaultVersion.Id);
+		var versionId = (await WithUnitOfWorkAsync(() => versions.GetAsync(x => x.PolicyId == alternatePolicy.Id && x.VersionNumber == alternatePolicy.Version))).Id;
+		var preview = await joining.PreviewAsync(fixture.Application.Id, new()
+		{
+			JoiningDate = joiningDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+			ProrationPolicyVersionId = versionId
+		});
+		preview.ProrationPolicy!.PolicyName.ShouldBe(alternatePolicy.PolicyName);
+		preview.ProrationPolicy.Source.ShouldBe("AdmissionOverride");
+		var collection = GetRequiredService<IAdmissionFeeCollectionAppService>();
+		var prepared = await collection.PrepareAsync(fixture.Application.Id, new()
+		{
+			ProrationPolicyVersionId = versionId
+		});
+		prepared.ProrationPolicy!.PolicyVersionId.ShouldBe(versionId);
+		prepared.ProrationPolicy.PolicyName.ShouldBe(alternatePolicy.PolicyName);
+		prepared.ProrationPolicy.Source.ShouldBe("AdmissionOverride");
+		var account = await ReadAsync<FinanceFeeAccount>(prepared.AccountId!.Value);
+		var snapshot = JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(account.AssignmentSnapshotJson!)!;
+		snapshot.PolicyOverrideReason.ShouldBe("Selected by authorized staff during Admission fee preparation.");
 	});
 
 	[Fact]

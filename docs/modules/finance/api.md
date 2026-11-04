@@ -222,7 +222,7 @@ Contextual Admissions/Onboarding collections, nullable applicant payers and Fina
 
 ## Shared request rules
 
-Admission collection summary/prepare responses include nullable, output-only `proration` (`FeeProrationResultDto`): policy/version IDs, joining/service dates, scheduled fees, admission reduction, withdrawal credit, payable fees, excess paid and explanations. Collection requests accept neither policy choices nor computed totals. `FeeLedgerLineDto` separately exposes withdrawal credit/explanation without replacing original or paid totals.
+Admission collection summary/prepare responses include nullable, output-only `proration` (`FeeProrationResultDto`): policy/version IDs, joining/service dates, scheduled fees, admission reduction, withdrawal credit, payable fees, excess paid and explanations. Admission fee preparation accepts an optional `prorationPolicyVersionId` only for an authorized policy override and only while the preparation remains replaceable; Finance revalidates the active same-year version. It accepts no computed totals. If a non-default version is selected without a user-entered reason, Finance stores its fixed admission-selection audit note. `FeeLedgerLineDto` separately exposes withdrawal credit/explanation without replacing original or paid totals.
 `FeeProrationResultDto.joiningDate` is nullable and contains only the recorded actual joining date; unknown dates remain null instead of being replaced by academic-year or manual service boundaries.
 New Finance structure assignments automatically pin the same active academic-year default Proration Policy as Admission preparation, including students without an Admission link; the context and preview identify it as `FinanceDefault`.
 

@@ -87,7 +87,7 @@ internal static class AdmissionPublicInquirySchema
 		return null;
 	}
 
-	private static string? ProjectRule(string? json, IReadOnlyDictionary<string, string> omitted)
+	internal static string? ProjectRule(string? json, IReadOnlyDictionary<string, string> omitted)
 	{
 		if (string.IsNullOrWhiteSpace(json)) return json;
 		try { return Fold(JsonNode.Parse(json))?.ToJsonString(); }

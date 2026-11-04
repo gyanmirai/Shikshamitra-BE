@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-03
+updated_on: 2026-11-04
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -208,6 +208,8 @@ Admissions no longer selects or assigns a counsellor or Onboarding case owner. I
 Anonymous public Inquiry context and submission omit `Family.IsSingleChild`, `Family.SiblingAtSchool`, `Family.SiblingStudentIds` and exact StudentSiblings sources; Single-parent child remains. New public captures preserve the effective exposed source for later Registration composition. POST accepts optional `requestId` (GUID): the same tenant/link/key and normalized body is a retry, while changing the body under the same key is rejected. A different explicit key is a distinct intent. Legacy no-key callers retain normalized-body retry handling. Responses remain generic; same-contact different-child submissions do not disclose matches or grant family/account authority. Token, tenant, offering, expiry, consent and rate-limit checks remain authoritative.
 
 Existing Application Form GET adds optional `autoFilledFieldCodes` and `familyPrefill` (source applicant/application, display name and confirmed relationship). Values contain safe draft-only parent projections; GET creates no values or history. Existing form-values PATCH accepts optional `autoFilledFieldCodes` identifying untouched submitted projections. These hints are validated against input and writable parent bindings; they cannot bypass field, concurrency, scope or source permissions. Authored answers/clears win over automatic aliases. Ordinary Save records target-only reuse history; submitted forms and source/shared identities are unchanged.
+
+Registration's legacy System-bound `Guardian.Relationship` question can prefill from the explicitly captured primary-contact role when its own profile value is unavailable. Text answers use Father/Mother/Guardian; Select/Radio answers require a matching configured choice. A draft GET may project a missing, visible, nonrepeatable, noninherited answer through the same `autoFilledFieldCodes` contract. Every stored answer, including null/empty clears, takes precedence; inherited questions retain their exact source answers even when a captured null has no value row. Reads create no values or audit records. Normal draft saves persist the answer with existing concurrency/field guards and never change primary-contact selection or sibling-account provenance. Submitted/finalized forms are not projected and published schemas are not rewritten.
 
 `GET /api/student/enrollment/admissions/public-inquiry-links/options?admissionCycleId={guid}` retains Offerings View and returns distinct published Inquiry forms from accessible active Inquiry/Both Offerings. The legacy assignment-profile field is always null. Create retains Offerings Add and requires the selected published form on an accessible active Offering in that period. It stores no assignment profile. Existing links retain their form, token hash, source, expiry and revocation behavior; their former routing profile no longer controls public capture. `Admissions.PublicInquiry.OfferingRequired` remains HTTP 400 with corrective form/Offering guidance and `PeriodName`. No new schema migration is required.
 
@@ -937,11 +939,11 @@ Base: `/api/student/enrollment/admissions/applications/{applicationId}/joining-d
 
 | Method and relative route | Contract |
 |---|---|
-| `GET` | Shared joining date, current application stamp, academic-year bounds, and server-controlled `canEdit`, `canPreview`, `isLocked`, and `lockReason`. Requires Finance Fee Collections View and existing application/onboarding scope. |
-| `POST preview` | Candidate `joiningDate` as `yyyy-MM-dd` and existing variable-fee amounts. Returns Finance-calculated totals, optional existing proration result, and warnings. Does not save the date, create an account, or persist dues. |
+| `GET` | Shared joining date, current application stamp, academic-year bounds, and server-controlled `canEdit`, `canPreview`, `isLocked`, and `lockReason`. When `canSelectProrationPolicy` is true, also returns active policy options and `defaultProrationPolicyVersionId`. Requires Finance Fee Collections View and existing application/onboarding scope. |
+| `POST preview` | Candidate `joiningDate` as `yyyy-MM-dd`, optional `prorationPolicyVersionId`, and existing variable-fee amounts. Returns Finance-calculated totals, optional proration result, optional `prorationPolicy` identity (`policyId`, `policyVersionId`, `policyName`, `policyVersion`, `source`) when a policy is applied, and warnings. Does not save the date, create an account, or persist dues. |
 | `PUT` | Confirms `joiningDate` with `concurrencyStamp`; requires Finance Fee Collections Add plus Admission Applications Edit, or Student Onboarding Edit after finalization. Returns refreshed date state. |
 
-Confirmation is available in an open current Payment stage or open Onboarding case after a fee structure is selected. The date is stored on the application and synchronized to its current Registration bound/explicit legacy date answers, captured applicant data, and already-created Student captured admission data. Submitted form snapshots remain immutable and explicit form/application audit records confirmation. Any prepared assignment or payment evidence locks date changes; ordinary Registration saves enforce the same guard. Invalid dates and dates after the academic-year end are rejected. Dates before the year start remain valid actual facts; existing Finance policy determines their treatment. Collection preparation and payment still use the existing Finance endpoints and authority.
+Confirmation is available in an open current Payment stage or open Onboarding case after a fee structure is selected. The date is stored on the application and synchronized to its current Registration bound/explicit legacy date answers, captured applicant data, and already-created Student captured admission data. Submitted form snapshots remain immutable and explicit form/application audit records confirmation. Any prepared assignment or payment evidence locks date changes; ordinary Registration saves enforce the same guard. Invalid dates and dates after the academic-year end are rejected. Dates before the year start remain valid actual facts; existing Finance policy determines their treatment. `POST /api/fee-collections/admission-applications/{applicationId}/prepare` accepts optional `prorationPolicyVersionId` and `policyOverrideReason`; Finance verifies the active current version and requires `Finance.Fees.StructureAssign.OverridePolicies` plus a reason for a non-default policy before pinning it. Collection preparation and payment still use the existing Finance authority.
 
 ## Managed Offer stage APIs
 
@@ -1103,3 +1105,34 @@ Photo metadata contains `hasPhoto`, private `url`, opaque `version`, `maxBytes:3
 PhotoChange contains `id`, `studentId`, native Records `status`, optional authenticated `proposedPhotoUrl`, `createdAt`, `rejectionReason`, and `exceptionCode`. Only Applied changes replace `Student.PhotoBlobName`. Exact actor/payload/snapshot retries return the original applied change; mismatched keys return `Students:Records:IdempotencyConflict`. An in-flight zero-approval change still prevents concurrent replacement until it finishes. Older approval-based requests are retained without blocking new mobile updates; their snapshot checks prevent overwriting a newer image. A nonapplied immediate command returns a business failure rather than a successful save. Other safe errors include `PhotoChangePending`, `InvalidPhoto`, `PhotoTooLarge`, `InvalidPhotoDraft`, `StaleSnapshot`, and `AuthorityChanged` under the `Students:Records:` prefix.
 
 Metadata pendingChange reports an in-flight zero-approval photo change without exposing another actor's draft URL. When no immediate change is in flight, it reports the latest zero-approval photo change only if it is the caller's portal submission. Legacy approval-based requests remain in staff history rather than disabling the mobile picker.
+
+## Parent Registration link APIs
+
+Staff routes use `/api/student/enrollment/admissions/applications/{applicationId}/parent-registration`. Reads require existing Applications View; commands require existing Applications Add/Edit and application scope. Document delegation additionally requires the existing Documents Add/Upload authority. Application services repeat the authorization boundary; no new permission grant or reseeding is introduced.
+
+| Method / suffix | Contract |
+|---|---|
+| GET root | Saved recipient choices, request/delivery/progress, concurrency stamp, correction choices and server capabilities; never the stored token |
+| POST `/send` | `{recipientRelationship, concurrencyStamp, idempotencyKey}`; create or replace a seven-day initial link |
+| POST `/email` | Send-command fields plus `{email,expectedEmail,reason?}`; compare the saved adult email and application stamp, save an eligible draft contact, synchronize compatible draft answers, revoke prior links and return refreshed context without sending |
+| POST `/corrections` | Send input plus `{notes,fieldCodes,documents:[{stageInstanceId,requirementCode}]}`; grant only requested eligible changes |
+| POST `/revoke`, `/takeover`, `/retry-delivery` | `{concurrencyStamp,idempotencyKey}`; retries retain the existing eligibility and uncertain-delivery safeguards |
+| POST `/apply` | Command plus `{reason}`; apply a ready post-submission proposal through the audited form-correction owner |
+
+Recipients expose `canChangeEmail` and `emailChangeBlockedReason`; submitted or linked/shared contact edits retain their governed owner. `canRequestDocumentCorrections` identifies the current eligible Documents stage; a document-only correction has empty `fieldCodes` and nonempty current-stage `documents`. `emailDeliveryBlockedReason` explains an explicitly unavailable Email setup without blocking staff form editing. Application-wide profile scope is revalidated for email changes, and exact command retries never restore an older email after a later edit.
+
+Public routes use `/api/public/admission-registration` and require exactly one `X-Admission-Registration-Token` header. They return raw context rather than the staff Result envelope. Responses are private/no-store. The frontend receives its token in a URL fragment, keeping it out of route/query logging.
+
+Parent invitations include a common five-rule guide in the token-free campaign text. SMTP registration delivery creates an email-safe HTML body only in the transient gateway request, with an encoded saved-recipient greeting, application reference and private Complete Registration link. Ordinary SMTP messages retain plain-text delivery and link appending; other providers retain their existing payload. Capital-letter copy is guidance only where requested, not automatic normalization or a new form validator. The public frontend and API do not require a parent account. Email URLs come from `App:ClientUrl` (legacy fallback `App:AngularUrl`) and must point to the frontend for the issuing backend/database; changing a localhost email's hostname alone does not transfer its grant.
+
+| Method / suffix | Contract |
+|---|---|
+| GET root | Public-safe frozen definition/values, school/applicant context, editable codes, requirements, capabilities and opaque `snapshotToken` |
+| PUT `/draft` | `{snapshotToken,idempotencyKey,values:[{fieldCode,valueJson}]}`; initial shared draft save or restricted later proposal |
+| POST `/hand-in` | `{snapshotToken,idempotencyKey}`; validate completeness and lock parent editing without formal submission |
+| POST `/documents/{stageInstanceId}/{requirementCode}` | Multipart `file`, `snapshotToken`, `idempotencyKey`, optional `notes`; canonical file validation and new private evidence revision |
+| GET `/files/{evidenceId}` | Private binary, reauthorized against this request/application/requirement |
+
+Public schema omits protected identity, sibling and staff metadata. The allowlisted `runtimeBindingKey` preserves display/validation semantics only; it grants no write authority. Snapshot checks reject stale writes while exact retries reuse their operation. Error family `Admissions.ParentRegistration` includes `.Unavailable`, `.Conflict`, `.Invalid` and `.Incomplete`; field validation uses `data.FieldErrors`. Expired/revoked/unknown tokens share the unavailable response without applicant details.
+
+Canonical evidence now permits a null staff `submittedBy` for a parent upload and supplies `parentRegistrationId`/`parentContactJson` to authorized staff history. Existing staff rows retain their attribution. Review and apply `20261104101347_AddAdmissionParentRegistration` before enabling these endpoints; source generation does not mean a database has been migrated. See [testing](./testing.md#parent-registration-validation).

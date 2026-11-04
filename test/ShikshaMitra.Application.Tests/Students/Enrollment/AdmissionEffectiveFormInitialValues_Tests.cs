@@ -3,11 +3,37 @@ using System.Collections.Generic;
 using System.Text.Json;
 using Shouldly;
 using Xunit;
+using Volo.Abp.Data;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionEffectiveFormInitialValues_Tests
 {
+	[Theory]
+	[InlineData("father", "Father")]
+	[InlineData("mother", "Mother")]
+	[InlineData("guardian", "Guardian")]
+	public void Registration_relationship_prefills_only_from_the_explicit_captured_contact_role(string role, string expected)
+	{
+		var applicant = Applicant();
+		applicant.SetProperty("AdmissionPrimaryContactRelationship", role);
+		var field = new AdmissionFormFieldDto { BindingType = AdmissionFormBindingType.System,
+			BindingKey = "Guardian.Relationship", FieldType = AdmissionFormFieldType.Text };
+		AdmissionApplicationLifecycleService.ResolveFrozenInitialValue(field, applicant, null, new Dictionary<string, string>())
+			.ShouldBe(JsonSerializer.Serialize(expected));
+	}
+
+	[Fact]
+	public void Registration_relationship_keeps_a_saved_kinship_value_over_the_primary_contact_role()
+	{
+		var applicant = Applicant();
+		applicant.SetProperty("AdmissionPrimaryContactRelationship", "guardian");
+		applicant.SetProperty("AdmissionStudentField.Guardian.Relationship", "Aunt");
+		var field = new AdmissionFormFieldDto { BindingType = AdmissionFormBindingType.System,
+			BindingKey = "Guardian.Relationship", FieldType = AdmissionFormFieldType.Text };
+		AdmissionApplicationLifecycleService.ResolveFrozenInitialValue(field, applicant, null, new Dictionary<string, string>())
+			.ShouldBe("\"Aunt\"");
+	}
 	[Fact]
 	public void Structured_first_name_does_not_prefill_with_the_whole_original_inquiry_name()
 	{

@@ -96,7 +96,7 @@ public class AdmissionDocumentPolicyAndEvidence_Tests
 		var observer = Guid.NewGuid();
 		var row = new AdmissionDocumentEvidence(Guid.NewGuid(), null, Guid.NewGuid(), Guid.NewGuid(), Requirement() with { CollectionMode = "both" },
 			2, "original", observer, DateTime.UtcNow, "{}", upload.GetFile(), observer, DateTime.UtcNow, "Inspected original");
-		foreach (var actor in new[] { upload.SubmittedBy, observer })
+		foreach (var actor in new[] { upload.SubmittedBy!.Value, observer })
 			Should.Throw<BusinessException>(() => new AdmissionDocumentReview(Guid.NewGuid(), null, row, Policy() with { RequireIndependentReview = true }, "accepted", null, actor, DateTime.UtcNow));
 	}
 	[Fact]

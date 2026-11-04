@@ -22,6 +22,9 @@ function Get-BackendProcessTarget {
     if (![IO.Path]::IsPathRooted($application)) { return '' }
     $application = [IO.Path]::GetFullPath($application).Replace('/', '\')
     $root = [IO.Path]::GetFullPath($Repository).TrimEnd('\', '/') + '\'
+    if (!$application.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { return '' }
+    $relativeApplication = $application.Substring($root.Length)
+    if ($relativeApplication -match '(?:^|\\)(?:release|publish|published)\\') { return '' }
     foreach ($entry in @(
         @{ Project = 'ShikshaMitra.HttpApi.Host'; Target = 'Host' },
         @{ Project = 'ShikshaMitra.DbMigrator'; Target = 'DbMigrator' }
@@ -30,8 +33,7 @@ function Get-BackendProcessTarget {
         $normalOutput = $root + 'src\' + $entry.Project + '\bin\Debug\'
         $artifactOutput = $root + '.artifacts\'
         if ($application.StartsWith($normalOutput, [StringComparison]::OrdinalIgnoreCase) -or
-            ($application.StartsWith($artifactOutput, [StringComparison]::OrdinalIgnoreCase) -and
-             $application -match '\\bin\\' -and $application -notmatch '\\release\\')) {
+            $application.StartsWith($artifactOutput, [StringComparison]::OrdinalIgnoreCase)) {
             return $entry.Target
         }
     }

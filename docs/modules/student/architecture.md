@@ -1,9 +1,9 @@
-﻿---
+---
 module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-11-03
+updated_on: 2026-11-04
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -402,3 +402,19 @@ Finance mappings and commands are not modified.
 | Contract/errors | `src/ShikshaMitra.Application.Contracts/Students/Dashboard/`, `src/ShikshaMitra.Domain.Shared/Students/Dashboard/` |
 
 Readers reuse Records enrollment scope, Admission inquiry/application scope, exact division scope and Portal association services. Counts/grouping/projections execute in SQL; full populations are not materialized. Queries run sequentially on the request DbContext. The frontend independently loads authorized sections, so one failed section can be retried alone. There is no server aggregate cache that could cross identity/scope boundaries and no new persistence schema. Existing Reporting dashboard providers remain separate for compatible consumers.
+
+## Parent Registration capability ownership
+
+| Concern | Owner |
+|---|---|
+| Durable expiring grant, recipient snapshot, operations and proposals | `Domain/Students/StudentEnrollments/Admissions/Aggregates/AdmissionParentRegistration.cs` |
+| Saved sender/recipient/tenant/scope and snapshot validation | `Application/Students/StudentEnrollments/Admissions/AdmissionParentRegistrationAccess.cs` and `AdmissionParentRegistrationData.cs` |
+| Staff send/revoke/takeover/correction/apply | `AdmissionParentRegistrationAppService.cs` and its command partial |
+| Saved applicant-specific parent email and compatible draft-answer synchronization | `AdmissionParentRegistrationAppService.Email.cs` and `AdmissionFamilyContactCapture.cs`; shared Guardian and Identity owners remain separate |
+| Safe frozen schema, canonical form validation and known document requirements | `AdmissionParentRegistrationSchema.cs`, `AdmissionParentRegistrationForms.cs`, `AdmissionParentRegistrationDocuments.cs` |
+| Parent reads/saves/hand-in/private files | `AdmissionParentRegistrationPublicAppService.cs` and its document partial |
+| Canonical draft mapping and audited proposal application | Existing `AdmissionApplicationFormService` parent/correction adapters |
+| Delivery | `AdmissionParentRegistrationDeliveryJob.cs`, `CommunicationAppService.ParentRegistration.cs` and `SmtpCommunicationChannelGateway`; the onboarding ABP sender is reused only for the private transactional no-Email-configuration fallback |
+| HTTP and persistence | Parent Registration controllers and `AdmissionParentRegistrationConfiguration.cs` |
+
+Paths without a layer prefix in this table are under `Application/Students/StudentEnrollments/Admissions/`, except the explicitly named Communication partial. The public capability is separate from staff identity; evaluating current sender authority must not attribute parent writes to that sender. Existing document owners retain file validation, revisions, review and Student linkage. Safe frontend rendering remains owned by the [Student frontend](../../../../Shikshamitra-FE/docs/student/clients.md#parent-registration-clients).

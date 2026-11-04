@@ -60,9 +60,12 @@ public partial class AdmissionApplicationFormService(
 		var prefill = applicant == null || application.Status != AdmissionApplicationStatus.Draft || application.SubmittedAt.HasValue ? new AdmissionApplicationFormDto { Values = storedValues } :
 			await LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingRegistrationPrefillService>()
 				.ProjectAsync(applicant, instance, definitionDto, storedValues);
+		if (applicant != null && application.Status == AdmissionApplicationStatus.Draft && !application.SubmittedAt.HasValue)
+			AdmissionRegistrationRelationshipPrefill.Project(definitionDto, applicant, prefill, formValidator);
 		var correctionBlockedReason = await GetCorrectionBlockedReasonAsync(application);
 		return new AdmissionApplicationFormDto
 		{
+			ConcurrencyStamp = application.ConcurrencyStamp,
 			CanCorrectForm = correctionBlockedReason == null,
 			CorrectionBlockedReason = correctionBlockedReason,
 			FormInstanceId = instance.Id,
@@ -131,7 +134,8 @@ public partial class AdmissionApplicationFormService(
 		IReadOnlySet<string> visibleCodes, IReadOnlySet<string>? writableCodes)
 	{
 		var allowed = definition.Sections.Where(section => !section.IsRepeatable).SelectMany(section => section.Fields)
-			.Where(AdmissionSiblingRegistrationPrefillPolicy.CanAutomaticallyFill).Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+			.Where(field => AdmissionSiblingRegistrationPrefillPolicy.CanAutomaticallyFill(field) || AdmissionRegistrationRelationshipPrefill.CanFill(field))
+			.Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
 		var hints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var code in input.AutoFilledFieldCodes ?? [])
 		{
@@ -146,7 +150,7 @@ public partial class AdmissionApplicationFormService(
 	}
 
 	private async Task<UpdateAdmissionApplicationFormValuesDto> ApplyValuesAsync(AdmissionApplication application, AdmissionFormInstance instance,
-		UpdateAdmissionApplicationFormValuesDto input, IReadOnlySet<string>? writableCodesOverride = null, AdmissionApplicant? loadedApplicant = null)
+		UpdateAdmissionApplicationFormValuesDto input, IReadOnlySet<string>? writableCodesOverride = null, AdmissionApplicant? loadedApplicant = null, bool parentAuthor = false)
 	{
 		var existingValues = await valueRepository.GetListAsync(value => value.FormInstanceId == instance.Id);
 		var frozen = AdmissionEffectiveFormStore.Read(instance);
@@ -159,7 +163,7 @@ public partial class AdmissionApplicationFormService(
 			.GuardFormChangeAsync(application, definitions, input.Values);
 		var applicant = loadedApplicant ?? await applicantRepository.FindAsync(application.ApplicantId);
 		AdmissionGuardian? guardian = null;
-		if (applicant is not null && definitions.Any(field => field.BindingType == AdmissionFormBindingType.System && field.BindingKey?.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase) == true))
+		if (!parentAuthor && applicant is not null && definitions.Any(field => field.BindingType == AdmissionFormBindingType.System && field.BindingKey?.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase) == true))
 		{
 			var family = await familyRepository.FindAsync(applicant.FamilyId);
 			if (family?.PrimaryGuardianId is Guid guardianId) guardian = await guardianRepository.FindAsync(guardianId);
@@ -216,7 +220,8 @@ public partial class AdmissionApplicationFormService(
 			var visibleCodes = AdmissionEffectiveFormResolver.VisibleFieldCodes(definition, current, formValidator);
 			automaticCodes = ValidateAutomaticHints(definition, input, visibleCodes, writableCodes);
 			if (!genericParent) automaticCodes.RemoveWhere(code => definitions.Any(field => string.Equals(field.Code, code, StringComparison.OrdinalIgnoreCase) &&
-				field.BindingKey?.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase) == true));
+				field.BindingKey?.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase) == true &&
+				!string.Equals(field.BindingKey, "Guardian.Relationship", StringComparison.OrdinalIgnoreCase)));
 			input = ProtectAutomaticOccupationAliases(definition, input, genericParent ? sibling?.Relationship : null, automaticCodes, writableCodes ?? visibleCodes);
 			if (automaticCodes.Count > 0 && sibling != null)
 				prefill = await LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingRegistrationPrefillService>().ProjectAsync(applicant!, instance,
@@ -225,7 +230,7 @@ public partial class AdmissionApplicationFormService(
 		else if (input.AutoFilledFieldCodes?.Count > 0)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed, "Automatic field hints apply only to an initial draft.");
 		var acceptedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		if (applicant != null)
+		if (!parentAuthor && applicant != null)
 			await RecoverFirstParentContactAsync(application, applicant, instance, definitions, existingValues);
 		var parentAnswers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var item in input.Values
@@ -290,7 +295,9 @@ public partial class AdmissionApplicationFormService(
 		if (guardian is not null && applicant?.ExistingStudentId.HasValue != true && (applicant == null || AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null)) await guardianRepository.UpdateAsync(guardian, false);
 		if (prefill?.FamilyPrefill != null)
 		{
-			var copied = automaticCodes.Where(acceptedCodes.Contains).ToArray();
+			var copied = automaticCodes.Where(code => acceptedCodes.Contains(code) &&
+				!definitions.Any(field => string.Equals(field.Code, code, StringComparison.OrdinalIgnoreCase) &&
+					string.Equals(field.BindingKey, "Guardian.Relationship", StringComparison.OrdinalIgnoreCase))).ToArray();
 			if (copied.Length > 0) await LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingRegistrationPrefillService>()
 				.RecordAsync(instance, prefill.FamilyPrefill, copied, clientReported: true);
 		}

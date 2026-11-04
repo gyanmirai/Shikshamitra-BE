@@ -147,6 +147,39 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 			request.Failed(DateTime.UtcNow);
 		}
 		await requests.UpdateAsync(request, false); await delivery.CompleteAsync();
+		if (request.Status is "Sent" or "Failed" or "Cancelled")
+			await RefreshOnboardingAfterDeliveryAsync(request);
+	}
+	private async Task RefreshOnboardingAfterDeliveryAsync(StudentCredentialEmailRequest request)
+	{
+		if (!request.RequestedByUserId.HasValue || !tenant.Id.HasValue) return;
+		var actor = await users.FindByIdAsync(request.RequestedByUserId.Value.ToString());
+		if (actor == null || !actor.IsActive || actor.TenantId != tenant.Id) return;
+		using var principal = currentPrincipal.Change(await principals.CreateAsync(actor));
+		if (!await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)) return;
+		try
+		{
+			await onboarding.EnsureCaseAccessAsync(request.CaseId);
+			for (var attempt = 0; attempt < 3; attempt++)
+			{
+				var current = await onboarding.GetAsync(request.CaseId);
+				if (current == null || string.IsNullOrWhiteSpace(current.ConcurrencyStamp)) return;
+				try
+				{
+					await onboarding.RefreshReadinessAsync(request.CaseId, current.ConcurrencyStamp);
+					return;
+				}
+				catch (BusinessException exception) when (exception.Code == StudentOnboardingErrorCodes.ConcurrencyConflict && attempt < 2)
+				{
+					// A concurrent setup edit may win the first refresh stamp; retry against the saved case.
+				}
+			}
+		}
+		catch (AbpAuthorizationException)
+		{
+			// A queued delivery can outlive the sender's academic-scope assignment.
+			// Do not let the background worker bypass that scope to update the case.
+		}
 	}
 	private static string GenerateInitialPassword()
 	{

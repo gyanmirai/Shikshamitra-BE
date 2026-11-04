@@ -127,7 +127,7 @@ public class AdmissionDocumentReadService(AdmissionDocumentAccessService access,
 	{
 		Id = evidence.Id, VersionNumber = evidence.VersionNumber, Kind = evidence.Kind, FileName = evidence.FileName,
 		ContentType = evidence.ContentType, Size = evidence.Size, Sha256Hash = evidence.Sha256Hash, OriginalSeen = evidence.OriginalSeen,
-		OriginalSeenBy = evidence.OriginalSeenBy, OriginalSeenAt = evidence.OriginalSeenAt, SubmittedBy = evidence.SubmittedBy,
+		OriginalSeenBy = evidence.OriginalSeenBy, OriginalSeenAt = evidence.OriginalSeenAt, SubmittedBy = evidence.SubmittedBy, ParentRegistrationId = evidence.ParentRegistrationId, ParentContactJson = evidence.ParentContactJson,
 		SubmittedAt = evidence.SubmittedAt, Notes = evidence.Notes, Status = AdmissionDocumentRules.Status(evidence, reviews),
 		CanDownload = canDownload && evidence.BlobName != null,
 		Reviews = reviews.Where(review => review.EvidenceId == evidence.Id).OrderBy(review => review.ReviewedAt).Select(review => new AdmissionDocumentReviewDto

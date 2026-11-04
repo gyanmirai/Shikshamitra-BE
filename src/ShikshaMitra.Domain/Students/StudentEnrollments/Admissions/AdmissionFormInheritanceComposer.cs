@@ -12,7 +12,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public static class AdmissionFormInheritanceComposer
 {
 	public static AdmissionFormInheritanceComposition Compose(
-		AdmissionFormSchema registration, AdmissionFormSchema? inquiry, AdmissionFormInheritancePolicy policy)
+		AdmissionFormSchema registration, AdmissionFormSchema? inquiry, AdmissionFormInheritancePolicy policy,
+		int? coreFieldPolicyVersion = null)
 	{
 		var result = new AdmissionFormInheritanceComposition { Definition = Clone(registration) };
 		if (!policy.Enabled || inquiry == null) return result;
@@ -103,7 +104,9 @@ public static class AdmissionFormInheritanceComposer
 			inheritedSection.Id = StableId(registration.Id, inquiry.Id, inheritedSection.Code);
 			sourceSectionIds.Add(inheritedSection.Id);
 			inheritedSection.DisplayOrder = nextSectionOrder++;
-			inheritedSection.FieldsPerRow = inquiry.FieldsPerRow;
+			// Registration's Grid Layout is the effective layout for the combined form,
+			// including sections copied from the selected Inquiry version.
+			inheritedSection.FieldsPerRow = registration.FieldsPerRow;
 			inheritedSection.Fields = [];
 			FillTranslations(inheritedSection.Translations, inquiry.DefaultLanguage, languages, sourceSection.Name, null, null);
 			inheritedSection.VisibilityRuleJson = Rewrite(sourceSection.VisibilityRuleJson, codeMap);
@@ -145,6 +148,16 @@ public static class AdmissionFormInheritanceComposer
 				FillTranslations(inherited.Translations, inquiry.DefaultLanguage, languages, source.Label, source.Placeholder, source.HelpText);
 				// The source definition owns all answer requirements and settings.
 				inherited.Required = source.Required;
+				var registrationRequiresCoreIdentity = (target?.Required == true || coreFieldPolicyVersion == 1) && identity is
+					"system:APPLICANT.DATEOFBIRTH" or "system:APPLICANT.GENDER";
+				if (registrationRequiresCoreIdentity)
+				{
+					// DOB and Gender are mandatory Registration identity. Apply that requirement
+					// to this composed clone only; Inquiry stays unchanged and other inherited
+					// questions remain source-owned.
+					inherited.Required = true;
+					inherited.RequiredRuleJson = null;
+				}
 				if (source.BindingKey?.StartsWith("Inquiry.", StringComparison.OrdinalIgnoreCase) == true)
 				{
 					inherited.ReadOnly = true;
@@ -168,7 +181,7 @@ public static class AdmissionFormInheritanceComposer
 					if (!string.IsNullOrWhiteSpace(targetSection.VisibilityRuleJson) || !string.IsNullOrWhiteSpace(targetSection.StepVisibilityRuleJson) ||
 						(!string.IsNullOrWhiteSpace(target.VisibilityRuleJson) && !string.Equals(target.VisibilityRuleJson, inherited.VisibilityRuleJson, StringComparison.Ordinal)))
 						Issue(result, "VisibilityConflict", "Move this shared question to an unconditional Registration section so its Inquiry visibility stays authoritative.", identity);
-					if (!string.IsNullOrWhiteSpace(target.RequiredRuleJson) && !EquivalentJson(target.RequiredRuleJson, inherited.RequiredRuleJson))
+					if (!registrationRequiresCoreIdentity && !string.IsNullOrWhiteSpace(target.RequiredRuleJson) && !EquivalentJson(target.RequiredRuleJson, inherited.RequiredRuleJson))
 						Issue(result, "RequiredRuleConflict", "The Registration question has a different conditional requirement. Keep the Inquiry rule unchanged before reusing it.", identity);
 					if (!string.IsNullOrWhiteSpace(target.ValidationJson) && !EquivalentJson(target.ValidationJson, inherited.ValidationJson))
 						Issue(result, "ValidationConflict", "The Registration question has different validation. Keep the Inquiry validation unchanged before reusing it.", identity);

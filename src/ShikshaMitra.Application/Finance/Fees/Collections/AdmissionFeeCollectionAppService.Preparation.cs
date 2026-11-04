@@ -24,6 +24,8 @@ public partial class AdmissionFeeCollectionAppService
 			v.Amount == 0m && string.IsNullOrWhiteSpace(v.ZeroAmountReason)) ||
 			input.VariableFeeHeads.Select(v => v.FeeHeadId).Distinct().Count() != input.VariableFeeHeads.Count)
 			throw new Volo.Abp.Validation.AbpValidationException("Invalid variable fee amounts.");
+		if (input.PolicyOverrideReason?.Length > 500)
+			throw new Volo.Abp.Validation.AbpValidationException("Policy override reason must be 500 characters or fewer.");
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View);
 		using var unit = units.Begin(new Volo.Abp.Uow.AbpUnitOfWorkOptions
 		{ IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.Serializable }, requiresNew: true);
@@ -32,7 +34,9 @@ public partial class AdmissionFeeCollectionAppService
 		var account = await accounts.FindAsync(a => a.ApplicationId == applicationId && a.AcademicYearId == source.AcademicYearId);
 		if (account != null) await scope.EnsureFeeAccountAccessibleAsync(account);
 		var saved = account?.AssignmentSnapshotJson == null ? null : ReadAssignment(account);
-		if (saved != null && SelectionMatches(source, saved) && (input.VariableFeeHeads.Count == 0 || VariableAmountsMatch(saved, input.VariableFeeHeads)))
+		if (saved != null && SelectionMatches(source, saved) &&
+			(!input.ProrationPolicyVersionId.HasValue || saved.ProrationPolicyVersionId == input.ProrationPolicyVersionId) &&
+			(input.VariableFeeHeads.Count == 0 || VariableAmountsMatch(saved, input.VariableFeeHeads)))
 		{
 			if (source.StudentId.HasValue)
 			{
@@ -79,7 +83,8 @@ public partial class AdmissionFeeCollectionAppService
 		}
 		else
 		{
-			var calculated = await assignmentCalculator.PrepareAdmissionAsync(source, account.Id, input.VariableFeeHeads);
+			var calculated = await assignmentCalculator.PrepareAdmissionAsync(source, account.Id, input.VariableFeeHeads,
+				input.ProrationPolicyVersionId, input.PolicyOverrideReason, requireOverrideReason: false);
 			account.CaptureAssignment(calculated.Structure.Id, calculated.Structure.RevisionNumber, JsonSerializer.Serialize(calculated.Preview), calculated.Fingerprint);
 			await dues.InsertManyAsync(calculated.Dues, false);
 		}

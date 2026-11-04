@@ -26,6 +26,8 @@ public class AdmissionDocumentConfiguration : IEntityTypeConfiguration<Admission
 		builder.Property(item => item.Sha256Hash).HasMaxLength(64);
 		builder.Property(item => item.BlobName).HasMaxLength(512);
 		builder.Property(item => item.Notes).HasMaxLength(1024);
+		builder.Property(item => item.ParentContactJson).HasMaxLength(2048);
+		builder.HasOne<AdmissionParentRegistration>().WithMany().HasForeignKey(item => item.ParentRegistrationId).OnDelete(DeleteBehavior.Restrict);
 		builder.Property(item => item.PolicySnapshotJson).HasColumnType("text").IsRequired();
 		builder.Ignore(item => item.OriginalSeen);
 		builder.HasIndex(item => new { item.StageInstanceId, item.RequirementCode, item.VersionNumber }).IsUnique().HasDatabaseName("UX_AdmissionDocuments_Stage_Requirement_Version");

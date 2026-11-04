@@ -115,6 +115,9 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		services.AddRateLimiter(options =>
 		{
 			options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+			options.AddPolicy("public-admission-registration", context =>
+				RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+					_ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 			options.AddPolicy("public-admission-inquiry", context =>
 				RateLimitPartition.GetFixedWindowLimiter(
 					context.Request.RouteValues["token"]?.ToString() ?? "unknown",

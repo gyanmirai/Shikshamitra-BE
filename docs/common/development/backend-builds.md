@@ -3,7 +3,7 @@ module: common
 domain: development
 content_type: How-to
 status: canonical
-updated_on: 2026-11-03
+updated_on: 2026-11-04
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -27,8 +27,10 @@ powershell.exe -NoProfile -File scripts/local/Stop-BackendProcess.ps1 -Target Db
 
 Cleanup intentionally stops the selected target's existing development instance before rebuilding it.
 It identifies direct `dotnet <absolute DLL>` processes and native apphosts in this checkout's Debug output or local `.artifacts` build output.
+Both standard `bin` layouts and flat runtime folders such as `.artifacts/relationship-validation-runtime/` are recognized;
+ownership depends on the exact application name and checkout path, not an intermediate folder name.
 It also releases an associated `vsdbg`/`vsdbg-ui` adapter when its children belong to that same target and its own Windows console host.
-It preserves the other target, test/build/compiler processes, other checkouts, published outputs, and Release outputs.
+It preserves the other target, test/build/compiler processes, other checkouts, and paths under `publish`, `published`, or `Release` output folders.
 The wrapper Host task additionally opts into `-IncludeRelatedWorktreePortOwners`:
 it can release a development API occupying `44332`/`5000` in another registered worktree of this same Git repository.
 Registration and the common Git directory are verified before selecting that worktree;

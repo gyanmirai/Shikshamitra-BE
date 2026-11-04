@@ -38,6 +38,26 @@ public class PortalElectivePreferenceAppService_Tests : ShikshaMitraApplicationT
 {
     private IPortalElectivePreferenceAppService Service => GetRequiredService<IPortalElectivePreferenceAppService>();
 	[Fact]
+	public Task Corrected_preference_is_visible_while_original_submission_remains_immutable() => WithUnitOfWorkAsync(async () =>
+	{
+		var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+		var f = await Seed(id); using var identity = SignIn(f.User.Id);
+		var group = await AddGroup(f);
+		var originalId = group.Subjects.First().SubjectId;
+		var correctedId = group.Subjects.Last().SubjectId;
+		var correctedSubject = await GetRequiredService<IRepository<Subject, Guid>>().GetAsync(correctedId);
+		var receipt = await Insert(new StudentElectivePreferenceSubmission(Guid.NewGuid(), id, f.Student.Id,
+			f.Year.Id, group.Id, originalId, "Original preference", f.User.Id, DateTime.UtcNow, Guid.NewGuid()));
+		var selection = new StudentElectiveSelection(Guid.NewGuid(), id, f.Student.Id, group.Id, originalId, f.Medium.Id, "Original preference");
+		selection.LockSelection(); selection.CorrectLockedSelection(correctedId, correctedId, correctedSubject.Name);
+		await Insert(selection);
+		var state = await Service.GetAsync(f.Student.Id, f.Year.Id);
+		var choice = state.Groups.Single();
+		choice.PreferredSubjectId.ShouldBe(correctedId); choice.PreferredSubjectName.ShouldBe(correctedSubject.Name);
+		choice.AssignedSubjectId.ShouldBe(correctedId); choice.Status.ShouldBe("approved"); choice.CanSubmit.ShouldBeFalse();
+		(await GetRequiredService<IRepository<StudentElectivePreferenceSubmission, Guid>>().GetAsync(receipt.Id)).PreferredSubjectId.ShouldBe(originalId);
+	});
+	[Fact]
 	public Task Direct_calls_reject_foreign_child_tenant_historical_year_and_inactive_identity() => WithUnitOfWorkAsync(async () =>
 	{
 		var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);

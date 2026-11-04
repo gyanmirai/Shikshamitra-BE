@@ -1,6 +1,10 @@
 {
     "Culture": "en",
     "Texts": {
+        "ClassManagement:ElectiveCorrectionReviewChanged": "The assignment or its affected records changed, or the review expired. Review the changes again before confirming.",
+        "ClassManagement:InvalidElectiveCorrection": "The student, class, division, elective group, or subject is unavailable in the selected context. Refresh the screen and check your choices.",
+        "ClassManagement:CorrectionRequiresLockedSelection": "This assignment is no longer locked. Refresh the screen before editing it.",
+        "ClassManagement:ElectiveCorrectionNoChanges": "Choose a different subject or preference before reviewing the change.",
         "Academic:Calendar:InvalidDateRange": "Calendar end date must be after its start date.",
         "Academic:Calendar:DatesExcludeMarkers": "These dates would exclude active entries in {Calendar}. Move or cancel those entries before shortening the institute dates.",
         "Academic:Calendar:BoardOutsideAcademicYear": "The dates for {Board} would fall outside the academic year. Update the board dates before shortening the academic year.",

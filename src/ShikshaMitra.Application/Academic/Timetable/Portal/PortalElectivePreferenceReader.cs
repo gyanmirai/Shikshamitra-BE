@@ -60,7 +60,8 @@ public class PortalElectivePreferenceReader(
 			var selection = candidates.SingleOrDefault(x => !x.IsDeleted);
 			var slots = timetable.Slots.Where(x => x.ElectiveGroupId == groupId).ToList();
 			var dto = new PortalElectivePreferenceGroupDto { ElectiveGroupId = groupId, Name = group?.Name ?? "Elective group",
-				PreferredSubjectId = receipt?.PreferredSubjectId, PreferredSubjectName = receipt?.PreferredSubjectName ?? selection?.StudentPreference,
+				PreferredSubjectId = selection?.PreferenceOverrideSubjectId ?? receipt?.PreferredSubjectId,
+				PreferredSubjectName = selection?.PreferenceOverrideSubjectId.HasValue == true ? selection.StudentPreference : receipt?.PreferredSubjectName ?? selection?.StudentPreference,
 				SubmittedAt = receipt?.SubmittedAt, AssignedSubjectId = selection?.SelectedSubjectId,
 				AssignedSubjectName = selection != null ? subjectRows.GetValueOrDefault(selection.SelectedSubjectId)?.Name : null };
 			if (group?.Status == SubjectMasterStatus.Active && group.AcademicMediumId == student.AcademicMediumId)

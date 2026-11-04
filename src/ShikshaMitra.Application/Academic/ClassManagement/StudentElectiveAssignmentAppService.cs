@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Students;
@@ -121,6 +122,9 @@ public class StudentElectiveAssignmentAppService(
 
 		var result = new PaginatedStudentElectiveResponseDto
 		{
+			CanCorrectLockedAssignments = CurrentTenant.Id.HasValue && CurrentUser.Id.HasValue &&
+				await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Security.Permissions.AdminPermissionAccess>().IsAdminAsync(CurrentUser.Id.Value) &&
+				await AuthorizationService.IsGrantedAsync(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.ClassManagement.StudentElectiveAssignment.Add),
 			TotalRecords = students.Count,
 			IsLocked = rosterLockStates.Count > 0 && rosterLockStates.All(locked => locked),
 			SubjectOptions = subjectOptions,

@@ -3,7 +3,7 @@ module: academic
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-03
+updated_on: 2026-11-04
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -172,3 +172,14 @@ Validation and business errors return 400.
 Visit conflicts retry with fresh units of work, up to three attempts, preserving the winning marker.
 Progress conflicts require refetching the current year state before deciding whether to retry.
 No request restores permissions, changes scope or resets school data.
+
+## Locked elective corrections
+
+Both commands require `ShikshaMitraSubmodulePermissions.ClassManagement.StudentElectiveAssignment.Add` and current persisted membership of the tenant's protected `admin` role. Configured data-scope rules, including the separately configured administrator scope exception, remain enforced. The elective roster response supplies `canCorrectLockedAssignments`; client role claims do not authorize a correction.
+
+| Endpoint | Contract |
+|---|---|
+| `POST /api/class-management/student-elective-assignments/corrections/preview` | `StudentElectiveCorrectionInput`: `academicMediumId`, `classId`, `divisionId`, `electiveGroupId`, `studentId`, `selectedSubjectId`, optional `preferredSubjectId` and `reason` (maximum 1,000 characters). Null preference retains the current preference. Returns old/new labels, all detected impacts, `reviewToken` and `expiresAt`. No mutation. |
+| `POST /api/class-management/student-elective-assignments/corrections/confirm` | The identical input plus `reviewToken`. Revalidates admin membership, context, choices and related state in a serializable transaction; saves the locked selection and correction audit together. Returns 204. |
+
+The protected token expires after ten minutes and binds the user, tenant, input and reviewed state. Invalid or expired tokens and changed impacts return `ClassManagement:ElectiveCorrectionReviewChanged`; refresh and review again. Invalid context/choices return `ClassManagement:InvalidElectiveCorrection`; unlocked rows return `ClassManagement:CorrectionRequiresLockedSelection`; unchanged choices return `ClassManagement:ElectiveCorrectionNoChanges`. These business errors return 400; authorization failure returns 403. Existing academic records are preserved as described in [product rules](product.md#data-integrity).

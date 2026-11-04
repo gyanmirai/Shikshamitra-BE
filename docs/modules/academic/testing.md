@@ -3,7 +3,7 @@ module: academic
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-03
+updated_on: 2026-11-04
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -67,6 +67,14 @@ Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedNam
 Coverage includes IST midnight versus the previous UTC date, valid and blocked selected dates, calendar changes after draft creation, inactive calendars, other media/divisions, UTC storage round trips and one batched marker query across division schedules. These SQLite tests do not establish deployed PostgreSQL acceptance; the [frontend testing guide](../../../../Shikshamitra-FE/docs/academic/testing.md) owns browser evidence.
 
 ## Elective late admissions
+
+`StudentElectiveCorrectionAppService_Tests` covers forged admin claims, foreign context/tenant rejection, missing review, new marks after preview, published marks/frozen results/seating preservation, immutable original preference, retained lock, audit actor and replay rejection. `PortalElectivePreferenceAppService_Tests.Corrected_preference_is_visible_while_original_submission_remains_immutable` covers portal readback.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~StudentElectiveCorrectionAppService_Tests|FullyQualifiedName~StudentElectiveAssignmentAppService_Tests|FullyQualifiedName~StudentElectiveReadPerformance_Tests|FullyQualifiedName~PortalElectivePreferenceAppService_Tests" --artifacts-path .artifacts/elective-correction-tests -p:RunAnalyzers=false -p:UseSharedCompilation=false -m:1
+```
+
+Migration `AdminLockedElectiveCorrections` adds the preference override and concurrency stamp plus the correction audit table. Apply it before deploying the new API. Local SQLite tests validate behavior; PostgreSQL concurrency under simultaneous writers requires environment validation.
 
 Elective late-admission regression: `StudentElectiveAssignmentAppService_Tests.New_Admission_Should_Remain_Editable_Without_Unlocking_Existing_Students` covers initial locking, admission, search-independent lock status, incomplete-roster rejection, saving and locking new selections, and rejection of changes/deletions to locked selections. Run it with the shared-option/count regressions:
 

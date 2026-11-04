@@ -139,9 +139,10 @@ public partial class CollectFeeWorkflow
 	{
 		var chargeMap = new Dictionary<Guid, Charge>();
 		var pendingChargeMap = new Dictionary<Guid, double>();
+		var payableChargeMap = new Dictionary<Guid, decimal>();
 
 		if (input.ChargePayments is not { Count: > 0 })
-			return new ChargeValidationContext(chargeMap, pendingChargeMap);
+			return new ChargeValidationContext(chargeMap, pendingChargeMap, payableChargeMap);
 
 		var chargeIds = input.ChargePayments.Select(cp => cp.ChargeId).Distinct().ToList();
 		var charges = await chargeRepository.GetListAsync(c => chargeIds.Contains(c.Id) && c.Status == ChargeStatus.Approved);
@@ -171,11 +172,12 @@ public partial class CollectFeeWorkflow
 			var pending = Math.Max(0d, (double)charge.Amount - paid
 				- waivedPerCharge.GetValueOrDefault(cp.ChargeId, 0d));
 			pendingChargeMap[cp.ChargeId] = pending;
+			payableChargeMap[cp.ChargeId] = charge.Amount - (decimal)waivedPerCharge.GetValueOrDefault(cp.ChargeId, 0d);
 			if (cp.Amount > pending)
 				throw new BusinessException(FeeCollectionErrorCodes.AmountExceedsOutstanding)
 					.WithData("ChargeId", charge.Id).WithData("Pending", pending).WithData("Amount", cp.Amount);
 		}
 
-		return new ChargeValidationContext(chargeMap, pendingChargeMap);
+		return new ChargeValidationContext(chargeMap, pendingChargeMap, payableChargeMap);
 	}
 }

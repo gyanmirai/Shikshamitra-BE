@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using Volo.Abp;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
@@ -15,7 +16,9 @@ public partial class StudentFeeStructureAppService
 	public async Task<AssignmentBulkPreviewDto> PreviewBulkAsync(BulkAssignStudentFeeStructureDto input)
 	{
 		var result = new AssignmentBulkPreviewDto();
-		foreach (var item in BulkItems(input))
+		var items = BulkItems(input);
+		await ValidateBulkCorrectionGroupAsync(items);
+		foreach (var item in items)
 		{
 			try { result.Results.Add(new() { StudentId = item.StudentId, Preview = await PreviewAsync(item) }); }
 			catch (BusinessException ex) { result.Results.Add(new() { StudentId = item.StudentId, ErrorCode = ex.Code, ErrorMessage = AssignmentErrorMessage(ex.Code) }); }
@@ -25,11 +28,14 @@ public partial class StudentFeeStructureAppService
 	}
 
 	[Authorize(AssignPermission)]
+	[UnitOfWork(isTransactional: false)]
 	public async Task<BulkAssignStudentFeeStructureResultDto> BulkAssignAsync(BulkAssignStudentFeeStructureDto input)
 	{
 		var acceptedAt = Clock.Now;
 		var result = new BulkAssignStudentFeeStructureResultDto();
-		foreach (var item in BulkItems(input))
+		var items = BulkItems(input);
+		await ValidateBulkCorrectionGroupAsync(items);
+		foreach (var item in items)
 		{
 			try
 			{
@@ -68,6 +74,8 @@ public partial class StudentFeeStructureAppService
 	}
 
 	private static string AssignmentErrorMessage(string? code) => code switch {
+		AssignmentErrorCodes.StructureEditBlocked => "Payment or another financial workflow already uses this assignment. Refresh its details and use the existing financial correction workflows.",
+		AssignmentErrorCodes.MixedOriginalStructures => "Select students assigned to the same original fee structure and revision for a common edit.",
 		AssignmentErrorCodes.VariableAmountRequired => "Enter an amount for every included variable fee head before previewing.",
 		AssignmentErrorCodes.AlreadyAssigned => "A different fee assignment already exists for this year. View its details before making a correction.",
 		AssignmentErrorCodes.StalePreview => "The preview expired or its inputs changed. Preview this student again.",

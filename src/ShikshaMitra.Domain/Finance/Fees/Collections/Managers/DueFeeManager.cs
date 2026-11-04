@@ -47,7 +47,25 @@ public class DueFeeManager(
 		if (alreadyExists)
 			throw new BusinessException(DueFeeErrorCodes.DueFeesAlreadyGenerated)
 				.WithData("StudentId", studentId!);
+		return await CalculateForStudentAsync(studentId, feeStructure, academicYear, selectedOptionalFeeHeadIds,
+			optionalFeeHeadDetails, prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate, financeFeeAccountId);
+	}
 
+	/// <summary>Constructs a transient schedule without checking or changing persisted obligations.
+	/// Assignment correction validates the existing assignment before using this calculation.</summary>
+	public async Task<IReadOnlyList<DueFee>> CalculateForStudentAsync(
+		Guid? studentId,
+		FeeStructure feeStructure,
+		AcademicYear academicYear,
+		IReadOnlyList<Guid> selectedOptionalFeeHeadIds,
+		IReadOnlyList<CustomOptionalFeeHeadDetail>? optionalFeeHeadDetails = null,
+		ProrationPolicySnapshot? prorationPolicy = null,
+		Guid? prorationPolicyVersionId = null,
+		DateTime? chargeStartDate = null,
+		DateTime? chargeEndDate = null,
+		Guid? financeFeeAccountId = null)
+	{
+		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
 		var assignmentChargeStart = (chargeStartDate ?? academicYear.StartDate).Date;
 		var assignmentChargeEnd = (chargeEndDate ?? academicYear.EndDate).Date;
 		ValidateChargePeriod(assignmentChargeStart, assignmentChargeEnd, academicYear);

@@ -6,6 +6,10 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 
 public class AssignStudentFeeStructureDto
 {
+	/// <summary>Explicitly correct this never-paid assignment; ordinary assignment never overwrites.</summary>
+	public Guid? EditAssignmentId { get; set; }
+	public string? AssignmentConcurrencyStamp { get; set; }
+	public string? EditReason { get; set; }
     public List<AssignmentPolicySelectionDto> Policies { get; set; } = [];
     public string? PolicyOverrideReason { get; set; }
     public Guid AcademicYearId { get; set; }

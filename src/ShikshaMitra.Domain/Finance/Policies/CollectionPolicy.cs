@@ -32,6 +32,9 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	// Late Fee
 	public bool EnableLateFee { get; protected set; }
+	/// <summary>Absent on historical rows: their selected-head scope remains authoritative.</summary>
+	[NotMapped]
+	public bool ApplyLateFeeToAllFeeHeads => this.GetProperty<bool>(nameof(ApplyLateFeeToAllFeeHeads), false);
 	public int GracePeriodDays { get; protected set; }
 	public string LateFeeApplyOnFeeHeadsJson { get; protected set; } = "[]";
 	public LateFeeCalculationType LateFeeType { get; protected set; }
@@ -101,9 +104,9 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	public void Update(CollectionPolicyUpdateModel model)
-		=> ApplyUpdate(model, validateInputBounds: true);
+		=> ApplyUpdate(model.NormalizeForWrite(), validateInputBounds: true, applyLateFeeToAllFeeHeads: true);
 
-	private void ApplyUpdate(CollectionPolicyUpdateModel model, bool validateInputBounds)
+	private void ApplyUpdate(CollectionPolicyUpdateModel model, bool validateInputBounds, bool applyLateFeeToAllFeeHeads)
 	{
 		if (IsDefault && (!model.IsDefault || model.Status != CollectionPolicyStatus.Active))
 			throw new BusinessException(CollectionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
@@ -141,7 +144,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidAllocationBasis).WithData("field", "allocationBasis");
 		if (!Enum.IsDefined(model.ReceiptGrouping))
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidReceiptGrouping).WithData("field", "receiptGrouping");
-		ValidateRules(model, model.Status == CollectionPolicyStatus.Active, validateInputBounds);
+		ValidateRules(model, model.Status == CollectionPolicyStatus.Active, validateInputBounds, applyLateFeeToAllFeeHeads);
 
 		PolicyName = FinanceName.Normalize(model.PolicyName);
 		PolicyCode = model.PolicyCode.Trim().ToUpperInvariant();
@@ -152,6 +155,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EffectiveTo = model.EffectiveTo?.Date;
 
 		EnableLateFee = model.EnableLateFee;
+		this.SetProperty(nameof(ApplyLateFeeToAllFeeHeads), applyLateFeeToAllFeeHeads);
 		GracePeriodDays = model.GracePeriodDays;
 		LateFeeApplyOnFeeHeadsJson = SerializeGuids(model.LateFeeApplyOnFeeHeads);
 		LateFeeType = model.LateFeeType;
@@ -221,7 +225,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	public bool AppliesLateFeeTo(Guid feeHeadId) =>
-		EnableLateFee && GetLateFeeApplyOnFeeHeads().Contains(feeHeadId);
+		EnableLateFee && (ApplyLateFeeToAllFeeHeads || GetLateFeeApplyOnFeeHeads().Contains(feeHeadId));
 
 	public bool AppliesWaiverTo(Guid feeHeadId) =>
 		EnableWaiver && AppliesLateFeeTo(feeHeadId);
@@ -244,7 +248,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public bool TryGetFeeHeadOverride(Guid feeHeadId, out CollectionPolicyFeeHeadOverride? feeHeadOverride)
 	{
-		feeHeadOverride = GetFeeHeadOverrides().FirstOrDefault(o => o.FeeHeadId == feeHeadId);
+		feeHeadOverride = ApplyLateFeeToAllFeeHeads ? null : GetFeeHeadOverrides().FirstOrDefault(o => o.FeeHeadId == feeHeadId);
 		return feeHeadOverride is not null;
 	}
 
@@ -296,6 +300,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EffectiveFrom = EffectiveFrom,
 		EffectiveTo = EffectiveTo,
 		EnableLateFee = EnableLateFee,
+		ApplyLateFeeToAllFeeHeads = ApplyLateFeeToAllFeeHeads,
 		GracePeriodDays = GracePeriodDays,
 		LateFeeApplyOnFeeHeads = GetLateFeeApplyOnFeeHeads().ToList(),
 		LateFeeType = LateFeeType,
@@ -332,12 +337,12 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		// Input limits apply to new writes; immutable historical versions retain their original economics.
 		var entity = new CollectionPolicy { Id = policyId, TenantId = tenantId, AcademicYearId = academicYearId };
-		entity.ApplyUpdate(snapshot.ToUpdateModel(), validateInputBounds: false);
+		entity.ApplyUpdate(snapshot.ToUpdateModel(), validateInputBounds: false, applyLateFeeToAllFeeHeads: snapshot.ApplyLateFeeToAllFeeHeads);
 		entity.Version = version;
 		return entity;
 	}
 
-	private static void ValidateRules(CollectionPolicyUpdateModel model, bool requireComplete, bool validateInputBounds)
+	private static void ValidateRules(CollectionPolicyUpdateModel model, bool requireComplete, bool validateInputBounds, bool commonScope)
 	{
 		if (model.EffectiveFrom.HasValue && model.EffectiveTo.HasValue &&
 			model.EffectiveFrom.Value.Date > model.EffectiveTo.Value.Date)
@@ -356,7 +361,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		if (model.EnableLateFee)
 		{
-			if (requireComplete && model.LateFeeApplyOnFeeHeads.Count == 0)
+			if (requireComplete && !commonScope && model.LateFeeApplyOnFeeHeads.Count == 0)
 			{
 				throw new BusinessException(CollectionPolicyErrorCodes.InvalidFeeHeadReference);
 			}
@@ -387,7 +392,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		if (model.EnableWaiver && requireComplete)
 		{
 			if (!model.EnableLateFee ||
-				model.LateFeeApplyOnFeeHeads.Count == 0)
+				(!commonScope && model.LateFeeApplyOnFeeHeads.Count == 0))
 			{
 				throw new BusinessException(CollectionPolicyErrorCodes.InvalidWaiverRule);
 			}
@@ -401,6 +406,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidWaiverRule);
 		}
 
+		if (commonScope) return;
 		ValidateFeeHeadOverrides(model.FeeHeadOverrides, validateInputBounds);
 		var lateFeeHeads = model.LateFeeApplyOnFeeHeads.ToHashSet();
 		if (model.FeeHeadOverrides.Any(x => !lateFeeHeads.Contains(x.FeeHeadId)))
@@ -481,4 +487,12 @@ public sealed record CollectionPolicyUpdateModel(
 	bool AllowOnlineCollection,
 	Guid? LateFeeIncomeCategoryId = null,
 	CollectionAllocationBasis AllocationBasis = CollectionAllocationBasis.Legacy,
-	CollectionReceiptGrouping ReceiptGrouping = CollectionReceiptGrouping.Separate);
+	CollectionReceiptGrouping ReceiptGrouping = CollectionReceiptGrouping.Separate)
+{
+	/// <summary>Public writes retire selected-head scope and per-head deviations.</summary>
+	public CollectionPolicyUpdateModel NormalizeForWrite() => this with
+	{
+		LateFeeApplyOnFeeHeads = Array.Empty<Guid>(),
+		FeeHeadOverrides = Array.Empty<CollectionPolicyFeeHeadOverride>()
+	};
+}

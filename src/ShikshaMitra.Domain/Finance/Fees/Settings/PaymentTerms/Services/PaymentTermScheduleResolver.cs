@@ -32,6 +32,16 @@ public class PaymentTermScheduleResolver(
 			throw new BusinessException(PaymentTermErrorCodes.NotFound)
 				.WithData("PaymentTermId", detail.PaymentTermId);
 		}
+		return Resolve(detail, term);
+	}
+
+	/// <summary>Compose a schedule from a term already read in the current operation.</summary>
+	public ResolvedFeeHeadSchedule Resolve(FeeStructureDetail detail, PaymentTerm term)
+	{
+		if (!detail.PaymentTermId.HasValue || !detail.PaymentTermVersionId.HasValue)
+			return ResolvedFeeHeadSchedule.Legacy(detail);
+		if (term.Id != detail.PaymentTermId.Value)
+			throw new BusinessException(PaymentTermErrorCodes.NotFound).WithData("PaymentTermId", detail.PaymentTermId);
 
 		var version = term.Versions.FirstOrDefault(v => v.Id == detail.PaymentTermVersionId.Value)
 			?? throw new BusinessException(PaymentTermErrorCodes.NotFound)

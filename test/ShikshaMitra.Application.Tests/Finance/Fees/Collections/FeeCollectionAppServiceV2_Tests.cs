@@ -35,7 +35,7 @@ namespace ShikshaMitra.Finance.Fees;
 ///   KFE-* → ProvisionalFee    (Cheque/DD, or CashierDecided with BankReceiptConfirmed=false)
 ///   KCH-* → ProvisionalCharge (Charges, always provisional regardless of payment method)
 /// </summary>
-public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<ShikshaMitra.Finance.FinanceReceiptIdentityTestModule>
 {
     private readonly IFeeCollectionAppService _service;
     private readonly IFinanceAuditTrailAppService _auditTrail;

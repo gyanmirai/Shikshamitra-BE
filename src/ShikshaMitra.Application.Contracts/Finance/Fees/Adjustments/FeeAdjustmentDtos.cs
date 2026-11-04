@@ -125,6 +125,7 @@ public class FeeAdjustmentDetailDto
 public class FeeAdjustmentApplicationItemDto
 {
     public Guid Id { get; set; }
+    public Guid? RequestedByUserId { get; set; }
     public Guid StudentId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public string GrNumber { get; set; } = string.Empty;

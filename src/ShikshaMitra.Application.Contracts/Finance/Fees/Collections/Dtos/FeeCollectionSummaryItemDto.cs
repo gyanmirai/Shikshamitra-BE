@@ -4,7 +4,7 @@ namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 
 /// <summary>
 /// Single student row in the V2 fee-collection summary list.
-/// Legacy monetary fields retain their V1 double contract; paid charges use decimal.
+/// Legacy monetary fields retain their V1 double contract; paid charges and refunds use decimal.
 /// </summary>
 public class FeeCollectionSummaryItemDto
 {
@@ -45,8 +45,11 @@ public class FeeCollectionSummaryItemDto
 	/// </summary>
 	public double TotalFees { get; set; }
 
-	/// <summary>Sum of all fee-collection record amounts for the student.</summary>
+	/// <summary>Gross principal payments, excluding payment reversals but without subtracting refunds or concessions.</summary>
 	public double PaidFees { get; set; }
+
+	/// <summary>Cumulative recorded principal refunds in INR, net of returned or reversed refunds. Unpaid approvals are excluded.</summary>
+	public decimal RefundAmount { get; set; }
 
 	/// <summary>All outstanding principal, including future installments, after payments and non-cash credits.</summary>
 	public double PendingFees { get; set; }

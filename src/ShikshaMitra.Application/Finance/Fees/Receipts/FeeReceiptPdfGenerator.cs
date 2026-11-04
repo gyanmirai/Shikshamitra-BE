@@ -4,150 +4,140 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using QuestPDF.Fluent;
-using QuestPDF.Helpers;
-using QuestPDF.Infrastructure;
-using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
-using ShikshaMitra.Common.PDF;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Application.Finance.Fees.Receipts;
 
-/// <summary>Printable receipt evidence. Payment methods come from the original collection.</summary>
+/// <summary>All Finance collection entry points and reprints use the same saved evidence.</summary>
 public class FeeReceiptPdfGenerator(
-    IReadOnlyRepository<FinanceFeeAccount, Guid>? accounts = null,
-    IReadOnlyRepository<PaymentMethodRecord, Guid>? paymentRecords = null,
-    IReadOnlyRepository<FeeCollectionDueFeeAllocation, Guid>? allocations = null,
-    IFeePaymentReceiptRepository? receipts = null,
-    ICurrentTenant? currentTenant = null) : IFeeReceiptPdfGenerator, ITransientDependency
+	IReadOnlyRepository<FinanceFeeAccount, Guid>? accounts = null,
+	IReadOnlyRepository<PaymentMethodRecord, Guid>? paymentRecords = null,
+	IReadOnlyRepository<FeeCollectionDueFeeAllocation, Guid>? allocations = null,
+	IFeePaymentReceiptRepository? receipts = null,
+	ICurrentTenant? currentTenant = null,
+	IReceiptSchoolIdentityReader? schoolIdentity = null,
+	IReadOnlyRepository<FeeRecordMetadata, Guid>? transactions = null,
+	IReadOnlyRepository<Standard, Guid>? standards = null,
+	IReadOnlyRepository<Division, Guid>? divisions = null,
+	IReadOnlyRepository<StudentFamilyDetail, Guid>? families = null,
+	IAsyncQueryableExecuter? queryExecuter = null) : IFeeReceiptPdfGenerator, ITransientDependency
 {
-    private static string Money(decimal value) => $"INR {value.ToString("N2", CultureInfo.GetCultureInfo("en-IN"))}";
+	public async Task<byte[]> GenerateAsync(FeePaymentReceipt receipt, Student? student,
+		AcademicYear? academicYear, CancellationToken cancellationToken = default)
+	{
+		var account = receipt.FinanceFeeAccountId.HasValue && accounts != null
+			? await accounts.GetAsync(receipt.FinanceFeeAccountId.Value, cancellationToken: cancellationToken) : null;
+		var metadata = transactions == null ? null
+			: await transactions.FindAsync(receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+		// A student's current placement may differ from the original payment context.
+		var organization = ReceiptCollectionSnapshot.ReadOrganization(metadata) ?? account?.MediumStageId;
+		var school = schoolIdentity == null ? new ReceiptSchoolIdentity(currentTenant?.Name ?? string.Empty)
+			: await schoolIdentity.ReadAsync(NonEmpty(receipt.BoardId), NonEmpty(receipt.EducationMediumId),
+				receipt.AcademicYearId, organization, cancellationToken);
+		var savedLines = ReceiptCollectionSnapshot.Read(metadata);
+		var lines = savedLines.Where(line => receipt.ReceiptScope == FeeReceiptScope.Combined ||
+			(line.IsCharge ? receipt.ReceiptScope == FeeReceiptScope.Charge : receipt.ReceiptScope == FeeReceiptScope.Fee)).ToList();
+		if (lines.Count == 0) lines = await LegacyLinesAsync(receipt, cancellationToken);
+		var predecessor = receipt.LinkedProvisionalReceiptId.HasValue && receipts != null
+			? await receipts.FindAsync(receipt.LinkedProvisionalReceiptId.Value, cancellationToken: cancellationToken) : null;
+		var payments = paymentRecords == null ? [] : await paymentRecords.GetListAsync(
+			payment => payment.FeeRecordMetadataId == receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+		var standardId = account?.StandardId ?? student?.StandardId;
+		var divisionId = account?.DivisionId ?? student?.DivisionId;
+		var standard = standards != null && queryExecuter != null && standardId.HasValue
+			? await queryExecuter.FirstOrDefaultAsync((await standards.GetQueryableAsync()).Where(item => item.Id == standardId).Select(item => item.Name), cancellationToken) : null;
+		var division = divisions != null && queryExecuter != null && divisionId.HasValue
+			? await queryExecuter.FirstOrDefaultAsync((await divisions.GetQueryableAsync()).Where(item => item.Id == divisionId).Select(item => item.Name), cancellationToken) : null;
+		var family = families != null && student != null ? await families.FindAsync(student.Id, cancellationToken: cancellationToken) : student?.FamilyDetail;
+		var guardian = family?.GuardianDetails?.FullName ?? family?.FatherDetails?.FullName ?? family?.MotherDetails?.FullName;
+		var provisional = FeeReceiptPresentation.IsProvisional(receipt.ReceiptKind);
+		var scopeTitle = receipt.ReceiptScope switch
+		{
+			FeeReceiptScope.Charge => "CHARGE RECEIPT", FeeReceiptScope.Combined => "FEES AND CHARGES RECEIPT", _ => "FEE RECEIPT"
+		};
+		return ClassicReceiptPdfRenderer.Render(new ReceiptDocumentModel
+		{
+			School = school, Title = (provisional ? "PROVISIONAL " : string.Empty) + scopeTitle,
+			Number = receipt.ReceiptNumber, Date = receipt.ReceiptDate, AcademicYear = academicYear?.Name,
+			StudentFields = [new(student == null ? "Applicant name" : "Student name", student == null ? account?.ApplicantName :
+				string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }.Where(name => !string.IsNullOrWhiteSpace(name)))),
+				new("GR No.", student?.GrNumber ?? student?.GrNo?.ToString(CultureInfo.InvariantCulture)),
+				new("Class / section", string.Join(" - ", new[] { standard, division }.Where(value => !string.IsNullOrWhiteSpace(value)))),
+				new("Parent / guardian", guardian), new("Roll no.", student?.RollNo?.ToString(CultureInfo.InvariantCulture))],
+			PaymentFields = PaymentFields(payments), Lines = lines, Amount = (decimal)receipt.TotalPaidAmount,
+			RelatedReceipt = predecessor?.ReceiptNumber,
+			Status = receipt.VerificationStatus == FeeReceiptVerificationStatus.Rejected ? "Rejected" : null
+		});
+	}
 
-    public async Task<byte[]> GenerateAsync(FeePaymentReceipt receipt, Student? student,
-        AcademicYear? academicYear, CancellationToken cancellationToken = default)
-    {
-        QuestPDF.Settings.License = LicenseType.Community;
-        PortablePdfFonts.EnsureRegistered();
-        var applicantName = receipt.FinanceFeeAccountId.HasValue && accounts != null
-            ? (await accounts.GetAsync(receipt.FinanceFeeAccountId.Value, cancellationToken: cancellationToken)).ApplicantName : null;
-        List<PaymentMethodRecord> payments = paymentRecords == null ? [] : await paymentRecords.GetListAsync(
-            p => p.FeeRecordMetadataId == receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
-        List<FeeCollectionDueFeeAllocation> feeLines = allocations == null || receipt.ReceiptScope == FeeReceiptScope.Charge ? [] : await allocations.GetListAsync(
-            a => a.FeeRecordMetadataId == receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
-        var predecessor = receipt.LinkedProvisionalReceiptId.HasValue && receipts != null
-            ? await receipts.FindAsync(receipt.LinkedProvisionalReceiptId.Value, cancellationToken: cancellationToken) : null;
-        var provisional = FeeReceiptPresentation.IsProvisional(receipt.ReceiptKind);
-        var accent = provisional ? Colors.Orange.Darken3 : Colors.Green.Darken3;
-        var name = student != null
-            ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ")
-            : applicantName ?? "Not recorded";
+	private static Guid? NonEmpty(Guid value) => value == Guid.Empty ? null : value;
 
-        return Document.Create(document => document.Page(page =>
-        {
-            page.Size(PageSizes.A4);
-            page.Margin(32);
-            page.DefaultTextStyle(t => t.FontSize(10).FontFamily(PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily));
-            page.Header().BorderBottom(2).BorderColor(accent).PaddingBottom(12).Column(column =>
-            {
-                column.Item().Text(currentTenant?.Name ?? "ShikshaMitra").FontSize(18).Bold();
-                column.Item().PaddingTop(6).Text(provisional ? "PROVISIONAL RECEIPT" : "RECEIPT")
-                    .FontSize(16).Bold().FontColor(accent);
-                column.Item().PaddingTop(6).Row(row =>
-                {
-                    row.RelativeItem().Text($"Receipt number: {receipt.ReceiptNumber}").SemiBold();
-                    row.AutoItem().Text($"Issued: {receipt.ReceiptDate:dd-MMM-yyyy}");
-                });
-            });
-            page.Content().PaddingTop(18).Column(column =>
-            {
-                column.Spacing(12);
-                column.Item().Table(table =>
-                {
-                    table.ColumnsDefinition(c => { c.ConstantColumn(110); c.RelativeColumn(); });
-                    void Fact(string label, string value)
-                    {
-                        table.Cell().PaddingVertical(4).Text(label).FontColor(Colors.Grey.Darken2);
-                        table.Cell().PaddingVertical(4).Text(value);
-                    }
-                    Fact(student == null && applicantName != null ? "Applicant" : "Student", name);
-                    Fact("GR number", student?.GrNo?.ToString() ?? "Not applicable");
-                    Fact("Academic year", academicYear?.Name ?? "Not recorded");
-                    Fact("Receipt covers", FeeReceiptPresentation.GetScopeLabel(receipt.ReceiptScope));
-                    Fact("Payment method", payments.Count == 0 ? "Not recorded" : string.Join(", ", payments
-                        .Select(p => p.PaymentMethod).Distinct().OrderBy(m => m).Select(FeeReceiptPresentation.GetPaymentMethodLabel)));
-                    if (payments.Count > 0)
-                        Fact("Payment received", payments.Min(p => p.PaymentDate).ToString("dd-MMM-yyyy"));
-                    foreach (var payment in payments.Where(p => p.PaymentDetails is BankTransferDetails))
-                    {
-                        var transfer = (BankTransferDetails)payment.PaymentDetails!;
-                        Fact("Transaction ID / UTR", string.IsNullOrWhiteSpace(transfer.TransactionReferenceNumber)
-                            ? "Not recorded" : transfer.TransactionReferenceNumber);
-                        Fact("Transfer date", transfer.TransferDate?.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture) ?? "Not recorded");
-                        Fact("Account holder", string.IsNullOrWhiteSpace(transfer.AccountHolderName)
-                            ? "Not recorded" : transfer.AccountHolderName);
-                        Fact("Receiving bank", payment.BankLabelSnapshot ?? "Not recorded");
-                    }
-                    if (predecessor != null) Fact("Provisional receipt", predecessor.ReceiptNumber);
-                });
-                column.Item().Table(table =>
-                {
-                    table.ColumnsDefinition(c => { c.RelativeColumn(3); c.RelativeColumn(2); c.RelativeColumn(); });
-                    table.Header(header =>
-                    {
-                        header.Cell().Background(Colors.Grey.Lighten3).Padding(8).Text("Description").SemiBold();
-                        header.Cell().Background(Colors.Grey.Lighten3).Padding(8).Text("Installment").SemiBold();
-                        header.Cell().Background(Colors.Grey.Lighten3).Padding(8).AlignRight().Text("Amount").SemiBold();
-                    });
-                    void Line(string description, string period, decimal amount)
-                    {
-                        table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(8).Text(description);
-                        table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(8).Text(period);
-                        table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(8).AlignRight().Text(Money(amount));
-                    }
-                    foreach (var line in feeLines.OrderBy(a => a.DueDate).ThenBy(a => a.FeeHeadName))
-                        Line(line.FeeHeadName ?? "Fee payment", line.InstallmentLabel ?? "—", (decimal)line.Amount);
-                    var feeTotal = receipt.ReceiptScope == FeeReceiptScope.Combined ? receipt.FeePaidAmount
-                        : receipt.ReceiptScope == FeeReceiptScope.Fee ? (decimal)receipt.TotalPaidAmount : 0m;
-                    var remainder = feeTotal - feeLines.Sum(a => (decimal)a.Amount);
-                    if (remainder > 0) Line(feeLines.Count == 0 ? "Fees (including applicable late fees)" : "Late fees / other fee allocations", "—", remainder);
-                    if (receipt.ReceiptScope is FeeReceiptScope.Charge or FeeReceiptScope.Combined)
-                    {
-                        var lateFees = receipt.LateFeePaidAmount ?? 0m;
-                        var otherCharges = receipt.ChargePaidAmount - lateFees;
-                        if (lateFees > 0m) Line("Late fees", "—", lateFees);
-                        if (otherCharges > 0m) Line("Charges", "—", otherCharges);
-                    }
-                });
-                column.Item().Background(Colors.Grey.Lighten3).Padding(12).Row(row =>
-                {
-                    row.RelativeItem().Text("Total amount received").Bold();
-                    row.AutoItem().Text(Money((decimal)receipt.TotalPaidAmount)).FontSize(14).Bold();
-                });
-                column.Item().Text(provisional
-                    ? "Subject to payment verification. A receipt will be issued after approval in reconciliation. This document does not confirm bank clearance."
-                    : predecessor != null
-                        ? "Payment verified. This receipt supersedes the provisional receipt referenced above; both documents represent the same payment."
-                        : payments.Count > 0 && payments.All(p => p.PaymentMethod == ShikshaMitra.Finance.Fees.Collections.PaymentMethodEnum.Cash)
-                            ? "Cash payment received. This receipt acknowledges the amount shown above."
-                            : "This receipt acknowledges the payment recorded above.")
-                    .FontSize(9).FontColor(accent);
-                if (!string.IsNullOrWhiteSpace(receipt.Remarks)) column.Item().Text($"Remarks: {receipt.Remarks}").FontSize(9);
-                column.Item().PaddingTop(24).Row(row =>
-                {
-                    row.RelativeItem().Text("Authorised signatory");
-                    row.RelativeItem().AlignRight().Text("School seal");
-                });
-            });
-            page.Footer().BorderTop(0.5f).BorderColor(Colors.Grey.Lighten2).PaddingTop(8).Row(row =>
-            {
-                row.RelativeItem().Text("Retain this receipt for your records. Currency: INR.").FontSize(8).FontColor(Colors.Grey.Darken1);
-                row.AutoItem().Text(text => { text.CurrentPageNumber(); text.Span(" / "); text.TotalPages(); });
-            });
-        })).GeneratePdf();
-    }
+	private async Task<List<ReceiptDocumentLine>> LegacyLinesAsync(FeePaymentReceipt receipt, CancellationToken cancellationToken)
+	{
+		var lines = new List<ReceiptDocumentLine>();
+		var feeLines = allocations == null || receipt.ReceiptScope == FeeReceiptScope.Charge ? [] : await allocations.GetListAsync(
+			line => line.FeeRecordMetadataId == receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+		foreach (var line in feeLines.OrderBy(item => item.DueDate).ThenBy(item => item.FeeHeadName))
+			lines.Add(new(line.FeeHeadName ?? "Fees", ClassicReceiptPdfRenderer.Period(line.CoverageStartDate, line.CoverageEndDate,
+				line.InstallmentLabel), null, null, null, (decimal)line.Amount));
+		// Older receipts did not preserve payable/paid-to-date/balance. Never fabricate those from today's dues.
+		var feeTotal = receipt.ReceiptScope == FeeReceiptScope.Combined ? receipt.FeePaidAmount
+			: receipt.ReceiptScope == FeeReceiptScope.Fee ? (decimal)receipt.TotalPaidAmount : 0m;
+		var remainder = feeTotal - feeLines.Sum(line => (decimal)line.Amount);
+		if (remainder > 0) lines.Add(new("Fees", "—", null, null, null, remainder));
+		if (receipt.ReceiptScope is FeeReceiptScope.Charge or FeeReceiptScope.Combined)
+		{
+			var lateFees = receipt.LateFeePaidAmount ?? 0m;
+			var charges = receipt.ChargePaidAmount - lateFees;
+			if (lateFees > 0) lines.Add(new("Late fees", "—", null, null, null, lateFees, true));
+			if (charges > 0) lines.Add(new("Charges", "—", null, null, null, charges, true));
+		}
+		return lines;
+	}
+
+	private static List<ReceiptDocumentField> PaymentFields(List<PaymentMethodRecord> payments)
+	{
+		if (payments.Count == 0) return [new("Payment mode", "Not recorded")];
+		var fields = new List<ReceiptDocumentField>();
+		foreach (var payment in payments.OrderBy(item => item.CreationTime))
+		{
+			fields.Add(new("Payment mode", FeeReceiptPresentation.GetPaymentMethodLabel(payment.PaymentMethod)));
+			fields.Add(new("Payment date", payment.PaymentDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)));
+			var bank = payment.BankLabelSnapshot ?? (payment.PaymentDetails switch
+			{
+				BankTransferDetails transfer => transfer.BankName, ChequeDetails cheque => cheque.BankName,
+				DemandDraftDetails draft => draft.IssuingBankName, CreditCardDetails card => card.BankName, _ => null
+			});
+			fields.Add(new("Bank", bank));
+			var reference = payment.PaymentDetails switch
+			{
+				BankTransferDetails transfer => transfer.TransactionReferenceNumber, ChequeDetails cheque => cheque.ChequeNumber,
+				DemandDraftDetails draft => draft.DDNumber, UpiDetails upi => upi.UpiTransactionId,
+				CreditCardDetails card => card.TransactionId, OnlineGatewayDetails gateway => gateway.TransactionId,
+				WalletDetails wallet => wallet.TransactionId, _ => null
+			};
+			if (!string.IsNullOrWhiteSpace(reference)) fields.Add(new("Transaction / instrument no.", reference));
+			var instrumentDate = payment.PaymentDetails switch
+			{
+				BankTransferDetails transfer => transfer.TransferDate, ChequeDetails cheque => cheque.ChequeDate,
+				DemandDraftDetails draft => draft.DDDate, _ => null
+			};
+			if (instrumentDate.HasValue) fields.Add(new("Instrument date", instrumentDate.Value.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture)));
+			var holder = payment.PaymentDetails switch
+			{
+				BankTransferDetails transfer => transfer.AccountHolderName, CreditCardDetails card => card.CardHolderName, _ => null
+			};
+			if (!string.IsNullOrWhiteSpace(holder)) fields.Add(new("Account holder", holder));
+		}
+		return fields;
+	}
 }

@@ -145,11 +145,11 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.View)]
 	public async Task<StandardFeeStructureResponse> GetByStandardAsync(Guid standardId)
 	{
-		var standard = await standardRepository.GetAsync(standardId);
-		await EnsureStandardScopeAsync(standardId);
+		var scope = await EnsureStandardScopeAsync(standardId);
 		var entities = await feeStructureRepository.GetListAsync(x => x.StandardId == standardId);
-		var result = new StandardFeeStructureResponse { StandardId = standard.Id, StandardName = standard.Name, StandardFeeStructures = [] };
-		foreach (var entity in entities.OrderBy(x => x.CreationTime)) result.StandardFeeStructures.Add(await MapAsync(entity));
+		var context = await LoadMappingContextAsync(entities);
+		var result = new StandardFeeStructureResponse { StandardId = standardId, StandardName = scope.Name!, StandardFeeStructures = [] };
+		foreach (var entity in entities.OrderBy(x => x.CreationTime)) result.StandardFeeStructures.Add(await MapAsync(entity, context));
 		return result;
 	}
 

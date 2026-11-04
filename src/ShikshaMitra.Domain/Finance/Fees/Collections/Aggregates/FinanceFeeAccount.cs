@@ -128,6 +128,21 @@ public class FinanceFeeAccount : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		HasPaymentEvidence = true;
 	}
 
+	public void CorrectUnpaidAssignment(Guid assignmentId, Guid structureId, int revision, string snapshot, string fingerprint)
+	{
+		if (HasPaymentEvidence || StudentFeeStructureId != assignmentId || AssignmentSnapshotJson == null || structureId == Guid.Empty || revision < 1)
+			throw new BusinessException(FinanceFeeAccountErrorCodes.AssignmentConflict);
+		var history = ExtraProperties.TryGetValue("AssignmentCorrectionHistory", out var saved)
+			? JsonSerializer.Deserialize<System.Collections.Generic.List<JsonElement>>(saved?.ToString() ?? "[]") ?? [] : [];
+		history.Add(JsonSerializer.SerializeToElement(new { AssignmentId = assignmentId, StructureId, StructureRevision,
+			AssignmentSnapshotJson, AssignmentRequestFingerprint, ReplacementFingerprint = fingerprint }));
+		ExtraProperties["AssignmentCorrectionHistory"] = JsonSerializer.Serialize(history);
+		StructureId = structureId;
+		StructureRevision = revision;
+		AssignmentSnapshotJson = Check.NotNullOrWhiteSpace(snapshot, nameof(snapshot));
+		AssignmentRequestFingerprint = Check.NotNullOrWhiteSpace(fingerprint, nameof(fingerprint), maxLength: 64);
+	}
+
 	/// <summary>
 	/// Resets a never-paid preparation. The Finance coordinator must first prove that
 	/// no allocation/collection references the draft dues and remove only those drafts transactionally.

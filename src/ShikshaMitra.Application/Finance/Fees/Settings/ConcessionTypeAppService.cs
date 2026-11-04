@@ -312,8 +312,11 @@ public partial class ConcessionTypeAppService(
 		}
 
 		using var _ = softDeleteFilter.Disable();
-		var requests = await concessionRequestRepository.GetListAsync(x => idList.Contains(x.ConcessionTypeId));
-		return requests.Select(x => x.ConcessionTypeId).ToHashSet();
+		var requests = await concessionRequestRepository.GetQueryableAsync();
+		var usedIds = await AsyncExecuter.ToListAsync(requests
+			.Where(x => idList.Contains(x.ConcessionTypeId))
+			.Select(x => x.ConcessionTypeId).Distinct());
+		return usedIds.ToHashSet();
 	}
 
 	private async Task<bool> IsUsedAsync(Guid concessionTypeId)

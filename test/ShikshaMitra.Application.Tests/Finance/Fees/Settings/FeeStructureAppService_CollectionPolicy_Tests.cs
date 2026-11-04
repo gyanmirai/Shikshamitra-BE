@@ -149,6 +149,24 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 		[new FeeHeadAssignmentRequest { FeeHeadId = feeHeadId, Amount = 1_000 }];
 
 	[Fact]
+	public async Task Common_Policy_Workspace_Preview_Covers_All_Heads_With_An_Empty_Saved_Selection()
+	{
+		using var reviewer = Reviewer();
+		using var tenant = _currentTenant.Change(TestTenantId);
+		var (metadata, standard, candidate) = await ReadyCandidateAsync();
+		var policy = await _collectionPolicies.GetAsync(candidate.CollectionPolicyId!.Value);
+		policy.ApplyLateFeeToAllFeeHeads.ShouldBeTrue();
+		policy.LateFeeApplyOnFeeHeads.ShouldBeEmpty();
+		var review = await _feeStructures.PreviewAsync(new()
+		{
+			FeeStructureMetadataId = metadata, StandardId = standard, StandardFeeStructures = candidate
+		});
+		review.Errors.ShouldBeEmpty();
+		review.Coverage.ShouldAllBe(x => x.Collection == "Late fee applies");
+		review.Warnings.ShouldNotContain(x => x.Contains("No late-fee heads overlap"));
+	}
+
+	[Fact]
 	public async Task Create_Persists_The_Attached_Collection_Policy()
 	{
 		using (GetRequiredService<ICurrentPrincipalAccessor>().Change(new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(AbpClaimTypes.UserId, TestUserId.ToString()) }, "Test"))))
@@ -253,7 +271,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 	}
 
 	[Fact]
-	public async Task Policy_Heads_Outside_The_Structure_Are_Ignored_Without_Blocking_Attachment()
+	public async Task Common_Policy_Covers_Structure_Heads_Without_Selected_Head_Overlap()
 	{
 		using (GetRequiredService<ICurrentPrincipalAccessor>().Change(new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(AbpClaimTypes.UserId, TestUserId.ToString()) }, "Test"))))
 		using (_currentTenant.Change(TestTenantId))
@@ -284,10 +302,10 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 				});
 
 			impact.IsAttachable.ShouldBeTrue();
-			impact.CoveredLateFeeHeadIds.ShouldBeEmpty();
-			impact.StructureHeadsWithoutLateFee.ShouldContain(structureFeeHeadId);
-			impact.PolicyLateFeeHeadsNotInStructure.ShouldContain(policyOnlyFeeHead.Id);
-			impact.Warnings.ShouldContain(x => x.Contains("No late fee will be charged"));
+			impact.CoveredLateFeeHeadIds.ShouldBe([structureFeeHeadId]);
+			impact.StructureHeadsWithoutLateFee.ShouldBeEmpty();
+			impact.PolicyLateFeeHeadsNotInStructure.ShouldBeEmpty();
+			impact.Warnings.ShouldBeEmpty();
 
 			var created = await _feeStructures.CreateAsync(metadataId, new StandardFeeStructureSaveRequest
 			{

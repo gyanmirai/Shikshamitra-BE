@@ -179,6 +179,13 @@ public class FeeCollectionManager : DomainService
 		var lateFeeAllocations = command.LateFeeAllocations ?? [];
 		if (lateFeeAllocations.Count > 0)
 		{
+			// Late-fee-only collections must contend on the same due concurrency token
+			// as an unpaid assignment correction, even though principal is unchanged.
+			var lateDueIds = lateFeeAllocations.Select(a => a.DueFeeId).Distinct().ToArray();
+			var lateDues = await dueFeeRepository.GetListAsync(d => Enumerable.Contains(lateDueIds, d.Id));
+			if (lateDues.Count != lateDueIds.Length) throw new BusinessException(DueFeeErrorCodes.DueFeeNotFound);
+			foreach (var due in lateDues) due.RecordPaymentEvidence();
+			await dueFeeRepository.UpdateManyAsync(lateDues, autoSave: false);
 			// Deliberately does not call DueFee.ApplyPayment — late fee is not part of
 			// DueFee.OutstandingAmount (see LateFeeCollectionAllocation's class doc). This
 			// only records that the amount was collected, for income-booking and audit.

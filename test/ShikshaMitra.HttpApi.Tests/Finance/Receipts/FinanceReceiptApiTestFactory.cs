@@ -20,6 +20,7 @@ public class FinanceReceiptApiTestCollection : ICollectionFixture<FinanceReceipt
 public class FinanceReceiptApiTestFactory : ShikshaMitraApiTestFactory
 {
     protected override bool InitializeTestData => false;
+    protected virtual bool SeedTransactionally => false;
 
     protected override IHost CreateHost(IHostBuilder builder)
     {
@@ -27,7 +28,7 @@ public class FinanceReceiptApiTestFactory : ShikshaMitraApiTestFactory
         Task.Run(async () =>
         {
             using (var scope = host.Services.CreateScope())
-            using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+            using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: SeedTransactionally))
             {
                 var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
                 using (currentTenant.Change(null))

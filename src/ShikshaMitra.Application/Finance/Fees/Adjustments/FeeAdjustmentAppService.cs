@@ -18,6 +18,7 @@ using Volo.Abp.Users;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Repositories;
 using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.Finance.Fees.FeeAdjustment;
 
@@ -35,6 +36,7 @@ public partial class FeeAdjustmentAppService(
     FinanceAuditWriter financeAuditWriter,
     FinanceScopeAccessService financeScopeAccessService,
     ICurrentUser currentUser,
+    IUserScopeService userScopeService,
     IUnitOfWorkManager unitOfWorkManager,
     IDistributedEventBus eventBus) : ApplicationService, IFeeAdjustmentAppService
 {

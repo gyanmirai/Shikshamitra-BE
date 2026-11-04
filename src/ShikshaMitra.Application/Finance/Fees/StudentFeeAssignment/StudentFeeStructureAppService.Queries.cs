@@ -134,6 +134,9 @@ public partial class StudentFeeStructureAppService
 			catch (JsonException) { result.Warnings.Add("Historical assignment evidence is unavailable. Canonical obligations are shown without recalculation."); }
 		}
 		var dues = await dueFeeRepository.GetListAsync(d => d.StudentFeeStructureId == assignment.Id && d.StudentId == studentId);
+		result.StructureEditBlocker = (await StructureEditBlockersAsync([assignment], dues))[assignment.Id] ?? (!enrollment.IsActive ? InactiveEditBlocker : null);
+		result.CanEditStructure = result.StructureEditBlocker == null;
+		result.StructureRevision = snapshot?.RevisionNumber;
 		if (assignment.AssignmentSnapshotJson == null)
 		{
 			var year = await academicYearRepository.GetAsync(academicYearId);

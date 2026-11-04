@@ -7,6 +7,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Events;
 using ShikshaMitra.Finance.Fees.Charges;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp;
 using Volo.Abp.Uow;
 
@@ -33,7 +34,36 @@ public partial class FeeAdjustmentAppService
             FinanceAuditActions.Adjustment, $"Fee adjustment request {request.VoucherNumber} created.",
             BuildStudentContext(student, request.VoucherNumber), input.Reason);
 
+        var administratorId = currentUser.Id;
+        if (administratorId.HasValue && await userScopeService.IsAdminUserAsync(administratorId.Value))
+        {
+            var dueFees = await dueFeeRepository.GetListAsync(
+                df => df.StudentId == request.StudentId && df.OutstandingAmount > 0.001m);
+            var targetLines = BuildAutomaticTargetLines(dueFees, request.RequestedAmount);
+            var autoApprovalNote = "Automatically approved on administrator submission.";
+            await feeAdjustmentManager.AutoApplyAsync(request, administratorId.Value, autoApprovalNote, targetLines);
+            await feeAdjustmentRepository.UpdateAsync(request, autoSave: false);
+            await financeAuditWriter.WriteAsync(
+                academicYearId, FinanceAuditEntityTypes.FeeAdjustment, request.Id, request.VoucherNumber,
+                FinanceAuditActions.Approve,
+                $"Automatically approved and applied {request.AppliedAmount:F2} from adjustment {request.VoucherNumber}.",
+                BuildStudentContext(student, request.VoucherNumber), autoApprovalNote, context: targetLines);
+        }
+
         await uow.CompleteAsync();
+        if (request.AppliedAmount > 0)
+        {
+            await eventBus.PublishAsync(new FeeAdjustmentAppliedEto
+            {
+                AdjustmentRequestId = request.Id,
+                VoucherNumber = request.VoucherNumber,
+                StudentId = request.StudentId,
+                AcademicYearId = request.AcademicYearId,
+                TotalAdjustedAmount = request.AppliedAmount,
+                TenantId = CurrentTenant.Id,
+                AppliedAt = Clock.Now,
+            });
+        }
         return await MapDetailAsync(request);
     }
 
@@ -92,6 +122,23 @@ public partial class FeeAdjustmentAppService
         };
     }
 
+    private static List<(Guid DueFeeId, double Amount)> BuildAutomaticTargetLines(
+        IReadOnlyList<DueFee> dueFees,
+        double requestedAmount)
+    {
+        var remaining = requestedAmount;
+        var targetLines = new List<(Guid DueFeeId, double Amount)>();
+        foreach (var dueFee in dueFees.OrderBy(df => df.Year).ThenBy(df => df.Month))
+        {
+            if (remaining <= 0.001) break;
+            var amount = Math.Min((double)dueFee.OutstandingAmount, remaining);
+            if (amount <= 0.001) continue;
+            targetLines.Add((dueFee.Id, amount));
+            remaining -= amount;
+        }
+        return targetLines;
+    }
+
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
     public async Task<ApplyFeeAdjustmentResultDto> ApplyAsync(
         Guid id, ApplyFeeAdjustmentDto input, string? idempotencyKey)
@@ -100,6 +147,8 @@ public partial class FeeAdjustmentAppService
 
         var request = await feeAdjustmentRepository.GetWithDetailsAsync(id);
         await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+
+        request.EnsureApproverNotCreator(approverId);
 
         if (!string.IsNullOrWhiteSpace(idempotencyKey) && request.HasIdempotencyKey(idempotencyKey))
             return await MapApplyResultAsync(request, approverId, 0);
@@ -111,10 +160,6 @@ public partial class FeeAdjustmentAppService
                 throw new BusinessException(FeeAdjustmentErrorCodes.ApplyExceedsRemaining)
                     .WithData("Message", "Full apply required when partial apply is disabled.");
         }
-
-        if (CurrentUser.Id == request.ProcessedByUserId && !IsPrivilegedUser())
-			throw new BusinessException(FeeAdjustmentErrorCodes.CannotApply)
-				.WithData("Message", "The approver must differ from the adjustment requestor");
 
         using var uow = unitOfWorkManager.Begin(isTransactional: true);
         var targetLines = input.Lines.Select(l => (l.DueFeeId, l.AppliedAmount)).ToList();
@@ -175,7 +220,4 @@ public partial class FeeAdjustmentAppService
             RejectionReason = request.RejectionReason ?? input.Message,
         };
     }
-
-    private bool IsPrivilegedUser() =>
-		CurrentUser.IsInRole("admin") || CurrentUser.IsInRole("Finance Officer");
 }

@@ -3,6 +3,7 @@ using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.FeeAdjustment;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using System;
 using Volo.Abp;
 using Volo.Abp.Data;
@@ -59,8 +60,12 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Stored in the aggregate's existing JSON extension column; independent of principal.
 	public decimal GetAssessedLateFeeAmount() => this.GetProperty<decimal>("AssessedLateFeeAmount", 0m);
 	public string? GetLateFeeAssessmentExplanation() => this.GetProperty<string>("LateFeeAssessmentExplanation", string.Empty);
+	public string? GetLateFeeAssessmentPeriodJson() => this.GetProperty<string>("LateFeeAssessmentPeriodJson", null);
+	public DateTimeOffset? GetLateFeeAssessedAt() => this.GetProperty<DateTimeOffset?>("LateFeeAssessedAt");
+	public Guid? GetLateFeeAssessmentPolicyVersionId() => this.GetProperty<Guid?>("LateFeeAssessmentPolicyVersionId");
 
-	public void PreserveLateFeeAssessment(decimal amount, DateTimeOffset assessedAt, Guid policyVersionId, string explanation)
+	public void PreserveLateFeeAssessment(decimal amount, DateTimeOffset assessedAt, Guid policyVersionId, string explanation,
+		string? appliedPeriodJson)
 	{
 		if (amount < 0m) throw new ArgumentOutOfRangeException(nameof(amount));
 		if (policyVersionId == Guid.Empty) throw new ArgumentException("The collection policy version is required.", nameof(policyVersionId));
@@ -69,7 +74,12 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		this.SetProperty("LateFeeAssessedAt", assessedAt);
 		this.SetProperty("LateFeeAssessmentPolicyVersionId", policyVersionId);
 		this.SetProperty("LateFeeAssessmentExplanation", explanation);
+		if (appliedPeriodJson != null) this.SetProperty("LateFeeAssessmentPeriodJson", appliedPeriodJson);
+		else ExtraProperties.Remove("LateFeeAssessmentPeriodJson");
 	}
+
+	public void PreserveLateFeeAssessment(decimal amount, DateTimeOffset assessedAt, Guid policyVersionId, string explanation) =>
+		PreserveLateFeeAssessment(amount, assessedAt, policyVersionId, explanation, null);
 
 	/// <summary>Total amount already refunded against this obligation line.</summary>
 	public decimal RefundedAmount { get; private set; }
@@ -79,6 +89,20 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	/// <summary>Total adjustment credit applied to this obligation line (reduces outstanding).</summary>
 	public decimal AdjustmentCreditAmount { get; private set; }
+
+	/// <summary>Permanent evidence survives payment/concession reversals.</summary>
+	public bool HasPaymentEvidence() => PaidAmount > 0 || RefundedAmount > 0 || this.GetProperty<bool>("HasPaymentEvidence");
+	public bool HasProtectedAssignmentUse() => this.GetProperty<bool>("HasProtectedAssignmentUse") ||
+		NetAmount != 0 || ConcessionAmount != 0 || AdjustmentCreditAmount != 0 || GetAssessedLateFeeAmount() != 0 || GetWithdrawalProrationSource().HasValue;
+	public void RecordPaymentEvidence() => this.SetProperty("HasPaymentEvidence", true);
+
+	/// <summary>Archives an unused schedule through a checked UPDATE, never ABP's reloading delete path.</summary>
+	public void SupersedeUnusedAssignment(Guid assignmentId)
+	{
+		if (assignmentId == Guid.Empty || StudentFeeStructureId != assignmentId || HasPaymentEvidence() || HasProtectedAssignmentUse())
+			throw new BusinessException(AssignmentErrorCodes.StructureEditBlocked);
+		IsDeleted = true;
+	}
 
 	public FeeStatus Status { get; private set; }
 
@@ -259,6 +283,7 @@ public DueFee(
 				.WithData("Amount", amount);
 
 		PaidAmount += amount;
+		RecordPaymentEvidence();
 		RecalculateBalancesAndStatus();
 	}
 
@@ -338,6 +363,7 @@ public DueFee(
 		}
 
 		ConcessionAmount += concessionAmount;
+		this.SetProperty("HasProtectedAssignmentUse", true);
 		NetAmount += concessionAmount;
 		RecalculateBalancesAndStatus();
 	}
@@ -380,6 +406,7 @@ public DueFee(
 		}
 
 		AdjustmentCreditAmount += amount;
+		this.SetProperty("HasProtectedAssignmentUse", true);
 		NetAmount += amount;
 		RecalculateBalancesAndStatus();
 	}
@@ -401,6 +428,7 @@ public DueFee(
 			throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
 		}
 		this.SetProperty("WithdrawalProrationCredit", credit);
+		this.SetProperty("HasProtectedAssignmentUse", true);
 		this.SetProperty("WithdrawalProrationSource", sourceId);
 		this.SetProperty("WithdrawalProrationExplanation", explanation);
 		AdjustmentCreditAmount += credit;

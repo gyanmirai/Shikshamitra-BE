@@ -38,7 +38,9 @@ public partial class FeeCollectionSummaryQueryService
 			.ToDictionary(s => s.Id, s => s.Name);
 		var divisionNames = (await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id), cancellationToken: cancellationToken))
 			.ToDictionary(d => d.Id, d => d.Name);
-		var rows = students.Select(s => new FeeCollectionRawRow
+		var singleAccountStudents = accounts.Where(a => a.StudentId.HasValue).GroupBy(a => a.StudentId!.Value)
+			.Where(g => g.Count() == 1).Select(g => g.Key).ToHashSet();
+		var rows = students.Where(s => !singleAccountStudents.Contains(s.Id)).Select(s => new FeeCollectionRawRow
 		{
 			StudentId = s.Id, FirstName = s.FirstName, MiddleName = s.MiddleName, LastName = s.LastName,
 			GrNo = s.GrNo?.ToString() ?? string.Empty, RollNo = s.RollNo?.ToString() ?? string.Empty,
@@ -66,10 +68,9 @@ public partial class FeeCollectionSummaryQueryService
 			rows.Add(row);
 			rowsByPayer[FinanceReportPayerKey.From(null, account.Id)] = row;
 			// One linked account and one enrolled Student are one summary payer, not duplicate balances.
-			if (linkedStudent != null && accounts.Count(a => a.StudentId == linkedStudent.Id) == 1)
+			if (linkedStudent != null && singleAccountStudents.Contains(linkedStudent.Id))
 			{
 				var studentKey = FinanceReportPayerKey.From(linkedStudent.Id, null);
-				if (rowsByPayer.TryGetValue(studentKey, out var oldRow)) rows.Remove(oldRow);
 				rowsByPayer[studentKey] = row;
 			}
 		}
@@ -85,7 +86,9 @@ public partial class FeeCollectionSummaryQueryService
 		{
 			if (!rowsByPayer.TryGetValue(FinanceReportPayerKey.From(due.StudentId, due.FinanceFeeAccountId), out var row)) continue;
 			row.TotalFees += (double)due.OriginalAmount;
-			row.PaidFees += (double)due.AppliedPaymentAmount;
+			// Collection history stays gross; cash returned is reported independently.
+			row.PaidFees += (double)due.PaidAmount;
+			row.RefundAmount += due.RefundedAmount;
 			// Pending includes every unpaid obligation, including installments not yet demanded.
 			row.OutstandingFees += (double)due.OutstandingAmount;
 			if (isOverdue(due)) row.OverdueFees += (double)due.OutstandingAmount;
@@ -140,18 +143,13 @@ public partial class FeeCollectionSummaryQueryService
 
 		var chargeIds = approvedCharges.Select(c => c.Id).Distinct().ToList();
 		var metaQ     = await feeRecordMetadataRepository.GetQueryableAsync();
-		var reversedTxIds = await AsyncExecuter.ToListAsync(
-			metaQ
-				.Where(m => m.Status == FeeCollectionStatus.Reversed)
-				.Select(m => m.Id),
-			cancellationToken);
 
 		var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
 		var paymentFacts = await AsyncExecuter.ToListAsync(
 			chargeCollQ
 				.Where(r => studentIds.Contains(r.StudentId)
 						 && chargeIds.Contains(r.ChargeId)
-						 && !reversedTxIds.Contains(r.FeeRecordMetadataId))
+						 && !metaQ.Any(m => m.Id == r.FeeRecordMetadataId && m.Status == FeeCollectionStatus.Reversed))
 				.Select(r => new { r.ChargeId, r.Amount }),
 			cancellationToken);
 

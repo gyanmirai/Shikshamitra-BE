@@ -72,7 +72,7 @@ public partial class PaymentTermAppService(
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount);
 
-		var items = await AsyncExecuter.ToListAsync(query);
+		var items = await ReadListRowsAsync(query);
 		var termIds = items.Select(t => t.Id).ToList();
 		var referenceCounts = await GetReferenceCountsAsync(termIds);
 		var usage = await GetUsageRowsAsync(termIds);
@@ -142,8 +142,11 @@ public partial class PaymentTermAppService(
 				FeeStructureName = structure.Name, FeeHeadId = detail.FeeHeadId, FeeHeadName = detail.FeeHead.Name,
 				VersionId = detail.PaymentTermVersionId
 			} });
-		var terms = await paymentTermRepository.GetListAsync(t => Enumerable.Contains(ids, t.Id));
-		var versions = terms.SelectMany(t => t.Versions).ToDictionary(v => v.Id, v => v.VersionNumber);
+		if (rows.Count == 0) return new();
+		var versionRows = await AsyncExecuter.ToListAsync((await paymentTermRepository.GetQueryableAsync())
+			.Where(t => Enumerable.Contains(ids, t.Id)).SelectMany(t => t.Versions)
+			.Select(v => new { v.Id, v.VersionNumber }));
+		var versions = versionRows.ToDictionary(v => v.Id, v => v.VersionNumber);
 		foreach (var row in rows)
 			row.Assignment.VersionNumber = row.Assignment.VersionId.HasValue ? versions.GetValueOrDefault(row.Assignment.VersionId.Value) : null;
 		return rows.GroupBy(r => r.TermId).ToDictionary(g => g.Key, g => g.Select(r => r.Assignment).ToList());
@@ -187,15 +190,22 @@ public partial class PaymentTermAppService(
 		Guid paymentTermId,
 		PagedAndSortedResultRequestDto input)
 	{
-		var term = await GetTermWithVersionsAsync(paymentTermId);
-		var totalCount = term.Versions.Count;
-		var maxResultCount = input.MaxResultCount <= 0 ? 20 : input.MaxResultCount;
-		var versions = term.Versions
+		var terms = (await paymentTermRepository.GetQueryableAsync()).Where(x => x.Id == paymentTermId);
+		if (!await AsyncExecuter.AnyAsync(terms))
+			throw new BusinessException(PaymentTermErrorCodes.NotFound).WithData("PaymentTermId", paymentTermId);
+		var query = terms.SelectMany(x => x.Versions);
+		var totalCount = await AsyncExecuter.CountAsync(query);
+		var maxResultCount = input.MaxResultCount <= 0 ? 20 : Math.Min(input.MaxResultCount, 1000);
+		var versions = await AsyncExecuter.ToListAsync(query
 			.OrderByDescending(version => version.VersionNumber)
-			.Skip(input.SkipCount)
+			.Skip(Math.Max(0, input.SkipCount))
 			.Take(maxResultCount)
-			.Select(MapVersionHistoryDto)
-			.ToList();
+			.Select(version => new PaymentTermVersionHistoryDto {
+				Id = version.Id, VersionNumber = version.VersionNumber, Status = version.Status,
+				ChangeReason = version.ChangeReason, CreationTime = version.CreationTime, CreatorId = version.CreatorId
+			}));
+		foreach (var version in versions)
+			version.ChangeAction = VersionHistoryAction(version.Status, version.VersionNumber);
 
 		var creatorIds = versions
 			.Where(version => version.CreatorId.HasValue)
@@ -205,7 +215,8 @@ public partial class PaymentTermAppService(
 		if (creatorIds.Count > 0)
 		{
 			var users = await AsyncExecuter.ToListAsync(
-				(await userRepository.GetQueryableAsync()).Where(user => creatorIds.Contains(user.Id)));
+				(await userRepository.GetQueryableAsync()).Where(user => creatorIds.Contains(user.Id))
+				.Select(user => new { user.Id, user.Name, user.UserName }));
 			var namesById = users.ToDictionary(
 				user => user.Id,
 				user => string.IsNullOrWhiteSpace(user.Name) ? user.UserName : user.Name);
@@ -861,48 +872,14 @@ public partial class PaymentTermAppService(
 		return effectiveFrom;
 	}
 
-	private static PaymentTermListDto MapListDto(PaymentTerm term, int referencedCount)
-	{
-		var draft = term.GetDraftVersion();
-		var published = term.GetPublishedVersion();
-		var latest = draft ?? published ?? term.GetCurrentVersion();
-		return new PaymentTermListDto
+	private static string VersionHistoryAction(PaymentTermVersionStatus status, int versionNumber) => status switch
 		{
-			Id = term.Id,
-			Name = term.Name,
-			Code = term.Code,
-			AcademicYearId = term.AcademicYearId,
-			BoardId = term.BoardId,
-			Status = ResolveLifecycleStatus(term),
-			IsDefault = term.IsDefault,
-			CurrentVersionNumber = latest?.VersionNumber ?? 0,
-			PublishedVersionId = published?.Id,
-			PublishedVersionNumber = published?.VersionNumber,
-			HasDraft = draft != null,
-			HasPublishedVersion = published != null,
-			InstallmentCount = latest?.Installments.Count ?? 0,
-			ReferencedStructureCount = referencedCount,
-			CanDirectEdit = term.Status == PaymentTermStatus.Active && referencedCount == 0
-		};
-	}
-
-	private static PaymentTermVersionHistoryDto MapVersionHistoryDto(PaymentTermVersion version) => new()
-	{
-		Id = version.Id,
-		VersionNumber = version.VersionNumber,
-		Status = version.Status,
-		ChangeAction = version.Status switch
-		{
-			PaymentTermVersionStatus.Draft => version.VersionNumber == 1 ? "created" : "revision_created",
+			PaymentTermVersionStatus.Draft => versionNumber == 1 ? "created" : "revision_created",
 			PaymentTermVersionStatus.Published => "published",
 			PaymentTermVersionStatus.Superseded => "superseded",
 			PaymentTermVersionStatus.Archived => "archived",
 			_ => "updated"
-		},
-		ChangeReason = version.ChangeReason,
-		CreationTime = version.CreationTime,
-		CreatorId = version.CreatorId
-	};
+		};
 
 	private async Task<PaymentTermDto> MapDetailDtoAsync(PaymentTerm term, int referencedCount)
 	{

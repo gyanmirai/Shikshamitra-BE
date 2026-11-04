@@ -219,7 +219,18 @@ public class DirectFinanceTableFilterApi_Tests(FinanceRoutingApiTestFactory fact
 		return new SettingsContext(context.YearId, headId, bookId, other.Id);
 	}
 
-	private async Task<AdjustmentContext> SeedAdjustmentsAsync(Guid tenantId)
+	[Theory]
+	[InlineData(FeeAdjustmentStatus.PartiallyApplied, "Partially applied")]
+	[InlineData(FeeAdjustmentStatus.Cancelled, "Cancelled")]
+	public async Task Adjustment_status_criteria_and_search_match_the_displayed_state(FeeAdjustmentStatus status, string label)
+	{
+		var context = await SeedAdjustmentsAsync(TenantId, status);
+		var url = $"/api/fee-adjustments/applications?academicYearId={context.YearId}&boardId={context.BoardId}&educationMediumId={context.MediumId}&pageSize=1";
+		await AssertAsync(Client, url, 1, context.TargetId, Criterion("status", "equals", label));
+		await AssertAsync(Client, url + "&filter=" + Uri.EscapeDataString(label), 1, context.TargetId);
+	}
+
+	private async Task<AdjustmentContext> SeedAdjustmentsAsync(Guid tenantId, FeeAdjustmentStatus targetStatus = FeeAdjustmentStatus.Pending)
 	{
 		using var scope = Factory.Services.CreateScope();
 		var services = scope.ServiceProvider;
@@ -249,6 +260,16 @@ public class DirectFinanceTableFilterApi_Tests(FinanceRoutingApiTestFactory fact
 					target ? "TARGET-VOUCHER" : "DIRECT-" + Guid.NewGuid().ToString("N")[..12], target ? 999d : 100d], CultureInfo.InvariantCulture)!;
 			request.CreationTime = target ? new DateTime(2026, 6, 12) : new DateTime(2026, 6, 13).AddMinutes(i);
 			request.CreatorId = userId;
+			if (target && targetStatus != FeeAdjustmentStatus.Pending)
+			{
+				// Construct the read-model fixture independently of payment/allocation workflow setup.
+				typeof(FeeAdjustmentRequest).GetProperty(nameof(FeeAdjustmentRequest.Status))!.SetValue(request, targetStatus);
+				if (targetStatus == FeeAdjustmentStatus.PartiallyApplied)
+				{
+					typeof(FeeAdjustmentRequest).GetProperty(nameof(FeeAdjustmentRequest.AppliedAmount))!.SetValue(request, 250d);
+					typeof(FeeAdjustmentRequest).GetProperty(nameof(FeeAdjustmentRequest.RemainingAmount))!.SetValue(request, 749d);
+				}
+			}
 			await services.GetRequiredService<IRepository<FeeAdjustmentRequest, Guid>>().InsertAsync(request);
 		}
 		await uow.CompleteAsync();

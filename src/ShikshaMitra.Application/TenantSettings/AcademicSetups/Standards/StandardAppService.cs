@@ -124,35 +124,41 @@ public class StandardAppService(
 	[RemoteService(false)]
 	public async Task<List<StandardDto>> GetStandardsByEducationMediumId(Guid educationMediumId)
 	{
-		List<EducationMediumStage> educationMediumsStages =
-			await educationMediumRepository.GetEducationMediumStagesByEducationMediumIdAsync(educationMediumId);
+		// Project each level instead of materializing the circular academic auto-includes.
+		var stages = await queryScope.StagesAsync(await educationMediumRepository.GetQueryableAsync());
+		var stageIds = await AsyncExecuter.ToListAsync(stages
+			.Where(stage => stage.EducationMediumId == educationMediumId
+				&& stage.EducationMedium.EducationBoard.AcademicYear.TenantId == CurrentTenant.Id
+				&& !stage.EducationMedium.EducationBoard.AcademicYear.IsDeleted).Select(stage => stage.Id));
+		if (stageIds.Count == 0) return [];
 
-		educationMediumsStages = educationMediumsStages.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).ToList();
-
-		if (educationMediumsStages.Count == 0)
-		{
-			return [];
-		}
-
-		List<Standard> standards = [];
-		var stageIds = educationMediumsStages.Select(stage => stage.Id).ToArray();
-		var allStandards = await AsyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync())
+		var standards = await queryScope.StandardsAsync(await standardRepository.GetQueryableAsync());
+		var standardDtos = await AsyncExecuter.ToListAsync(standards
 			.Where(standard => Enumerable.Contains(stageIds, standard.EducationMediumStageId))
-			.OrderBy(standard => standard.SortOrder).ThenBy(standard => standard.Name).ThenBy(standard => standard.Id));
-		var standardsByStage = allStandards.ToLookup(standard => standard.EducationMediumStageId);
+			.OrderBy(standard => standard.EducationMediumStage.SortOrder)
+			.ThenBy(standard => standard.EducationMediumStage.Name).ThenBy(standard => standard.EducationMediumStageId)
+			.ThenBy(standard => standard.SortOrder).ThenBy(standard => standard.Name).ThenBy(standard => standard.Id)
+			.Select(standard => new StandardDto {
+				Id = standard.Id, Name = standard.Name, SortOrder = standard.SortOrder,
+				AgeLowerLimit = standard.AgeLowerLimit, EducationMediumStageId = standard.EducationMediumStageId,
+				ShiftId = standard.ShiftId, CreationTime = standard.CreationTime, CreatorId = standard.CreatorId,
+				LastModificationTime = standard.LastModificationTime, LastModifierId = standard.LastModifierId,
+				// Shift has no audit columns; preserve the legacy DTO's default audit values.
+				Shift = standard.Shift == null ? null! : new ShiftManagementDto {
+					Id = standard.Shift.Id, ShiftName = standard.Shift.ShiftName,
+					StartTime = standard.Shift.StartTime, EndTime = standard.Shift.EndTime },
+				Divisions = new List<DivisionDto>() }));
+		if (standardDtos.Count == 0) return standardDtos;
 
-		foreach (EducationMediumStage educationMediumStage in educationMediumsStages)
-		{
-			foreach (Standard standard in standardsByStage[educationMediumStage.Id])
-			{
-				standard.Divisions = standard.Divisions.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).ToList();
-				standards.Add(standard);
-			}
-		}
-
-		standards = await scopeAccessService.FilterStandardsAsync(standards);
-
-		var standardDtos = ObjectMapper.Map<List<Standard>, List<StandardDto>>(standards);
+		var standardIds = standardDtos.Select(standard => standard.Id).ToArray();
+		var divisions = await queryScope.DivisionsAsync(await LazyServiceProvider
+			.LazyGetRequiredService<IRepository<Division, Guid>>().GetQueryableAsync());
+		var divisionDtos = await AsyncExecuter.ToListAsync(divisions
+			.Where(division => Enumerable.Contains(standardIds, division.StandardId))
+			.OrderBy(division => division.SortOrder).ThenBy(division => division.Name).ThenBy(division => division.Id)
+			.Select(AcademicHierarchyProjection.Division));
+		var divisionsByStandard = divisionDtos.ToLookup(division => division.StandardId);
+		foreach (var standard in standardDtos) standard.Divisions = divisionsByStandard[standard.Id].ToList();
 		await EnrichDivisionOccupancyAsync(standardDtos.SelectMany(s => s.Divisions ?? []).ToList());
 		return standardDtos;
 	}

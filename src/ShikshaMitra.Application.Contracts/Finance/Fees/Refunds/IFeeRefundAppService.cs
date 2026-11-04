@@ -18,6 +18,9 @@ public interface IFeeRefundAppService : IApplicationService
     /// <summary>Single refund request with its lines.</summary>
     Task<FeeRefundRequestDto> GetAsync(Guid id);
 
+    /// <summary>Printable evidence of a recorded refund payout, retaining view scope and reference masking.</summary>
+    Task<FeeRefundReceiptFileDto> GetReceiptPdfAsync(Guid id);
+
     /// <summary>
     /// Returns pinned refund eligibility for a Student or admission Finance account.
     /// An original receipt limits the result to its settled source allocations.

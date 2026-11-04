@@ -3,6 +3,8 @@ using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 
+public sealed record FeeRefundReceiptFileDto(byte[] Content, string FileName);
+
 public sealed class RefundSourceReceiptDto
 {
     public Guid ReceiptId { get; set; }

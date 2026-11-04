@@ -1,3 +1,7 @@
+using Microsoft.EntityFrameworkCore;
+using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.Finance.Fees.Settings;
+using Volo.Abp.EntityFrameworkCore;
 using System;
 using System.Linq;
 using System.IO;
@@ -88,7 +92,7 @@ public partial class LateFeeCollectionRuntime_Tests
 			using (var reader = new CsvReader(new StringReader(csv), CultureInfo.InvariantCulture))
 			{
 				reader.Read().ShouldBeTrue(); reader.ReadHeader();
-				reader.HeaderRecord!.Skip(8).Take(3).ToArray().ShouldBe(new[] { "Total Charges", "Paid Charges", "Pending Charges" });
+				reader.HeaderRecord!.Skip(10).Take(3).ToArray().ShouldBe(new[] { "Total Charges", "Paid Charges", "Pending Charges" });
 				reader.Read().ShouldBeTrue();
 				reader.GetField<double>("Total Charges").ShouldBe(expectedTotal);
 				reader.GetField<decimal>("Paid Charges").ShouldBe((decimal)paid);
@@ -101,12 +105,12 @@ public partial class LateFeeCollectionRuntime_Tests
 			});
 			using var workbook = new XLWorkbook(new MemoryStream(excel));
 			var sheet = workbook.Worksheets.First();
-			sheet.Cell(1, 9).GetString().ShouldBe("TotalCharges");
-			sheet.Cell(1, 10).GetString().ShouldBe("Paid Charges");
-			sheet.Cell(1, 11).GetString().ShouldBe("Pending Charges");
-			sheet.Cell(2, 9).GetDouble().ShouldBe(expectedTotal);
-			sheet.Cell(2, 10).GetValue<decimal>().ShouldBe((decimal)paid);
-			sheet.Cell(2, 11).GetDouble().ShouldBe(expectedPending);
+			sheet.Cell(1, 11).GetString().ShouldBe("TotalCharges");
+			sheet.Cell(1, 12).GetString().ShouldBe("Paid Charges");
+			sheet.Cell(1, 13).GetString().ShouldBe("Pending Charges");
+			sheet.Cell(2, 11).GetDouble().ShouldBe(expectedTotal);
+			sheet.Cell(2, 12).GetValue<decimal>().ShouldBe((decimal)paid);
+			sheet.Cell(2, 13).GetDouble().ShouldBe(expectedPending);
 		}
 	}
 
@@ -133,7 +137,17 @@ public partial class LateFeeCollectionRuntime_Tests
 				AcademicYearId = year, BoardId = first.AcademicBoardId.Value, EducationMediumId = first.AcademicMediumId,
 				MaxResultCount = 100, SortBy = "paidCharges", SortOrder = "desc"
 			};
-			var descending = await _feeCollections.GetSummaryAsync(input);
+			var hasStandaloneReversalScan = false;
+			var descending = await WithUnitOfWorkAsync(async () =>
+			{
+				var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+				using var reads = new FinanceSettingsReadCapture(db.Database.GetDbConnection());
+				var result = await _feeCollections.GetSummaryAsync(input);
+				var metadataTable = System.Text.RegularExpressions.Regex.Escape(db.Model.FindEntityType(typeof(FeeRecordMetadata))!.GetTableName()!);
+				var standaloneMetadataIds = "^\\s*SELECT\\s+\"[^\"]+\"\\.\"Id\"\\s+FROM\\s+\"" + metadataTable + "\"";
+				hasStandaloneReversalScan = reads.Commands.Any(sql => System.Text.RegularExpressions.Regex.IsMatch(sql, standaloneMetadataIds));
+				return result;
+			});
 			descending.Items.Select(x => x.StudentId).ShouldBe(new Guid?[] { firstId, second.Id });
 			ReadPaidCharges(descending.Items[0]).ShouldBe(320.25m);
 			ReadPaidCharges(descending.Items[1]).ShouldBe(100.50m);
@@ -141,6 +155,8 @@ public partial class LateFeeCollectionRuntime_Tests
 			descending.Items[0].PendingCharges.ShouldBe(699.75d);
 			descending.Items[1].PendingCharges.ShouldBe(899.50d);
 			descending.Items.ShouldAllBe(x => x.PaidFees == 0d);
+			hasStandaloneReversalScan.ShouldBeFalse("Charge summaries must exclude reversed allocations in SQL without first enumerating every reversed transaction in the tenant.");
+
 			input.SortOrder = "asc";
 			(await _feeCollections.GetSummaryAsync(input)).Items.Select(x => x.StudentId).ShouldBe(new Guid?[] { second.Id, firstId });
 			input.SortBy = null; input.Sorting = "PaidCharges desc";

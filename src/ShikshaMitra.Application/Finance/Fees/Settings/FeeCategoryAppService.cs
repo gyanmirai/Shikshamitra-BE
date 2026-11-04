@@ -17,7 +17,7 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 [Authorize]
 [RemoteService(false)]
-public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
+public partial class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
 {
 	private readonly IRepository<FeeCategory, Guid> feeCategoryRepository;
 	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
@@ -217,14 +217,10 @@ public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
 			headQuery.Where(x => categoryIds.Contains(x.FeeCategoryId))
 		);
 
-		var usedFeeHeadIds = await GetUsedFeeHeadIdsAsync(allHeads.Select(x => x.Id).ToList());
-
-		var items = new List<FeeCategoryResponse>();
-		foreach (var category in categories)
-		{
-			var heads = allHeads.Where(x => x.FeeCategoryId == category.Id).ToList();
-			items.Add(await MapToResponseAsync(category, heads, usedFeeHeadIds));
-		}
+		var responseContext = await LoadResponseContextAsync(allHeads);
+		var headsByCategory = allHeads.ToLookup(x => x.FeeCategoryId);
+		var items = categories.Select(category =>
+			MapToResponse(category, headsByCategory[category.Id], responseContext)).ToList();
 
 		return new FeeCategoryListResponse
 		{
@@ -400,39 +396,4 @@ public class FeeCategoryAppService : ApplicationService, IFeeCategoryAppService
 		return (await dependencyQuery.GetAsync(feeHeadIds)).Where(x => x.Value.IsBlocked).Select(x => x.Key).ToHashSet();
 	}
 
-	private async Task<FeeCategoryResponse> MapToResponseAsync(FeeCategory feeCategory, List<FeeHead> feeHeads, HashSet<Guid>? usedFeeHeadIds = null)
-	{
-		usedFeeHeadIds ??= await GetUsedFeeHeadIdsAsync(feeHeads.Select(x => x.Id).ToList());
-		var incomeCategoryIds = feeHeads.Select(x => x.IncomeCategoryId).Distinct().ToList();
-		var incomeCategories = await incomeCategoryRepository.GetListAsync(x => incomeCategoryIds.Contains(x.Id));
-		var incomeCategoryDict = incomeCategories.ToDictionary(x => x.Id);
-		var accountHeadIds = incomeCategories.Where(x => x.DefaultAccountHeadId.HasValue)
-			.Select(x => x.DefaultAccountHeadId!.Value).Distinct().ToList();
-		var accountHeads = await accountHeadRepository.GetListAsync(x => accountHeadIds.Contains(x.Id));
-		var accountHeadDict = accountHeads.ToDictionary(x => x.Id);
-
-		var dependencies = await dependencyQuery.GetAsync(feeHeads.Select(x => x.Id));
-		var response = ObjectMapper.Map<FeeCategory, FeeCategoryResponse>(feeCategory);
-		response.FeeHeads = feeHeads.Select(feeHead =>
-		{
-			var headResponse = ObjectMapper.Map<FeeHead, FeeHeadResponse>(feeHead);
-			headResponse.FeeCategoryName = feeCategory.Name;
-			if (incomeCategoryDict.TryGetValue(feeHead.IncomeCategoryId, out var incomeCategory))
-			{
-				headResponse.IncomeCategoryName = incomeCategory.Name;
-				if (incomeCategory.DefaultAccountHeadId.HasValue &&
-					accountHeadDict.TryGetValue(incomeCategory.DefaultAccountHeadId.Value, out var accountHead))
-				{
-					headResponse.IncomeAccountHeadId = accountHead.Id;
-					headResponse.IncomeAccountHeadName = accountHead.Name;
-				}
-			}
-			headResponse.Dependencies = dependencies[feeHead.Id];
-			headResponse.IsUsedInDownstream = headResponse.Dependencies.IsBlocked;
-			return headResponse;
-		}).ToList();
-		response.IsUsedInDownstream = feeHeads.Any(x => usedFeeHeadIds.Contains(x.Id));
-
-		return response;
-	}
 }

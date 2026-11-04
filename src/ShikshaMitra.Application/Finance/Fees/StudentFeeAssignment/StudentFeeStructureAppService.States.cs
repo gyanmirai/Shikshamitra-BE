@@ -18,6 +18,7 @@ public partial class StudentFeeStructureAppService
 		if (page.Count == 0) return;
 		var studentIds = page.Select(row => row.StudentId).ToArray();
 		var assignments = await studentFeeStructureRepository.GetListAsync(a => a.AcademicYearId == yearId && Enumerable.Contains(studentIds, a.StudentId));
+		var editBlockers = await StructureEditBlockersAsync(assignments);
 		var accounts = await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>()
 			.GetListAsync(a => a.AcademicYearId == yearId && a.StudentId.HasValue && Enumerable.Contains(studentIds, a.StudentId.Value));
 		var applications = await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionApplication, Guid>>().GetQueryableAsync();
@@ -36,7 +37,16 @@ public partial class StudentFeeStructureAppService
 			row.IsFeeStructureAssigned = assignment != null;
 			row.AssignmentState = assignment != null ? "Assigned" : "Unassigned";
 			row.AssignmentSource = assignment?.FinanceFeeAccountId.HasValue == true ? "Admission" : "Finance";
-			if (assignment != null) continue;
+			if (assignment != null)
+			{
+				row.AssignmentId = assignment.Id;
+				row.StructureId = assignment.FeeStructureStandardId;
+				row.StructureRevision = SavedAssignment(assignment)?.RevisionNumber;
+				row.AssignmentConcurrencyStamp = assignment.ConcurrencyStamp;
+				row.StructureEditBlocker = editBlockers[assignment.Id] ?? (!row.IsActive ? InactiveEditBlocker : null);
+				row.CanEditStructure = row.StructureEditBlocker == null;
+				continue;
+			}
 			var matching = sources.Where(a => a.StudentId == row.StudentId || a.EnrolledStudentId == row.StudentId).ToList();
 			if (matching.Count > 0 || accounts.Any(a => a.StudentId == row.StudentId)) row.AssignmentSource = "Admission";
 			if (matching.Count > 1) { row.AssignmentState = "NeedsAttention"; continue; }

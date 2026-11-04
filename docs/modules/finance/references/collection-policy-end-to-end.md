@@ -3,7 +3,7 @@ module: finance
 domain: collection-policy
 content_type: Reference
 status: active
-updated_on: 2026-11-02
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -49,6 +49,14 @@ The frontend owns the configuration and receipt-preview workflow in [Finance wor
 
 ## Goals and boundaries
 
+### Common late-fee scope (implemented)
+
+New policies, updates, revisions and clones persist `applyLateFeeToAllFeeHeads = true` in the existing extension JSON and immutable version snapshot. When enabled, the single policy rule applies to every Fee Head in the attached assignment/account context. New writes discard legacy selected-head lists and per-head overrides before validation; the legacy waiver-head column is also cleared. Formula, numeric bounds, academic-year access, accounting routing and lifecycle validation still apply.
+
+Rows and pinned version JSON without the marker default to `false` and retain selected-head scope, `NoLateFee` exclusions and `CustomRule` groups. Reading a historical snapshot never upgrades it. Saving or cloning it creates a common version for future use. The historical selected-head attachment rules below apply only to versions whose marker is false; enabled common policies cover every validated structure head and have no selected-head overlap/unused-head warning.
+
+Common accrual uses one group across all eligible heads and installments in the context. Assessed/paid/waived amounts remain on their existing due references, and only growth above their combined assessment floor is added. Charge displays use **Late Fee**. The persisted explanation prefix `Common late fee across selected fee heads and overdue installments. ` remains recognized for historical evidence. No schema migration or historical data rewrite is needed.
+
 The policy must make these questions deterministic:
 
 - Which fee heads can attract a late fee?
@@ -75,9 +83,9 @@ Those modules consume the policy result but remain their own source of truth.
 | Versioning | Every create, edit, status change, and clone writes an immutable version/audit snapshot |
 | Historical use | Fee structure and student assignment store policy ID plus exact policy-version ID |
 | Runtime math | Server is authoritative; frontend calculators are previews only |
-| Fee-head mismatch | Use the intersection of policy heads and fee-structure heads; zero overlap is allowed and makes that feature inactive for the structure |
-| Policy-only heads | Allowed because one policy may serve multiple structures; show a warning for the current structure |
-| Structure-only heads | Collect normally but do not receive that policy's late fee |
+| Fee-head coverage | Common enabled policies cover all validated structure heads; historical selected-head versions use intersection |
+| Policy-only heads | Relevant only to historical selected-head versions; warn for heads absent from the structure |
+| Structure-only heads | Covered by common policies; excluded only by historical selected-head versions |
 | No-policy case | New fee structures and new student assignments are blocked; legacy data needs a controlled migration path |
 | Policy edit | Existing assignments and posted transactions keep their captured version; only future assignments use the new version |
 | Policy deletion | Financial policies are archived, not hard-deleted after creation |
@@ -88,7 +96,7 @@ Use progressive disclosure in the UI.
 
 | Staff need | Default experience | Advanced controls |
 |---|---|---|
-| Create a normal policy | Name, eligible heads, grace days, one calculation method | Caps, accounting, per-head overrides |
+| Create a normal policy | Name, grace days, one common calculation method | Caps and accounting |
 | Attach to a structure | Default policy is preselected and an impact summary appears | Change policy or inspect version |
 | Collect a payment | Due, calculated late fee, applied waiver, and payable total are already calculated | Open calculation explanation or apply an eligible waiver |
 | Handle a closure/disaster | Create one exception window | Student-specific override only for genuine individual exceptions |
@@ -182,7 +190,7 @@ The backend derives and stores the academic-year start and end dates for version
 |---|---|---|
 | Enable late fee | Always | When false, clear/ignore late-fee formula fields and return zero |
 | Grace-period days | Late fee enabled | Integer 0-365 calendar days, including weekends and holidays; no configurable day-count type |
-| Late-fee fee heads | Late fee enabled | At least one valid, active fee head from the same tenant/year |
+| Late-fee fee heads | Historical versions only | New writes clear the list and apply one common rule to all heads |
 | Calculation type | Late fee enabled | `Flat`, `Percentage`, `PerDay`, `PerWeek`, `PerMonth`, `Compound`, `Slab` |
 | Flat amount | Type = Flat | 0.01-999999, at most two decimal places |
 | Percentage | Type = Percentage/Compound | 0.01-100, at most two decimal places |
@@ -201,9 +209,9 @@ The backend derives and stores the academic-year start and end dates for version
 The same numeric bounds apply to supplied draft values and custom fee-head overrides. Simulation accepts 0-365 overdue days, 0-365 optional custom grace days, and 0-999999 for monetary inputs with at most two decimal places. These are configuration/input bounds; calculated outputs remain governed by the selected formula, cutoff, ceiling, and rounding, rather than being silently clamped to the input maximum. Immutable historical version snapshots retain their original numeric configuration when restored for calculation; new writes, including revisions and clones, must satisfy current bounds.
 Keep it hidden or label it experimental until Finance approves a precise definition; do not let staff select an ambiguous calculation base.
 
-### Per-fee-head override section
+### Historical per-fee-head overrides
 
-Each policy fee head can use one mode:
+Pinned historical selected-head versions retain these modes. New writes ignore and clear override inputs:
 
 | Mode | Meaning | Validation |
 |---|---|---|
@@ -380,9 +388,9 @@ chargeableDays = max(0, daysLate - effectiveGrace)
 
 Every response exposes gross late fee, previously paid, waived, remaining, chargeable days, cap/rounding result, policy/version, and explanation.
 
-Selected fee heads define the common rule's applicability scope. Inherited heads share one calculation; explicit custom-rule overrides retain separate rule groups and `NoLateFee` overrides remain excluded. Daily, weekly and monthly rates count the union of eligible overdue calendar-day intervals, including evidenced principal settlement dates, so simultaneous heads do not multiply days. Grace applies before interval union; weekly/monthly periods remain started 7/30-day periods. Fully settled principal stops new accrual.
+Common versions apply the rule to all context heads. Historical selected-head versions retain their saved applicability scope; inherited heads share one calculation, custom-rule overrides retain separate groups and `NoLateFee` overrides remain excluded. Daily, weekly and monthly rates count the union of eligible overdue calendar-day intervals, including evidenced principal settlement dates, so simultaneous heads do not multiply days. Grace applies before interval union; weekly/monthly periods remain started 7/30-day periods. Fully settled principal stops new accrual.
 
-`LateFeeBalanceService` loads the full same-academic-year payer scope even for single-row payment/waiver validation, then returns the requested rows. New common charges use a stable due reference and the label **Late Fee - Selected fee heads**. Existing assessed, paid and waived amounts stay on their original references; only growth above their combined floor is added to the common charge. Historical assessments are not automatically deleted or rewritten by this fix. Collection, summaries and bulk waivers use these canonical balances.
+`LateFeeBalanceService` loads the full same-academic-year payer scope even for single-row payment/waiver validation, then returns the requested rows. New common charges use a stable due reference and the label **Late Fee**. Existing assessed, paid and waived amounts stay on their original references; only growth above their combined floor is added to the common charge. Historical assessments are not automatically deleted or rewritten by this fix. Collection, summaries and bulk waivers use these canonical balances.
 
 ## Collection scenarios
 

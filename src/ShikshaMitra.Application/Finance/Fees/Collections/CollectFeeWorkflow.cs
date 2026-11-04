@@ -201,6 +201,7 @@ public partial class CollectFeeWorkflow : ApplicationService, ITransientDependen
 		var paymentRows = input.Payments
 			.Select(p => (p.PaymentMethod, p.Amount, FeeCollectionManager.MapPaymentDetails(p.PaymentMethod, p.Details)))
 			.ToList();
+		var receiptLines = await CaptureReceiptLinesAsync(input, dueFeeContext, chargeContext, lateFeeMap);
 
 		var transaction = await feeCollectionManager.ExecuteCollectionTransactionAsync(
 			new FeeCollectionManager.CollectFeeTransactionCommand(
@@ -228,6 +229,9 @@ public partial class CollectFeeWorkflow : ApplicationService, ITransientDependen
 				input.AutomaticAllocation.ChargeIds
 			});
 
+		ShikshaMitra.Application.Finance.Fees.Receipts.ReceiptCollectionSnapshot.Capture(transaction.Metadata, receiptLines);
+		ShikshaMitra.Application.Finance.Fees.Receipts.ReceiptCollectionSnapshot.CaptureOrganization(
+			transaction.Metadata, account?.MediumStageId ?? student?.AcademicMediumStageId);
 		transaction.Metadata.SetProperty("ReceiptPolicy", new
 		{
 			ReceiptGrouping = (effectivePolicy?.ReceiptGrouping ?? CollectionReceiptGrouping.Separate).ToString(),
@@ -337,5 +341,6 @@ public partial class CollectFeeWorkflow : ApplicationService, ITransientDependen
 		Dictionary<Guid, DueFee> DueFeeMap, Dictionary<Guid, FeeHead> FeeHeadMap);
 
 	private sealed record ChargeValidationContext(
-		Dictionary<Guid, Charge> ChargeMap, Dictionary<Guid, double> PendingChargeMap);
+		Dictionary<Guid, Charge> ChargeMap, Dictionary<Guid, double> PendingChargeMap,
+		Dictionary<Guid, decimal> PayableChargeMap);
 }

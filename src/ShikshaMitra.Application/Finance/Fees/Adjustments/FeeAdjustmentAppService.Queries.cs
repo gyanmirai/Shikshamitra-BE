@@ -19,8 +19,6 @@ public partial class FeeAdjustmentAppService
         var feeHeadIds = feeHeads.Select(fh => fh.Id).ToList();
         var dueFees = await dueFeeRepository.GetListAsync(
             df => df.StudentId == studentId && feeHeadIds.Contains(df.FeeHeadId) && df.OutstandingAmount > 0);
-        var pendingSource = await feeAdjustmentRepository.GetPendingSourceAmountsByDueFeeAsync(studentId);
-
         if (dueFees.Count == 0)
             return new AdjustmentEligibilityDto { StudentId = studentId, AcademicYearId = academicYearId };
 
@@ -34,8 +32,7 @@ public partial class FeeAdjustmentAppService
                     .OrderBy(df => df.Year).ThenBy(df => df.Month)
                     .Select(df =>
                     {
-                        pendingSource.TryGetValue(df.Id, out var reserved);
-						var adjustable = (double)Math.Max(0m, df.AdjustableBalance - (decimal)reserved);
+						var adjustable = (double)df.AdjustableBalance;
                         return new AdjustmentEligibilityMonthDto
                         {
                             DueFeeId = df.Id, Month = df.Month, Year = df.Year,
@@ -133,6 +130,7 @@ public partial class FeeAdjustmentAppService
             return new FeeAdjustmentApplicationItemDto
             {
                 Id = request.Id, StudentId = request.StudentId,
+                RequestedByUserId = request.CreatorId,
                 StudentName = student == null ? string.Empty
                     : $"{student.FirstName}{(string.IsNullOrEmpty(student.MiddleName) ? " " : $" {student.MiddleName} ")}{student.LastName}".Trim(),
                 GrNumber = student?.GrNo?.ToString() ?? string.Empty,

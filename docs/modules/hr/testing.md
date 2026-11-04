@@ -3,10 +3,16 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-29
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
+
+## Historical ESIC configuration
+
+`EsiHistoricalConfigurationApi_Tests` calls the real save endpoint under a controlled clock for June initial setup, earning classification, unlocked updates, stale/retried requests, version ordering, protected payroll, invalidation and the Indian month boundary. `EsiHistoricalConfigurationPostgres_Tests` repeats persistence cases and checks finalization fencing and rollback after an injected invalidation failure. Set `ESI_HISTORICAL_TEST_POSTGRES` to a separate empty disposable loopback `payroll_tests_*` database; the fixture refuses other targets and never resets existing databases. Run the existing `EsiConfigurationPostgres_Tests`, `EsiStatutoryApi_Tests` and `EsiPolicyApi_Tests` alongside these cases. Synthetic fixtures do not certify tenant policy history or live acceptance.
+
+`EsiHistoricalPayrollRaceScenario` drives the real `POST /api/payroll/run` issuance/finalization path against a historical configuration save in both fence orderings. It checks stale-lock rejection and successful recalculation, rejects fresh historical writes after protection, accepts the identical pre-lock idempotent retry, and compares protected amounts, statutory evidence, reviews, issued document facts and PDF bytes/hash. There is no separately exposed salary-slip finalization HTTP route; the lock endpoint performs finalization. `EsiConfigurationCommitFailure` injects a test-only failure just before commit, after querying the same transaction to prove snapshot and review soft deletes executed; post-rollback reads must exactly restore both records and configuration history.
 
 ## HR setup readiness
 

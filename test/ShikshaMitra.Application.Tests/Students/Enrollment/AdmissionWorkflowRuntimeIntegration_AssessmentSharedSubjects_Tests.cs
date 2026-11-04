@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Timetable;
 using ShikshaMitra.Academic.Timetable.RoomAvailability;
+using ShikshaMitra.Security.UserScope;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -79,8 +80,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		} }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 		nextVersion = await _workflowAppService.UpdateAsync(nextVersion.Id, update);
 		nextVersion = await _workflowAppService.PublishAsync(nextVersion.Id, nextVersion.ConcurrencyStamp);
-		await UpdateSharedSubjectOfferingAsync(firstOffering.Id, nextVersion.Id);
-		await UpdateSharedSubjectOfferingAsync(secondOffering.Id, nextVersion.Id);
+		(await Should.ThrowAsync<BusinessException>(() => UpdateSharedSubjectOfferingAsync(firstOffering.Id, nextVersion.Id)))
+			.Code.ShouldBe(AdmissionErrorCodes.OfferingConfigurationLocked);
+		(await Should.ThrowAsync<BusinessException>(() => UpdateSharedSubjectOfferingAsync(secondOffering.Id, nextVersion.Id)))
+			.Code.ShouldBe(AdmissionErrorCodes.OfferingConfigurationLocked);
+		var offerings = GetRequiredService<IAdmissionOfferingAppService>();
+		(await offerings.GetAsync(firstOffering.Id)).WorkflowDefinitionId.ShouldBe(workflow.Id);
+		(await offerings.GetAsync(secondOffering.Id)).WorkflowDefinitionId.ShouldBe(workflow.Id);
 		(await _applicationAppService.GetWorkflowAsync(first.Id)).WorkflowDefinitionId.ShouldBe(workflow.Id);
 		(await _applicationAppService.GetWorkflowAsync(second.Id)).WorkflowDefinitionId.ShouldBe(workflow.Id);
 
@@ -137,7 +143,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 	private async Task<(AdmissionWorkflowDto Workflow, AdmissionOfferingDto First, AdmissionOfferingDto Second)> CreateSharedSubjectOfferingsAsync()
 	{
-		var (_, _, source) = await CreateManagedAssessmentApplicationAsync();
+		await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId,
+			userId: TestUserId, description: "Shared subject assessment integration test"), autoSave: true);
+		// Prepare the shared workflow before intake starts; used offerings retain their original setup.
+		var source = await CreateOptionalIntakeOfferingAsync();
+		var offerings = GetRequiredService<IAdmissionOfferingAppService>();
+		var initial = await offerings.GetAsync(source.Id);
+		await offerings.DeactivateAsync(initial.Id, initial.ConcurrencyStamp);
 		var additionalClass = await WithUnitOfWorkAsync(async () =>
 		{
 			var standard = await _standardManager.CreateAsync(source.StageId, $"Upper entrance {Guid.NewGuid():N}"[..30], 11, null);
@@ -160,7 +172,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 		var workflow = await _workflowAppService.PublishAsync(draft.Id, draft.ConcurrencyStamp);
 		var first = await UpdateSharedSubjectOfferingAsync(source.Id, workflow.Id);
-		var second = await GetRequiredService<IAdmissionOfferingAppService>().CreateAsync(first.AdmissionCycleId, SharedSubjectOfferingInput(first, workflow.Id, additionalClass.Id));
+		first = await offerings.ActivateAsync(first.Id, first.ConcurrencyStamp);
+		var second = await offerings.CreateAsync(first.AdmissionCycleId, SharedSubjectOfferingInput(first, workflow.Id, additionalClass.Id));
 		return (workflow, first, second);
 	}
 

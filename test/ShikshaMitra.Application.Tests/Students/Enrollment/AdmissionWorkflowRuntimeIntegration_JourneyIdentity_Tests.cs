@@ -78,7 +78,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await _offeringValidator.ValidateForActivationAsync(await _offeringRepository.GetAsync(offering.Id)));
 		var missing = activation.Errors.Single(error => error.Code == AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete);
 		missing.Message.ShouldNotContain("Applicant.LastName");
-		missing.Message.ShouldContain("Applicant.Gender");
+		missing.Message.ShouldContain("Gender");
+		missing.Message.ShouldNotContain("Applicant.");
 		missing.ActivationOnly.ShouldBeTrue();
 		AdmissionOfferingConfigurationValidator.GetBlockingErrors(new([missing]), isActive: false).ShouldBeEmpty();
 		AdmissionOfferingConfigurationValidator.GetBlockingErrors(new([missing]), isActive: true).Count.ShouldBe(1);

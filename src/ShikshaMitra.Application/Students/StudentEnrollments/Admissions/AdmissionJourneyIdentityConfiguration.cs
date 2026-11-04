@@ -38,7 +38,7 @@ internal static class AdmissionJourneyIdentityConfiguration
 			(field.Required || !string.IsNullOrWhiteSpace(field.RequiredRuleJson) && AlwaysTrue(field.RequiredRuleJson)) &&
 			AlwaysTrue(field.VisibilityRuleJson) && CompatibleType(field, key)));
 
-	private static bool CompatibleType(AdmissionFormSchemaField field, string key) => key switch
+	internal static bool CompatibleType(AdmissionFormSchemaField field, string key) => key switch
 	{
 		"Applicant.DateOfBirth" => field.FieldType == AdmissionFormFieldType.Date,
 		"Applicant.Gender" => field.FieldType is AdmissionFormFieldType.Select or AdmissionFormFieldType.Radio && SupportedGenderChoices(field.OptionsJson),

@@ -37,7 +37,8 @@ public partial class AdmissionApplicationFormService(
 	public async Task<AdmissionApplicationFormDto> GetAsync(Guid applicationId)
 	{
 		var application = await applicationReadService.GetEntityAsync(applicationId);
-		var instance = await GetInstanceAsync(applicationId);
+		var context = await GetFormContextAsync(application);
+		var instance = context.Instance;
 		var cycle = await cycleRepository.FindAsync(application.AdmissionCycleId) ??
 			throw new EntityNotFoundException(typeof(AdmissionCycle), application.AdmissionCycleId);
 		var frozen = AdmissionEffectiveFormStore.Read(instance);
@@ -53,6 +54,12 @@ public partial class AdmissionApplicationFormService(
 			definitionDto = MapDefinition(definition, sections, fields);
 		}
 		var values = await valueRepository.GetListAsync(value => value.FormInstanceId == instance.Id);
+		var storedValues = values.OrderBy(value => value.FieldCode).Select(value => new AdmissionFormValueDto
+			{ FieldCode = value.FieldCode, ValueJson = value.ValueJson }).ToList();
+		var applicant = context.Applicant;
+		var prefill = applicant == null || application.Status != AdmissionApplicationStatus.Draft || application.SubmittedAt.HasValue ? new AdmissionApplicationFormDto { Values = storedValues } :
+			await LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingRegistrationPrefillService>()
+				.ProjectAsync(applicant, instance, definitionDto, storedValues);
 		var correctionBlockedReason = await GetCorrectionBlockedReasonAsync(application);
 		return new AdmissionApplicationFormDto
 		{
@@ -68,11 +75,9 @@ public partial class AdmissionApplicationFormService(
 			InquiryFormDefinitionId = frozen?.InquiryFormDefinitionId,
 			InquiryContextSections = frozen?.InquiryContextSections ?? [],
 			InquiryContextValues = frozen?.InquiryContextValues ?? [],
-			Values = values.OrderBy(value => value.FieldCode).Select(value => new AdmissionFormValueDto
-			{
-				FieldCode = value.FieldCode,
-				ValueJson = value.ValueJson
-			}).ToList()
+			Values = prefill.Values,
+			AutoFilledFieldCodes = prefill.AutoFilledFieldCodes,
+			FamilyPrefill = prefill.FamilyPrefill
 		};
 	}
 
@@ -85,12 +90,13 @@ public partial class AdmissionApplicationFormService(
 		var application = await applicationReadService.GetEntityAsync(applicationId);
 		application.SaveDraft();
 		EnsureConcurrency(application, input.ConcurrencyStamp);
-		var instance = await GetInstanceAsync(applicationId);
-		await ApplyValuesAsync(application, instance, input);
+		var context = await GetFormContextAsync(application);
+		var instance = context.Instance;
+		var acceptedInput = await ApplyValuesAsync(application, instance, input, loadedApplicant: context.Applicant);
 		instance.MarkSaved();
 		await instanceRepository.UpdateAsync(instance, false);
 		await historyRepository.InsertAsync(new AdmissionFormChangeHistory(GuidGenerator.Create(), CurrentTenant.Id, instance.Id, application.Id,
-			"DraftSaved", System.Text.Json.JsonSerializer.Serialize(input.Values.Select(value => value.FieldCode).Distinct(StringComparer.OrdinalIgnoreCase)), CurrentUser.Id), false);
+			"DraftSaved", System.Text.Json.JsonSerializer.Serialize(acceptedInput.Values.Select(value => value.FieldCode).Distinct(StringComparer.OrdinalIgnoreCase)), CurrentUser.Id), false);
 		await applicationRepository.UpdateAsync(application, false);
 		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("ApplicationSaved", "Application draft saved", application.ApplicantId, application.Id), true);
 		var result = await GetAsync(applicationId);
@@ -98,18 +104,60 @@ public partial class AdmissionApplicationFormService(
 		return result;
 	}
 
-	private async Task ApplyValuesAsync(AdmissionApplication application, AdmissionFormInstance instance,
-		UpdateAdmissionApplicationFormValuesDto input, IReadOnlySet<string>? writableCodesOverride = null)
+	private static UpdateAdmissionApplicationFormValuesDto ProtectAutomaticOccupationAliases(AdmissionFormDto definition,
+		UpdateAdmissionApplicationFormValuesDto input, string? relationship, IReadOnlySet<string> automaticCodes, IReadOnlySet<string> writableCodes)
+	{
+		if (!AdmissionSiblingParentSelection.IsRelationship(relationship)) return input;
+		var role = relationship == "father" ? "Father" : "Mother";
+		var aliases = definition.Sections.Where(section => !section.IsRepeatable).SelectMany(section => section.Fields).Where(field => !field.ReadOnly && writableCodes.Contains(field.Code) && field.BindingType == AdmissionFormBindingType.System &&
+			(field.BindingKey == role + ".Occupation" || field.BindingKey == "Guardian.Occupation")).Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var submitted = input.Values.DistinctBy(value => value.FieldCode, StringComparer.OrdinalIgnoreCase).Where(value => aliases.Contains(value.FieldCode)).ToList();
+		if (submitted.Count < 2) return input;
+		string Value(AdmissionFormValueDto value) => AdmissionApplicationValueConverter.Unwrap(value.ValueJson);
+		var hasClear = submitted.Any(value => string.IsNullOrWhiteSpace(Value(value)));
+		var authored = submitted.Where(value => !automaticCodes.Contains(value.FieldCode)).ToList();
+		var suppressed = submitted.Where(value => !string.IsNullOrWhiteSpace(Value(value)) && (hasClear || authored.Count > 0 && automaticCodes.Contains(value.FieldCode)))
+			.Select(value => value.FieldCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var remaining = submitted.Where(value => !suppressed.Contains(value.FieldCode)).ToList();
+		if (!hasClear && remaining.Select(Value).Distinct(StringComparer.Ordinal).Skip(1).Any())
+			throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed, "Parent occupation answers disagree. Review both fields before saving.")
+				.WithData("FieldErrors", remaining.ToDictionary(value => value.FieldCode, _ => "Review this parent's occupation answers."));
+		return new UpdateAdmissionApplicationFormValuesDto { ConcurrencyStamp = input.ConcurrencyStamp,
+			AutoFilledFieldCodes = input.AutoFilledFieldCodes?.Where(code => !suppressed.Contains(code)).ToList(),
+			Values = input.Values.Where(value => !suppressed.Contains(value.FieldCode)).ToList() };
+	}
+
+	private static HashSet<string> ValidateAutomaticHints(AdmissionFormDto definition, UpdateAdmissionApplicationFormValuesDto input,
+		IReadOnlySet<string> visibleCodes, IReadOnlySet<string>? writableCodes)
+	{
+		var allowed = definition.Sections.Where(section => !section.IsRepeatable).SelectMany(section => section.Fields)
+			.Where(AdmissionSiblingRegistrationPrefillPolicy.CanAutomaticallyFill).Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var hints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var code in input.AutoFilledFieldCodes ?? [])
+		{
+			var value = input.Values.FirstOrDefault(value => string.Equals(value.FieldCode, code, StringComparison.OrdinalIgnoreCase));
+			if (string.IsNullOrWhiteSpace(code) || !allowed.Contains(code) || !visibleCodes.Contains(code) ||
+				writableCodes != null && !writableCodes.Contains(code) || value == null || string.IsNullOrWhiteSpace(AdmissionApplicationValueConverter.Unwrap(value.ValueJson)))
+				throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed, "Automatic field hints must refer to writable parent answers in this save.")
+					.WithData("FieldCode", code);
+			hints.Add(code);
+		}
+		return hints;
+	}
+
+	private async Task<UpdateAdmissionApplicationFormValuesDto> ApplyValuesAsync(AdmissionApplication application, AdmissionFormInstance instance,
+		UpdateAdmissionApplicationFormValuesDto input, IReadOnlySet<string>? writableCodesOverride = null, AdmissionApplicant? loadedApplicant = null)
 	{
 		var existingValues = await valueRepository.GetListAsync(value => value.FormInstanceId == instance.Id);
 		var frozen = AdmissionEffectiveFormStore.Read(instance);
-		if (frozen == null) AdmissionEffectiveFormStore.EnsureLegacyAllowed(await formRepository.GetAsync(instance.FormDefinitionId));
+		var legacyDefinition = frozen == null ? await formRepository.GetAsync(instance.FormDefinitionId) : null;
+		if (legacyDefinition != null) AdmissionEffectiveFormStore.EnsureLegacyAllowed(legacyDefinition);
 		var definitions = frozen == null
 			? await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId)
 			: AdmissionEffectiveFormResolver.MaterializeFields(frozen.Definition);
 		await LazyServiceProvider.LazyGetRequiredService<AdmissionJoiningDateCapture>()
 			.GuardFormChangeAsync(application, definitions, input.Values);
-		var applicant = await applicantRepository.FindAsync(application.ApplicantId);
+		var applicant = loadedApplicant ?? await applicantRepository.FindAsync(application.ApplicantId);
 		AdmissionGuardian? guardian = null;
 		if (applicant is not null && definitions.Any(field => field.BindingType == AdmissionFormBindingType.System && field.BindingKey?.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase) == true))
 		{
@@ -135,6 +183,48 @@ public partial class AdmissionApplicationFormService(
 				currentValues[value.FieldCode] = AdmissionApplicationValueConverter.Unwrap(value.ValueJson);
 			writableCodes ??= AdmissionEffectiveFormResolver.VisibleFieldCodes(frozen.Definition, currentValues, formValidator);
 		}
+		var automaticCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		AdmissionApplicationFormDto? prefill = null;
+		var sibling = applicant == null ? null : AdmissionSiblingParentSelection.ReadConfirmation(applicant);
+		var genericParent = false;
+		AdmissionFormDto? parentDefinition = null;
+		if (sibling != null)
+		{
+			parentDefinition = frozen?.Definition ?? MapDefinition(legacyDefinition!,
+				await sectionRepository.GetListAsync(section => section.FormDefinitionId == instance.FormDefinitionId), definitions);
+			var current = existingValues.ToDictionary(value => value.FieldCode, value => AdmissionApplicationValueConverter.Unwrap(value.ValueJson), StringComparer.OrdinalIgnoreCase);
+			var posted = input.Values.Where(value => definitions.Any(field => !field.ReadOnly && string.Equals(field.Code, value.FieldCode, StringComparison.OrdinalIgnoreCase)) &&
+				(writableCodes == null || writableCodes.Contains(value.FieldCode))).ToList();
+			foreach (var value in posted) current[value.FieldCode] = AdmissionApplicationValueConverter.Unwrap(value.ValueJson);
+			var visible = AdmissionEffectiveFormResolver.VisibleFieldCodes(parentDefinition, current, formValidator);
+			var identityValues = existingValues.Select(value => new AdmissionFormValueDto { FieldCode = value.FieldCode, ValueJson = value.ValueJson }).ToList();
+			foreach (var value in posted.Where(value => visible.Contains(value.FieldCode)))
+			{
+				identityValues.RemoveAll(existing => string.Equals(existing.FieldCode, value.FieldCode, StringComparison.OrdinalIgnoreCase));
+				identityValues.Add(value);
+			}
+			genericParent = AdmissionSiblingRegistrationPrefillPolicy.CanUseSelectedParentAliases(applicant!,
+				parentDefinition.Sections.Where(section => !section.IsRepeatable).SelectMany(section => section.Fields), identityValues, sibling.Relationship);
+		}
+		if (application.Status == AdmissionApplicationStatus.Draft && !application.SubmittedAt.HasValue &&
+			(sibling != null || input.AutoFilledFieldCodes?.Count > 0))
+		{
+			var definition = parentDefinition ?? frozen?.Definition ?? MapDefinition(legacyDefinition!,
+				await sectionRepository.GetListAsync(section => section.FormDefinitionId == instance.FormDefinitionId), definitions);
+			var current = existingValues.ToDictionary(value => value.FieldCode, value => AdmissionApplicationValueConverter.Unwrap(value.ValueJson), StringComparer.OrdinalIgnoreCase);
+			foreach (var value in input.Values) current[value.FieldCode] = AdmissionApplicationValueConverter.Unwrap(value.ValueJson);
+			var visibleCodes = AdmissionEffectiveFormResolver.VisibleFieldCodes(definition, current, formValidator);
+			automaticCodes = ValidateAutomaticHints(definition, input, visibleCodes, writableCodes);
+			if (!genericParent) automaticCodes.RemoveWhere(code => definitions.Any(field => string.Equals(field.Code, code, StringComparison.OrdinalIgnoreCase) &&
+				field.BindingKey?.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase) == true));
+			input = ProtectAutomaticOccupationAliases(definition, input, genericParent ? sibling?.Relationship : null, automaticCodes, writableCodes ?? visibleCodes);
+			if (automaticCodes.Count > 0 && sibling != null)
+				prefill = await LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingRegistrationPrefillService>().ProjectAsync(applicant!, instance,
+					definition, existingValues.Select(value => new AdmissionFormValueDto { FieldCode = value.FieldCode, ValueJson = value.ValueJson }).ToList());
+		}
+		else if (input.AutoFilledFieldCodes?.Count > 0)
+			throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed, "Automatic field hints apply only to an initial draft.");
+		var acceptedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		if (applicant != null)
 			await RecoverFirstParentContactAsync(application, applicant, instance, definitions, existingValues);
 		var parentAnswers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -167,16 +257,19 @@ public partial class AdmissionApplicationFormService(
 				existing.SetValue(valueJson);
 				await valueRepository.UpdateAsync(existing, false);
 			}
+			acceptedCodes.Add(code);
 			if (definition.BindingType == AdmissionFormBindingType.System && applicant is not null &&
 				!((applicant.ExistingStudentId.HasValue || AdmissionSiblingParentSelection.ReadConfirmation(applicant) != null) && definition.BindingKey is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email"))
 			{
 				var value = AdmissionApplicationValueConverter.Unwrap(valueJson);
-				parentAnswers[definition.BindingKey!] = value;
+				var bindingKey = sibling != null && genericParent && definition.BindingKey == "Guardian.Occupation"
+					? (sibling.Relationship == "father" ? "Father.Occupation" : "Mother.Occupation") : definition.BindingKey!;
+				parentAnswers[bindingKey] = value;
 				if (!string.IsNullOrWhiteSpace(value) ||
 					AdmissionSubmissionIdentityValidator.IsOptionalNamePart(definition) ||
 					AdmissionAdditionalStudentFieldCatalog.Metadata.ContainsKey(definition.BindingKey!) ||
 					(AdmissionFirstParentContactMapping.CanMap(applicant) && definition.BindingKey is "Guardian.Email" or "Guardian.LastName"))
-					AdmissionFormBindingRegistry.ApplyValue(definition.BindingKey!, value, applicant, guardian);
+					AdmissionFormBindingRegistry.ApplyValue(bindingKey, value, applicant, guardian);
 			}
 		}
 		if (applicant is not null)
@@ -195,6 +288,13 @@ public partial class AdmissionApplicationFormService(
 			}
 		}
 		if (guardian is not null && applicant?.ExistingStudentId.HasValue != true && (applicant == null || AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null)) await guardianRepository.UpdateAsync(guardian, false);
+		if (prefill?.FamilyPrefill != null)
+		{
+			var copied = automaticCodes.Where(acceptedCodes.Contains).ToArray();
+			if (copied.Length > 0) await LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingRegistrationPrefillService>()
+				.RecordAsync(instance, prefill.FamilyPrefill, copied, clientReported: true);
+		}
+		return input;
 	}
 
 	internal async Task RecoverFirstParentContactAsync(AdmissionApplication application, AdmissionApplicant applicant,
@@ -329,6 +429,22 @@ public partial class AdmissionApplicationFormService(
 		await instanceRepository.FindAsync(instance => instance.ApplicationId == applicationId) ??
 		throw new EntityNotFoundException(typeof(AdmissionFormInstance), applicationId);
 
+	private sealed record FormContext(AdmissionFormInstance Instance, AdmissionApplicant? Applicant);
+
+	private async Task<FormContext> GetFormContextAsync(AdmissionApplication application)
+	{
+		if (application.Status != AdmissionApplicationStatus.Draft || application.SubmittedAt.HasValue)
+			return new FormContext(await GetInstanceAsync(application.Id), null);
+		var instances = await instanceRepository.GetQueryableAsync();
+		var applicants = (await applicantRepository.GetQueryableAsync()).Where(applicant => applicant.Id == application.ApplicantId && applicant.TenantId == CurrentTenant.Id);
+		var query = from instance in instances
+			where instance.ApplicationId == application.Id
+			join applicant in applicants on application.ApplicantId equals applicant.Id into targets
+			from applicant in targets.DefaultIfEmpty()
+			select new FormContext(instance, applicant);
+		return await AsyncExecuter.FirstOrDefaultAsync(query) ?? throw new EntityNotFoundException(typeof(AdmissionFormInstance), application.Id);
+	}
+
 	private async Task<AdmissionFormExperienceMetadata> GetLegacyExperienceAsync(AdmissionFormInstance instance)
 	{
 		var definition = await formRepository.GetAsync(instance.FormDefinitionId);
@@ -353,6 +469,7 @@ public partial class AdmissionApplicationFormService(
 		{
 			Id = definition.Id, Name = definition.Name, Code = definition.Code, Description = definition.Description,
 			Version = definition.Version, Status = definition.Status, LayoutType = definition.LayoutType, Purpose = definition.Purpose,
+			CoreFieldPolicyVersion = experience.CoreFieldPolicyVersion,
 			FieldsPerRow = definition.FieldsPerRow, DefaultLanguage = experience.DefaultLanguage,
 			SupportedLanguages = experience.SupportedLanguages, ParentVersionId = definition.ParentVersionId,
 			PublishedAt = definition.PublishedAt, PublishedBy = definition.PublishedBy,

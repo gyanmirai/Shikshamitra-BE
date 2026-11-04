@@ -8,6 +8,49 @@ namespace ShikshaMitra.Students.Enrollment;
 
 public class AdmissionOffering_Tests
 {
+	[Theory]
+	[InlineData(true, false)]
+	[InlineData(true, true)]
+	[InlineData(false, true)]
+	public void Locked_configuration_rejects_each_changed_reference(bool active, bool hasUsage)
+	{
+		var offering = CreateOffering(true, null, null);
+		var workflow = Guid.NewGuid();
+		var inquiry = Guid.NewGuid();
+		var registration = Guid.NewGuid();
+		offering.ConfigureReferences(workflow, inquiry, registration);
+		if (!active) offering.Deactivate();
+		foreach (var reference in new[] { "workflow", "inquiry", "registration" })
+			Should.Throw<BusinessException>(() => offering.EnsureConfigurationReferencesUnchanged(
+				reference == "workflow" ? Guid.NewGuid() : workflow,
+				reference == "inquiry" ? Guid.NewGuid() : inquiry,
+				reference == "registration" ? Guid.NewGuid() : registration, hasUsage))
+				.Code.ShouldBe(AdmissionErrorCodes.OfferingConfigurationLocked);
+	}
+
+	[Fact]
+	public void Inactive_never_used_configuration_can_change_references()
+	{
+		var offering = CreateOffering(true, null, null);
+		offering.Deactivate();
+		offering.EnsureConfigurationReferencesUnchanged(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), false);
+	}
+
+	[Fact]
+	public void Locked_configuration_allows_unchanged_or_omitted_derived_registration_reference()
+	{
+		var offering = CreateOffering(true, null, null);
+		var workflow = Guid.NewGuid();
+		var inquiry = Guid.NewGuid();
+		var registration = Guid.NewGuid();
+		offering.ConfigureReferences(workflow, inquiry, registration);
+		offering.EnsureConfigurationReferencesUnchanged(workflow, inquiry, registration, true);
+		offering.EnsureConfigurationReferencesUnchanged(workflow, inquiry, null, true);
+		Should.Throw<BusinessException>(() => offering.EnsureConfigurationReferencesUnchanged(null, inquiry, null, true));
+		Should.Throw<BusinessException>(() => offering.EnsureConfigurationReferencesUnchanged(workflow, null, null, true));
+		offering.ApplicationFormDefinitionId.ShouldBe(registration);
+	}
+
 	[Fact]
 	public void Offering_normalizes_code_and_defaults_active()
 	{

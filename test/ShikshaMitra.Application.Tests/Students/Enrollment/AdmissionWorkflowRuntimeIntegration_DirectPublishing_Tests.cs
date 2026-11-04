@@ -75,7 +75,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 	private Task<AdmissionWorkflowDto> CreateDirectPublicationDraftAsync() => _workflowAppService.CreateAsync(new()
 	{
-		Name = "Direct publication", Code = $"DIRECT_{Guid.NewGuid():N}"[..24],
+		Name = $"Direct publication {Guid.NewGuid():N}", Code = $"DIRECT_{Guid.NewGuid():N}"[..24],
 		Stages = [new() { Code = "DECISION", Name = "Admission decision", StageType = AdmissionWorkflowStageType.Approval,
 			IsEntryStage = true, IsTerminalStage = true, IsRequired = true }],
 		Transitions = []

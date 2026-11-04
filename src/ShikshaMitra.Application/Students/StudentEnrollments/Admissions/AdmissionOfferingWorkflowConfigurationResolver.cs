@@ -12,7 +12,8 @@ public class AdmissionOfferingWorkflowConfigurationResolver(
 	IRepository<AdmissionWorkflowDefinition, Guid> workflows,
 	IRepository<AdmissionWorkflowStageDefinition, Guid> stages) : ITransientDependency
 {
-	public async Task ResolveAsync(AdmissionOfferingWriteDto input, AdmissionOffering? existing = null, bool preserveRouting = true)
+	public async Task ResolveAsync(AdmissionOfferingWriteDto input, AdmissionOffering? existing = null, bool preserveRouting = true,
+		bool preserveReferences = false)
 	{
 		if (!Enum.IsDefined(input.Track) || !Enum.IsDefined(input.EntryMode))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
@@ -21,6 +22,14 @@ public class AdmissionOfferingWorkflowConfigurationResolver(
 		{
 			input.Track = existing.Track;
 			input.EntryMode = existing.EntryMode;
+		}
+		if (preserveReferences && existing != null)
+		{
+			// Operational saves must not silently derive a replacement for a locked historical form.
+			input.WorkflowDefinitionId = existing.WorkflowDefinitionId;
+			input.InquiryFormDefinitionId = existing.InquiryFormDefinitionId;
+			input.ApplicationFormDefinitionId = existing.ApplicationFormDefinitionId;
+			return;
 		}
 		var workflow = input.WorkflowDefinitionId.HasValue
 			? await workflows.FindAsync(input.WorkflowDefinitionId.Value) : null;

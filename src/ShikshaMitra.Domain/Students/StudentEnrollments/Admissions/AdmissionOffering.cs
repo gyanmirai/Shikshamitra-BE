@@ -120,6 +120,17 @@ public class AdmissionOffering : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ApplicationFormDefinitionId = applicationFormDefinitionId;
 	}
 
+	public void EnsureConfigurationReferencesUnchanged(Guid? workflowDefinitionId, Guid? inquiryFormDefinitionId,
+		Guid? applicationFormDefinitionId, bool hasUsage)
+	{
+		if (!IsActive && !hasUsage) return;
+		if (workflowDefinitionId == WorkflowDefinitionId && inquiryFormDefinitionId == InquiryFormDefinitionId &&
+			(!applicationFormDefinitionId.HasValue || applicationFormDefinitionId == ApplicationFormDefinitionId)) return;
+		throw new BusinessException(AdmissionErrorCodes.OfferingConfigurationLocked,
+			hasUsage ? "Workflow and forms are locked after the first inquiry or application. Deactivating this offering will not unlock its setup."
+				: "Deactivate this unused admission offering before changing its workflow or forms.");
+	}
+
 	public void ConfigureIntake(Guid? inquiryIntakeProfileId, Guid? counsellorAssignmentProfileId)
 	{
 		// Retain legacy storage, but new writes no longer configure intake or ownership.

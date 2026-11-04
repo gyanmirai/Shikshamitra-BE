@@ -188,6 +188,86 @@ public class AdmissionFormInheritanceService_Tests
 		second.Definition.Sections.SelectMany(item => item.Fields).Single(field => field.Code == "QUESTION").FieldIdentity.ShouldBe("custom:" + fieldId.ToString("D"));
 	}
 
+	[Fact]
+	public async Task Persisted_core_policy_marker_cannot_be_downgraded_by_preview_draft()
+	{
+		var school = Guid.NewGuid();
+		var source = Form(school, "Inquiry", AdmissionFormPurpose.Inquiry);
+		var registration = Form(school, "Registration", AdmissionFormPurpose.Registration, publish: false);
+		AdmissionFormMetadataStore.WriteExperience(registration, new() { CoreFieldPolicyVersion = 1 });
+		var section = Section(source);
+		var service = Service(school, [registration, source], sourceSections: [section],
+			sourceFields: [Field(source, section, "DOB")]);
+		var preview = await service.PreviewAsync(new()
+		{
+			RegistrationFormDefinitionId = registration.Id, InquiryFormDefinitionId = source.Id,
+			Draft = new() { ConcurrencyStamp = registration.ConcurrencyStamp, CoreFieldPolicyVersion = null }
+		});
+		preview.Definition.CoreFieldPolicyVersion.ShouldBe(1);
+		preview.Issues.ShouldContain(issue => issue.Code == "CoreIdentityRequired");
+	}
+
+	[Fact]
+	public async Task Saved_preview_rejects_unapproved_source_before_attempting_to_load_it()
+	{
+		var school = Guid.NewGuid();
+		var registration = Registration(school, Guid.NewGuid());
+		var error = await Should.ThrowAsync<BusinessException>(() => Service(school, [registration])
+			.GetSavedPreviewAsync(registration.Id, Guid.NewGuid()));
+		error.Code.ShouldBe(AdmissionFormInheritanceErrorCodes.InvalidPolicy);
+	}
+
+	[Fact]
+	public async Task Saved_preview_requires_enabled_persisted_inheritance()
+	{
+		var school = Guid.NewGuid();
+		var registration = Form(school, "Registration", AdmissionFormPurpose.Registration);
+		var error = await Should.ThrowAsync<BusinessException>(() => Service(school, [registration])
+			.GetSavedPreviewAsync(registration.Id, Guid.NewGuid()));
+		error.Code.ShouldBe(AdmissionFormInheritanceErrorCodes.InvalidPolicy);
+	}
+
+	[Fact]
+	public async Task Saved_preview_keeps_exact_approved_source_and_does_not_modify_either_definition()
+	{
+		var school = Guid.NewGuid();
+		var source = Form(school, "Inquiry", AdmissionFormPurpose.Inquiry);
+		var registration = Registration(school, source.Id);
+		var section = Section(source);
+		var before = System.Text.Json.JsonSerializer.Serialize(new[] { registration, source });
+		var result = await Service(school, [registration, source], sourceSections: [section], sourceFields: [Field(source, section, "Captured DOB")])
+			.GetSavedPreviewAsync(registration.Id, source.Id);
+		result.IsValid.ShouldBeTrue();
+		result.Definition.Sections.SelectMany(item => item.Fields).Single().Label.ShouldBe("Captured DOB");
+		result.InquiryFormDefinitionId.ShouldBe(source.Id);
+		System.Text.Json.JsonSerializer.Serialize(new[] { registration, source }).ShouldBe(before);
+	}
+
+	[Fact]
+	public async Task Saved_preview_never_loads_an_approved_source_from_another_tenant()
+	{
+		var school = Guid.NewGuid();
+		var source = Form(Guid.NewGuid(), "Other tenant", AdmissionFormPurpose.Inquiry);
+		var registration = Registration(school, source.Id);
+		await Should.ThrowAsync<EntityNotFoundException>(() => Service(school, [registration, source])
+			.GetSavedPreviewAsync(registration.Id, source.Id));
+	}
+	[Fact]
+	public async Task Context_only_inquiry_step_counts_toward_the_composed_stepper_layout()
+	{
+		var school = Guid.NewGuid();
+		var source = new AdmissionFormDefinition(Guid.NewGuid(), school, "Inquiry", "INQUIRY_CONTEXT", AdmissionFormLayoutType.Stepper, purpose: AdmissionFormPurpose.Inquiry);
+		source.Publish(null);
+		var registration = new AdmissionFormDefinition(Guid.NewGuid(), school, "Registration", "REG_CONTEXT", AdmissionFormLayoutType.Stepper, purpose: AdmissionFormPurpose.Registration);
+		AdmissionFormInheritanceMetadataStore.Write(registration, new() { Purpose = AdmissionFormPurpose.Registration, Inheritance = new() { Enabled = true, Sources = [new() { InquiryFormDefinitionId = source.Id }] } });
+		registration.Publish(null);
+		var contact = new AdmissionFormSectionDefinition(Guid.NewGuid(), source.Id, "CONTACT", "Contact", 0, null, Guid.NewGuid(), "CONTACT_STEP", "Contact", 0);
+		var student = new AdmissionFormSectionDefinition(Guid.NewGuid(), source.Id, "STUDENT", "Student", 1, null, Guid.NewGuid(), "STUDENT_STEP", "Student", 1);
+		var role = new AdmissionFormFieldDefinition(Guid.NewGuid(), source.Id, contact.Id, "ROLE", "Relationship to student", AdmissionFormFieldType.Select, AdmissionFormBindingType.System, "Inquiry.ParentRelationship", true, false, 0, null, null, null, null, null,
+			"[{\"value\":\"father\",\"label\":\"Father\"},{\"value\":\"mother\",\"label\":\"Mother\"},{\"value\":\"guardian\",\"label\":\"Guardian\"}]");
+		var service = Service(school, [registration, source], sourceSections: [contact, student], sourceFields: [role, Field(source, student, "Birth date")]);
+		(await service.ValidatePolicyAsync(registration.Id)).ShouldNotContain(issue => issue.Code == "InsufficientSteps");
+	}
 	private static AdmissionFormDefinition Registration(Guid tenant, params Guid[] sources)
 	{
 		var form = Form(tenant, "Registration", AdmissionFormPurpose.Registration, publish: false);

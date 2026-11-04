@@ -10,6 +10,58 @@ namespace ShikshaMitra.Students;
 
 public class AdmissionFormInheritanceComposer_Tests
 {
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public void Legacy_source_class_replaces_explicit_target_group_without_orphan_parent_controls(bool sharedMedium)
+	{
+		var board = Custom("BOARD", "Target board", "board");
+		var medium = Custom("MEDIUM", "Target medium", "medium");
+		var standard = Custom("CLASS", "Target class", "class");
+		foreach (var field in new[] { board, medium, standard }) field.FieldType = AdmissionFormFieldType.Select;
+		board.OptionsJson = "{\"source\":\"EducationBoards\"}";
+		medium.OptionsJson = "{\"source\":\"EducationMediums\",\"parentField\":\"BOARD\"}";
+		standard.OptionsJson = "{\"source\":\"StandardsByMedium\",\"parentField\":\"MEDIUM\"}";
+		var extra = Custom("OTHER_CLASS", "Another destination", "other-class");
+		extra.FieldType = AdmissionFormFieldType.Select;
+		extra.OptionsJson = "{\"source\":\"StandardsByMediumStage\",\"parentField\":\"MEDIUM\"}";
+		var registration = sharedMedium ? Form(board, medium, standard, extra) : Form(board, medium, standard);
+		var legacy = Custom("CLASS_INTERESTED", "Interested class", "legacy-class");
+		legacy.FieldType = AdmissionFormFieldType.Select; legacy.OptionsJson = "{\"source\":\"Standards\"}";
+		var inquiry = Form(legacy);
+		var before = JsonSerializer.Serialize(registration);
+		var result = AdmissionFormInheritanceComposer.Compose(registration, inquiry, Policy(inquiry.Id));
+		result.Issues.ShouldBeEmpty();
+		var fields = result.Definition.Sections.SelectMany(section => section.Fields).ToList();
+		fields.Count.ShouldBe(sharedMedium ? 4 : 1);
+		fields.Single(field => field.InheritedFrom != null).OptionsJson.ShouldBe(legacy.OptionsJson);
+		fields.Any(field => field.Id == board.Id).ShouldBe(sharedMedium);
+		fields.Any(field => field.Id == medium.Id).ShouldBe(sharedMedium);
+		JsonSerializer.Serialize(registration).ShouldBe(before);
+	}
+	[Fact]
+	public void Explicit_academic_group_replaces_the_legacy_interest_slot_with_source_owned_connections()
+	{
+		var board = Custom("BOARD", "Class interested in", "board");
+		var medium = Custom("MEDIUM", "Language", "medium");
+		var standard = Custom("CLASS", "Choose class", "class");
+		foreach (var field in new[] { board, medium, standard }) field.FieldType = AdmissionFormFieldType.Select;
+		board.OptionsJson = "{\"source\":\"EducationBoards\"}";
+		medium.OptionsJson = "{\"source\":\"EducationMediums\",\"parentField\":\"BOARD\"}";
+		standard.OptionsJson = "{\"source\":\"StandardsByMedium\",\"parentField\":\"MEDIUM\"}";
+		var target = Custom("CLASS_INTERESTED", "Interested class", "target-class");
+		target.FieldType = AdmissionFormFieldType.Select; target.OptionsJson = "{\"source\":\"Standards\"}";
+		var inquiry = Form(board, medium, standard);
+		var before = JsonSerializer.Serialize(inquiry);
+		var result = AdmissionFormInheritanceComposer.Compose(Form(target), inquiry, Policy(inquiry.Id));
+		result.Issues.ShouldBeEmpty();
+		var fields = result.Definition.Sections.SelectMany(section => section.Fields).ToList();
+		fields.Count.ShouldBe(3);
+		var inheritedClass = fields.Single(field => field.Label == "Choose class");
+		inheritedClass.Id.ShouldBe(target.Id);
+		inheritedClass.OptionsJson!.ShouldContain("StandardsByMedium");
+		JsonSerializer.Serialize(inquiry).ShouldBe(before);
+	}
 	[Fact]
 	public void Class_interest_alias_is_reused_but_final_applied_class_remains_separate()
 	{

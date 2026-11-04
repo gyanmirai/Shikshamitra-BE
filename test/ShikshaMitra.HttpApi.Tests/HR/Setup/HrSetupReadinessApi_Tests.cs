@@ -14,6 +14,7 @@ using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.TenantSettings;
@@ -44,13 +45,14 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 		var school = await SeedAsync(); using var client = As(school, "HR.Employee.EmployeeList.Add");
 		var result = await GetAsync(client, school.Year);
 		result.IsReady.ShouldBeFalse();
-		foreach (var code in new[] { "shift", "teaching-role", "non-teaching-role", "calendar", "payroll-policy", "leave-policy", "attendance-policy", "earnings", "salary-template" })
+		foreach (var code in new[] { "shift", "teaching-role", "non-teaching-role", "calendar", "payroll-policy", "leave-policy", "attendance-policy", "earnings", "salary-template", "pf-coverage" })
 			result.Checks.Single(x => x.Code == code).State.ShouldBe("missing");
 		result.Checks.Where(x => x.Code != "academic-year").All(x => !x.CanConfigure).ShouldBeTrue();
 		await InAsync(school.Tenant, async services => {
 			(await services.GetRequiredService<IRepository<EsiPayrollConfiguration, Guid>>().GetCountAsync()).ShouldBe(0);
 			(await services.GetRequiredService<IRepository<EarningComponent, Guid>>().GetCountAsync()).ShouldBe(0);
 			(await services.GetRequiredService<IRepository<Employee, Guid>>().GetCountAsync()).ShouldBe(0);
+			(await services.GetRequiredService<IRepository<PfCoverageConfiguration, Guid>>().GetCountAsync()).ShouldBe(0);
 		});
 	}
 
@@ -73,6 +75,74 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 		var result = await GetAsync(client, school.Year);
 		result.IsReady.ShouldBeTrue(); result.Checks.ShouldAllBe(x => x.State == "ready");
 		result.Checks.ShouldNotContain(x => x.Code == "pf" || x.Code == "esi" || x.Code == "deductions");
+	}
+
+	[Fact]
+	public async Task Missing_coverage_blocks_completion_even_with_a_usable_template()
+	{
+		var school = await SeedAsync(complete: true, coverage: false);
+		using var client = As(school);
+		var result = await GetAsync(client, school.Year);
+		result.IsReady.ShouldBeFalse();
+		result.Checks.Single(x => x.Code == "pf-coverage").State.ShouldBe("missing");
+		result.Checks.Where(x => x.Code != "pf-coverage").ShouldAllBe(x => x.State == "ready");
+	}
+
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task Saving_either_coverage_decision_completes_setup(bool covered)
+	{
+		var school = await SeedAsync(complete: true, coverage: false);
+		using var client = As(school);
+		var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata"));
+		var response = await client.PutAsJsonAsync("/api/payroll/pf-rules/coverage", new SavePfCoverageDto {
+			EffectiveMonth = new(now.Year, now.Month, 1), IsCovered = covered,
+			EvidenceReference = "Synthetic setup coverage decision", IdempotencyKey = Guid.NewGuid()
+		});
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		(await GetAsync(client, school.Year)).IsReady.ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task Future_cancelled_and_other_tenant_coverage_do_not_satisfy_setup()
+	{
+		var school = await SeedAsync(complete: true, coverage: false);
+		await SeedAsync(complete: true);
+		await InAsync(school.Tenant, async services => {
+			var repository = services.GetRequiredService<IRepository<PfCoverageConfiguration, Guid>>();
+			await repository.InsertAsync(new PfCoverageConfiguration(Guid.NewGuid(), school.Tenant, new(2100, 1, 1), true, "Future evidence", Guid.NewGuid().ToString("N")), true);
+			var cancelled = new PfCoverageConfiguration(Guid.NewGuid(), school.Tenant, new(2026, 1, 1), true, "Cancelled evidence", Guid.NewGuid().ToString("N"));
+			cancelled.Cancel(); await repository.InsertAsync(cancelled, true);
+		});
+		using var client = As(school);
+		var result = await GetAsync(client, school.Year);
+		result.IsReady.ShouldBeFalse();
+		result.Checks.Single(x => x.Code == "pf-coverage").State.ShouldBe("missing");
+	}
+
+	[Theory]
+	[InlineData("HR.Employee.EmployeeList.Add,HR.PayrollManagement.Settings.PfRule.Add", true, false)]
+	[InlineData("HR.Employee.EmployeeList.Add,HR.PayrollManagement.Settings.PfRule.View", true, false)]
+	[InlineData("HR.PayrollManagement.Settings.PfRule.View,HR.PayrollManagement.Settings.PfRule.Add", false, false)]
+	[InlineData("HR.PayrollManagement.Settings.PfRule.View,HR.PayrollManagement.Settings.PfRule.Add", true, true)]
+	public async Task Coverage_configuration_requires_view_add_and_school_wide_scope(string grants, bool schoolWide, bool canConfigure)
+	{
+		var school = await SeedAsync(schoolWide: schoolWide);
+		using var client = As(school, grants);
+		(await GetAsync(client, school.Year)).Checks.Single(x => x.Code == "pf-coverage").CanConfigure.ShouldBe(canConfigure);
+	}
+
+	[Fact]
+	public async Task Coverage_month_uses_the_school_timezone_at_the_UTC_month_boundary()
+	{
+		var school = await SeedAsync();
+		await InAsync(school.Tenant, async services => {
+			await services.GetRequiredService<IRepository<PfCoverageConfiguration, Guid>>().InsertAsync(new PfCoverageConfiguration(Guid.NewGuid(), school.Tenant, new(2026, 11, 1), false, "Boundary evidence", Guid.NewGuid().ToString("N")), true);
+			var reader = services.GetRequiredService<HrSetupPayrollReadinessReader>();
+			(await reader.ReadAsync(school.Tenant, new DateTime(2026, 10, 31, 18, 29, 0, DateTimeKind.Utc))).Single(x => x.Code == "pf-coverage").State.ShouldBe("missing");
+			(await reader.ReadAsync(school.Tenant, new DateTime(2026, 10, 31, 18, 30, 0, DateTimeKind.Utc))).Single(x => x.Code == "pf-coverage").State.ShouldBe("ready");
+		});
 	}
 
 	[Fact]
@@ -209,7 +279,7 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 		if (grants != null) client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, grants);
 		return client;
 	}
-	private async Task<School> SeedAsync(bool complete = false)
+	private async Task<School> SeedAsync(bool complete = false, bool coverage = true, bool schoolWide = true)
 	{
 		Guid tenantId = default;
 		await InAsync(null, async services => {
@@ -220,10 +290,14 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 		await InAsync(tenantId, async services => {
 			var actor = new IdentityUser(Guid.NewGuid(), "operator", "operator@example.test", tenantId);
 			await services.GetRequiredService<IIdentityUserRepository>().InsertAsync(actor, true);
+			if (schoolWide)
+				await services.GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(new UserScopeAssignment(Guid.NewGuid(), tenantId, userId: actor.Id, description: "Synthetic school-wide setup scope"), true);
 			var year = await services.GetRequiredService<AcademicYearManager>().CreateAsync("Readiness year", new(2026, 4, 1), new(2027, 3, 31));
 			await services.GetRequiredService<IRepository<AcademicYear, Guid>>().InsertAsync(year, true);
 			if (complete)
 			{
+				if (coverage)
+					await services.GetRequiredService<IRepository<PfCoverageConfiguration, Guid>>().InsertAsync(new PfCoverageConfiguration(Guid.NewGuid(), tenantId, new(2026, 1, 1), false, "Synthetic coverage review", Guid.NewGuid().ToString("N")), true);
 				await services.GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(HrStarterPolicyDefaults.Shift(tenantId), true);
 				var role = new IdentityRole(Guid.NewGuid(), "Approved staff", tenantId);
 				role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Employee);

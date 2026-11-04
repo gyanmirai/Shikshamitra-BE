@@ -19,6 +19,8 @@ audience: humans-and-agents
 Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~HrSetupReadinessApi_Tests` for clean-school HTTP and direct-service authorization coverage.
 The isolated fixture covers missing and usable configuration, tenant/year/identity boundaries, self-service denial, inactive earnings, conflicting defaults, invalid calendar references, employee-group role coverage, and conditional template dependencies.
 Read-only assertions confirm the endpoint does not create employee records, earning components, or ESI configuration.
+PF coverage tests also prove missing coverage blocks completion, either saved coverage decision permits completion, future/cancelled/foreign-tenant records do not satisfy setup, and the school month changes at midnight Asia/Kolkata.
+Configuration-action tests require the existing PF View/Add grants and school-wide scope; readiness reads create no coverage records.
 `test/browser/hr-setup/HrSetupBrowser.csproj` exposes disposable SQLite and real ABP APIs on loopback port 4396 for the frontend wizard browser tests.
 Its synthetic authentication and fixture-reset endpoints exist only in the test executable.
 

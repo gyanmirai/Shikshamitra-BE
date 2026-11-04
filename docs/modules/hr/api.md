@@ -38,6 +38,10 @@ The application service requires an active current-tenant identity and at least 
 The response contains configuration status and academic-year choices, without employee records, compensation amounts, or protected configuration details.
 Omitting the academic year reports year-specific checks as unknown and offers existing tenant years; a foreign or nonexistent year returns 404.
 Checks cover usable shifts, explicitly approved employee roles for both staff groups, unique active default policies and referenced calendars, valid active earnings, and at least one usable active salary template with its required dependencies.
+The `pf-coverage` check in the `salary` step also requires a non-cancelled current-tenant PF coverage record effective by the current school month in Asia/Kolkata.
+Either Covered or Not covered satisfies this configuration check; it does not require PF enrollment or change PF calculations.
+Missing coverage keeps `isReady=false`, even when the salary template is usable.
+Its `canConfigure` requires the existing PF Rule View and Add grants and backend-confirmed school-wide scope, matching the coverage editor and save endpoint.
 The read does not seed defaults, record review acknowledgements, enable schemes, or persist progress.
 Configuration writes continue through their existing authorized endpoints, and operational validation remains authoritative.
 

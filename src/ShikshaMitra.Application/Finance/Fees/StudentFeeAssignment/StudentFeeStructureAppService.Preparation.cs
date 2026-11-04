@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
+using ShikshaMitra.Finance.Policies;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 
@@ -14,7 +15,7 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 public partial class StudentFeeStructureAppService
 {
-	private async Task<PreparedAssignment> PrepareForContextAsync(AssignStudentFeeStructureDto input, AdmissionAssignmentContext? admission)
+	private async Task<PreparedAssignment> PrepareForContextAsync(AssignStudentFeeStructureDto input, AdmissionAssignmentContext? admission, bool isCorrection = false)
 	{
 		ValidateInput(input, admission != null);
 		var enrollment = admission == null ? await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, true) : null;
@@ -46,8 +47,9 @@ public partial class StudentFeeStructureAppService
                 (!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId)))))
             throw new BusinessException(AssignmentErrorCodes.InvalidInput);
         foreach (var detail in details.Where(d => structure.FeeStructureDetails.All(x => x.Id != d.Id))) structure.AddDetail(detail);
-		var selectedPolicies = await ResolveAssignedPoliciesAsync(structure, year.Id, input.Policies, input.PolicyOverrideReason);
-		if (admission != null) selectedPolicies["proration"] = admission.Proration;
+		var selectedPolicies = await ResolveAssignedPoliciesAsync(structure, year.Id, input.Policies, input.PolicyOverrideReason, input.EditAssignmentId);
+		selectedPolicies["proration"] = admission != null ? admission.Proration :
+			await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(year.Id);
 		var collection = selectedPolicies["collection"];
 		var proration = selectedPolicies["proration"];
 		var refund = selectedPolicies["refund"];
@@ -79,6 +81,7 @@ public partial class StudentFeeStructureAppService
 		var admissionStart = admission?.JoiningDate?.Date > year.StartDate.Date ? admission.JoiningDate.Value.Date : year.StartDate.Date;
 		var names = headRecords.ToDictionary(h => h.Key, h => h.Value.Name);
 		var preview = new StudentFeeAssignmentPreviewDto {
+			CalculationVersion = "assignment-v3",
 			AssignmentSource = admission == null ? "Finance" : "Admission", ApplicationId = admission?.ApplicationId,
 			StudentId = studentId, AcademicYearId = year.Id, EnrollmentId = enrollment?.Id,
 			StructureId = structure.Id, StructureName = structure.Name, RevisionNumber = structure.RevisionNumber,
@@ -153,9 +156,14 @@ public partial class StudentFeeStructureAppService
 			optionalDetails.Add(new CustomOptionalFeeHeadDetail { FeeHeadId = detail.FeeHeadId, Amount = head.EffectiveAmount ?? throw new BusinessException(AssignmentErrorCodes.VariableAmountRequired),
 				ChargeStartDate = fact.Period.StartDate, ChargeEndDate = fact.Period.EndDate });
 		}
-		var dues = (await dueFeeManager.GenerateForStudentAsync(studentId, structure, year,
-			input.SelectedOptionalFeeHeadIds, optionalDetails, prorationRules, proration?.Id, year.StartDate, year.EndDate,
-			financeFeeAccountId: admission?.AccountId)).OrderBy(x => x.FeeHeadId).ThenBy(x => x.InstallmentSequence).ToList();
+		var calculatedDues = isCorrection
+			? await dueFeeManager.CalculateForStudentAsync(studentId, structure, year,
+				input.SelectedOptionalFeeHeadIds, optionalDetails, prorationRules, proration?.Id, year.StartDate, year.EndDate,
+				financeFeeAccountId: admission?.AccountId)
+			: await dueFeeManager.GenerateForStudentAsync(studentId, structure, year,
+				input.SelectedOptionalFeeHeadIds, optionalDetails, prorationRules, proration?.Id, year.StartDate, year.EndDate,
+				financeFeeAccountId: admission?.AccountId);
+		var dues = calculatedDues.OrderBy(x => x.FeeHeadId).ThenBy(x => x.InstallmentSequence).ToList();
 		foreach (var due in dues)
 		{
 			var head = preview.Heads.Single(x => x.FeeHeadId == due.FeeHeadId);
@@ -173,10 +181,10 @@ public partial class StudentFeeStructureAppService
 		{
 			var policy = new AssignmentPolicyDto { Family = version!.PolicyType, PolicyId = version.PolicyId, VersionId = version.Id,
 				Version = version.VersionNumber, Name = version.PolicyName };
-			policy.Source = admission != null && version.PolicyType == "proration" ? "FinanceDefault" : StructurePolicyVersions(structure)[version.PolicyType] == version.Id ? "FeeStructure" : "StudentOverride";
+			policy.Source = version.PolicyType == "proration" ? "FinanceDefault" : StructurePolicyVersions(structure)[version.PolicyType] == version.Id ? "FeeStructure" : "StudentOverride";
 			foreach (var head in preview.Heads)
 				policy.HeadTreatment[head.FeeHeadId] = !head.Included ? "Not included" : version.PolicyType switch {
-					"collection" => collectionRules.EnableLateFee && collectionRules.LateFeeApplyOnFeeHeads.Contains(head.FeeHeadId)
+					"collection" => collectionRules.EnableLateFee && (collectionRules.ApplyLateFeeToAllFeeHeads || collectionRules.LateFeeApplyOnFeeHeads.Contains(head.FeeHeadId))
 						? "Configured for late-fee evaluation; overrides, grace and exemptions checked on collection. No penalty on assignment."
 						: "No base late-fee rule; collection and waiver conditions are checked on collection.",
 					"proration" => head.IsOneTime ? "One-time head: full charge" : prorationRules?.Rules.FirstOrDefault(x => x.FeeHeadId == head.FeeHeadId)?.RuleType.ToString() ?? "No matching rule: full charge",

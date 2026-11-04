@@ -206,7 +206,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			Doj = DateTime.UtcNow.AddMonths(-3),
 			IsTeaching = false,
 			RoleId = created.RoleId,
-			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = EmployeeTestHelper.DefaultShiftId, EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow) },
+			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = EmployeeTestHelper.DefaultShiftId, EffectiveFrom = EmployeeTestHelper.SchoolToday },
 			Email = created.Email,
 			PanNo = TestDataHelper.UniquePan(),
 			AdharNo = TestDataHelper.UniqueAdhar(),
@@ -237,7 +237,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			Doj = created.Doj,
 			IsTeaching = created.IsTeaching,
 			RoleId = created.RoleId,
-			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = created.ShiftId, EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow) },
+			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = created.ShiftId, EffectiveFrom = EmployeeTestHelper.SchoolToday },
 			Email = created.Email,
 			Gender = created.Gender,
 			Department = "Identity Preserve"
@@ -301,6 +301,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		var originalEmail = created.Email;
 		originalEmail.ShouldNotBeNull();
 		var updateRequest = EmployeeTestHelper.BuildPersonalInfoRequest("RejectEmailChangeUpdate");
+		updateRequest.InitialWorkShiftAssignment = null;
 		var requestedEmail = TestDataHelper.UniqueEmail("upd-email-change");
 		updateRequest.Email = requestedEmail;
 
@@ -309,7 +310,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
 		var responseBody = await response.Content.ReadAsStringAsync();
 		responseBody.ShouldContain(HRErrorCodes.EmployeeEmailCannotBeChanged);
-		responseBody.ShouldContain("Employee email cannot be changed after employee creation.");
+		responseBody.ShouldContain("Use the controlled account email change to update a staff member's email.");
 		responseBody.ShouldNotContain(originalEmail);
 		responseBody.ShouldNotContain(requestedEmail);
 	}

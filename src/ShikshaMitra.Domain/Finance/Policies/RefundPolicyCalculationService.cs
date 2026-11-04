@@ -40,7 +40,8 @@ public class RefundPolicyCalculationService : DomainService
 		var studentYearCap = policy.MaximumPerStudentYear.HasValue
 			? Math.Max(0m, policy.MaximumPerStudentYear.Value - input.StudentYearRefundedOrReserved)
 			: decimal.MaxValue;
-		var hardCeiling = Math.Min(remainingEligible, Math.Min(requestCap, studentYearCap));
+		var hardCeiling = Math.Min(remainingEligible,
+			Math.Min(input.RequestedAmount ?? decimal.MaxValue, Math.Min(requestCap, studentYearCap)));
 		var capped = Math.Min(afterDeduction, hardCeiling);
 		var finalRefund = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUpWithin(capped, hardCeiling);
 

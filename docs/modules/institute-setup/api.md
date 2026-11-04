@@ -3,7 +3,7 @@ module: institute-setup
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-02
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -41,6 +41,12 @@ For a requested limit of 1 and two saved rooms, `detail` reads: `Cannot set tota
 The message remains available when development exception details and stack traces are disabled.
 `Room` currently has no active status or soft-delete flag; every saved room on the floor counts, and deleting or moving a room releases its place.
 A limit equal to or above the current count is allowed.
+
+## Academic date updates
+
+`PUT /api/app/education-board/{id}` retains its existing `startDate` and `endDate` request fields and synchronizes the board's active calendars. `PUT /api/app/academic-year/{id}` retains `startYear` and `endYear`; boards inheriting the old year range and their calendars follow the updated dates. See [product rules](./product.md#academic-dates-and-calendars).
+
+`Academic:Calendar:DatesExcludeMarkers` rejects a range that would exclude active calendar entries, with `Calendar` in the exception data. `Academic:Calendar:BoardOutsideAcademicYear` rejects a year range that excludes a custom board range, with `Board` in the exception data. These failures preserve the existing records through the application transaction.
 
 ## Paged report history
 

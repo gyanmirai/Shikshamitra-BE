@@ -29,6 +29,8 @@ public class AdmissionOfferingRuntimeService(
 			offering, cycle, validation.IsValid, new DateTimeOffset(Clock.Now.ToUniversalTime()));
 		if (!availability.IsAvailable)
 		{
+			if (availability.Status == AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete)
+				AdmissionOfferingConfigurationValidator.EnsureCanSave(validation, isActive: true);
 			throw new BusinessException(
 				availability.ReasonCode ?? AdmissionApplicationErrorCodes.OfferingNotAvailable,
 				availability.ReasonMessage ?? "This Admission Offering is not available.");
@@ -46,8 +48,12 @@ public class AdmissionOfferingRuntimeService(
 		var availability = AdmissionOfferingAvailabilityEvaluator.Evaluate(offering, cycle,
 			validation.IsValid, new DateTimeOffset(Clock.Now.ToUniversalTime()));
 		if (!availability.IsAvailable)
+		{
 			throw new BusinessException(availability.ReasonCode ?? AdmissionApplicationErrorCodes.OfferingNotAvailable,
-				availability.ReasonMessage ?? "Admission is not open for this class.");
+				availability.Status == AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete
+					? "Admission setup for this class needs attention. Contact the school for help."
+					: availability.ReasonMessage ?? "Admission is not open for this class.");
+		}
 		return new(offering, cycle);
 	}
 }

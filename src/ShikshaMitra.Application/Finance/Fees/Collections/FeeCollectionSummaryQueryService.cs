@@ -51,7 +51,7 @@ public partial class FeeCollectionSummaryQueryService(
 
 		var totalCount = filtered.Count();
 		if (totalCount == 0)
-			return new PagedResultDto<FeeCollectionSummaryItemDto>(0, []);
+            return new PagedResultDto<FeeCollectionSummaryItemDto>(0, []);
 
         var ordered = tableQuery.SortBy is null ? filtered : tableQuery.Order(filtered, TableFields, "name", false, r => r.FinanceFeeAccountId ?? r.StudentId ?? Guid.Empty);
 		var page = ordered

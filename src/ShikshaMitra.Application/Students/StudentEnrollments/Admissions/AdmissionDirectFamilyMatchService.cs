@@ -51,6 +51,11 @@ public class AdmissionDirectFamilyMatchService(
 		string? relationship, string mobile, string? email, string errorCode)
 	{
 		if (!AdmissionSiblingParentSelection.IsRelationship(relationship)) throw new BusinessException(errorCode, "Choose Father or Mother.");
+		// Mutation-only resolution keeps the exact source family stable through its caller's commit.
+		await parentApplicants.LockForSiblingParentSelectionAsync([sourceApplicantId]);
+		var source = await applicants.FindAsync(sourceApplicantId);
+		if (source == null || source.IsDeleted || source.TenantId != CurrentTenant.Id || source.FamilyId != familyId || source.Status != AdmissionApplicantStatus.Active)
+			throw new BusinessException(errorCode, "The selected parent no longer belongs to this family.");
 		var matches = await FindAccessibleMatchesAsync(mobile, email);
 		var parents = matches.FirstOrDefault(match => match.FamilyId == familyId)?.Parents;
 		var parent = parents?.FirstOrDefault(candidate => candidate.SourceApplicantId == sourceApplicantId && candidate.Relationship == relationship)
@@ -114,15 +119,18 @@ public class AdmissionDirectFamilyMatchService(
 			var parents = new List<AdmissionSiblingParentCandidateDto>();
 			foreach (var applicant in familyApplicants.Where(applicant => applicant.FamilyId == family.Id))
 			{
-				var profile = profiles.FirstOrDefault(student => student.Id == (applicant.ExistingStudentId ?? applicant.ReservedStudentId))?.FamilyDetail;
+				var currentStudent = profiles.FirstOrDefault(student => student.Id == (applicant.ExistingStudentId ?? applicant.ReservedStudentId));
+				var profile = currentStudent?.FamilyDetail;
+				if (applicant.ExistingStudentId.HasValue && currentStudent == null) continue;
 				foreach (var prefix in new[] { "Father", "Mother" })
 				{
 					var saved = prefix == "Father" ? profile?.FatherDetails : profile?.MotherDetails;
+					if (currentStudent != null && saved == null) continue;
 					var candidate = ReadParent(applicant.Id, prefix, key => AdmissionStudentProfileMapping.Read(applicant, key));
 					if (saved != null) candidate = CreateCandidate(applicant.Id, prefix.ToLowerInvariant(), saved.FullName, saved.ContactNo, saved.Email);
 					if (!string.IsNullOrWhiteSpace(candidate.Email) || !string.IsNullOrWhiteSpace(candidate.Mobile)) parents.Add(candidate);
 				}
-				if (primary != null && profile?.FatherDetails == null && profile?.MotherDetails == null &&
+				if (primary != null && currentStudent == null &&
 					primary.Relationship == AdmissionGuardianRelationship.Parent && !parents.Any(parent => parent.SourceApplicantId == applicant.Id &&
 					(string.Equals(parent.Email, primary.Email, StringComparison.OrdinalIgnoreCase) || parent.Mobile == primary.Mobile)))
 					parents.Add(CreateCandidate(applicant.Id, null, string.Join(" ", new[] { primary.FirstName, primary.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))), primary.Mobile, primary.Email));

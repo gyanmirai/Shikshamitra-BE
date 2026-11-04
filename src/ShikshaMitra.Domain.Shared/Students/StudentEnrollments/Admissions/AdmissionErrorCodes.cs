@@ -41,6 +41,7 @@ public static class AdmissionErrorCodes
 	public const string OfferingNotOpenYet = "Admissions.Offering.NotOpenYet";
 	public const string OfferingClosed = "Admissions.Offering.Closed";
 	public const string OfferingIdentityLocked = "Admissions.Offering.IdentityLocked";
+	public const string OfferingConfigurationLocked = "Admissions.Offering.ConfigurationLocked";
 	public const string OfferingHasApplications = "Admissions.Offering.HasApplications";
 	public const string OfferingConcurrencyConflict = "Admissions.Offering.ConcurrencyConflict";
 	public const string OfferingHierarchyOutOfScope = "Admissions.Offering.HierarchyOutOfScope";

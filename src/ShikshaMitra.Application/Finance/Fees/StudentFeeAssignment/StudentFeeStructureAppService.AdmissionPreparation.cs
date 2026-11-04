@@ -15,6 +15,7 @@ public partial class StudentFeeStructureAppService
 	private async Task<PreparedAssignment> PrepareAsync(AssignStudentFeeStructureDto input)
 	{
 		ValidateInput(input);
+		if (input.EditAssignmentId.HasValue) return await PrepareCorrectionAsync(input);
 		var enrollment = await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, true);
 		var facts = await ReadAssignmentAdmissionAsync(input.StudentId, input.AcademicYearId, enrollment.StandardId);
 		if (facts == null) return await PrepareForContextAsync(input, null);

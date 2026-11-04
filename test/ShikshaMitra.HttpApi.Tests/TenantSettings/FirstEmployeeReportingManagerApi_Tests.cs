@@ -44,13 +44,8 @@ public class FirstEmployeeReportingManagerApi_Tests(InitialSetupTestFactory fact
 			adminId = (await services.GetRequiredService<IdentityUserManager>().FindByNameAsync("admin"))!.Id;
 			hrRoleId = (await services.GetRequiredService<IdentityRoleManager>().FindByNameAsync("HR Manager"))!.Id;
 			(await services.GetRequiredService<HR.Employees.IEmployeeRepository>().GetCountAsync()).ShouldBe(0);
-			var shift = await services.GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(new ShiftManagement
-			{
-				TenantId = tenant.Id,
-				ShiftName = "Synthetic first staff shift",
-				StartTime = new TimeOnly(8, 0),
-				EndTime = new TimeOnly(16, 0)
-			}, autoSave: true);
+			var shift = await services.GetRequiredService<IRepository<HR.WorkShifts.EmployeeWorkShift, Guid>>().InsertAsync(
+				new HR.WorkShifts.EmployeeWorkShift(Guid.NewGuid(), tenant.Id, "Synthetic first staff shift", new TimeOnly(8, 0), new TimeOnly(16, 0)), autoSave: true);
 			shiftId = shift.Id;
 		});
 		using var school = SchoolClient(tenant.Id, adminId);
@@ -149,8 +144,8 @@ public class FirstEmployeeReportingManagerApi_Tests(InitialSetupTestFactory fact
 			adminId = admin.Id;
 			hrRoleId = (await services.GetRequiredService<IdentityRoleManager>().FindByNameAsync("HR Manager"))!.Id;
 			var adminRole = (await services.GetRequiredService<IdentityRoleManager>().FindByNameAsync("admin"))!;
-			var shift = await services.GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(new ShiftManagement
-			{ TenantId = tenant.Id, ShiftName = "Synthetic existing staff shift", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(16, 0) }, autoSave: true);
+			var shift = await services.GetRequiredService<IRepository<HR.WorkShifts.EmployeeWorkShift, Guid>>().InsertAsync(
+				new HR.WorkShifts.EmployeeWorkShift(Guid.NewGuid(), tenant.Id, "Synthetic existing staff shift", new TimeOnly(8, 0), new TimeOnly(16, 0)), autoSave: true);
 			shiftId = shift.Id;
 			// Persist a synthetic legacy profile with different employee and login IDs.
 			// No production creation path or identity memberships are changed.

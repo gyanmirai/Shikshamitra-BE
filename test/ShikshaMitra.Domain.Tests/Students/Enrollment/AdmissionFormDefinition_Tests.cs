@@ -8,6 +8,28 @@ namespace ShikshaMitra.Students;
 
 public class AdmissionFormDefinition_Tests
 {
+	[Theory]
+	[InlineData(AdmissionFormPurpose.Inquiry)]
+	[InlineData(AdmissionFormPurpose.Registration)]
+	public void Restore_preserves_the_published_version_and_metadata(AdmissionFormPurpose purpose)
+	{
+		var actor = Guid.NewGuid();
+		var form = new AdmissionFormDefinition(Guid.NewGuid(), Guid.NewGuid(), "School form", "SCHOOL_FORM",
+			AdmissionFormLayoutType.SinglePage, version: 3, purpose: purpose);
+		Should.Throw<BusinessException>(() => form.Restore()).Code.ShouldBe(AdmissionFormErrorCodes.ArchivedRequired);
+		form.Publish(actor);
+		var publishedAt = form.PublishedAt;
+		Should.Throw<BusinessException>(() => form.Restore()).Code.ShouldBe(AdmissionFormErrorCodes.ArchivedRequired);
+		form.Archive();
+		form.Restore();
+		form.Status.ShouldBe(AdmissionFormStatus.Published);
+		form.Version.ShouldBe(3);
+		form.PublishedAt.ShouldBe(publishedAt);
+		form.PublishedBy.ShouldBe(actor);
+		form.Purpose.ShouldBe(purpose);
+		Should.Throw<BusinessException>(() => form.UpdateDetails("Changed", "CHANGED", AdmissionFormLayoutType.SinglePage));
+	}
+
 	[Fact]
 	public void FormInstanceTracksDraftAndSubmissionState()
 	{

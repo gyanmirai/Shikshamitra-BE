@@ -9,7 +9,10 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public sealed record AdmissionInquiryAvailability(bool CanCreateInquiry, string? Reason,
-	AdmissionClassCapacityDto ClassCapacity, bool WaitlistAllowed);
+	AdmissionClassCapacityDto ClassCapacity, bool WaitlistAllowed)
+{
+	public AdmissionOfferingValidationResult? ConfigurationBlocker { get; init; }
+}
 
 [RemoteService(false)]
 public class AdmissionInquiryAvailabilityService(
@@ -31,8 +34,14 @@ public class AdmissionInquiryAvailabilityService(
 		var validation = enforceUserScope ? await configuration.ValidateStoredAsync(offering) : await configuration.ValidateStoredForPublicAsync(offering);
 		var availability = AdmissionOfferingAvailabilityEvaluator.Evaluate(offering, cycle,
 			validation.IsValid, new DateTimeOffset(Clock.Now.ToUniversalTime()));
+		if (availability.Status == AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete)
+			availability = availability with { ReasonMessage = enforceUserScope
+				? string.Join(" ", validation.Errors.Select(error => error.Message).Distinct())
+				: "Admission setup for this class needs attention. Contact the school for help." };
 		var capacity = await capacityReader.ReadAsync(offering, cycle);
-		return await ReadEvaluatedAsync(offering, availability, capacity);
+		var result = await ReadEvaluatedAsync(offering, availability, capacity);
+		return enforceUserScope && availability.Status == AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete
+			? result with { ConfigurationBlocker = validation } : result;
 	}
 
 	// Only shares a result already read in this scoped staff request. Public/write guards still use ReadCoreAsync.
@@ -67,6 +76,8 @@ public class AdmissionInquiryAvailabilityService(
 
 	internal static void EnsureAvailable(AdmissionInquiryAvailability availability)
 	{
+		if (availability.ConfigurationBlocker != null)
+			AdmissionOfferingConfigurationValidator.EnsureCanSave(availability.ConfigurationBlocker, isActive: true);
 		if (!availability.CanCreateInquiry)
 			throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable, availability.Reason);
 	}

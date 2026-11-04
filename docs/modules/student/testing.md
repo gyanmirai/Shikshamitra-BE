@@ -3,12 +3,76 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-02
+updated_on: 2026-11-04
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Offering workflow and form setup locks
+
+`AdmissionOffering_Tests` covers active/used reference protection, unchanged operational references and inactive-unused preparation. The fresh full Offering Domain selection passes **24 tests**, including these nineteen cases (`.artifacts/offering-setup-domain-suite-verified.log`). `AdmissionOfferingConfigurationUsage_Tests` covers coalesced first uses, seven stale context changes, refreshed operational values, nullable context, ordered transfers and a missing historical source. Its twelve service cases complement the persisted `Offering_configuration_` scenarios; simulated service contention does not establish PostgreSQL concurrency behavior.
+
+Run the Application Offering selection, including the `Offering_configuration_` cases in `AdmissionOfferingConfigurationLock_Tests`. Verify active reference tampering, inactive-unused replacement, operational edits with omitted derived forms, detail metadata, moved Inquiry markers, soft-deleted Inquiry/Application references and retained tenant filtering. Existing create/clone, activation, routing and pinned runtime scenarios remain regression gates.
+
+The final current-source Application selection passes **140 tests with no skips** (`.artifacts/offering-setup-related-verified.log` and `.artifacts/offering-setup-lock/results/offering-related-verified.trx`). The full Application test-project dependency graph, including EF source and normal compiler checks, builds with zero errors; existing warnings remain. Shared fixtures now use distinct workflow names and prepare replacement references only on unused inactive offerings. Used shared-assessment offerings reject version replacement while their scores, rosters and frozen snapshots remain intact. The catalogue scale assertion retains equivalent inactive validation at both scales (34 reads each); the fee cases assert the existing nonblocking activation policy without changing Finance production code. Frontend component-browser proof and its synthetic-data boundary are recorded in the [frontend testing guide](../../../../Shikshamitra-FE/docs/student/testing.md#offering-setup-lifecycle-lock).
+
+```powershell
+dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~Offering"
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Offering|FullyQualifiedName~Optional_intake|FullyQualifiedName~Shared_subject_assessment_keeps_two_class_profiles"
+```
+
+The production first-use lock requires an existing PostgreSQL transaction and refreshes only an unchanged tracked Offering. SQLite integration disables transactions and cannot prove PostgreSQL advisory scheduling or rollback. Actual PostgreSQL concurrency acceptance requires a dedicated disposable loopback test database; never repurpose the application database. Legacy pre-marker links without a surviving reference are not backfilled, as described in [product rules](./product.md#runtime-integrity).
+
+## Form version history integrity
+
+`AdmissionFormVersionComparison_Tests` checks rule, binding, editability, order, help/default, translation, section-layout and inherited-source changes, plus equivalent JSON and generated-ID handling. It also checks readable field/section names for additions, removals and changes, both names for renames, friendly legacy fallbacks, repeated labels and unchanged source DTOs. `Form_version_conflicts_identify_the_existing_draft_without_rewriting_history` and `Form_version_cannot_leave_its_original_family_when_an_api_changes_its_code` cover actionable conflicts, stable family identity, unchanged historical content and a no-change comparison through the service. The archive lifecycle scenario captures all current required parent fields for replacement intake, asserts the used offering stays locked, and uses a separate unused offering for the replacement; all ten original answer snapshots and the original public-link reference must remain unchanged. These are isolated test scenarios, not a migration of existing school data.
+
+## Confirmed sibling registration and public capture
+
+The final combined current-source gate passed 10 runtime cases covering public-source inheritance, pending confirmation through Registration, initial/late parent reuse, current parent-account preservation and distinct Guardian profession variants. The retained focused gates separately cover public capture (68 passing cases), prefill and adjacent contacts (69), the HTTP contract (1), and 60 distinct pending-confirmation cases cumulatively after fixture corrections; the latter is not one green 60-case run. Current Contracts/Application/HTTP/Host builds and original-checkout feature hash comparisons passed. Detailed commands, overlap, prior failures and limits remain in `.artifacts/sibling-family-autofill/`.
+
+Local authenticated browser acceptance separately verified initial and late parent reuse, normal-save persistence, deliberate edits/clears and unchanged source/child identities. A read-only local database check found the late target's projected profession values absent before Save and persisted afterward. The frontend testing page owns responsive screenshots and fixture details. No migration, deployment or live portal-account change was performed.
+
+Run `AdmissionSiblingRegistrationPrefillPolicy_Tests` and the sibling-registration scenarios in `AdmissionSiblingRegistrationPrefill_Tests`. Cover source-before-target and both-drafts-before-source, current scoped Student data, source action grants and academic scope, partial/conflicting parent identities, compatible configured fields, explicit clears, authored edits, changed-source alias ordering, read-only/frozen/submitted exclusions, GET-without-writes and source/account preservation. Run adjacent first-parent, sibling-parent, primary-contact and Onboarding parent-account regression suites.
+
+Run public schema/contract tests and `AdmissionWorkflowRuntimeIntegration_PublicSiblingIntake_Tests` for different-child same-contact retention, keyed/no-key exact retries, changed-body conflicts, omitted sibling answers/conditions and Inquiry-to-Registration source inheritance. Run `AdmissionPublicInquirySubmissionLockPostgres_Tests` with the guarded loopback disposable-database fixture for transaction lock and bounded replay-query behavior. No school/staging database is used by this provider fixture. Complete current-source builds, HTTP permission/contract checks, documentation validation and the separate [frontend live acceptance](../../../../Shikshamitra-FE/docs/student/testing.md#public-sibling-controls-and-automatic-parent-details); narrow unit passes are not deployment or live account-access proof.
+
+Pending confirmation coverage is in `AdmissionWorkflowRuntimeIntegration_FamilyConfirmation_Tests`, `AdmissionInquiryFamilyConfirmationPostgres_Tests` and HTTP `AdmissionInquiryFamilyConfirmationApiContract_Tests`. Verify real public A/B capture through staff confirmation and Registration reuse, pending-only graph restrictions, exact retries, stale/different proof, tenant/target/source scope and action permissions, Mother/generic projection and removed current Student roles, unchanged source password/child links, immutable capture and one actor-rich audit. Provider cases must exercise stale tracking, mutual source/target confirmation and existing source-link creation races under the shared lock order.
+
+## Admission form archive and restore
+
+`AdmissionFormArchiveValidation_Tests` checks structured offering configuration errors. `AdmissionFormDefinition_Tests` checks Inquiry/Registration restore state restrictions and preserved publication metadata. `AdmissionFormArchiveLifecycleIntegration_Tests` scenarios in `AdmissionWorkflowRuntimeIntegration_Tests` exercise ten retained inquiries, unchanged schemas/references, workflow-stage impact and error metadata, stale stamps and tenant rejection. `AdmissionFormLifecycleApiContract_Tests` checks exact existing permissions at both boundaries and query-stamp forwarding.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AdmissionFormArchiveValidation_Tests|(FullyQualifiedName~Form&FullyQualifiedName~restore)|(FullyQualifiedName~Form&FullyQualifiedName~lifecycle)"
+dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~AdmissionFormDefinition_Tests"
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AdmissionFormLifecycleApiContract_Tests"
+```
+
+These tests are local-source gates; authenticated browser acceptance and deployment must be reported separately.
+
+## Versioned core fields and activation readiness
+
+`AdmissionCoreFieldPolicy_Tests` covers the six Inquiry defaults, optional surname, required parent email, protected structure after renaming, canonical choice values and visibility/repeatability guarantees. `AdmissionCoreFieldComposition_Tests` covers source-owned full-name compatibility, optional DOB rejection and historical schema behavior. `Core_field_policy_is_server_owned_on_create_update_and_publication` and `Core_field_policy_clone_upgrades_only_the_new_definition_and_keeps_historical_full_name_schema` cover persisted policy ownership and new-version isolation. `Inactive_offering_identity_readiness_matches_activation_before_the_user_confirms` covers matching list/detail and activation readiness while retaining existing active runtime behavior.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AdmissionCoreFieldPolicy_Tests|FullyQualifiedName~AdmissionCoreFieldComposition_Tests|FullyQualifiedName~Core_field_policy_|FullyQualifiedName~Inactive_offering_identity_readiness"
+```
+
+Partial drafts and historical frozen evidence remain separate from publication/readiness checks. These test names are local validation gates; they do not establish authenticated browser acceptance, migrations or deployed behavior.
+
+## Academic Class selector
+
+`AdmissionAcademicHierarchyMapping_Tests` checks scoped Board/Medium parent membership, stable Class IDs and Board/Medium context, existing Inquiry/Application read permissions without opening sibling sources, offering-bounded public choices, required valid parents for nonblank linked public answers, and label-safe class configuration. Optional blank answers and parentless legacy `Standards` remain supported. `AdmissionAcademicOptionsUnit_Tests` covers the reserved class-interest publication rule. `AdmissionFormInheritanceComposer_Tests` covers both explicit/legacy source directions, removing orphan target parents while preserving parents still referenced by other questions, Inquiry source dependencies and the separate final class-applied question.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AdmissionAcademicHierarchyMapping_Tests|FullyQualifiedName~AdmissionAcademicOptionsUnit_Tests"
+dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~AdmissionFormInheritanceComposer_Tests"
+```
+
+Source-linked focused tests are useful during implementation; report full source compilation, service integration, authenticated frontend checks and deployed acceptance separately. Frontend add/query/reset/reopen behavior is covered in the [Student frontend checks](../../../../Shikshamitra-FE/docs/student/testing.md).
 
 ## Admission gender choices
 
@@ -1214,7 +1278,7 @@ Current-source focused Domain tests passed **37/37**, zero failures or skips, in
 
 The Domain filter is `FullyQualifiedName~StudentOnboardingIdentifierRules_Tests|FullyQualifiedName~StudentOnboardingLegacyVersion_Tests`. Coverage includes independent identifier locks, legacy/canonical GR protection, correction reasons, duplicate Offering rules, saved Draft before Publish, immutable published/superseded history, stale sibling publication, history-removal/status-demotion rejection, and authoritative school-history inheritance when first creating a year override.
 
-The Application filter is `FullyQualifiedName~Offering_fee_reference_confirmation_should_gate_activation_without_finance_payment_or_assignment|FullyQualifiedName~Document_handoff_accepted_workflow_evidence_satisfies_frozen_onboarding_requirements_without_waivers`, in the partial `AdmissionWorkflowRuntimeIntegration_Tests` fixture. The selected cases are:
+The recorded Application filter was `FullyQualifiedName~Offering_fee_reference_confirmation_should_gate_activation_without_finance_payment_or_assignment|FullyQualifiedName~Document_handoff_accepted_workflow_evidence_satisfies_frozen_onboarding_requirements_without_waivers`, in the partial `AdmissionWorkflowRuntimeIntegration_Tests` fixture. Current fee-reference coverage uses `Offering_fee_reference_confirmation_is_nonblocking_and_creates_no_finance_payment_or_assignment`: pending fees do not block activation, while confirmation and zero Finance-side-effect assertions remain. The selected cases are:
 
 - Offering fee reference: `(prepareAccess:false, failAutomaticAccounts:false)`, `(true,false)` and `(true,true)`.
 - Frozen document evidence: Upload, Both, Original and Custom accepted cases, plus a Waiver case whose readiness must remain false.
@@ -1281,6 +1345,16 @@ Contracts, Application, HttpApi and Host compiled with zero errors using increme
 `AdmissionAssessmentProgress_Tests` and the focused roster lifecycle/scoping integration methods passed (7 tests). Coverage includes start/end boundaries, ended sessions awaiting results, zero marks, qualitative outcomes, waiver, absence/retake, individual-slot precedence, status filtering/counts before pagination and explicit workflow continuation. The bounded test build used freshly compiled Application/Contracts outputs and existing unchanged dependency artifacts; it is not a full solution rebuild. No migration is introduced by the display contract. Student docs validation passes; the broad validator reports unrelated missing mobile-project links.
 
 The additional PostgreSQL scale run initially failed because the isolated fixture did not explicitly map Standard's get-only `TenantId`. The fixture now includes that production-equivalent property mapping. Its rebuild/rerun was stopped under workstation memory pressure, so the corrected scale test remains an open verification gate; earlier scale results are not evidence for this revision.
+
+## Workflow name uniqueness
+
+`AdmissionWorkflowNameUniqueness_Tests.cs` contributes `Workflow_Name_Should_*` cases to `AdmissionWorkflowRuntimeIntegration_Tests`: duplicate create/clone against archived names, case/outer-space normalization, rename versus self-edit, cross-tenant reuse, same-family versions/rollback, deleted-draft reuse, legacy duplicate publication and Re-open restoring Published. Keep the SettingsCode, direct/compatibility publication and Reopen scenarios in the same focused gate.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~Workflow_Name_Should|FullyQualifiedName~SettingsCode_Workflow|FullyQualifiedName~Direct_publication|FullyQualifiedName~Compatibility_publication|FullyQualifiedName~Reopen" --artifacts-path .artifacts/workflow-name-tests -p:RunAnalyzers=false -m:1
+```
+
+This gate compiles the current dependencies and exercises the service/DI/query behavior on SQLite. PostgreSQL name-lock contention, updated-host HTTP acceptance and deployment require separate verification. English/Hindi conflict resources must parse and retain `Admissions.WorkflowNameAlreadyExists`.
 
 ## Archived workflow re-open checks (2026-10-16)
 

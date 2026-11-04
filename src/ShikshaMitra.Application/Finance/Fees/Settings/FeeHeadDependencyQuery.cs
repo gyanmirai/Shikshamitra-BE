@@ -23,11 +23,18 @@ public class FeeHeadDependencyQuery(
 	{
 		var ids = feeHeadIds.Distinct().ToArray();
 		if (ids.Length == 0) return [];
-		var details = await detailRepository.GetListAsync(x => Enumerable.Contains(ids, x.FeeHeadId));
+		var idSet = ids.ToHashSet();
+		var detailQuery = await detailRepository.GetQueryableAsync();
+		var details = await detailRepository.AsyncExecuter.ToListAsync(detailQuery
+			.Where(x => Enumerable.Contains(ids, x.FeeHeadId))
+			.Select(x => new { x.FeeHeadId, x.FeeStructureId, x.PaymentTermId }));
+		var detailsByHead = details.ToLookup(x => x.FeeHeadId);
+		var detailsByStructure = details.ToLookup(x => x.FeeStructureId);
 		var query = await dueRepository.GetQueryableAsync();
 		var references = await dueRepository.AsyncExecuter.ToListAsync(query
 			.Where(x => Enumerable.Contains(ids, x.FeeHeadId))
 			.Select(x => new { x.FeeHeadId, x.StudentId, x.StudentFeeStructureId }).Distinct());
+		var referencesByHead = references.ToLookup(x => x.FeeHeadId);
 		var structureIds = details.Select(x => x.FeeStructureId).Distinct().ToArray();
 		var assignments = await assignmentRepository.GetQueryableAsync();
 		var assignmentsUsingStructures = await assignmentRepository.AsyncExecuter.ToListAsync(assignments
@@ -43,15 +50,18 @@ public class FeeHeadDependencyQuery(
 				try { included = JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(assignment.AssignmentSnapshotJson)?.Heads?.Where(h => h.Included).Select(h => h.FeeHeadId).ToList(); }
 				catch (JsonException) { /* Preserve conservative references for legacy/corrupt evidence. */ }
 			}
-			foreach (var id in included ?? details.Where(d => d.FeeStructureId == assignment.FeeStructureStandardId).Select(d => d.FeeHeadId).ToList())
-				if (Enumerable.Contains(ids, id)) explicitReferences.Add((id, assignment.StudentId, assignment.Id));
+			foreach (var id in included ?? detailsByStructure[assignment.FeeStructureStandardId].Select(d => d.FeeHeadId).ToList())
+				if (idSet.Contains(id)) explicitReferences.Add((id, assignment.StudentId, assignment.Id));
 		}
+		var explicitByHead = explicitReferences.ToLookup(x => x.FeeHeadId);
 		return ids.ToDictionary(id => id, id => {
-			var dues = references.Where(x => x.FeeHeadId == id).ToList();
-			var heads = details.Where(x => x.FeeHeadId == id).ToList();
-			var assigned = explicitReferences.Where(x => x.FeeHeadId == id)
+			var dues = referencesByHead[id];
+			var heads = detailsByHead[id];
+			var explicitForHead = explicitByHead[id];
+			var explicitStudents = explicitForHead.Select(x => x.StudentId).ToHashSet();
+			var assigned = explicitForHead
 				.Select(x => (x.StudentId, x.AssignmentId)).Concat(dues
-					.Where(x => x.StudentFeeStructureId.HasValue || !explicitReferences.Any(r => r.FeeHeadId == id && r.StudentId == x.StudentId))
+					.Where(x => x.StudentFeeStructureId.HasValue || !explicitStudents.Contains(x.StudentId))
 					.Select(x => (x.StudentId, x.StudentFeeStructureId))).Distinct().ToList();
 			return new FeeHeadDependenciesDto {
 				StudentCount = assigned.Where(x => x.StudentId.HasValue).Select(x => x.StudentId).Distinct().Count(),

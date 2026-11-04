@@ -220,12 +220,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	{
 		var offering = await CreateSpecialRegistrationOfferingAsync();
 		var firstInput = SpecialRegistrationInput(offering.Id); firstInput.GuardianRelationship = relationship;
+		firstInput.GuardianResponsibilityConfirmed = true;
 		await _applicationAppService.StartDirectRegistrationAsync(firstInput);
 		var match = (await _applicationAppService.FindDirectRegistrationFamiliesAsync(offering.Id, firstInput.GuardianMobile)).ShouldHaveSingleItem();
 		match.PrimaryGuardianName.ShouldBe("Ravi Patel");
 		match.Parents.ShouldBeEmpty();
 		match.MatchByMobile.ShouldBeTrue();
 		var secondInput = SpecialRegistrationInput(offering.Id); secondInput.GuardianRelationship = relationship;
+		secondInput.GuardianResponsibilityConfirmed = true;
 		secondInput.ExistingFamilyId = match.FamilyId; secondInput.ApplicantFirstName = "Legacy sibling";
 		var second = await _applicationAppService.StartDirectRegistrationAsync(secondInput);
 		(await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(second.ApplicantId))).FamilyId.ShouldBe(match.FamilyId);

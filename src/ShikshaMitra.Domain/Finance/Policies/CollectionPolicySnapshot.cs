@@ -26,6 +26,7 @@ public sealed class CollectionPolicySnapshot
 	public DateTime? EffectiveFrom { get; set; }
 	public DateTime? EffectiveTo { get; set; }
 	public bool EnableLateFee { get; set; }
+	public bool ApplyLateFeeToAllFeeHeads { get; set; }
 	public int GracePeriodDays { get; set; }
 	public List<Guid> LateFeeApplyOnFeeHeads { get; set; } = [];
 	public LateFeeCalculationType LateFeeType { get; set; }

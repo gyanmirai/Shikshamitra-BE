@@ -18,7 +18,6 @@ public class AdmissionOfferingConfigurationValidator
 	: ApplicationService, ITransientDependency
 {
 	private readonly IRepository<AdmissionOffering, Guid> offeringRepository;
-	private readonly IRepository<AdmissionApplication, Guid> applicationRepository;
 	private readonly IRepository<AdmissionCampus, Guid> campusRepository;
 	private readonly IRepository<AdmissionCycle, Guid> cycleRepository;
 	private readonly IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository;
@@ -58,7 +57,7 @@ public class AdmissionOfferingConfigurationValidator
 	)
 	{
 		this.offeringRepository = offeringRepository;
-		this.applicationRepository = applicationRepository;
+		_ = applicationRepository;
 		this.campusRepository = campusRepository;
 		this.cycleRepository = cycleRepository;
 		this.workflowRepository = workflowRepository;
@@ -94,8 +93,12 @@ public class AdmissionOfferingConfigurationValidator
 		Guid? excludingOfferingId = null)
 	{
 		var existing = excludingOfferingId.HasValue ? await offeringRepository.FindAsync(excludingOfferingId.Value) : null;
-		var preserveRouting = existing != null && await applicationRepository.AnyAsync(application => application.AdmissionOfferingId == existing.Id);
-		await workflowConfiguration.ResolveAsync(input, existing, preserveRouting);
+		var usage = LazyServiceProvider.LazyGetRequiredService<AdmissionOfferingConfigurationUsageService>();
+		var hasUsage = existing != null && await usage.HasUsageAsync(existing);
+		existing?.EnsureConfigurationReferencesUnchanged(input.WorkflowDefinitionId, input.InquiryFormDefinitionId,
+			input.ApplicationFormDefinitionId, hasUsage);
+		await workflowConfiguration.ResolveAsync(input, existing, preserveRouting: existing != null && (existing.IsActive || hasUsage),
+			preserveReferences: existing != null && (existing.IsActive || hasUsage));
 		var changedJourney = existing == null || existing.WorkflowDefinitionId != input.WorkflowDefinitionId ||
 			existing.InquiryFormDefinitionId != input.InquiryFormDefinitionId || existing.ApplicationFormDefinitionId != input.ApplicationFormDefinitionId ||
 			existing.EntryMode != input.EntryMode;
@@ -181,7 +184,9 @@ public class AdmissionOfferingConfigurationValidator
 		var first = blockingErrors[0];
 		throw new BusinessException(ToBusinessErrorCode(first.Code), first.Message)
 			.WithData("ValidationErrors", blockingErrors.Select(error => error.Code).Distinct().ToArray())
-			.WithData("ValidationMessages", blockingErrors.Select(error => error.Message).Distinct().ToArray());
+			.WithData("ValidationMessages", blockingErrors.Select(error => error.Message).Distinct().ToArray())
+			.WithData("Reason", string.Join(" ", blockingErrors.Select(error => error.Message).Distinct()))
+			.WithData("ConfigurationErrors", AdmissionOfferingReadService.MapValidation(new(blockingErrors)).Errors);
 	}
 
 	public static IReadOnlyList<AdmissionOfferingValidationError> GetBlockingErrors(
@@ -271,7 +276,10 @@ public class AdmissionOfferingConfigurationValidator
 			if (workflow == null || !workflow.Status.CanConfigureOffering())
 			{
 				errors.Add(Error(AdmissionOfferingValidationCodes.WorkflowNotPublished,
-					"The selected Admission Workflow must be a published version."));
+					workflow == null
+						? "The linked Admission workflow is unavailable. Select an available published workflow in this offering."
+						: $"Admission workflow '{workflow.Name}' is {workflow.Status.ToString().ToLowerInvariant()}. Open Admission workflows, publish an eligible version and select it in this offering before activating it.") with
+				{ WorkflowDefinitionId = workflow?.Id });
 			}
 		}
 
@@ -280,12 +288,13 @@ public class AdmissionOfferingConfigurationValidator
 			AdmissionOfferingValidationCodes.InquiryFormNotPublished,
 			AdmissionOfferingValidationCodes.InquiryFormPurposeMismatch,
 			AdmissionFormPurpose.Inquiry, "Inquiry Form", errors,
-			required: input.EntryMode is AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both);
+			required: input.EntryMode is AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both,
+			workflowId: input.WorkflowDefinitionId);
 		await ValidateFormAsync(input.ApplicationFormDefinitionId,
 			AdmissionOfferingValidationCodes.ApplicationFormMissing,
 			AdmissionOfferingValidationCodes.ApplicationFormNotPublished,
 			AdmissionOfferingValidationCodes.ApplicationFormPurposeMismatch,
-			AdmissionFormPurpose.Registration, "Application Form", errors);
+			AdmissionFormPurpose.Registration, "Registration Form", errors, workflowId: input.WorkflowDefinitionId);
 		await ValidateWorkflowFormCompatibilityAsync(input.WorkflowDefinitionId, input.ApplicationFormDefinitionId, errors);
 		await ValidateEntryModeWorkflowCompatibilityAsync(input.WorkflowDefinitionId, input.Track, input.EntryMode, errors);
 		await ValidateInheritanceCompatibilityAsync(input, errors);
@@ -303,7 +312,8 @@ public class AdmissionOfferingConfigurationValidator
 		if (policy?.Enabled != true) return;
 		if (input.InquiryFormDefinitionId.HasValue && policy.Sources.All(source => source.InquiryFormDefinitionId != input.InquiryFormDefinitionId.Value))
 			errors.Add(Error(AdmissionFormInheritanceErrorCodes.SourceNotApproved,
-				"Review and approve this Inquiry version in the workflow's Registration form before activating the Offering.", activationOnly: true));
+				$"The published Registration form '{registration.Name}' has not approved the selected Inquiry form. Open this Registration form, review and approve the Inquiry version, then publish a new Registration version and attach its workflow before activating the offering.", activationOnly: true) with
+			{ FormDefinitionId = registration.Id, FormName = registration.Name, FormPurpose = registration.Purpose, WorkflowDefinitionId = input.WorkflowDefinitionId });
 		if (input.EntryMode is AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both)
 		{
 			var fieldRepository = LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>();
@@ -320,40 +330,53 @@ public class AdmissionOfferingConfigurationValidator
 		if (registrationEntity is not { Status: AdmissionFormStatus.Published, Purpose: AdmissionFormPurpose.Registration }) return;
 		var inheritance = LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>();
 		var registration = await inheritance.ReadDefinitionAsync(registrationEntity.Id);
-		var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		AdmissionFormDto? inquiry = null;
 		if (input.EntryMode is AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both && input.InquiryFormDefinitionId.HasValue)
 		{
 			var inquiryEntity = await formRepository.FindAsync(input.InquiryFormDefinitionId.Value);
 			if (inquiryEntity is { Status: AdmissionFormStatus.Published, Purpose: AdmissionFormPurpose.Inquiry })
-			{
-				var inquiry = await inheritance.ReadDefinitionAsync(inquiryEntity.Id);
-				var effective = registration;
-				if (registration.Inheritance?.Enabled == true)
-				{
-					var preview = AdmissionFormInheritanceService.Compose(registration, inquiry, requireApprovedSource: true);
-					if (!preview.IsValid)
-					{
-						errors.Add(Error(AdmissionFormInheritanceErrorCodes.IncompatibleSource,
-							string.Join("; ", preview.Issues.Select(issue => issue.Message)), activationOnly: true));
-						return;
-					}
-					effective = preview.Definition;
-				}
-				missing.UnionWith(AdmissionJourneyIdentityConfiguration.MissingBindings(ToSchema(effective), InquiryIdentitySchema(inquiry)));
-			}
+				inquiry = await inheritance.ReadDefinitionAsync(inquiryEntity.Id);
 		}
-		if (input.EntryMode is AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both)
+		foreach (var error in EvaluateJourneyIdentity(registration, inquiry, input.EntryMode, input.WorkflowDefinitionId)) errors.Add(error);
+	}
+
+	// Shared by the activation command and batched inactive Offering readiness reads.
+	internal static IReadOnlyList<AdmissionOfferingValidationError> EvaluateJourneyIdentity(
+		AdmissionFormDto registration, AdmissionFormDto? inquiry, AdmissionEntryMode entryMode, Guid? workflowId)
+	{
+		var errors = new List<AdmissionOfferingValidationError>();
+		var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		if (entryMode is AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both && inquiry != null)
+		{
+			var effective = registration;
+			if (registration.Inheritance?.Enabled == true)
+			{
+				var preview = AdmissionFormInheritanceService.Compose(registration, inquiry, requireApprovedSource: true);
+				if (!preview.IsValid)
+				{
+					errors.Add(Error(AdmissionFormInheritanceErrorCodes.IncompatibleSource,
+						string.Join("; ", preview.Issues.Select(issue => issue.Message)), activationOnly: true) with
+					{ FormDefinitionId = registration.Id, FormName = registration.Name, FormPurpose = registration.Purpose, WorkflowDefinitionId = workflowId });
+					return errors;
+				}
+				effective = preview.Definition;
+			}
+			missing.UnionWith(AdmissionJourneyIdentityConfiguration.MissingBindings(ToSchema(effective), InquiryIdentitySchema(inquiry)));
+		}
+		if (entryMode is AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both)
 			missing.UnionWith(AdmissionJourneyIdentityConfiguration.MissingBindings(ToSchema(registration), null,
 				AdmissionJourneyIdentityConfiguration.DirectEntryCapturedBindings));
 		if (missing.Count > 0)
 			errors.Add(Error(AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete,
-				"Before activating this Offering, configure these required Student fields in its published Inquiry or Registration form: " +
+				"Make " +
 				string.Join(", ", AdmissionJourneyIdentityConfiguration.CoreBindings.Where(missing.Contains).Select(key => key switch
 				{
-					"Applicant.FirstName" => "Student name (Applicant.FirstName or Applicant.Name)",
-					"Applicant.DateOfBirth" => "Date of birth (Applicant.DateOfBirth)",
-					_ => "Gender (Applicant.Gender)"
-				})) + ". Use the matching Student field connection, keep the question visible and editable, and use supported Gender choices. Last name is optional. When collecting separate name parts, keep a full-name reference read-only.", activationOnly: true));
+					"Applicant.FirstName" => "Student name",
+					"Applicant.DateOfBirth" => "Date of birth",
+					_ => "Gender"
+				})) + " required, visible and editable in the linked Inquiry or Registration form. Use the matching Student fields and supported Gender choices.", activationOnly: true) with
+				{ FormDefinitionId = registration.Id, FormName = registration.Name, FormPurpose = registration.Purpose, WorkflowDefinitionId = workflowId });
+		return errors;
 	}
 
 	private static AdmissionFormSchema InquiryIdentitySchema(AdmissionFormDto inquiry)
@@ -443,9 +466,14 @@ public class AdmissionOfferingConfigurationValidator
 			stage.WorkflowDefinitionId == workflowId.Value && stage.StageType == AdmissionWorkflowStageType.Form);
 		var configuredForms = stages.Select(stage => AdmissionFormStageAccessService.ReadFormDefinitionId(stage.ConfigurationJson))
 			.Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToArray();
+		foreach (var configuredFormId in configuredForms.Where(id => id != formId))
+			await ValidateFormAsync(configuredFormId, AdmissionOfferingValidationCodes.ApplicationFormMissing,
+				AdmissionOfferingValidationCodes.ApplicationFormNotPublished, AdmissionOfferingValidationCodes.ApplicationFormPurposeMismatch,
+				AdmissionFormPurpose.Registration, "Registration Form", errors, workflowId: workflowId);
 		if (configuredForms.Length > 1 || formId.HasValue && configuredForms.Any(id => id != formId.Value))
 			errors.Add(Error(AdmissionOfferingValidationCodes.WorkflowFormMismatch,
-				"Every Form stage in the workflow must use the same published Registration Form version."));
+				"Open the workflow and set every Registration Form stage to the same published form version, then select that workflow in this offering.") with
+			{ FormDefinitionId = formId, FormPurpose = AdmissionFormPurpose.Registration, WorkflowDefinitionId = workflowId });
 	}
 
 	private async Task ValidateFormAsync(
@@ -456,20 +484,35 @@ public class AdmissionOfferingConfigurationValidator
 		AdmissionFormPurpose purpose,
 		string label,
 		ICollection<AdmissionOfferingValidationError> errors,
-		bool required = true)
+		bool required = true,
+		Guid? workflowId = null)
 	{
 		if (!formId.HasValue)
 		{
 			if (required) errors.Add(Error(missingCode, purpose == AdmissionFormPurpose.Registration
 				? "Select a published Registration Form in the workflow's Form stage before activating this offering."
-				: $"Published {label} is required."));
+				: "Select a published Inquiry form in this offering before activating it.") with
+			{ FormPurpose = purpose, WorkflowDefinitionId = workflowId });
 			return;
 		}
 
 		var form = await formRepository.FindAsync(formId.Value);
 		if (form == null || form.Status != AdmissionFormStatus.Published)
 		{
-			errors.Add(Error(unpublishedCode, $"The selected {label} must be a published version."));
+			var resolution = purpose == AdmissionFormPurpose.Registration
+				? "Restore it in Admission forms, or select another published Registration form in the workflow's Registration stage and attach that workflow to this offering."
+				: "Restore it in Admission forms, or select another published Inquiry form in this offering.";
+			var state = form == null ? "is unavailable" : form.Status == AdmissionFormStatus.Archived ? "is archived" : "is still a draft";
+			var message = $"{label} '{form?.Name ?? formId.Value.ToString()}' {state}. {resolution}";
+			var stage = purpose == AdmissionFormPurpose.Registration && workflowId.HasValue
+				? (await workflowStageRepository.GetListAsync(item => item.WorkflowDefinitionId == workflowId.Value && item.StageType == AdmissionWorkflowStageType.Form))
+					.FirstOrDefault(item => AdmissionFormStageAccessService.ReadFormDefinitionId(item.ConfigurationJson) == formId)
+				: null;
+			errors.Add(Error(unpublishedCode, message) with
+			{
+				FormDefinitionId = formId, FormName = form?.Name, FormPurpose = purpose,
+				WorkflowDefinitionId = workflowId, WorkflowStageId = stage?.Id, WorkflowStageName = stage?.Name
+			});
 		}
 		else if (form.Purpose != purpose)
 		{

@@ -46,6 +46,12 @@ public class AssignmentStudentDto
 	public string DivisionName { get; set; } = "";
 	public bool IsActive { get; set; }
 	public bool IsFeeStructureAssigned { get; set; }
+	public Guid? AssignmentId { get; set; }
+	public Guid? StructureId { get; set; }
+	public int? StructureRevision { get; set; }
+	public string? AssignmentConcurrencyStamp { get; set; }
+	public bool CanEditStructure { get; set; }
+	public string? StructureEditBlocker { get; set; }
 	public string AssignmentState { get; set; } = "Unassigned";
 	public string AssignmentSource { get; set; } = "Finance";
 }

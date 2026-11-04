@@ -66,6 +66,20 @@ public partial class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMul
 		ConfirmOnboardingFeeSelection(selection.SavedBy, selection.SavedAt);
 	}
 
+	/// <summary>Finance alone coordinates this transition with the linked unused assignment.</summary>
+	public void CorrectUnpaidFinanceSelection(Guid accountId, AdmissionFeeSelectionSnapshot selection, string reason)
+	{
+		if (HasFinanceFeePayment || accountId == Guid.Empty || (!StudentId.HasValue && !EnrolledStudentId.HasValue) ||
+			selection.StructureId == Guid.Empty || selection.SavedBy == Guid.Empty || selection.RevisionNumber < 1 ||
+			selection.Heads.Count == 0 || string.IsNullOrWhiteSpace(reason))
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked);
+		var history = this.GetProperty<string>("FinanceFeeSelectionCorrectionHistory", "[]");
+		var entries = JsonSerializer.Deserialize<System.Collections.Generic.List<JsonElement>>(history ?? "[]") ?? [];
+		entries.Add(JsonSerializer.SerializeToElement(new { Before = GetFeeSelection(), After = selection, AccountId = accountId, Reason = reason.Trim() }));
+		this.SetProperty("FinanceFeeSelectionCorrectionHistory", JsonSerializer.Serialize(entries));
+		this.SetProperty(FeeSelectionProperty, JsonSerializer.Serialize(selection));
+	}
+
 	public Guid? TenantId { get; private set; }
 	public string ApplicationNumber { get; private set; }
 	public Guid ApplicantId { get; private set; }

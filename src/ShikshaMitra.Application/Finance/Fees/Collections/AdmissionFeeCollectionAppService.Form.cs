@@ -116,7 +116,12 @@ public partial class AdmissionFeeCollectionAppService
     private static ChargeDetailDto AccountLateFeeCharge(DueFee due, string name, LateFeeBalanceService.Balance balance) => new()
     {
         ChargeId = due.Id, SourceId = due.Id, SourceType = "LateFee", IsSystemGenerated = true,
-        Name = $"Late Fee - {name} ({due.GetDisplayInstallmentLabel()})", Amount = (double)balance.Total,
+        DueDate = DateOnly.FromDateTime(due.DueDate),
+        LateFeeAppliedFromDate = balance.AppliedFromDate, LateFeeAppliedThroughDate = balance.AppliedThroughDate,
+        LateFeeAppliedDays = balance.AppliedDays,
+        LateFeeAppliedIntervals = balance.AppliedIntervals?.Select(x => new LateFeeAppliedIntervalDto
+            { FromDate = x.FromDate, ThroughDate = x.ThroughDate }).ToList(),
+        Name = balance.IsCommonCharge ? "Late Fee" : $"Late Fee - {name} ({due.GetDisplayInstallmentLabel()})", Amount = (double)balance.Total,
         PaidAmount = (double)balance.PaidAmount, PendingAmount = (double)balance.PendingAmount,
         WaivedAmount = (double)balance.WaivedAmount, ReconciliationAmount = balance.ReconciliationAmount,
         Explanation = balance.Explanation, CanWaive = balance.PendingAmount > 0m,

@@ -3,16 +3,24 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-02
+updated_on: 2026-11-04
 owner: backend-team
 audience: humans-and-agents
 ---
+
+## Historical ESIC configuration
+
+`EsiHistoricalConfigurationApi_Tests` calls the real save endpoint under a controlled clock for June initial setup, earning classification, unlocked updates, stale/retried requests, version ordering, protected payroll, invalidation and the Indian month boundary. `EsiHistoricalConfigurationPostgres_Tests` repeats persistence cases and checks finalization fencing and rollback after an injected invalidation failure. Set `ESI_HISTORICAL_TEST_POSTGRES` to a separate empty disposable loopback `payroll_tests_*` database; the fixture refuses other targets and never resets existing databases. Run the existing `EsiConfigurationPostgres_Tests`, `EsiStatutoryApi_Tests` and `EsiPolicyApi_Tests` alongside these cases. Synthetic fixtures do not certify tenant policy history or live acceptance.
+
+`EsiHistoricalPayrollRaceScenario` drives the real `POST /api/payroll/run` issuance/finalization path against a historical configuration save in both fence orderings. It checks stale-lock rejection and successful recalculation, rejects fresh historical writes after protection, accepts the identical pre-lock idempotent retry, and compares protected amounts, statutory evidence, reviews, issued document facts and PDF bytes/hash. There is no separately exposed salary-slip finalization HTTP route; the lock endpoint performs finalization. `EsiConfigurationCommitFailure` injects a test-only failure just before commit, after querying the same transaction to prove snapshot and review soft deletes executed; post-rollback reads must exactly restore both records and configuration history.
 
 ## HR setup readiness
 
 Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~HrSetupReadinessApi_Tests` for clean-school HTTP and direct-service authorization coverage.
 The isolated fixture covers missing and usable configuration, tenant/year/identity boundaries, self-service denial, inactive earnings, conflicting defaults, invalid calendar references, employee-group role coverage, and conditional template dependencies.
 Read-only assertions confirm the endpoint does not create employee records, earning components, or ESI configuration.
+PF coverage tests also prove missing coverage blocks completion, either saved coverage decision permits completion, future/cancelled/foreign-tenant records do not satisfy setup, and the school month changes at midnight Asia/Kolkata.
+Configuration-action tests require the existing PF View/Add grants and school-wide scope; readiness reads create no coverage records.
 `test/browser/hr-setup/HrSetupBrowser.csproj` exposes disposable SQLite and real ABP APIs on loopback port 4396 for the frontend wizard browser tests.
 Its synthetic authentication and fixture-reset endpoints exist only in the test executable.
 
@@ -58,6 +66,10 @@ Run `LeavePolicySafetyApi_Tests`, `LeavePolicyApi_Tests`, `LeavePolicyAppService
 The Version migration is additive and enrolls existing policies at version 1 without inventing earlier events. Validate migration upgrade and real concurrent edits/default changes against a separately authorized disposable PostgreSQL database. SQLite unit/API checks do not establish PostgreSQL row-lock, transaction rollback or concurrent-writer acceptance. `LeavePolicyLockOrderPostgres_Tests` remains the fence-before-row barrier regression; never interpret an unconfigured/skipped PostgreSQL test as a pass. The FE policy suite covers precise unavailable metrics, exact review scope, restricted/error drilldowns, prompt cancellation/year switching and the shared restore drawer. Authenticated browser acceptance is a separate check.
 
 Run `CashManagementDeploymentModel_Tests` and `LeavePolicyDeploymentModel_Tests` in separate exact-class-filter processes in the EF test project. These are offline metadata checks: the latest target model and snapshot must match the current design-time model, the earlier cash migration keeps its historical target and additive operations, and the later leave target must include the merged cash tables. Leave's migration adds only the Version column; its rule metadata preserves explicit minimum-notice zero. These checks do not open a connection or apply a migration and do not replace PostgreSQL upgrade/concurrency acceptance.
+
+`ReconcileEmployeeWorkShiftModel` records the combined Work Shift and elective-correction target model after merging their independent migration histories.
+Its Up and Down operations are empty; it makes no schema or data changes.
+The same offline model check must pass with this migration as the latest target.
 
 ## New-school starter policy regression coverage
 

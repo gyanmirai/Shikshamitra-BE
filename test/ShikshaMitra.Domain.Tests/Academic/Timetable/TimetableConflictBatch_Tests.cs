@@ -10,6 +10,7 @@ using NSubstitute;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
@@ -30,7 +31,7 @@ public class TimetableConflictBatch_Tests
 	public TimetableConflictBatch_Tests()
 	{
 		_manager = new TimetableManager(_repository, EmptyRepository<Standard>(), EmptyRepository<Division>(),
-			EmptyRepository<Subject>(), EmptyRepository<Room>(), EmptyRepository<Employee>());
+            EmptyRepository<Subject>(), EmptyRepository<Room>(), EmptyRepository<Employee>(), EmptyRepository<AcademicYear>());
 		_repository.GetConflictCandidatesAsync(Arg.Any<Guid>(), Arg.Any<Guid>(),
 			Arg.Any<IReadOnlyCollection<TimetableDayOfWeek>>(), Arg.Any<TimeOnly>(), Arg.Any<TimeOnly>(),
 			Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<IReadOnlyCollection<Guid>>())

@@ -8,6 +8,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 internal sealed class AdmissionFormExperienceMetadata
 {
+	public int? CoreFieldPolicyVersion { get; set; }
 	public string DefaultLanguage { get; set; } = "en";
 	public List<string> SupportedLanguages { get; set; } = ["en"];
 	public Dictionary<string, AdmissionFormSectionExperienceMetadata> Sections { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -48,6 +49,7 @@ internal static class AdmissionFormMetadataStore
 
 		var metadata = new AdmissionFormExperienceMetadata
 		{
+			CoreFieldPolicyVersion = input.CoreFieldPolicyVersion,
 			DefaultLanguage = defaultLanguage,
 			SupportedLanguages = languages,
 			Sections = input.Sections

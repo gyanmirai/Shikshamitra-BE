@@ -15,10 +15,12 @@ public partial class FeeCollectionSummaryQueryService
         ["rollNumber"] = new(FinanceTableValueType.Text),
         ["totalFees"] = new(FinanceTableValueType.Number),
         ["paidFees"] = new(FinanceTableValueType.Number),
+        ["refundAmount"] = new(FinanceTableValueType.Number),
         ["pendingFees"] = new(FinanceTableValueType.Number),
         ["overdueFees"] = new(FinanceTableValueType.Number),
         ["totalConcessionAmount"] = new(FinanceTableValueType.Number),
         ["totalCharges"] = new(FinanceTableValueType.Number),
+        ["paidCharges"] = new(FinanceTableValueType.Number),
         ["pendingCharges"] = new(FinanceTableValueType.Number),
         ["status"] = new(FinanceTableValueType.Enum, true, [0, 1, 2, 7])
     };
@@ -30,10 +32,12 @@ public partial class FeeCollectionSummaryQueryService
         ["rollNumber"] = (Expression<Func<FeeCollectionSummaryItemDto, string>>)(r => r.RollNumber),
         ["totalFees"] = (Expression<Func<FeeCollectionSummaryItemDto, double>>)(r => r.TotalFees),
         ["paidFees"] = (Expression<Func<FeeCollectionSummaryItemDto, double>>)(r => r.PaidFees),
+        ["refundAmount"] = (Expression<Func<FeeCollectionSummaryItemDto, decimal>>)(r => r.RefundAmount),
         ["pendingFees"] = (Expression<Func<FeeCollectionSummaryItemDto, double>>)(r => r.PendingFees),
         ["overdueFees"] = (Expression<Func<FeeCollectionSummaryItemDto, double>>)(r => r.OverdueFees),
         ["totalConcessionAmount"] = (Expression<Func<FeeCollectionSummaryItemDto, double>>)(r => r.TotalConcessionAmount),
         ["totalCharges"] = (Expression<Func<FeeCollectionSummaryItemDto, double>>)(r => r.TotalCharges),
+        ["paidCharges"] = (Expression<Func<FeeCollectionSummaryItemDto, decimal>>)(r => r.PaidCharges),
         ["pendingCharges"] = (Expression<Func<FeeCollectionSummaryItemDto, double>>)(r => r.PendingCharges),
         ["status"] = (Expression<Func<FeeCollectionSummaryItemDto, int>>)(r => (int)r.Status)
     };

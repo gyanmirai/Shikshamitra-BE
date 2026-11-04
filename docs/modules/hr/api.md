@@ -38,6 +38,10 @@ The application service requires an active current-tenant identity and at least 
 The response contains configuration status and academic-year choices, without employee records, compensation amounts, or protected configuration details.
 Omitting the academic year reports year-specific checks as unknown and offers existing tenant years; a foreign or nonexistent year returns 404.
 Checks cover usable shifts, explicitly approved employee roles for both staff groups, unique active default policies and referenced calendars, valid active earnings, and at least one usable active salary template with its required dependencies.
+The `pf-coverage` check in the `salary` step also requires a non-cancelled current-tenant PF coverage record effective by the current school month in Asia/Kolkata.
+Either Covered or Not covered satisfies this configuration check; it does not require PF enrollment or change PF calculations.
+Missing coverage keeps `isReady=false`, even when the salary template is usable.
+Its `canConfigure` requires the existing PF Rule View and Add grants and backend-confirmed school-wide scope, matching the coverage editor and save endpoint.
 The read does not seed defaults, record review acknowledgements, enable schemes, or persist progress.
 Configuration writes continue through their existing authorized endpoints, and operational validation remains authoritative.
 
@@ -283,12 +287,12 @@ Salary previews and payroll resolve the same effective-dated ESIC configuration 
 GET /api/payroll/statutory-schemes/esi/configuration returns the persisted default-on/current configuration, audit history, server current month, and school-wide scope.
 Unknown school registration facts remain empty and do not block salary calculations.
 PUT /api/payroll/statutory-schemes/esi/configuration saves enabled status, registration facts, and earning-treatment changes with a concurrency stamp and idempotency key.
-Saving requires both Edit and Activate permissions plus HR-wide scope.
+Saving requires Edit, Activate and ConfigureCalculation permissions plus HR-wide scope.
 There are no draft-preview, schedule, or cancellation commands in this configuration flow.
-The server applies changes from the current Asia/Kolkata payroll month.
+The effective month defaults to the current Asia/Kolkata payroll month. Initial setup and subsequent changes can use an older month only when no locked payroll snapshot or finalized/paid payslip exists from that month onward. The full later horizon is protected because contribution-period continuity can depend on earlier months; a later configuration version does not remove that safeguard. Rejection returns `HR:Payroll:EsiConfigurationLocked` (409) before configuration history changes.
 Save shares the payroll input-revision transaction fence with payroll locking.
 Identical retries are idempotent; stale edits and changed retry payloads are rejected.
-Current/future unlocked snapshots and reviews are invalidated; earlier, locked, and finalized snapshots retain their configuration and figures.
+Unlocked snapshots and reviews from the effective month onward are invalidated. Earlier periods retain their configuration and figures. Current/future changes retain the existing preservation of locked and finalized payroll; historical changes are rejected when they overlap any protected later period. Same-month changes supersede the prior version without deleting its audit history; later saved versions remain effective from their existing dates.
 Off mode omits ESI deductions and employer contributions while retaining employee enrollment facts.
 ESI uses effective-dated component wage classifications, the employee coverage record, the standard or disability ceiling, contribution-period continuation, and audited overrides.
 The wage-mapping catalog includes active master earnings and employee-specific earnings applicable to the selected month so a custom salary line cannot become an unresolvable payroll blocker.

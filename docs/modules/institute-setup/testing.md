@@ -3,7 +3,7 @@ module: institute-setup
 domain: testing
 content_type: Troubleshooting
 status: canonical
-updated_on: 2026-11-02
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,12 @@ audience: humans-and-agents
 # Validate Institute Setup backend changes
 
 TL;DR: run the docs validator for documentation changes and targeted Tenant Settings or Academic tests for behavior changes.
+
+## Academic date synchronization
+
+Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AcademicCalendarInstituteDates_Tests|FullyQualifiedName~EducationBoardIntegration_Tests|FullyQualifiedName~AcademicCalendarStatistics_Tests"`.
+
+The regressions cover board-date extension, repair on an unchanged-date save, May-to-June summer vacation persistence, archived and other-board calendar preservation, structured calendar auditing, inherited year-date changes, custom board ranges and rejection of a shrink that excludes active entries. Weekend generation applies only to the added dates and must preserve existing entries and removed historical weekends. No database migration is required.
 
 ## Performance and migration regressions
 

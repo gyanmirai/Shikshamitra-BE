@@ -26,7 +26,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
         var entry = Guid.NewGuid(); var decision = Guid.NewGuid();
         var workflow = await _workflowAppService.CreateAsync(new()
         {
-            Name = "Onboarding offering journey", Code = $"ONBOARD_{Guid.NewGuid():N}"[..24],
+            Name = $"Onboarding offering journey {entry:N}", Code = $"ONBOARD_{Guid.NewGuid():N}"[..24],
             Stages = [new() { Id = entry, Code = documents == null ? "FEES" : "DOCUMENTS", Name = "Admission requirements",
                 StageType = documents == null ? AdmissionWorkflowStageType.Payment : AdmissionWorkflowStageType.DocumentVerification,
                 IsEntryStage = true, IsRequired = true, ConfigurationJson = documents == null ? null : JsonSerializer.Serialize(new { documentVerification = documents }) },

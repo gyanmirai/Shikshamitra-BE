@@ -4,6 +4,7 @@ using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.StudentFeeAssignment;
 
@@ -46,6 +47,7 @@ public class StudentFeeStructureController(
 		studentFeeStructureAppService.PreviewAsync(input);
 
 	[HttpPost("assign-bulk")]
+	[UnitOfWork(isTransactional: false)]
 	public async Task<BulkAssignStudentFeeStructureResultDto> BulkAssignAsync(
 		[FromBody] BulkAssignStudentFeeStructureDto input)
 	{

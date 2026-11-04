@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
@@ -44,18 +45,25 @@ public partial class FeeStructureAppService
 				result.Errors.Add("A Fee Head line no longer belongs to this draft. Refresh the structure.");
 		var board = await GetBoardCalendarAsync(metadata.AcademicBoardId!.Value);
 		var year = await academicYearRepository.GetAsync(metadata.AcademicYearId!.Value);
+		var termIds = candidate.FeeHeads.Where(x => x.PaymentTermId.HasValue).Select(x => x.PaymentTermId!.Value).Distinct().ToArray();
+		var terms = termIds.Length == 0 ? new Dictionary<Guid, PaymentTerm>() :
+			(await paymentTermRepository.GetListAsync(x => Enumerable.Contains(termIds, x.Id))).ToDictionary(x => x.Id);
+		var accountingValidity = new Dictionary<Guid, bool>();
+		var headsById = heads.ToDictionary(x => x.Id);
 		foreach (var line in candidate.FeeHeads)
 		{
-			var head = heads.SingleOrDefault(x => x.Id == line.FeeHeadId);
+			var head = headsById.GetValueOrDefault(line.FeeHeadId);
 			if (head == null) continue;
 			var coverage = new FeeStructureCoverageDto { FeeHeadId = head.Id, Name = head.Name };
 			result.Coverage.Add(coverage);
-			try
+			if (!accountingValidity.TryGetValue(head.IncomeCategoryId, out var accountingReady))
 			{
-				var map = await accountingManager.GetValidMappingAsync(year.Id, head.IncomeCategoryId);
-				coverage.Accounting = "Ready";
+				try { await accountingManager.GetValidMappingAsync(year.Id, head.IncomeCategoryId); accountingReady = true; }
+				catch (BusinessException) { accountingReady = false; }
+				accountingValidity[head.IncomeCategoryId] = accountingReady;
 			}
-			catch (BusinessException) { coverage.Accounting = "Mapping needs attention"; if (publishing) result.Errors.Add($"{head.Name}: configure an active Income Category."); }
+			coverage.Accounting = accountingReady ? "Ready" : "Mapping needs attention";
+			if (!accountingReady && publishing) result.Errors.Add($"{head.Name}: configure an active Income Category.");
 			if (!line.PaymentTermId.HasValue)
 			{
 				if (line.PaymentTermVersionId.HasValue || line.InstallmentOverrides.Count > 0 || line.ScheduleMode != ScheduleMode.Inherited)
@@ -65,7 +73,7 @@ public partial class FeeStructureAppService
 			}
 			try
 			{
-				var term = await paymentTermRepository.FindAsync(line.PaymentTermId.Value);
+				var term = terms.GetValueOrDefault(line.PaymentTermId.Value);
 				var version = term?.Versions.SingleOrDefault(x => x.Id == line.PaymentTermVersionId);
 				if (term == null || term.Status != PaymentTermStatus.Active || term.AcademicYearId != year.Id || term.BoardId != board.Id ||
 					version == null || version.Status is not (PaymentTermVersionStatus.Published or PaymentTermVersionStatus.Superseded))
@@ -87,7 +95,7 @@ public partial class FeeStructureAppService
 				var detail = new FeeStructureDetail(GuidGenerator.Create(), CurrentTenant.Id, current?.Id ?? Guid.NewGuid(), line.FeeHeadId,
 					line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable);
 				AttachSchedule(detail, line);
-				var resolved = await scheduleResolver.ResolveAsync(detail);
+				var resolved = scheduleResolver.Resolve(detail, term);
 				var installments = resolved.Installments.Select(x => new CreatePaymentTermInstallmentDto
 				{
 					Sequence = x.Sequence, Name = x.Name, CoverageStartDate = x.CoverageStartDate, CoverageEndDate = x.CoverageEndDate,
@@ -111,7 +119,9 @@ public partial class FeeStructureAppService
 			catch (BusinessException error) { result.Errors.Add($"{head.Name}: the Payment Term or customized schedule is invalid ({error.Code})."); }
 		}
 
-		var availableVersions = await ActivePolicyVersionsAsync(year.Id);
+		var availableVersions = await ActivePolicyVersionsAsync(year.Id,
+			new[] { candidate.CollectionPolicyId, candidate.ConcessionPolicyId, candidate.RefundPolicyId }
+				.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToArray());
 		async Task<FinancePolicyVersion?> Resolve(string family, Guid? id, Guid? selected, Guid? previousId, Guid? previousVersion, bool required)
 		{
 			if (!id.HasValue)
@@ -180,25 +190,35 @@ public partial class FeeStructureAppService
 				(publishing ? result.Errors : result.Warnings).Add("The Refund Policy has no matching Fee Heads. Choose a compatible policy or remove the attachment before publishing.");
 			foreach (var row in result.Coverage)
 			{
-				row.Collection = cp is { EnableLateFee: true } && cp.LateFeeApplyOnFeeHeads.Contains(row.FeeHeadId) ? "Late fee applies" : "No late fee";
+				row.Collection = cp is { EnableLateFee: true } && (cp.ApplyLateFeeToAllFeeHeads || cp.LateFeeApplyOnFeeHeads.Contains(row.FeeHeadId)) ? "Late fee applies" : "No late fee";
 				row.Concession = cn != null && candidate.ConcessionApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Eligible on approval" : "Not eligible";
 				row.Refund = rp == null ? "No refund policy attached" : rp.FeeHeadScope != RefundFeeHeadScope.SelectedFeeHeads || rp.ApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Policy eligible" : "Excluded";
 			}
-			var unused = (cp?.LateFeeApplyOnFeeHeads ?? [])
+			var unused = (cp is { ApplyLateFeeToAllFeeHeads: false } ? cp.LateFeeApplyOnFeeHeads : [])
 				.Concat(rp?.ApplicableFeeHeadIds ?? []).Distinct().Except(ids).Count();
 			if (unused > 0) result.Warnings.Add($"{unused} policy Fee Head(s) are absent from this structure and will not create charges.");
-			if (cp is { EnableLateFee: true } && !cp.LateFeeApplyOnFeeHeads.Any(ids.Contains))
+			if (cp is { EnableLateFee: true, ApplyLateFeeToAllFeeHeads: false } && !cp.LateFeeApplyOnFeeHeads.Any(ids.Contains))
 				result.Warnings.Add("No late-fee heads overlap. No late fee applies; Collection Policy channel controls remain attached.");
 		}
 		catch (JsonException) { result.Errors.Add("A policy snapshot cannot be read. Repair the policy version before publishing."); }
 		return result;
 	}
 
-	private async Task<List<FinancePolicyVersion>> ActivePolicyVersionsAsync(Guid yearId)
+	private async Task<List<FinancePolicyVersion>> ActivePolicyVersionsAsync(Guid yearId, Guid[]? requestedPolicyIds = null)
 	{
-		var collection = (await collectionPolicyRepository.GetListAsync(x => x.AcademicYearId == yearId && x.Status == CollectionPolicyStatus.Active)).Select(x => x.Id).ToList();
-		var concession = (await concessionPolicyRepository.GetListAsync(x => x.AcademicYearId == yearId && x.Status == ConcessionPolicyStatus.Active)).Select(x => x.Id).ToList();
-		var refund = (await refundPolicyRepository.GetListAsync(x => x.AcademicYearId == yearId && x.Status == RefundPolicyStatus.Active)).Select(x => x.Id).ToList();
+		if (requestedPolicyIds is { Length: 0 }) return [];
+		var collectionQuery = (await collectionPolicyRepository.GetQueryableAsync()).Where(x => x.AcademicYearId == yearId && x.Status == CollectionPolicyStatus.Active);
+		var concessionQuery = (await concessionPolicyRepository.GetQueryableAsync()).Where(x => x.AcademicYearId == yearId && x.Status == ConcessionPolicyStatus.Active);
+		var refundQuery = (await refundPolicyRepository.GetQueryableAsync()).Where(x => x.AcademicYearId == yearId && x.Status == RefundPolicyStatus.Active);
+		if (requestedPolicyIds != null)
+		{
+			collectionQuery = collectionQuery.Where(x => Enumerable.Contains(requestedPolicyIds, x.Id));
+			concessionQuery = concessionQuery.Where(x => Enumerable.Contains(requestedPolicyIds, x.Id));
+			refundQuery = refundQuery.Where(x => Enumerable.Contains(requestedPolicyIds, x.Id));
+		}
+		var collection = await AsyncExecuter.ToListAsync(collectionQuery.Select(x => x.Id));
+		var concession = await AsyncExecuter.ToListAsync(concessionQuery.Select(x => x.Id));
+		var refund = await AsyncExecuter.ToListAsync(refundQuery.Select(x => x.Id));
 		return await financePolicyVersionRepository.GetListAsync(x => x.AcademicYearId == yearId && x.Status == "Active" &&
 			(x.PolicyType == "collection" && collection.Contains(x.PolicyId) || x.PolicyType == "concession" && concession.Contains(x.PolicyId) ||
 			 x.PolicyType == "refund" && refund.Contains(x.PolicyId)));
@@ -213,18 +233,20 @@ public partial class FeeStructureAppService
 		var heads = await feeHeadRepository.GetListAsync(x => headIds.Contains(x.Id));
 		if (heads.Count != headIds.Count || heads.Any(x => !x.IsActive || x.AcademicYearId != metadata.AcademicYearId))
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidFeeHeadReference);
-		var versions = await ActivePolicyVersionsAsync(metadata.AcademicYearId!.Value);
+		var versions = await ActivePolicyVersionsAsync(metadata.AcademicYearId!.Value, [input.CollectionPolicyId]);
 		var version = versions.Where(x => x.PolicyType == "collection" && x.PolicyId == input.CollectionPolicyId).OrderByDescending(x => x.VersionNumber).FirstOrDefault()
 			?? throw new BusinessException(CollectionPolicyErrorCodes.PolicyNotActive);
 		var policy = CollectionPolicySnapshot.Deserialize(version.SnapshotJson);
 		var ids = input.FeeHeadIds.Distinct().ToList();
+		var coveredIds = !policy.EnableLateFee ? new List<Guid>() : policy.ApplyLateFeeToAllFeeHeads
+			? ids : ids.Intersect(policy.LateFeeApplyOnFeeHeads).ToList();
 		var result = new CollectionPolicyAttachmentImpactResponse
 		{
 			PolicyId = version.PolicyId, PolicyVersionId = version.Id, PolicyName = version.PolicyName, PolicyCode = policy.PolicyCode, IsAttachable = true,
-			CoveredLateFeeHeadIds = ids.Intersect(policy.LateFeeApplyOnFeeHeads).ToList(), StructureHeadsWithoutLateFee = ids.Except(policy.LateFeeApplyOnFeeHeads).ToList(),
-			PolicyLateFeeHeadsNotInStructure = policy.LateFeeApplyOnFeeHeads.Except(ids).ToList(),
+			CoveredLateFeeHeadIds = coveredIds, StructureHeadsWithoutLateFee = ids.Except(coveredIds).ToList(),
+			PolicyLateFeeHeadsNotInStructure = policy.ApplyLateFeeToAllFeeHeads ? [] : policy.LateFeeApplyOnFeeHeads.Except(ids).ToList(),
 		};
-		if (policy.EnableLateFee && result.CoveredLateFeeHeadIds.Count == 0) result.Warnings.Add("No late fee will be charged: no policy late-fee heads overlap this structure.");
+		if (policy.EnableLateFee && !policy.ApplyLateFeeToAllFeeHeads && result.CoveredLateFeeHeadIds.Count == 0) result.Warnings.Add("No late fee will be charged: no policy late-fee heads overlap this structure.");
 		if (result.PolicyLateFeeHeadsNotInStructure.Count > 0) result.Warnings.Add("Some policy Fee Heads are absent from this structure.");
 		return result;
 	}

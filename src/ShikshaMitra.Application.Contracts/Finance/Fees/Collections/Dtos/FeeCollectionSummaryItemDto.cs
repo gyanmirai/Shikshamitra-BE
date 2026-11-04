@@ -4,7 +4,7 @@ namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 
 /// <summary>
 /// Single student row in the V2 fee-collection summary list.
-/// All monetary values use <c>double</c> consistent with the V1 convention.
+/// Legacy monetary fields retain their V1 double contract; paid charges and refunds use decimal.
 /// </summary>
 public class FeeCollectionSummaryItemDto
 {
@@ -45,8 +45,11 @@ public class FeeCollectionSummaryItemDto
 	/// </summary>
 	public double TotalFees { get; set; }
 
-	/// <summary>Sum of all fee-collection record amounts for the student.</summary>
+	/// <summary>Gross principal payments, excluding payment reversals but without subtracting refunds or concessions.</summary>
 	public double PaidFees { get; set; }
+
+	/// <summary>Cumulative recorded principal refunds in INR, net of returned or reversed refunds. Unpaid approvals are excluded.</summary>
+	public decimal RefundAmount { get; set; }
 
 	/// <summary>All outstanding principal, including future installments, after payments and non-cash credits.</summary>
 	public double PendingFees { get; set; }
@@ -57,12 +60,15 @@ public class FeeCollectionSummaryItemDto
 	public double OverdueFees { get; set; }
 
 	/// <summary>
-	/// Sum of approved charge amounts for the student in the requested academic year.
+	/// Current approved manual and assessed system charges, net of applied waivers, including paid amounts.
 	/// </summary>
 	public double TotalCharges { get; set; }
 
+	/// <summary>Collected manual and system charge allocations in INR, including pending verification; excludes waivers and reversed payments.</summary>
+	public decimal PaidCharges { get; set; }
+
 	/// <summary>
-	/// Sum of unpaid approved charge balances (amount minus collected, excluding reversed payments).
+	/// Current manual and system charge balances after applied waivers and active payments, clamped to zero.
 	/// </summary>
 	public double PendingCharges { get; set; }
 

@@ -30,6 +30,10 @@ public class AdmissionAcademicOptionsUnit_Tests
 			AdmissionFormFieldType.Static, AdmissionFormBindingType.Custom, "CLASS_HEADING", false, false, 0, null, null, null, null, null, null);
 		AdmissionFormAppService.ValidateClassInterestQuestions([first, heading], valid);
 		valid.Errors.ShouldBeEmpty();
+		var linkedClass = Question("CLASS_INTERESTED", "Choose a class", "{\"source\":\"StandardsByMedium\",\"parentField\":\"MEDIUM_2\"}");
+		var linkedValidation = new AdmissionFormValidationResultDto();
+		AdmissionFormAppService.ValidateClassInterestQuestions([linkedClass], linkedValidation);
+		linkedValidation.Errors.ShouldBeEmpty();
 	}
 	[Fact]
 	public async Task Runtime_academic_reads_accept_the_owning_View_without_opening_other_form_sources()
@@ -41,7 +45,8 @@ public class AdmissionAcademicOptionsUnit_Tests
 		await access.EnsureReadAsync("Standards");
 		await access.EnsureReadAsync("DivisionsByStandard");
 		await Should.ThrowAsync<AbpAuthorizationException>(() => access.EnsureReadAsync("StudentSiblings"));
-		await Should.ThrowAsync<AbpAuthorizationException>(() => access.EnsureReadAsync("EducationBoards"));
+		await access.EnsureReadAsync("EducationBoards");
+		await access.EnsureReadAsync("EducationMediums");
 		permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View).Returns(false);
 		permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View).Returns(true);
 		await access.EnsureReadAsync("StandardsByMedium");

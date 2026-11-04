@@ -76,6 +76,7 @@ public partial class ShikshaMitraPermissionAppService : ApplicationService, IPer
 		var isCurrentUserRead = IsCurrentUserProvider(providerName, providerKey);
 
 		await CheckProviderPolicy(providerName, providerKey, allowCurrentUserRead: true);
+		var protectedAdmin = await IsProtectedAdminAsync(providerName, providerKey);
 		var policyMs = timer.ElapsedMilliseconds;
 
 		var result = new GetPermissionListResultDto
@@ -153,12 +154,16 @@ public partial class ShikshaMitraPermissionAppService : ApplicationService, IPer
 			foreach (var grantInfoDto in grantInfoDtos)
 			{
 				var grantInfo = grantInfoLookup[grantInfoDto.Name];
-				grantInfoDto.IsGranted = !denied.Contains(grantInfoDto.Name) && (effectiveGrantLookup != null
+				var adminGrant = protectedAdmin && (!grantInfoDto.AllowedProviders.Any() || grantInfoDto.AllowedProviders.Contains("R"));
+				grantInfoDto.IsGranted = adminGrant || (!denied.Contains(grantInfoDto.Name) && (effectiveGrantLookup != null
 					? effectiveGrantLookup[grantInfoDto.Name] == PermissionGrantResult.Granted
-					: grantInfo.IsGranted);
+					: grantInfo.IsGranted));
+				if (adminGrant)
+					grantInfoDto.GrantedProviders.Add(new ProviderInfoDto { ProviderName = "R", ProviderKey = AdminPermissionAccess.RoleName });
 
 				foreach (var provider in grantInfo.Providers)
 				{
+					if (adminGrant && provider.Name == "R" && provider.Key == AdminPermissionAccess.RoleName) continue;
 					grantInfoDto.GrantedProviders.Add(new ProviderInfoDto
 					{
 						ProviderName = provider.Name,
@@ -222,6 +227,7 @@ public partial class ShikshaMitraPermissionAppService : ApplicationService, IPer
 		try
 		{
 			await CheckProviderPolicy(providerName, providerKey);
+			await CheckAdminPermissionsEditableAsync(providerName, providerKey);
 			if (input?.Permissions == null || input.Permissions.Any(x => x == null || string.IsNullOrWhiteSpace(x.Name)) ||
 				input.Permissions.Select(x => x.Name).Distinct(StringComparer.Ordinal).Count() != input.Permissions.Length)
 				throw InvalidPermissions();

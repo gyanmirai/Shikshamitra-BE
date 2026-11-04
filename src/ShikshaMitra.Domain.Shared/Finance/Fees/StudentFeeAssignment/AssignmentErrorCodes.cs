@@ -13,4 +13,6 @@ public static class AssignmentErrorCodes
 	public const string SourceUnavailable = "Finance:Assignment:SourceUnavailable";
 	public const string ConfigurationInvalid = "Finance:Assignment:ConfigurationInvalid";
 	public const string CommitFailed = "Finance:Assignment:CommitFailed";
+	public const string StructureEditBlocked = "Finance:Assignment:StructureEditBlocked";
+	public const string MixedOriginalStructures = "Finance:Assignment:MixedOriginalStructures";
 }

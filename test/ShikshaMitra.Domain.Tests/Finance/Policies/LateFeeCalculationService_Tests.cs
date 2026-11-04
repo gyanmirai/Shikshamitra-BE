@@ -15,6 +15,13 @@ public class LateFeeCalculationService_Tests
 		return new CollectionPolicy(Guid.NewGuid(), null, Guid.NewGuid(), builder.Build());
 	}
 
+	private static CollectionPolicy BuildLegacyPolicy(Action<CollectionPolicyUpdateModelBuilder> configure)
+	{
+		var builder = new CollectionPolicyUpdateModelBuilder();
+		configure(builder);
+		return builder.BuildLegacyPolicy();
+	}
+
 	private static LateFeeCalculationInput Input(
 		int daysLate,
 		decimal outstanding = 10000,
@@ -310,7 +317,7 @@ public class LateFeeCalculationService_Tests
 	{
 		var tuitionFeeHeadId = Guid.NewGuid();
 		var transportFeeHeadId = Guid.NewGuid();
-		var policy = BuildPolicy(b =>
+		var policy = BuildLegacyPolicy(b =>
 		{
 			b.LateFeeType = LateFeeCalculationType.PerDay;
 			b.AmountPerDay = 20;
@@ -335,7 +342,7 @@ public class LateFeeCalculationService_Tests
 	public void CustomRule_Override_Uses_The_Fee_Head_Level_Rule_Instead_Of_The_Policy_Level_One()
 	{
 		var libraryFeeHeadId = Guid.NewGuid();
-		var policy = BuildPolicy(b =>
+		var policy = BuildLegacyPolicy(b =>
 		{
 			b.LateFeeType = LateFeeCalculationType.PerDay;
 			b.AmountPerDay = 20; // policy-level rule — should NOT be used for libraryFeeHeadId
@@ -372,7 +379,7 @@ public class LateFeeCalculationService_Tests
 	public void CustomRule_Override_Respects_Its_Own_Maximum_Late_Fee_Cap()
 	{
 		var libraryFeeHeadId = Guid.NewGuid();
-		var policy = BuildPolicy(b =>
+		var policy = BuildLegacyPolicy(b =>
 		{
 			b.LateFeeType = LateFeeCalculationType.PerDay;
 			b.AmountPerDay = 20;

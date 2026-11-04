@@ -39,6 +39,10 @@ public class CreateFeeRefundRequestDto
     /// </summary>
     public Dictionary<string, object?>? PaymentDetails { get; set; }
 
+    /// <summary>Explicit validated expense routing for an administrator's immediate cash payout.</summary>
+    public Guid? ExpenseCategoryId { get; set; }
+    public Guid? BankAccountId { get; set; }
+
     /// <summary>Optional reason / taxonomy for the refund (TC, excess payment, transfer, etc.).</summary>
     [MaxLength(1000)]
     public string? Reason { get; set; }
@@ -54,6 +58,9 @@ public class CreateFeeRefundLineDto
 
     [Required]
     public Guid SourceAllocationId { get; set; }
+
+    /// <summary>Receipt owning this allocation; legacy clients omit this to use OriginalReceiptId.</summary>
+    public Guid? SourceReceiptId { get; set; }
 
     [Range(typeof(decimal), "0.01", "9999999999999999")]
     public decimal Amount { get; set; }
@@ -81,6 +88,8 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
         RuleFor(x => x.FinanceFeeAccountId).NotEqual(Guid.Empty).When(x => x.FinanceFeeAccountId.HasValue);
         RuleFor(x => x.AcademicYearId).NotEmpty();
         RuleFor(x => x.OriginalReceiptId).NotEmpty();
+        RuleFor(x => x.ExpenseCategoryId).NotEqual(Guid.Empty).When(x => x.ExpenseCategoryId.HasValue);
+        RuleFor(x => x.BankAccountId).NotEqual(Guid.Empty).When(x => x.BankAccountId.HasValue);
 
         RuleFor(x => x.Lines)
             .NotNull()
@@ -95,6 +104,7 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
             line.RuleFor(l => l.ChargeId).NotEqual(Guid.Empty).When(l => l.ChargeId.HasValue);
             line.RuleFor(l => l.LateFeeDueFeeId).NotEqual(Guid.Empty).When(l => l.LateFeeDueFeeId.HasValue);
             line.RuleFor(l => l.SourceAllocationId).NotEmpty();
+            line.RuleFor(l => l.SourceReceiptId).NotEqual(Guid.Empty).When(l => l.SourceReceiptId.HasValue);
             line.RuleFor(l => l.Amount).GreaterThan(0);
         });
 

@@ -156,7 +156,7 @@ public partial class AdmissionFeeCollectionAppService(
 		return new()
 		{
 			PolicyId = policy.PolicyId, PolicyVersionId = policy.VersionId,
-			PolicyName = policy.Name, PolicyVersion = policy.Version, JoiningDate = saved.RegistrationJoiningDate ?? saved.ChargeStartDate,
+			PolicyName = policy.Name, PolicyVersion = policy.Version, JoiningDate = saved.RegistrationJoiningDate,
 			ChargeStartDate = saved.ChargeStartDate, ChargeEndDate = saved.ChargeEndDate,
 			ScheduledAmount = saved.ScheduledTotal, AdmissionReduction = saved.ReductionTotal, WithdrawalCredit = withdrawal,
 			PayableAmount = rows.Sum(x => Math.Max(0m, x.OriginalAmount - x.NetAmount)),

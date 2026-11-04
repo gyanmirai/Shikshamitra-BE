@@ -51,7 +51,7 @@ public class CollectionPolicyNumericValidation_Tests
 	}
 
 	[Fact]
-	public void Custom_Fee_Head_Rule_Cannot_Bypass_Numeric_Bounds()
+	public void New_Common_Writes_Discard_Legacy_Custom_Rule_Values_Before_Validation()
 	{
 		var builder = new CollectionPolicyUpdateModelBuilder();
 		var feeHead = builder.LateFeeApplyOnFeeHeads[0];
@@ -59,7 +59,7 @@ public class CollectionPolicyNumericValidation_Tests
 			new LateFeeRuleOverride(LateFeeCalculationType.PerDay, null, null, PercentageBaseType.OutstandingAmount,
 				1000000m, null, null, CompoundFrequencyType.Daily, Array.Empty<CollectionPolicyEscalationRule>(),
 				RoundingMethodType.None, null, null)) };
-		Should.Throw<BusinessException>(() => Create(builder.Build())).Code.ShouldBe(CollectionPolicyErrorCodes.InvalidLateFeeRule);
+		Create(builder.Build()).GetFeeHeadOverrides().ShouldBeEmpty();
 	}
 
 	[Fact]

@@ -104,6 +104,16 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ApplicantId = Check.NotDefaultOrNull<Guid>(applicantId, nameof(applicantId));
 	}
 
+	public void ConfirmPendingSiblingFamily(AdmissionApplicant applicant, Guid originalFamilyId, Guid confirmedFamilyId, DateTime confirmedAt)
+	{
+		if (IsDeleted || Status is not (AdmissionInquiryStatus.New or AdmissionInquiryStatus.Contacted or AdmissionInquiryStatus.FollowUp) ||
+			DuplicateOfId.HasValue || ApplicantId != applicant.Id || FamilyId != originalFamilyId || TenantId != applicant.TenantId)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
+		applicant.ReassignPendingInquiryFamily(originalFamilyId, confirmedFamilyId);
+		FamilyId = confirmedFamilyId;
+		LastActivityAt = confirmedAt;
+	}
+
 	public void ConfirmOffering(Guid offeringId)
 	{
 		if (Status is AdmissionInquiryStatus.ApplicationStarted or AdmissionInquiryStatus.Converted)

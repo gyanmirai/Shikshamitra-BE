@@ -38,7 +38,9 @@ public partial class FeeCollectionSummaryQueryService
 			.ToDictionary(s => s.Id, s => s.Name);
 		var divisionNames = (await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id), cancellationToken: cancellationToken))
 			.ToDictionary(d => d.Id, d => d.Name);
-		var rows = students.Select(s => new FeeCollectionRawRow
+		var singleAccountStudents = accounts.Where(a => a.StudentId.HasValue).GroupBy(a => a.StudentId!.Value)
+			.Where(g => g.Count() == 1).Select(g => g.Key).ToHashSet();
+		var rows = students.Where(s => !singleAccountStudents.Contains(s.Id)).Select(s => new FeeCollectionRawRow
 		{
 			StudentId = s.Id, FirstName = s.FirstName, MiddleName = s.MiddleName, LastName = s.LastName,
 			GrNo = s.GrNo?.ToString() ?? string.Empty, RollNo = s.RollNo?.ToString() ?? string.Empty,
@@ -46,7 +48,7 @@ public partial class FeeCollectionSummaryQueryService
 			DivisionId = s.DivisionId ?? Guid.Empty, DivisionName = s.Division?.Name ?? string.Empty,
 			IsFeeStructureAssigned = s.FeeStructureId.HasValue,
 			TotalFees = 0d, PaidFees = 0d, OutstandingFees = 0d, OverdueFees = 0d,
-			TotalCharges = 0d, PendingCharges = 0d
+			TotalCharges = 0d, PaidCharges = 0m, PendingCharges = 0d
 		}).ToList();
 		var rowsByPayer = rows.ToDictionary(r => FinanceReportPayerKey.From(r.StudentId, null));
 		foreach (var account in accounts)
@@ -61,15 +63,14 @@ public partial class FeeCollectionSummaryQueryService
 				DivisionName = account.DivisionId.HasValue ? divisionNames.GetValueOrDefault(account.DivisionId.Value) ?? string.Empty : string.Empty,
 				IsFeeStructureAssigned = true,
 				TotalFees = 0d, PaidFees = 0d, OutstandingFees = 0d, OverdueFees = 0d,
-				TotalCharges = 0d, PendingCharges = 0d
+				TotalCharges = 0d, PaidCharges = 0m, PendingCharges = 0d
 			};
 			rows.Add(row);
 			rowsByPayer[FinanceReportPayerKey.From(null, account.Id)] = row;
 			// One linked account and one enrolled Student are one summary payer, not duplicate balances.
-			if (linkedStudent != null && accounts.Count(a => a.StudentId == linkedStudent.Id) == 1)
+			if (linkedStudent != null && singleAccountStudents.Contains(linkedStudent.Id))
 			{
 				var studentKey = FinanceReportPayerKey.From(linkedStudent.Id, null);
-				if (rowsByPayer.TryGetValue(studentKey, out var oldRow)) rows.Remove(oldRow);
 				rowsByPayer[studentKey] = row;
 			}
 		}
@@ -85,18 +86,23 @@ public partial class FeeCollectionSummaryQueryService
 		{
 			if (!rowsByPayer.TryGetValue(FinanceReportPayerKey.From(due.StudentId, due.FinanceFeeAccountId), out var row)) continue;
 			row.TotalFees += (double)due.OriginalAmount;
-			row.PaidFees += (double)due.AppliedPaymentAmount;
+			// Collection history stays gross; cash returned is reported independently.
+			row.PaidFees += (double)due.PaidAmount;
+			row.RefundAmount += due.RefundedAmount;
 			// Pending includes every unpaid obligation, including installments not yet demanded.
 			row.OutstandingFees += (double)due.OutstandingAmount;
 			if (isOverdue(due)) row.OverdueFees += (double)due.OutstandingAmount;
-			row.TotalCharges += (double)lateBalances[due.Id].Total;
-			row.PendingCharges += (double)lateBalances[due.Id].PendingAmount;
+			var lateBalance = lateBalances[due.Id];
+			row.TotalCharges += (double)Math.Max(0m, lateBalance.Total - lateBalance.WaivedAmount);
+			row.PaidCharges += lateBalance.PaidAmount;
+			row.PendingCharges += (double)lateBalance.PendingAmount;
 		}
 		var charges = await BuildChargeAggregatesByStudentAsync(studentIds, input.AcademicYearId, cancellationToken);
 		foreach (var item in charges)
 		{
 			if (!rowsByPayer.TryGetValue(FinanceReportPayerKey.From(item.Key, null), out var row)) continue;
 			row.TotalCharges += item.Value.TotalCharges;
+			row.PaidCharges += item.Value.PaidCharges;
 			row.PendingCharges += item.Value.PendingCharges;
 		}
 		var concessions = await AsyncExecuter.ToListAsync((await concessionRequestRepository.GetQueryableAsync())
@@ -137,23 +143,19 @@ public partial class FeeCollectionSummaryQueryService
 
 		var chargeIds = approvedCharges.Select(c => c.Id).Distinct().ToList();
 		var metaQ     = await feeRecordMetadataRepository.GetQueryableAsync();
-		var reversedTxIds = await AsyncExecuter.ToListAsync(
-			metaQ
-				.Where(m => m.Status == FeeCollectionStatus.Reversed)
-				.Select(m => m.Id),
-			cancellationToken);
 
 		var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
-		var paidPerCharge = await AsyncExecuter.ToListAsync(
+		var paymentFacts = await AsyncExecuter.ToListAsync(
 			chargeCollQ
 				.Where(r => studentIds.Contains(r.StudentId)
 						 && chargeIds.Contains(r.ChargeId)
-						 && !reversedTxIds.Contains(r.FeeRecordMetadataId))
-				.GroupBy(r => r.ChargeId)
-				.Select(g => new { ChargeId = g.Key, Paid = g.Sum(r => r.Amount) }),
+						 && !metaQ.Any(m => m.Id == r.FeeRecordMetadataId && m.Status == FeeCollectionStatus.Reversed))
+				.Select(r => new { r.ChargeId, r.Amount }),
 			cancellationToken);
 
-		var paidDict = paidPerCharge.ToDictionary(x => x.ChargeId, x => x.Paid);
+		// Convert each legacy allocation before adding it: the new paid-money projection is decimal.
+		var paidDict = paymentFacts.GroupBy(x => x.ChargeId)
+			.ToDictionary(g => g.Key, g => g.Sum(x => Convert.ToDecimal(x.Amount)));
 		var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
 			.GroupBy(x => x.ChargeId)
 			.ToDictionary(x => x.Key, x => x.Sum(w => (double)w.EffectiveAmount));
@@ -161,14 +163,17 @@ public partial class FeeCollectionSummaryQueryService
 		foreach (var group in approvedCharges.GroupBy(c => c.StudentId))
 		{
 			var total   = 0d;
+			var paid = 0m;
 			var pending = 0d;
 			foreach (var charge in group)
 			{
-				total   += charge.Amount;
-				pending += Math.Max(0d, charge.Amount - paidDict.GetValueOrDefault(charge.Id, 0d)
-					- waivedPerCharge.GetValueOrDefault(charge.Id, 0d));
+				var netAmount = Math.Max(0d, charge.Amount - waivedPerCharge.GetValueOrDefault(charge.Id, 0d));
+				var collected = paidDict.GetValueOrDefault(charge.Id, 0m);
+				total += netAmount;
+				paid += collected;
+				pending += Math.Max(0d, netAmount - (double)collected);
 			}
-			result[group.Key] = new StudentChargeAggregate(total, pending);
+			result[group.Key] = new StudentChargeAggregate(total, paid, pending);
 		}
 
 		return result;

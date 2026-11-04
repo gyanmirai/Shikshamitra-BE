@@ -46,6 +46,11 @@ public class AdmissionFormDefinition : FullAuditedAggregateRoot<Guid>, IMultiTen
 	}
 	public void Publish(Guid? userId) { if (Status != AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.PublishedImmutable); Status = AdmissionFormStatus.Published; PublishedAt = DateTime.UtcNow; PublishedBy = userId; }
 	public void Archive() { if (Status == AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.PublishedImmutable); Status = AdmissionFormStatus.Archived; }
+	public void Restore()
+	{
+		if (Status != AdmissionFormStatus.Archived) throw new BusinessException(AdmissionFormErrorCodes.ArchivedRequired);
+		Status = AdmissionFormStatus.Published;
+	}
 	private static string NormalizeCode(string code) => Check.NotNullOrWhiteSpace(code, nameof(code)).Trim().ToUpperInvariant();
 	private static string? NormalizeDescription(string? description) => string.IsNullOrWhiteSpace(description) ? null : Check.Length(description.Trim(), nameof(description), 1024);
 	private static int NormalizeFieldsPerRow(int fieldsPerRow) => Check.Range(fieldsPerRow, nameof(fieldsPerRow), 1, 4);

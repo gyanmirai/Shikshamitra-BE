@@ -3,7 +3,7 @@ module: finance
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-31
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -18,6 +18,16 @@ through the assignment workflow. See [automatic collection allocation](./api.md#
 for the request, compatibility, permission, rounding, error and receipt-evidence contract.
 
 TL;DR: use this page to understand how Finance changes affect due rows, approvals, receipts, and reports.
+
+## Setup guide
+
+Choose an existing academic year and resume Accounts, Fees, Policies, Fee structures, Assignment guidance, Operations guidance and Review.
+The guide reads authorized active configuration presence and saves only year-specific navigation/deferred/review metadata through the [setup API](./api.md#finance-setup-guide).
+Existing setting forms and action permissions continue to own all configuration changes.
+Assignment and operations are guidance; users do not need to create financial transactions to finish review.
+Review records that the user reviewed the guide, including deferred or missing items; it does not assert complete class coverage or transaction readiness.
+Changing guide position or deferrals clears the previous review marker.
+A concurrency conflict requires refreshing the year state before retrying progress; unrelated Academic Setup and other year metadata are preserved.
 
 ## Core workflows
 
@@ -83,7 +93,7 @@ Both endpoints reject unknown columns/operators, invalid status codes, reversed 
 | Fee adjustment | Create credit pool from paid due rows, approve and apply to pending due rows, reject, or cancel pending request | Paid source rows, pending target rows, idempotency key, and maker-checker rule |
 | Fee collection | Load student fee details, collect payment, allocate to due rows, and create receipt records | Payment amount, due allocation, receipt numbering, and audit trail |
 | Fee Collection waiver target | Show a waiver toggle on each eligible late-fee and approved charge row, require only a reason, and waive the full live remaining balance immediately | Dedicated action permission, student scope, source status, server-derived amount, idempotency, concurrency, and separate non-cash ledger evidence; see [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md) |
-| Fee refund | Check eligibility, create refund request, update status, and preserve receipt/payment history | Refund eligibility and non-overlap with adjustment flow |
+| Fee refund | Select eligible source allocations across receipts, create the request, and preserve receipt/payment history. Explicit Cash completes during administrator creation or independent approval; non-cash retains separate payment recording | Exact Approve/Process authority, eligible balance, atomic payout/accounting and non-overlap with adjustment flow; [payout contract](./references/fee-refund-payout-workflow.md) |
 | Reconciliation | Create or review reconciliation records, approve, or reject | Bank/account consistency and approval audit |
 | Finance reports | Select report filters, preview, export, and audit output | Preview/export parity and tenant isolation |
 

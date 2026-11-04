@@ -63,12 +63,21 @@ public partial class StudentFeeStructureAppService
 		["refund"] = structure.RefundPolicyVersionId, ["proration"] = null };
 
 	private async Task<Dictionary<string, FinancePolicyVersion?>> ResolveAssignedPoliciesAsync(
-		FeeStructure structure, Guid year, List<AssignmentPolicySelectionDto> selections, string? reason)
+		FeeStructure structure, Guid year, List<AssignmentPolicySelectionDto> selections, string? reason, Guid? editingAssignmentId = null)
 	{
 		ValidatePolicies(selections);
 		var defaults = StructurePolicyVersions(structure);
 		var defaultIds = new Dictionary<string, Guid?> { ["concession"] = structure.ConcessionPolicyId, ["collection"] = structure.CollectionPolicyId,
 			["refund"] = structure.RefundPolicyId, ["proration"] = null };
+		if (editingAssignmentId.HasValue)
+		{
+			// Keeping the student's pinned policies is not a new override, even when
+			// switching structure or retaining a version that is no longer active.
+			var current = await studentFeeStructureRepository.GetAsync(editingAssignmentId.Value);
+			defaults["concession"] = current.ConcessionPolicyVersionId; defaultIds["concession"] = current.ConcessionPolicyId;
+			defaults["collection"] = current.CollectionPolicyVersionId; defaultIds["collection"] = current.CollectionPolicyId;
+			defaults["refund"] = current.RefundPolicyVersionId; defaultIds["refund"] = current.RefundPolicyId;
+		}
 		var changes = selections.Where(x => x.VersionId != defaults[x.Family] || (!x.VersionId.HasValue && defaultIds[x.Family].HasValue)).ToList();
 		if (changes.Count > 0)
 		{

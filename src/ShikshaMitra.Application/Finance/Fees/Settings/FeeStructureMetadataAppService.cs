@@ -45,6 +45,9 @@ public partial class FeeStructureMetadataAppService(
 
 		if (!string.IsNullOrWhiteSpace(search))
 			query = query.Where(x => x.Name != null && x.Name.Contains(search));
+		if (tableQuery.Filters.Count == 0)
+			return await GetVisiblePageAsync(query, page, pageSize,
+				item => UserScopeQueryExtensions.HasAccessToEntity(item, scope));
 
 		// A metadata row is a parent container. Reveal it only when at least one child class is accessible.
 		// Project scalars instead of materializing the recursively auto-included academic graph.
@@ -63,7 +66,8 @@ public partial class FeeStructureMetadataAppService(
 				StageId = standard.EducationMediumStageId, StageName = standard.EducationMediumStage.Name, StageSortOrder = standard.EducationMediumStage.SortOrder,
 				StandardId = standard.Id, standard.Name, standard.SortOrder
 			}));
-		var accessible = all.ToDictionary(x => x.Id, x => classRows.Where(c => c.MediumId == x.MediumId &&
+		var classesByMedium = classRows.ToLookup(c => c.MediumId);
+		var accessible = all.ToDictionary(x => x.Id, x => classesByMedium[x.MediumId].Where(c =>
 				UserScopeQueryExtensions.HasAccessToEntity(new MetadataScope(x.AcademicYearId, x.BoardId, x.MediumId, c.StageId, c.StandardId), scope))
 			.OrderBy(c => c.StageSortOrder).ThenBy(c => c.StageName).ThenBy(c => c.StageId).ThenBy(c => c.SortOrder).ThenBy(c => c.Name).ThenBy(c => c.StandardId)
 			.Select(c => new FeeStructureClassOptionDto { Id = c.StandardId, Name = c.Name }).ToList());
@@ -76,13 +80,15 @@ public partial class FeeStructureMetadataAppService(
 				.Select(x => new { x.FeeStructureMetadataId, x.StandardId }));
 
 		var responseItems = new List<FeeStructureDetailsResponse>();
+		var structuresByMetadata = feeStructures.ToLookup(x => x.FeeStructureMetadataId);
 
 		// I want to calculate total classes and configured classes for each metadata
 		foreach (var metadata in visible)
 		{
-			var structuresForMetadata = feeStructures.Where(x => x.FeeStructureMetadataId == metadata.Id).ToList();
+			var structuresForMetadata = structuresByMetadata[metadata.Id];
 			var classes = accessible[metadata.Id];
-			var configuredClasses = structuresForMetadata.Where(x => classes.Any(c => c.Id == x.StandardId)).Select(x => x.StandardId).Distinct().Count();
+			var classIds = classes.Select(c => c.Id).ToHashSet();
+			var configuredClasses = structuresForMetadata.Where(x => classIds.Contains(x.StandardId)).Select(x => x.StandardId).Distinct().Count();
 			var item = metadata;
 			item.TotalClasses = classes.Count;
 			item.ConfiguredClasses = configuredClasses;

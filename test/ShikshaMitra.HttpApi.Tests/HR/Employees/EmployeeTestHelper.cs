@@ -47,6 +47,8 @@ public static class EmployeeTestHelper
 	public static Guid DefaultBoardId { get; set; }
 	public static Guid DefaultMediumId { get; set; }
 	public static Guid DefaultMediumStageId { get; set; }
+	public static DateOnly SchoolToday => DateOnly.FromDateTime(
+		TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata")));
 
 	/// <summary>
 	/// Creates an employee via POST /api/employees/personal-info (multipart/form-data)
@@ -220,7 +222,7 @@ public static class EmployeeTestHelper
 			Doj = DateTime.UtcNow.AddMonths(-6),
 			IsTeaching = true,
 			RoleId = DefaultRoleId,
-			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = DefaultShiftId, EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow) },
+			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = DefaultShiftId, EffectiveFrom = SchoolToday },
 			Email = TestDataHelper.UniqueEmail("emp"),
 			PanNo = TestDataHelper.UniquePan(),
 			AdharNo = TestDataHelper.UniqueAdhar(),
@@ -254,7 +256,7 @@ public static class EmployeeTestHelper
 			IsTeaching = true,
 			Department = "Science",
 			RoleId = DefaultRoleId,
-			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = DefaultShiftId, EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow) },
+			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = DefaultShiftId, EffectiveFrom = SchoolToday },
 			Address1 = "123 Test Street",
 			Address2 = "Block A",
 			Address3 = "Near Park",

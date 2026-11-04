@@ -1,6 +1,13 @@
 {
     "Culture": "en",
     "Texts": {
+        "ClassManagement:ElectiveCorrectionReviewChanged": "The assignment or its affected records changed, or the review expired. Review the changes again before confirming.",
+        "ClassManagement:InvalidElectiveCorrection": "The student, class, division, elective group, or subject is unavailable in the selected context. Refresh the screen and check your choices.",
+        "ClassManagement:CorrectionRequiresLockedSelection": "This assignment is no longer locked. Refresh the screen before editing it.",
+        "ClassManagement:ElectiveCorrectionNoChanges": "Choose a different subject or preference before reviewing the change.",
+        "Academic:Calendar:InvalidDateRange": "Calendar end date must be after its start date.",
+        "Academic:Calendar:DatesExcludeMarkers": "These dates would exclude active entries in {Calendar}. Move or cancel those entries before shortening the institute dates.",
+        "Academic:Calendar:BoardOutsideAcademicYear": "The dates for {Board} would fall outside the academic year. Update the board dates before shortening the academic year.",
     "Students:Records:PhotoChangePending": "A photo change is already awaiting approval or application.",
         "Students:Family:MainContactInvalid": "Choose a saved parent or guardian as the main school contact. Review the family details before finalizing admission.",
         "Students.Onboarding.FinalizationNotReady": "Admission cannot be finalized yet. Review these checks: {Blockers}.",
@@ -213,9 +220,20 @@
         "Finance:CollectionPolicy:InvalidAllocationBasis": "Choose By installment or By fee head for automatic payment allocation.",
         "Finance:LateFeeWaiver:010006": "Enter a reason for rejecting the waiver request.",
         "Finance:LateFeeWaiver:010007": "The user who submitted this waiver request cannot approve or reject it.",
+        "Admissions.WorkflowNameAlreadyExists": "A workflow with this name already exists. Please enter a different name.",
         "Admissions.FormDraftRequired": "Only a draft admission form can be deleted.",
+        "Admissions.FormDraftAlreadyExists": "An editable draft already exists for this form. Open the existing draft in Admission Forms and edit or publish it before creating another version.",
+        "Admissions.FormVersionSourceRequired": "This form is already a draft. Edit and publish this draft before creating another version.",
+        "Admissions.FormVersionCodeImmutable": "A form version must keep its original form code. Use Clone as Draft to create a separate form instead.",
         "Admissions.FormInUse": "Cannot delete this draft while it has linked records: offerings {OfferingCount}, applications {ApplicationCount}, public inquiry links {PublicLinkCount}.",
         "Admissions.FormConcurrencyConflict": "This admission form changed after the list loaded. Refresh and try again.",
+        "Admissions.FormArchivedRequired": "Only an archived form can be restored. Refresh the form list and check its current status.",
+        "Admissions.FormRestoreInvalidDefinition": "This form cannot be restored because its configuration needs attention: {Errors}. Clone it as a draft, correct the highlighted settings and publish a replacement.",
+        "Admissions.OfferingFormNotPublished": "{Reason}",
+        "Admissions.OfferingWorkflowNotPublished": "{Reason}",
+        "Admissions.Offering.ConfigurationIncomplete": "This offering has unresolved configuration requirements. Review the listed issues, restore archived forms or choose published replacements, then try again.",
+        "Admissions.Offering.ConfigurationLocked": "Workflow and forms are locked while this offering is active or has been used by an inquiry or application. Only an inactive, unused offering can change its setup.",
+        "Admissions.FormInheritanceSourceNotApproved": "Review and approve the selected Inquiry version in the workflow's Registration form, publish the replacement Registration version and select its workflow in the offering.",
         "Admissions:ApplicationStageCannotAdvance": "The {StageType} stage cannot be completed while the application status is {ApplicationStatus}. Complete the required submission or decision first, then try again.",
         "Admissions:Offer:InvalidPolicy": "Review the offer content, response rules, validity limits and completion outcomes.",
         "Admissions:FeeSelection:InvalidSelection": "Choose a published fee structure for this application's academic year and class, with valid fee heads.",
@@ -936,6 +954,8 @@
         "Permission:Finance.Accounts.CashManagement.Deposit": "Record bank deposits",
         "Permission:Finance.Accounts.CashManagement.Reconcile": "Confirm bank credits",
         "ShikshaMitra:AcademicSetup:Invalid": "Choose a valid Academic setup stage, setting and school context before saving.",
-        "ShikshaMitra:AcademicSetup:InvalidStoredState": "The saved Academic setup guide state is invalid. Contact a school administrator to review it."
+        "ShikshaMitra:AcademicSetup:InvalidStoredState": "The saved Academic setup guide state is invalid. Contact a school administrator to review it.",
+        "ShikshaMitra:FinanceSetup:Invalid": "Choose a valid Finance setup guide stage, setting and deferred settings.",
+        "ShikshaMitra:FinanceSetup:InvalidStoredState": "The saved Finance setup guide state is invalid. Contact a school administrator to review it."
     }
 }

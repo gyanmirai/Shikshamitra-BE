@@ -3,7 +3,15 @@ using System.Collections.Generic;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
-public sealed record AdmissionOfferingValidationError(string Code, string Message, bool ActivationOnly = false);
+public sealed record AdmissionOfferingValidationError(string Code, string Message, bool ActivationOnly = false)
+{
+	public Guid? FormDefinitionId { get; init; }
+	public string? FormName { get; init; }
+	public AdmissionFormPurpose? FormPurpose { get; init; }
+	public Guid? WorkflowDefinitionId { get; init; }
+	public Guid? WorkflowStageId { get; init; }
+	public string? WorkflowStageName { get; init; }
+}
 
 public sealed class AdmissionOfferingValidationResult
 {

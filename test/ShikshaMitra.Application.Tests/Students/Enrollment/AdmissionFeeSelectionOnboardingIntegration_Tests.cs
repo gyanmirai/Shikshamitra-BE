@@ -8,7 +8,6 @@ using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using Shouldly;
-using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Xunit;
 
@@ -50,7 +49,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public Task Offering_fee_reference_confirmation_should_gate_activation_without_finance_payment_or_assignment(bool prepareAccess, bool failAutomaticAccounts) =>
+    public Task Offering_fee_reference_confirmation_is_nonblocking_and_creates_no_finance_payment_or_assignment(bool prepareAccess, bool failAutomaticAccounts) =>
         RunCertificationScenarioAsync(async () =>
         {
             var fixture = await CreateOnboardingFlowFixtureAsync("FeeConfirm", null, prepareAccess, failAutomaticAccounts);
@@ -77,8 +76,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
             item = await service.AssignGrNumberAsync(item.Id, new() { NumberSeriesId = series.Id, ConcurrencyStamp = item.ConcurrencyStamp });
             item.GrNumber.ShouldBe("1001");
             item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
-            (await service.PreviewActivationAsync(item.Id)).LastError.ShouldNotBeNull().ShouldContain("fee structure");
-            await Should.ThrowAsync<BusinessException>(() => service.ActivateAsync(item.Id, new() { IdempotencyKey = "fee-reference-blocked", ConcurrencyStamp = item.ConcurrencyStamp }));
+            // Fee confirmation is optional for activation; verify it remains available without creating Finance rows.
+            var preview = await service.PreviewActivationAsync(item.Id);
+            preview.LastError.ShouldBeNull();
+            preview.Status.ShouldBe(StudentOnboardingStatus.ReadyForActivation);
             item = await service.GetAsync(item.Id);
             var selection = await service.SaveFeeStructureAsync(item.Id, new() { StructureId = structure.Id, ConcurrencyStamp = item.ConcurrencyStamp });
             selection.OnboardingConfirmed.ShouldBeTrue();

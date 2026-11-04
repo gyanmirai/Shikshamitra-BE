@@ -9,6 +9,17 @@ public class NavigationVisibilityPrerequisiteContract_Tests
 	[InlineData("View")]
 	[InlineData("Add")]
 	[InlineData("Delete")]
+	public void Fee_adjustment_actions_require_finance_and_fees_visibility(string action)
+	{
+		var paths = NavigationVisibilityPrerequisites.GetPaths($"Finance.Fees.Adjustment.{action}");
+		paths.Length.ShouldBe(1);
+		paths[0].ShouldBe(new[] { "ShikshaMitra.Module.Finance", "ShikshaMitra.Module.Finance.Fees" });
+	}
+
+	[Theory]
+	[InlineData("View")]
+	[InlineData("Add")]
+	[InlineData("Delete")]
 	public void House_management_actions_require_existing_student_and_records_visibility(string action)
 	{
 		var paths = NavigationVisibilityPrerequisites.GetPaths($"Students.Records.HouseManagement.{action}");

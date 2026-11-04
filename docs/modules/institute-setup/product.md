@@ -3,7 +3,7 @@ module: institute-setup
 domain: product
 content_type: Conceptual
 status: canonical
-updated_on: 2026-11-02
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,14 @@ audience: humans-and-agents
 
 TL;DR: Institute Setup owns durable first-login configuration and Rooms Management.
 Rooms Management stores buildings, floors, room types, and rooms used by academic scheduling and operations.
+
+## Academic dates and calendars
+
+Saving board dates synchronizes the start and end dates of its non-archived medium calendars in the same unit of work, including published calendars and legacy calendars without a year ID. Saving unchanged board dates also repairs stale calendar ranges. Other boards, years and tenants are excluded; archived calendars retain their historical dates.
+
+An extension generates configured weekend holidays only for newly included dates. Existing calendar entries and deliberately removed weekends within the old range are preserved.
+
+When an academic year's dates change, boards whose full range matched the previous year inherit the new range. Custom board ranges remain unchanged and must fit the new year. Active calendar entries must fit the resulting calendar range; shortening dates is rejected before any date changes when it would exclude an entry. Entries are never deleted or moved automatically. Calendar date changes produce a structured CalendarUpdated audit entry and preserve the calendar's status, identity and publication details.
 
 ## Academic field formatting
 

@@ -3,12 +3,49 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-31
+updated_on: 2026-11-04
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Finance backend changes
+
+## Fee settings read performance
+
+Run `FeeSettingsReadPerformance_Tests`, `PaymentTermListFilters_Tests`,
+`FeeCategoryAppService_Tests`, `FeeHeadAppService_Tests`, and `ConcessionTypeAppService_Tests`.
+The SQLite SQL capture checks page-wide Category enrichment, SQL paging for filtered Heads,
+reference-only dependency reads, and Concession Type usage without request child graphs.
+Dependency cases retain zero-value selected heads, excluded optional heads, malformed/legacy
+snapshot fallback, legacy due deduplication and tenant isolation.
+
+`FeeStructureReadPerformance_Tests.cs` extends the existing structure fixture with reference-read
+budgets and response assertions. Charge pages share accounting labels; term history pages scalar
+version metadata; metadata pages visible containers before configuration enrichment. Structure
+checks cover shared term/income validation, unrelated policy snapshot exclusion, customized
+schedules, frozen publication evidence and revision pins.
+Retain publication, revision, customized-schedule, scope, retry and copy regressions when changing mapping or validation.
+Term list checks preserve draft/published/fallback selection while excluding installment history.
+These are integration and query-shape checks; production latency and PostgreSQL query plans
+must be measured separately with representative tenant data.
+
+## Collection balance read performance
+
+Run the `LateFeeCollectionRuntime_Tests` integration fixture, including its
+`LateFeeCollectionRuntime.ReadPerformanceTests.cs` and `LateFeeCollectionRuntime.AccountReadPerformanceTests.cs` partials.
+The real SQLite command capture bounds assignment, immutable policy-version, current override and applicant-account reference reads.
+Hand-derived charges retain student exemptions, custom grace periods and distinct applicant version rates.
+Invalid policy family, identity, year, JSON and foreign-tenant student pins remain rejected without assessment or principal mutation.
+Repeated calls in the same unit of work must observe unsaved override changes; the context lives for one calculation only.
+Keep historical deleted override evidence separate from current rules, and never share mutable policy aggregates across payers.
+Retain the full collection/ledger/waiver/reversal/reconciliation/refund/receipt and admission handoff tests when changing these reads.
+The paid-charge summary regression also captures SQL to prevent a standalone enumeration of tenant-wide reversed transaction IDs.
+These checks establish scoped query behavior and monetary parity; they do not certify production latency, PostgreSQL plans or browser acceptance.
+
+Receipt-producing fixtures need a persisted school tenant for the production identity reader.
+`test/ShikshaMitra.Application.Tests/Finance/Receipts/FinanceReceiptIdentityTestModule.cs` supplies that prerequisite for the fixed-tenant collection/admission fixtures.
+Dynamic-tenant PDF scenarios create a real tenant through the normal manager/repository, and policy simulations seed explicit identity, user-scope and income-routing data.
+Keep production tenant, permission and scope readers active in these fixtures.
 
 ## Admission assignment context and handoff
 
@@ -43,6 +80,20 @@ These cover full/partial refunds, the original unpaid remainder, refund reversal
 eligibility, collection-form/detail status and the idempotent historical balance correction.
 The refund HTTP fixture requires a disposable loopback PostgreSQL database in
 `SHIKSHAMITRA_REFUND_TEST_DB`; never point it at an operational database.
+
+`FeeRefundApi_Tests` adds explicit Cash completion on administrator creation and independent
+approval, denied Process authority including replay, invalid routing rollback, one expense and
+subledger entry after retries, previous partial refunds, approval-time annual caps and multi-receipt
+allocation ownership. Retain non-cash and historical Approved Cash payment-recording coverage.
+`RefundPolicyCalculationService_Tests` covers the deprecated partial-policy flag, partial payout
+ceilings after deductions/caps, and stable zero-request errors. Actual settlement dates must represent
+the current instant rather than relabelling local clock time as UTC.
+
+Charge summary cases in `LateFeeCollectionRuntime_ChargeSummary_Tests.cs` cover full/partial
+manual and system waivers, decimal paid amounts, reconciliation/reversal treatment, numeric
+filtering/sorting and CSV/XLSX parity. `CashActivitySummaryApi_Tests` covers event-date month
+boundaries, split bank credits and legacy credited aggregates, including unknown-date amounts
+that contribute only to All months. Keep cumulative academic-year cash availability unchanged.
 
 Stored None defaults: run `NoneCategory_Tests` and `NoneCategoryApi_Tests`, plus the existing account
 settings permission/simplification suites. Verify None is first in fee-head income and refund-policy
@@ -129,6 +180,9 @@ The persisted serializer fixture contains two collection rows, a payout, a legac
 | Gate | Coverage |
 |---|---|
 | Calendar and ledger equation | `WithdrawalProration_Tests`, `AssignmentAmountCalculator_Tests`, `ProrationEventCalculation_Tests` |
+| Per-head service-period terms, daily entitlement, effective percentage precision, original installment dates and idempotent assignment | `StudentFeeAssignmentServicePeriod_Tests` (partial `FeeStructureAppService_CollectionPolicy_Tests`) |
+| Automatic defaults in both preparation flows, unlinked-student context, full-year treatment, bulk student dates, version/replay and saved-period withdrawal | `StudentFeeAssignmentDefaultProration_Tests` (partial `FeeStructureAppService_CollectionPolicy_Tests`) |
+| Joining/service-start late-fee boundary, independent head dates, summary consistency and preservation without duplicate common charges | `LateFeeCollectionRuntime.ServicePeriodTests` (partial `LateFeeCollectionRuntime_Tests`) |
 | Registration/default/version/no-reduction/one-time behavior, paid-date lock, Onboarding activation continuity | `AdmissionProrationIntegration_Tests` (partial `AdmissionWorkflowRuntimeIntegration_Tests`) and existing Admission collection/handoff tests |
 | Real PostgreSQL permissions, source replay, correction and rollback | `StudentRecordWithdrawalProrationPostgres_Tests` (partial `StudentRecordMidnightSchedule_Tests`); fresh disposable loopback `records_tests_*` database through `STUDENT_RECORDS_APPLICATION_POSTGRES` |
 

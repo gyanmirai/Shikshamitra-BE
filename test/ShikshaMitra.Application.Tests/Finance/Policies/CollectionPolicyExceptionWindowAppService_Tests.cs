@@ -1,5 +1,9 @@
 using Shouldly;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Security.UserScope;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Users;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
@@ -49,20 +53,30 @@ public class CollectionPolicyExceptionWindowAppService_Tests : ShikshaMitraAppli
 
 	private async Task<CollectionPolicyDto> CreateActivePolicyAsync(string name)
 	{
+		// The default fake principal is insufficient for the real Finance scope resolver.
+		// Create explicit synthetic identity/scope evidence, as in the policy fixture.
+		var userId = GetRequiredService<ICurrentUser>().Id!.Value;
+		var tenantId = GetRequiredService<ICurrentTenant>().Id;
+		var users = GetRequiredService<IRepository<IdentityUser, Guid>>();
+		if (await users.FindAsync(userId) == null)
+			await users.InsertAsync(new IdentityUser(userId, "window-editor", "window-editor@example.test", tenantId), true);
+		var scopes = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		if ((await scopes.GetListAsync(x => x.UserId == userId)).Count == 0)
+			await scopes.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), tenantId, userId: userId), true);
 		var academicYearId = _guidGenerator.Create();
 		var categoryId = _guidGenerator.Create();
 		var feeHeadId = _guidGenerator.Create();
 		await _academicYearRepository.InsertAsync(new AcademicYear(
-			academicYearId, null, $"Test {academicYearId:N}",
+			academicYearId, tenantId, $"Test {academicYearId:N}",
 			new DateTime(2025, 4, 1), new DateTime(2026, 3, 31)), autoSave: true);
 		await _feeCategoryRepository.InsertAsync(new FeeCategory(
-			categoryId, null, academicYearId, $"Category {categoryId:N}", null), autoSave: true);
+			categoryId, tenantId, academicYearId, $"Category {categoryId:N}", null), autoSave: true);
 		var incomeCategoryId = await ShikshaMitra.Finance.Fees.FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
 			GetRequiredService<IRepository<ShikshaMitra.Domain.Finance.Accounts.Settings.AccountHead, Guid>>(),
 			GetRequiredService<IRepository<ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory, Guid>>(),
-			academicYearId, null, "Exception Fee");
+			academicYearId, tenantId, "Exception Fee");
 		await _feeHeadRepository.InsertAsync(new FeeHead(
-			feeHeadId, null, academicYearId, categoryId, "Tuition Fee",
+			feeHeadId, tenantId, academicYearId, categoryId, "Tuition Fee",
 			FeeHeadModule.Finance, false, null, incomeCategoryId), autoSave: true);
 
 		return await _collectionPolicies.CreateAsync(new CreateUpdateCollectionPolicyDto
@@ -72,6 +86,7 @@ public class CollectionPolicyExceptionWindowAppService_Tests : ShikshaMitraAppli
 			PolicyCode = $"CP-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
 			Status = "Active",
 			EnableLateFee = true,
+			LateFeeIncomeCategoryId = incomeCategoryId,
 			GracePeriodDays = 0,
 			LateFeeApplyOnFeeHeads = new() { feeHeadId },
 			LateFeeType = "PerDay",

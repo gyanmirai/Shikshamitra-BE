@@ -13,7 +13,7 @@ public partial class HomeworkAppService
         if (ids.Length == 0) return [];
         var query = await studentSubmissionRepository.GetQueryableAsync();
         var counts = await asyncExecuter.ToListAsync(query.Where(submission => submission.HomeworkAssignmentId.HasValue &&
-                ids.Contains(submission.HomeworkAssignmentId.Value))
+                Enumerable.Contains(ids, submission.HomeworkAssignmentId.Value))
             .GroupBy(submission => submission.HomeworkAssignmentId!.Value)
             .Select(group => new
             {

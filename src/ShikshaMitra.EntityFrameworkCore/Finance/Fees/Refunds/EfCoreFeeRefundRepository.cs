@@ -8,6 +8,7 @@ using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.FeeRefund.Repositories;
 using ShikshaMitra.Students;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Receipts;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 
@@ -105,13 +106,16 @@ public class EfCoreFeeRefundRepository(
                 .Where(a => a.ApplicantName.ToLower().Contains(term) ||
                     (a.StudentId.HasValue && matchingStudents.Contains(a.StudentId.Value)))
                 .Select(a => a.Id);
+            var matchingReceipts = dbContext.Set<FeePaymentReceipt>()
+                .Where(receipt => receipt.ReceiptNumber.ToLower().Contains(term)).Select(receipt => receipt.Id);
             query = query.Where(r => r.VoucherNumber.ToLower().Contains(term) ||
                 (r.OriginalReceiptNumber != null && r.OriginalReceiptNumber.ToLower().Contains(term)) ||
+                r.Lines.Any(line => line.SourceReceiptId.HasValue && matchingReceipts.Contains(line.SourceReceiptId.Value)) ||
                 (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && matchingStudents.Contains(r.StudentId.Value)) ||
                 (r.FinanceFeeAccountId.HasValue && matchingAccounts.Contains(r.FinanceFeeAccountId.Value)));
         }
 
-        query = FeeRefundColumnFilterQuery.Apply(query, dbContext.Set<Student>(), columnFilters ?? []);
+        query = FeeRefundColumnFilterQuery.Apply(query, dbContext.Set<Student>(), columnFilters ?? [], dbContext.Set<FeePaymentReceipt>());
         var totalCount = await query.CountAsync(cancellationToken);
 
         query = ApplySorting(query, sorting);

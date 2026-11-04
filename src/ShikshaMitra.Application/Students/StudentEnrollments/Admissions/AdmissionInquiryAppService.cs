@@ -11,9 +11,11 @@ using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
@@ -184,6 +186,16 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 		{
 			result.GuardianFirstName = guardian.FirstName; result.GuardianLastName = guardian.LastName;
 		}
+		var siblingProof = applicant == null ? null : AdmissionSiblingParentSelection.ReadConfirmation(applicant);
+		result.SiblingFamilyConfirmed = siblingProof is { ConfirmedBy: not null } && siblingProof.ConfirmedBy != Guid.Empty && siblingProof.SourceApplicantId != applicant!.Id;
+		if (result.SiblingFamilyConfirmed)
+		{
+			result.GuardianFirstName = (string?)AdmissionFormBindingRegistry.GetValue("Guardian.FirstName", applicant!, guardian);
+			result.GuardianLastName = (string?)AdmissionFormBindingRegistry.GetValue("Guardian.LastName", applicant!, guardian);
+			result.NormalizedPhone = (string?)AdmissionFormBindingRegistry.GetValue("Guardian.Mobile", applicant!, guardian) ?? string.Empty;
+			result.Email = (string?)AdmissionFormBindingRegistry.GetValue("Guardian.Email", applicant!, guardian);
+			result.MainSchoolContact = AdmissionFamilyContactCapture.ReadMainContact(applicant!);
+		}
 		if (inquiry.FormResponseDefinitionId is not Guid formId ||
 			string.IsNullOrWhiteSpace(inquiry.FormResponseSnapshotJson)) return result;
 		var snapshot = JsonSerializer.Deserialize<Dictionary<string, string>>(
@@ -191,6 +203,14 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 		if (snapshot == null) return result;
 		var answers = new Dictionary<string, string>(snapshot, StringComparer.OrdinalIgnoreCase);
 		var fields = await formFieldRepository.GetListAsync(field => field.FormDefinitionId == formId);
+		if (result.SiblingFamilyConfirmed)
+			foreach (var field in fields)
+			{
+				var binding = AdmissionFormBindingRegistry.Metadata.TryGetValue(field.BindingKey ?? string.Empty, out var metadata)
+					? metadata.Key : AdmissionInquiryConfiguredFields.ReservedBinding(field.Code, field.BindingKey);
+				if (binding is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email" or "Inquiry.ParentRelationship")
+					answers[string.IsNullOrWhiteSpace(field.BindingKey) ? field.Code : field.BindingKey] = JsonSerializer.Serialize(AdmissionFormBindingRegistry.GetValue(binding, applicant!, guardian));
+			}
 		// Older intake forms captured mandatory identity outside the form response.
 		foreach (var field in fields.Where(field => field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey)))
 			if (!answers.ContainsKey(field.BindingKey!) && applicant != null)
@@ -266,6 +286,7 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Create)]
+	[UnitOfWork(true)]
 	public Task<AdmissionInquiryDto> CreateAsync(CreateAdmissionInquiryDto input) =>
 		CreateCoreAsync(input, isPublic: false, publicAssignmentProfileId: null);
 
@@ -280,7 +301,7 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 	private async Task<AdmissionInquiryDto> CreateCoreAsync(CreateAdmissionInquiryDto input, bool isPublic,
 		Guid? publicAssignmentProfileId, Guid? publicFormDefinitionId = null, Student? returningStudent = null)
 	{
-		if (isPublic && input.ExistingParentApplicantId.HasValue)
+		if (isPublic && (input.ExistingParentApplicantId.HasValue || input.ExistingFamilyId.HasValue))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Only authorized school staff can confirm an existing parent.");
 		if (!Enum.IsDefined(input.Source))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
@@ -305,21 +326,38 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Choose an admission option configured for this public inquiry link.");
 
-		if (input.FormValues.GroupBy(item => item.FieldCode, StringComparer.OrdinalIgnoreCase)
+		if (!isPublic && input.FormValues.GroupBy(item => item.FieldCode, StringComparer.OrdinalIgnoreCase)
 			.Any(group => group.Count() > 1))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Submit each inquiry field once.");
-		var values = input.FormValues.ToDictionary(x => x.FieldCode, x => UnwrapValue(x.ValueJson), StringComparer.OrdinalIgnoreCase);
+		var values = input.FormValues.GroupBy(item => item.FieldCode, StringComparer.OrdinalIgnoreCase)
+			.ToDictionary(group => group.Key, group => UnwrapValue(group.Last().ValueJson), StringComparer.OrdinalIgnoreCase);
+		AdmissionFormDto? publicSource = null;
 		var returningContact = returningStudent == null ? null : new { input.GuardianFirstName, input.GuardianLastName, input.GuardianPhone, input.GuardianEmail };
 		var inquiryFields = new List<AdmissionFormFieldDefinition>();
 		IReadOnlySet<string>? inquiryVisibleFieldCodes = null;
+		int? coreFieldPolicyVersion = null;
 		var managedPolicy = await policyResolver.ResolveAsync(offering?.Id);
 		var inquiryFormId = offering?.InquiryFormDefinitionId ?? publicFormDefinitionId;
 		if (inquiryFormId.HasValue)
 		{
 			var form = await formRepository.FindAsync(inquiryFormId.Value);
 			var fields = await formFieldRepository.GetListAsync(x => x.FormDefinitionId == inquiryFormId.Value);
+			var sections = await formSectionRepository.GetListAsync(section => section.FormDefinitionId == inquiryFormId.Value);
+			if (isPublic && form != null)
+			{
+				publicSource = AdmissionPublicInquirySchema.Project(AdmissionFormAppService.Map(form, sections, fields));
+				var allowed = publicSource.Sections.SelectMany(section => section.Fields).Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+				var omitted = fields.Where(field => !allowed.Contains(field.Code)).Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+				input.FormValues.RemoveAll(answer => omitted.Contains(answer.FieldCode));
+				foreach (var code in omitted) values.Remove(code);
+				if (input.FormValues.GroupBy(answer => answer.FieldCode, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+					throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Submit each inquiry field once.");
+				fields = AdmissionEffectiveFormResolver.MaterializeFields(publicSource);
+				sections = AdmissionEffectiveFormResolver.MaterializeSections(publicSource);
+			}
 			inquiryFields = fields;
+			coreFieldPolicyVersion = form == null ? null : AdmissionFormMetadataStore.ReadExperience(form).CoreFieldPolicyVersion;
 			foreach (var answer in input.FormValues)
 			{
 				var field = fields.FirstOrDefault(field => string.Equals(field.Code, answer.FieldCode, StringComparison.OrdinalIgnoreCase));
@@ -335,7 +373,6 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 				if (values.Keys.Any(code => !fieldCodes.Contains(code)))
 					throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 						"The inquiry contains a field outside its published form.");
-				var sections = await formSectionRepository.GetListAsync(section => section.FormDefinitionId == inquiryFormId.Value);
 				var validation = formValidator.ValidateInquiry(fields, sections, values);
 				var visibleFields = formValidator.GetVisibleInquiryFieldCodes(fields, sections, values);
 				inquiryVisibleFieldCodes = visibleFields;
@@ -395,6 +432,7 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 			input.GuardianPhone = returningContact.GuardianPhone; input.GuardianEmail = returningContact.GuardianEmail;
 			input.Email = returningContact.GuardianEmail;
 		}
+		AdmissionCoreFieldPolicy.EnsureParentEmail(coreFieldPolicyVersion, input.GuardianEmail);
 		if (string.IsNullOrWhiteSpace(input.ApplicantName))
 			input.ApplicantName = string.Join(" ", new[] { input.ApplicantFirstName, input.ApplicantLastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
 		if (string.IsNullOrWhiteSpace(input.ApplicantFirstName) && !string.IsNullOrWhiteSpace(input.ApplicantName))
@@ -424,7 +462,7 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 			isPublic && input.ExistingParentApplicantId.HasValue || input.ExistingFamilyId.HasValue && input.CreateSeparateFamily)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Only authorized school staff can confirm an existing parent. Choose Father or Mother.");
 		var query = await inquiryRepository.GetQueryableAsync();
-		var duplicateExists = !input.ExistingFamilyId.HasValue && await AsyncExecuter.AnyAsync(query.Where(x =>
+		var duplicateExists = !isPublic && !input.ExistingFamilyId.HasValue && await AsyncExecuter.AnyAsync(query.Where(x =>
 			x.AdmissionCycleId == cycle.Id && x.NormalizedPhone == phone));
 		if (duplicateExists)
 		{
@@ -483,6 +521,7 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 				await referenceSequenceRepository.IncrementAndGetAsync(referenceYear, AdmissionReferenceKind.Family));
 		var family = existingFamily;
 		family ??= new AdmissionFamily(GuidGenerator.Create(), CurrentTenant.Id, familyNumber!);
+		if (isPublic) family.SetProperty("AdmissionPublicCaptureTrust", "unconfirmed");
 		var guardian = family.PrimaryGuardianId.HasValue ? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
 		var newGuardian = guardian == null;
 		if (newGuardian) { guardian = new AdmissionGuardian(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.GuardianFirstName, input.GuardianLastName, input.GuardianPhone, input.GuardianEmail, AdmissionGuardianRelationship.Parent, true); family.SetPrimaryGuardian(guardian.Id); }
@@ -542,6 +581,7 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 		inquiry.SetPreferredLanguage(input.PreferredLanguageCode);
 		inquiry.LinkIdentity(family.Id, applicant.Id);
 		AdmissionFamilyContactCapture.CopyToInquiry(applicant, inquiry);
+		AdmissionInquiryFamilyConfirmationService.CaptureProof(inquiry, applicant);
 		if (inquiryFormId.HasValue)
 		{
 			var snapshot = input.FormValues
@@ -555,12 +595,22 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 				.ToDictionary(group => group.Key, group => group.Last().ValueJson,
 					StringComparer.OrdinalIgnoreCase);
 			inquiry.RecordFormResponseSnapshot(JsonSerializer.Serialize(snapshot), inquiryFormId);
+			if (publicSource != null) AdmissionPublicInquirySchema.Capture(inquiry, publicSource);
 		}
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionOfferingConfigurationUsageService>().RecordAsync(offering);
 		await inquiryRepository.InsertAsync(inquiry, autoSave: false);
 		await inquiryRuntime.EnsureManagementAsync(inquiry);
 		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("InquiryCreated", "Inquiry created", applicant.Id, null, inquiry.Id,
 			JsonSerializer.Serialize(new { Managed = managedPolicy != null, IsPublic = isPublic, input.DuplicateOverrideReason, input.ExistingParentApplicantId, input.ParentRelationship })), autoSave: true);
 		return Map(inquiry);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	[UnitOfWork(true)]
+	public async Task<AdmissionInquiryDto> ConfirmFamilyAsync(Guid id, ConfirmAdmissionInquiryFamilyDto input)
+	{
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryFamilyConfirmationService>().ConfirmAsync(id, input);
+		return await GetAsync(id);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
@@ -587,6 +637,7 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.SourceNotAllowed);
 		}
 		var previousCounsellorId = inquiry.AssignedCounsellorId;
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionOfferingConfigurationUsageService>().RecordAsync(offering);
 		inquiry.ConfirmOffering(offering.Id);
 
 		await inquiryRepository.UpdateAsync(inquiry, false);
@@ -660,6 +711,8 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 			input.SourceDetail, input.PreferredLanguageCode);
 		if (offering.Id != inquiry.AdmissionOfferingId)
 		{
+			var configurationUsage = LazyServiceProvider.LazyGetRequiredService<AdmissionOfferingConfigurationUsageService>();
+			await configurationUsage.RecordTransferAsync(inquiry.AdmissionOfferingId, offering);
 			inquiry.ConfirmOffering(offering.Id);
 			await inquiryRuntime.RefreshPolicyAsync(inquiry);
 		}
@@ -1080,6 +1133,7 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 		return new AdmissionInquiryDto
 		{
 		MainSchoolContact = AdmissionFamilyContactCapture.ReadMainContact(x),
+		SiblingFamilyConfirmed = AdmissionInquiryFamilyConfirmationService.IsConfirmed(x),
 		Id = x.Id, ConcurrencyStamp = x.ConcurrencyStamp, InquiryNumber = x.InquiryNumber, AdmissionCycleId = x.AdmissionCycleId, AdmissionOfferingId = x.AdmissionOfferingId, FamilyId = x.FamilyId, ApplicantId = x.ApplicantId, AssignedCounsellorId = null,
 		AssignedCounsellorName = null, AdmissionCycleName = cycleName ?? string.Empty,
 		AdmissionOfferingCode = offeringCode,

@@ -26,10 +26,13 @@ public partial class FeeCollectionSummaryQueryService
 		csv.WriteField("Roll Number");
 		csv.WriteField("Class / Division");
 		csv.WriteField("Total Fees");
+		csv.WriteField("Total Concession Amount");
+		csv.WriteField("Refund Amount");
 		csv.WriteField("Paid Fees");
 		csv.WriteField("Pending Fees");
 		csv.WriteField("Overdue Fees");
 		csv.WriteField("Total Charges");
+		csv.WriteField("Paid Charges");
 		csv.WriteField("Pending Charges");
 		csv.WriteField("Status");
 		csv.NextRecord();
@@ -41,10 +44,13 @@ public partial class FeeCollectionSummaryQueryService
 			csv.WriteField(r.RollNumber);
 			csv.WriteField(r.StandardDivision);
 			csv.WriteField(r.TotalFees);
+			csv.WriteField(r.TotalConcessionAmount);
+			csv.WriteField(r.RefundAmount);
 			csv.WriteField(r.PaidFees);
 			csv.WriteField(r.PendingFees);
 			csv.WriteField(r.OverdueFees);
 			csv.WriteField(r.TotalCharges);
+			csv.WriteField(r.PaidCharges);
 			csv.WriteField(r.PendingCharges);
 			csv.WriteField(GetExportStatusLabel(r.Status));
 			csv.NextRecord();
@@ -62,8 +68,8 @@ public partial class FeeCollectionSummaryQueryService
 		var headers = new[]
 		{
 			"Student Name", "GR Number", "Roll Number", "Class / Division",
-			"Total Fees", "Paid Fees", "Pending Fees", "Overdue Fees",
-			"TotalCharges", "Pending Charges", "Status",
+			"Total Fees", "Total Concession Amount", "Refund Amount", "Paid Fees", "Pending Fees", "Overdue Fees",
+			"TotalCharges", "Paid Charges", "Pending Charges", "Status",
 		};
 
 		for (var col = 0; col < headers.Length; col++)
@@ -83,12 +89,15 @@ public partial class FeeCollectionSummaryQueryService
 			sheet.Cell(row, 3).Value  = r.RollNumber;
 			sheet.Cell(row, 4).Value  = r.StandardDivision;
 			sheet.Cell(row, 5).Value  = r.TotalFees;
-			sheet.Cell(row, 6).Value  = r.PaidFees;
-			sheet.Cell(row, 7).Value  = r.PendingFees;
-			sheet.Cell(row, 8).Value  = r.OverdueFees;
-			sheet.Cell(row, 9).Value  = r.TotalCharges;
-			sheet.Cell(row, 10).Value = r.PendingCharges;
-			sheet.Cell(row, 11).Value = GetExportStatusLabel(r.Status);
+			sheet.Cell(row, 6).Value  = r.TotalConcessionAmount;
+			sheet.Cell(row, 7).Value  = r.RefundAmount;
+			sheet.Cell(row, 8).Value  = r.PaidFees;
+			sheet.Cell(row, 9).Value  = r.PendingFees;
+			sheet.Cell(row, 10).Value = r.OverdueFees;
+			sheet.Cell(row, 11).Value = r.TotalCharges;
+			sheet.Cell(row, 12).Value = r.PaidCharges;
+			sheet.Cell(row, 13).Value = r.PendingCharges;
+			sheet.Cell(row, 14).Value = GetExportStatusLabel(r.Status);
 
 			if (r.Status == FeeCollectionStatus.Overdue)
 				sheet.Row(row).Style.Fill.BackgroundColor = XLColor.LightSalmon;

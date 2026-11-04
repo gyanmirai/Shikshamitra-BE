@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,15 +33,20 @@ public class LateFeeReceiptGrouping_Tests
         CollectionReceiptGrouping grouping, int principal, int late, int charges, int count)
     {
         var total = principal + late + charges;
-        var result = await Manager().ExecuteCollectionTransactionAsync(new(
-            StudentId: Guid.NewGuid(), AcademicYearId: Guid.NewGuid(), BoardId: Guid.NewGuid(),
+        var studentId = Guid.NewGuid();
+        var due = new DueFee(Guid.NewGuid(), null, studentId, Guid.NewGuid(), MonthEnum.October,
+            2026, false, 5000m, new DateTime(2026, 10, 1));
+        var result = await Manager(due).ExecuteCollectionTransactionAsync(new(
+            StudentId: studentId, AcademicYearId: Guid.NewGuid(), BoardId: Guid.NewGuid(),
             EducationMediumId: Guid.NewGuid(), Status: FeeCollectionStatus.Paid, ReceivedAmount: total,
             Notes: null, BankReceiptConfirmed: null,
             FeeHeadGroups: principal > 0 ? [(Guid.NewGuid(), principal)] : [],
             ChargePayments: charges > 0 ? [(Guid.NewGuid(), charges)] : [],
             DueFeeAllocations: [], Payments: [(PaymentMethodEnum.Cash, total, null)],
-            LateFeeAllocations: [(Guid.NewGuid(), late)], ReceiptGrouping: grouping));
+            LateFeeAllocations: [(due.Id, late)], ReceiptGrouping: grouping));
 
+        due.HasPaymentEvidence().ShouldBeTrue();
+        due.PaidAmount.ShouldBe(0m);
         result.Receipts.Count.ShouldBe(count);
         result.Receipts.Sum(r => (decimal)r.TotalPaidAmount).ShouldBe(total);
         result.Receipts.Sum(r => r.FeePaidAmount).ShouldBe(principal);
@@ -80,8 +87,11 @@ public class LateFeeReceiptGrouping_Tests
         Should.Throw<Volo.Abp.BusinessException>(() => principal.SetLateFeePaidAmount(1m));
     }
 
-    private static FeeCollectionManager Manager()
+    private static FeeCollectionManager Manager(DueFee due)
     {
+        var dueFees = Substitute.For<IDueFeeRepository>();
+        dueFees.GetListAsync(Arg.Any<Expression<Func<DueFee, bool>>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(call => new List<DueFee> { due }.Where(call.Arg<Expression<Func<DueFee, bool>>>().Compile()).ToList());
         var sequences = Substitute.For<IReceiptNumberSequenceRepository>();
         long sequence = 0;
         sequences.IncrementAndGetAsync(Arg.Any<int>(), Arg.Any<FeeReceiptKind?>(), Arg.Any<CancellationToken>())
@@ -99,7 +109,7 @@ public class LateFeeReceiptGrouping_Tests
             Substitute.For<IRepository<PaymentMethodRecord, Guid>>(),
             Substitute.For<IRepository<FeeCollectionDueFeeAllocation, Guid>>(),
             Substitute.For<IRepository<LateFeeCollectionAllocation, Guid>>(),
-            Substitute.For<IDueFeeRepository>(), Substitute.For<IRepository<FeeHead, Guid>>(),
+            dueFees, Substitute.For<IRepository<FeeHead, Guid>>(),
             Substitute.For<IFeePaymentReceiptRepository>(), receipts, sequences, clock, tenant,
             Substitute.For<ICurrentUser>()) { LazyServiceProvider = services };
     }

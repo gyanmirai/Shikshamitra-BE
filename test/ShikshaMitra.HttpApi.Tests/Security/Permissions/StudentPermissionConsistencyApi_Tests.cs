@@ -27,8 +27,11 @@ public partial class PermissionConsistencyApi_Tests
 		const string records = "ShikshaMitra.Module.Students.Records";
 		var (role, _) = await CreateTargetAsync();
 		var url = Url("R", role);
-		using var rejected = await Client.PutAsJsonAsync(url, new { permissions = new[] {
-			new { name = student, isGranted = true }, new { name = action, isGranted = true } } });
+		using var rejected = await Client.PutAsJsonAsync(url, new
+		{
+			permissions = new[] {
+			new { name = student, isGranted = true }, new { name = action, isGranted = true } }
+		});
 		rejected.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await rejected.Content.ReadAsStringAsync());
 		(await rejected.Content.ReadAsStringAsync()).ShouldContain("VISIBILITY_PREREQUISITE_MISSING");
 		var after = await ReadAsync(url);
@@ -144,8 +147,11 @@ public partial class PermissionConsistencyApi_Tests
 		var grants = await ReadAsync(url);
 		grants.Single(item => item.Name == ShikshaMitraModulePermissions.Students).IsGranted.ShouldBeFalse();
 		grants.Single(item => item.Name == ShikshaMitraSubModulePermissions.Records).IsGranted.ShouldBeFalse();
-		using var rejected = await Client.PutAsJsonAsync(url, new { permissions = new[] {
-			new { name = add, isGranted = true }, new { name = "Students.Portal.ProfilePhoto.Delete", isGranted = true } } });
+		using var rejected = await Client.PutAsJsonAsync(url, new
+		{
+			permissions = new[] {
+			new { name = add, isGranted = true }, new { name = "Students.Portal.ProfilePhoto.Delete", isGranted = true } }
+		});
 		rejected.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await rejected.Content.ReadAsStringAsync());
 		await AssertRealCheckerAsync(user, role, add, false);
 		await AssertRealCheckerAsync(user, role, view, true);

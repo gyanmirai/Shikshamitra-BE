@@ -50,9 +50,11 @@ public partial class FeeCollectionSummaryQueryService
 					: $"{r.StandardName} - {r.DivisionName}",
 				TotalFees              = r.TotalFees ?? 0d,
 				PaidFees               = r.PaidFees ?? 0d,
+				RefundAmount           = r.RefundAmount,
 				PendingFees            = outstanding ?? 0d,
 				OverdueFees            = overdue ?? 0d,
 				TotalCharges           = r.TotalCharges ?? 0d,
+				PaidCharges            = r.PaidCharges,
 				PendingCharges         = r.PendingCharges ?? 0d,
 				TotalConcessionAmount  = r.TotalConcessionAmount ?? 0d,
 				IsFeeStructureAssigned = r.IsFeeStructureAssigned,
@@ -110,12 +112,16 @@ public partial class FeeCollectionSummaryQueryService
 			"totalfees desc"                              => rows.OrderByDescending(x => x.TotalFees),
 			"paidfees asc"         or "paidfees"          => rows.OrderBy(x => x.PaidFees),
 			"paidfees desc"                               => rows.OrderByDescending(x => x.PaidFees),
+			"refundamount asc"     or "refundamount"      => rows.OrderBy(x => x.RefundAmount),
+			"refundamount desc"                           => rows.OrderByDescending(x => x.RefundAmount),
 			"pendingfees asc"      or "pendingfees"       => rows.OrderBy(x => x.OutstandingFees),
 			"pendingfees desc"                            => rows.OrderByDescending(x => x.OutstandingFees),
 			"overduefees asc"      or "overduefees"       => rows.OrderBy(x => x.OverdueFees),
 			"overduefees desc"                            => rows.OrderByDescending(x => x.OverdueFees),
 			"totalcharges asc"     or "totalcharges"      => rows.OrderBy(x => x.TotalCharges),
 			"totalcharges desc"                           => rows.OrderByDescending(x => x.TotalCharges),
+			"paidcharges asc"      or "paidcharges"       => rows.OrderBy(x => x.PaidCharges),
+			"paidcharges desc"                            => rows.OrderByDescending(x => x.PaidCharges),
 			"pendingcharges asc"   or "pendingcharges"    => rows.OrderBy(x => x.PendingCharges),
 			"pendingcharges desc"                         => rows.OrderByDescending(x => x.PendingCharges),
 			"standarddivision asc" or "standarddivision"  => rows.OrderBy(x => x.StandardName).ThenBy(x => x.DivisionName),
@@ -208,9 +214,9 @@ public partial class FeeCollectionSummaryQueryService
 		return query;
 	}
 
-	private readonly record struct StudentChargeAggregate(double TotalCharges, double PendingCharges)
+	private readonly record struct StudentChargeAggregate(double TotalCharges, decimal PaidCharges, double PendingCharges)
 	{
-		public static StudentChargeAggregate Empty => new(0d, 0d);
+		public static StudentChargeAggregate Empty => new(0d, 0m, 0d);
 	}
 
 	private sealed class FeeCollectionRawRow
@@ -228,9 +234,11 @@ public partial class FeeCollectionSummaryQueryService
 		public string  DivisionName    { get; init; } = string.Empty;
 		public double? TotalFees       { get; set; }
 		public double? PaidFees        { get; set; }
+		public decimal RefundAmount    { get; set; }
 		public double? OutstandingFees { get; set; }
 		public double? OverdueFees     { get; set; }
 		public double? TotalCharges    { get; set; }
+		public decimal PaidCharges     { get; set; }
 		public double? PendingCharges  { get; set; }
 		public double? TotalConcessionAmount   { get; set; }
 		public bool    IsFeeStructureAssigned  { get; set; }

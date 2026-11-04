@@ -21,6 +21,14 @@ public class EfCoreAdmissionInquiryRepository(
 		{
 			if (dbContext.Database.CurrentTransaction == null)
 				throw new InvalidOperationException("Application start requires a transactional unit of work.");
+			// Every family/Start mutation uses Applicant -> Inquiry lock order.
+			await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+				SELECT 1 FROM "AppAdmissionApplicants" AS applicant
+				JOIN "AppAdmissionInquiries" AS inquiry ON inquiry."ApplicantId" = applicant."Id"
+				WHERE inquiry."Id" = {inquiryId} AND inquiry."TenantId" IS NOT DISTINCT FROM {currentTenant.Id}
+				AND applicant."TenantId" IS NOT DISTINCT FROM {currentTenant.Id} AND NOT inquiry."IsDeleted" AND NOT applicant."IsDeleted"
+				FOR UPDATE OF applicant
+				""", cancellationToken);
 			// The email worker also updates this aggregate. Keep the inquiry stable until
 			// its handoff and the application graph commit together; scope the lock by tenant.
 			await dbContext.Database.ExecuteSqlInterpolatedAsync(
@@ -38,6 +46,9 @@ public class EfCoreAdmissionInquiryRepository(
 		// committed. Refresh persisted state without discarding a caller's pending changes.
 		if (entry.State == EntityState.Unchanged)
 			await entry.ReloadAsync(cancellationToken);
-		return entry.State == EntityState.Detached || inquiry.IsDeleted || inquiry.TenantId != currentTenant.Id ? null : inquiry;
+		if (entry.State == EntityState.Detached || inquiry.IsDeleted || inquiry.TenantId != currentTenant.Id) return null;
+		if (inquiry.ApplicantId.HasValue)
+			await EfCoreAdmissionApplicantRepository.RefreshTrackedIdentityAsync(dbContext, currentTenant.Id, [inquiry.ApplicantId.Value], cancellationToken);
+		return inquiry;
 	}
 }

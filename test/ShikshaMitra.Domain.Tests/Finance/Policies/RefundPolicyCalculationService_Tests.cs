@@ -76,6 +76,39 @@ public class RefundPolicyCalculationService_Tests
 		Assert.Equal(RefundPolicyErrorCodes.InputNotAllowed, exception.Code);
 	}
 
+	[Theory]
+	[InlineData(RefundAmountMode.RemainingPaidAmount, 200)]
+	[InlineData(RefundAmountMode.FixedAmount, 200)]
+	[InlineData(RefundAmountMode.Percentage, 100)]
+	public void Requested_Amount_Is_A_Ceiling_Within_The_Policy_Formula(RefundAmountMode mode, int expected)
+	{
+		var result = _service.Calculate(BuildPolicy(mode, fixedAmount: 500m, percentageValue: 10m),
+			new RefundPolicyCalculationInput(1000m, 0m, 0m, 0m, 200m));
+		Assert.Equal(expected, result.FinalRefund);
+	}
+
+	[Fact]
+	public void Manual_Zero_Request_Retains_The_Input_Not_Allowed_Error()
+	{
+		var error = Assert.Throws<BusinessException>(() => _service.Calculate(
+			BuildPolicy(RefundAmountMode.ManualUpToEligible), new RefundPolicyCalculationInput(100m, 0m, 0m, 0m, 0m)));
+		Assert.Equal(RefundPolicyErrorCodes.InputNotAllowed, error.Code);
+	}
+
+	[Theory]
+	[InlineData(200, 200)]
+	[InlineData(900, 450)]
+	public void Requested_Ceiling_Preserves_The_Formula_Deduction_And_Year_Cap(int requested, int expected)
+	{
+		var policy = BuildPolicy(RefundAmountMode.Percentage, percentageValue: 80m,
+			maximumPerRequest: 600m, maximumPerStudentYear: 700m,
+			deductionType: RefundDeductionType.Percentage, deductionValue: 10m);
+		var result = _service.Calculate(policy, new RefundPolicyCalculationInput(1000m, 0m, 0m, 250m, requested));
+		Assert.Equal(800m, result.RawRefund);
+		Assert.Equal(80m, result.DeductionAmount);
+		Assert.Equal(expected, result.FinalRefund);
+	}
+
 	[Fact]
 	public void Unarchive_Returns_An_Archived_Policy_To_Draft()
 	{
@@ -90,6 +123,15 @@ public class RefundPolicyCalculationService_Tests
 
 		Assert.Equal(RefundPolicyStatus.Draft, policy.Status);
 		Assert.Equal(3, policy.Version);
+	}
+
+	[Fact]
+	public void Legacy_Partial_Flag_Does_Not_Reject_Manual_Policy_Calculations()
+	{
+		var policy = new RefundPolicy(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+			BuildUpdateModel() with { AmountMode = RefundAmountMode.ManualUpToEligible, AllowPartialRefund = false });
+		var result = _service.Calculate(policy.ToSnapshot(), new RefundPolicyCalculationInput(1000m, 0m, 0m, 0m, 200m));
+		Assert.Equal(200m, result.FinalRefund);
 	}
 
 	private static RefundPolicySnapshot BuildPolicy(

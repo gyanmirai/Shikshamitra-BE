@@ -50,16 +50,22 @@ Permission names above identify source constant members; the constant values and
   one Charge receipt. Combined mode retains one document. New PDFs itemize the saved late-fee
   portion separately from ordinary charges. Historical receipt numbers, totals and scope remain
   intact; refund and reconciliation read the stored late-fee attribution.
-- A4 printable document with institution/tenant heading, clear lifecycle title, number/date, student or applicant, GR number, academic year, scope, recorded payment method, fee installment rows, total in INR, signatory and seal spaces, and page numbering.
+- All fee, charge and combined receipts use the shared classic A4 layout: Institute Setup school name/address, resolved School Identity logo, lifecycle/scope title, number/date, student or applicant, GR number, class/section, academic year, recorded payment/bank/instrument details, installment rows, totals, amount in words and signatory space. Sample labels and acknowledgment paragraphs are not printed.
+- Installment coverage dates render as `May 2026 - Sep 2026`; legacy labels remain when dates were not recorded. New collections preserve net payable, cumulative gross paid and pending balances in collection metadata before PDF generation. Verified receipts reuse that transaction snapshot, so later payments, concessions or refunds cannot rewrite the displayed balances. Legacy unknown balances remain unavailable while each known allocation amount is retained as `Received` under its fee head.
+- Organisation logo overrides use the original collection context, including linked refund documents. Legacy rows without that snapshot use the stable Finance account or school/board/medium identity, never the student's later placement.
 - Charge-only documents are titled with the same lifecycle as fee documents. Combined documents retain fee/charge amounts. Missing legacy payment evidence says "Not recorded"; it is never inferred to be cash.
-- Official documents created on approval identify their provisional predecessor and explain that the two documents represent the same payment.
+- Official documents created on approval retain the provisional predecessor number without an explanatory acknowledgment paragraph.
 - Filename: `<Receipt|Provisional-Receipt>_<Fee|Charge|Fees-And-Charges>_<receipt-number>_<yyyy-MM-dd>.pdf`. Example: `Receipt_Charge_FCH-2026-000006_2026-10-23.pdf`. Receipt numbers are sanitized for safe filenames; pupil names and bank identifiers are excluded.
 - Reconciliation PDF previews use the same `/api/v1/fee-receipts/{id}/pdf` endpoint as Receipts, selecting the linked official ID after approval and retaining the server filename.
 - Download metadata is exposed as `pdfFileName`; `paymentMethodLabel` appears in receipt list and detail responses. The PDF endpoint returns the same filename in Content-Disposition.
-- PDF template blobs use `fee-receipts/{tenant}/v4/{kind}/{id}.pdf`. Old template blobs remain retained; the first download regenerates the new presentation from the original receipt and collection records, keeping its ID, number and date.
+- PDF template blobs use `fee-receipts/{tenant}/v5/{kind}/{id}.pdf`. Old template blobs remain retained; the first download regenerates the new presentation from the original receipt and collection records, keeping its ID, number and date. No schema migration or historical balance backfill is performed.
 - Number prefixes (`FIN`, `FCH`, `KFE`, `KCH`) remain stable to preserve receipt-book references and existing sequences. Display terminology and filenames carry the new names.
 
 ## Source and acceptance
+
+Refund payout PDFs use the same composer with Approved/Refunded/Pending columns and explicit provisional/final refund titles.
+The refund read endpoint enforces existing Refund View/payer scope, preserves sensitive-reference masking and rejects unpaid, failed, cancelled, rejected or reversed requests.
+See the [refund PDF API contract](../api.md#refund-receipt-pdf).
 
 `FeeReceiptPaymentPolicy` owns collection classification; `CollectFeeInputValidator` blocks unsafe mixed instruments; `FeeReceiptPresentation` owns labels and filenames; `FeeReceiptManager` and `ReconciliationManager` own issuance/linkage; `FeeReceiptPdfGenerator` owns printable presentation.
 

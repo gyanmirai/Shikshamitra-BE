@@ -71,7 +71,8 @@ public partial class FeeRefundAppService
 	}
 
 	private static FeeRefundRequestDto MapToDto(FeeRefundRequest r, Dictionary<Guid, RefundStudentSummary> studentMap,
-		Dictionary<Guid, FinanceFeeAccount> accountMap, Dictionary<Guid, AcademicYear> yearMap)
+		Dictionary<Guid, FinanceFeeAccount> accountMap, Dictionary<Guid, AcademicYear> yearMap,
+		Dictionary<Guid, string>? sourceReceipts = null)
 	{
 		var student = r.StudentId.HasValue ? studentMap.GetValueOrDefault(r.StudentId.Value) : null;
 		var account = r.FinanceFeeAccountId.HasValue ? accountMap.GetValueOrDefault(r.FinanceFeeAccountId.Value) : null;
@@ -99,6 +100,10 @@ public partial class FeeRefundAppService
 			ConcessionRequestId = r.ConcessionRequestId,
 			OriginalReceiptId = r.OriginalReceiptId,
 			OriginalReceiptNumber = r.OriginalReceiptNumber, Currency = string.IsNullOrWhiteSpace(r.Currency) ? "INR" : r.Currency,
+			SourceReceipts = r.Lines.Select(line => line.SourceReceiptId).Where(id => id.HasValue)
+				.Select(id => id!.Value).DefaultIfEmpty(r.OriginalReceiptId ?? Guid.Empty).Where(id => id != Guid.Empty)
+				.Distinct().Select(id => new RefundSourceReceiptDto { ReceiptId = id,
+					ReceiptNumber = sourceReceipts?.GetValueOrDefault(id) ?? (id == r.OriginalReceiptId ? r.OriginalReceiptNumber : null) ?? "Unavailable" }).ToList(),
 			ApprovedAmount = isLegacy ? legacyFinancialAmount : r.ApprovedAmount,
 			ProcessedAmount = isLegacy ? legacyFinancialAmount : r.ProcessedAmount, ReversedAmount = r.ReversedAmount,
 			ExpenseCategoryId = r.ExpenseCategoryId, PayingBankAccountId = r.PayingBankAccountId,
@@ -181,6 +186,8 @@ public partial class FeeRefundAppService
 			if (action == "edit" && !request.CanEdit) continue;
 			if (!required.TryGetValue(action, out var permission) ||
 				!await AuthorizationService.IsGrantedAsync(permission)) continue;
+			if (action == "approve" && request.WorkflowVersion == 1 && request.RefundMethod == "Cash" &&
+				!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Process)) continue;
 			if ((action == "approve" || action == "reject") &&
 				(request.SubmittedByUserId == CurrentUser.Id || request.CreatorId == CurrentUser.Id)) continue;
 			if ((action == "confirmPayout" || action == "failPayout") &&

@@ -77,7 +77,8 @@ public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
     public async Task<FeeHeadListResponse> GetListAsync(Guid academicYearId, Guid? feeCategoryId = null, string? search = null, int page = 1, int pageSize = 10, string? filters = null)
     {
         var tableQuery = ListFilters.Parse(filters);
-        var hasHeaderFilters = tableQuery.Filters.Count > 0;
+		page = Math.Max(1, page);
+		pageSize = Math.Clamp(pageSize, 1, 1000);
         var query = await feeHeadRepository.GetQueryableAsync();
 
         query = query.Where(x => x.AcademicYearId == academicYearId);
@@ -93,43 +94,38 @@ public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
             query = query.Where(x => x.Name.ToLower().Contains(normalizedSearch));
         }
 
-        var totalCount = await feeHeadRepository.AsyncExecuter.CountAsync(query);
-
-        query = query.OrderByDescending(x => x.CreationTime);
-        if (!hasHeaderFilters)
-            query = query.Skip((page - 1) * pageSize).Take(pageSize);
-
-        var items = await feeHeadRepository.AsyncExecuter.ToListAsync(query);
-
-        var categoryIds = items.Select(x => x.FeeCategoryId).Distinct().ToList();
-        var categories = await feeCategoryRepository.GetListAsync(x => categoryIds.Contains(x.Id));
-        var categoryDict = categories.ToDictionary(x => x.Id, x => x.Name);
-		var incomeCategoryIds = items.Select(x => x.IncomeCategoryId).Distinct().ToList();
-		var incomeCategories = await incomeCategoryRepository.GetListAsync(x => incomeCategoryIds.Contains(x.Id));
-		var incomeCategoryDict = incomeCategories.ToDictionary(x => x.Id);
-		var accountHeadIds = incomeCategories.Where(x => x.DefaultAccountHeadId.HasValue)
-			.Select(x => x.DefaultAccountHeadId!.Value).Distinct().ToList();
-		var accountHeads = await accountHeadRepository.GetListAsync(x => accountHeadIds.Contains(x.Id));
-		var accountHeadDict = accountHeads.ToDictionary(x => x.Id);
-
-		var dependencies = await dependencyQuery.GetAsync(items.Select(x => x.Id));
-
-        var dtos = items.Select(x =>
-        {
-            var response = ObjectMapper.Map<FeeHead, FeeHeadResponse>(x);
-            response.FeeCategoryName = categoryDict.GetValueOrDefault(x.FeeCategoryId);
-			PopulateAccountingMapping(response, x, incomeCategoryDict, accountHeadDict);
-            response.Dependencies = dependencies[x.Id];
-            response.IsUsedInDownstream = response.Dependencies.IsBlocked;
-            return response;
-        }).ToList();
-
-        if (hasHeaderFilters)
-        {
-            dtos = ListFilters.Apply(dtos.AsQueryable(), tableQuery).ToList();
-            totalCount = dtos.Count;
-            dtos = dtos.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-        }
+		var categories = await feeCategoryRepository.GetQueryableAsync();
+		var incomeCategories = await incomeCategoryRepository.GetQueryableAsync();
+		var accounts = await accountHeadRepository.GetQueryableAsync();
+		// Project scalars so filters and paging stay in SQL and do not hydrate navigation graphs.
+		// The required category join retains the existing FeeHead AutoInclude visibility semantics.
+		var rows = from head in query
+			join category in categories on head.FeeCategoryId equals category.Id
+			join income in incomeCategories on head.IncomeCategoryId equals income.Id into incomeGroup
+			from income in incomeGroup.DefaultIfEmpty()
+			join account in accounts on income.DefaultAccountHeadId equals (Guid?)account.Id into accountGroup
+			from account in accountGroup.DefaultIfEmpty()
+			select new FeeHeadResponse
+			{
+				Id = head.Id, AcademicYearId = head.AcademicYearId, FeeCategoryId = head.FeeCategoryId,
+				FeeCategoryName = category.Name, IncomeCategoryId = head.IncomeCategoryId,
+				IncomeCategoryName = income == null ? null : income.Name,
+				IncomeAccountHeadId = account == null ? Guid.Empty : account.Id,
+				IncomeAccountHeadName = account == null ? null : account.Name,
+				Name = head.Name, Module = head.Module, IsConcessionApplied = head.IsConcessionApplied,
+				Description = head.Description, IsActive = head.IsActive, DeactivationReason = head.DeactivationReason,
+				CreatedAt = head.CreationTime, UpdatedAt = head.LastModificationTime
+			};
+		rows = ListFilters.Apply(rows, tableQuery);
+		var totalCount = await AsyncExecuter.CountAsync(rows);
+		var dtos = await AsyncExecuter.ToListAsync(rows.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
+			.Skip((page - 1) * pageSize).Take(pageSize));
+		var dependencies = await dependencyQuery.GetAsync(dtos.Select(x => x.Id));
+		foreach (var response in dtos)
+		{
+			response.Dependencies = dependencies[response.Id];
+			response.IsUsedInDownstream = response.Dependencies.IsBlocked;
+		}
 
         return new FeeHeadListResponse
         {
@@ -275,15 +271,4 @@ public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 		return response;
 	}
 
-	private static void PopulateAccountingMapping(FeeHeadResponse response, FeeHead feeHead,
-		IReadOnlyDictionary<Guid, TransactionCategory> incomeCategories,
-		IReadOnlyDictionary<Guid, AccountHead> accountHeads)
-	{
-		if (!incomeCategories.TryGetValue(feeHead.IncomeCategoryId, out var incomeCategory)) return;
-		response.IncomeCategoryName = incomeCategory.Name;
-		if (!incomeCategory.DefaultAccountHeadId.HasValue ||
-			!accountHeads.TryGetValue(incomeCategory.DefaultAccountHeadId.Value, out var accountHead)) return;
-		response.IncomeAccountHeadId = accountHead.Id;
-		response.IncomeAccountHeadName = accountHead.Name;
-	}
 }

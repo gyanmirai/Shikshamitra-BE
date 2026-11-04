@@ -23,6 +23,7 @@ public static class AdmissionFormInheritanceComposer
 			return result;
 		}
 		var targetFields = result.Definition.Sections.SelectMany(section => section.Fields).ToList();
+		var replacedAcademicParents = new List<AdmissionFormSchemaField>();
 		var authoredEmptySections = result.Definition.Sections.Where(section => section.Fields.Count == 0).Select(section => section.Id).ToHashSet();
 		if (targetFields.GroupBy(field => field.Code, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
 		{
@@ -30,7 +31,7 @@ public static class AdmissionFormInheritanceComposer
 			return result;
 		}
 		var targetsByCode = targetFields.ToDictionary(field => field.Code, StringComparer.OrdinalIgnoreCase);
-		var targetGroups = targetFields.GroupBy(field => MatchIdentity(field, registration.Id), StringComparer.OrdinalIgnoreCase).ToList();
+		var targetGroups = targetFields.GroupBy(field => MatchIdentity(field, registration.Id, targetFields), StringComparer.OrdinalIgnoreCase).ToList();
 		if (targetGroups.Any(group => group.Count() > 1))
 		{
 			Issue(result, "DuplicateRegistrationIdentity", "The Registration form includes the same question more than once.");
@@ -46,7 +47,7 @@ public static class AdmissionFormInheritanceComposer
 			var source = sourceFields.SingleOrDefault(field => string.Equals(field.Code, mapping.SourceFieldCode, StringComparison.OrdinalIgnoreCase));
 			if (source == null || !targetsByCode.TryGetValue(mapping.RegistrationFieldCode, out var target) ||
 				source.BindingType != AdmissionFormBindingType.Custom || target.BindingType != AdmissionFormBindingType.Custom ||
-				!mappings.TryAdd(source.Code, MatchIdentity(target, registration.Id)))
+				!mappings.TryAdd(source.Code, MatchIdentity(target, registration.Id, targetFields)))
 			{
 				Issue(result, "InvalidMapping", "Choose one existing custom question on each side when confirming a shared question.");
 			}
@@ -57,7 +58,7 @@ public static class AdmissionFormInheritanceComposer
 		var seenSourceIdentities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var field in sourceFields)
 		{
-			var identity = mappings.GetValueOrDefault(field.Code) ?? MatchIdentity(field, inquiry.Id);
+			var identity = mappings.GetValueOrDefault(field.Code) ?? MatchIdentity(field, inquiry.Id, sourceFields);
 			identities[field.Code] = identity;
 			if (!seenSourceIdentities.Add(identity))
 				Issue(result, "DuplicateSourceIdentity", "The Inquiry form includes the same question more than once.", identity);
@@ -158,7 +159,8 @@ public static class AdmissionFormInheritanceComposer
 					var targetSection = result.Definition.Sections.Single(section => section.Fields.Contains(target));
 					if (source.FieldType != target.FieldType)
 						Issue(result, "FieldTypeConflict", "The linked question has incompatible answer types. Correct its definition before enabling inheritance.", identity);
-					if (IsChoice(source.FieldType) && !EquivalentOptions(inherited.OptionsJson, target.OptionsJson))
+					if (IsChoice(source.FieldType) && !EquivalentOptions(inherited.OptionsJson, target.OptionsJson) &&
+						!SourceOwnedAcademicMatch(source, target, identity))
 						Issue(result, "OptionsConflict", "The linked question has different option values. Review the source question before enabling inheritance.", identity);
 					if (sourceSection.IsRepeatable != targetSection.IsRepeatable ||
 						(sourceSection.IsRepeatable && (sourceSection.MinEntries != targetSection.MinEntries || sourceSection.MaxEntries != targetSection.MaxEntries)))
@@ -178,6 +180,16 @@ public static class AdmissionFormInheritanceComposer
 						inherited.BindingKey = target.BindingKey;
 					}
 					targetSection.Fields.Remove(target);
+					if (ReadAcademicSource(source).Key == "Standards" && ReadAcademicSource(target).Key == "StandardsByMedium")
+					{
+						var medium = targetFields.FirstOrDefault(field => field.Code == ReadAcademicSource(target).Parent);
+						var board = medium == null ? null : targetFields.FirstOrDefault(field => field.Code == ReadAcademicSource(medium).Parent);
+						if (medium != null && ReadAcademicSource(medium).Key == "EducationMediums" && board != null && ReadAcademicSource(board).Key == "EducationBoards")
+						{
+							replacedAcademicParents.Add(medium);
+							replacedAcademicParents.Add(board);
+						}
+					}
 				}
 				if (identity == "system:APPLICANT.NAME" && targetFields.Any(field => MatchIdentity(field, registration.Id) is
 					"system:APPLICANT.FIRSTNAME" or "system:APPLICANT.MIDDLENAME" or "system:APPLICANT.LASTNAME"))
@@ -194,7 +206,8 @@ public static class AdmissionFormInheritanceComposer
 			if (inheritedSection.Fields.Count > 0) result.Definition.Sections.Add(inheritedSection);
 			if (contextSection.Fields.Count > 0) result.InquiryContextSections.Add(contextSection);
 		}
-		OrderInquiryFirst(result.Definition, sourceSectionIds, authoredEmptySections);
+		RemoveUnusedAcademicParents(result.Definition, replacedAcademicParents);
+		OrderInquiryFirst(result.Definition, result.InquiryContextSections, sourceSectionIds, authoredEmptySections);
 		result.Definition.SupportedLanguages = languages;
 		return result;
 	}
@@ -204,9 +217,13 @@ public static class AdmissionFormInheritanceComposer
 			? "system:" + field.BindingKey.Trim().ToUpperInvariant()
 			: !string.IsNullOrWhiteSpace(field.FieldIdentity) ? field.FieldIdentity : "custom:" + formId.ToString("N") + ":" + field.Code.ToUpperInvariant();
 
-	private static string MatchIdentity(AdmissionFormSchemaField field, Guid formId)
+	private static string MatchIdentity(AdmissionFormSchemaField field, Guid formId, IReadOnlyList<AdmissionFormSchemaField>? siblings = null)
 	{
-		if (field.FieldType != AdmissionFormFieldType.Static && AdmissionClassInterestQuestion.Matches(field.Code, field.Label, field.BindingType, field.BindingKey))
+		var academicIdentity = AcademicGroupIdentity(field, siblings);
+		if (academicIdentity != null) return academicIdentity;
+		var source = ReadAcademicSource(field);
+		if (field.FieldType != AdmissionFormFieldType.Static && source.Key is not ("EducationBoards" or "EducationMediums") &&
+			AdmissionClassInterestQuestion.Matches(field.Code, field.Label, field.BindingType, field.BindingKey, field.OptionsJson))
 			return AdmissionClassInterestQuestion.Identity;
 		if (field.BindingType == AdmissionFormBindingType.System ||
 			(!string.IsNullOrWhiteSpace(field.BindingKey) && !string.Equals(field.BindingKey, field.Code, StringComparison.OrdinalIgnoreCase)))
@@ -230,17 +247,76 @@ public static class AdmissionFormInheritanceComposer
 		return binding == null ? Identity(field, formId) : "system:" + binding;
 	}
 
-	private static void OrderInquiryFirst(AdmissionFormSchema definition, IReadOnlySet<Guid> sourceSectionIds, IReadOnlySet<Guid> authoredEmptySections)
+	private static string? AcademicGroupIdentity(AdmissionFormSchemaField field, IReadOnlyList<AdmissionFormSchemaField>? siblings)
+	{
+		if (siblings == null) return null;
+		foreach (var standard in siblings.Where(candidate => ReadAcademicSource(candidate).Key == "StandardsByMedium"))
+		{
+			var medium = siblings.FirstOrDefault(candidate => candidate.Code == ReadAcademicSource(standard).Parent);
+			if (medium == null || ReadAcademicSource(medium).Key != "EducationMediums") continue;
+			var board = siblings.FirstOrDefault(candidate => candidate.Code == ReadAcademicSource(medium).Parent);
+			if (board == null || ReadAcademicSource(board).Key != "EducationBoards" || ReadAcademicSource(board).Parent != null) continue;
+			if (field.Id == standard.Id) return AdmissionClassInterestQuestion.Identity;
+			if (field.Id == medium.Id) return "academic:medium";
+			if (field.Id == board.Id) return "academic:board";
+		}
+		return null;
+	}
+
+	private static void RemoveUnusedAcademicParents(AdmissionFormSchema definition, IEnumerable<AdmissionFormSchemaField> candidates)
+	{
+		foreach (var candidate in candidates.DistinctBy(field => field.Id))
+		{
+			var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { candidate.Code };
+			var referenced = definition.Sections.Any(section => ReferencesContext(section.VisibilityRuleJson, codes) ||
+				ReferencesContext(section.StepVisibilityRuleJson, codes) || section.Fields.Any(field => field.Id != candidate.Id &&
+					(ReferencesContext(field.OptionsJson, codes) || ReferencesContext(field.ValidationJson, codes) ||
+					ReferencesContext(field.VisibilityRuleJson, codes) || ReferencesContext(field.RequiredRuleJson, codes))));
+			if (!referenced)
+				foreach (var section in definition.Sections) section.Fields.RemoveAll(field => field.Id == candidate.Id);
+		}
+	}
+
+	private static bool SourceOwnedAcademicMatch(AdmissionFormSchemaField source, AdmissionFormSchemaField target, string identity) =>
+		identity.StartsWith("academic:", StringComparison.Ordinal) && ReadAcademicSource(source).Key != null && ReadAcademicSource(target).Key != null &&
+		(identity != AdmissionClassInterestQuestion.Identity || AdmissionClassInterestQuestion.IsConfigured(source.FieldType, source.OptionsJson) &&
+			AdmissionClassInterestQuestion.IsConfigured(target.FieldType, target.OptionsJson));
+
+	private static (string? Key, string? Parent) ReadAcademicSource(AdmissionFormSchemaField field)
+	{
+		if (field.FieldType != AdmissionFormFieldType.Select) return (null, null);
+		try
+		{
+			using var json = JsonDocument.Parse(field.OptionsJson ?? "{}");
+			if (json.RootElement.ValueKind != JsonValueKind.Object || !json.RootElement.TryGetProperty("source", out var key) || key.ValueKind != JsonValueKind.String)
+				return (null, null);
+			var source = key.GetString();
+			if (source is not ("EducationBoards" or "EducationMediums" or "StandardsByMedium" or "Standards")) return (null, null);
+			return (source, json.RootElement.TryGetProperty("parentField", out var parent) && parent.ValueKind == JsonValueKind.String ? parent.GetString() : null);
+		}
+		catch (JsonException) { return (null, null); }
+	}
+
+	private static void OrderInquiryFirst(AdmissionFormSchema definition, IReadOnlyCollection<AdmissionFormSchemaSection> contextSections,
+		IReadOnlySet<Guid> sourceSectionIds, IReadOnlySet<Guid> authoredEmptySections)
 	{
 		var source = definition.Sections.Where(section => sourceSectionIds.Contains(section.Id)).OrderBy(section => section.DisplayOrder).ToList();
+		// A source-only section can live entirely in the immutable context payload.
+		// Order the complete presentation union, then apply the same metadata to both faces
+		// of a mixed section without adding context fields to editable Registration.
+		var allSource = source.Concat(contextSections).ToList();
+		var sourceGroups = allSource.GroupBy(section => section.Id)
+			.OrderBy(group => group.Min(section => section.DisplayOrder)).ToList();
 		var registration = definition.Sections.Where(section => !sourceSectionIds.Contains(section.Id) &&
 			(section.Fields.Count > 0 || authoredEmptySections.Contains(section.Id)))
 			.OrderBy(section => section.DisplayOrder).ToList();
 		definition.Sections = source.Concat(registration).ToList();
-		for (var index = 0; index < definition.Sections.Count; index++) definition.Sections[index].DisplayOrder = index;
+		for (var index = 0; index < sourceGroups.Count; index++)
+			foreach (var section in sourceGroups[index]) section.DisplayOrder = index;
+		for (var index = 0; index < registration.Count; index++) registration[index].DisplayOrder = sourceGroups.Count + index;
 		if (definition.LayoutType != AdmissionFormLayoutType.Stepper) return;
 		var stepOrder = 0;
-		foreach (var owner in new[] { source, registration })
+		foreach (var owner in new[] { allSource, registration })
 			foreach (var group in owner.GroupBy(section => section.StepId ?? section.Id)
 				.OrderBy(group => group.Min(section => section.StepDisplayOrder ?? section.DisplayOrder)))
 			{

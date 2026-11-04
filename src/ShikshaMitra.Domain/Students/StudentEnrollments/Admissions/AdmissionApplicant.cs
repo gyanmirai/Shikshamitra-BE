@@ -23,5 +23,12 @@ public class AdmissionApplicant : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingErrorCodes.ExistingStudentInvalid);
 		ExistingStudentId = studentId;
 	}
+	public void ReassignPendingInquiryFamily(Guid expectedFamilyId, Guid confirmedFamilyId)
+	{
+		if (IsDeleted || Status != AdmissionApplicantStatus.Active || ExistingStudentId.HasValue || FamilyId != expectedFamilyId ||
+			confirmedFamilyId == Guid.Empty || confirmedFamilyId == FamilyId)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
+		FamilyId = confirmedFamilyId;
+	}
 	private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

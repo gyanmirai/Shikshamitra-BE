@@ -3,6 +3,14 @@ using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 
+public sealed record FeeRefundReceiptFileDto(byte[] Content, string FileName);
+
+public sealed class RefundSourceReceiptDto
+{
+    public Guid ReceiptId { get; set; }
+    public string ReceiptNumber { get; set; } = string.Empty;
+}
+
 /// <summary>Response DTO for a single <see cref="FeeRefundRequest"/>.</summary>
 public class FeeRefundRequestDto
 {
@@ -30,6 +38,7 @@ public class FeeRefundRequestDto
 	public string? RefundPolicyName { get; set; }
 	public Guid? OriginalReceiptId { get; set; }
 	public string? OriginalReceiptNumber { get; set; }
+	public List<RefundSourceReceiptDto> SourceReceipts { get; set; } = [];
 	public string Currency { get; set; } = "INR";
 
     public string VoucherNumber { get; set; } = default!;

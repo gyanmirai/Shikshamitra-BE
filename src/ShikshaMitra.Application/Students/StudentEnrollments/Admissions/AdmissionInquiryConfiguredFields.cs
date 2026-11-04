@@ -36,6 +36,9 @@ internal static class AdmissionInquiryConfiguredFields
 		["Mother.Email"] = ["MOTHER_EMAIL"]
 	};
 
+	internal static string? ReservedBinding(string code, string? bindingKey) => HasOwnedBinding(bindingKey) ? null :
+		Aliases.FirstOrDefault(item => item.Value.Any(alias => Normalize(alias) == Normalize(code))).Key;
+
 	public static AdmissionFormFieldDefinition? Find(IEnumerable<AdmissionFormFieldDefinition> fields, string key)
 	{
 		var candidates = fields as IReadOnlyCollection<AdmissionFormFieldDefinition> ?? fields.ToList();

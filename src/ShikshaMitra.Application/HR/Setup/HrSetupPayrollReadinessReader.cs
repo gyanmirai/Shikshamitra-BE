@@ -6,10 +6,12 @@ using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Payroll.Templates;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Users;
 using H = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.HR;
 
 namespace ShikshaMitra.HR.Setup;
@@ -20,6 +22,7 @@ public class HrSetupPayrollReadinessReader(
 	IRepository<SalaryStructureTemplate, Guid> templates, IRepository<SalaryStructureTemplateVersion, Guid> versions,
 	IRepository<ProvidentFund, Guid> pf, IRepository<ProfessionalTax, Guid> professionalTax,
 	IRepository<EsiPayrollConfiguration, Guid> esiConfigurations, EsiPolicyResolver esiPolicies,
+	IRepository<PfCoverageConfiguration, Guid> pfCoverage, IUserScopeService scope, ICurrentUser currentUser,
 	IPermissionChecker permissions) : ITransientDependency
 {
 	public async Task<List<HrSetupCheckDto>> ReadAsync(Guid tenantId, DateTime now)
@@ -38,6 +41,14 @@ public class HrSetupPayrollReadinessReader(
 		var versionRows = await versions.GetListAsync(x => x.TenantId == tenantId);
 		var deductionIds = (await deductions.GetListAsync(x => x.TenantId == tenantId && x.IsActive)).Select(x => x.Id).ToHashSet();
 		var month = new DateTime(now.Year, now.Month, 1);
+		var schoolNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(now, DateTimeKind.Utc), TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata"));
+		var coverageMonth = new DateTime(schoolNow.Year, schoolNow.Month, 1);
+		var coverageConfigured = await pfCoverage.AnyAsync(x => x.TenantId == tenantId && !x.IsCancelled && x.EffectiveMonth <= coverageMonth);
+		result.Add(new() { Code = "pf-coverage", Step = "salary", State = coverageConfigured ? "ready" : "missing",
+			Reason = coverageConfigured ? "School PF coverage is recorded for the current month." : "Record whether the school is covered under PF, with an effective month and evidence reference.",
+			CanConfigure = await permissions.IsGrantedAsync(H.PayrollManagement_SettingsPfRule.View) &&
+				await permissions.IsGrantedAsync(H.PayrollManagement_SettingsPfRule.Add) && currentUser.Id.HasValue &&
+				HrUserScopeAccess.HasHrWideAccess(await scope.GetUserScopeAsync(currentUser.Id.Value)) });
 		var monthEnd = month.AddMonths(1).AddDays(-1);
 		var pfRules = await pf.GetListAsync(x => x.TenantId == tenantId && x.IsActive && x.EffectiveFrom <= monthEnd && (!x.EffectiveTo.HasValue || x.EffectiveTo >= month));
 		var taxRules = await professionalTax.GetListAsync(x => x.TenantId == tenantId && x.IsActive && x.EffectiveFrom <= monthEnd && (!x.EffectiveTo.HasValue || x.EffectiveTo >= month));

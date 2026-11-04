@@ -116,6 +116,7 @@ public class PublicAdmissionInquiryFieldDto
 	public string? HelpText { get; set; }
 	public string? DefaultValue { get; set; }
 	public string? OptionsJson { get; set; }
+	public string? OptionsSourceJson { get; set; }
 	public string? ValidationJson { get; set; }
 	public string? VisibilityRuleJson { get; set; }
 	public string? RequiredRuleJson { get; set; }
@@ -124,6 +125,7 @@ public class PublicAdmissionInquiryFieldDto
 
 public class SubmitPublicAdmissionInquiryDto
 {
+	public Guid? RequestId { get; set; }
 	private string? _guardianEmail;
 	[Required]
 	public Guid AdmissionOfferingId { get; set; }

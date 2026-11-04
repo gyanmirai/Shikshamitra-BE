@@ -31,6 +31,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		created.Configuration.Errors.ShouldNotContain(error => error.Code == AdmissionOfferingValidationCodes.WorkflowFormMismatch);
 
 		var legacy = await CreateOptionalIntakeOfferingAsync();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var unused = await _offeringRepository.GetAsync(legacy.Id);
+			unused.Deactivate();
+			await _offeringRepository.UpdateAsync(unused, true);
+		});
 		var update = await EligibilityOfferingInputAsync<UpdateAdmissionOfferingDto>(await GetRequiredService<IAdmissionOfferingAppService>().GetAsync(legacy.Id));
 		update.ApplicationFormDefinitionId = Guid.NewGuid();
 		await WithUnitOfWorkAsync(async () =>

@@ -18,6 +18,7 @@ using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
@@ -162,32 +163,15 @@ public class AdmissionPublicInquiryAppService(
 			var form = await forms.GetAsync(formId);
 			var sections = await formSections.GetListAsync(item => item.FormDefinitionId == formId);
 			var fields = await formFields.GetListAsync(item => item.FormDefinitionId == formId);
-			context.Form = new PublicAdmissionInquiryFormDto
-			{
-				Id = form.Id, Name = form.Name, Version = form.Version,
-				Sections = sections.OrderBy(item => item.DisplayOrder).Select(section => new PublicAdmissionInquirySectionDto
-				{
-					Code = section.Code, Name = section.Name, DisplayOrder = section.DisplayOrder,
-					VisibilityRuleJson = section.VisibilityRuleJson,
-					StepVisibilityRuleJson = section.StepVisibilityRuleJson,
-					Fields = fields.Where(field => field.SectionId == section.Id)
-						.OrderBy(field => field.DisplayOrder).Select(field => new PublicAdmissionInquiryFieldDto
-						{
-							Code = field.Code, Label = field.Label, FieldType = field.FieldType,
-							BindingType = field.BindingType, BindingKey = field.BindingKey,
-							Required = field.Required, ReadOnly = field.ReadOnly,
-							DisplayOrder = field.DisplayOrder, Placeholder = field.Placeholder,
-							HelpText = field.HelpText, DefaultValue = field.DefaultValue,
-							OptionsJson = field.OptionsJson, ValidationJson = field.ValidationJson,
-							VisibilityRuleJson = field.VisibilityRuleJson,
-							RequiredRuleJson = field.RequiredRuleJson
-						}).ToList()
-				}).ToList()
-			};
+			var projected = AdmissionPublicInquirySchema.Project(AdmissionFormAppService.Map(form, sections, fields));
+			context.Form = JsonSerializer.Deserialize<PublicAdmissionInquiryFormDto>(JsonSerializer.Serialize(projected))!;
 			var academicChoices = LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryAcademicOptionsService>();
 			foreach (var field in context.Form.Sections.SelectMany(section => section.Fields))
 				if (AdmissionFormMasterDataValidator.TrySource(AdmissionAcademicFormOptions.OptionsJson(field.Code, field.FieldType, field.OptionsJson), out var key, out _) && AdmissionAcademicFormOptions.IsAcademic(key))
+				{
+					field.OptionsSourceJson = AdmissionAcademicFormOptions.OptionsJson(field.Code, field.FieldType, field.OptionsJson);
 					field.OptionsJson = AdmissionAcademicFormOptions.SerializeOptions(await academicChoices.ForPublicOfferingAsync(key, selected));
+				}
 		}
 		return context;
 	}
@@ -225,6 +209,8 @@ public class AdmissionPublicInquiryAppService(
 	[AllowAnonymous]
 	public async Task SubmitPublicAsync(string token, SubmitPublicAdmissionInquiryDto input)
 	{
+		var units = LazyServiceProvider.LazyGetRequiredService<IUnitOfWorkManager>();
+		using var submission = units.Begin(requiresNew: units.Current?.Options.IsTransactional != true, isTransactional: true);
 		var (link, cycle) = await ResolveLinkAsync(token);
 		input.FormValues ??= [];
 		if (!input.ConsentToContact)
@@ -239,11 +225,35 @@ public class AdmissionPublicInquiryAppService(
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 					"Choose the board, medium and class belonging to this admission option.");
 			await availabilityService.EnsureAvailableForPublicAsync(offering);
+			var sourceId = offering.InquiryFormDefinitionId ?? throw new BusinessException(AdmissionErrorCodes.OfferingConfigurationIncomplete);
+			var source = AdmissionFormAppService.Map(await forms.GetAsync(sourceId),
+				await formSections.GetListAsync(section => section.FormDefinitionId == sourceId),
+				await formFields.GetListAsync(field => field.FormDefinitionId == sourceId));
+			var projected = AdmissionPublicInquirySchema.Project(source);
+			input = AdmissionPublicInquirySubmissionStore.ProjectInput(input, source, projected);
+			var fingerprint = AdmissionPublicInquirySubmissionStore.Fingerprint(input, projected);
+			await LazyServiceProvider.LazyGetRequiredService<IAdmissionPublicInquirySubmissionLock>().AcquireAsync(link.TenantId, link.Id);
+			// Re-read scalar eligibility after waiting: tracked objects may predate a revocation.
+			var now = Clock.Now;
+			if (!await AsyncExecuter.AnyAsync((await links.GetQueryableAsync()).Where(item => item.Id == link.Id && item.IsActive &&
+				item.AdmissionCycleId == cycle.Id && (!item.InquiryFormDefinitionId.HasValue || item.InquiryFormDefinitionId == sourceId) &&
+				(!item.ExpiresAtUtc.HasValue || item.ExpiresAtUtc > now))) ||
+				!await AsyncExecuter.AnyAsync((await cycles.GetQueryableAsync()).Where(item => item.Id == cycle.Id && item.Status == AdmissionCycleStatus.Published &&
+					item.StartDate.Date <= now.Date && item.EndDate.Date >= now.Date)) ||
+				!await AsyncExecuter.AnyAsync((await offerings.GetQueryableAsync()).Where(item => item.Id == offering.Id && item.IsActive &&
+					item.AdmissionCycleId == cycle.Id && item.InquiryFormDefinitionId == sourceId && item.EntryMode != AdmissionEntryMode.DirectRegistration)) ||
+				!await AsyncExecuter.AnyAsync((await forms.GetQueryableAsync()).Where(item => item.Id == sourceId && item.Status == AdmissionFormStatus.Published && item.Purpose == AdmissionFormPurpose.Inquiry)))
+				throw new BusinessException(LinkUnavailable);
+			await availabilityService.EnsureAvailableForPublicAsync(offering);
+			if (await LazyServiceProvider.LazyGetRequiredService<AdmissionPublicInquirySubmissionStore>().IsReplayAsync(link, input.RequestId, fingerprint))
+			{
+				await submission.CompleteAsync();
+				return;
+			}
 			var details = link.SourceDetail ?? link.Name;
 			if (!string.IsNullOrWhiteSpace(input.ClassInterest))
 				details = $"{details}; Class interest: {input.ClassInterest.Trim()}";
 			if (details.Length > 512) details = details[..512];
-			try
 			{
 				var inquiry = await inquiryService.CreateFromPublicLinkAsync(new CreateAdmissionInquiryDto
 				{
@@ -264,16 +274,16 @@ public class AdmissionPublicInquiryAppService(
 					SourceDetail = details,
 					FormValues = input.FormValues
 				}, null, offering.InquiryFormDefinitionId);
-				await communications.RecordPublicInquiryConsentAsync(
-					await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionInquiry, Guid>>().GetAsync(inquiry.Id), link.Id);
+				var inquiryRepository = LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionInquiry, Guid>>();
+				var captured = await inquiryRepository.GetAsync(inquiry.Id);
+				AdmissionPublicInquirySubmissionStore.Capture(captured, link.Id, input.RequestId, fingerprint);
+				await inquiryRepository.UpdateAsync(captured, autoSave: false);
+				await communications.RecordPublicInquiryConsentAsync(captured, link.Id);
 				await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("PublicInquiryConsent", "Guardian consented to admission inquiry contact.",
 					inquiry.ApplicantId, null, inquiry.Id,
 					JsonSerializer.Serialize(new { LinkId = link.Id, ConsentToContact = true })), autoSave: true);
 			}
-			catch (BusinessException error) when (error.Code == AdmissionErrorCodes.InquiryDuplicate)
-			{
-				// A public caller receives the same acknowledgement for an existing phone.
-			}
+			await submission.CompleteAsync();
 		}
 	}
 

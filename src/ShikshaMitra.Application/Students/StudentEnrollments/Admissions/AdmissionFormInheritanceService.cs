@@ -25,8 +25,33 @@ public class AdmissionFormInheritanceService(
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
+	public async Task<AdmissionFormInheritancePreviewDto> GetSavedPreviewAsync(Guid registrationFormId, Guid inquiryFormDefinitionId)
+	{
+		var registration = await ReadDefinitionAsync(registrationFormId);
+		if (registration.Purpose != AdmissionFormPurpose.Registration || registration.Inheritance?.Enabled != true ||
+			registration.Inheritance.Sources.All(source => source.InquiryFormDefinitionId != inquiryFormDefinitionId))
+			throw new BusinessException(AdmissionFormInheritanceErrorCodes.InvalidPolicy,
+				"Choose an Inquiry version approved by this saved Registration form.");
+		// Check persisted approval before reading the source; View is not authority to
+		// preview an arbitrary caller-supplied Inquiry through this saved-form route.
+		var inquiry = await ReadDefinitionAsync(inquiryFormDefinitionId);
+		if (inquiry.Status is not (AdmissionFormStatus.Published or AdmissionFormStatus.Archived))
+			throw new BusinessException(AdmissionFormInheritanceErrorCodes.IncompatibleSource,
+				"The saved Inquiry source is not a published version.");
+		return Compose(registration, inquiry, requireApprovedSource: true);
+	}
+
 	public async Task<AdmissionFormInheritancePreviewDto> ComposeAsync(
 		Guid registrationFormId, Guid? inquiryFormId, bool requireApprovedSource = true)
+		=> await ComposeCoreAsync(registrationFormId, inquiryFormId, requireApprovedSource, null);
+
+	internal Task<AdmissionFormInheritancePreviewDto> ComposeCapturedAsync(Guid registrationFormId, AdmissionInquiry? inquiry) =>
+		ComposeCoreAsync(registrationFormId, inquiry?.FormResponseDefinitionId, true,
+			inquiry == null ? null : AdmissionPublicInquirySchema.ReadCaptured(inquiry));
+
+	private async Task<AdmissionFormInheritancePreviewDto> ComposeCoreAsync(Guid registrationFormId, Guid? inquiryFormId,
+		bool requireApprovedSource, AdmissionFormDto? effectiveSource)
 	{
 		var registration = await ReadDefinitionAsync(registrationFormId);
 		if (registration.Purpose != AdmissionFormPurpose.Registration)
@@ -36,7 +61,7 @@ public class AdmissionFormInheritanceService(
 		var inquiry = await ReadDefinitionAsync(inquiryFormId.Value);
 		if (inquiry.Status is not (AdmissionFormStatus.Published or AdmissionFormStatus.Archived))
 			throw new BusinessException(AdmissionFormInheritanceErrorCodes.IncompatibleSource, "The source Inquiry version is not published.");
-		return Compose(registration, inquiry, requireApprovedSource);
+		return ComposeCore(registration, effectiveSource ?? inquiry, requireApprovedSource, effectiveSource != null);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
@@ -56,6 +81,7 @@ public class AdmissionFormInheritanceService(
 				if (registration.Status != AdmissionFormStatus.Draft || input.Draft.ConcurrencyStamp != registration.ConcurrencyStamp)
 					throw new BusinessException("Admissions.FormConcurrencyConflict", "Reload the current draft before previewing inheritance.");
 				registration = DraftDefinition(input.Draft, registration.Id);
+				registration.CoreFieldPolicyVersion = persistedRegistration.CoreFieldPolicyVersion;
 			}
 		}
 		else if (input.Draft != null) registration = DraftDefinition(input.Draft, Guid.NewGuid());
@@ -159,7 +185,8 @@ public class AdmissionFormInheritanceService(
 				issues.AddRange(composed.Issues);
 				if (!composed.Definition.Sections.SelectMany(section => section.Fields).Any(field => field.FieldType != AdmissionFormFieldType.Static))
 					issues.Add(new() { Code = "EmptyRegistration", Message = "Each connected Inquiry must supply Registration questions, or add a Registration-only question." });
-				if (registration.LayoutType == AdmissionFormLayoutType.Stepper && composed.Definition.Sections.GroupBy(section => section.StepId ?? section.Id).Count() < 2)
+				if (registration.LayoutType == AdmissionFormLayoutType.Stepper && composed.Definition.Sections.Concat(composed.InquiryContextSections)
+					.GroupBy(section => section.StepId ?? section.Id).Count() < 2)
 					issues.Add(new() { Code = "InsufficientSteps", Message = "The resulting Registration form needs at least two steps for a stepper layout." });
 			}
 		}
@@ -176,10 +203,14 @@ public class AdmissionFormInheritanceService(
 	}
 
 	public static AdmissionFormInheritancePreviewDto Compose(AdmissionFormDto registration, AdmissionFormDto inquiry, bool requireApprovedSource)
+		=> ComposeCore(registration, inquiry, requireApprovedSource, false);
+
+	private static AdmissionFormInheritancePreviewDto ComposeCore(AdmissionFormDto registration, AdmissionFormDto inquiry,
+		bool requireApprovedSource, bool publicSourceProjection)
 	{
 		if (inquiry.Purpose != AdmissionFormPurpose.Inquiry)
 			return new() { Definition = registration, Issues = [new() { Code = "InvalidSource", Message = "Choose an Inquiry form as the source." }] };
-		var structuralIssues = ValidatePreviewRules(registration).Concat(ValidatePreviewRules(inquiry)).ToList();
+		var structuralIssues = ValidatePreviewRules(registration).Concat(ValidatePreviewRules(inquiry, allowRuntimeConstants: publicSourceProjection)).ToList();
 		if (structuralIssues.Count > 0) return new() { Definition = registration, InquiryFormDefinitionId = inquiry.Id, Issues = structuralIssues };
 		var policy = Convert<AdmissionFormInheritancePolicy>(registration.Inheritance ?? new AdmissionFormInheritancePolicyDto());
 		if (!requireApprovedSource)
@@ -187,15 +218,29 @@ public class AdmissionFormInheritanceService(
 			policy.Enabled = true;
 			if (policy.Sources.All(source => source.InquiryFormDefinitionId != inquiry.Id)) policy.Sources.Add(new() { InquiryFormDefinitionId = inquiry.Id });
 		}
-		var composition = AdmissionFormInheritanceComposer.Compose(Convert<AdmissionFormSchema>(registration), Convert<AdmissionFormSchema>(inquiry), policy);
+		// New-policy Registration keeps the captured source name intact. Historical schemas
+		// retain the previous read-only full-name context behavior and are never rewritten.
+		var registrationSchema = Convert<AdmissionFormSchema>(registration);
+		if (registration.CoreFieldPolicyVersion.HasValue && inquiry.Sections.SelectMany(section => section.Fields).Any(field =>
+			field.BindingType == AdmissionFormBindingType.System && field.BindingKey == "Applicant.Name" ||
+			AdmissionInquiryConfiguredFields.ReservedBinding(field.Code, field.BindingKey) == "Applicant.Name"))
+			foreach (var section in registrationSchema.Sections)
+				section.Fields.RemoveAll(field => field.BindingType == AdmissionFormBindingType.System &&
+					field.BindingKey is "Applicant.FirstName" or "Applicant.MiddleName" or "Applicant.LastName");
+		var composition = AdmissionFormInheritanceComposer.Compose(registrationSchema, Convert<AdmissionFormSchema>(inquiry), policy);
 		var definition = Convert<AdmissionFormDto>(composition.Definition);
+		definition.CoreFieldPolicyVersion = registration.CoreFieldPolicyVersion;
 		definition.Status = registration.Status;
 		definition.ConcurrencyStamp = registration.ConcurrencyStamp;
 		definition.Inheritance = registration.Inheritance;
 		definition.SectionCount = definition.Sections.Count;
 		var contextSections = Convert<List<AdmissionFormSectionDto>>(composition.InquiryContextSections);
 		var issues = Convert<List<AdmissionFormInheritanceIssueDto>>(composition.Issues);
-		if (issues.Count == 0) issues.AddRange(ValidatePreviewRules(definition, contextSections));
+		if (issues.Count == 0) issues.AddRange(ValidatePreviewRules(definition, contextSections, publicSourceProjection));
+		if (registration.CoreFieldPolicyVersion.HasValue)
+			foreach (var key in new[] { "Applicant.DateOfBirth", "Applicant.Gender" })
+				if (!AdmissionCoreFieldPolicy.IsGuaranteed(definition, key))
+					issues.Add(new() { Code = "CoreIdentityRequired", Message = $"{key} must be a required, visible, editable question. Publish a new Inquiry version with this requirement, or remove its optional question and use the Registration question." });
 		return new()
 		{
 			Definition = definition, InquiryFormDefinitionId = inquiry.Id,
@@ -204,7 +249,8 @@ public class AdmissionFormInheritanceService(
 		};
 	}
 
-	private static List<AdmissionFormInheritanceIssueDto> ValidatePreviewRules(AdmissionFormDto form, IReadOnlyCollection<AdmissionFormSectionDto>? contextSections = null)
+	private static List<AdmissionFormInheritanceIssueDto> ValidatePreviewRules(AdmissionFormDto form,
+		IReadOnlyCollection<AdmissionFormSectionDto>? contextSections = null, bool allowRuntimeConstants = false)
 	{
 		var validation = new AdmissionFormValidationResultDto();
 		var validationSections = form.Sections.Concat(contextSections ?? []).ToList();
@@ -221,12 +267,12 @@ public class AdmissionFormInheritanceService(
 		var definitionsByCode = materializedFields.ToDictionary(field => field.Code, StringComparer.OrdinalIgnoreCase);
 		foreach (var section in validationSections)
 		{
-			AdmissionFormAppService.ValidateRule(section.VisibilityRuleJson, codes, section.Code, validation);
-			AdmissionFormAppService.ValidateRule(section.StepVisibilityRuleJson, codes, section.Code, validation);
+			AdmissionFormAppService.ValidateRule(ValidationRule(section.VisibilityRuleJson), codes, section.Code, validation);
+			AdmissionFormAppService.ValidateRule(ValidationRule(section.StepVisibilityRuleJson), codes, section.Code, validation);
 			foreach (var field in section.Fields)
 			{
-				AdmissionFormAppService.ValidateRule(field.VisibilityRuleJson, codes, field.Code, validation);
-				AdmissionFormAppService.ValidateRule(field.RequiredRuleJson, codes, field.Code, validation);
+				AdmissionFormAppService.ValidateRule(ValidationRule(field.VisibilityRuleJson), codes, field.Code, validation);
+				AdmissionFormAppService.ValidateRule(ValidationRule(field.RequiredRuleJson), codes, field.Code, validation);
 				AdmissionFormAppService.ValidateValidationJson(field.ValidationJson, field.Code, codes, validation);
 				if (field.FieldType is AdmissionFormFieldType.Select or AdmissionFormFieldType.MultiSelect or AdmissionFormFieldType.Radio)
 				{
@@ -236,6 +282,25 @@ public class AdmissionFormInheritanceService(
 		}
 		if (validation.Errors.Count == 0) AdmissionFormAppService.ValidateDependencyCycles(materializedFields, validation);
 		return PreviewIssues(validation);
+
+		string? ValidationRule(string? json)
+		{
+			if (!allowRuntimeConstants || string.IsNullOrWhiteSpace(json) || codes.Count == 0) return json;
+			// Authoring still rejects empty groups. Server-folded constants are valid runtime nodes;
+			// use a valid leaf only in this validation copy, retaining the actual ALL/ANY schema.
+			try { return Normalize(JsonNode.Parse(json))?.ToJsonString(); }
+			catch (JsonException) { return json; }
+
+			JsonNode? Normalize(JsonNode? node)
+			{
+				if (node is not JsonObject condition || condition["conditions"] is not JsonArray children) return node;
+				if (children.Count == 0 && condition["operator"] is JsonValue operation && operation.TryGetValue<string>(out var name) &&
+					(name.Equals("ALL", StringComparison.OrdinalIgnoreCase) || name.Equals("ANY", StringComparison.OrdinalIgnoreCase)))
+					return new JsonObject { ["field"] = codes.First(), ["operator"] = "IsEmpty" };
+				for (var index = 0; index < children.Count; index++) children[index] = Normalize(children[index]?.DeepClone());
+				return condition;
+			}
+		}
 	}
 
 	private static List<AdmissionFormInheritanceIssueDto> PreviewIssues(AdmissionFormValidationResultDto validation) =>

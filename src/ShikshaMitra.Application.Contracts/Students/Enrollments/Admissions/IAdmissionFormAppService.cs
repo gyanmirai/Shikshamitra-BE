@@ -11,12 +11,15 @@ public interface IAdmissionFormAppService : IApplicationService
 	Task<AdmissionFormDto> PreviewAsync(Guid id);
 	Task<PagedResultDto<AdmissionFormInheritanceSourceSummaryDto>> GetInheritanceSourcesAsync(Guid id, PagedResultRequestDto input);
 	Task<AdmissionFormInheritancePreviewDto> PreviewInheritanceAsync(AdmissionFormInheritancePreviewInput input);
+	Task<AdmissionFormInheritancePreviewDto> GetSavedInheritancePreviewAsync(Guid id, Guid inquiryFormDefinitionId);
 	Task<AdmissionFormDto> CreateAsync(CreateUpdateAdmissionFormDto input);
 	Task<AdmissionFormDto> UpdateAsync(Guid id, CreateUpdateAdmissionFormDto input);
 	Task<AdmissionFormDto> CloneAsync(Guid id, CloneAdmissionFormDto input);
 	Task<AdmissionFormDto> CreateNewVersionAsync(Guid id);
 	Task DeleteAsync(Guid id, string? concurrencyStamp = null);
 	Task<AdmissionFormDto> ArchiveAsync(Guid id, string? concurrencyStamp = null);
+	Task<AdmissionFormDto> RestoreAsync(Guid id, string? concurrencyStamp = null);
+	Task<AdmissionFormArchiveImpactDto> GetArchiveImpactAsync(Guid id);
 	Task<AdmissionFormValidationResultDto> ValidateAsync(Guid id);
 	Task<AdmissionFormDto> PublishAsync(Guid id, string? concurrencyStamp = null);
 	Task<IReadOnlyList<AdmissionFormAuditEntryDto>> GetAuditAsync(Guid id);

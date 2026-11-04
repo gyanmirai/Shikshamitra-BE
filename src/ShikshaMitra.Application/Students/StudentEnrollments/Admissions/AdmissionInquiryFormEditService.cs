@@ -164,6 +164,8 @@ public class AdmissionInquiryFormEditService(
 		}
 		else if (changedOffering)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed, "Complete the selected offering's inquiry form before changing the admission option.");
+		var policyForm = formId.HasValue ? await forms.FindAsync(formId.Value) : null;
+		AdmissionCoreFieldPolicy.EnsureParentEmail(policyForm == null ? null : AdmissionFormMetadataStore.ReadExperience(policyForm).CoreFieldPolicyVersion, input.Email);
 		if (applicant != null)
 		{
 			if (input.FormValues == null && input.GuardianResponsibilityConfirmed && AdmissionPrimaryContactSelection.ReadRelationship(applicant) == "guardian" && guardian != null)

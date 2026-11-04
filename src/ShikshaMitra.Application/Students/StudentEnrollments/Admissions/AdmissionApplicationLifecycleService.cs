@@ -79,6 +79,7 @@ public class AdmissionApplicationLifecycleService(
 		if (workflow == null || !workflow.Status.IsRuntimeVersion() || form?.Status != AdmissionFormStatus.Published)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);
 
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionOfferingConfigurationUsageService>().RecordAsync(offering);
 		var applicationNumber = await applicationNumbering.AllocateAsync(offering.AdmissionCycleId);
 		var application = new AdmissionApplication(
 			GuidGenerator.Create(), CurrentTenant.Id, applicationNumber, applicantId, inquiryId,
@@ -153,19 +154,45 @@ public class AdmissionApplicationLifecycleService(
 			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
 		var inquiryValues = ReadInquiryValues(inquiry?.FormResponseSnapshotJson);
 		var frozen = AdmissionEffectiveFormStore.Read(instance);
+		AdmissionFormFieldValue[] initialValues;
+		AdmissionFormDto definition;
 		if (frozen != null)
-			return frozen.Definition.Sections.SelectMany(section => section.Fields)
+		{
+			definition = frozen.Definition;
+			initialValues = frozen.Definition.Sections.SelectMany(section => section.Fields)
 				.Select(field => new AdmissionFormFieldValue(GuidGenerator.Create(), CurrentTenant.Id, instance.Id, field.Code,
 					ResolveFrozenInitialValue(field, applicant, guardian, inquiryValues)))
 				.Where(value => value.ValueJson != "null" && !string.IsNullOrWhiteSpace(value.ValueJson)).ToArray();
-		var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
-		var inquiryFields = inquiry?.FormResponseDefinitionId is Guid inquiryFormId
-			? await fieldRepository.GetListAsync(field => field.FormDefinitionId == inquiryFormId)
-			: [];
-		return fields.Select(field => new AdmissionFormFieldValue(
-				GuidGenerator.Create(), CurrentTenant.Id, instance.Id, field.Code,
-				ResolveInitialValue(field, applicant, guardian, inquiryFields, inquiryValues)))
-			.Where(value => value.ValueJson != "null" && !string.IsNullOrWhiteSpace(value.ValueJson)).ToArray();
+		}
+		else
+		{
+			var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
+			var inquiryFields = inquiry?.FormResponseDefinitionId is Guid inquiryFormId
+				? await fieldRepository.GetListAsync(field => field.FormDefinitionId == inquiryFormId)
+				: [];
+			initialValues = fields.Select(field => new AdmissionFormFieldValue(
+					GuidGenerator.Create(), CurrentTenant.Id, instance.Id, field.Code,
+					ResolveInitialValue(field, applicant, guardian, inquiryFields, inquiryValues)))
+				.Where(value => value.ValueJson != "null" && !string.IsNullOrWhiteSpace(value.ValueJson)).ToArray();
+			if (AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null) return initialValues;
+			var sections = await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionFormSectionDefinition, Guid>>()
+				.GetListAsync(section => section.FormDefinitionId == instance.FormDefinitionId);
+			definition = AdmissionApplicationFormService.MapDefinition(await formRepository.GetAsync(instance.FormDefinitionId), sections, fields);
+		}
+		if (AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null) return initialValues;
+		var prefillService = LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingRegistrationPrefillService>();
+		var prefill = await prefillService.ProjectAsync(applicant, instance, definition,
+			initialValues.Select(value => new AdmissionFormValueDto { FieldCode = value.FieldCode, ValueJson = value.ValueJson }).ToList(), initial: true);
+		if (prefill.AutoFilledFieldCodes.Count == 0) return initialValues;
+		foreach (var field in definition.Sections.SelectMany(section => section.Fields).Where(field => prefill.AutoFilledFieldCodes.Contains(field.Code)))
+		{
+			if (field.BindingKey is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email") continue;
+			var key = field.BindingKey == "Guardian.Occupation" ? (prefill.FamilyPrefill!.Relationship == "father" ? "Father.Occupation" : "Mother.Occupation") : field.BindingKey!;
+			AdmissionFormBindingRegistry.ApplyValue(key, AdmissionApplicationValueConverter.Unwrap(prefill.Values.Single(value => value.FieldCode == field.Code).ValueJson), applicant, null);
+		}
+		await applicantRepository.UpdateAsync(applicant, false);
+		await prefillService.RecordAsync(instance, prefill.FamilyPrefill!, prefill.AutoFilledFieldCodes);
+		return prefill.Values.Select(value => new AdmissionFormFieldValue(GuidGenerator.Create(), CurrentTenant.Id, instance.Id, value.FieldCode, value.ValueJson)).ToArray();
 	}
 
 	internal static string? ResolveFrozenInitialValue(AdmissionFormFieldDto field, AdmissionApplicant applicant,

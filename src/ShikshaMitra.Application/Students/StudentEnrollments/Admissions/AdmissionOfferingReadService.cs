@@ -8,6 +8,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
@@ -75,11 +76,28 @@ public class AdmissionOfferingReadService(
 		var rows = await AsyncExecuter.ToListAsync(read.Query);
 		var row = rows.SingleOrDefault() ?? throw new EntityNotFoundException(typeof(AdmissionOffering), id);
 		var detail = MapDetail(row, read.Errors.GetValueOrDefault(row.Offering.Id));
-		var validation = await configurationValidator.ValidateStoredAsync(row.Offering);
+		var usage = LazyServiceProvider.LazyGetRequiredService<AdmissionOfferingConfigurationUsageService>();
+		detail.InquiryCount = await usage.GetInquiryCountAsync(id);
+		detail.HasConfigurationUsage = await usage.HasUsageAsync(row.Offering);
+		AdmissionOfferingValidationResult validation;
+		try
+		{
+			validation = row.Offering.IsActive
+				? await configurationValidator.ValidateStoredAsync(row.Offering)
+				: await configurationValidator.ValidateForActivationAsync(row.Offering);
+		}
+		catch (BusinessException exception) when (exception.Code == AdmissionFormInheritanceErrorCodes.InvalidPolicy)
+		{
+			validation = new(read.Errors.GetValueOrDefault(row.Offering.Id) ??
+				[new(AdmissionFormInheritanceErrorCodes.IncompatibleSource,
+					"Open the linked Admission forms and repair their Inquiry inheritance settings before using this offering.")]);
+		}
 		detail.Configuration = MapValidation(validation);
 		detail.ConfigurationStatus = validation.Status;
 		var availability = AdmissionOfferingAvailabilityEvaluator.Evaluate(
 			row.Offering, row.Cycle, validation.IsValid, new DateTimeOffset(Clock.Now.ToUniversalTime()));
+		if (availability.Status == AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete)
+			availability = availability with { ReasonMessage = string.Join(" ", validation.Errors.Select(error => error.Message).Distinct()) };
 		detail.AvailabilityStatus = availability.Status;
 		detail.ClassCapacity = await classCapacityService.ReadForOfferingAsync(id);
 		return (row, detail, availability);
@@ -100,9 +118,8 @@ public class AdmissionOfferingReadService(
 			Status = detail.AvailabilityStatus,
 			CanCreateInquiry = intake.CanCreateInquiry,
 			CanStartApplication = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open,
-			ReasonCode = detail.Configuration.IsValid ? StatusReasonCode(detail.AvailabilityStatus) : AdmissionErrorCodes.OfferingConfigurationIncomplete,
-			ReasonMessage = intake.Reason ?? (detail.Configuration.IsValid ? StatusReasonMessage(detail.AvailabilityStatus) :
-				detail.Configuration.Errors.FirstOrDefault()?.Message)
+			ReasonCode = read.Availability.ReasonCode,
+			ReasonMessage = intake.Reason ?? read.Availability.ReasonMessage
 		});
 	}
 
@@ -199,11 +216,125 @@ public class AdmissionOfferingReadService(
 		}
 
 		var eligibilityErrors = await eligibilityValidator.GetErrorsAsync(query.Select(row => row.Offering));
+		await AddFormCompatibilityErrorsAsync(query, eligibilityErrors);
 		// Availability uses the institution's calendar day, including before 05:30 IST.
 		var today = DateTime.SpecifyKind(AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now.ToUniversalTime()), DateTimeKind.Utc);
 		query = ApplyDerivedFilters(query, input, today, eligibilityErrors.Keys.ToList());
 
 		return new(query, eligibilityErrors);
+	}
+
+	private async Task AddFormCompatibilityErrorsAsync(IQueryable<AdmissionOfferingReadRow> query,
+		Dictionary<Guid, List<AdmissionOfferingValidationError>> errors)
+	{
+		// Read scoped references and their dependencies in batches before paging/filtering.
+		// A per-row full validation here would turn catalogue reads into N+1 queries.
+		var references = await AsyncExecuter.ToListAsync(query.Select(row => new
+		{
+			row.Offering.Id, row.Offering.WorkflowDefinitionId, row.Offering.InquiryFormDefinitionId,
+			row.Offering.ApplicationFormDefinitionId, row.Offering.IsActive, row.Offering.EntryMode,
+			Registration = row.ApplicationForm, Inquiry = row.InquiryForm
+		}));
+		var workflowIds = references.Where(row => row.WorkflowDefinitionId.HasValue)
+			.Select(row => row.WorkflowDefinitionId!.Value).Distinct().ToArray();
+		var stages = workflowIds.Length == 0 ? [] : await LazyServiceProvider
+			.LazyGetRequiredService<IRepository<AdmissionWorkflowStageDefinition, Guid>>()
+			.GetListAsync(stage => Enumerable.Contains(workflowIds, stage.WorkflowDefinitionId) && stage.StageType == AdmissionWorkflowStageType.Form);
+		var stageForms = stages.Select(stage => (Stage: stage, FormId: AdmissionFormStageAccessService.ReadFormDefinitionId(stage.ConfigurationJson)))
+			.Where(item => item.FormId.HasValue).ToList();
+		var byForm = references.Where(row => row.Registration != null).Select(row => row.Registration!)
+			.DistinctBy(form => form.Id).ToDictionary(form => form.Id);
+		var formIds = stageForms.Select(item => item.FormId!.Value).Where(id => !byForm.ContainsKey(id)).Distinct().ToArray();
+		if (formIds.Length > 0)
+			foreach (var form in await formRepository.GetListAsync(form => Enumerable.Contains(formIds, form.Id))) byForm[form.Id] = form;
+		var byWorkflow = stageForms.ToLookup(item => item.Stage.WorkflowDefinitionId);
+		// Identity prerequisites apply to activation preparation, not existing active legacy routes.
+		// Batch all fields/sections once; do not call the full validator for each list row.
+		var identityForms = references.Where(row => !row.IsActive)
+			.SelectMany(row => new[] { row.Registration, row.Inquiry }).Where(form => form != null)
+			.Select(form => form!).DistinctBy(form => form.Id).ToList();
+		var identityIds = identityForms.Select(form => form.Id).ToArray();
+		var identitySections = identityIds.Length == 0 ? [] : await LazyServiceProvider
+			.LazyGetRequiredService<IRepository<AdmissionFormSectionDefinition, Guid>>()
+			.GetListAsync(section => Enumerable.Contains(identityIds, section.FormDefinitionId));
+		var identityFields = identityIds.Length == 0 ? [] : await LazyServiceProvider
+			.LazyGetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>()
+			.GetListAsync(field => Enumerable.Contains(identityIds, field.FormDefinitionId));
+		var sectionsByForm = identitySections.ToLookup(section => section.FormDefinitionId);
+		var fieldsByForm = identityFields.ToLookup(field => field.FormDefinitionId);
+		var definitions = identityForms.ToDictionary(form => form.Id, form => AdmissionOfferingFormDefinitionReader.Read(form,
+			sectionsByForm[form.Id].OrderBy(section => section.DisplayOrder).ToList(),
+			fieldsByForm[form.Id].OrderBy(field => field.DisplayOrder).ToList()));
+		foreach (var reference in references)
+		{
+			var blockers = new List<AdmissionOfferingValidationError>();
+			var invalidForms = new[] { reference.Registration, reference.Inquiry }
+				.Where(form => form != null && definitions.TryGetValue(form.Id, out var definition) && definition == null)
+				.Select(form => form!).DistinctBy(form => form.Id).ToList();
+			foreach (var invalidForm in invalidForms)
+				blockers.Add(new(AdmissionFormInheritanceErrorCodes.IncompatibleSource,
+					$"Open Admission form '{invalidForm.Name}' and repair its Inquiry inheritance settings before using this offering.")
+				{
+					FormDefinitionId = invalidForm.Id, FormName = invalidForm.Name, FormPurpose = invalidForm.Purpose,
+					WorkflowDefinitionId = reference.WorkflowDefinitionId
+				});
+			if (!reference.IsActive && invalidForms.Count == 0 &&
+				reference.Registration is { Status: AdmissionFormStatus.Published, Purpose: AdmissionFormPurpose.Registration } registration)
+			{
+				var inquiry = reference.Inquiry is { Status: AdmissionFormStatus.Published, Purpose: AdmissionFormPurpose.Inquiry }
+					? definitions.GetValueOrDefault(reference.Inquiry.Id) : null;
+				blockers.AddRange(AdmissionOfferingConfigurationValidator.EvaluateJourneyIdentity(
+					definitions[registration.Id]!, inquiry, reference.EntryMode, reference.WorkflowDefinitionId));
+			}
+			if (reference.Registration != null)
+			{
+				try
+				{
+					var policy = AdmissionFormInheritanceMetadataStore.ReadPolicy(reference.Registration);
+					if (policy?.Enabled == true && reference.InquiryFormDefinitionId.HasValue &&
+						policy.Sources.All(source => source.InquiryFormDefinitionId != reference.InquiryFormDefinitionId.Value))
+						blockers.Add(new(AdmissionFormInheritanceErrorCodes.SourceNotApproved,
+							"Review and approve this Inquiry version in the workflow's Registration form before activating the Offering.", ActivationOnly: true)
+						{
+							FormDefinitionId = reference.Registration.Id, FormName = reference.Registration.Name,
+							FormPurpose = AdmissionFormPurpose.Registration, WorkflowDefinitionId = reference.WorkflowDefinitionId
+						});
+				}
+				catch (BusinessException)
+				{
+					blockers.Add(new(AdmissionFormInheritanceErrorCodes.IncompatibleSource,
+						"Open the Registration form and repair its Inquiry inheritance settings before using this offering.")
+					{
+						FormDefinitionId = reference.Registration.Id, FormName = reference.Registration.Name,
+						FormPurpose = AdmissionFormPurpose.Registration, WorkflowDefinitionId = reference.WorkflowDefinitionId
+					});
+				}
+			}
+			var linkedStages = reference.WorkflowDefinitionId.HasValue ? byWorkflow[reference.WorkflowDefinitionId.Value].ToList() : [];
+			foreach (var linked in linkedStages.Where(item => item.FormId != reference.ApplicationFormDefinitionId))
+			{
+				var form = byForm.GetValueOrDefault(linked.FormId!.Value);
+				if (form == null || form.Status != AdmissionFormStatus.Published)
+					blockers.Add(new(form == null ? AdmissionOfferingValidationCodes.ApplicationFormMissing : AdmissionOfferingValidationCodes.ApplicationFormNotPublished,
+						form == null ? $"Registration form in workflow stage '{linked.Stage.Name}' was not found. Open the workflow and select a published Registration form." :
+						$"Registration form '{form.Name}' in workflow stage '{linked.Stage.Name}' is {form.Status.ToString().ToLowerInvariant()}. Restore it or select another published form in the workflow.")
+					{
+						FormDefinitionId = linked.FormId, FormName = form?.Name, FormPurpose = AdmissionFormPurpose.Registration,
+						WorkflowDefinitionId = linked.Stage.WorkflowDefinitionId, WorkflowStageId = linked.Stage.Id, WorkflowStageName = linked.Stage.Name
+					});
+			}
+			if (linkedStages.Select(item => item.FormId).Distinct().Count() > 1 ||
+				reference.ApplicationFormDefinitionId.HasValue && linkedStages.Any(item => item.FormId != reference.ApplicationFormDefinitionId))
+				blockers.Add(new(AdmissionOfferingValidationCodes.WorkflowFormMismatch,
+					"Open the workflow and set every Registration Form stage to the same published form version, then select that workflow in this offering.")
+				{
+					FormDefinitionId = reference.ApplicationFormDefinitionId, FormPurpose = AdmissionFormPurpose.Registration,
+					WorkflowDefinitionId = reference.WorkflowDefinitionId
+				});
+			if (blockers.Count == 0) continue;
+			if (!errors.TryGetValue(reference.Id, out var existing)) errors[reference.Id] = blockers;
+			else existing.AddRange(blockers);
+		}
 	}
 
 	private static IQueryable<AdmissionOfferingReadRow> ApplyDerivedFilters(
@@ -331,6 +462,7 @@ public class AdmissionOfferingReadService(
 			EffectiveCloseDate = row.Offering.GetEffectiveCloseDate(row.Cycle.EndDate),
 			WorkflowName = row.Workflow?.Name,
 			WorkflowVersion = row.Workflow?.Version,
+			CoreFieldPolicyVersion = row.ApplicationForm == null ? null : AdmissionFormMetadataStore.ReadExperience(row.ApplicationForm).CoreFieldPolicyVersion,
 			IsActive = row.Offering.IsActive,
 			AvailabilityStatus = availability.Status,
 			ConfigurationStatus = validation.Status,
@@ -364,6 +496,7 @@ public class AdmissionOfferingReadService(
 			EffectiveCloseDate = list.EffectiveCloseDate,
 			WorkflowName = list.WorkflowName,
 			WorkflowVersion = list.WorkflowVersion,
+			CoreFieldPolicyVersion = list.CoreFieldPolicyVersion,
 			IsActive = list.IsActive,
 			AvailabilityStatus = list.AvailabilityStatus,
 			ConfigurationStatus = list.ConfigurationStatus,
@@ -438,7 +571,13 @@ public class AdmissionOfferingReadService(
 		Errors = validation.Errors.Select(error => new AdmissionOfferingValidationErrorDto
 		{
 			Code = error.Code,
-			Message = error.Message
+			Message = error.Message,
+			FormDefinitionId = error.FormDefinitionId,
+			FormName = error.FormName,
+			FormPurpose = error.FormPurpose,
+			WorkflowDefinitionId = error.WorkflowDefinitionId,
+			WorkflowStageId = error.WorkflowStageId,
+			WorkflowStageName = error.WorkflowStageName
 		}).ToList()
 	};
 
@@ -467,22 +606,6 @@ public class AdmissionOfferingReadService(
 		};
 		return ordered.ThenBy(row => row.Offering.Id);
 	}
-
-	private static string? StatusReasonCode(AdmissionOfferingAvailabilityStatus status) => status switch
-	{
-		AdmissionOfferingAvailabilityStatus.Inactive => AdmissionErrorCodes.OfferingInactive,
-		AdmissionOfferingAvailabilityStatus.NotOpenYet => AdmissionErrorCodes.OfferingNotOpenYet,
-		AdmissionOfferingAvailabilityStatus.Closed => AdmissionErrorCodes.OfferingClosed,
-		_ => null
-	};
-
-	private static string? StatusReasonMessage(AdmissionOfferingAvailabilityStatus status) => status switch
-	{
-		AdmissionOfferingAvailabilityStatus.Inactive => "This Admission Offering is inactive.",
-		AdmissionOfferingAvailabilityStatus.NotOpenYet => "Applications for this Admission Offering are not open yet.",
-		AdmissionOfferingAvailabilityStatus.Closed => "Applications for this Admission Offering are closed.",
-		_ => null
-	};
 
 	private sealed record AdmissionOfferingReadQuery(IQueryable<AdmissionOfferingReadRow> Query,
 		Dictionary<Guid, List<AdmissionOfferingValidationError>> Errors);

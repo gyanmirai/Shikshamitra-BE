@@ -1,6 +1,17 @@
 {
   "culture": "hi",
   "texts": {
+    "Admissions.FormDraftAlreadyExists": "इस फ़ॉर्म का एक ड्राफ़्ट पहले से मौजूद है। नया संस्करण बनाने से पहले Admission Forms में मौजूदा ड्राफ़्ट खोलकर संपादित या प्रकाशित करें।",
+    "Admissions.FormVersionSourceRequired": "यह फ़ॉर्म पहले से ड्राफ़्ट है। नया संस्करण बनाने से पहले इस ड्राफ़्ट को संपादित और प्रकाशित करें।",
+    "Admissions.FormVersionCodeImmutable": "फ़ॉर्म संस्करण का मूल कोड नहीं बदला जा सकता। अलग फ़ॉर्म बनाने के लिए Clone as Draft का उपयोग करें।",
+    "Admissions.WorkflowNameAlreadyExists": "इस नाम का वर्कफ़्लो पहले से मौजूद है। कृपया कोई दूसरा नाम दर्ज करें।",
+    "Admissions.FormArchivedRequired": "केवल संग्रहित फ़ॉर्म को बहाल किया जा सकता है। सूची रीफ़्रेश करके फ़ॉर्म की वर्तमान स्थिति जाँचें।",
+    "Admissions.FormRestoreInvalidDefinition": "इस फ़ॉर्म को बहाल करने से पहले इन सेटिंग को ठीक करना होगा: {Errors}। ड्राफ़्ट कॉपी बनाकर सेटिंग सुधारें और नया फ़ॉर्म प्रकाशित करें।",
+    "Admissions.OfferingFormNotPublished": "{Reason}",
+    "Admissions.OfferingWorkflowNotPublished": "{Reason}",
+    "Admissions.Offering.ConfigurationIncomplete": "इस ऑफ़रिंग की सेटिंग अधूरी है। दिखाई गई समस्याएँ ठीक करें, संग्रहित फ़ॉर्म बहाल करें या प्रकाशित विकल्प चुनें और फिर प्रयास करें।",
+    "Admissions.Offering.ConfigurationLocked": "ऑफ़रिंग सक्रिय होने या किसी पूछताछ अथवा आवेदन में उपयोग होने पर वर्कफ़्लो और फ़ॉर्म लॉक रहते हैं। सेटअप केवल निष्क्रिय और अप्रयुक्त ऑफ़रिंग में बदला जा सकता है।",
+    "Admissions.FormInheritanceSourceNotApproved": "वर्कफ़्लो के पंजीकरण फ़ॉर्म में चुने गए पूछताछ संस्करण की समीक्षा और मंज़ूरी करें, नया पंजीकरण संस्करण प्रकाशित करें और ऑफ़रिंग में उसका वर्कफ़्लो चुनें।",
     "Students:Records:PhotoChangePending": "फ़ोटो में बदलाव की मंज़ूरी या लागू होने की प्रक्रिया पहले से लंबित है।",
     "Permission:Students.Portal.ProfilePhoto.View": "पोर्टल पर विद्यार्थी की प्रोफ़ाइल फ़ोटो देखें",
     "Permission:Students.Portal.ProfilePhoto.Add": "पोर्टल पर विद्यार्थी की प्रोफ़ाइल फ़ोटो जोड़ें या बदलें",

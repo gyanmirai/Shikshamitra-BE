@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using Shouldly;
+using Volo.Abp.Data;
 using Volo.Abp.EntityFrameworkCore;
 using Xunit;
 
@@ -21,8 +23,31 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var workflow = await CreateAndPublishCurrentWorkflowAsync();
 			var first = await CreateAvailableOfferingAsync(workflow.Id, registrationFormId:
 				AdmissionFormStageAccessService.ReadFormDefinitionId(workflow.Stages.Single(stage => stage.IsEntryStage).ConfigurationJson));
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var form = await _formRepository.GetAsync(first.ApplicationFormDefinitionId!.Value);
+				var metadata = JsonNode.Parse(form.GetProperty<string>("AdmissionFormExperience") ?? "{}")!.AsObject();
+				metadata["coreFieldPolicyVersion"] = 1;
+				form.SetProperty("AdmissionFormExperience", metadata.ToJsonString());
+				await _formRepository.UpdateAsync(form, true);
+			});
 			var yearId = await WithUnitOfWorkAsync(async () => (await _cycleRepository.GetAsync(first.AdmissionCycleId)).AcademicYearId);
-			var single = await MeasureOnboardingOfferingChoicesAsync(yearId, 1);
+			var active = await MeasureOnboardingOfferingChoicesAsync(yearId, 1);
+			active.FormSectionReads.ShouldBe(0);
+			active.FormFieldReads.ShouldBe(0);
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var offering = await _offeringRepository.GetAsync(first.Id);
+				offering.Deactivate();
+				await _offeringRepository.UpdateAsync(offering, true);
+			});
+			var singleInactive = await MeasureOnboardingOfferingChoicesAsync(yearId, 1);
+			singleInactive.FormSectionReads.ShouldBe(1);
+			singleInactive.FormFieldReads.ShouldBe(1);
+			// Activation readiness needs both section/step rules and question definitions.
+			// These two batched reads are skipped for active legacy routes; their cost is fixed.
+			singleInactive.ReadCount.ShouldBeLessThanOrEqualTo(active.ReadCount + 2,
+				"Inactive readiness adds only one section batch and one field batch to the active catalogue.");
 			await WithUnitOfWorkAsync(async () =>
 			{
 				for (var index = 0; index < 5; index++)
@@ -41,12 +66,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				}
 			});
 			var many = await MeasureOnboardingOfferingChoicesAsync(yearId, 6);
-			Console.WriteLine($"SQLite onboarding offering choices: 1 cycle={single} reads; 6 cycles={many} reads.");
-			many.ShouldBeLessThanOrEqualTo(single,
+			many.FormSectionReads.ShouldBe(1);
+			many.FormFieldReads.ShouldBe(1);
+			Console.WriteLine($"SQLite onboarding offering choices: active 1 cycle={active.ReadCount} reads; inactive 1 cycle={singleInactive.ReadCount} reads; mixed 6 cycles={many.ReadCount} reads. " +
+				$"Section/field batches: active={active.FormSectionReads}/{active.FormFieldReads}, inactive={singleInactive.FormSectionReads}/{singleInactive.FormFieldReads}, mixed={many.FormSectionReads}/{many.FormFieldReads}.");
+			many.ReadCount.ShouldBeLessThanOrEqualTo(singleInactive.ReadCount,
 				"Onboarding offering choices must batch the same scoped reader across cycles, including draft, inactive and direct-entry choices.");
 		});
 
-	private async Task<int> MeasureOnboardingOfferingChoicesAsync(Guid yearId, int expectedCount)
+	private sealed record OnboardingOfferingReadMeasurement(int ReadCount, int FormSectionReads, int FormFieldReads);
+
+	private async Task<OnboardingOfferingReadMeasurement> MeasureOnboardingOfferingChoicesAsync(Guid yearId, int expectedCount)
 	{
 		var expected = await WithUnitOfWorkAsync(async () =>
 		{
@@ -75,7 +105,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				result[index].WorkflowDefinitionId.ShouldBe(expected[index].WorkflowId);
 				result[index].AcademicYearId.ShouldBe(yearId);
 			}
-			return capture.ReadCount;
+			return new OnboardingOfferingReadMeasurement(capture.ReadCount,
+				capture.ReadCommands.Count(command => command.Contains("FROM \"AppAdmissionFormSections\"", StringComparison.Ordinal)),
+				capture.ReadCommands.Count(command => command.Contains("FROM \"AppAdmissionFormFields\"", StringComparison.Ordinal)));
 		});
 	}
 }

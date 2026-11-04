@@ -22,13 +22,13 @@ public class AdmissionEffectiveFormResolver(AdmissionFormInheritanceService inhe
 			instance.ApplicationId != application.Id || instance.TenantId != application.TenantId)
 			throw new BusinessException(AdmissionFormInheritanceErrorCodes.IncompatibleSource);
 		if (AdmissionFormInheritanceMetadataStore.ReadPolicy(registration)?.Enabled != true) return;
-		if (inquiry != null && (inquiry.ApplicantId != application.ApplicantId || inquiry.Id != application.InquiryId ||
+		if (inquiry != null && (inquiry.TenantId != application.TenantId || inquiry.ApplicantId != application.ApplicantId || inquiry.Id != application.InquiryId ||
 			inquiry.AdmissionOfferingId != application.AdmissionOfferingId || inquiry.AdmissionCycleId != application.AdmissionCycleId))
 			throw new BusinessException(AdmissionFormInheritanceErrorCodes.IncompatibleSource);
 		if (inquiry != null && !inquiry.FormResponseDefinitionId.HasValue)
 			throw new BusinessException(AdmissionFormInheritanceErrorCodes.IncompatibleSource,
 				"The linked Inquiry has no captured form version. Review its form before starting Registration.");
-		var preview = await inheritance.ComposeAsync(instance.FormDefinitionId, inquiry?.FormResponseDefinitionId);
+		var preview = await inheritance.ComposeCapturedAsync(instance.FormDefinitionId, inquiry);
 		if (!preview.IsValid) throw new BusinessException(AdmissionFormInheritanceErrorCodes.IncompatibleSource)
 			.WithData("Errors", string.Join("; ", preview.Issues.Select(issue => issue.Message)));
 		var sourceValues = ReadInquiryValues(inquiry?.FormResponseSnapshotJson);

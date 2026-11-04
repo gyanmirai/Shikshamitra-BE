@@ -3,12 +3,49 @@ module: common
 domain: development
 content_type: How-to
 status: canonical
-updated_on: 2026-10-31
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Build the backend under local memory pressure
+
+## Windows VS Code builds and duplicate processes
+
+Windows cannot replace a DLL loaded by a running API host, DbMigrator, or its debugger.
+`MSB3027`/`MSB3021` therefore recur when a build targets the same output as an existing runtime.
+A separately launched API can also keep ports `44332`/`5000` occupied after a VS Code debug session ends.
+
+The wrapper workspace's `build-be` and `build-dbmigrator` tasks run a target-specific cleanup dependency before building.
+Their existing `preLaunchTask` links also apply the cleanup when pressing F5 or starting Full Stack.
+The helpers can be run directly from the backend repository:
+
+```powershell
+powershell.exe -NoProfile -File scripts/local/Stop-BackendProcess.ps1 -Target Host
+powershell.exe -NoProfile -File scripts/local/Stop-BackendProcess.ps1 -Target DbMigrator
+```
+
+Cleanup intentionally stops the selected target's existing development instance before rebuilding it.
+It identifies direct `dotnet <absolute DLL>` processes and native apphosts in this checkout's Debug output or local `.artifacts` build output.
+It also releases an associated `vsdbg`/`vsdbg-ui` adapter when its children belong to that same target and its own Windows console host.
+It preserves the other target, test/build/compiler processes, other checkouts, published outputs, and Release outputs.
+The wrapper Host task additionally opts into `-IncludeRelatedWorktreePortOwners`:
+it can release a development API occupying `44332`/`5000` in another registered worktree of this same Git repository.
+Registration and the common Git directory are verified before selecting that worktree;
+its other runtimes, and all unregistered/unrelated checkouts, remain protected.
+If an unrecognized process still owns either API port, the Host task fails with its PID instead of terminating it.
+Use `-WhatIf` to inspect the selected processes without stopping them.
+The helper does not run migrations, seed data, or change application/connection configuration.
+
+The wrapper `.vscode/tasks.json` is workspace configuration outside the two Git repositories.
+When recreating that workspace, keep the cleanup task as a `dependsOn` dependency of the corresponding build task;
+the helper and its regression checks live in the backend repository.
+
+```powershell
+pwsh -NoProfile -File scripts/local/tests/Stop-BackendProcess.Tests.ps1
+```
+
+## Builds under memory pressure
 
 TL;DR: use the serialized local build helper when the large EF migration history exhausts compiler memory.
 It preserves all source files, migration designers, nullable analysis and analyzers.

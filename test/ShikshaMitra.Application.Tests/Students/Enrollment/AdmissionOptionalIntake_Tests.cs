@@ -108,7 +108,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var decisionStageId = Guid.NewGuid();
 		var initial = await _workflowAppService.CreateAsync(new()
 		{
-			Name = "Optional intake fixture", Code = $"OPT_DRAFT_{Guid.NewGuid():N}"[..24],
+			Name = $"Optional intake fixture {formStageId:N}", Code = $"OPT_DRAFT_{Guid.NewGuid():N}"[..24],
 			Stages =
 			[
 				new() { Id = formStageId, Code = "FORM", Name = "Application form", StageType = AdmissionWorkflowStageType.Form,
@@ -121,7 +121,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var offering = await CreateAvailableOfferingAsync(initial.Id, assertValid: false);
 		var workflow = await _workflowAppService.CreateAsync(new()
 		{
-			Name = "Optional intake current workflow", Code = $"OPT_FLOW_{Guid.NewGuid():N}"[..24],
+			Name = $"Optional intake current workflow {formStageId:N}", Code = $"OPT_FLOW_{Guid.NewGuid():N}"[..24],
 			Stages =
 			[
 				new() { Id = formStageId, Code = "FORM", Name = "Application form", StageType = AdmissionWorkflowStageType.Form,

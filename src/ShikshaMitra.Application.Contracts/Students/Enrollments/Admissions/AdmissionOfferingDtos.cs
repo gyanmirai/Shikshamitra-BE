@@ -26,6 +26,8 @@ public class AdmissionOfferingListDto : EntityDto<Guid>
 	public DateTimeOffset EffectiveCloseDate { get; set; }
 	public string? WorkflowName { get; set; }
 	public int? WorkflowVersion { get; set; }
+	/// <summary>The selected Registration definition's core policy; null preserves historical capture rules.</summary>
+	public int? CoreFieldPolicyVersion { get; set; }
 	public bool IsActive { get; set; }
 	public AdmissionOfferingAvailabilityStatus AvailabilityStatus { get; set; }
 	public AdmissionOfferingConfigurationStatus ConfigurationStatus { get; set; }
@@ -37,6 +39,9 @@ public class AdmissionOfferingListDto : EntityDto<Guid>
 
 public class AdmissionOfferingDto : AdmissionOfferingListDto
 {
+	public int InquiryCount { get; set; }
+	public bool HasConfigurationUsage { get; set; }
+	public bool CanEditConfiguration => !IsActive && !HasConfigurationUsage;
 	public AdmissionClassCapacityDto? ClassCapacity { get; set; }
 	public bool UseCycleDates { get; set; }
 	public DateTimeOffset? OpenDate { get; set; }
@@ -112,6 +117,12 @@ public class AdmissionOfferingValidationErrorDto
 {
 	public string Code { get; set; } = string.Empty;
 	public string Message { get; set; } = string.Empty;
+	public Guid? FormDefinitionId { get; set; }
+	public string? FormName { get; set; }
+	public AdmissionFormPurpose? FormPurpose { get; set; }
+	public Guid? WorkflowDefinitionId { get; set; }
+	public Guid? WorkflowStageId { get; set; }
+	public string? WorkflowStageName { get; set; }
 }
 
 public class AdmissionOfferingConfigurationValidationDto

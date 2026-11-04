@@ -90,6 +90,9 @@ public class AdmissionDirectRegistrationService
 		if (offering.EntryMode is not (AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both))
 			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed,
 				"Choose a direct Registration Offering. This Offering starts with Inquiry.");
+		var registrationForm = offering.ApplicationFormDefinitionId.HasValue
+			? await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionFormDefinition, Guid>>().FindAsync(offering.ApplicationFormDefinitionId.Value) : null;
+		AdmissionCoreFieldPolicy.EnsureParentEmail(registrationForm == null ? null : AdmissionFormMetadataStore.ReadExperience(registrationForm).CoreFieldPolicyVersion, input.GuardianEmail);
 		Guid? selectedCounsellorId = null;
 		if (string.IsNullOrWhiteSpace(input.ApplicantFirstName) || !input.ApplicantDateOfBirth.HasValue ||
 			input.ApplicantDateOfBirth.Value.Date > Clock.Now.Date ||

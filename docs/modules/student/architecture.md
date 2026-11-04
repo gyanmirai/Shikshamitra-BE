@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-24
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -17,6 +17,8 @@ audience: humans-and-agents
 `AttendanceWorkspaceAccessService.cs` checks current database identity/admin roles and exact active ClassTeacher → active Employee.UserId mapping; manual academic scope does not create teaching authority. Mark/Submit checks this authority inside its Serializable command unit of work, alongside current roster/scope checks. No new database entities, grants, seed repair or migration are introduced.
 
 TL;DR: Admissions remains inside the Student modular-monolith boundary and separates aggregate invariants, authoritative validation, reads, commands, and runtime availability.
+
+Saved-definition preview delegates through `AdmissionFormAppService.GetSavedInheritancePreviewAsync` to the existing inheritance service. It checks the persisted exact-source approval before loading that source and keeps the draft-preview Manage boundary separate. The Domain composer orders editable sections and Inquiry context as one source sequence while returning them separately for immutable runtime ownership.
 
 ## Staff scope gateways
 
@@ -34,12 +36,18 @@ Admissions parent matching is owned by `Application/Students/StudentEnrollments/
 It combines existing admission scope with exact saved contacts, current Student parent projections and a provider-backed pending JSON-parent contact predicate; it does not create accounts or send credentials.
 `Domain/Students/StudentEnrollments/Admissions/Repositories/IAdmissionApplicantRepository.cs` and `EntityFrameworkCore/Students/StudentEnrollments/Admissions/EfCoreAdmissionApplicantRepository.cs` own this composable PostgreSQL/SQLite query, with parameterized contact values and tenant/soft-delete boundaries retained.
 `AdmissionSiblingParentSelection.cs` records parent-only flow version, selected relationship and server-resolved source/family/email/actor/time confirmation in existing applicant extra properties.
+`AdmissionInquiryFamilyConfirmationService.cs` confirms only an already-saved pending target and delegates named target-only family mutation to the Inquiry/Applicant aggregates. Downstream-evidence checks refuse a merge after handoff. `IAdmissionApplicantRepository.LockForSiblingParentSelectionAsync` supplies ordered mutation-only Applicant locks and identity refresh; `FindForApplicationStartAsync` follows Applicant-before-Inquiry order so Start cannot use a pre-confirmation tracked identity. Central `ResolveParentAsync` shares the source lock for existing sibling-entry commands. Duplicate matching stays read-only; current Student role absence never revives an older applicant parent. Target audit/proof supports the confirmed detail/list state without per-row source profile reads.
 Inquiry and Direct Registration own explicit selection; inquiry/application form writers protect the shared primary contact after confirmation.
 Finalization maps new parent-only captures into Father/Mother profile storage without fabricating a Guardian profile.
 `AdmissionFirstParentContactMapping.cs` synchronizes generic form contact aliases only into the explicitly selected first parent's canonical fields, retaining per-field server provenance for structured answers and intentional clears.
 Registration and Inquiry edits recover older saved ownership before alias mutation; new-Student finalization catches up accepted unfinalized records from saved binding answers, excluding untouched Registration prefills.
 Confirmed siblings, existing Students, returns and legacy flows do not use this synchronization.
 Legacy records and mobile-only callers remain readable and do not gain trusted confirmation through inference.
+
+`AdmissionSiblingRegistrationPrefillService.cs` owns the Registration parent allowlist, source permission/scope and identity checks, compatible configured-field projection and target-only audit. Application lifecycle initialization and existing Form GET/Save reuse this service. Optional response metadata describes display projections; PATCH origin hints do not grant authority. Authored clears and equivalent parent aliases are resolved before profile mapping. Existing submitted/frozen records are not rewritten.
+Projection and Save share the selected-person alias policy: distinct generic/independent Guardian identity blocks parent aliasing, while canonical parent fields remain eligible. Independent Guardian edits retain the original profile binding; origin hints cannot change ownership or produce a parent-copy audit for that field. Legacy Guardian-only source occupation without safe parent identity association is not recovered through inference.
+
+`AdmissionPublicInquirySchema.cs` projects a clone of the public Inquiry schema and folds only omitted sibling-control rules. New public captures retain their exposed source snapshot for fresh Registration inheritance; original published definitions and previously frozen applications stay intact. `AdmissionPublicInquirySubmissionStore.cs` owns retry fingerprints and unconfirmed capture metadata, while provider-specific submission locking and replay queries belong to Domain repository contracts and EntityFrameworkCore implementations. No new schema migration is required.
 
 ## Onboarding email and access ownership
 
@@ -157,6 +165,7 @@ Do not drop or regenerate reservations once they are in use, and never delete St
 | Hierarchy and readiness validation | `src/ShikshaMitra.Application/Students/StudentEnrollments/Admissions/AdmissionOfferingConfigurationValidator.cs` |
 | Scoped projections | `src/ShikshaMitra.Application/Students/StudentEnrollments/Admissions/AdmissionOfferingReadService.cs` |
 | Commands and concurrency | `src/ShikshaMitra.Application/Students/StudentEnrollments/Admissions/AdmissionOfferingCommandService.cs` |
+| Setup immutability and first-use serialization | `AdmissionOffering.EnsureConfigurationReferencesUnchanged`, Application `AdmissionOfferingConfigurationUsageService`, Domain `IAdmissionOfferingConfigurationLock`, and EF `EfCoreAdmissionOfferingConfigurationLock` |
 | Permission facade | `src/ShikshaMitra.Application/Students/StudentEnrollments/Admissions/AdmissionOfferingAppService.cs` |
 | Inquiry and application guard | `src/ShikshaMitra.Application/Students/StudentEnrollments/Admissions/AdmissionOfferingRuntimeService.cs` |
 | EF mapping and indexes | `src/ShikshaMitra.EntityFrameworkCore/Students/StudentEnrollments/Admissions/AdmissionOfferingConfiguration.cs` |
@@ -185,6 +194,15 @@ The frontend owns interaction state only and cannot replace backend authorizatio
 | HTTP routes | `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/Admissions/AdmissionWorkflowsController.cs` and `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/Admissions/AdmissionApplicationsController.cs` |
 
 Form runtime persistence is separated from configuration: `AdmissionFormInstance` pins a published definition/version, `AdmissionFormFieldValue` stores mutable values, `AdmissionFormSubmission` stores immutable submitted snapshots, and `AdmissionFormChangeHistory` records lifecycle changes. Form definition changes never mutate an existing instance.
+
+| Form policy concern | Owning source |
+|---|---|
+| Versioned core defaults, protected structure, guaranteed source identity and parent email | `Application/Students/StudentEnrollments/Admissions/AdmissionCoreFieldPolicy.cs`; `AdmissionFormAppService` owns create/update/clone/version/publication orchestration and `AdmissionFormExperienceMetadata` persists the marker. |
+| Source-owned Registration composition and preview | `AdmissionFormInheritanceService.cs` retains the persisted policy marker and checks guaranteed DOB/Gender; `Domain/Students/StudentEnrollments/Admissions/AdmissionFormInheritanceComposer.cs` deduplicates complete academic groups and rewrites source dependency codes without altering source definitions. |
+| Scoped academic choices and public bounds | `AdmissionFormDataSourceRegistry.cs` maps `StudentDirectoryOptionsService` hierarchy results; `AdmissionAcademicFormOptions.cs` owns compatibility/serialization; `AdmissionInquiryAcademicOptionsService.cs` bounds anonymous choices to the authorized offering. |
+| Readiness before activation | `AdmissionJourneyIdentityConfiguration.cs` owns reachable identity rules; `AdmissionOfferingConfigurationValidator.cs` applies them to activation/new configuration; `AdmissionOfferingReadService.cs` uses activation validation for inactive rows and existing runtime validation for active rows. |
+
+Application paths in this table are under `src/ShikshaMitra.Application/Students/StudentEnrollments/Admissions/` unless their layer is explicitly named.
 
 Draft graph updates synchronize existing child rows by identifier, insert new rows, and delete removed transitions before removed stages. This preserves required EF relationships and prevents conceptual-null failures while a draft is edited.
 

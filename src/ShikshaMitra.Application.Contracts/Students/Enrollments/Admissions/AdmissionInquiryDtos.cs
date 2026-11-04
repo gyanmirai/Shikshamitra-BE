@@ -8,6 +8,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 {
+	public bool SiblingFamilyConfirmed { get; set; }
 	public AdmissionSchoolContactDto? MainSchoolContact { get; set; }
 	public string? ParentRelationship { get; set; }
 	public string? PrimaryContactRelationship { get; set; }
@@ -62,6 +63,18 @@ public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 	public bool IsQualificationOverdue { get; set; }
 	public bool HasOverdueFollowUp { get; set; }
 	public bool IsOverdue => IsFirstContactOverdue || IsQualificationOverdue || HasOverdueFollowUp;
+}
+
+public class ConfirmAdmissionInquiryFamilyDto
+{
+	[Required]
+	public Guid ExistingFamilyId { get; set; }
+	[Required]
+	public Guid ExistingParentApplicantId { get; set; }
+	[Required, RegularExpression("^(father|mother)$")]
+	public string ParentRelationship { get; set; } = string.Empty;
+	[Required, StringLength(40)]
+	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
 public class CreateAdmissionInquiryDto

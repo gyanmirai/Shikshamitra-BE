@@ -141,7 +141,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var terminalId = Guid.NewGuid();
 		var input = new CreateUpdateAdmissionWorkflowDto
 		{
-			Name = "Managed assessment journey", Code = $"ASSESS_{Guid.NewGuid():N}"[..24],
+			Name = $"Managed assessment journey {assessmentId:N}", Code = $"ASSESS_{Guid.NewGuid():N}"[..24],
 			Stages = [], Transitions = []
 		};
 		input.Stages.Add(new CreateUpdateAdmissionWorkflowStageDto

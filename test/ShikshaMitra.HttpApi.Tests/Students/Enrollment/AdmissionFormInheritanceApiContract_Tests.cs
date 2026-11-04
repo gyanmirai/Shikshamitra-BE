@@ -18,6 +18,7 @@ public class AdmissionFormInheritanceApiContract_Tests
 	[Theory]
 	[InlineData(nameof(AdmissionFormsController.GetInheritanceSourcesAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionForms.ViewUsage)]
 	[InlineData(nameof(AdmissionFormsController.PreviewInheritanceAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
+	[InlineData(nameof(AdmissionFormsController.GetSavedInheritancePreviewAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public void Inheritance_endpoints_require_existing_permissions_at_both_boundaries(string name, string permission)
 	{
 		foreach (var boundary in new[] { typeof(AdmissionFormsController), typeof(AdmissionFormAppService) })
@@ -47,5 +48,21 @@ public class AdmissionFormInheritanceApiContract_Tests
 		await service.Received(1).GetInheritanceSourcesAsync(id, input);
 		typeof(AdmissionFormsController).GetMethod(nameof(AdmissionFormsController.GetInheritanceSourcesAsync))!
 			.GetCustomAttribute<HttpGetAttribute>()!.Template.ShouldBe("{id:guid}/inheritance/sources");
+	}
+
+	[Fact]
+	public async Task Saved_preview_get_forwards_only_saved_identity_and_exact_source_without_writes()
+	{
+		var service = Substitute.For<IAdmissionFormAppService>();
+		var id = Guid.NewGuid();
+		var source = Guid.NewGuid();
+		service.GetSavedInheritancePreviewAsync(id, source).Returns(new AdmissionFormInheritancePreviewDto());
+		await new AdmissionFormsController(service).GetSavedInheritancePreviewAsync(id, source);
+		await service.Received(1).GetSavedInheritancePreviewAsync(id, source);
+		await service.DidNotReceiveWithAnyArgs().CreateAsync(default!);
+		await service.DidNotReceiveWithAnyArgs().UpdateAsync(default, default!);
+		await service.DidNotReceiveWithAnyArgs().PreviewInheritanceAsync(default!);
+		typeof(AdmissionFormsController).GetMethod(nameof(AdmissionFormsController.GetSavedInheritancePreviewAsync))!
+			.GetCustomAttribute<HttpGetAttribute>()!.Template.ShouldBe("{id:guid}/inheritance-preview");
 	}
 }

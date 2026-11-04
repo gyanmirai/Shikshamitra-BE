@@ -10,7 +10,7 @@ internal static class AdmissionAcademicFormOptions
 {
 	internal static string SerializeOptions(IEnumerable<AdmissionFormOptionDto> options) => JsonSerializer.Serialize(options.Select(option =>
 		new { value = option.Value, label = option.Label, displayOrder = option.DisplayOrder, isActive = option.IsActive,
-			boardId = option.BoardId, boardLabel = option.BoardLabel }));
+			boardId = option.BoardId, boardLabel = option.BoardLabel, mediumId = option.MediumId, mediumLabel = option.MediumLabel }));
 
 	internal static string? OptionsJson(string code, AdmissionFormFieldType type, string? configured)
 	{
@@ -26,6 +26,7 @@ internal static class AdmissionAcademicFormOptions
 	}
 
 	internal static bool IsAcademic(string key) => key.Equals("Standards", StringComparison.OrdinalIgnoreCase) ||
+		key.Equals("EducationBoards", StringComparison.OrdinalIgnoreCase) || key.Equals("EducationMediums", StringComparison.OrdinalIgnoreCase) ||
 		key.Equals("StandardsByMedium", StringComparison.OrdinalIgnoreCase) || key.Equals("StandardsByMediumStage", StringComparison.OrdinalIgnoreCase) ||
 		key.Equals("DivisionsByStandard", StringComparison.OrdinalIgnoreCase);
 }

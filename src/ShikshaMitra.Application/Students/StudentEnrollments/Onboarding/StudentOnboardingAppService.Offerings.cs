@@ -39,6 +39,7 @@ public partial class StudentOnboardingAppService
                     MediumId = row.MediumId, MediumName = row.MediumName, StageId = row.StageId, StageName = row.StageName,
                     StandardId = row.StandardId, StandardName = row.StandardName, Track = row.Track, EntryMode = row.EntryMode,
                     IsActive = row.IsActive, WorkflowName = row.WorkflowName, WorkflowVersion = row.WorkflowVersion,
+                    CoreFieldPolicyVersion = row.CoreFieldPolicyVersion,
                     WorkflowDefinitionId = item.WorkflowDefinitionId,
                     EffectiveOpenDate = row.EffectiveOpenDate, EffectiveCloseDate = row.EffectiveCloseDate,
                     AvailabilityStatus = row.AvailabilityStatus, ConfigurationStatus = row.ConfigurationStatus, ApplicationCount = row.ApplicationCount

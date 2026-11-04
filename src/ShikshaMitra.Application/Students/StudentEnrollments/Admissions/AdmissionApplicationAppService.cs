@@ -57,10 +57,12 @@ public class AdmissionApplicationAppService(
 	public Task<AdmissionApplicationDto?> FindAsync(Guid id) => readService.FindAsync(id);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
+	[UnitOfWork(true)]
 	public Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId = null) =>
 		lifecycleService.StartAsync(applicantId, offeringId, inquiryId);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
+	[UnitOfWork(true)]
 	public async Task<AdmissionApplicationDto> StartDirectRegistrationAsync(StartAdmissionDirectRegistrationDto input)
 	{
 		using var unitOfWork = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true });

@@ -53,6 +53,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var first = await CreateAvailableOfferingAsync(workflow.Id, registrationFormId:
 				AdmissionFormStageAccessService.ReadFormDefinitionId(workflow.Stages.Single(stage => stage.IsEntryStage).ConfigurationJson));
 			var yearId = await WithUnitOfWorkAsync(async () => (await _cycleRepository.GetAsync(first.AdmissionCycleId)).AcademicYearId);
+			// Compare the same readiness branches at both scales: inactive choices require batched identity reads.
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var stored = await _offeringRepository.GetAsync(first.Id);
+				stored.Deactivate();
+				await _offeringRepository.UpdateAsync(stored, true);
+			});
 			var singleReads = await ReadPerformanceCatalogueAsync(yearId, 1, 1);
 			await WithUnitOfWorkAsync(async () =>
 			{
@@ -85,6 +92,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		result.Periods.Count.ShouldBe(periods);
 		result.Offerings.Count.ShouldBe(offerings);
 		result.Offerings.ShouldAllBe(item => item.EntryMode != AdmissionEntryMode.DirectRegistration);
+		result.Offerings.ShouldContain(item => !item.IsActive);
 		var periodOrder = result.Periods.Select((period, index) => new { period.Id, Index = index }).ToDictionary(item => item.Id, item => item.Index);
 		result.Offerings.Select(item => periodOrder[item.AdmissionCycleId]).ShouldBeInOrder();
 		return capture.ReadCount;

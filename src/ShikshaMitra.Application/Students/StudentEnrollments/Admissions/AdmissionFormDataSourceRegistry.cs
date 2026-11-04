@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.TenantSettings.EducationBoards;
-using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.Students.Records;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Linq;
@@ -13,8 +11,6 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 /// <summary>Allow-listed master-data sources for dynamic choice fields.</summary>
 public sealed class AdmissionFormDataSourceRegistry(
-	IEducationBoardRepository educationBoardRepository,
-	IEducationMediumRepository educationMediumRepository,
 	IStudentRepository studentRepository,
 	StudentDirectoryOptionsService academicOptions,
 	StudentScopeAccessService studentScope,
@@ -50,7 +46,7 @@ public sealed class AdmissionFormDataSourceRegistry(
 		var source = Metadata.FirstOrDefault(item => string.Equals(item.Key, sourceKey, StringComparison.OrdinalIgnoreCase));
 		if (source == null) throw new ArgumentException("Unknown admission form data source.", nameof(sourceKey));
 		if (source.SupportsParent && !parentId.HasValue) return [];
-		if (source.Key is "Standards" or "StandardsByMedium" or "StandardsByMediumStage" or "DivisionsByStandard")
+		if (AdmissionAcademicFormOptions.IsAcademic(source.Key))
 		{
 			if (!academicYearId.HasValue || !currentTenant.Id.HasValue) return [];
 			var hierarchy = await academicOptions.GetAsync(academicYearId);
@@ -86,44 +82,42 @@ public sealed class AdmissionFormDataSourceRegistry(
 			}).ToList();
 		}
 
-		return source.Key switch
-		{
-			"EducationBoards" => (await educationBoardRepository.GetListAsync(item =>
-				!academicYearId.HasValue || item.AcademicYearId == academicYearId.Value, includeDetails: false))
-				.GroupBy(item => item.Type)
-				.Select(group => group.OrderBy(item => item.Id).First())
-				.OrderBy(item => item.Type)
-				.Select((item, index) => new AdmissionFormOptionDto { Value = item.Id.ToString(), Label = item.Type.ToString(), DisplayOrder = index })
-				.ToList(),
-			"EducationMediums" => (await educationMediumRepository.GetListAsync(item => item.EducationBoardId == parentId!.Value))
-				.OrderBy(item => item.Name)
-				.Select((item, index) => new AdmissionFormOptionDto { Value = item.Id.ToString(), Label = item.Name, DisplayOrder = index })
-				.ToList(),
-			_ => []
-		};
+		return [];
 	}
 
-	// The caller supplies the scoped hierarchy for this operation; this mapper performs no reads or authorization caching.
+	// The hierarchy is scoped to the caller and academic year before this mapper runs.
 	internal static IReadOnlyList<AdmissionFormOptionDto> MapAcademicOptions(string sourceKey, Guid? parentId, StudentDirectoryOptionsDto hierarchy)
 	{
-		if (sourceKey != "Standards" && !parentId.HasValue) return [];
-		var options = sourceKey == "DivisionsByStandard"
-			? hierarchy.Divisions.Where(item => item.ParentId == parentId)
-			: hierarchy.Standards.Where(item => sourceKey == "StandardsByMediumStage"
-				? item.StageId == parentId : !parentId.HasValue || item.ParentId == parentId);
+		if (sourceKey is not ("Standards" or "EducationBoards") && !parentId.HasValue) return [];
+		var options = sourceKey switch
+		{
+			"EducationBoards" => hierarchy.Boards.AsEnumerable(),
+			"EducationMediums" => hierarchy.Mediums.Where(item => item.ParentId == parentId),
+			"DivisionsByStandard" => hierarchy.Divisions.Where(item => item.ParentId == parentId),
+			"StandardsByMediumStage" => hierarchy.Standards.Where(item => item.StageId == parentId),
+			"StandardsByMedium" => hierarchy.Standards.Where(item => item.ParentId == parentId),
+			"Standards" => hierarchy.Standards.Where(item => !parentId.HasValue || item.ParentId == parentId),
+			_ => Enumerable.Empty<StudentDirectoryOptionDto>()
+		};
 		var duplicateNames = options.GroupBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
 			.Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var boards = hierarchy.Boards.ToDictionary(item => item.Id);
 		var mediums = hierarchy.Mediums.ToDictionary(item => item.Id);
 		var stages = hierarchy.Stages.ToDictionary(item => item.Id);
 		return options.Select((item, index) =>
 		{
-			var isClass = sourceKey != "DivisionsByStandard";
+			var isClass = sourceKey is "Standards" or "StandardsByMedium" or "StandardsByMediumStage";
 			var medium = isClass && item.ParentId.HasValue ? mediums.GetValueOrDefault(item.ParentId.Value) : null;
+			var board = medium?.ParentId is Guid boardId ? boards.GetValueOrDefault(boardId) : null;
 			return new AdmissionFormOptionDto
 			{
 				Value = item.Id.ToString(), Label = duplicateNames.Contains(item.Name) && isClass
 					? $"{item.Name} ({medium?.Name} / {(item.StageId.HasValue ? stages.GetValueOrDefault(item.StageId.Value)?.Name : null)})" : item.Name,
-				DisplayOrder = index
+				DisplayOrder = index,
+				BoardId = sourceKey == "Standards" ? board?.Id : null,
+				BoardLabel = sourceKey == "Standards" ? board?.Name : null,
+				MediumId = sourceKey == "Standards" ? medium?.Id : null,
+				MediumLabel = sourceKey == "Standards" ? medium?.Name : null
 			};
 		}).ToList();
 	}

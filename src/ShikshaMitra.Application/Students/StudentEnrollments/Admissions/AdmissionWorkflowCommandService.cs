@@ -24,6 +24,7 @@ public class AdmissionWorkflowCommandService(
 		AdmissionWorkflowDefinitionStore.EnsureSupportedStages(input);
 		var id = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "WF", id);
+		await EnsureNameAvailableAsync(input.Name);
 		await EnsureCodeVersionAvailableAsync(code, 1);
 		await EnsurePublishedInquiryFormAsync(input.DefaultInquiryFormDefinitionId);
 		var workflow = new AdmissionWorkflowDefinition(
@@ -55,6 +56,7 @@ public class AdmissionWorkflowCommandService(
 				"Workflow code cannot change inside a version history.");
 		}
 		await EnsureCodeVersionAvailableAsync(code, workflow.Version, workflow.Id);
+		await EnsureNameAvailableAsync(input.Name, workflow.Code);
 		await EnsurePublishedInquiryFormAsync(input.DefaultInquiryFormDefinitionId);
 		workflow.UpdateDetails(input.Name, code, input.Description);
 		workflow.SetDefaultInquiryForm(input.DefaultInquiryFormDefinitionId);
@@ -83,6 +85,7 @@ public class AdmissionWorkflowCommandService(
 		await definitionStore.EnsureSupportedStagesAsync(source.Id);
 		var cloneId = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "WF", cloneId);
+		await EnsureNameAvailableAsync(input.Name);
 		await EnsureCodeVersionAvailableAsync(code, 1);
 		var clone = new AdmissionWorkflowDefinition(
 			cloneId, CurrentTenant.Id, input.Name, code, description: input.Description,
@@ -146,6 +149,7 @@ public class AdmissionWorkflowCommandService(
 		if (workflow.Status is not (AdmissionWorkflowStatus.Draft or AdmissionWorkflowStatus.Validated or
 			AdmissionWorkflowStatus.Approved or AdmissionWorkflowStatus.Scheduled))
 			throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidGovernanceTransition);
+		await EnsureNameAvailableAsync(workflow.Name, workflow.Code);
 		await EnsureValidAsync(workflow);
 		if (workflow.Status == AdmissionWorkflowStatus.Draft)
 		{
@@ -279,6 +283,9 @@ public class AdmissionWorkflowCommandService(
 		var query = await workflowRepository.GetQueryableAsync();
 		var anotherVersionPublished = await AsyncExecuter.AnyAsync(query.Where(item =>
 			item.Id != id && item.Code == workflow.Code && item.Status == AdmissionWorkflowStatus.Published));
+		if (workflow.Status == AdmissionWorkflowStatus.Archived && !anotherVersionPublished &&
+			archivedFrom == AdmissionWorkflowStatus.Published)
+			await EnsureNameAvailableAsync(workflow.Name, workflow.Code);
 		workflow.Reopen(archivedFrom, anotherVersionPublished);
 		await governanceService.RecordAsync(workflow, AdmissionWorkflowGovernanceAction.Reopened,
 			AdmissionWorkflowStatus.Archived, CurrentUser.Id);
@@ -334,6 +341,24 @@ public class AdmissionWorkflowCommandService(
 			throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidInquiryForm,
 				"Select a published Inquiry form for this workflow.");
 		}
+	}
+
+	private async Task EnsureNameAvailableAsync(string name, string? familyCode = null)
+	{
+		var normalizedName = Check.NotNullOrWhiteSpace(name, nameof(name), AdmissionWorkflowConsts.MaxNameLength)
+			.Trim().ToUpperInvariant();
+		await LazyServiceProvider.LazyGetRequiredService<IAdmissionWorkflowNameLock>()
+			.AcquireAsync(CurrentTenant.Id, normalizedName);
+		var tenantId = CurrentTenant.Id;
+		var query = await workflowRepository.GetQueryableAsync();
+		// Versions deliberately share a family name. Archived independent families still reserve theirs.
+		var names = await AsyncExecuter.ToListAsync(query.Where(workflow =>
+			workflow.TenantId == tenantId && !workflow.IsDeleted &&
+			(familyCode == null || workflow.Code != familyCode)).Select(workflow => workflow.Name));
+		// Compare using the same invariant normalization as the lock, independent of database collation.
+		if (names.Any(existing => string.Equals(existing.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase)))
+			throw new BusinessException(AdmissionWorkflowErrorCodes.NameAlreadyExists,
+				"A workflow with this name already exists. Please enter a different name.");
 	}
 
 	private async Task EnsureCodeVersionAvailableAsync(string code, int version, Guid? excludingId = null)

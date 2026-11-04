@@ -11,6 +11,10 @@ public class AssignmentContextDto
 	public string Status { get; set; } = "Unassigned";
 	public string Source { get; set; } = "Finance";
 	public Guid? AssignmentId { get; set; }
+	public bool CanEditStructure { get; set; }
+	public string? StructureEditBlocker { get; set; }
+	public string? AssignmentConcurrencyStamp { get; set; }
+	public StudentFeeAssignmentPreviewDto? AssignedAssignment { get; set; }
 	public Guid? ApplicationId { get; set; }
 	public Guid? FinanceFeeAccountId { get; set; }
 	public Guid? StructureId { get; set; }

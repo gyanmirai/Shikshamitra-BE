@@ -51,7 +51,6 @@ public class FeeAdjustmentManager(
         }
 
         var dueFeeMap = dueFees.ToDictionary(df => df.Id);
-        var pendingSource = await feeAdjustmentRepository.GetPendingSourceAmountsByDueFeeAsync(studentId);
 
         foreach (var (dueFeeId, amount) in sourceLines)
         {
@@ -68,8 +67,7 @@ public class FeeAdjustmentManager(
                     .WithData("DueFeeId", dueFeeId);
             }
 
-            pendingSource.TryGetValue(dueFeeId, out var reserved);
-			var available = dueFee.AdjustableBalance - (decimal)reserved;
+			var available = dueFee.AdjustableBalance;
 			if ((decimal)amount > available + 0.001m)
             {
                 throw new BusinessException(FeeAdjustmentErrorCodes.SourceExceedsAdjustableBalance)
@@ -119,6 +117,21 @@ public class FeeAdjustmentManager(
         Guid approverId,
         string? approvalNotes,
         IReadOnlyList<(Guid DueFeeId, double Amount)> targetLines)
+        => await ApplyCoreAsync(request, approverId, approvalNotes, targetLines, automaticallyApproved: false);
+
+    public async Task AutoApplyAsync(
+        FeeAdjustmentRequest request,
+        Guid administratorId,
+        string? approvalNotes,
+        IReadOnlyList<(Guid DueFeeId, double Amount)> targetLines)
+        => await ApplyCoreAsync(request, administratorId, approvalNotes, targetLines, automaticallyApproved: true);
+
+    private async Task ApplyCoreAsync(
+        FeeAdjustmentRequest request,
+        Guid approverId,
+        string? approvalNotes,
+        IReadOnlyList<(Guid DueFeeId, double Amount)> targetLines,
+        bool automaticallyApproved)
     {
         request.EnsureCanApply();
 
@@ -166,7 +179,14 @@ public class FeeAdjustmentManager(
             return (l.DueFeeId, df.FeeHeadId, df.Month, df.Year, l.Amount);
         }).ToList();
 
-        request.RecordApplyBatch(approverId, approvalNotes, allocations);
+        if (automaticallyApproved)
+        {
+            request.RecordAutoApplyBatch(approverId, approvalNotes, allocations);
+        }
+        else
+        {
+            request.RecordApplyBatch(approverId, approvalNotes, allocations);
+        }
 
         foreach (var (dueFeeId, amount) in targetLines)
         {

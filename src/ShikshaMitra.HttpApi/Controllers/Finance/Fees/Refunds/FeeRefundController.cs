@@ -30,6 +30,15 @@ public class FeeRefundController(
     public Task<FeeRefundRequestDto> GetAsync([FromRoute] Guid id)
         => feeRefundAppService.GetAsync(id);
 
+    [HttpGet("{id:guid}/receipt/pdf")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
+    [Produces("application/pdf")]
+    public async Task<IActionResult> GetReceiptPdfAsync([FromRoute] Guid id)
+    {
+        var receipt = await feeRefundAppService.GetReceiptPdfAsync(id);
+        return File(receipt.Content, "application/pdf", receipt.FileName);
+    }
+
     [HttpGet("eligibility")]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
     [ProducesResponseType(typeof(RefundEligibilityDto), StatusCodes.Status200OK)]

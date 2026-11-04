@@ -62,7 +62,7 @@ public partial class StudentFeeStructureAppService(
 	{
 		using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
 		await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, false);
-		if (await studentFeeStructureRepository.AnyAsync(a => a.StudentId == input.StudentId && a.AcademicYearId == input.AcademicYearId))
+		if (!input.EditAssignmentId.HasValue && await studentFeeStructureRepository.AnyAsync(a => a.StudentId == input.StudentId && a.AcademicYearId == input.AcademicYearId))
 			throw new BusinessException(AssignmentErrorCodes.AlreadyAssigned);
 		var prepared = await PrepareAsync(input);
 		var expires = Clock.Now.AddMinutes(20);
@@ -95,6 +95,7 @@ public partial class StudentFeeStructureAppService(
 			}
 			if (exception.GetType().Name is "DbUpdateException" or "AbpDbConcurrencyException")
 			{
+				if (input.EditAssignmentId.HasValue) throw new BusinessException(AssignmentErrorCodes.StalePreview);
 				if (existing != null) return await ExistingResultAsync(existing, fingerprint);
 				Logger.LogError(exception, "Assignment commit failed");
 				throw new BusinessException(AssignmentErrorCodes.CommitFailed);
@@ -105,11 +106,15 @@ public partial class StudentFeeStructureAppService(
 
 	private async Task<AssignmentCommitResultDto> CommitAsync(AssignStudentFeeStructureDto input, DateTime acceptedAt)
 	{
-		using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: true);
+		using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
+			{ IsTransactional = true, IsolationLevel = input.EditAssignmentId.HasValue ? System.Data.IsolationLevel.Serializable : null }, requiresNew: true);
 		await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, false);
 		var commandFingerprint = CommandFingerprint(input);
 		var existing = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == input.StudentId && x.AcademicYearId == input.AcademicYearId);
-		if (existing != null) return await ExistingResultAsync(existing, commandFingerprint);
+		if (existing != null && (!input.EditAssignmentId.HasValue || existing.AssignmentRequestFingerprint == commandFingerprint))
+			return await ExistingResultAsync(existing, commandFingerprint);
+		if (input.EditAssignmentId.HasValue && (existing == null || existing.Id != input.EditAssignmentId))
+			throw new BusinessException(AssignmentErrorCodes.StalePreview);
 		PreviewAssertion assertion;
 		try { assertion = JsonSerializer.Deserialize<PreviewAssertion>(Protector.Unprotect(input.PreviewToken ?? ""))!; }
 		catch (Exception ex) when (ex is CryptographicException or JsonException or ArgumentException)
@@ -122,7 +127,7 @@ public partial class StudentFeeStructureAppService(
 		var prepared = await PrepareAsync(input);
 		if (assertion.Prepared != prepared.Fingerprint)
 			throw new BusinessException(AssignmentErrorCodes.StalePreview);
-		var id = GuidGenerator.Create();
+		var id = input.EditAssignmentId ?? GuidGenerator.Create();
 		var structure = prepared.Structure;
 		var policies = prepared.Preview.Policies.ToDictionary(x => x.Family);
 		var concessionPolicy = policies.GetValueOrDefault("concession");
@@ -133,6 +138,12 @@ public partial class StudentFeeStructureAppService(
 			policies["collection"].PolicyId, policies["collection"].VersionId, policies.GetValueOrDefault("refund")?.PolicyId, policies.GetValueOrDefault("refund")?.VersionId,
 			policies.GetValueOrDefault("proration")?.PolicyId, policies.GetValueOrDefault("proration")?.VersionId, prepared.Preview.ChargeStartDate, prepared.Preview.ChargeEndDate,
 			financeFeeAccountId: prepared.Account?.Id);
+		if (input.EditAssignmentId.HasValue)
+		{
+			var corrected = await CommitCorrectionAsync(input, prepared, existing!, assignment, commandFingerprint);
+			await uow.CompleteAsync();
+			return corrected;
+		}
 		if (prepared.Account != null)
 			await LazyServiceProvider.LazyGetRequiredService<AdmissionFeeCollectionAppService>()
 				.LinkForAssignmentAsync(prepared.AdmissionSource!, prepared.Account);
@@ -197,10 +208,16 @@ public partial class StudentFeeStructureAppService(
 			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 		ValidatePolicies(input.Policies);
 		if (input.PolicyOverrideReason?.Length > 500) throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+		if (input.EditAssignmentId.HasValue && (input.EditAssignmentId == Guid.Empty || string.IsNullOrWhiteSpace(input.AssignmentConcurrencyStamp) ||
+			string.IsNullOrWhiteSpace(input.EditReason)))
+			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 	}
 
 	private static string Hash(object value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value))));
-	private static string CommandFingerprint(AssignStudentFeeStructureDto input) => input.VariableFeeHeads.Count == 0 ? LegacyCommandFingerprint(input) :
+	private static string CommandFingerprint(AssignStudentFeeStructureDto input) => input.EditAssignmentId.HasValue
+		? Hash(new { Command = AmountCommandFingerprint(input), input.EditAssignmentId, input.AssignmentConcurrencyStamp, EditReason = input.EditReason?.Trim() })
+		: AmountCommandFingerprint(input);
+	private static string AmountCommandFingerprint(AssignStudentFeeStructureDto input) => input.VariableFeeHeads.Count == 0 ? LegacyCommandFingerprint(input) :
         Hash(new { Legacy = LegacyCommandFingerprint(input), VariableHeads = input.VariableFeeHeads.OrderBy(x => x.FeeHeadId).ToArray() });
     private static string LegacyCommandFingerprint(AssignStudentFeeStructureDto input) => Hash(new {
 		input.StudentId, input.AcademicYearId, input.StandardFeeStructureId,

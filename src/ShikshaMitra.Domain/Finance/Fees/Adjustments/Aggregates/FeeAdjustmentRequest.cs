@@ -124,6 +124,25 @@ public class FeeAdjustmentRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         IEnumerable<(Guid DueFeeId, Guid FeeHeadId, MonthEnum Month, int Year, double Amount)> allocations)
     {
         EnsureCanApply();
+        EnsureApproverNotCreator(approverId);
+
+        return RecordApplyBatchCore(approverId, approvalNotes, allocations);
+    }
+
+    public int RecordAutoApplyBatch(
+        Guid administratorId,
+        string? approvalNotes,
+        IEnumerable<(Guid DueFeeId, Guid FeeHeadId, MonthEnum Month, int Year, double Amount)> allocations)
+    {
+        EnsureCanApply();
+        return RecordApplyBatchCore(administratorId, approvalNotes, allocations);
+    }
+
+    private int RecordApplyBatchCore(
+        Guid approverId,
+        string? approvalNotes,
+        IEnumerable<(Guid DueFeeId, Guid FeeHeadId, MonthEnum Month, int Year, double Amount)> allocations)
+    {
 
         var allocationList = allocations.ToList();
         if (allocationList.Count == 0)

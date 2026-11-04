@@ -496,7 +496,7 @@ public class CollectionPolicyAppService(
 		}
 		var year = await academicYearRepository.FindAsync(input.AcademicYearId)
 			?? throw new BusinessException(CollectionPolicyErrorCodes.AcademicYearRequired);
-		var model = CollectionPolicyMapping.ToUpdateModel(input, year.StartDate.Date, year.EndDate.Date);
+		var model = CollectionPolicyMapping.ToUpdateModel(input, year.StartDate.Date, year.EndDate.Date).NormalizeForWrite();
 		var feeHeadIds = model.LateFeeApplyOnFeeHeads
 			.Concat(model.FeeHeadOverrides.Select(x => x.FeeHeadId))
 			.Distinct().ToList();

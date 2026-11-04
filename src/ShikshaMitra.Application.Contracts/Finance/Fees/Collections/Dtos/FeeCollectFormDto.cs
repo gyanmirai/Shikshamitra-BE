@@ -112,6 +112,9 @@ public class FeeLedgerLineDto
     /// <summary>Amount already paid (cleared) against this obligation.</summary>
     public double Paid { get; set; }
 
+    /// <summary>Adjustment credits already applied to this obligation.</summary>
+    public double AdjustmentCreditAmount { get; set; }
+
     /// <summary>Outstanding amount (Total − Paid, clamped to zero).</summary>
     public double Due { get; set; }
 

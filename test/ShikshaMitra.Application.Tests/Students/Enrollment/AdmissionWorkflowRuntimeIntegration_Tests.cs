@@ -25,7 +25,7 @@ using Xunit;
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
-	: ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+	: ShikshaMitraApplicationTestBase<ShikshaMitra.Finance.FinanceReceiptIdentityTestModule>
 {
 	private static readonly Guid TestTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 	private static readonly Guid TestUserId = Guid.Parse("22222222-2222-2222-2222-222222222222");

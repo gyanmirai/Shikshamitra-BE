@@ -2,6 +2,9 @@ using System;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using ShikshaMitra.EntityFrameworkCore;
+using Volo.Abp.EntityFrameworkCore;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
@@ -32,6 +35,47 @@ public class PaymentTermListFilters_Tests : ShikshaMitraApplicationTestBase<Shik
 	{
 		_service = GetRequiredService<IPaymentTermAppService>();
 		_terms = GetRequiredService<IRepository<PaymentTerm, Guid>>();
+	}
+
+	[Fact]
+	public async Task History_pages_version_metadata_in_SQL_without_loading_installment_history()
+	{
+		var input = await SeedContextAsync();
+		var term = await AddTermAsync(input, "Paged history", version: 3);
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+			using var reads = new FinanceSettingsReadCapture(db.Database.GetDbConnection());
+			var result = await _service.GetVersionHistoryAsync(term.Id, new() { SkipCount = 0, MaxResultCount = 1 });
+			result.TotalCount.ShouldBe(2);
+			result.Items.Single().VersionNumber.ShouldBe(3);
+			result.Items.Single().ChangeAction.ShouldBe("revision_created");
+			reads.Commands.ShouldNotContain(sql => sql.Contains("CoverageStartDate", StringComparison.Ordinal));
+			reads.Commands.ShouldContain(sql => sql.Contains("LIMIT", StringComparison.OrdinalIgnoreCase));
+		});
+	}
+
+	[Fact]
+	public async Task List_preserves_version_selection_without_loading_installment_history()
+	{
+		var input = await SeedContextAsync();
+		var term = await AddTermAsync(input, "Projected schedule", version: 3);
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+			using var reads = new FinanceSettingsReadCapture(db.Database.GetDbConnection());
+			var result = await _service.GetListAsync(input);
+			var item = result.Items.Single();
+			item.Id.ShouldBe(term.Id);
+			item.CurrentVersionNumber.ShouldBe(3);
+			item.PublishedVersionNumber.ShouldBe(1);
+			item.Status.ShouldBe(PaymentTermLifecycleStatus.Draft);
+			item.HasDraft.ShouldBeTrue();
+			item.HasPublishedVersion.ShouldBeTrue();
+			item.InstallmentCount.ShouldBe(0);
+			reads.Commands.ShouldNotContain(sql => sql.Contains("CoverageStartDate", StringComparison.Ordinal),
+				"a term list needs installment counts, not historical schedule rows");
+		});
 	}
 
 	[Fact]

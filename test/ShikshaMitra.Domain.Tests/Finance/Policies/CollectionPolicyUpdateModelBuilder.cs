@@ -55,4 +55,13 @@ public sealed class CollectionPolicyUpdateModelBuilder
 		CompoundFrequency, EscalationRules, FeeHeadOverrides, RoundingMethod, ConsiderAsIncome, LateFeeIncomeHeadId,
 		MaximumLateFeeAmount, MaximumChargingDays, EnableWaiver, EnableChargeWaiver,
 		RequiresApproval, ApprovalRoleIds, AllowOnlineCollection);
+
+	public CollectionPolicy BuildLegacyPolicy()
+	{
+		var snapshot = new CollectionPolicy(Guid.NewGuid(), null, Guid.NewGuid(), Build()).ToSnapshot();
+		snapshot.ApplyLateFeeToAllFeeHeads = false;
+		snapshot.LateFeeApplyOnFeeHeads = new List<Guid>(LateFeeApplyOnFeeHeads);
+		snapshot.FeeHeadOverrides = new List<CollectionPolicyFeeHeadOverride>(FeeHeadOverrides);
+		return CollectionPolicy.FromSnapshot(Guid.NewGuid(), null, Guid.NewGuid(), 1, snapshot);
+	}
 }

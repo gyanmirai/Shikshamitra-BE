@@ -38,6 +38,10 @@ public partial class LateFeeBalanceService(
 		bool IsCommonCharge = false)
 	{
 		public decimal PendingAmount => Math.Max(0m, Total - PaidAmount - WaivedAmount);
+		public IReadOnlyList<AppliedInterval>? AppliedIntervals { get; init; }
+		public DateOnly? AppliedFromDate => AppliedIntervals is { Count: > 0 } ? AppliedIntervals[0].FromDate : null;
+		public DateOnly? AppliedThroughDate => AppliedIntervals is { Count: > 0 } ? AppliedIntervals[^1].ThroughDate : null;
+		public int? AppliedDays => AppliedIntervals?.Sum(x => x.ThroughDate.DayNumber - x.FromDate.DayNumber + 1);
 	}
 
 	public async Task<Dictionary<Guid, Balance>> GetBalancesAsync(
@@ -90,6 +94,12 @@ public partial class LateFeeBalanceService(
 		var duesByStudent = dues.Where(x => x.StudentId.HasValue).GroupBy(x => x.StudentId!.Value).ToDictionary(x => x.Key, x => x.ToList());
 		var windows = new Dictionary<(Guid StructureId, DateTime Date), ActiveExceptionWindow?>();
 		var contexts = new List<AccrualContext>();
+		var assignmentCounts = assignments.GroupBy(x => x.StudentId).ToDictionary(x => x.Key, x => x.Count());
+		var duesByAccount = dues.Where(x => x.FinanceFeeAccountId.HasValue)
+			.GroupBy(x => x.FinanceFeeAccountId!.Value).ToDictionary(x => x.Key, x => x.ToList());
+
+		var studentPolicies = await policyResolver.CreateStudentReadContextAsync(
+			assignments.Where(x => x.CollectionPolicyVersionId.HasValue).ToList());
 
 		foreach (var assignment in assignments)
 		{
@@ -97,7 +107,7 @@ public partial class LateFeeBalanceService(
 			// assessment/payment evidence remains visible even when no version was pinned.
 			if (assignment.CollectionPolicyVersionId is null) continue;
 			var rules = await policyResolver.ResolveEffectiveRulesForStudentAsync(
-				assignment.StudentId, assignment.FeeStructureStandardId, assignment.Id);
+				assignment, studentPolicies);
 			var studentOverrides = overridesByAssignment.GetValueOrDefault(
 				(assignment.StudentId, assignment.FeeStructureStandardId), []);
 			var applicableFrom = rules.Policy?.EnableLateFee == true && !rules.IsLateFeeExempt
@@ -106,20 +116,22 @@ public partial class LateFeeBalanceService(
 			contexts.Add(new(assignment.FeeStructureStandardId, assignment.CollectionPolicyVersionId.Value, rules,
 				duesByStudent[assignment.StudentId].Where(d => d.StudentFeeStructureId == assignment.Id ||
 					(d.FinanceFeeAccountId == null && d.StudentFeeStructureId == null &&
-					 assignments.Count(x => x.StudentId == assignment.StudentId) == 1)).ToList(),
+					 assignmentCounts[assignment.StudentId] == 1)).ToList(),
 				date => CanRecoverWithAssignedVersion(assignment, date) &&
 					!studentOverrides.Any(x => x.CreationTime > date || x.LastModificationTime > date || x.DeletionTime > date), applicableFrom));
 		}
+		// Reuse immutable version rows only within this calculation; policies remain per payer.
+		var accountVersions = studentPolicies.Versions.ToDictionary(x => x.Key, x => (FinancePolicyVersion?)x.Value);
 		foreach (var account in accounts.Where(x => !x.StudentFeeStructureId.HasValue))
 		{
-			var rules = await policyResolver.ResolveEffectiveRulesForAccountAsync(account.Id);
+			var rules = await policyResolver.ResolveEffectiveRulesForAccountAsync(account, accountVersions);
 			var version = account.GetPolicyReference("collection")
 				?? throw new BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
 			var applicableFrom = rules.Policy?.EnableLateFee == true && !rules.IsLateFeeExempt
 				? await ReadApplicableFromAsync(account.AssignmentSnapshotJson, null,
 					account.StudentId, account.ApplicationId, academicYearId) : null;
 			contexts.Add(new(account.StructureId!.Value, version.VersionId, rules,
-				dues.Where(d => d.FinanceFeeAccountId == account.Id).ToList(), date => account.CreationTime <= date, applicableFrom));
+				duesByAccount.GetValueOrDefault(account.Id, []), date => account.CreationTime <= date, applicableFrom));
 		}
 		foreach (var context in contexts)
 		{
@@ -128,7 +140,8 @@ public partial class LateFeeBalanceService(
 		}
 		foreach (var due in dues.Where(x => !result.ContainsKey(x.Id)))
 			result[due.Id] = new Balance(Math.Max(due.GetAssessedLateFeeAmount(), paid.GetValueOrDefault(due.Id) + waived.GetValueOrDefault(due.Id)),
-				paid.GetValueOrDefault(due.Id), waived.GetValueOrDefault(due.Id), due.GetLateFeeAssessmentExplanation()!, reconciliation.GetValueOrDefault(due.Id));
+				paid.GetValueOrDefault(due.Id), waived.GetValueOrDefault(due.Id), due.GetLateFeeAssessmentExplanation()!, reconciliation.GetValueOrDefault(due.Id))
+				{ AppliedIntervals = ReadAssessmentIntervals(due) };
 		if (changed.Count > 0) await dueFeeRepository.UpdateManyAsync(changed, autoSave: false);
 		return result.Where(x => requestedIds.Contains(x.Key)).ToDictionary(x => x.Key, x => x.Value);
 	}

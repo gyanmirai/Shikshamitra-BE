@@ -21,7 +21,7 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 /// a second, independently-passed academicYearId would just be a second source of truth that
 /// could disagree with the Fee Structure's actual year.
 /// </summary>
-public class CollectionPolicyResolver(
+public partial class CollectionPolicyResolver(
 	IRepository<FeeStructure, Guid> feeStructureRepository,
 	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
 	IRepository<CollectionPolicy, Guid> collectionPolicyRepository,
@@ -84,21 +84,7 @@ public class CollectionPolicyResolver(
 		if (assignment?.CollectionPolicyVersionId is { } versionId && versionId != Guid.Empty)
 		{
 			var version = await versionRepository.FindAsync(versionId);
-			if (version is not null && version.PolicyType == "collection" &&
-				version.PolicyId == assignment.CollectionPolicyId &&
-				version.AcademicYearId == assignment.AcademicYearId)
-			{
-				try
-				{
-					var snapshot = CollectionPolicySnapshot.Deserialize(version.SnapshotJson);
-					policy = CollectionPolicy.FromSnapshot(
-						version.PolicyId, version.TenantId, version.AcademicYearId, version.VersionNumber, snapshot);
-				}
-				catch (System.Text.Json.JsonException)
-				{
-					policy = null;
-				}
-			}
+			policy = ReadStudentPinnedPolicy(assignment, version);
 		}
 		if (assignment != null && policy == null)
             throw new Volo.Abp.BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
@@ -123,26 +109,7 @@ public class CollectionPolicyResolver(
 	public async Task<EffectiveCollectionRules> ResolveEffectiveRulesForAccountAsync(Guid accountId)
 	{
 		var account = await accountRepository.GetAsync(accountId);
-		if (account.StudentId.HasValue && account.StudentFeeStructureId.HasValue && account.StructureId.HasValue)
-			return await ResolveEffectiveRulesForStudentAsync(account.StudentId.Value, account.StructureId.Value,
-				account.StudentFeeStructureId.Value);
-		var reference = account.GetPolicyReference("collection")
-			?? throw new Volo.Abp.BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
-		var version = await versionRepository.FindAsync(reference.VersionId);
-		if (version == null || version.PolicyType != "collection" || version.PolicyId != reference.PolicyId ||
-			version.AcademicYearId != account.AcademicYearId || version.TenantId != account.TenantId)
-			throw new Volo.Abp.BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
-		try
-		{
-			var snapshot = CollectionPolicySnapshot.Deserialize(version.SnapshotJson);
-			var policy = CollectionPolicy.FromSnapshot(version.PolicyId, version.TenantId, version.AcademicYearId,
-				version.VersionNumber, snapshot);
-			return new EffectiveCollectionRules(policy, false, null, false);
-		}
-		catch (System.Text.Json.JsonException)
-		{
-			throw new Volo.Abp.BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
-		}
+		return await ResolveEffectiveRulesForAccountAsync(account, null);
 	}
 }
 

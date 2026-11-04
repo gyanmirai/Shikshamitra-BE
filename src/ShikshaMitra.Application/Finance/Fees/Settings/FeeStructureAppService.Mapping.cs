@@ -46,7 +46,7 @@ public partial class FeeStructureAppService
 
 	private sealed record StructureScope(Guid? AcademicYearId, Guid? EducationBoardId, Guid? EducationMediumId,
 
-		Guid? EducationMediumStageId, Guid? StandardId, Guid? DivisionId = null) : IUserScopedEntity;
+		Guid? EducationMediumStageId, Guid? StandardId, Guid? DivisionId = null, string? Name = null) : IUserScopedEntity;
 
 
 
@@ -64,7 +64,7 @@ public partial class FeeStructureAppService
 
 				x.EducationMediumStage.EducationMedium.EducationBoardId,
 
-				x.EducationMediumStage.EducationMediumId, x.EducationMediumStageId, x.Id, null)))
+				x.EducationMediumStage.EducationMediumId, x.EducationMediumStageId, x.Id, null, x.Name)))
 
 			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(ShikshaMitra.TenantSettings.Standards.Standard), id);
 
@@ -270,7 +270,7 @@ public partial class FeeStructureAppService
 
 
 
-	private async Task<FeeStructureCreateResponse> MapAsync(FeeStructure entity)
+	private async Task<FeeStructureCreateResponse> MapAsync(FeeStructure entity, StructureMappingContext? context = null)
 
 	{
 
@@ -315,17 +315,14 @@ public partial class FeeStructureAppService
 
 		var policyIds = new[] { entity.CollectionPolicyVersionId, entity.ConcessionPolicyVersionId, entity.RefundPolicyVersionId }.Where(x => x.HasValue).Select(x => x!.Value).ToList();
 
-		result.PolicyLabels = frozen?.PolicyLabels ?? (await financePolicyVersionRepository.GetListAsync(x => policyIds.Contains(x.Id)))
+		context ??= await LoadMappingContextAsync([entity]);
+		result.PolicyLabels = frozen?.PolicyLabels ?? context.Policies.Values.Where(x => policyIds.Contains(x.Id))
 
 			.ToDictionary(x => x.PolicyType, x => $"{x.PolicyName} · v{x.VersionNumber}");
 
-		var ids = entity.FeeStructureDetails.Select(x => x.FeeHeadId).ToList();
+		var heads = context.Heads;
 
-		var heads = (await feeHeadRepository.GetListAsync(x => ids.Contains(x.Id))).ToDictionary(x => x.Id);
-
-		var termIds = entity.FeeStructureDetails.Where(x => x.PaymentTermId.HasValue).Select(x => x.PaymentTermId!.Value).Distinct().ToList();
-
-		var terms = (await paymentTermRepository.GetListAsync(x => termIds.Contains(x.Id))).ToDictionary(x => x.Id);
+		var terms = context.Terms;
 
 		foreach (var line in entity.FeeStructureDetails)
 
@@ -341,13 +338,13 @@ public partial class FeeStructureAppService
 
 			{
 
-				Id = line.Id, FeeHeadId = line.FeeHeadId, FeeHeadName = frozen?.Coverage.SingleOrDefault(x => x.FeeHeadId == line.FeeHeadId)?.Name ?? head?.Name ?? "Unavailable fee head", CategoryName = head?.FeeCategory?.Name ?? "",
+				Id = line.Id, FeeHeadId = line.FeeHeadId, FeeHeadName = frozen?.Coverage.SingleOrDefault(x => x.FeeHeadId == line.FeeHeadId)?.Name ?? head?.Name ?? "Unavailable fee head", CategoryName = head?.CategoryName ?? "",
 
 				Amount = line.Amount, IsVariable = line.IsVariable, IsOneTime = line.IsOneTime, IsOptional = line.IsOptional, PayableMonth = line.PayableMonth, PayableYear = line.PayableYear,
 
 				PaymentTermId = line.PaymentTermId, PaymentTermVersionId = line.PaymentTermVersionId, PaymentTermName = frozen?.Schedules.SingleOrDefault(x => x.FeeHeadId == line.FeeHeadId)?.PaymentTermName ?? term?.Name,
 
-				PaymentTermVersionNumber = version?.VersionNumber, HasNewVersionAvailable = term?.GetPublishedVersion() is { } latest && version != null && latest.VersionNumber > version.VersionNumber,
+				PaymentTermVersionNumber = version?.VersionNumber, HasNewVersionAvailable = term?.Versions.Where(x => x.Status == PaymentTermVersionStatus.Published).OrderByDescending(x => x.VersionNumber).FirstOrDefault() is { } latest && version != null && latest.VersionNumber > version.VersionNumber,
 
 				ScheduleMode = line.ScheduleMode, IsScheduleLocked = entity.IsLocked, InstallmentOverrides = line.ScheduleOverrides.Select(MapOverride).ToList()
 

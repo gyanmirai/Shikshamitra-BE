@@ -42,6 +42,27 @@ public partial class StudentFeeStructureAppService
 			result.StructureId = existing.FeeStructureStandardId;
 			result.FinanceFeeAccountId = existing.FinanceFeeAccountId;
 			result.Source = existing.FinanceFeeAccountId.HasValue ? "Admission" : "Finance";
+			result.AssignmentConcurrencyStamp = existing.ConcurrencyStamp;
+			result.StructureEditBlocker = (await StructureEditBlockersAsync([existing]))[existing.Id] ?? (!enrollment.IsActive ? InactiveEditBlocker : null);
+			result.CanEditStructure = result.StructureEditBlocker == null;
+			var snapshot = SavedAssignment(existing);
+			result.AssignedAssignment = snapshot;
+			result.StructureRevision = snapshot?.RevisionNumber;
+			if (snapshot != null)
+			{
+				result.JoiningDate = snapshot.RegistrationJoiningDate;
+				result.ChargeStartDate = snapshot.ChargeStartDate;
+				result.ChargeEndDate = snapshot.ChargeEndDate;
+				result.ApplicationId = snapshot.ApplicationId;
+				result.SelectedOptionalFeeHeadIds = snapshot.Heads.Where(h => h.Included && h.IsOptional).Select(h => h.FeeHeadId).ToList();
+				result.VariableFeeHeads = SavedVariableAmounts(snapshot);
+				var ids = new[] { existing.CollectionPolicyVersionId, existing.ConcessionPolicyVersionId, existing.RefundPolicyVersionId, existing.ProrationPolicyVersionId }
+					.Where(id => id.HasValue).Select(id => id!.Value).ToArray();
+				var policies = await financePolicyVersionRepository.GetListAsync(p => Enumerable.Contains(ids, p.Id));
+				snapshot.Policies = policies.Select(p => snapshot.Policies.FirstOrDefault(s => s.VersionId == p.Id) ?? ToAssignmentPolicy(p)).ToList();
+				result.ProrationPolicy = snapshot.Policies.FirstOrDefault(p => p.Family == "proration");
+				if (existing.ExtraProperties.TryGetValue("AssignedPolicyReason", out var reason)) snapshot.PolicyOverrideReason = reason?.ToString();
+			}
 			return result;
 		}
 		try

@@ -54,6 +54,8 @@ public class CollectionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public string PolicyType { get; set; } = "collection";
 
 	public bool EnableLateFee { get; set; }
+	/// <summary>True for common rules; false for historical selected-head policies.</summary>
+	public bool ApplyLateFeeToAllFeeHeads { get; set; }
 	public int GracePeriodDays { get; set; }
 	public List<Guid> LateFeeApplyOnFeeHeads { get; set; } = new();
 	public string LateFeeType { get; set; } = "Flat";

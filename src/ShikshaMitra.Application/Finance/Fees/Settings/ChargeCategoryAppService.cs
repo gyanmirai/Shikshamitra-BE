@@ -96,14 +96,8 @@ public partial class ChargeCategoryAppService(
         );
 
 		var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
-		var responses = new List<ChargeCategoryResponse>(items.Count);
-
-		// ToResponseAsync performs repository queries. Keep these calls sequential
-		// because all repositories share the request-scoped EF Core DbContext.
-		foreach (var item in items)
-		{
-			responses.Add(await ToResponseAsync(item));
-		}
+		var labels = await LoadAccountingLabelsAsync(items);
+		var responses = items.Select(item => MapResponse(item, labels)).ToList();
 
         return new PaginatedChargeCategoryResponse
         {
@@ -196,21 +190,6 @@ public partial class ChargeCategoryAppService(
 
 	private async Task<ChargeCategoryResponse> ToResponseAsync(ChargeCategory category)
 	{
-		var incomeCategory = category.IncomeCategoryId.HasValue
-			? await transactionCategoryRepository.FindAsync(category.IncomeCategoryId.Value) : null;
-		var accountHead = category.IncomeAccountHeadId.HasValue
-			? await accountHeadRepository.FindAsync(category.IncomeAccountHeadId.Value) : null;
-		return new ChargeCategoryResponse
-		{
-			Id = category.Id, Name = category.Name,
-			IsApprovalRequired = category.IsApprovalRequired,
-			Description = category.Description, IsActive = category.IsActive,
-			IncomeCategoryId = category.IncomeCategoryId,
-			IncomeAccountHeadId = category.IncomeAccountHeadId,
-			IncomeCategoryName = incomeCategory?.Name,
-			IncomeAccountHeadName = accountHead?.Name,
-			IsAccountingReady = category.IsAccountingReady,
-			ConcurrencyStamp = category.ConcurrencyStamp
-		};
+		return MapResponse(category, await LoadAccountingLabelsAsync([category]));
 	}
 }

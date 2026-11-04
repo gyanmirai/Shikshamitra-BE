@@ -50,6 +50,7 @@ public partial class FeeCollectionSummaryQueryService
 					: $"{r.StandardName} - {r.DivisionName}",
 				TotalFees              = r.TotalFees ?? 0d,
 				PaidFees               = r.PaidFees ?? 0d,
+				RefundAmount           = r.RefundAmount,
 				PendingFees            = outstanding ?? 0d,
 				OverdueFees            = overdue ?? 0d,
 				TotalCharges           = r.TotalCharges ?? 0d,
@@ -111,6 +112,8 @@ public partial class FeeCollectionSummaryQueryService
 			"totalfees desc"                              => rows.OrderByDescending(x => x.TotalFees),
 			"paidfees asc"         or "paidfees"          => rows.OrderBy(x => x.PaidFees),
 			"paidfees desc"                               => rows.OrderByDescending(x => x.PaidFees),
+			"refundamount asc"     or "refundamount"      => rows.OrderBy(x => x.RefundAmount),
+			"refundamount desc"                           => rows.OrderByDescending(x => x.RefundAmount),
 			"pendingfees asc"      or "pendingfees"       => rows.OrderBy(x => x.OutstandingFees),
 			"pendingfees desc"                            => rows.OrderByDescending(x => x.OutstandingFees),
 			"overduefees asc"      or "overduefees"       => rows.OrderBy(x => x.OverdueFees),
@@ -231,6 +234,7 @@ public partial class FeeCollectionSummaryQueryService
 		public string  DivisionName    { get; init; } = string.Empty;
 		public double? TotalFees       { get; set; }
 		public double? PaidFees        { get; set; }
+		public decimal RefundAmount    { get; set; }
 		public double? OutstandingFees { get; set; }
 		public double? OverdueFees     { get; set; }
 		public double? TotalCharges    { get; set; }

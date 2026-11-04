@@ -146,7 +146,9 @@ public partial class MobileAcademicAppService_Tests
 	[Fact]
 	public Task Finance_payment_lists_real_receipt_ids_and_downloads_only_owned_pdf()=>WithUnitOfWorkAsync(async()=>
 	{
-		var tenantId=Guid.NewGuid();using var tenant=GetRequiredService<ICurrentTenant>().Change(tenantId);
+		var school = await GetRequiredService<Volo.Abp.TenantManagement.ITenantManager>().CreateAsync($"Family receipt {Guid.NewGuid():N}");
+		await GetRequiredService<Volo.Abp.TenantManagement.ITenantRepository>().InsertAsync(school, autoSave: true);
+		var tenantId=school.Id;using var tenant=GetRequiredService<ICurrentTenant>().Change(tenantId);
 		var f=await Seed(tenantId,true);using var identity=FinanceIdentity(f.User.Id);
 		var grants=GetRequiredService<IPermissionManager>();
 		await GrantFinancePermissionAsync(f.User.Id,Permissions.View);

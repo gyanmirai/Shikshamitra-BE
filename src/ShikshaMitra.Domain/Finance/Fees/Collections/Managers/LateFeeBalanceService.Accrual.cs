@@ -23,7 +23,8 @@ public partial class LateFeeBalanceService
 			var explanation = due.GetLateFeeAssessmentExplanation() ?? string.Empty;
 			result[due.Id] = new(Math.Max(due.GetAssessedLateFeeAmount(), paid.GetValueOrDefault(due.Id) + waived.GetValueOrDefault(due.Id)),
 				paid.GetValueOrDefault(due.Id), waived.GetValueOrDefault(due.Id), explanation,
-				reconciliation.GetValueOrDefault(due.Id), explanation.StartsWith(CommonExplanation, StringComparison.Ordinal));
+				reconciliation.GetValueOrDefault(due.Id), explanation.StartsWith(CommonExplanation, StringComparison.Ordinal))
+				{ AppliedIntervals = ReadAssessmentIntervals(due) };
 		}
 		var rules = context.Rules;
 		if (rules.Policy is not { EnableLateFee: true } policy || rules.IsLateFeeExempt) return;
@@ -37,12 +38,40 @@ public partial class LateFeeBalanceService
 		{
 			var rows = group.Where(d => context.StartBoundary?.Allows(d) != false).OrderBy(d => d.DueDate).ThenBy(d => d.Id).ToList();
 			if (rows.Count == 0) continue;
+			// Older individual assessments stored their amount, assessment timestamp, and
+			// pinned policy version before interval snapshots were added. Recover a range
+			// only when those immutable facts still identify the same policy and no relevant
+			// exception window could have altered the counted days. This is read-only; an
+			// uncertain historical period remains null rather than being guessed.
+			foreach (var due in rows)
+			{
+				if (result[due.Id].AppliedIntervals is not null || result[due.Id].IsCommonCharge ||
+					result[due.Id].Total <= 0m || due.GetLateFeeAssessmentPolicyVersionId() != context.VersionId ||
+					due.GetLateFeeAssessedAt() is not { } assessedAt || !context.CanRecover(assessedAt.UtcDateTime)) continue;
+				var assessmentDate = assessedAt.Date;
+				var graceDays = rules.CustomGracePeriodDays ?? policy.GracePeriodDays;
+				var exclusiveStart = due.DueDate.Date.AddDays(graceDays);
+				if (assessmentDate <= exclusiveStart) continue;
+				var hasRelevantExceptionEvidence = windowEvidence.Any(window =>
+					(window.Scope == ExceptionWindowScope.SchoolWide ||
+					 window.Scope == ExceptionWindowScope.AcademicYear && window.ScopeId == academicYearId ||
+					 window.Scope == ExceptionWindowScope.FeeStructure && window.ScopeId == context.StructureId) &&
+					(window.CreationTime > assessedAt.UtcDateTime || window.LastModificationTime > assessedAt.UtcDateTime ||
+					 window.DeletionTime > assessedAt.UtcDateTime ||
+					 window.StartDate.Date <= assessmentDate && window.EndDate.Date > exclusiveStart));
+				if (hasRelevantExceptionEvidence) continue;
+				var countedDays = (assessmentDate - exclusiveStart).Days;
+				var recovered = AppliedPeriod([(exclusiveStart, assessmentDate)], countedDays);
+				if (recovered is { Count: > 0 })
+					result[due.Id] = result[due.Id] with { AppliedIntervals = recovered };
+			}
 			var anchor = rows.OrderByDescending(d => result[d.Id].Total > 0m).ThenBy(d => d.DueDate).ThenBy(d => d.Id).First();
 			// Retain historical assessments on excluded rows without issuing the same
 			// common charge again against a newly eligible installment.
 			var preservedTotal = group.Sum(d => result[d.Id].Total);
 			var target = preservedTotal;
 			var explanation = result[anchor.Id].Explanation;
+			var appliedIntervals = result[anchor.Id].AppliedIntervals;
 			bool CanRecover(DateTime timestamp, DateTime calendarDate) => context.CanRecover(timestamp) && !windowEvidence.Any(x => x.CoversDate(calendarDate)
 				&& (x.Scope != ExceptionWindowScope.FeeStructure || x.ScopeId == context.StructureId)
 				&& (x.CreationTime > timestamp || x.LastModificationTime > timestamp || x.DeletionTime > timestamp));
@@ -53,11 +82,16 @@ public partial class LateFeeBalanceService
 					windows[key] = window = await windowResolver.ResolveActiveWindowAsync(academicYearId, key.Item1, key.Item2);
 				return window;
 			}
-			void Accept(LateFeeCalculationResult calculated)
+			void Accept(LateFeeCalculationResult calculated, IEnumerable<(DateTime Start, DateTime End)> intervals)
 			{
-				if (calculated.LateFee <= target) return;
+				// Before the first assessment, an equal-valued flat/capped calculation
+				// can describe a fuller common interval union. Existing assessments
+				// retain their dated evidence when the monetary assessment does not grow.
+				if (calculated.LateFee < target || calculated.LateFee <= 0m ||
+					(calculated.LateFee == target && preservedTotal > 0m)) return;
 				target = calculated.LateFee;
 				explanation = CommonExplanation + calculated.Explanation;
+				appliedIntervals = AppliedPeriod(intervals, calculated.EffectiveDaysLate);
 			}
 			// Legacy recovery uses only immutable pre-payment principal/date evidence. It
 			// must never manufacture today's overdue days for a fully settled obligation.
@@ -67,8 +101,9 @@ public partial class LateFeeBalanceService
 						&& CanRecover(timestamp, date) && due.IsBillGeneratedOn(date))
 					{
 						var window = await WindowAsync(date);
-						Accept(calculator.Calculate(policy, new((date.Date - due.DueDate.Date).Days, before, due.OriginalAmount, before,
-							due.FeeHeadId, false, rules.CustomGracePeriodDays, window?.Effect, window?.ExtensionDays, window?.Label)));
+						var calculated = calculator.Calculate(policy, new((date.Date - due.DueDate.Date).Days, before, due.OriginalAmount, before,
+							due.FeeHeadId, false, rules.CustomGracePeriodDays, window?.Effect, window?.ExtensionDays, window?.Label));
+						Accept(calculated, [(due.DueDate.Date.AddDays(calculated.EffectiveGracePeriodDays), date.Date)]);
 					}
 			var active = rows.Where(d => d.OutstandingAmount > 0m && d.DueDate.Date < asOf.Date && d.IsBillGeneratedOn(asOf)).ToList();
 			var type = policy.TryGetFeeHeadOverride(rows[0].FeeHeadId, out var custom) && custom?.OverrideMode == FeeHeadOverrideMode.CustomRule
@@ -93,7 +128,7 @@ public partial class LateFeeBalanceService
 			// suspension/extension cannot erase late days already evidenced at settlement.
 			if (type is LateFeeCalculationType.Flat or LateFeeCalculationType.PerDay or LateFeeCalculationType.PerWeek or LateFeeCalculationType.PerMonth)
 				Accept(calculator.Calculate(policy, new(CountOverdueDays(closedIntervals), 0m, 0m, 0m,
-					rows[0].FeeHeadId, CustomGracePeriodDays: 0)));
+					rows[0].FeeHeadId, CustomGracePeriodDays: 0)), closedIntervals);
 			if (active.Count > 0)
 			{
 				var window = await WindowAsync(asOf);
@@ -108,18 +143,19 @@ public partial class LateFeeBalanceService
 				var days = CountOverdueDays(intervals);
 				var outstanding = active.Sum(d => d.OutstandingAmount);
 				Accept(calculator.Calculate(policy, new(days + grace, outstanding, active.Sum(d => d.OriginalAmount), outstanding,
-					rows[0].FeeHeadId, false, rules.CustomGracePeriodDays, window?.Effect, window?.ExtensionDays, window?.Label)));
+					rows[0].FeeHeadId, false, rules.CustomGracePeriodDays, window?.Effect, window?.ExtensionDays, window?.Label)), intervals);
 			}
 			// Keep historical amounts on their original rows and allocate only common growth.
 			var delta = target - preservedTotal;
 			if (delta > 0m) result[anchor.Id] = result[anchor.Id] with
 			{
-				Total = result[anchor.Id].Total + delta, Explanation = explanation, IsCommonCharge = true,
+				Total = result[anchor.Id].Total + delta, Explanation = explanation, IsCommonCharge = true, AppliedIntervals = appliedIntervals,
 			};
 			foreach (var due in rows.Where(d => preserveAssessment && result[d.Id].Total > d.GetAssessedLateFeeAmount()))
 			{
 				due.PreserveLateFeeAssessment(result[due.Id].Total, new(DateTime.SpecifyKind(asOf, DateTimeKind.Utc)),
-					context.VersionId, result[due.Id].Explanation);
+					context.VersionId, result[due.Id].Explanation,
+					result[due.Id].AppliedIntervals == null ? null : System.Text.Json.JsonSerializer.Serialize(result[due.Id].AppliedIntervals));
 				changed.Add(due);
 			}
 		}

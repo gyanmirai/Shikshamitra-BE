@@ -2,12 +2,16 @@ using Shouldly;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.Security.UserScope;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Users;
 using Xunit;
 
 namespace ShikshaMitra.Domain.Finance.Policies;
@@ -36,6 +40,18 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 	private async Task<CreateUpdateCollectionPolicyDto> BuildInputAsync(
 		Guid academicYearId, string name, bool isDefault = false)
 	{
+		// The real scope resolver requires a persisted identity and assignment;
+		// the fake principal's admin claim alone grants no academic access.
+		var userId = GetRequiredService<ICurrentUser>().Id!.Value;
+		var tenantId = GetRequiredService<ICurrentTenant>().Id;
+		var users = GetRequiredService<IRepository<IdentityUser, Guid>>();
+		if (await users.FindAsync(userId) == null)
+		{
+			await users.InsertAsync(new IdentityUser(userId, "policy-editor", "policy-editor@example.test", tenantId), autoSave: true);
+		}
+		var assignments = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		if ((await assignments.GetListAsync(x => x.UserId == userId)).Count == 0)
+			await assignments.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), tenantId, userId: userId), autoSave: true);
 		if (await _academicYearRepository.FindAsync(academicYearId) is null)
 		{
 			await _academicYearRepository.InsertAsync(new AcademicYear(
@@ -68,6 +84,7 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 			Status = "Active",
 			IsDefault = isDefault,
 			EnableLateFee = true,
+			LateFeeIncomeCategoryId = incomeCategoryId,
 			GracePeriodDays = 7,
 			LateFeeApplyOnFeeHeads = new() { lateFeeHeadId, waiverFeeHeadId },
 			LateFeeType = "PerDay",
@@ -94,7 +111,8 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		created.LateFeeType.ShouldBe("PerDay");
 		created.AmountPerDay.ShouldBe(20);
 		created.MaximumLateFeeAmount.ShouldBe(2000);
-		created.LateFeeApplyOnFeeHeads.Count.ShouldBe(2);
+		created.ApplyLateFeeToAllFeeHeads.ShouldBeTrue();
+		created.LateFeeApplyOnFeeHeads.ShouldBeEmpty();
 		created.Version.ShouldBe(1); // ctor calls Update() once, same as AttendancePolicy's pattern
 		var stored = await _collectionPolicyRepository.GetAsync(created.Id);
 		stored.EffectiveFrom.ShouldBe(new DateTime(2025, 4, 1));
@@ -104,6 +122,21 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		fetched.PolicyName.ShouldBe(created.PolicyName);
 		fetched.AmountPerDay.ShouldBe(20);
 		fetched.LateFeeApplyOnFeeHeads.ShouldBe(created.LateFeeApplyOnFeeHeads);
+	}
+
+	[Fact]
+	public async Task Active_Common_Policy_Accepts_Empty_Head_Selection()
+	{
+		var input = await BuildInputAsync(_guidGenerator.Create(), "Common empty scope");
+		input.LateFeeApplyOnFeeHeads = [];
+		var created = await _collectionPolicies.CreateAsync(input);
+		created.ApplyLateFeeToAllFeeHeads.ShouldBeTrue();
+		created.LateFeeApplyOnFeeHeads.ShouldBeEmpty();
+		var simulated = await _collectionPolicies.SimulateAsync(created.Id, new CollectionPolicySimulateRequestDto
+		{
+			DaysLate = 15, OutstandingAmount = 5000, FeeHeadId = Guid.NewGuid()
+		});
+		simulated.LateFee.ShouldBe(160);
 	}
 
 	[Fact]
@@ -238,7 +271,7 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 	}
 
 	[Fact]
-	public async Task Active_Policy_Rejects_A_Fee_Head_From_An_Inactive_Category()
+	public async Task Common_Policy_Ignores_Legacy_Head_Selection_From_An_Inactive_Category()
 	{
 		var academicYearId = _guidGenerator.Create();
 		var input = await BuildInputAsync(academicYearId, "Inactive category policy");
@@ -247,11 +280,9 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		category.SetStatus(false, "Not selectable");
 		await _feeCategoryRepository.UpdateAsync(category, autoSave: true);
 
-		var exception = await Should.ThrowAsync<BusinessException>(() =>
-			_collectionPolicies.CreateAsync(input));
-
-		exception.Code.ShouldBe(CollectionPolicyErrorCodes.InvalidFeeHeadReference);
-		exception.Data["reason"].ShouldBe("inactive_fee_category");
+		var created = await _collectionPolicies.CreateAsync(input);
+		created.ApplyLateFeeToAllFeeHeads.ShouldBeTrue();
+		created.LateFeeApplyOnFeeHeads.ShouldBeEmpty();
 	}
 
 	[Fact]
@@ -385,7 +416,7 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 	// ── Per-fee-head overrides (Phase 4a) ────────────────────────────────────
 
 	[Fact]
-	public async Task FeeHeadOverrides_Round_Trip_Through_Create_And_Get()
+	public async Task New_Common_Policy_Discards_Legacy_Overrides_Through_Create_And_Get()
 	{
 		var academicYearId = _guidGenerator.Create();
 		var input = await BuildInputAsync(academicYearId, "Policy With Overrides");
@@ -412,23 +443,17 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 
 		var created = await _collectionPolicies.CreateAsync(input);
 
-		created.FeeHeadOverrides.Count.ShouldBe(2);
-		var transportOverride = created.FeeHeadOverrides.Single(o => o.FeeHeadId == transportFeeHeadId);
-		transportOverride.OverrideMode.ShouldBe("NoLateFee");
-		transportOverride.LateFeeRule.ShouldBeNull();
-
-		var libraryOverride = created.FeeHeadOverrides.Single(o => o.FeeHeadId == libraryFeeHeadId);
-		libraryOverride.OverrideMode.ShouldBe("CustomRule");
-		libraryOverride.LateFeeRule.ShouldNotBeNull();
-		libraryOverride.LateFeeRule!.LateFeeType.ShouldBe("Flat");
-		libraryOverride.LateFeeRule!.FlatAmount.ShouldBe(50);
+		created.ApplyLateFeeToAllFeeHeads.ShouldBeTrue();
+		created.LateFeeApplyOnFeeHeads.ShouldBeEmpty();
+		created.FeeHeadOverrides.ShouldBeEmpty();
 
 		var fetched = await _collectionPolicies.GetAsync(created.Id);
-		fetched.FeeHeadOverrides.Count.ShouldBe(2);
+		fetched.ApplyLateFeeToAllFeeHeads.ShouldBeTrue();
+		fetched.FeeHeadOverrides.ShouldBeEmpty();
 	}
 
 	[Fact]
-	public async Task Duplicate_FeeHeadId_In_Overrides_Is_Rejected()
+	public async Task New_Common_Policy_Ignores_Duplicate_Legacy_Override_Heads()
 	{
 		var input = await BuildInputAsync(_guidGenerator.Create(), "Duplicate Override Policy");
 		var feeHeadId = input.LateFeeApplyOnFeeHeads.First();
@@ -438,13 +463,13 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 			new CollectionPolicyFeeHeadOverrideDto { FeeHeadId = feeHeadId, OverrideMode = "Inherit" }
 		};
 
-		var ex = await Should.ThrowAsync<BusinessException>(() => _collectionPolicies.CreateAsync(input));
-
-		ex.Code.ShouldBe(CollectionPolicyErrorCodes.DuplicateFeeHeadOverride);
+		var created = await _collectionPolicies.CreateAsync(input);
+		created.ApplyLateFeeToAllFeeHeads.ShouldBeTrue();
+		created.FeeHeadOverrides.ShouldBeEmpty();
 	}
 
 	[Fact]
-	public async Task CustomRule_Override_Without_A_LateFeeRule_Is_Rejected()
+	public async Task New_Common_Policy_Ignores_Legacy_Custom_Override_Without_A_Rule()
 	{
 		var input = await BuildInputAsync(_guidGenerator.Create(), "Missing Custom Rule Policy");
 		input.FeeHeadOverrides = new()
@@ -457,17 +482,15 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 			}
 		};
 
-		var ex = await Should.ThrowAsync<BusinessException>(() => _collectionPolicies.CreateAsync(input));
-
-		ex.Code.ShouldBe(CollectionPolicyErrorCodes.CustomRuleRequiresLateFeeRule);
+		var created = await _collectionPolicies.CreateAsync(input);
+		created.ApplyLateFeeToAllFeeHeads.ShouldBeTrue();
+		created.FeeHeadOverrides.ShouldBeEmpty();
 	}
 
 	[Fact]
-	public async Task Acceptance_Transport_NoLateFee_And_Tuition_Normal_Rule_Both_Resolve_Correctly_Via_Simulate()
+	public async Task Common_Rule_Applies_To_Tuition_And_Transport_Despite_Legacy_NoLateFee_Input()
 	{
-		// implementation plan §4a acceptance criteria: tuition on the default rule and transport
-		// set to NoLateFee produces zero late fee on transport dues and the normal calculated
-		// amount on tuition dues.
+		// New writes discard legacy per-head exceptions before persisting the common rule.
 		var input = await BuildInputAsync(_guidGenerator.Create(), "Acceptance Scenario Policy");
 		var tuitionFeeHeadId = input.LateFeeApplyOnFeeHeads.First();
 		var transportFeeHeadId = input.LateFeeApplyOnFeeHeads.Last();
@@ -494,7 +517,7 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		tuitionResult.LateFee.ShouldBe(160);
 		tuitionResult.FeeHeadOverrideApplied.ShouldBe("Inherit");
 
-		transportResult.LateFee.ShouldBe(0);
-		transportResult.FeeHeadOverrideApplied.ShouldBe("NoLateFee");
+		transportResult.LateFee.ShouldBe(160);
+		transportResult.FeeHeadOverrideApplied.ShouldBe("Inherit");
 	}
 }

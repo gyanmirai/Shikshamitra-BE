@@ -12,10 +12,13 @@ using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
@@ -23,6 +26,7 @@ using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.ObjectMapping;
 using Volo.Abp.Uow;
+using Volo.Abp.TenantManagement;
 using Xunit;
 
 namespace ShikshaMitra.TenantSettings;
@@ -34,8 +38,10 @@ public partial class StandardLookupApi_Tests
 	[InlineData(4, "wide", "none")]
 	[InlineData(4, "standard", "none")]
 	[InlineData(4, "division", "none")]
+	[InlineData(4, "none", "none")]
 	[InlineData(4, "wide", "stage")]
 	[InlineData(4, "wide", "board")]
+	[InlineData(4, "wide", "year")]
 	public async Task Medium_standard_selector_batches_stage_reads_without_changing_full_dto_scope_order_or_occupancy(int stageCount, string scopeKind, string deleted)
 	{
 		using var client = factory.CreateClient();
@@ -44,6 +50,7 @@ public partial class StandardLookupApi_Tests
 		factory.Scope = scopeKind switch {
 			"standard" => new() { StandardIds = [fixture.First.StandardId] },
 			"division" => new() { DivisionIds = [fixture.First.DivisionId] },
+			"none" => new(),
 			_ => new() { HasWildcardAcademicYear = true }
 		};
 		var expected = await ReadLegacyMediumOracleAsync(fixture.First.MediumId);
@@ -54,10 +61,10 @@ public partial class StandardLookupApi_Tests
 		var actual = (await response.Content.ReadFromJsonAsync<List<StandardDto>>())!;
 		var json = factory.Services.GetRequiredService<IOptions<Microsoft.AspNetCore.Mvc.JsonOptions>>().Value.JsonSerializerOptions;
 		JsonSerializer.Serialize(actual, json).ShouldBe(JsonSerializer.Serialize(expected, json), "All persisted standard/division/shift/audit fields must match the legacy complete selector.");
-		if (deleted == "board") actual.ShouldBeEmpty();
+		if (deleted is "board" or "year" || scopeKind == "none") actual.ShouldBeEmpty();
 		else if (scopeKind == "wide") actual.Select(row => row.Id).ShouldBe(fixture.ExpectedOrder);
 		else actual.ShouldHaveSingleItem().Id.ShouldBe(fixture.First.StandardId);
-		if (deleted != "board")
+		if (deleted is not ("board" or "year") && scopeKind != "none")
 		{
 			var first = actual.Single(row => row.Id == fixture.First.StandardId);
 			first.Shift.ShiftName.ShouldBe("Selector shift");
@@ -73,7 +80,50 @@ public partial class StandardLookupApi_Tests
 		}
 		var standardReads = factory.Commands.Count(sql => Regex.Match(sql, "\\bFROM\\s+\"(?<table>[^\"]+)\"", RegexOptions.IgnoreCase)
 			.Groups["table"].Value.EndsWith("Standards", StringComparison.Ordinal));
-		standardReads.ShouldBe(deleted == "board" ? 0 : 1, $"The actual HTTP selector must use one standard-root read for {stageCount} stages; observed {standardReads}. Full response/scope/occupancy parity already passed.");
+		standardReads.ShouldBe(deleted is "board" or "year" || scopeKind == "none" ? 0 : 1, $"The actual HTTP selector must use one standard-root read for {stageCount} stages; observed {standardReads}. Full response/scope/occupancy parity already passed.");
+		factory.Commands.ShouldNotContain(sql => sql.Contains("\"FirstName\"", StringComparison.Ordinal)
+			|| sql.Contains("\"AssignmentSnapshotJson\"", StringComparison.Ordinal),
+			"A class selector must not materialize student or fee-assignment graphs; occupancy is projected separately.");
+	}
+
+	[Fact]
+	public async Task Medium_standard_selector_does_not_expose_another_tenants_hierarchy()
+	{
+		using var client = factory.CreateClient();
+		factory.Scope = new() { HasWildcardAcademicYear = true };
+		var foreignTenantId = Guid.NewGuid();
+		// Seed the authenticated actor once in its own tenant; foreign hierarchy needs no duplicate user.
+		await factory.SeedStageAsync();
+		Guid foreignMediumId;
+		using (var services = factory.Services.CreateScope())
+		using (var work = services.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+		{
+			var provider = services.ServiceProvider;
+			var currentTenant = provider.GetRequiredService<ICurrentTenant>();
+			using (currentTenant.Change(null))
+			{
+				var foreignSchool = await provider.GetRequiredService<ITenantManager>().CreateAsync("Foreign selector school " + foreignTenantId);
+				typeof(Tenant).GetProperty(nameof(Tenant.Id))!.SetValue(foreignSchool, foreignTenantId);
+				await provider.GetRequiredService<IRepository<Tenant, Guid>>().InsertAsync(foreignSchool, true);
+			}
+			using (currentTenant.Change(foreignTenantId))
+			{
+				var year = await provider.GetRequiredService<AcademicYearManager>().CreateAsync("Foreign selector year", new DateTime(2026, 4, 1), new DateTime(2027, 3, 31));
+				await provider.GetRequiredService<IRepository<AcademicYear, Guid>>().InsertAsync(year, true);
+				var board = await provider.GetRequiredService<EducationBoardManager>().CreateAsync(year.Id, EducationBoardType.CBSE);
+				await provider.GetRequiredService<IRepository<EducationBoard, Guid>>().InsertAsync(board, true);
+				var medium = await provider.GetRequiredService<EducationMediumManager>().CreateAsync(board.Id, "Foreign English");
+				await provider.GetRequiredService<IRepository<EducationMedium, Guid>>().InsertAsync(medium, true);
+				foreignMediumId = medium.Id;
+				var stage = await provider.GetRequiredService<EducationMediumStageManager>().CreateAsync(medium.Id, "Foreign Primary");
+				await provider.GetRequiredService<IRepository<EducationMediumStage, Guid>>().InsertAsync(stage, true);
+				var foreignStandard = await provider.GetRequiredService<StandardManager>().CreateAsync(stage.Id, "Foreign selector class", 6, null);
+				await provider.GetRequiredService<IStandardRepository>().InsertAsync(foreignStandard, true);
+				await work.CompleteAsync();
+			}
+		}
+		var actual = await client.GetFromJsonAsync<List<StandardDto>>($"/api/education-medium/{foreignMediumId}/standards");
+		actual.ShouldNotBeNull().ShouldBeEmpty();
 	}
 
 	private async Task<MediumReadFixture> SeedMediumReadAsync(int count, string deleted)
@@ -128,6 +178,7 @@ public partial class StandardLookupApi_Tests
 		var deletedStageId = deleted == "stage" ? stageRows[^1].Id : Guid.Empty;
 		if (deleted == "stage") await stages.DeleteAsync(deletedStageId, true);
 		if (deleted == "board") await services.GetRequiredService<IRepository<EducationBoard, Guid>>().DeleteAsync(first.BoardId, true);
+		if (deleted == "year") await services.GetRequiredService<IRepository<AcademicYear, Guid>>().DeleteAsync(first.YearId, true);
 		await work.CompleteAsync();
 		return new(first, stageRows.AsEnumerable().Reverse().Where(row => row.Id != deletedStageId).SelectMany(row => roots[row.Id]).ToArray());
 	}

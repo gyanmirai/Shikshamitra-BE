@@ -34,7 +34,7 @@ public partial class LateFeeCollectionRuntime_Tests
 			var charges = form.Charges.Where(x => x.SourceType == "LateFee").ToList();
 			charges.Count.ShouldBe(1);
 			charges.Single().PendingAmount.ShouldBe(expected);
-			charges.Single().Name.ShouldBe("Late Fee - Selected fee heads");
+			charges.Single().Name.ShouldBe("Late Fee");
 			var details = await _feeCollections.GetStudentFeeDetailsAsync(student, year);
 			details.Charges!.Sum(x => x.PendingAmount).ShouldBe(expected);
 			var summary = await GetSummaryRowAsync(year, student);
@@ -282,7 +282,7 @@ public partial class LateFeeCollectionRuntime_Tests
 		{
 			AcademicYearId = assignment.AcademicYearId, PolicyName = saved.PolicyName, PolicyCode = saved.PolicyCode,
 			Status = "Active", IsDefault = saved.IsDefault, EnableLateFee = true, LateFeeIncomeCategoryId = head.IncomeCategoryId,
-			LateFeeApplyOnFeeHeads = secondHead.HasValue ? [firstHead, secondHead.Value] : [firstHead],
+			LateFeeApplyOnFeeHeads = [],
 			LateFeeType = type, FlatAmount = 10m, AmountPerDay = 10m, AmountPerWeek = 10m, AmountPerMonth = 10m,
 		});
 		updated = await _collectionPolicies.GetAsync(updated.Id);

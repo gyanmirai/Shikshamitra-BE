@@ -307,7 +307,8 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		var dues = GetRequiredService<IRepository<DueFee, Guid>>();
 		var preview = await service.PreviewAsync(input);
 		(await dues.GetListAsync(d => d.StudentId == input.StudentId)).ShouldBeEmpty();
-		preview.ProratedTotal.ShouldBe(1000.01m);
+		// New obligations use the centralized upward whole-rupee rule.
+		preview.ProratedTotal.ShouldBe(1001m);
 		preview.Policies.ShouldNotContain(p => p.Family == "concession");
 		input.PreviewToken = preview.PreviewToken;
 		var result = await service.AssignAsync(input);
@@ -315,7 +316,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		(await service.AssignAsync(input)).Outcome.ShouldBe("AlreadyAssigned");
 		var committed = await dues.GetListAsync(d => d.StudentFeeStructureId == result.AssignmentId);
 		committed.Count.ShouldBe(2);
-		committed.Sum(d => d.OriginalAmount).ShouldBe(1000.01m);
+		committed.Sum(d => d.OriginalAmount).ShouldBe(1001m);
 		var read = await service.GetByStudentIdAsync(input.StudentId, input.AcademicYearId);
 		read.ConcessionPolicyId.ShouldBeNull();
 		read.Assignment!.Lines.Count.ShouldBe(2);
@@ -325,7 +326,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		var paidRetry = await service.AssignAsync(input);
 		paidRetry.Outcome.ShouldBe("AlreadyAssigned");
 		paidRetry.Assignment.Lines.Sum(l => l.PaidAmount).ShouldBe(100m);
-		paidRetry.Assignment.Lines.Sum(l => l.OutstandingAmount).ShouldBe(900.01m);
+		paidRetry.Assignment.Lines.Sum(l => l.OutstandingAmount).ShouldBe(901m);
 	}
 
 	[Fact]
@@ -391,7 +392,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		await students.UpdateAsync(student, autoSave: true);
 		var historical = await service.GetByStudentIdAsync(input.StudentId, input.AcademicYearId);
 		historical.StudentFeeStructureId.ShouldBe(result.AssignmentId);
-		historical.Assignment!.ProratedTotal.ShouldBe(1000.01m);
+		historical.Assignment!.ProratedTotal.ShouldBe(1001m);
 		var list = await service.GetStudentsAsync(new() { AcademicYearId = input.AcademicYearId, MaxResultCount = 10 });
 		list.Items.Single(s => s.StudentId == input.StudentId).IsFeeStructureAssigned.ShouldBeTrue();
 	}

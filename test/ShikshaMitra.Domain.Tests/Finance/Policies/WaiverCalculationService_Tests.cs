@@ -41,9 +41,17 @@ public class WaiverCalculationService_Tests
 	[Fact]
 	public void Fee_Head_Outside_Late_Fee_Scope_Is_Not_Waivable()
 	{
-		var policy = BuildPolicy();
+		var policy = new CollectionPolicyUpdateModelBuilder().BuildLegacyPolicy();
 		var result = _service.Calculate(policy, new WaiverCalculationInput(200, 1000, DateTime.Today, FeeHeadId: Guid.NewGuid()));
 		Assert.Equal(0, result.EffectiveWaiverAmount);
+	}
+
+	[Fact]
+	public void Common_Late_Fee_Scope_Allows_Waiver_On_Any_Head()
+	{
+		var policy = BuildPolicy(b => b.LateFeeApplyOnFeeHeads = Array.Empty<Guid>());
+		var result = _service.Calculate(policy, new WaiverCalculationInput(200, 1000, DateTime.Today, FeeHeadId: Guid.NewGuid()));
+		Assert.Equal(200, result.EffectiveWaiverAmount);
 	}
 
 	[Fact]

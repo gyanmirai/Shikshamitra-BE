@@ -46,6 +46,7 @@
   "Finance.Accounts.Settings.ExpenseCategory": [["ShikshaMitra.Module.Finance","ShikshaMitra.Module.Finance.Accounts","ShikshaMitra.Module.Finance.Accounts.Settings"]],
   "Finance.Accounts.Settings.IncomeCategory": [["ShikshaMitra.Module.Finance","ShikshaMitra.Module.Finance.Accounts","ShikshaMitra.Module.Finance.Accounts.Settings"]],
   "Finance.Auditing": [["ShikshaMitra.Module.Finance"]],
+  "Finance.Fees.Adjustment": [["ShikshaMitra.Module.Finance","ShikshaMitra.Module.Finance.Fees"]],
   "Finance.Fees.Charges": [["ShikshaMitra.Module.Finance","ShikshaMitra.Module.Finance.Fees"]],
   "Finance.Fees.Concession": [["ShikshaMitra.Module.Finance","ShikshaMitra.Module.Finance.Fees"]],
   "Finance.Fees.FeeCollections": [["ShikshaMitra.Module.Finance","ShikshaMitra.Module.Finance.Fees"]],

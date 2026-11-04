@@ -59,10 +59,15 @@ public partial class FeeAdjustmentAppService
 	private static string ClassDisplay(FeeAdjustmentApplicationItemDto row) =>
 		!string.IsNullOrEmpty(row.StandardName) && !string.IsNullOrEmpty(row.DivisionName)
 			? row.StandardName + " / " + row.DivisionName : string.IsNullOrEmpty(row.StandardName) ? "-" : row.StandardName;
-	// Match the existing table mapper's UI states; wire enum identities are unchanged.
+	// Match the displayed worklist states without collapsing partially applied requests.
 	private static string StatusDisplay(FeeAdjustmentApplicationItemDto row) => row.Status switch
 	{
-		FeeAdjustmentStatus.Pending => "Pending", FeeAdjustmentStatus.Rejected => "Rejected", _ => "Approved"
+		FeeAdjustmentStatus.Pending => "Pending",
+		FeeAdjustmentStatus.Rejected => "Rejected",
+		FeeAdjustmentStatus.PartiallyApplied => "Partially applied",
+		FeeAdjustmentStatus.Applied => "Approved",
+		FeeAdjustmentStatus.Cancelled => "Cancelled",
+		_ => row.Status.ToString()
 	};
 	private static bool MatchesListSearch(FeeAdjustmentApplicationItemDto row, FeeAdjustmentRequest request, string search) =>
 		string.Join(" ", StudentDisplay(row), ClassDisplay(row), row.RollNo, row.RequestedByName, StatusDisplay(row),

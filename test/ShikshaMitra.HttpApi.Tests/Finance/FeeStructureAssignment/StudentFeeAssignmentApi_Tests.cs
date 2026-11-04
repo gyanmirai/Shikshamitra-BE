@@ -41,9 +41,9 @@ using Xunit;
 
 namespace ShikshaMitra.Finance.FeeStructureAssignment;
 
-[Collection(ApiTestCollection.Name)]
+[Collection(FinanceReceiptApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.Finance)]
-public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
+public partial class StudentFeeAssignmentApi_Tests(FinanceReceiptApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private const string BaseUrl = "/api/student-fee-structure";
 
@@ -94,7 +94,8 @@ public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) :
 
 	// Enrollment is a synthetic prerequisite, not a call to the removed registration API.
 	// Publication, preview, assignment and collection reads use real HTTP endpoints.
-	private async Task<(AssignStudentFeeStructureDto Input, Guid[] Heads)> CreateFixtureAsync(bool optionalHeads = false, bool useCurrentAcademicContext = false)
+	private async Task<(AssignStudentFeeStructureDto Input, Guid[] Heads)> CreateFixtureAsync(bool optionalHeads = false,
+		bool useCurrentAcademicContext = false, bool withRefundPolicy = false, bool variableOptionalHead = false)
 	{
 		var heads = new Guid[optionalHeads ? 3 : 1];
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
@@ -174,11 +175,24 @@ public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) :
 				LateFeeType = "PerDay", PercentageBase = "OutstandingAmount", CompoundFrequency = "Daily", RoundingMethod = "None"
 			});
 			candidate.CollectionPolicyId = policy.Id;
+			if (withRefundPolicy)
+			{
+				var expenseHead = new AccountHead(Guid.NewGuid(), tenantId, year.Id, candidate.Name + " Refund", AccountHeadType.Expense, null, null);
+				await provider.GetRequiredService<IRepository<AccountHead, Guid>>().InsertAsync(expenseHead, true);
+				var expense = new TransactionCategory(Guid.NewGuid(), tenantId, year.Id, TransactionType.Expense,
+					candidate.Name + " Refund", null, [], true, $"E-{Guid.NewGuid():N}"[..16], expenseHead.Id, DateTimeOffset.UtcNow.AddDays(-1), null);
+				await provider.GetRequiredService<IRepository<TransactionCategory, Guid>>().InsertAsync(expense, true);
+				var refund = await provider.GetRequiredService<IRefundPolicyAppService>().CreateAsync(new CreateUpdateRefundPolicyDto {
+					AcademicYearId = year.Id, PolicyName = candidate.Name + " Refund", PolicyCode = $"R-{Guid.NewGuid():N}"[..16],
+					Status = "Active", FeeHeadScope = "AllFeeHeads", ExpenseCategoryId = expense.Id,
+					AllowedPayoutMethods = ["Cash"], RoundingMethod = "None" });
+				candidate.RefundPolicyId = refund.Id;
+			}
 			for (var i = 0; i < heads.Length; i++)
 				candidate.FeeHeads.Add(new FeeHeadAssignmentRequest
 				{
-					FeeHeadId = heads[i], Amount = i == 0 ? 12_000m : i == 1 ? 6_000m : 2_000m,
-					IsOptional = i > 0, IsOneTime = i == 2,
+					FeeHeadId = heads[i], Amount = i == 2 && variableOptionalHead ? (decimal?)null : i == 0 ? 12_000m : i == 1 ? 6_000m : 2_000m,
+					IsOptional = i > 0, IsOneTime = i == 2 && !variableOptionalHead, IsVariable = i == 2 && variableOptionalHead,
 					PayableMonth = (MonthEnum)year.StartDate.Month, PayableYear = year.StartDate.Year,
 					PaymentTermId = term.Id, PaymentTermVersionId = version.Id
 				});

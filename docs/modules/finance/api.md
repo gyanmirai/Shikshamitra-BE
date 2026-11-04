@@ -3,7 +3,7 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-02
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -82,6 +82,8 @@ described below; staff pending semantics do not change that contract.
 
 Summary rows add decimal `paidCharges` for active collected additional-charge payments, including late fees and payments awaiting verification. Reversed payments and waivers do not contribute to paid amounts. `totalCharges` is net of applied waivers; `pendingCharges` deducts active payments from that net amount and clamps each source balance to zero. Waivers are deducted once. Sorting, numeric table filters and CSV/XLSX exports use these same server projections; exports place Paid Charges between Total Charges and Pending Charges. Tenant, academic-year and academic scope remain unchanged.
 
+Collection summary `paidFees` uses gross principal payments (`DueFee.PaidAmount`), excluding payment reversals without subtracting refunds or capping payments after concessions. Decimal `refundAmount` (INR) sums recorded principal refunds (`DueFee.RefundedAmount`), net of returns/reversals; approved refunds awaiting payout do not contribute. Pending fees and status continue to use the canonical outstanding balance. Numeric filters, sorting and CSV/XLSX exports use these same amounts. The fee columns in exports are Total Fees, Total Concession Amount, Refund Amount, Paid Fees and Pending Fees, followed by the existing overdue and charge fields.
+
 ### Installment refunds
 
 The collect-form ledger keeps `refundAmount` as cumulative completed principal
@@ -123,6 +125,15 @@ provided `cardLast4` takes precedence. Reconciliation returns the stored values 
 `instrumentDetails.cardHolderName` and `instrumentDetails.cardLast4`. Historical records without
 a holder remain null. This adds no schema migration or historical rewrite; evidence discarded
 by the old mapper cannot be reconstructed.
+
+## Refund receipt PDF
+
+`GET /api/fee-refunds/{id}/receipt/pdf` returns `application/pdf` under the existing `Finance.Fees_Refund.View` permission constant and the same authorized payer scope as refund details.
+Processing payouts produce a Provisional Refund Receipt; completed payouts produce a Refund Receipt.
+Unpaid, failed, cancelled, rejected and reversed requests fail with the existing `PaymentNotSettled` business error.
+The PDF uses the scoped refund detail projection, preserving `ViewSensitivePaymentDetails` masking of payout references, and the configured school identity.
+Content-Disposition uses `<Provisional-Refund-Receipt|Refund-Receipt>_<safe-voucher-number>_<yyyy-MM-dd>.pdf` without pupil names or bank identifiers.
+The endpoint is read-only and does not issue another voucher, record a payout or change balances.
 
 ## Refund source receipts and cash approval
 
@@ -345,6 +356,16 @@ Fee Collection instead exposes a toggle on each eligible late-fee and approved c
 
 Use backend constants as the security source of truth.
 Known Finance families include `Finance.Fees.Charges.*`, `Finance.Fees.Concession.*`, `Finance.Fees.Adjustment.*`, and related Fees, Accounts, Reports, and Audit permissions.
+
+Fee adjustments retain `Finance.Fees.Adjustment.{View|Add|Delete}`. View covers reads;
+Add covers create/update, apply and reject; Delete covers pending-request deletion.
+The creator cannot apply or reject their own adjustment, including when holding an
+administrator or Finance Officer role. Apply checks the creator before idempotent
+replay and again at the domain transition, including later partial batches. The same
+noncreator checker may apply successive batches. Assigning adjustment actions requires
+Finance and Fees navigation visibility; no existing role or user grants are reseeded.
+Application list rows include nullable `requestedByUserId` for the matching client
+decision guards.
 
 Accounts settings use `Finance.Accounts.Settings.{IncomeCategory|ExpenseCategory|BankAccount}.{View|Add|Edit|ChangeStatus|Delete}`.
 Each action is independent; module visibility and Add do not authorize Edit or ChangeStatus.

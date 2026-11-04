@@ -34,7 +34,7 @@ public partial class FeeReceiptAppService
             ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
         await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId, cancellationToken);
 
-        if (receipt.PdfBlobName != null && receipt.PdfBlobName.Contains("/v4/", StringComparison.Ordinal))
+        if (receipt.PdfBlobName != null && receipt.PdfBlobName.Contains("/v5/", StringComparison.Ordinal))
         {
             var cached = await blobManager.GetPdfOrNullAsync(receipt.PdfBlobName, cancellationToken);
             if (cached != null) return cached;

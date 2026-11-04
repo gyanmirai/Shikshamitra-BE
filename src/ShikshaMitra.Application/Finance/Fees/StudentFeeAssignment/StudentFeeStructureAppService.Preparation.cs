@@ -15,7 +15,7 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 public partial class StudentFeeStructureAppService
 {
-	private async Task<PreparedAssignment> PrepareForContextAsync(AssignStudentFeeStructureDto input, AdmissionAssignmentContext? admission)
+	private async Task<PreparedAssignment> PrepareForContextAsync(AssignStudentFeeStructureDto input, AdmissionAssignmentContext? admission, bool isCorrection = false)
 	{
 		ValidateInput(input, admission != null);
 		var enrollment = admission == null ? await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, true) : null;
@@ -47,7 +47,7 @@ public partial class StudentFeeStructureAppService
                 (!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId)))))
             throw new BusinessException(AssignmentErrorCodes.InvalidInput);
         foreach (var detail in details.Where(d => structure.FeeStructureDetails.All(x => x.Id != d.Id))) structure.AddDetail(detail);
-		var selectedPolicies = await ResolveAssignedPoliciesAsync(structure, year.Id, input.Policies, input.PolicyOverrideReason);
+		var selectedPolicies = await ResolveAssignedPoliciesAsync(structure, year.Id, input.Policies, input.PolicyOverrideReason, input.EditAssignmentId);
 		selectedPolicies["proration"] = admission != null ? admission.Proration :
 			await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(year.Id);
 		var collection = selectedPolicies["collection"];
@@ -156,9 +156,14 @@ public partial class StudentFeeStructureAppService
 			optionalDetails.Add(new CustomOptionalFeeHeadDetail { FeeHeadId = detail.FeeHeadId, Amount = head.EffectiveAmount ?? throw new BusinessException(AssignmentErrorCodes.VariableAmountRequired),
 				ChargeStartDate = fact.Period.StartDate, ChargeEndDate = fact.Period.EndDate });
 		}
-		var dues = (await dueFeeManager.GenerateForStudentAsync(studentId, structure, year,
-			input.SelectedOptionalFeeHeadIds, optionalDetails, prorationRules, proration?.Id, year.StartDate, year.EndDate,
-			financeFeeAccountId: admission?.AccountId)).OrderBy(x => x.FeeHeadId).ThenBy(x => x.InstallmentSequence).ToList();
+		var calculatedDues = isCorrection
+			? await dueFeeManager.CalculateForStudentAsync(studentId, structure, year,
+				input.SelectedOptionalFeeHeadIds, optionalDetails, prorationRules, proration?.Id, year.StartDate, year.EndDate,
+				financeFeeAccountId: admission?.AccountId)
+			: await dueFeeManager.GenerateForStudentAsync(studentId, structure, year,
+				input.SelectedOptionalFeeHeadIds, optionalDetails, prorationRules, proration?.Id, year.StartDate, year.EndDate,
+				financeFeeAccountId: admission?.AccountId);
+		var dues = calculatedDues.OrderBy(x => x.FeeHeadId).ThenBy(x => x.InstallmentSequence).ToList();
 		foreach (var due in dues)
 		{
 			var head = preview.Heads.Single(x => x.FeeHeadId == due.FeeHeadId);
@@ -179,7 +184,7 @@ public partial class StudentFeeStructureAppService
 			policy.Source = version.PolicyType == "proration" ? "FinanceDefault" : StructurePolicyVersions(structure)[version.PolicyType] == version.Id ? "FeeStructure" : "StudentOverride";
 			foreach (var head in preview.Heads)
 				policy.HeadTreatment[head.FeeHeadId] = !head.Included ? "Not included" : version.PolicyType switch {
-					"collection" => collectionRules.EnableLateFee && collectionRules.LateFeeApplyOnFeeHeads.Contains(head.FeeHeadId)
+					"collection" => collectionRules.EnableLateFee && (collectionRules.ApplyLateFeeToAllFeeHeads || collectionRules.LateFeeApplyOnFeeHeads.Contains(head.FeeHeadId))
 						? "Configured for late-fee evaluation; overrides, grace and exemptions checked on collection. No penalty on assignment."
 						: "No base late-fee rule; collection and waiver conditions are checked on collection.",
 					"proration" => head.IsOneTime ? "One-time head: full charge" : prorationRules?.Rules.FirstOrDefault(x => x.FeeHeadId == head.FeeHeadId)?.RuleType.ToString() ?? "No matching rule: full charge",

@@ -1,6 +1,8 @@
 {
     "Culture": "en",
     "Texts": {
+        "HR:Payroll:EsiPolicyInUse": "This ESIC policy is selected in live salary templates. Review their policy selection and relevant salary month, then save a usable replacement or archive the unused templates before retrying. Existing payroll history is preserved.",
+        "HR:Payroll:EsiPolicyArchiveConfirmationRequired": "Review the ESIC policy archive consequences and explicitly confirm before archiving.",
         "ClassManagement:ElectiveCorrectionReviewChanged": "The assignment or its affected records changed, or the review expired. Review the changes again before confirming.",
         "ClassManagement:InvalidElectiveCorrection": "The student, class, division, elective group, or subject is unavailable in the selected context. Refresh the screen and check your choices.",
         "ClassManagement:CorrectionRequiresLockedSelection": "This assignment is no longer locked. Refresh the screen before editing it.",

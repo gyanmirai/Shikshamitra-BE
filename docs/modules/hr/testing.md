@@ -8,6 +8,10 @@ owner: backend-team
 audience: humans-and-agents
 ---
 
+## ESIC archive dependencies
+
+`EsiPolicyArchiveApi_Tests` verifies confirmation, a clear review becoming stale after a template selection, dependency names and policy dates, archive retry/stamp handling, tenant/permission boundaries and retained historical resolution. Its PostgreSQL test executes concurrent template publication and archive in both lock orderings; use `PAYROLL_TEST_POSTGRES` with a new empty disposable loopback `payroll_tests_*` database. The fixture creates tables and refuses existing schemas. Run with `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~EsiPolicyArchiveApi_Tests|FullyQualifiedName~EsiPolicyApi_Tests"`.
+
 ## Historical ESIC configuration
 
 `EsiHistoricalConfigurationApi_Tests` calls the real save endpoint under a controlled clock for June initial setup, earning classification, unlocked updates, stale/retried requests, version ordering, protected payroll, invalidation and the Indian month boundary. `EsiHistoricalConfigurationPostgres_Tests` repeats persistence cases and checks finalization fencing and rollback after an injected invalidation failure. Set `ESI_HISTORICAL_TEST_POSTGRES` to a separate empty disposable loopback `payroll_tests_*` database; the fixture refuses other targets and never resets existing databases. Run the existing `EsiConfigurationPostgres_Tests`, `EsiStatutoryApi_Tests` and `EsiPolicyApi_Tests` alongside these cases. Synthetic fixtures do not certify tenant policy history or live acceptance.

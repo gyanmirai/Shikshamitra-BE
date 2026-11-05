@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-31
+updated_on: 2026-11-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -668,7 +668,8 @@ See [complete HR table exports](./references/hr-table-exports.md) for the allowl
 | `GET /api/payroll/statutory-schemes/esi/policies/options` | Selection catalogue; statutory View, template View/Add, or compensation View/Manage |
 | `POST /api/payroll/statutory-schemes/esi/policies` | Name, code and initial version; existing Edit, Activate, ConfigureCalculation and HR-wide scope |
 | `POST /api/payroll/statutory-schemes/esi/policies/{id}/versions` | New immutable version with expected concurrency stamp and GUID idempotency key; same write permissions |
-| `POST /api/payroll/statutory-schemes/esi/policies/{id}/archive` | Expected concurrency stamp; same write permissions; default policy cannot be archived |
+| `GET /api/payroll/statutory-schemes/esi/policies/{id}/archive-review` | Current policy/coverage and live template name/version/status dependencies; same write permissions and HR-wide scope as archive |
+| `POST /api/payroll/statutory-schemes/esi/policies/{id}/archive` | Expected concurrency stamp plus `confirmed: true`; same write permissions; default policy cannot be archived; live template dependencies block with HTTP 409 `HR:Payroll:EsiPolicyInUse` |
 
 Version inputs include employee/employer percentages, wage ceilings, daily exemption, establishment threshold, caps, rounding, calculation settings, source and verification date.
 Versions begin on a month boundary; each later version supersedes its predecessor without editing historical versions.
@@ -685,6 +686,8 @@ External management suppresses both ESIC shares and payslip presentation, while 
 Policy selection does not confer eligibility; the existing wage classifications, enrollment, contribution continuity and rounding engine still apply.
 Missing effective versions return `HR:Payroll:EsiPolicyNotEffective`; missing/invalid assignment returns `HR:Payroll:EsiPolicySelectionInvalid`.
 New assignments reject archived policies; existing employee assignments and historical references continue resolving them.
+
+Archive reviews include the published and latest version selections of non-archived salary templates using in-platform ESIC. Superseded versions and archived templates remain historical evidence and do not block archive. Templates have no effective date range; policy version dates are metadata, not proof of active usable payroll coverage. The archive UI displays recorded `effectiveFrom`/`effectiveTo`, never the successor-derived `appliesUntil`, so an explicit expiry remains visible before a later successor. Missing expiry and unavailable activity status must not imply availability. The conservative live-template block requires an administrator to preview the relevant salary month and save a usable replacement, or archive an unused template; it never silently reassigns policies. Archive and template create/update serialize through the tenant payroll input fence, and save recalculates policy validation after acquiring it. Archive recomputes dependencies under the lock, so stale reviews and direct API calls cannot bypass the block. Missing confirmation is HTTP 400 `HR:Payroll:EsiPolicyArchiveConfirmationRequired`; a changed policy stamp remains HTTP 409. Already archived retries are no-ops. Existing policy date gaps remain errors; archive does not rewrite policy versions, compensation, payroll or payslips.
 Preview proof and compensation idempotency include assignment values and resolved calculation evidence.
 Reusing a template save key with a changed ESIC assignment or submitting a stale template write returns HTTP 409.
 

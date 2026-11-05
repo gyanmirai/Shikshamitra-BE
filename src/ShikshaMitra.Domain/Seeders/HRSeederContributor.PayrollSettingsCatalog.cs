@@ -94,15 +94,21 @@ public partial class HRSeederContributor
 			await _esiPolicyRepository.InsertAsync(esiDefault, autoSave: true);
 		}
 		var legacyRules = await _statutoryRuleRepository.GetListAsync(x => x.SchemeCode == "ESI" && x.EsiPolicyId == null);
-		if (!legacyRules.GroupBy(x => x.EffectiveFrom).Any(x => x.Count() > 1))
+		var hasAmbiguousLegacyRules = legacyRules.GroupBy(x => x.EffectiveFrom).Any(x => x.Count() > 1);
+		// Preserve all default history, including intentional gaps and deleted version identities.
+		// A different named policy's v1 must not suppress the default baseline.
+		bool hasDefaultHistory;
+		using (_dataFilter.Disable<ISoftDelete>())
+			hasDefaultHistory = await _statutoryRuleRepository.AnyAsync(x =>
+				x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance && x.EsiPolicyId == esiDefault.Id);
+		// Existing named history is authoritative. Do not merge orphan legacy rows into it.
+		if (!hasAmbiguousLegacyRules && !hasDefaultHistory)
 			foreach (var legacyRule in legacyRules)
 			{
 				legacyRule.AssignLegacyPolicy(esiDefault.Id);
 				await _statutoryRuleRepository.UpdateAsync(legacyRule);
 			}
-		if (!await _statutoryRuleRepository.AnyAsync(x =>
-			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance &&
-			x.JurisdictionCode == "IN-GJ" && x.Version == 1))
+		if (legacyRules.Count == 0 && !hasDefaultHistory)
 		{
 			await _statutoryRuleRepository.InsertAsync(
 				new StatutoryRuleVersion(

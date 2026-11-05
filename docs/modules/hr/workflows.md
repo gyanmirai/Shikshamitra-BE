@@ -3,7 +3,7 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-26
+updated_on: 2026-11-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -273,6 +273,15 @@ See [states, access and exceptions](./references/hr-table-exports.md).
 
 `NamedEsiPolicies` groups unambiguous tenant statutory versions into Standard ESIC and fills policy references on existing template versions and salary revisions.
 Duplicate legacy effective starts remain unassigned and surface setup blockers rather than choosing an arbitrary version.
+Staff Review resolves each effective compensation revision's selected in-platform policy; an unrelated missing default does not block named assignments, externally managed staff or an empty staff population.
+An unassigned in-platform revision or a selected policy without an effective version remains a setup error, consistent with monthly payroll.
+The school rule endpoint continues to require the actual default policy and never substitutes a named policy.
+The v3 statutory-settings backfill creates a default baseline only when that default has no rule history and legacy effective starts are unambiguous.
+Another named policy's version 1 does not suppress this baseline; existing default history, including future, inactive, expired and deleted versions, is retained without filling deliberate gaps.
+Unambiguous orphan legacy versions are adopted only when the default has no history; existing named history is never merged with orphan rows by the backfill.
+The backfill runs only through an explicitly enabled seeding workflow; a schema-only deployment does not repair an existing tenant's missing default.
+School Settings uses the staff-impact preview for its review status and the default-rule request only for help text, so valid named assignments can be reviewed and school settings saved without substituting a default.
+An existing tenant with missing staff assignments, ineffective selected versions or ambiguous legacy history still requires inspection and an explicit administrator decision; deploying this code does not change those records.
 Existing legacy versions retain school-level calculation settings until a named policy version supplies its own settings.
 Migration does not rewrite payroll snapshots, calculation JSON or issued payslips.
 Policy writes share the payroll input fence and invalidate affected unlocked employee months; locked payroll and issued documents remain protected.

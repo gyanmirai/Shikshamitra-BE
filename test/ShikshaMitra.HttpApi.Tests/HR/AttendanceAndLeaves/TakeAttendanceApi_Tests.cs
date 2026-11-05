@@ -13,6 +13,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.WorkShifts;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Security.UserScope;
@@ -34,6 +35,60 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 	private const string BaseUrl = "/api/hr/attendance/take-attendance";
 
 	public TakeAttendanceApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
+
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Day_Should_Combine_Case_Insensitive_Department_And_Group_Before_Paging(bool isTeaching)
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = $"Dept{Guid.NewGuid():N}"[..12];
+		var joined = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+		var teachingA = await EmployeeTestHelper.CreateEmployeeAsync(Client, marker + "A", true, joined, "Science");
+		var nonTeaching = await EmployeeTestHelper.CreateEmployeeAsync(Client, marker + "B", false, joined, "Science");
+		var teachingC = await EmployeeTestHelper.CreateEmployeeAsync(Client, marker + "C", true, joined, "Science");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, teachingA.Id);
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, nonTeaching.Id);
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, teachingC.Id);
+		using (var services = Factory.Services.CreateScope())
+		using (services.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var unit = services.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var persisted = await services.ServiceProvider.GetRequiredService<IRepository<Employee, Guid>>().GetAsync(teachingA.Id);
+			persisted.Department.ShouldBe("Science");
+			persisted.EmployeeStatusType.ShouldBe(EmployeeStatusType.Active);
+			persisted.DateOfJoining.ShouldBe(new DateOnly(2026, 1, 1));
+			(persisted.FirstName ?? string.Empty).ShouldContain(marker);
+			await unit.CompleteAsync();
+		}
+		// The API fixture persists Department = Science. Partial, mixed-case input must still match.
+		var query = $"{BaseUrl}/day?attendanceDate=2026-04-11&department=%20cIeN%20&isTeaching={isTeaching.ToString().ToLowerInvariant()}&search={marker}&maxResultCount=1";
+		var controlResponse = await Client.GetAsync(query.Replace("%20cIeN%20", "Science"));
+		controlResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var control = (await controlResponse.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions))!;
+		control.TotalCount.ShouldBe(isTeaching ? 2 : 1);
+		var response = await Client.GetAsync(query + "&skipCount=0");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var first = (await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions))!;
+		first.TotalCount.ShouldBe(isTeaching ? 2 : 1);
+		first.Items.Count.ShouldBe(1);
+		first.Items.All(row => row.IsTeaching == isTeaching).ShouldBeTrue();
+		if (!isTeaching) first.Items.Single().EmployeeId.ShouldBe(nonTeaching.Id);
+
+		var nextResponse = await Client.GetAsync(query + "&skipCount=1");
+		nextResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var next = (await nextResponse.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions))!;
+		next.TotalCount.ShouldBe(first.TotalCount);
+		next.Items.Count.ShouldBe(isTeaching ? 1 : 0);
+		if (isTeaching) next.Items.Single().EmployeeId.ShouldNotBe(first.Items.Single().EmployeeId);
+
+		var emptyResponse = await Client.GetAsync(query.Replace("cIeN", "missing-department"));
+		emptyResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var empty = (await emptyResponse.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions))!;
+		empty.TotalCount.ShouldBe(0);
+		empty.Items.ShouldBeEmpty();
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
@@ -830,40 +885,22 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task SaveDay_Should_Reject_Overnight_Shift_For_Worked_Time_Evaluation()
+	public async Task Work_Shift_Should_Reject_Overnight_Schedule_Before_Attendance()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
-		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"ManualOvernightShift{Guid.NewGuid():N}",
-			dateOfJoining: attendanceDate.AddDays(-10).ToDateTime(TimeOnly.MinValue));
-		var overnightShiftId = await InsertShiftAsync(
-			$"Overnight Manual Test {Guid.NewGuid():N}",
-			new TimeOnly(22, 0),
-			new TimeOnly(6, 0));
-		await AssignEmployeeShiftAsync(employee.Id, overnightShiftId);
-		await AssignCaptureModePolicyAsync(employee.Id, attendanceDate, AttendanceCaptureMode.ManualWithTime);
-
-		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		// The employee catalogue rejects this schedule before it can become an
+		// assignment. A school-shift ID cannot be inserted into an employee FK.
+		var response = await Client.PostAsJsonAsync("/api/hr/work-shifts", new SaveWorkShiftInput
 		{
-			AttendanceDate = attendanceDate.ToString("yyyy-MM-dd"),
-			Entries =
-			[
-				new TakeAttendanceSaveEntryDto
-				{
-					EmployeeId = employee.Id,
-					StatusWire = "PRESENT",
-					InTime = "22:00:00",
-					OutTime = "23:00:00"
-				}
-			]
+			ShiftName = $"Overnight Manual Test {Guid.NewGuid():N}",
+			StartTime = new TimeOnly(22, 0),
+			EndTime = new TimeOnly(6, 0)
 		}, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		var payload = await response.Content.ReadAsStringAsync();
-		payload.ShouldContain(HRErrorCodes.AttendancePolicyEvaluationInvalidShift);
+		payload.ShouldContain(HRErrorCodes.WorkShiftInvalid);
 	}
 
 	[Fact]
@@ -1305,49 +1342,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		leavePolicy.ReplaceRules([leavePolicyRule, unpaidRule]);
 		await leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
 		return leavePolicy.Id;
-	}
-
-	private async Task<Guid> InsertShiftAsync(
-		string shiftName,
-		TimeOnly startTime,
-		TimeOnly endTime)
-	{
-		using var scope = Factory.Services.CreateScope();
-		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
-		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-		var shiftRepository = scope.ServiceProvider.GetRequiredService<IRepository<ShiftManagement, Guid>>();
-		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
-
-		using (currentTenant.Change(tenantId))
-		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
-		{
-			var shift = await shiftRepository.InsertAsync(new ShiftManagement
-			{
-				ShiftName = shiftName,
-				StartTime = startTime,
-				EndTime = endTime
-			}, autoSave: false);
-			await uow.CompleteAsync();
-			return shift.Id;
-		}
-	}
-
-	private async Task AssignEmployeeShiftAsync(Guid employeeId, Guid shiftId)
-	{
-		using var scope = Factory.Services.CreateScope();
-		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
-		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-		var employeeRepository = scope.ServiceProvider.GetRequiredService<IRepository<Employee, Guid>>();
-		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
-
-		using (currentTenant.Change(tenantId))
-		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
-		{
-			var employee = await employeeRepository.GetAsync(employeeId);
-			employee.ShiftId = shiftId;
-			await employeeRepository.UpdateAsync(employee, autoSave: false);
-			await uow.CompleteAsync();
-		}
 	}
 
 	private async Task<Guid> InsertLeaveForAttendanceAsync(

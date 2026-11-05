@@ -46,11 +46,25 @@ public class EsiPolicyDto
 }
 public interface IEsiPolicyAppService : IApplicationService
 {
+	Task<EsiPolicyArchiveReviewDto> GetArchiveReviewAsync(Guid id);
 	Task<List<EsiPolicyDto>> GetListAsync();
 	Task<List<EsiPolicyDto>> GetOptionsAsync();
 	Task<EsiPolicyDto> CreateAsync(CreateEsiPolicyDto input);
 	Task<EsiPolicyDto> AddVersionAsync(Guid id, EsiPolicyVersionInput input);
-	Task ArchiveAsync(Guid id, string concurrencyStamp);
+	Task ArchiveAsync(Guid id, string concurrencyStamp, bool confirmed = false);
+}
+public class EsiPolicyArchiveReviewDto
+{
+	public EsiPolicyDto Policy { get; set; } = new();
+	public bool CanArchive { get; set; }
+	public List<EsiPolicyTemplateDependencyDto> Templates { get; set; } = [];
+}
+public class EsiPolicyTemplateDependencyDto
+{
+	public Guid TemplateId { get; set; }
+	public string TemplateName { get; set; } = string.Empty;
+	public int Version { get; set; }
+	public string Status { get; set; } = string.Empty;
 }
 public class EsiPolicyVersionInputValidator : AbstractValidator<EsiPolicyVersionInput>
 {

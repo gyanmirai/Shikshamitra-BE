@@ -8,11 +8,21 @@ owner: backend-team
 audience: humans-and-agents
 ---
 
+## ESIC archive dependencies
+
+`EsiPolicyArchiveApi_Tests` verifies confirmation, a clear review becoming stale after a template selection, dependency names and policy dates, archive retry/stamp handling, tenant/permission boundaries and retained historical resolution. Its PostgreSQL test executes concurrent template publication and archive in both lock orderings; use `PAYROLL_TEST_POSTGRES` with a new empty disposable loopback `payroll_tests_*` database. The fixture creates tables and refuses existing schemas. Run with `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~EsiPolicyArchiveApi_Tests|FullyQualifiedName~EsiPolicyApi_Tests"`.
+
 ## Historical ESIC configuration
 
 `EsiHistoricalConfigurationApi_Tests` calls the real save endpoint under a controlled clock for June initial setup, earning classification, unlocked updates, stale/retried requests, version ordering, protected payroll, invalidation and the Indian month boundary. `EsiHistoricalConfigurationPostgres_Tests` repeats persistence cases and checks finalization fencing and rollback after an injected invalidation failure. Set `ESI_HISTORICAL_TEST_POSTGRES` to a separate empty disposable loopback `payroll_tests_*` database; the fixture refuses other targets and never resets existing databases. Run the existing `EsiConfigurationPostgres_Tests`, `EsiStatutoryApi_Tests` and `EsiPolicyApi_Tests` alongside these cases. Synthetic fixtures do not certify tenant policy history or live acceptance.
 
 `EsiHistoricalPayrollRaceScenario` drives the real `POST /api/payroll/run` issuance/finalization path against a historical configuration save in both fence orderings. It checks stale-lock rejection and successful recalculation, rejects fresh historical writes after protection, accepts the identical pre-lock idempotent retry, and compares protected amounts, statutory evidence, reviews, issued document facts and PDF bytes/hash. There is no separately exposed salary-slip finalization HTTP route; the lock endpoint performs finalization. `EsiConfigurationCommitFailure` injects a test-only failure just before commit, after querying the same transaction to prove snapshot and review soft deletes executed; post-rollback reads must exactly restore both records and configuration history.
+
+## Manual attendance department filters
+
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~TakeAttendanceApi_Tests` with the pinned .NET 9 SDK.
+`Day_Should_Combine_Case_Insensitive_Department_And_Group_Before_Paging` covers trimmed mixed-case partial department matches, both boolean group values, filtered totals, successive pages and no matches through the real HTTP controller and SQLite-backed reader.
+PostgreSQL execution and production collation remain separate environment checks; the test host does not access tenant databases.
 
 ## HR setup readiness
 
@@ -1164,6 +1174,10 @@ Cover source-view access without Export grants, current revocation, owner and te
 Cover document checklist pagination, policy filters and performance report scope.
 
 ## Named ESIC policy regression checks
+
+Run `EsiPolicyAvailabilityApi_Tests` for Staff Review with effective named assignments and no effective default, missing/unassigned selections, future/expired versions, deliberate gaps, external-only staff and zero staff.
+Its isolated synthetic API fixtures also cover saving school settings without an effective default, idempotent default seeding alongside another named policy's version 1, preservation of default history and deleted version identities, orphan version collisions, ambiguous legacy starts and unambiguous legacy adoption.
+These regressions reproduce source defects; they do not establish the affected tenant's policy history or browser acceptance for bug #6593.
 
 Run `EsiPolicy_Tests`, `EsiPolicyCalculation_Tests`, `EsiPolicyRepricing_Tests`, `EsiPolicyApi_Tests` and `SalaryTemplateComposerAppService_Tests`.
 Run `EsiPolicyPostgres_Tests` with `PAYROLL_TEST_POSTGRES` pointing to a separate empty loopback `payroll_tests_*` database; the factory refuses to reset existing tables.

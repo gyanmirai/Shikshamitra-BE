@@ -92,7 +92,7 @@ public class EsiPolicyApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMit
 		var saved = await PostAndReadAsync<EsiPolicyDto>($"{Url}/{policy.Id}/versions", version);
 		version.IdempotencyKey = Guid.NewGuid(); version.EffectiveFrom = new(2046, 9, 1);
 		(await Client.PostAsJsonAsync($"{Url}/{policy.Id}/versions", version)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
-		(await Client.PostAsJsonAsync($"{Url}/{policy.Id}/archive", new { saved.ConcurrencyStamp })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+		(await Client.PostAsJsonAsync($"{Url}/{policy.Id}/archive", new { saved.ConcurrencyStamp, confirmed = true })).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 		var all = await GetAndReadAsync<List<EsiPolicyDto>>(Url);
 		all.Single(x => x.Id == policy.Id).IsArchived.ShouldBeTrue();
 		all.Single(x => x.Id == policy.Id).Versions.Count.ShouldBe(2);

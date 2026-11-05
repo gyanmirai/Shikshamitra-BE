@@ -57,8 +57,8 @@ public class TakeAttendanceDayReader(
 
 		if (!string.IsNullOrWhiteSpace(input.Department))
 		{
-			var d = input.Department.Trim();
-			empQuery = empQuery.Where(e => e.Department != null && e.Department.Contains(d));
+			var d = input.Department.Trim().ToLowerInvariant();
+			empQuery = empQuery.Where(e => e.Department != null && e.Department.ToLower().Contains(d));
 		}
 
 		if (input.IsTeaching.HasValue)

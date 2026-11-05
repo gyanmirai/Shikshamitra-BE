@@ -43,7 +43,6 @@ public sealed class EsiStatutoryPreviewReader(
 				clock.Now.ToUniversalTime(), "DISABLED");
 		var monthEnd = new DateTime(payrollMonth.Year, payrollMonth.Month, 1).AddMonths(1).AddDays(-1);
 		var policies = await policyResolver.ResolveAllAsync(payrollMonth);
-		var rule = policies.Values.SingleOrDefault(x => x.Policy.IsDefault)?.Rule ?? throw EsiPolicyResolver.NotEffective(null, payrollMonth);
 		var employees = await scopedEmployeeResolver.GetScopedPayrollEmployeesAsync(
 			payrollMonth.Year, payrollMonth.Month, includeUnknownStageEmployees: false);
 		if (employees.Count > ShikshaMitra.HR.Reports.HrReportingEngine.MaximumPopulation)
@@ -124,8 +123,7 @@ public sealed class EsiStatutoryPreviewReader(
 					EmployeeName = employee.EmployeeName, CanCalculate = true, CoverageDecisionCode = "EXTERNALLY_MANAGED", CoverageDecisionLabel = "Handled outside ShikshaMitra" });
 				continue;
 			}
-			var assigned = compensationResolution.Revision.EsiPolicyId is { } assignedId ? policies.GetValueOrDefault(assignedId)
-				: policies.Values.SingleOrDefault(x => x.Policy.IsDefault);
+			var assigned = compensationResolution.Revision.EsiPolicyId is { } assignedId ? policies.GetValueOrDefault(assignedId) : null;
 			if (assigned == null) throw EsiPolicyResolver.NotEffective(compensationResolution.Revision.EsiPolicyId, payrollMonth);
 			var employeeSettings = assigned.Rule.GetPolicySettings() ?? calculationSettings;
 			employeeSettings = employeeSettings with {
@@ -234,7 +232,7 @@ public sealed class EsiStatutoryPreviewReader(
 				x.ApprovedByUserId
 			}).ToList()
 		};
-		var previewFingerprint = BuildFingerprint(monthYear, rule, establishment, effectiveTreatments, items, summary, inputEvidence);
+		var previewFingerprint = BuildFingerprint(monthYear, establishment, effectiveTreatments, items, summary, inputEvidence);
 		return new EsiStatutoryPreviewCalculation(
 			monthYear, items, summary, clock.Now.ToUniversalTime(), previewFingerprint);
 	}
@@ -312,7 +310,6 @@ public sealed class EsiStatutoryPreviewReader(
 
 	private static string BuildFingerprint(
 		string monthYear,
-		StatutoryRuleVersion rule,
 		StatutoryEstablishment? establishment,
 		IEnumerable<PayrollComponentStatutoryTreatment> treatments,
 		IEnumerable<EmployeeStatutoryImpactDto> items,
@@ -323,25 +320,6 @@ public sealed class EsiStatutoryPreviewReader(
 		{
 			MonthYear = monthYear,
 			InputEvidence = inputEvidence,
-			Rule = new
-			{
-				rule.Id,
-				rule.Version,
-				rule.EffectiveFrom,
-				rule.EffectiveTo,
-				rule.JurisdictionCode,
-				rule.EstablishmentThreshold,
-				rule.StandardWageCeiling,
-				rule.DisabilityWageCeiling,
-				rule.EmployeePercentage,
-				rule.EmployeeShareDailyWageExemption,
-				rule.EmployerPercentage,
-				rule.ExclusionCapPercentage,
-				rule.InKindCapPercentage,
-				rule.RoundingPolicy,
-				rule.SourceUrl,
-				rule.SourceVerifiedOn
-			},
 			Establishment = establishment is null ? null : new
 			{
 				establishment.Id,

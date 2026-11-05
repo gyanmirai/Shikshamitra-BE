@@ -22,7 +22,8 @@ namespace ShikshaMitra.HR.Payroll.Statutory;
 public class EsiPolicyAppService(IRepository<EsiPolicy, Guid> policies,
 	IRepository<StatutoryRuleVersion, Guid> versions, IPayrollInputRevisionStore fence,
 	EsiConfigurationPeriodGuard periodGuard, IUserScopeService scopes,
-	IEarningComponentRepository earnings, IRepository<Compensation.EmployeeCompensationRevision, Guid> compensation) : ApplicationService, IEsiPolicyAppService
+	IEarningComponentRepository earnings, IRepository<Compensation.EmployeeCompensationRevision, Guid> compensation,
+	EsiPolicyArchiveDependencyReader archiveDependencies) : ApplicationService, IEsiPolicyAppService
 {
 	[Authorize(EsiPermissions.View)]
 	public async Task<List<EsiPolicyDto>> GetListAsync()
@@ -79,14 +80,26 @@ public class EsiPolicyAppService(IRepository<EsiPolicy, Guid> policies,
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		return (await ReadAsync()).Single(x => x.Id == id);
 	}
+	public async Task<EsiPolicyArchiveReviewDto> GetArchiveReviewAsync(Guid id)
+	{
+		await AuthorizeWriteAsync();
+		await policies.GetAsync(id);
+		var policy = (await ReadAsync()).Single(x => x.Id == id);
+		var dependencies = await archiveDependencies.ReadAsync(id);
+		return new() { Policy = policy, Templates = dependencies, CanArchive = !policy.IsArchived && !policy.IsDefault && dependencies.Count == 0 };
+	}
 	[UnitOfWork(isTransactional: true)]
-	public virtual async Task ArchiveAsync(Guid id, string concurrencyStamp)
+	public virtual async Task ArchiveAsync(Guid id, string concurrencyStamp, bool confirmed = false)
 	{
 		await AuthorizeWriteAsync();
 		await fence.LockAsync();
 		var policy = await policies.GetAsync(id);
 		if (policy.IsArchived) return;
 		if (policy.ConcurrencyStamp != concurrencyStamp) throw new BusinessException(HRErrorCodes.StatutoryPreviewStale);
+		if (!confirmed) throw new BusinessException(HRErrorCodes.EsiPolicyArchiveConfirmationRequired);
+		var dependencies = await archiveDependencies.ReadAsync(id);
+		if (dependencies.Count > 0)
+			throw new BusinessException(HRErrorCodes.EsiPolicyInUse).WithData("templates", dependencies);
 		policy.Archive();
 		await policies.UpdateAsync(policy);
 	}

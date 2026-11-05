@@ -147,7 +147,7 @@ public class PayrollSettingsActionAuthorization_Tests
 	[InlineData("preview", H.PayrollManagement_SettingsSalaryTemplates.View)]
 	public async Task Template_direct_calls_reject_exact_controller_action_before_repository_access(string operation, string permission)
 	{
-		var service = new SalaryTemplateAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = Authorization(null) };
+		var service = new SalaryTemplateAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = Authorization(null) };
 		Func<Task> call = operation switch
 		{
 			"list" => () => service.GetListAsync(), "get" => () => service.GetAsync(Guid.NewGuid()),

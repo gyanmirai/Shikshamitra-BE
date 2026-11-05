@@ -3,10 +3,14 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-03
+updated_on: 2026-11-05
 owner: backend-team
 audience: humans-and-agents
 ---
+
+## ESIC archive dependencies
+
+`EsiPolicyArchiveApi_Tests` verifies confirmation, a clear review becoming stale after a template selection, dependency names and policy dates, archive retry/stamp handling, tenant/permission boundaries and retained historical resolution. Its PostgreSQL test executes concurrent template publication and archive in both lock orderings; use `PAYROLL_TEST_POSTGRES` with a new empty disposable loopback `payroll_tests_*` database. The fixture creates tables and refuses existing schemas. Run with `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~EsiPolicyArchiveApi_Tests|FullyQualifiedName~EsiPolicyApi_Tests"`.
 
 ## Historical ESIC configuration
 

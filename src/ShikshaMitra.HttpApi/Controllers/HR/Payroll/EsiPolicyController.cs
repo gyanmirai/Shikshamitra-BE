@@ -17,6 +17,11 @@ public class EsiPolicyController(IEsiPolicyAppService service) : AbpControllerBa
 	[HttpGet("options")] public Task<List<EsiPolicyDto>> GetOptionsAsync() => service.GetOptionsAsync();
 	[HttpPost] public Task<EsiPolicyDto> CreateAsync(CreateEsiPolicyDto input) => service.CreateAsync(input);
 	[HttpPost("{id:guid}/versions")] public Task<EsiPolicyDto> AddVersionAsync(Guid id, EsiPolicyVersionInput input) => service.AddVersionAsync(id, input);
-	[HttpPost("{id:guid}/archive")] public Task ArchiveAsync(Guid id, [FromBody] ArchiveEsiPolicyDto input) => service.ArchiveAsync(id, input.ConcurrencyStamp);
+	[HttpGet("{id:guid}/archive-review")] public Task<EsiPolicyArchiveReviewDto> GetArchiveReviewAsync(Guid id) => service.GetArchiveReviewAsync(id);
+	[HttpPost("{id:guid}/archive")] public Task ArchiveAsync(Guid id, [FromBody] ArchiveEsiPolicyDto input) => service.ArchiveAsync(id, input.ConcurrencyStamp, input.Confirmed);
 }
-public class ArchiveEsiPolicyDto { public string ConcurrencyStamp { get; set; } = string.Empty; }
+public class ArchiveEsiPolicyDto
+{
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public bool Confirmed { get; set; }
+}

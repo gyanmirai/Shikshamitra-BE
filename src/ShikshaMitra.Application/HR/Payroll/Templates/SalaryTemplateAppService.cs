@@ -7,6 +7,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Statutory;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -14,6 +15,7 @@ using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
 using Volo.Abp.Timing;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Payroll.Templates;
 
@@ -26,7 +28,8 @@ public class SalaryTemplateAppService(
 	SalaryTemplateCalculationService calculationService,
 	SalaryTemplatePreviewProofService previewProofService,
 	IAsyncQueryableExecuter asyncExecuter,
-	IClock clock, IEmployeeAuthorizationService employeeAuthorizationService) : ApplicationService, ISalaryTemplateAppService
+	IClock clock, IEmployeeAuthorizationService employeeAuthorizationService,
+	IPayrollInputRevisionStore fence) : ApplicationService, ISalaryTemplateAppService
 {
 	private const string CanonicalEsiComponentName = "Employee State Insurance (ESI) - Auto";
 
@@ -127,9 +130,11 @@ public class SalaryTemplateAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Add)]
-	public async Task<SalaryTemplateDto> CreateAsync(SaveSalaryTemplateDto input)
+	[UnitOfWork(isTransactional: true)]
+	public virtual async Task<SalaryTemplateDto> CreateAsync(SaveSalaryTemplateDto input)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Add);
+		await fence.LockAsync();
 		var replay = await FindIdempotentSaveAsync(input.IdempotencyKey);
 		if (replay != null)
 		{
@@ -159,9 +164,11 @@ public class SalaryTemplateAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Edit)]
-	public async Task<SalaryTemplateDto> UpdateAsync(Guid id, SaveSalaryTemplateDto input)
+	[UnitOfWork(isTransactional: true)]
+	public virtual async Task<SalaryTemplateDto> UpdateAsync(Guid id, SaveSalaryTemplateDto input)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Edit);
+		await fence.LockAsync();
 		var template = await templateRepository.GetAsync(id);
 		EnsureNotArchived(template);
 		var replay = await FindIdempotentSaveAsync(input.IdempotencyKey, id);

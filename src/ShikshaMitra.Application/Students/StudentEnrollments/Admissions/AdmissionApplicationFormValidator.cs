@@ -37,7 +37,8 @@ public class AdmissionApplicationFormValidator(AdmissionWorkflowConditionEvaluat
 		IEnumerable<AdmissionFormFieldDefinition> fields,
 		IEnumerable<AdmissionFormSectionDefinition> sections,
 		IReadOnlyDictionary<string, string> values,
-		AdmissionFormExperienceMetadata? experience)
+		AdmissionFormExperienceMetadata? experience,
+		IReadOnlySet<string>? validationFieldCodes = null)
 	{
 		var sectionList = sections.ToList();
 		var fieldList = fields.ToList();
@@ -50,10 +51,11 @@ public class AdmissionApplicationFormValidator(AdmissionWorkflowConditionEvaluat
 			var repeatable = experience?.Sections.GetValueOrDefault(section.Code);
 			if (repeatable?.IsRepeatable == true)
 			{
-				ValidateRepeatableSection(section, sectionFields, repeatable, values, errors, fieldErrors);
+				ValidateRepeatableSection(section, sectionFields, repeatable, values, errors, fieldErrors, validationFieldCodes);
 				continue;
 			}
-			foreach (var field in sectionFields) ValidateField(field, sectionRules.GetValueOrDefault(field.SectionId), values, errors, fieldErrors);
+			foreach (var field in sectionFields.Where(field => validationFieldCodes == null || validationFieldCodes.Contains(field.Code)))
+				ValidateField(field, sectionRules.GetValueOrDefault(field.SectionId), values, errors, fieldErrors);
 		}
 		return new AdmissionFormValidationResult(errors, fieldErrors);
 	}
@@ -64,7 +66,8 @@ public class AdmissionApplicationFormValidator(AdmissionWorkflowConditionEvaluat
 		AdmissionFormSectionExperienceMetadata repeatable,
 		IReadOnlyDictionary<string, string> values,
 		ICollection<string> errors,
-		IDictionary<string, string> fieldErrors)
+		IDictionary<string, string> fieldErrors,
+		IReadOnlySet<string>? validationFieldCodes)
 	{
 		var rows = fields.ToDictionary(
 			field => field.Code,
@@ -87,7 +90,7 @@ public class AdmissionApplicationFormValidator(AdmissionWorkflowConditionEvaluat
 		{
 			var rowValues = values.ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
 			foreach (var field in fields) rowValues[field.Code] = rows[field.Code].ElementAtOrDefault(index) ?? string.Empty;
-			foreach (var field in fields)
+			foreach (var field in fields.Where(field => validationFieldCodes == null || validationFieldCodes.Contains(field.Code)))
 			{
 				var key = $"{field.Code}[{index}]";
 				ValidateField(field, section.VisibilityRuleJson, rowValues, errors, fieldErrors, key);

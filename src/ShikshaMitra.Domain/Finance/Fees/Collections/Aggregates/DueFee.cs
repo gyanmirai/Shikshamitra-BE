@@ -61,7 +61,15 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public decimal GetAssessedLateFeeAmount() => this.GetProperty<decimal>("AssessedLateFeeAmount", 0m);
 	public string? GetLateFeeAssessmentExplanation() => this.GetProperty<string>("LateFeeAssessmentExplanation", string.Empty);
 	public string? GetLateFeeAssessmentPeriodJson() => this.GetProperty<string>("LateFeeAssessmentPeriodJson", null);
-	public DateTimeOffset? GetLateFeeAssessedAt() => this.GetProperty<DateTimeOffset?>("LateFeeAssessedAt");
+	public DateTimeOffset? GetLateFeeAssessedAt()
+	{
+		// JSON extra properties can materialize a saved timestamp as DateTime.
+		// Legacy values without a kind represent UTC, independent of the host timezone.
+		if (this.GetProperty("LateFeeAssessedAt") is DateTime timestamp)
+			return new DateTimeOffset(timestamp.Kind == DateTimeKind.Unspecified
+				? DateTime.SpecifyKind(timestamp, DateTimeKind.Utc) : timestamp);
+		return this.GetProperty<DateTimeOffset?>("LateFeeAssessedAt");
+	}
 	public Guid? GetLateFeeAssessmentPolicyVersionId() => this.GetProperty<Guid?>("LateFeeAssessmentPolicyVersionId");
 
 	public void PreserveLateFeeAssessment(decimal amount, DateTimeOffset assessedAt, Guid policyVersionId, string explanation,

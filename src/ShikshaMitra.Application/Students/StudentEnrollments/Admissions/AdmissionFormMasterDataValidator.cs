@@ -12,7 +12,9 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionFormMasterDataValidator(AdmissionFormDataSourceRegistry sources, AdmissionApplicationFormValidator validator) : ITransientDependency
 {
 	internal async Task ValidateAsync(IEnumerable<AdmissionFormFieldDefinition> fields, IEnumerable<AdmissionFormSectionDefinition> sections,
-		IReadOnlyDictionary<string, string> values, Guid academicYearId, AdmissionFormValidationResult validation, AdmissionFormExperienceMetadata experience)
+		IReadOnlyDictionary<string, string> values, Guid academicYearId, AdmissionFormValidationResult validation, AdmissionFormExperienceMetadata experience,
+		Func<string, Guid?, Task<List<AdmissionFormOptionDto>>>? publicOptions = null,
+		IReadOnlySet<string>? validationFieldCodes = null)
 	{
 		var sectionRows = sections.ToList();
 		foreach (var section in sectionRows)
@@ -26,20 +28,21 @@ public class AdmissionFormMasterDataValidator(AdmissionFormDataSourceRegistry so
 				if (repeated)
 					foreach (var field in sectionFields) row[field.Code] = ReadMultiple(values.GetValueOrDefault(field.Code)).ElementAtOrDefault(index) ?? "";
 				var visible = validator.GetVisibleFieldCodes(sectionFields, [section], row);
-				foreach (var field in sectionFields.Where(f => visible.Contains(f.Code) && f.FieldType is AdmissionFormFieldType.Select or AdmissionFormFieldType.MultiSelect or AdmissionFormFieldType.Radio))
+				foreach (var field in sectionFields.Where(f => (validationFieldCodes == null || validationFieldCodes.Contains(f.Code)) && visible.Contains(f.Code) && f.FieldType is AdmissionFormFieldType.Select or AdmissionFormFieldType.MultiSelect or AdmissionFormFieldType.Radio))
 				{
 					if (!TrySource(AdmissionAcademicFormOptions.OptionsJson(field.Code, field.FieldType, field.OptionsJson), out var sourceKey, out var parentField)) continue;
 					var selected = field.FieldType == AdmissionFormFieldType.MultiSelect ? ReadMultiple(row.GetValueOrDefault(field.Code)) : [row.GetValueOrDefault(field.Code) ?? ""];
 					var valid = true;
 					if (sourceKey == "StudentSiblings")
 					{
+						if (publicOptions != null) continue; // Parent cannot alter the saved sibling relationship.
 						try { valid = await sources.AreSiblingIdsAllowedAsync(AdmissionStudentProfileMapping.ReadSiblings(row.GetValueOrDefault(field.Code)) ?? []); }
 						catch (BusinessException) { valid = false; }
 					}
 					else
 					{
 						var parent = parentField != null && Guid.TryParse(row.GetValueOrDefault(parentField), out var parentId) ? parentId : (Guid?)null;
-						var allowed = (await sources.GetOptionsAsync(sourceKey, parent, academicYearId)).Select(x => x.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+						var allowed = (publicOptions == null ? await sources.GetOptionsAsync(sourceKey, parent, academicYearId) : await publicOptions(sourceKey, parent)).Select(x => x.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
 						valid = selected.All(x => string.IsNullOrWhiteSpace(x) || allowed.Contains(x));
 					}
 					if (valid) continue;

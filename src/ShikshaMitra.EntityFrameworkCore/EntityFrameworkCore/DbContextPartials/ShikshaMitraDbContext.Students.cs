@@ -75,6 +75,7 @@ public partial class ShikshaMitraDbContext
 	public DbSet<AdmissionInquiryManagement> AdmissionInquiryManagement { get; set; }
 	public DbSet<AdmissionIntakeProfile> AdmissionIntakeProfiles { get; set; }
 	public DbSet<AdmissionIntakeSetup> AdmissionIntakeSetups { get; set; }
+	public DbSet<AdmissionParentRegistration> AdmissionParentRegistrations { get; set; }
 	public DbSet<AdmissionPublicInquiryLink> AdmissionPublicInquiryLinks { get; set; }
 	public DbSet<AdmissionInquiryFollowUp> AdmissionInquiryFollowUps { get; set; }
 	public DbSet<AdmissionDocumentEvidence> AdmissionDocumentEvidence { get; set; }

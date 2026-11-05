@@ -227,7 +227,8 @@ public class AdmissionFormInheritanceService(
 			foreach (var section in registrationSchema.Sections)
 				section.Fields.RemoveAll(field => field.BindingType == AdmissionFormBindingType.System &&
 					field.BindingKey is "Applicant.FirstName" or "Applicant.MiddleName" or "Applicant.LastName");
-		var composition = AdmissionFormInheritanceComposer.Compose(registrationSchema, Convert<AdmissionFormSchema>(inquiry), policy);
+		var composition = AdmissionFormInheritanceComposer.Compose(registrationSchema, Convert<AdmissionFormSchema>(inquiry), policy,
+			registration.CoreFieldPolicyVersion);
 		var definition = Convert<AdmissionFormDto>(composition.Definition);
 		definition.CoreFieldPolicyVersion = registration.CoreFieldPolicyVersion;
 		definition.Status = registration.Status;

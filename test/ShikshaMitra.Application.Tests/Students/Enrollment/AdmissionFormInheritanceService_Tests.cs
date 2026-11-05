@@ -189,6 +189,80 @@ public class AdmissionFormInheritanceService_Tests
 	}
 
 	[Fact]
+	public async Task Saved_preview_keeps_registration_requiredness_for_optional_inquiry_dob_and_gender()
+	{
+		var school = Guid.NewGuid();
+		var source = Form(school, "Inquiry", AdmissionFormPurpose.Inquiry);
+		var registration = Registration(school, source.Id);
+		AdmissionFormMetadataStore.WriteExperience(registration, new()
+		{
+			CoreFieldPolicyVersion = 1,
+			Inheritance = new() { Enabled = true, Sources = [new() { InquiryFormDefinitionId = source.Id }] }
+		});
+		var sourceSection = Section(source);
+		var registrationSection = Section(registration);
+		var sourceDob = Field(source, sourceSection, "Birth date");
+		var sourceGender = new AdmissionFormFieldDefinition(Guid.NewGuid(), source.Id, sourceSection.Id, "GENDER", "Gender",
+			AdmissionFormFieldType.Select, AdmissionFormBindingType.System, "Applicant.Gender", false, false, 1, null, null, null, null, null,
+			"[{\"value\":\"Male\",\"label\":\"Male\"},{\"value\":\"Female\",\"label\":\"Female\"},{\"value\":\"Other\",\"label\":\"Other\"}]");
+		var registrationDob = new AdmissionFormFieldDefinition(Guid.NewGuid(), registration.Id, registrationSection.Id, "REG_DOB", "Registration DOB",
+			AdmissionFormFieldType.Date, AdmissionFormBindingType.System, "Applicant.DateOfBirth", true, false, 0, null, null, null, null, null);
+		var registrationGender = new AdmissionFormFieldDefinition(Guid.NewGuid(), registration.Id, registrationSection.Id, "REG_GENDER", "Registration Gender",
+			AdmissionFormFieldType.Select, AdmissionFormBindingType.System, "Applicant.Gender", true, false, 1, null, null, null, null, null,
+			"[{\"value\":\"Male\",\"label\":\"Male\"},{\"value\":\"Female\",\"label\":\"Female\"},{\"value\":\"Other\",\"label\":\"Other\"}]");
+		var service = Service(school, [registration, source],
+			sourceSections: [sourceSection, registrationSection], sourceFields: [sourceDob, sourceGender, registrationDob, registrationGender]);
+
+		var preview = await service.GetSavedPreviewAsync(registration.Id, source.Id);
+
+		preview.IsValid.ShouldBeTrue();
+		preview.Issues.ShouldBeEmpty();
+		var fields = preview.Definition.Sections.SelectMany(section => section.Fields).ToList();
+		fields.Count(field => field.BindingKey == "Applicant.DateOfBirth").ShouldBe(1);
+		fields.Count(field => field.BindingKey == "Applicant.Gender").ShouldBe(1);
+		fields.Single(field => field.BindingKey == "Applicant.DateOfBirth").Required.ShouldBeTrue();
+		fields.Single(field => field.BindingKey == "Applicant.Gender").Required.ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task Preview_promotes_optional_inquiry_dob_and_gender_when_registration_requires_them()
+	{
+		var school = Guid.NewGuid();
+		var source = Form(school, "Inquiry", AdmissionFormPurpose.Inquiry);
+		var registration = Form(school, "Registration", AdmissionFormPurpose.Registration, publish: false);
+		AdmissionFormMetadataStore.WriteExperience(registration, new() { CoreFieldPolicyVersion = 1 });
+		var sourceSection = Section(source);
+		var sourceDob = Field(source, sourceSection, "Birth date");
+		var sourceGender = new AdmissionFormFieldDefinition(Guid.NewGuid(), source.Id, sourceSection.Id, "GENDER", "Gender",
+			AdmissionFormFieldType.Select, AdmissionFormBindingType.System, "Applicant.Gender", false, false, 1, null, null, null, null, null,
+			"[{\"value\":\"Male\",\"label\":\"Male\"},{\"value\":\"Female\",\"label\":\"Female\"},{\"value\":\"Other\",\"label\":\"Other\"}]");
+		var service = Service(school, [registration, source], sourceSections: [sourceSection], sourceFields: [sourceDob, sourceGender]);
+		var registrationSectionId = Guid.NewGuid();
+		var registrationSection = new CreateUpdateAdmissionFormSectionDto { Id = registrationSectionId, Code = "DETAILS", Name = "Details", DisplayOrder = 0,
+			Fields =
+			[
+				new() { Id = Guid.NewGuid(), Code = "REG_DOB", Label = "Birth date", BindingType = AdmissionFormBindingType.System,
+					BindingKey = "Applicant.DateOfBirth", FieldType = AdmissionFormFieldType.Date, Required = true, SectionId = registrationSectionId },
+				new() { Id = Guid.NewGuid(), Code = "REG_GENDER", Label = "Gender", BindingType = AdmissionFormBindingType.System,
+					BindingKey = "Applicant.Gender", FieldType = AdmissionFormFieldType.Select, Required = true, SectionId = registrationSectionId,
+					OptionsJson = "[{\"value\":\"Male\",\"label\":\"Male\"},{\"value\":\"Female\",\"label\":\"Female\"},{\"value\":\"Other\",\"label\":\"Other\"}]" }
+			] };
+		var preview = await service.PreviewAsync(new()
+		{
+			RegistrationFormDefinitionId = registration.Id,
+			InquiryFormDefinitionId = source.Id,
+			Draft = new() { ConcurrencyStamp = registration.ConcurrencyStamp, CoreFieldPolicyVersion = null, Sections = [registrationSection] }
+		});
+
+		preview.Issues.ShouldBeEmpty();
+		var fields = preview.Definition.Sections.SelectMany(section => section.Fields).ToList();
+		fields.Count(field => field.BindingKey == "Applicant.DateOfBirth").ShouldBe(1);
+		fields.Count(field => field.BindingKey == "Applicant.Gender").ShouldBe(1);
+		fields.Single(field => field.BindingKey == "Applicant.DateOfBirth").Required.ShouldBeTrue();
+		fields.Single(field => field.BindingKey == "Applicant.Gender").Required.ShouldBeTrue();
+	}
+
+	[Fact]
 	public async Task Persisted_core_policy_marker_cannot_be_downgraded_by_preview_draft()
 	{
 		var school = Guid.NewGuid();

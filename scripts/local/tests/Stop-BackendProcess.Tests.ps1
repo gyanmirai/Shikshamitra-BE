@@ -19,6 +19,14 @@ $cases = @(
     @{ Path = "$repository/src/ShikshaMitra.DbMigrator/bin/Debug/net9.0/ShikshaMitra.DbMigrator.dll"; Target = 'DbMigrator' },
     @{ Path = "$repository/src/ShikshaMitra.HttpApi.Host/bin/Release/net9.0/ShikshaMitra.HttpApi.Host.dll"; Target = '' },
     @{ Path = "$repository/.artifacts/runtime/bin/ShikshaMitra.HttpApi.Host/debug/ShikshaMitra.HttpApi.Host.dll"; Target = 'Host' },
+    @{ Path = "$repository/.artifacts/relationship-validation-runtime/ShikshaMitra.HttpApi.Host.dll"; Target = 'Host' },
+    @{ Path = "$repository/.artifacts/flat-runtime/ShikshaMitra.DbMigrator.dll"; Target = 'DbMigrator' },
+    @{ Path = "$repository/.artifacts/Release/ShikshaMitra.HttpApi.Host.dll"; Target = '' },
+    @{ Path = "$repository/.artifacts/publish/ShikshaMitra.HttpApi.Host.dll"; Target = '' },
+    @{ Path = "$repository/.artifacts/verification/publish/ShikshaMitra.HttpApi.Host/debug/ShikshaMitra.HttpApi.Host.dll"; Target = '' },
+    @{ Path = "$repository/.artifacts/published/ShikshaMitra.HttpApi.Host.dll"; Target = '' },
+    @{ Path = "$repository/src/ShikshaMitra.HttpApi.Host/bin/Debug/net9.0/publish/ShikshaMitra.HttpApi.Host.dll"; Target = '' },
+    @{ Path = "${repository}-other/.artifacts/flat-runtime/ShikshaMitra.HttpApi.Host.dll"; Target = '' },
     @{ Path = "${repository}-other/src/ShikshaMitra.HttpApi.Host/bin/Debug/net9.0/ShikshaMitra.HttpApi.Host.dll"; Target = '' },
     @{ Path = "$repository/src/ShikshaMitra.Application/bin/Debug/net9.0/ShikshaMitra.Application.dll"; Target = '' },
     @{ Path = "$repository/publish/ShikshaMitra.HttpApi.Host.dll"; Target = '' }
@@ -97,8 +105,11 @@ System.Threading.Thread.Sleep(System.Threading.Timeout.Infinite);
         if ($LASTEXITCODE -ne 0) { throw "Fixture build failed: $testRoot" }
     }
     Copy-Item -Path (Join-Path $testRoot 'ShikshaMitra.HttpApi.Host/bin/*') -Destination $outsideRoot
+    $flatRuntime = Join-Path $testRoot 'flat-runtime'
+    New-Item -ItemType Directory -Path $flatRuntime | Out-Null
+    Copy-Item -Path (Join-Path $testRoot 'ShikshaMitra.HttpApi.Host/bin/*') -Destination $flatRuntime
     foreach ($dll in @(
-        (Join-Path $testRoot 'ShikshaMitra.HttpApi.Host/bin/ShikshaMitra.HttpApi.Host.dll'),
+        (Join-Path $flatRuntime 'ShikshaMitra.HttpApi.Host.dll'),
         (Join-Path $testRoot 'ShikshaMitra.DbMigrator/bin/ShikshaMitra.DbMigrator.dll'),
         (Join-Path $outsideRoot 'ShikshaMitra.HttpApi.Host.dll')
     )) {

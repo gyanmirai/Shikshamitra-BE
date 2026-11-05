@@ -21,7 +21,14 @@ public class AdmissionDocumentFileService(IBlobContainer blobs, AdmissionDocumen
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionDocumentFile> SaveAsync(AdmissionDocumentContext context, AdmissionDocumentRequirement requirement,
-		Guid evidenceId, IRemoteStreamContent file)
+		Guid evidenceId, IRemoteStreamContent file) => await SaveCoreAsync(context, requirement, evidenceId, file,
+		CurrentUser.Id ?? throw Invalid("An authenticated staff member is required."));
+
+	internal Task<AdmissionDocumentFile> SaveForParentAsync(AdmissionDocumentContext context, AdmissionDocumentRequirement requirement,
+		Guid evidenceId, IRemoteStreamContent file) => SaveCoreAsync(context, requirement, evidenceId, file, null);
+
+	private async Task<AdmissionDocumentFile> SaveCoreAsync(AdmissionDocumentContext context, AdmissionDocumentRequirement requirement,
+		Guid evidenceId, IRemoteStreamContent file, Guid? actor)
 	{
 		if (file == null) throw Invalid("Choose a document to upload.");
 		var documentType = await access.ValidateMappingAsync(requirement);
@@ -51,7 +58,7 @@ public class AdmissionDocumentFileService(IBlobContainer blobs, AdmissionDocumen
 		var blobName = $"admission-evidence/{CurrentTenant.Id:N}/{context.Application.Id:N}/{evidenceId:N}";
 		await blobs.SaveAsync(blobName, content, overrideExisting: false);
 		return new(validation.SafeFileName, validation.ContentType, content.LongLength, validation.Sha256Hash, blobName,
-			CurrentUser.Id ?? throw Invalid("An authenticated staff member is required."));
+			actor);
 	}
 
 	public async Task<AdmissionDocumentDownloadDto> DownloadAsync(Guid id)

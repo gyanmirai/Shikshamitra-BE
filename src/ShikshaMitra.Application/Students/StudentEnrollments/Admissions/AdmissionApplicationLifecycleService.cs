@@ -214,7 +214,7 @@ public class AdmissionApplicationLifecycleService(
 			if (source != null) return source;
 		}
 		if (field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey))
-			return InitialSystemValue(field.BindingKey, applicant, guardian, inquiryValues);
+			return InitialSystemValue(field.BindingKey, applicant, guardian, inquiryValues, field);
 		return field.DefaultValue;
 	}
 
@@ -226,17 +226,21 @@ public class AdmissionApplicationLifecycleService(
 		IReadOnlyDictionary<string, string> inquiryValues)
 	{
 		if (field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey))
-			return InitialSystemValue(field.BindingKey, applicant, guardian, inquiryValues);
+			return InitialSystemValue(field.BindingKey, applicant, guardian, inquiryValues, new AdmissionFormFieldDto
+			{ BindingType = field.BindingType, BindingKey = field.BindingKey, FieldType = field.FieldType, OptionsJson = field.OptionsJson, ReadOnly = field.ReadOnly });
 		return AdmissionInquiryFormPrefill.ResolveCustomValue(field, inquiryFields, inquiryValues)
 			?? field.DefaultValue;
 	}
 
 	private static string? InitialSystemValue(string key, AdmissionApplicant applicant, AdmissionGuardian? guardian,
-		IReadOnlyDictionary<string, string> inquiryValues)
+		IReadOnlyDictionary<string, string> inquiryValues, AdmissionFormFieldDto field)
 	{
 		if (!applicant.ExistingStudentId.HasValue && string.Equals(key, "Applicant.FirstName", StringComparison.OrdinalIgnoreCase))
 			return JsonSerializer.Serialize(AdmissionStructuredNamePrefill.FirstName(applicant.FirstName, inquiryValues));
-		return JsonSerializer.Serialize(AdmissionApplicationMapper.GetBoundValue(key, applicant, guardian));
+		var value = AdmissionApplicationMapper.GetBoundValue(key, applicant, guardian);
+		if (AdmissionRegistrationRelationshipPrefill.CanFill(field) && string.IsNullOrWhiteSpace(value?.ToString()))
+			value = AdmissionRegistrationRelationshipPrefill.Resolve(field, applicant);
+		return JsonSerializer.Serialize(value);
 	}
 
 	private static IReadOnlyDictionary<string, string> ReadInquiryValues(string? snapshotJson)

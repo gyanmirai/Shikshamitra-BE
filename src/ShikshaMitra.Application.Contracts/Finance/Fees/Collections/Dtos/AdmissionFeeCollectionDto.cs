@@ -27,9 +27,20 @@ public class AdmissionFeeCollectionDto
 	public string? Blocker { get; set; }
 	public bool HasPaymentEvidence { get; set; }
 	public FeeProrationResultDto? Proration { get; set; }
+	public AdmissionProrationPolicyDto? ProrationPolicy { get; set; }
 	public List<AdmissionCollectionFeeHeadDto> FeeHeads { get; set; } = [];
 	public List<AdmissionCollectionReceiptDto> Receipts { get; set; } = [];
 	public List<AssignmentHeadDto> VariableFeeHeads { get; set; } = [];
+}
+
+/// <summary>The immutable proration policy version used for this admission calculation.</summary>
+public class AdmissionProrationPolicyDto
+{
+	public Guid? PolicyId { get; set; }
+	public Guid? PolicyVersionId { get; set; }
+	public string PolicyName { get; set; } = string.Empty;
+	public int PolicyVersion { get; set; }
+	public string Source { get; set; } = string.Empty;
 }
 
 public class AdmissionCollectionAcademicYearDto
@@ -66,6 +77,9 @@ public class PrepareAdmissionFeeCollectionDto
 {
 	/// <summary>Only Finance-configured variable heads may receive initial amounts.</summary>
 	public List<VariableFeeHeadAmountDto> VariableFeeHeads { get; set; } = [];
+	public Guid? ProrationPolicyVersionId { get; set; }
+	[MaxLength(500)]
+	public string? PolicyOverrideReason { get; set; }
 }
 
 /// <summary>No student or academic-scope identifier is accepted from the client.</summary>

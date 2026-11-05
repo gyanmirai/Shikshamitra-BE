@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-04
+updated_on: 2026-11-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -67,7 +67,7 @@ The Version migration is additive and enrolls existing policies at version 1 wit
 
 Run `CashManagementDeploymentModel_Tests` and `LeavePolicyDeploymentModel_Tests` in separate exact-class-filter processes in the EF test project. These are offline metadata checks: the latest target model and snapshot must match the current design-time model, the earlier cash migration keeps its historical target and additive operations, and the later leave target must include the merged cash tables. Leave's migration adds only the Version column; its rule metadata preserves explicit minimum-notice zero. These checks do not open a connection or apply a migration and do not replace PostgreSQL upgrade/concurrency acceptance.
 
-`ReconcileEmployeeWorkShiftModel` records the combined Work Shift and elective-correction target model after merging their independent migration histories.
+`ReconcileEmployeeWorkShiftModel` records the combined Work Shift, elective-correction and admission-parent-registration target model after merging their independent migration histories.
 Its Up and Down operations are empty; it makes no schema or data changes.
 The same offline model check must pass with this migration as the latest target.
 

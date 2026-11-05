@@ -63,6 +63,7 @@ public partial class AdmissionFeeCollectionAppService(
 		if (current != null && SelectionMatches(source, current))
 		{
 			result.StructureName = current.StructureName; result.StructureRevision = current.RevisionNumber;
+			result.ProrationPolicy = ProrationPolicy(current);
 			var rows = await dues.GetListAsync(d => d.FinanceFeeAccountId == account!.Id);
 			result.Proration = ProrationResult(current, rows);
 			var tx = await transactions.GetListAsync(t => t.FinanceFeeAccountId == account!.Id ||
@@ -113,7 +114,11 @@ public partial class AdmissionFeeCollectionAppService(
 		{
 			if (account?.HasPaymentEvidence == true) throw new BusinessException(AdmissionFeeCollectionErrorCodes.SelectionChanged);
 			result.VariableFeeHeads = await VariableHeadsAsync(source);
-			if (result.VariableFeeHeads.Count > 0) result.Blocker = "Enter the initial amounts for the Finance-configured variable fees.";
+			if (result.VariableFeeHeads.Count > 0)
+			{
+				result.ProrationPolicy = await DefaultProrationPolicyAsync(source.AcademicYearId);
+				result.Blocker = "Enter the initial amounts for the Finance-configured variable fees.";
+			}
 			else
 			{
 				AdmissionAssignmentPreparation calculated;
@@ -125,6 +130,7 @@ public partial class AdmissionFeeCollectionAppService(
 					return result;
 				}
 				result.Proration = ProrationResult(calculated.Preview, calculated.Dues);
+				result.ProrationPolicy = ProrationPolicy(calculated.Preview);
 				result.StructureName = calculated.Preview.StructureName; result.StructureRevision = calculated.Preview.RevisionNumber;
 				result.TotalAmount = result.OutstandingAmount = calculated.Preview.ProratedTotal;
 				result.FeeHeads = calculated.Preview.Heads.Where(h => h.Included).Select(h => new AdmissionCollectionFeeHeadDto
@@ -142,6 +148,33 @@ public partial class AdmissionFeeCollectionAppService(
 
 	private static StudentFeeAssignmentPreviewDto ReadAssignment(FinanceFeeAccount account) =>
 		JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(account.AssignmentSnapshotJson!) ?? throw new BusinessException(AdmissionFeeCollectionErrorCodes.NotPrepared);
+
+	private async Task<AdmissionProrationPolicyDto?> DefaultProrationPolicyAsync(Guid academicYearId)
+	{
+		var version = await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Policies.AdmissionProrationPolicyResolver>()
+			.ResolveAsync(academicYearId);
+		return version == null ? null : new AdmissionProrationPolicyDto
+		{
+			PolicyId = version.PolicyId,
+			PolicyVersionId = version.Id,
+			PolicyName = version.PolicyName,
+			PolicyVersion = version.VersionNumber,
+			Source = "FinanceDefault"
+		};
+	}
+
+	internal static AdmissionProrationPolicyDto? ProrationPolicy(StudentFeeAssignmentPreviewDto saved)
+	{
+		var policy = saved.Policies.FirstOrDefault(x => x.Family == "proration");
+		return policy == null ? null : new AdmissionProrationPolicyDto
+		{
+			PolicyId = policy.PolicyId,
+			PolicyVersionId = policy.VersionId,
+			PolicyName = policy.Name,
+			PolicyVersion = policy.Version,
+			Source = policy.Source
+		};
+	}
 
 	internal static bool SelectionMatches(AdmissionFinanceContext source, StudentFeeAssignmentPreviewDto saved) =>
 		source.StructureId == saved.StructureId && source.StructureRevision == saved.RevisionNumber &&

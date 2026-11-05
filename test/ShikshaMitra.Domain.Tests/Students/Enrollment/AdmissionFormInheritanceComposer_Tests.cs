@@ -127,11 +127,11 @@ public class AdmissionFormInheritanceComposer_Tests
 		result.Issues.ShouldBeEmpty();
 		result.Definition.Sections.Select(section => section.Name).ShouldBe(new[] { "Original Inquiry section", "Details" });
 		var source = result.Definition.Sections[0];
-		source.FieldsPerRow.ShouldBe(3);
+		source.FieldsPerRow.ShouldBe(registration.FieldsPerRow);
 		source.StepDisplayOrder.ShouldBe(0);
 		source.Fields.Select(field => field.Label).ShouldBe(new[] { "Date of birth", "Parent or guardian name" });
 		source.Fields[0].Id.ShouldBe(registration.Sections[0].Fields[0].Id);
-		source.Fields[0].Required.ShouldBeFalse();
+		source.Fields[0].Required.ShouldBeTrue();
 		source.Fields[0].BindingKey.ShouldBe("Applicant.DateOfBirth");
 		source.Fields[0].InheritedFrom!.SourceBindingKey.ShouldBe("DATE_OF_BIRTH");
 		source.Fields[0].InheritedFrom!.SourceFieldIdentity.ShouldBe("custom:inquiry-birth");
@@ -157,7 +157,7 @@ public class AdmissionFormInheritanceComposer_Tests
 		var section = result.Definition.Sections.Single();
 		section.Id.ShouldNotBe(registration.Sections[0].Id);
 		var field = section.Fields.Single();
-		field.Required.ShouldBeFalse();
+		field.Required.ShouldBeTrue();
 		field.DisplayOrder.ShouldBe(source.DisplayOrder);
 		field.ValidationJson.ShouldBe(source.ValidationJson);
 	}
@@ -303,7 +303,7 @@ public class AdmissionFormInheritanceComposer_Tests
 		var inherited = result.Definition.Sections.Where(section => section.Fields.Any(field => field.InheritedFrom != null)).ToList();
 		inherited.Count.ShouldBe(3);
 		foreach (var section in inherited)
-			JsonSerializer.SerializeToElement(section).GetProperty("FieldsPerRow").GetInt32().ShouldBe(4);
+			JsonSerializer.SerializeToElement(section).GetProperty("FieldsPerRow").GetInt32().ShouldBe(registration.FieldsPerRow);
 		if (inquiryLayout == AdmissionFormLayoutType.SinglePage)
 			inherited.Select(section => section.StepId).Distinct().Count().ShouldBe(1);
 		else
@@ -390,7 +390,44 @@ public class AdmissionFormInheritanceComposer_Tests
 	}
 
 	[Fact]
-	public void Registration_cannot_strengthen_source_requiredness_or_change_a_readonly_question()
+	public void Registration_required_dob_and_gender_promote_optional_inquiry_fields_without_mutating_source()
+	{
+		var registrationDob = Field("REG_DOB", "Registration birth date", "Applicant.DateOfBirth");
+		var registrationGender = Field("REG_GENDER", "Registration gender", "Applicant.Gender");
+		registrationDob.Required = true;
+		registrationGender.Required = true;
+		registrationGender.FieldType = AdmissionFormFieldType.Select;
+		registrationGender.OptionsJson = "[{\"value\":\"Male\",\"label\":\"Male\"},{\"value\":\"Female\",\"label\":\"Female\"},{\"value\":\"Other\",\"label\":\"Other\"}]";
+		registrationGender.RequiredRuleJson = "{\"operator\":\"ANY\",\"conditions\":[]}";
+		var inquiryDob = Field("DOB", "Date of birth", "Applicant.DateOfBirth");
+		inquiryDob.RequiredRuleJson = "{\"operator\":\"ANY\",\"conditions\":[]}";
+		var inquiryGender = Field("GENDER", "Gender", "Applicant.Gender");
+		inquiryGender.FieldType = AdmissionFormFieldType.Select;
+		inquiryGender.OptionsJson = registrationGender.OptionsJson;
+		var inquiryOther = Custom("EXTRA", "Optional detail", "optional-detail");
+		var registration = Form(registrationDob, registrationGender);
+		var inquiry = Form(inquiryDob, inquiryGender, inquiryOther);
+		inquiry.Sections[0].Fields[0].Required = false;
+		inquiry.Sections[0].Fields[1].Required = false;
+		var inquiryBefore = JsonSerializer.Serialize(inquiry);
+
+		var result = AdmissionFormInheritanceComposer.Compose(registration, inquiry, Policy(inquiry.Id));
+
+		result.Issues.ShouldBeEmpty();
+		var fields = result.Definition.Sections.SelectMany(section => section.Fields).ToList();
+		fields.Count(field => field.BindingKey == "Applicant.DateOfBirth").ShouldBe(1);
+		fields.Count(field => field.BindingKey == "Applicant.Gender").ShouldBe(1);
+		fields.Single(field => field.BindingKey == "Applicant.DateOfBirth").Required.ShouldBeTrue();
+		fields.Single(field => field.BindingKey == "Applicant.DateOfBirth").RequiredRuleJson.ShouldBeNull();
+		fields.Single(field => field.BindingKey == "Applicant.Gender").Required.ShouldBeTrue();
+		fields.Single(field => field.BindingKey == "Applicant.Gender").RequiredRuleJson.ShouldBeNull();
+		fields.Single(field => field.FieldIdentity == "custom:optional-detail").Required.ShouldBeFalse();
+		fields.Single(field => field.BindingKey == "Applicant.DateOfBirth").InheritedFrom!.SourceRequired.ShouldBeFalse();
+		JsonSerializer.Serialize(inquiry).ShouldBe(inquiryBefore);
+	}
+
+	[Fact]
+	public void Requiredness_policy_without_registration_identity_target_cannot_strengthen_source_or_change_readonly_question()
 	{
 		var source = Field("DOB", "DOB", "Applicant.DateOfBirth");
 		var inquiry = Form(source);
@@ -404,6 +441,23 @@ public class AdmissionFormInheritanceComposer_Tests
 		readonlyResult.Issues.ShouldBeEmpty();
 		readonlyResult.Definition.Sections.SelectMany(section => section.Fields).Single().ReadOnly.ShouldBeTrue();
 		readonlyResult.Definition.Sections.SelectMany(section => section.Fields).Single().Required.ShouldBeFalse();
+	}
+
+	[Fact]
+	public void Versioned_registration_keeps_inherited_dob_and_gender_required_after_their_target_section_is_removed()
+	{
+		var dob = Field("DOB", "Date of birth", "Applicant.DateOfBirth");
+		dob.Required = false;
+		var gender = Field("GENDER", "Gender", "Applicant.Gender");
+		gender.FieldType = AdmissionFormFieldType.Select;
+		gender.Required = false;
+		gender.OptionsJson = "[{\"value\":\"Male\",\"label\":\"Male\"},{\"value\":\"Female\",\"label\":\"Female\"},{\"value\":\"Other\",\"label\":\"Other\"}]";
+		var inquiry = Form(dob, gender);
+		var result = AdmissionFormInheritanceComposer.Compose(Form(), inquiry, Policy(inquiry.Id), coreFieldPolicyVersion: 1);
+		var inherited = result.Definition.Sections.SelectMany(section => section.Fields).ToList();
+		inherited.Single(field => field.BindingKey == "Applicant.DateOfBirth").Required.ShouldBeTrue();
+		inherited.Single(field => field.BindingKey == "Applicant.Gender").Required.ShouldBeTrue();
+		inquiry.Sections.SelectMany(section => section.Fields).All(field => !field.Required).ShouldBeTrue();
 	}
 
 	[Fact]

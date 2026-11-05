@@ -181,7 +181,9 @@ public partial class StudentFeeStructureAppService
 		{
 			var policy = new AssignmentPolicyDto { Family = version!.PolicyType, PolicyId = version.PolicyId, VersionId = version.Id,
 				Version = version.VersionNumber, Name = version.PolicyName };
-			policy.Source = version.PolicyType == "proration" ? "FinanceDefault" : StructurePolicyVersions(structure)[version.PolicyType] == version.Id ? "FeeStructure" : "StudentOverride";
+			policy.Source = version.PolicyType == "proration"
+				? admission?.IsProrationOverride == true ? "AdmissionOverride" : "FinanceDefault"
+				: StructurePolicyVersions(structure)[version.PolicyType] == version.Id ? "FeeStructure" : "StudentOverride";
 			foreach (var head in preview.Heads)
 				policy.HeadTreatment[head.FeeHeadId] = !head.Included ? "Not included" : version.PolicyType switch {
 					"collection" => collectionRules.EnableLateFee && (collectionRules.ApplyLateFeeToAllFeeHeads || collectionRules.LateFeeApplyOnFeeHeads.Contains(head.FeeHeadId))

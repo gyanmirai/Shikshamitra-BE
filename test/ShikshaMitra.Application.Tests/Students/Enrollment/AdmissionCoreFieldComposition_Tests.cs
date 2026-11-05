@@ -31,12 +31,21 @@ public class AdmissionCoreFieldComposition_Tests
 	}
 
 	[Fact]
-	public void Optional_source_birth_date_is_not_strengthened_or_accepted_as_guaranteed()
+	public void Optional_source_dob_and_gender_are_required_in_registration_when_registration_requires_them()
 	{
-		var inquiry = Inquiry(Field("Applicant.DateOfBirth", AdmissionFormFieldType.Date, false));
+		var gender = Field("Applicant.Gender", AdmissionFormFieldType.Select, false);
+		gender.OptionsJson = "[{\"value\":\"Male\",\"label\":\"Male\"},{\"value\":\"Female\",\"label\":\"Female\"},{\"value\":\"Other\",\"label\":\"Other\"}]";
+		var inquiry = Inquiry(Field("Applicant.DateOfBirth", AdmissionFormFieldType.Date, false), gender);
+		var inquiryBefore = JsonSerializer.Serialize(inquiry);
 		var result = AdmissionFormInheritanceService.Compose(Registration(inquiry.Id), inquiry, true);
-		result.Issues.ShouldContain(issue => issue.Code == "CoreIdentityRequired");
-		result.Definition.Sections.SelectMany(section => section.Fields).Single(field => field.BindingKey == "Applicant.DateOfBirth").Required.ShouldBeFalse();
+		result.Issues.ShouldBeEmpty();
+		var fields = result.Definition.Sections.SelectMany(section => section.Fields).ToList();
+		fields.Count(field => field.BindingKey == "Applicant.DateOfBirth").ShouldBe(1);
+		fields.Count(field => field.BindingKey == "Applicant.Gender").ShouldBe(1);
+		fields.Single(field => field.BindingKey == "Applicant.DateOfBirth").Required.ShouldBeTrue();
+		fields.Single(field => field.BindingKey == "Applicant.Gender").Required.ShouldBeTrue();
+		fields.Single(field => field.BindingKey == "Applicant.DateOfBirth").InheritedFrom!.SourceRequired.ShouldBeFalse();
+		JsonSerializer.Serialize(inquiry).ShouldBe(inquiryBefore);
 	}
 
 	[Fact]

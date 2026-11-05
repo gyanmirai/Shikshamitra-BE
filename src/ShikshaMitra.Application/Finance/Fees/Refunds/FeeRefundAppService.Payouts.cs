@@ -45,7 +45,8 @@ public partial class FeeRefundAppService
                 (priorPayout.SettlementDate - input.PaymentDate).Duration() > TimeSpan.FromMilliseconds(1) ||
                 priorPayout.ExternalReference != reference ||
                 (priorPayout.Status == FeeRefundSettlementStatus.Processed &&
-                    (priorPayout.BankAccountId != input.BankAccountId || request.ExpenseCategoryId != input.ExpenseCategoryId)))
+                    ((input.Method != "Cash" && priorPayout.BankAccountId != input.BankAccountId) ||
+                     request.ExpenseCategoryId != input.ExpenseCategoryId)))
                 throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
             if (priorPayout.Status == FeeRefundSettlementStatus.Processed)
             {
@@ -60,7 +61,7 @@ public partial class FeeRefundAppService
             throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
         var category = await routingManager.RequireCategoryAsync(request.AcademicYearId,
             input.ExpenseCategoryId, ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Expense);
-        var bank = await routingManager.RequireBankAsync(request.AcademicYearId,
+        var bank = input.Method == "Cash" ? null : await routingManager.RequireBankAsync(request.AcademicYearId,
             input.BankAccountId, input.PaymentDate);
         if (pendingPayout != null && (pendingPayout.Method != input.Method ||
             pendingPayout.Amount != input.Amount || pendingPayout.ExternalReference != reference ||
@@ -71,12 +72,12 @@ public partial class FeeRefundAppService
         if (await feeRefundRepository.IsPayoutReferenceUsedAsync(input.Method,
             reference!, request.Id))
             throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
-        request.SetPayoutRouting(category.Id, category.Name, bank.Id,
-            $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}", input.Method);
+        request.SetPayoutRouting(category.Id, category.Name, bank?.Id,
+            bank == null ? null : $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}", input.Method);
         var evidence = string.IsNullOrWhiteSpace(input.EvidenceReference)
             ? $"Payment recorded for {request.VoucherNumber}" : input.EvidenceReference.Trim();
         var payout = pendingPayout ?? request.RecordPayout(GuidGenerator.Create(), currentUser.GetId(), input.IdempotencyKey,
-            input.Method, input.Amount, input.PaymentDate, reference, null, bank.Id, evidence);
+            input.Method, input.Amount, input.PaymentDate, reference, null, bank?.Id, evidence);
         if (pendingPayout == null) await feeRefundRepository.StageNewSettlementAsync(payout);
         await CompleteRecordedPayoutAsync(request, payout, input.IdempotencyKey, evidence);
         await uow.CompleteAsync();

@@ -26,6 +26,57 @@ public class DueFee_Mutations_Tests
         return df;
     }
 
+    [Fact]
+    public void Unpaid_debt_is_never_transferable_adjustment_credit()
+    {
+        var due = Create(100m);
+
+        Assert.Equal(100m, due.OutstandingAmount);
+        Assert.Equal(0m, due.AdjustableBalance);
+    }
+
+    [Fact]
+    public void Only_retained_overpayment_is_candidate_adjustment_credit()
+    {
+        var due = Create(100m);
+        due.ApplyPayment(100m);
+        due.ApplyConcession(20m);
+
+        Assert.Equal(20m, due.AdjustableBalance);
+        due.ApplyRefund(5m);
+        Assert.Equal(15m, due.AdjustableBalance);
+    }
+
+    [Fact]
+    public void Reserved_paid_credit_cannot_be_refunded_or_payment_reversed()
+    {
+        var due = Create(100m);
+        due.ApplyPayment(100m);
+        due.ApplyConcession(20m);
+        due.ReservePaidCredit(20m);
+
+        Assert.Equal(0m, due.AdjustableBalance);
+        Assert.Equal(0m, due.RefundableBalance);
+        Assert.Throws<BusinessException>(() => due.ApplyRefund(1m));
+        Assert.Throws<BusinessException>(() => due.ReversePayment(1m));
+    }
+
+    [Fact]
+    public void Consumed_credit_stays_unavailable_while_released_remainder_becomes_available()
+    {
+        var due = Create(100m);
+        due.ApplyPayment(100m);
+        due.ApplyConcession(20m);
+        due.ReservePaidCredit(20m);
+        due.ConsumeReservedPaidCredit(15m);
+        due.ReleaseReservedPaidCredit(5m);
+
+        Assert.Equal(15m, due.TransferredPaidCreditAmount);
+        Assert.Equal(5m, due.AdjustableBalance);
+        Assert.Equal(5m, due.RefundableBalance);
+        Assert.Throws<BusinessException>(() => due.ReverseConcession(6m));
+    }
+
     // ── ApplyPayment ─────────────────────────────────────────────────────────
 
     [Fact]

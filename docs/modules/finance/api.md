@@ -357,15 +357,27 @@ Fee Collection instead exposes a toggle on each eligible late-fee and approved c
 Use backend constants as the security source of truth.
 Known Finance families include `Finance.Fees.Charges.*`, `Finance.Fees.Concession.*`, `Finance.Fees.Adjustment.*`, and related Fees, Accounts, Reports, and Audit permissions.
 
-Fee adjustments retain `Finance.Fees.Adjustment.{View|Add|Delete}`. View covers reads;
-Add covers create/update, apply and reject; Delete covers pending-request deletion.
-The creator cannot apply or reject their own adjustment, including when holding an
-administrator or Finance Officer role. Apply checks the creator before idempotent
-replay and again at the domain transition, including later partial batches. The same
-noncreator checker may apply successive batches. Assigning adjustment actions requires
-Finance and Fees navigation visibility; no existing role or user grants are reseeded.
-Application list rows include nullable `requestedByUserId` for the matching client
-decision guards.
+Fee adjustments define `Finance.Fees.Adjustment.{View|Add|Approve|Reject|Delete}`.
+Add does not confer a decision grant; Apply and its context require Approve, while
+Reject requires Reject. The reviewer must have View, the exact decision grant,
+current student scope, and a current reporting-manager route. The creator cannot
+review their own request. No existing Add grant is promoted or reseeded.
+
+Paid-credit transfer sources are capped by retained overpayment from settled
+principal receipt allocations. Outstanding debt and provisional unverified
+collections contribute no source credit. Creating a request reserves the source
+on each due row after subtracting active refund reservations; approval consumes
+the reservation and credits target outstanding balances in one serializable
+transaction. Reject, delete, and replacement release pending reservations.
+Refund and payment/concession reversal checks exclude both reserved and already
+transferred credit. Create/update require a stable `idempotencyKey` in the body;
+Apply requires the existing `Idempotency-Key` header. Duplicate command keys
+replay the original result and changed payloads fail. List/detail include
+`availableActions` (`Approve` and `Reject`) computed from current reviewer
+authority. Historical requests without source reservations remain readable and
+may be rejected, but application returns
+`Finance:FeeAdjustment:PaidCreditTransferUnavailable`. Existing applied history
+is unchanged. There is no adjustment administrator auto-approval.
 
 Accounts settings use `Finance.Accounts.Settings.{IncomeCategory|ExpenseCategory|BankAccount}.{View|Add|Edit|ChangeStatus|Delete}`.
 Each action is independent; module visibility and Add do not authorize Edit or ChangeStatus.

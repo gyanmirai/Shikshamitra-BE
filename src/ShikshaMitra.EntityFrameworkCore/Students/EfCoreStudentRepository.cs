@@ -25,6 +25,13 @@ public class EfCoreStudentRepository(
             .FirstOrDefaultAsync(student => student.Id == id, cancellationToken);
     }
 
+    public async Task<Student?> GetForFinanceContextAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+        return await dbSet.IgnoreAutoIncludes().AsNoTracking()
+            .FirstOrDefaultAsync(student => student.Id == id, cancellationToken);
+    }
+
     /// <inheritdoc/>
     public async Task<IQueryable<Student>> GetQueryableWithoutAutoIncludesAsync()
     {

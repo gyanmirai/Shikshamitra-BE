@@ -24,8 +24,14 @@ public partial class FeeAdjustmentAppService : IFamilyAdjustmentService
 		var yearHeadIds = (await feeHeadRepository.GetQueryableAsync()).Where(x => x.AcademicYearId == year).Select(x => x.Id);
 		var rows = await AsyncExecuter.ToListAsync((await dueFeeRepository.GetQueryableAsync())
 			.Where(x => x.StudentId == child && yearHeadIds.Contains(x.FeeHeadId)));
-		var pending = await feeAdjustmentRepository.GetPendingSourceAmountsByDueFeeAsync(child);
-		return rows.Select(x => (Due: x, Available: Math.Max(0m, x.AdjustableBalance - Convert.ToDecimal(pending.GetValueOrDefault(x.Id)))))
+		var refunds = await feeRefundRepository.GetActiveReservedAmountsAsync(rows.Select(row => row.Id).ToList());
+		var settledPaid = await feeAdjustmentManager.GetSettledPaidAmountsAsync(
+			rows.Select(row => row.Id).ToList(), child, year);
+		return rows.Select(x => (Due: x, Available: Math.Max(0m,
+			Math.Min(x.AdjustableBalance, Math.Max(0m,
+				settledPaid.GetValueOrDefault(x.Id) - x.RefundedAmount + x.NetAmount -
+				x.OriginalAmount - x.ReservedPaidCreditAmount - x.TransferredPaidCreditAmount)) -
+			refunds.GetValueOrDefault(x.Id))))
 			.Where(x => x.Available > 0m).ToList();
 	}
 

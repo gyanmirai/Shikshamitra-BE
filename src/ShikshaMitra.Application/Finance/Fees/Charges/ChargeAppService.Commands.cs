@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Data;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Data;
 using Volo.Abp.Uow;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Collections;
@@ -26,21 +27,27 @@ public partial class ChargeAppService
 		using var uow = unitOfWorkManager.Begin(isTransactional: true);
 		await EnsureAcademicYearExistsAsync(academicYearId);
 		var category = await chargeCategoryRepository.GetAsync(input.ChargeCategoryId);
-		var approvalNotRequired = !category.IsApprovalRequired;
+		var isClassTeacher = await financeScopeAccessService.IsClassTeacherRequestUserAsync();
+		var approvalNotRequired = !category.IsApprovalRequired && !isClassTeacher;
 		var autoApprove = approvalNotRequired || await userScopeService.IsAdminUserAsync(currentUser.Id!.Value);
 		if (autoApprove && !approvalNotRequired)
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve);
 		var audienceDto = await ResolveAudienceDtoAsync(input);
 		var audience = ChargeAudienceMapper.ToDomain(audienceDto);
 		var snapshot = ChargeAudienceMapper.SerializeSnapshot(audienceDto);
-		var resolvedStudentIds = await chargeAudienceResolver.ResolveAsync(audience, academicYearId);
+		var permittedStudents = await AsyncExecuter.ToListAsync(
+			await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
+				academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Add));
+		var resolvedStudentIds = await chargeAudienceResolver.ResolveAsync(audience, academicYearId, permittedStudents);
 		await EnsureLinesAccessibleAsync(resolvedStudentIds);
 
 		var (request, lines) = await chargeRequestManager.CreateAsync(
 			CurrentTenant.Id, academicYearId,
 			input.ChargeName, input.ChargeCategoryId, input.PurposeDescription,
 			input.Amount, input.DueDate, (ChargePriority)input.Priority,
-			audience, snapshot, currentUser.Id!.Value, input.AdditionalNotes);
+			audience, snapshot, currentUser.Id!.Value, input.AdditionalNotes, permittedStudents);
+		if (isClassTeacher)
+			request.SetProperty("IsApprovalRequiredAtCreation", true);
 
 		await CurrentUnitOfWork!.SaveChangesAsync();
 
@@ -82,7 +89,10 @@ public partial class ChargeAppService
 		if (input.Audience is not null)
 		{
 			var audience = ChargeAudienceMapper.ToDomain(input.Audience);
-			var resolvedStudentIds = await chargeAudienceResolver.ResolveAsync(audience, request.AcademicYearId);
+			var permittedStudents = await AsyncExecuter.ToListAsync(
+				await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
+					request.AcademicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Update));
+			var resolvedStudentIds = await chargeAudienceResolver.ResolveAsync(audience, request.AcademicYearId, permittedStudents);
 			await EnsureLinesAccessibleAsync(resolvedStudentIds);
 			var snapshot = ChargeAudienceMapper.SerializeSnapshot(input.Audience);
 			await chargeRequestManager.SyncAudienceAsync(
@@ -90,7 +100,7 @@ public partial class ChargeAppService
 				input.ChargeName, input.ChargeCategoryId, input.PurposeDescription,
 				input.Amount, input.DueDate,
 				input.Priority.HasValue ? (ChargePriority)input.Priority.Value : null,
-				input.AdditionalNotes, request.AcademicYearId);
+				input.AdditionalNotes, request.AcademicYearId, permittedStudents);
 		}
 		else
 		{
@@ -135,6 +145,8 @@ public partial class ChargeAppService
 		var approvedLines = input.StudentIds is { Count: > 0 }
 			? pendingLines.Where(line => input.StudentIds.Contains(line.StudentId)).ToList()
 			: pendingLines;
+		await EnsureChargeReviewerAsync(request, approvedLines.Select(line => line.StudentId),
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve);
 		var (processed, remaining) = await chargeRequestManager.ApproveLinesAsync(
 			request, input.StudentIds, currentUser.Id!.Value, input.ApprovalNotes);
 		await chargeRequestRepository.UpdateAsync(request, autoSave: false);
@@ -178,6 +190,13 @@ public partial class ChargeAppService
 		if (CurrentUser.Id == request.RequestorId)
 			throw new BusinessException(FinanceChargeErrorCodes.ChargeApproverCannotBeRequestor)
 				.WithData("Message", "The approver must differ from the charge requestor");
+		var pendingLines = await chargeRepository.GetListAsync(
+			c => c.ChargeRequestId == request.Id && c.Status == ChargeStatus.Pending);
+		var selectedLines = input.StudentIds is { Count: > 0 }
+			? pendingLines.Where(line => input.StudentIds.Contains(line.StudentId)).ToList()
+			: pendingLines;
+		await EnsureChargeReviewerAsync(request, selectedLines.Select(line => line.StudentId),
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Reject);
 
 		var (processed, remaining) = await chargeRequestManager.RejectLinesAsync(
 			request, input.StudentIds, currentUser.Id!.Value, input.RejectionReason);

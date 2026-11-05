@@ -46,6 +46,7 @@ public partial class FeeRefundAppService : ApplicationService, IFeeRefundAppServ
 	private readonly RefundPolicyCalculationService refundPolicyCalculationService;
 	private readonly FinanceAuditWriter financeAuditWriter;
 	private readonly FinanceScopeAccessService financeScopeAccessService;
+	private readonly FinanceReviewerAccessService financeReviewerAccessService;
 	private readonly ICurrentUser currentUser;
 	private readonly IUserScopeService userScopeService;
 	private readonly IUnitOfWorkManager unitOfWorkManager;
@@ -73,6 +74,7 @@ public partial class FeeRefundAppService : ApplicationService, IFeeRefundAppServ
 		RefundPolicyCalculationService refundPolicyCalculationService,
 		FinanceAuditWriter financeAuditWriter,
 		FinanceScopeAccessService financeScopeAccessService,
+		FinanceReviewerAccessService financeReviewerAccessService,
 		ICurrentUser currentUser,
 		IUserScopeService userScopeService,
 		IUnitOfWorkManager unitOfWorkManager,
@@ -100,6 +102,7 @@ public partial class FeeRefundAppService : ApplicationService, IFeeRefundAppServ
 		this.refundPolicyCalculationService = refundPolicyCalculationService;
 		this.financeAuditWriter = financeAuditWriter;
 		this.financeScopeAccessService = financeScopeAccessService;
+		this.financeReviewerAccessService = financeReviewerAccessService;
 		this.currentUser = currentUser;
 		this.userScopeService = userScopeService;
 		this.unitOfWorkManager = unitOfWorkManager;

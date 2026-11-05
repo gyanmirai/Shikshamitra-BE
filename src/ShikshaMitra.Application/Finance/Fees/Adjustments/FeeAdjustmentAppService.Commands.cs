@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -15,18 +16,35 @@ namespace ShikshaMitra.Finance.Fees.FeeAdjustment;
 
 public partial class FeeAdjustmentAppService
 {
+    private IUnitOfWork BeginBalanceUnitOfWork() => unitOfWorkManager.Begin(
+        new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable },
+        requiresNew: true);
+
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
+    [UnitOfWork(IsDisabled = true)]
     public async Task<FeeAdjustmentDetailDto> CreateAsync(Guid academicYearId, CreateFeeAdjustmentDto input)
     {
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
-
-        using var uow = unitOfWorkManager.Begin(isTransactional: true);
+        using var uow = BeginBalanceUnitOfWork();
+        await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(input.StudentId, academicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add);
+        var payload = new { academicYearId, input.StudentId, input.Reason,
+            Lines = input.SourceLines.OrderBy(line => line.DueFeeId).Select(line =>
+                new { line.DueFeeId, line.Amount }).ToList() };
+        var replayId = await feeAdjustmentCommandStore.ReplayAsync("create", input.IdempotencyKey, payload);
+        if (replayId.HasValue)
+        {
+            var saved = await feeAdjustmentRepository.GetWithDetailsAsync(replayId.Value);
+            await uow.CompleteAsync();
+            return await MapDetailAsync(saved);
+        }
 
         var lines = input.SourceLines.Select(l => (l.DueFeeId, l.Amount)).ToList();
         var request = await feeAdjustmentManager.CreateAsync(
             academicYearId, input.StudentId, input.Reason, lines);
 
         await feeAdjustmentRepository.InsertAsync(request, autoSave: false);
+        await feeAdjustmentCommandStore.RecordAsync("create", input.IdempotencyKey, payload,
+            request.Id, request.StudentId, academicYearId);
 
         var student = await studentRepository.GetAsync(input.StudentId);
         await financeAuditWriter.WriteAsync(
@@ -34,124 +52,133 @@ public partial class FeeAdjustmentAppService
             FinanceAuditActions.Adjustment, $"Fee adjustment request {request.VoucherNumber} created.",
             BuildStudentContext(student, request.VoucherNumber), input.Reason);
 
-        var administratorId = currentUser.Id;
-        if (administratorId.HasValue && await userScopeService.IsAdminUserAsync(administratorId.Value))
-        {
-            var dueFees = await dueFeeRepository.GetListAsync(
-                df => df.StudentId == request.StudentId && df.OutstandingAmount > 0.001m);
-            var targetLines = BuildAutomaticTargetLines(dueFees, request.RequestedAmount);
-            var autoApprovalNote = "Automatically approved on administrator submission.";
-            await feeAdjustmentManager.AutoApplyAsync(request, administratorId.Value, autoApprovalNote, targetLines);
-            await feeAdjustmentRepository.UpdateAsync(request, autoSave: false);
-            await financeAuditWriter.WriteAsync(
-                academicYearId, FinanceAuditEntityTypes.FeeAdjustment, request.Id, request.VoucherNumber,
-                FinanceAuditActions.Approve,
-                $"Automatically approved and applied {request.AppliedAmount:F2} from adjustment {request.VoucherNumber}.",
-                BuildStudentContext(student, request.VoucherNumber), autoApprovalNote, context: targetLines);
-        }
-
         await uow.CompleteAsync();
-        if (request.AppliedAmount > 0)
-        {
-            await eventBus.PublishAsync(new FeeAdjustmentAppliedEto
-            {
-                AdjustmentRequestId = request.Id,
-                VoucherNumber = request.VoucherNumber,
-                StudentId = request.StudentId,
-                AcademicYearId = request.AcademicYearId,
-                TotalAdjustedAmount = request.AppliedAmount,
-                TenantId = CurrentTenant.Id,
-                AppliedAt = Clock.Now,
-            });
-        }
         return await MapDetailAsync(request);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
+    [UnitOfWork(IsDisabled = true)]
     public async Task<FeeAdjustmentDetailDto> UpdateAsync(Guid id, Guid academicYearId, UpdateFeeAdjustmentDto input)
     {
+        using var uow = BeginBalanceUnitOfWork();
+        var payload = new { id, academicYearId, input.StudentId, input.Reason,
+            Lines = input.SourceLines.OrderBy(line => line.DueFeeId).Select(line =>
+                new { line.DueFeeId, line.Amount }).ToList() };
+        var replayId = await feeAdjustmentCommandStore.ReplayAsync($"update:{id}", input.IdempotencyKey, payload);
+        if (replayId.HasValue)
+        {
+            var saved = await feeAdjustmentRepository.GetWithDetailsAsync(replayId.Value);
+            await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(saved.StudentId, saved.AcademicYearId,
+                ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add);
+            await uow.CompleteAsync();
+            return await MapDetailAsync(saved);
+        }
         var existing = await feeAdjustmentRepository.GetWithDetailsAsync(id);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(existing.StudentId);
+        await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(existing.StudentId, existing.AcademicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add);
+        await EnsureOwnerOrAdministratorAsync(existing);
+        await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(input.StudentId, academicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add);
         existing.EnsurePending();
-        await feeAdjustmentRepository.DeleteAsync(existing, autoSave: true);
-        return await CreateAsync(academicYearId, input);
+        await feeAdjustmentManager.ReleasePendingReservationAsync(existing);
+        await feeAdjustmentRepository.DeleteAsync(existing, autoSave: false);
+        var lines = input.SourceLines.Select(line => (line.DueFeeId, line.Amount)).ToList();
+        var replacement = await feeAdjustmentManager.CreateAsync(
+            academicYearId, input.StudentId, input.Reason, lines);
+        await feeAdjustmentRepository.InsertAsync(replacement, autoSave: false);
+        await feeAdjustmentCommandStore.RecordAsync($"update:{id}", input.IdempotencyKey, payload,
+            replacement.Id, replacement.StudentId, academicYearId);
+        var student = await studentRepository.GetAsync(input.StudentId);
+        await financeAuditWriter.WriteAsync(
+            academicYearId, FinanceAuditEntityTypes.FeeAdjustment, replacement.Id, replacement.VoucherNumber,
+            FinanceAuditActions.Adjustment, $"Fee adjustment request {existing.VoucherNumber} replaced by {replacement.VoucherNumber}.",
+            BuildStudentContext(student, replacement.VoucherNumber), input.Reason);
+        await uow.CompleteAsync();
+        return await MapDetailAsync(replacement);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Delete)]
+    [UnitOfWork(IsDisabled = true)]
     public async Task DeleteAsync(Guid id)
     {
-        var request = await feeAdjustmentRepository.GetAsync(id);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+        using var uow = BeginBalanceUnitOfWork();
+        var request = await feeAdjustmentRepository.GetWithDetailsAsync(id);
+        await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(request.StudentId, request.AcademicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Delete);
+        await EnsureOwnerOrAdministratorAsync(request);
         request.EnsurePending();
+        await feeAdjustmentManager.ReleasePendingReservationAsync(request);
         await feeAdjustmentRepository.DeleteAsync(request);
+        await uow.CompleteAsync();
     }
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve)]
     public async Task<FeeAdjustmentApplyContextDto> GetApplyContextAsync(Guid id)
     {
         var request = await feeAdjustmentRepository.GetWithDetailsAsync(id);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+        await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(request.StudentId, request.AcademicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve);
+        await EnsureCurrentReviewerCanDecideAsync(request,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve);
         request.EnsureCanApply();
-
+        if (request.Kind == FeeAdjustmentKind.PaidCredit && !request.HasPaidCreditReservation)
+            throw new BusinessException(FeeAdjustmentErrorCodes.PaidCreditTransferUnavailable);
+        var feeHeads = await feeHeadRepository.GetListAsync(head => head.AcademicYearId == request.AcademicYearId);
+        var headIds = feeHeads.Select(head => head.Id).ToList();
+        var headNames = feeHeads.ToDictionary(head => head.Id, head => head.Name);
+        var sourceIds = request.SourceLines.Select(line => line.DueFeeId).ToList();
+        var unpaidTransfer = request.Kind == FeeAdjustmentKind.UnpaidTransfer;
         var dueFees = await dueFeeRepository.GetListAsync(
-			df => df.StudentId == request.StudentId && df.OutstandingAmount > 0.001m);
-        var feeHeadIds = dueFees.Select(df => df.FeeHeadId).Distinct().ToList();
-        var feeHeads = feeHeadIds.Count > 0
-            ? await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id)) : [];
-        var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
-
-        var pendingFees = dueFees
-            .OrderBy(df => df.Year).ThenBy(df => df.Month)
+            df => df.StudentId == request.StudentId && headIds.Contains(df.FeeHeadId) &&
+                df.OutstandingAmount > 0.001m &&
+                (!unpaidTransfer || !sourceIds.Contains(df.Id)));
+        var pendingFees = dueFees.OrderBy(df => df.Year).ThenBy(df => df.Month)
             .Select(df => new FeeAdjustmentPendingFeeDto
             {
                 InstallmentId = df.Id, DueFeeId = df.Id,
                 InstallmentLabel = FormatMonthLabel(df.Month, df.Year),
-                MonthOrder = (int)df.Month,
-                FeeHeadId = df.FeeHeadId,
-                FeeHeadName = feeHeadMap.GetValueOrDefault(df.FeeHeadId, string.Empty),
-				TotalFees = (double)df.OriginalAmount, PaidAmount = (double)df.PaidAmount,
-				PendingAmount = (double)df.OutstandingAmount, DueAmount = (double)df.OutstandingAmount,
-				MaxApplicableAmount = Math.Min((double)df.OutstandingAmount, request.RemainingAmount),
+                MonthOrder = (int)df.Month, FeeHeadId = df.FeeHeadId,
+                FeeHeadName = headNames.GetValueOrDefault(df.FeeHeadId, string.Empty),
+                TotalFees = (double)df.EffectiveObligationAmount, PaidAmount = (double)df.PaidAmount,
+                PendingAmount = (double)df.OutstandingAmount, DueAmount = (double)df.OutstandingAmount,
+                MaxApplicableAmount = unpaidTransfer
+                    ? request.RemainingAmount
+                    : Math.Min((double)df.OutstandingAmount, request.RemainingAmount),
             }).ToList();
-
         return new FeeAdjustmentApplyContextDto
         {
+            Kind = request.Kind,
             AdjustmentId = request.Id, StudentId = request.StudentId,
             ApprovedAmount = request.RequestedAmount, RemainingAmount = request.RemainingAmount,
-            TotalPendingFees = pendingFees.Sum(p => p.PendingAmount), PendingFees = pendingFees,
+            TotalPendingFees = pendingFees.Sum(fee => fee.PendingAmount), PendingFees = pendingFees,
         };
     }
 
-    private static List<(Guid DueFeeId, double Amount)> BuildAutomaticTargetLines(
-        IReadOnlyList<DueFee> dueFees,
-        double requestedAmount)
-    {
-        var remaining = requestedAmount;
-        var targetLines = new List<(Guid DueFeeId, double Amount)>();
-        foreach (var dueFee in dueFees.OrderBy(df => df.Year).ThenBy(df => df.Month))
-        {
-            if (remaining <= 0.001) break;
-            var amount = Math.Min((double)dueFee.OutstandingAmount, remaining);
-            if (amount <= 0.001) continue;
-            targetLines.Add((dueFee.Id, amount));
-            remaining -= amount;
-        }
-        return targetLines;
-    }
-
-    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve)]
+    [UnitOfWork(IsDisabled = true)]
     public async Task<ApplyFeeAdjustmentResultDto> ApplyAsync(
         Guid id, ApplyFeeAdjustmentDto input, string? idempotencyKey)
     {
+        using var uow = BeginBalanceUnitOfWork();
         var approverId = currentUser.Id ?? throw new BusinessException(FeeAdjustmentErrorCodes.CannotApply);
 
         var request = await feeAdjustmentRepository.GetWithDetailsAsync(id);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+        await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(request.StudentId, request.AcademicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve);
+        await EnsureCurrentReviewerCanDecideAsync(request,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve);
 
         request.EnsureApproverNotCreator(approverId);
-
-        if (!string.IsNullOrWhiteSpace(idempotencyKey) && request.HasIdempotencyKey(idempotencyKey))
+        var key = idempotencyKey ?? string.Empty;
+        var payload = new { id, input.AllowPartialApply, input.ApprovalNotes,
+            Lines = input.Lines.OrderBy(line => line.DueFeeId).Select(line =>
+                new { line.DueFeeId, line.AppliedAmount }).ToList() };
+        var replayId = await feeAdjustmentCommandStore.ReplayAsync($"apply:{id}", key, payload);
+        if (replayId.HasValue)
+        {
+            await uow.CompleteAsync();
             return await MapApplyResultAsync(request, approverId, 0);
+        }
 
         if (!input.AllowPartialApply)
         {
@@ -161,16 +188,14 @@ public partial class FeeAdjustmentAppService
                     .WithData("Message", "Full apply required when partial apply is disabled.");
         }
 
-        using var uow = unitOfWorkManager.Begin(isTransactional: true);
         var targetLines = input.Lines.Select(l => (l.DueFeeId, l.AppliedAmount)).ToList();
         var batchBefore = request.AppliedAmount;
 
         await feeAdjustmentManager.ApplyAsync(request, approverId, input.ApprovalNotes, targetLines);
 
-        if (!string.IsNullOrWhiteSpace(idempotencyKey))
-            request.SetIdempotencyKey(idempotencyKey);
-
         await feeAdjustmentRepository.UpdateAsync(request, autoSave: true);
+        await feeAdjustmentCommandStore.RecordAsync($"apply:{id}", key, payload,
+            request.Id, request.StudentId, request.AcademicYearId);
 
         var student = await studentRepository.GetAsync(request.StudentId);
         await financeAuditWriter.WriteAsync(
@@ -180,7 +205,8 @@ public partial class FeeAdjustmentAppService
 
         await uow.CompleteAsync();
 
-        await eventBus.PublishAsync(new FeeAdjustmentAppliedEto
+        if (request.Kind == FeeAdjustmentKind.PaidCredit)
+            await eventBus.PublishAsync(new FeeAdjustmentAppliedEto
         {
             AdjustmentRequestId   = request.Id,
             VoucherNumber         = request.VoucherNumber,
@@ -194,14 +220,19 @@ public partial class FeeAdjustmentAppService
         return await MapApplyResultAsync(request, approverId, request.AppliedAmount - batchBefore);
     }
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Reject)]
+    [UnitOfWork(IsDisabled = true)]
     public async Task<RejectFeeAdjustmentResultDto> RejectAsync(Guid id, RejectFeeAdjustmentDto input)
     {
         var reviewerId = currentUser.Id ?? throw new BusinessException(FeeAdjustmentErrorCodes.CannotApply);
 
-        using var uow = unitOfWorkManager.Begin(isTransactional: true);
+        using var uow = BeginBalanceUnitOfWork();
         var request = await feeAdjustmentRepository.GetWithDetailsAsync(id);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+        await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(request.StudentId, request.AcademicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Reject);
+        await EnsureCurrentReviewerCanDecideAsync(request,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Reject);
+        await feeAdjustmentManager.ReleasePendingReservationAsync(request);
         feeAdjustmentManager.Reject(request, reviewerId, input.Message);
         await feeAdjustmentRepository.UpdateAsync(request, autoSave: true);
 

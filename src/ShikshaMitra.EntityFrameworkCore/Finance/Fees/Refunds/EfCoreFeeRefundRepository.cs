@@ -36,11 +36,14 @@ public class EfCoreFeeRefundRepository(
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<FeeRefundColumnFilter>? columnFilters = null,
         IQueryable<Guid>? scopedAccountIdsQuery = null,
-        Guid? financeFeeAccountId = null)
+        Guid? financeFeeAccountId = null,
+        IQueryable<Guid>? visibleRequestIdsQuery = null)
     {
         var dbContext = await GetDbContextAsync();
         var dbSet = dbContext.Set<FeeRefundRequest>();
         var query = dbSet.Include(r => r.Lines).Include(r => r.Reservations).Include(r => r.Settlements).AsQueryable();
+        if (visibleRequestIdsQuery != null)
+            query = query.Where(r => visibleRequestIdsQuery.Contains(r.Id));
 
         if (studentId.HasValue)
             query = query.Where(r => r.StudentId == studentId.Value);
@@ -78,12 +81,12 @@ public class EfCoreFeeRefundRepository(
                 (r.FinanceFeeAccountId.HasValue && filteredAccountIds.Contains(r.FinanceFeeAccountId.Value)));
         }
 
-        // Account-backed evidence keeps the original account scope after Student linking.
+        // Linked requests follow the student's scope; account-only requests follow the account scope.
         if (scopedStudentIdsQuery != null && scopedAccountIdsQuery != null)
-            query = query.Where(r => (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value)) ||
-                (r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value)));
+            query = query.Where(r => (r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value)) ||
+                (!r.StudentId.HasValue && r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value)));
         else if (scopedStudentIdsQuery != null)
-            query = query.Where(r => !r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value));
+            query = query.Where(r => r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value));
         else if (scopedAccountIdsQuery != null)
             query = query.Where(r => r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value));
 

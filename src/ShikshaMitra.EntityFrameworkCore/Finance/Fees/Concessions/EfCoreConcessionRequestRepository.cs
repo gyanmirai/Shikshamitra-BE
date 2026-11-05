@@ -59,11 +59,13 @@ public partial class EfCoreConcessionRequestRepository(IDbContextProvider<Shiksh
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
 		CancellationToken cancellationToken = default,
-        FinanceTableQuery? tableQuery = null, string? tab = null, bool includeReviewableDrafts = false)
+        FinanceTableQuery? tableQuery = null, string? tab = null, bool includeReviewableDrafts = false,
+		IQueryable<Guid>? visibleRequestIdsQuery = null)
 	{
 		var query = await BuildApplicationsQueryAsync(
 			academicYearId, boardId, educationMediumId, status, standardId, divisionId,
-			scopedStudentIdsQuery, draftCreatorId, cancellationToken, tableQuery, tab, includeReviewableDrafts);
+			scopedStudentIdsQuery, draftCreatorId, cancellationToken, tableQuery, tab, includeReviewableDrafts,
+			visibleRequestIdsQuery);
 
         query = tableQuery is null ? query.OrderByDescending(x => x.CreationTime).ThenBy(x => x.Id) :
             ConcessionApplicationsTableQuery.Order(query, await GetDbContextAsync(), tableQuery);
@@ -83,11 +85,13 @@ public partial class EfCoreConcessionRequestRepository(IDbContextProvider<Shiksh
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
 		CancellationToken cancellationToken = default,
-        FinanceTableQuery? tableQuery = null, string? tab = null, bool includeReviewableDrafts = false)
+        FinanceTableQuery? tableQuery = null, string? tab = null, bool includeReviewableDrafts = false,
+		IQueryable<Guid>? visibleRequestIdsQuery = null)
 	{
 		var query = await BuildApplicationsQueryAsync(
 			academicYearId, boardId, educationMediumId, status, standardId, divisionId,
-			scopedStudentIdsQuery, draftCreatorId, cancellationToken, tableQuery, tab, includeReviewableDrafts);
+			scopedStudentIdsQuery, draftCreatorId, cancellationToken, tableQuery, tab, includeReviewableDrafts,
+			visibleRequestIdsQuery);
 		return await query.CountAsync(cancellationToken);
 	}
 
@@ -100,11 +104,13 @@ public partial class EfCoreConcessionRequestRepository(IDbContextProvider<Shiksh
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
 		CancellationToken cancellationToken = default,
-        FinanceTableQuery? tableQuery = null, bool includeReviewableDrafts = false)
+        FinanceTableQuery? tableQuery = null, bool includeReviewableDrafts = false,
+		IQueryable<Guid>? visibleRequestIdsQuery = null)
 	{
 		var query = await BuildApplicationsQueryAsync(
 			academicYearId, boardId, educationMediumId, status: null, standardId, divisionId,
-			scopedStudentIdsQuery, draftCreatorId, cancellationToken, tableQuery, includeReviewableDrafts: includeReviewableDrafts);
+			scopedStudentIdsQuery, draftCreatorId, cancellationToken, tableQuery,
+			includeReviewableDrafts: includeReviewableDrafts, visibleRequestIdsQuery: visibleRequestIdsQuery);
 
 		return await query
 			.GroupBy(x => x.Status)
@@ -122,7 +128,8 @@ public partial class EfCoreConcessionRequestRepository(IDbContextProvider<Shiksh
 		IQueryable<Guid>? scopedStudentIdsQuery,
 		Guid? draftCreatorId,
 		CancellationToken cancellationToken,
-        FinanceTableQuery? tableQuery = null, string? tab = null, bool includeReviewableDrafts = false)
+        FinanceTableQuery? tableQuery = null, string? tab = null, bool includeReviewableDrafts = false,
+		IQueryable<Guid>? visibleRequestIdsQuery = null)
 	{
 		var queryable = await GetQueryableAsync();
 		var query = queryable.Where(c => c.AcademicYearId == academicYearId &&
@@ -133,6 +140,8 @@ public partial class EfCoreConcessionRequestRepository(IDbContextProvider<Shiksh
 		// User scope — restrict to students within the caller's access scope
 		if (scopedStudentIdsQuery != null)
 			query = query.Where(c => scopedStudentIdsQuery.Contains(c.StudentId));
+		if (visibleRequestIdsQuery != null)
+			query = query.Where(c => visibleRequestIdsQuery.Contains(c.Id));
 		if (!includeReviewableDrafts)
 			query = draftCreatorId.HasValue
 				? query.Where(c => c.Status != ConcessionRequestStatus.Draft || c.CreatorId == draftCreatorId.Value)

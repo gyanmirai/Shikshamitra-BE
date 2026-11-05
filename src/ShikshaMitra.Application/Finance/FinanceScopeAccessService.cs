@@ -2,6 +2,9 @@
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ShikshaMitra.Academic.ClassTeacher;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -10,6 +13,9 @@ using Volo.Abp.Authorization;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Authorization.Permissions;
+using Volo.Abp.Identity;
+using Volo.Abp.Data;
 
 namespace ShikshaMitra.Finance;
 
@@ -17,9 +23,143 @@ namespace ShikshaMitra.Finance;
 public partial class FinanceScopeAccessService(
 	IUserScopeService userScopeService,
 	IAcademicYearRepository academicYearRepository,
-	IReadOnlyRepository<Student, Guid> studentRepository)
+	IReadOnlyRepository<Student, Guid> studentRepository,
+	IRepository<ClassTeacher, Guid> classTeacherRepository,
+	IRepository<Employee, Guid> employeeRepository,
+	IPermissionChecker permissionChecker,
+	IRepository<IdentityUser, Guid> identityUsers,
+	IRepository<IdentityRole, Guid> roleRepository,
+	IDataFilter dataFilter)
 	: ApplicationService, ITransientDependency
 {
+	public async Task<IQueryable<Guid>> GetRequestScopedStudentIdsQueryAsync(
+		Guid academicYearId, string actionPermission, CancellationToken cancellationToken = default)
+	{
+		if (!CurrentUser.Id.HasValue || !CurrentTenant.Id.HasValue || academicYearId == Guid.Empty ||
+			string.IsNullOrWhiteSpace(actionPermission) ||
+			!await permissionChecker.IsGrantedAsync(actionPermission))
+			throw new AbpAuthorizationException("Finance request access denied.");
+
+		return (await GetRequestScopedStudentsQueryForUserAsync(CurrentUser.Id.Value, academicYearId, cancellationToken))
+			.Select(student => student.Id);
+	}
+
+	public async Task EnsureRequestStudentAccessibleAsync(
+		Guid studentId, Guid academicYearId, string actionPermission, CancellationToken cancellationToken = default)
+	{
+		if (!await IsRequestStudentAccessibleAsync(studentId, academicYearId, actionPermission, cancellationToken))
+			throw new AbpAuthorizationException("Finance request student access denied.");
+	}
+
+	public async Task<bool> IsRequestStudentAccessibleAsync(
+		Guid studentId, Guid academicYearId, string actionPermission, CancellationToken cancellationToken = default)
+	{
+		var ids = await GetRequestScopedStudentIdsQueryAsync(academicYearId, actionPermission, cancellationToken);
+		return await AsyncExecuter.AnyAsync(ids.Where(id => id == studentId), cancellationToken);
+	}
+
+	public async Task<IQueryable<Guid>> GetReviewerScopedStudentIdsQueryAsync(
+		Guid academicYearId, string viewPermission, string decisionPermission,
+		CancellationToken cancellationToken = default)
+	{
+		if (!CurrentUser.Id.HasValue || !CurrentTenant.Id.HasValue || academicYearId == Guid.Empty ||
+			string.IsNullOrWhiteSpace(viewPermission) || string.IsNullOrWhiteSpace(decisionPermission) ||
+			!await permissionChecker.IsGrantedAsync(viewPermission) ||
+			!await permissionChecker.IsGrantedAsync(decisionPermission))
+			throw new AbpAuthorizationException("Finance reviewer access denied.");
+		return (await GetRequestScopedStudentsQueryForUserAsync(
+			CurrentUser.Id.Value, academicYearId, cancellationToken, capTeacherAssignments: false))
+			.Select(student => student.Id);
+	}
+
+	public async Task EnsureReviewerStudentAccessibleAsync(
+		Guid studentId, Guid academicYearId, string viewPermission, string decisionPermission,
+		CancellationToken cancellationToken = default)
+	{
+		var scoped = await GetReviewerScopedStudentIdsQueryAsync(
+			academicYearId, viewPermission, decisionPermission, cancellationToken);
+		if (!await AsyncExecuter.AnyAsync(scoped.Where(id => id == studentId), cancellationToken))
+			throw new AbpAuthorizationException("Finance reviewer student access denied.");
+	}
+
+	public async Task<bool> IsClassTeacherRequestUserAsync(CancellationToken cancellationToken = default)
+	{
+		if (!CurrentUser.Id.HasValue || !CurrentTenant.Id.HasValue) return false;
+		var employee = await GetCurrentTenantEmployeeAsync(CurrentUser.Id.Value, cancellationToken);
+		return employee != null && await classTeacherRepository.AnyAsync(assignment =>
+			assignment.TenantId == CurrentTenant.Id && assignment.TeacherId == employee.Id &&
+			assignment.Status == ClassTeacherAssignmentStatus.Active, cancellationToken);
+	}
+
+	internal async Task<IQueryable<Student>> GetRequestScopedStudentsQueryForUserAsync(
+		Guid userId, Guid academicYearId, CancellationToken cancellationToken = default,
+		bool capTeacherAssignments = true)
+	{
+		if (!CurrentTenant.Id.HasValue || academicYearId == Guid.Empty)
+			throw new AbpAuthorizationException("Finance request requires a tenant and academic year.");
+		var identity = await GetActiveIdentityAsync(userId);
+		var scope = await userScopeService.GetUserScopeAsync(userId, cancellationToken);
+		var students = (await studentRepository.GetQueryableAsync()).Where(student =>
+			student.TenantId == CurrentTenant.Id && student.AcademicYearId == academicYearId);
+		students = FinanceStudentScopeQueryBuilder.ApplyPayerScope(students, scope);
+		return scope.IsAdmin || !capTeacherAssignments
+			? students : await ApplyClassTeacherCapAsync(students, userId, identity, cancellationToken);
+	}
+
+	private async Task<IdentityUser> GetActiveIdentityAsync(Guid userId)
+	{
+		var identity = await identityUsers.FindAsync(userId);
+		if (identity == null || !identity.IsActive || identity.TenantId != CurrentTenant.Id)
+			throw new AbpAuthorizationException("Finance request identity is unavailable.");
+		return identity;
+	}
+
+	private async Task<IQueryable<Student>> ApplyClassTeacherCapAsync(
+		IQueryable<Student> students, Guid userId, IdentityUser identity,
+		CancellationToken cancellationToken)
+	{
+		var employee = await GetCurrentTenantEmployeeAsync(userId, cancellationToken);
+		var hasClassTeacherHistory = await HasClassTeacherHistoryAsync(identity.Id, employee, cancellationToken);
+		if (employee == null) return hasClassTeacherHistory ? students.Where(_ => false) : students;
+		if (employee.EmployeeStatusType != EmployeeStatusType.Active) return students.Where(_ => false);
+		if (!hasClassTeacherHistory) return students;
+		var assignments = (await classTeacherRepository.GetQueryableAsync()).Where(assignment =>
+			assignment.TenantId == CurrentTenant.Id);
+		return FinanceStudentScopeQueryBuilder.ApplyExactTeacherAssignments(students, assignments, employee.Id);
+	}
+
+	private async Task<bool> HasClassTeacherHistoryAsync(
+		Guid userId, Employee? employee, CancellationToken cancellationToken)
+	{
+		var classTeacherRoleIds = (await roleRepository.GetQueryableAsync()).Where(role =>
+			role.TenantId == CurrentTenant.Id &&
+			(role.Name == "Class Teacher" || role.Name == "ClassTeacher"))
+			.Select(role => role.Id);
+		var users = await identityUsers.GetQueryableAsync();
+		var hasClassTeacherRole = await AsyncExecuter.AnyAsync(users.Where(user =>
+			user.Id == userId && user.TenantId == CurrentTenant.Id &&
+			user.Roles.Any(membership => classTeacherRoleIds.Contains(membership.RoleId))),
+			cancellationToken);
+		if (hasClassTeacherRole || employee == null) return hasClassTeacherRole;
+		bool hasTeacherAssignment;
+		using (dataFilter.Disable<ISoftDelete>())
+		{
+			hasTeacherAssignment = await classTeacherRepository.AnyAsync(assignment =>
+				assignment.TenantId == CurrentTenant.Id && assignment.TeacherId == employee.Id,
+				cancellationToken);
+		}
+		return hasTeacherAssignment;
+	}
+
+	private async Task<Employee?> GetCurrentTenantEmployeeAsync(Guid userId, CancellationToken cancellationToken)
+	{
+		var employees = (await employeeRepository.GetQueryableAsync()).Where(employee =>
+			employee.TenantId == CurrentTenant.Id && employee.UserId == userId);
+		var matches = await AsyncExecuter.ToListAsync(employees.Take(2), cancellationToken);
+		if (matches.Count > 1)
+			throw new AbpAuthorizationException("Finance employee identity is ambiguous.");
+		return matches.Count == 0 ? null : matches[0];
+	}
 	public async Task EnsureAcademicContextAccessibleAsync(
 		Guid? academicYearId,
 		Guid? boardId,
@@ -120,6 +260,7 @@ public partial class FinanceScopeAccessService(
 		{
 			throw new AbpAuthorizationException("Current user context is required.");
 		}
+		await GetActiveIdentityAsync(CurrentUser.Id.Value);
 
 		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
 		if (!scope.HasTenantWideScope())
@@ -155,9 +296,11 @@ public partial class FinanceScopeAccessService(
 			throw new AbpAuthorizationException("Current user context is required.");
 		}
 
+		var identity = await GetActiveIdentityAsync(currentUserId.Value);
 		var scope = await userScopeService.GetUserScopeAsync(currentUserId.Value);
 		var query = (await studentRepository.GetQueryableAsync()).Where(student => student.TenantId == CurrentTenant.Id);
 
-		return FinanceStudentScopeQueryBuilder.ApplyPayerScope(query, scope);
+		query = FinanceStudentScopeQueryBuilder.ApplyPayerScope(query, scope);
+		return scope.IsAdmin ? query : await ApplyClassTeacherCapAsync(query, currentUserId.Value, identity, default);
 	}
 }

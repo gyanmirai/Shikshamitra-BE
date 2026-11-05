@@ -41,7 +41,6 @@ public partial class FeeRefundAppService
                 replay.ReplacesRefundRequestId != input.ReplacesRefundRequestId ||
                 replay.RefundMethod != input.RefundMethod || replay.Reason != input.Reason ||
                 (autoApprove && input.RefundMethod == "Cash" && input.ExpenseCategoryId.HasValue && replay.ExpenseCategoryId != input.ExpenseCategoryId) ||
-                (autoApprove && input.RefundMethod == "Cash" && input.BankAccountId.HasValue && replay.PayingBankAccountId != input.BankAccountId) ||
                 replay.Lines.Count != input.Lines.Count ||
                 input.Lines.Any(x => !replay.Lines.Any(y => y.ChargeId == x.ChargeId && y.DueFeeId == x.DueFeeId && y.LateFeeDueFeeId == x.LateFeeDueFeeId &&
                     y.SourceAllocationId == x.SourceAllocationId && y.SourceReceiptId == (x.SourceReceiptId ?? input.OriginalReceiptId) && y.RequestedAmount == x.Amount)))
@@ -213,8 +212,8 @@ public partial class FeeRefundAppService
         using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
             { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
-        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
-        await EnsureMakerCheckerAsync(request);
+        await EnsureRefundVisibleAsync(request);
+        await EnsureMakerCheckerAsync(request, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve);
         var method = input.Method ?? request.RefundMethod ?? "Cash";
         EnsureSettlementMethodAllowed(request, method);
         if (request.WorkflowVersion == 1 && request.RefundMethod == "Cash")
@@ -224,8 +223,7 @@ public partial class FeeRefundAppService
             if (request.Status == FeeRefundStatus.Processed && request.Settlements.Any(x =>
                 x.IdempotencyKey == $"cash-approval:{request.Id:N}" && x.Status == FeeRefundSettlementStatus.Processed))
             {
-                if (input.ExpenseCategoryId.HasValue && input.ExpenseCategoryId != request.ExpenseCategoryId ||
-                    input.BankAccountId.HasValue && input.BankAccountId != request.PayingBankAccountId)
+                if (input.ExpenseCategoryId.HasValue && input.ExpenseCategoryId != request.ExpenseCategoryId)
                     throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
                 var replay = await MapAsync(request);
                 await uow.CompleteAsync();
@@ -253,8 +251,8 @@ public partial class FeeRefundAppService
         using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
             { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
-        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
-        await EnsureMakerCheckerAsync(request);
+        await EnsureRefundVisibleAsync(request);
+        await EnsureMakerCheckerAsync(request, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reject);
         request.Reject(currentUser.GetId(), input.Notes);
         await WriteAuditAsync(request, FinanceAuditActions.Reject,
             $"Refund request {request.VoucherNumber} rejected.", input.Notes);
@@ -394,14 +392,31 @@ public partial class FeeRefundAppService
         return input.StudentId.HasValue && request.StudentId == input.StudentId && !request.FinanceFeeAccountId.HasValue;
     }
 
-    private async Task EnsureMakerCheckerAsync(FeeRefundRequest request)
+    private async Task EnsureMakerCheckerAsync(FeeRefundRequest request, string decisionPermission)
     {
         if (request.WorkflowVersion == 1 &&
             (request.CreatorId == CurrentUser.Id || request.SubmittedByUserId == CurrentUser.Id))
             throw new BusinessException(FeeRefundErrorCodes.MakerCheckerViolation);
-        if (request.CreatorId != CurrentUser.Id) return;
-        if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.OverrideMakerChecker))
+        if (request.CreatorId == CurrentUser.Id)
             throw new BusinessException(FeeRefundErrorCodes.MakerCheckerViolation);
+        // Admission accounts have no class placement; only a school admin can check them.
+        if (!request.StudentId.HasValue)
+        {
+            if (!CurrentUser.Id.HasValue ||
+                !await userScopeService.IsAdminUserAsync(CurrentUser.Id.Value))
+                throw new Volo.Abp.Authorization.AbpAuthorizationException(
+                    "Admission-account refund approval requires a school admin.");
+            return;
+        }
+        var makerId = request.SubmittedByUserId ?? request.CreatorId ?? Guid.Empty;
+        var reviewerId = makerId != Guid.Empty
+            ? await financeReviewerAccessService.FindEligibleReviewerAsync(
+                makerId, request.StudentId.Value, request.AcademicYearId,
+                ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View, decisionPermission)
+            : null;
+        await financeReviewerAccessService.EnsureReviewerCanDecideAsync(
+            makerId, reviewerId, request.StudentId.Value, request.AcademicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View, decisionPermission);
     }
 
     private static void EnsureSettlementMethodAllowed(FeeRefundRequest request, string method)

@@ -49,20 +49,6 @@ public class FeeAdjustmentApproval_Tests
 	}
 
 	[Fact]
-	public void Administrator_auto_approval_can_apply_the_creator_request()
-	{
-		var creator = Guid.NewGuid();
-		var request = CreateRequest(creator);
-
-		request.RecordAutoApplyBatch(creator, "Automatically approved on administrator submission.",
-			[(Guid.NewGuid(), Guid.NewGuid(), (MonthEnum)1, 2026, 100d)]);
-
-		Assert.Equal(FeeAdjustmentStatus.Applied, request.Status);
-		Assert.Equal(100d, request.AppliedAmount);
-		Assert.Equal(creator, request.ProcessedByUserId);
-	}
-
-	[Fact]
 	public void Creator_still_cannot_reject_own_request()
 	{
 		var creator = Guid.NewGuid();

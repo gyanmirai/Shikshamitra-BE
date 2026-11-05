@@ -42,6 +42,13 @@ public record ChargeLineJoinResult(
 	Standard Standard,
 	Division Division);
 
+/// <summary>Complete-line visibility for request-level totals and counts.</summary>
+public sealed record ChargeRequestReadScope(
+	IReadOnlyCollection<Guid> OwnStudentIds,
+	IReadOnlyCollection<Guid> ReviewerStudentIds,
+	IReadOnlyCollection<Guid> ReportingMakerIds,
+	IQueryable<Guid> NonEmployeeMakerIds);
+
 public interface IChargeRequestRepository : IRepository<ChargeRequest, Guid>
 {
 	Task<ChargeRequestDetailResult?> GetWithLinesAsync(
@@ -68,7 +75,8 @@ public interface IChargeRequestRepository : IRepository<ChargeRequest, Guid>
 		string? sortOrder = null,
 		IReadOnlyCollection<Guid>? scopedStudentIds = null,
 		CancellationToken cancellationToken = default,
-		IReadOnlyCollection<ChargeColumnFilter>? columnFilters = null);
+		IReadOnlyCollection<ChargeColumnFilter>? columnFilters = null,
+		ChargeRequestReadScope? readScope = null);
 
 	Task<IQueryable<ChargeLineJoinResult>> GetChargeLinesQueryAsync(
 		Guid academicYearId,
@@ -85,7 +93,8 @@ public interface IChargeRequestRepository : IRepository<ChargeRequest, Guid>
 		IReadOnlyCollection<Guid>? scopedStudentIds = null,
 		CancellationToken cancellationToken = default,
 		string? search = null,
-		IReadOnlyCollection<ChargeColumnFilter>? columnFilters = null);
+		IReadOnlyCollection<ChargeColumnFilter>? columnFilters = null,
+		ChargeRequestReadScope? readScope = null);
 }
 
 public record ChargeRequestStatusCounts(int Pending, int Processed, int Completed = 0, int Rejected = 0);

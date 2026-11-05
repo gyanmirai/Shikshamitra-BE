@@ -11,6 +11,8 @@ using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Fees.FeeAdjustment;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Mobile;
 using Shouldly;
 using Volo.Abp;
@@ -40,8 +42,23 @@ public partial class MobileAcademicAppService_Tests
         var head = await Insert(new FeeHead(Guid.NewGuid(), tenantId, f.Year.Id, category.Id, "PG Tuition", null, true, null, income.Id));
         var due = await Insert(new DueFee(Guid.NewGuid(), tenantId, f.Student.Id, head.Id,
             (ShikshaMitra.Finance.Fees.Collections.MonthEnum)(DateTime.Today.Month - 1), DateTime.Today.Year, false, 500m, DateTime.Today));
+        due.ApplyPayment(500m);
+        due.ApplyConcession(400m);
+        await GetRequiredService<IRepository<DueFee, Guid>>().UpdateAsync(due, autoSave: true);
+        var payment = await Insert(new FeeRecordMetadata(Guid.NewGuid(), tenantId, f.Student.Id,
+            f.Year.Id, 500d, $"ADJ-{Guid.NewGuid():N}", FeeCollectionStatus.Paid));
+        await Insert(new FeeCollectionDueFeeAllocation(Guid.NewGuid(), tenantId,
+            payment.Id, due.Id, 500d));
+        await Insert(new FeePaymentReceipt(Guid.NewGuid())
+        {
+            TenantId = tenantId, StudentId = f.Student.Id, AcademicYearId = f.Year.Id,
+            FeeCollectionTransactionId = payment.Id, ReceiptNumber = $"ADJ-FIN-{Guid.NewGuid():N}",
+            ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = FeeReceiptScope.Fee,
+            VerificationStatus = FeeReceiptVerificationStatus.Verified,
+            TotalPaidAmount = 500d, ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow),
+        });
         var key = Guid.NewGuid().ToString("N");
-        var input = new MobileAdjustmentInput { IdempotencyKey = key, Reason = "Correct the assigned tuition charge",
+        var input = new MobileAdjustmentInput { IdempotencyKey = key, Reason = "Transfer retained paid credit",
             SourceLines = [new() { DueFeeId = due.Id, Amount = "400.00" }] };
         var preview = JsonSerializer.SerializeToElement(await FamilyService<FeeAdjustmentAppService>().FamilyAdjustmentPreviewAsync(f.Student.Id, f.Year.Id, input));
         input.PreviewFingerprint = preview.GetProperty("PreviewFingerprint").GetString();
@@ -90,6 +107,8 @@ public partial class MobileAcademicAppService_Tests
         var pending = await GetRequiredService<IRepository<FeeAdjustmentRequest, Guid>>().GetListAsync(x => x.StudentId == f.Student.Id);
         pending.ShouldHaveSingleItem().RequestedAmount.ShouldBe(400d);
         (await GetRequiredService<IRepository<FinanceAuditEvent, Guid>>().CountAsync(x => x.StudentId == f.Student.Id && x.EntityType == "family_command_receipt")).ShouldBe(1);
-        (await GetRequiredService<IRepository<DueFee, Guid>>().GetAsync(due.Id)).OutstandingAmount.ShouldBe(500m);
+        var persistedDue = await GetRequiredService<IRepository<DueFee, Guid>>().GetAsync(due.Id);
+        persistedDue.OutstandingAmount.ShouldBe(0m);
+        persistedDue.ReservedPaidCreditAmount.ShouldBe(400m);
     });
 }

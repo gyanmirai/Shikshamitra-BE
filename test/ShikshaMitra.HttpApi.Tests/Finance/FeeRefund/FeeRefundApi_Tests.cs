@@ -195,6 +195,8 @@ public partial class FeeRefundApi_Tests : ShikshaMitraApiTestBase
             var created = (await create.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions))!;
             created.Status.ShouldBe(FeeRefundStatus.Processed);
             created.Settlements.Count.ShouldBe(1);
+            created.PayingBankAccountId.ShouldBeNull();
+            created.Settlements.Single().BankAccountId.ShouldBeNull();
             administrator.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
                 $"{ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Add},{ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve}");
             var deniedReplay = await administrator.PostAsJsonAsync(BaseUrl, input, JsonOptions);
@@ -212,10 +214,9 @@ public partial class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Administrator_Cash_Creation_With_Explicit_Routing_And_No_Policy_Bank_Default_Should_Complete_Idempotently()
+    public async Task Administrator_Cash_Creation_Without_Bank_Should_Complete_Idempotently()
     {
         var category = await FeeRefundTestHelper.SeedRefundExpenseCategoryAsync(Factory.Services);
-        var bank = await FeeRefundTestHelper.SeedSchoolBankAccountAsync(Factory.Services);
         var source = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services,
             allowedPayoutMethods: [RefundPayoutMethod.Cash], expenseCategoryId: category);
         var line = await FeeRefundTestHelper.GetEligibleLineAsync(Client, source.StudentId, source.DueFeeId);
@@ -230,19 +231,20 @@ public partial class FeeRefundApi_Tests : ShikshaMitraApiTestBase
                 ["studentId"] = source.StudentId, ["academicYearId"] = FeeRefundTestHelper.DefaultAcademicYearId,
                 ["originalReceiptId"] = line.SourceReceiptId, ["idempotencyKey"] = Guid.NewGuid().ToString("N"),
                 ["refundMethod"] = "Cash", ["paymentDetails"] = new { receivedBy = "QA Parent" },
-                ["expenseCategoryId"] = category, ["bankAccountId"] = bank,
+                ["expenseCategoryId"] = category,
                 ["lines"] = new[] { new { dueFeeId = source.DueFeeId, sourceAllocationId = line.SourceAllocationId, amount = 200m } }
             };
             var create = await administrator.PostAsJsonAsync(BaseUrl, input, JsonOptions);
             create.StatusCode.ShouldBe(HttpStatusCode.Created, await create.Content.ReadAsStringAsync());
             var created = (await create.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions))!;
             created.Status.ShouldBe(FeeRefundStatus.Processed);
-            created.PayingBankAccountId.ShouldBe(bank);
+            created.PayingBankAccountId.ShouldBeNull();
+            created.Settlements.Single().BankAccountId.ShouldBeNull();
             created.DefaultPayingBankAccountId.ShouldBeNull();
             var replay = await administrator.PostAsJsonAsync(BaseUrl, input, JsonOptions);
             replay.StatusCode.ShouldBe(HttpStatusCode.Created, await replay.Content.ReadAsStringAsync());
             (await replay.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions))!.Id.ShouldBe(created.Id);
-            input["bankAccountId"] = Guid.NewGuid();
+            input["expenseCategoryId"] = Guid.NewGuid();
             var changed = await administrator.PostAsJsonAsync(BaseUrl, input, JsonOptions);
             changed.IsSuccessStatusCode.ShouldBeFalse();
             (await changed.Content.ReadAsStringAsync()).ShouldContain(FeeRefundErrorCodes.IdempotencyConflict);
@@ -419,7 +421,6 @@ public partial class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         var input = new FeeRefundActionDto
         {
             ExpenseCategoryId = await FeeRefundTestHelper.SeedRefundExpenseCategoryAsync(Factory.Services),
-            BankAccountId = await FeeRefundTestHelper.SeedSchoolBankAccountAsync(Factory.Services),
             Notes = "Cash handed to the named recipient"
         };
         var beforeApproval = DateTimeOffset.UtcNow.AddSeconds(-1);
@@ -431,6 +432,8 @@ public partial class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         completed.Status.ShouldBe(FeeRefundStatus.Processed);
         completed.ProcessedAmount.ShouldBe(200m);
         completed.Settlements.Count.ShouldBe(1);
+        completed.PayingBankAccountId.ShouldBeNull();
+        completed.Settlements.Single().BankAccountId.ShouldBeNull();
         completed.Settlements.Single().SettlementDate.ShouldBeInRange(beforeApproval, DateTimeOffset.UtcNow.AddSeconds(1),
             $"Cash payment must retain its actual instant. Clock kind: {cashClock.Kind}; Now.Kind: {cashClock.Now.Kind}.");
         var retry = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve", input, JsonOptions);
@@ -1205,8 +1208,7 @@ public partial class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
         var payoutInput = new RecordRefundPayoutDto
         {
-                ExpenseCategoryId = await FeeRefundTestHelper.SeedRefundExpenseCategoryAsync(Factory.Services),
-                BankAccountId = await FeeRefundTestHelper.SeedSchoolBankAccountAsync(Factory.Services),
+            ExpenseCategoryId = await FeeRefundTestHelper.SeedRefundExpenseCategoryAsync(Factory.Services),
             IdempotencyKey = Guid.NewGuid().ToString("N"), Method = "Cash", Amount = 200m,
             PaymentDate = DateTimeOffset.UtcNow
         };
@@ -1232,7 +1234,7 @@ public partial class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         var expense = expenses.Single();
         expense.Amount.ShouldBe(200m);
         expense.CategoryId.ShouldBe(payoutInput.ExpenseCategoryId!.Value);
-        expense.BankAccountId.ShouldBe(payoutInput.BankAccountId);
+        expense.BankAccountId.ShouldBeNull();
         expense.IsConfirmed.ShouldBe(true);
         expense.TransactionType.ShouldBe(ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Expense);
         payoutInput.ExpenseCategoryId = Guid.NewGuid();
@@ -1307,7 +1309,8 @@ public partial class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         input.ExternalReference = sendMaskedReference ? maskedReference : null;
         input.IdempotencyKey = Guid.NewGuid().ToString("N");
         input.ExpenseCategoryId = await FeeRefundTestHelper.SeedRefundExpenseCategoryAsync(Factory.Services);
-        input.BankAccountId = await FeeRefundTestHelper.SeedSchoolBankAccountAsync(Factory.Services);
+        if (method != "Cash")
+            input.BankAccountId = await FeeRefundTestHelper.SeedSchoolBankAccountAsync(Factory.Services);
         var result = await Client.PostAsJsonAsync($"{BaseUrl}/{request.Id}/payout", input, JsonOptions);
         result.StatusCode.ShouldBe(HttpStatusCode.OK, await result.Content.ReadAsStringAsync());
         var completed = (await result.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions))!;

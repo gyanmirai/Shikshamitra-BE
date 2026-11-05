@@ -77,7 +77,8 @@ public class EfCoreChargeRequestRepository(
 		string? sortOrder = null,
 		IReadOnlyCollection<Guid>? scopedStudentIds = null,
 		CancellationToken cancellationToken = default,
-		IReadOnlyCollection<ChargeColumnFilter>? columnFilters = null)
+		IReadOnlyCollection<ChargeColumnFilter>? columnFilters = null,
+		ChargeRequestReadScope? readScope = null)
 	{
 		var chargeQuery = await GetQueryableAsync();
 		chargeQuery = chargeQuery.Where(r => r.AcademicYearId == academicYearId);
@@ -92,6 +93,8 @@ public class EfCoreChargeRequestRepository(
 
 		var chargeLineQuery = await chargeRepository.GetQueryableAsync();
 		chargeLineQuery = chargeLineQuery.Where(c => c.AcademicYearId == academicYearId);
+		if (readScope != null)
+			chargeQuery = ApplyCompleteLineReadScope(chargeQuery, chargeLineQuery, readScope);
 		if (scopedStudentIds is not null)
 		{
 			if (scopedStudentIds.Count == 0)
@@ -234,7 +237,8 @@ public class EfCoreChargeRequestRepository(
 		IReadOnlyCollection<Guid>? scopedStudentIds = null,
 		CancellationToken cancellationToken = default,
 		string? search = null,
-		IReadOnlyCollection<ChargeColumnFilter>? columnFilters = null)
+		IReadOnlyCollection<ChargeColumnFilter>? columnFilters = null,
+		ChargeRequestReadScope? readScope = null)
 	{
 		var db = await GetDbContextAsync();
 
@@ -250,6 +254,8 @@ public class EfCoreChargeRequestRepository(
 
 		var chargeLines = db.Set<Charge>().AsNoTracking()
 			.Where(c => c.AcademicYearId == academicYearId);
+		if (readScope != null)
+			requestQuery = ApplyCompleteLineReadScope(requestQuery, chargeLines, readScope);
 
 		if (scopedStudentIds is not null)
 		{
@@ -290,6 +296,23 @@ public class EfCoreChargeRequestRepository(
 			workflows.Count(x => x.Value == ChargeWorkflowStatus.InProcess),
 			workflows.Count(x => x.Value == ChargeWorkflowStatus.Completed),
 			workflows.Count(x => x.Value == ChargeWorkflowStatus.Rejected));
+	}
+
+	private static IQueryable<ChargeRequest> ApplyCompleteLineReadScope(
+		IQueryable<ChargeRequest> requests, IQueryable<Charge> allLines,
+		ChargeRequestReadScope scope)
+	{
+		var ownStudentIds = scope.OwnStudentIds.Distinct().ToArray();
+		var reviewerStudentIds = scope.ReviewerStudentIds.Distinct().ToArray();
+		var reportingMakerIds = scope.ReportingMakerIds.Distinct().ToArray();
+		var nonEmployeeMakerIds = scope.NonEmployeeMakerIds;
+		return requests.Where(request =>
+			allLines.Any(line => line.ChargeRequestId == request.Id) &&
+			!allLines.Any(line => line.ChargeRequestId == request.Id &&
+				!(Enumerable.Contains(ownStudentIds, line.StudentId) ||
+					Enumerable.Contains(reviewerStudentIds, line.StudentId) &&
+					(Enumerable.Contains(reportingMakerIds, request.RequestorId) ||
+					 nonEmployeeMakerIds.Contains(request.RequestorId)))));
 	}
 
 	private async Task<Dictionary<Guid, ChargePaymentProgress>> GetPaymentProgressAsync(

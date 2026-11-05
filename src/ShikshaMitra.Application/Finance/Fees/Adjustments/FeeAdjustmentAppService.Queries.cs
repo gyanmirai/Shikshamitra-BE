@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Common;
+using ShikshaMitra.Finance.Fees.Collections;
 
 namespace ShikshaMitra.Finance.Fees.FeeAdjustment;
 
@@ -13,53 +14,55 @@ public partial class FeeAdjustmentAppService
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View)]
     public async Task<AdjustmentEligibilityDto> GetEligibilityAsync(Guid studentId, Guid academicYearId)
     {
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
-
-        var feeHeads = await feeHeadRepository.GetListAsync(fh => fh.AcademicYearId == academicYearId);
-        var feeHeadIds = feeHeads.Select(fh => fh.Id).ToList();
-        var dueFees = await dueFeeRepository.GetListAsync(
-            df => df.StudentId == studentId && feeHeadIds.Contains(df.FeeHeadId) && df.OutstandingAmount > 0);
-        if (dueFees.Count == 0)
-            return new AdjustmentEligibilityDto { StudentId = studentId, AcademicYearId = academicYearId };
-
-        var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
-
-        var grouped = dueFees
-            .GroupBy(df => df.FeeHeadId)
-            .Select(g =>
-            {
-                var months = g
-                    .OrderBy(df => df.Year).ThenBy(df => df.Month)
-                    .Select(df =>
-                    {
-						var adjustable = (double)df.AdjustableBalance;
-                        return new AdjustmentEligibilityMonthDto
-                        {
-                            DueFeeId = df.Id, Month = df.Month, Year = df.Year,
-							Total = (double)df.OriginalAmount, Paid = (double)df.PaidAmount,
-							Refunded = (double)df.RefundedAmount, Adjusted = (double)df.AdjustmentCreditAmount,
-                            Adjustable = adjustable,
-                        };
-                    })
-                    .Where(m => m.Adjustable > 0.001).ToList();
-
-                return new AdjustmentEligibilityFeeHeadDto
+        await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(studentId, academicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View);
+        var feeHeads = await feeHeadRepository.GetListAsync(head => head.AcademicYearId == academicYearId);
+        var headIds = feeHeads.Select(head => head.Id).ToList();
+        var dues = await dueFeeRepository.GetListAsync(due =>
+            due.StudentId == studentId && headIds.Contains(due.FeeHeadId));
+        var reservations = await feeRefundRepository.GetActiveReservedAmountsAsync(
+            dues.Select(due => due.Id).ToList());
+        var settledPaid = await feeAdjustmentManager.GetSettledPaidAmountsAsync(
+            dues.Select(due => due.Id).ToList(), studentId, academicYearId);
+        var headNames = feeHeads.ToDictionary(head => head.Id, head => head.Name);
+        var grouped = dues.GroupBy(due => due.FeeHeadId).Select(group =>
+        {
+            var months = group.OrderBy(due => due.Year).ThenBy(due => due.Month)
+                .Select(due =>
                 {
-                    FeeHeadId = g.Key,
-                    FeeHeadName = feeHeadMap.GetValueOrDefault(g.Key, g.Key.ToString()),
-					TotalPaid = (double)g.Sum(df => df.PaidAmount),
-                    TotalAdjustable = months.Sum(m => m.Adjustable),
-                    Months = months,
-                };
-            })
-            .Where(fh => fh.Months.Count > 0).ToList();
-
+                    var unpaid = due.OutstandingAmount > 0m;
+                    var settledCredit = Math.Max(0m,
+                        settledPaid.GetValueOrDefault(due.Id) - due.RefundedAmount +
+                        due.NetAmount - due.EffectiveObligationAmount -
+                        due.ReservedPaidCreditAmount - due.TransferredPaidCreditAmount);
+                    return new AdjustmentEligibilityMonthDto
+                    {
+                        DueFeeId = due.Id, Month = due.Month, Year = due.Year,
+                        Kind = unpaid ? FeeAdjustmentKind.UnpaidTransfer : FeeAdjustmentKind.PaidCredit,
+                        Status = DueFeeCollectionStatusResolver.Resolve(due, Clock.Now, 0d),
+                        OutstandingAmount = (double)due.OutstandingAmount,
+                        Total = (double)due.EffectiveObligationAmount, Paid = (double)due.PaidAmount,
+                        Refunded = (double)due.RefundedAmount, Adjusted = (double)due.AdjustmentCreditAmount,
+                        Adjustable = unpaid ? (double)due.OutstandingAmount : (double)Math.Max(0m,
+                            Math.Min(due.AdjustableBalance, settledCredit) -
+                            reservations.GetValueOrDefault(due.Id)),
+                    };
+                }).Where(month => month.Adjustable > 0).ToList();
+            return new AdjustmentEligibilityFeeHeadDto
+            {
+                FeeHeadId = group.Key,
+                FeeHeadName = headNames.GetValueOrDefault(group.Key, group.Key.ToString()),
+                TotalPaid = (double)group.Sum(due => due.PaidAmount),
+                TotalAdjustable = months.Sum(month => month.Adjustable),
+                Months = months,
+            };
+        }).Where(head => head.Months.Count > 0).ToList();
         return new AdjustmentEligibilityDto
         {
             StudentId = studentId, AcademicYearId = academicYearId,
-            TotalPaid = grouped.Sum(f => f.TotalPaid),
-            TotalAdjustable = grouped.Sum(f => f.TotalAdjustable),
-			TotalAlreadyAdjusted = (double)dueFees.Sum(df => df.AdjustmentCreditAmount),
+            TotalPaid = (double)dues.Sum(due => due.PaidAmount),
+            TotalAdjustable = grouped.Sum(head => head.TotalAdjustable),
+            TotalAlreadyAdjusted = (double)dues.Sum(due => due.AdjustmentCreditAmount),
             FeeHeads = grouped,
         };
     }
@@ -68,7 +71,8 @@ public partial class FeeAdjustmentAppService
     public async Task<FeeAdjustmentDetailDto> GetAsync(Guid id)
     {
         var request = await feeAdjustmentRepository.GetWithDetailsAsync(id);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+        await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(request.StudentId, request.AcademicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View);
         return await MapDetailAsync(request);
     }
 
@@ -130,6 +134,8 @@ public partial class FeeAdjustmentAppService
             return new FeeAdjustmentApplicationItemDto
             {
                 Id = request.Id, StudentId = request.StudentId,
+                UnavailableReason = request.HasPaidCreditReservation || request.Kind == FeeAdjustmentKind.UnpaidTransfer
+                    ? null : PaidCreditTransferUnavailableReason,
                 RequestedByUserId = request.CreatorId,
                 StudentName = student == null ? string.Empty
                     : $"{student.FirstName}{(string.IsNullOrEmpty(student.MiddleName) ? " " : $" {student.MiddleName} ")}{student.LastName}".Trim(),
@@ -155,6 +161,9 @@ public partial class FeeAdjustmentAppService
             total = dtos.Count;
             dtos = dtos.Skip(skip).Take(pageSize).ToList();
         }
+        var visibleRequests = items.ToDictionary(request => request.Id);
+        foreach (var row in dtos)
+            row.AvailableActions = await GetAvailableActionsAsync(visibleRequests[row.Id]);
         return new FeeAdjustmentApplicationsDto
         {
             PendingCount = counts.GetValueOrDefault(FeeAdjustmentStatus.Pending),

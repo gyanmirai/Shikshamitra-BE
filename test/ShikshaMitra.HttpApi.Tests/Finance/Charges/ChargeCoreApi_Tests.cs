@@ -7,6 +7,10 @@ using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Academic.ClassTeacher;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Common;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
@@ -98,6 +102,49 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 		body.ShouldNotBeNull();
 		body.Data.Status.ShouldBe(1);
 		body.Data.ResolvedStudentCount.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Class_teacher_charge_in_no_approval_category_still_requires_manager_review()
+	{
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
+		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: false);
+		var userId = Guid.NewGuid();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+		using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>()
+			.Begin(requiresNew: true, isTransactional: true))
+		{
+			var services = scope.ServiceProvider;
+			var user = new IdentityUser(userId, $"charge-teacher-{userId:N}",
+				$"charge-teacher-{userId:N}@example.test", tenantId);
+			user.AddRole(Factory.SeededRoleId);
+			await services.GetRequiredService<IRepository<IdentityUser, Guid>>().InsertAsync(user, autoSave: true);
+			var employee = await services.GetRequiredService<EmployeeManager>().CreateEmployeeAsync(
+				userId, Factory.SeededRoleId, "Charge", "Teacher", null, "Charge Teacher",
+				EmployeeStatusType.Active, null, panNo: "ABCDE1234F", adharNo: "900000000002",
+				employeeGroup: EmployeeGroupType.Teaching);
+			await services.GetRequiredService<IRepository<Employee, Guid>>().InsertAsync(employee, autoSave: true);
+			await services.GetRequiredService<IRepository<ClassTeacher, Guid>>().InsertAsync(
+				new ClassTeacher(Guid.NewGuid(), tenantId, Factory.SeededStandardId,
+					Factory.SeededDivisionId, employee.Id, Factory.SeededMediumId,
+					Factory.SeededAcademicYearId, Factory.SeededBoardId, Factory.SeededMediumId,
+					Factory.SeededMediumStageId), autoSave: true);
+			await services.GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(
+				new UserScopeAssignment(Guid.NewGuid(), tenantId, userId: userId,
+					description: "Charge teacher scope test"), autoSave: true);
+			await uow.CompleteAsync();
+		}
+		using var teacherClient = CreateClientAs(userId);
+		var response = await teacherClient.PostAsJsonAsync(
+			$"{BaseUrl}?academicYearId={Factory.SeededAcademicYearId}",
+			ChargeTestHelper.BuildCreateDto(studentId, categoryId), JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var body = await response.Content.ReadFromJsonAsync<ChargeResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Data.Status.ShouldBe((int)ShikshaMitra.Finance.Fees.Charges.ChargeStatus.Pending);
 	}
 
 	[Fact]

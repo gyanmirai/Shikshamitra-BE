@@ -34,7 +34,8 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<FeeRefundColumnFilter>? columnFilters = null,
         IQueryable<Guid>? scopedAccountIdsQuery = null,
-        Guid? financeFeeAccountId = null);
+        Guid? financeFeeAccountId = null,
+        IQueryable<Guid>? visibleRequestIdsQuery = null);
 
     /// <summary>Loads a single request with its <see cref="FeeRefundRequest.Lines"/> collection.</summary>
     Task<FeeRefundRequest?> FindWithLinesAsync(Guid id, CancellationToken cancellationToken = default);

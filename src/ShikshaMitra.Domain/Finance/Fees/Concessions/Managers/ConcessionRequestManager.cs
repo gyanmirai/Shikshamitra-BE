@@ -20,7 +20,7 @@ namespace ShikshaMitra.Finance.Fees.ConcessionRequests;
 
 public class ConcessionRequestManager(
 	IConcessionRequestRepository concessionRequestRepository,
-	IRepository<Student, Guid> studentRepository,
+	IStudentRepository studentRepository,
 	IRepository<ConcessionType, Guid> concessionTypeRepository,
 	IRepository<DueFee, Guid> dueFeeRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
@@ -691,7 +691,7 @@ public class ConcessionRequestManager(
 
 	private static decimal GetConcessionCapacity(DueFee dueFee, ConcessionApplyOn applyOn) =>
 		applyOn == ConcessionApplyOn.AllFees
-			? Math.Max(0m, dueFee.OriginalAmount - dueFee.NetAmount)
+			? Math.Max(0m, dueFee.EffectiveObligationAmount - dueFee.NetAmount)
 			: dueFee.OutstandingAmount;
 
 	private static bool IsSameInstallmentCohort(DueFee candidate, DueFee first)
@@ -843,7 +843,7 @@ public class ConcessionRequestManager(
 
 	private async Task<Student> LoadStudentAsync(Guid studentId)
 	{
-		var student = await studentRepository.FindAsync(studentId)
+		var student = await studentRepository.GetForFinanceContextAsync(studentId)
 			?? throw new BusinessException(FinanceConcessionErrorCodes.StudentNotFound)
 				.WithData("StudentId", studentId);
 

@@ -22,14 +22,18 @@ public partial class FeeRefundAppService
     public async Task<PagedResultDto<FeeRefundRequestDto>> GetListAsync(GetFeeRefundsInput input)
     {
         FinanceClassDivisionFilterValidator.Validate(input);
-        var scoped = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+        var scoped = input.AcademicYearId.HasValue
+            ? await GetVisibleRefundStudentIdsAsync(input.AcademicYearId.Value)
+            : await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
         var scopedAccounts = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
+        var visibleRequestIds = input.AcademicYearId.HasValue
+            ? await GetVisibleRefundRequestIdsAsync(input.AcademicYearId.Value) : null;
         var (items, count) = await feeRefundRepository.GetListWithDetailsAsync(input.StudentId, input.AcademicYearId,
             input.AcademicMediumId, input.StandardId, input.DivisionId, input.Status,
             input.LegacyHistory, input.WorkflowVersion, input.Search,
             input.SkipCount, input.MaxResultCount, input.Sorting, scoped,
             scopedAccountIdsQuery: scopedAccounts, financeFeeAccountId: input.FinanceFeeAccountId,
-            columnFilters: FeeRefundColumnFilter.Parse(input.Filters));
+            columnFilters: FeeRefundColumnFilter.Parse(input.Filters), visibleRequestIdsQuery: visibleRequestIds);
         var students = await BuildStudentMapAsync(items.Select(x => x.StudentId).Distinct());
         var accounts = await BuildAccountMapAsync(items.Select(x => x.FinanceFeeAccountId));
         var years = await BuildYearMapAsync(items.Select(x => x.AcademicYearId));
@@ -58,7 +62,7 @@ public partial class FeeRefundAppService
     public async Task<FeeRefundRequestDto> GetAsync(Guid id)
     {
         var request = await RequireAsync(id);
-        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
+        await EnsureRefundVisibleAsync(request);
         var dto = await MapAsync(request);
         if (await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.ViewSensitivePaymentDetails))
         {

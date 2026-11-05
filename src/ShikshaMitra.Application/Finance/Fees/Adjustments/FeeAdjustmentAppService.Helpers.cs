@@ -5,12 +5,68 @@ using System.Threading.Tasks;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students;
+using Volo.Abp.Authorization;
 
 namespace ShikshaMitra.Finance.Fees.FeeAdjustment;
 
 public partial class FeeAdjustmentAppService
 {
+    private const string PaidCreditTransferUnavailableReason =
+        "This older request has no paid-credit reservation and cannot be applied.";
+
+    private async Task EnsureOwnerOrAdministratorAsync(FeeAdjustmentRequest request)
+    {
+        if (currentUser.Id.HasValue &&
+            (request.CreatorId == currentUser.Id ||
+             await userScopeService.IsAdminUserAsync(currentUser.Id.Value)))
+            return;
+        throw new AbpAuthorizationException("Only the adjustment requester or a configured administrator may change a pending request.");
+    }
+
+    private async Task<List<string>> GetAvailableActionsAsync(FeeAdjustmentRequest request)
+    {
+        var actions = new List<string>();
+        if (!request.CreatorId.HasValue ||
+            request.Status is not FeeAdjustmentStatus.Pending and not FeeAdjustmentStatus.PartiallyApplied)
+            return actions;
+        if (request.HasPaidCreditReservation || request.Kind == FeeAdjustmentKind.UnpaidTransfer)
+        {
+            try
+            {
+                await EnsureCurrentReviewerCanDecideAsync(request,
+                    ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve);
+                actions.Add("Approve");
+            }
+            catch (AbpAuthorizationException) { }
+        }
+        if (request.Status == FeeAdjustmentStatus.Pending)
+        {
+            try
+            {
+                await EnsureCurrentReviewerCanDecideAsync(request,
+                    ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Reject);
+                actions.Add("Reject");
+            }
+            catch (AbpAuthorizationException) { }
+        }
+        return actions;
+    }
+
+    private async Task EnsureCurrentReviewerCanDecideAsync(FeeAdjustmentRequest request, string decisionPermission)
+    {
+        if (!request.CreatorId.HasValue)
+            throw new Volo.Abp.BusinessException(FeeAdjustmentErrorCodes.CannotApply);
+
+        var routedReviewerId = await financeReviewerAccessService.FindEligibleReviewerAsync(
+            request.CreatorId.Value, request.StudentId, request.AcademicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View, decisionPermission);
+        await financeReviewerAccessService.EnsureReviewerCanDecideAsync(
+            request.CreatorId.Value, routedReviewerId, request.StudentId, request.AcademicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View, decisionPermission);
+    }
+
     private async Task<FeeAdjustmentDetailDto> MapDetailAsync(FeeAdjustmentRequest request)
     {
         var student = await studentRepository.GetAsync(request.StudentId);
@@ -35,6 +91,10 @@ public partial class FeeAdjustmentAppService
 
         return new FeeAdjustmentDetailDto
         {
+            AvailableActions = await GetAvailableActionsAsync(request),
+            UnavailableReason = request.HasPaidCreditReservation || request.Kind == FeeAdjustmentKind.UnpaidTransfer
+                ? null : PaidCreditTransferUnavailableReason,
+            Kind = request.Kind,
             Id = request.Id, VoucherNumber = request.VoucherNumber, StudentId = request.StudentId,
             StudentName = FormatStudentName(student), StudentGrNo = student.GrNo,
             RollNo = student.RollNo?.ToString(), ClassName = standard?.Name, DivisionName = division?.Name,
@@ -56,7 +116,10 @@ public partial class FeeAdjustmentAppService
                     FeeHeadName = feeHeadMap.GetValueOrDefault(l.FeeHeadId, string.Empty),
                     InstallmentLabel = df?.GetDisplayInstallmentLabel() ?? FormatMonthLabel(l.Month, l.Year),
                     Month = l.Month, Year = l.Year,
-					PaidAmount = (double)(df?.PaidAmount ?? 0m), AdjustableAmount = (double)(df?.AdjustableBalance ?? 0m),
+					PaidAmount = (double)(df?.PaidAmount ?? 0m),
+                    AdjustableAmount = request.Kind == FeeAdjustmentKind.UnpaidTransfer
+                        ? (double)(df?.OutstandingAmount ?? 0m)
+                        : (double)(df?.AdjustableBalance ?? 0m),
                     RequestedAmount = l.Amount,
                 };
             }).ToList(),
@@ -103,7 +166,9 @@ public partial class FeeAdjustmentAppService
             Lines = batchLines.Select(a =>
             {
                 dueFeeMap.TryGetValue(a.DueFeeId, out var df);
-				var originalPending = (double)(df?.OutstandingAmount ?? 0m) + a.Amount;
+                var originalPending = request.Kind == FeeAdjustmentKind.UnpaidTransfer
+                    ? (double)(df?.OutstandingAmount ?? 0m) - a.Amount
+                    : (double)(df?.OutstandingAmount ?? 0m) + a.Amount;
                 return new ApplyFeeAdjustmentLineResultDto
                 {
                     DueFeeId = a.DueFeeId, FeeHeadId = a.FeeHeadId,

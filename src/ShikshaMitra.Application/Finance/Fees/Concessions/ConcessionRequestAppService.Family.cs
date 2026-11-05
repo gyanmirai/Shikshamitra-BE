@@ -203,7 +203,8 @@ public partial class ConcessionRequestAppService : IFamilyConcessionService
 			request.StudentId, request.ConcessionTypeId, request.AcademicYearId, request.Id));
 		var type = await concessionTypeRepository.GetAsync(request.ConcessionTypeId);
 		var canViewDocuments = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.ViewConcessionDocument);
-		var student = await studentRepository.GetAsync(request.StudentId);
+		var student = await studentRepository.GetForFinanceContextAsync(request.StudentId)
+			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(ShikshaMitra.Students.Student), request.StudentId);
 		var version = await financePolicyVersionRepository.GetAsync(request.ConcessionPolicyVersionId);
 		var policy = System.Text.Json.JsonSerializer.Deserialize<ConcessionPolicySnapshot>(version.SnapshotJson) ?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
 		var headIds = request.ConcessionFeeHeadMappings.Select(x => x.FeeHeadId).ToArray();

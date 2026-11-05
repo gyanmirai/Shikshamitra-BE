@@ -46,12 +46,13 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         ExpenseCategoryId = categoryId; ExpenseCategoryName = name;
         PayingBankAccountId = bankId; PayingBankLabel = bankLabel; RefundMethod = method;
     }
-    public void SetPayoutRouting(Guid categoryId, string name, Guid bankId, string bankLabel, string method)
+    public void SetPayoutRouting(Guid categoryId, string name, Guid? bankId, string? bankLabel, string method)
     {
         if (WorkflowVersion != 1 || Status != FeeRefundStatus.Approved ||
-            (RefundMethod != null && RefundMethod != method))
+            (RefundMethod != null && RefundMethod != method) || (method != "Cash" && !bankId.HasValue))
             ThrowIllegalTransition(FeeRefundStatus.Processed);
-        foreach (var settlement in _settlements) settlement.SetPaymentBank(bankId);
+        if (bankId.HasValue)
+            foreach (var settlement in _settlements) settlement.SetPaymentBank(bankId.Value);
         ExpenseCategoryId = categoryId; ExpenseCategoryName = name;
         PayingBankAccountId = bankId; PayingBankLabel = bankLabel; RefundMethod = method;
     }

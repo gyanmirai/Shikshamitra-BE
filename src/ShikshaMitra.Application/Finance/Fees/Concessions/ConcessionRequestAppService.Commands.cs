@@ -547,7 +547,7 @@ public partial class ConcessionRequestAppService
 	public async Task<FileDownloadResult> DownloadDocumentAsync(Guid id, Guid documentId)
 	{
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+		await EnsureConcessionVisibleAsync(request);
 		var document = request.ConcessionRequestDocuments.FirstOrDefault(x =>
 			x.DocumentId == documentId && x.Status == 1 && !string.IsNullOrWhiteSpace(x.Url))
 			?? throw new BusinessException(FinanceConcessionErrorCodes.InvalidDocumentSubmission);
@@ -573,14 +573,14 @@ public partial class ConcessionRequestAppService
 			return await concessionRequestRepository.ReadCommittedAsync(async () =>
 			{
 				var replay = await concessionRequestRepository.GetWithDetailsAsync(id);
-				await financeScopeAccessService.EnsureStudentAccessibleAsync(replay.StudentId);
-				await EnsureDecisionActorAsync(replay);
+				await EnsureConcessionVisibleAsync(replay);
+				await EnsureDecisionActorAsync(replay, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve);
 				return await BuildApprovalResponseAsync(replay);
 			});
 		}
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
-		var allowCreatorDecision = await EnsureDecisionActorAsync(request);
+		await EnsureConcessionVisibleAsync(request);
+		var allowCreatorDecision = await EnsureDecisionActorAsync(request, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve);
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
 		await concessionRequestManager.EnsureBenefitAvailableAsync(request.StudentId, request.ConcessionTypeId, request.AcademicYearId, request.Id);
 		await PromoteDraftToPendingAsync(request);
@@ -684,13 +684,13 @@ public partial class ConcessionRequestAppService
 		{
 			if (replayId.Value != id) throw new BusinessException(FinanceConcessionErrorCodes.IdempotencyKeyConflict);
 			var replay = await concessionRequestRepository.GetWithDetailsAsync(id);
-			await financeScopeAccessService.EnsureStudentAccessibleAsync(replay.StudentId);
-			await EnsureDecisionActorAsync(replay);
+			await EnsureConcessionVisibleAsync(replay);
+			await EnsureDecisionActorAsync(replay, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject);
 			return BuildRejectionResponse(replay);
 		}
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
-		var allowCreatorDecision = await EnsureDecisionActorAsync(request);
+		await EnsureConcessionVisibleAsync(request);
+		var allowCreatorDecision = await EnsureDecisionActorAsync(request, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject);
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
 
 		request.Reject(currentUser.Id!.Value, input.Message, Clock.Now, allowCreatorDecision);
@@ -789,7 +789,7 @@ public partial class ConcessionRequestAppService
 					FeeHeadId = line.Allocation.FeeHeadId,
 					ReversalAmount = line.Input.Amount,
 					OutstandingBefore = dueFee.OutstandingAmount,
-					OutstandingAfter = Math.Max(0m, dueFee.OriginalAmount - dueFee.NetAmount +
+					OutstandingAfter = Math.Max(0m, dueFee.EffectiveObligationAmount - dueFee.NetAmount +
 						line.Input.Amount - dueFee.PaidAmount + dueFee.RefundedAmount),
 				};
 			}).ToList(),

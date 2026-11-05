@@ -25,14 +25,11 @@ public partial class FeeRefundAppService
         var category = await routingManager.RequireCategoryAsync(request.AcademicYearId,
             input?.ExpenseCategoryId ?? policy?.ExpenseCategoryId, TransactionType.Expense);
         var date = new DateTimeOffset(Clock.Now).ToUniversalTime();
-        var bank = await routingManager.RequireBankAsync(request.AcademicYearId,
-            input?.BankAccountId ?? policy?.DefaultPayingBankAccountId, date);
-        request.SetPayoutRouting(category.Id, category.Name, bank.Id,
-            $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}", "Cash");
+        request.SetPayoutRouting(category.Id, category.Name, null, null, "Cash");
         var key = $"cash-approval:{request.Id:N}";
         var evidence = $"Cash payout authorized for {cash.ReceivedBy}.";
         var payout = request.RecordPayout(GuidGenerator.Create(), currentUser.GetId(), key,
-            "Cash", request.ApprovedAmount, date, $"CASH-{request.VoucherNumber}", null, bank.Id, evidence);
+            "Cash", request.ApprovedAmount, date, $"CASH-{request.VoucherNumber}", null, null, evidence);
         await feeRefundRepository.StageNewSettlementAsync(payout);
         await CompleteRecordedPayoutAsync(request, payout, key, evidence);
     }

@@ -20,7 +20,8 @@ public class ChargeAudienceResolver(
 {
 	public const int MaxBatchSize = 500;
 
-	public async Task<IReadOnlyList<Guid>> ResolveAsync(ChargeAudience audience, Guid academicYearId)
+	public async Task<IReadOnlyList<Guid>> ResolveAsync(ChargeAudience audience, Guid academicYearId,
+		IReadOnlyCollection<Guid>? permittedStudentIds = null)
 	{
 		var candidates = await studentRepository.GetActiveStudentsInScopeAsync(
 			academicYearId,
@@ -28,6 +29,11 @@ public class ChargeAudienceResolver(
 			audience.Scope.EducationMediumId,
 			audience.Scope.ClassIds,
 			audience.Scope.DivisionIds);
+		if (permittedStudentIds != null)
+		{
+			var permitted = permittedStudentIds.ToHashSet();
+			candidates = candidates.Where(student => permitted.Contains(student.Id)).ToList();
+		}
 
 		if (candidates.Count == 0)
 		{

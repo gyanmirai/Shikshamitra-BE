@@ -4,7 +4,6 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
-using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Domain.Repositories;
@@ -46,16 +45,20 @@ public abstract class ConcessionRequestApiTestsBase : ShikshaMitraApiTestBase
 		var services = scope.ServiceProvider;
 		var tenant = services.GetRequiredService<ICurrentTenant>();
 		var uowManager = services.GetRequiredService<IUnitOfWorkManager>();
-		var dbContext = services.GetRequiredService<ShikshaMitraDbContext>();
 		var assignments = services.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
 		using (tenant.Change(tenantId))
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
 			var userName = $"concession-checker-{checkerId:N}";
-			await dbContext.Set<IdentityUser>().AddAsync(new IdentityUser(
-				checkerId, userName, $"{userName}@example.test", tenantId));
+			var user = new IdentityUser(checkerId, userName,
+				$"{userName}@example.test", tenantId);
+			user.AddRole(Factory.SeededRoleId);
+			await services.GetRequiredService<IRepository<IdentityUser, Guid>>()
+				.InsertAsync(user, autoSave: true);
 			await assignments.InsertAsync(new UserScopeAssignment(
-				Guid.NewGuid(), tenantId, checkerId, description: "Concession API checker scope"), autoSave: false);
+				Guid.NewGuid(), tenantId, checkerId,
+				academicYearId: Factory.SeededAcademicYearId,
+				description: "Concession API checker scope"), autoSave: false);
 			await uow.CompleteAsync();
 		}
 		await services.GetRequiredService<IUserScopeService>().InvalidateUserScopeCacheAsync(checkerId);

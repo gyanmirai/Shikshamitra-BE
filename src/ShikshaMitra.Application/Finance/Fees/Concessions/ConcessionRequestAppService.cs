@@ -32,7 +32,7 @@ namespace ShikshaMitra.Finance.Fees.Concessions;
 public partial class ConcessionRequestAppService(
 	IConcessionRequestRepository concessionRequestRepository,
 	ConcessionRequestManager concessionRequestManager,
-	IRepository<Student, Guid> studentRepository,
+	IStudentRepository studentRepository,
 	IRepository<ConcessionType, Guid> concessionTypeRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<DueFee, Guid> dueFeeRepository,
@@ -50,6 +50,7 @@ public partial class ConcessionRequestAppService(
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
 	FinanceScopeAccessService financeScopeAccessService,
+	FinanceReviewerAccessService financeReviewerAccessService,
 	IFileStorageAppService fileStorageAppService,
 	ICurrentUser currentUser,
 	IUserScopeService userScopeService,

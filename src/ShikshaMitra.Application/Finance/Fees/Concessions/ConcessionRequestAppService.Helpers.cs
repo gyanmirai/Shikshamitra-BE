@@ -166,15 +166,78 @@ public partial class ConcessionRequestAppService
 			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ScopeMismatch);
 	}
 
-	private async Task<bool> EnsureDecisionActorAsync(ConcessionRequest request)
+	private async Task<bool> EnsureDecisionActorAsync(ConcessionRequest request, string decisionPermission)
 	{
-		if (!currentUser.Id.HasValue || !request.CreatorId.HasValue)
+		if (!currentUser.Id.HasValue)
 			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor)
 				.WithData("Message", "Decision identity is unavailable.");
-		if (currentUser.Id != request.CreatorId) return false;
-		if (await userScopeService.IsAdminUserAsync(currentUser.Id.Value)) return true;
-		throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor)
-			.WithData("Message", "Only a configured administrator may decide their own concession request.");
+		if (currentUser.Id == request.CreatorId)
+		{
+			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor)
+				.WithData("Message", "The request creator cannot manually approve or reject their own concession request.");
+		}
+		var makerId = request.CreatorId ?? Guid.Empty;
+		var reviewerId = request.CreatorId.HasValue
+			? await financeReviewerAccessService.FindEligibleReviewerAsync(
+				makerId, request.StudentId, request.AcademicYearId,
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View, decisionPermission)
+			: null;
+		await financeReviewerAccessService.EnsureReviewerCanDecideAsync(
+			makerId, reviewerId, request.StudentId, request.AcademicYearId,
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View, decisionPermission);
+		return false;
+	}
+
+	private async Task<IQueryable<Guid>> GetVisibleConcessionStudentIdsAsync(Guid academicYearId)
+	{
+		var own = await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
+			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View);
+		var decisionPermission = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve)
+			? ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve
+			: await AuthorizationService.IsGrantedAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject)
+				? ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject : null;
+		if (decisionPermission == null) return own;
+		var review = await financeScopeAccessService.GetReviewerScopedStudentIdsQueryAsync(
+			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View,
+			decisionPermission);
+		return own.Union(review);
+	}
+
+	private async Task EnsureConcessionVisibleAsync(ConcessionRequest request)
+	{
+		var visible = await GetVisibleConcessionRequestIdsAsync(request.AcademicYearId);
+		if (!await AsyncExecuter.AnyAsync(visible.Where(id => id == request.Id)))
+			throw new Volo.Abp.Authorization.AbpAuthorizationException(
+				"Concession request is outside your Finance scope.");
+	}
+
+	private async Task<IQueryable<Guid>> GetVisibleConcessionRequestIdsAsync(Guid academicYearId)
+	{
+		var own = await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
+			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View);
+		var requests = await concessionRequestRepository.GetQueryableAsync();
+		var decisionPermission = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve)
+			? ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve
+			: await AuthorizationService.IsGrantedAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject)
+				? ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject : null;
+		if (decisionPermission == null || !currentUser.Id.HasValue)
+			return requests.Where(r => r.AcademicYearId == academicYearId && own.Contains(r.StudentId))
+				.Select(r => r.Id);
+		var review = await financeScopeAccessService.GetReviewerScopedStudentIdsQueryAsync(
+			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View,
+			decisionPermission);
+		var reportees = (await financeReviewerAccessService.GetReportingMakerUserIdsAsync(
+			currentUser.Id.Value)).ToArray();
+		var familyMakers = await financeReviewerAccessService.GetNonEmployeeMakerIdsQueryAsync();
+		return requests.Where(r => r.AcademicYearId == academicYearId &&
+			(own.Contains(r.StudentId) ||
+				(review.Contains(r.StudentId) && r.CreatorId.HasValue &&
+					(reportees.Contains(r.CreatorId.Value) || familyMakers.Contains(r.CreatorId.Value)))))
+			.Select(r => r.Id);
 	}
 
 	private static void EnsureRequiredDocumentsPresent(ConcessionRequest request)
@@ -247,7 +310,7 @@ public partial class ConcessionRequestAppService
 			AdjustmentCreditAmount = x.AdjustmentCreditAmount,
 			OutstandingAmount = x.OutstandingAmount,
 			EligibleConcessionAmount = includePaid
-				? Math.Max(0m, x.OriginalAmount - x.NetAmount) : x.OutstandingAmount,
+				? Math.Max(0m, x.EffectiveObligationAmount - x.NetAmount) : x.OutstandingAmount,
 			Status = x.Status.ToString(),
 			ConcurrencyStamp = x.ConcurrencyStamp
 		}).ToList();
@@ -357,7 +420,6 @@ public partial class ConcessionRequestAppService
 
     private async Task<ConcessionRequestDetailDto> MapDetailAsync(ConcessionRequest request)
     {
-		var isAdministrator = currentUser.Id.HasValue && await userScopeService.IsAdminUserAsync(currentUser.Id.Value);
 		var canViewDocuments = await AuthorizationService.IsGrantedAsync(
 			ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.ViewDocument);
 		var canViewRefunds = await AuthorizationService.IsGrantedAsync(
@@ -365,7 +427,8 @@ public partial class ConcessionRequestAppService
 		var linkedRefunds = canViewRefunds
 			? await feeRefundRepository.GetListAsync(x => x.ConcessionRequestId == request.Id)
 			: [];
-        var student = await studentRepository.GetAsync(request.StudentId);
+        var student = await studentRepository.GetForFinanceContextAsync(request.StudentId)
+            ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), request.StudentId);
         var type = await concessionTypeRepository.GetAsync(request.ConcessionTypeId);
         var feeHeadIds = request.ConcessionFeeHeadMappings.Select(m => m.FeeHeadId).ToList();
         var feeHeads = feeHeadIds.Count > 0
@@ -478,15 +541,16 @@ public partial class ConcessionRequestAppService
 			MissingDocumentIds = requiredDocs.Where(x => x.IsRequired && !x.IsUploaded)
 				.Select(x => x.DocumentId).ToList(),
             CreatedAt = request.CreationTime,
-			AvailableActions = BuildAvailableActions(request, isAdministrator),
+			AvailableActions = await FilterDecisionActionsAsync(request,
+				BuildAvailableActions(request)),
 			Timeline = BuildTimeline(request),
         };
     }
 
-	private List<string> BuildAvailableActions(ConcessionRequest request, bool isAdministrator)
+	private List<string> BuildAvailableActions(ConcessionRequest request)
 	{
 		var isOwner = request.CreatorId.HasValue && request.CreatorId == currentUser.Id;
-		var canDecide = request.CreatorId.HasValue && currentUser.Id.HasValue && (!isOwner || isAdministrator);
+		var canDecide = request.CreatorId.HasValue && currentUser.Id.HasValue && !isOwner;
 		return request.Status switch
 		{
 			ConcessionRequestStatus.Draft =>
@@ -501,6 +565,38 @@ public partial class ConcessionRequestAppService
 				["view", "reverse"],
 			_ => ["view"],
 		};
+	}
+
+	private async Task<List<string>> FilterDecisionActionsAsync(
+		ConcessionRequest request, List<string> actions)
+	{
+		if (!actions.Contains("approve") && !actions.Contains("reject")) return actions;
+		if (request.CreatorId == currentUser.Id)
+		{
+			actions.Remove("approve");
+			actions.Remove("reject");
+			return actions;
+		}
+		foreach (var (action, permission) in new[]
+		{
+			("approve", ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve),
+			("reject", ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject)
+		})
+		{
+			if (!actions.Contains(action)) continue;
+			if (!await AuthorizationService.IsGrantedAsync(permission)) { actions.Remove(action); continue; }
+			if (currentUser.Id.HasValue &&
+				await userScopeService.IsAdminUserAsync(currentUser.Id.Value)) continue;
+			var makerId = request.CreatorId ?? Guid.Empty;
+			var reviewerId = makerId != Guid.Empty
+				? await financeReviewerAccessService.FindEligibleReviewerAsync(
+					makerId, request.StudentId, request.AcademicYearId,
+					ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View, permission)
+				: null;
+			if (reviewerId != currentUser.Id && reviewerId != Guid.Empty && !(reviewerId == null && currentUser.Id.HasValue &&
+				await userScopeService.IsAdminUserAsync(currentUser.Id.Value))) actions.Remove(action);
+		}
+		return actions;
 	}
 
 	private static List<ConcessionTimelineEventDto> BuildTimeline(ConcessionRequest request)
@@ -741,7 +837,7 @@ public partial class ConcessionRequestAppService
             Message = request.ApproverMessage ?? request.RejectionReason,
 			ApprovedAt = request.GetApprovedOn(),
 			ConcurrencyStamp = request.ConcurrencyStamp,
-			AvailableActions = BuildAvailableActions(request, isAdministrator),
+			AvailableActions = BuildAvailableActions(request),
 			Timeline = BuildTimeline(request),
         };
     }

@@ -13,9 +13,11 @@ public static class FeeAdjustmentErrorCodes
     public const string TargetExceedsOutstanding = Namespace + ":TargetExceedsOutstanding";
     public const string ApplyExceedsRemaining = Namespace + ":ApplyExceedsRemaining";
     public const string NoAllocationLines = Namespace + ":NoAllocationLines";
+    public const string NoUnpaidDestination = Namespace + ":NoUnpaidDestination";
     public const string AlreadyFullyApplied = Namespace + ":AlreadyFullyApplied";
     public const string DuplicateIdempotencyKey = Namespace + ":DuplicateIdempotencyKey";
     public const string DueFeeNotFound = Namespace + ":DueFeeNotFound";
     public const string StudentNotFound = Namespace + ":StudentNotFound";
     public const string CannotApply = Namespace + ":CannotApply";
+    public const string PaidCreditTransferUnavailable = Namespace + ":PaidCreditTransferUnavailable";
 }

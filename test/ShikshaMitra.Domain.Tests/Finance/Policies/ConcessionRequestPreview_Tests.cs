@@ -212,7 +212,8 @@ public class ConcessionRequestPreview_Tests
 			if (policyFixed) due.ApplyPayment(index == 1 ? amount : 1000m);
 			return due;
 		}).ToList();
-		var studentRepository = Repository(student);
+		var studentRepository = Substitute.For<IStudentRepository>();
+		studentRepository.GetForFinanceContextAsync(student.Id, Arg.Any<CancellationToken>()).Returns(student);
 		var typeRepository = Repository(type);
 		var dueRepository = Repository(dues.ToArray());
 		var assignmentRepository = Repository(assignment);

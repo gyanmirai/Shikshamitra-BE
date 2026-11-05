@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 using Volo.Abp.Validation;
@@ -43,7 +44,8 @@ public partial class FeeAdjustmentAppService
 
 	private async Task<IQueryable<FeeAdjustmentRequest>> BuildApplicationsListQueryAsync(GetFeeAdjustmentApplicationsInput input)
 	{
-		var scopedStudents = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		var scopedStudents = await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
+			input.AcademicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View);
 		var query = (await feeAdjustmentRepository.GetQueryableAsync()).Where(request =>
 			request.TenantId == CurrentTenant.Id && scopedStudents.Contains(request.StudentId) &&
 			request.AcademicYearId == input.AcademicYearId && request.BoardId == input.BoardId &&

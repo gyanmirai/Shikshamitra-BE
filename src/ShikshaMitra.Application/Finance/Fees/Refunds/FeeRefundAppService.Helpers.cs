@@ -190,12 +190,99 @@ public partial class FeeRefundAppService
 				!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Process)) continue;
 			if ((action == "approve" || action == "reject") &&
 				(request.SubmittedByUserId == CurrentUser.Id || request.CreatorId == CurrentUser.Id)) continue;
+			if ((action is "approve" or "reject") && !request.StudentId.HasValue &&
+				(!CurrentUser.Id.HasValue ||
+				 !await userScopeService.IsAdminUserAsync(CurrentUser.Id.Value))) continue;
+			if ((action is "approve" or "reject") && request.StudentId.HasValue)
+			{
+				if (CurrentUser.Id.HasValue &&
+					await userScopeService.IsAdminUserAsync(CurrentUser.Id.Value))
+				{
+					filtered.Add(action);
+					continue;
+				}
+				var makerId = request.SubmittedByUserId ?? request.CreatorId ?? Guid.Empty;
+				var reviewerId = makerId != Guid.Empty
+					? await financeReviewerAccessService.FindEligibleReviewerAsync(
+						makerId, request.StudentId.Value, request.AcademicYearId,
+						ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View, permission)
+					: null;
+				if (reviewerId != CurrentUser.Id && reviewerId != Guid.Empty && !(reviewerId == null && CurrentUser.Id.HasValue &&
+					await userScopeService.IsAdminUserAsync(CurrentUser.Id.Value))) continue;
+			}
 			if ((action == "confirmPayout" || action == "failPayout") &&
 				request.Settlements.LastOrDefault()?.InitiatedByUserId == CurrentUser.Id &&
 				(action == "failPayout" || request.RefundMethod != "Cash")) continue;
 			filtered.Add(action);
 		}
 		dto.AvailableActions = filtered;
+	}
+
+	private async Task<IQueryable<Guid>> GetVisibleRefundStudentIdsAsync(Guid academicYearId)
+	{
+		var own = await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
+			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
+		var decisionPermission = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve)
+			? ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve
+			: await AuthorizationService.IsGrantedAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reject)
+				? ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reject : null;
+		if (decisionPermission == null) return own;
+		var review = await financeScopeAccessService.GetReviewerScopedStudentIdsQueryAsync(
+			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View,
+			decisionPermission);
+		return own.Union(review);
+	}
+
+	private async Task EnsureRefundVisibleAsync(FeeRefundRequest request)
+	{
+		if (!request.StudentId.HasValue)
+		{
+			await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(
+				request.StudentId, request.FinanceFeeAccountId);
+			return;
+		}
+		var visible = await GetVisibleRefundRequestIdsAsync(request.AcademicYearId);
+		if (!await AsyncExecuter.AnyAsync(visible.Where(id => id == request.Id)))
+			throw new Volo.Abp.Authorization.AbpAuthorizationException(
+				"Refund request is outside your Finance scope.");
+	}
+
+	private async Task<IQueryable<Guid>> GetVisibleRefundRequestIdsAsync(Guid academicYearId)
+	{
+		var own = await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
+			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
+		var ownAccounts = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
+		var requests = await feeRefundRepository.GetQueryableAsync();
+		var decisionPermission = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve)
+			? ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve
+			: await AuthorizationService.IsGrantedAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reject)
+				? ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reject : null;
+		if (decisionPermission == null || !CurrentUser.Id.HasValue)
+			return requests.Where(r => r.AcademicYearId == academicYearId &&
+				((r.StudentId.HasValue && own.Contains(r.StudentId.Value)) ||
+				 (!r.StudentId.HasValue && r.FinanceFeeAccountId.HasValue &&
+					ownAccounts.Contains(r.FinanceFeeAccountId.Value)))).Select(r => r.Id);
+		var review = await financeScopeAccessService.GetReviewerScopedStudentIdsQueryAsync(
+			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View,
+			decisionPermission);
+		var reportees = (await financeReviewerAccessService.GetReportingMakerUserIdsAsync(
+			CurrentUser.Id.Value)).ToArray();
+		var familyMakers = await financeReviewerAccessService.GetNonEmployeeMakerIdsQueryAsync();
+		var ownRequests = requests.Where(r => r.AcademicYearId == academicYearId &&
+			((r.StudentId.HasValue && own.Contains(r.StudentId.Value)) ||
+			 (!r.StudentId.HasValue && r.FinanceFeeAccountId.HasValue &&
+				ownAccounts.Contains(r.FinanceFeeAccountId.Value))));
+		var reviewable = requests.Where(r => r.AcademicYearId == academicYearId &&
+			r.StudentId.HasValue && review.Contains(r.StudentId.Value) &&
+			((r.SubmittedByUserId.HasValue &&
+				(reportees.Contains(r.SubmittedByUserId.Value) || familyMakers.Contains(r.SubmittedByUserId.Value))) ||
+			 (!r.SubmittedByUserId.HasValue && r.CreatorId.HasValue &&
+				(reportees.Contains(r.CreatorId.Value) || familyMakers.Contains(r.CreatorId.Value)))));
+		return ownRequests.Select(r => r.Id).Union(reviewable.Select(r => r.Id));
 	}
 
     private static Dictionary<string, object?>? PreserveMaskedPaymentDetails(FeeRefundRequest request,

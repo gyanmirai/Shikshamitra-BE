@@ -46,6 +46,8 @@
         "Permission:Finance.SelfService.RequestAdjustment": "Request adjustment for linked student",
         "Finance:SelfService:InvalidRequest": "Select a valid academic year, filter and page, then try again.",
         "Finance:SelfService:PaymentEvidenceIncomplete": "Payment evidence is incomplete. Contact the school finance team to reconcile this transaction.",
+        "Finance:FeeAdjustment:PaidCreditTransferUnavailable": "This older adjustment has no reserved paid credit and cannot be applied. Create a new paid-credit transfer request.",
+        "Finance:FeeAdjustment:NoUnpaidDestination": "Leave one pending or overdue installment unselected to receive the transferred amount.",
         "Finance:Proration:JoiningDateRequired": "Complete the actual joining date in the registration form before preparing fees.",
         "Finance:Proration:JoiningDateInvalid": "Correct the actual joining date in the registration form. It must be a valid, unambiguous date within or before this academic year.",
         "Finance:Proration:PolicyAmbiguous": "Finance must configure one active default proration policy for this academic year.",

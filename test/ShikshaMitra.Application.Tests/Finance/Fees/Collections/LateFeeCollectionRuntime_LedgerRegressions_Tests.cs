@@ -7,6 +7,7 @@ using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Entities;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Repositories;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Receipts;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Xunit;
@@ -15,6 +16,41 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 
 public partial class LateFeeCollectionRuntime_Tests
 {
+	[Fact]
+	public async Task Ledger_Adjustment_Eligibility_Excludes_Unverified_Provisional_Payment()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (year, student, _, dueId, _) = await SeedStudentWithOverdueDueFeeAsync(1, false);
+			var due = await _dueFeeRepo.GetAsync(dueId);
+			due.ApplyPayment(due.OriginalAmount);
+			due.ApplyConcession(20m);
+			await _dueFeeRepo.UpdateAsync(due, autoSave: true);
+			var payment = new FeeRecordMetadata(Guid.NewGuid(), TestTenantId, student, year,
+				(double)due.PaidAmount, $"UNVERIFIED-{Guid.NewGuid():N}", FeeCollectionStatus.Paid);
+			await GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().InsertAsync(payment, autoSave: true);
+			await GetRequiredService<IRepository<FeeCollectionDueFeeAllocation, Guid>>().InsertAsync(
+				new FeeCollectionDueFeeAllocation(Guid.NewGuid(), TestTenantId, payment.Id,
+					due.Id, (double)due.PaidAmount), autoSave: true);
+			await GetRequiredService<IRepository<FeePaymentReceipt, Guid>>().InsertAsync(
+				new FeePaymentReceipt(Guid.NewGuid())
+				{
+					TenantId = TestTenantId, StudentId = student, AcademicYearId = year,
+					FeeCollectionTransactionId = payment.Id, ReceiptNumber = $"KFE-{Guid.NewGuid():N}",
+					ReceiptKind = FeeReceiptKind.ProvisionalFee, ReceiptScope = FeeReceiptScope.Fee,
+					VerificationStatus = FeeReceiptVerificationStatus.PendingVerification,
+					TotalPaidAmount = (double)due.PaidAmount,
+					ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow),
+				}, autoSave: true);
+
+			var eligibility = await GetRequiredService<IFeeAdjustmentAppService>()
+				.GetEligibilityAsync(student, year);
+			eligibility.TotalPaid.ShouldBe((double)due.PaidAmount);
+			eligibility.TotalAdjustable.ShouldBe(0d);
+			eligibility.FeeHeads.ShouldBeEmpty();
+		}
+	}
+
 	[Theory]
 	[InlineData(100d, 0d, 0d, FeeCollectionStatus.InReconciliation, 0d)]
 	[InlineData(40d, 30d, 0d, FeeCollectionStatus.InReconciliation, 30d)]
@@ -82,44 +118,42 @@ public partial class LateFeeCollectionRuntime_Tests
 	}
 
 	[Fact]
-	public async Task Ledger_Adjustment_Eligibility_Uses_Fee_Head_Academic_Year_And_Matching_Reservations()
+	public async Task Ledger_Adjustment_Eligibility_Uses_Settled_Paid_Credit_And_Reservation()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		{
 			var (year, student, head, dueId, _) = await SeedStudentWithOverdueDueFeeAsync(1, false);
-			var (otherYear, _, otherHead, _, _) = await SeedStudentWithOverdueDueFeeAsync(1, false, academicYearName: "Other ledger year");
 			var due = await _dueFeeRepo.GetAsync(dueId);
-			due.ApplyPayment(200m); due.ApplyAdjustmentCredit(50m);
+			due.ApplyAdjustmentCredit(50m);
+			due.ApplyPayment(due.OriginalAmount - 50m);
+			due.ApplyConcession(200m);
+			due.ReservePaidCredit(150m);
 			await _dueFeeRepo.UpdateAsync(due, autoSave: true);
-			// The same calendar month/year belongs to a different academic year through its fee head.
-			var other = new DueFee(Guid.NewGuid(), TestTenantId, student, otherHead,
-				due.Month, due.Year, false, 900m, due.DueDate);
-			other.ApplyPayment(400m); other.ApplyAdjustmentCredit(100m);
-			await _dueFeeRepo.InsertAsync(other, autoSave: true);
-			foreach (var (source, academicYear, amount) in new[] { (due, year, 150d), (other, otherYear, 50d) })
-			{
-				var request = new FeeAdjustmentRequest(Guid.NewGuid(), TestTenantId, student, academicYear,
-					Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Reserve source",
-					$"LEDGER-{Guid.NewGuid():N}", amount);
-				request.SetSourceLines([new FeeAdjustmentSourceLine(Guid.NewGuid(), request.Id,
-					source.Id, source.FeeHeadId, source.Month, source.Year, amount)]);
-				await GetRequiredService<IFeeAdjustmentRepository>().InsertAsync(request, autoSave: true);
-			}
+			var payment = new FeeRecordMetadata(Guid.NewGuid(), TestTenantId, student, year,
+				(double)due.PaidAmount, $"ADJ-{Guid.NewGuid():N}", FeeCollectionStatus.Paid);
+			await GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().InsertAsync(payment, autoSave: true);
+			await GetRequiredService<IRepository<FeeCollectionDueFeeAllocation, Guid>>().InsertAsync(
+				new FeeCollectionDueFeeAllocation(Guid.NewGuid(), TestTenantId, payment.Id,
+					due.Id, (double)due.PaidAmount), autoSave: true);
+			await GetRequiredService<IRepository<FeePaymentReceipt, Guid>>().InsertAsync(
+				new FeePaymentReceipt(Guid.NewGuid())
+				{
+					TenantId = TestTenantId, StudentId = student, AcademicYearId = year,
+					FeeCollectionTransactionId = payment.Id, ReceiptNumber = $"ADJ-FIN-{Guid.NewGuid():N}",
+					ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = FeeReceiptScope.Fee,
+					VerificationStatus = FeeReceiptVerificationStatus.Verified,
+					TotalPaidAmount = (double)due.PaidAmount,
+					ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow),
+				}, autoSave: true);
 			var service = GetRequiredService<IFeeAdjustmentAppService>();
 			var eligibility = await service.GetEligibilityAsync(student, year);
-			eligibility.TotalAdjustable.ShouldBe(4600d);
-			eligibility.TotalPaid.ShouldBe(200d);
+			eligibility.TotalAdjustable.ShouldBe(50d);
+			eligibility.TotalPaid.ShouldBe((double)(due.OriginalAmount - 50m));
 			eligibility.TotalAlreadyAdjusted.ShouldBe(50d);
 			eligibility.FeeHeads.Single().FeeHeadId.ShouldBe(head);
 			eligibility.FeeHeads.Single().Months.Single().DueFeeId.ShouldBe(due.Id);
-			var previous = await service.GetEligibilityAsync(student, otherYear);
-			previous.TotalAdjustable.ShouldBe(350d);
-			previous.TotalPaid.ShouldBe(400d);
-			previous.TotalAlreadyAdjusted.ShouldBe(100d);
-			previous.FeeHeads.Single().FeeHeadId.ShouldBe(otherHead);
-			var empty = await service.GetEligibilityAsync(student, Guid.NewGuid());
-			empty.FeeHeads.ShouldBeEmpty();
-			empty.TotalPaid.ShouldBe(0d); empty.TotalAlreadyAdjusted.ShouldBe(0d); empty.TotalAdjustable.ShouldBe(0d);
+			await Should.ThrowAsync<Volo.Abp.Authorization.AbpAuthorizationException>(
+				() => service.GetEligibilityAsync(student, Guid.NewGuid()));
 		}
 	}
 }

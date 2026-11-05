@@ -113,8 +113,10 @@ public class ConcessionRequestContextPolicy_Tests
 		if (assignedVersion is not null) versions.Add(assignedVersion);
 		var generator = Substitute.For<IGuidGenerator>();
 		generator.Create().Returns(_ => Guid.NewGuid());
+		var studentRepository = Substitute.For<IStudentRepository>();
+		studentRepository.GetForFinanceContextAsync(student.Id, Arg.Any<CancellationToken>()).Returns(student);
 		var manager = new ConcessionRequestManager(Substitute.For<IConcessionRequestRepository>(),
-			Repository(student), Repository<ConcessionType>(), Repository(paid, unpaid, otherStudent, otherAssignment),
+			studentRepository, Repository<ConcessionType>(), Repository(paid, unpaid, otherStudent, otherAssignment),
 			Repository(assignment), Repository(structure), Repository<FeeHead>(), Repository(versions.ToArray()),
 			new ConcessionPolicyCalculationService(), generator, NullLogger<ConcessionRequestManager>.Instance);
 		return (manager, year, student.Id, assignment.Id, selected, selectedVersion, paid, unpaid);

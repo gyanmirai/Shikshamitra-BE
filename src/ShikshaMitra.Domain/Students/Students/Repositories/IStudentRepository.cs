@@ -19,6 +19,9 @@ public interface IStudentRepository : IRepository<Student, Guid>
     /// </summary>
     Task<Student?> GetForFeeAssignmentAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>Loads the student root for Finance checks without the profile and academic navigation graph.</summary>
+    Task<Student?> GetForFinanceContextAsync(Guid id, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Returns a student query without configured automatic navigation includes.
     /// Use for list projections where loading the whole aggregate graph would be wasteful.

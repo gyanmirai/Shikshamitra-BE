@@ -19,10 +19,10 @@ public class FeeAdjustmentApi_Tests : ShikshaMitraApiTestBase
     }
 
     [Fact]
-    public async Task Get_Eligibility_Should_Return_Ok()
+    public async Task Get_Eligibility_With_Empty_Student_And_Year_Should_Be_Forbidden()
     {
         var response = await Client.GetAsync(
             $"{BaseUrl}/eligibility?studentId={Guid.Empty}&academicYearId={Guid.Empty}");
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 }

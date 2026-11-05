@@ -19,34 +19,30 @@ public partial class ChargeAppService
 		if (input.AcademicYearId == Guid.Empty)
 			throw new Volo.Abp.Validation.AbpValidationException("academicYearId is required.");
 
-		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(
-			input.AcademicYearId, input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId))
-		{
-			return new ChargeListResponse
-			{
-				Success = true, Items = [], TotalCount = 0,
-				CurrentPage = input.Page, PageSize = input.PageSize, TotalPages = 0,
-				Message = "Charges retrieved successfully"
-			};
-		}
-
 		var page = Math.Max(1, input.Page);
 		var pageSize = Math.Clamp(input.PageSize, 1, MaxPageSize);
-		var scopedStudentIds = await GetScopedStudentIdsAsync(input.AcademicYearId);
+		var readScope = await GetChargeReadScopeAsync(input.AcademicYearId);
+		var scopedStudentIds = readScope.OwnStudentIds.Concat(readScope.ReviewerStudentIds).Distinct().ToArray();
 		var columnFilters = ChargeColumnFilter.Parse(input.Filters);
 		var (items, totalCount) = await chargeRequestRepository.GetChargeRequestsPagedAsync(
 			input.AcademicYearId, input.Status, page, pageSize,
 			input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId, input.Search,
-			input.SortBy, input.SortOrder, scopedStudentIds, columnFilters: columnFilters);
+			input.SortBy, input.SortOrder, scopedStudentIds, columnFilters: columnFilters,
+			readScope: readScope);
 		var statusCounts = await chargeRequestRepository.GetStatusCountsAsync(
 			input.AcademicYearId, input.BoardId, input.EducationMediumId,
-			input.StandardId, input.DivisionId, scopedStudentIds, search: input.Search, columnFilters: columnFilters);
+			input.StandardId, input.DivisionId, scopedStudentIds, search: input.Search,
+			columnFilters: columnFilters, readScope: readScope);
 		var mappedItems = new System.Collections.Generic.List<ChargeListItem>();
 		foreach (var item in items)
 		{
 			var dto = MapToListItem(item);
+			var pendingStudentIds = (await chargeRepository.GetListAsync(line =>
+				line.ChargeRequestId == item.Request.Id && line.Status == ChargeStatus.Pending))
+				.Select(line => line.StudentId).ToList();
 			dto.AvailableActions = await GetAvailableActionsAsync(
-				item.Request.RequestorId, item.PendingCount > 0, item.PendingCount == item.StudentCount,
+				item.Request.RequestorId, item.Request.AcademicYearId, pendingStudentIds,
+				item.PendingCount > 0, item.PendingCount == item.StudentCount,
 				item.CanCancel);
 			mappedItems.Add(dto);
 		}
@@ -65,12 +61,21 @@ public partial class ChargeAppService
 	public async Task<ChargeLineListResponse> GetLinesAsync(Guid academicYearId, GetChargeLinesRequest input)
 	{
 		await EnsureAcademicYearExistsAsync(academicYearId);
-		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		var readScope = await GetChargeReadScopeAsync(academicYearId);
+		var ownStudentIds = readScope.OwnStudentIds.ToArray();
+		var reviewerStudentIds = readScope.ReviewerStudentIds.ToArray();
+		var reportingMakerIds = readScope.ReportingMakerIds.ToArray();
+		var nonEmployeeMakerIds = readScope.NonEmployeeMakerIds;
+		var requests = await chargeRequestRepository.GetQueryableAsync();
 
 		var pageSize = Math.Min(input.PageSize, MaxPageSize);
 		var query = (await chargeRequestRepository.GetChargeLinesQueryAsync(
 			academicYearId, input.Status, input.BoardId, input.EducationMediumId))
-			.Where(x => scopedStudentIds.Contains(x.Student.Id));
+			.Where(x => Enumerable.Contains(ownStudentIds, x.Student.Id) ||
+				Enumerable.Contains(reviewerStudentIds, x.Student.Id) &&
+				requests.Any(request => request.Id == x.Charge.ChargeRequestId &&
+					(Enumerable.Contains(reportingMakerIds, request.RequestorId) ||
+					 nonEmployeeMakerIds.Contains(request.RequestorId))));
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var lines = await AsyncExecuter.ToListAsync(
@@ -106,7 +111,7 @@ public partial class ChargeAppService
 	public async Task<ChargeDetailResponse> GetByIdAsync(Guid chargeId)
 	{
 		var detail = await GetChargeRequestDetailsOrThrowAsync(chargeId);
-		await EnsureLinesAccessibleAsync(detail.Lines.Select(x => x.Charge.StudentId));
+		await EnsureRequestAccessibleAsync(chargeId);
 		var audience = ChargeAudienceMapper.DeserializeSnapshot(detail.Request.AudienceSnapshot);
 
 		Volo.Abp.Identity.IdentityUser? lastActor = null;
@@ -135,7 +140,9 @@ public partial class ChargeAppService
 			new ChargeWorkflowLine((ChargeStatus)line.Status, line.OutstandingAmount)));
 		var canCancel = await CanCancelAsync(detail.Lines.Select(line => line.Charge).ToList());
 		var availableActions = await GetAvailableActionsAsync(
-			detail.Request.RequestorId, hasPending, allPending, canCancel);
+			detail.Request.RequestorId, detail.Request.AcademicYearId,
+			detail.Lines.Where(line => line.Charge.Status == ChargeStatus.Pending)
+				.Select(line => line.Charge.StudentId).ToList(), hasPending, allPending, canCancel);
 
 		return new ChargeDetailResponse
 		{

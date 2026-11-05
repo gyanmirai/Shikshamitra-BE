@@ -6,6 +6,11 @@ namespace ShikshaMitra.Finance;
 
 public static class FinanceFeeAccountScopeQueryBuilder
 {
+	public static IQueryable<FinanceFeeAccount> ApplyLinkedStudentCap(
+		IQueryable<FinanceFeeAccount> accounts, IQueryable<System.Guid> allowedStudentIds) =>
+		accounts.Where(account => account.StudentId.HasValue &&
+			allowedStudentIds.Contains(account.StudentId.Value));
+
     public static IQueryable<FinanceFeeAccount> ApplyScope(IQueryable<FinanceFeeAccount> query, UserScopeContext scope)
     {
         if (scope.IsAdmin || scope.HasWildcardAcademicYear) return query;

@@ -38,10 +38,11 @@ public class ChargeRequestManager(
 		ChargeAudience audience,
 		string audienceSnapshot,
 		Guid requestorId,
-		string? additionalNotes = null)
+		string? additionalNotes = null,
+		IReadOnlyCollection<Guid>? permittedStudentIds = null)
 	{
 		var category = await GetActiveCategoryAsync(chargeCategoryId, academicYearId);
-		var studentIds = await audienceResolver.ResolveAsync(audience, academicYearId);
+		var studentIds = await audienceResolver.ResolveAsync(audience, academicYearId, permittedStudentIds);
 		var initialStatus = ChargeStatus.Pending;
 
 		var request = new ChargeRequest(
@@ -85,9 +86,10 @@ public class ChargeRequestManager(
 		DateTimeOffset? dueDate,
 		ChargePriority? priority,
 		string? additionalNotes,
-		Guid academicYearId)
+		Guid academicYearId,
+		IReadOnlyCollection<Guid>? permittedStudentIds = null)
 	{
-		var resolvedIds = await audienceResolver.ResolveAsync(audience, academicYearId);
+		var resolvedIds = await audienceResolver.ResolveAsync(audience, academicYearId, permittedStudentIds);
 		var existingLines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == request.Id);
 
 		var toRemove = existingLines

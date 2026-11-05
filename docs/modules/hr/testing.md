@@ -18,6 +18,12 @@ audience: humans-and-agents
 
 `EsiHistoricalPayrollRaceScenario` drives the real `POST /api/payroll/run` issuance/finalization path against a historical configuration save in both fence orderings. It checks stale-lock rejection and successful recalculation, rejects fresh historical writes after protection, accepts the identical pre-lock idempotent retry, and compares protected amounts, statutory evidence, reviews, issued document facts and PDF bytes/hash. There is no separately exposed salary-slip finalization HTTP route; the lock endpoint performs finalization. `EsiConfigurationCommitFailure` injects a test-only failure just before commit, after querying the same transaction to prove snapshot and review soft deletes executed; post-rollback reads must exactly restore both records and configuration history.
 
+## Manual attendance department filters
+
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~TakeAttendanceApi_Tests` with the pinned .NET 9 SDK.
+`Day_Should_Combine_Case_Insensitive_Department_And_Group_Before_Paging` covers trimmed mixed-case partial department matches, both boolean group values, filtered totals, successive pages and no matches through the real HTTP controller and SQLite-backed reader.
+PostgreSQL execution and production collation remain separate environment checks; the test host does not access tenant databases.
+
 ## HR setup readiness
 
 Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~HrSetupReadinessApi_Tests` for clean-school HTTP and direct-service authorization coverage.

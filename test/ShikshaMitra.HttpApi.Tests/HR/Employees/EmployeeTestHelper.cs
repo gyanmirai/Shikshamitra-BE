@@ -55,10 +55,12 @@ public static class EmployeeTestHelper
 		HttpClient client,
 		string? firstNameSuffix = null,
 		bool isTeaching = true,
-		DateTime? dateOfJoining = null)
+		DateTime? dateOfJoining = null,
+		string? department = null)
 	{
 		var personalInfo = BuildPersonalInfoRequest(firstNameSuffix);
 		personalInfo.IsTeaching = isTeaching;
+		personalInfo.Department = department;
 		personalInfo.RoleId = await ResolveCompatibleRoleIdAsync(client, isTeaching);
 		if (dateOfJoining.HasValue)
 		{

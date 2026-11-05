@@ -218,3 +218,8 @@ The PostgreSQL factory refuses existing databases and non-loopback hosts. It ver
 `Record_ID_issuance_is_idempotent_snapshot_is_frozen_and_reprint_and_void_are_audited` and `Record_certificate_snapshots_idempotency_and_leaving_exit_are_enforced` exercise real issuance and reprints after school defaults change. Legacy-import tests check idempotency, original-byte preservation and configured-default protection. Staff preview tests check current shared assets and omission.
 
 The [frontend testing guide](../../../../Shikshamitra-FE/docs/institute-setup/testing.md) owns browser evidence. Stored test output is evidence of only the cases it actually exercises, not a claim that every suite or deployment has passed.
+
+## Independent catalogue regression
+
+Run EmployeeWorkShiftApi_Tests alongside ShiftTenantApi_Tests to verify independent catalogues and exact action authorization.
+Confirm class shift selection and Institute Setup shift reports still use school records only.

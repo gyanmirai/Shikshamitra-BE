@@ -5,11 +5,13 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
+using ShikshaMitra.HR.WorkShifts;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Guids;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Xunit;
@@ -45,8 +47,9 @@ public class ShiftManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 		{
 			foreign = await CreateShiftAsync("Foreign employee reference");
 		}
-		(await Should.ThrowAsync<BusinessException>(() => CreateEmployeeAsync(foreign.Id)))
-			.Code.ShouldBe(HRErrorCodes.AttendancePolicyEvaluationShiftRequired);
+		using (_currentTenant.Change(TestTenantId))
+			(await Should.ThrowAsync<BusinessException>(() => CreateEmployeeAsync(foreign.Id)))
+				.Code.ShouldBe(HRErrorCodes.WorkShiftInvalid);
 	}
 
 	[Fact]
@@ -104,16 +107,18 @@ public class ShiftManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	}
 
 	[Fact]
-	public async Task Delete_Should_Reject_Shift_Assigned_To_Employee()
+	public async Task Delete_Should_Preserve_Independent_Employee_Work_Shift_With_The_Same_Id()
 	{
+		using var tenant = _currentTenant.Change(TestTenantId);
 		var shift = await CreateShiftAsync("Employee Ref");
+		var workShifts = GetRequiredService<IRepository<EmployeeWorkShift, Guid>>();
+		await WithUnitOfWorkAsync(async () => await workShifts.InsertAsync(
+			new EmployeeWorkShift(shift.Id, TestTenantId, "Independent employee shift", shift.StartTime, shift.EndTime), autoSave: true));
 		await CreateEmployeeAsync(shift.Id);
 
-		var exception = await Should.ThrowAsync<BusinessException>(() =>
-			_shiftManagementAppService.DeleteAsync(shift.Id));
-
-		exception.Code.ShouldBe(HRErrorCodes.AttendancePolicyEvaluationInvalidShift);
-		exception.Message.ShouldContain("assigned to employees or classes");
+		await _shiftManagementAppService.DeleteAsync(shift.Id);
+		await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(() => _shiftManagementAppService.GetAsync(shift.Id));
+		await WithUnitOfWorkAsync(async () => (await workShifts.GetAsync(shift.Id)).ShiftName.ShouldBe("Independent employee shift"));
 	}
 
 	[Fact]
@@ -134,7 +139,7 @@ public class ShiftManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 		}
 
 		exception.Code.ShouldBe(HRErrorCodes.AttendancePolicyEvaluationInvalidShift);
-		exception.Message.ShouldContain("assigned to employees or classes");
+		exception.Message.ShouldContain("assigned to classes");
 	}
 
 	private Task<ShiftManagementDto> CreateShiftAsync(string prefix) =>
@@ -166,7 +171,9 @@ public class ShiftManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 			EmployeeStatusType = EmployeeStatusType.Active,
 			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = roleId,
-			ShiftId = shiftId
+			InitialWorkShiftAssignment = new InitialWorkShiftInput {
+				WorkShiftId = shiftId,
+				EffectiveFrom = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata"))) }
 		});
 	}
 

@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -62,7 +63,7 @@ public class EmployeeProfileRead_Tests(ITestOutputHelper output)
 			{
 				actual.OrganizationNames.ShouldBeEmpty();
 				actual.Address.ShouldBe(string.Empty);
-				actual.Status.ShouldBe((int)EmployeeStatusType.Active);
+				actual.Status.ShouldBe((int) EmployeeStatusType.Active);
 			}
 		});
 	}
@@ -94,7 +95,7 @@ public class EmployeeProfileRead_Tests(ITestOutputHelper output)
 			db.ChangeTracker.Clear();
 			var authorization = Substitute.For<IEmployeeAuthorizationService>();
 			var reader = new EmployeeProfileAppService(authorization, repository,
-				GetRequiredService<EmployeeOrganizationScopeResolver>())
+				GetRequiredService<EmployeeOrganizationScopeResolver>(), GetRequiredService<EmployeeShiftResolver>())
 			{
 				LazyServiceProvider = GetRequiredService<IAbpLazyServiceProvider>()
 			};
@@ -121,7 +122,7 @@ public class EmployeeProfileRead_Tests(ITestOutputHelper output)
 		var authorization = Substitute.For<IEmployeeAuthorizationService>();
 		authorization.CheckEmployeeAccessAsync(id).Returns(Task.FromException(new AbpAuthorizationException("Denied")));
 		var repository = Substitute.For<IEmployeeRepository>();
-		var reader = new EmployeeProfileAppService(authorization, repository, null!);
+		var reader = new EmployeeProfileAppService(authorization, repository, null!, null!);
 		await Should.ThrowAsync<AbpAuthorizationException>(() => reader.GetAsync(id));
 		repository.ReceivedCalls().ShouldBeEmpty();
 	}
@@ -180,8 +181,8 @@ public class EmployeeProfileRead_Tests(ITestOutputHelper output)
 			Guid? shiftId = null;
 			if (populated)
 			{
-				var shift = new ShiftManagement(Guid.NewGuid(), tenantId, "Profile shift", new(7, 8, 9), new(16, 17, 18));
-				await GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(shift, true);
+				var shift = new EmployeeWorkShift(Guid.NewGuid(), tenantId, "Profile shift", new(7, 8, 9), new(16, 17, 18));
+				await GetRequiredService<IRepository<EmployeeWorkShift, Guid>>().InsertAsync(shift, true);
 				shiftId = shift.Id;
 			}
 			var employee = new Employee(Guid.NewGuid(), tenantId, userId, "PROFILE-" + Guid.NewGuid().ToString("N"),
@@ -196,6 +197,7 @@ public class EmployeeProfileRead_Tests(ITestOutputHelper output)
 				[new WorkExperience("Unrelated organization", null, null, null, null, null, new string('x', 4096), null)]);
 			employee.AddDocument(new EmployeeDocument(Guid.NewGuid(), tenantId, employee.Id, "Unrelated document", "application/pdf", 1, "unused-blob", DateTime.UtcNow));
 			await GetRequiredService<IEmployeeRepository>().InsertAsync(employee, true);
+			if (shiftId.HasValue) await GetRequiredService<IRepository<EmployeeShiftAssignment, Guid>>().InsertAsync(new EmployeeShiftAssignment(Guid.NewGuid(), employee.Id, await GetRequiredService<IRepository<EmployeeWorkShift, Guid>>().GetAsync(shiftId.Value), new DateOnly(2020, 4, 5), provenance: "TestBaseline"), true);
 			await GetRequiredService<IEmployeeFamilyMemberRepository>().InsertAsync(new EmployeeFamilyMember(Guid.NewGuid(), tenantId,
 				employee.Id, FamilyRelationType.Father, "Unrelated family", null, null, null, null, null, null, null, null, null, null, null), true);
 			if (populated && userId.HasValue) await AddOrganizationAsync(tenantId, userId.Value);
@@ -230,15 +232,28 @@ public class EmployeeProfileRead_Tests(ITestOutputHelper output)
 	// contract so scalar/null/display/role/shift/organization parity is not inferred.
 	private static EmployeeDetails PreviousContract(EmployeeDto employee) => new()
 	{
-		Id = employee.Id, UserId = employee.UserId, RoleName = employee.Role?.Name,
-		FullName = employee.EmployeeName, FirstName = employee.FirstName, MiddleName = employee.MiddleName, LastName = employee.LastName,
-		ThumbnailPicture = employee.ProfilePictureBlobName, EmployeeIdentifier = employee.EmployeeCode,
-		Dob = employee.DateOfBirth?.ToDateTime(TimeOnly.MinValue), Gender = employee.GenderType?.ToString(), Doj = employee.DateOfJoining?.ToDateTime(TimeOnly.MinValue),
-		Email = employee.Email, MobileNo = employee.MobileNo, Department = employee.Department, Designation = employee.Designation, BloodGroup = employee.BloodGroup,
+		Id = employee.Id,
+		UserId = employee.UserId,
+		RoleName = employee.Role?.Name,
+		FullName = employee.EmployeeName,
+		FirstName = employee.FirstName,
+		MiddleName = employee.MiddleName,
+		LastName = employee.LastName,
+		ThumbnailPicture = employee.ProfilePictureBlobName,
+		EmployeeIdentifier = employee.EmployeeCode,
+		Dob = employee.DateOfBirth?.ToDateTime(TimeOnly.MinValue),
+		Gender = employee.GenderType?.ToString(),
+		Doj = employee.DateOfJoining?.ToDateTime(TimeOnly.MinValue),
+		Email = employee.Email,
+		MobileNo = employee.MobileNo,
+		Department = employee.Department,
+		Designation = employee.Designation,
+		BloodGroup = employee.BloodGroup,
 		Address = string.Join(", ", new[] { employee.Address1, employee.Address2, employee.Address3 }.Where(x => !string.IsNullOrWhiteSpace(x))),
 		IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
 		Shift = employee.Shift == null ? null : new ShiftInfo { Id = employee.Shift.Id, Name = employee.Shift.ShiftName ?? string.Empty, StartTime = employee.Shift.StartTime.ToString("HH:mm:ss"), EndTime = employee.Shift.EndTime.ToString("HH:mm:ss") },
-		Organizations = employee.Organizations, OrganizationNames = employee.OrganizationNames,
-		Status = (int)(employee.EmployeeStatusType ?? EmployeeStatusType.Active)
+		Organizations = employee.Organizations,
+		OrganizationNames = employee.OrganizationNames,
+		Status = (int) (employee.EmployeeStatusType ?? EmployeeStatusType.Active)
 	};
 }

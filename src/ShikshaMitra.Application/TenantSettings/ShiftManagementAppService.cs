@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -17,11 +17,15 @@ namespace ShikshaMitra.TenantSettings;
 [Authorize]
 public class ShiftManagementAppService(
 	IRepository<ShiftManagement, Guid> repository,
-	IRepository<Employee, Guid> employeeRepository,
 	IRepository<Standard, Guid> standardRepository)
 	: CrudAppService<ShiftManagement, ShiftManagementDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateShiftManagementDto>(repository),
 	IShiftManagementAppService
 {
+	protected override string GetPolicyName { get; set; } = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.InstituteSetup.ShiftManagement.View;
+	protected override string GetListPolicyName { get; set; } = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.InstituteSetup.ShiftManagement.View;
+	protected override string CreatePolicyName { get; set; } = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.InstituteSetup.ShiftManagement.Add;
+	protected override string UpdatePolicyName { get; set; } = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.InstituteSetup.ShiftManagement.Edit;
+	protected override string DeletePolicyName { get; set; } = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.InstituteSetup.ShiftManagement.Delete;
 	protected override async Task<IQueryable<ShiftManagement>> CreateFilteredQueryAsync(PagedAndSortedResultRequestDto input)
 	{
 		return (await base.CreateFilteredQueryAsync(input)).Where(shift => shift.TenantId == CurrentTenant.Id);
@@ -51,14 +55,13 @@ public class ShiftManagementAppService(
 	public override async Task DeleteAsync(Guid id)
 	{
 		await GetEntityByIdAsync(id);
-		var isAssignedToEmployee = await employeeRepository.AnyAsync(x => x.ShiftId == id);
 		var isAssignedToStandard = await standardRepository.AnyAsync(x => x.ShiftId == id);
 
-		if (isAssignedToEmployee || isAssignedToStandard)
+		if (isAssignedToStandard)
 		{
 			throw new BusinessException(
 				HRErrorCodes.AttendancePolicyEvaluationInvalidShift,
-				"Shift cannot be deleted because it is assigned to employees or classes.");
+				"Shift cannot be deleted because it is assigned to classes.");
 		}
 
 		await base.DeleteAsync(id);

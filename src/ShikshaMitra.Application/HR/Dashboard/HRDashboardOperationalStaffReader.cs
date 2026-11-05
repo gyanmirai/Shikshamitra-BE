@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,7 +19,7 @@ public class HRDashboardOperationalStaffReader(
 	HrEmployeeScopeQueryService scopeQuery,
 	IEmployeeAttendanceRepository attendanceRepository,
 	IEmployeeLeaveRepository leaveRepository,
-	IRepository<ShiftManagement, Guid> shiftRepository,
+	EmployeeShiftResolver shiftResolver,
 	IRepository<EducationMediumStage, Guid> stageRepository,
 	HRDashboardCalendarReader calendarReader,
 	IAsyncQueryableExecuter executer) : ITransientDependency
@@ -28,7 +29,9 @@ public class HRDashboardOperationalStaffReader(
 	{
 		var query = await scopeQuery.BuildScopedEmployeeQueryAsync(scope, new HrEmployeeScopeOptions
 		{
-			ActiveOnOrAfter = start, JoinedOnOrBefore = end, TreatNullStatusAsActive = true,
+			ActiveOnOrAfter = start,
+			JoinedOnOrBefore = end,
+			TreatNullStatusAsActive = true,
 			EducationMediumStageId = input.EducationMediumStageId
 		});
 		// Filter choices come from the authorized population, before user-selected filters.
@@ -45,9 +48,8 @@ public class HRDashboardOperationalStaffReader(
 			x.EducationMedium.EducationBoard.AcademicYear.EndDate >= selectedDay)
 			.Select(x => new { x.Id, x.Name, x.SortOrder, Medium = x.EducationMedium.Name, Board = x.EducationMedium.EducationBoard.Type }));
 		var stageNames = stageRows.ToDictionary(x => x.Id, x => $"{x.Board} / {x.Medium} / {x.Name}");
-		var shiftIds = all.Where(x => x.ShiftId.HasValue).Select(x => x.ShiftId!.Value).Distinct().ToList();
-		var shiftQuery = await shiftRepository.GetQueryableAsync();
-		var shifts = await executer.ToListAsync(shiftQuery.Where(x => shiftIds.Contains(x.Id)));
+		var effectiveShifts = await shiftResolver.ForDateAsync(all.Select(x => x.Id), end);
+		var shifts = effectiveShifts.Values.DistinctBy(x => x.Id).ToList();
 		var options = new HRDashboardFilterOptionsDto
 		{
 			Departments = all.Select(x => x.Department).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!).Distinct().OrderBy(x => x).ToList(),
@@ -58,7 +60,7 @@ public class HRDashboardOperationalStaffReader(
 		var employees = all.Where(x =>
 			(!input.IsTeaching.HasValue || (x.EmployeeGroup == EmployeeGroupType.Teaching) == input.IsTeaching.Value) &&
 			(string.IsNullOrWhiteSpace(input.Department) || string.Equals(x.Department, input.Department.Trim(), StringComparison.OrdinalIgnoreCase)) &&
-			(!input.ShiftId.HasValue || x.ShiftId == input.ShiftId)).ToList();
+			(!input.ShiftId.HasValue || effectiveShifts.GetValueOrDefault(x.Id)?.Id == input.ShiftId)).ToList();
 		return new(employees, options, stageIdsByEmployee, stageNames, shifts.ToDictionary(x => x.Id, x => x.ShiftName));
 	}
 
@@ -82,6 +84,7 @@ public class HRDashboardOperationalStaffReader(
 			.Select(x => new { x.EmployeeId, x.StartDateOnly, x.EndDateOnly, x.HalfDay }));
 		var leaveLookup = leaves.ToLookup(x => x.EmployeeId);
 		var calendars = await calendarReader.ReadAsync(employees, dates);
+		var assignments = await shiftResolver.LoadAsync(ids, start, end);
 		var result = new Dictionary<DateOnly, List<HRDashboardStaffDto>>();
 		foreach (var date in dates)
 		{
@@ -107,9 +110,13 @@ public class HRDashboardOperationalStaffReader(
 					Department = employee.Department,
 					Stages = population.StageIds.GetValueOrDefault(employee.Id, []).Where(population.StageNames.ContainsKey)
 						.Select(x => new HRDashboardOptionDto { Id = x, Name = population.StageNames[x] }).ToList(),
-					ShiftName = employee.ShiftId.HasValue ? population.ShiftNames.GetValueOrDefault(employee.ShiftId.Value) : null,
-					Status = status, ApprovedLeaveCoverage = fullLeave ? HRDashboardLeaveCoverage.FullDay : halfLeave ? HRDashboardLeaveCoverage.HalfDay : null,
-					Source = recorded?.Source.ToString(), TimeIn = recorded?.TimeIn, TimeOut = recorded?.TimeOut, ReviewFlags = flags
+					ShiftName = assignments.SingleOrDefault(x => x.EmployeeId == employee.Id && x.Covers(date))?.ShiftName,
+					Status = status,
+					ApprovedLeaveCoverage = fullLeave ? HRDashboardLeaveCoverage.FullDay : halfLeave ? HRDashboardLeaveCoverage.HalfDay : null,
+					Source = recorded?.Source.ToString(),
+					TimeIn = recorded?.TimeIn,
+					TimeOut = recorded?.TimeOut,
+					ReviewFlags = flags
 				});
 			}
 			result[date] = rows;

@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Security.Cryptography;
 using System.Text;
@@ -18,7 +19,7 @@ public static class HrStarterPolicyDefaults
 	public const string ReviewNotice = "Editable starter settings; review your school's contracts and applicable requirements before operating leave or payroll. No statutory entitlement or deduction is configured.";
 
 	public static Guid RecordId(AcademicYear year, string kind) => RecordId(year.TenantId!.Value, year.Id, kind);
-	public static ShiftManagement Shift(Guid tenantId) => new(RecordId(tenantId, Guid.Empty, "shift"),
+	public static EmployeeWorkShift Shift(Guid tenantId) => new(RecordId(tenantId, Guid.Empty, "shift"),
 		tenantId, "Starter Morning Shift (editable)", new TimeOnly(7, 0), new TimeOnly(12, 30));
 
 	private static Guid RecordId(Guid tenantId, Guid scopeId, string kind) => new(

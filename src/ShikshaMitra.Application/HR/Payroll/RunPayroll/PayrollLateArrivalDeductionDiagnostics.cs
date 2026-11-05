@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.AttendanceAndLeaves;
@@ -16,7 +17,7 @@ internal static class PayrollLateArrivalDeductionDiagnostics
 		int year,
 		int month,
 		AttendancePolicy policy,
-		ShiftManagement? shift)
+		EmployeeWorkSchedule? shift)
 	{
 		if (policy.PenaltyType != AttendancePenaltyType.SalaryDeduction)
 		{

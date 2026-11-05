@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using AutoMapper;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.NotificationHistories;
@@ -25,6 +26,8 @@ public class HRMapperProfile : Profile
 {
 	public HRMapperProfile()
 	{
+		CreateMap<EmployeeWorkShift, EmployeeWorkShiftDto>().ForMember(x => x.IsAssigned, options => options.Ignore());
+
 		CreateMap<Employee, EmployeeDto>()
 			.ForMember(dest => dest.OrganizationIds,
 				opt => opt.Ignore())

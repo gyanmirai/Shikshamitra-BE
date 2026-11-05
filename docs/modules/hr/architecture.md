@@ -3,7 +3,7 @@ module: hr
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -105,3 +105,16 @@ Its operations exclude unrelated retired tables and the student custom-profile t
 
 HR table exports remain inside the modular monolith and reuse domain readers, current database principals, report run pages, document rendering and retention.
 See [the export reference](./references/hr-table-exports.md).
+
+## Work shift ownership
+
+EmployeeWorkShift and EmployeeShiftAssignment live under HR/WorkShifts across the DDD layers.
+The domain assignment manager owns transactional schedule changes and protects recorded attendance and payroll.
+EmployeeShiftResolver owns date-aware batched resolution and the ShikshaMitra.HR.Reporting.TimeZone setting.
+EmployeeWorkSchedule supplies per-date payroll inputs.
+EmployeeShiftWriteFence serializes attendance evaluation with assignment changes through the PostgreSQL employee row.
+
+HR_WorkShifts and HR_EmployeeShiftAssignments are independent of academic_ShiftManagements.
+The employee ShiftId column is retained as an internal onboarding/migration baseline reference to HR_WorkShifts, never the authority for dated attendance.
+PostgreSQL excludes overlapping nondeleted assignment ranges.
+Migration mapping is explicit through LegacySchoolShiftId; identical UUID values across independent tables do not establish a relationship.

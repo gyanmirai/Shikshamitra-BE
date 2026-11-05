@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using Microsoft.AspNetCore.Identity;
 using ShikshaMitra.Common;
 using ShikshaMitra.Groups;
@@ -73,7 +74,8 @@ public partial class HRSeederContributor : BaseSeederContributor
 		LeavePolicyManager leavePolicyManager,
 		IAcademicYearRepository academicYearRepository,
 		IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
-			IRepository<ShiftManagement, Guid> shiftRepository,
+			IRepository<EmployeeWorkShift, Guid> shiftRepository,
+			IRepository<EmployeeShiftAssignment, Guid> shiftAssignmentRepository,
 			IEmployeeRepository employeeRepository,
 			IRepository<EmployeeOrganizationAssignment, Guid> employeeOrganizationAssignmentRepository,
 			IRepository<EducationMediumStagePermission, Guid> educationMediumStagePermissionRepository,
@@ -136,6 +138,7 @@ public partial class HRSeederContributor : BaseSeederContributor
 		_academicYearRepository = academicYearRepository;
 		_educationMediumStageRepository = educationMediumStageRepository;
 		_shiftRepository = shiftRepository;
+		_shiftAssignmentRepository = shiftAssignmentRepository;
 		_employeeRepository = employeeRepository;
 		_employeeOrganizationAssignmentRepository = employeeOrganizationAssignmentRepository;
 		_educationMediumStagePermissionRepository = educationMediumStagePermissionRepository;

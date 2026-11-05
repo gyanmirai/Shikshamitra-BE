@@ -133,7 +133,7 @@ Use source inspection for Academic Setup, shift management, organization options
 
 ## Shift ownership
 
-Shifts belong to the active server tenant. Schools cannot list, read, change, delete or assign another school's shift. Standard and employee writes validate ownership before accepting a shift reference. Null shift references remain optional.
+Shifts belong to the active server tenant. Schools cannot list, read, change, delete or assign another school's shift. Standard writes validate ownership before accepting a shift reference. Null shift references remain optional.
 
 Migration `20261014063540_AddShiftTenantIsolation` adds nullable ownership and its index. The old aggregate had neither tenant ownership nor creator audit fields. Existing employee and class references could have been created through the leak, so the migration does not infer an owner from them. Legacy rows and references are preserved with null ownership and are hidden from schools until an operator verifies ownership and performs an approved audited repair. Do not reseed or assign all rows to DDVS as a repair.
 
@@ -162,3 +162,10 @@ New host tenant provisioning creates blank setup progress without demo academic 
 The migration preserves explicit legacy completion and operational institutes without a legacy marker when a complete tenant-owned academic branch exists.
 Incomplete legacy markers remain incomplete.
 Setup does not restore grants, seed removed permissions or overwrite credentials.
+
+## School shifts and HR
+
+School shifts continue to describe academic sessions and class scheduling.
+Editing or deleting a school shift cannot change employee work schedules.
+Only class dependencies prevent school-shift deletion.
+Employee assignment and attendance behavior belongs to [HR](../hr/product.md#employee-work-shifts).

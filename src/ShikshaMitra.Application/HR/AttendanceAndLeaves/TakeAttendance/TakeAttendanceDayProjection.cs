@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,7 +17,7 @@ internal static class TakeAttendanceDayProjection
 		IReadOnlyList<Employee> employees,
 		IReadOnlyDictionary<Guid, EmployeeAttendance> attendanceByEmployee,
 		IReadOnlyDictionary<Guid, ApprovedAttendanceLeaveRow> approvedLeaveByEmployee,
-		IReadOnlyDictionary<Guid, ShiftManagement> shifts,
+		IReadOnlyDictionary<Guid, EmployeeWorkShift> shifts,
 		IReadOnlyDictionary<Guid, AttendanceCaptureMode> captureModeByEmployee,
 		DateTime date,
 		Holiday? holiday,
@@ -27,7 +28,7 @@ internal static class TakeAttendanceDayProjection
 		{
 			attendanceByEmployee.TryGetValue(employee.Id, out var attendance);
 			approvedLeaveByEmployee.TryGetValue(employee.Id, out var approvedLeave);
-			shifts.TryGetValue(employee.ShiftId ?? Guid.Empty, out var shift);
+			shifts.TryGetValue(employee.Id, out var shift);
 			var captureMode = captureModeByEmployee.GetValueOrDefault(employee.Id, AttendanceCaptureMode.Integrated);
 			var warnings = new List<string>();
 			if (attendance != null && approvedLeave != null)

@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -46,6 +47,8 @@ public static class EmployeeTestHelper
 	public static Guid DefaultBoardId { get; set; }
 	public static Guid DefaultMediumId { get; set; }
 	public static Guid DefaultMediumStageId { get; set; }
+	public static DateOnly SchoolToday => DateOnly.FromDateTime(
+		TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata")));
 
 	/// <summary>
 	/// Creates an employee via POST /api/employees/personal-info (multipart/form-data)
@@ -76,7 +79,7 @@ public static class EmployeeTestHelper
 		{
 			var payload = await response.Content.ReadAsStringAsync();
 			throw new HttpRequestException(
-				$"Employee create failed with {(int)response.StatusCode} {response.StatusCode}: {payload}",
+				$"Employee create failed with {(int) response.StatusCode} {response.StatusCode}: {payload}",
 				null,
 				response.StatusCode);
 		}
@@ -119,9 +122,9 @@ public static class EmployeeTestHelper
 
 			var roleId = role.GetProperty("id").GetGuid();
 			if (string.Equals(
-				    EmployeeGroupAudience.ResolveOrDefault(groupAudience),
-				    EmployeeGroupAudience.NonTeaching,
-				    StringComparison.Ordinal))
+					EmployeeGroupAudience.ResolveOrDefault(groupAudience),
+					EmployeeGroupAudience.NonTeaching,
+					StringComparison.Ordinal))
 			{
 				return roleId;
 			}
@@ -166,7 +169,7 @@ public static class EmployeeTestHelper
 		{
 			var payload = await response.Content.ReadAsStringAsync();
 			throw new HttpRequestException(
-				$"Employee create with picture failed with {(int)response.StatusCode} {response.StatusCode}: {payload}",
+				$"Employee create with picture failed with {(int) response.StatusCode} {response.StatusCode}: {payload}",
 				null,
 				response.StatusCode);
 		}
@@ -197,7 +200,7 @@ public static class EmployeeTestHelper
 	{
 		// Title must match ^[A-Za-z ]+; suffix must stay alphabetic (shared in-memory DB across tests).
 		var suffix = Guid.NewGuid().ToString("N")[..6]
-			.Aggregate("", (s, c) => s + (char.IsDigit(c) ? (char)('a' + (c - '0')) : c));
+			.Aggregate("", (s, c) => s + (char.IsDigit(c) ? (char) ('a' + (c - '0')) : c));
 		var request = new DocumentRequest
 		{
 			Title = $"Test Document {suffix}",
@@ -221,7 +224,7 @@ public static class EmployeeTestHelper
 			Doj = DateTime.UtcNow.AddMonths(-6),
 			IsTeaching = true,
 			RoleId = DefaultRoleId,
-			ShiftId = DefaultShiftId,
+			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = DefaultShiftId, EffectiveFrom = SchoolToday },
 			Email = TestDataHelper.UniqueEmail("emp"),
 			PanNo = TestDataHelper.UniquePan(),
 			AdharNo = TestDataHelper.UniqueAdhar(),
@@ -255,7 +258,7 @@ public static class EmployeeTestHelper
 			IsTeaching = true,
 			Department = "Science",
 			RoleId = DefaultRoleId,
-			ShiftId = DefaultShiftId,
+			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = DefaultShiftId, EffectiveFrom = SchoolToday },
 			Address1 = "123 Test Street",
 			Address2 = "Block A",
 			Address3 = "Near Park",
@@ -312,7 +315,7 @@ public static class EmployeeTestHelper
 		{
 			var payload = await response.Content.ReadAsStringAsync();
 			throw new HttpRequestException(
-				$"Employee default academic permission failed with {(int)response.StatusCode} {response.StatusCode}: {payload}",
+				$"Employee default academic permission failed with {(int) response.StatusCode} {response.StatusCode}: {payload}",
 				null,
 				response.StatusCode);
 		}

@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -68,7 +69,7 @@ public class PersonalInfoRequest
 
 	public Guid RoleId { get; set; }
 
-	public Guid ShiftId { get; set; }
+	public InitialWorkShiftInput? InitialWorkShiftAssignment { get; set; }
 
 	public ShiftInfo? Shift { get; set; }
 
@@ -106,6 +107,7 @@ public class PersonalInfoPolicyOverrideRequest
 /// </summary>
 public class PersonalInfoResponse : PersonalInfoRequest
 {
+	public Guid ShiftId { get; set; }
 	[Required]
 	public Guid Id { get; set; }
 

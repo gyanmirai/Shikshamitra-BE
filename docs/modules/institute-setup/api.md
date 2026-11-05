@@ -189,7 +189,7 @@ The [frontend guide](../../../../Shikshamitra-FE/docs/institute-setup/workflows.
 
 ABP conventionally exposes `ShiftManagementAppService` at `/api/app/shift-management`: GET/POST collection and GET/PUT/DELETE `/{id}`. Its DTOs contain name and start/end times; tenant ownership comes from the authenticated server context, never a client payload. Authentication is required. The existing action-permission model is unchanged.
 
-Lists and their total counts use the current tenant. Foreign and host-only IDs return 404 to school callers for reads, updates and deletes. Standard and employee writes reject foreign shift references with `HR:Attendance:020310`. Equal or overnight time ranges and deletion of assigned shifts remain rejected.
+Lists and their total counts use the current tenant. Foreign and host-only IDs return 404 to school callers for reads, updates and deletes. Standard writes reject foreign shift references with `HR:Attendance:020310`. Equal or overnight time ranges and deletion of assigned shifts remain rejected.
 
 ## School Identity API
 
@@ -323,3 +323,10 @@ Use these paths before changing payload shape.
 
 Inspect controllers and DTOs when this page does not include enough request or response detail.
 Do not restore raw generated exports under `docs/`.
+
+## Independent school shift authorization
+
+The existing /api/app/shift-management API remains the school-shift API.
+List/read, create, update and delete enforce the existing InstituteSetup.ShiftManagement.View/Add/Edit/Delete actions respectively.
+HR shift permissions do not authorize these operations.
+Employee selectors and HR reports use the separate [HR work-shift API](../hr/api.md#employee-work-shift-apis).

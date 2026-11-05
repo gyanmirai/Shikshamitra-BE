@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using ShikshaMitra.HR;
 using ShikshaMitra.Security.Roles;
 using ShikshaMitra.TenantSettings.AcademicSetups;
@@ -38,9 +38,10 @@ public static class ApiProblemDetailsMapper
 			Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidState or
 			Finance.Accounts.CashManagement.CashManagementErrorCodes.InsufficientCash or
 			Finance.Accounts.CashManagement.CashManagementErrorCodes.Immutable => StatusCodes.Status409Conflict,
-            Finance.Accounts.Reconciliation.ReconciliationErrorCodes.AlreadyVerified or
-            Finance.Accounts.Reconciliation.ReconciliationErrorCodes.AlreadyRejected or
-            Finance.Accounts.Reconciliation.ReconciliationErrorCodes.TerminalStatus => StatusCodes.Status409Conflict,
+			Finance.Accounts.Reconciliation.ReconciliationErrorCodes.AlreadyVerified or
+			Finance.Accounts.Reconciliation.ReconciliationErrorCodes.AlreadyRejected or
+			Finance.Accounts.Reconciliation.ReconciliationErrorCodes.TerminalStatus => StatusCodes.Status409Conflict,
+			HRErrorCodes.WorkShiftReferenced or HRErrorCodes.ShiftAssignmentProtected => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewStale or HRErrorCodes.PayrollPreviewNotReady => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewNotFound => StatusCodes.Status404NotFound,
 			HRErrorCodes.LeaveEmployeeNotFound => StatusCodes.Status403Forbidden,

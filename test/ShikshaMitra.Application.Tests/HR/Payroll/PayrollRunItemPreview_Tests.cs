@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -109,7 +110,7 @@ public class PayrollRunItemPreview_Tests
 			leaveUnitsByDate: null,
 			previousMonthNetPay: null,
 			employmentStartDate: null,
-			shift,
+			new EmployeeWorkSchedule([new EmployeeShiftAssignment(Guid.NewGuid(), attendance.EmployeeId, new EmployeeWorkShift(shift.Id, shift.TenantId, shift.ShiftName ?? "Shift", shift.StartTime, shift.EndTime), new DateOnly(2027, 3, 1))]),
 			policy);
 
 		var overtime = preview.Computation.Earnings.Single(x => x.Source.Name == "Overtime Pay");

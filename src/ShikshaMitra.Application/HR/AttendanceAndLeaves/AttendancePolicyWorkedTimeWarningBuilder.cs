@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -11,7 +12,7 @@ public static class AttendancePolicyWorkedTimeWarningBuilder
 {
 	public static void AddEarlyExitWarning(
 		AttendancePolicy policy,
-		ShiftManagement shift,
+		EmployeeWorkShift shift,
 		DateTimeOffset timeOut,
 		List<string> warnings)
 	{

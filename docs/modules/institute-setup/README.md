@@ -3,7 +3,7 @@ module: institute-setup
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -61,3 +61,8 @@ Run these commands from the `Shikshamitra-BE` repo root:
 powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module institute-setup
 git diff --check
 ```
+
+## School shift boundary
+
+Institute Setup owns academic school shifts only.
+Employee work shifts and assignments belong to [HR](../hr/product.md#employee-work-shifts).

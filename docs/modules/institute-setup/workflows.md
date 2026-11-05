@@ -3,7 +3,7 @@ module: institute-setup
 domain: workflows
 content_type: How-to
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -100,3 +100,9 @@ The [frontend workflow](../../../../Shikshamitra-FE/docs/institute-setup/workflo
 9. Cleanup selects bounded batches of unretained old drafts, reserves them conditionally, removes their blobs and completes metadata deletion. Failed transactions can retry; retained document files are excluded.
 
 The [frontend workflow](../../../../Shikshamitra-FE/docs/institute-setup/workflows.md) owns editor state, source labels, confirmations and previews.
+
+## Employee scheduling
+
+Configure academic sessions in School Shifts.
+Configure employee working hours separately in HR Work Shifts, then assign them through the employee Work Schedule section.
+Matching times do not couple the two records.

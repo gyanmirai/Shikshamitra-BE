@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -20,28 +20,28 @@ internal static class HrPolicyAssignmentProjection
 		int priority,
 		IReadOnlyDictionary<Guid, string> payrollNames,
 		IReadOnlyDictionary<Guid, string> attendanceNames) => new()
-	{
-		AssignmentId = assignmentId,
-		TargetType = HrPolicyMapping.MapAssignmentTargetType(targetType),
-		TargetKey = targetKey,
-		TargetDisplayName = targetDisplayName,
-		PayrollPolicyId = payrollPolicyId,
-		PayrollPolicyName = payrollNames.GetValueOrDefault(payrollPolicyId) ?? "Unknown payroll policy",
-		AttendancePolicyId = attendancePolicyId,
-		AttendancePolicyName = attendanceNames.GetValueOrDefault(attendancePolicyId) ?? "Unknown attendance policy",
-		EffectiveFrom = effectiveFrom.Date,
-		EffectiveTo = effectiveTo?.Date,
-		Priority = priority
-	};
+		{
+			AssignmentId = assignmentId,
+			TargetType = HrPolicyMapping.MapAssignmentTargetType(targetType),
+			TargetKey = targetKey,
+			TargetDisplayName = targetDisplayName,
+			PayrollPolicyId = payrollPolicyId,
+			PayrollPolicyName = payrollNames.GetValueOrDefault(payrollPolicyId) ?? "Unknown payroll policy",
+			AttendancePolicyId = attendancePolicyId,
+			AttendancePolicyName = attendanceNames.GetValueOrDefault(attendancePolicyId) ?? "Unknown attendance policy",
+			EffectiveFrom = effectiveFrom.Date,
+			EffectiveTo = effectiveTo?.Date,
+			Priority = priority
+		};
 
-	public static HrPolicyAffectedEmployeeDto MapAffectedEmployee(Employee employee) => new()
+	public static HrPolicyAffectedEmployeeDto MapAffectedEmployee(Employee employee, Guid? workShiftId) => new()
 	{
 		EmployeeId = employee.Id,
 		EmployeeCode = employee.EmployeeCode,
 		EmployeeName = employee.EmployeeName,
 		Department = employee.Department,
 		RoleId = employee.RoleId,
-		ShiftId = employee.ShiftId,
+		ShiftId = workShiftId,
 		EmployeeType = employee.EmployeeGroup?.ToString()
 	};
 

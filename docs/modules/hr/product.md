@@ -3,7 +3,7 @@ module: hr
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-25
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -25,7 +25,7 @@ New schools created through the host tenant API or the legacy tenant API opt int
 | Payroll | Active default using working days and full working Saturdays when the calendar makes Saturday a workday. Matches the existing standard payroll basis; no manual month overrides, holiday pay overrides, locks, salary values or statutory deductions are configured. Review before payroll. |
 | Leave | Active default with the two required paid/unpaid rules. Both have **zero unconfigured days**, yearly accrual, approval required, no negative balance, carry-forward or encashment. This supplies valid employee policy references without choosing contractual leave entitlements or automatically generating unpaid leave. Administrators must configure leave before requests can be accepted. Request controls start at zero notice days, 30 days per request, half-days allowed, no attachment requirement. |
 
-These are onboarding settings, not a claim of legal compliance or recommended leave entitlements. Policy names identify starter/review settings; the leave description explicitly explains the unconfigured allocations. They are ordinary records visible and editable through existing HR Policies and Rules APIs/UI, with the usual permission and impact-confirmation checks; the shift appears in the existing institute shift settings and employee selector. Employee finalization can resolve attendance, payroll, leave and calendar references. Salaries, academic scope and reporting-manager requirements retain their existing workflows.
+These are onboarding settings, not a claim of legal compliance or recommended leave entitlements. Policy names identify starter/review settings; the leave description explicitly explains the unconfigured allocations. They are ordinary records visible and editable through existing HR Policies and Rules APIs/UI, with the usual permission and impact-confirmation checks; the shift appears in HR Work Shifts and the employee selector. Employee finalization can resolve attendance, payroll, leave and calendar references. Salaries, academic scope and reporting-manager requirements retain their existing workflows.
 
 Initialization is transactional, tenant-scoped and repeat-safe. A completed academic year is never reseeded after customization or deletion. Any existing policy setup (including drafts or archived records) is preserved as a whole. See [policy architecture](./references/policy-architecture.md) for lifecycle details. No startup/migrator backfill or public backfill endpoint is added.
 
@@ -98,3 +98,22 @@ Do not treat these as fully shipped without checking frontend navigation and bac
 Use [api.md](./api.md) for current endpoint behavior.
 Use current source files for behavior that is not covered here.
 Do not restore old generated exports or old planning docs under `docs/`.
+
+## Employee work shifts
+
+Work shifts are tenant-owned HR records assignable to any employee, independently of job roles and access roles.
+School sessions and employee working hours have separate catalogues and lifecycles.
+This release supports daytime working hours only, one assignment per employee per date, and inclusive start/exclusive end dates.
+Overnight shifts, split shifts, rosters and historical corrections are not supported.
+
+Assignments capture immutable shift-name and time snapshots.
+Unreferenced definitions are editable; assigned definitions require a new work shift to change hours.
+Renaming or deactivating a definition preserves existing assignments.
+Deactivated definitions cannot receive new assignments, and referenced definitions cannot be deleted.
+
+Changes start today or later, no earlier than joining, and cannot affect saved attendance or locked payroll.
+Future changes preserve subsequent scheduled assignments.
+Cancelling a future assignment extends its predecessor until the next change.
+Historical evaluation uses the assignment for each attendance date, including monthly late-arrival counts, payroll overtime and teacher availability.
+Missing required assignments fail explicitly rather than using school shifts.
+Imported baselines identify the last-known configuration; they do not reconstruct historical schedule changes.

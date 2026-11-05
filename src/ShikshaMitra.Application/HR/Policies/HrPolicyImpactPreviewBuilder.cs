@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.HR.WorkShifts;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,7 +20,7 @@ public class HrPolicyImpactPreviewBuilder(
 	HrPolicyPayrollRiskReader payrollRiskReader,
 	HrPolicyDefaultReplacementWarningService defaultReplacementWarningService,
 	HrPolicyProposedRuleDifferenceReader ruleDifferences,
-	IAsyncQueryableExecuter asyncExecuter)
+	IAsyncQueryableExecuter asyncExecuter, EmployeeShiftResolver shiftResolver)
 	: ITransientDependency
 {
 	public async Task<HrPolicyImpactPreviewDto> BuildAsync(HrPolicyImpactPreviewRequestDto input)
@@ -51,7 +52,8 @@ public class HrPolicyImpactPreviewBuilder(
 
 		var affectedEmployees = await affectedEmployeeResolver.ResolveAsync(academicYearId, affectedAssignments);
 		preview.AffectedEmployeeCount = affectedEmployees.Count;
-		preview.AffectedEmployees = affectedEmployees.Sample.Select(HrPolicyAssignmentProjection.MapAffectedEmployee).ToList();
+		var currentShifts = await shiftResolver.ForDateAsync(affectedEmployees.Sample.Select(x => x.Id), await shiftResolver.TodayAsync());
+		preview.AffectedEmployees = affectedEmployees.Sample.Select(employee => HrPolicyAssignmentProjection.MapAffectedEmployee(employee, currentShifts.GetValueOrDefault(employee.Id)?.Id)).ToList();
 		if (!isRestoreDraft)
 		{
 			await payrollRiskReader.FillPayrollRiskAsync(preview, policyType, input.PolicyId);

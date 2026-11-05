@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,33 +14,25 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 /// Resolves daytime attendance unavailability from the employee's HR shift.
 /// Half-day attendance retains the existing first-half absence convention.
 /// </summary>
-public class AttendanceAvailabilityWindowResolver(IRepository<ShiftManagement, Guid> shiftRepository)
+public class AttendanceAvailabilityWindowResolver(EmployeeShiftResolver shiftResolver)
 	: DomainService
 {
 	public async Task<(TimeOnly Start, TimeOnly End)> ResolveAsync(
 		Employee employee,
 		bool isFullDay,
 		TimeOnly fallbackStart,
-		TimeOnly fallbackEnd)
+		TimeOnly fallbackEnd, DateOnly date)
 	{
-		var shift = employee.ShiftId.HasValue
-			? await shiftRepository.FindAsync(employee.ShiftId.Value)
-			: null;
+		var shift = await shiftResolver.FindShiftAsync(employee.Id, date);
 		return Resolve(shift, isFullDay, fallbackStart, fallbackEnd);
 	}
 
 	/// <summary>Loads configured shifts once for a collection of employees.</summary>
-	public async Task<IReadOnlyDictionary<Guid, ShiftManagement>> LoadShiftsAsync(IEnumerable<Employee> employees)
-	{
-		var shiftIds = employees.Where(x => x.ShiftId.HasValue).Select(x => x.ShiftId!.Value).Distinct().ToArray();
-		return shiftIds.Length == 0
-			? new Dictionary<Guid, ShiftManagement>()
-			: (await shiftRepository.GetListAsync(x => Enumerable.Contains(shiftIds, x.Id))).ToDictionary(x => x.Id);
-	}
+	public Task<List<EmployeeShiftAssignment>> LoadShiftsAsync(IEnumerable<Employee> employees, DateOnly from, DateOnly to) => shiftResolver.LoadAsync(employees.Select(x => x.Id), from, to);
 
 	/// <summary>Resolves a window from an already loaded shift.</summary>
 	public static (TimeOnly Start, TimeOnly End) Resolve(
-		ShiftManagement? shift,
+		EmployeeWorkShift? shift,
 		bool isFullDay,
 		TimeOnly fallbackStart,
 		TimeOnly fallbackEnd)

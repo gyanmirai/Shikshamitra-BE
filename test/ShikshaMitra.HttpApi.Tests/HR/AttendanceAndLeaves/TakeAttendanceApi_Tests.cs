@@ -13,6 +13,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.WorkShifts;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Security.UserScope;
@@ -884,40 +885,22 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task SaveDay_Should_Reject_Overnight_Shift_For_Worked_Time_Evaluation()
+	public async Task Work_Shift_Should_Reject_Overnight_Schedule_Before_Attendance()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
-		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"ManualOvernightShift{Guid.NewGuid():N}",
-			dateOfJoining: attendanceDate.AddDays(-10).ToDateTime(TimeOnly.MinValue));
-		var overnightShiftId = await InsertShiftAsync(
-			$"Overnight Manual Test {Guid.NewGuid():N}",
-			new TimeOnly(22, 0),
-			new TimeOnly(6, 0));
-		await AssignEmployeeShiftAsync(employee.Id, overnightShiftId);
-		await AssignCaptureModePolicyAsync(employee.Id, attendanceDate, AttendanceCaptureMode.ManualWithTime);
-
-		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
+		// The employee catalogue rejects this schedule before it can become an
+		// assignment. A school-shift ID cannot be inserted into an employee FK.
+		var response = await Client.PostAsJsonAsync("/api/hr/work-shifts", new SaveWorkShiftInput
 		{
-			AttendanceDate = attendanceDate.ToString("yyyy-MM-dd"),
-			Entries =
-			[
-				new TakeAttendanceSaveEntryDto
-				{
-					EmployeeId = employee.Id,
-					StatusWire = "PRESENT",
-					InTime = "22:00:00",
-					OutTime = "23:00:00"
-				}
-			]
+			ShiftName = $"Overnight Manual Test {Guid.NewGuid():N}",
+			StartTime = new TimeOnly(22, 0),
+			EndTime = new TimeOnly(6, 0)
 		}, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		var payload = await response.Content.ReadAsStringAsync();
-		payload.ShouldContain(HRErrorCodes.AttendancePolicyEvaluationInvalidShift);
+		payload.ShouldContain(HRErrorCodes.WorkShiftInvalid);
 	}
 
 	[Fact]
@@ -1359,49 +1342,6 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		leavePolicy.ReplaceRules([leavePolicyRule, unpaidRule]);
 		await leavePolicyRepository.InsertAsync(leavePolicy, autoSave: false);
 		return leavePolicy.Id;
-	}
-
-	private async Task<Guid> InsertShiftAsync(
-		string shiftName,
-		TimeOnly startTime,
-		TimeOnly endTime)
-	{
-		using var scope = Factory.Services.CreateScope();
-		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
-		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-		var shiftRepository = scope.ServiceProvider.GetRequiredService<IRepository<ShiftManagement, Guid>>();
-		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
-
-		using (currentTenant.Change(tenantId))
-		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
-		{
-			var shift = await shiftRepository.InsertAsync(new ShiftManagement
-			{
-				ShiftName = shiftName,
-				StartTime = startTime,
-				EndTime = endTime
-			}, autoSave: false);
-			await uow.CompleteAsync();
-			return shift.Id;
-		}
-	}
-
-	private async Task AssignEmployeeShiftAsync(Guid employeeId, Guid shiftId)
-	{
-		using var scope = Factory.Services.CreateScope();
-		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
-		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-		var employeeRepository = scope.ServiceProvider.GetRequiredService<IRepository<Employee, Guid>>();
-		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
-
-		using (currentTenant.Change(tenantId))
-		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
-		{
-			var employee = await employeeRepository.GetAsync(employeeId);
-			employee.ShiftId = shiftId;
-			await employeeRepository.UpdateAsync(employee, autoSave: false);
-			await uow.CompleteAsync();
-		}
 	}
 
 	private async Task<Guid> InsertLeaveForAttendanceAsync(

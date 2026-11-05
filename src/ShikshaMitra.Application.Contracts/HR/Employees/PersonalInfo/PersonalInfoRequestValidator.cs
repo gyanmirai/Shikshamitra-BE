@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using FluentValidation;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
@@ -68,7 +68,7 @@ public class PersonalInfoRequestValidator : AbstractValidator<PersonalInfoReques
 
 		RuleFor(x => x.Doj).NotEmpty();
 		RuleFor(x => x.RoleId).NotEmpty();
-		RuleFor(x => x.ShiftId).NotEmpty();
+		// Initial work shift is validated by the creation workflow; profile updates do not change schedules.
 
 		RuleFor(x => x.Address1).MaximumLength(512);
 		RuleFor(x => x.Address2).MaximumLength(512);

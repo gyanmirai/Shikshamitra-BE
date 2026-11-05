@@ -1,3 +1,4 @@
+using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Linq;
 using System.Net;
@@ -48,7 +49,8 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 		foreach (var code in new[] { "shift", "teaching-role", "non-teaching-role", "calendar", "payroll-policy", "leave-policy", "attendance-policy", "earnings", "salary-template", "pf-coverage" })
 			result.Checks.Single(x => x.Code == code).State.ShouldBe("missing");
 		result.Checks.Where(x => x.Code != "academic-year").All(x => !x.CanConfigure).ShouldBeTrue();
-		await InAsync(school.Tenant, async services => {
+		await InAsync(school.Tenant, async services =>
+		{
 			(await services.GetRequiredService<IRepository<EsiPayrollConfiguration, Guid>>().GetCountAsync()).ShouldBe(0);
 			(await services.GetRequiredService<IRepository<EarningComponent, Guid>>().GetCountAsync()).ShouldBe(0);
 			(await services.GetRequiredService<IRepository<Employee, Guid>>().GetCountAsync()).ShouldBe(0);
@@ -174,7 +176,8 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 	public async Task Inactive_earnings_and_duplicate_defaults_are_not_ready()
 	{
 		var school = await SeedAsync(complete: true);
-		await InAsync(school.Tenant, async services => {
+		await InAsync(school.Tenant, async services =>
+		{
 			var earnings = services.GetRequiredService<IRepository<EarningComponent, Guid>>();
 			var component = (await earnings.GetListAsync()).Single(); component.Deactivate(); await earnings.UpdateAsync(component, true);
 			var year = await services.GetRequiredService<IRepository<AcademicYear, Guid>>().GetAsync(school.Year);
@@ -192,7 +195,8 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 	public async Task Calendar_references_and_employee_group_coverage_are_validated()
 	{
 		var school = await SeedAsync(complete: true);
-		await InAsync(school.Tenant, async services => {
+		await InAsync(school.Tenant, async services =>
+		{
 			var roles = services.GetRequiredService<IIdentityRoleRepository>(); var role = (await roles.GetListAsync()).Single();
 			role.SetProperty(EmployeeGroupAudience.ExtraPropertyName, EmployeeGroupAudience.Teaching); await roles.UpdateAsync(role, true);
 			var calendars = services.GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>(); var calendar = (await calendars.GetListAsync()).Single();
@@ -210,7 +214,8 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 	public async Task Invalid_legacy_fields_are_reported_as_invalid_configuration()
 	{
 		var school = await SeedAsync(complete: true);
-		await InAsync(school.Tenant, async services => {
+		await InAsync(school.Tenant, async services =>
+		{
 			var earnings = services.GetRequiredService<IRepository<EarningComponent, Guid>>();
 			var earning = (await earnings.GetListAsync()).Single();
 			typeof(EarningComponent).GetProperty(nameof(EarningComponent.Name))!.SetValue(earning, " ");
@@ -231,7 +236,8 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 	public async Task Only_template_required_statutory_dependencies_are_reported()
 	{
 		var school = await SeedAsync(complete: true);
-		await InAsync(school.Tenant, async services => {
+		await InAsync(school.Tenant, async services =>
+		{
 			var templates = services.GetRequiredService<IRepository<SalaryStructureTemplate, Guid>>();
 			var original = (await templates.GetListAsync()).Single(); original.Archive(); await templates.UpdateAsync(original, true);
 			var earning = (await services.GetRequiredService<IRepository<EarningComponent, Guid>>().GetListAsync()).Single();
@@ -254,7 +260,8 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 	public async Task Direct_application_calls_enforce_operator_permissions_without_a_controller()
 	{
 		var school = await SeedAsync();
-		await InAsync(school.Tenant, async services => {
+		await InAsync(school.Tenant, async services =>
+		{
 			var accessor = services.GetRequiredService<IHttpContextAccessor>(); var previous = accessor.HttpContext;
 			accessor.HttpContext = new DefaultHttpContext();
 			accessor.HttpContext.Request.Headers[AlwaysGrantPermissionChecker.TestPermissionsHeader] = "None";
@@ -282,12 +289,14 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 	private async Task<School> SeedAsync(bool complete = false, bool coverage = true, bool schoolWide = true)
 	{
 		Guid tenantId = default;
-		await InAsync(null, async services => {
+		await InAsync(null, async services =>
+		{
 			var tenant = await services.GetRequiredService<TenantManager>().CreateAsync($"Readiness-{Guid.NewGuid():N}");
 			await services.GetRequiredService<ITenantRepository>().InsertAsync(tenant, true); tenantId = tenant.Id;
 		});
 		School school = null!;
-		await InAsync(tenantId, async services => {
+		await InAsync(tenantId, async services =>
+		{
 			var actor = new IdentityUser(Guid.NewGuid(), "operator", "operator@example.test", tenantId);
 			await services.GetRequiredService<IIdentityUserRepository>().InsertAsync(actor, true);
 			if (schoolWide)
@@ -298,7 +307,7 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 			{
 				if (coverage)
 					await services.GetRequiredService<IRepository<PfCoverageConfiguration, Guid>>().InsertAsync(new PfCoverageConfiguration(Guid.NewGuid(), tenantId, new(2026, 1, 1), false, "Synthetic coverage review", Guid.NewGuid().ToString("N")), true);
-				await services.GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(HrStarterPolicyDefaults.Shift(tenantId), true);
+				await services.GetRequiredService<IRepository<EmployeeWorkShift, Guid>>().InsertAsync(HrStarterPolicyDefaults.Shift(tenantId), true);
 				var role = new IdentityRole(Guid.NewGuid(), "Approved staff", tenantId);
 				role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Employee);
 				role.SetProperty(EmployeeOnboardingRoleAssignment.ExtraPropertyName, true);

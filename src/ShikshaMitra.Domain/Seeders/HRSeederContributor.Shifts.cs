@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using Microsoft.AspNetCore.Identity;
 using ShikshaMitra.Common;
 using ShikshaMitra.Groups;
@@ -52,32 +53,11 @@ public partial class HRSeederContributor
 		{
 			if (existingByName.TryGetValue(shift.Name, out var existingShift))
 			{
-				if (!string.Equals(existingShift.ShiftName, shift.Name, StringComparison.Ordinal) ||
-				    existingShift.StartTime != shift.StartTime ||
-				    existingShift.EndTime != shift.EndTime)
-				{
-					existingShift.ShiftName = shift.Name;
-					existingShift.StartTime = shift.StartTime;
-					existingShift.EndTime = shift.EndTime;
-					await _shiftRepository.UpdateAsync(existingShift, autoSave: false);
-					changed = true;
-				}
-
 				continue;
 			}
 
 			var id = GuidGenerator.Create();
-			var shiftEntity = new ShiftManagement
-			{
-				TenantId = CurrentTenant.Id,
-				ShiftName = shift.Name,
-				StartTime = shift.StartTime,
-				EndTime = shift.EndTime
-			};
-			// Set the Id using reflection since there's no constructor
-			var idProperty = typeof(ShiftManagement).GetProperty(nameof(ShiftManagement.Id))
-				?? throw new InvalidOperationException("ShiftManagement.Id property was not found.");
-			idProperty.SetValue(shiftEntity, id);
+			var shiftEntity = new EmployeeWorkShift(id, CurrentTenant.Id, shift.Name, shift.StartTime, shift.EndTime);
 			await _shiftRepository.InsertAsync(shiftEntity, autoSave: false);
 			changed = true;
 		}
@@ -95,7 +75,7 @@ public partial class HRSeederContributor
 		new(SeedDefaultShiftName, new TimeOnly(7, 0), new TimeOnly(17, 30))
 	];
 
-	internal static Guid? ResolveSeedDefaultShiftId(IEnumerable<ShiftManagement> shifts)
+	internal static Guid? ResolveSeedDefaultShiftId(IEnumerable<EmployeeWorkShift> shifts)
 	{
 		var shiftList = shifts.ToList();
 		return shiftList

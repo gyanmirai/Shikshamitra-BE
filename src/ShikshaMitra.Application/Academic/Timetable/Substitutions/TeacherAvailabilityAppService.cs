@@ -1,3 +1,4 @@
+using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -95,12 +96,13 @@ public partial class TeacherAvailabilityAppService(
             (employee.UserId.HasValue && attendanceIds.Contains(employee.UserId.Value))).ToList();
         attendanceEmployees.AddRange(employees.Where(employee => attendanceNames.Contains(employee.EmployeeName) &&
             attendanceEmployees.All(existing => existing.Id != employee.Id)));
-        var shifts = await attendanceWindowResolver.LoadShiftsAsync(attendanceEmployees);
+        var shifts = await attendanceWindowResolver.LoadShiftsAsync(attendanceEmployees, pageRows.Count == 0 ? DateOnly.MinValue : DateOnly.FromDateTime(pageRows.Min(x => x.AvailabilityDate)), pageRows.Count == 0 ? DateOnly.MinValue : DateOnly.FromDateTime(pageRows.Max(x => x.AvailabilityDate)));
         var dtoRows = new List<TeacherAvailabilityDto>();
         foreach (var row in pageRows)
         {
             var employee = ResolveEmployeeByTeacherReference(attendanceEmployees, row.TeacherId, row.TeacherName);
-            var shift = employee?.ShiftId is Guid shiftId ? shifts.GetValueOrDefault(shiftId) : null;
+            var assignment = shifts.SingleOrDefault(x => x.EmployeeId == employee?.Id && x.Covers(DateOnly.FromDateTime(row.AvailabilityDate)));
+            var shift = assignment == null ? null : EmployeeShiftResolver.Snapshot(assignment);
             var window = row.SourceType == TeacherAvailabilitySource.Attendance
                 ? AttendanceAvailabilityWindowResolver.Resolve(shift, row.IsFullDay, row.StartTime, row.EndTime)
                 : (row.StartTime, row.EndTime);

@@ -3,7 +3,7 @@ module: academic
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-29
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -71,3 +71,9 @@ These projections report record existence only.
 They do not load usage graphs or replace domain-specific readiness checks.
 Existing configuration services in `src/ShikshaMitra.Application/Academic/**` continue to own creates, updates, validation, archive rules and their action permissions.
 Frontend wiring remains documented in the [frontend clients guide](../../../../Shikshamitra-FE/docs/academic/clients.md).
+
+## HR shift integration
+
+Attendance-derived teacher unavailability resolves employee work-shift assignments for the availability date.
+Class sessions continue to use Institute Setup school shifts.
+See [HR ownership](../hr/architecture.md#work-shift-ownership).

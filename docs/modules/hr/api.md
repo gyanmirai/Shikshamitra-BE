@@ -1,4 +1,4 @@
----
+﻿---
 module: hr
 domain: api
 content_type: Reference
@@ -726,3 +726,30 @@ The operational endpoint always captures its bounded authorized population, incl
 Operational criteria and complete table exports share `HrTableExportSources` and its projection. Filters/count/order precede response pagination. Equal-column alternatives are OR; different columns are AND. Numeric/date/clock/enum handling is typed on the server. Unbounded amounts sort above finite values and do not match finite numeric criteria. Salary displayed-page totals and full-export available-value totals use their respective matching populations. See [implementation limits](references/hr-table-exports.md#operational-query-population-capture).
 
 The table count reflects matching rows. Other owning-reader business summary metadata retains its canonical domain scope (for example the selected payroll/calculation month); table header criteria do not recalculate payroll or statutory business totals. Salary totals explicitly labeled for displayed rows are recomputed for the displayed matching page.
+
+## Employee work shift APIs
+
+| Method | Endpoint | Required action |
+| --- | --- | --- |
+| GET | /api/hr/work-shifts | HR shift View |
+| GET | /api/hr/work-shifts/lookup | Employee Add/Edit or HR shift View |
+| POST | /api/hr/work-shifts | HR shift Add |
+| PUT | /api/hr/work-shifts/{id} | HR shift Add |
+| DELETE | /api/hr/work-shifts/{id}?concurrencyStamp=... | HR shift Delete |
+| GET | /api/hr/employees/{employeeId}/shift-assignments | Employee View and employee scope |
+| POST | /api/hr/employees/{employeeId}/shift-assignments | Employee Edit and employee scope |
+| DELETE | /api/hr/employees/{employeeId}/shift-assignments/{assignmentId}?concurrencyStamp=... | Employee Edit and employee scope |
+
+HR shift actions retain the exact HR.AttendanceAndLeave.Setting.ShiftManagement namespace.
+Employee actions retain HR.Employee.EmployeeList.
+No new grants are seeded.
+
+Catalogue writes accept shiftName, startTime, endTime and isActive; updates require the returned concurrencyStamp.
+The lookup returns active options and today in the school's configured HR timezone.
+Assignment POST accepts workShiftId, effectiveFrom and the employee schedule concurrencyStamp.
+Schedule reads return today, concurrencyStamp, current, upcoming and history, including immutable hours and provenance.
+Employee creation accepts initialWorkShiftAssignment with workShiftId and effectiveFrom; legacy shiftId input is no longer accepted as a schedule write.
+Ordinary profile updates cannot change work schedules.
+
+Protected or referenced changes return HTTP 409, invalid dates/times return HTTP 400, stale writes return HTTP 409, and foreign catalogue IDs return HTTP 404.
+All operations derive tenant ownership from the server context.

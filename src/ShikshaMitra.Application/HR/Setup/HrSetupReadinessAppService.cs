@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -22,7 +23,7 @@ namespace ShikshaMitra.HR.Setup;
 [Authorize, RemoteService(false)]
 public class HrSetupReadinessAppService(
 	IPermissionChecker permissions, IIdentityUserRepository users, IIdentityRoleRepository roles,
-	IRepository<AcademicYear, Guid> years, IRepository<ShiftManagement, Guid> shifts,
+	IRepository<AcademicYear, Guid> years, IRepository<EmployeeWorkShift, Guid> shifts,
 	HrSetupPolicyReadinessReader policies, HrSetupPayrollReadinessReader payroll) : ApplicationService, IHrSetupReadinessAppService
 {
 	public async Task<HrSetupReadinessDto> GetAsync(Guid? academicYearId = null)
@@ -42,24 +43,39 @@ public class HrSetupReadinessAppService(
 		{
 			AcademicYearId = year?.Id,
 			AvailableYears = yearRows.OrderByDescending(x => x.StartDate).Select(x => new HrSetupYearDto
-				{ Id = x.Id, Name = x.Name, StartDate = x.StartDate, EndDate = x.EndDate }).ToList()
+			{ Id = x.Id, Name = x.Name, StartDate = x.StartDate, EndDate = x.EndDate }).ToList()
 		};
-		result.Checks.Add(new() { Code = "academic-year", Step = "policies", State = year == null ? "missing" : "ready",
+		result.Checks.Add(new()
+		{
+			Code = "academic-year",
+			Step = "policies",
+			State = year == null ? "missing" : "ready",
 			Reason = year != null ? "Academic year selected." : yearRows.Count == 0 ? "An administrator must create an academic year in Institute Setup." : "Select an academic year to check its policies.",
-			CanConfigure = yearRows.Count > 0 });
+			CanConfigure = yearRows.Count > 0
+		});
 		var shiftRows = await shifts.GetListAsync(x => x.TenantId == tenantId);
-		var usableShift = shiftRows.Any(x => !string.IsNullOrWhiteSpace(x.ShiftName) && x.EndTime > x.StartTime);
-		result.Checks.Add(new() { Code = "shift", Step = "staff", State = usableShift ? "ready" : shiftRows.Count == 0 ? "missing" : "invalid",
+		var usableShift = shiftRows.Any(x => x.IsActive && !string.IsNullOrWhiteSpace(x.ShiftName) && x.EndTime > x.StartTime);
+		result.Checks.Add(new()
+		{
+			Code = "shift",
+			Step = "staff",
+			State = usableShift ? "ready" : shiftRows.Count == 0 ? "missing" : "invalid",
 			Reason = usableShift ? "A usable staff shift is available." : "Create a staff shift with valid start and end times.",
-			CanConfigure = await permissions.IsGrantedAsync(H.AttendanceAndLeave_Setting_ShiftManagement.Add) });
+			CanConfigure = await permissions.IsGrantedAsync(H.AttendanceAndLeave_Setting_ShiftManagement.Add)
+		});
 		var employeeRoles = (await roles.GetListAsync()).Where(x => x.TenantId == tenantId && EmployeeRoleEligibility.IsOnboardingAssignable(x)).ToList();
 		foreach (var group in new[] { EmployeeGroupType.Teaching, EmployeeGroupType.NonTeaching })
 		{
 			var covered = employeeRoles.Any(x => EmployeeGroupAudience.IsAssignableTo(x.GetProperty<string>(EmployeeGroupAudience.ExtraPropertyName), group));
 			var name = group == EmployeeGroupType.Teaching ? "Teaching" : "Non Teaching";
-			result.Checks.Add(new() { Code = group == EmployeeGroupType.Teaching ? "teaching-role" : "non-teaching-role", Step = "staff",
-				State = covered ? "ready" : "missing", Reason = covered ? $"An approved {name} employee role is available." : $"Approve an Employee-audience role for {name} onboarding in Role Management.",
-				CanConfigure = await permissions.IsGrantedAsync(IdentityPermissions.Roles.Default) && await permissions.IsGrantedAsync(IdentityPermissions.Roles.Update) });
+			result.Checks.Add(new()
+			{
+				Code = group == EmployeeGroupType.Teaching ? "teaching-role" : "non-teaching-role",
+				Step = "staff",
+				State = covered ? "ready" : "missing",
+				Reason = covered ? $"An approved {name} employee role is available." : $"Approve an Employee-audience role for {name} onboarding in Role Management.",
+				CanConfigure = await permissions.IsGrantedAsync(IdentityPermissions.Roles.Default) && await permissions.IsGrantedAsync(IdentityPermissions.Roles.Update)
+			});
 		}
 		result.Checks.AddRange(await policies.ReadAsync(year, tenantId));
 		result.Checks.AddRange(await payroll.ReadAsync(tenantId, Clock.Now));

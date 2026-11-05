@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,7 +15,7 @@ namespace ShikshaMitra.HR.Employees.PersonalInfo;
 public class EmployeeProfileAppService(
 	IEmployeeAuthorizationService authorizationService,
 	IEmployeeRepository employeeRepository,
-	EmployeeOrganizationScopeResolver organizationScopeResolver)
+	EmployeeOrganizationScopeResolver organizationScopeResolver, EmployeeShiftResolver shiftResolver)
 	: ApplicationService, IEmployeeProfileAppService
 {
 	public async Task<EmployeeDetails> GetAsync(Guid employeeId)
@@ -27,6 +28,8 @@ public class EmployeeProfileAppService(
 				.Select(EmployeeProfileProjection.Details))
 			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
 
+		var shift = await shiftResolver.FindShiftAsync(employeeId, await shiftResolver.TodayAsync());
+		employee.Shift = shift == null ? null : new ShiftInfo { Id = shift.Id, Name = shift.ShiftName, StartTime = shift.StartTime.ToString("HH:mm:ss"), EndTime = shift.EndTime.ToString("HH:mm:ss") };
 		var organizations = await organizationScopeResolver.GetOrganizationsByUserIdsAsync([employee.UserId]);
 		EmployeeSearchProjection.ApplyOrganizations(employee, organizations);
 		return employee;

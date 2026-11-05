@@ -285,3 +285,22 @@ An existing tenant with missing staff assignments, ineffective selected versions
 Existing legacy versions retain school-level calculation settings until a named policy version supplies its own settings.
 Migration does not rewrite payroll snapshots, calculation JSON or issued payslips.
 Policy writes share the payroll input fence and invalidate affected unlocked employee months; locked payroll and issued documents remain protected.
+
+## Employee work shift cutover
+
+1. Pause employee/shift writes, attendance processing and payroll jobs during a coordinated maintenance window.
+2. Back up the database and rehearse migration against a disposable PostgreSQL copy.
+3. Run scripts/hr/work-shifts-preflight.sql and resolve missing, foreign-tenant, ownerless and invalid referenced shifts through an approved audited repair.
+4. Apply SeparateEmployeeWorkShifts before deploying the matching backend/frontend pair.
+5. Reconcile copied definitions and baseline assignments with original references, preserving attendance, school-class references and locked payroll snapshots.
+6. Smoke-test both catalogues and dated employee assignments, then resume processing.
+
+The migration copies all tenant-owned definitions, including unassigned records.
+Ownerless unreferenced school records remain untouched and are not inferred into HR ownership.
+Employees with null references remain unassigned and require HR scheduling before shift-dependent operation.
+ImportedLastKnown baselines cover the known employment/attendance boundary and explicitly identify incomplete historical provenance.
+No historical attendance or payroll is recalculated.
+
+Before reopening writes, rollback uses the verified pre-cutover backup and previous application versions.
+After reopening writes, use a reviewed forward repair; the migration intentionally refuses destructive Down execution.
+The migrator needs permission to install the btree_gist extension if it is absent.

@@ -10,6 +10,7 @@ using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.WorkShifts;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.TenantSettings.AcademicSetups;
@@ -59,7 +60,7 @@ public partial class InitialSetupApi_Tests
 			year.GetProperty(HrStarterPolicyDefaults.YearInitializedProperty, false).ShouldBeTrue();
 			var resolved = await scope.ServiceProvider.GetRequiredService<HrPolicyResolver>().ResolvePreviewAsync(null, null, year.StartDate, year.Id);
 			resolved.LeavePolicy.ShouldNotBeNull(); resolved.AttendancePolicy.IsDefault.ShouldBeTrue();
-			(await scope.ServiceProvider.GetRequiredService<IRepository<ShiftManagement, Guid>>().GetListAsync()).Count.ShouldBe(1);
+			(await scope.ServiceProvider.GetRequiredService<IRepository<EmployeeWorkShift, Guid>>().GetListAsync()).Count.ShouldBe(1);
 			await unit.CompleteAsync();
 		}
 	}
@@ -130,23 +131,23 @@ public partial class InitialSetupApi_Tests
 		await InHrTenantAsync(school, async services => await services.GetRequiredService<HrStarterPolicyInitializer>().InitializeAsync(
 			await services.GetRequiredService<IRepository<AcademicYear, Guid>>().GetAsync(yearId)));
 		(await school.GetFromJsonAsync<LeavePolicyDetailResponse>($"/api/leave-policies/{leave.Id}"))!.Rules.ShouldAllBe(rule => rule.LeaveCount == 7);
-		var shift = (await school.GetFromJsonAsync<PagedResultDto<ShiftManagementDto>>("/api/app/shift-management"))!.Items.Single();
+		var shift = (await school.GetFromJsonAsync<PagedResultDto<EmployeeWorkShiftDto>>("/api/hr/work-shifts"))!.Items.Single();
 		shift.StartTime.ShouldBe(new TimeOnly(7, 0)); shift.EndTime.ShouldBe(new TimeOnly(12, 30));
 		await InHrTenantAsync(school, async services =>
 		{
-			await services.GetRequiredService<ShiftReferenceValidator>().EnsureExistsAsync(shift.Id);
+			await services.GetRequiredService<WorkShiftReferenceValidator>().EnsureExistsAsync(shift.Id);
 			var role = await services.GetRequiredService<IIdentityRoleRepository>().FindByNormalizedNameAsync("TEACHER");
 			role.ShouldNotBeNull();
 			var employeeInput = new CreateEmployeePersonalInfoDto {
 				FirstName = "Synthetic", LastName = "Starter", MobileNo = "9000000001", Email = "starter@example.test",
 				PanNo = "ABCDE1234F", AdharNo = "123456789012", CastType = CastType.General, FamilyCaste = "Synthetic",
-				EmployeeGroup = EmployeeGroupType.Teaching, RoleId = role.Id, ShiftId = shift.Id, DateOfJoining = new DateOnly(2026, 7, 1),
+				EmployeeGroup = EmployeeGroupType.Teaching, RoleId = role.Id, InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = shift.Id, EffectiveFrom = HR.Employees.EmployeeTestHelper.SchoolToday }, DateOfJoining = new DateOnly(2026, 7, 1),
 				PolicyOverride = new CreateEmployeePolicyOverrideDto { AcademicYearId = yearId,
 					AttendancePolicyId = attendance.Id, PayrollPolicyId = payroll.Id, LeavePolicyId = leave.Id, EffectiveFrom = new DateTime(2026, 7, 1) } };
 			var validation = await new CreateEmployeePersonalInfoDtoValidator(services.GetRequiredService<IClock>()).ValidateAsync(employeeInput);
 			validation.Errors.ShouldBeEmpty();
 		});
-		var shiftEdit = await school.PutAsJsonAsync($"/api/app/shift-management/{shift.Id}", new CreateUpdateShiftManagementDto {
+		var shiftEdit = await school.PutAsJsonAsync($"/api/hr/work-shifts/{shift.Id}", new SaveWorkShiftInput { ConcurrencyStamp = shift.ConcurrencyStamp,
 			ShiftName = "Reviewed school shift", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(13, 0) });
 		shiftEdit.StatusCode.ShouldBe(HttpStatusCode.OK, await shiftEdit.Content.ReadAsStringAsync());
 		await InHrTenantAsync(school, async services =>
@@ -154,7 +155,7 @@ public partial class InitialSetupApi_Tests
 			var nextYear = await services.GetRequiredService<AcademicYearManager>().CreateAsync("Next year", new DateTime(2027, 6, 1), new DateTime(2028, 5, 31));
 			await services.GetRequiredService<IRepository<AcademicYear, Guid>>().InsertAsync(nextYear, autoSave: true);
 		});
-		var retainedShift = (await school.GetFromJsonAsync<PagedResultDto<ShiftManagementDto>>("/api/app/shift-management"))!.Items.Single();
+		var retainedShift = (await school.GetFromJsonAsync<PagedResultDto<EmployeeWorkShiftDto>>("/api/hr/work-shifts"))!.Items.Single();
 		retainedShift.Id.ShouldBe(shift.Id); retainedShift.ShiftName.ShouldBe("Reviewed school shift");
 		retainedShift.StartTime.ShouldBe(new TimeOnly(8, 0));
 	}
@@ -238,7 +239,7 @@ public partial class InitialSetupApi_Tests
 		{
 			(await services.GetRequiredService<IRepository<AcademicYear, Guid>>().FindAsync(failedId)).ShouldBeNull();
 			(await services.GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>().GetListAsync()).ShouldBeEmpty();
-			(await services.GetRequiredService<IRepository<ShiftManagement, Guid>>().GetListAsync()).ShouldBeEmpty();
+			(await services.GetRequiredService<IRepository<EmployeeWorkShift, Guid>>().GetListAsync()).ShouldBeEmpty();
 			(await services.GetRequiredService<IRepository<PayrollPolicy, Guid>>().GetListAsync()).ShouldBeEmpty();
 			(await services.GetRequiredService<IRepository<AttendancePolicy, Guid>>().GetListAsync()).ShouldBeEmpty();
 			(await services.GetRequiredService<IRepository<LeavePolicy, Guid>>().GetListAsync()).ShouldBeEmpty();
@@ -263,7 +264,7 @@ public partial class InitialSetupApi_Tests
 			(await services.GetRequiredService<IRepository<PayrollPolicy, Guid>>().GetListAsync()).ShouldBeEmpty();
 			(await services.GetRequiredService<IRepository<AttendancePolicy, Guid>>().GetListAsync()).ShouldBeEmpty();
 			(await services.GetRequiredService<IRepository<LeavePolicyRule, Guid>>().GetListAsync()).ShouldBeEmpty();
-			(await services.GetRequiredService<IRepository<ShiftManagement, Guid>>().GetListAsync()).ShouldBeEmpty();
+			(await services.GetRequiredService<IRepository<EmployeeWorkShift, Guid>>().GetListAsync()).ShouldBeEmpty();
 		});
 		(await SaveHrYearAsync(school)).AcademicYearId.ShouldNotBeNull();
 	}

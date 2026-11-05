@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,7 +24,7 @@ public class PayrollLateArrivalDeductionAdjustmentService(
 	IGuidGenerator guidGenerator,
 	ICurrentTenant currentTenant,
 	IDataFilter dataFilter,
-	IAsyncQueryableExecuter asyncExecuter)
+	IAsyncQueryableExecuter asyncExecuter, EmployeeShiftResolver shiftResolver)
 	: ITransientDependency
 {
 	public async Task SyncAsync(
@@ -32,7 +33,7 @@ public class PayrollLateArrivalDeductionAdjustmentService(
 		int month,
 		IReadOnlyCollection<Employee> employees,
 		IReadOnlyDictionary<Guid, List<EmployeeAttendance>> attendanceByEmployee,
-		IReadOnlyDictionary<Guid, ShiftManagement> shiftsById,
+		IReadOnlyDictionary<Guid, EmployeeWorkSchedule> shiftsById,
 		IReadOnlyDictionary<Guid, HrResolvedPolicies> policiesByEmployee)
 	{
 		var employeeIds = employees.Select(x => x.Id).Distinct().ToList();
@@ -41,6 +42,9 @@ public class PayrollLateArrivalDeductionAdjustmentService(
 			return;
 		}
 
+		var monthStart = new DateOnly(year, month, 1);
+		var assignmentRows = await shiftResolver.LoadAsync(employeeIds, monthStart, monthStart.AddMonths(1).AddDays(-1));
+		var schedules = assignmentRows.GroupBy(x => x.EmployeeId).ToDictionary(x => x.Key, x => new EmployeeWorkSchedule(x.ToList()));
 		var lockedEmployeeIds = await GetLockedEmployeeIdsAsync(internalMonthYear, employeeIds);
 		var existingAdjustments = await GetExistingAdjustmentsAsync(internalMonthYear, employeeIds);
 		var desiredByEmployee = new Dictionary<Guid, PayrollLateArrivalDeductionCalculation>();
@@ -48,7 +52,7 @@ public class PayrollLateArrivalDeductionAdjustmentService(
 		foreach (var employee in employees)
 		{
 			if (lockedEmployeeIds.Contains(employee.Id) ||
-			    !policiesByEmployee.TryGetValue(employee.Id, out var policies))
+				!policiesByEmployee.TryGetValue(employee.Id, out var policies))
 			{
 				continue;
 			}
@@ -61,7 +65,7 @@ public class PayrollLateArrivalDeductionAdjustmentService(
 				attendanceByEmployee.TryGetValue(employee.Id, out var attendanceRecords)
 					? attendanceRecords
 					: [],
-				ResolveShift(employee, shiftsById),
+				schedules.GetValueOrDefault(employee.Id),
 				policies.AttendancePolicy);
 
 			if (desired != null)
@@ -152,17 +156,10 @@ public class PayrollLateArrivalDeductionAdjustmentService(
 		}
 	}
 
-	private static ShiftManagement? ResolveShift(
+	private static EmployeeWorkSchedule? ResolveShift(
 		Employee employee,
-		IReadOnlyDictionary<Guid, ShiftManagement> shiftsById)
+		IReadOnlyDictionary<Guid, EmployeeWorkSchedule> shiftsById)
 	{
-		if (employee.Shift != null)
-		{
-			return employee.Shift;
-		}
-
-		return employee.ShiftId.HasValue && shiftsById.TryGetValue(employee.ShiftId.Value, out var shift)
-			? shift
-			: null;
+		return shiftsById.GetValueOrDefault(employee.Id);
 	}
 }

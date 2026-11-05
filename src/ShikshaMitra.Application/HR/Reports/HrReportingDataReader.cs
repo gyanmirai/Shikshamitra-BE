@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.HR.WorkShifts;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -26,7 +27,7 @@ public class HrReportingDataReader(
 	AttendanceRegisterRowReader attendanceReader, LeaveActorAccessService leaveAccess,
 	LeaveBalanceReader balances, LeaveWorkCalendarUnitService leaveUnits,
 	IRepository<EmployeeLeave, Guid> leaveRepository, ProfessionalManagementReadScopeService reviewScope,
-	IRepository<PerformanceReviewAssignment, Guid> assignments, IRepository<ProfessionalReviewCycle, Guid> cycles, IRepository<ShiftManagement, Guid> shifts, IAsyncQueryableExecuter executor)
+	IRepository<PerformanceReviewAssignment, Guid> assignments, IRepository<ProfessionalReviewCycle, Guid> cycles, EmployeeShiftResolver shiftResolver, IAsyncQueryableExecuter executor)
 	: ITransientDependency
 {
 	internal async Task<IQueryable<Employee>> EmployeesAsync(string dataset, HrReportParametersDto p, UserScopeContext scope)
@@ -175,14 +176,12 @@ public class HrReportingDataReader(
 				return result;
 			}
 			if ((long) staff.Count * (to.DayNumber - from.DayNumber + 1) > HrReportingEngine.MaximumPopulation) throw new BusinessException(HRErrorCodes.ReportPopulationTooLarge);
-			var shiftIds = staff.Where(x => x.ShiftId.HasValue).Select(x => x.ShiftId!.Value).Distinct().ToArray();
-			var shiftLookup = (await executor.ToListAsync((await shifts.GetQueryableAsync()).Where(x => Enumerable.Contains(shiftIds, x.Id)))).ToDictionary(x => x.Id);
-			var staffShifts = staff.ToDictionary(x => x.Id, x => x.ShiftId.HasValue ? shiftLookup.GetValueOrDefault(x.ShiftId.Value) : null);
+			var staffAssignments = await shiftResolver.LoadAsync(staffIds, from, to);
 			var register = await attendanceReader.BuildRowsAsync(new GetAttendanceRegisterInput { AcademicYearId = p.AcademicYearId, EducationMediumStageId = p.EducationMediumStageId }, from, to, scope, staffIds, includeWeeklyOffs: true);
 			var approved = leaves.Where(x => x.Status == EmployeeLeaveStatusType.Approved).ToLookup(x => x.EmployeeId);
 			return register.Select(x =>
 			{
-				var shift = staffShifts.GetValueOrDefault(x.EmployeeId);
+				var shift = staffAssignments.SingleOrDefault(a => a.EmployeeId == x.EmployeeId && a.Covers(x.AttendanceDate));
 				var dayState = HrReportingAttendanceDay.State(x.AttendanceDate, now, timezone, shift?.StartTime, shift?.EndTime);
 				var dayLeaves = approved[x.EmployeeId].Where(l => l.StartDateOnly <= x.AttendanceDate && l.EndDateOnly >= x.AttendanceDate).ToList();
 				var isLeave = dayLeaves.Any();

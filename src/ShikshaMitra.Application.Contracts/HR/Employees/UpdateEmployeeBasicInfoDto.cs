@@ -1,3 +1,4 @@
+﻿using System.Text.Json.Serialization;
 using ShikshaMitra.Common;
 using System;
 
@@ -65,5 +66,5 @@ public class UpdateEmployeeBasicInfoDto
 
 	public string? PinCode { get; set; }
 
-	public Guid? ShiftId { get; set; }
+	[JsonIgnore] public Guid? ShiftId { get; set; }
 }

@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,7 +19,7 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 public class PayrollLateArrivalDeductionSnapshotInvalidationReader(
 	IRepository<Employee, Guid> employeeRepository,
 	IRepository<EmployeeAttendance, Guid> attendanceRepository,
-	IRepository<ShiftManagement, Guid> shiftRepository,
+	EmployeeShiftResolver shiftResolver,
 	IAsyncQueryableExecuter asyncExecuter,
 	ILogger<PayrollLateArrivalDeductionSnapshotInvalidationReader> logger) : ITransientDependency
 {
@@ -40,12 +41,12 @@ public class PayrollLateArrivalDeductionSnapshotInvalidationReader(
 		var employeeIds = unlockedSnapshots.Select(x => x.EmployeeId).Distinct().ToList();
 		var employeesById = await GetEmployeesByIdAsync(employeeIds);
 		var attendanceByEmployee = await GetAttendanceByEmployeeAsync(employeeIds, year, month);
-		var shiftsById = await GetShiftsByIdAsync(employeesById.Values);
+		var shiftsById = await GetShiftsByIdAsync(employeesById.Values, year, month);
 
 		foreach (var snapshot in unlockedSnapshots)
 		{
 			if (!employeesById.TryGetValue(snapshot.EmployeeId, out var employee) ||
-			    !policiesByEmployee.TryGetValue(snapshot.EmployeeId, out var policies))
+				!policiesByEmployee.TryGetValue(snapshot.EmployeeId, out var policies))
 			{
 				continue;
 			}
@@ -97,21 +98,11 @@ public class PayrollLateArrivalDeductionSnapshotInvalidationReader(
 			.ToDictionary(x => x.Key, x => x.ToList());
 	}
 
-	private async Task<Dictionary<Guid, ShiftManagement>> GetShiftsByIdAsync(IEnumerable<Employee> employees)
+	private async Task<Dictionary<Guid, EmployeeWorkSchedule>> GetShiftsByIdAsync(IEnumerable<Employee> employees, int year, int month)
 	{
-		var shiftIds = employees
-			.Where(x => x.ShiftId.HasValue)
-			.Select(x => x.ShiftId!.Value)
-			.Distinct()
-			.ToList();
-		if (shiftIds.Count == 0)
-		{
-			return new Dictionary<Guid, ShiftManagement>();
-		}
-
-		var query = await shiftRepository.GetQueryableAsync();
-		return (await asyncExecuter.ToListAsync(query.Where(x => shiftIds.Contains(x.Id))))
-			.ToDictionary(x => x.Id);
+		var from = new DateOnly(year, month, 1);
+		var rows = await shiftResolver.LoadAsync(employees.Select(x => x.Id), from, from.AddMonths(1).AddDays(-1));
+		return rows.GroupBy(x => x.EmployeeId).ToDictionary(x => x.Key, x => new EmployeeWorkSchedule(x.ToList()));
 	}
 
 	private bool ConfigurationIssueChanged(
@@ -121,7 +112,7 @@ public class PayrollLateArrivalDeductionSnapshotInvalidationReader(
 		int year,
 		int month,
 		AttendancePolicy attendancePolicy,
-		ShiftManagement? shift)
+		EmployeeWorkSchedule? shift)
 	{
 		var warning = PayrollLateArrivalDeductionDiagnostics.BuildConfigurationWarning(
 			employee,
@@ -170,13 +161,13 @@ public class PayrollLateArrivalDeductionSnapshotInvalidationReader(
 		var hasMatchingAdjustment =
 			current != null &&
 			current.SourceId == expectedDeduction.SourceId &&
-			Math.Round((decimal)current.Amount, 2, MidpointRounding.AwayFromZero) == expectedDeduction.Amount &&
+			Math.Round((decimal) current.Amount, 2, MidpointRounding.AwayFromZero) == expectedDeduction.Amount &&
 			!current.IsEarning &&
 			current.IsSystemGenerated;
 		var hasMatchingDeductionComponent = (Deserialize<List<RunPayrollComponentItem>>(snapshot.DeductionComponentsJson) ?? [])
 			.Any(x =>
 				x.Name == PayrollLateArrivalDeductionCalculator.AdjustmentName &&
-				Math.Round((decimal)x.Amount, 2, MidpointRounding.AwayFromZero) == expectedDeduction.Amount);
+				Math.Round((decimal) x.Amount, 2, MidpointRounding.AwayFromZero) == expectedDeduction.Amount);
 		if (snapshotAdjustments.Count == 1 && hasMatchingAdjustment && hasMatchingDeductionComponent)
 		{
 			return false;
@@ -189,18 +180,11 @@ public class PayrollLateArrivalDeductionSnapshotInvalidationReader(
 		return true;
 	}
 
-	private static ShiftManagement? ResolveShift(
+	private static EmployeeWorkSchedule? ResolveShift(
 		Employee employee,
-		IReadOnlyDictionary<Guid, ShiftManagement> shiftsById)
+		IReadOnlyDictionary<Guid, EmployeeWorkSchedule> shiftsById)
 	{
-		if (employee.Shift != null)
-		{
-			return employee.Shift;
-		}
-
-		return employee.ShiftId.HasValue && shiftsById.TryGetValue(employee.ShiftId.Value, out var shift)
-			? shift
-			: null;
+		return shiftsById.GetValueOrDefault(employee.Id);
 	}
 
 	private static T? Deserialize<T>(string json)

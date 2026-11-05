@@ -688,6 +688,10 @@ New assignments reject archived policies; existing employee assignments and hist
 Preview proof and compensation idempotency include assignment values and resolved calculation evidence.
 Reusing a template save key with a changed ESIC assignment or submitting a stale template write returns HTTP 409.
 
+### Manual attendance query composition
+
+Manual attendance day reads trim the optional department substring and match it case-insensitively. Department, nullable isTeaching and name/code search intersect before counting and pagination. Empty department and omitted group retain all authorized staff; false selects non-teaching staff. Operational table queries and exports reuse the same day reader.
+
 ### Attendance register query composition
 
 The grouped register (`GET /api/hr/attendance/register/grouped`) accepts indexed `educationMediumStageIds[0]`, `educationMediumStageIds[1]` query parameters. These identify academic organization assignments, not student/class divisions. Empty selection retains the existing all-authorized behavior. Selected IDs use OR; staff ID, group, department substring, date, attendance status, payroll state, exceptions and search combine using AND. The legacy single `educationMediumStageId` remains supported and intersects a supplied list. Every requested stage is checked against the actor's current scope before reading; year-specific assignment lookup still applies. Filtering occurs before day projection, summary and pagination.

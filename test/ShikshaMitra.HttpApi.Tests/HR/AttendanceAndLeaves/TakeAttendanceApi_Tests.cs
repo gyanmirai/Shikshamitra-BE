@@ -35,6 +35,60 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 
 	public TakeAttendanceApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Day_Should_Combine_Case_Insensitive_Department_And_Group_Before_Paging(bool isTeaching)
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = $"Dept{Guid.NewGuid():N}"[..12];
+		var joined = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+		var teachingA = await EmployeeTestHelper.CreateEmployeeAsync(Client, marker + "A", true, joined, "Science");
+		var nonTeaching = await EmployeeTestHelper.CreateEmployeeAsync(Client, marker + "B", false, joined, "Science");
+		var teachingC = await EmployeeTestHelper.CreateEmployeeAsync(Client, marker + "C", true, joined, "Science");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, teachingA.Id);
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, nonTeaching.Id);
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, teachingC.Id);
+		using (var services = Factory.Services.CreateScope())
+		using (services.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var unit = services.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var persisted = await services.ServiceProvider.GetRequiredService<IRepository<Employee, Guid>>().GetAsync(teachingA.Id);
+			persisted.Department.ShouldBe("Science");
+			persisted.EmployeeStatusType.ShouldBe(EmployeeStatusType.Active);
+			persisted.DateOfJoining.ShouldBe(new DateOnly(2026, 1, 1));
+			(persisted.FirstName ?? string.Empty).ShouldContain(marker);
+			await unit.CompleteAsync();
+		}
+		// The API fixture persists Department = Science. Partial, mixed-case input must still match.
+		var query = $"{BaseUrl}/day?attendanceDate=2026-04-11&department=%20cIeN%20&isTeaching={isTeaching.ToString().ToLowerInvariant()}&search={marker}&maxResultCount=1";
+		var controlResponse = await Client.GetAsync(query.Replace("%20cIeN%20", "Science"));
+		controlResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var control = (await controlResponse.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions))!;
+		control.TotalCount.ShouldBe(isTeaching ? 2 : 1);
+		var response = await Client.GetAsync(query + "&skipCount=0");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var first = (await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions))!;
+		first.TotalCount.ShouldBe(isTeaching ? 2 : 1);
+		first.Items.Count.ShouldBe(1);
+		first.Items.All(row => row.IsTeaching == isTeaching).ShouldBeTrue();
+		if (!isTeaching) first.Items.Single().EmployeeId.ShouldBe(nonTeaching.Id);
+
+		var nextResponse = await Client.GetAsync(query + "&skipCount=1");
+		nextResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var next = (await nextResponse.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions))!;
+		next.TotalCount.ShouldBe(first.TotalCount);
+		next.Items.Count.ShouldBe(isTeaching ? 1 : 0);
+		if (isTeaching) next.Items.Single().EmployeeId.ShouldNotBe(first.Items.Single().EmployeeId);
+
+		var emptyResponse = await Client.GetAsync(query.Replace("cIeN", "missing-department"));
+		emptyResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var empty = (await emptyResponse.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions))!;
+		empty.TotalCount.ShouldBe(0);
+		empty.Items.ShouldBeEmpty();
+	}
+
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Reject_Take_Attendance_Endpoints_When_Permissions_Are_Missing()

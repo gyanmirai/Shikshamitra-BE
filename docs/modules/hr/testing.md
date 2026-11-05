@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-03
+updated_on: 2026-11-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -1160,6 +1160,10 @@ Cover source-view access without Export grants, current revocation, owner and te
 Cover document checklist pagination, policy filters and performance report scope.
 
 ## Named ESIC policy regression checks
+
+Run `EsiPolicyAvailabilityApi_Tests` for Staff Review with effective named assignments and no effective default, missing/unassigned selections, future/expired versions, deliberate gaps, external-only staff and zero staff.
+Its isolated synthetic API fixtures also cover saving school settings without an effective default, idempotent default seeding alongside another named policy's version 1, preservation of default history and deleted version identities, orphan version collisions, ambiguous legacy starts and unambiguous legacy adoption.
+These regressions reproduce source defects; they do not establish the affected tenant's policy history or browser acceptance for bug #6593.
 
 Run `EsiPolicy_Tests`, `EsiPolicyCalculation_Tests`, `EsiPolicyRepricing_Tests`, `EsiPolicyApi_Tests` and `SalaryTemplateComposerAppService_Tests`.
 Run `EsiPolicyPostgres_Tests` with `PAYROLL_TEST_POSTGRES` pointing to a separate empty loopback `payroll_tests_*` database; the factory refuses to reset existing tables.

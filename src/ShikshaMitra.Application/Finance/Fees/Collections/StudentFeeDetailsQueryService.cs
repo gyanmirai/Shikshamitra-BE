@@ -67,14 +67,21 @@ public partial class StudentFeeDetailsQueryService(
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId, cancellationToken);
 
 		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
-		var feeStructureAssignment = await studentFeeStructureRepository.FirstOrDefaultAsync(
-			x => x.StudentId == studentId && x.AcademicYearId == academicYearId,
-			cancellationToken: cancellationToken);
-		if (feeStructureAssignment == null)
+		var assignmentQ = await studentFeeStructureRepository.GetQueryableAsync();
+		var feeStructureStandardId = await AsyncExecuter.FirstOrDefaultAsync(
+			assignmentQ
+				.Where(x => x.StudentId == studentId && x.AcademicYearId == academicYearId)
+				.Select(x => (Guid?)x.FeeStructureStandardId),
+			cancellationToken);
+		if (!feeStructureStandardId.HasValue)
 		{
-			var account = await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FinanceFeeAccount, Guid>>().FirstOrDefaultAsync(a =>
-				a.StudentId == studentId && a.AcademicYearId == academicYearId && a.AssignmentSnapshotJson != null,
-				cancellationToken: cancellationToken);
+			var accountRepository = LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FinanceFeeAccount, Guid>>();
+			var accountQ = await accountRepository.GetQueryableAsync();
+			var account = await AsyncExecuter.FirstOrDefaultAsync(
+				accountQ
+					.Where(a => a.StudentId == studentId && a.AcademicYearId == academicYearId && a.AssignmentSnapshotJson != null)
+					.Select(a => new { a.StudentFeeStructureId, a.ApplicationId }),
+				cancellationToken);
 			if (account != null)
 			{
 				if (account.StudentFeeStructureId.HasValue)
@@ -89,7 +96,7 @@ public partial class StudentFeeDetailsQueryService(
 		var allowOnlineCollection = true;
 		CollectionPolicy? allocationPolicy = null;
 
-		if (feeStructureAssignment != null)
+		if (feeStructureStandardId.HasValue)
 		{
 			var dueFees = await GetDueFeesAsync(studentId, academicYearId, cancellationToken);
 			dueFees = dueFees
@@ -103,14 +110,19 @@ public partial class StudentFeeDetailsQueryService(
 			// an advance payment against a specific future installment. DemandDate still controls
 			// bill generation and late-fee timing; it is not a collection-eligibility boundary.
 			var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
-			var feeHeads = await feeHeadRepository.GetListAsync(
-				fh => feeHeadIds.Contains(fh.Id), cancellationToken: cancellationToken);
+			var feeHeadQ = await feeHeadRepository.GetQueryableAsync();
+			var feeHeads = await AsyncExecuter.ToListAsync(
+				feeHeadQ.Where(fh => feeHeadIds.Contains(fh.Id)).Select(fh => new { fh.Id, fh.Name }),
+				cancellationToken);
 			var feeHeadNameMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
 			var prorationVersionIds = dueFees.Where(d => d.ProrationPolicyVersionId.HasValue)
 				.Select(d => d.ProrationPolicyVersionId!.Value).Distinct().ToList();
-			var prorationVersions = (await financePolicyVersionRepository.GetListAsync(v =>
-				prorationVersionIds.Contains(v.Id) && v.PolicyType == "proration",
-				cancellationToken: cancellationToken))
+			var financePolicyVersionQ = await financePolicyVersionRepository.GetQueryableAsync();
+			var prorationVersions = (await AsyncExecuter.ToListAsync(
+				financePolicyVersionQ
+					.Where(v => prorationVersionIds.Contains(v.Id) && v.PolicyType == "proration")
+					.Select(v => new { v.Id, v.PolicyId, v.PolicyName, v.VersionNumber }),
+				cancellationToken))
 				.ToDictionary(v => v.Id);
 			var reconByDueFee = await GetInReconciliationByDueFeeAsync(
 				studentId, academicYearId, cancellationToken);
@@ -121,7 +133,8 @@ public partial class StudentFeeDetailsQueryService(
 			var concessions = await concessionRequestRepository.GetListAsync(c => c.StudentId == studentId
 				&& c.AcademicYearId == academicYearId
 				&& (c.Status == ConcessionRequestStatus.Approved
-					|| c.Status == ConcessionRequestStatus.PartiallyReversed));
+					|| c.Status == ConcessionRequestStatus.PartiallyReversed),
+				cancellationToken: cancellationToken);
 
 			var refundByDueFee = await GetRefundsByDueFeeAsync(studentId, cancellationToken);
 			var pendingRefundByDueFee = await GetPendingRefundsByDueFeeAsync(
@@ -131,7 +144,7 @@ public partial class StudentFeeDetailsQueryService(
 			// One resolution for the whole collect-form call, not per due line — the policy
 			// doesn't vary by fee head today (per-fee-head override is Phase 4a, not yet built).
 			var effectiveRules = await policyResolver.ResolveEffectiveRulesForStudentAsync(
-				studentId, feeStructureAssignment.FeeStructureStandardId);
+				studentId, feeStructureStandardId.Value);
 			allowOnlineCollection = effectiveRules.Policy?.AllowOnlineCollection ?? true;
 			allocationPolicy = effectiveRules.Policy;
 

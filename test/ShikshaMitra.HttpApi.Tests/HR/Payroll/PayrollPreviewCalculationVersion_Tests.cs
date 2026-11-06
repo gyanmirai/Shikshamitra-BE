@@ -21,7 +21,7 @@ public partial class PayrollPreviewPostgres_Tests
 	[PayrollPostgresFact]
 	public async Task Legacy_completed_preview_cannot_be_reviewed_or_locked_and_fresh_preview_resets_review()
 	{
-		var run = await StartAsync("2026-06");
+		var run = await StartAsync("2026-06", refresh: true);
 		await ExecuteAsync(run.Id);
 		var rows = await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{run.Id}/employees?pageSize=100");
 		var employeeId = rows.Items.First().EmployeeId;
@@ -53,7 +53,7 @@ public partial class PayrollPreviewPostgres_Tests
 	[PayrollPostgresFact]
 	public async Task Legacy_queued_worker_is_superseded_without_calculation()
 	{
-		var run = await StartAsync("2026-08");
+		var run = await StartAsync("2026-08", refresh: true);
 		await WithDatabaseAsync(async db =>
 		{
 			var stored = await db.PayrollPreviewRuns.SingleAsync(x => x.Id == run.Id);
@@ -70,7 +70,7 @@ public partial class PayrollPreviewPostgres_Tests
 	[PayrollPostgresFact]
 	public async Task Legacy_running_preview_is_superseded_when_replacement_is_requested()
 	{
-		var run = await StartAsync("2026-09");
+		var run = await StartAsync("2026-09", refresh: true);
 		await WithDatabaseAsync(async db =>
 		{
 			var stored = await db.PayrollPreviewRuns.SingleAsync(x => x.Id == run.Id);

@@ -63,26 +63,28 @@ public partial class StudentFeeDetailsQueryService
 	private static string BuildFullName(string? first, string? middle, string? last) =>
 		string.Join(" ", new[] { first, middle, last }.Where(p => !string.IsNullOrWhiteSpace(p)));
 
-	private async Task<Dictionary<Guid, double>> GetInReconciliationByDueFeeAsync(Guid studentId, Guid academicYearId)
+	private async Task<Dictionary<Guid, double>> GetInReconciliationByDueFeeAsync(
+		Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
 	{
 		var metaQ = await feeRecordMetadataRepository.GetQueryableAsync();
 		var allocQ = await dueFeeAllocationRepository.GetQueryableAsync();
 		var reconMetaIds = metaQ.Where(m => m.StudentId == studentId && m.AcademicYearId == academicYearId && m.Status == FeeCollectionStatus.InReconciliation).Select(m => m.Id);
-		return allocQ.Where(a => reconMetaIds.Contains(a.FeeRecordMetadataId))
+		var rows = await AsyncExecuter.ToListAsync(allocQ.Where(a => reconMetaIds.Contains(a.FeeRecordMetadataId))
 			.GroupBy(a => a.DueFeeId)
-			.Select(g => new { DueFeeId = g.Key, Amount = g.Sum(a => a.Amount) })
-			.ToDictionary(x => x.DueFeeId, x => x.Amount);
+			.Select(g => new { DueFeeId = g.Key, Amount = g.Sum(a => a.Amount) }), cancellationToken);
+		return rows.ToDictionary(x => x.DueFeeId, x => x.Amount);
 	}
 
-	private async Task<Dictionary<Guid, double>> GetInReconciliationByFeeHeadAsync(Guid studentId)
+	private async Task<Dictionary<Guid, double>> GetInReconciliationByFeeHeadAsync(
+		Guid studentId, CancellationToken cancellationToken = default)
 	{
 		var metaQ = await feeRecordMetadataRepository.GetQueryableAsync();
 		var collQ = await feeCollectionRecordRepository.GetQueryableAsync();
 		var reconMetaIds = metaQ.Where(m => m.StudentId == studentId && m.Status == FeeCollectionStatus.InReconciliation).Select(m => m.Id);
-		return collQ.Where(r => r.StudentId == studentId && reconMetaIds.Contains(r.FeeRecordMetadataId))
+		var rows = await AsyncExecuter.ToListAsync(collQ.Where(r => r.StudentId == studentId && reconMetaIds.Contains(r.FeeRecordMetadataId))
 			.GroupBy(r => r.FeeHeadId)
-			.Select(g => new { FeeHeadId = g.Key, Amount = g.Sum(r => r.Amount) })
-			.ToDictionary(x => x.FeeHeadId, x => x.Amount);
+			.Select(g => new { FeeHeadId = g.Key, Amount = g.Sum(r => r.Amount) }), cancellationToken);
+		return rows.ToDictionary(x => x.FeeHeadId, x => x.Amount);
 	}
 
 	private sealed class StudentSnapshot

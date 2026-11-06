@@ -14,6 +14,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionParentRegistrationController(IAdmissionParentRegistrationAppService service) : AbpController
 {
 	[HttpGet] public async Task<Result<AdmissionParentStaffContextDto>> GetAsync(Guid applicationId) => Result.Success(await service.GetAsync(applicationId));
+	[HttpGet("email-history")] public async Task<Result<System.Collections.Generic.List<AdmissionParentEmailHistoryDto>>> GetEmailHistoryAsync(Guid applicationId) => Result.Success(await service.GetEmailHistoryAsync(applicationId));
 	[HttpPost("send"), Authorize(Permissions.Edit)] public async Task<Result<AdmissionParentStaffContextDto>> SendAsync(Guid applicationId, AdmissionParentSendInput input) => Result.Success(await service.SendAsync(applicationId, input));
 	[HttpPost("email"), Authorize(Permissions.Edit)] public async Task<Result<AdmissionParentStaffContextDto>> EmailAsync(Guid applicationId, AdmissionParentEmailInput input) => Result.Success(await service.ChangeEmailAsync(applicationId, input));
 	[HttpPost("corrections"), Authorize(Permissions.Edit)] public async Task<Result<AdmissionParentStaffContextDto>> CorrectionsAsync(Guid applicationId, AdmissionParentCorrectionInput input) => Result.Success(await service.RequestCorrectionsAsync(applicationId, input));

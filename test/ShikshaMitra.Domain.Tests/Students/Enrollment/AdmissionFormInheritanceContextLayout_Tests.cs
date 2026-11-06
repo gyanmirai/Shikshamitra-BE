@@ -59,10 +59,30 @@ public class AdmissionFormInheritanceContextLayout_Tests
 		context.DisplayOrder.ShouldBe(editable.DisplayOrder);
 		context.StepId.ShouldBe(editable.StepId);
 		context.StepDisplayOrder.ShouldBe(editable.StepDisplayOrder);
-		context.FieldsPerRow.ShouldBe(3);
+		context.FieldsPerRow.ShouldBe(registration.FieldsPerRow);
 		context.Fields.Single().DisplayOrder.ShouldBe(5);
 		context.Fields.Single().ReadOnly.ShouldBeTrue();
 		editable.Fields.Single().DisplayOrder.ShouldBe(8);
+	}
+
+	[Theory]
+	[InlineData(true, false)]
+	[InlineData(true, true)]
+	[InlineData(false, false)]
+	public void Registration_step_titles_survive_policy_roundtrip_without_changing_the_inquiry(bool inquiryStepper, bool sharedStep)
+	{
+		var inquiry = Form("Inquiry", inquiryStepper, Section("DETAILS", 0, Field("NAME", "Applicant.FirstName", 0)), Section("CONTACT", 1, Field("ROLE", "Inquiry.ParentRelationship", 1)));
+		var registration = Form("Registration", true, Section("ADDITIONAL", 0, Field("EMAIL", "Guardian.Email", 0)));
+		if (sharedStep) inquiry.Sections[1].StepId = inquiry.Sections[0].StepId;
+		var before = JsonSerializer.Serialize(inquiry);
+		var policy = new AdmissionFormInheritancePolicy { Enabled = true, Sources = [new() { InquiryFormDefinitionId = inquiry.Id,
+			StepNames = new() { [inquiryStepper ? "INQ_DETAILS" : "INQUIRY_PAGE"] = "Student Information", ["INQ_CONTACT"] = "Contact Person" } }] };
+		policy = JsonSerializer.Deserialize<AdmissionFormInheritancePolicy>(JsonSerializer.Serialize(policy))!;
+		var composed = AdmissionFormInheritanceComposer.Compose(registration, inquiry, policy);
+		composed.Issues.ShouldBeEmpty();
+		composed.Definition.Sections.First().StepName.ShouldBe("Student Information");
+		composed.InquiryContextSections.Single().StepName.ShouldBe(inquiryStepper && !sharedStep ? "Contact Person" : "Student Information");
+		JsonSerializer.Serialize(inquiry).ShouldBe(before);
 	}
 
 	private static AdmissionFormSchema Form(string name, bool stepper, params AdmissionFormSchemaSection[] sections)

@@ -60,7 +60,8 @@ public class StudentOnboardingCredentialEligibilityResolver(
         {
             using var saved = System.Text.Json.JsonDocument.Parse(text); rules = saved.RootElement.Clone();
         }
-		var requiredAccount = rules.HasValue && StudentPortalAccountRules.IsRequired(rules.Value, accountType);
+		rules = StudentPortalAccountRules.ForStaffSelection(rules);
+		var requiredAccount = StudentPortalAccountRules.IsRequired(rules.Value, accountType);
 		var enabled = rules.HasValue && StudentPortalAccountRules.IsEnabled(rules.Value, accountType) &&
 			(prepareAccount || allowManualEmail || OnboardingRuleConfiguration.Boolean(rules.Value,
 			accountType == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail"));

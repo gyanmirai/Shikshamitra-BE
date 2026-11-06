@@ -243,7 +243,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var parent = await AddSiblingParentOnboardingSourceAsync(fixture, "father", withoutPassword: !hasPassword);
 		await ConfirmSiblingParentOnboardingAsync(fixture, parent);
 		var service = GetRequiredService<IStudentOnboardingAppService>();
-		var activated = await service.ActivateAsync(fixture.Case.Id, new() { ConcurrencyStamp = fixture.Case.ConcurrencyStamp, IdempotencyKey = "parent-help" });
+		var activated = await service.ActivateAsync(fixture.Case.Id, new() { ConcurrencyStamp = fixture.Case.ConcurrencyStamp, IdempotencyKey = "parent-help", SiblingParentSelection = new() { Relationship = "father", ExpectedEmail = fixture.FatherEmail, ExpectedUserId = parent.UserId } });
 		var workspace = await service.GetCredentialsAsync(activated.Id);
 		var manager = GetRequiredService<IdentityUserManager>();
 		var original = (await WithUnitOfWorkAsync(() => manager.GetByIdAsync(parent.UserId))).PasswordHash;

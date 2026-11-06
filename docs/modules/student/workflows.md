@@ -18,7 +18,7 @@ TL;DR: setup commands produce validated offering defaults, while inquiry and app
 2. With Add and sufficient configuration scope, create or update a house.
 3. Select eligible enrolled students and preview assignment or removal. Review affected house leaders, then submit the current preview atomically.
 4. Select or clear a house leader from eligible members, or independently select or clear a division leader. Replacements require the current concurrency stamp and authority over the affected records.
-5. Delete only an empty house using Delete authority. Legacy House Settings retains the same population safeguard.
+5. Delete only an empty house using Delete authority through the House Management API.
 
 Server commands recheck the current tenant, active actor, exact action grant, scope and reviewed state. A failed batch commits no partial membership changes. There is no automatic year carry-forward. See the [API contract](./api.md#house-management) and [frontend workflow](../../../../Shikshamitra-FE/docs/student/workflows.md#house-management).
 
@@ -68,11 +68,11 @@ For new explicit Father/Mother admissions, use this sibling branch:
 6. If the child was already activated before the parent's first manual account preparation, Link Parent uses the same confirmed selection without replaying student setup. This also supports completed cases with optional parent access; it does not prepare a new parent or send sibling credentials.
 7. After owner setup, the existing portal students API returns the parent's eligible linked children. Mobile-client refresh behavior requires separate app verification.
 
-1. Configure student and parent/guardian login requirements in Onboarding Settings. Existing delivery mode, timing and guardian relationship preferences retain their compatibility behavior.
-2. Finalize Admissions; common checks and published document requirements are inherited automatically. Pending cases adopt current account requirements without rewriting their frozen document policies. Activated, completed and cancelled cases retain their snapshots. Complete placement, identifiers and required document evidence; required evidence cannot be waived through an onboarding override.
-3. Activate enrollment; automatic mode retains its existing grants and owner checks. In manual Credentials, select the account type and saved recipient, then use Send Credentials.
-4. The command validates current email provenance, saved account requirements and timing, readiness, tenant/scope and identity authority before preparing or safely reusing the account and queuing one intent transactionally. Explicit manual requests may send with automatic email Off; school/case automatic-email flags stay unchanged. Staff authorization is audited without claiming mailbox ownership was verified.
-5. Activation-timed requests dispatch after commit. Completion-timed requests remain Pending until required non-email handoffs complete, avoiding a deadlock when both accounts are required. The worker rechecks actor scope, exact grants, active enrollment, owner provenance, mailbox and documents before preparing/sending credentials. Finance remains unchanged and is not a new payment gate.
+1. Staff selects Student, Parent or both in Student Setup and reviews each saved email. Global App Login settings are retired; both login types are available on request. No selection creates accounts or emails.
+2. Finalize Admissions; common checks and published document requirements are inherited automatically. Effective login policy is optional/manual; historical snapshots and frozen document policies remain intact. Complete placement, identifiers and required document evidence; required evidence cannot be waived through an onboarding override.
+3. Save & Activate commits enrollment before preparing selected login accounts and sending selected details. Existing sibling parents link without a new credential email. For active students, staff can send later from App Login.
+4. The command validates current email provenance, required readiness, tenant/scope and identity authority before preparing or safely reusing the selected account and queuing one explicit intent transactionally. Staff authorization is audited without claiming mailbox ownership was verified.
+5. Explicit staff requests dispatch after activation commits. Retired school timing choices do not delay delivery. The worker rechecks actor scope, exact grants, active enrollment, owner provenance, mailbox and documents before preparing/sending credentials. Finance remains unchanged and is not a new payment gate.
 6. The owner uses the secure setup link to confirm email and choose their password. An existing verified Parent links another child without password changes.
 7. Failed/interrupted delivery remains visible for controlled retry; Sent records sender acceptance. Repeated access emails do not reveal an existing password.
 8. Records terminal application unlinks the child immediately; eligible siblings remain available to the Parent. A reviewed correction checks exact recorded links before restoration.

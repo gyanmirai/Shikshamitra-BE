@@ -77,13 +77,13 @@ Changing from the default format to a school prefix carries the existing sequenc
 
 Apply `20261030111330_AddHouseManagement` before starting an API that uses these endpoints. The migration adds persistence only; it does not allocate students, copy houses between years or grant permissions.
 
-All endpoints below use the authenticated `/api/students/records/house-management` root and existing Result envelope. Controller and application boundaries use exact `Students.Records.HouseManagement.View`, `.Add` and `.Delete` permissions. Positive permission assignments require the existing Student and Student Records visibility flags; adding the feature does not grant roles/users access. Legacy House Settings retains its separate contract.
+All endpoints below use the authenticated `/api/students/records/house-management` root and existing Result envelope. Controller and application boundaries use exact `Students.Records.HouseManagement.View`, `.Add` and `.Delete` permissions. Positive permission assignments require the existing Student and Student Records visibility flags; adding the feature does not grant roles/users access. This is the only supported house catalogue API; legacy House Settings routes are retired. The separate Student Records policy settings API and permissions remain unchanged.
 
 | Method and suffix | Authority | Contract |
 | --- | --- | --- |
 | GET `houses`, `students`, `divisions` | View | Required `academicMediumId`; paging uses `skipCount` and `maxResultCount` (1–100), with optional `filter` and supported `sorting`. Student reads accept `standardId`, `divisionId`, `houseId`, `unassignedOnly`; division reads accept `standardId`. Results contain scoped counts and visible leaders only. |
 | POST `houses`; PUT `houses/{id}` | Add | Medium, required name/color and optional description/logo URL. Update requires current `concurrencyStamp`. Shared configuration requires medium-wide or broader scope. |
-| DELETE `houses/{id}` | Delete | Query contains medium and current stamp; populated houses are rejected, including through legacy House Settings. |
+| DELETE `houses/{id}` | Delete | Query contains medium and current stamp; populated houses are rejected. |
 | POST `assignments/preview`; POST `assignments/commit` | Add | Medium, nullable target `houseId` (null removes membership), 1–500 distinct enrollment IDs. Preview returns affected students, departing house leaders and `previewToken`; commit supplies the reviewed token and revalidates the whole atomic batch. The request bound does not limit house membership. |
 | PUT `houses/{id}/leader`; PUT `divisions/{id}/leader` | Add | Medium, nullable `enrollmentId` (null clears the role), current owner `concurrencyStamp`. House leaders must be eligible members; division leaders remain independent. |
 
@@ -228,17 +228,11 @@ Student captured summaries exclude Aadhaar, APAAR, PEN, UDISE, PAN and raw photo
 
 ## App Login settings
 
-The existing Onboarding settings configuration remains schema version 1, with additive fields inside `readinessAccess`; no new endpoint, table or migration is required.
+The shared Onboarding configuration API and schema version 1 remain for GR/Roll settings. Existing readinessAccess login fields remain accepted and persisted for compatibility, but effective runtime access is Optional for Student and Parent, manual delivery, activation timing, with automatic-email flags disabled. These runtime values do not rewrite historical rule documents, published numbering, identity links or passwords.
 
-| Field | Contract |
-|---|---|
-| `studentAccountAccess`, `guardianAccountAccess` | Optional enum: `not-needed`, `optional`, `required`. When absent, the corresponding legacy account boolean resolves false/true to Not needed/Required. |
-| `studentAccount`, `guardianAccount` | Retained required-account booleans. When an access enum is supplied alongside its boolean, it must equal whether that enum is `required`; contradictory payloads are rejected. |
-| `credentialProvisioningMode` | Retained `manual`/`automatic`, default manual. The UI preserves existing automatic configuration until explicitly changed. |
-| `sendStudentCredentialEmail`, `sendGuardianCredentialEmail` | Retained automatic-email flags; new UI writes enable them only in automatic mode for enabled account types. Manual Send Credentials retains its explicit saved-owner authority without changing school flags. |
-| `credentialSendingTime` | Retained `activation`/`completion`; new manual UI saves use activation so staff controls the send moment. Existing case snapshots retain pinned timing. |
+Login preparation requires an explicit scoped staff credentials command after enrollment activation. With no recipient selected, activation prepares no account and queues no email. Existing required-account handoffs remain historical evidence but no longer gate readiness, completion or credentials queues. Pending/failed explicit staff email intents remain visible separately from setup completion; unrequested legacy automatic intents are not dispatchable. New renewal captures do not inherit school-wide account requirements. Existing renewal evidence remains frozen.
 
-Pending cases adopt current school choices through the existing admission-derived snapshot logic. Activated/completed/cancelled snapshots are not rewritten. Optional preparation is allowed on completed active enrollments, but never on cancelled cases; optional email work does not block completion. Existing permission, tenant/scope, identity collision, saved-owner provenance, enrollment, identifiers and document checks remain authoritative. Automatic queue intents are flushed inside the same enclosing transaction so a following manual request reuses the queued intent rather than inserting a duplicate.
+The existing readiness refresh remains the explicit reconciliation path for an already active unfinished legacy case; it retains Records return validation. No GET performs this completion mutation. Saved owner, tenant/scope, permissions, active enrollment, identifiers, documents and identity-collision checks remain authoritative. Existing verified sibling Parent links use the existing linking command without a new password or initial credential email.
 
 ## Onboarding credential delivery
 
@@ -1084,6 +1078,8 @@ Business errors include `Students:Records:OutstandingReasonRequired`, `Outstandi
 
 Form DTOs and existing draft writes add optional `inheritance` with `enabled` and source entries containing `inquiryFormDefinitionId` and reviewed `fieldMappings`. The retained `requiredFieldIdentities` and `layouts` properties are accepted for policy compatibility but cannot change Inquiry-owned requirements or placement during composition. Preview input contains `inquiryFormDefinitionId`, optional `registrationFormDefinitionId` and optional `draft`. A preview does not create a form/application, approve a source or modify routing. Effective fields carry `fieldIdentity` and optional `inheritedFrom` provenance, retaining the original source key for prefill even when a reserved legacy starter maps to a canonical Registration binding. The application-form response keeps the existing definition/value shape and adds safe source context.
 
+`inheritance.sources[].stepNames` is an optional dictionary of Registration-only step titles, keyed by the effective Inquiry step code (`INQ_<sourceStepCode>` or `INQUIRY_PAGE`). Names must contain non-whitespace text and be at most 128 characters; at most 500 overrides per source are accepted. The existing inheritance metadata stores and clones these titles. Composition applies them to cloned Inquiry sections and their context counterparts; the published Inquiry and frozen application schemas remain unchanged. Older policies without the dictionary retain their original titles.
+
 Existing publish validates every approved source composition. Active routes and application start enforce compatibility; incomplete inactive drafts retain their existing save behavior. Published/base definitions stay immutable. Legacy requests without inheritance settings retain existing behavior. `Admissions.FormInheritance...` business failures identify invalid policy, incompatible source or unavailable frozen schema without weakening existing tenant, permission, ownership or concurrency checks.
 
 Discovery includes exact versions captured by tenant inquiries on accessible connected Offerings. Archived source retention requires this captured history or an enabled previously Published/Archived Registration-family approval; an unsaved draft cannot manufacture that proof. New Offering source selection still requires Published. Discovery returns source/version and connection metadata, not applicant answers.
@@ -1113,6 +1109,7 @@ Staff routes use `/api/student/enrollment/admissions/applications/{applicationId
 | Method / suffix | Contract |
 |---|---|
 | GET root | Saved recipient choices, request/delivery/progress, concurrency stamp, correction choices and server capabilities; never the stored token |
+| GET `/email-history` | Registration-link snapshots and recorded Communication attempts for this application; requires Applications View and returns safe provider guidance without protected links or raw provider diagnostics |
 | POST `/send` | `{recipientRelationship, concurrencyStamp, idempotencyKey}`; create or replace a seven-day initial link |
 | POST `/email` | Send-command fields plus `{email,expectedEmail,reason?}`; compare the saved adult email and application stamp, save an eligible draft contact, synchronize compatible draft answers, revoke prior links and return refreshed context without sending |
 | POST `/corrections` | Send input plus `{notes,fieldCodes,documents:[{stageInstanceId,requirementCode}]}`; grant only requested eligible changes |

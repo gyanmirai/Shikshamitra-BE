@@ -178,6 +178,43 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await Should.ThrowAsync<BusinessException>(() => parent.GetAsync(token))).Code.ShouldBe(AdmissionParentRegistrationErrors.Unavailable);
 	}
 	[Fact]
+	public async Task ParentRegistration_email_history_is_scoped_to_its_grants_and_excludes_private_link_data()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId); using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var fixture = await ParentFixtureAsync();
+		Guid campaignId = Guid.NewGuid();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var campaign = new CommunicationCampaign(campaignId, TestTenantId)
+			{
+				SourceEntityType = "AdmissionParentRegistration", SourceEntityId = fixture.GrantId,
+				PublishedAt = DateTimeOffset.UtcNow
+			};
+			await GetRequiredService<IRepository<CommunicationCampaign, Guid>>().InsertAsync(campaign, true);
+			await GetRequiredService<IRepository<DeliveryAttempt, Guid>>().InsertAsync(new(Guid.NewGuid(), TestTenantId)
+			{
+				CampaignId = campaignId, Destination = "mother@example.test", Status = CommunicationDeliveryStatus.Sent,
+				SentAt = DateTimeOffset.UtcNow
+			}, true);
+			await GetRequiredService<IRepository<DeliveryAttempt, Guid>>().InsertAsync(new(Guid.NewGuid(), TestTenantId)
+			{
+				CampaignId = campaignId, Destination = "mother@example.test", Status = CommunicationDeliveryStatus.Failed,
+				ErrorCode = "SMTP_SEND_FAILED", ErrorMessage = "Raw provider diagnostics must stay private."
+			}, true);
+		});
+
+		var history = await GetRequiredService<IAdmissionParentRegistrationAppService>().GetEmailHistoryAsync(fixture.Application.Id);
+		var request = history.ShouldHaveSingleItem();
+		request.RecipientEmail.ShouldBe("mother@example.test");
+		request.Attempts.Count.ShouldBe(2);
+		request.Attempts.ShouldContain(row => row.Status == "Sent");
+		request.Attempts.ShouldContain(row => row.Status == "Failed" && row.SafeMessage!.Contains("sender rejected"));
+		JsonSerializer.Serialize(history).ShouldNotContain("ProtectedToken");
+		JsonSerializer.Serialize(history).ShouldNotContain(fixture.Token);
+		JsonSerializer.Serialize(history).ShouldNotContain("Raw provider diagnostics");
+	}
+
+	[Fact]
 	public async Task ParentRegistration_campaign_audience_is_immutable_and_skipped_retry_retains_history()
 	{
 		using var tenant = _currentTenant.Change(TestTenantId); using var principal = _principalAccessor.Change(BuildAdminPrincipal());

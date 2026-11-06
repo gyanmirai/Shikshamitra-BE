@@ -35,11 +35,11 @@ public class StudentCredentialReadiness_Tests
 	}
 
 	[Fact]
-	public void Automatic_readiness_defaults_to_parent_access_without_enabling_emails_or_approval()
+	public void Automatic_readiness_defaults_to_optional_staff_selected_access_without_emails_or_approval()
 	{
 		var rules = AutomaticOnboardingReadinessRules.Resolve(null);
 		OnboardingRuleConfiguration.Boolean(rules, "studentAccount").ShouldBeFalse();
-		OnboardingRuleConfiguration.Boolean(rules, "guardianAccount").ShouldBeTrue();
+		OnboardingRuleConfiguration.Boolean(rules, "guardianAccount").ShouldBeFalse();
 		OnboardingRuleConfiguration.Boolean(rules, "requireDocuments").ShouldBeTrue();
 		OnboardingRuleConfiguration.Boolean(rules, "sendStudentCredentialEmail").ShouldBeFalse();
 		OnboardingRuleConfiguration.Boolean(rules, "sendGuardianCredentialEmail").ShouldBeFalse();
@@ -47,13 +47,13 @@ public class StudentCredentialReadiness_Tests
 	}
 
 	[Fact]
-	public void Automatic_readiness_preserves_explicit_saved_access_choices_and_needs_no_profile()
+	public void Automatic_readiness_retires_saved_access_gates_and_needs_no_profile()
 	{
 		var settings = new OnboardingRuleConfiguration(Configuration(new { studentAccount = true, guardianAccount = false,
 			sendStudentCredentialEmail = false, credentialProvisioningMode = "manual", approvalMode = "always", requireDocuments = false }));
 		var rules = AutomaticOnboardingReadinessRules.Resolve(settings);
 		settings.Profiles.ShouldBeEmpty();
-		OnboardingRuleConfiguration.Boolean(rules, "studentAccount").ShouldBeTrue();
+		OnboardingRuleConfiguration.Boolean(rules, "studentAccount").ShouldBeFalse();
 		OnboardingRuleConfiguration.Boolean(rules, "guardianAccount").ShouldBeFalse();
 		OnboardingRuleConfiguration.Boolean(rules, "sendStudentCredentialEmail").ShouldBeFalse();
 		OnboardingRuleConfiguration.Text(rules, "credentialProvisioningMode").ShouldBe("manual");
@@ -70,7 +70,7 @@ public class StudentCredentialReadiness_Tests
 	}
 
 	[Fact]
-	public void Snapshotless_readiness_ignores_conflicting_dormant_profiles_but_preserves_a_saved_snapshot()
+	public void Runtime_readiness_ignores_retired_access_choices_without_rewriting_a_saved_snapshot()
 	{
 		var item = Case();
 		var json = System.Text.Json.Nodes.JsonNode.Parse(Configuration(new { studentAccount = false, guardianAccount = false }))!.AsObject();
@@ -82,7 +82,8 @@ public class StudentCredentialReadiness_Tests
 		var settings = new OnboardingRuleConfiguration(json.ToJsonString());
 		OnboardingRuleConfiguration.Boolean(settings.Readiness(item), "studentAccount").ShouldBeFalse();
 		item.ExtraProperties["ReadinessRulesSnapshot"] = "{\"studentAccount\":true}";
-		OnboardingRuleConfiguration.Boolean(settings.Readiness(item), "studentAccount").ShouldBeTrue();
+		OnboardingRuleConfiguration.Boolean(settings.Readiness(item), "studentAccount").ShouldBeFalse();
+		item.ExtraProperties["ReadinessRulesSnapshot"].ShouldBe("{\"studentAccount\":true}");
 	}
 
 	[Fact]
@@ -118,7 +119,7 @@ public class StudentCredentialReadiness_Tests
 	[InlineData("not-needed", false, false)]
 	[InlineData("optional", true, false)]
 	[InlineData("required", true, true)]
-	public void App_login_access_separates_availability_from_completion(string access, bool enabled, bool required)
+	public void Retired_app_login_access_values_do_not_change_staff_selected_runtime(string access, bool enabled, bool required)
 	{
 		var settings = new OnboardingRuleConfiguration(Configuration(new { studentAccountAccess = access,
 			studentAccount = required, guardianAccountAccess = access, guardianAccount = required,
@@ -126,10 +127,10 @@ public class StudentCredentialReadiness_Tests
 		var rules = AutomaticOnboardingReadinessRules.Resolve(settings);
 		foreach (var type in new[] { "student", "guardian" })
 		{
-			StudentPortalAccountRules.IsEnabled(rules, type).ShouldBe(enabled);
-			StudentPortalAccountRules.IsRequired(rules, type).ShouldBe(required);
-			OnboardingRuleConfiguration.Boolean(rules, type + "Account").ShouldBe(required);
-			OnboardingRuleConfiguration.Boolean(rules, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail").ShouldBe(enabled);
+			StudentPortalAccountRules.IsEnabled(rules, type).ShouldBeTrue();
+			StudentPortalAccountRules.IsRequired(rules, type).ShouldBeFalse();
+			OnboardingRuleConfiguration.Boolean(rules, type + "Account").ShouldBeFalse();
+			OnboardingRuleConfiguration.Boolean(rules, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail").ShouldBeFalse();
 		}
 	}
 

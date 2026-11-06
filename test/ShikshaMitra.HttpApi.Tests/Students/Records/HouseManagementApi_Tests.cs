@@ -23,6 +23,8 @@ public class HouseManagementApi_Tests(ShikshaMitraApiTestFactory factory) : Shik
 	[InlineData("GET", "students", "Students.Records.HouseManagement.Add")]
 	[InlineData("GET", "divisions", "Students.Records.HouseManagement.Delete")]
 	[InlineData("POST", "houses", "Students.Records.HouseManagement.View")]
+	[InlineData("GET", "houses", "Students.Records.Settings.View")]
+	[InlineData("POST", "houses", "Students.Records.Settings.Add")]
 	[InlineData("PUT", "houses/11111111-1111-1111-1111-111111111111", "Students.Records.HouseManagement.View")]
 	[InlineData("DELETE", "houses/11111111-1111-1111-1111-111111111111", "Students.Records.HouseManagement.Add")]
 	[InlineData("POST", "assignments/preview", "Students.Records.HouseManagement.View")]
@@ -48,6 +50,27 @@ public class HouseManagementApi_Tests(ShikshaMitraApiTestFactory factory) : Shik
 		using var client = CreateAnonymousClient();
 		using var response = await client.GetAsync($"{Root}/houses?academicMediumId={Factory.SeededMediumId}");
 		response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Legacy_house_settings_routes_are_retired()
+	{
+		var medium = Factory.SeededMediumId;
+		var id = Guid.NewGuid();
+		var routes = new[]
+		{
+			$"/api/students/records/academic-mediums/{medium}/house-settings",
+			$"/api/students/records/house-settings/{id}",
+		};
+
+		foreach (var route in routes)
+		{
+			using var read = await Client.GetAsync(route);
+			read.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+		}
+		using var create = await Client.PostAsJsonAsync(routes[0], new { name = "Legacy Falcons", color = "#2468ab" }, JsonOptions);
+		create.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 
 	[Fact]

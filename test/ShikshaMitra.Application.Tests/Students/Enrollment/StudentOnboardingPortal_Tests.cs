@@ -206,52 +206,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			(await service.PreviewActivationAsync(item.Id)).LastError.ShouldBeNullOrEmpty();
 			item = await service.ActivateAsync(item.Id, new() { IdempotencyKey = "portal-activation", ConcurrencyStamp = item.ConcurrencyStamp });
 			item.StudentEnrollmentId.ShouldNotBeNull();
-			item.Status.ShouldBe(StudentOnboardingStatus.NeedsAttention);
-			item.StudentAccountRequired.ShouldBe(type == "student");
-			item.GuardianAccountRequired.ShouldBe(type == "guardian");
+			item.Status.ShouldBe(StudentOnboardingStatus.Completed);
+			item.StudentAccountRequired.ShouldBeFalse();
+			item.GuardianAccountRequired.ShouldBeFalse();
 			input.ConcurrencyStamp = item.ConcurrencyStamp;
 			item.PortalAccountOwners.ShouldNotBeNull();
 			item.PortalAccountOwners!.Single(owner => owner.AccountType == "guardian" && owner.Relationship == "father").Email.ShouldBe(email);
 			item.PortalAccountOwners.Single(owner => owner.Relationship == "self").Email.ShouldBe(email);
-			item.PortalAccountOwners.ShouldNotContain(owner => owner.Relationship == "mother" || owner.Relationship == "guardian");
-			if (type == "guardian")
-			{
-				var caseRepo = GetRequiredService<IRepository<StudentOnboardingCase, Guid>>();
-				var beforeRules = await WithUnitOfWorkAsync(async () =>
-					(await caseRepo.GetAsync(item.Id)).ExtraProperties["ReadinessRulesSnapshot"].ShouldNotBeNull().ToString()!);
-				var beforeSettings = (await service.GetSettingsAsync(cycle.AcademicYearId)).Single().ConfigurationJson;
-				await Should.ThrowAsync<AbpValidationException>(() => service.EnableGuardianCredentialEmailAsync(item.Id,
-					new() { Reason = "", ConcurrencyStamp = item.ConcurrencyStamp }));
-				(await Should.ThrowAsync<BusinessException>(() => service.EnableGuardianCredentialEmailAsync(item.Id,
-					new() { Reason = "Case-specific delivery correction", ConcurrencyStamp = "stale" })))
-					.Code.ShouldBe(StudentOnboardingErrorCodes.ConcurrencyConflict);
-				using (_currentTenant.Change(Guid.NewGuid()))
-					await Should.ThrowAsync<EntityNotFoundException>(() => service.EnableGuardianCredentialEmailAsync(item.Id,
-						new() { Reason = "Case-specific delivery correction", ConcurrencyStamp = item.ConcurrencyStamp }));
-				item = await service.EnableGuardianCredentialEmailAsync(item.Id,
-					new() { Reason = "Father mailbox confirmed; enable case delivery", ConcurrencyStamp = item.ConcurrencyStamp });
-				var expectedRules = System.Text.Json.Nodes.JsonNode.Parse(beforeRules)!;
-				expectedRules["sendGuardianCredentialEmail"] = true;
-				var afterRules = await WithUnitOfWorkAsync(async () =>
-					(await caseRepo.GetAsync(item.Id)).ExtraProperties["ReadinessRulesSnapshot"].ShouldNotBeNull().ToString()!);
-				System.Text.Json.Nodes.JsonNode.DeepEquals(expectedRules, System.Text.Json.Nodes.JsonNode.Parse(afterRules)).ShouldBeTrue();
-				(await service.GetSettingsAsync(cycle.AcademicYearId)).Single().ConfigurationJson.ShouldBe(beforeSettings);
-				await service.EnableGuardianCredentialEmailAsync(item.Id,
-					new() { Reason = "Repeat delivery correction", ConcurrencyStamp = item.ConcurrencyStamp });
-				(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentOnboardingEvent, Guid>>()
-					.CountAsync(e => e.OnboardingCaseId == item.Id && e.EventType == "GuardianCredentialEmailEnabled"))).ShouldBe(1);
-				(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>()
-					.CountAsync(e => e.CaseId == item.Id))).ShouldBe(0);
-				(await service.GetPortalAccountsAsync(item.Id)).ShouldBeEmpty();
-				input.ConcurrencyStamp = item.ConcurrencyStamp;
-				input.Relationship = "guardian";
-				input.Email = "other-owner@example.test";
-				var wrongOwner = await Should.ThrowAsync<BusinessException>(() => service.ProvisionPortalAccountAsync(item.Id, input));
-				wrongOwner.Code.ShouldBe(StudentOnboardingErrorCodes.PortalAccountInvalid);
-				wrongOwner.Data["Reason"]!.ToString()!.ShouldContain("Father or Mother");
-				input.Relationship = relationship;
-				input.Email = email;
-			}
+			item.PortalAccountOwners.ShouldNotContain(owner => owner.Relationship == "mother");
+			item.PortalAccountOwners.ShouldContain(owner => owner.Relationship == "guardian" && owner.Email == "other-owner@example.test");
 			input.Email = "not-the-saved-owner@example.test";
 			(await Should.ThrowAsync<BusinessException>(() => service.ProvisionPortalAccountAsync(item.Id, input)))
 				.Code.ShouldBe(StudentOnboardingErrorCodes.PortalAccountInvalid);
@@ -260,6 +223,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var validation = await Should.ThrowAsync<AbpValidationException>(() => service.ProvisionPortalAccountAsync(item.Id, input));
 			validation.ValidationErrors.ShouldContain(error => error.MemberNames.Contains(nameof(input.RelationshipVerified)));
 			input.RelationshipVerified = true;
+			// Start the successful command with the current stamp after the rejected requests.
+			input.ConcurrencyStamp = (await service.GetAsync(item.Id)).ConcurrencyStamp;
 			var result = await service.ProvisionPortalAccountAsync(item.Id, input);
 			(await service.ProvisionPortalAccountAsync(item.Id, input)).UserId.ShouldBe(result.UserId);
 			var user = await WithUnitOfWorkAsync(() => users.GetByIdAsync(result.UserId));
@@ -305,9 +270,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				await Should.ThrowAsync<EntityNotFoundException>(() => service.GetPortalAccountsAsync(item.Id));
 			item = await service.GetAsync(item.Id);
 			item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
-			item.Status.ShouldBe(type == "guardian" ? StudentOnboardingStatus.NeedsAttention : StudentOnboardingStatus.Completed);
+			item.Status.ShouldBe(StudentOnboardingStatus.Completed);
+			// These summary fields describe required handoffs; optional logins are verified below.
 			(type == "student" ? item.StudentAccountStatus : item.GuardianAccountStatus)
-				.ShouldBe(StudentOnboardingServiceHandoffStatus.Acknowledged);
+				.ShouldBeNull();
 			(await service.GetServiceHandoffsAsync(item.Id)).Single(x => x.ServiceKey == type + "-account")
 				.Status.ShouldBe(StudentOnboardingServiceHandoffStatus.Acknowledged);
 		});

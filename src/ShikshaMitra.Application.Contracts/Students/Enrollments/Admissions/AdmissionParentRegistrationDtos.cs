@@ -103,6 +103,29 @@ public class AdmissionParentStaffContextDto
 	public List<AdmissionParentFieldDto> AvailableFields { get; set; } = [];
 	public List<AdmissionParentDocumentDto> AvailableDocuments { get; set; } = [];
 }
+public class AdmissionParentEmailHistoryDto
+{
+	public Guid RegistrationId { get; set; }
+	public string Purpose { get; set; } = "initial";
+	public string LinkStatus { get; set; } = "";
+	public string RecipientName { get; set; } = "";
+	public string RecipientRelationship { get; set; } = "";
+	public string? RecipientRelationshipLabel { get; set; }
+	public string? RecipientEmail { get; set; }
+	public DateTime ExpiresAt { get; set; }
+	public DateTime? LastSavedAt { get; set; }
+	public DateTime? HandedInAt { get; set; }
+	public string? Notes { get; set; }
+	public List<AdmissionParentEmailAttemptDto> Attempts { get; set; } = [];
+}
+public class AdmissionParentEmailAttemptDto
+{
+	public string Status { get; set; } = "";
+	public int AttemptNumber { get; set; }
+	public DateTimeOffset? AttemptedAt { get; set; }
+	public string? Destination { get; set; }
+	public string? SafeMessage { get; set; }
+}
 public class AdmissionParentPublicContextDto
 {
 	public string SchoolName { get; set; } = "School admission";
@@ -199,6 +222,7 @@ public class AdmissionParentFileDto
 public interface IAdmissionParentRegistrationAppService : IApplicationService
 {
 	Task<AdmissionParentStaffContextDto> GetAsync(Guid applicationId);
+	Task<List<AdmissionParentEmailHistoryDto>> GetEmailHistoryAsync(Guid applicationId);
 	Task<AdmissionParentStaffContextDto> SendAsync(Guid applicationId, AdmissionParentSendInput input);
 	Task<AdmissionParentStaffContextDto> ChangeEmailAsync(Guid applicationId, AdmissionParentEmailInput input);
 	Task<AdmissionParentStaffContextDto> RequestCorrectionsAsync(Guid applicationId, AdmissionParentCorrectionInput input);

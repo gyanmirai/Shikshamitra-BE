@@ -13,6 +13,7 @@ public class AdmissionFormInheritanceSourceDto
 {
 	public Guid InquiryFormDefinitionId { get; set; }
 	public List<string> RequiredFieldIdentities { get; set; } = [];
+	public Dictionary<string, string> StepNames { get; set; } = [];
 	public List<AdmissionFormInheritanceMappingDto> FieldMappings { get; set; } = [];
 	public List<AdmissionFormInheritanceLayoutDto> Layouts { get; set; } = [];
 }

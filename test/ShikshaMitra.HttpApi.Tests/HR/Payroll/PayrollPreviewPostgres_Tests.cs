@@ -25,7 +25,8 @@ using Xunit.Abstractions;
 namespace ShikshaMitra.HR.Payroll;
 
 [Trait("Database", "PostgreSQL")]
-public class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory factory, ITestOutputHelper output)
+[Collection(PayrollCalculationTestCollection.Name)]
+public partial class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory factory, ITestOutputHelper output)
 	: ShikshaMitraApiTestBase(factory), IClassFixture<PayrollPostgresTestFactory>
 {
 	private static readonly Guid TenantId = Guid.Parse(TestAuthHandler.TestTenantId);

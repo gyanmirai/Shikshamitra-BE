@@ -25,6 +25,17 @@ public class PayrollPreviewRun_Tests
 	}
 
 	[Fact]
+	public void New_previews_are_versioned_and_legacy_previews_default_to_zero()
+	{
+		var run = Create();
+		run.CalculationVersion.ShouldBe(1);
+		run.HasCurrentCalculationVersion.ShouldBeTrue();
+		run.ExtraProperties.Remove(PayrollPreviewRun.CalculationVersionProperty);
+		run.CalculationVersion.ShouldBe(0);
+		run.HasCurrentCalculationVersion.ShouldBeFalse();
+	}
+
+	[Fact]
 	public void Expired_worker_cannot_report_progress_or_retry_replacement()
 	{
 		var run = Create();

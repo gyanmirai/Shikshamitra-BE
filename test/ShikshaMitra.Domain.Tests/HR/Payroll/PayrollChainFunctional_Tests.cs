@@ -77,7 +77,7 @@ public class PayrollChainFunctional_Tests
 	}
 
 	[Fact]
-	public void Pf_Should_Block_Payroll_When_Custom_Earning_Has_No_Basic_Classification()
+	public void Pf_Should_Block_When_Custom_Earning_Has_No_Basic_Classification()
 	{
 		var employeeId = Guid.NewGuid();
 		var pfRule = new ProvidentFund(
@@ -110,7 +110,7 @@ public class PayrollChainFunctional_Tests
 
 		result.Deductions.ShouldBeEmpty();
 		result.EmployerContributions.ShouldBeEmpty();
-		result.StatutoryIssueCodes.ShouldContain("PF_WAGE_BASIS_REQUIRED");
+		result.StatutoryIssueCodes.ShouldContain(RunPayroll.IssueCodes.PfWageBasisRequired);
 		result.ProvidentFundRuleId.ShouldBe(pfRule.Id);
 	}
 

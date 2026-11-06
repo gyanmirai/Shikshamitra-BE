@@ -3,7 +3,7 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-11-05
+updated_on: 2026-11-06
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -77,7 +77,8 @@ Obsolete queued/running previews are superseded, and old completed previews cann
 A replacement preview requires review of the new generation.
 This uses existing storage and does not require a schema migration.
 
-Draft reads and direct finalization refresh changed employer contribution lines/totals, statutory evidence, and compensation evidence through the existing snapshot writer.
+Internal draft freshness checks and direct finalization refresh changed employer contribution lines/totals, statutory evidence, and compensation evidence through the existing snapshot writer.
+Public payslip reads retain their issued-document requirement; an unlocked preview does not expose a draft payslip.
 The slip identity and document invalidation behavior are preserved.
 Finalized and paid slips remain immutable.
 Historical underpayments or already issued slips require the existing correction workflow and are not rewritten automatically.

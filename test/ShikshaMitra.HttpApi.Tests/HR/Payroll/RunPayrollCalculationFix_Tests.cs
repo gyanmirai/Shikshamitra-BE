@@ -31,7 +31,7 @@ public partial class RunPayrollApi_Tests
 		var id = await PrepareCalculationEmployeeAsync("FinalizeMeta");
 		await SeedAttendanceOnDateAsync(id, new DateOnly(2026, 6, 10));
 		await GetPreviewFromQueryAsync($"{BaseUrl}?month=2026-06&forceRefresh=true&pageSize=100");
-		await GetSalarySlipResponseAsync(id, "2026-06");
+		await EnsureCalculationDraftAsync(id, "2026-06");
 		var review = await Client.PostAsJsonAsync(ReviewUrl,
 			new { month = "2026-06", previewRunId = LastPreviewId("2026-06"), employeeIds = new[] { id } });
 		review.EnsureSuccessStatusCode();
@@ -139,7 +139,10 @@ public partial class RunPayrollApi_Tests
 		var id = await PrepareCalculationEmployeeAsync("DraftMeta");
 		await SeedAttendanceOnDateAsync(id, new DateOnly(2026, 5, 11));
 		await GetPreviewFromQueryAsync($"{BaseUrl}?month=2026-05&forceRefresh=true&pageSize=100");
-		var original = await GetSalarySlipResponseAsync(id, "2026-05");
+		var unavailable = await Client.GetAsync($"/api/payroll/salary-slips?employeeId={id}&monthYear=2026-05");
+		unavailable.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await unavailable.Content.ReadAsStringAsync()).ShouldContain("HR:Payroll:PayslipNotAvailable");
+		var original = await EnsureCalculationDraftAsync(id, "2026-05");
 		Guid originalSlipId;
 		using (var scope = Factory.Services.CreateScope())
 		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId)))
@@ -159,8 +162,8 @@ public partial class RunPayrollApi_Tests
 			await repository.UpdateAsync(snapshot);
 			await uow.CompleteAsync();
 		}
-		var refreshed = await GetSalarySlipResponseAsync(id, "2026-05");
-		refreshed.NetPay.ShouldBe(original.NetPay);
+		var refreshed = await EnsureCalculationDraftAsync(id, "2026-05");
+		refreshed.NetSalary.ShouldBe(original.NetSalary);
 		if (change == "insurance-number") refreshed.EmployeeStateInsuranceNumber.ShouldBe("1234567890");
 		using var readScope = Factory.Services.CreateScope();
 		using var readTenant = readScope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId));
@@ -169,6 +172,33 @@ public partial class RunPayrollApi_Tests
 		persisted.Id.ShouldBe(originalSlipId);
 		if (change == "employer-contribution") persisted.EmployerContributionTotal.ShouldBe(325m);
 		if (change == "compensation-revision") persisted.CompensationRevisionNumber.ShouldBe(2);
+	}
+
+	private async Task<SalarySlip> EnsureCalculationDraftAsync(Guid id, string month)
+	{
+		// Internal owned fixture: public payslips remain unavailable until payroll issuance.
+		using var scope = Factory.Services.CreateScope();
+		var services = scope.ServiceProvider;
+		using var tenant = services.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId));
+		using var uow = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
+		var slip = await services.GetRequiredService<ISalarySlipRepository>().GetByEmployeeAndMonthAsync(id, month);
+		if (slip == null)
+		{
+			var snapshot = await services.GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>()
+				.GetAsync(x => x.EmployeeId == id && x.MonthYear == month);
+			slip = await services.GetRequiredService<SalarySlipManager>().GenerateOrGetSalarySlipFromSnapshotAsync(
+				snapshot,
+				PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EarningComponentsJson),
+				PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.DeductionComponentsJson),
+				PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EmployerContributionsJson),
+				SalarySlipSnapshotMatcher.ParseDayCalculationMode(snapshot.DayCalculationMode));
+		}
+		else
+		{
+			slip = await services.GetRequiredService<SalarySlipDraftFreshnessService>().EnsureFreshAsync(slip);
+		}
+		await uow.CompleteAsync();
+		return slip;
 	}
 
 	private async Task<Guid> PrepareCalculationEmployeeAsync(string suffix)

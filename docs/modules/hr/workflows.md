@@ -290,7 +290,7 @@ Policy writes share the payroll input fence and invalidate affected unlocked emp
 
 1. Pause employee/shift writes, attendance processing and payroll jobs during a coordinated maintenance window.
 2. Back up the database and rehearse migration against a disposable PostgreSQL copy.
-3. Run scripts/hr/work-shifts-preflight.sql and resolve missing, foreign-tenant, ownerless and invalid referenced shifts through an approved audited repair.
+3. Verify the database target, run scripts/hr/work-shifts-preflight.sql and resolve missing, foreign-tenant, ownerless references and invalid tenant-owned definitions (including unassigned definitions) through an approved audited repair. The script uses a read-only transaction and returns category counts followed by sensitive row-level diagnostics. Share counts only in deployment logs; categories may overlap. Migration failures report the same count categories without identifiers. Do not bypass the preflight or rerun deployment until the repair and cutover are approved.
 4. Apply SeparateEmployeeWorkShifts before deploying the matching backend/frontend pair.
 5. Reconcile copied definitions and baseline assignments with original references, preserving attendance, school-class references and locked payroll snapshots.
 6. Smoke-test both catalogues and dated employee assignments, then resume processing.

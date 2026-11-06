@@ -31,10 +31,7 @@ public partial class StudentFeeDetailsQueryService
 		var lateDues = dueFees.Where(d => lateBalances[d.Id].Total > 0m).ToList();
 		if (lateDues.Count > 0)
 		{
-			var headIds = lateDues.Select(d => d.FeeHeadId).Distinct().ToList();
-			var names = (await feeHeadRepository.GetListAsync(
-				x => headIds.Contains(x.Id), cancellationToken: cancellationToken))
-				.ToDictionary(x => x.Id, x => x.Name);
+			var names = feeHeads.ToDictionary(x => x.FeeHeadId, x => x.FeeHeadName);
 			charges ??= [];
 			charges.InsertRange(0, lateDues.Select(d =>
 			{
@@ -54,7 +51,7 @@ public partial class StudentFeeDetailsQueryService
 		}
 
 		var payments = await BuildPaymentHistoryAsync(studentId, academicYearId, cancellationToken);
-		var concessions = await BuildConcessionDetailsAsync(studentId, academicYearId);
+		var concessions = await BuildConcessionDetailsAsync(studentId, academicYearId, cancellationToken);
 		var feeOverview = BuildFeeOverview(feeHeads, overdueFee);
 
 		return new StudentFeeDetailsDto
@@ -90,8 +87,12 @@ public partial class StudentFeeDetailsQueryService
 		if (dueFees.Count == 0) return [];
 
 		var dueFeeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
-		var feeHeads = (await feeHeadRepository.GetListAsync(
-			fh => dueFeeHeadIds.Contains(fh.Id), cancellationToken: cancellationToken))
+		var feeHeadQ = await feeHeadRepository.GetQueryableAsync();
+		var feeHeads = (await AsyncExecuter.ToListAsync(
+			feeHeadQ
+				.Where(fh => dueFeeHeadIds.Contains(fh.Id))
+				.Select(fh => new { fh.Id, fh.Name, fh.Description }),
+			cancellationToken))
 			.ToDictionary(fh => fh.Id);
 		var reconByFeeHead = await GetInReconciliationByFeeHeadAsync(studentId, cancellationToken);
 		var today = clock.Now.Date;
@@ -130,8 +131,12 @@ public partial class StudentFeeDetailsQueryService
 		Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
 	{
 		var chargesQ = await chargeRepository.GetQueryableAsync();
-		var studentCharges = await AsyncExecuter.ToListAsync(chargesQ.Where(c => c.StudentId == studentId
-			&& c.AcademicYearId == academicYearId && c.Status == ChargeStatus.Approved), cancellationToken);
+		var studentCharges = await AsyncExecuter.ToListAsync(
+			chargesQ
+				.Where(c => c.StudentId == studentId
+					&& c.AcademicYearId == academicYearId && c.Status == ChargeStatus.Approved)
+				.Select(c => new { c.Id, c.Amount, c.ChargeName, c.PurposeDescription }),
+			cancellationToken);
 
 		if (studentCharges.Count == 0) return null;
 		var chargeIds = studentCharges.Select(c => c.Id).ToList();
@@ -177,8 +182,11 @@ public partial class StudentFeeDetailsQueryService
 	{
 		var metaQ = await feeRecordMetadataRepository.GetQueryableAsync();
 		var metadataForStudent = await AsyncExecuter.ToListAsync(
-			metaQ.Where(m => m.StudentId == studentId && m.AcademicYearId == academicYearId)
-				.OrderByDescending(m => m.CreationTime), cancellationToken);
+			metaQ
+				.Where(m => m.StudentId == studentId && m.AcademicYearId == academicYearId)
+				.OrderByDescending(m => m.CreationTime)
+				.Select(m => new { m.Id, m.ReceiptNumber, m.CreationTime, m.TotalPaidFee, m.Status }),
+			cancellationToken);
 
 		if (metadataForStudent.Count == 0) return null;
 
@@ -216,13 +224,15 @@ public partial class StudentFeeDetailsQueryService
 		}).ToList();
 	}
 
-	private async Task<List<ConcessionDetailDto>?> BuildConcessionDetailsAsync(Guid studentId, Guid academicYearId)
+	private async Task<List<ConcessionDetailDto>?> BuildConcessionDetailsAsync(
+		Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
 	{
 		var approvedConcessions = await concessionRequestRepository.GetListAsync(
 			r => r.StudentId == studentId
 				&& r.AcademicYearId == academicYearId
 				&& (r.Status == ConcessionRequestStatus.Approved
-					|| r.Status == ConcessionRequestStatus.PartiallyReversed));
+					|| r.Status == ConcessionRequestStatus.PartiallyReversed),
+			cancellationToken: cancellationToken);
 
 		if (approvedConcessions.Count == 0) return null;
 

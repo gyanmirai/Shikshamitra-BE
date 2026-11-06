@@ -16,7 +16,9 @@ using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.Infrastructure.Auth;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Data;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.TenantManagement;
 using Volo.Abp.Uow;
 using Volo.Abp.Security.Claims;
 using Xunit;
@@ -52,6 +54,11 @@ public partial class RunPayrollApi_Tests
 		try
 		{
 			using var uow = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
+			var tenants = services.GetRequiredService<ITenantRepository>();
+			var institute = await tenants.GetAsync(Guid.Parse(TestAuthHandler.TestTenantId));
+			institute.SetProperty("InstituteName", "Synthetic payroll school");
+			institute.SetProperty("Address1", "Synthetic local test address");
+			await tenants.UpdateAsync(institute, autoSave: true);
 			var snapshots = services.GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
 			var snapshot = await snapshots.GetAsync(x => x.EmployeeId == id && x.MonthYear == "2026-06");
 			snapshot.EmployerContributionTotal = 321m;

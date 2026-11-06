@@ -12,6 +12,10 @@ public class StudentRecordReportInput : PagedResultRequestDto
 	public string ReportType { get; set; } = "Directory";
 	public Guid? AcademicYearId { get; set; }
 	public Guid? StudentId { get; set; }
+	public Guid? BoardId { get; set; }
+	public Guid? MediumId { get; set; }
+	public Guid? StandardId { get; set; }
+	public Guid? DivisionId { get; set; }
 	public string? Status { get; set; }
 	[StringLength(80)] public string ClientKey { get; set; } = string.Empty;
 }

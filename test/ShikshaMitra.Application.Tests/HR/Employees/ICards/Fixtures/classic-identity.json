@@ -1,0 +1,419 @@
+{
+  "orientation": "Horizontal",
+  "width": 428,
+  "height": 270,
+  "widthMm": 85.6,
+  "heightMm": 53.98,
+  "themeColor": "#007867",
+  "backgroundColor": "#FFFFFF",
+  "presetKey": "classic-identity",
+  "front": {
+    "elements": [
+      {
+        "id": "logo",
+        "type": "logo",
+        "x": 19,
+        "y": 18,
+        "w": 34,
+        "h": 34,
+        "z": 1,
+        "visible": true
+      },
+      {
+        "id": "school-name",
+        "type": "text",
+        "fieldKey": "schoolName",
+        "label": "School name",
+        "x": 66,
+        "y": 18,
+        "w": 342,
+        "h": 24,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#1C252E",
+          "fontSize": 19,
+          "fontFamily": "Arial",
+          "showLabel": false,
+          "fontWeight": 700
+        }
+      },
+      {
+        "id": "school-address",
+        "type": "text",
+        "fieldKey": "schoolAddress",
+        "label": "School address",
+        "x": 66,
+        "y": 44,
+        "w": 342,
+        "h": 15,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#637381",
+          "fontSize": 10,
+          "fontFamily": "Arial",
+          "showLabel": false
+        }
+      },
+      {
+        "id": "card-kind",
+        "type": "text",
+        "fieldKey": "headerText",
+        "label": "Card heading",
+        "x": 19,
+        "y": 72,
+        "w": 389,
+        "h": 18,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#007867",
+          "fontSize": 12,
+          "fontFamily": "Arial",
+          "showLabel": false
+        },
+        "value": "Student identity card"
+      },
+      {
+        "id": "divider",
+        "type": "line",
+        "x": 19,
+        "y": 94,
+        "w": 390,
+        "h": 1,
+        "z": 1,
+        "visible": true,
+        "style": {
+          "backgroundColor": "#007867"
+        }
+      },
+      {
+        "id": "photo",
+        "type": "photo",
+        "x": 19,
+        "y": 104,
+        "w": 84,
+        "h": 96,
+        "z": 1,
+        "visible": true,
+        "style": {
+          "photoShape": "rounded",
+          "borderColor": "#C4CDD5",
+          "borderWidth": 1
+        }
+      },
+      {
+        "id": "person-name",
+        "type": "text",
+        "fieldKey": "StudentName",
+        "label": "Name",
+        "x": 120,
+        "y": 105,
+        "w": 289,
+        "h": 25,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#1C252E",
+          "fontSize": 20,
+          "fontFamily": "Arial",
+          "showLabel": false,
+          "fontWeight": 700
+        }
+      },
+      {
+        "id": "person-role",
+        "type": "text",
+        "fieldKey": "Class",
+        "label": "Class",
+        "x": 132,
+        "y": 134,
+        "w": 277,
+        "h": 18,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#007867",
+          "fontSize": 12,
+          "fontFamily": "Arial",
+          "showLabel": false
+        }
+      },
+      {
+        "id": "record-number",
+        "type": "text",
+        "fieldKey": "GRNumber",
+        "label": "GR number",
+        "x": 132,
+        "y": 159,
+        "w": 277,
+        "h": 18,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#1C252E",
+          "fontSize": 11,
+          "fontFamily": "Arial",
+          "showLabel": true,
+          "separator": ": "
+        }
+      },
+      {
+        "id": "division",
+        "type": "text",
+        "fieldKey": "Division",
+        "label": "Division",
+        "x": 132,
+        "y": 179,
+        "w": 277,
+        "h": 18,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#1C252E",
+          "fontSize": 11,
+          "fontFamily": "Arial",
+          "showLabel": true,
+          "separator": ": "
+        }
+      },
+      {
+        "id": "additional-record",
+        "type": "text",
+        "fieldKey": "AcademicYear",
+        "label": "Academic year",
+        "x": 132,
+        "y": 195,
+        "w": 277,
+        "h": 12,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#1C252E",
+          "fontSize": 10,
+          "fontFamily": "Arial",
+          "showLabel": true,
+          "separator": ": "
+        }
+      },
+      {
+        "id": "footer-divider",
+        "type": "line",
+        "x": 19,
+        "y": 207,
+        "w": 390,
+        "h": 1,
+        "z": 1,
+        "visible": true,
+        "style": {
+          "backgroundColor": "#DFE3E8"
+        }
+      },
+      {
+        "id": "card-number",
+        "type": "text",
+        "fieldKey": "CardNumber",
+        "label": "Card number",
+        "x": 19,
+        "y": 221,
+        "w": 307,
+        "h": 18,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#1C252E",
+          "fontSize": 12,
+          "fontFamily": "Arial",
+          "showLabel": false,
+          "fontWeight": 700
+        }
+      },
+      {
+        "id": "validity",
+        "type": "text",
+        "fieldKey": "AcademicYear",
+        "label": "Academic year",
+        "x": 19,
+        "y": 242,
+        "w": 307,
+        "h": 14,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#1C252E",
+          "fontSize": 10,
+          "fontFamily": "Arial",
+          "showLabel": true,
+          "separator": ": "
+        }
+      },
+      {
+        "id": "qr",
+        "type": "qr",
+        "x": 363,
+        "y": 219,
+        "w": 44,
+        "h": 44,
+        "z": 2,
+        "visible": true
+      }
+    ]
+  },
+  "back": {
+    "elements": [
+      {
+        "id": "back-logo",
+        "type": "logo",
+        "x": 19,
+        "y": 18,
+        "w": 34,
+        "h": 34,
+        "z": 1,
+        "visible": true
+      },
+      {
+        "id": "back-school-name",
+        "type": "text",
+        "fieldKey": "schoolName",
+        "label": "School name",
+        "x": 66,
+        "y": 18,
+        "w": 342,
+        "h": 24,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#1C252E",
+          "fontSize": 19,
+          "fontFamily": "Arial",
+          "showLabel": false,
+          "fontWeight": 700
+        }
+      },
+      {
+        "id": "back-school-address",
+        "type": "text",
+        "fieldKey": "schoolAddress",
+        "label": "School address",
+        "x": 66,
+        "y": 44,
+        "w": 342,
+        "h": 15,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#637381",
+          "fontSize": 10,
+          "fontFamily": "Arial",
+          "showLabel": false
+        }
+      },
+      {
+        "id": "back-card-kind",
+        "type": "text",
+        "fieldKey": "headerText",
+        "label": "Card heading",
+        "x": 19,
+        "y": 72,
+        "w": 389,
+        "h": 18,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#007867",
+          "fontSize": 12,
+          "fontFamily": "Arial",
+          "showLabel": false
+        },
+        "value": "Student identity card"
+      },
+      {
+        "id": "return-instructions",
+        "type": "text",
+        "fieldKey": "footerText",
+        "label": "Return instructions",
+        "x": 19,
+        "y": 108,
+        "w": 389,
+        "h": 42,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#1C252E",
+          "fontSize": 12,
+          "fontFamily": "Arial",
+          "showLabel": false
+        },
+        "value": "If found, return this card to the school office."
+      },
+      {
+        "id": "office-address",
+        "type": "text",
+        "fieldKey": "schoolAddress",
+        "label": "School office",
+        "x": 19,
+        "y": 155,
+        "w": 275,
+        "h": 38,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#1C252E",
+          "fontSize": 11,
+          "fontFamily": "Arial",
+          "showLabel": true,
+          "separator": "\n"
+        }
+      },
+      {
+        "id": "signature",
+        "type": "text",
+        "fieldKey": "static",
+        "label": "Signature label",
+        "x": 19,
+        "y": 211,
+        "w": 275,
+        "h": 22,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#1C252E",
+          "fontSize": 10,
+          "fontFamily": "Arial",
+          "showLabel": false
+        },
+        "value": "Authorised signatory"
+      },
+      {
+        "id": "back-validity",
+        "type": "text",
+        "fieldKey": "AcademicYear",
+        "label": "Academic year",
+        "x": 19,
+        "y": 242,
+        "w": 307,
+        "h": 14,
+        "z": 2,
+        "visible": true,
+        "style": {
+          "color": "#1C252E",
+          "fontSize": 10,
+          "fontFamily": "Arial",
+          "showLabel": true,
+          "separator": ": "
+        }
+      },
+      {
+        "id": "back-qr",
+        "type": "qr",
+        "x": 363,
+        "y": 219,
+        "w": 44,
+        "h": 44,
+        "z": 2,
+        "visible": true
+      }
+    ]
+  }
+}

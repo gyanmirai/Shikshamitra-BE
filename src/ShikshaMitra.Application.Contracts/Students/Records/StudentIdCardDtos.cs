@@ -8,6 +8,10 @@ namespace ShikshaMitra.Students.Records;
 
 public class StudentIdCardTemplateDto
 {
+	public int SchemaVersion { get; set; } = 1;
+	public string? LayoutJson { get; set; }
+	public string? PrintSettingsJson { get; set; }
+	public bool BackSideEnabled { get; set; }
 	public Guid? Id { get; set; }
 	// Omission on update preserves the saved cohort, including membership outside the editor's scope.
 	public StudentIdCardSelectionDto? Selection { get; set; }

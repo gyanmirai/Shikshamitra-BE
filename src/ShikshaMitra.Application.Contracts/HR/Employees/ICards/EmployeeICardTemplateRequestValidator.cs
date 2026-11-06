@@ -57,7 +57,7 @@ public class EmployeeICardTemplateRequestValidator : AbstractValidator<EmployeeI
 			.When(x => x.PresetKey != null);
 
 		RuleFor(x => x.SchemaVersion)
-			.Equal(1);
+			.InclusiveBetween(1, 2);
 
 		RuleFor(x => x.FieldsJson)
 			.Must(x => !string.IsNullOrWhiteSpace(x))

@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-04
+updated_on: 2026-11-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -74,6 +74,8 @@ Apply `AddAdmissionApplicationNumbering` before starting the updated API. The mi
 Changing from the default format to a school prefix carries the existing sequence: `APP-2026-000050` → `DDVS-2026-0051` with four digits. Starting number is a minimum. Calendar reset adopts the matching legacy calendar counter; continuous adopts the highest legacy counter; academic reset adopts issued default APP numbers in that academic year, including soft-deleted applications. Existing custom scope counters and matching historic numbers also set a floor. Preview and issuance share this logic under the same tenant transaction lock; previews are current observations, not reservations. This continuation/preview change adds no schema migration.
 
 ## House Management
+
+For `GET students`, `filter` matches the visible student name or GR number using a trimmed, case-insensitive substring. Search runs on the same tenant-, enrollment-, academic- and user-scoped projection as the returned rows; masked GR numbers cannot match hidden identities.
 
 Apply `20261030111330_AddHouseManagement` before starting an API that uses these endpoints. The migration adds persistence only; it does not allocate students, copy houses between years or grant permissions.
 
@@ -1133,3 +1135,36 @@ Parent invitations include a common five-rule guide in the token-free campaign t
 Public schema omits protected identity, sibling and staff metadata. The allowlisted `runtimeBindingKey` preserves display/validation semantics only; it grants no write authority. Snapshot checks reject stale writes while exact retries reuse their operation. Error family `Admissions.ParentRegistration` includes `.Unavailable`, `.Conflict`, `.Invalid` and `.Incomplete`; field validation uses `data.FieldErrors`. Expired/revoked/unknown tokens share the unavailable response without applicant details.
 
 Canonical evidence now permits a null staff `submittedBy` for a parent upload and supplies `parentRegistrationId`/`parentContactJson` to authorized staff history. Existing staff rows retain their attribution. Review and apply `20261104101347_AddAdmissionParentRegistration` before enabling these endpoints; source generation does not mean a database has been migrated. See [testing](./testing.md#parent-registration-validation).
+
+## Configurable student identity-card designs
+
+The existing Student I-Card template DTO adds `schemaVersion` (default 1), nullable `layoutJson` and `printSettingsJson`, and `backSideEnabled` (default false). Schema 2 accepts `classic-identity` alongside existing presets. New configuration stays in existing template JSON and immutable issued snapshots, without a database migration. Old saved/issued templates remain readable and use their existing renderer. Schema 1 does not accept new layout/back configuration.
+
+Schema-2 layouts retain canvas `width`/`height`, orientation, colours and positioned `front.elements`/`back.elements`, and require physical `widthMm`/`heightMm` of 30–200 mm. Existing student data bindings remain `StudentName`, `GRNumber`, `Class`, `Division`, `AcademicYear` and `DateOfBirth`; `CardNumber`, school name/address, header/footer and static text are also supported. Existing `fields`, photo and QR flags remain effective on either side. Barcode elements use the existing card number and introduce no verification or access service.
+
+The [employee identity-card print contract](../hr/api.md#configurable-employee-identity-cards) defines the shared millimetre settings, element/font limits, fixed-size A4 capacity, duplex reflection, back rotation/calibration and side selection. Student export uses those settings with the existing request's cards-per-page selection. Issued download/reprint uses card-sized output from the frozen configuration, preserving the existing school-identity snapshot and authorized photo/logo loaders. Disabled backs produce no empty pages; oversized schema-2 text produces an actionable configuration error rather than truncating identity text. Existing scope, masking, cohort transfers, permissions, idempotency and document events remain authoritative.
+
+
+## Compliance report projections
+
+The existing `/api/students/records/reports` family accepts four additional string `reportType` values; the Directory, Changes, Documents and Transitions contracts remain supported.
+No new controller or storage migration is required: job type storage is an existing string and scope remains the existing request JSON.
+
+| Type | Factual output beyond Student / GR number / Board / Medium / Class / Division |
+|---|---|
+| `UdiseBaseline` | Masked Aadhaar, APAAR, PEN and UDISE code; saved identity verification, APAAR consent, UDISE sync and last recorded export |
+| `GujaratCompliance` | Same columns, limited to the saved `EducationBoardType.GSEB` |
+| `IdentityExceptions` | Masked Aadhaar/APAAR, saved verification and consent; includes absent compliance rows, either verification other than Verified, or consent other than Granted |
+| `EligibilityTracking` | Saved RTE flag, scholarship status/scheme, masked application/caste-certificate references and certificate verification |
+
+All four require nonempty `academicYearId`; optional `boardId`, `mediumId`, `standardId`, `divisionId` and `studentId` narrow the permitted current active Records population.
+Current saved Student placement must match that year and the supplied filters; these outputs do not reconstruct historical identity snapshots.
+`status` is unsupported, preview pages are 1–100 rows, and export uses the complete deterministic Student-ID-ordered scope.
+Existing Reports View and Student List View plus `Students.IdentityCompliance.View` authorize preview/source reads; Reports Add additionally authorizes job creation and cancellation.
+The worker and download path retain per-user tenant ownership, permission/policy/UserScope authority snapshots, cancellation, expiry and full-scope XLSX generation.
+
+Canonical Records `general` policy masking applies to baseline identity/location and identity-status columns (Identity and Contact mask groups); `additional` policy masking applies to benefit tracking (Identity, Medical and Contact groups).
+Identity Exceptions fails with `Students:Records:RestrictedFields` when the general section is masked, avoiding disclosure through exception membership/counts.
+Visible identifiers expose at most their final four characters; Aadhaar uses only the stored last-four value, never the encrypted value or hash.
+Missing compliance uses canonical not-provided/not-asked states and unavailable fields; no eligibility, state certification or official submission result is inferred.
+Preview and export are reads and never update UDISE/verification statuses.

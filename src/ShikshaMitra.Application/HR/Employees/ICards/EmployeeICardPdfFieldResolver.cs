@@ -11,7 +11,8 @@ internal static class EmployeeICardPdfFieldResolver
 		Employee employee,
 		string? organization,
 		string? fieldKey,
-		string? fallback)
+		string? fallback,
+		string? validityYear = null)
 	{
 		var address = string.Join(", ", new[] { employee.Address1, employee.Address2, employee.Address3 }.Where(x => !string.IsNullOrWhiteSpace(x)));
 		var employeeName = string.IsNullOrWhiteSpace(employee.EmployeeName) ? employee.ShortName ?? "Staff" : employee.EmployeeName;
@@ -24,7 +25,7 @@ internal static class EmployeeICardPdfFieldResolver
 			"organization" => organization,
 			"contactno" => employee.MobileNo,
 			"bloodgroup" => employee.BloodGroup,
-			"validityyear" => template.Name,
+			"validityyear" => template.SchemaVersion >= 2 ? validityYear : template.Name,
 			"address" => address,
 			"schoolname" => string.IsNullOrWhiteSpace(template.SchoolName) ? template.Name : template.SchoolName,
 			"schooladdress" => string.IsNullOrWhiteSpace(template.SchoolAddress) ? organization ?? "School" : template.SchoolAddress,

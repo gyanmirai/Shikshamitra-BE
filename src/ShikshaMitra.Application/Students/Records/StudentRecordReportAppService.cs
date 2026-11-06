@@ -25,7 +25,8 @@ public class StudentRecordReportAppService(IRepository<StudentRecordReportJob, G
 	{
 		await LazyServiceProvider.LazyGetRequiredService<StudentRecordsActorService>().EnsureActiveAsync();
 		if (!CurrentTenant.Id.HasValue || string.IsNullOrWhiteSpace(input.ClientKey)) throw new BusinessException("Students:Records:InvalidReport");
-		await generator.GeneratePageAsync(new() { ReportType = input.ReportType, AcademicYearId = input.AcademicYearId, StudentId = input.StudentId, Status = input.Status, MaxResultCount = 1 });
+		await generator.GeneratePageAsync(new() { ReportType = input.ReportType, AcademicYearId = input.AcademicYearId, StudentId = input.StudentId,
+			BoardId = input.BoardId, MediumId = input.MediumId, StandardId = input.StandardId, DivisionId = input.DivisionId, Status = input.Status, MaxResultCount = 1 });
 		input.SkipCount = 0; input.MaxResultCount = 100;
 		var json = StudentRecordPayloadService.Canonical(JsonSerializer.Serialize(input, StudentRecordPayloadService.JsonOptions));
 		var existing = await jobs.FindAsync(x => x.TenantId == CurrentTenant.Id && x.RequestedBy == CurrentUser.Id && x.ClientKey == input.ClientKey);

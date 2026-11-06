@@ -3,7 +3,7 @@ module: hr
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-11-02
+updated_on: 2026-11-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -118,3 +118,6 @@ HR_WorkShifts and HR_EmployeeShiftAssignments are independent of academic_ShiftM
 The employee ShiftId column is retained as an internal onboarding/migration baseline reference to HR_WorkShifts, never the authority for dated attendance.
 PostgreSQL excludes overlapping nondeleted assignment ranges.
 Migration mapping is explicit through LegacySchoolShiftId; identical UUID values across independent tables do not establish a relationship.
+## Identity-card rendering
+
+`src/ShikshaMitra.Application/Common/IdentityCards/` owns neutral canvas models, JSON schema validation, physical A4/card geometry, SVG media/text and page composition. `HR/Employees/ICards/` retains employee field/flag policy, selection and asset authorization; its PDF composer supplies authorized values to the shared renderer. The Student Records adapter uses the same physical geometry without importing HR field policy. Shared error codes live in `src/ShikshaMitra.Domain.Shared/Common/IdentityCards/`.

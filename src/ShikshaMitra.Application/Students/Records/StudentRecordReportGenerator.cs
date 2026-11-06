@@ -48,6 +48,8 @@ public class StudentRecordReportGenerator(IStudentDirectoryAppService directory,
 					x.EffectiveDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), $"{x.CurrentApprovalStage}/{x.ApprovalStageCount}", x.Reason)).ToList();
 				break;
 			case "Documents": await AddDocumentsAsync(result, input); break;
+			case "UdiseBaseline": case "GujaratCompliance": case "IdentityExceptions": case "EligibilityTracking":
+				return await LazyServiceProvider.LazyGetRequiredService<StudentComplianceReportQueryService>().GenerateAsync(input);
 			default: throw new BusinessException("Students:Records:InvalidReport");
 		}
 		return result;

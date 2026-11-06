@@ -37,6 +37,32 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 	}
 
 	[Fact]
+	public async Task CreateAsync_Should_Roundtrip_Schema_Two_Duplex_Physical_Settings()
+	{
+		var input = BuildTemplateRequest();
+		input.SchemaVersion = 2;
+		input.LogoMode = ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityAssetMode.Hidden;
+		await WithUnitOfWorkAsync(async () => await GetRequiredService<IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid>>().InsertAsync(
+			new(input.AcademicYearId, _currentTenant.Id, "2026-2027", new DateTime(2026, 4, 1), new DateTime(2027, 3, 31)), autoSave: true));
+		input.PresetKey = "staff-professional";
+		input.BackSideEnabled = true;
+		var layout = System.Text.Json.Nodes.JsonNode.Parse(input.LayoutJson)!;
+		layout["widthMm"] = 85.6;
+		layout["heightMm"] = 53.98;
+		layout["back"] = System.Text.Json.Nodes.JsonNode.Parse("""{"elements":[{"id":"return","type":"text","fieldKey":"static","value":"Return to school office.","x":16,"y":16,"w":328,"h":40,"style":{"fontSize":12}}]}""");
+		input.LayoutJson = layout.ToJsonString();
+		input.PrintSettingsJson = """{"pageSize":"Card","units":"mm","cardsPerPage":8,"sideMode":"both"}""";
+		var template = await _iCardAppService.CreateAsync(input);
+		template.SchemaVersion.ShouldBe(2);
+		template.LayoutJson.ShouldBe(input.LayoutJson);
+		template.PrintSettingsJson.ShouldBe(input.PrintSettingsJson);
+		template.BackSideEnabled.ShouldBeTrue();
+		var employee = await CreateEmployeeAsync();
+		var pdf = await _iCardAppService.GenerateEmployeeICardsPdfAsync(template.Id, new() { EmployeeIds = [employee.Id] });
+		System.Text.RegularExpressions.Regex.Matches(System.Text.Encoding.Latin1.GetString(pdf), @"/Type\s*/Page\b").Count.ShouldBe(2);
+	}
+
+	[Fact]
 	public async Task CreateAsync_Should_Accept_Valid_Field_Schema()
 	{
 		var template = await _iCardAppService.CreateAsync(BuildTemplateRequest());

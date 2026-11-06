@@ -12,6 +12,7 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
 using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Volo.Abp.Data;
+using ShikshaMitra.TenantSettings.AcademicYears;
 
 namespace ShikshaMitra.HR.Employees.ICards;
 
@@ -22,7 +23,8 @@ public class EmployeeICardPdfWorkflow(
 	EmployeeOrganizationScopeResolver organizationScopeResolver,
 	EmployeeICardAssetService assetService,
 	IAsyncQueryableExecuter asyncExecuter,
-	SchoolIdentityDocumentService schoolIdentity) : ApplicationService, ITransientDependency
+	SchoolIdentityDocumentService schoolIdentity,
+	IRepository<AcademicYear, Guid> academicYears) : ApplicationService, ITransientDependency
 {
 	public async Task<byte[]> GenerateEmployeeICardsPdfAsync(Guid templateId, EmployeeICardPdfRequest input)
 	{
@@ -35,7 +37,7 @@ public class EmployeeICardPdfWorkflow(
 		var employeeIds = input.EmployeeIds.Distinct().ToList();
 		var fields = EmployeeICardTemplateRules.ParseFieldsJson(template.FieldsJson);
 		var layout = EmployeeICardLayoutSchema.ResolveLayout(template);
-		var printSettings = EmployeeICardLayoutSchema.ResolvePrintSettings(template.PrintSettingsJson, input.CardsPerPage);
+		var printSettings = EmployeeICardLayoutSchema.ResolvePrintSettings(template.PrintSettingsJson, input.CardsPerPage, template.SchemaVersion);
 		EmployeeICardTemplateRules.ValidateTemplateAssetReferences(
 			CurrentTenant.Id,
 			template.LogoBlobName,
@@ -65,7 +67,13 @@ public class EmployeeICardPdfWorkflow(
 		employees = FilterIncompleteEmployees(input, template, employees, logoMode == SchoolIdentityAssetMode.Hidden || logoBytes != null);
 		if (employees.Count == 0) throw new BusinessException(HRErrorCodes.EmployeeICardPdfEmployeeRequired);
 		var photoBytesByEmployeeId = await GetPhotoBytesByEmployeeIdAsync(employees);
-		var cardsPerPage = Math.Clamp(input.CardsPerPage ?? printSettings.CardsPerPage, 1, 10);
+		string? validityYear = null;
+		if (template.SchemaVersion >= 2)
+		{
+			var year = await academicYears.FindAsync(x => x.Id == template.AcademicYearId && x.TenantId == CurrentTenant.Id);
+			validityYear = year?.Name ?? throw new BusinessException(HRErrorCodes.EmployeeICardTemplateInvalidFieldsJson).WithData("detail", "The template academic year is unavailable in this school.");
+		}
+		var cardsPerPage = input.CardsPerPage ?? printSettings.CardsPerPage;
 		return EmployeeICardPdfComposer.Compose(
 			template,
 			employees,
@@ -75,7 +83,8 @@ public class EmployeeICardPdfWorkflow(
 			printSettings,
 			cardsPerPage,
 			logoIsRaster ? logoBytes : null,
-			photoBytesByEmployeeId);
+			photoBytesByEmployeeId,
+			validityYear);
 	}
 
 	private async Task<List<Employee>> GetEmployeesAsync(List<Guid> employeeIds)

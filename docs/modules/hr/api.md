@@ -753,3 +753,14 @@ Ordinary profile updates cannot change work schedules.
 
 Protected or referenced changes return HTTP 409, invalid dates/times return HTTP 400, stale writes return HTTP 409, and foreign catalogue IDs return HTTP 404.
 All operations derive tenant ownership from the server context.
+## Configurable employee identity cards
+
+Existing `/api/employee-icard-templates` operations keep their action permissions, tenant and employee scope, school-identity selection and authorized asset loading. Schema versions 1 and 2 are supported. Version 2 accepts the `staff-professional` preset and explicit `widthMm`/`heightMm` in `layoutJson`; `width`/`height` and element coordinates remain canvas units. Physical dimensions must be 30–200 mm. Legacy layouts without physical dimensions use 85.60 × 53.98 mm, reversed for Vertical.
+
+`front.elements` and optional `back.elements` share text, photo, logo, QR, barcode, shape and line support, with at most 100 elements per side. IDs must be unique within each side and finite element rectangles must remain inside the canvas. Existing field bindings and `fieldsJson`, QR, barcode and back-side flags still govern rendering. School text and static content do not widen employee field access. Fonts support Arial, sans-serif, Inter, Roboto, Noto Sans and Lato at 4–100 canvas units; invalid properties, colours, enums and unsupported bindings fail validation.
+
+`printSettingsJson` uses `pageSize` (`A4` or `Card`), `units: "mm"`, `cardsPerPage` (1–10), `margin`, `gap`, `showCutMarks`, `bleedMm`, `safeInsetMm`, `duplexFlip` (`long-edge` or `short-edge`), `backRotation` (0 or 180), `backOffsetXmm`, `backOffsetYmm`, and `sideMode` (`both`, `front`, `back`). Defaults are A4, 8 cards, 10 mm margin, 3 mm gap, no cut marks/bleed, 3 mm safe inset, long-edge, no rotation/offset and both sides. Legacy schema-1 margin/gap without `units` are converted from points once on read.
+
+A4 capacity includes margins, gaps and bleed; the renderer lowers the batch capacity without shrinking credentials and rejects sheets with no usable slot. A centred full-capacity grid retains empty slots on partial sheets. Long-edge backs reflect columns and short-edge backs reflect rows. The matching back follows each front sheet. Card output emits per-card front/back pages at trim dimensions plus twice the bleed, and omits cut marks. Back offsets require A4 and must keep artwork on the paper. Selecting back-only requires an enabled, configured back. Text wraps within its element; schema-2 overflow reports the affected element instead of truncating identity data. Barcode values must use Code39 characters.
+
+Saving configuration and generating a PDF do not establish physical printing or distribution. This rendering change adds no migration, issuance entity, verification service or permission grants.

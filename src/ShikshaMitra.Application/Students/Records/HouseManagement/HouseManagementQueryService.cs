@@ -89,7 +89,8 @@ public class HouseManagementQueryService(
 		if (!string.IsNullOrWhiteSpace(input.Filter))
 		{
 			var term = input.Filter.Trim().ToLower();
-			q = q.Where(x => x.StudentName.ToLower().Contains(term));
+			q = q.Where(x => x.StudentName.ToLower().Contains(term) ||
+				x.AdmissionNumber != null && x.AdmissionNumber.ToLower().Contains(term));
 		}
 
 		var count = await AsyncExecuter.CountAsync(q);

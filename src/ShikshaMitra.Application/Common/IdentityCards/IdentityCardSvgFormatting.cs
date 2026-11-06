@@ -1,9 +1,9 @@
 using System;
 using System.Net;
 
-namespace ShikshaMitra.HR.Employees.ICards;
+namespace ShikshaMitra.Common.IdentityCards;
 
-internal static class EmployeeICardSvgFormatting
+internal static class IdentityCardSvgFormatting
 {
 	public static string Truncate(string value, int maxLength) =>
 		value.Length <= maxLength ? value : value[..Math.Max(1, maxLength - 3)] + "...";

@@ -36,7 +36,7 @@ internal static class EmployeeICardTemplateRules
 		ValidateTemplateAssetReferences(tenantId, input.LogoBlobName, input.BackgroundImageBlobName);
 		ValidateColor(input.ThemeColor);
 		ValidateColor(input.BackgroundColor);
-		EmployeeICardLayoutSchema.Validate(input.LayoutJson, input.PrintSettingsJson);
+		EmployeeICardLayoutSchema.Validate(input.LayoutJson, input.PrintSettingsJson, input.SchemaVersion, input.BackSideEnabled);
 	}
 
 	public static void ValidateTemplateAssetReferences(Guid? tenantId, params string?[] blobNames)

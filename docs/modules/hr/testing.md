@@ -1206,3 +1206,12 @@ Run existing attendance availability, payroll overtime/late-arrival, HR setup re
 Verify catalogue independence, date boundaries, missing assignments, stale writes, future replacement/cancellation, tenant/scope denial and recorded-history protection.
 Reconcile migration mappings and exercise PostgreSQL overlap enforcement with real concurrent writes before production cutover.
 Run both repositories' reusable Security Regression commands locally and the all-module documentation validator.
+## Configurable identity-card regression checks
+
+The focused local .NET 9 run passed 33 tests on 2026-11-05. It covers explicit physical sizing, unscaled capacity, both duplex flip axes and partial sheets, side selection, large Card/zero-margin A4 output, invalid schemas, actual shared frontend preset fixtures, QR vector scaling, hidden logos and logo/photo aspect ratios. The employee schema-2 round-trip/PDF case and student save/issue/edit/download snapshot case passed; six legacy student card orientation/QR/logo combinations also passed.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~IdentityCardPhysicalLayout_Tests|FullyQualifiedName~IdentityCardDuplexPdf_Tests|FullyQualifiedName~IdentityCardPresetPdf_Tests|FullyQualifiedName~StudentIdCardPdfLayout_Tests|FullyQualifiedName~CreateAsync_Should_Roundtrip_Schema_Two|FullyQualifiedName~Icard_templates_schema_two|FullyQualifiedName~Configurable_student_hidden_logo" --artifacts-path .artifacts/id-card-build -p:RunAnalyzers=false -p:UseSharedCompilation=false
+```
+
+The older broad HR I-card suite has two host-level fixture failures in `GenerateEmployeeICardsPdfAsync_Should_Return_Pdf_For_Existing_Employee` and `GenerateEmployeeICardsPdfAsync_Should_Reject_Exclude_Incomplete_When_Template_Logo_Missing`: inherited logo loading raises `SchoolIdentity:InvalidContext` because those fixtures have no current tenant. The new duplex case uses explicit Hidden logo mode and a persisted academic year. These fixture failures are separate from physical rendering; production school-identity authorization is unchanged. The source has existing unrelated compiler warnings. Local behavioral validation disabled Roslynator analysis because concurrent builds made analysis expensive; this is not a zero-warning analyzer gate.

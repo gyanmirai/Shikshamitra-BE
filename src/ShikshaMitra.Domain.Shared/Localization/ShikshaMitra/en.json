@@ -846,6 +846,7 @@
         "Students:Records:InvalidCertificateFields": "One or more certificate fields are invalid.",
         "Students:Records:InvalidDuplicatePair": "Choose two different accessible student profiles for duplicate review.",
         "Students:Records:InvalidIdStudentSelection": "Choose eligible students to issue ID cards.",
+        "ShikshaMitra:IdentityCard:InvalidConfiguration": "Invalid identity card configuration: {detail}",
         "Students:Records:InvalidIdTemplate": "The ID card template is invalid.",
         "Students:Records:InvalidPhoto": "Choose a valid student photo.",
         "Students:Records:InvalidPhotoDraft": "The photo draft is unavailable. Upload the photo again.",

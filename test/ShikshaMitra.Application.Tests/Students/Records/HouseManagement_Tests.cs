@@ -38,7 +38,24 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		Color = "#2468ab"
 	};
 	[Fact]
-	public Task House_management_moves_clear_only_house_leadership_and_blocks_populated_house_deletion() => RunCertificationScenarioAsync(async () =>
+	public Task House_management_search_matches_name_or_GR_number_case_insensitively() => RunCertificationScenarioAsync(async () =>
+	{
+		var f = await HouseFixtureAsync();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var student = await _studentRepository.GetAsync(f.Student.Id);
+			student.AssignGrNumber("GR-HOUSE-781", reason: "House search regression");
+			await _studentRepository.UpdateAsync(student, true);
+		});
+		var input = new HouseManagementQuery { AcademicMediumId = f.Student.AcademicMediumId, Filter = " gr-house-781 " };
+		(await f.Service.GetStudentsAsync(input)).Items.ShouldContain(x => x.EnrollmentId == f.EnrollmentId);
+		input.Filter = f.Student.FirstName;
+		(await f.Service.GetStudentsAsync(input)).Items.ShouldContain(x => x.EnrollmentId == f.EnrollmentId);
+		input.Filter = "nonexistent-student-identifier";
+		(await f.Service.GetStudentsAsync(input)).TotalCount.ShouldBe(0);
+	});
+	[Fact]
+	public Task House_management_moves_clear_only_house_leadership_and_legacy_delete_is_blocked() => RunCertificationScenarioAsync(async () =>
 	{
 		var f = await HouseFixtureAsync();
 		var first = await f.Service.CreateHouseAsync(NewHouse(f.Student, "Falcons"));

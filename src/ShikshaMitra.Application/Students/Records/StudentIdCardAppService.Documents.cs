@@ -1,3 +1,4 @@
+using ShikshaMitra.Common.IdentityCards;
 using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -36,8 +37,15 @@ public partial class StudentIdCardAppService
 			cards.Add((new StudentIdCardDto { StudentId = studentId, HasPhoto = photo != null,
 				StudentSnapshot = PublicFields(snapshot.Fields), TemplateSnapshot = frozen }, photo, logo));
 		}
+		if (template!.SchemaVersion == 2)
+		{
+			var (layout, settings) = StudentIdCardDesign.Resolve(template);
+			settings.CardsPerPage = input.CardsPerPage;
+			var bytes = IdentityCardPdfComposer.Compose(layout, settings, cards.Select(item => StudentIdCardDesign.Artwork(item.Card, item.Photo, item.Logo)).ToList(), template.BackSideEnabled);
+			return new() { FileName = $"Student-I-Cards-{Clock.Now:yyyy-MM-dd}.pdf", Content = bytes };
+		}
 		QuestPDF.Settings.License = LicenseType.Community;
-		var vertical = template!.Orientation == "Vertical";
+		var vertical = template.Orientation == "Vertical";
 		var perPage = Math.Min(input.CardsPerPage, vertical ? 9 : 10);
 		var content = Document.Create(container =>
 		{
@@ -96,6 +104,12 @@ public partial class StudentIdCardAppService
 		var snapshot = JsonSerializer.Deserialize<Dictionary<string, string?>>(card.StudentSnapshotJson, JsonOptions)!;
 		var photo = await LoadPhotoAsync(template, snapshot);
 		var logo = (await schoolIdentity.LoadAsync(template.SchoolIdentity)).Logo;
+		if (template.SchemaVersion == 2)
+		{
+			var (layout, settings) = StudentIdCardDesign.Resolve(template, cardOutput: true);
+			var bytes = IdentityCardPdfComposer.Compose(layout, settings, [StudentIdCardDesign.Artwork(dto, photo, logo)], template.BackSideEnabled);
+			return new() { FileName = $"{card.CardNumber}.pdf", Content = bytes };
+		}
 		QuestPDF.Settings.License = LicenseType.Community;
 		var vertical = template.Orientation == "Vertical";
 		var content = Document.Create(container => container.Page(page =>

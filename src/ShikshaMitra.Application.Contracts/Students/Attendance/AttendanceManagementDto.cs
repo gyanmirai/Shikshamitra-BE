@@ -10,6 +10,8 @@ namespace ShikshaMitra.Students.Attendance;
 public class AttendanceRegisterInput : PagedResultRequestDto
 {
 	public Guid AcademicYearId { get; set; }
+	public Guid? BoardId { get; set; }
+	public Guid? EducationMediumId { get; set; }
 	public Guid? StandardId { get; set; }
 	public Guid? DivisionId { get; set; }
 	public DateTime StartDate { get; set; }

@@ -22,14 +22,20 @@ public class AttendanceRegisterQueryService(IRepository<StudentEnrollment, Guid>
 	{
 		var range = await reports.RangeAsync(input.AcademicYearId, input.StartDate, input.EndDate);
 		var scopedMembers = await enrollmentScopes.GetQueryableAsync();
+		var selectedDivisions = (await divisions.GetQueryableAsync()).Where(d => d.TenantId == CurrentTenant.Id &&
+			d.Standard.TenantId == CurrentTenant.Id && d.Standard.EducationMediumStage.TenantId == CurrentTenant.Id &&
+			d.Standard.EducationMediumStage.EducationMedium.TenantId == CurrentTenant.Id &&
+			d.Standard.EducationMediumStage.EducationMedium.EducationBoard.TenantId == CurrentTenant.Id &&
+			d.Standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId == input.AcademicYearId &&
+			(!input.BoardId.HasValue || d.Standard.EducationMediumStage.EducationMedium.EducationBoardId == input.BoardId) &&
+			(!input.EducationMediumId.HasValue || d.Standard.EducationMediumStage.EducationMediumId == input.EducationMediumId) &&
+			(!input.StandardId.HasValue || d.StandardId == input.StandardId) && (!input.DivisionId.HasValue || d.Id == input.DivisionId));
 		var scopedDays = (await scope.ApplyCurrentUserAttendanceDayScopeAsync(await days.GetQueryableAsync())).Where(d =>
 			d.TenantId == CurrentTenant.Id && d.AcademicYearId == input.AcademicYearId &&
-			(!input.StandardId.HasValue || d.StandardId == input.StandardId) && (!input.DivisionId.HasValue || d.DivisionId == input.DivisionId));
+			selectedDivisions.Any(division => division.Id == d.DivisionId));
 		var historicIds = from entry in await entries.GetQueryableAsync() join day in scopedDays on entry.AttendanceDayId equals day.Id
 			where day.Date >= range.Start && day.Date <= range.End select entry.EnrollmentId;
-		var authorizedDivisions = await scope.ApplyCurrentUserDivisionScopeAsync((await divisions.GetQueryableAsync()).Where(d =>
-			d.TenantId == CurrentTenant.Id && (!input.StandardId.HasValue || d.StandardId == input.StandardId) &&
-			(!input.DivisionId.HasValue || d.Id == input.DivisionId)), input.AcademicYearId);
+		var authorizedDivisions = await scope.ApplyCurrentUserDivisionScopeAsync(selectedDivisions, input.AcademicYearId);
 		var authorizedPaths = (await AsyncExecuter.ToListAsync(authorizedDivisions.Select(d => new { d.StandardId, DivisionId = d.Id })))
 			.Select(d => (d.StandardId, d.DivisionId)).ToHashSet();
 		var historicalCandidates = await AsyncExecuter.ToListAsync((await enrollments.GetQueryableAsync()).Where(e =>
@@ -40,21 +46,22 @@ public class AttendanceRegisterQueryService(IRepository<StudentEnrollment, Guid>
 			.Any(p => p.StandardId.HasValue && p.DivisionId.HasValue && authorizedPaths.Contains((p.StandardId.Value, p.DivisionId.Value))))
 			.Select(e => e.Id).ToArray();
 		var query = (await enrollments.GetQueryableAsync()).Where(e => e.TenantId == CurrentTenant.Id && e.AcademicYearId == input.AcademicYearId &&
-			(scopedMembers.Any(m => m.Id == e.Id) && (!input.StandardId.HasValue || e.StandardId == input.StandardId) && (!input.DivisionId.HasValue || e.DivisionId == input.DivisionId) ||
+			(scopedMembers.Any(m => m.Id == e.Id) && authorizedDivisions.Any(d => d.Id == e.DivisionId) ||
 			 historicIds.Any(id => id == e.Id) || Enumerable.Contains(historicalEnrollmentIds, e.Id)));
 		var count = await AsyncExecuter.CountAsync(query);
 		var members = await AsyncExecuter.ToListAsync(query.OrderBy(e => e.RollNumber).ThenBy(e => e.Id).Skip(input.SkipCount).Take(input.MaxResultCount));
 		return new() { TotalCount = count, Rows = await BuildRowsAsync(input.AcademicYearId, range.Start, range.End, members,
-			input.StandardId, input.DivisionId, includeDaily: false) };
+			input.StandardId, input.DivisionId, includeDaily: false, allowedPaths: authorizedPaths) };
 	}
 
 	public async Task<List<AttendanceSummaryDto>> BuildRowsAsync(Guid yearId, DateTime start, DateTime end, IReadOnlyCollection<StudentEnrollment> members,
-		Guid? standardId = null, Guid? divisionId = null, bool includeDaily = false)
+		Guid? standardId = null, Guid? divisionId = null, bool includeDaily = false, IReadOnlySet<(Guid Standard, Guid Division)>? allowedPaths = null)
 	{
 		var paths = new Dictionary<(Guid Standard, Guid Division), HashSet<Guid>>();
 		void Add(Guid? standard, Guid? division, Guid enrollmentId)
 		{
 			if (!standard.HasValue || !division.HasValue || standardId.HasValue && standard != standardId || divisionId.HasValue && division != divisionId) return;
+			if (allowedPaths != null && !allowedPaths.Contains((standard.Value, division.Value))) return;
 			var path = (standard.Value, division.Value);
 			if (!paths.TryGetValue(path, out var cohort)) paths[path] = cohort = [];
 			cohort.Add(enrollmentId);

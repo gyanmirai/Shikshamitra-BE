@@ -3,7 +3,7 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-04
+updated_on: 2026-11-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -126,7 +126,7 @@ dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~StudentM
 dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~House_actions_require|FullyQualifiedName~Students_catalogue_contains|FullyQualifiedName~Student_actions_follow|FullyQualifiedName~Teacher_assignment_and_development_environment"
 ```
 
-Run `HouseManagementDomain_Tests`, `HouseManagement_Tests` and `HouseManagementApi_Tests` in addition to these catalogue checks. They cover house validation, independent leaders, preview/stamp conflicts, scoped and mixed-batch authorization, same-year placement cleanup, legacy deletion safeguards and endpoint contracts. Local SQLite/synthetic tests do not establish PostgreSQL concurrency, live persistence, migration deployment or authenticated school acceptance.
+Run `HouseManagementDomain_Tests`, `HouseManagement_Tests` and `HouseManagementApi_Tests` in addition to these catalogue checks. They cover house validation, independent leaders, preview/stamp conflicts, scoped and mixed-batch authorization, same-year placement cleanup, legacy deletion safeguards and endpoint contracts. `House_management_search_matches_name_or_GR_number_case_insensitively` checks trimmed GR search, name search and an unmatched identifier through the application service. Local SQLite/synthetic tests do not establish PostgreSQL concurrency, live persistence, migration deployment or authenticated school acceptance.
 
 ```powershell
 dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~HouseManagementDomain_Tests"
@@ -1484,3 +1484,30 @@ Communication verification uses a substituted `IEmailSender` to exercise `Admiss
 ## Staff-selected onboarding login
 
 StudentOnboardingStaffLoginRules_Tests covers effective optional/manual policy without changing saved JSON. Staff_selected_login integration cases cover retired required/disabled/automatic policies, activation with no accounts or email, later explicit requests, Records credential summary, new renewal capture, retained legacy handoff evidence, and cancellation of old automatic outbox intents without transport. Also run current permission/scope, portal-account idempotency, sibling-link and password-preservation regressions. Tests use synthetic in-memory fixtures; they do not prove deployed delivery.
+## Configurable identity-card regression checks
+
+The focused local .NET 9 run passed 33 tests on 2026-11-05. It covers explicit physical sizing, unscaled capacity, both duplex flip axes and partial sheets, side selection, large Card/zero-margin A4 output, invalid schemas, actual shared frontend preset fixtures, QR vector scaling, hidden logos and logo/photo aspect ratios. The employee schema-2 round-trip/PDF case and student save/issue/edit/download snapshot case passed; six legacy student card orientation/QR/logo combinations also passed.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~IdentityCardPhysicalLayout_Tests|FullyQualifiedName~IdentityCardDuplexPdf_Tests|FullyQualifiedName~IdentityCardPresetPdf_Tests|FullyQualifiedName~StudentIdCardPdfLayout_Tests|FullyQualifiedName~CreateAsync_Should_Roundtrip_Schema_Two|FullyQualifiedName~Icard_templates_schema_two|FullyQualifiedName~Configurable_student_hidden_logo" --artifacts-path .artifacts/id-card-build -p:RunAnalyzers=false -p:UseSharedCompilation=false
+```
+
+The older broad HR I-card suite has two host-level fixture failures in `GenerateEmployeeICardsPdfAsync_Should_Return_Pdf_For_Existing_Employee` and `GenerateEmployeeICardsPdfAsync_Should_Reject_Exclude_Incomplete_When_Template_Logo_Missing`: inherited logo loading raises `SchoolIdentity:InvalidContext` because those fixtures have no current tenant. The new duplex case uses explicit Hidden logo mode and a persisted academic year. These fixture failures are separate from physical rendering; production school-identity authorization is unchanged. The source has existing unrelated compiler warnings. Local behavioral validation disabled Roslynator analysis because concurrent builds made analysis expensive; this is not a zero-warning analyzer gate.
+
+
+## Compliance report tests
+
+`test/ShikshaMitra.Application.Tests/Students/Records/StudentComplianceReports_Tests.cs` adds 14 focused cases in the existing admission-runtime integration fixture.
+
+| Proof | Coverage |
+|---|---|
+| Four real preview/XLSX lifecycle cases | Selected columns, masked identifiers, idempotent command replay, actual job artifact and policy-change download rejection |
+| Explicit academic year | Missing report year rejected |
+| Tenant and UserScope | No-scope denial, permitted population and exclusion of foreign/out-of-scope students |
+| Persisted status selection | GSEB board enum selection and verified/consented identity exception inclusion/exclusion |
+| Three mask-policy cases | Existing Identity, Contact and Medical masks applied through canonical section groups |
+| Four real grant cases | Identity Compliance required at preview and rechecked before completed-job download |
+
+Focused filter: `FullyQualifiedName~Compliance_report` with the existing PostgreSQL integration test prerequisites.
+The manually constructed permission-proof service graph is invoked inside `WithUnitOfWorkAsync`; production app-service interception supplies the normal request boundary.
+These source tests do not deploy the new types or prove a remote development API has them.

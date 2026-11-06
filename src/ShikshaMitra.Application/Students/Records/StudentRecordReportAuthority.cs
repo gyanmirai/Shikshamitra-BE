@@ -27,6 +27,8 @@ public class StudentRecordReportAuthority(IUserScopeAccessService scopes, Studen
 			"Changes" => [ShikshaMitraSubmodulePermissions.Students.Records_Changes.View],
 			"Documents" => [ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View, ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View],
 			"Transitions" => [ShikshaMitraSubmodulePermissions.Students.Records_Transitions.View],
+			"UdiseBaseline" or "GujaratCompliance" or "IdentityExceptions" or "EligibilityTracking" =>
+				[ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View, ShikshaMitraSubmodulePermissions.Students.IdentityCompliance.View],
 			_ => throw new Volo.Abp.BusinessException("Students:Records:InvalidReport")
 		};
 		foreach (var grant in required) if (!await permissions.IsGrantedAsync(grant)) throw new AbpAuthorizationException();

@@ -1,56 +1,27 @@
-using System;
-using System.Text.Json;
-using ShikshaMitra.HR;
+using ShikshaMitra.Common.IdentityCards;
 using Volo.Abp;
 
 namespace ShikshaMitra.HR.Employees.ICards;
 
 internal static class EmployeeICardLayoutSchema
 {
-	public static EmployeeICardLayout ResolveLayout(EmployeeICardTemplate template)
+	public static IdentityCardLayout ResolveLayout(EmployeeICardTemplate template) => EmployeeICardLayoutValidator.ParseLayout(template.LayoutJson, template.SchemaVersion, template.BackSideEnabled);
+
+	public static IdentityCardPrintSettings ResolvePrintSettings(string? json, int? cardsPerPageFallback, int schemaVersion = 1)
 	{
-		if (!string.IsNullOrWhiteSpace(template.LayoutJson))
+		try { return IdentityCardSchema.ParsePrint(json, cardsPerPageFallback, schemaVersion); }
+		catch (BusinessException ex) when (ex.Code == IdentityCardGeometry.InvalidConfiguration)
 		{
-			var layout = EmployeeICardLayoutValidator.ParseLayout(template.LayoutJson);
-			if (layout is not null)
-			{
-				return layout;
-			}
-		}
-
-		throw new BusinessException(HRErrorCodes.EmployeeICardTemplateInvalidFieldsJson);
-	}
-
-	public static EmployeeICardPrintSettings ResolvePrintSettings(string? json, int? cardsPerPageFallback)
-	{
-		var fallback = Math.Clamp(cardsPerPageFallback ?? 8, 1, 10);
-		if (string.IsNullOrWhiteSpace(json))
-		{
-			return new EmployeeICardPrintSettings { CardsPerPage = fallback };
-		}
-
-		try
-		{
-			var settings = JsonSerializer.Deserialize<EmployeeICardPrintSettings>(json, EmployeeICardLayoutJson.Options) ?? new EmployeeICardPrintSettings();
-			settings.PageSize = "A4";
-			settings.CardsPerPage = Math.Clamp(settings.CardsPerPage <= 0 ? fallback : settings.CardsPerPage, 1, 10);
-			settings.Margin = Math.Clamp(settings.Margin, 0, 60);
-			settings.Gap = Math.Clamp(settings.Gap, 0, 40);
-			return settings;
-		}
-		catch (JsonException)
-		{
-			throw new BusinessException(HRErrorCodes.EmployeeICardTemplateInvalidFieldsJson);
+			throw new BusinessException(HRErrorCodes.EmployeeICardTemplateInvalidFieldsJson).WithData("detail", ex.Data["detail"] ?? "Invalid identity card configuration.");
 		}
 	}
 
-	public static void Validate(string? layoutJson, string? printSettingsJson)
+	public static void Validate(string? layoutJson, string? printSettingsJson, int schemaVersion = 1, bool backEnabled = false)
 	{
-		if (!string.IsNullOrWhiteSpace(layoutJson))
-		{
-			_ = EmployeeICardLayoutValidator.ParseLayout(layoutJson) ?? throw new BusinessException(HRErrorCodes.EmployeeICardTemplateInvalidFieldsJson);
-		}
-
-		_ = ResolvePrintSettings(printSettingsJson, 8);
+		if (schemaVersion is not (1 or 2)) throw new BusinessException(HRErrorCodes.EmployeeICardTemplateInvalidFieldsJson);
+		var layout = EmployeeICardLayoutValidator.ParseLayout(layoutJson ?? "", schemaVersion, backEnabled);
+		var settings = ResolvePrintSettings(printSettingsJson, null, schemaVersion);
+		_ = IdentityCardGeometry.Sheet(layout, settings);
+		if (settings.SideMode == "back" && !backEnabled) throw new BusinessException(HRErrorCodes.EmployeeICardTemplateInvalidFieldsJson);
 	}
 }

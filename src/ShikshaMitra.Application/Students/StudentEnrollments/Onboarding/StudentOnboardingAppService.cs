@@ -1643,6 +1643,7 @@ public partial class StudentOnboardingAppService
 	// Keep retired handoffs in persisted history, outside current readiness and operational actions.
 	private static bool IsApplicableServiceHandoff(StudentOnboardingCase item, StudentOnboardingServiceHandoff handoff) =>
 		handoff.ServiceKey != "finance-first-payment" &&
+		!(handoff.Required && handoff.ServiceKey is "student-account" or "guardian-account") &&
 		(handoff.ServiceKey != "service-consent" || !item.ExtraProperties.ContainsKey("ReadinessRulesSnapshot"));
 
 	private static StudentOnboardingServiceHandoffDto MapHandoff(StudentOnboardingServiceHandoff handoff) => new()

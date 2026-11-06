@@ -35,6 +35,8 @@ public partial class StudentOnboardingAppService
 	private async Task PrepareSiblingParentSelectionAsync(StudentOnboardingCase item, StudentSiblingParentSelectionDto? input,
 		StudentGuardianAccessSelectionDto? guardianAccess = null)
 	{
+		// An unselected parent must not become an activation prerequisite or receive access implicitly.
+		if (input == null && guardianAccess == null) return;
 		if (guardianAccess != null)
 		{
 			if (input != null) throw PortalInvalid("Choose one adult app-access recipient for this case.");

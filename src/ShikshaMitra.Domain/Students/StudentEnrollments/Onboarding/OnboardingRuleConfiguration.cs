@@ -194,11 +194,11 @@ public sealed class OnboardingRuleConfiguration
 	{
 		if (item.ExtraProperties.TryGetValue("ReadinessRulesSnapshot", out var json) && json is string text)
 		{
-			using var document = JsonDocument.Parse(text); return document.RootElement.Clone();
+			using var document = JsonDocument.Parse(text); return StudentPortalAccountRules.ForStaffSelection(document.RootElement);
 		}
 		// Named readiness profiles are retained only as historical configuration metadata.
 		// Snapshot-less compatibility reads must not reactivate those profiles or their links.
-		return Root.GetProperty("readinessAccess");
+		return StudentPortalAccountRules.ForStaffSelection(Root.GetProperty("readinessAccess"));
 	}
 	public static bool IsPublished(JsonElement rule) => Text(rule, "status", Boolean(rule, "isActive", true) ? "published" : "superseded") == "published";
 	public JsonElement? ResolveRule(string section, StudentOnboardingCase item, DateTime at, Guid? divisionId = null) =>

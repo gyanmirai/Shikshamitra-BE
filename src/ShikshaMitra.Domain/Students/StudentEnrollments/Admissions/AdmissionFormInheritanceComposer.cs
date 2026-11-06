@@ -82,6 +82,8 @@ public static class AdmissionFormInheritanceComposer
 		var sourceStepOrders = inquiry.Sections
 			.GroupBy(section => section.StepId ?? section.Id).OrderBy(group => group.Min(section => section.StepDisplayOrder ?? section.DisplayOrder))
 			.Select((group, index) => new { group.Key, Order = nextStepOrder + index }).ToDictionary(item => item.Key, item => item.Order);
+		var sourceStepCodes = inquiry.Sections.GroupBy(section => section.StepId ?? section.Id)
+			.ToDictionary(group => group.Key, group => "INQ_" + (group.OrderBy(section => section.DisplayOrder).First().StepCode ?? group.OrderBy(section => section.DisplayOrder).First().Code));
 		foreach (var repeated in inquiry.Sections.Where(section => section.IsRepeatable))
 		{
 			var dataFields = repeated.Fields.Where(field => field.FieldType != AdmissionFormFieldType.Static).ToList();
@@ -114,12 +116,14 @@ public static class AdmissionFormInheritanceComposer
 			if (inquiryStepper)
 			{
 				inheritedSection.StepId = StableId(registration.Id, inquiry.Id, "STEP:" + (sourceSection.StepId ?? sourceSection.Id));
-				inheritedSection.StepCode = "INQ_" + (sourceSection.StepCode ?? sourceSection.Code);
+				inheritedSection.StepCode = sourceStepCodes[sourceSection.StepId ?? sourceSection.Id];
 				inheritedSection.StepName = sourceSection.StepName ?? sourceSection.Name;
 				inheritedSection.StepDisplayOrder = sourceStepOrders[sourceSection.StepId ?? sourceSection.Id];
 			}
 			else
 				SetSinglePageStep(inheritedSection, inquiry, combinedStepper, registration.Id, "INQUIRY_PAGE", nextStepOrder);
+			if (inheritedSection.StepCode != null && sourcePolicy.StepNames.TryGetValue(inheritedSection.StepCode, out var stepName))
+				inheritedSection.StepName = stepName;
 			var contextSection = Clone(inheritedSection);
 			foreach (var source in sourceSection.Fields.OrderBy(field => field.DisplayOrder))
 			{

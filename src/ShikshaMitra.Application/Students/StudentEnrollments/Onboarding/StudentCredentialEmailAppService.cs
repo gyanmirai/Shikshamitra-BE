@@ -23,7 +23,7 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 		var result = new List<StudentCredentialEmailDto>();
 		foreach (var type in new[] { "student", "guardian" })
 		{
-			var state = await eligibility.ResolveAsync(caseId, type);
+			var state = await eligibility.ResolveExplicitAsync(caseId, type);
 			var row = state.LinkId.HasValue ? await requests.FindAsync(x => x.CaseId == caseId && x.AccountType == type && x.LinkId == state.LinkId) : null;
 			var dto = Map(type, state, row);
 			if (row?.IsExistingParentHelp() != true && await LazyServiceProvider.LazyGetRequiredService<StudentSiblingParentService>().IsReusedAsync(caseId, type))
@@ -38,7 +38,7 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
 	[UnitOfWork(true)]
 	public async Task<StudentCredentialEmailDto> RequestAsync(Guid caseId, RequestStudentCredentialEmailDto input)
-		=> await RequestCoreAsync(caseId, input, allowCompletionWait: false);
+		=> await RequestCoreAsync(caseId, input, allowCompletionWait: true);
 
 	// Only the scoped one-click command calls this after authoritative account preparation.
 	internal Task<StudentCredentialEmailDto> RequestPreparedAsync(Guid caseId, string accountType, string concurrencyStamp) =>

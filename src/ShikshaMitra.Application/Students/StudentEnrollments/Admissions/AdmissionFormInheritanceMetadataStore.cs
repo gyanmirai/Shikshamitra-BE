@@ -61,6 +61,8 @@ internal static class AdmissionFormInheritanceMetadataStore
 		foreach (var source in policy.Sources)
 		{
 			if (source.FieldMappings == null || source.Layouts == null || source.RequiredFieldIdentities == null ||
+				source.StepNames == null || source.StepNames.Count > 500 ||
+				source.StepNames.Any(step => string.IsNullOrWhiteSpace(step.Key) || string.IsNullOrWhiteSpace(step.Value) || step.Value.Length > 128) ||
 				source.FieldMappings.Count > 500 || source.Layouts.Count > 500 || source.RequiredFieldIdentities.Count > 500 ||
 				source.RequiredFieldIdentities.Any(string.IsNullOrWhiteSpace) ||
 				source.FieldMappings.Any(mapping => mapping == null || string.IsNullOrWhiteSpace(mapping.SourceFieldCode) || string.IsNullOrWhiteSpace(mapping.RegistrationFieldCode)) ||

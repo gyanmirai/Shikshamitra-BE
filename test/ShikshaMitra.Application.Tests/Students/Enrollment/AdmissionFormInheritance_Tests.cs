@@ -12,6 +12,28 @@ namespace ShikshaMitra.Students;
 public class AdmissionFormInheritance_Tests
 {
 	[Fact]
+	public void Step_titles_are_persisted_reopened_and_copied_with_the_registration_policy()
+	{
+		var form = Form();
+		AdmissionFormInheritanceMetadataStore.Write(form, new() { Purpose = AdmissionFormPurpose.Registration,
+			Inheritance = new() { Enabled = true, Sources = [new() { InquiryFormDefinitionId = Guid.NewGuid(), StepNames = new() { ["INQ_DETAILS"] = "Student Information" } }] } });
+		AdmissionFormInheritanceMetadataStore.ReadPolicy(form)!.Sources.Single().StepNames["INQ_DETAILS"].ShouldBe("Student Information");
+		var copy = Form();
+		AdmissionFormInheritanceMetadataStore.Copy(form, copy);
+		AdmissionFormInheritanceMetadataStore.ReadPolicy(copy)!.Sources.Single().StepNames["INQ_DETAILS"].ShouldBe("Student Information");
+	}
+
+	[Theory]
+	[InlineData("")]
+	[InlineData(" ")]
+	public void Blank_registration_step_titles_are_rejected(string name)
+	{
+		Should.Throw<BusinessException>(() => AdmissionFormInheritanceMetadataStore.Validate(new() { Sources = [new() {
+			InquiryFormDefinitionId = Guid.NewGuid(), StepNames = new() { ["INQ_DETAILS"] = name } }] }))
+			.Code.ShouldBe(AdmissionFormInheritanceErrorCodes.InvalidPolicy);
+	}
+
+	[Fact]
 	public void Legacy_forms_have_no_inheritance_policy()
 	{
 		AdmissionFormInheritanceMetadataStore.ReadPolicy(Form()).ShouldBeNull();
@@ -115,7 +137,7 @@ public class AdmissionFormInheritance_Tests
 		after.IsValid.ShouldBeTrue();
 		System.Text.Json.JsonSerializer.Serialize(after.Definition).ShouldBe(System.Text.Json.JsonSerializer.Serialize(before.Definition));
 		after.Definition.Sections.Select(section => section.Name).ShouldBe(new[] { "Inquiry details", "Details" });
-		after.Definition.Sections[0].FieldsPerRow.ShouldBe(3);
+		after.Definition.Sections[0].FieldsPerRow.ShouldBe(registration.FieldsPerRow);
 		after.Definition.Sections.SelectMany(section => section.Fields).Count().ShouldBe(3);
 		after.Definition.Sections[0].Fields[0].InheritedFrom!.SourceBindingKey.ShouldBe("DATE_OF_BIRTH");
 		after.Definition.Sections[0].Fields[0].BindingKey.ShouldBe("Applicant.DateOfBirth");
@@ -140,10 +162,10 @@ public class AdmissionFormInheritance_Tests
 		result.IsValid.ShouldBeTrue();
 		result.Definition.LayoutType.ShouldBe(AdmissionFormLayoutType.Stepper);
 		result.Definition.FieldsPerRow.ShouldBe(2);
-		result.Definition.Sections.Single().FieldsPerRow.ShouldBe(3);
+		result.Definition.Sections.Single().FieldsPerRow.ShouldBe(registration.FieldsPerRow);
 		result.Definition.Sections.Single().StepName.ShouldBe("Student");
 		var json = System.Text.Json.JsonSerializer.Serialize(result.Definition);
-		System.Text.Json.JsonSerializer.Deserialize<AdmissionFormDto>(json)!.Sections.Single().FieldsPerRow.ShouldBe(3);
+		System.Text.Json.JsonSerializer.Deserialize<AdmissionFormDto>(json)!.Sections.Single().FieldsPerRow.ShouldBe(registration.FieldsPerRow);
 	}
 
 	[Fact]

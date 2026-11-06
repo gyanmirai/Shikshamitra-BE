@@ -20,8 +20,8 @@ public class StudentRecordRegistrationReader(
 	IRepository<AdmissionApplication, Guid> applications, IRepository<StudentOnboardingCase, Guid> cases,
 	IRepository<AdmissionFormInstance, Guid> instances, IRepository<AdmissionFormSubmission, Guid> submissions,
 	IRepository<AdmissionFormDefinition, Guid> forms, IRepository<AdmissionFormSectionDefinition, Guid> sections,
-	IRepository<AdmissionFormFieldDefinition, Guid> fields, IRepository<StudentOnboardingServiceHandoff, Guid> handoffs,
-	IRepository<StudentCredentialEmailRequest, Guid> emails, OnboardingConfigurationManager configuration,
+	IRepository<AdmissionFormFieldDefinition, Guid> fields,
+	IRepository<StudentCredentialEmailRequest, Guid> emails,
 	IRepository<StudentEnrollment, Guid> allEnrollments,
 	IRepository<StudentOnboardingEvent, Guid> events,
 	StudentRecordsEnrollmentScopeService enrollmentScope) : ApplicationService, ITransientDependency
@@ -167,30 +167,12 @@ public class StudentRecordRegistrationReader(
 					(e.OnboardingCaseId == c.Id ? (DateTime?)e.CreationTime : c.CompletedAt), CompletedAt = c.CompletedAt };
 		var result = await AsyncExecuter.ToListAsync(query);
 		var caseIds = result.Select(x => x.OnboardingCaseId).ToArray();
-		var accountHandoffs = await handoffs.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(caseIds, x.OnboardingCaseId) &&
-			x.Required && (x.ServiceKey == "student-account" || x.ServiceKey == "guardian-account"));
 		var emailRequests = await emails.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(caseIds, x.CaseId));
-		var sourceCases = await cases.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(caseIds, x.Id));
-		var settings = new Dictionary<Guid, JsonElement?>();
 		foreach (var item in result)
 		{
-			var source = sourceCases.First(x => x.Id == item.OnboardingCaseId);
-			JsonElement? rules;
-			if (source.ExtraProperties.TryGetValue("ReadinessRulesSnapshot", out var snapshot) && snapshot is string text)
-				rules = JsonSerializer.Deserialize<JsonElement>(text);
-			else
-			{
-				if (!settings.TryGetValue(source.AcademicYearId, out rules))
-					settings[source.AcademicYearId] = rules = (await configuration.GetAsync(source.AcademicYearId))?.Readiness(source);
-			}
-			var expectedEmails = new[] { "student", "guardian" }.Where(type => rules.HasValue &&
-				OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail")).ToList();
-			var accounts = accountHandoffs.Where(x => x.OnboardingCaseId == item.OnboardingCaseId).ToList();
-			var requests = emailRequests.Where(x => x.CaseId == item.OnboardingCaseId).ToList();
-			var pending = accounts.Any(x => x.Status != StudentOnboardingServiceHandoffStatus.Acknowledged) ||
-				expectedEmails.Any(type => !requests.Any(x => x.AccountType == type && x.Status == "Sent"));
-			item.CredentialsStatus = accounts.Count == 0 && expectedEmails.Count == 0 ? "NotRequired" : !pending ? "Completed" :
-				accounts.Any(x => x.Status == StudentOnboardingServiceHandoffStatus.Failed) || requests.Any(x => x.Status == "Failed") ? "Failed" : "Pending";
+			var requests = emailRequests.Where(x => x.CaseId == item.OnboardingCaseId && x.RequiresSavedOwnerValidation()).ToList();
+			item.CredentialsStatus = requests.Count == 0 ? "NotRequired" : requests.All(x => x.Status == "Sent") ? "Completed" :
+				requests.Any(x => x.Status is "Failed" or "Cancelled") ? "Failed" : "Pending";
 		}
 		return result;
 	}

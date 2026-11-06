@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.Records.HouseManagement;
-using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -39,7 +38,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		Color = "#2468ab"
 	};
 	[Fact]
-	public Task House_management_moves_clear_only_house_leadership_and_legacy_delete_is_blocked() => RunCertificationScenarioAsync(async () =>
+	public Task House_management_moves_clear_only_house_leadership_and_blocks_populated_house_deletion() => RunCertificationScenarioAsync(async () =>
 	{
 		var f = await HouseFixtureAsync();
 		var first = await f.Service.CreateHouseAsync(NewHouse(f.Student, "Falcons"));
@@ -61,7 +60,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		await f.Service.ReplaceHouseLeaderAsync(first.Id, new() { AcademicMediumId = query.AcademicMediumId, EnrollmentId = f.EnrollmentId, ConcurrencyStamp = first.ConcurrencyStamp });
 		var division = (await f.Service.GetDivisionsAsync(query)).Items.Single(x => x.Id == f.DivisionId);
 		await f.Service.ReplaceDivisionLeaderAsync(division.Id, new() { AcademicMediumId = query.AcademicMediumId, EnrollmentId = f.EnrollmentId, ConcurrencyStamp = division.ConcurrencyStamp });
-		(await Should.ThrowAsync<BusinessException>(() => GetRequiredService<IHouseSettingsAppService>().DeleteHouseSettingsAsync(first.Id))).Code.ShouldBe(HouseManagementErrorCodes.HousePopulated);
+		var populatedHouse = (await f.Service.GetHousesAsync(query)).Items.Single(x => x.Id == first.Id);
+		(await Should.ThrowAsync<BusinessException>(() => f.Service.DeleteHouseAsync(populatedHouse.Id, query.AcademicMediumId, populatedHouse.ConcurrencyStamp))).Code.ShouldBe(HouseManagementErrorCodes.HousePopulated);
 		// A reviewed no-op keeps leadership intact.
 		assignment.PreviewToken = (await f.Service.PreviewAssignmentAsync(assignment)).PreviewToken;
 		await f.Service.CommitAssignmentAsync(assignment);

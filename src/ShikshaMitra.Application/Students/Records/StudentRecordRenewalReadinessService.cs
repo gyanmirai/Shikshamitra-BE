@@ -92,6 +92,10 @@ public class StudentRecordRenewalReadinessService(OnboardingConfigurationManager
 				requirement.StudentAccount = legacy.RequireStudentAccount; requirement.GuardianAccount = legacy.RequireGuardianAccount; requirement.ServiceConsent = legacy.RequireServiceConsent;
 			}
 		}
+		// New renewal captures cannot inherit the retired school-wide login gates.
+		// Existing renewal snapshots and their evidence stay intact.
+		requirement.StudentAccount = false;
+		requirement.GuardianAccount = false;
 		return JsonSerializer.Serialize(requirement);
 	}
 	public async Task<List<StudentRecordTransitionIssueDto>> GetIssuesAsync(StudentRecordRenewalCase item, bool provisioning)

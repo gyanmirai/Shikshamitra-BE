@@ -5,7 +5,6 @@ using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.Students.Enrollments.Notes;
 using ShikshaMitra.Students.Enrollments.Registrations;
-using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
@@ -153,8 +152,6 @@ public class StudentMapperProfile : Profile
 		// StudentNote mappings
 		CreateMap<StudentNote, StudentNoteDto>();
         CreateMap<CreateUpdateStudentNoteDto, StudentNote>();
-
-		CreateMap<HouseSettings, HouseSettingsDto>();
 
 		// StudentStatusHistory ? StudentStatusHistoryDto
 		// OperationalStatus is derived from ToStatus so we compute it during mapping.

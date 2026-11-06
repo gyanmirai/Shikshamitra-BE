@@ -70,11 +70,22 @@ public class AdmissionParentRegistrationApiContract_Tests
 	{
 		var type = typeof(AdmissionParentRegistrationController);
 		type.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBe(Permissions.View);
+		type.GetMethod("GetEmailHistoryAsync")!.GetCustomAttribute<HttpGetAttribute>()!.Template.ShouldBe("email-history");
 		foreach (var method in new[] { "SendAsync", "EmailAsync", "CorrectionsAsync", "RevokeAsync", "TakeoverAsync", "ApplyAsync", "RetryAsync" })
 			type.GetMethod(method)!.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBe(Permissions.Edit);
 		ApiProblemDetailsMapper.ResolveBusinessStatusCode(AdmissionParentRegistrationErrors.Conflict).ShouldBe(409);
 		ApiProblemDetailsMapper.ResolveBusinessStatusCode(AdmissionParentRegistrationErrors.Invalid).ShouldBe(400);
 		ApiProblemDetailsMapper.ResolveBusinessStatusCode(AdmissionParentRegistrationErrors.Unavailable).ShouldBe(404);
+	}
+	[Fact]
+	public async Task Email_history_route_is_read_only_and_delegates_to_the_scoped_service()
+	{
+		var service = Substitute.For<IAdmissionParentRegistrationAppService>();
+		var applicationId = Guid.NewGuid();
+		service.GetEmailHistoryAsync(applicationId).Returns([]);
+		await new AdmissionParentRegistrationController(service).GetEmailHistoryAsync(applicationId);
+		await service.Received(1).GetEmailHistoryAsync(applicationId);
+		await service.DidNotReceiveWithAnyArgs().SendAsync(default, default!);
 	}
 	[Fact]
 	public async Task Saved_email_change_is_a_scoped_staff_command_and_never_calls_send()

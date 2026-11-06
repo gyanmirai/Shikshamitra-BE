@@ -290,8 +290,8 @@ Policy writes share the payroll input fence and invalidate affected unlocked emp
 
 1. Pause employee/shift writes, attendance processing and payroll jobs during a coordinated maintenance window.
 2. Back up the database and rehearse migration against a disposable PostgreSQL copy.
-3. Run scripts/hr/work-shifts-preflight.sql and resolve missing, foreign-tenant, ownerless and invalid referenced shifts through an approved audited repair.
-4. Apply SeparateEmployeeWorkShifts before deploying the matching backend/frontend pair.
+3. Run scripts/hr/work-shifts-preflight.sql. `RepairKnownOwnerlessShifts` copies only the two reviewed Afternoon Shift and Full Day Shift definitions used by DDVS/QADEMO02 into tenant-owned school shifts, then moves those tenants' employee and standard references. It leaves the originals untouched and fails if the reviewed names, hours or tenant references have changed. Resolve any other missing, foreign-tenant, ownerless or invalid shift through an approved audited repair.
+4. Apply RepairKnownOwnerlessShifts and then SeparateEmployeeWorkShifts before deploying the matching backend/frontend pair.
 5. Reconcile copied definitions and baseline assignments with original references, preserving attendance, school-class references and locked payroll snapshots.
 6. Smoke-test both catalogues and dated employee assignments, then resume processing.
 

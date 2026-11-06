@@ -1200,7 +1200,7 @@ The 26 October local completion run, including the final offset correction, pass
 
 ## Work shift regression checks
 
-Run domain EmployeeWorkShift_Tests, HTTP EmployeeWorkShiftApi_Tests and PostgreSQL EmployeeWorkShiftPostgres_Tests.
+Run domain EmployeeWorkShift_Tests, HTTP EmployeeWorkShiftApi_Tests, PostgreSQL EmployeeWorkShiftPostgres_Tests and RepairKnownOwnerlessShiftsPostgres_Tests.
 The PostgreSQL test requires SHIFT_TEST_POSTGRES pointing at a new loopback shift_isolation_tests_* database.
 Run existing attendance availability, payroll overtime/late-arrival, HR setup readiness and starter-policy regressions after changing these consumers.
 Verify catalogue independence, date boundaries, missing assignments, stale writes, future replacement/cancellation, tenant/scope denial and recorded-history protection.

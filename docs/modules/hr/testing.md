@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-05
+updated_on: 2026-11-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -1215,3 +1215,9 @@ dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Ide
 ```
 
 The older broad HR I-card suite has two host-level fixture failures in `GenerateEmployeeICardsPdfAsync_Should_Return_Pdf_For_Existing_Employee` and `GenerateEmployeeICardsPdfAsync_Should_Reject_Exclude_Incomplete_When_Template_Logo_Missing`: inherited logo loading raises `SchoolIdentity:InvalidContext` because those fixtures have no current tenant. The new duplex case uses explicit Hidden logo mode and a persisted academic year. These fixture failures are separate from physical rendering; production school-identity authorization is unchanged. The source has existing unrelated compiler warnings. Local behavioral validation disabled Roslynator analysis because concurrent builds made analysis expensive; this is not a zero-warning analyzer gate.
+
+## Effective leave notice preview
+
+Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~EffectivePolicyPreview_Should_Project_Notice_Days"` with the pinned .NET 9 SDK.
+The persisted synthetic fixture exercises the actual assignment preview and shared projection for default and employee-assigned policies, distinct Paid/Unpaid notice values of 0, 1 and 5, inactive historical rules, stable rule IDs and the camel-case JSON response contract.
+These application and serialization checks do not replace HTTP or browser acceptance.

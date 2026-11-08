@@ -76,6 +76,7 @@ internal static class HrPolicyAssignmentProjection
 						LeaveCount = rule.LeaveCount,
 						IsUnlimited = rule.IsUnlimited,
 						RequiresApproval = rule.RequiresApproval,
+						MinNoticeDays = rule.MinNoticeDays,
 						MaxDaysPerRequest = rule.MaxDaysPerRequest,
 						AllowHalfDay = rule.AllowHalfDay,
 						AttachmentRequiredAfterDays = rule.AttachmentRequiredAfterDays,

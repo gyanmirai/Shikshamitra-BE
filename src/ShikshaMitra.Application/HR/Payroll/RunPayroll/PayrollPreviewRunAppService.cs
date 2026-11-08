@@ -39,7 +39,12 @@ public class PayrollPreviewRunAppService(
 		var query = await runs.GetQueryableAsync();
 		var latest = await AsyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Month == canonicalMonth
 			&& x.AcademicYearId == academicYear && x.ScopeFingerprint == fingerprint).OrderByDescending(x => x.CreatedAtUtc));
-		if (latest != null && ((latest.Status is "QUEUED" or "RUNNING") ||
+		if (latest != null && !latest.HasCurrentCalculationVersion && (latest.Status is "QUEUED" or "RUNNING"))
+		{
+			latest.Supersede(Clock.Now);
+			await runs.UpdateAsync(latest);
+		}
+		if (latest != null && latest.HasCurrentCalculationVersion && ((latest.Status is "QUEUED" or "RUNNING") ||
 			(!request.Refresh && latest.Status == "SUCCEEDED" && latest.InputRevision == revision)))
 		{
 			await uow.CompleteAsync();
@@ -105,7 +110,7 @@ public class PayrollPreviewRunAppService(
 			item.ReviewedAt = snapshot.IsLocked || reviewedIds.Contains(item.EmployeeId) ? snapshot.ReviewedAt : null;
 			item.IsLocked = snapshot.IsLocked;
 		}
-		var isCurrent = run.Status == "SUCCEEDED" && run.InputRevision == await revisions.ReadAsync();
+		var isCurrent = run.HasCurrentCalculationVersion && run.Status == "SUCCEEDED" && run.InputRevision == await revisions.ReadAsync();
 		summary.CanLock = isCurrent && summary.BlockingIssues.Count == 0 && summary.ReviewedCount > 0;
 		return new RunPayrollResponse
 		{
@@ -142,7 +147,7 @@ public class PayrollPreviewRunAppService(
 		Status = run.Status,
 		EmployeeCount = run.EmployeeCount,
 		CompletedEmployees = run.CompletedEmployees,
-		IsCurrent = run.Status == "SUCCEEDED" && run.InputRevision == revision,
+		IsCurrent = run.HasCurrentCalculationVersion && run.Status == "SUCCEEDED" && run.InputRevision == revision,
 		CreatedAtUtc = run.CreatedAtUtc,
 		StartedAtUtc = run.StartedAtUtc,
 		CompletedAtUtc = run.CompletedAtUtc,

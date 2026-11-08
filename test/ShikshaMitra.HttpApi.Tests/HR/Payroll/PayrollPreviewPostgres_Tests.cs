@@ -25,7 +25,8 @@ using Xunit.Abstractions;
 namespace ShikshaMitra.HR.Payroll;
 
 [Trait("Database", "PostgreSQL")]
-public class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory factory, ITestOutputHelper output)
+[Collection(PayrollCalculationTestCollection.Name)]
+public partial class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory factory, ITestOutputHelper output)
 	: ShikshaMitraApiTestBase(factory), IClassFixture<PayrollPostgresTestFactory>
 {
 	private static readonly Guid TenantId = Guid.Parse(TestAuthHandler.TestTenantId);
@@ -276,10 +277,10 @@ public class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory factory, IT
 		(await GetAndReadAsync<PayrollPreviewStatusDto>($"{Previews}/{run.Id}")).IsCurrent.ShouldBeFalse();
 	}
 
-	private async Task<PayrollPreviewStatusDto> StartAsync(string month)
+	private async Task<PayrollPreviewStatusDto> StartAsync(string month, bool refresh = false)
 	{
 		var watch = Stopwatch.StartNew();
-		var response = await Client.PostAsJsonAsync(Previews, new { month });
+		var response = await Client.PostAsJsonAsync(Previews, new { month, refresh });
 		response.StatusCode.ShouldBe(HttpStatusCode.Accepted, await response.Content.ReadAsStringAsync());
 		output.WriteLine($"Start {month}: {watch.Elapsed.TotalMilliseconds:F0}ms");
 		return (await response.Content.ReadFromJsonAsync<PayrollPreviewStatusDto>(JsonOptions))!;

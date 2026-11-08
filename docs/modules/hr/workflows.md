@@ -3,7 +3,7 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-11-05
+updated_on: 2026-11-06
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -58,6 +58,30 @@ Leave workflows use policy rules and affect payroll:
 | Leave center | Show balances, history, and request state for one employee | Accrued days, remaining days, unlimited unpaid display, and negative-balance rules |
 
 ## Payroll workflows
+
+### Calculation release and PF remediation
+
+Worked attendance and approved paid leave add together, capped at the scheduled day capacity remaining after approved unpaid leave.
+Calendar and employment-date eligibility still apply.
+PF uses recurring eligible Basic, or recurring eligible Basic plus DA when the assigned rule requires it.
+Basic semantic classification and recognized Basic names remain supported.
+Temporary payments and monthly adjustments never provide the PF wage basis.
+The former gross/total-earnings fallback is intentionally removed.
+Missing eligible components produce the blocking `PF_WAGE_BASIS_REQUIRED` issue while preview remains available.
+Eligible components with zero earned wages produce zero employee and employer PF and retain the rule metadata.
+Update the affected salary structure to match its assigned PF rule, then run a fresh preview and review before locking or finalizing.
+The same blocker applies to correction approval.
+
+New preview runs store calculation version `1` in `ExtraProperties`; an absent version is `0`.
+Obsolete queued/running previews are superseded, and old completed previews cannot be reused, reviewed, or locked as current payroll.
+A replacement preview requires review of the new generation.
+This uses existing storage and does not require a schema migration.
+
+Internal draft freshness checks and direct finalization refresh changed employer contribution lines/totals, statutory evidence, and compensation evidence through the existing snapshot writer.
+Public payslip reads retain their issued-document requirement; an unlocked preview does not expose a draft payslip.
+The slip identity and document invalidation behavior are preserved.
+Finalized and paid slips remain immutable.
+Historical underpayments or already issued slips require the existing correction workflow and are not rewritten automatically.
 
 Payroll workflows depend on employee, attendance, leave, and policy data:
 

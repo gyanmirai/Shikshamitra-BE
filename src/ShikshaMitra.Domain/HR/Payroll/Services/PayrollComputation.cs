@@ -50,6 +50,7 @@ public static class PayrollComputation
 		}
 
 		var employerContributions = new List<PayrollComputedEmployerContribution>();
+
 		Guid? pfRuleId = null;
 		int? pfRuleVersion = null;
 		var pfSource = components.FirstOrDefault(x =>
@@ -58,20 +59,10 @@ public static class PayrollComputation
 		PayrollSchemeApplication? pfApplication = null;
 		if (pfSource != null && pfRule is { IsActive: true })
 		{
-			var contributionBase = basicSalary;
-			if (pfRule.ContributionBasis == PfContributionBasis.BasicAndDearnessAllowance)
-			{
-				contributionBase += earnings
-					.Where(x => x.Source.SemanticType == Templates.PayrollComponentSemanticType.DearnessAllowance)
-					.Sum(x => x.Amount);
-			}
-			if (contributionBase <= 0m)
-			{
-				var fullWageBasis = components.Where(x => x.IsEarning && !x.IsTemp &&
-					(x.SemanticType == Templates.PayrollComponentSemanticType.Basic ||
-					 pfRule.ContributionBasis == PfContributionBasis.BasicAndDearnessAllowance && x.SemanticType == Templates.PayrollComponentSemanticType.DearnessAllowance)).Sum(x => x.Amount);
-				if (fullWageBasis <= 0m) statutoryIssueCodes.Add("PF_WAGE_BASIS_REQUIRED");
-			}
+			var eligibleEarnings = earnings.Where(x => PayrollProvidentFundBasis.IsEligible(x.Source, pfRule.ContributionBasis)).ToList();
+			if (eligibleEarnings.Count == 0)
+				statutoryIssueCodes.Add(RunPayroll.IssueCodes.PfWageBasisRequired);
+			var contributionBase = Math.Max(0m, eligibleEarnings.Sum(x => x.Amount));
 			if (pfRule.WageCeiling.HasValue)
 			{
 				contributionBase = Math.Min(contributionBase, pfRule.WageCeiling.Value);

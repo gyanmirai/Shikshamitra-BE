@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-05
+updated_on: 2026-11-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -362,6 +362,8 @@ Policy APIs resolve work calendars, payroll policies, attendance policies, assig
 
 Work-calendar effective dates accept years from 1900 through 2100, and a custom weekly-off pattern must leave at least one working day.
 Assignment resolution preview requires the existing `HR.Policies.PreviewImpact` grant at both controller and application-service boundaries. Supply `assignment`, `date`, optional `assignmentId` and optional `sampleEmployeeId`; the tenant is server-derived. It resolves current and detached proposed assignments through the same staff/group/default ordering without saving them. Staff samples require current staff scope. A group-only result is explicitly scoped to that group; a new-ID tie returns `isComplete: false` and no proposed winner rather than guessing its future ID.
+Effective-policy responses, including `GET /api/hr/policy-assignment-preview`, expose `leavePolicy.rules[].minNoticeDays` as the selected active Paid or Unpaid rule's integer notice requirement.
+The projection preserves explicit zero and each bucket's own configured value; it does not infer a one-day default or change server-side leave-request validation.
 Shared policy impact responses add `ruleDifferencesStatus` and `ruleDifferences` for current/proposed contract fields. Collection differences describe operational holiday, weekday and payroll-month values while excluding temporary row identities. Unknown comparisons are not represented as no changes. These disclosures do not simulate salary or change confirmation/locking behavior.
 Work-calendar, attendance, payroll, and leave policy names are unique only among non-archived policies in the same tenant and academic year, so an archived name can be reused.
 Leave policy uniqueness is case-insensitive and is backed by the normalized database key, while the other policy families preserve their existing case-sensitive name contract.

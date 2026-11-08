@@ -189,6 +189,78 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		body.Shift.Name.ShouldNotBeNullOrWhiteSpace();
 	}
 
+	[Theory]
+	[InlineData("omitted")]
+	[InlineData("null")]
+	[InlineData("empty")]
+	[InlineData("replacement")]
+	[InlineData("mixed")]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Preserve_Or_Explicitly_Change_Supplementary_Personal_Info(string mode)
+	{
+		var input = EmployeeTestHelper.BuildFullPersonalInfoRequest("Supplementary");
+		input.Designation = "Senior Teacher";
+		input.Qualification = "M.Ed.";
+		input.IdentificationMark1 = "Mole on left cheek";
+		using var createContent = new MultipartFormDataContent();
+		createContent.Add(new StringContent(JsonSerializer.Serialize(input, JsonOptions)), "data");
+		using var createResponse = await Client.PostAsync($"{BaseUrl}/personal-info", createContent);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+		var created = (await createResponse.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions))!;
+		created.Designation.ShouldBe(input.Designation);
+		created.Qualification.ShouldBe(input.Qualification);
+		created.IdentificationMark1.ShouldBe(input.IdentificationMark1);
+
+		var payload = JsonSerializer.SerializeToNode(input, JsonOptions)!.AsObject();
+		payload["lastName"] = "RevisedSurname";
+		payload["address3"] = null; // Other optional fields retain their replacement semantics.
+		foreach (var field in new[] { "designation", "qualification", "identificationMark1" })
+		{
+			payload.Remove(field);
+			if (mode != "omitted" && mode != "mixed")
+			{
+				payload[field] = mode == "null" ? null : mode == "empty" ? "" : "Revised value";
+			}
+		}
+		if (mode == "mixed")
+		{
+			payload["designation"] = "Head Teacher";
+			payload["qualification"] = null;
+		}
+
+		using var updateContent = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
+		using var updateResponse = await Client.PutAsync($"{BaseUrl}/{created.Id}/personal-info", updateContent);
+		updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updateResponse.Content.ReadAsStringAsync());
+		using var getResponse = await Client.GetAsync($"{BaseUrl}/{created.Id}/personal-info");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await getResponse.Content.ReadAsStringAsync());
+		var body = (await getResponse.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions))!;
+
+		body.LastName.ShouldBe("RevisedSurname");
+		body.Address3.ShouldBeNull();
+		body.Designation.ShouldBe(mode switch
+		{
+			"omitted" => input.Designation,
+			"null" => null,
+			"empty" => "",
+			"mixed" => "Head Teacher",
+			_ => "Revised value"
+		});
+		body.Qualification.ShouldBe(mode switch
+		{
+			"omitted" => input.Qualification,
+			"null" or "mixed" => null,
+			"empty" => "",
+			_ => "Revised value"
+		});
+		body.IdentificationMark1.ShouldBe(mode switch
+		{
+			"omitted" or "mixed" => input.IdentificationMark1,
+			"null" => null,
+			"empty" => "",
+			_ => "Revised value"
+		});
+	}
+
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Update_Personal_Info()
@@ -609,3 +681,4 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		return client;
 	}
 }
+

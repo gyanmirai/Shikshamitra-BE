@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.HR.WorkShifts;
+﻿using System.Text.Json.Serialization;
+using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -61,11 +62,50 @@ public class PersonalInfoRequest
 
 	public string? Department { get; set; }
 
-	public string? Designation { get; set; }
+	private string? _designation;
+	/// <summary>Omission preserves the stored value on update; explicit null or empty clears it.</summary>
+	public string? Designation
+	{
+		get => _designation;
+		set
+		{
+			_designation = value;
+			DesignationSpecified = true;
+		}
+	}
 
-	public string? Qualification { get; set; }
+	[JsonIgnore]
+	public bool DesignationSpecified { get; private set; }
 
-	public string? IdentificationMark1 { get; set; }
+	private string? _qualification;
+	/// <summary>Omission preserves the stored value on update; explicit null or empty clears it.</summary>
+	public string? Qualification
+	{
+		get => _qualification;
+		set
+		{
+			_qualification = value;
+			QualificationSpecified = true;
+		}
+	}
+
+	[JsonIgnore]
+	public bool QualificationSpecified { get; private set; }
+
+	private string? _identificationMark1;
+	/// <summary>Omission preserves the stored value on update; explicit null or empty clears it.</summary>
+	public string? IdentificationMark1
+	{
+		get => _identificationMark1;
+		set
+		{
+			_identificationMark1 = value;
+			IdentificationMark1Specified = true;
+		}
+	}
+
+	[JsonIgnore]
+	public bool IdentificationMark1Specified { get; private set; }
 
 	public Guid RoleId { get; set; }
 

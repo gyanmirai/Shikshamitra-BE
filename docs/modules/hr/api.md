@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-05
+updated_on: 2026-11-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -109,6 +109,9 @@ Creating personal information with `policyOverride` requires `HR.Policies.Assign
 The common creation workflow checks these existing policy actions before creating an identity or staff record, and returns HTTP 403 with `errorCode: HR:Employee:010043` and `data.missingPermissions` when access is missing.
 Creating personal information without an override keeps its existing Staff Add permission contract.
 Policy list reads retain `HR.Policies.View` for attendance/payroll and `HR.AttendanceAndLeave.Setting.LeavePolicy.View` for leave; Staff Add/Edit does not silently grant policy administration access.
+For `PUT /api/employees/{id}/personal-info`, omitted `designation`, `qualification`, and `identificationMark1` preserve their current stored values, including requests from older clients.
+An explicit `null` or empty string clears only the supplied field; a supplied nonempty value replaces it.
+Presence is tracked independently per field through JSON binding, contract mapping, and the application service; all other personal-info field semantics and create behavior stay unchanged.
 Generic personal-information updates still reject email changes with HR:Employee:010034.
 The controlled account-email GET returns userId, employeeEmail, accountEmail, userName and a concurrencyToken covering both records.
 PUT requires email, a 5-512 character reason, confirmEmployeeVerified=true, that concurrencyToken and a non-empty idempotencyKey.

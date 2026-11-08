@@ -4,11 +4,33 @@ namespace ShikshaMitra.Migrations;
 public partial class SeparateEmployeeWorkShifts
 {
  private static void ValidateLegacyReferences(MigrationBuilder migrationBuilder) => migrationBuilder.Sql("""
- DO $$ BEGIN
- IF EXISTS (SELECT 1 FROM "AppEmployees" e LEFT JOIN "academic_ShiftManagements" s ON s."Id"=e."ShiftId"
-  WHERE e."ShiftId" IS NOT NULL AND (s."Id" IS NULL OR e."TenantId" IS NULL OR s."TenantId" IS DISTINCT FROM e."TenantId"))
- OR EXISTS (SELECT 1 FROM "academic_ShiftManagements" WHERE "TenantId" IS NOT NULL AND ("EndTime" <= "StartTime" OR length(trim("ShiftName"))=0 OR length("ShiftName")>128))
- THEN RAISE EXCEPTION 'Employee work shift preflight failed. Resolve invalid, missing, ownerless, or foreign-tenant references before cutover.'; END IF;
+ DO $$
+ DECLARE
+  missing_shift bigint;
+  ownerless_employee bigint;
+  ownerless_shift bigint;
+  foreign_tenant bigint;
+  invalid_times bigint;
+  empty_name bigint;
+  name_too_long bigint;
+ BEGIN
+ SELECT count(*) FILTER (WHERE s."Id" IS NULL),
+  count(*) FILTER (WHERE e."TenantId" IS NULL),
+  count(*) FILTER (WHERE s."Id" IS NOT NULL AND s."TenantId" IS NULL),
+  count(*) FILTER (WHERE e."TenantId" IS NOT NULL AND s."TenantId" IS NOT NULL AND s."TenantId" <> e."TenantId")
+ INTO missing_shift, ownerless_employee, ownerless_shift, foreign_tenant
+ FROM "AppEmployees" e LEFT JOIN "academic_ShiftManagements" s ON s."Id"=e."ShiftId"
+ WHERE e."ShiftId" IS NOT NULL;
+ SELECT count(*) FILTER (WHERE "EndTime" <= "StartTime"),
+  count(*) FILTER (WHERE length(trim("ShiftName"))=0),
+  count(*) FILTER (WHERE length("ShiftName")>128)
+ INTO invalid_times, empty_name, name_too_long
+ FROM "academic_ShiftManagements" WHERE "TenantId" IS NOT NULL;
+ IF missing_shift + ownerless_employee + ownerless_shift + foreign_tenant + invalid_times + empty_name + name_too_long > 0 THEN
+  -- Counts only: deployment logs must not expose employee, tenant or shift data.
+  RAISE EXCEPTION 'Employee work shift preflight failed. MISSING_SHIFT=%, OWNERLESS_EMPLOYEE=%, OWNERLESS_SHIFT=%, FOREIGN_TENANT=%, INVALID_TIMES=%, EMPTY_NAME=%, NAME_TOO_LONG=%. Counts may overlap. Run scripts/hr/work-shifts-preflight.sql on the verified target and obtain an approved audited repair before cutover.',
+   missing_shift, ownerless_employee, ownerless_shift, foreign_tenant, invalid_times, empty_name, name_too_long;
+ END IF;
  END $$;
  """);
  private static void PopulateIndependentWorkShifts(MigrationBuilder migrationBuilder) => migrationBuilder.Sql("""

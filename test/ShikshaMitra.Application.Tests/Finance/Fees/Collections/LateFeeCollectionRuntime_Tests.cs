@@ -372,9 +372,8 @@ public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTes
 				10, true, maximumLateFeeAmount: 100, principalAmount: 1999.2m);
 			var first = await _dueFeeRepo.GetAsync(dueId);
 			var dues = new List<DueFee> { first };
-			foreach (var (offset, amount) in new[] { (-40, 1999.2m), (-70, 1999.2m), (-100, 2400m), (30, 1999.2m), (60, 1999.2m) })
+			foreach (var (date, amount) in AdditionalMonthlyFees(first.DueDate))
 			{
-				var date = DateTime.UtcNow.Date.AddDays(offset);
 				var due = new DueFee(Guid.NewGuid(), TestTenantId, studentId, headId,
 					(MonthEnum)(date.Month - 1), date.Year, false, amount, date);
 				due.BindAssignment(first.StudentFeeStructureId!.Value);
@@ -393,6 +392,41 @@ public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTes
 			var remaining = (await _feeCollections.GetCollectFormAsync(studentId, yearId)).Charges;
 			remaining.Count.ShouldBe(1); remaining.ShouldAllBe(c => c.PendingAmount == 100d && c.Status == FeeCollectionStatus.Pending);
 			(await GetSummaryRowAsync(yearId, studentId)).PendingCharges.ShouldBe(100d);
+		}
+	}
+
+	// Legacy schedule identity uses fee head/year/month, not the exact due date.
+	// Anchor each installment to the seeded due date instead of approximating months with 30 days.
+	private static (DateTime DueDate, decimal Amount)[] AdditionalMonthlyFees(DateTime firstDueDate) =>
+	[
+		(firstDueDate.AddMonths(-1), 1999.2m),
+		(firstDueDate.AddMonths(-2), 1999.2m),
+		(firstDueDate.AddMonths(-3), 2400m),
+		(firstDueDate.AddMonths(1), 1999.2m),
+		(firstDueDate.AddMonths(2), 1999.2m)
+	];
+
+	[Theory]
+	[InlineData(2024)]
+	[InlineData(2025)]
+	[InlineData(2026)]
+	[InlineData(2027)]
+	public void Six_Fee_Fixture_Uses_Distinct_Monthly_Schedules_For_Every_Calendar_Day(int year)
+	{
+		var headId = Guid.NewGuid();
+		var firstDay = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+		for (var today = firstDay; today < firstDay.AddYears(1); today = today.AddDays(1))
+		{
+			var firstDueDate = today.AddDays(-10);
+			var installments = AdditionalMonthlyFees(firstDueDate)
+				.Prepend((DueDate: firstDueDate, Amount: 1999.2m)).ToArray();
+			var keys = installments.Select(item => DueFee.BuildScheduleInstanceKey(
+				ScheduleSource.Legacy, headId, item.DueDate.Year, (MonthEnum)(item.DueDate.Month - 1), null, null, null));
+
+			keys.Distinct().Count().ShouldBe(6, $"Distinct monthly schedules as of {today:yyyy-MM-dd}");
+			installments.Sum(item => item.Amount).ShouldBe(12396m);
+			installments.Count(item => item.DueDate < today).ShouldBe(4);
+			installments.Count(item => item.DueDate > today).ShouldBe(2);
 		}
 	}
 

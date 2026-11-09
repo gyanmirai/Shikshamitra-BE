@@ -1,5 +1,7 @@
 ﻿using System;
 using Volo.Abp;
+using System.ComponentModel.DataAnnotations.Schema;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.MultiTenancy;
 
@@ -7,6 +9,12 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
 public class PayrollPreviewRun : AggregateRoot<Guid>, IMultiTenant
 {
+	public const int CurrentCalculationVersion = 1;
+	public const string CalculationVersionProperty = "CalculationVersion";
+	[NotMapped]
+	public int CalculationVersion => this.GetProperty<int>(CalculationVersionProperty, 0);
+	[NotMapped]
+	public bool HasCurrentCalculationVersion => CalculationVersion == CurrentCalculationVersion;
 	public Guid? TenantId { get; private set; }
 	public Guid RequestedBy { get; private set; }
 	public string Month { get; private set; } = "";
@@ -29,6 +37,7 @@ public class PayrollPreviewRun : AggregateRoot<Guid>, IMultiTenant
 	{
 		TenantId = tenantId; RequestedBy = requestedBy; Month = month; AcademicYearId = academicYearId;
 		ScopeFingerprint = scopeFingerprint; EmployeeCount = employeeCount; CreatedAtUtc = now;
+		this.SetProperty(CalculationVersionProperty, CurrentCalculationVersion);
 	}
 	public void Start(Guid revision, DateTime now)
 	{

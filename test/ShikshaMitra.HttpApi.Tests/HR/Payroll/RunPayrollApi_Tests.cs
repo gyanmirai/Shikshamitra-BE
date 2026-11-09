@@ -35,8 +35,9 @@ using Xunit;
 namespace ShikshaMitra.HR.Payroll;
 
 [Trait("Database", "PostgreSQL")]
+[Collection(PayrollCalculationTestCollection.Name)]
 [TestModule(TestTraits.Modules.HR)]
-public class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixture<PayrollWorkflowPostgresTestFactory>
+public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixture<PayrollWorkflowPostgresTestFactory>
 {
 	private const string BaseUrl = "/api/payroll/run";
 	private const string ReviewUrl = "/api/payroll/run/reviews";
@@ -1994,7 +1995,8 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixture<Payrol
 		Guid? deductionComponentId,
 		string deductionName,
 		decimal deductionAmount,
-		Guid? pfRuleId)
+		Guid? pfRuleId,
+		PayrollComponentSemanticType earningSemanticType = PayrollComponentSemanticType.Basic)
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
@@ -2053,7 +2055,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixture<Payrol
 				new(
 					Guid.NewGuid(), tenantId, revision.Id, employeeId, earningComponentId,
 					earningName, null, earningAmount, isEarning: true,
-					PayrollComponentSemanticType.Basic, CompensationLineSource.Template, 0)
+					earningSemanticType, CompensationLineSource.Template, 0)
 			};
 			if (deductionAmount > 0m)
 			{
@@ -2455,7 +2457,8 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixture<Payrol
 		Guid leavePolicyId,
 		DateTime leaveDate,
 		LeavePaidType paidType,
-		decimal approvedUnits)
+		decimal approvedUnits,
+		bool halfDay = false)
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
@@ -2480,7 +2483,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixture<Payrol
 				paidType,
 				new DateTimeOffset(leaveDate.Date),
 				new DateTimeOffset(leaveDate.Date),
-				"Approved leave for payroll setup regression");
+				"Approved leave for payroll setup regression", halfDay);
 
 			await leaveRepository.InsertAsync(leave, autoSave: false);
 			await leaveManager.ApproveAsync(leave, paidType, approvedUnits);

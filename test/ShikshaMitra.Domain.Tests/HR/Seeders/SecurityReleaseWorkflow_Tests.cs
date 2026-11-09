@@ -13,10 +13,14 @@ public class SecurityReleaseWorkflow_Tests
 	{
 		var root = FindRepositoryRoot();
 		var workflow = ReadWorkflow(root, "deploy.yml");
-		// Deployment coupling and seed settings were intentionally reverted; keep their
-		// current release flow independent of the reusable security workflow contract.
 		Assert.Matches(@"\A\s*push:\s*branches:\s*\[['""]main['""]\]\s*\z", ReadTopLevelBlock(workflow, "on"));
 		AssertEveryJobRequiresMain(workflow);
+		Assert.Contains("uses: ./.github/workflows/security-regression.yml", workflow);
+		Assert.Matches(@"(?m)^        needs: security\s*$", workflow);
+		Assert.Contains("group: deploy-backend-${{ github.ref }}", workflow);
+		Assert.Contains("cancel-in-progress: false", workflow);
+		Assert.Contains("[[ \"$sdk_version\" == 9.0.* ]]", workflow);
+		Assert.Contains("ShikshaMitra__Seeders__Enabled: 'false'", workflow);
 		Assert.Matches(@"(?m)^\s+build-and-deploy:\s*$", workflow);
 		Assert.Contains("DOTNET_VERSION: '9.0.x'", workflow);
 		Assert.Contains("dotnet-version: ${{ env.DOTNET_VERSION }}", workflow);
@@ -42,6 +46,12 @@ public class SecurityReleaseWorkflow_Tests
 		Assert.Contains("- name: Diagnose an existing production startup failure", workflow);
 		Assert.Contains("- name: Collect Azure startup diagnostics", workflow);
 		Assert.Contains("./scripts/deployment/Get-AzureStartupDiagnostics.ps1", workflow);
+		var startupGate = workflow.IndexOf("- name: Run deployment startup regression gates", StringComparison.Ordinal);
+		var publishGate = workflow.IndexOf("- name: Validate Azure publish profile", StringComparison.Ordinal);
+		var migrate = workflow.IndexOf("- name: Run DbMigrator", StringComparison.Ordinal);
+		var deploy = workflow.IndexOf("- name: Deploy to Azure Web App", StringComparison.Ordinal);
+		Assert.True(startupGate < migrate && publishGate < migrate && migrate < deploy,
+			"Startup and publish validation must precede migration, and migration must precede deployment.");
 	}
 
 	[Fact]

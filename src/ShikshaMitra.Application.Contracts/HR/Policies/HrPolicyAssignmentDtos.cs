@@ -123,6 +123,7 @@ public class EffectiveLeavePolicyRuleDto
 	public int? LeaveCount { get; set; }
 	public bool IsUnlimited { get; set; }
 	public bool RequiresApproval { get; set; }
+	public int MinNoticeDays { get; set; }
 	public int MaxDaysPerRequest { get; set; }
 	public bool AllowHalfDay { get; set; }
 	public int? AttachmentRequiredAfterDays { get; set; }

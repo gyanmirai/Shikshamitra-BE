@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -40,11 +42,54 @@ public class EmployeeWorkShiftPostgres_Tests
 			script.ShouldNotContain("DROP TABLE");
 			await db.Database.OpenConnectionAsync();
 			var migrationConnection = (NpgsqlConnection) db.Database.GetDbConnection();
+			var repository = new DirectoryInfo(AppContext.BaseDirectory);
+			while (repository is not null && !File.Exists(Path.Combine(repository.FullName, "ShikshaMitra.sln"))) repository = repository.Parent;
+			if (repository is null) throw new InvalidOperationException("Could not find repository root.");
+			var preflight = await File.ReadAllTextAsync(Path.Combine(repository.FullName, "scripts", "hr", "work-shifts-preflight.sql"));
+			async Task<Dictionary<string, long>> ReadSummary()
+			{
+				await using var command = new NpgsqlCommand(preflight, migrationConnection);
+				await using var reader = await command.ExecuteReaderAsync();
+				var counts = new Dictionary<string, long>();
+				while (await reader.ReadAsync()) counts.Add(reader.GetString(0), reader.GetInt64(1));
+				// Consume detailed reports and the final ROLLBACK before using the connection again.
+				while (await reader.NextResultAsync()) while (await reader.ReadAsync()) { }
+				return counts;
+			}
 			// Reject foreign ownership before any schema or record change is committed.
 			await new NpgsqlCommand("INSERT INTO \"AppEmployees\" VALUES ('dddddddd-dddd-dddd-dddd-dddddddddddd','eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee','11111111-1111-1111-1111-111111111111','2026-04-01')", migrationConnection).ExecuteNonQueryAsync();
+			(await ReadSummary())["FOREIGN_TENANT"].ShouldBe(1);
 			var invalid = await Should.ThrowAsync<PostgresException>(() => new NpgsqlCommand(script, migrationConnection).ExecuteNonQueryAsync());
 			invalid.MessageText.ShouldContain("preflight failed");
+			invalid.MessageText.ShouldContain("FOREIGN_TENANT=1");
+			invalid.MessageText.ShouldNotContain("dddddddd");
 			await new NpgsqlCommand("ROLLBACK; DELETE FROM \"AppEmployees\" WHERE \"Id\"='dddddddd-dddd-dddd-dddd-dddddddddddd'", migrationConnection).ExecuteNonQueryAsync();
+			// Exercise every diagnostic without changing failure semantics. Definition
+			// validation includes unassigned rows and never infers missing tenant ownership.
+			var cases = new (string Category, string Change, string Restore)[]
+			{
+				("OWNERLESS_EMPLOYEE", "UPDATE \"AppEmployees\" SET \"TenantId\"=NULL", "UPDATE \"AppEmployees\" SET \"TenantId\"='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'"),
+				("OWNERLESS_SHIFT", "UPDATE \"academic_ShiftManagements\" SET \"TenantId\"=NULL WHERE \"Id\"='11111111-1111-1111-1111-111111111111'", "UPDATE \"academic_ShiftManagements\" SET \"TenantId\"='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' WHERE \"Id\"='11111111-1111-1111-1111-111111111111'"),
+				("INVALID_TIMES", "UPDATE \"academic_ShiftManagements\" SET \"EndTime\"='08:00' WHERE \"Id\"='22222222-2222-2222-2222-222222222222'", "UPDATE \"academic_ShiftManagements\" SET \"EndTime\"='17:00' WHERE \"Id\"='22222222-2222-2222-2222-222222222222'"),
+				("EMPTY_NAME", "UPDATE \"academic_ShiftManagements\" SET \"ShiftName\"='   ' WHERE \"Id\"='22222222-2222-2222-2222-222222222222'", "UPDATE \"academic_ShiftManagements\" SET \"ShiftName\"='Unassigned shift' WHERE \"Id\"='22222222-2222-2222-2222-222222222222'"),
+				("NAME_TOO_LONG", "UPDATE \"academic_ShiftManagements\" SET \"ShiftName\"=repeat('x',129) WHERE \"Id\"='22222222-2222-2222-2222-222222222222'", "UPDATE \"academic_ShiftManagements\" SET \"ShiftName\"='Unassigned shift' WHERE \"Id\"='22222222-2222-2222-2222-222222222222'"),
+				("MISSING_SHIFT", "ALTER TABLE \"AppEmployees\" DROP CONSTRAINT \"FK_AppEmployees_academic_ShiftManagements_ShiftId\"; UPDATE \"AppEmployees\" SET \"ShiftId\"='99999999-9999-9999-9999-999999999999'", "UPDATE \"AppEmployees\" SET \"ShiftId\"='11111111-1111-1111-1111-111111111111'; ALTER TABLE \"AppEmployees\" ADD CONSTRAINT \"FK_AppEmployees_academic_ShiftManagements_ShiftId\" FOREIGN KEY (\"ShiftId\") REFERENCES \"academic_ShiftManagements\"(\"Id\")")
+			};
+			foreach (var item in cases)
+			{
+				await new NpgsqlCommand(item.Change, migrationConnection).ExecuteNonQueryAsync();
+				var counts = await ReadSummary();
+				counts[item.Category].ShouldBe(1);
+				var rejected = await Should.ThrowAsync<PostgresException>(() => new NpgsqlCommand(script, migrationConnection).ExecuteNonQueryAsync());
+				rejected.SqlState.ShouldBe("P0001");
+				rejected.MessageText.ShouldContain(item.Category + "=1");
+				foreach (var count in counts) rejected.MessageText.ShouldContain(count.Key + "=" + count.Value);
+				rejected.MessageText.ShouldNotContain("aaaaaaaa");
+				await new NpgsqlCommand("ROLLBACK", migrationConnection).ExecuteNonQueryAsync();
+				(await new NpgsqlCommand("SELECT to_regclass('\"HR_WorkShifts\"') IS NULL", migrationConnection).ExecuteScalarAsync()).ShouldBe(true);
+				await new NpgsqlCommand(item.Restore, migrationConnection).ExecuteNonQueryAsync();
+			}
+			(await ReadSummary()).Values.ShouldAllBe(count => count == 0);
 			await new NpgsqlCommand(script, migrationConnection).ExecuteNonQueryAsync();
 			await using var sql = new NpgsqlConnection(connection.ConnectionString); await sql.OpenAsync();
 			async Task<long> Count(string query) => (long) (await new NpgsqlCommand(query, sql).ExecuteScalarAsync())!;

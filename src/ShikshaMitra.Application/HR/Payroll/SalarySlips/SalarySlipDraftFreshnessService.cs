@@ -31,7 +31,7 @@ public class SalarySlipDraftFreshnessService(
 		var snapshotEmployerContributions = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EmployerContributionsJson);
 		PayrollSnapshotTotalGuard.EnsureMatchesLineItems(snapshot, snapshotEarnings, snapshotDeductions);
 
-		return SalarySlipMatchesSnapshot(salarySlip, snapshot, snapshotEarnings, snapshotDeductions)
+		return SalarySlipMatchesSnapshot(salarySlip, snapshot, snapshotEarnings, snapshotDeductions, snapshotEmployerContributions)
 			? salarySlip
 			: await salarySlipManager.GenerateOrGetSalarySlipFromSnapshotAsync(
 				snapshot,

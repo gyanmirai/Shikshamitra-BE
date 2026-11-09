@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-05
+updated_on: 2026-11-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -109,6 +109,9 @@ Creating personal information with `policyOverride` requires `HR.Policies.Assign
 The common creation workflow checks these existing policy actions before creating an identity or staff record, and returns HTTP 403 with `errorCode: HR:Employee:010043` and `data.missingPermissions` when access is missing.
 Creating personal information without an override keeps its existing Staff Add permission contract.
 Policy list reads retain `HR.Policies.View` for attendance/payroll and `HR.AttendanceAndLeave.Setting.LeavePolicy.View` for leave; Staff Add/Edit does not silently grant policy administration access.
+For `PUT /api/employees/{id}/personal-info`, omitted `designation`, `qualification`, and `identificationMark1` preserve their current stored values, including requests from older clients.
+An explicit `null` or empty string clears only the supplied field; a supplied nonempty value replaces it.
+Presence is tracked independently per field through JSON binding, contract mapping, and the application service; all other personal-info field semantics and create behavior stay unchanged.
 Generic personal-information updates still reject email changes with HR:Employee:010034.
 The controlled account-email GET returns userId, employeeEmail, accountEmail, userName and a concurrencyToken covering both records.
 PUT requires email, a 5-512 character reason, confirmEmployeeVerified=true, that concurrencyToken and a non-empty idempotencyKey.
@@ -362,6 +365,8 @@ Policy APIs resolve work calendars, payroll policies, attendance policies, assig
 
 Work-calendar effective dates accept years from 1900 through 2100, and a custom weekly-off pattern must leave at least one working day.
 Assignment resolution preview requires the existing `HR.Policies.PreviewImpact` grant at both controller and application-service boundaries. Supply `assignment`, `date`, optional `assignmentId` and optional `sampleEmployeeId`; the tenant is server-derived. It resolves current and detached proposed assignments through the same staff/group/default ordering without saving them. Staff samples require current staff scope. A group-only result is explicitly scoped to that group; a new-ID tie returns `isComplete: false` and no proposed winner rather than guessing its future ID.
+Effective-policy responses, including `GET /api/hr/policy-assignment-preview`, expose `leavePolicy.rules[].minNoticeDays` as the selected active Paid or Unpaid rule's integer notice requirement.
+The projection preserves explicit zero and each bucket's own configured value; it does not infer a one-day default or change server-side leave-request validation.
 Shared policy impact responses add `ruleDifferencesStatus` and `ruleDifferences` for current/proposed contract fields. Collection differences describe operational holiday, weekday and payroll-month values while excluding temporary row identities. Unknown comparisons are not represented as no changes. These disclosures do not simulate salary or change confirmation/locking behavior.
 Work-calendar, attendance, payroll, and leave policy names are unique only among non-archived policies in the same tenant and academic year, so an archived name can be reused.
 Leave policy uniqueness is case-insensitive and is backed by the normalized database key, while the other policy families preserve their existing case-sensitive name contract.

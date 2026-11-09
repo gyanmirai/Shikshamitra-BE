@@ -3,7 +3,7 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-11-05
+updated_on: 2026-11-06
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -58,6 +58,30 @@ Leave workflows use policy rules and affect payroll:
 | Leave center | Show balances, history, and request state for one employee | Accrued days, remaining days, unlimited unpaid display, and negative-balance rules |
 
 ## Payroll workflows
+
+### Calculation release and PF remediation
+
+Worked attendance and approved paid leave add together, capped at the scheduled day capacity remaining after approved unpaid leave.
+Calendar and employment-date eligibility still apply.
+PF uses recurring eligible Basic, or recurring eligible Basic plus DA when the assigned rule requires it.
+Basic semantic classification and recognized Basic names remain supported.
+Temporary payments and monthly adjustments never provide the PF wage basis.
+The former gross/total-earnings fallback is intentionally removed.
+Missing eligible components produce the blocking `PF_WAGE_BASIS_REQUIRED` issue while preview remains available.
+Eligible components with zero earned wages produce zero employee and employer PF and retain the rule metadata.
+Update the affected salary structure to match its assigned PF rule, then run a fresh preview and review before locking or finalizing.
+The same blocker applies to correction approval.
+
+New preview runs store calculation version `1` in `ExtraProperties`; an absent version is `0`.
+Obsolete queued/running previews are superseded, and old completed previews cannot be reused, reviewed, or locked as current payroll.
+A replacement preview requires review of the new generation.
+This uses existing storage and does not require a schema migration.
+
+Internal draft freshness checks and direct finalization refresh changed employer contribution lines/totals, statutory evidence, and compensation evidence through the existing snapshot writer.
+Public payslip reads retain their issued-document requirement; an unlocked preview does not expose a draft payslip.
+The slip identity and document invalidation behavior are preserved.
+Finalized and paid slips remain immutable.
+Historical underpayments or already issued slips require the existing correction workflow and are not rewritten automatically.
 
 Payroll workflows depend on employee, attendance, leave, and policy data:
 
@@ -290,7 +314,7 @@ Policy writes share the payroll input fence and invalidate affected unlocked emp
 
 1. Pause employee/shift writes, attendance processing and payroll jobs during a coordinated maintenance window.
 2. Back up the database and rehearse migration against a disposable PostgreSQL copy.
-3. Run scripts/hr/work-shifts-preflight.sql. `RepairKnownOwnerlessShifts` copies only the two reviewed Afternoon Shift and Full Day Shift definitions used by DDVS/QADEMO02 into tenant-owned school shifts, then moves those tenants' employee and standard references. It leaves the originals untouched and fails if the reviewed names, hours or tenant references have changed. Resolve any other missing, foreign-tenant, ownerless or invalid shift through an approved audited repair.
+3. Verify the database target and run scripts/hr/work-shifts-preflight.sql. `RepairKnownOwnerlessShifts` copies only the two reviewed Afternoon Shift and Full Day Shift definitions used by DDVS/QADEMO02 into tenant-owned school shifts, then moves those tenants' employee and standard references. It leaves the originals untouched and fails if the reviewed names, hours or tenant references have changed. Resolve any other missing, foreign-tenant, ownerless references or invalid tenant-owned definitions (including unassigned definitions) through an approved audited repair. The script uses a read-only transaction and returns category counts followed by sensitive row-level diagnostics. Share counts only in deployment logs; categories may overlap. Migration failures report the same count categories without identifiers. Do not bypass the preflight or rerun deployment until the repair and cutover are approved.
 4. Apply RepairKnownOwnerlessShifts and then SeparateEmployeeWorkShifts before deploying the matching backend/frontend pair.
 5. Reconcile copied definitions and baseline assignments with original references, preserving attendance, school-class references and locked payroll snapshots.
 6. Smoke-test both catalogues and dated employee assignments, then resume processing.

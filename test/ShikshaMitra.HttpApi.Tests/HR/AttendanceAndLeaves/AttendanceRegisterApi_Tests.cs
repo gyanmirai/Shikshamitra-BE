@@ -40,6 +40,44 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Bulk_Adjust_Should_Create_Unmarked_Attendance_Using_Employee_Dates_Only()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+
+		var attendanceDate = new DateOnly(2026, 4, 17);
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
+			Client,
+			$"RegUnmarkedBulk{Guid.NewGuid():N}",
+			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
+		await AssignCaptureModePolicyAsync(employee.Id, attendanceDate, AttendanceCaptureMode.ManualStatus);
+
+		var response = await Client.PostAsJsonAsync($"{RegisterUrl}/bulk-adjust", new AttendanceRegisterBulkAdjustRequest
+		{
+			EmployeeDates = [new EmployeeDateInput
+			{
+				EmployeeId = employee.Id,
+				AttendanceDate = attendanceDate.ToString("yyyy-MM-dd")
+			}],
+			StatusWire = "PRESENT",
+			Reason = "Mark previously unmarked attendance"
+		}, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var result = await response.Content.ReadFromJsonAsync<AttendanceRegisterAdjustmentResult>(JsonOptions)
+			?? throw new InvalidOperationException("Failed to deserialize adjustment result.");
+		result.UpdatedCount.ShouldBe(1);
+		result.SkippedCount.ShouldBe(0);
+		result.Rows.Single().EmployeeId.ShouldBe(employee.Id);
+		var attendance = await GetAttendanceAsync(employee.Id, attendanceDate);
+		attendance.StatusType.ShouldBe(EmployeeAttendanceStatusType.Present);
+		attendance.Source.ShouldBe(AttendanceRecordSource.Correction);
+		attendance.TimeIn.ShouldBeNull();
+		attendance.TimeOut.ShouldBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Multi_Division_Register_Should_Compose_Staff_Group_Search_Paging_And_Reset()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();

@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-11-05
+updated_on: 2026-11-06
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -180,6 +180,8 @@ Inquiry and application services call the shared runtime service instead of dupl
 The frontend owns interaction state only and cannot replace backend authorization or hierarchy validation.
 
 ## Workflow implementation map
+
+Application/workflow opening resolves the core read services without constructing unrelated command graphs. `AdmissionApplicationAppService` resolves its optional Form, Inquiry-management and command helpers through ABP's existing lazy service provider when the owning action runs. `AdmissionApplicationFormService` resolves the workflow command service only at the existing submit handoff. This changes dependency activation timing, not API contracts, permission/scope checks, service lifetimes, unit-of-work boundaries or workflow execution.
 
 | Concern | Source |
 |---|---|
@@ -419,16 +421,6 @@ Readers reuse Records enrollment scope, Admission inquiry/application scope, exa
 
 Paths without a layer prefix in this table are under `Application/Students/StudentEnrollments/Admissions/`, except the explicitly named Communication partial. The public capability is separate from staff identity; evaluating current sender authority must not attribute parent writes to that sender. Existing document owners retain file validation, revisions, review and Student linkage. Safe frontend rendering remains owned by the [Student frontend](../../../../Shikshamitra-FE/docs/student/clients.md#parent-registration-clients).
 
-## Configurable identity-card rendering
+## Admission intake without capacity
 
-`StudentIdCardDesign` in `src/ShikshaMitra.Application/Students/Records/` validates student-specific bindings and supplies frozen school/student values to `Common/IdentityCards/`. The shared schema, SVG and physical geometry are used for schema-2 export and issued download/reprint. Existing schema-1 rendering, access checks, photo/blob loaders and immutable template/student snapshots remain source-owned by Student Records. Configuration uses existing JSON storage; no new persistence model is introduced.
-
-
-## Compliance report query ownership
-
-`Students/Records/StudentComplianceReportQueryService.cs` obtains the canonical active directory population, then applies saved current academic placement, persisted GSEB board type and factual exception-status selection.
-The tenant-filtered compliance left join preserves students without compliance rows and selects no encrypted Aadhaar/hash fields.
-`StudentComplianceReportProjection.cs` owns explicit columns, canonical policy-group redaction and partial-identifier output.
-`StudentRecordReportAuthority.cs` adds source grants for the four types; the existing generator, app service, job runner and worker own preview/export lifecycle and download reauthorization.
-Contract scope fields live in `StudentRecordReportDtos.cs`; no new persistence entity, migration or parallel report API is introduced.
-Frontend catalog/availability and saved-request history remain owned by the [frontend workflows](../../../../Shikshamitra-FE/docs/student/workflows.md#compliance-reports-and-real-job-history).
+AdmissionInquiryAvailabilityService evaluates offering configuration, dates and entry mode without room allocations, occupancy totals or Seat pools. AdmissionOfferingReadService reuses the evaluated availability without capacity queries; Offering contracts omit classCapacity. The retired admission room-capacity controller, application/read services, calculator and DTOs are removed. AdmissionClassRoomAllocation, its EF mapping and existing migrations remain compatibility-only persistence; no runtime service reads or writes them. StudentOnboardingAppService remains the owner of division placement limits.

@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-11-04
+updated_on: 2026-11-06
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -28,11 +28,11 @@ Closed/unavailable intake, expired offers, finalized/enrolled cases and cancelle
 
 ## Archive and restore admission forms
 
-Archiving Inquiry or Registration forms retains their offering, workflow, inherited-source and public-link references. Existing inquiry answers and pinned application schemas are not migrated or rewritten. New intake that requires an archived form is blocked; other offering, cycle, scope and capacity restrictions remain authoritative.
+Archiving Inquiry or Registration forms retains their offering, workflow, inherited-source and public-link references. Existing inquiry answers and pinned application schemas are not migrated or rewritten. New intake that requires an archived form is blocked; other offering, cycle and scope restrictions remain authoritative.
 
 The archive impact read identifies tenant-owned workflow/default/stage, public-link and inherited Registration references, visible linked offerings and scoped saved Inquiry/Application counts. Related feature View permissions govern names, IDs and counts; denied feature reads are skipped and `hasRestrictedDependencies` indicates incomplete visibility. Restricted offering names and IDs are omitted with `hasRestrictedOfferings`. Public-link tokens and student answers are never returned.
 
-Restore returns only an Archived form to Published after current definition validation and exact concurrency checks. Its ID, version, schema and original publication metadata remain fixed; the action appends a Restored audit entry. Restore does not reactivate an offering or bypass workflow approval, registration-source approval, dates or capacity. Replacement forms affect future intake; retained inquiries continue using their original form unless staff explicitly change the inquiry's offering.
+Restore returns only an Archived form to Published after current definition validation and exact concurrency checks. Its ID, version, schema and original publication metadata remain fixed; the action appends a Restored audit entry. Restore does not reactivate an offering or bypass workflow approval, registration-source approval or dates. Replacement forms affect future intake; retained inquiries continue using their original form unless staff explicitly change the inquiry's offering.
 
 Creating another form version requires a non-Draft source and no existing Draft in that code family. Conflicts identify the existing draft rather than returning a deletion message. Version drafts retain their family code; a separate form uses Clone as Draft. Comparison reads meaningful question, section, layout, translation, rule and Inquiry-source approval changes, ignores generated record/audit identifiers, and treats equivalent JSON formatting as unchanged. These operations do not migrate saved inquiries, application schemas or offering references. Current offering configuration locks still govern where a newly published version can be selected.
 
@@ -398,15 +398,17 @@ New saved Documents settings enable one upload checklist by default. Requirement
 
 Every upload/replacement and acceptance/rejection remains audited against the current application stamp and latest revision. A replacement requires fresh acceptance. Applicable required uploads block advance, skip and override until accepted; optional evidence does not block completion. Class applicability uses the Offering Standard, not an applicant-typed answer. Finalization rechecks visited evidence and preserves idempotent finalized retries.
 
+Documents may precede the Registration form. An active Draft application can complete that stage when its applicable required evidence is resolved and exactly one next-stage route is eligible; form submission is not a prerequisite. Draft journeys cannot defer unresolved document requirements to Onboarding. Completing Documents leaves the application Draft and the form unsubmitted; the Form stage retains its own submission validation. Closed applications and historical document stages remain blocked.
+
 Accepted mapped uploads remain canonical and can satisfy corresponding Onboarding upload requirements without overwriting existing Student documents. Unmapped custom evidence does not satisfy an independently mandatory onboarding category. Historical revisions remain readable within record scope.
 
 ## Managed eligibility
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Managed Review
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Managed Form stages
 
@@ -420,13 +422,11 @@ Actual fee assignment and collection remain Finance-owned. Offering-linked Onboa
 
 ## Managed Offer stages
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Managed Seat stages
 
-Class-level admission capacity is a separate warning-only projection: for an academic year and Standard, sum the capacities of assigned Institute Setup rooms and subtract active enrollments plus accepted or finalized admissions not already enrolled. General, RTE, Management, and Staff offerings for the same class share this count. A full class warns staff at inquiry or registration but does not stop either action. No room assignment means capacity is unknown. This does not change the historical managed Seat-stage reservation and waitlist policy below.
-An Enrolled application does not hold a second seat after its active StudentEnrollment is deactivated;
-transfers and withdrawals free that class seat in the live projection.
+Admission Inquiry and Registration intake has no seat-count limit. Room assignments, active enrollment totals and historical Seat-pool occupancy do not close intake or block Inquiry-to-Registration handoff. Offering availability, published configuration, entry-route, identity, duplicate, tenant and user-scope checks still apply. Room-derived admission capacity and its setup/read APIs are retired. Legacy room-allocation records and schema remain for migration compatibility and have no runtime effect. Actual division placement retains its existing strength, active-enrollment and live-reservation checks in Student Setup. Historical managed Seat stages retain their later workflow operations below.
 
 Seat stages opt into `configurationJson.seat` version 1. Schools set the offering capacity, choose manual reservation or reservation on stage entry, define hold duration and staff override limits, enable bounded renewals and FIFO waitlisting, control authorized capacity exceptions, require release reasons, and choose which outcomes may complete the stage. Missing or disabled settings preserve the basic workflow step.
 
@@ -491,3 +491,7 @@ Parents complete form answers and delegated uploads in one private Registration 
 Private uploaded evidence keeps its original versions and explicit parent-request/contact provenance. Staff acceptance/rejection and the finalization-to-Onboarding handoff retain their canonical owners. Parent links do not expose other applicants, sibling search, staff-only audit content or public blob URLs.
 
 Durable delivery retains Communication's history, consent and approval controls. For an explicit transactional Registration invitation when the tenant has never configured an Email provider, it reuses the same ABP `IEmailSender` and SMTP settings as Student Onboarding without creating provider settings. Any persisted Email configuration, including disabled/suspended/removed setup, prevents that fallback; enabled providers retain their opt-in and template rules. Explicit recipient withdrawal and campaign approval remain authoritative. Ordinary campaigns do not inherit this fallback. Status distinguishes queued, sent, failed, approval-pending and uncertain acceptance. Sent means provider acceptance, not inbox delivery. Only known skips or explicit SMTP rejections permit a retry campaign; timeouts/disconnects remain Unknown and require history review/new-link handling. An invalid/expired/revoked token, changed recipient, lost sender authority or terminal admission state blocks public access. Source and test availability do not certify real mailbox delivery or deployment.
+
+## Future backlog: shared class capacity
+
+Deferred; not implemented. A future read-only class capacity view may derive the selected academic year and class total from division strengths, account for active enrollments and accepted/finalized admissions awaiting enrollment without double counting, and share the count across admission tracks. This future work does not authorize a seat-count limit on Inquiry or Registration intake. Its pending-admission semantics, scope and staff UI require a separate implementation decision.

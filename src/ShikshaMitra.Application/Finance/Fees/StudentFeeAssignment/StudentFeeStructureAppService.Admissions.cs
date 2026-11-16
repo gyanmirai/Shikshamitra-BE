@@ -32,7 +32,12 @@ public partial class StudentFeeStructureAppService
 			SelectedOptionalFeeHeadIds = source.OptionalHeadIds.ToList(), VariableFeeHeads = variableHeads.ToList()
 		};
 		var resolver = LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Policies.AdmissionProrationPolicyResolver>();
-		var defaultProration = await resolver.ResolveAsync(source.AcademicYearId);
+		var year = await academicYearRepository.GetAsync(source.AcademicYearId);
+		var prorationEligible = source.JoiningDate.HasValue && source.JoiningDate.Value.Date >= year.StartDate.Date;
+		if (!prorationEligible && prorationPolicyVersionId.HasValue)
+			throw new BusinessException(AssignmentErrorCodes.InvalidInput)
+				.WithData("Reason", "A proration policy cannot be selected before the academic-year start date.");
+		var defaultProration = prorationEligible ? await resolver.ResolveAsync(source.AcademicYearId) : null;
 		var proration = prorationPolicyVersionId.HasValue
 			? await resolver.ResolveActiveVersionAsync(source.AcademicYearId, prorationPolicyVersionId.Value)
 			: defaultProration;

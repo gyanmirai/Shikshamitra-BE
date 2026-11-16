@@ -930,20 +930,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 						ApplicationFormDefinitionId = generalOffering.ApplicationFormDefinitionId
 					}));
 			duplicate.Code.ShouldBe(AdmissionErrorCodes.OfferingDuplicate);
-			var room = await CreateCapacityRoomAsync(1);
-			var capacityService = GetRequiredService<IAdmissionClassCapacityAppService>();
-			var capacity = await capacityService.UpdateForOfferingAsync(offering.Id,
-				new UpdateAdmissionClassRoomsDto { RoomIds = [room.Id] });
-			capacity.Capacity.ShouldBe(1);
-			capacity.OccupiedCount.ShouldBe(1);
-			capacity.IsFull.ShouldBeTrue();
-			var generalCapacity = await capacityService.GetForOfferingAsync(generalOffering.Id);
-			generalCapacity.StandardId.ShouldBe(offering.StandardId);
-			generalCapacity.RemainingSeats.ShouldBe(0);
-			generalCapacity.Warning.ShouldNotBeNull();
-			var generalApplicant = await CreateApplicantAsync("General");
-			(await Should.ThrowAsync<BusinessException>(() => StartFixtureApplicationAsync(generalApplicant.Id, generalOffering.Id)))
-				.Code.ShouldBe(AdmissionApplicationErrorCodes.OfferingNotAvailable);
+
 		}
 	}
 

@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-05
+updated_on: 2026-11-06
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -512,15 +512,12 @@ These additive fields use existing audited extra-property storage and require no
 | POST | `/api/student/enrollment/admissions/offerings/validate` | `Students.Admissions.Offerings.Add` |
 | GET | `/api/student/enrollment/admissions/offerings/{id}/availability` | `Students.Admissions.Offerings.View` |
 | POST | `/api/student/enrollment/admissions/offerings/cycles/{admissionCycleId}/bulk` | `Students.Admissions.Offerings.Add` |
-| GET | `/api/student/enrollment/admissions/offerings/{offeringId}/class-capacity` | `Students.Admissions.Offerings.View` |
-| GET | `/api/student/enrollment/admissions/offerings/{offeringId}/class-capacity/rooms` | `Students.Admissions.Offerings.View` |
-| PUT | `/api/student/enrollment/admissions/offerings/{offeringId}/class-capacity` | `Students.Admissions.Offerings.Add` |
 
 The compatibility create route accepts `POST /api/student/enrollment/admissions/offerings?admissionCycleId=...`.
 
 Offering list accepts optional `forSpecialRegistration=true`, default false. It filters RTE/Direct and Management-or-Staff/Direct-or-Both before counting, sorting and paging; cycle, type, academic scope, tenant, active/configuration/availability and search filters still apply. This prevents an inquiry-only first page from hiding eligible later rows. Availability filtering and returned status use the institution calendar date (`Asia/Kolkata`), including UTC/IST date boundaries. No permissions or stored routing change.
 The read model projects academic identity/name/parent columns as scalars. It does not materialize Board/Medium/Stage/Standard entities and their recursive academic AutoIncludes; returned identities, readiness checks and sort fields are preserved.
-Class capacity is shared by all tracks for the same academic year and Standard. PUT accepts distinct `roomIds`; it assigns existing positive-capacity rooms to that class, not a manually entered seat number. The GET summary returns `capacity`, `occupiedCount`, `remainingSeats`, `isFull`, `isOverCapacity`, and a non-blocking warning. With no assigned rooms, capacity is unknown rather than zero. The room-choice response flags rooms allocated to a different class.
+The former Offering class-capacity GET/PUT and room-choice endpoints are retired, and Offering detail/availability DTOs no longer include classCapacity. Staff/public Inquiry capture and Registration start do not check room or Seat-pool occupancy. Their existing availability, entry-route, authorization, identity, concurrency and duplicate rules remain authoritative.
 
 ## Workflow endpoints
 
@@ -888,11 +885,11 @@ The nullable `requiredCredentialDeliveryConfirmed` reports the existing activati
 
 ## Eligibility APIs
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Review APIs
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Managed Form stage APIs
 
@@ -939,11 +936,11 @@ Base: `/api/student/enrollment/admissions/applications/{applicationId}/joining-d
 | `POST preview` | Candidate `joiningDate` as `yyyy-MM-dd`, optional `prorationPolicyVersionId`, and existing variable-fee amounts. Returns Finance-calculated totals, optional proration result, optional `prorationPolicy` identity (`policyId`, `policyVersionId`, `policyName`, `policyVersion`, `source`) when a policy is applied, and warnings. Does not save the date, create an account, or persist dues. |
 | `PUT` | Confirms `joiningDate` with `concurrencyStamp`; requires Finance Fee Collections Add plus Admission Applications Edit, or Student Onboarding Edit after finalization. Returns refreshed date state. |
 
-Confirmation is available in an open current Payment stage or open Onboarding case after a fee structure is selected. The date is stored on the application and synchronized to its current Registration bound/explicit legacy date answers, captured applicant data, and already-created Student captured admission data. Submitted form snapshots remain immutable and explicit form/application audit records confirmation. Any prepared assignment or payment evidence locks date changes; ordinary Registration saves enforce the same guard. Invalid dates and dates after the academic-year end are rejected. Dates before the year start remain valid actual facts; existing Finance policy determines their treatment. `POST /api/fee-collections/admission-applications/{applicationId}/prepare` accepts optional `prorationPolicyVersionId` and `policyOverrideReason`; Finance verifies the active current version and requires `Finance.Fees.StructureAssign.OverridePolicies` plus a reason for a non-default policy before pinning it. Collection preparation and payment still use the existing Finance authority.
+Confirmation is available in an open current Payment stage or open Onboarding case after a fee structure is selected. The date is stored on the application and synchronized to its current Registration bound/explicit legacy date answers, captured applicant data, and already-created Student captured admission data. Submitted form snapshots remain immutable and explicit form/application audit records confirmation. Any prepared assignment or payment evidence locks date changes; ordinary Registration saves enforce the same guard. Invalid dates and dates after the academic-year end are rejected. Dates before the year start remain valid actual facts. The academic-year Start Date configured in Institute Setup is each school's proration eligibility cutoff: before it, Payment previews and new fee preparations use full scheduled charges with no proration policy attached; on or after it, the existing academic-year default and authorized override behavior applies. A policy version submitted before the cutoff is rejected. Existing prepared snapshots and payment evidence remain unchanged. `POST /api/fee-collections/admission-applications/{applicationId}/prepare` accepts optional `prorationPolicyVersionId` and `policyOverrideReason`; Finance verifies the active current version and requires `Finance.Fees.StructureAssign.OverridePolicies` plus a reason for a non-default policy before pinning it. Collection preparation and payment still use the existing Finance authority.
 
 ## Managed Offer stage APIs
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 Application counsellor list/assignment endpoints remain under `/api/student/enrollment/admissions/applications`, with current tenant, Offering hierarchy and concurrency enforcement. Retired Offer operations do not change application ownership.
 

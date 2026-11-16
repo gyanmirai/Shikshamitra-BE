@@ -95,7 +95,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 
 	[Fact]
-	public Task Inquiry_capture_denies_full_seats_when_the_workflow_has_no_waitlist() =>
+	public Task Inquiry_capture_allows_full_seats_when_the_workflow_has_no_waitlist() =>
 		RunCertificationScenarioAsync(async () =>
 		{
 			var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
@@ -104,9 +104,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<AdmissionSeatPool, Guid>>().InsertAsync(pool, true));
 			var availability = GetRequiredService<AdmissionInquiryAvailabilityService>();
 			var result = await WithUnitOfWorkAsync(() => availability.ReadAsync(offering));
-			result.CanCreateInquiry.ShouldBeFalse();
-			result.WaitlistAllowed.ShouldBeFalse();
-			result.Reason.ShouldNotBeNull().ShouldContain("filled");
-			await WithUnitOfWorkAsync(async () => await Should.ThrowAsync<Volo.Abp.BusinessException>(() => availability.EnsureAvailableAsync(offering)));
+			result.CanCreateInquiry.ShouldBeTrue();
+			result.Reason.ShouldBeNull();
+			await WithUnitOfWorkAsync(() => availability.EnsureAvailableAsync(offering));
 		});
 }

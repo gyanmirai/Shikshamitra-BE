@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-11-02
+updated_on: 2026-11-06
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -210,7 +210,7 @@ Bulk preview and creation resolve each selected Standard's own school level befo
 
 Fresh General admission uses a linked Inquiry, while the authenticated special Registration command supports RTE/Management/Staff offerings with DirectRegistration or retained compatible Both routing.
 RTE must start at a Form stage without Inquiry or Assessment.
-The same cycle/class can have separate General and RTE offerings, each using its own published workflow, without increasing the shared class capacity.
+The same cycle/class can have separate General and RTE offerings, each using its own published workflow, while keeping their independent admission process.
 Existing applications retain their frozen runtime; the internal Student Records return coordinator retains its independent governed entry path.
 
 ### Start a special-track Registration
@@ -370,17 +370,18 @@ Resource coordination has a precise boundary: Assessment writes check the curren
 2. Publication normalizes uploads at the active stage, disables waivers/independent review and clears earlier Form-stage collection.
 3. Upload evidence, accept it or request a reasoned replacement through existing permission, scope and concurrency checks. Replacements need fresh acceptance; prior revisions remain readable.
 4. Resolve every applicable mandatory requirement before advancing. Missing required uploads and unavailable class context fail closed.
+   When Documents comes before Registration, accepted evidence can advance a Draft application to the next configured stage without filling/submitting the form. Draft readiness and the advance command both enforce evidence and routing; they do not use Onboarding deferral for missing, pending, rejected or replaced required evidence.
 5. Finalize an Approved completed journey; link accepted evidence to the Student in the finalization unit of work and continue operational Onboarding. Mapped uploads can satisfy corresponding onboarding documents; unmet onboarding requirements retain their scoped upload flow.
 
 `standardIds: null` or omitted means All classes. Selected IDs must be nonempty, unique and tenant-local. Conditional requirement configuration and physical-original/evidence-mode setup are not offered in the supported editor.
 
 ## Check eligibility
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Managed Review workflow
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Run a managed Form stage
 
@@ -406,7 +407,7 @@ The Payment workspace can confirm the same actual joining date used by Registrat
 
 ## Run a managed Offer stage
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Run a legacy managed Seat stage
 
@@ -414,7 +415,7 @@ Seat is not selectable in new workflow drafts. Published workflow versions and a
 
 For those historical journeys, capacity, expiry, and waitlist facts remain server-computed. Confirm, renew, release, promote, or adjust capacity only when the returned server capability permits it; every action records immutable history. Staff should refresh and retry after a concurrency conflict instead of overwriting a newer allocation decision.
 
-Room-derived class capacity is configured by assigning Institute Setup rooms to a class from Admission Offering details. Its shared remaining-seat count is a warning only and does not reserve seats or implement a waitlist. Any future offering-level reservation and waitlist contract remains separate from this class-capacity display and from the historical managed Seat stage.
+Admission Offering details no longer configure rooms or show admission capacity. Staff/public Inquiry and Registration intake are independent of room and historical Seat-pool occupancy. Historical Seat-stage actions still govern their own later workflow step; actual Student Setup division placement still enforces division strength and live reservations. Shared division-derived class capacity remains future backlog only.
 ## Student dashboard reads
 
 1. Authenticate with Dashboard.View; resolve an active user and role membership from the tenant database.

@@ -32,9 +32,7 @@ public class AdmissionOfferingReadService(
 	IRepository<Division, Guid> divisionRepository,
 	IUserScopeAccessService scopeAccessService,
 	AdmissionEligibilityOfferingValidator eligibilityValidator,
-	AdmissionOfferingConfigurationValidator configurationValidator,
-	AdmissionClassCapacityAppService classCapacityService,
-	AdmissionInquiryAvailabilityService inquiryAvailability)
+	AdmissionOfferingConfigurationValidator configurationValidator)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<PagedResultDto<AdmissionOfferingListDto>> GetListAsync(AdmissionOfferingListInput input)
@@ -99,7 +97,6 @@ public class AdmissionOfferingReadService(
 		if (availability.Status == AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete)
 			availability = availability with { ReasonMessage = string.Join(" ", validation.Errors.Select(error => error.Message).Distinct()) };
 		detail.AvailabilityStatus = availability.Status;
-		detail.ClassCapacity = await classCapacityService.ReadForOfferingAsync(id);
 		return (row, detail, availability);
 	}
 
@@ -110,10 +107,9 @@ public class AdmissionOfferingReadService(
 	{
 		var read = await ReadDetailAsync(id);
 		var detail = read.Detail;
-		var intake = await inquiryAvailability.ReadEvaluatedAsync(read.Row.Offering, read.Availability, detail.ClassCapacity!);
+		var intake = AdmissionInquiryAvailabilityService.ReadEvaluated(read.Row.Offering, read.Availability);
 		return (detail, new AdmissionOfferingAvailabilityDto
 		{
-			ClassCapacity = detail.ClassCapacity,
 			IsAvailable = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open,
 			Status = detail.AvailabilityStatus,
 			CanCreateInquiry = intake.CanCreateInquiry,

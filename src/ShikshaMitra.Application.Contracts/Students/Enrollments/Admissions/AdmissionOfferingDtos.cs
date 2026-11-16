@@ -42,7 +42,6 @@ public class AdmissionOfferingDto : AdmissionOfferingListDto
 	public int InquiryCount { get; set; }
 	public bool HasConfigurationUsage { get; set; }
 	public bool CanEditConfiguration => !IsActive && !HasConfigurationUsage;
-	public AdmissionClassCapacityDto? ClassCapacity { get; set; }
 	public bool UseCycleDates { get; set; }
 	public DateTimeOffset? OpenDate { get; set; }
 	public DateTimeOffset? CloseDate { get; set; }
@@ -134,7 +133,6 @@ public class AdmissionOfferingConfigurationValidationDto
 
 public class AdmissionOfferingAvailabilityDto
 {
-	public AdmissionClassCapacityDto? ClassCapacity { get; set; }
 	public bool IsAvailable { get; set; }
 	public AdmissionOfferingAvailabilityStatus Status { get; set; }
 	public bool CanCreateInquiry { get; set; }

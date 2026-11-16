@@ -30,7 +30,10 @@ public partial class StudentFeeStructureAppService
 			ValidatePreparedRequest(input, saved.Preview);
 			return saved;
 		}
-		var policy = await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(input.AcademicYearId);
+		var year = await academicYearRepository.GetAsync(input.AcademicYearId);
+		var policy = facts.JoiningDate.HasValue && facts.JoiningDate.Value.Date >= year.StartDate.Date
+			? await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(input.AcademicYearId)
+			: null;
 		var student = await studentRepository.GetAsync(input.StudentId);
 		// The account's existing unique application/year key serializes Admission and
 		// Finance creation, including when both commands initially see no preparation.

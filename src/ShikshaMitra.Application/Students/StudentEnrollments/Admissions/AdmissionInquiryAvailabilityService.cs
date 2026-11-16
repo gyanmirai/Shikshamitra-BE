@@ -8,8 +8,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
-public sealed record AdmissionInquiryAvailability(bool CanCreateInquiry, string? Reason,
-	AdmissionClassCapacityDto ClassCapacity, bool WaitlistAllowed)
+public sealed record AdmissionInquiryAvailability(bool CanCreateInquiry, string? Reason)
 {
 	public AdmissionOfferingValidationResult? ConfigurationBlocker { get; init; }
 }
@@ -17,10 +16,7 @@ public sealed record AdmissionInquiryAvailability(bool CanCreateInquiry, string?
 [RemoteService(false)]
 public class AdmissionInquiryAvailabilityService(
 	IRepository<AdmissionCycle, Guid> cycles,
-	IRepository<AdmissionWorkflowStageDefinition, Guid> stages,
-	IRepository<AdmissionSeatPool, Guid> pools,
-	AdmissionOfferingConfigurationValidator configuration,
-	AdmissionClassCapacityReadService capacityReader) : ApplicationService, ITransientDependency
+	AdmissionOfferingConfigurationValidator configuration) : ApplicationService, ITransientDependency
 {
 	// Offering scope is resolved by the staff runtime or by the public link before this shared check.
 	public Task<AdmissionInquiryAvailability> ReadAsync(AdmissionOffering offering) => ReadCoreAsync(offering, enforceUserScope: true);
@@ -38,28 +34,19 @@ public class AdmissionInquiryAvailabilityService(
 			availability = availability with { ReasonMessage = enforceUserScope
 				? string.Join(" ", validation.Errors.Select(error => error.Message).Distinct())
 				: "Admission setup for this class needs attention. Contact the school for help." };
-		var capacity = await capacityReader.ReadAsync(offering, cycle);
-		var result = await ReadEvaluatedAsync(offering, availability, capacity);
+		var result = ReadEvaluated(offering, availability);
 		return enforceUserScope && availability.Status == AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete
 			? result with { ConfigurationBlocker = validation } : result;
 	}
 
 	// Only shares a result already read in this scoped staff request. Public/write guards still use ReadCoreAsync.
-	internal async Task<AdmissionInquiryAvailability> ReadEvaluatedAsync(AdmissionOffering offering, AdmissionOfferingAvailability availability,
-		AdmissionClassCapacityDto capacity)
+	internal static AdmissionInquiryAvailability ReadEvaluated(AdmissionOffering offering, AdmissionOfferingAvailability availability)
 	{
 		if (!availability.IsAvailable || offering.EntryMode == AdmissionEntryMode.DirectRegistration)
-			return new(false, availability.ReasonMessage ?? "Admission is not open for this class.", capacity, false);
-		var seatStages = offering.WorkflowDefinitionId.HasValue
-			? await stages.GetListAsync(stage => stage.WorkflowDefinitionId == offering.WorkflowDefinitionId.Value &&
-				stage.StageType == AdmissionWorkflowStageType.Seat) : [];
-		var policies = seatStages.Select(AdmissionSeatAccessService.ReadPolicy).Where(policy => policy != null).ToList();
-		var waitlistAllowed = policies.Count > 0 && policies.All(policy => policy!.AllowWaitlist);
-		var seatPools = await pools.GetListAsync(pool => pool.AdmissionOfferingId == offering.Id);
-		var isFull = capacity.IsFull || seatPools.Any(pool => pool.OccupiedCount >= pool.Capacity);
-		return isFull && !waitlistAllowed
-			? new(false, "Admission is closed for this class because all seats are filled.", capacity, false)
-			: new(true, null, capacity, waitlistAllowed);
+			return new(false, availability.ReasonMessage ?? "Admission is not open for this class.");
+		// Inquiry capture and Registration handoff do not reserve seats. Historical Seat
+		// stages enforce their own policy later; division placement remains owned by Onboarding.
+		return new(true, null);
 	}
 
 	public async Task EnsureAvailableAsync(AdmissionOffering offering)

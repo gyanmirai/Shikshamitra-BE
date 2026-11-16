@@ -158,6 +158,47 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	});
 
 	[Fact]
+	public Task Proration_policy_applies_only_on_or_after_school_academic_year_start() => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await CreateCollectibleAdmissionAsync("ProrationSchoolCutoff", amount: 12000m, oneTime: false);
+		var year = await ReadAsync<AcademicYear>(fixture.YearId);
+		var policy = await ConfigureProrationAsync(fixture);
+		var versions = GetRequiredService<IRepository<FinancePolicyVersion, Guid>>();
+		var versionId = (await WithUnitOfWorkAsync(() => versions.GetAsync(x => x.PolicyId == policy.Id && x.VersionNumber == policy.Version))).Id;
+		var joining = GetRequiredService<IAdmissionPaymentJoiningDateAppService>();
+
+		var beforeCutoff = year.StartDate.AddDays(-1);
+		var beforePreview = await joining.PreviewAsync(fixture.Application.Id, new()
+		{ JoiningDate = beforeCutoff.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) });
+		beforePreview.ProrationPolicy.ShouldBeNull();
+		beforePreview.Proration.ShouldBeNull();
+		beforePreview.TotalAmount.ShouldBe(beforePreview.ScheduledAmount);
+		await Should.ThrowAsync<BusinessException>(() => joining.PreviewAsync(fixture.Application.Id, new()
+		{ JoiningDate = beforeCutoff.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), ProrationPolicyVersionId = versionId }));
+
+		var cutoffPreview = await joining.PreviewAsync(fixture.Application.Id, new()
+		{ JoiningDate = year.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) });
+		cutoffPreview.ProrationPolicy.ShouldNotBeNull().PolicyVersionId.ShouldBe(versionId);
+
+		var afterCutoff = year.StartDate.AddDays(1);
+		var afterPreview = await joining.PreviewAsync(fixture.Application.Id, new()
+		{ JoiningDate = afterCutoff.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) });
+		afterPreview.ProrationPolicy.ShouldNotBeNull().PolicyVersionId.ShouldBe(versionId);
+
+		await joining.SaveAsync(fixture.Application.Id, new()
+		{ JoiningDate = beforeCutoff.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+			ConcurrencyStamp = (await joining.GetAsync(fixture.Application.Id)).ConcurrencyStamp });
+		var prepared = await GetRequiredService<IAdmissionFeeCollectionAppService>().PrepareAsync(fixture.Application.Id, new());
+		prepared.ProrationPolicy.ShouldBeNull();
+		prepared.Proration.ShouldBeNull();
+		prepared.TotalAmount.ShouldBe(12000m);
+		var account = await ReadAsync<FinanceFeeAccount>(prepared.AccountId!.Value);
+		var snapshot = JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(account.AssignmentSnapshotJson!)!;
+		snapshot.ProrationPolicyVersionId.ShouldBeNull();
+		(await AccountDuesAsync(prepared.AccountId.Value)).Single().ProrationPolicyVersionId.ShouldBeNull();
+	});
+
+	[Fact]
 	public Task Proration_paid_registration_date_change_cannot_reset_financial_history() => RunCertificationScenarioAsync(async () =>
 	{
 		var fixture = await CreateCollectibleAdmissionAsync("JoiningChanged", oneTime: false);

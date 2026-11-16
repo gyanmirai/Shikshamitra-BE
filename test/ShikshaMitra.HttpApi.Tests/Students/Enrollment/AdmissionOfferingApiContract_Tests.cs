@@ -39,25 +39,12 @@ public class AdmissionOfferingApiContract_Tests
 	}
 
 	[Fact]
-	public void Class_capacity_routes_preserve_view_and_configuration_permissions()
+	public void Retired_admission_room_capacity_routes_are_not_exposed()
 	{
-		var controller = typeof(AdmissionClassCapacityController);
-		controller.GetCustomAttribute<RouteAttribute>()!.Template.ShouldBe(
-			"api/student/enrollment/admissions/offerings/{offeringId:guid}/class-capacity");
-		var get = controller.GetMethod(nameof(AdmissionClassCapacityController.Get))!;
-		get.GetCustomAttribute<HttpGetAttribute>()!.Template.ShouldBeNull();
-		get.GetCustomAttributes<AuthorizeAttribute>().Select(attribute => attribute.Policy)
-			.ShouldContain(OfferingPermissions.View);
-		var rooms = controller.GetMethod(nameof(AdmissionClassCapacityController.GetRooms))!;
-		rooms.GetCustomAttribute<HttpGetAttribute>()!.Template.ShouldBe("rooms");
-		rooms.GetCustomAttributes<AuthorizeAttribute>().Select(attribute => attribute.Policy)
-			.ShouldContain(OfferingPermissions.View);
-		var update = controller.GetMethod(nameof(AdmissionClassCapacityController.Update))!;
-		update.GetCustomAttribute<HttpPutAttribute>()!.Template.ShouldBeNull();
-		update.GetCustomAttributes<AuthorizeAttribute>().Select(attribute => attribute.Policy)
-			.ShouldContain(OfferingPermissions.Add);
-		update.GetParameters().ShouldContain(parameter =>
-			parameter.ParameterType == typeof(UpdateAdmissionClassRoomsDto));
+		typeof(AdmissionOfferingsController).Assembly.GetType(
+			"ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionClassCapacityController").ShouldBeNull();
+		typeof(AdmissionOfferingDto).GetProperty("ClassCapacity").ShouldBeNull();
+		typeof(AdmissionOfferingAvailabilityDto).GetProperty("ClassCapacity").ShouldBeNull();
 	}
 
 	private static string? PostTemplate(string methodName) =>

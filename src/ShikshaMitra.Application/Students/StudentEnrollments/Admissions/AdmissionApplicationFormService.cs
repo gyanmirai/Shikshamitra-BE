@@ -29,11 +29,13 @@ public partial class AdmissionApplicationFormService(
 	AdmissionApplicationFormValidator formValidator,
 	AdmissionFormDataSourceRegistry dataSourceRegistry,
 	AdmissionFormMasterDataValidator masterDataValidator,
-	AdmissionApplicationWorkflowService workflowService,
 	AdmissionFormStageRuntimeService formStageRuntime,
 	AdmissionReviewDecisionGuard reviewGuard)
 	: ApplicationService, ITransientDependency
 {
+	// Workflow commands are used only on submit, not when opening a saved form.
+	private AdmissionApplicationWorkflowService WorkflowService => LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationWorkflowService>();
+
 	public async Task<AdmissionApplicationFormDto> GetAsync(Guid applicationId)
 	{
 		var application = await applicationReadService.GetEntityAsync(applicationId);
@@ -350,7 +352,7 @@ public partial class AdmissionApplicationFormService(
 			// A legacy workflow can enter its Form stage only after the same submit request
 			// completes an older Inquiry entry stage. Retrying a successful submission must
 			// therefore repair the workflow handoff instead of returning the stuck record.
-			await workflowService.AdvanceAfterSubmitAsync(application);
+			await WorkflowService.AdvanceAfterSubmitAsync(application);
 			return new AdmissionApplicationSubmitResultDto { Application = AdmissionApplicationMapper.ToDto(application) };
 		}
 		application.SaveDraft();
@@ -394,7 +396,7 @@ public partial class AdmissionApplicationFormService(
 		await historyRepository.InsertAsync(new AdmissionFormChangeHistory(GuidGenerator.Create(), CurrentTenant.Id, instance.Id, application.Id,
 			"Submitted", null, CurrentUser.Id), false);
 		application.Submit();
-		await workflowService.AdvanceAfterSubmitAsync(application);
+		await WorkflowService.AdvanceAfterSubmitAsync(application);
 		await applicationRepository.UpdateAsync(application, false);
 		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("ApplicationSubmitted", "Application submitted", application.ApplicantId, application.Id), true);
 		return new AdmissionApplicationSubmitResultDto { Application = AdmissionApplicationMapper.ToDto(application) };

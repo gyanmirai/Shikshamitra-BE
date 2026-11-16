@@ -27,7 +27,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 
 	[Fact]
-	public Task Inquiry_redesign_full_seats_should_allow_capture_when_seat_workflow_allows_waitlist() =>
+	public Task Inquiry_redesign_full_legacy_seat_pool_does_not_restrict_capture() =>
 		RunCertificationScenarioAsync(async () =>
 		{
 			var offering = await CreateAvailableOfferingAsync((await CreateManagedSeatWorkflowAsync()).Id);
@@ -37,7 +37,6 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var availability = GetRequiredService<AdmissionInquiryAvailabilityService>();
 			var result = await WithUnitOfWorkAsync(() => availability.ReadAsync(offering));
 			result.CanCreateInquiry.ShouldBeTrue();
-			result.WaitlistAllowed.ShouldBeTrue();
 			await WithUnitOfWorkAsync(() => availability.EnsureAvailableAsync(offering));
 		});
 

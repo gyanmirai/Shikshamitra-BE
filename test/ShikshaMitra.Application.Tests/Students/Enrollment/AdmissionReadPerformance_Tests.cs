@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.EntityFrameworkCore;
-using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
@@ -139,55 +138,6 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 
 	[Fact]
-	public Task Class_capacity_aggregates_distinct_occupancy_and_projects_allocated_rooms() =>
-		RunCertificationScenarioAsync(async () =>
-		{
-			var workflow = await CreateAndPublishCurrentWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id, registrationFormId:
-				AdmissionFormStageAccessService.ReadFormDefinitionId(workflow.Stages.Single(stage => stage.IsEntryStage).ConfigurationJson));
-			var room = await CreateCapacityRoomAsync(10);
-			await GetRequiredService<IAdmissionClassCapacityAppService>().UpdateForOfferingAsync(offering.Id, new() { RoomIds = [room.Id] });
-			var student = await CreateExistingStudentAsync(offering, "Capacity", "Reader");
-			var linked = await CreateApplicantAsync("AlreadyEnrolled");
-			var pending = await CreateApplicantAsync("PendingAccepted");
-			await WithUnitOfWorkAsync(async () =>
-			{
-				var cycle = await _cycleRepository.GetAsync(offering.AdmissionCycleId);
-				await _studentEnrollmentRepository.InsertAsync(StudentEnrollment.Create(Guid.NewGuid(), TestTenantId,
-					student.Id, cycle.AcademicYearId, offering.StandardId, null), true);
-				var stored = await _applicantRepository.GetAsync(linked.Id);
-				stored.LinkStudent(student.Id);
-				await _applicantRepository.UpdateAsync(stored, true);
-				foreach (var applicantId in new[] { linked.Id, pending.Id })
-				{
-					var application = new AdmissionApplication(Guid.NewGuid(), TestTenantId, $"CAP-{Guid.NewGuid():N}",
-						applicantId, null, cycle.Id, offering.Id, workflow.Id, offering.ApplicationFormDefinitionId!.Value);
-					application.Submit(); application.MarkInReview(TestUserId, null); application.Approve(TestUserId, null);
-					application.IssueOffer(DateTime.UtcNow.AddDays(1), TestUserId, null); application.AcceptOffer(TestUserId, null);
-					await _applicationRepository.InsertAsync(application, true);
-				}
-			});
-			await WithUnitOfWorkAsync(async () =>
-			{
-				var cycle = await _cycleRepository.GetAsync(offering.AdmissionCycleId);
-				var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
-				db.ChangeTracker.Clear();
-				using var capture = new AcademicQueryCounter(db.Database.GetDbConnection());
-				var result = await GetRequiredService<AdmissionClassCapacityReadService>().ReadAsync(offering, cycle);
-				result.OccupiedCount.ShouldBe(2, "An accepted applicant linked to the active student must not consume a second seat.");
-				result.Capacity.ShouldBe(10);
-				result.RemainingSeats.ShouldBe(8);
-				result.Rooms.Single().RoomId.ShouldBe(room.Id);
-				var occupancyReads = capture.ReadCommands.Where(sql => sql.Contains("StudentEnrollments", StringComparison.Ordinal) ||
-					sql.Contains("AdmissionApplications", StringComparison.Ordinal)).ToList();
-				occupancyReads.Count.ShouldBe(2);
-				occupancyReads.ShouldAllBe(sql => sql.Contains("COUNT(", StringComparison.OrdinalIgnoreCase),
-					"Occupancy must be aggregated by the database instead of transferring every student's identity.");
-				db.ChangeTracker.Entries<Room>().ShouldBeEmpty();
-			});
-		});
-
-	[Fact]
 	public Task Assessment_scope_names_do_not_hydrate_academic_hierarchy_aggregates() =>
 		RunCertificationScenarioAsync(async () =>
 		{
@@ -201,30 +151,6 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					item.StandardId == fixture.Offering.StandardId && !string.IsNullOrWhiteSpace(item.ClassName));
 				db.ChangeTracker.Entries<Standard>().ShouldBeEmpty(
 					"Assessment scope names must not recursively load Institute Setup hierarchy graphs.");
-			});
-		});
-
-	[Fact]
-	public Task Admission_room_choices_use_scalar_projections() =>
-		RunCertificationScenarioAsync(async () =>
-		{
-			var workflow = await CreateAndPublishCurrentWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id, registrationFormId:
-				AdmissionFormStageAccessService.ReadFormDefinitionId(workflow.Stages.Single(stage => stage.IsEntryStage).ConfigurationJson));
-			var room = await CreateCapacityRoomAsync(10);
-			var service = GetRequiredService<IAdmissionClassCapacityAppService>();
-			await service.UpdateForOfferingAsync(offering.Id, new() { RoomIds = [room.Id] });
-			await WithUnitOfWorkAsync(async () =>
-			{
-				var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
-				db.ChangeTracker.Clear();
-				var result = await service.GetRoomChoicesAsync(offering.Id, room.RoomName);
-				var choice = result.Single(item => item.RoomId == room.Id);
-				choice.RoomName.ShouldBe(room.RoomName);
-				choice.Capacity.ShouldBe(10);
-				choice.IsAllocatedToAnotherClass.ShouldBeFalse();
-				db.ChangeTracker.Entries<Room>().ShouldBeEmpty(
-					"Room choices must not materialize room graphs for name and capacity fields.");
 			});
 		});
 

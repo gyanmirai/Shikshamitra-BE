@@ -520,6 +520,15 @@ public partial class ExamSeatAllocationAppService(
         // Free the unique room/seat keys before applying replacements. Updating two occupied
         // seats directly (including a swap) creates a cycle in EF's unique-index ordering.
         var submittedRoomIds = input.Rooms.Select(room => room.RoomId).ToHashSet();
+        var saveContext = submittedRoomIds.Count == 0
+            ? null
+            : await CreateSeatSaveContextAsync(exam, plan, submittedRoomIds);
+        var roomPatches = input.Rooms.Select(room => new SaveSeatAllocationRequestDto
+        {
+            SeatingPlanId = plan.Id, RoomId = room.RoomId, Students = room.Students
+        }).ToList();
+        foreach (var roomPatch in roomPatches)
+            await ValidateSeatAllocationAsync(roomPatch, saveContext!);
         if (submittedRoomIds.Count > 0)
         {
             List<ExamSeatAllocation> existingInSubmittedRooms;
@@ -541,15 +550,8 @@ public partial class ExamSeatAllocationAppService(
             }
         }
 
-        foreach (var room in input.Rooms)
-        {
-            await SaveSeatAllocationAsync(examId, new SaveSeatAllocationRequestDto
-            {
-                SeatingPlanId = plan.Id,
-                RoomId = room.RoomId,
-                Students = room.Students
-            });
-        }
+        foreach (var roomPatch in roomPatches)
+            await SaveSeatAllocationCoreAsync(examId, plan, roomPatch);
 
         // Recompute status/counts after the room allocations have been applied.
         await SaveSeatingPlanDraftAsync(examId, draftInput);
@@ -749,18 +751,9 @@ public partial class ExamSeatAllocationAppService(
         return capacity - unavailable.Count(seat => seat >= 1 && seat <= capacity);
     }
 
-    private static bool SubjectSchedulesOverlap(ExamSubject left, ExamSubject right)
-    {
-        if (!left.ExamDate.HasValue || !right.ExamDate.HasValue)
-            return false;
-        if (left.ExamDate.Value.Date != right.ExamDate.Value.Date)
-            return false;
-        if (!left.StartTime.HasValue || !left.EndTime.HasValue || !right.StartTime.HasValue || !right.EndTime.HasValue)
-            return true;
-
-        return left.StartTime.Value.TimeOfDay < right.EndTime.Value.TimeOfDay &&
-               right.StartTime.Value.TimeOfDay < left.EndTime.Value.TimeOfDay;
-    }
+    private static bool SubjectSchedulesOverlap(ExamSubject left, ExamSubject right) =>
+        SubjectSchedulesOverlap(left.ExamDate, left.StartTime, left.EndTime,
+            right.ExamDate, right.StartTime, right.EndTime);
 
     private static bool PlanSchedulesOverlap(
         IReadOnlyCollection<Guid> currentExamSubjectIds,
@@ -2500,21 +2493,19 @@ public partial class ExamSeatAllocationAppService(
         await ThrowIfExaminationSeatingPublishedAsync(examId);
         var plan = await ResolvePlanAsync(exam, input.SeatingPlanId);
         await ReopenLegacyPlanDraftAsync(plan);
+        var context = await CreateSeatSaveContextAsync(exam, plan, [input.RoomId]);
+        await ValidateSeatAllocationAsync(input, context);
+        return await SaveSeatAllocationCoreAsync(examId, plan, input);
+    }
 
-        var room = await roomRepository.FindAsync(input.RoomId)
-            ?? throw new UserFriendlyException("Room not found.");
-        var planSubjectIds = (await GetPlanSubjectsAsync(plan.Id)).Select(s => s.ExamSubjectId).ToHashSet();
-        var allowedRoomIds = ParseGuidCsv(plan.RoomIdsCsv).ToHashSet();
-        allowedRoomIds.UnionWith(exam.ExamSubjects
-            .Where(s => planSubjectIds.Contains(s.Id))
-            .SelectMany(s => s.RoomAssignments)
-            .SelectMany(a => a.RoomIds));
-        if (!allowedRoomIds.Contains(room.Id))
+    private async Task ValidateSeatAllocationAsync(SaveSeatAllocationRequestDto input, SeatSaveContext context)
+    {
+        if (!context.Rooms.TryGetValue(input.RoomId, out var room))
+            throw new UserFriendlyException("Room not found.");
+        if (!context.AllowedRoomIds.Contains(room.Id))
             throw new UserFriendlyException("The selected room is not available for this seating plan.");
 
-        var eligibleStudents = await GetEligibleStudentsForPlanAsync(exam, plan);
-        var eligibleStudentIds = eligibleStudents.Select(s => s.Id).ToHashSet();
-        if (input.Students.Any(s => !eligibleStudentIds.Contains(s.StudentId)))
+        if (input.Students.Any(s => !context.EligibleStudentIds.Contains(s.StudentId)))
             throw new UserFriendlyException("One or more students are not eligible for this seating plan.");
 
         var disabledSeats = ParseIntCsv(room.DisabledSeatNumbersCsv);
@@ -2526,12 +2517,8 @@ public partial class ExamSeatAllocationAppService(
             reservedSeats.Contains(s.SeatNumber)))
             throw new UserFriendlyException("One or more selected seats are outside the room layout or unavailable.");
 
-        var overlappingPlanAllocations = await GetOtherOverlappingPlanAllocationsAsync(
-            examId,
-            plan.Id,
-            [input.RoomId]);
         var incomingSeatNumbers = input.Students.Select(student => student.SeatNumber).ToHashSet();
-        var conflictingAllocation = overlappingPlanAllocations.FirstOrDefault(allocation =>
+        var conflictingAllocation = context.OverlappingAllocations[input.RoomId].FirstOrDefault(allocation =>
             incomingSeatNumbers.Contains(allocation.SeatNumber));
         if (conflictingAllocation != null)
         {
@@ -2542,7 +2529,11 @@ public partial class ExamSeatAllocationAppService(
                 Code = "ROOM_SEAT_TIME_CONFLICT"
             };
         }
+    }
 
+    private async Task<SaveSeatAllocationResponseDto> SaveSeatAllocationCoreAsync(
+        Guid examId, ExamSeatingPlan plan, SaveSeatAllocationRequestDto input)
+    {
         var incomingStudentIds = input.Students.Select(s => s.StudentId).ToHashSet();
 
         // Load by studentId (not roomId) to respect the unique index on {ExamId, StudentId}.
@@ -3104,37 +3095,69 @@ public partial class ExamSeatAllocationAppService(
         Guid planId,
         IReadOnlyCollection<Guid> roomIds)
     {
-        var planSubjects = await seatingPlanSubjectRepository.GetListAsync(s => s.SeatingPlanId == planId);
-        var currentPlanSubjectIds = planSubjects.Select(s => s.ExamSubjectId).ToHashSet();
-        if (currentPlanSubjectIds.Count == 0 || roomIds.Count == 0)
-            return [];
-
         var exam = await GetScopedExamAsync(examId);
-        var otherExams = await examRepository.GetListAsync(
-            candidate => candidate.Id != examId,
-            includeDetails: true);
-        var examSubjectsById = otherExams
+        var planSubjects = await GetPlanSubjectsAsync(planId);
+        return await LoadOverlappingSeatAllocationsAsync(exam, planId, roomIds, planSubjects);
+    }
+
+    private sealed record SeatSaveContext(
+        Dictionary<Guid, Room> Rooms,
+        HashSet<Guid> AllowedRoomIds,
+        HashSet<Guid> EligibleStudentIds,
+        ILookup<Guid, ExamSeatAllocation> OverlappingAllocations);
+
+    private async Task<SeatSaveContext> CreateSeatSaveContextAsync(
+        Exam exam, ExamSeatingPlan plan, IReadOnlyCollection<Guid> roomIds)
+    {
+        var planSubjects = await GetPlanSubjectsAsync(plan.Id);
+        var planSubjectIds = planSubjects.Select(subject => subject.ExamSubjectId).ToHashSet();
+        var allowedRoomIds = ParseGuidCsv(plan.RoomIdsCsv).ToHashSet();
+        allowedRoomIds.UnionWith(exam.ExamSubjects.Where(subject => planSubjectIds.Contains(subject.Id))
+            .SelectMany(subject => subject.RoomAssignments).SelectMany(assignment => assignment.RoomIds));
+        var rooms = await roomRepository.GetListAsync(room => Enumerable.Contains(roomIds, room.Id));
+        var eligibleStudents = await GetEligibleStudentsForPlanAsync(exam, plan);
+        var conflicts = await LoadOverlappingSeatAllocationsAsync(exam, plan.Id, roomIds, planSubjects);
+        return new(rooms.ToDictionary(room => room.Id), allowedRoomIds,
+            eligibleStudents.Select(student => student.Id).ToHashSet(), conflicts.ToLookup(allocation => allocation.RoomId));
+    }
+
+    private async Task<List<ExamSeatAllocation>> LoadOverlappingSeatAllocationsAsync(
+        Exam exam, Guid planId, IReadOnlyCollection<Guid> roomIds,
+        IReadOnlyCollection<ExamSeatingPlanSubject> planSubjects)
+    {
+        if (planSubjects.Count == 0 || roomIds.Count == 0) return [];
+        var subjectIds = planSubjects.Select(subject => subject.ExamSubjectId).ToHashSet();
+        var currentSubjects = exam.ExamSubjects.Where(subject => subjectIds.Contains(subject.Id) && subject.ExamDate.HasValue).ToList();
+        var dates = currentSubjects.Select(subject => subject.ExamDate!.Value.Date).Distinct().ToArray();
+        if (dates.Length == 0) return [];
+
+        // Query through parent exams to retain their tenant and soft-delete boundaries.
+        var candidates = await AsyncExecuter.ToListAsync((await examRepository.GetQueryableAsync())
             .SelectMany(candidate => candidate.ExamSubjects)
-            .Concat(exam.ExamSubjects)
-            .GroupBy(subject => subject.Id)
-            .ToDictionary(group => group.Key, group => group.First());
-
-        var otherPlanSubjects = await seatingPlanSubjectRepository.GetListAsync(subject =>
-            subject.SeatingPlanId != planId);
-        var overlappingPlanIds = otherPlanSubjects
-            .GroupBy(subject => subject.SeatingPlanId)
-            .Where(group => PlanSchedulesOverlap(
-                currentPlanSubjectIds,
-                group.Select(subject => subject.ExamSubjectId).ToList(),
-                examSubjectsById))
-            .Select(group => group.Key)
-            .ToHashSet();
-
+            .Where(subject => subject.ExamDate.HasValue && Enumerable.Contains(dates, subject.ExamDate.Value.Date))
+            .Select(subject => new { subject.Id, subject.ExamDate, subject.StartTime, subject.EndTime }));
+        var overlappingSubjectIds = candidates.Where(other => currentSubjects.Any(current =>
+                SubjectSchedulesOverlap(current.ExamDate, current.StartTime, current.EndTime,
+                    other.ExamDate, other.StartTime, other.EndTime)))
+            .Select(subject => subject.Id).ToArray();
+        if (overlappingSubjectIds.Length == 0) return [];
+        var overlappingPlanIds = await AsyncExecuter.ToListAsync((await seatingPlanSubjectRepository.GetQueryableAsync())
+            .Where(subject => subject.SeatingPlanId != planId && Enumerable.Contains(overlappingSubjectIds, subject.ExamSubjectId))
+            .Select(subject => subject.SeatingPlanId).Distinct());
         if (overlappingPlanIds.Count == 0)
             return [];
 
         return await seatAllocationRepository.GetListAsync(allocation =>
             roomIds.Contains(allocation.RoomId) &&
             overlappingPlanIds.Contains(allocation.SeatingPlanId));
+    }
+
+    private static bool SubjectSchedulesOverlap(
+        DateTime? leftDate, DateTime? leftStart, DateTime? leftEnd,
+        DateTime? rightDate, DateTime? rightStart, DateTime? rightEnd)
+    {
+        if (!leftDate.HasValue || !rightDate.HasValue || leftDate.Value.Date != rightDate.Value.Date) return false;
+        if (!leftStart.HasValue || !leftEnd.HasValue || !rightStart.HasValue || !rightEnd.HasValue) return true;
+        return leftStart.Value.TimeOfDay < rightEnd.Value.TimeOfDay && rightStart.Value.TimeOfDay < leftEnd.Value.TimeOfDay;
     }
 }

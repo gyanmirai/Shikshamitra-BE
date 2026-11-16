@@ -39,6 +39,14 @@ public class HomeworkFeedbackController : AbpControllerBase
 		return await _feedbackAppService.GetSubmissionsAsync(academicMediumId, filter);
 	}
 
+	[HttpGet("{homeworkId}/submissions/{studentId}")]
+	public Task<HomeworkSubmissionDto> GetSubmission(Guid homeworkId, Guid studentId,
+		[FromQuery] Guid academicMediumId, [FromQuery] GetHomeworkSubmissionsFilterDto filter)
+	{
+		filter.HomeworkId = homeworkId;
+		return _feedbackAppService.GetSubmissionAsync(academicMediumId, studentId, filter);
+	}
+
 	/// <summary>
 	/// PATCH: api/homework/{homeworkId}/submissions/{studentId}/feedback?academicMediumId=xxx
 	/// Gives or updates feedback for a student's homework submission

@@ -194,10 +194,22 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
             return suggestions;
         }
 
-        var rooms = await _roomRepository.GetListAsync();
-        var buildings = await _buildingRepository.GetListAsync();
-        var floors = await _floorRepository.GetListAsync();
-        var roomTypes = await _roomTypeRepository.GetListAsync();
+        var roomIds = suggestions.Select(suggestion => suggestion.RoomId).Distinct().ToArray();
+        var buildingIds = suggestions.Select(suggestion => suggestion.BuildingId).Distinct().ToArray();
+        var floorIds = suggestions.Select(suggestion => suggestion.FloorId).Distinct().ToArray();
+        var rooms = await AsyncExecuter.ToListAsync((await _roomRepository.GetQueryableAsync())
+            .Where(room => Enumerable.Contains(roomIds, room.Id))
+            .Select(room => new { room.Id, room.RoomTypeId }));
+        var roomTypeIds = rooms.Select(room => room.RoomTypeId).Distinct().ToArray();
+        var buildings = await AsyncExecuter.ToListAsync((await _buildingRepository.GetQueryableAsync())
+            .Where(building => Enumerable.Contains(buildingIds, building.Id))
+            .Select(building => new { building.Id, building.BuildingName }));
+        var floors = await AsyncExecuter.ToListAsync((await _floorRepository.GetQueryableAsync())
+            .Where(floor => Enumerable.Contains(floorIds, floor.Id))
+            .Select(floor => new { floor.Id, floor.FloorName }));
+        var roomTypes = await AsyncExecuter.ToListAsync((await _roomTypeRepository.GetQueryableAsync())
+            .Where(roomType => Enumerable.Contains(roomTypeIds, roomType.Id))
+            .Select(roomType => new { roomType.Id, roomType.RoomTypeName }));
 
         var roomLookup = rooms.ToDictionary(room => room.Id);
         var buildingLookup = buildings.ToDictionary(building => building.Id, building => building.BuildingName);
@@ -667,7 +679,8 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
 
     private async Task<HashSet<Guid>> GetVisibleReservationUserIdsAsync(Guid currentUserId)
     {
-        var employees = await _employeeRepository.GetListAsync();
+        var employees = await AsyncExecuter.ToListAsync((await _employeeRepository.GetQueryableAsync())
+            .Select(employee => new { employee.Id, employee.UserId, employee.ReportingManagerId }));
         var currentEmployee = employees.FirstOrDefault(x => x.UserId == currentUserId);
         var visibleUserIds = new HashSet<Guid> { currentUserId };
 
@@ -677,6 +690,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
         }
 
         var visited = new HashSet<Guid>();
+        var directReports = employees.ToLookup(employee => employee.ReportingManagerId);
         var queue = new Queue<Guid>();
         queue.Enqueue(currentEmployee.Id);
 
@@ -688,7 +702,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
                 continue;
             }
 
-            foreach (var employee in employees.Where(x => x.ReportingManagerId == managerId))
+            foreach (var employee in directReports[managerId])
             {
                 if (employee.UserId.HasValue)
                 {

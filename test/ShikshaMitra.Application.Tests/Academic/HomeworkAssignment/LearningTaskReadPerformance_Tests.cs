@@ -10,6 +10,7 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EntityFrameworkCore;
 using Xunit;
@@ -69,6 +70,9 @@ public class LearningTaskReadPerformance_Tests : SubjectTeacherReassignmentTestB
 					? new StudentSubmissionEntity(Guid.NewGuid(), taskId, reviewedStudent, DivisionId, DateTime.UtcNow.Date, TenantId, true)
 					: new StudentSubmissionEntity(Guid.NewGuid(), taskId, reviewedStudent, DivisionId, DateTime.UtcNow.Date, TenantId);
 				submission.Status = SubmissionStatus.Reviewed;
+				submission.SaveMobileResponse(new string('x', 12000), null, "selected.pdf", "Selected.pdf", false,
+					DateTimeOffset.UtcNow, html: new string('h', 24000));
+				submission.Status = SubmissionStatus.Reviewed;
 				submission.Marks = 8;
 				submission.TotalMarks = 10;
 				await GetRequiredService<IRepository<StudentSubmissionEntity, Guid>>().InsertAsync(submission, autoSave: true);
@@ -91,6 +95,42 @@ public class LearningTaskReadPerformance_Tests : SubjectTeacherReassignmentTestB
 				studentReads.Select(read => read.Sql[..read.Sql.IndexOf("FROM", StringComparison.OrdinalIgnoreCase)])
 					.ShouldAllBe(select => !select.Contains("\"BankDetailId\"", StringComparison.Ordinal));
 				db.ChangeTracker.Entries<Student>().ShouldBeEmpty("Rosters need identity scalars, not student aggregate graphs.");
+
+				db.ChangeTracker.Clear();
+				using var narrow = new AcademicReportPerformance_Tests.ReportQueryCapture(db.Database.GetDbConnection());
+				var assignmentResponse = assignment ? await GetRequiredService<IAssignmentFeedbackAppService>().GetSubmissionsAsync(AcademicMediumId,
+					new() { AssignmentId = taskId, ClassId = StandardId, DivisionId = DivisionId, SubjectId = SubjectId, Lightweight = true }) : null;
+				var homeworkResponse = !assignment ? await GetRequiredService<IHomeworkFeedbackAppService>().GetSubmissionsAsync(AcademicMediumId,
+					new() { HomeworkId = taskId, ClassId = StandardId, DivisionId = DivisionId, SubjectId = SubjectId, Lightweight = true }) : null;
+				var lightweight = assignmentResponse?.Data ?? homeworkResponse!.Data;
+				var summary = assignmentResponse?.Summary ?? homeworkResponse!.Summary;
+				summary.TotalStudents.ShouldBe(3);
+				summary.NotSubmitted.ShouldBe(2);
+				summary.Reviewed.ShouldBe(1);
+				summary.AverageMarks.ShouldBe(8);
+				lightweight.Select(row => row.StudentId).ShouldBe(rows.Select(row => row.StudentId));
+				lightweight.ShouldAllBe(row => row.SubmittedContent == null && row.SubmittedDocumentUrl == null &&
+					row.OriginalFileName == null && row.SubmissionAttachments.Count == 0);
+				narrow.Commands.ShouldAllBe(sql => !sql.Contains("\"SubmittedContent\"", StringComparison.Ordinal) &&
+					!sql.Contains("\"SubmittedContentHtml\"", StringComparison.Ordinal) &&
+					!sql.Contains("\"MobileAttachmentsJson\"", StringComparison.Ordinal));
+				db.ChangeTracker.Entries<StudentSubmissionEntity>().ShouldBeEmpty();
+				async Task<HomeworkSubmissionDto> Detail(Guid id, Guid? subjectId = null) => assignment
+					? await GetRequiredService<IAssignmentFeedbackAppService>().GetSubmissionAsync(AcademicMediumId, id,
+						new() { AssignmentId = taskId, ClassId = StandardId, DivisionId = DivisionId, SubjectId = subjectId ?? SubjectId })
+					: await GetRequiredService<IHomeworkFeedbackAppService>().GetSubmissionAsync(AcademicMediumId, id,
+						new() { HomeworkId = taskId, ClassId = StandardId, DivisionId = DivisionId, SubjectId = subjectId ?? SubjectId });
+				using var selected = new AcademicReportPerformance_Tests.ReportQueryCapture(db.Database.GetDbConnection());
+				var detail = await Detail(reviewedStudent);
+				detail.SubmittedContent!.Length.ShouldBe(12000);
+				detail.SubmissionAttachments.Single().Name.ShouldBe("Selected.pdf");
+				var submissionTable = db.Model.FindEntityType(typeof(StudentSubmissionEntity))!.GetTableName()!;
+				// Each selected-student reader includes one final unsuccessful Read.
+				selected.Reads.Where(read => read.Sql.Contains(submissionTable, StringComparison.Ordinal))
+					.ShouldAllBe(read => read.Rows <= 2);
+				(await Detail(lightweight.First().StudentId)).Status.ShouldBe((int)SubmissionStatus.NotSubmitted);
+				(await Should.ThrowAsync<BusinessException>(() => Detail(Guid.NewGuid()))).Code.ShouldBe(HomeworkAssignmentErrorCodes.AccessDenied);
+				(await Should.ThrowAsync<BusinessException>(() => Detail(reviewedStudent, Guid.NewGuid()))).Code.ShouldBe(HomeworkAssignmentErrorCodes.AccessDenied);
 			}
 		});
 	}

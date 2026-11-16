@@ -633,9 +633,9 @@ public partial class HomeworkAppService(
         }
 
         var scopeFilteredQuery = userScopeAccessService.ApplyScope(query, scope);
-        var accessibleHomeworkIds = await GetCurrentTeacherSubjectOwnedHomeworkIdsAsync(query);
-        accessibleHomeworkIds.UnionWith(await asyncExecuter.ToListAsync(
-            scopeFilteredQuery.Select(homework => homework.Id)));
+        var teacherOwnedQuery = await GetCurrentTeacherSubjectOwnedHomeworkQueryAsync(query);
+        var accessibleHomeworkIds = scopeFilteredQuery.Select(homework => homework.Id)
+            .Union(teacherOwnedQuery.Select(homework => homework.Id));
         if (scope.DivisionIds.Count == 0)
         {
             // Explicit subject ownership remains valid without a separate generic
@@ -649,8 +649,7 @@ public partial class HomeworkAppService(
         var divisionScopedQuery = query.Where(homework =>
             homework.DivisionSchedules.Any() &&
             homework.DivisionSchedules.All(schedule => scope.DivisionIds.Contains(schedule.DivisionId)));
-        accessibleHomeworkIds.UnionWith(await asyncExecuter.ToListAsync(
-            divisionScopedQuery.Select(homework => homework.Id)));
+        accessibleHomeworkIds = accessibleHomeworkIds.Union(divisionScopedQuery.Select(homework => homework.Id));
 
         return query.Where(homework => accessibleHomeworkIds.Contains(homework.Id));
     }
@@ -766,6 +765,11 @@ public partial class HomeworkAppService(
         {
             return teacherIds;
         }
+        if (!await asyncExecuter.AnyAsync((await userRepository.GetQueryableAsync())
+                .Where(user => user.Id == CurrentUser.Id.Value)))
+        {
+            return teacherIds;
+        }
 
         teacherIds.Add(CurrentUser.Id.Value);
         var employee = await employeeRepository.FirstOrDefaultAsync(
@@ -789,39 +793,26 @@ public partial class HomeworkAppService(
             CurrentUser.IsInRole("administrator");
     }
 
-    private async Task<HashSet<Guid>> GetCurrentTeacherSubjectOwnedHomeworkIdsAsync(
+    private async Task<IQueryable<HomeworkAssignmentEntity>> GetCurrentTeacherSubjectOwnedHomeworkQueryAsync(
         IQueryable<HomeworkAssignmentEntity> unscopedQuery)
     {
         var teacherIds = await GetCurrentAccessibleTeacherIdsAsync();
         if (teacherIds.Count == 0)
         {
-            return [];
+            return unscopedQuery.Where(homework => false);
         }
 
-        var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync(
-            assignment => assignment.Teachers);
-        var assignedSubjects = await asyncExecuter.ToListAsync(
-            assignedSubjectQuery.Where(assignment =>
-                assignment.Teachers.Any(teacher => teacherIds.Contains(teacher.TeacherId))));
-        var assignedSubjectKeys = assignedSubjects
-            .Select(assignment => (assignment.StandardId, assignment.SubjectId))
-            .ToHashSet();
-
-        var allocations = await teacherSubjectAllocationRepository.GetListAsync(allocation =>
-            allocation.Teachers.Any(teacher => teacherIds.Contains(teacher.TeacherId)));
-        var allocatedSubjectKeys = allocations
-            .Select(allocation => (allocation.StandardId, allocation.DivisionId, allocation.SubjectId))
-            .ToHashSet();
-
-        var candidates = await asyncExecuter.ToListAsync(unscopedQuery);
-        return candidates
-            .Where(homework =>
-                assignedSubjectKeys.Contains((homework.StandardId, homework.SubjectId)) ||
-                (homework.DivisionSchedules.Count > 0 &&
-                 homework.DivisionSchedules.All(schedule =>
-                     allocatedSubjectKeys.Contains((homework.StandardId, schedule.DivisionId, homework.SubjectId)))))
-            .Select(homework => homework.Id)
-            .ToHashSet();
+        var ids = teacherIds.ToArray();
+        var assignedSubjects = await assignedSubjectRepository.GetQueryableAsync();
+        var allocations = await teacherSubjectAllocationRepository.GetQueryableAsync();
+        return unscopedQuery.Where(homework =>
+            assignedSubjects.Any(assignment => assignment.StandardId == homework.StandardId &&
+                assignment.SubjectId == homework.SubjectId &&
+                assignment.Teachers.Any(teacher => Enumerable.Contains(ids, teacher.TeacherId))) ||
+            (homework.DivisionSchedules.Any() && homework.DivisionSchedules.All(schedule =>
+                allocations.Any(allocation => allocation.StandardId == homework.StandardId &&
+                    allocation.SubjectId == homework.SubjectId && allocation.DivisionId == schedule.DivisionId &&
+                    allocation.Teachers.Any(teacher => Enumerable.Contains(ids, teacher.TeacherId))))));
     }
 
     private async Task<List<LearningTaskDashboardItemDto>> BuildHomeworkDashboardRowsAsync(List<HomeworkAssignmentEntity> homeworks)

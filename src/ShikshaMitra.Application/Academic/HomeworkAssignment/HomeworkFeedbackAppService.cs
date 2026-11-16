@@ -30,6 +30,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	private readonly IRepository<Subject, Guid> _subjectRepository;
 	private readonly IAsyncQueryableExecuter _asyncExecuter;
 	private readonly StudentSubmissionManager _submissionManager;
+	private readonly HomeworkAppService _homeworkAppService;
 
 	public HomeworkFeedbackAppService(
 		IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
@@ -39,7 +40,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		IRepository<Standard, Guid> standardRepository,
 		IRepository<Subject, Guid> subjectRepository,
 		IAsyncQueryableExecuter asyncExecuter,
-		StudentSubmissionManager submissionManager
+		StudentSubmissionManager submissionManager,
+		HomeworkAppService homeworkAppService
 	)
 	{
 		_homeworkRepository = homeworkRepository;
@@ -50,6 +52,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		_subjectRepository = subjectRepository;
 		_asyncExecuter = asyncExecuter;
 		_submissionManager = submissionManager;
+		_homeworkAppService = homeworkAppService;
 	}
 
 	/// <summary>
@@ -60,6 +63,18 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		Guid academicMediumId,
 		GetHomeworkSubmissionsFilterDto filter
 	)
+		=> await ReadSubmissionsAsync(academicMediumId, filter, null);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View)]
+	public async Task<HomeworkSubmissionDto> GetSubmissionAsync(Guid academicMediumId, Guid studentId,
+		GetHomeworkSubmissionsFilterDto filter)
+	{
+		var result = await ReadSubmissionsAsync(academicMediumId, filter, studentId);
+		return result.Data.SingleOrDefault() ?? throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
+	}
+
+	private async Task<HomeworkSubmissionsResponseDto> ReadSubmissionsAsync(Guid academicMediumId,
+		GetHomeworkSubmissionsFilterDto filter, Guid? studentId)
 	{
 		// 1. Validate homework exists and belongs to medium
 		var homeworkQuery = await _homeworkRepository.WithDetailsAsync(
@@ -75,6 +90,14 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		{
 			throw new BusinessException("ShikshaMitra.Homework:NotFound")
 				.WithData("HomeworkId", filter.HomeworkId);
+		}
+
+		if (filter.Lightweight || studentId.HasValue)
+		{
+			var scoped = await _homeworkAppService.ApplyCurrentUserScopeAsync(await _homeworkRepository.GetQueryableAsync());
+			if (!CurrentUser.Id.HasValue || homework.StandardId != filter.ClassId || homework.SubjectId != filter.SubjectId ||
+				!await _asyncExecuter.AnyAsync(scoped.Where(row => row.Id == homework.Id)))
+				throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
 		}
 
 		// 2. Validate homework is assigned to the requested division
@@ -98,7 +121,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		var studentsQuery = await _studentRepository.GetQueryableAsync();
 		var students = await _asyncExecuter.ToListAsync(
 			studentsQuery.Where(s =>
-				s.DivisionId == filter.DivisionId
+				(!studentId.HasValue || s.Id == studentId.Value)
+				&& s.DivisionId == filter.DivisionId
 				&& s.StandardId == filter.ClassId
 				&& s.AcademicMediumId == academicMediumId
 				&& s.Status == StudentLifeCycleStatusEnum.Enrolled
@@ -110,10 +134,15 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		);
 
 		// 4. Get existing submissions for this homework and division
-		var submissions = await _submissionRepository.GetSubmissionsWithDetailsAsync(
-			filter.HomeworkId,
-			filter.DivisionId
-		);
+		if (studentId.HasValue && students.Count == 0)
+			throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
+		var submissionsQuery = (await _submissionRepository.GetQueryableAsync()).Where(row =>
+			row.HomeworkAssignmentId == filter.HomeworkId && row.DivisionId == filter.DivisionId &&
+			(!studentId.HasValue || row.StudentId == studentId.Value));
+		if (studentId.HasValue)
+			submissionsQuery = await EvaluationSubmissionRead.KeepLatestAsync(submissionsQuery, _asyncExecuter);
+		var submissions = await _asyncExecuter.ToListAsync(EvaluationSubmissionRead.Project(submissionsQuery,
+			filter.Lightweight && !studentId.HasValue));
 
 		// Use the latest row if legacy data already contains duplicate submissions.
 		var submissionDict = submissions
@@ -128,12 +157,12 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		var homeworkTypeName = homework.HomeworkType?.Name
 			?? homework.HomeworkAssignmentType?.Name
 			?? "Homework";
-		var taskRubric = (await _rubricRepository.GetListAsync(r =>
+		var taskRubricTotalMarks = await _asyncExecuter.FirstOrDefaultAsync((await _rubricRepository.GetQueryableAsync()).Where(r =>
 				r.HomeworkId == homework.Id &&
 				!r.IsTemplate &&
-				r.Status != RubricStatus.Archived))
+				r.Status != RubricStatus.Archived)
 			.OrderByDescending(r => r.CreationTime)
-			.FirstOrDefault();
+			.Select(r => (decimal?)r.TotalMarks));
 
 		// 6. Build response - Left join students with submissions
 		var submissionDtos = new List<HomeworkSubmissionDto>();
@@ -160,14 +189,14 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 					?? homework.DivisionSchedules.FirstOrDefault(ds => ds.DivisionId == filter.DivisionId)?.DueDate.ToString("dd-MM-yyyy")
 					?? string.Empty,
 				Marks = submission?.Marks,
-				TotalMarks = submission?.TotalMarks ?? taskRubric?.TotalMarks,
+				TotalMarks = submission?.TotalMarks ?? taskRubricTotalMarks,
 				Feedback = submission?.Feedback,
 				Remarks = submission?.Remarks,
 				Status = (int) (submission?.Status ?? SubmissionStatus.NotSubmitted),
 				SubmissionStatusLabel = GetSubmissionStatusLabel(submission?.Status ?? SubmissionStatus.NotSubmitted),
 				EvaluationStatus = GetEvaluationStatus(submission?.Status, submission?.Feedback),
 				FeedbackStatus = string.IsNullOrWhiteSpace(submission?.Feedback) ? "Feedback Pending" : "Feedback Added",
-				Percentage = CalculatePercentage(submission?.Marks, submission?.TotalMarks ?? taskRubric?.TotalMarks),
+				Percentage = CalculatePercentage(submission?.Marks, submission?.TotalMarks ?? taskRubricTotalMarks),
 				SubmittedContent = submission?.SubmittedContent,
 				SubmittedDocumentUrl = submission?.SubmittedDocumentUrl,
 				OriginalFileName = submission?.OriginalFileName,

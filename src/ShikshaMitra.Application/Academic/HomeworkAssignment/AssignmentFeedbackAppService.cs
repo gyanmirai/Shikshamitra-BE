@@ -66,6 +66,18 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		Guid academicMediumId,
 		GetAssignmentSubmissionsFilterDto filter
 	)
+		=> await ReadSubmissionsAsync(academicMediumId, filter, null);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View)]
+	public async Task<HomeworkSubmissionDto> GetSubmissionAsync(Guid academicMediumId, Guid studentId,
+		GetAssignmentSubmissionsFilterDto filter)
+	{
+		var result = await ReadSubmissionsAsync(academicMediumId, filter, studentId);
+		return result.Data.SingleOrDefault() ?? throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
+	}
+
+	private async Task<AssignmentSubmissionsResponseDto> ReadSubmissionsAsync(Guid academicMediumId,
+		GetAssignmentSubmissionsFilterDto filter, Guid? studentId)
 	{
 		// 1. Get assignment with division schedules (eager loading)
 		var queryable = await _assignmentRepository.WithDetailsAsync(a => a.DivisionSchedules, a => a.AssignmentType);
@@ -81,6 +93,9 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 
 			EnsureEvaluationRequired(assignment);
 			await EnsureCurrentUserCanAccessDivisionAsync(assignment, filter.DivisionId, nameof(GetSubmissionsAsync));
+			if ((filter.Lightweight || studentId.HasValue) &&
+				(assignment.StandardId != filter.ClassId || assignment.SubjectId != filter.SubjectId))
+				throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
 			// 2. Validate requested division is in assignment.DivisionSchedules
 
 		var divisionSchedule = assignment.DivisionSchedules
@@ -96,7 +111,8 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		var studentsQuery = await _studentRepository.GetQueryableAsync();
 		var students = await _asyncExecuter.ToListAsync(
 			studentsQuery.Where(s =>
-				s.DivisionId == filter.DivisionId
+				(!studentId.HasValue || s.Id == studentId.Value)
+				&& s.DivisionId == filter.DivisionId
 				&& s.StandardId == filter.ClassId
 				&& s.AcademicMediumId == academicMediumId
 				&& s.Status == StudentLifeCycleStatusEnum.Enrolled
@@ -108,10 +124,15 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		);
 
 		// 4. Get existing submissions for this assignment and division
-		var submissions = await _submissionRepository.GetSubmissionsByAssignmentAndDivisionAsync(
-			filter.AssignmentId,
-			filter.DivisionId
-		);
+		if (studentId.HasValue && students.Count == 0)
+			throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
+		var submissionsQuery = (await _submissionRepository.GetQueryableAsync()).Where(row =>
+			row.AssignmentId == filter.AssignmentId && row.DivisionId == filter.DivisionId &&
+			(!studentId.HasValue || row.StudentId == studentId.Value));
+		if (studentId.HasValue)
+			submissionsQuery = await EvaluationSubmissionRead.KeepLatestAsync(submissionsQuery, _asyncExecuter);
+		var submissions = await _asyncExecuter.ToListAsync(EvaluationSubmissionRead.Project(submissionsQuery,
+			filter.Lightweight && !studentId.HasValue));
 
 		// Use the latest row if legacy data already contains duplicate submissions.
 		var submissionDict = submissions

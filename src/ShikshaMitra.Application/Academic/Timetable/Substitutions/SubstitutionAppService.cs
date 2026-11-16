@@ -660,18 +660,39 @@ public partial class SubstitutionAppService(
 
         var standard = await standardRepository.FindAsync(input.StandardId);
         var division = await divisionRepository.FindAsync(input.DivisionId);
-        var subjects = await subjectRepository.GetListAsync();
-        var rooms = await roomRepository.GetListAsync();
-        var employees = await employeeRepository.GetListAsync();
-
-        return timetable.Slots
+        var slots = timetable.Slots
             .Where(slot => slot.Day == timetableDay.Value && slot.SlotType == SlotType.Period)
+            .ToList();
+        var slotSubjects = slots.SelectMany(slot => slot.Subjects).ToList();
+        var subjectIds = slotSubjects.Select(subject => subject.SubjectId).Distinct().ToArray();
+        var roomIds = slotSubjects.Where(subject => subject.RoomId.HasValue)
+            .Select(subject => subject.RoomId!.Value).Distinct().ToArray();
+        var teacherIds = slotSubjects.Where(subject => subject.TeacherId.HasValue)
+            .Select(subject => subject.TeacherId!.Value).Distinct().ToArray();
+        var subjects = (await AsyncExecuter.ToListAsync((await subjectRepository.GetQueryableAsync())
+            .Where(subject => Enumerable.Contains(subjectIds, subject.Id))
+            .Select(subject => new { subject.Id, subject.Name }))).ToDictionary(subject => subject.Id);
+        var rooms = (await AsyncExecuter.ToListAsync((await roomRepository.GetQueryableAsync())
+            .Where(room => Enumerable.Contains(roomIds, room.Id))
+            .Select(room => new { room.Id, room.RoomName }))).ToDictionary(room => room.Id);
+        var employees = await AsyncExecuter.ToListAsync((await employeeRepository.GetQueryableAsync())
+            .Where(employee => Enumerable.Contains(teacherIds, employee.Id) ||
+                (employee.UserId.HasValue && Enumerable.Contains(teacherIds, employee.UserId.Value)))
+            .Select(employee => new { employee.Id, employee.UserId, employee.FirstName, employee.LastName }));
+        var employeesById = employees.ToDictionary(employee => employee.Id);
+        var employeesByUserId = employees.Where(employee => employee.UserId.HasValue)
+            .GroupBy(employee => employee.UserId!.Value).ToDictionary(group => group.Key, group => group.First());
+
+        return slots
             .SelectMany(slot => slot.Subjects.Select(slotSubject =>
             {
-                var subject = subjects.FirstOrDefault(x => x.Id == slotSubject.SubjectId);
-                var teacher = ResolveEmployeeByTeacherReference(employees, slotSubject.TeacherId, null);
+                var subject = subjects.GetValueOrDefault(slotSubject.SubjectId);
+                var teacher = slotSubject.TeacherId.HasValue
+                    ? employeesById.GetValueOrDefault(slotSubject.TeacherId.Value) ??
+                      employeesByUserId.GetValueOrDefault(slotSubject.TeacherId.Value)
+                    : null;
                 var room = slotSubject.RoomId.HasValue
-                    ? rooms.FirstOrDefault(x => x.Id == slotSubject.RoomId.Value)
+                    ? rooms.GetValueOrDefault(slotSubject.RoomId.Value)
                     : null;
 
                 return new SubstitutionLectureLookupDto
@@ -689,7 +710,8 @@ public partial class SubstitutionAppService(
                     SubjectId = slotSubject.SubjectId,
                     SubjectName = subject?.Name ?? string.Empty,
                     OriginalTeacherId = teacher?.Id ?? slotSubject.TeacherId,
-                    OriginalTeacherName = teacher?.EmployeeName ?? string.Empty,
+                    OriginalTeacherName = teacher == null ? string.Empty : string.Join(" ",
+                        new[] { teacher.FirstName, teacher.LastName }.Where(part => !string.IsNullOrWhiteSpace(part))),
                     OriginalRoomId = slotSubject.RoomId,
                     RoomName = room?.RoomName ?? string.Empty
                 };
@@ -801,16 +823,14 @@ public partial class SubstitutionAppService(
             return;
         }
 
-        var publishedTimetables = await timetableRepository.GetListAsync(x => x.Status == TimetableStatus.Published);
-        var roomConflict = publishedTimetables
-            .SelectMany(x => x.Slots)
-            .Where(slot =>
+        var timetables = await timetableRepository.GetQueryableAsync();
+        var roomConflict = await AsyncExecuter.AnyAsync(timetables.Where(timetable =>
+            timetable.Status == TimetableStatus.Published && timetable.Slots.Any(slot =>
                 (!currentTimetableSlotId.HasValue || slot.Id != currentTimetableSlotId.Value) &&
                 slot.Day == timetableDay.Value &&
                 slot.SlotType == SlotType.Period &&
-                HasOverlap(slot.StartTime, slot.EndTime, startTime, endTime))
-            .SelectMany(slot => slot.Subjects)
-            .Any(subject => subject.RoomId == assignedRoomId.Value);
+                slot.StartTime < endTime && slot.EndTime > startTime &&
+                slot.Subjects.Any(subject => subject.RoomId == assignedRoomId.Value))));
 
         if (roomConflict)
         {

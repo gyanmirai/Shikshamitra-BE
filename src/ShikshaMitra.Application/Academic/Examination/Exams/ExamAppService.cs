@@ -2846,8 +2846,9 @@ public partial class ExamAppService(
 		foreach (var mark in marks)
 		{
 			mark.Unpublish();
-			await examMarkRepository.UpdateAsync(mark, autoSave: true);
 		}
+		if (marks.Count > 0)
+			await examMarkRepository.UpdateManyAsync(marks, autoSave: false);
 
 		state.TransitionTo(ExamMarksWorkflowStatus.Draft);
 		state.SetUnlockReason(input.Reason.Trim());

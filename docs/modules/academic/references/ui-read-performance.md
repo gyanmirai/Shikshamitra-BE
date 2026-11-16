@@ -3,7 +3,7 @@ module: academic
 domain: read-contracts
 content_type: Reference
 status: active
-updated_on: 2026-11-03
+updated_on: 2026-11-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -28,6 +28,8 @@ Controllers delegate authorization and scoped reads to their application service
 | `GET /api/academic/curriculum/lesson-plans/workspace` | Existing lesson scope and paging plus `view`, `uiCriteria`, `searchTerm`, `searchColumns`, `filters`, `sorts`; returns `totalCount`, page `items`, associated `diaries` and `summary`. |
 | `GET /api/academic/rubrics/templates/paged` | Existing rubric filters plus one-based `page`, `pageSize` (1 to 100), JSON `filters`/`sorts`, optional `timeZoneId`; template summaries, total and status/usage counts. |
 | `GET /api/academic/rubrics/{id}/evaluations/submission/{submissionId}` | Required `studentId`; returns only the selected student's submission evaluation, or no content. |
+| `GET /api/homework/submissions`, `GET /api/assignments/submissions` | Existing medium/class/division/subject/task context; optional `Lightweight=true` projects the full scalar roster and global summary without submission answers or attachment payloads. The default retains the legacy full list. |
+| `GET /api/homework/{homeworkId}/submissions/{studentId}`, `GET /api/assignments/{assignmentId}/submissions/{studentId}` | Existing medium/class/division/subject context; returns only the selected roster student's latest submission, including answer text and attachments. Reuses task, context, scope and roster authorization; non-submitters remain represented. |
 | `POST /api/class-management/student-elective-assignments/selection-counts` | Body: `academicMediumId`, `classId`, `divisionIds`, `electiveGroupIds`; counts grouped by elective group, division and subject. |
 | `GET /api/class-management/student-elective-assignments` | Existing context/search plus `includeSelectableSubjects` (default true); pass false to omit per-student option arrays and use the shared `subjectOptions` response. Each record includes `isLocked`; response `isLocked` requires every student in the full context roster to have a locked selection, independently of search. |
 | `GET /api/academics/timetable/by-standard/{standardId}/division/{divisionId}` | Existing complete class timetable and subject summary. Subject, elective-group and room lookup reads select referenced IDs instead of complete tenant catalogues; action permission and resource scope remain unchanged. |
@@ -42,6 +44,17 @@ Controllers delegate authorization and scoped reads to their application service
 Grade filter options remain documented with their owning [Examination API](../../examination/api.md).
 The class-teacher, elective, lesson-plan, rubric and room DTO sources are under `src/ShikshaMitra.Application.Contracts/Academic/`.
 Student list validation caps `maxResultCount` at 100 in `src/ShikshaMitra.Application.Contracts/Academic/StudentAcademic360/StudentAcademic360ListInputValidator.cs`.
+
+## Active workflow query boundaries
+
+The active Homework list applies teacher/subject ownership and all-target division access in SQL before display filtering and page graph hydration. Missing identities fail closed under the [security standard](../../../common/security/permission-consistency.md#scope-caching-and-failures).
+Evaluation metadata intentionally remains proportional to the authorized division roster so existing whole-cohort client filtering, sorting, summaries and navigation stay complete; large answer and attachment columns are deferred to the selected read.
+
+Substitution lecture labels and Weekly Lecture detail labels load referenced records rather than unrelated catalogues. Substitution room validation checks published overlapping rows through their timetable parent without requiring tracked slot graphs. Cross-board/medium conflicts and tenant/soft-delete boundaries remain enforced.
+Room reservation visibility projects reporting links and traverses a manager lookup; room suggestion enrichment selects only returned references. Global suggestion ranking remains complete.
+
+The guided manual seating bulk save shares request-local eligibility and overlap reads across submitted rooms, while retaining transaction/version checks and temporary seat-key flushing for swaps. Every submitted room is validated before any seat-key or allocation changes. Overlap schedules are projected through tenant-filtered exam parents for the relevant dates, including sibling plans and incomplete time ranges under the existing overlap policy.
+Grade Entry unlock persists mark publication changes with the workflow transition in one flush. Manual exam-completion batching, legacy seating review pages, commented Resources/LMS/quiz/question pages and uninvoked diagnostic APIs are outside this change.
 
 ## Counts, history and compatibility
 
@@ -86,6 +99,9 @@ Paths are relative to the backend repository root.
 | Concern | Test source |
 |---|---|
 | Class-teacher combined workspace and elective grouped reads | `test/ShikshaMitra.Application.Tests/Academic/ClassManagement/ClassTeacherWorkspaceRead_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/ClassManagement/StudentElectiveReadPerformance_Tests.cs` |
+| Active substitution/weekly detail references, reporting visibility and suggestion enrichment | `test/ShikshaMitra.Application.Tests/Academic/Timetable/TimetableReferencedRead_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Timetable/RoomAvailability/RoomReferencedRead_Tests.cs` |
+| Teacher ownership and lightweight selected evaluations | `test/ShikshaMitra.Application.Tests/Academic/HomeworkAssignment/HomeworkOwnershipReadPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/HomeworkAssignment/LearningTaskReadPerformance_Tests.cs` |
+| Guided manual seating saves and Grade Entry unlock persistence | `test/ShikshaMitra.Application.Tests/Academic/Examination/SeatAllocation/ExamSeatAllocationSavePerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Examination/Exams/ExamMarksUnlockPerformance_Tests.cs` |
 | Subject lookup/bulk reads, allocation paging and chapter enrichment | `test/ShikshaMitra.Application.Tests/Academic/Curriculum/SubjectCreationReadPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Curriculum/SubjectAssignmentReadBatching_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Curriculum/SubjectAllocationPagingPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Curriculum/ChapterReadPerformance_Tests.cs` |
 | All lesson workspace views and global counts | `test/ShikshaMitra.Application.Tests/Academic/Curriculum/LessonPlanWorkspacePerformance_Tests.cs` |
 | Template paging and selected submission evaluation authorization | `test/ShikshaMitra.HttpApi.Tests/Academic/HomeworkAssignment/RubricReadPerformanceApi_Tests.cs` |

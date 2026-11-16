@@ -27,7 +27,7 @@ using Xunit;
 
 namespace ShikshaMitra.Academic.Timetable;
 
-public class TimetableClassReadPerformance_Tests : LessonPlanProgressTestBase
+public partial class TimetableClassReadPerformance_Tests : LessonPlanProgressTestBase
 {
 	[Theory]
 	[InlineData(false, "en-US", "08:00", "09:00")]

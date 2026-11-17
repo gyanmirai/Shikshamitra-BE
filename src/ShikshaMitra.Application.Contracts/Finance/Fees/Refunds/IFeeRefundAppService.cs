@@ -13,7 +13,7 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund;
 public interface IFeeRefundAppService : IApplicationService
 {
     /// <summary>Paginated list of refund requests, optionally filtered.</summary>
-    Task<PagedResultDto<FeeRefundRequestDto>> GetListAsync(GetFeeRefundsInput input);
+    Task<FeeRefundListResultDto> GetListAsync(GetFeeRefundsInput input);
 
     /// <summary>Single refund request with its lines.</summary>
     Task<FeeRefundRequestDto> GetAsync(Guid id);

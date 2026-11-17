@@ -43,6 +43,17 @@ public partial class FeeCollectionSummaryQueryService(
 	{
         var tableQuery = ShikshaMitra.Finance.Common.FinanceTableQuery.Parse(input.Filters, null,
             input.SortBy, input.SortOrder, TableColumns);
+		// The ordinary list is ordered by payer identity, so only its visible page needs balance work.
+		// Derived amount/status filters and sorts still calculate the complete scoped set first.
+		if (tableQuery.Filters.Count == 0 && !input.Status.HasValue && tableQuery.SortBy is null &&
+			string.IsNullOrWhiteSpace(input.Sorting))
+		{
+			var (payers, singleAccountStudents) = await BuildPayerRowsAsync(input, cancellationToken);
+			var pagePayers = ApplySorting(payers, null).ThenBy(row => row.StudentId)
+				.Skip(input.SkipCount).Take(input.MaxResultCount).ToList();
+			await PopulateBalancesAsync(input, pagePayers, singleAccountStudents, cancellationToken);
+			return new PagedResultDto<FeeCollectionSummaryItemDto>(payers.Count, MapToDto(pagePayers));
+		}
 		var allRows = await BuildRawRowsAsync(input, cancellationToken);
         // Keep the canonical balances/status mapping; apply header filters to those same values before counting or paging.
 		var rawFiltered = ApplyStatusFilter(allRows, input.Status);

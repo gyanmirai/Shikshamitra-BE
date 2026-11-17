@@ -5,6 +5,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
@@ -23,6 +25,13 @@ public class EfCoreFeePaymentReceiptRepository(
 ) : EfCoreRepository<ShikshaMitraDbContext, FeePaymentReceipt, Guid>(dbContextProvider),
     IFeePaymentReceiptRepository
 {
+    private static readonly IReadOnlyDictionary<string, LambdaExpression> ReceiptFilterFields =
+        new Dictionary<string, LambdaExpression>
+        {
+            ["receiptNumber"] = (Expression<Func<FeePaymentReceipt, string>>)(r => r.ReceiptNumber),
+            ["totalPaidAmount"] = (Expression<Func<FeePaymentReceipt, double>>)(r => r.TotalPaidAmount),
+            ["receiptDate"] = (Expression<Func<FeePaymentReceipt, DateOnly>>)(r => r.ReceiptDate)
+        };
     private static readonly JsonSerializerOptions PaymentDetailsJsonOptions =
         new(JsonSerializerDefaults.Web);
 
@@ -254,12 +263,13 @@ public class EfCoreFeePaymentReceiptRepository(
 
     public async Task<(int TotalCount, List<FeePaymentReceipt> Items)> GetPagedListAsync(
         FeeReceiptListFilter filter,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool includeTotalCount = true)
     {
         var dbContext = await GetDbContextAsync();
 
         // ── Build student sub-query for denormalized board/medium match ────────
-        var query = dbContext.Set<FeePaymentReceipt>()
+        var query = dbContext.Set<FeePaymentReceipt>().AsNoTracking()
             .Where(r => r.AcademicYearId == filter.AcademicYearId
                      && r.BoardId == filter.BoardId
                      && r.EducationMediumId == filter.EducationMediumId);
@@ -302,8 +312,11 @@ public class EfCoreFeePaymentReceiptRepository(
         // ── Free-text search ──────────────────────────────────────────────────
         query = ApplySearch(query, dbContext, filter.Search);
 
-        var totalCount = await query.CountAsync(cancellationToken);
-        if (totalCount == 0)
+        if (filter.TableQuery is not null)
+            query = filter.TableQuery.Apply(query, ReceiptFilterFields, ReceiptFilterFields.ContainsKey);
+
+        var totalCount = includeTotalCount ? await query.CountAsync(cancellationToken) : -1;
+        if (includeTotalCount && totalCount == 0)
             return (0, []);
 
         var items = await query

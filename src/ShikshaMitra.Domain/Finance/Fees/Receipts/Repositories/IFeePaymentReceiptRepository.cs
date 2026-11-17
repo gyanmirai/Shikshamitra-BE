@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Common;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Fees.Receipts;
@@ -50,7 +51,8 @@ public interface IFeePaymentReceiptRepository : IRepository<FeePaymentReceipt, G
     /// </summary>
     Task<(int TotalCount, List<FeePaymentReceipt> Items)> GetPagedListAsync(
         FeeReceiptListFilter filter,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool includeTotalCount = true);
 
     /// <summary>
     /// Returns the <see cref="FeePaymentReceipt"/> for a given receipt number, or null.
@@ -70,6 +72,7 @@ public interface IFeePaymentReceiptRepository : IRepository<FeePaymentReceipt, G
 /// <summary>Filter parameters for the paginated receipt list query.</summary>
 public sealed class FeeReceiptListFilter
 {
+    public FinanceTableQuery? TableQuery { get; init; }
     public Guid AcademicYearId { get; init; }
     public Guid BoardId { get; init; }
     public Guid EducationMediumId { get; init; }

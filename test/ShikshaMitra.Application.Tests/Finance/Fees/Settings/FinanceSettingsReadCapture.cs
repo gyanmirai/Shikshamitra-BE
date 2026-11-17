@@ -17,6 +17,7 @@ internal sealed class FinanceSettingsReadCapture : IObserver<DiagnosticListener>
 	private readonly IDisposable listener;
 	private readonly ConcurrentBag<IDisposable> subscriptions = [];
 	private readonly ConcurrentQueue<string> commands = [];
+	private readonly ConcurrentQueue<CapturedRead> details = [];
 
 	public FinanceSettingsReadCapture(DbConnection connection)
 	{
@@ -25,7 +26,9 @@ internal sealed class FinanceSettingsReadCapture : IObserver<DiagnosticListener>
 	}
 
 	public string[] Commands => commands.ToArray();
+	public CapturedRead[] Details => details.ToArray();
 	public int Count => commands.Count;
+	public sealed record CapturedRead(string Sql, string Parameters, TimeSpan Duration);
 
 	public void OnNext(DiagnosticListener value)
 	{
@@ -38,7 +41,12 @@ internal sealed class FinanceSettingsReadCapture : IObserver<DiagnosticListener>
 		if (value.Value is CommandExecutedEventData data && data.Context != null &&
 			ReferenceEquals(data.Context.Database.GetDbConnection(), connection) &&
 			data.Command.CommandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+		{
 			commands.Enqueue(data.Command.CommandText);
+			details.Enqueue(new CapturedRead(data.Command.CommandText,
+				string.Join("|", data.Command.Parameters.Cast<DbParameter>().Select(parameter => parameter.Value?.ToString())),
+				data.Duration));
+		}
 	}
 
 	public void OnCompleted() { }

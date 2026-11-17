@@ -61,7 +61,7 @@ public interface IChargeRequestRepository : IRepository<ChargeRequest, Guid>
 	/// inside the repository to avoid EF Core correlated-subquery translation errors.
 	/// status: 0 = Pending, 1 = In Process, 2 = Completed, 3 = Rejected.
 	/// </summary>
-	Task<(List<ChargeRequestJoinResult> Items, int TotalCount)> GetChargeRequestsPagedAsync(
+	Task<(List<ChargeRequestJoinResult> Items, int TotalCount, ChargeRequestStatusCounts StatusCounts)> GetChargeRequestsPagedAsync(
 		Guid academicYearId,
 		int status,
 		int page,

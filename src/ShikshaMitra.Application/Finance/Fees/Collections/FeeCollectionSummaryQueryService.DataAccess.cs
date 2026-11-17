@@ -19,8 +19,16 @@ public partial class FeeCollectionSummaryQueryService
 		GetFeeCollectionSummaryInput input,
 		CancellationToken cancellationToken = default)
 	{
+		var (rows, singleAccountStudents) = await BuildPayerRowsAsync(input, cancellationToken);
+		await PopulateBalancesAsync(input, rows, singleAccountStudents, cancellationToken);
+		return rows;
+	}
+
+	private async Task<(List<FeeCollectionRawRow> Rows, HashSet<Guid> SingleAccountStudents)> BuildPayerRowsAsync(
+		GetFeeCollectionSummaryInput input,
+		CancellationToken cancellationToken)
+	{
 		EnsureSummaryContextIsValid(input);
-		var currentDate = clock.Now.Date;
 		var studentQuery = await BuildFilteredStudentQueryAsync(input, cancellationToken);
 		var students = await AsyncExecuter.ToListAsync(studentQuery.Select(s => new
 		{
@@ -28,9 +36,7 @@ public partial class FeeCollectionSummaryQueryService
 			s.StandardId, s.DivisionId, s.Standard, s.Division, s.FeeStructureId
 		}), cancellationToken);
 		var accounts = await AsyncExecuter.ToListAsync(await BuildFilteredFeeAccountQueryAsync(input, studentQuery.Select(s => s.Id)), cancellationToken);
-		if (students.Count == 0 && accounts.Count == 0) return [];
-		var studentIds = students.Select(s => s.Id).ToList();
-		var accountIds = accounts.Select(a => a.Id).ToList();
+		if (students.Count == 0 && accounts.Count == 0) return ([], []);
 		var studentMap = students.ToDictionary(s => s.Id);
 		var standardIds = accounts.Select(a => a.StandardId).Distinct().ToList();
 		var divisionIds = accounts.Where(a => a.DivisionId.HasValue).Select(a => a.DivisionId!.Value).Distinct().ToList();
@@ -50,7 +56,6 @@ public partial class FeeCollectionSummaryQueryService
 			TotalFees = 0d, PaidFees = 0d, OutstandingFees = 0d, OverdueFees = 0d,
 			TotalCharges = 0d, PaidCharges = 0m, PendingCharges = 0d
 		}).ToList();
-		var rowsByPayer = rows.ToDictionary(r => FinanceReportPayerKey.From(r.StudentId, null));
 		foreach (var account in accounts)
 		{
 			var linkedStudent = account.StudentId.HasValue ? studentMap.GetValueOrDefault(account.StudentId.Value) : null;
@@ -66,13 +71,31 @@ public partial class FeeCollectionSummaryQueryService
 				TotalCharges = 0d, PaidCharges = 0m, PendingCharges = 0d
 			};
 			rows.Add(row);
-			rowsByPayer[FinanceReportPayerKey.From(null, account.Id)] = row;
-			// One linked account and one enrolled Student are one summary payer, not duplicate balances.
-			if (linkedStudent != null && singleAccountStudents.Contains(linkedStudent.Id))
-			{
-				var studentKey = FinanceReportPayerKey.From(linkedStudent.Id, null);
-				rowsByPayer[studentKey] = row;
-			}
+		}
+		return (rows, singleAccountStudents);
+	}
+
+	private async Task PopulateBalancesAsync(
+		GetFeeCollectionSummaryInput input,
+		List<FeeCollectionRawRow> rows,
+		HashSet<Guid> singleAccountStudents,
+		CancellationToken cancellationToken)
+	{
+		if (rows.Count == 0) return;
+		var currentDate = clock.Now.Date;
+		var studentIds = rows.Where(row => row.StudentId.HasValue &&
+			(!row.FinanceFeeAccountId.HasValue || singleAccountStudents.Contains(row.StudentId.Value)))
+			.Select(row => row.StudentId!.Value).Distinct().ToList();
+		var accountIds = rows.Where(row => row.FinanceFeeAccountId.HasValue)
+			.Select(row => row.FinanceFeeAccountId!.Value).ToList();
+		var rowsByPayer = rows.Where(row => !row.FinanceFeeAccountId.HasValue)
+			.ToDictionary(row => FinanceReportPayerKey.From(row.StudentId, null));
+		foreach (var row in rows.Where(row => row.FinanceFeeAccountId.HasValue))
+		{
+			rowsByPayer[FinanceReportPayerKey.From(null, row.FinanceFeeAccountId)] = row;
+			// A single linked account owns the enrolled student's legacy obligations too.
+			if (row.StudentId.HasValue && singleAccountStudents.Contains(row.StudentId.Value))
+				rowsByPayer[FinanceReportPayerKey.From(row.StudentId, null)] = row;
 		}
 		var feeHeadQ = await feeHeadRepository.GetQueryableAsync();
 		var yearFeeHeads = feeHeadQ.Where(f => f.AcademicYearId == input.AcademicYearId).Select(f => f.Id);
@@ -117,7 +140,6 @@ public partial class FeeCollectionSummaryQueryService
 		foreach (var concession in concessions)
 			if (rowsByPayer.TryGetValue(FinanceReportPayerKey.From(concession.StudentId, null), out var row))
 				row.TotalConcessionAmount = concession.Amount;
-		return rows;
 	}
 	private async Task<Dictionary<Guid, StudentChargeAggregate>> BuildChargeAggregatesByStudentAsync(
 		List<Guid> studentIds,

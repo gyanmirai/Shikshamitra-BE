@@ -327,4 +327,4 @@ No historical attendance or payroll is recalculated.
 
 Before reopening writes, rollback uses the verified pre-cutover backup and previous application versions.
 After reopening writes, use a reviewed forward repair; the migration intentionally refuses destructive Down execution.
-The migrator needs permission to install the btree_gist extension if it is absent.
+The migrator needs permission to install the `btree_gist` extension if it is absent. On Azure Database for PostgreSQL Flexible Server, add `btree_gist` to the server's `azure.extensions` allowlist before running the cutover migration; keep any extensions already allowed. This is a server parameter, not a database migration setting. After the parameter change takes effect, rerun DbMigrator so it can install the extension and create the non-overlap constraint.

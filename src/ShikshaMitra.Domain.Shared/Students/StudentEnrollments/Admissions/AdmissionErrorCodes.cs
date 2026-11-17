@@ -17,6 +17,7 @@ public static class AdmissionErrorCodes
 	public const string OfferingCycleNotFound = "Admissions.OfferingCycleNotFound";
 	public const string OfferingAcademicHierarchyInvalid = "Admissions.OfferingAcademicHierarchyInvalid";
 	public const string InquiryDuplicate = "Admissions.InquiryDuplicate";
+	public const string InquiryDuplicateStudent = "Admissions.InquiryDuplicateStudent";
 	public const string InquiryCycleNotFound = "Admissions.InquiryCycleNotFound";
 	public const string InquiryCycleNotOpen = "Admissions.InquiryCycleNotOpen";
 	public const string InquiryDuplicateTargetInvalid = "Admissions.InquiryDuplicateTargetInvalid";

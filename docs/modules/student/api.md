@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-16
+updated_on: 2026-11-17
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -19,6 +19,10 @@ Finalization may report `Students:Family:MainContactInvalid` when the selected m
 ## Saved Registration composition preview
 
 `GET /api/student/enrollment/admissions/forms/{id}/inheritance-preview?inquiryFormDefinitionId={sourceId}` requires Admission Forms View at both HTTP and application boundaries. It composes only the persisted Registration definition and an exact, previously approved Inquiry source. Approval is checked before reading the tenant-filtered source; the request cannot supply a draft, approve a source, save a form or change its concurrency stamp. The existing `AdmissionFormInheritancePreviewDto` returns the effective definition and separate read-only Inquiry context. Draft `POST /forms/inheritance/preview` retains its existing Manage permission.
+
+## Workflow archive refusals
+
+Workflow `POST /api/student/enrollment/admissions/workflows/{id}/archive` retains its current concurrency and active-Offering guard. A blocked archive returns `Admissions.WorkflowInUse` with `data.ActiveOfferingCount` and `data.Reason`, explaining how many active offerings must be deactivated or moved to another workflow. Inactive offerings do not block archiving. Refusal leaves workflow status, concurrency stamp and governance history unchanged; the same error code on Delete retains its existing semantics.
 
 ## Admission form archive and restore
 
@@ -103,6 +107,8 @@ Permissions come from effective role/user grants; teacher assignments restrict s
 Tenant isolation, active identity, configured approval stages, separate approvers, reasons, concurrency and owning Finance/Identity permissions still apply.
 Attendance lock/unlock requires MarkAttendance.Add and the same assigned-class scope as marking, with the existing database-administrator scope exception.
 Onboarding settings, policy, identifier-series, offering and historical-preview reads use View.
+
+`GET /api/student/onboarding/settings/gr-number-previews?academicYearId={id}` uses Onboarding View and the same academic-year scope check as configuration reads. It returns published-rule `ruleId`, `nextSequence`, nullable `maximumNumber`, `limitReached`, `isEffective` and nullable `nextPreview`. Previews share the allocation rule identity, version lineage, format and year/school counter scope; continuous counters are read even when created in an earlier year. This read neither creates a series nor reserves a number. Exhausted or future-effective rules have no available preview. Allocation remains authoritative at save time. Exhaustion keeps `Students.Onboarding.IdentifierSeriesUnavailable` and adds `data.ReasonCode=SeriesLimitReached`, `MaximumNumber` and `NextSequence`; no numbering, permission or Finance invariant changes.
 Selected-year reads require academic scope; class-specific configuration is limited to readable classes, while inherited school/year defaults remain visible.
 Configuration writes require the whole affected year or class; division-only scope cannot change shared class settings. School-default writes require tenant-wide scope.
 Historical reconciliation and placement options use scoped application/division queries; applying a backfill still requires Add.
@@ -490,6 +496,7 @@ The same-request/same-payload retry returns the existing scoped application with
 ### Parent-only sibling selection
 
 Inquiry creation and Direct Registration accept additive `parentRelationship` (`father` or `mother`) and `existingParentApplicantId` alongside `existingFamilyId`.
+Staff Inquiry creation additionally accepts `familyLinkOnly: true` with `existingFamilyId` and a visible source child's `existingParentApplicantId`. In this mode `parentRelationship` remains the new child's own captured relationship; no source parent or relationship is selected or copied. The server rechecks matching authored parent contacts, active family/source, source feature View, tenant and record scope. The witness child need not own the matching contact; another visible child in the selected family can supply it. The child's own parent profiles, school-contact selection and authored form values remain authoritative. Its generic contact is stored on that applicant, so later Inquiry, Registration, Applicant profile and Student finalization operations neither read nor modify another child's shared guardian contact. Valid edits to the currently selected structured parent contact update this applicant-only contact, retaining structured-answer precedence over generic aliases; optional structured name/mobile clears do not erase an independently required generic contact. This membership proof grants no parent-account access or sibling Registration prefill; Onboarding retains its separate explicit existing-parent confirmation. No shared guardian is created when the selected family's primary guardian is missing. Omitting `familyLinkOnly` retains the existing saved-parent flow below; Direct Registration is unchanged.
 An existing family in this new flow requires the source applicant and explicit parent relationship; a family ID or matching email alone never grants portal access.
 Family match responses add `parents: [{sourceApplicantId,relationship,name,firstName,lastName,email,mobile}]`, `matchByEmail` and `matchByMobile`.
 A legacy generic Parent contact has nullable `relationship`; staff must explicitly identify Father or Mother rather than the server guessing.
@@ -714,9 +721,19 @@ Unknown policy versions, stale stamps, unavailable capacity, missing evidence, a
 
 `POST /api/student/enrollment/admissions/inquiries/{id}/confirm-family` uses the existing Inquiries Add/Manage action at HTTP, app-service and command boundaries. Input contains `existingFamilyId`, `existingParentApplicantId`, explicit `parentRelationship` (`father`/`mother`) and target `concurrencyStamp`; the response is the current Inquiry with `siblingFamilyConfirmed`. Source reads additionally require source feature View and current scope. New confirmation is limited to a pending target with its own active, untouched admission identity and exclusive original family. Existing Application, Student, Onboarding, account or Finance evidence blocks reassignment; a matching source parent's existing account does not. Exact persisted same-family/source/role retries do not recopy data or add audit; stale or conflicting new intent is rejected. Captured Inquiry schema/answers, reserved identity and shared source/guardian/accounts remain unchanged. Source/target Applicant locks precede the Inquiry lock, and source mutation matching shares that fence with existing Add sibling and Direct Registration.
 
+For sibling membership without replacing the pending child's parent details, send `familyLinkOnly: true`, the selected `existingFamilyId`, a visible child witness as `existingParentApplicantId`, and the target `concurrencyStamp`; omit `parentRelationship`. The same pending-identity and downstream-evidence fences apply to a new family assignment. Existing same-family requests revalidate target/source scope and active membership and then return without mutation or another audit, including retries with the original browser stamp. Parent roles, both parent profiles, school-contact responsibility and captured Inquiry answers remain unchanged. Applicant-only contact snapshots protect subsequent reads/edits and Registration/Student handoff from the shared family guardian. Family-only confirmation is stored separately from `SiblingParentConfirmation` and cannot authorize portal-account reuse, account changes or sibling-parent autofill. Old saved-parent requests and their exact retry behavior remain compatible.
+
+Inquiry detail/list adds `hasLinkedSiblings`, computed from other active applicants in the same family visible in the caller's current admission scope. Both children can therefore display linked membership. This informational flag is independent of the legacy `siblingFamilyConfirmed` parent-account proof and grants no authority. No historical parent/profile repair or data migration is performed.
+
 The existing inquiry capture-context response includes nullable `academicYearStartDate` (a calendar date) and `minimumAgeYears`. After the offering scope check, these are read from its cycle's Academic Year and its Standard's existing `AgeLowerLimit`; non-positive minima return null. Clients use them for advisory DOB age feedback in inquiry create/edit. This does not add inquiry validation, change workflow eligibility policies, require Institute Setup permissions, or introduce persisted settings/migrations.
 
 The inquiry collection route prefix is `/api/student/enrollment/admissions/inquiries`.
+
+Inquiry list and CSV export accept optional `creationTimeFrom` (`CreationTimeFrom`, inclusive) and `creationTimeBefore` (`CreationTimeBefore`, exclusive) ISO 8601 UTC timestamps against the saved Inquiry `CreationTime`.
+Each omitted bound leaves that side open; omitting both retains existing list behavior.
+When both bounds are supplied, an equal or earlier upper bound is rejected with `Admissions:Inquiry:InvalidInput`.
+The shared tenant- and scope-constrained query applies these bounds before counting and paging; CSV export uses the same filtered population without page truncation.
+Existing permissions and other filters remain authoritative, and no schema migration is required.
 
 Inquiry publication requires explicit, required, editable, reachable Student name and coherent primary adult name/mobile mappings. New builder defaults add the configured **Primary contact** question (`Inquiry.ParentRelationship`) with Father/Mother/Guardian choices; Guardian requires the generic primary name/mobile slots. Draft saves remain available while incomplete. Writable full-name and split-name identity mappings cannot be mixed; read-only Registration full-name context remains allowed. Legacy single bound Father/Mother paths and safe code aliases remain readable without runtime question injection. Existing captured roles/read-only contacts protect edits; shared phone/name values never establish role or sibling-account provenance.
 

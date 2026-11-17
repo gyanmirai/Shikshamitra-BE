@@ -241,6 +241,11 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 	public async Task<Result<IReadOnlyList<StudentIdentifierSeriesDto>>> GetIdentifierSeriesAsync(
 		[FromQuery] Guid academicYearId) => Result.Success(await service.GetIdentifierSeriesAsync(academicYearId));
 
+	[HttpGet("settings/gr-number-previews")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	public async Task<Result<IReadOnlyList<StudentGrNumberPreviewDto>>> GetGrNumberPreviewsAsync(
+		[FromQuery] Guid academicYearId) => Result.Success(await service.GetGrNumberPreviewsAsync(academicYearId));
+
 	[HttpPost("settings/identifier-series")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
 	public async Task<Result<StudentIdentifierSeriesDto>> CreateIdentifierSeriesAsync(

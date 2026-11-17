@@ -66,6 +66,19 @@ public class AdmissionDirectFamilyMatchService(
 		return parent;
 	}
 
+	internal async Task ResolveFamilyLinkAsync(Guid familyId, Guid sourceApplicantId, string mobile, string? email,
+		IReadOnlyCollection<AdmissionSiblingParentContactDto>? contacts, string errorCode)
+	{
+		await parentApplicants.LockForSiblingParentSelectionAsync([sourceApplicantId]);
+		var source = await applicants.FindAsync(sourceApplicantId);
+		if (source == null || source.IsDeleted || source.TenantId != CurrentTenant.Id || source.FamilyId != familyId || source.Status != AdmissionApplicantStatus.Active)
+			throw new BusinessException(errorCode, "The selected child no longer belongs to this family.");
+		var matches = await FindAccessibleMatchesAsync(mobile, email, contacts);
+		// The visible child is a family witness. Another scoped sibling may own the matching contact.
+		if (!matches.Any(match => match.FamilyId == familyId))
+			throw new BusinessException(errorCode, "The selected sibling family no longer matches this child's saved parent contacts. Check the family again.");
+	}
+
 	internal async Task<List<AdmissionDirectFamilyMatchDto>> FindAccessibleMatchesAsync(string? mobile, string? email,
 		IReadOnlyCollection<AdmissionSiblingParentContactDto>? contacts = null, bool includeLegacyGuardians = false)
 	{
@@ -119,6 +132,7 @@ public class AdmissionDirectFamilyMatchService(
 			var parents = new List<AdmissionSiblingParentCandidateDto>();
 			foreach (var applicant in familyApplicants.Where(applicant => applicant.FamilyId == family.Id))
 			{
+				var applicantContact = AdmissionSiblingFamilyLink.HasOwnContact(applicant) ? AdmissionSiblingFamilyLink.OwnGuardian(applicant) : primary;
 				var currentStudent = profiles.FirstOrDefault(student => student.Id == (applicant.ExistingStudentId ?? applicant.ReservedStudentId));
 				var profile = currentStudent?.FamilyDetail;
 				if (applicant.ExistingStudentId.HasValue && currentStudent == null) continue;
@@ -130,10 +144,10 @@ public class AdmissionDirectFamilyMatchService(
 					if (saved != null) candidate = CreateCandidate(applicant.Id, prefix.ToLowerInvariant(), saved.FullName, saved.ContactNo, saved.Email);
 					if (!string.IsNullOrWhiteSpace(candidate.Email) || !string.IsNullOrWhiteSpace(candidate.Mobile)) parents.Add(candidate);
 				}
-				if (primary != null && currentStudent == null &&
-					primary.Relationship == AdmissionGuardianRelationship.Parent && !parents.Any(parent => parent.SourceApplicantId == applicant.Id &&
-					(string.Equals(parent.Email, primary.Email, StringComparison.OrdinalIgnoreCase) || parent.Mobile == primary.Mobile)))
-					parents.Add(CreateCandidate(applicant.Id, null, string.Join(" ", new[] { primary.FirstName, primary.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))), primary.Mobile, primary.Email));
+				if (applicantContact != null && currentStudent == null &&
+					applicantContact.Relationship == AdmissionGuardianRelationship.Parent && !parents.Any(parent => parent.SourceApplicantId == applicant.Id &&
+					(string.Equals(parent.Email, applicantContact.Email, StringComparison.OrdinalIgnoreCase) || parent.Mobile == applicantContact.Mobile)))
+					parents.Add(CreateCandidate(applicant.Id, null, string.Join(" ", new[] { applicantContact.FirstName, applicantContact.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))), applicantContact.Mobile, applicantContact.Email));
 			}
 			return new AdmissionDirectFamilyMatchDto
 			{

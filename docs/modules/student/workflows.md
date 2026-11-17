@@ -291,6 +291,8 @@ Configure the required student name and a coherent primary adult name/mobile in 
 
 Inquiry creation checks cycle consistency and shared offering availability before validating inquiry form values.
 Legacy create-time duplicate enforcement stays in the selected admission cycle; the new parent flow also requires explicit existing/separate family choice when a scoped saved-parent contact matches.
+
+Inquiry updates allow different children to share a parent mobile. Within the same admission cycle, another inquiry sharing that mobile or the saved family blocks the edit when its normalized student name matches and DOB matches or is missing. Distinct known birth dates remain distinguishable. This check also runs when the mobile is unchanged. `Admissions.InquiryDuplicateStudent` supplies a localized validation message without exposing candidate records. A contact edit never links families or grants portal access; staff still use the existing explicit sibling confirmation command after saving.
 Duplicate precheck suggests scoped prior-cycle families through saved Father/Mother email/mobile contacts; name-only signals do not cross cycles.
 Application start checks the same availability service, validates any linked inquiry, and freezes the offering's published workflow and application form references.
 Later changes to offering defaults affect only future runtime records.

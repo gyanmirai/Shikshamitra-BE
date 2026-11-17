@@ -51,7 +51,7 @@ public class EfCoreAdmissionApplicantRepository(IDbContextProvider<ShikshaMitraD
 	}
 
 	private static bool SameProof(ExtraPropertyDictionary persisted, ExtraPropertyDictionary tracked) =>
-		new[] { "SiblingParentConfirmation", "ParentAccountRelationship", "ParentAccountFlowVersion" }.All(key =>
+		new[] { "SiblingParentConfirmation", "ParentAccountRelationship", "ParentAccountFlowVersion", "AdmissionSiblingFamilyLink", "AdmissionSiblingOwnContact" }.All(key =>
 			(persisted.TryGetValue(key, out var left) ? left?.ToString() : null) ==
 			(tracked.TryGetValue(key, out var right) ? right?.ToString() : null));
 

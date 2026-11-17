@@ -74,6 +74,7 @@ public class StudentRecordActionAuthorization_Tests
 	[InlineData("reprint", "Students.Records.StudentICard.Add")]
 	[InlineData("void", "Students.Records.StudentICard.Add")]
 	[InlineData("download", "Students.Records.StudentICard.View")]
+	[InlineData("issued-history", "Students.Records.StudentICard.View")]
 	public async Task Record_action_ID_direct_service_rejects_denied_exact_permission(string action, string deniedPermission)
 	{
 		var service = new StudentIdCardAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = Denying(deniedPermission) };
@@ -82,6 +83,7 @@ public class StudentRecordActionAuthorization_Tests
 			"issue" => () => service.IssueAsync(new()), "template" => () => service.SaveTemplateAsync(new()),
 			"reprint" => () => service.ReprintAsync(Guid.NewGuid(), new() { Reason = "Replacement print" }),
 			"void" => () => service.VoidAsync(Guid.NewGuid(), new() { Reason = "Invalid issued card" }),
+			"issued-history" => () => service.GetIssuedHistoryAsync(new()),
 			_ => () => service.GetPdfAsync(Guid.NewGuid())
 		};
 		(await Should.ThrowAsync<AbpAuthorizationException>(call)).Data["PolicyName"].ShouldBe(deniedPermission);
@@ -94,6 +96,8 @@ public class StudentRecordActionAuthorization_Tests
 	[InlineData("download", "Students.Records.Certificates.View")]
 	[InlineData("batches", "Students.Records.Certificates.View")]
 	[InlineData("batch-view", "Students.Records.Certificates.View")]
+	[InlineData("preview-branding", "Students.Records.Certificates.View")]
+	[InlineData("view-branding", "Students.Records.Certificates.View")]
 	public async Task Record_action_certificate_direct_service_rejects_denied_exact_permission(string action, string deniedPermission)
 	{
 		var service = new StudentCertificateAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = Denying(deniedPermission) };
@@ -104,6 +108,8 @@ public class StudentRecordActionAuthorization_Tests
 			"void" => () => service.VoidAsync(Guid.NewGuid(), new() { Reason = "Invalid issued certificate" }),
 			"batches" => () => service.GetBatchesAsync(new()),
 			"batch-view" => () => service.GetBatchAsync(Guid.NewGuid(), ShikshaMitra.Students.StudentRecords.StudentCertificateType.Bonafide),
+			"preview-branding" => () => service.PreviewAsync(new() { IncludeBranding = true }),
+			"view-branding" => () => service.GetAsync(Guid.NewGuid(), true),
 			_ => () => service.GeneratePdfAsync(Guid.NewGuid())
 		};
 		(await Should.ThrowAsync<AbpAuthorizationException>(call)).Data["PolicyName"].ShouldBe(deniedPermission);

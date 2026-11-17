@@ -107,6 +107,40 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	});
 
 	[Fact]
+	public Task Certificate_generation_rejects_a_selected_year_that_differs_from_the_student_current_year() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateCertificateStudentOfferingAsync();
+		var student = await CreateExistingStudentAsync(offering, "CertificateYear", "Student");
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var row = await _studentRepository.GetAsync(student.Id);
+			row.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
+			await _studentRepository.UpdateAsync(row, autoSave: true);
+		});
+		var service = GetRequiredService<IStudentCertificateAppService>();
+		var request = new CreateStudentCertificateDto
+		{
+			StudentId = student.Id, CertificateType = StudentCertificateType.Bonafide,
+			ExpectedAcademicYearId = Guid.NewGuid(), IdempotencyKey = $"certificate-year-{student.Id:N}"
+		};
+		(await Should.ThrowAsync<BusinessException>(() => service.PreviewAsync(request)))
+			.Code.ShouldBe("Students:Records:CertificateYearMismatch");
+		(await Should.ThrowAsync<BusinessException>(() => service.GenerateAsync(request)))
+			.Code.ShouldBe("Students:Records:CertificateYearMismatch");
+		(await service.GetHistoryAsync(student.Id)).ShouldBeEmpty();
+		student.AcademicYearId.ShouldNotBeNull();
+		request.ExpectedAcademicYearId = student.AcademicYearId;
+		(await service.PreviewAsync(request)).Student.StudentId.ShouldBe(student.Id);
+		var generated = await service.GenerateAsync(request);
+		generated.CertificateId.ShouldNotBeNull();
+		(await service.GenerateAsync(request)).CertificateId.ShouldBe(generated.CertificateId);
+		request.ExpectedAcademicYearId = Guid.NewGuid();
+		(await Should.ThrowAsync<BusinessException>(() => service.GenerateAsync(request)))
+			.Code.ShouldBe("Students:Records:CertificateYearMismatch");
+		(await service.GetHistoryAsync(student.Id)).Count.ShouldBe(1);
+	});
+
+	[Fact]
 	public Task Record_certificate_snapshots_idempotency_and_leaving_exit_are_enforced() => RunCertificationScenarioAsync(async () =>
 	{
 		using var identityActor = _principalAccessor.Change(new ClaimsPrincipal(new ClaimsIdentity(

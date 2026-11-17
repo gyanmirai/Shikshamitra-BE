@@ -3,12 +3,26 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-05
+updated_on: 2026-11-16
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Assessment Catalog Academic Order
+
+Run `AdmissionAssessmentCatalogOrder_Tests` and the existing Assessment catalog integration case. The SQLite tests seed shuffled class names and explicit academic stage/class ranks, including Nursery/LKG/UKG, classes 1-12 and stream variants, then exercise deterministic zero-rank ties. Preserve active-subject suggestions, missing scope, assigned-user scope and foreign-tenant exclusions. Only lookup ordering changes; marks validation and workflow snapshots remain governed by the existing policy tests.
+## School-wide issued I-card history
+
+Run Application `Icard_issued_history_` scenarios and `Record_action_ID_direct_service_rejects_denied_exact_permission`, plus HTTP `Icard_issued_history_HTTP_`. These cover current saved placement after a year change while preserving the original issued snapshot/PDF, older issuance years, all card statuses, search/count/paging and stable sorting, scalar SQL without frozen JSON or aggregate tracking, both Identity policy years, current division scope, tenant/active-actor/Records eligibility, invalid queries and exact View permission at both boundaries. Existing `Record_ID_issuance_` and `Icard_templates_` scenarios cover unchanged issue/design/reprint behavior.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Icard_issued_history_|FullyQualifiedName~Record_action_ID_direct_service_rejects_denied_exact_permission|FullyQualifiedName~Record_ID_issuance_|FullyQualifiedName~Icard_templates_" --artifacts-path .artifacts/issued-history -m:1
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~Icard_issued_history_HTTP_" --artifacts-path .artifacts/issued-history -m:1
+```
+
+Report isolated test compilation and any migration-metadata exclusions separately from full runtime artifacts; tests using reduced migration compilation cannot establish deployment/migration readiness. Frontend browser checks and deployed school acceptance remain separate.
 
 ## Documents before Registration
 
@@ -1519,3 +1533,32 @@ These source tests do not deploy the new types or prove a remote development API
 ## Admission capacity retirement regression checks
 
 Run focused Application tests matching Full_legacy_room_and_seat_pool, Inquiry_capture_allows_full_seats_when_the_workflow_has_no_waitlist, Inquiry_redesign_full_legacy_seat_pool, and Rte_registration_keeps_frozen_form. Run AdmissionOfferingApiContract_Tests for retired API contracts and Unlimited_intake_does_not_allow_placement_in_a_full_division to protect actual division placement. Browser smoke must confirm no Offering room-assignment editor or Inquiry/Direct Registration capacity notices remain. These commands describe required coverage, not a claim of deployed verification.
+
+## Student setup guide validation
+
+`Students/Setup/StudentSetupGuideApi_Tests*.cs` covers real HTTP authorization, active school identity, tenant/year/class scope, school-wide first visits, visit collisions, progress concurrency, corrupt metadata, hidden deferrals, effective Records defaults/inheritance, and selected-class numbering coverage.
+Run from the backend repository with the pinned SDK:
+
+```powershell
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~StudentSetupGuideApi_Tests|FullyQualifiedName~AcademicSetupGuideApi_Tests" --artifacts-path .artifacts/student-guide -m:1
+powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module student
+git diff --check
+```
+
+These tests do not establish deployed acceptance or an authenticated production school walkthrough.
+
+The 16 November follow-up normal `ShikshaMitra.sln` build passed with the pinned SDK 9.0.319, zero errors and 16 existing warnings. Serialized compilation and adaptive GC retained all source files, EF migration designers/model snapshot, nullable checks and analyzers. The first solution pass encountered test/Contracts drift from concurrent Offering edits; rebuilding the settled current files resolved that mismatch without test or compiler exclusions. Evidence: `.artifacts/student-guide-full-build.log`.
+
+The complete build's HTTP test assembly then passed all 32 Student/Academic guide cases with no skips (`.artifacts/student-guide-full-http-tests.log`). The actual full-build Host was verified with a real school admin and the workspace's loopback PostgreSQL database override, including guide saves and fresh reads. Isolated local ports avoided concurrent shared-host restarts; migrations, seeders and background delivery jobs stayed disabled. No operational student or financial record was changed. The [frontend testing guide](../../../../Shikshamitra-FE/docs/student/testing.md#student-setup-guide-checks) owns the browser and responsive evidence. Local acceptance does not establish deployed behavior or production-provider concurrency scheduling.
+
+## Selected-student certificate flow
+
+Run `Certificate_directory_includes_active_student_list_without_widening_records_directory`, `Directory_and_profile_mask_identity_using_database_roles_and_search_does_not_disclose_hidden_names`, and `Certificate_generation_rejects_a_selected_year_that_differs_from_the_student_current_year` in `ShikshaMitra.Application.Tests`. They cover full-name and case-insensitive admission/registration lookup, unchanged tenant/scope/Identity masking, expected-year rejection before preview/write, matching-year issuance and idempotent recovery. Run the existing certificate document, history-performance and action-authorization tests to protect immutable snapshots, Leaving policy, numbering, reasons and permissions. Local integration checks do not establish authenticated browser or deployed acceptance; the search/drawer/history UI is documented in the sibling frontend module.
+
+The six-case selected-student certificate regression run passed with no skipped cases on 16 November 2026, including the three lookup/year/masking cases and existing active-student, grouped-batch and snapshot/idempotency/Leaving governance scenarios. The preceding red run reproduced the full-name lookup and wrong-year preview failures while the masked-identity check passed. Existing unrelated compiler warnings remain; no migration or live school data change is part of this validation.
+
+## Certificate preview branding
+
+Run `Certificate_branding_is_opt_in_and_issued_and_duplicate_reads_keep_the_saved_images` and `Record_action_certificate_direct_service_rejects_denied_exact_permission` in `ShikshaMitra.Application.Tests`. The isolated scenario uploads valid logo/banner/signature fixtures, checks opt-in image payloads and signature exclusion, hides current defaults, then verifies saved and duplicate reads retain the captured assets. It also checks cross-tenant rejection. Exact View permission rejection covers both branded preview and saved reads. Keep the existing snapshot/idempotency/Leaving and active-student certificate scenarios in the focused regression run. No live Institute Setup change or certificate issuance is required for this test.
+
+The focused branding and governance run passed all 12 cases with no skips on 16 November 2026 (`.artifacts/certificate-branding-be-green.log`). After correcting the signature fixture's required principal details, the red run reproduced absent preview branding before hydration was implemented. This is isolated local integration evidence, not deployed acceptance.

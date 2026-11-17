@@ -134,6 +134,9 @@ public partial class StudentDirectoryQueryService(
 				((s.FirstName != null && s.FirstName.ToLower().Contains(term)) || (s.LastName != null && s.LastName.ToLower().Contains(term)) ||
 				 (s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) || (s.GrNumber != null && s.GrNumber.ToLower().Contains(term)) ||
 				 (s.GrNo.HasValue && s.GrNo.Value.ToString().Contains(term)) ||
+				 (input.IncludeActiveStudentList && (((s.FirstName ?? "") +
+					(s.MiddleName != null && s.MiddleName != "" ? " " + s.MiddleName : "") + " " + (s.LastName ?? "")).ToLower().Contains(term) ||
+					(s.AdditionalDetail != null && s.AdditionalDetail.RegistrationFormNo != null && s.AdditionalDetail.RegistrationFormNo.ToLower().Contains(term)))) ||
 				 numericTerm.HasValue && (s.GrNo == numericTerm || identifierEnrollments.Any(e => e.StudentId == s.Id &&
 					e.AcademicYearId == input.AcademicYearId && e.RollNumber == numericTerm))));
 		}

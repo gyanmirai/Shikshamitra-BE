@@ -35,7 +35,12 @@ public class AdmissionAssessmentCatalogService(IRepository<Standard, Guid> stand
 					scope.WildcardStandardMediumStageIds.Contains(item.EducationMediumStageId) ||
 					scope.WildcardDivisionStandardIds.Contains(item.Id) || scope.StandardIds.Contains(item.Id) ||
 					divisionQuery.Any(division => division.StandardId == item.Id && scope.DivisionIds.Contains(division.Id))));
-		var rows = await AsyncExecuter.ToListAsync(standardQuery.OrderBy(item => item.Name).Select(item => new
+		var rows = await AsyncExecuter.ToListAsync(standardQuery
+			.OrderBy(item => item.EducationMediumStage.EducationMediumId)
+			.ThenBy(item => item.EducationMediumStage.SortOrder)
+			.ThenBy(item => item.EducationMediumStage.Name).ThenBy(item => item.EducationMediumStageId)
+			.ThenBy(item => item.SortOrder).ThenBy(item => item.Name).ThenBy(item => item.Id)
+			.Select(item => new
 		{
 			item.Id, item.Name,
 			BoardId = item.EducationMediumStage.EducationMedium.EducationBoardId,

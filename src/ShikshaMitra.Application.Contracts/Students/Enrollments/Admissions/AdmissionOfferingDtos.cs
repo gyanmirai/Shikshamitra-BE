@@ -30,6 +30,7 @@ public class AdmissionOfferingListDto : EntityDto<Guid>
 	public int? CoreFieldPolicyVersion { get; set; }
 	public bool IsActive { get; set; }
 	public AdmissionOfferingAvailabilityStatus AvailabilityStatus { get; set; }
+	public string? UnavailableReason { get; set; }
 	public AdmissionOfferingConfigurationStatus ConfigurationStatus { get; set; }
 	public bool CanActivate => ConfigurationStatus == AdmissionOfferingConfigurationStatus.Ready;
 	public int ApplicationCount { get; set; }

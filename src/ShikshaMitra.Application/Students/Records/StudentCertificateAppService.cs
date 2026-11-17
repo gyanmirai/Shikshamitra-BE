@@ -135,6 +135,7 @@ public partial class StudentCertificateAppService(
 		response.TransitionId = input.TransitionId;
 		if (exitSnapshot != null) response.CertificateData["_ExitTransition"] = exitSnapshot;
 		response.Template.Document = StudentCertificateDocumentFactory.Create(response);
+		if (input.IncludeBranding) await PopulateBrandingAsync(response);
 		return response;
 	}
 
@@ -157,14 +158,16 @@ public partial class StudentCertificateAppService(
 				certificateNo,
 				input.CertificateFields,
 				certificateId,
-				templateSnapshot: null), input.IdempotencyKey.Trim(), input.TransitionId);
+				templateSnapshot: null), input.IdempotencyKey.Trim(), input.TransitionId, expectedAcademicYearId: input.ExpectedAcademicYearId);
 	}
 
-	public async Task<StudentCertificateResponseDto> GetAsync(Guid certificateId)
+	public async Task<StudentCertificateResponseDto> GetAsync(Guid certificateId, bool includeBranding = false)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View);
 		var certificate = await LoadScopedCertificateAsync(certificateId, nameof(GetAsync));
-		return BuildStoredCertificateResponse(certificate);
+		var response = BuildStoredCertificateResponse(certificate);
+		if (includeBranding) await PopulateBrandingAsync(response);
+		return response;
 	}
 
 	public async Task<List<StudentCertificateHistoryDto>> GetHistoryAsync(Guid studentId)
@@ -374,7 +377,8 @@ public partial class StudentCertificateAppService(
 		StudentCertificateType certificateType,
 		DateTimeOffset issueDate,
 		Func<string, Guid, Task<StudentCertificateResponseDto>> responseFactory,
-		string idempotencyKey, Guid? transitionId = null, Guid? sourceCertificateId = null, string? duplicateReason = null)
+		string idempotencyKey, Guid? transitionId = null, Guid? sourceCertificateId = null, string? duplicateReason = null,
+		Guid? expectedAcademicYearId = null)
 	{
 		for (var attempt = 1; attempt <= MaxCertificateNumberGenerationAttempts; attempt++)
 		{
@@ -383,16 +387,19 @@ public partial class StudentCertificateAppService(
 				using var uow = UnitOfWorkManager.Begin(
 					new AbpUnitOfWorkOptions { IsTransactional = true },
 					requiresNew: true);
+				var student = await LoadScopedStudentAsync(studentId, "issue certificate");
+				EnsureExpectedAcademicYear(student, expectedAcademicYearId);
 				var existing = await certificateRepository.FindAsync(x => x.TenantId == CurrentTenant.Id && x.IdempotencyKey == idempotencyKey);
 				if (existing != null)
 				{
+					if (expectedAcademicYearId.HasValue && existing.AcademicYearId != expectedAcademicYearId)
+						throw new BusinessException(StudentErrorCodes.CertificateYearMismatch);
 					if (existing.StudentId != studentId || existing.CertificateType != certificateType || existing.TransitionId != transitionId || existing.SourceCertificateId != sourceCertificateId ||
 						(sourceCertificateId.HasValue && DeserializeDictionary(existing.CertificateDataJson).GetValueOrDefault("_DuplicateReason") != duplicateReason?.Trim()))
 						throw new BusinessException("Students:Records:DocumentIdempotencyConflict");
 					return BuildStoredCertificateResponse(await LoadScopedCertificateAsync(existing.Id, "recover certificate issuance"));
 				}
-				var student = await LoadScopedStudentAsync(studentId, "issue certificate");
-				var exit = await ValidateIssuanceAsync(student, new() { StudentId = studentId, CertificateType = certificateType, TransitionId = transitionId });
+				var exit = await ValidateIssuanceAsync(student, new() { StudentId = studentId, CertificateType = certificateType, TransitionId = transitionId, ExpectedAcademicYearId = expectedAcademicYearId });
 				var certificateNo = await GenerateCertificateNumberAsync(certificateType, issueDate.Year, student.AcademicYearId);
 				var certificateId = GuidGenerator.Create();
 				var response = await responseFactory(certificateNo, certificateId);

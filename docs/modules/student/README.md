@@ -3,7 +3,7 @@ module: student
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-10-08
+updated_on: 2026-11-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,9 @@ audience: humans-and-agents
 # Understand the Student backend module
 
 TL;DR: use this page for Admissions, Onboarding, Student Records, and daily Student Attendance behavior, APIs, ownership, and validation.
+
+The Student setup guide shares school-first-visit and academic-year progress metadata while reusing existing configuration owners.
+See its [product rules](./product.md#student-setup-guide), [API](./api.md#student-setup-guide), [ownership](./architecture.md#student-setup-guide-ownership), and [validation](./testing.md#student-setup-guide-validation).
 
 ## Student Attendance
 

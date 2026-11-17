@@ -11,6 +11,35 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Archive_catalogue_names_the_unpublished_form_and_recovery_without_changing_availability(bool registrationForm) => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
+		var formName = await WithUnitOfWorkAsync(async () =>
+		{
+			var form = await _formRepository.GetAsync(registrationForm ? offering.ApplicationFormDefinitionId!.Value : offering.InquiryFormDefinitionId!.Value);
+			form.Archive();
+			await _formRepository.UpdateAsync(form, autoSave: true);
+			return form.Name;
+		});
+		var reader = GetRequiredService<AdmissionOfferingReadService>();
+		var catalogue = await WithUnitOfWorkAsync(() => reader.GetCatalogueAsync([offering.AdmissionCycleId]));
+		var row = catalogue.Single(item => item.Row.Id == offering.Id).Row;
+		row.IsActive.ShouldBeTrue();
+		row.ConfigurationStatus.ShouldBe(AdmissionOfferingConfigurationStatus.Incomplete);
+		row.AvailabilityStatus.ShouldBe(AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete);
+		var payload = JsonSerializer.SerializeToElement(row, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+		payload.TryGetProperty("unavailableReason", out var reason).ShouldBeTrue();
+		reason.GetString().ShouldNotBeNull().ShouldContain(formName);
+		reason.GetString()!.ShouldContain("archived");
+		reason.GetString()!.ShouldContain("Restore");
+		var context = await WithUnitOfWorkAsync(() => GetRequiredService<IAdmissionInquiryCaptureAppService>().GetContextAsync(offering.Id));
+		context.Availability.CanCreateInquiry.ShouldBeFalse();
+		context.Form.ShouldBeNull();
+	});
+
 	[Fact]
 	public Task Archive_availability_catalogue_and_capture_agree_on_unapproved_inquiry_version() => RunCertificationScenarioAsync(async () =>
 	{
@@ -72,6 +101,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		available.Status.ShouldBe(AdmissionOfferingAvailabilityStatus.Inactive);
 		available.ReasonCode.ShouldBe(AdmissionErrorCodes.OfferingInactive);
 		available.ReasonMessage.ShouldNotBeNull().ShouldContain("inactive", Case.Insensitive);
+		var catalogue = await WithUnitOfWorkAsync(() => GetRequiredService<AdmissionOfferingReadService>().GetCatalogueAsync([offering.AdmissionCycleId]));
+		var row = catalogue.Single(item => item.Row.Id == offering.Id).Row;
+		row.UnavailableReason.ShouldNotBeNull().ShouldContain("inactive", Case.Insensitive);
+		row.UnavailableReason!.ShouldNotContain("archived", Case.Insensitive);
 	});
 
 	[Fact]

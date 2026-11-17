@@ -63,7 +63,7 @@ public class EfCoreChargeRequestRepository(
 			lines);
 	}
 
-	public async Task<(List<ChargeRequestJoinResult> Items, int TotalCount)> GetChargeRequestsPagedAsync(
+	public async Task<(List<ChargeRequestJoinResult> Items, int TotalCount, ChargeRequestStatusCounts StatusCounts)> GetChargeRequestsPagedAsync(
 		Guid academicYearId,
 		int status,
 		int page,
@@ -98,7 +98,7 @@ public class EfCoreChargeRequestRepository(
 		if (scopedStudentIds is not null)
 		{
 			if (scopedStudentIds.Count == 0)
-				return ([], 0);
+				return ([], 0, new ChargeRequestStatusCounts(0, 0));
 			chargeLineQuery = chargeLineQuery.Where(c => scopedStudentIds.Contains(c.StudentId));
 			chargeQuery = chargeQuery.Where(r => chargeLineQuery.Any(c => c.ChargeRequestId == r.Id));
 		}
@@ -127,6 +127,13 @@ public class EfCoreChargeRequestRepository(
 		// Class/division and user scope select requests, but their lifecycle uses the entire batch.
 		var candidateIds = await chargeQuery.Select(r => r.Id).ToListAsync(cancellationToken);
 		var progress = await GetPaymentProgressAsync(candidateIds, cancellationToken, chargeLineQuery);
+		var countable = progress.Values.Where(value =>
+			ChargeColumnFilter.MatchesStatus(columnFilters, value.WorkflowStatus)).ToList();
+		var statusCounts = new ChargeRequestStatusCounts(
+			countable.Count(value => value.WorkflowStatus == ChargeWorkflowStatus.Pending),
+			countable.Count(value => value.WorkflowStatus == ChargeWorkflowStatus.InProcess),
+			countable.Count(value => value.WorkflowStatus == ChargeWorkflowStatus.Completed),
+			countable.Count(value => value.WorkflowStatus == ChargeWorkflowStatus.Rejected));
 		var matchingIds = progress.Where(x => (int)x.Value.WorkflowStatus == status && ChargeColumnFilter.MatchesStatus(columnFilters, x.Value.WorkflowStatus))
 			.Select(x => x.Key).ToList();
 		chargeQuery = chargeQuery.Where(r => matchingIds.Contains(r.Id));
@@ -168,7 +175,10 @@ public class EfCoreChargeRequestRepository(
 				.Take(pageSize).ToListAsync(cancellationToken);
 		}
 
-		var chargeLines = await chargeLineQuery.OrderByDescending(r => r.CreationTime).ToListAsync(cancellationToken);
+		var pageRequestIds = charges.Select(charge => charge.Id).ToList();
+		var chargeLines = pageRequestIds.Count == 0 ? [] : await chargeLineQuery
+			.Where(line => pageRequestIds.Contains(line.ChargeRequestId))
+			.OrderByDescending(line => line.CreationTime).ToListAsync(cancellationToken);
 
 		var chargeCategoryIds = charges.Select(c => c.ChargeCategoryId).Distinct().ToList();
 		var chargeCategories = await chargeCategoryRepository.GetListAsync(c => chargeCategoryIds.Contains(c.Id));
@@ -206,7 +216,7 @@ public class EfCoreChargeRequestRepository(
 						 progress[charge.Id].CanCancel
 					 );
 
-		return (result.ToList(), totalCount);
+		return (result.ToList(), totalCount, statusCounts);
 	}
 
 	public async Task<IQueryable<ChargeLineJoinResult>> GetChargeLinesQueryAsync(

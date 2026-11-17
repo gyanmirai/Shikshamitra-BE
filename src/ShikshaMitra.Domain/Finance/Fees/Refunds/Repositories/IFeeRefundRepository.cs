@@ -17,7 +17,7 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
     /// <summary>
     /// Fetches a page of refund requests with their lines, applying optional filters.
     /// </summary>
-    Task<(List<FeeRefundRequest> Items, int TotalCount)> GetListWithDetailsAsync(
+    Task<(List<FeeRefundRequest> Items, int TotalCount, Dictionary<FeeRefundStatus, int> StatusCounts)> GetListWithDetailsAsync(
         Guid? studentId = null,
         Guid? academicYearId = null,
         Guid? academicMediumId = null,

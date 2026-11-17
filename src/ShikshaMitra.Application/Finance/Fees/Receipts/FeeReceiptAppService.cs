@@ -73,10 +73,11 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
         ValidateListInput(input);
         FinanceClassDivisionFilterValidator.Validate(input);
 		var tableQuery = ParseListFilters(input.Filters);
-		var hasHeaderFilters = tableQuery.Filters.Count > 0;
+		var hasDisplayFilters = tableQuery.Filters.Any(f => !SqlListFilterColumns.Contains(f.Column));
 
         var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
-        var filter = new FeeReceiptListFilter
+        var scopedAccountIds = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
+        FeeReceiptListFilter CreateFilter(int skip, int take) => new()
         {
             AcademicYearId        = input.AcademicYearId,
             BoardId               = input.BoardId,
@@ -86,16 +87,49 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
             Search                = input.Search,
             StandardId            = input.StandardId,
             DivisionId            = input.DivisionId,
-            // Display filters must see every already-authorized candidate before count/page.
-            SkipCount             = hasHeaderFilters ? 0 : input.SkipCount,
-            MaxResultCount        = hasHeaderFilters ? int.MaxValue : input.MaxResultCount,
+            SkipCount             = skip,
+            MaxResultCount        = take,
             ScopedStudentIdsQuery = scopedStudentIds,
-            ScopedAccountIdsQuery = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync(),
+            ScopedAccountIdsQuery = scopedAccountIds,
+            TableQuery            = tableQuery,
         };
 
-        var (totalCount, receipts) = await receiptRepository.GetPagedListAsync(filter, cancellationToken);
+        var batchSize = hasDisplayFilters ? 200 : input.MaxResultCount;
+        var (totalCount, receipts) = await receiptRepository.GetPagedListAsync(
+            CreateFilter(hasDisplayFilters ? 0 : input.SkipCount, batchSize), cancellationToken);
         if (totalCount == 0)
             return new PagedResultDto<FeeReceiptListItemDto>(0, []);
+
+		if (hasDisplayFilters)
+		{
+			var matchingCount = 0;
+			var page = new List<FeeReceiptListItemDto>();
+			var offset = 0;
+			while (receipts.Count > 0)
+			{
+				var matching = tableQuery.Apply((await LoadReceiptItemsAsync(receipts, cancellationToken)).AsQueryable(),
+					ListFilterFields).ToList();
+				foreach (var item in matching)
+				{
+					if (matchingCount >= input.SkipCount && page.Count < input.MaxResultCount)
+						page.Add(item);
+					matchingCount++;
+				}
+				offset += receipts.Count;
+				if (offset >= totalCount) break;
+				(_, receipts) = await receiptRepository.GetPagedListAsync(CreateFilter(offset, batchSize),
+					cancellationToken, includeTotalCount: false);
+			}
+			return new PagedResultDto<FeeReceiptListItemDto>(matchingCount, page);
+		}
+
+		return new PagedResultDto<FeeReceiptListItemDto>(totalCount,
+			await LoadReceiptItemsAsync(receipts, cancellationToken));
+    }
+
+	private async Task<List<FeeReceiptListItemDto>> LoadReceiptItemsAsync(
+		List<FeePaymentReceipt> receipts, CancellationToken cancellationToken)
+	{
 
         var studentIds = receipts.Where(r => r.StudentId.HasValue).Select(r => r.StudentId!.Value).Distinct().ToList();
         var students   = await AsyncExecuter.ToListAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => Enumerable.Contains(studentIds, s.Id)), cancellationToken);
@@ -150,14 +184,7 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
             };
         }).ToList();
 
-		if (hasHeaderFilters)
-		{
-			var matching = tableQuery.Apply(items.AsQueryable(), ListFilterFields).ToList();
-			return new PagedResultDto<FeeReceiptListItemDto>(matching.Count,
-				matching.Skip(input.SkipCount).Take(input.MaxResultCount).ToList());
-		}
-
-        return new PagedResultDto<FeeReceiptListItemDto>(totalCount, items);
+		return items;
     }
 
     public async Task<FeeReceiptDetailDto> GetAsync(

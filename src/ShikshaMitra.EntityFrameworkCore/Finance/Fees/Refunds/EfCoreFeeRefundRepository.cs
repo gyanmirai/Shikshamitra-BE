@@ -19,7 +19,7 @@ public class EfCoreFeeRefundRepository(
 ) : EfCoreRepository<ShikshaMitraDbContext, FeeRefundRequest, Guid>(dbContextProvider),
     IFeeRefundRepository
 {
-    public async Task<(List<FeeRefundRequest> Items, int TotalCount)> GetListWithDetailsAsync(
+    public async Task<(List<FeeRefundRequest> Items, int TotalCount, Dictionary<FeeRefundStatus, int> StatusCounts)> GetListWithDetailsAsync(
         Guid? studentId = null,
         Guid? academicYearId = null,
         Guid? academicMediumId = null,
@@ -90,8 +90,6 @@ public class EfCoreFeeRefundRepository(
         else if (scopedAccountIdsQuery != null)
             query = query.Where(r => r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value));
 
-        if (status.HasValue)
-            query = query.Where(r => r.Status == status.Value);
         if (legacyHistory)
             query = query.Where(r => r.WorkflowVersion == 0);
         else if (workflowVersion.HasValue)
@@ -119,7 +117,14 @@ public class EfCoreFeeRefundRepository(
         }
 
         query = FeeRefundColumnFilterQuery.Apply(query, dbContext.Set<Student>(), columnFilters ?? [], dbContext.Set<FeePaymentReceipt>());
-        var totalCount = await query.CountAsync(cancellationToken);
+        var statusCounts = await query.GroupBy(r => r.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Count, cancellationToken);
+        var totalCount = status.HasValue ? statusCounts.GetValueOrDefault(status.Value) : statusCounts.Values.Sum();
+        if (totalCount == 0)
+            return ([], 0, statusCounts);
+        if (status.HasValue)
+            query = query.Where(r => r.Status == status.Value);
 
         query = ApplySorting(query, sorting);
 
@@ -128,7 +133,7 @@ public class EfCoreFeeRefundRepository(
             .Take(maxResultCount)
             .ToListAsync(cancellationToken);
 
-        return (items, totalCount);
+        return (items, totalCount, statusCounts);
     }
 
     public async Task<FeeRefundRequest?> FindWithLinesAsync(Guid id, CancellationToken cancellationToken = default)

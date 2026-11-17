@@ -19,7 +19,7 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund;
 public partial class FeeRefundAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
-    public async Task<PagedResultDto<FeeRefundRequestDto>> GetListAsync(GetFeeRefundsInput input)
+    public async Task<FeeRefundListResultDto> GetListAsync(GetFeeRefundsInput input)
     {
         FinanceClassDivisionFilterValidator.Validate(input);
         var scoped = input.AcademicYearId.HasValue
@@ -28,7 +28,7 @@ public partial class FeeRefundAppService
         var scopedAccounts = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
         var visibleRequestIds = input.AcademicYearId.HasValue
             ? await GetVisibleRefundRequestIdsAsync(input.AcademicYearId.Value) : null;
-        var (items, count) = await feeRefundRepository.GetListWithDetailsAsync(input.StudentId, input.AcademicYearId,
+        var (items, count, statusCounts) = await feeRefundRepository.GetListWithDetailsAsync(input.StudentId, input.AcademicYearId,
             input.AcademicMediumId, input.StandardId, input.DivisionId, input.Status,
             input.LegacyHistory, input.WorkflowVersion, input.Search,
             input.SkipCount, input.MaxResultCount, input.Sorting, scoped,
@@ -55,7 +55,12 @@ public partial class FeeRefundAppService
             }
             dtos.Add(dto);
         }
-        return new PagedResultDto<FeeRefundRequestDto>(count, dtos);
+        return new FeeRefundListResultDto
+        {
+            TotalCount = count,
+            Items = dtos,
+            StatusCounts = statusCounts.ToDictionary(entry => (int)entry.Key, entry => entry.Value)
+        };
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]

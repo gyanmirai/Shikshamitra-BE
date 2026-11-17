@@ -70,9 +70,10 @@ public sealed class FinanceTableQuery
         };
     }
 
-    public IQueryable<T> Apply<T>(IQueryable<T> query, IReadOnlyDictionary<string, LambdaExpression> fields)
+    public IQueryable<T> Apply<T>(IQueryable<T> query, IReadOnlyDictionary<string, LambdaExpression> fields,
+        Func<string, bool>? includeColumn = null)
     {
-        foreach (var group in Filters.GroupBy(f => f.Column))
+        foreach (var group in Filters.Where(f => includeColumn?.Invoke(f.Column) ?? true).GroupBy(f => f.Column))
         {
             var field = fields[group.Key];
             Expression? alternatives = null;
@@ -111,6 +112,21 @@ public sealed class FinanceTableQuery
             {
                 "startsWith" => nameof(string.StartsWith), "endsWith" => nameof(string.EndsWith), _ => nameof(string.Contains)
             }, System.Type.EmptyTypes, value);
+        }
+        if (field.Type == typeof(DateOnly))
+        {
+            var day = DateTimeOffset.Parse(filter.Value.ToString(), CultureInfo.InvariantCulture);
+            var startDay = new DateTimeOffset(day.Date, day.Offset).ToUniversalTime().UtcDateTime;
+            var endDay = startDay.AddDays(1);
+            static DateOnly CeilingDate(DateTime date) => DateOnly.FromDateTime(date).AddDays(date.TimeOfDay == TimeSpan.Zero ? 0 : 1);
+            var start = Expression.Constant(CeilingDate(startDay));
+            var end = Expression.Constant(CeilingDate(endDay));
+            return filter.Type switch
+            {
+                "after" => Expression.GreaterThanOrEqual(field, start),
+                "before" => Expression.LessThan(field, end),
+                _ => Expression.AndAlso(Expression.GreaterThanOrEqual(field, start), Expression.LessThan(field, end))
+            };
         }
         if (field.Type == typeof(DateTimeOffset) || field.Type == typeof(DateTime))
         {

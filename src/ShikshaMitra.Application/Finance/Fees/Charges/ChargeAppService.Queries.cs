@@ -24,22 +24,28 @@ public partial class ChargeAppService
 		var readScope = await GetChargeReadScopeAsync(input.AcademicYearId);
 		var scopedStudentIds = readScope.OwnStudentIds.Concat(readScope.ReviewerStudentIds).Distinct().ToArray();
 		var columnFilters = ChargeColumnFilter.Parse(input.Filters);
-		var (items, totalCount) = await chargeRequestRepository.GetChargeRequestsPagedAsync(
+		var (items, totalCount, statusCounts) = await chargeRequestRepository.GetChargeRequestsPagedAsync(
 			input.AcademicYearId, input.Status, page, pageSize,
 			input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId, input.Search,
 			input.SortBy, input.SortOrder, scopedStudentIds, columnFilters: columnFilters,
 			readScope: readScope);
-		var statusCounts = await chargeRequestRepository.GetStatusCountsAsync(
-			input.AcademicYearId, input.BoardId, input.EducationMediumId,
-			input.StandardId, input.DivisionId, scopedStudentIds, search: input.Search,
-			columnFilters: columnFilters, readScope: readScope);
+		if (!input.BoardId.HasValue || !input.EducationMediumId.HasValue)
+			statusCounts = await chargeRequestRepository.GetStatusCountsAsync(
+				input.AcademicYearId, input.BoardId, input.EducationMediumId,
+				input.StandardId, input.DivisionId, scopedStudentIds, search: input.Search,
+				columnFilters: columnFilters, readScope: readScope);
+		var pageRequestIds = items.Select(item => item.Request.Id).ToList();
+		var pendingByRequest = pageRequestIds.Count == 0
+			? new Dictionary<Guid, List<Guid>>()
+			: (await chargeRepository.GetListAsync(line =>
+				pageRequestIds.Contains(line.ChargeRequestId) && line.Status == ChargeStatus.Pending))
+				.GroupBy(line => line.ChargeRequestId)
+				.ToDictionary(group => group.Key, group => group.Select(line => line.StudentId).ToList());
 		var mappedItems = new System.Collections.Generic.List<ChargeListItem>();
 		foreach (var item in items)
 		{
 			var dto = MapToListItem(item);
-			var pendingStudentIds = (await chargeRepository.GetListAsync(line =>
-				line.ChargeRequestId == item.Request.Id && line.Status == ChargeStatus.Pending))
-				.Select(line => line.StudentId).ToList();
+			var pendingStudentIds = pendingByRequest.GetValueOrDefault(item.Request.Id) ?? [];
 			dto.AvailableActions = await GetAvailableActionsAsync(
 				item.Request.RequestorId, item.Request.AcademicYearId, pendingStudentIds,
 				item.PendingCount > 0, item.PendingCount == item.StudentCount,

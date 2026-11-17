@@ -72,7 +72,7 @@ public class FinanceChargeRequestReadScope_Tests : ShikshaMitraApplicationTestBa
 					[fixture.ReviewStudentId], [fixture.MakerId], familyIds);
 				var repository = GetRequiredService<IChargeRequestRepository>();
 				var visibleStudentIds = new[] { fixture.OwnStudentId, fixture.ReviewStudentId };
-				var (items, total) = await repository.GetChargeRequestsPagedAsync(
+				var (items, total, pageCounts) = await repository.GetChargeRequestsPagedAsync(
 					fixture.YearId, status: 0, page: 1, pageSize: 20,
 					scopedStudentIds: visibleStudentIds, readScope: scope);
 				total.ShouldBe(1);
@@ -80,6 +80,7 @@ public class FinanceChargeRequestReadScope_Tests : ShikshaMitraApplicationTestBa
 				var counts = await repository.GetStatusCountsAsync(fixture.YearId,
 					scopedStudentIds: visibleStudentIds, readScope: scope);
 				counts.Pending.ShouldBe(1);
+				pageCounts.Pending.ShouldBe(counts.Pending);
 			});
 		}
 	}

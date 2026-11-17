@@ -20,8 +20,8 @@ public class FeeRefundController(
 {
     [HttpGet]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
-    [ProducesResponseType(typeof(PagedResultDto<FeeRefundRequestDto>), StatusCodes.Status200OK)]
-    public Task<PagedResultDto<FeeRefundRequestDto>> GetListAsync([FromQuery] GetFeeRefundsInput input)
+    [ProducesResponseType(typeof(FeeRefundListResultDto), StatusCodes.Status200OK)]
+    public Task<FeeRefundListResultDto> GetListAsync([FromQuery] GetFeeRefundsInput input)
         => feeRefundAppService.GetListAsync(input);
 
     [HttpGet("{id:guid}")]

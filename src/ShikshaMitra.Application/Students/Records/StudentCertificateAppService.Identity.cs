@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -9,6 +10,32 @@ namespace ShikshaMitra.Students.Records;
 public partial class StudentCertificateAppService
 {
 	private const string IdentityChoicesProperty = "SchoolIdentityChoices";
+
+	private async Task PopulateBrandingAsync(StudentCertificateResponseDto response)
+	{
+		var snapshot = response.Template.SchoolIdentity;
+		if (snapshot == null || (!snapshot.LogoAssetId.HasValue && !snapshot.BannerAssetId.HasValue)) return;
+		// Load only the captured public letterhead assets; signatures remain in the existing PDF flow.
+		var assets = await schoolIdentity.LoadAsync(new SchoolIdentityDocumentSnapshotDto
+		{
+			TenantId = snapshot.TenantId,
+			LogoAssetId = snapshot.LogoAssetId,
+			BannerAssetId = snapshot.BannerAssetId
+		});
+		response.Branding = new StudentCertificateBrandingDto
+		{
+			LogoDataUrl = BrandingDataUrl(assets.Logo),
+			BannerDataUrl = BrandingDataUrl(assets.Banner)
+		};
+	}
+
+	private static string? BrandingDataUrl(byte[]? bytes)
+	{
+		if (bytes == null) return null;
+		var contentType = bytes.Length >= 2 && bytes[0] == 0xff && bytes[1] == 0xd8 ? "image/jpeg" : "image/png";
+		return $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
+	}
+
 	private async Task ConfigureIdentityAsync(StudentCertificateTemplate template, SchoolIdentityTemplateChoicesDto? input)
 	{
 		if (input == null) return;

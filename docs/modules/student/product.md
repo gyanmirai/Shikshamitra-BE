@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-11-06
+updated_on: 2026-11-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -173,7 +173,7 @@ Local tests and source availability do not certify deployment or authenticated b
 | Inline profile form | The retained original Registration schema displays safe current answers. Authorized staff can save supported mapped and school-specific fields immediately as one atomic actor/time/reason/before/after audit, without an approval step. This explicit profile command leaves generic correction/approval policy unchanged; original submissions, protected identities, placement and fields outside the form remain intact. |
 | Sensitive data | Current database roles govern field groups. Current and historical-year school policy both constrain history and export reads. Free-text reasons and event remarks are withheld when relevant groups are restricted. |
 | Parent / guardian changes | A changed linked person's saved profile uses the published SuspendUntilReview or KeepUntilReview policy. Main-contact-only preferences and added unlinked guardians keep unchanged adult links. Resolution uses verified identity and preserves sibling relationships. |
-| Documents | IDs and certificates retain issued snapshots, numbering, issue history, reasoned reprint/void actions, and idempotency. Certificates may be generated for all active Student List students in staff scope; onboarding or historical entry approval is not required for their certificate operations. Other Records operations and former-student certificate eligibility retain their existing approval rules. Certificate history groups students generated together and filters by generation month. Leaving certificates for withdrawal/transfer require the configured ApprovedExit or EffectiveExit point. Graduation requires an Applied case whose effective date has arrived, including when ApprovedExit is selected. |
+| Documents | IDs and certificates retain issued snapshots, numbering, issue history, reasoned reprint/void actions, and idempotency. Certificates may be generated for all active Student List students in staff scope; onboarding or historical entry approval is not required for their certificate operations. Other Records operations and former-student certificate eligibility retain their existing approval rules. Certificate APIs retain grouped generation-month history and all-type, all-date per-student history. Selected-student generation rejects a mismatch with the permanent Student year. Leaving certificates for withdrawal/transfer require the configured ApprovedExit or EffectiveExit point. Graduation requires an Applied case whose effective date has arrived, including when ApprovedExit is selected. |
 | Year-end | Promote, Repeat, Hold, Graduate, Withdraw, and Transfer use batch preview, owner checks, approval, and per-student atomic apply. ReadyOnly skips exception rows; HoldAll keeps the batch waiting when any submitted row cannot proceed. |
 | Annual renewal | DirectEnrollment creates a unique next-year enrollment after approval and placement checks. ShortChecklist opens year-specific short onboarding; the prior permanent profile stays visible. Finance and portal completion follow enrollment activation. |
 | Returns | Every route follows the frozen Records Status approval rule. ReuseProfile opens short renewal. FreshApplication follows the Offering's Inquiry or DirectRegistration entry; Both requires an explicit choice. ResumeStage resumes the eligible linked application's current stage. Fresh/Resume remain AwaitingAdmission until real Onboarding completion. |
@@ -377,6 +377,8 @@ Existing inquiries and workflows remain compatible; management is created only f
 
 New saved Assessment settings enable managed results by default, with optional scheduling, attendance, aggregate marks/pass thresholds, Maximum attempts, bounded retakes and existing authorized waivers. Independent result review is disabled. The frozen policy and attempt history remain authoritative.
 
+Assessment catalog classes follow saved academic stage order, then saved class order, with name and identity tie-breakers at each level. This matches the Student directory; it does not infer class level from display names or change scope eligibility.
+
 Subject-wise marks are an opt-in version 2 mode inside the existing Assessment stage.
 Each Board/Medium/class has exactly one profile, containing mandatory school or custom entrance subjects and their maximum marks.
 Published Academic subject assignments are suggestions only; any active subject in the profile's Medium may be selected.
@@ -495,3 +497,13 @@ Durable delivery retains Communication's history, consent and approval controls.
 ## Future backlog: shared class capacity
 
 Deferred; not implemented. A future read-only class capacity view may derive the selected academic year and class total from division strengths, account for active enrollments and accepted/finalized admissions awaiting enrollment without double counting, and share the count across admission tracks. This future work does not authorize a seat-count limit on Inquiry or Registration intake. Its pending-admission semantics, scope and staff UI require a separate implementation decision.
+
+## Student setup guide
+
+The six-stage guide helps staff configure Admissions, Student Numbering, Records and Houses, then review Student workflows.
+It reuses existing configuration owners and saves only navigation, deferrals and review metadata.
+The first authorized guide or configuration entry is recorded once per school, independently of academic-year progress.
+Completion does not create students, enrollments, credentials, payments, finance records or attendance operations.
+Published configuration presence is advisory for the selected context; a matching numbering rule does not establish readiness for all classes.
+The effective starter Records policy is already configured and is identified as a school default.
+Documents, I-Cards and Attendance do not have separate setup stages.

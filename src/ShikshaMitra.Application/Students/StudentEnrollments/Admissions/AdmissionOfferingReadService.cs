@@ -97,6 +97,7 @@ public class AdmissionOfferingReadService(
 		if (availability.Status == AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete)
 			availability = availability with { ReasonMessage = string.Join(" ", validation.Errors.Select(error => error.Message).Distinct()) };
 		detail.AvailabilityStatus = availability.Status;
+		detail.UnavailableReason = availability.ReasonMessage;
 		return (row, detail, availability);
 	}
 
@@ -461,6 +462,9 @@ public class AdmissionOfferingReadService(
 			CoreFieldPolicyVersion = row.ApplicationForm == null ? null : AdmissionFormMetadataStore.ReadExperience(row.ApplicationForm).CoreFieldPolicyVersion,
 			IsActive = row.Offering.IsActive,
 			AvailabilityStatus = availability.Status,
+			UnavailableReason = availability.Status == AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete
+				? string.Join(" ", validation.Errors.Select(error => error.Message).Distinct())
+				: availability.ReasonMessage,
 			ConfigurationStatus = validation.Status,
 			ApplicationCount = row.ApplicationCount
 		};
@@ -495,6 +499,7 @@ public class AdmissionOfferingReadService(
 			CoreFieldPolicyVersion = list.CoreFieldPolicyVersion,
 			IsActive = list.IsActive,
 			AvailabilityStatus = list.AvailabilityStatus,
+			UnavailableReason = list.UnavailableReason,
 			ConfigurationStatus = list.ConfigurationStatus,
 			ApplicationCount = list.ApplicationCount,
 			UseCycleDates = !row.Offering.OpenDate.HasValue && !row.Offering.CloseDate.HasValue,
@@ -541,13 +546,15 @@ public class AdmissionOfferingReadService(
 		if (row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration && row.InquiryForm == null)
 			errors.Add(new(AdmissionOfferingValidationCodes.InquiryFormMissing, "Published Inquiry Form is required."));
 		else if (row.InquiryForm != null && row.InquiryForm.Status != AdmissionFormStatus.Published)
-			errors.Add(new(AdmissionOfferingValidationCodes.InquiryFormNotPublished, "Inquiry Form is not published."));
+			errors.Add(new(AdmissionOfferingValidationCodes.InquiryFormNotPublished,
+				AdmissionOfferingConfigurationValidator.GetUnpublishedFormMessage(row.InquiryForm, row.InquiryForm.Id, AdmissionFormPurpose.Inquiry)));
 		else if (row.InquiryForm != null && row.InquiryForm.Purpose != AdmissionFormPurpose.Inquiry)
 			errors.Add(new(AdmissionOfferingValidationCodes.InquiryFormPurposeMismatch, "The selected Inquiry Form must have the Inquiry purpose."));
 		if (row.ApplicationForm == null)
 			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormMissing, "Published Application Form is required."));
 		else if (row.ApplicationForm.Status != AdmissionFormStatus.Published)
-			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormNotPublished, "Application Form is not published."));
+			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormNotPublished,
+				AdmissionOfferingConfigurationValidator.GetUnpublishedFormMessage(row.ApplicationForm, row.ApplicationForm.Id, AdmissionFormPurpose.Registration)));
 		else if (row.ApplicationForm.Purpose != AdmissionFormPurpose.Registration)
 			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormPurposeMismatch, "The selected Application Form must have the Registration purpose."));
 		var usingIntake = row.Offering.InquiryIntakeProfileId.HasValue || row.Offering.CounsellorAssignmentProfileId.HasValue;

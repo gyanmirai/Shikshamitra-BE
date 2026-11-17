@@ -81,5 +81,8 @@ public static class StudentErrorCodes
     public const string CertificateNotFound                  = "ST:Records:050008";
     public const string CertificateTemplateNotFound          = "ST:Records:050009";
     public const string CertificateNumberGenerationConflict  = "ST:Records:050010";
+    public const string CertificateYearMismatch              = "Students:Records:CertificateYearMismatch";
     public const string InvalidCertificateBatchQuery         = "Students:Records:InvalidCertificateBatchQuery";
+    public const string InvalidIdHistoryQuery                = "Students:Records:InvalidIdHistoryQuery";
+    public const string InvalidIdHistorySort                 = "Students:Records:InvalidIdHistorySort";
 }

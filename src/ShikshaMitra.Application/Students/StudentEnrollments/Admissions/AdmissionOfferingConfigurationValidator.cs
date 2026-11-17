@@ -476,6 +476,16 @@ public class AdmissionOfferingConfigurationValidator
 			{ FormDefinitionId = formId, FormPurpose = AdmissionFormPurpose.Registration, WorkflowDefinitionId = workflowId });
 	}
 
+	internal static string GetUnpublishedFormMessage(AdmissionFormDefinition? form, Guid formId, AdmissionFormPurpose purpose)
+	{
+		var label = purpose == AdmissionFormPurpose.Registration ? "Registration Form" : "Inquiry Form";
+		var resolution = purpose == AdmissionFormPurpose.Registration
+			? "Restore it in Admission forms, or select another published Registration form in the workflow's Registration stage and attach that workflow to this offering."
+			: "Restore it in Admission forms, or select another published Inquiry form in this offering.";
+		var state = form == null ? "is unavailable" : form.Status == AdmissionFormStatus.Archived ? "is archived" : "is still a draft";
+		return $"{label} '{form?.Name ?? formId.ToString()}' {state}. {resolution}";
+	}
+
 	private async Task ValidateFormAsync(
 		Guid? formId,
 		string missingCode,
@@ -499,11 +509,7 @@ public class AdmissionOfferingConfigurationValidator
 		var form = await formRepository.FindAsync(formId.Value);
 		if (form == null || form.Status != AdmissionFormStatus.Published)
 		{
-			var resolution = purpose == AdmissionFormPurpose.Registration
-				? "Restore it in Admission forms, or select another published Registration form in the workflow's Registration stage and attach that workflow to this offering."
-				: "Restore it in Admission forms, or select another published Inquiry form in this offering.";
-			var state = form == null ? "is unavailable" : form.Status == AdmissionFormStatus.Archived ? "is archived" : "is still a draft";
-			var message = $"{label} '{form?.Name ?? formId.Value.ToString()}' {state}. {resolution}";
+			var message = GetUnpublishedFormMessage(form, formId.Value, purpose);
 			var stage = purpose == AdmissionFormPurpose.Registration && workflowId.HasValue
 				? (await workflowStageRepository.GetListAsync(item => item.WorkflowDefinitionId == workflowId.Value && item.StageType == AdmissionWorkflowStageType.Form))
 					.FirstOrDefault(item => AdmissionFormStageAccessService.ReadFormDefinitionId(item.ConfigurationJson) == formId)

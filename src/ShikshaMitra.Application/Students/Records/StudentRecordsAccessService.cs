@@ -43,6 +43,21 @@ public class StudentRecordsAccessService(
 		return await EvaluateEligibilityAsync(await GetScopedStudentAsync(studentId));
 	}
 
+	// The caller first constrains this population to one current year and establishes current actor, tenant and scope.
+	internal async Task<IQueryable<Student>> FilterFullAccessStudentsAsync(IQueryable<Student> query, StudentRecordsPolicy policy)
+	{
+		var eligibleIds = await GetOnboardingEligibleStudentIdsAsync();
+		var overrideQuery = await overrides.GetQueryableAsync();
+		var caseQuery = await cases.GetQueryableAsync();
+		var enrollmentQuery = await enrollments.GetQueryableAsync();
+		var allowProvisioning = policy.Provisioning.Mode == "Full";
+		return query.Where(student => eligibleIds.Contains(student.Id) ||
+			overrideQuery.Any(item => item.TenantId == CurrentTenant.Id && item.StudentId == student.Id && item.Status == "Approved") ||
+			allowProvisioning && caseQuery.Any(item => item.TenantId == CurrentTenant.Id && item.StudentId == student.Id &&
+				item.Status == StudentOnboardingStatus.Provisioning && item.StudentEnrollmentId.HasValue && enrollmentQuery.Any(enrollment =>
+					enrollment.TenantId == CurrentTenant.Id && enrollment.Id == item.StudentEnrollmentId && enrollment.StudentId == student.Id && enrollment.IsActive)));
+	}
+
 	// Internal: caller must first establish its own tenant and association boundary.
 	internal async Task<StudentRecordsAccess> EvaluateEligibilityAsync(Student student)
 	{

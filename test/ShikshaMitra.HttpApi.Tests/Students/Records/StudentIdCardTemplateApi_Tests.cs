@@ -38,6 +38,33 @@ public class StudentIdCardTemplateApi_Tests(ShikshaMitraApiTestFactory factory) 
 	private const string Delete = "Students.Records.StudentICard.Delete";
 
 	[Fact, TestTier(TestTraits.Tiers.Critical)]
+	public async Task Icard_issued_history_HTTP_returns_paged_metadata_with_view_only_and_preserves_frozen_JSON()
+	{
+		var actor = await CreateActorAsync(); var member = await SeedStudentAsync(actor);
+		var placement = await InTenantAsync(actor.TenantId, async services =>
+		{
+			var student = await services.GetRequiredService<IStudentRepository>().GetAsync(member.Student);
+			await services.GetRequiredService<IRepository<StudentIdCard, Guid>>().InsertAsync(new StudentIdCard(Guid.NewGuid(), actor.TenantId, student.Id,
+				"HTTP-CARD-001", "http-issued-history", "{invalid frozen JSON}", "{invalid frozen template}", DateTime.UtcNow, actor.UserId, member.Year), true);
+			return (Board: student.AcademicBoardId!.Value, Medium: student.AcademicMediumId);
+		});
+		var route = $"/api/students/records/ids/history?academicYearId={member.Year}&boardId={placement.Board}&mediumId={placement.Medium}&search=HTTP-CARD&maxResultCount=1";
+		using var allowed = AsActor(actor, View); using var response = await allowed.GetAsync(route);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var json = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+		json["data"]!["totalCount"]!.GetValue<long>().ShouldBe(1);
+		var row = json["data"]!["items"]!.AsArray().Single()!;
+		row["studentId"]!.GetValue<Guid>().ShouldBe(member.Student); row["studentName"]!.GetValue<string>().ShouldBe("Synthetic HTTP Icard");
+		row["studentSnapshot"].ShouldBeNull(); row["templateSnapshot"].ShouldBeNull();
+		using var denied = AsActor(actor, Add);
+		(await denied.GetAsync(route)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		(await allowed.GetAsync(route + "&skipCount=-1")).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var foreignActor = await CreateActorAsync(); using var foreign = AsActor(foreignActor, View);
+		var forbidden = await foreign.GetAsync(route); forbidden.IsSuccessStatusCode.ShouldBeFalse();
+		(await forbidden.Content.ReadAsStringAsync()).ShouldNotContain("HTTP-CARD-001");
+	}
+
+	[Fact, TestTier(TestTraits.Tiers.Critical)]
 	public async Task Icard_templates_HTTP_library_CRUD_preserves_oldest_legacy_fallback()
 	{
 		var actor = await CreateActorAsync();

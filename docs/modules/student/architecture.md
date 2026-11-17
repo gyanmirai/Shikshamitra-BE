@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-11-06
+updated_on: 2026-11-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -424,3 +424,12 @@ Paths without a layer prefix in this table are under `Application/Students/Stude
 ## Admission intake without capacity
 
 AdmissionInquiryAvailabilityService evaluates offering configuration, dates and entry mode without room allocations, occupancy totals or Seat pools. AdmissionOfferingReadService reuses the evaluated availability without capacity queries; Offering contracts omit classCapacity. The retired admission room-capacity controller, application/read services, calculator and DTOs are removed. AdmissionClassRoomAllocation, its EF mapping and existing migrations remain compatibility-only persistence; no runtime service reads or writes them. StudentOnboardingAppService remains the owner of division placement limits.
+
+## Student setup guide ownership
+
+The guide lives under `Students/Setup/` in Domain.Shared, Domain, Application.Contracts and Application, with the explicit `HttpApi/Controllers/Student/Setup/StudentSetupController.cs` boundary.
+`StudentSetupVisit` stores `StudentConfigurationFirstVisitV1` on Tenant ExtraProperties, and `StudentSetupProgress` stores `StudentSetupGuideProgressV1` on AcademicYear ExtraProperties.
+Both documents validate stored versions and shape; optimistic concurrency protects progress and first-visit retries reload a fresh unit of work.
+The configuration reader reuses Student scope/access owners, scoped Admission Offering queries, the Records policy resolver, and the Onboarding rule resolver.
+Queries run sequentially under existing tenant filters and exact View checks; hidden configuration is never queried.
+There is no migration or configuration mutation through this API.

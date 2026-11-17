@@ -12,7 +12,7 @@ public interface IStudentCertificateAppService
 	Task<StudentCertificateTemplateDto> UpsertTemplateAsync(StudentCertificateType certificateType, StudentCertificateTemplateDto input);
 	Task<StudentCertificateResponseDto> PreviewAsync(StudentCertificatePreviewRequestDto input);
 	Task<StudentCertificateResponseDto> GenerateAsync(CreateStudentCertificateDto input);
-	Task<StudentCertificateResponseDto> GetAsync(Guid certificateId);
+	Task<StudentCertificateResponseDto> GetAsync(Guid certificateId, bool includeBranding = false);
 	Task<List<StudentCertificateHistoryDto>> GetHistoryAsync(Guid studentId);
 	Task<Volo.Abp.Application.Dtos.PagedResultDto<StudentCertificateBatchDto>> GetBatchesAsync(StudentCertificateBatchQuery input);
 	Task<StudentCertificateBatchDetailDto> GetBatchAsync(Guid batchId, StudentCertificateType certificateType);

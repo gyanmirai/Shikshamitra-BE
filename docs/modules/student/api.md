@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-06
+updated_on: 2026-11-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -358,6 +358,10 @@ Records preserve each controller's response contract: Directory/Profile, Setting
 | Certificates | Directory requests with `includeActiveStudentList=true` require Certificates.View and include enrolled Student List students without records onboarding; former students retain records eligibility. `academicMediumStageId` filters the academic stage. Directory options expose `stages` under Medium and `stageId` on Classes. Certificate preview, generation, history and downloads accept active scoped students while retaining identity masking and Leaving exit rules. GET `/api/students/records/certificates/batches` accepts `certificateType`, `generatedFrom`, `generatedTo` (offset-bearing timestamps spanning at most 32 days), `skipCount` and `maxResultCount` (1–100). It returns paged generation groups. GET `/batches/{batchId}?certificateType=...` returns the saved certificate snapshots for visible students. Both require Certificates.View. A multi-student generation uses one stable UUID followed by each student UUID as its idempotency key; older independent requests appear as individual groups. |
 | Student I-Card | GET `/api/students/records/ids/templates/list` lists saved designs; POST `/templates` creates one, and GET/PUT/DELETE `/templates/{id}` views, edits, or deletes it. The existing GET/PUT `/templates` remains for older clients and addresses the oldest design. List and read require StudentICard.View, create and update require StudentICard.Add, and delete requires StudentICard.Delete. A student can belong to only one saved template in an academic year; creating or updating a template moves selected students from any other template in that year to the saved template. The same student may use a different template in another year. POST `/preview`, `/issue`, and `/export` accept an optional `templateId` to select a saved design; omitted ID uses the oldest design for compatibility. Preview validates up to 100 student IDs; issue creates numbered snapshot cards with an idempotency key; export returns an A4 bulk PDF for up to 100 IDs and requires StudentICard.Add. Deleting a design leaves issued card snapshots intact. Individual PDF requires View; reprint and void require Add. Directory accepts repeated `boardIds`, `mediumIds`, `standardIds` and `divisionIds` query parameters for the multi-select student step; scope and identity masking still apply. |
 
+GET `/api/students/records/ids/history` requires `StudentICard.View` and returns `Result<PagedResultDto<StudentIdCardListItemDto>>`. Required query values are `academicYearId`, `boardId` and `mediumId`; optional `standardId` and `divisionId` refine the current saved Student placement, and a division requires its class. Every selected hierarchy value must belong to its supplied parent and the actor's current scoped options. Historical enrollment membership does not qualify a student. `search` (maximum 150 characters) matches current full student name, current GR number or issued card number. `skipCount` is nonnegative and `maxResultCount` is 1–100. `sorting` accepts `studentName`, `grNumber`, `standardName`, `divisionName`, `cardNumber`, `issuedAt` or `status`, with `asc`/`desc`; a field alone means ascending. Default ordering is `issuedAt desc`; every order uses ascending card ID as its stable tie-breaker. Invalid queries/sorts return `Students:Records:InvalidIdHistoryQuery`/`Students:Records:InvalidIdHistorySort` (HTTP model validation can reject annotated bounds first).
+
+Rows contain only `id`, `studentId`, `studentName`, `grNumber`, `standardName`, `divisionName`, `cardNumber`, `status` and `issuedAt`. The names, GR, class and division describe the current saved Student. Issued, Printed and Voided cards, including cards from older issuance years, remain included when both the current Student year and card year allow Identity visibility. Tenant ownership, active database actor, current Student scope and Full Records eligibility are enforced before count and pagination. Masked or ineligible cards do not contribute to search/count results. This metadata projection never loads frozen student/template JSON or full Student aggregates. Existing per-student history and card-ID PDF/reprint/void endpoints retain their frozen snapshot behavior; no issuance snapshot, permission or migration changes.
+
 I-card designs return `id`, `concurrencyStamp`, and a saved `selection` containing `academicYearId`, `boardIds`, `mediumIds`, `standardIds`, `divisionIds` and `studentIds`. Each array accepts at most 100 distinct, nonempty IDs; selected students require an academic year. Preview does not create or transfer assignments. A missing selection on a legacy design is an empty cohort; omitting or sending null `selection` on an update preserves its stored cohort. An explicit empty selection clears membership only after the same current authority checks as replacement.
 
 Template metadata remains readable with I-card View when a saved cohort is outside the actor's current scope. In that case the server returns `selectionRestricted: true` and `selection: null`, including when stored class/division filters alone are inaccessible. Clients must omit selection for a design-only edit. Explicit cohort replacement, removal and design deletion validate the affected saved and replacement scope, student eligibility and Identity masks; denied writes also withhold opaque saved member IDs from error details. No additional Student List grant is inferred. Transfers are atomic within a Serializable transaction; stale template stamps fail with `Students:Records:IdTemplateConflict`, and a concurrent serialization conflict returns HTTP 409 for a fresh reload. Issued-card responses and PDFs never disclose a template's saved cohort, and template edits/deletion do not rewrite persisted issued snapshots. Apply the existing `20261012060526_AllowMultipleStudentIdCardTemplates` migration before enabling multiple designs on an existing database; it changes only the template tenant index from unique to nonunique.
@@ -465,6 +469,8 @@ Bulk `stageId` is optional and each item's actual stage is resolved from its Sta
 Uniqueness includes admission Track, so General and RTE may coexist for the same cycle/class/academic scope, but two non-deleted offerings of the same identity and Track are rejected even when inactive.
 Offering clone always uses the target cycle window (`useCycleDates=true`, null `openDate`/`closeDate` overrides), without copying or changing the source's custom dates.
 Generic create/update/bulk date contracts retain validated custom-date compatibility.
+
+Scoped Offering list/detail and staff Inquiry `capture-catalogue` rows include nullable `unavailableReason`, derived from the existing batched readiness and availability evaluation without additional per-row reads. Archived Inquiry/Registration forms are named with their restore/replacement guidance. Inactive availability takes precedence over configuration blockers; open rows have no unavailable reason. This display field does not change availability or write guards. Anonymous public capture retains its existing sanitized configuration messages.
 
 Fresh special Registration and family matching accept only RTE, Management, or Staff offerings configured for DirectRegistration or retained Both entry.
 RTE configuration still requires DirectRegistration, Form entry, no Inquiry stage and no Assessment stage.
@@ -811,6 +817,7 @@ Bulk creation previews every row and commits all rows in one unit of work only w
 | `Admissions.Offering.HierarchyOutOfScope` | UserScope does not allow the hierarchy |
 | `Admissions.OfferingDateRangeInvalid` | Override dates are missing, reversed, or outside the cycle |
 | `Admissions.Offering.ConfigurationIncomplete` | Published runtime configuration is incomplete |
+| `Admissions.Offering.Inactive` | New intake/start is blocked until an administrator activates the offering; normalized errors explain this recovery without changing the code or status |
 | `Admissions.Offering.IdentityLocked` | Runtime applications lock identity |
 | `Admissions.Offering.HasApplications` | Delete is blocked by runtime history |
 | `Admissions.Offering.ConcurrencyConflict` | The supplied stamp is stale |
@@ -1165,3 +1172,34 @@ Identity Exceptions fails with `Students:Records:RestrictedFields` when the gene
 Visible identifiers expose at most their final four characters; Aadhaar uses only the stored last-four value, never the encrypted value or hash.
 Missing compliance uses canonical not-provided/not-asked states and unavailable fields; no eligibility, state certification or official submission result is inferred.
 Preview and export are reads and never update UDISE/verification statuses.
+
+## Student setup guide
+
+`/api/student/setup` exposes authenticated school configuration guidance using existing exact Student View/Add grants.
+No new permission, schema, migration, or configuration-write endpoint is introduced.
+
+| Endpoint | Contract |
+|---|---|
+| `GET visit-status` | Returns `canAccessSetup`, `hasVisitedConfiguration`, and `firstVisitedAt`; reading never records a visit. |
+| `POST visit` | Optional `settingKey`; verifies that setting's exact View grant and records the first school-wide entry atomically. |
+| `GET {academicYearId}` | Optional `academicMediumId` and `standardId`; returns shared year progress and permission-filtered configuration states. |
+| `PUT {academicYearId}/progress` | Saves guide metadata with required `concurrencyStamp`, `currentStageKey`, optional `currentSettingKey`, `deferredSettingKeys`, and `finishReview`; stale writes return 409. |
+
+Stages are `welcome`, `admissions`, `numbering`, `records`, `workflows`, and `review`.
+Settings are `admission-periods`, `admission-forms`, `admission-stages`, `admission-offerings`, `public-inquiry-links`, `gr-number`, `roll-number`, `houses`, and `records-policy`.
+`canManage` requires both View and Add plus the owning configuration's data scope.
+Periods use Admissions; Forms use Admission Forms; Stages use Admission Workflows; Offerings and Public Inquiry Links use Admission Offerings; numbering uses Onboarding; Houses and Records Policy use their corresponding Records actions.
+Hidden settings remain `unavailable`, are not queried for configuration, and cannot be submitted as current/deferred settings.
+Hidden saved deferrals are preserved and omitted from the caller's response.
+States are `configured`, `empty`, `context-required`, or `unavailable`; presence is advisory and never certifies complete class coverage.
+Numbering requires medium and class context and an applicable effective published rule; `configurationSource` identifies `school` or `academic-year` inheritance.
+Records policy always resolves the effective published policy or safe starter (`school-default`); an unpublished draft does not replace that effective policy.
+Invalid input returns `ShikshaMitra:StudentSetup:Invalid`; malformed persisted guide metadata returns `ShikshaMitra:StudentSetup:InvalidStoredState` without resetting data.
+
+## Certificate selection context
+
+Directory requests with `includeActiveStudentList=true` additionally match the full student name and admission/registration form number case-insensitively. Matches remain inside the existing tenant, user scope, year and Identity-visibility predicate; the flag still requires Certificates.View.
+
+Certificate preview and creation accept optional `expectedAcademicYearId`. When supplied, it must match the permanent Student current academic year; a mismatch, including an unset current year, returns `Students:Records:CertificateYearMismatch` before preview or issuance. Creation rechecks this within the issuance transaction and before recovering an existing request. The selected-student client supplies its retained source year; omitted values preserve existing client compatibility. The guard does not create historical-placement certificates or limit all-date per-student history. GET `/api/students/records/certificates/students/{studentId}/history` returns metadata for all certificate types; GET `/api/students/records/certificates/{certificateId}` returns its saved snapshot. Reprint, duplicate and void retain their existing permissions, reasons, numbering and snapshot rules.
+
+Focused certificate previews may request `includeBranding: true`; saved reads may use `GET /api/students/records/certificates/{certificateId}?includeBranding=true`. Under the existing Certificates.View and student scope checks, the optional `branding` response contains PNG/JPEG `logoDataUrl` and `bannerDataUrl` resolved from the template's captured SchoolIdentity asset IDs. It never returns signature bytes. Plain reads/previews, generation, batch/history and PDF reads remain image-free in their JSON responses. Missing configured assets leave branding absent; saved and duplicate reads retain their original assets after Institute Setup defaults change. Existing explicit template overrides and Hidden choices retain precedence, and the PDF renderer remains unchanged.

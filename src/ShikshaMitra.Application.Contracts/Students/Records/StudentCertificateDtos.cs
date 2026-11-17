@@ -8,6 +8,8 @@ namespace ShikshaMitra.Students.Records;
 public class StudentCertificatePreviewRequestDto
 {
 	public Guid StudentId { get; set; }
+	public Guid? ExpectedAcademicYearId { get; set; }
+	public bool IncludeBranding { get; set; }
 	public StudentCertificateType CertificateType { get; set; }
 	public DateTimeOffset? IssueDate { get; set; }
 	public Dictionary<string, string?> CertificateFields { get; set; } = new();
@@ -38,6 +40,13 @@ public class StudentCertificateResponseDto
 	public Dictionary<string, string?> CertificateData { get; set; } = new();
 	public Dictionary<string, string?> PlaceholderValues { get; set; } = new();
 	public StudentCertificateTemplateRenderDto Template { get; set; } = new();
+	public StudentCertificateBrandingDto? Branding { get; set; }
+}
+
+public sealed class StudentCertificateBrandingDto
+{
+	public string? LogoDataUrl { get; set; }
+	public string? BannerDataUrl { get; set; }
 }
 
 public class StudentCertificateStudentDto

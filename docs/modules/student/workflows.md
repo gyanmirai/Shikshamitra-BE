@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-11-06
+updated_on: 2026-11-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -435,3 +435,14 @@ A verified persisted guardian or student-self association can upload and submit 
 Portal and standalone staff photo submissions/application acquire a tenant/student PostgreSQL transaction row fence before querying active requests or the snapshot. They use ReadCommitted so a waiting request sees the prior commit. The fence is a no-op update of the Student concurrency stamp: it holds the row lock and creates an MVCC version without changing semantic fields. Admission photo review joins its existing transaction; a prior Serializable snapshot aborts safely with ConcurrencyConflict if another photo transaction committed first. Other sections retain their existing isolation and approval actor checks. The immutable approval policy decides Pending versus immediate application. The shared application path rechecks the portal requester's live account, association, View/Add grants, eligibility and masking, including when a staff reviewer applies the approved change. Revocation or stale state becomes Conflict and retains the previous official image.
 
 No delete endpoint, grant reseeding, administrator impersonation, schema migration or parallel photo store is introduced. Drafts and previously applied blobs remain available to existing Records history; this feature does not delete referenced assets. Image selection/cropping and local cache handling belong to the mobile client; the backend accepts only the constrained upload contract.
+
+## Student setup guidance
+
+1. Read visit status using the authenticated active school identity and existing Student configuration View grants.
+2. Record the authorized configuration entry; only the first visitor in that school receives `firstVisit: true`.
+3. Select an authorized academic year and optional medium/class, then read effective configuration presence.
+4. Save each setting through its existing owner; the guide only persists current stage, current setting and visible deferrals with the latest year concurrency stamp.
+5. Finish the review to record reviewer/time metadata; reopening or changing guide progress invalidates the earlier review.
+
+Progress belongs to the academic year and is shared between authorized staff.
+Hidden deferrals survive partial-permission saves, and stale writes require a refresh.

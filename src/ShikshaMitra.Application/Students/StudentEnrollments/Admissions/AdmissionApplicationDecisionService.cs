@@ -557,6 +557,7 @@ public class AdmissionApplicationDecisionService(
 		var guardian = family?.PrimaryGuardianId.HasValue == true
 			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value)
 			: await guardianRepository.FindAsync(item => item.FamilyId == applicant.FamilyId && item.IsPrimaryContact);
+		if (AdmissionSiblingFamilyLink.HasOwnContact(applicant)) guardian = AdmissionSiblingFamilyLink.OwnGuardian(applicant);
 		var cycle = await cycleRepository.FindAsync(application.AdmissionCycleId) ??
 			throw new EntityNotFoundException(typeof(AdmissionCycle), application.AdmissionCycleId);
 		var offering = await offeringRepository.FindAsync(application.AdmissionOfferingId) ??

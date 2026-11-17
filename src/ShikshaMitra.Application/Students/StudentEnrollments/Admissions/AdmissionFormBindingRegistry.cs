@@ -44,6 +44,7 @@ internal static class AdmissionFormBindingRegistry
 
 	public static object? GetValue(string key, AdmissionApplicant applicant, AdmissionGuardian? guardian)
 	{
+		if (AdmissionSiblingFamilyLink.HasOwnContact(applicant)) guardian = AdmissionSiblingFamilyLink.OwnGuardian(applicant);
 		var confirmed = AdmissionSiblingParentSelection.ReadConfirmation(applicant);
 		if (confirmed != null && key is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email")
 		{
@@ -83,6 +84,8 @@ internal static class AdmissionFormBindingRegistry
 
 	public static bool ApplyValue(string key, string value, AdmissionApplicant applicant, AdmissionGuardian? guardian)
 	{
+		if (AdmissionSiblingFamilyLink.ApplyContactValue(applicant, key, value)) return true;
+		if (AdmissionSiblingFamilyLink.ApplyParentContactValue(applicant, key, value)) return true;
 		if (key is "Address.State" or "Address.Country") applicant.SetProperty("AdmissionLocation." + key, value);
 		switch (key)
 		{

@@ -169,6 +169,7 @@ public partial class AdmissionApplicationFormService(
 		{
 			var family = await familyRepository.FindAsync(applicant.FamilyId);
 			if (family?.PrimaryGuardianId is Guid guardianId) guardian = await guardianRepository.FindAsync(guardianId);
+			if (AdmissionSiblingFamilyLink.HasOwnContact(applicant)) guardian = AdmissionSiblingFamilyLink.OwnGuardian(applicant);
 		}
 		var definitionCodes = definitions.Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
 		var unknownCode = input.Values.FirstOrDefault(value => !definitionCodes.Contains(value.FieldCode))?.FieldCode;
@@ -282,6 +283,7 @@ public partial class AdmissionApplicationFormService(
 		if (applicant is not null)
 		{
 			AdmissionFirstParentContactMapping.Apply(applicant, parentAnswers, guardian);
+			AdmissionSiblingFamilyLink.SynchronizeStructuredContact(applicant, parentAnswers);
 			await applicantRepository.UpdateAsync(applicant, false);
 			if (application.InquiryId.HasValue)
 			{
@@ -294,7 +296,8 @@ public partial class AdmissionApplicationFormService(
 				}
 			}
 		}
-		if (guardian is not null && applicant?.ExistingStudentId.HasValue != true && (applicant == null || AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null)) await guardianRepository.UpdateAsync(guardian, false);
+		if (guardian is not null && applicant?.ExistingStudentId.HasValue != true && (applicant == null ||
+			!AdmissionSiblingFamilyLink.HasOwnContact(applicant) && AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null)) await guardianRepository.UpdateAsync(guardian, false);
 		if (prefill?.FamilyPrefill != null)
 		{
 			var copied = automaticCodes.Where(code => acceptedCodes.Contains(code) &&

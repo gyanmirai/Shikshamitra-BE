@@ -361,6 +361,16 @@ public class StudentOnboardingSettingsDto : EntityDto<Guid>
 	public string ConfigurationJson { get; set; } = "{}";
 }
 
+public class StudentGrNumberPreviewDto
+{
+	public string RuleId { get; set; } = string.Empty;
+	public long NextSequence { get; set; }
+	public long? MaximumNumber { get; set; }
+	public bool LimitReached { get; set; }
+	public bool IsEffective { get; set; }
+	public string? NextPreview { get; set; }
+}
+
 public class CreateStudentIdentifierSeriesDto
 {
 	public Guid AcademicYearId { get; set; }

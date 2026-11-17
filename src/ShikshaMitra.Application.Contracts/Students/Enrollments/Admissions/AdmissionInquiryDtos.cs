@@ -8,6 +8,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 {
+	/// <summary>Informational scoped family membership; never parent-account authority.</summary>
+	public bool HasLinkedSiblings { get; set; }
 	public bool SiblingFamilyConfirmed { get; set; }
 	public AdmissionSchoolContactDto? MainSchoolContact { get; set; }
 	public string? ParentRelationship { get; set; }
@@ -67,18 +69,20 @@ public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 
 public class ConfirmAdmissionInquiryFamilyDto
 {
+	public bool FamilyLinkOnly { get; set; }
 	[Required]
 	public Guid ExistingFamilyId { get; set; }
 	[Required]
 	public Guid ExistingParentApplicantId { get; set; }
-	[Required, RegularExpression("^(father|mother)$")]
-	public string ParentRelationship { get; set; } = string.Empty;
+	[RegularExpression("^(father|mother)$")]
+	public string? ParentRelationship { get; set; }
 	[Required, StringLength(40)]
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
 public class CreateAdmissionInquiryDto
 {
+	public bool FamilyLinkOnly { get; set; }
 	public bool GuardianResponsibilityConfirmed { get; set; }
 	public AdmissionFamilyContactsDto? FamilyContacts { get; set; }
 	public Guid? ExistingFamilyId { get; set; }
@@ -111,6 +115,10 @@ public class CreateAdmissionInquiryDto
 
 public class AdmissionInquiryListInput : PagedAndSortedResultRequestDto
 {
+	/// <summary>Inclusive UTC creation timestamp; omitted to leave the lower bound open.</summary>
+	public DateTime? CreationTimeFrom { get; set; }
+	/// <summary>Exclusive UTC creation timestamp; omitted to leave the upper bound open.</summary>
+	public DateTime? CreationTimeBefore { get; set; }
 	[System.ComponentModel.DataAnnotations.MaxLength(250)] public string? StandardName { get; set; }
 	public string? StandardNameFilterType { get; set; }
 	public bool DashboardFollowUpsDue { get; set; }

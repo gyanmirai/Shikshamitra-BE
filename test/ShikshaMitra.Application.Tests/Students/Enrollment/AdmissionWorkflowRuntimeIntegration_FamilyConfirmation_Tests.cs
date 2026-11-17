@@ -232,14 +232,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		return await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<AdmissionInquiry, Guid>>().GetAsync(item => item.AdmissionOfferingId == offering.Id && item.ApplicantName == name));
 	}
 
-	private async Task ConfirmPendingFamilyWithPermissionsAsync(AdmissionInquiry target, AdmissionInquiry source, IPermissionChecker permissions)
+	private async Task ConfirmPendingFamilyWithPermissionsAsync(AdmissionInquiry target, AdmissionInquiry source, IPermissionChecker permissions, bool familyLinkOnly = false)
 	{
 		var type = typeof(AdmissionInquiryAppService).Assembly.GetType("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionInquiryFamilyConfirmationService").ShouldNotBeNull();
 		var service = (ApplicationService)ActivatorUtilities.CreateInstance(GetRequiredService<IServiceProvider>(), type, permissions);
 		service.LazyServiceProvider = new AbpLazyServiceProvider(GetRequiredService<IServiceProvider>());
 		var method = type.GetMethod("ConfirmAsync")!;
 		var input = JsonSerializer.Deserialize(JsonSerializer.Serialize(new { ExistingFamilyId = source.FamilyId, ExistingParentApplicantId = source.ApplicantId,
-			ParentRelationship = "father", ConcurrencyStamp = target.ConcurrencyStamp }), method.GetParameters()[1].ParameterType)!;
+			FamilyLinkOnly = familyLinkOnly, ParentRelationship = familyLinkOnly ? null : "father", ConcurrencyStamp = target.ConcurrencyStamp }), method.GetParameters()[1].ParameterType)!;
 		try { await (Task)method.Invoke(service, [target.Id, input])!; }
 		catch (TargetInvocationException error) when (error.InnerException != null) { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
 	}

@@ -28,6 +28,8 @@ public class AdmissionInquiryFormEditService(
 		var applicant = inquiry.ApplicantId.HasValue ? await applicants.FindAsync(inquiry.ApplicantId.Value) : null;
 		var family = inquiry.FamilyId.HasValue ? await families.FindAsync(inquiry.FamilyId.Value) : null;
 		var guardian = family?.PrimaryGuardianId.HasValue == true ? await guardians.FindAsync(family.PrimaryGuardianId.Value) : null;
+		var ownContact = applicant != null && AdmissionSiblingFamilyLink.HasOwnContact(applicant);
+		if (ownContact) guardian = AdmissionSiblingFamilyLink.OwnGuardian(applicant!);
 		var confirmedSibling = applicant != null && AdmissionSiblingParentSelection.ReadConfirmation(applicant) != null;
 		var definitions = formId.HasValue ? await fields.GetListAsync(field => field.FormDefinitionId == formId.Value) : [];
 		if (applicant != null && AdmissionFirstParentContactMapping.CanMap(applicant) && inquiry.FormResponseDefinitionId.HasValue)
@@ -186,7 +188,12 @@ public class AdmissionInquiryFormEditService(
 				}, guardian);
 				await applicants.UpdateAsync(applicant, false);
 			}
-			await guardians.UpdateAsync(guardian, false);
+			if (ownContact)
+			{
+				AdmissionSiblingFamilyLink.CaptureContact(applicant!, guardian);
+				await applicants.UpdateAsync(applicant!, false);
+			}
+			else await guardians.UpdateAsync(guardian, false);
 		}
 		if (applicant != null) AdmissionFamilyContactCapture.CopyToInquiry(applicant, inquiry);
 	}

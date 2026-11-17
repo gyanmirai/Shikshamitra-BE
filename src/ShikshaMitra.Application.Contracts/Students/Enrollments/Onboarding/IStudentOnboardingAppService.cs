@@ -54,6 +54,7 @@ public interface IStudentOnboardingAppService : IApplicationService
 	Task<StudentOnboardingSettingsDto> SaveSettingsAsync(SaveStudentOnboardingSettingsDto input);
 	Task DeleteSettingsAsync(Guid id, string? concurrencyStamp);
 	Task<IReadOnlyList<StudentIdentifierSeriesDto>> GetIdentifierSeriesAsync(Guid academicYearId);
+	Task<IReadOnlyList<StudentGrNumberPreviewDto>> GetGrNumberPreviewsAsync(Guid academicYearId);
 	Task<StudentIdentifierSeriesDto> CreateIdentifierSeriesAsync(CreateStudentIdentifierSeriesDto input);
 	Task<StudentIdentifierSeriesDto> DeactivateIdentifierSeriesAsync(Guid id, string? concurrencyStamp);
 	Task<HistoricalAdmissionReconciliationDto> GetHistoricalReconciliationAsync();

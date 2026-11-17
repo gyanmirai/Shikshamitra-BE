@@ -60,6 +60,8 @@ internal static class AdmissionFamilyContactCapture
 			throw Invalid("Update linked family contact details through the existing Student or family contact workflow.");
 		var prefix = relationship switch { "father" => "Father", "mother" => "Mother", "guardian" => "Guardian", _ => throw Invalid("Choose a saved parent or guardian.") };
 		applicant.SetProperty("AdmissionStudentField." + prefix + ".Email", email);
+		if (AdmissionSiblingFamilyLink.HasOwnContact(applicant) && ReadMainContact(applicant)?.Relationship == relationship)
+			AdmissionSiblingFamilyLink.ApplyContactValue(applicant, "Guardian.Email", email);
 		// A dedicated saved-contact correction takes precedence over historical first-parent aliases.
 		if (relationship is "father" or "mother") applicant.SetProperty("ParentAccountStructuredContact." + prefix + ".Email", true);
 	}

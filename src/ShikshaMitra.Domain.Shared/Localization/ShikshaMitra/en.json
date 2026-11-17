@@ -849,6 +849,7 @@
         "Students:Records:InvalidDuplicatePair": "Choose two different accessible student profiles for duplicate review.",
         "Students:Records:InvalidIdStudentSelection": "Choose eligible students to issue ID cards.",
         "ShikshaMitra:IdentityCard:InvalidConfiguration": "Invalid identity card configuration: {detail}",
+        "ShikshaMitra:IdentityCard:PhotoSourceChanged": "The source photo changed or is unavailable. Reload it and apply the edit again.",
         "Students:Records:InvalidIdTemplate": "The ID card template is invalid.",
         "Students:Records:InvalidPhoto": "Choose a valid student photo.",
         "Students:Records:InvalidPhotoDraft": "The photo draft is unavailable. Upload the photo again.",

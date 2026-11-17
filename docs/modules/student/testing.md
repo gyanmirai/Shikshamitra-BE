@@ -1513,6 +1513,10 @@ dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Ide
 The older broad HR I-card suite has two host-level fixture failures in `GenerateEmployeeICardsPdfAsync_Should_Return_Pdf_For_Existing_Employee` and `GenerateEmployeeICardsPdfAsync_Should_Reject_Exclude_Incomplete_When_Template_Logo_Missing`: inherited logo loading raises `SchoolIdentity:InvalidContext` because those fixtures have no current tenant. The new duplex case uses explicit Hidden logo mode and a persisted academic year. These fixture failures are separate from physical rendering; production school-identity authorization is unchanged. The source has existing unrelated compiler warnings. Local behavioral validation disabled Roslynator analysis because concurrent builds made analysis expensive; this is not a zero-warning analyzer gate.
 
 
+## Visual card studio checks
+
+Run `IdentityCardStudio_Tests`, `Icard_photo_edits` and `Icard_photo_read` in the application test project and the `Icard_photo` cases in the HTTP API test project. These cover real PNG decoding/PDF generation, rendering transforms/styles, payload validation, source hashes, cohort membership, issued per-student frozen-photo isolation, unchanged original blobs, public snapshot/template redaction, download/reprint and denied tenant/UserScope/action access. Retain the existing physical-layout, duplex, preset and legacy student PDF checks. The [HR test guide](../hr/testing.md#visual-card-studio-checks) records shared ownership and SDK/output conventions.
+
 ## Compliance report tests
 
 `test/ShikshaMitra.Application.Tests/Students/Records/StudentComplianceReports_Tests.cs` adds 14 focused cases in the existing admission-runtime integration fixture.

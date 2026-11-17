@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-08
+updated_on: 2026-11-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -760,7 +760,7 @@ Protected or referenced changes return HTTP 409, invalid dates/times return HTTP
 All operations derive tenant ownership from the server context.
 ## Configurable employee identity cards
 
-Existing `/api/employee-icard-templates` operations keep their action permissions, tenant and employee scope, school-identity selection and authorized asset loading. Schema versions 1 and 2 are supported. Version 2 accepts the `staff-professional` preset and explicit `widthMm`/`heightMm` in `layoutJson`; `width`/`height` and element coordinates remain canvas units. Physical dimensions must be 30–200 mm. Legacy layouts without physical dimensions use 85.60 × 53.98 mm, reversed for Vertical.
+Existing `/api/employees/i-card/templates` operations keep their action permissions, tenant and employee scope, school-identity selection and authorized asset loading. Schema versions 1 and 2 are supported. Version 2 accepts the `staff-professional` preset and explicit `widthMm`/`heightMm` in `layoutJson`; `width`/`height` and element coordinates remain canvas units. Physical dimensions must be 30–200 mm. Legacy layouts without physical dimensions use 85.60 × 53.98 mm, reversed for Vertical.
 
 `front.elements` and optional `back.elements` share text, photo, logo, QR, barcode, shape and line support, with at most 100 elements per side. IDs must be unique within each side and finite element rectangles must remain inside the canvas. Existing field bindings and `fieldsJson`, QR, barcode and back-side flags still govern rendering. School text and static content do not widen employee field access. Fonts support Arial, sans-serif, Inter, Roboto, Noto Sans and Lato at 4–100 canvas units; invalid properties, colours, enums and unsupported bindings fail validation.
 
@@ -769,3 +769,13 @@ Existing `/api/employee-icard-templates` operations keep their action permission
 A4 capacity includes margins, gaps and bleed; the renderer lowers the batch capacity without shrinking credentials and rejects sheets with no usable slot. A centred full-capacity grid retains empty slots on partial sheets. Long-edge backs reflect columns and short-edge backs reflect rows. The matching back follows each front sheet. Card output emits per-card front/back pages at trim dimensions plus twice the bleed, and omits cut marks. Back offsets require A4 and must keep artwork on the paper. Selecting back-only requires an enabled, configured back. Text wraps within its element; schema-2 overflow reports the affected element instead of truncating identity data. Barcode values must use Code39 characters.
 
 Saving configuration and generating a PDF do not establish physical printing or distribution. This rendering change adds no migration, issuance entity, verification service or permission grants.
+
+### Visual studio assets and personal photo edits
+
+Schema 2 additionally supports `type: "image"` with `imageData` containing an embedded PNG/JPEG data URI. Other element types cannot contain `imageData`. Each raster must fully decode, be at most 512 KB and have dimensions at most 2048 × 2048. SVG, external URLs and malformed rasters are rejected. Layout JSON is limited to 2 MB in UTF-8. Optional element properties are `rotation` (-180 to 180), `opacity` (0 to 1) and `groupId` (at most 100 characters); numbers must be finite. Styles add `shape` (`rectangle`/`ellipse`), `fontStyle` (`normal`/`italic`) and `textDecoration` (`none`/`underline`/`line-through`). PDF rotation is around the element centre and opacity applies to the complete element. Existing geometry and defaults remain unchanged.
+
+The exact resolved font variant used for measuring/wrapping is registered with the PDF renderer, including its actual fallback family when the requested family is unavailable. Underline and strike-through use explicit vector strokes for each wrapped line, positioned from the same font metrics and aligned to its measured advance. They inherit the element's rotation and opacity; native SVG text-decoration is omitted because the PDF importer does not reliably render it.
+
+`GET /api/employees/i-card/templates/photos/{employeeId}` returns `{recordId,imageData,sourceHash}` for the authorized employee's full, uncropped raster photo. `sourceHash` is lowercase SHA-256 over the original blob bytes. The read requires the existing I-Card View action, current employee UserScope and tenant match before loading pixels. Missing/invalid photos return a structured configuration error. Existing PNG, JPEG, GIF and WebP originals are safely bounded to 5 MB, 8192 pixels per dimension and 32 million pixels before allocation. Rasters larger than 2048 in either dimension are proportionally resized with camera orientation preserved; GIF/WebP normalize to PNG using their first decoded frame. Returned pixels are PNG/JPEG and the hash always identifies the unchanged original blob. Photo responses disable browser/proxy caching.
+
+The existing `POST /api/employees/i-card/templates/{id}/pdf` request accepts optional `photoEdits: [{recordId,sourceHash,imageData}]`. IDs must be distinct members of the requested, authorized employee cohort, and each hash must match that employee's current original photo. Edited rasters use the same 512 KB/2048 limits and an 8 MB decoded aggregate limit. An unknown ID, duplicate, malformed raster or stale source rejects the request before rendering. `ShikshaMitra:IdentityCard:PhotoSourceChanged` asks the caller to reload and reapply the edit. Every requested employee retains the exact I-Card View and canonical employee scope checks. These transient overrides neither update profile-photo blobs nor enter reusable template JSON. `photoEdits` and nested `imageData` are excluded from ABP audit parameters; selected record IDs and other request metadata remain auditable.

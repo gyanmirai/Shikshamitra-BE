@@ -13,7 +13,7 @@ public class StudentIdCard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string CardNumber { get; private set; } = "";
 	public string IdempotencyKey { get; private set; } = "";
 	public string Status { get; private set; } = "Issued";
-	public string StudentSnapshotJson { get; private set; } = "{}";
+	[Volo.Abp.Auditing.DisableAuditing] public string StudentSnapshotJson { get; private set; } = "{}";
 	public string TemplateSnapshotJson { get; private set; } = "{}";
 	public DateTime IssuedAt { get; private set; }
 	public Guid IssuedByUserId { get; private set; }

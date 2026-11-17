@@ -16,6 +16,7 @@ public class EmployeeICardTemplateAppService(
 	EmployeeICardPdfWorkflow pdfWorkflow,
 	EmployeeICardSchoolLogoService schoolLogo) : ApplicationService, IEmployeeICardTemplateAppService
 {
+	public Task<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto> GetPhotoAsync(Guid employeeId) => pdfWorkflow.GetPhotoAsync(employeeId);
 	public Task<EmployeeICardTemplateListResponse> GetListAsync(
 		Guid? academicYearId = null,
 		Guid? mediumStageId = null,

@@ -16,6 +16,9 @@ namespace ShikshaMitra.HttpApi.Controllers.Students.Records;
 [Route("api/students/records/ids")]
 public class StudentIdCardController(IStudentIdCardAppService service) : AbpController
 {
+	[HttpGet("photos/{studentId:guid}")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
+	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+	public async Task<Result<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto>> PhotoAsync(Guid studentId) => Result.Success(await service.GetPhotoAsync(studentId));
 	[HttpGet("templates/list")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
 	public async Task<Result<List<StudentIdCardTemplateDto>>> GetTemplatesAsync() => Result.Success(await service.GetTemplatesAsync());
 	[HttpGet("templates/{id:guid}")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]

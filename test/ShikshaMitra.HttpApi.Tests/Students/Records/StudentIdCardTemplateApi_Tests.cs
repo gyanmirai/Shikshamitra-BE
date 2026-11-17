@@ -36,6 +36,13 @@ public class StudentIdCardTemplateApi_Tests(ShikshaMitraApiTestFactory factory) 
 	private const string View = "Students.Records.StudentICard.View";
 	private const string Add = "Students.Records.StudentICard.Add";
 	private const string Delete = "Students.Records.StudentICard.Delete";
+	[Fact, TestTier(TestTraits.Tiers.Critical)]
+	public async Task Icard_photo_HTTP_requires_view_before_record_lookup()
+	{
+		var actor = await CreateActorAsync(); using var denied = AsActor(actor, Add);
+		var response = await denied.GetAsync("/api/students/records/ids/photos/" + Guid.NewGuid());
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+	}
 
 	[Fact, TestTier(TestTraits.Tiers.Critical)]
 	public async Task Icard_issued_history_HTTP_returns_paged_metadata_with_view_only_and_preserves_frozen_JSON()

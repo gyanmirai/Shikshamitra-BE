@@ -13,6 +13,9 @@ using Volo.Abp.Linq;
 using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Volo.Abp.Data;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Common.IdentityCards;
+using ShikshaMitra.Constants.Permissions;
 
 namespace ShikshaMitra.HR.Employees.ICards;
 
@@ -24,17 +27,34 @@ public class EmployeeICardPdfWorkflow(
 	EmployeeICardAssetService assetService,
 	IAsyncQueryableExecuter asyncExecuter,
 	SchoolIdentityDocumentService schoolIdentity,
-	IRepository<AcademicYear, Guid> academicYears) : ApplicationService, ITransientDependency
+	IRepository<AcademicYear, Guid> academicYears,
+	IEmployeeAuthorizationService employeeAuthorization) : ApplicationService, ITransientDependency
 {
+	public async Task<IdentityCardPhotoDto> GetPhotoAsync(Guid employeeId)
+	{
+		await AuthorizeEmployeeAsync(employeeId);
+		var employee = await employeeRepository.GetAsync(employeeId, includeDetails: false);
+		if (employee.TenantId != CurrentTenant.Id) throw IdentityCardGeometry.Invalid("This employee is unavailable in the current school.");
+		return IdentityCardPhotos.Read(employeeId, await assetService.TryGetBytesAsync(employee.ProfilePictureBlobName));
+	}
+	private async Task AuthorizeEmployeeAsync(Guid employeeId)
+	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.Employee_ICard.View);
+		if (!CurrentUser.Id.HasValue) throw IdentityCardGeometry.Invalid("Sign in before accessing card photos.");
+		await employeeAuthorization.CheckEmployeeScopedPermissionAsync(employeeId, ShikshaMitraSubmodulePermissions.HR.Employee_ICard.View);
+	}
 	public async Task<byte[]> GenerateEmployeeICardsPdfAsync(Guid templateId, EmployeeICardPdfRequest input)
 	{
-		if (input.EmployeeIds.Count == 0)
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.Employee_ICard.View);
+		if (input.EmployeeIds == null || input.EmployeeIds.Count is < 1 or > 100 || input.EmployeeIds.Any(id => id == Guid.Empty))
 		{
 			throw new BusinessException(HRErrorCodes.EmployeeICardPdfEmployeeRequired);
 		}
 
 		var template = await templateRepository.GetAsync(templateId);
+		if (template.TenantId != CurrentTenant.Id) throw IdentityCardGeometry.Invalid("This template is unavailable in the current school.");
 		var employeeIds = input.EmployeeIds.Distinct().ToList();
+		foreach (var employeeId in employeeIds) await AuthorizeEmployeeAsync(employeeId);
 		var fields = EmployeeICardTemplateRules.ParseFieldsJson(template.FieldsJson);
 		var layout = EmployeeICardLayoutSchema.ResolveLayout(template);
 		var printSettings = EmployeeICardLayoutSchema.ResolvePrintSettings(template.PrintSettingsJson, input.CardsPerPage, template.SchemaVersion);
@@ -44,10 +64,17 @@ public class EmployeeICardPdfWorkflow(
 			template.BackgroundImageBlobName);
 
 		var employees = await GetEmployeesAsync(employeeIds);
+		if (employees.Any(e => e.TenantId != CurrentTenant.Id)) throw IdentityCardGeometry.Invalid("The selected employees are unavailable in the current school.");
 		var organizationsByUserId = await organizationScopeResolver.GetOrganizationsByUserIdsAsync(
 			employees.Select(x => x.UserId),
 			template.AcademicYearId);
 		EnsureEmployeesMatchTemplateScope(template, employees, organizationsByUserId);
+		var employeeById = employees.ToDictionary(e => e.Id);
+		var photoEdits = await IdentityCardPhotos.ValidateAsync(input.PhotoEdits, employeeIds, async id =>
+		{
+			var original = await assetService.TryGetBytesAsync(employeeById[id].ProfilePictureBlobName);
+			return original;
+		});
 
 		if (employees.Count == 0)
 		{
@@ -67,6 +94,7 @@ public class EmployeeICardPdfWorkflow(
 		employees = FilterIncompleteEmployees(input, template, employees, logoMode == SchoolIdentityAssetMode.Hidden || logoBytes != null);
 		if (employees.Count == 0) throw new BusinessException(HRErrorCodes.EmployeeICardPdfEmployeeRequired);
 		var photoBytesByEmployeeId = await GetPhotoBytesByEmployeeIdAsync(employees);
+		foreach (var (id, edited) in photoEdits) if (photoBytesByEmployeeId.ContainsKey(id)) photoBytesByEmployeeId[id] = edited;
 		string? validityYear = null;
 		if (template.SchemaVersion >= 2)
 		{

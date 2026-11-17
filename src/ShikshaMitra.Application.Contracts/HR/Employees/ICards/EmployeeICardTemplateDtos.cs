@@ -103,6 +103,7 @@ public class EmployeeICardAssetDownloadResult
 
 public class EmployeeICardPdfRequest
 {
+	[Volo.Abp.Auditing.DisableAuditing] public List<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto>? PhotoEdits { get; set; }
 	public List<Guid> EmployeeIds { get; set; } = new();
 
 	public int? CardsPerPage { get; set; }

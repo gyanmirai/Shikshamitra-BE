@@ -14,12 +14,12 @@ internal static class IdentityCardSchema
 		UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
 		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
 	};
-	private static readonly string[] ElementTypes = ["text", "photo", "logo", "qr", "barcode", "shape", "line"];
+	private static readonly string[] ElementTypes = ["text", "photo", "logo", "qr", "barcode", "shape", "line", "image"];
 	private static readonly string[] Fonts = ["Arial", "sans-serif", "Inter", "Roboto", "Noto Sans", "Lato"];
 
 	public static IdentityCardLayout ParseLayout(string json, IEnumerable<string> fields, int schemaVersion = 1, bool backEnabled = false)
 	{
-		if (schemaVersion is not (1 or 2) || string.IsNullOrWhiteSpace(json) || json.Length > 100_000) throw IdentityCardGeometry.Invalid("Unsupported layout schema or excessive JSON size.");
+		if (schemaVersion is not (1 or 2) || string.IsNullOrWhiteSpace(json) || System.Text.Encoding.UTF8.GetByteCount(json) > 2 * 1024 * 1024) throw IdentityCardGeometry.Invalid("Unsupported layout schema or excessive JSON size (maximum 2 MB).");
 		try
 		{
 			var options = schemaVersion == 1 ? new JsonSerializerOptions(JsonOptions) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Skip } : JsonOptions;
@@ -47,12 +47,18 @@ internal static class IdentityCardSchema
 						element.Z is < -1000 or > 1000 || element.Value?.Length > 2000 || element.Label?.Length > 150 ||
 						(!string.IsNullOrEmpty(element.FieldKey) && !allowed.Contains(element.FieldKey))) throw IdentityCardGeometry.Invalid("Invalid element bounds, duplicate IDs, type or field binding.");
 					var style = element.Style;
+					if (!ValidNumber(element.Rotation, -180, 180) || !ValidNumber(element.Opacity, 0, 1) || element.GroupId?.Length > 100 ||
+						(element.ImageData != null && element.Type != "image")) throw IdentityCardGeometry.Invalid("Invalid rotation, opacity, group or image binding.");
+					if (element.Type == "image") _ = IdentityCardRaster.Decode(element.ImageData);
 					ValidateColor(style.Color); ValidateColor(style.BackgroundColor); ValidateColor(style.BorderColor);
 					if (style.Color != null) style.Color = IdentityCardSvgFormatting.NormalizeColor(style.Color);
 					if (style.BackgroundColor != null) style.BackgroundColor = IdentityCardSvgFormatting.NormalizeColor(style.BackgroundColor);
 					if (style.BorderColor != null) style.BorderColor = IdentityCardSvgFormatting.NormalizeColor(style.BorderColor);
 					if (!ValidNumber(style.BorderWidth, 0, 20) || !ValidNumber(style.BorderRadius, 0, 1000) || !ValidNumber(style.FontSize, 4, 100) ||
 						(style.FontFamily != null && !Fonts.Contains(style.FontFamily)) || (style.TextAlign != null && style.TextAlign is not ("left" or "center" or "right")) ||
+						(style.Shape != null && style.Shape is not ("rectangle" or "ellipse")) ||
+						(style.FontStyle != null && style.FontStyle is not ("normal" or "italic")) ||
+						(style.TextDecoration != null && style.TextDecoration is not ("none" or "underline" or "line-through")) ||
 						(style.PhotoShape != null && style.PhotoShape is not ("circle" or "square" or "rounded" or "rectangle")) || style.Separator?.Length > 20 ||
 						(style.FontWeight != null && style.FontWeight.ToString() is not ("normal" or "bold" or "400" or "500" or "600" or "700" or "800" or "900")))
 						throw IdentityCardGeometry.Invalid("Invalid font, colour or element style.");

@@ -5,6 +5,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.ICards;
+using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -18,6 +20,14 @@ public class EmployeeICardTemplateApi_Tests : ShikshaMitraApiTestBase
 	private const string BaseUrl = "/api/employees/i-card/templates";
 
 	public EmployeeICardTemplateApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
+	[Fact, TestTier(TestTraits.Tiers.Critical)]
+	public async Task Icard_photo_requires_exact_view_permission_before_record_lookup()
+	{
+		using var request = new HttpRequestMessage(HttpMethod.Get, BaseUrl + "/photos/" + Guid.NewGuid());
+		request.Headers.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, ShikshaMitraSubmodulePermissions.HR.Employee_ICard.Add);
+		using var response = await Client.SendAsync(request);
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]

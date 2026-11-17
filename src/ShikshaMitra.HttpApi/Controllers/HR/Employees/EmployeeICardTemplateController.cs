@@ -42,6 +42,10 @@ public class EmployeeICardTemplateController : AbpControllerBase
 		return _appService.GetListAsync(academicYearId, mediumStageId, page, pageSize, search);
 	}
 
+	[HttpGet("photos/{employeeId:guid}")]
+	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+	public Task<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto> PhotoAsync(Guid employeeId) => _appService.GetPhotoAsync(employeeId);
+
 	[HttpGet("{id}")]
 	[ProducesResponseType(typeof(EmployeeICardTemplateDto), StatusCodes.Status200OK)]
 	public Task<EmployeeICardTemplateDto> GetAsync(Guid id)

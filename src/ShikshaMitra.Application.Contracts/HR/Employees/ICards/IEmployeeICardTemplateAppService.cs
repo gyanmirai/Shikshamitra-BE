@@ -6,6 +6,7 @@ namespace ShikshaMitra.HR.Employees.ICards;
 
 public interface IEmployeeICardTemplateAppService : IApplicationService
 {
+	Task<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto> GetPhotoAsync(Guid employeeId);
 	Task<EmployeeICardTemplateListResponse> GetListAsync(
 		Guid? academicYearId = null,
 		Guid? mediumStageId = null,

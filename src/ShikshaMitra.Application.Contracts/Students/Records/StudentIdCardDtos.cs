@@ -51,10 +51,12 @@ public class StudentIdCardPreviewRequestDto
 }
 public class IssueStudentIdCardsDto : StudentIdCardPreviewRequestDto
 {
+	[Volo.Abp.Auditing.DisableAuditing] public List<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto>? PhotoEdits { get; set; }
 	[Required, StringLength(60)] public string IdempotencyKey { get; set; } = "";
 }
 public class StudentIdCardsPdfRequestDto : StudentIdCardPreviewRequestDto
 {
+	[Volo.Abp.Auditing.DisableAuditing] public List<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto>? PhotoEdits { get; set; }
 	public int CardsPerPage { get; set; } = 8;
 }
 public class StudentIdCardDto
@@ -72,6 +74,7 @@ public class StudentIdCardDto
 
 public interface IStudentIdCardAppService : IApplicationService
 {
+	Task<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto> GetPhotoAsync(Guid studentId);
 	Task<List<StudentIdCardTemplateDto>> GetTemplatesAsync();
 	Task<StudentIdCardTemplateDto> GetTemplateByIdAsync(Guid id);
 	Task<StudentIdCardTemplateDto> CreateTemplateAsync(StudentIdCardTemplateDto input);

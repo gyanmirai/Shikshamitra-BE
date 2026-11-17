@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-05
+updated_on: 2026-11-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -1143,6 +1143,12 @@ The existing Student I-Card template DTO adds `schemaVersion` (default 1), nulla
 Schema-2 layouts retain canvas `width`/`height`, orientation, colours and positioned `front.elements`/`back.elements`, and require physical `widthMm`/`heightMm` of 30–200 mm. Existing student data bindings remain `StudentName`, `GRNumber`, `Class`, `Division`, `AcademicYear` and `DateOfBirth`; `CardNumber`, school name/address, header/footer and static text are also supported. Existing `fields`, photo and QR flags remain effective on either side. Barcode elements use the existing card number and introduce no verification or access service.
 
 The [employee identity-card print contract](../hr/api.md#configurable-employee-identity-cards) defines the shared millimetre settings, element/font limits, fixed-size A4 capacity, duplex reflection, back rotation/calibration and side selection. Student export uses those settings with the existing request's cards-per-page selection. Issued download/reprint uses card-sized output from the frozen configuration, preserving the existing school-identity snapshot and authorized photo/logo loaders. Disabled backs produce no empty pages; oversized schema-2 text produces an actionable configuration error rather than truncating identity text. Existing scope, masking, cohort transfers, permissions, idempotency and document events remain authoritative.
+
+The [visual studio contract](../hr/api.md#visual-studio-assets-and-personal-photo-edits) also defines static raster images, rotation/opacity, ellipse and typography styles, strict decoding and payload limits. `GET /api/students/records/ids/photos/{studentId}` returns the normal Result envelope with `{recordId,imageData,sourceHash}` in `data`; the hash covers the current original photo bytes. I-Card View, active tenant/actor, Student Records eligibility, current student UserScope and Identity masking are checked before the photo blob is read.
+
+Student `POST /api/students/records/ids/export` and `POST /api/students/records/ids/issue` accept optional `photoEdits: [{recordId,sourceHash,imageData}]` under their existing Add action. All selected students are authorized before validating edits; IDs must belong to that cohort and hashes must match their own current original photos. The shared 512 KB per processed raster, 2048 × 2048 dimensions and 8 MB batch limits apply. Any invalid or stale edit rejects the request before issuance writes. Each issued card freezes only its own processed photo in private `_ProcessedPhotoData` inside its existing `StudentSnapshotJson`. Download/reprint use that frozen raster even if the original blob later changes or is removed. The original profile photo, reusable template and other students' snapshots are untouched; public card/history DTOs omit private snapshot keys and template reads contain no personal photo overrides. No database migration is required.
+
+The shared original-reader compatibility and safe decode/normalization rules apply to student photos as well. Photo responses disable browser/proxy caching. `photoEdits` and nested `imageData` are excluded from action audit parameters, and `StudentSnapshotJson` is excluded from entity property-change audit payloads. Selected students, document identifiers/status, operator metadata and explicit issuance/download/reprint events retain their existing auditing.
 
 
 ## Compliance report projections

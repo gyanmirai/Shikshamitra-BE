@@ -57,7 +57,7 @@ public partial class NotificationTemplateRevisionService
 			.OrderByDescending(x => x.Revision), cancellationToken);
 	}
 
-	private async Task<(CommunicationTemplate Header, CommunicationTemplateRevision Revision)> LoadCommandAsync(Guid templateId,
+	internal async Task<(CommunicationTemplate Header, CommunicationTemplateRevision Revision)> LoadCommandAsync(Guid templateId,
 		Guid revisionId, NotificationTemplateAction action, CancellationToken cancellationToken)
 	{
 		var header = await LoadHeaderAsync(templateId, cancellationToken);

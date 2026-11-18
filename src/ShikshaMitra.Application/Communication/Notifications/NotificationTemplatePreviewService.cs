@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,16 +27,19 @@ public sealed class NotificationTemplatePreviewService(INotificationTemplateRead
 			x.TemplateId == templateId && x.TenantId == tenantId && !x.IsDeleted), cancellationToken)
 			?? throw new EntityNotFoundException(typeof(CommunicationTemplateRevision), revisionId);
 		var definition = validator.GetDefinition(revision.EventKey);
-		var link = (configuration["App:ClientUrl"] ?? string.Empty).TrimEnd('/') + "/";
-		var variables = definition.Variables.ToDictionary(x => x.Key, field => new NotificationVariableValueDto(field.Type, field.Type switch {
-			NotificationVariableType.Date => "2000-01-15",
-			NotificationVariableType.DateTime => "2000-01-15T10:00:00+00:00",
-			NotificationVariableType.Number => "1",
-			NotificationVariableType.Link => link,
-			_ => "Example " + field.Key.Replace("_name", string.Empty, StringComparison.Ordinal).Replace('_', ' ')
-		}), StringComparer.Ordinal);
+		var variables = CreateExampleVariables(definition, configuration["App:ClientUrl"]);
 		var input = new NotificationRenderInput(revision.Id, revision.EventKey, revision.SchemaVersion, revision.RecipientKind,
 			revision.Channel, revision.LanguageCode, variables);
 		return new(true, renderer.RenderPreview(revision, input));
 	}
+
+	internal static IReadOnlyDictionary<string, NotificationVariableValueDto> CreateExampleVariables(NotificationEventDefinition definition,
+		string? clientUrl) =>
+		definition.Variables.ToDictionary(x => x.Key, field => new NotificationVariableValueDto(field.Type, field.Type switch {
+			NotificationVariableType.Date => "2000-01-15",
+			NotificationVariableType.DateTime => "2000-01-15T10:00:00+00:00",
+			NotificationVariableType.Number => "1",
+			NotificationVariableType.Link => (clientUrl ?? string.Empty).TrimEnd('/') + "/",
+			_ => "Example " + field.Key.Replace("_name", string.Empty, StringComparison.Ordinal).Replace('_', ' ')
+		}), StringComparer.Ordinal);
 }

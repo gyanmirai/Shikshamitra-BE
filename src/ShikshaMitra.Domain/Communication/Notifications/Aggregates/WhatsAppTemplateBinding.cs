@@ -37,6 +37,5 @@ public class WhatsAppTemplateBinding : FullAuditedAggregateRoot<Guid>, IMultiTen
 		ProviderTemplateId = id;
 		ProviderStatus = status;
 		LastSyncedAt = observedAt.ToUniversalTime();
-		ConcurrencyStamp = Guid.NewGuid().ToString("N");
 	}
 }

@@ -69,6 +69,13 @@ public class ChargeController(IChargeAppService chargeAppService) : AbpControlle
 		return chargeAppService.GetAllAsync(request);
 	}
 
+	/// <summary>Read fee-assigned students in the actor's Finance charge scope.</summary>
+	[HttpGet("eligible-students")]
+	[ProducesResponseType(typeof(ChargeEligibleStudentsResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	public Task<ChargeEligibleStudentsResponse> GetEligibleStudentsAsync(
+		[FromQuery] GetChargeEligibleStudentsRequest input) => chargeAppService.GetEligibleStudentsAsync(input);
+
 	/// <summary>
 	/// Retrieve flat charge lines for student-grouped history views.
 	/// </summary>

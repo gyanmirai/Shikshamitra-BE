@@ -106,6 +106,8 @@ public class FeeSettingsReadPerformance_Tests(ITestOutputHelper output) : Shiksh
 			dependencies.PaymentTermCount.ShouldBe(0);
 			reads.Commands.ShouldNotContain(sql => sql.Contains("CoverageStartDate", StringComparison.Ordinal),
 				"dependency checks need reference IDs, not customized installment schedules");
+			reads.Commands.ShouldNotContain(sql => sql.Contains("AssignmentSnapshotJson", StringComparison.Ordinal),
+				"dependency counts must aggregate normalized head evidence in SQL, without returning full snapshots");
 		});
 	}
 
@@ -220,6 +222,59 @@ public class FeeSettingsReadPerformance_Tests(ITestOutputHelper output) : Shiksh
 				head.IsUsedInDownstream.ShouldBeFalse();
 			}
 			reads.Count.ShouldBeLessThanOrEqualTo(10, "a page must batch dependency and accounting reads, not repeat them per category");
+		});
+	}
+
+	[Fact]
+	public async Task Simple_concession_filters_page_before_materializing_candidates()
+	{
+		var year = Guid.NewGuid();
+		await WithUnitOfWorkAsync(async () => {
+			await GetRequiredService<IRepository<ConcessionTypeEntity, Guid>>().InsertManyAsync(
+				Enumerable.Range(0, 25).Select(i => new ConcessionTypeEntity(Guid.NewGuid(), null, year, $"Matching {i}", null)), true);
+		});
+		await WithUnitOfWorkAsync(async () => {
+			var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+			using var reads = new FinanceSettingsReadCapture(db.Database.GetDbConnection());
+			var result = await GetRequiredService<IConcessionTypeAppService>().GetListAsync(year, maxResultCount: 2,
+				filters: """[{"column":"name","type":"contains","value":"matching"}]""");
+			result.TotalCount.ShouldBe(25);
+			result.Items.Count.ShouldBe(2);
+			reads.Commands.ShouldNotContain(sql => sql.Contains("FROM \"Finance_ConcessionTypes\"", StringComparison.Ordinal) &&
+				!sql.Contains("COUNT", StringComparison.OrdinalIgnoreCase) && !sql.Contains("LIMIT", StringComparison.OrdinalIgnoreCase),
+				"simple filters must not load all catalogue candidates before SQL paging");
+		});
+	}
+
+	[Theory]
+	[InlineData(100)]
+	[InlineData(2000)]
+	public async Task Dependency_counts_return_only_head_aggregates_as_assignment_history_grows(int assignmentCount)
+	{
+		var year = Guid.NewGuid(); var head = Guid.NewGuid(); var structure = Guid.NewGuid();
+		var snapshot = JsonSerializer.Serialize(new { Heads = new[] { new { FeeHeadId = head, Included = true, Amount = 0 } }, Evidence = new string('x', 8192) });
+		await WithUnitOfWorkAsync(async () => {
+			var income = await FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
+				GetRequiredService<IRepository<AccountHead, Guid>>(), GetRequiredService<IRepository<TransactionCategory, Guid>>(), year, null, "Scale");
+			var category = new FeeCategory(Guid.NewGuid(), null, year, "Scale category", null);
+			await GetRequiredService<IRepository<FeeCategory, Guid>>().InsertAsync(category, true);
+			await GetRequiredService<IRepository<FeeHead, Guid>>().InsertAsync(new FeeHead(head, null, year, category.Id, "Scale zero head", null, false, null, income), true);
+			await GetRequiredService<IRepository<FeeStructure, Guid>>().InsertAsync(new FeeStructure(structure, null, Guid.NewGuid(), Guid.NewGuid(), "Scale structure"), true);
+			await GetRequiredService<IRepository<FeeStructureDetail, Guid>>().InsertAsync(new FeeStructureDetail(Guid.NewGuid(), null, structure, head, 0m, false, false, null, null), true);
+			await GetRequiredService<IRepository<StudentFeeStructure, Guid>>().InsertManyAsync(Enumerable.Range(0, assignmentCount).Select(_ => {
+				var assignment = new StudentFeeStructure(Guid.NewGuid(), null, Guid.NewGuid(), structure, year);
+				assignment.CaptureAssignment("scale", snapshot); return assignment;
+			}), true);
+		});
+		await WithUnitOfWorkAsync(async () => {
+			var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+			using var reads = new FinanceSettingsReadCapture(db.Database.GetDbConnection());
+			var result = await GetRequiredService<FeeHeadDependencyQuery>().GetAsync([head]);
+			result.Count.ShouldBe(1); result[head].StudentCount.ShouldBe(assignmentCount); result[head].AssignmentCount.ShouldBe(assignmentCount);
+			reads.Count.ShouldBeLessThanOrEqualTo(2);
+			reads.Commands.ShouldNotContain(sql => sql.Contains("AssignmentSnapshotJson", StringComparison.Ordinal));
+			reads.Commands.ShouldContain(sql => sql.Contains("GROUP BY", StringComparison.OrdinalIgnoreCase));
+			output.WriteLine($"SQLite synthetic assignments={assignmentCount}; source snapshot bytes={assignmentCount * snapshot.Length}; aggregate SELECTs={reads.Count}; returned head aggregates={result.Count}");
 		});
 	}
 }

@@ -67,6 +67,18 @@ public class FeePaymentReceiptConfiguration : IEntityTypeConfiguration<FeePaymen
             })
             .HasDatabaseName("IX_FeePaymentReceipts_ListFilter");
 
+        builder.HasIndex(x => new
+            {
+                x.TenantId,
+                x.AcademicYearId,
+                x.BoardId,
+                x.EducationMediumId,
+                x.CreationTime,
+                x.ReceiptNumber,
+            })
+            .IsDescending(false, false, false, false, true, true)
+            .HasDatabaseName("IX_FeePaymentReceipts_ListOrder");
+
         // ── Reconciliation inbox query ────────────────────────────────────────
         builder.HasIndex(x => new
             {

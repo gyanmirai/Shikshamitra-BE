@@ -93,6 +93,9 @@ public class FinanceReviewerAccessService_Tests : ShikshaMitraApplicationTestBas
 				var route = await access.FindEligibleReviewerAsync(fixture.MakerId, fixture.StudentId,
 					fixture.YearId, view, approve);
 				route.ShouldBe(fixture.ManagerId);
+				access.PrepareReviewerAccessForStudents([fixture.StudentId]);
+				(await access.FindEligibleReviewerAsync(fixture.MakerId, fixture.StudentId,
+					fixture.YearId, view, approve)).ShouldBe(route);
 				using (SignIn(fixture.ManagerId, tenantId))
 					await access.EnsureReviewerCanDecideAsync(fixture.MakerId, route,
 						fixture.StudentId, fixture.YearId, view, approve);

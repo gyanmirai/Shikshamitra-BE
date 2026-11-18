@@ -48,7 +48,7 @@ public class AccountSettingsQaApiFactory : ShikshaMitraApiTestFactory
 }
 
 [Collection(AccountSettingsQaApiCollection.Name)]
-public class AccountSettingsQaRegressionApi_Tests(AccountSettingsQaApiFactory factory) : ShikshaMitraApiTestBase(factory)
+public partial class AccountSettingsQaRegressionApi_Tests(AccountSettingsQaApiFactory factory) : ShikshaMitraApiTestBase(factory)
 {
     [Theory]
     [InlineData("income-categories")]

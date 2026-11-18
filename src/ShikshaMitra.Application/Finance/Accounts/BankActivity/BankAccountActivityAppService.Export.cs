@@ -30,13 +30,13 @@ public partial class BankAccountActivityAppService
 		if (input.Columns.Count == 0) input.Columns = [new("occurredAt", "Activity date"), new("reference", "Reference"), new("source", "Source"), new("incoming", "Incoming (INR)"), new("outgoing", "Outgoing (INR)")];
 		using var snapshot = units.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.RepeatableRead }, requiresNew: true);
 		var context = await ContextAsync(id, input.Query.AcademicYearId);
-		var page = await PageAsync(context, input.Query);
-		if (page.TotalCount > ExportRowLimit) throw new BusinessException(BankActivityErrorCodes.ExportLimit).WithData("MaximumRows", ExportRowLimit);
-		var table = BankActivityQueryRules.Validate(input.Query);
-		var query = BankActivityQueryRules.Filter(context.Facts, input.Query, table);
+		var query = FilteredQuery(context, input.Query, out var table);
+		// Export reads its bounded complete result once; it does not fetch a discarded UI page or filter options.
 		var facts = await AsyncExecuter.ToListAsync(BankActivityQueryRules.Order(query, table).Take(ExportRowLimit + 1));
-		if (facts.Count > ExportRowLimit || facts.Count != page.TotalCount) throw new BusinessException(BankActivityErrorCodes.ExportLimit);
-		var rows = new List<BankActivityRow>(); foreach (var fact in facts) rows.Add(await MapAsync(fact));
+		if (facts.Count > ExportRowLimit) throw new BusinessException(BankActivityErrorCodes.ExportLimit).WithData("MaximumRows", ExportRowLimit);
+		var totals = BankActivityQueryRules.MethodTotals(facts.AsQueryable()).ToList();
+		var page = CreatePage(context, input.Query, totals);
+		var rows = new List<BankActivityRow>(); foreach (var fact in facts) rows.Add(Map(fact, context));
 		var bytes = input.Format == "excel" ? Excel(page, rows, input.Columns) : Pdf(page, rows, input.Columns);
 		await snapshot.CompleteAsync();
 		return new RemoteStreamContent(new MemoryStream(bytes), $"bank-activity-{page.GeneratedAt:yyyyMMdd-HHmmss}.{(input.Format == "excel" ? "xlsx" : "pdf")}",

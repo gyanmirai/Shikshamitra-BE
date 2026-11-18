@@ -56,11 +56,17 @@ public class FinanceWorkContextAppService(
 				ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Reject]
 		};
 		var result = new FinanceWorkContextDto { AcademicYearId = academicYearId };
+		var capabilityGrants = (await permissions.IsGrantedAsync(capabilityNames.Values
+			.SelectMany(names => names)
+			.Where(name => !string.IsNullOrEmpty(name))
+			.Distinct(StringComparer.Ordinal)
+			.ToArray())).Result;
 		foreach (var (module, names) in capabilityNames)
 		{
 			var granted = new bool[names.Length];
 			for (var i = 0; i < names.Length; i++)
-				granted[i] = !string.IsNullOrEmpty(names[i]) && await permissions.IsGrantedAsync(names[i]);
+				granted[i] = !string.IsNullOrEmpty(names[i]) &&
+					capabilityGrants[names[i]] == PermissionGrantResult.Granted;
 			result.RequestCapabilities[module] = new FinanceRequestCapabilityDto
 			{
 				View = granted[0], Add = granted[1], Submit = granted[2],

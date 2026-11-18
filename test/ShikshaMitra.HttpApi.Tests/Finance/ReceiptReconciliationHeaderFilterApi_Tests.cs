@@ -58,6 +58,7 @@ public class ReceiptReconciliationHeaderFilterApi_Tests(FinanceRoutingApiTestFac
 		await AssertListAsync(url + "&skipCount=1", 1, null, Filter("totalPaidAmount", "greaterThan", 900));
 		await AssertListAsync(url, 102, null);
 		await AssertListAsync(url + "&filters=%5B%5D", 102, null);
+		await AssertListAsync(ReceiptUrl("%25"), 0, null);
 	}
 
 	[Fact]

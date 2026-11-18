@@ -135,21 +135,21 @@ public partial class FeeCollectionSummaryQueryService
 		CancellationToken cancellationToken = default)
 	{
 		var studentQ = await studentRepository.GetQueryableAsync();
+		var currentScopedIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		var historicalIds = await financeScopeAccessService.GetScopedFeeCollectionEnrollmentIdsQueryAsync(
+			input.AcademicYearId, input.BoardId, input.EducationMediumId, input.StandardId,
+			input.DivisionId, cancellationToken);
+		var privileged = IsPrivilegedUser();
 		studentQ = studentQ.Where(s =>
-			s.AcademicYearId   == input.AcademicYearId   &&
-			s.AcademicBoardId  == input.BoardId           &&
-			s.AcademicMediumId == input.EducationMediumId);
-
-		studentQ = IsPrivilegedUser()
-			? studentQ.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled
-								|| s.Status == StudentLifeCycleStatusEnum.Left
-								|| s.Status == StudentLifeCycleStatusEnum.InActive)
-			: studentQ.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled);
-
-		if (input.StandardId.HasValue)
-			studentQ = studentQ.Where(s => s.StandardId == input.StandardId.Value);
-		if (input.DivisionId.HasValue)
-			studentQ = studentQ.Where(s => s.DivisionId == input.DivisionId.Value);
+			(s.AcademicYearId == input.AcademicYearId && s.AcademicBoardId == input.BoardId &&
+			 s.AcademicMediumId == input.EducationMediumId &&
+			 (!input.StandardId.HasValue || s.StandardId == input.StandardId.Value) &&
+			 (!input.DivisionId.HasValue || s.DivisionId == input.DivisionId.Value) &&
+			 currentScopedIds.Contains(s.Id) &&
+			 (s.Status == StudentLifeCycleStatusEnum.Enrolled ||
+			  privileged && (s.Status == StudentLifeCycleStatusEnum.Left ||
+			                         s.Status == StudentLifeCycleStatusEnum.InActive))) ||
+			(s.AcademicYearId != input.AcademicYearId && historicalIds.Contains(s.Id)));
 		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
 			var terms = input.Search.Split((char[]?)null,
@@ -177,12 +177,7 @@ public partial class FeeCollectionSummaryQueryService
 				}
 			}
 		}
-		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
-		return studentQ
-			.Where(s => scopedStudentIds.Contains(s.Id))
-			.OrderBy(s => s.Standard!.CreationTime)
-			.ThenBy(s => s.Division!.CreationTime)
-			.ThenBy(s => s.RollNo);
+		return studentQ;
 	}
 
 	private bool IsPrivilegedUser() =>
@@ -191,7 +186,8 @@ public partial class FeeCollectionSummaryQueryService
 	private async Task<IQueryable<FinanceFeeAccount>> BuildFilteredFeeAccountQueryAsync(
 		GetFeeCollectionSummaryInput input, IQueryable<Guid> matchingStudentIds)
 	{
-		var accountIds = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
+		var accountIds = await financeScopeAccessService.GetScopedFeeCollectionAccountIdsQueryAsync(
+			input.AcademicYearId);
 		var query = (await accountRepository.GetQueryableAsync()).Where(a =>
 			accountIds.Contains(a.Id) && a.AcademicYearId == input.AcademicYearId &&
 			a.BoardId == input.BoardId && a.EducationMediumId == input.EducationMediumId &&

@@ -76,6 +76,7 @@ The controller base route is `api/charges`.
 |---|---|---|
 | Create a batch | `POST api/charges?academicYearId={id}` | `Finance.Fees.Charges.Add` |
 | List batches | `GET api/charges?academicYearId={id}` | `Finance.Fees.Charges.View` |
+| Look up fee-assigned charge candidates | `GET api/charges/eligible-students?academicYearId={id}&boardId={id}&educationMediumId={id}&classIds={id}` | `Finance.Fees.Charges.View` plus Add or Update |
 | List student lines | `GET api/charges/lines?academicYearId={id}` | `Finance.Fees.Charges.View` |
 | Read batch | `GET api/charges/{chargeId}` | `Finance.Fees.Charges.View` |
 | Update pending batch | `PUT api/charges/{chargeId}` | `Finance.Fees.Charges.Update` |
@@ -85,6 +86,8 @@ The controller base route is `api/charges`.
 | Delete pending batch | `DELETE api/charges/{chargeId}` | `Finance.Fees.Charges.Delete` |
 
 Do not use module visibility, route access, or a role name as an action grant. The backend returns `availableActions`, and the frontend intersects those with its exact action permissions.
+
+The charge candidate lookup applies the caller's Finance request scope and returns only enrolled students with a fee-structure assignment in the requested academic year. Its `items` are paged (one-based `page`, maximum `pageSize` 100); `candidateStudentIds` contains the complete unfiltered eligible audience, while `matchingStudentIds` and `matchingStudentNames` follow the optional search, gender, roll-number, division, and charged filters. Charge creation still revalidates every submitted student ID and enforces the 500-student batch limit. The lookup does not require Student Records View.
 
 ## Implementation status (2026-09-21)
 

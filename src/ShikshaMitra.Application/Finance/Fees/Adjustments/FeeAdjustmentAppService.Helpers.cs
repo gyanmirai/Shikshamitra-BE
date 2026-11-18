@@ -25,28 +25,31 @@ public partial class FeeAdjustmentAppService
         throw new AbpAuthorizationException("Only the adjustment requester or a configured administrator may change a pending request.");
     }
 
-    private async Task<List<string>> GetAvailableActionsAsync(FeeAdjustmentRequest request)
+    private async Task<List<string>> GetAvailableActionsAsync(
+        FeeAdjustmentRequest request, bool mayApprove = true, bool mayReject = true,
+        bool? isAdministrator = null)
     {
         var actions = new List<string>();
-        if (!request.CreatorId.HasValue ||
+        if (!request.CreatorId.HasValue || !currentUser.Id.HasValue ||
+            request.CreatorId == currentUser.Id ||
             request.Status is not FeeAdjustmentStatus.Pending and not FeeAdjustmentStatus.PartiallyApplied)
             return actions;
-        if (request.HasPaidCreditReservation || request.Kind == FeeAdjustmentKind.UnpaidTransfer)
+        if (mayApprove && (request.HasPaidCreditReservation || request.Kind == FeeAdjustmentKind.UnpaidTransfer))
         {
             try
             {
                 await EnsureCurrentReviewerCanDecideAsync(request,
-                    ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve);
+                    ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve, isAdministrator);
                 actions.Add("Approve");
             }
             catch (AbpAuthorizationException) { }
         }
-        if (request.Status == FeeAdjustmentStatus.Pending)
+        if (mayReject && request.Status == FeeAdjustmentStatus.Pending)
         {
             try
             {
                 await EnsureCurrentReviewerCanDecideAsync(request,
-                    ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Reject);
+                    ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Reject, isAdministrator);
                 actions.Add("Reject");
             }
             catch (AbpAuthorizationException) { }
@@ -54,14 +57,21 @@ public partial class FeeAdjustmentAppService
         return actions;
     }
 
-    private async Task EnsureCurrentReviewerCanDecideAsync(FeeAdjustmentRequest request, string decisionPermission)
+    private async Task EnsureCurrentReviewerCanDecideAsync(
+        FeeAdjustmentRequest request, string decisionPermission, bool? administrator = null)
     {
         if (!request.CreatorId.HasValue)
             throw new Volo.Abp.BusinessException(FeeAdjustmentErrorCodes.CannotApply);
 
-        var routedReviewerId = await financeReviewerAccessService.FindEligibleReviewerAsync(
-            request.CreatorId.Value, request.StudentId, request.AcademicYearId,
-            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View, decisionPermission);
+        // Administrators are authorized independently of the maker's reporting route.
+        // The eligibility check in EnsureReviewerCanDecideAsync still enforces both
+        // permissions and student scope for the current reviewer.
+        var isAdministrator = administrator ?? (currentUser.Id.HasValue &&
+            await userScopeService.IsAdminUserAsync(currentUser.Id.Value));
+        var routedReviewerId = isAdministrator ? null :
+            await financeReviewerAccessService.FindEligibleReviewerAsync(
+                request.CreatorId.Value, request.StudentId, request.AcademicYearId,
+                ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View, decisionPermission);
         await financeReviewerAccessService.EnsureReviewerCanDecideAsync(
             request.CreatorId.Value, routedReviewerId, request.StudentId, request.AcademicYearId,
             ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View, decisionPermission);

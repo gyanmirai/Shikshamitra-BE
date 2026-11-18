@@ -4,17 +4,50 @@ using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Students;
+using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Reports;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Fees.Collections;
 
 public partial class FeeCollectionSummaryQueryService
 {
+	private async Task<(List<FeeCollectionRawRow> Rows, HashSet<Guid> SingleAccountStudents, int TotalCount)>
+		BuildPagedPayerRowsAsync(GetFeeCollectionSummaryInput input, CancellationToken cancellationToken)
+	{
+		EnsureSummaryContextIsValid(input);
+		var studentQuery = await BuildFilteredStudentQueryAsync(input, cancellationToken);
+		var accountQuery = await BuildFilteredFeeAccountQueryAsync(input, studentQuery.Select(s => s.Id));
+		var singleAccountStudentIds = accountQuery.Where(a => a.StudentId.HasValue)
+			.GroupBy(a => a.StudentId!.Value).Where(group => group.Count() == 1).Select(group => group.Key);
+		var payerKeys = studentQuery.Where(s => !singleAccountStudentIds.Contains(s.Id))
+			.Select(s => new { StudentId = (Guid?)s.Id, FinanceFeeAccountId = (Guid?)null,
+				FirstName = (string?)s.FirstName, LastName = (string?)s.LastName })
+			.Concat(accountQuery.Select(a => new { a.StudentId, FinanceFeeAccountId = (Guid?)a.Id,
+				FirstName = (string?)a.ApplicantName, LastName = (string?)null }));
+		var totalCount = await AsyncExecuter.CountAsync(payerKeys, cancellationToken);
+		if (totalCount == 0) return ([], [], 0);
+		var pageKeys = await AsyncExecuter.ToListAsync(payerKeys
+			.OrderBy(key => key.LastName ?? string.Empty).ThenBy(key => key.FirstName ?? string.Empty)
+			.ThenBy(key => key.StudentId).ThenBy(key => key.FinanceFeeAccountId)
+			.Skip(input.SkipCount).Take(input.MaxResultCount), cancellationToken);
+		var studentIds = pageKeys.Where(key => !key.FinanceFeeAccountId.HasValue && key.StudentId.HasValue)
+			.Select(key => key.StudentId!.Value).ToArray();
+		var accountIds = pageKeys.Where(key => key.FinanceFeeAccountId.HasValue)
+			.Select(key => key.FinanceFeeAccountId!.Value).ToArray();
+		var (rows, singleAccountStudents) = await BuildPayerRowsAsync(input, cancellationToken,
+			studentIds, accountIds);
+		var byKey = rows.ToDictionary(row => (row.StudentId, row.FinanceFeeAccountId));
+		return (pageKeys.Select(key => byKey[(key.StudentId, key.FinanceFeeAccountId)]).ToList(),
+			singleAccountStudents, totalCount);
+	}
+
 	private async Task<List<FeeCollectionRawRow>> BuildRawRowsAsync(
 		GetFeeCollectionSummaryInput input,
 		CancellationToken cancellationToken = default)
@@ -26,33 +59,77 @@ public partial class FeeCollectionSummaryQueryService
 
 	private async Task<(List<FeeCollectionRawRow> Rows, HashSet<Guid> SingleAccountStudents)> BuildPayerRowsAsync(
 		GetFeeCollectionSummaryInput input,
-		CancellationToken cancellationToken)
+		CancellationToken cancellationToken,
+		Guid[]? pageStudentIds = null,
+		Guid[]? pageAccountIds = null)
 	{
 		EnsureSummaryContextIsValid(input);
 		var studentQuery = await BuildFilteredStudentQueryAsync(input, cancellationToken);
+		var allAccountQuery = await BuildFilteredFeeAccountQueryAsync(input, studentQuery.Select(s => s.Id));
+		var accountQuery = allAccountQuery;
+		if (pageAccountIds is not null)
+			accountQuery = accountQuery.Where(a => pageAccountIds.Contains(a.Id));
+		var accounts = await AsyncExecuter.ToListAsync(accountQuery, cancellationToken);
+		if (pageStudentIds is not null)
+		{
+			var linkedIds = accounts.Where(a => a.StudentId.HasValue).Select(a => a.StudentId!.Value).ToArray();
+			studentQuery = studentQuery.Where(s => pageStudentIds.Contains(s.Id) || linkedIds.Contains(s.Id));
+		}
 		var students = await AsyncExecuter.ToListAsync(studentQuery.Select(s => new
 		{
 			s.Id, s.FirstName, s.MiddleName, s.LastName, s.GrNo, s.RollNo,
-			s.StandardId, s.DivisionId, s.Standard, s.Division, s.FeeStructureId
+			s.StandardId, s.DivisionId, s.Standard, s.Division, s.FeeStructureId,
+			s.AcademicYearId
 		}), cancellationToken);
-		var accounts = await AsyncExecuter.ToListAsync(await BuildFilteredFeeAccountQueryAsync(input, studentQuery.Select(s => s.Id)), cancellationToken);
 		if (students.Count == 0 && accounts.Count == 0) return ([], []);
 		var studentMap = students.ToDictionary(s => s.Id);
-		var standardIds = accounts.Select(a => a.StandardId).Distinct().ToList();
-		var divisionIds = accounts.Where(a => a.DivisionId.HasValue).Select(a => a.DivisionId!.Value).Distinct().ToList();
+		var historicalIds = students.Where(s => s.AcademicYearId != input.AcademicYearId)
+			.Select(s => s.Id).ToArray();
+		var historicalPlacements = await AsyncExecuter.ToListAsync(
+			(await LazyServiceProvider.LazyGetRequiredService<IRepository<StudentEnrollment, Guid>>()
+				.GetQueryableAsync()).Where(enrollment => enrollment.AcademicYearId == input.AcademicYearId &&
+					historicalIds.Contains(enrollment.StudentId))
+				.Select(enrollment => new { enrollment.StudentId, enrollment.StandardId,
+					enrollment.DivisionId, enrollment.RollNumber }), cancellationToken);
+		var placementMap = historicalPlacements.GroupBy(p => p.StudentId)
+			.ToDictionary(group => group.Key, group => group.First());
+		var assignedHistoricalIds = await AsyncExecuter.ToListAsync(
+			(await LazyServiceProvider.LazyGetRequiredService<IRepository<StudentFeeStructure, Guid>>()
+				.GetQueryableAsync()).Where(assignment => assignment.AcademicYearId == input.AcademicYearId &&
+					historicalIds.Contains(assignment.StudentId)).Select(assignment => assignment.StudentId),
+			cancellationToken);
+		var assignedHistoricalSet = assignedHistoricalIds.ToHashSet();
+		var standardIds = accounts.Select(a => a.StandardId)
+			.Concat(historicalPlacements.Where(p => p.StandardId.HasValue).Select(p => p.StandardId!.Value))
+			.Distinct().ToList();
+		var divisionIds = accounts.Where(a => a.DivisionId.HasValue).Select(a => a.DivisionId!.Value)
+			.Concat(historicalPlacements.Where(p => p.DivisionId.HasValue).Select(p => p.DivisionId!.Value))
+			.Distinct().ToList();
 		var standardNames = (await standardRepository.GetListAsync(s => standardIds.Contains(s.Id), cancellationToken: cancellationToken))
 			.ToDictionary(s => s.Id, s => s.Name);
 		var divisionNames = (await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id), cancellationToken: cancellationToken))
 			.ToDictionary(d => d.Id, d => d.Name);
-		var singleAccountStudents = accounts.Where(a => a.StudentId.HasValue).GroupBy(a => a.StudentId!.Value)
+		var linkedStudentIds = accounts.Where(a => a.StudentId.HasValue).Select(a => a.StudentId!.Value).Distinct().ToArray();
+		var accountCounts = pageAccountIds is null ? accounts.Select(a => a.StudentId).ToList()
+			: await AsyncExecuter.ToListAsync(allAccountQuery
+				.Where(a => a.StudentId.HasValue && linkedStudentIds.Contains(a.StudentId.Value))
+				.Select(a => a.StudentId), cancellationToken);
+		var singleAccountStudents = accountCounts.Where(id => id.HasValue).GroupBy(id => id!.Value)
 			.Where(g => g.Count() == 1).Select(g => g.Key).ToHashSet();
-		var rows = students.Where(s => !singleAccountStudents.Contains(s.Id)).Select(s => new FeeCollectionRawRow
+		var rows = students.Where(s => (pageStudentIds is null || pageStudentIds.Contains(s.Id))
+			&& !singleAccountStudents.Contains(s.Id)).Select(s => new FeeCollectionRawRow
 		{
 			StudentId = s.Id, FirstName = s.FirstName, MiddleName = s.MiddleName, LastName = s.LastName,
-			GrNo = s.GrNo?.ToString() ?? string.Empty, RollNo = s.RollNo?.ToString() ?? string.Empty,
-			StandardId = s.StandardId ?? Guid.Empty, StandardName = s.Standard?.Name ?? string.Empty,
-			DivisionId = s.DivisionId ?? Guid.Empty, DivisionName = s.Division?.Name ?? string.Empty,
-			IsFeeStructureAssigned = s.FeeStructureId.HasValue,
+			GrNo = s.GrNo?.ToString() ?? string.Empty,
+			RollNo = placementMap.TryGetValue(s.Id, out var placement) ? placement.RollNumber?.ToString() ?? string.Empty : s.RollNo?.ToString() ?? string.Empty,
+			StandardId = placementMap.TryGetValue(s.Id, out var placed) ? placed.StandardId ?? Guid.Empty : s.StandardId ?? Guid.Empty,
+			StandardName = placementMap.TryGetValue(s.Id, out var named) && named.StandardId.HasValue
+				? standardNames.GetValueOrDefault(named.StandardId.Value) ?? string.Empty : s.Standard?.Name ?? string.Empty,
+			DivisionId = placementMap.TryGetValue(s.Id, out var divided) ? divided.DivisionId ?? Guid.Empty : s.DivisionId ?? Guid.Empty,
+			DivisionName = placementMap.TryGetValue(s.Id, out var division) && division.DivisionId.HasValue
+				? divisionNames.GetValueOrDefault(division.DivisionId.Value) ?? string.Empty : s.Division?.Name ?? string.Empty,
+			IsFeeStructureAssigned = s.AcademicYearId == input.AcademicYearId ? s.FeeStructureId.HasValue
+				: assignedHistoricalSet.Contains(s.Id),
 			TotalFees = 0d, PaidFees = 0d, OutstandingFees = 0d, OverdueFees = 0d,
 			TotalCharges = 0d, PaidCharges = 0m, PendingCharges = 0d
 		}).ToList();

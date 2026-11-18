@@ -97,6 +97,11 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
         var firstSorted = await ReadPageAsync(url + "&sortBy=amount&sortDescending=false&pageSize=1");
         firstSorted.TotalCount.ShouldBe(2); firstSorted.Items.Single().Amount.ShouldBe(5m);
         (await ReadPageAsync(url + "&sortBy=amount&sortDescending=false&pageSize=1&page=2")).Items.Single().Amount.ShouldBe(12.34m);
+        var byParty = await ReadPageAsync(url + "&sortBy=counterparty&sortDescending=false&pageSize=1");
+        byParty.TotalCount.ShouldBe(2);
+        byParty.Items.Single().Counterparty.ShouldBe("Another payer");
+        (await ReadPageAsync(url + "&sortBy=counterparty&sortDescending=false&pageSize=1&page=2"))
+            .Items.Single().Counterparty.ShouldBe("Parent association");
         var amountFiltered = await ReadPageAsync(url + "&pageSize=1" + ColumnFilters(
             new { column = "amount", type = "between", value = new { min = 5m, max = 10m } },
             new { column = "source", type = "equals", value = direction == "income" ? "Income" : "Expense" },

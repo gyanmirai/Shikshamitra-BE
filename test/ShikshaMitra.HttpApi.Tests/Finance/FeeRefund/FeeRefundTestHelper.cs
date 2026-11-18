@@ -458,7 +458,7 @@ public static class FeeRefundTestHelper
             var collection = new CollectionPolicy(collectionPolicyId.Value, tenantId, DefaultAcademicYearId,
                 new CollectionPolicySnapshot
                 {
-                    PolicyName = "Synthetic paid-ledger collection policy", PolicyCode = $"CP-{collectionPolicyId:N}"[..20],
+                    PolicyName = $"Synthetic collection {collectionPolicyId:N}", PolicyCode = $"CP-{collectionPolicyId:N}"[..20],
                     Status = CollectionPolicyStatus.Active, EnableLateFee = false, AllowOnlineCollection = true
                 }.ToUpdateModel());
             await scope.ServiceProvider.GetRequiredService<IRepository<CollectionPolicy, Guid>>().InsertAsync(collection);

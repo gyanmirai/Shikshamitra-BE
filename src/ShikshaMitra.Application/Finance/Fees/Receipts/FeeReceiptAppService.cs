@@ -94,34 +94,46 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
             TableQuery            = tableQuery,
         };
 
-        var batchSize = hasDisplayFilters ? 200 : input.MaxResultCount;
+        if (hasDisplayFilters)
+        {
+            var filterRows = await receiptRepository.GetListFilterRowsAsync(
+                CreateFilter(0, 0),
+                tableQuery.Filters.Any(f => f.Column == "paymentMethodLabel"),
+                cancellationToken);
+            var filterItems = filterRows.Select(row => new FeeReceiptListItemDto
+            {
+                Id = row.Id,
+                ReceiptNumber = row.ReceiptNumber,
+                ReceiptKind = row.ReceiptKind,
+                ReceiptKindLabel = FeeReceiptPresentation.GetLabel(row.ReceiptKind, row.ReceiptScope),
+                PaymentMethodLabel = row.PaymentMethodLabel,
+                VerificationStatus = row.VerificationStatus,
+                LinkedFinalReceiptNumber = row.LinkedFinalReceiptNumber,
+                TotalPaidAmount = row.TotalPaidAmount,
+                ReceiptDate = row.ReceiptDate,
+                StudentName = row.StudentName,
+                GrNo = row.GrNo,
+                RollNo = row.RollNo,
+            }).ToList();
+            var matching = tableQuery.Apply(filterItems.AsQueryable(), ListFilterFields).ToList();
+            var pageIds = matching.Skip(input.SkipCount).Take(input.MaxResultCount)
+                .Select(item => item.Id).ToList();
+            if (pageIds.Count == 0)
+                return new PagedResultDto<FeeReceiptListItemDto>(matching.Count, []);
+
+            var pageReceipts = await receiptRepository.GetListAsync(
+                receipt => pageIds.Contains(receipt.Id), cancellationToken: cancellationToken);
+            var positions = pageIds.Select((id, index) => (id, index))
+                .ToDictionary(pair => pair.id, pair => pair.index);
+            pageReceipts = pageReceipts.OrderBy(receipt => positions[receipt.Id]).ToList();
+            return new PagedResultDto<FeeReceiptListItemDto>(matching.Count,
+                await LoadReceiptItemsAsync(pageReceipts, cancellationToken));
+        }
+
         var (totalCount, receipts) = await receiptRepository.GetPagedListAsync(
-            CreateFilter(hasDisplayFilters ? 0 : input.SkipCount, batchSize), cancellationToken);
+            CreateFilter(input.SkipCount, input.MaxResultCount), cancellationToken);
         if (totalCount == 0)
             return new PagedResultDto<FeeReceiptListItemDto>(0, []);
-
-		if (hasDisplayFilters)
-		{
-			var matchingCount = 0;
-			var page = new List<FeeReceiptListItemDto>();
-			var offset = 0;
-			while (receipts.Count > 0)
-			{
-				var matching = tableQuery.Apply((await LoadReceiptItemsAsync(receipts, cancellationToken)).AsQueryable(),
-					ListFilterFields).ToList();
-				foreach (var item in matching)
-				{
-					if (matchingCount >= input.SkipCount && page.Count < input.MaxResultCount)
-						page.Add(item);
-					matchingCount++;
-				}
-				offset += receipts.Count;
-				if (offset >= totalCount) break;
-				(_, receipts) = await receiptRepository.GetPagedListAsync(CreateFilter(offset, batchSize),
-					cancellationToken, includeTotalCount: false);
-			}
-			return new PagedResultDto<FeeReceiptListItemDto>(matchingCount, page);
-		}
 
 		return new PagedResultDto<FeeReceiptListItemDto>(totalCount,
 			await LoadReceiptItemsAsync(receipts, cancellationToken));

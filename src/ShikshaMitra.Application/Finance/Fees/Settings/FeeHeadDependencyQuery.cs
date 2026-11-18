@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Text.Json;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
-using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
@@ -17,60 +15,48 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 public class FeeHeadDependencyQuery(
 	IRepository<FeeStructureDetail, Guid> detailRepository,
 	IRepository<DueFee, Guid> dueRepository,
-	IRepository<StudentFeeStructure, Guid> assignmentRepository) : ITransientDependency
+	IRepository<StudentFeeStructure, Guid> assignmentRepository,
+	IRepository<ShikshaMitra.Domain.Finance.Fees.Settings.FeeHead, Guid> headRepository) : ITransientDependency
 {
 	public async Task<Dictionary<Guid, FeeHeadDependenciesDto>> GetAsync(IEnumerable<Guid> feeHeadIds)
 	{
 		var ids = feeHeadIds.Distinct().ToArray();
 		if (ids.Length == 0) return [];
-		var idSet = ids.ToHashSet();
-		var detailQuery = await detailRepository.GetQueryableAsync();
-		var details = await detailRepository.AsyncExecuter.ToListAsync(detailQuery
-			.Where(x => Enumerable.Contains(ids, x.FeeHeadId))
-			.Select(x => new { x.FeeHeadId, x.FeeStructureId, x.PaymentTermId }));
-		var detailsByHead = details.ToLookup(x => x.FeeHeadId);
-		var detailsByStructure = details.ToLookup(x => x.FeeStructureId);
-		var query = await dueRepository.GetQueryableAsync();
-		var references = await dueRepository.AsyncExecuter.ToListAsync(query
-			.Where(x => Enumerable.Contains(ids, x.FeeHeadId))
-			.Select(x => new { x.FeeHeadId, x.StudentId, x.StudentFeeStructureId }).Distinct());
-		var referencesByHead = references.ToLookup(x => x.FeeHeadId);
-		var structureIds = details.Select(x => x.FeeStructureId).Distinct().ToArray();
+		var details = (await detailRepository.GetQueryableAsync()).Where(x => Enumerable.Contains(ids, x.FeeHeadId));
+		var structures = await detailRepository.AsyncExecuter.ToListAsync(details.GroupBy(x => x.FeeHeadId).Select(group => new {
+			FeeHeadId = group.Key,
+			StructureCount = group.Select(x => x.FeeStructureId).Distinct().Count(),
+			TermCount = group.Where(x => x.PaymentTermId.HasValue).Select(x => x.PaymentTermId).Distinct().Count()
+		}));
 		var assignments = await assignmentRepository.GetQueryableAsync();
-		var assignmentsUsingStructures = await assignmentRepository.AsyncExecuter.ToListAsync(assignments
-			.Where(a => Enumerable.Contains(structureIds, a.FeeStructureStandardId))
-			.Select(a => new { a.Id, a.StudentId, a.FeeStructureStandardId, a.AssignmentSnapshotJson }));
-		var explicitReferences = new List<(Guid FeeHeadId, Guid? StudentId, Guid? AssignmentId)>();
-		foreach (var assignment in assignmentsUsingStructures)
-		{
-			// Zero-valued selected heads may intentionally generate no dues. Count their assignment evidence too.
-			List<Guid>? included = null;
-			if (assignment.AssignmentSnapshotJson != null)
-			{
-				try { included = JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(assignment.AssignmentSnapshotJson)?.Heads?.Where(h => h.Included).Select(h => h.FeeHeadId).ToList(); }
-				catch (JsonException) { /* Preserve conservative references for legacy/corrupt evidence. */ }
-			}
-			foreach (var id in included ?? detailsByStructure[assignment.FeeStructureStandardId].Select(d => d.FeeHeadId).ToList())
-				if (idSet.Contains(id)) explicitReferences.Add((id, assignment.StudentId, assignment.Id));
-		}
-		var explicitByHead = explicitReferences.ToLookup(x => x.FeeHeadId);
-		return ids.ToDictionary(id => id, id => {
-			var dues = referencesByHead[id];
-			var heads = detailsByHead[id];
-			var explicitForHead = explicitByHead[id];
-			var explicitStudents = explicitForHead.Select(x => x.StudentId).ToHashSet();
-			var assigned = explicitForHead
-				.Select(x => (x.StudentId, x.AssignmentId)).Concat(dues
-					.Where(x => x.StudentFeeStructureId.HasValue || !explicitStudents.Contains(x.StudentId))
-					.Select(x => (x.StudentId, x.StudentFeeStructureId))).Distinct().ToList();
-			return new FeeHeadDependenciesDto {
-				StudentCount = assigned.Where(x => x.StudentId.HasValue).Select(x => x.StudentId).Distinct().Count(),
-				// Legacy dues without an assignment ID still represent an assigned obligation.
-				AssignmentCount = assigned.Count,
-				FeeStructureCount = heads.Select(x => x.FeeStructureId).Distinct().Count(),
-				PaymentTermCount = heads.Where(x => x.PaymentTermId.HasValue).Select(x => x.PaymentTermId).Distinct().Count()
-			};
-		});
+		// The small normalized evidence includes selected zero-value heads. NULL is deliberately
+		// conservative for legacy/corrupt snapshots, using that assignment's structure heads.
+		// Expand database head rows, never a primitive collection SelectMany (unsupported
+		// by one or both providers). Scalar membership retains PostgreSQL's array index path.
+		var requestedHeads = (await headRepository.GetQueryableAsync()).Where(x => Enumerable.Contains(ids, x.Id));
+		var normalizedReferences = from assignment in assignments.Where(x => x.IncludedFeeHeadIds != null && x.IncludedFeeHeadIds.Any(headId => Enumerable.Contains(ids, headId)))
+			from head in requestedHeads
+			where Enumerable.Contains(assignment.IncludedFeeHeadIds!, head.Id)
+			select new { FeeHeadId = head.Id, StudentId = (Guid?)assignment.StudentId, AssignmentId = (Guid?)assignment.Id };
+		var legacyReferences = from detail in details
+			join assignment in assignments.Where(x => x.IncludedFeeHeadIds == null) on detail.FeeStructureId equals assignment.FeeStructureStandardId
+			select new { detail.FeeHeadId, StudentId = (Guid?)assignment.StudentId, AssignmentId = (Guid?)assignment.Id };
+		var explicitReferences = normalizedReferences.Union(legacyReferences);
+		var dues = (await dueRepository.GetQueryableAsync()).Where(x => Enumerable.Contains(ids, x.FeeHeadId));
+		// An unbound legacy due is one assignment only when no explicit assignment for the
+		// same student/head exists. Bound dues retain their independent assignment identity.
+		var dueReferences = dues.Where(due => due.StudentFeeStructureId.HasValue || !explicitReferences.Any(reference =>
+			reference.FeeHeadId == due.FeeHeadId && reference.StudentId == due.StudentId))
+			.Select(due => new { due.FeeHeadId, due.StudentId, AssignmentId = due.StudentFeeStructureId });
+		var counts = await assignmentRepository.AsyncExecuter.ToListAsync(explicitReferences.Union(dueReferences)
+			.GroupBy(x => x.FeeHeadId).Select(group => new {
+				FeeHeadId = group.Key, AssignmentCount = group.Count(),
+				StudentCount = group.Where(x => x.StudentId.HasValue).Select(x => x.StudentId).Distinct().Count()
+			}));
+		var result = ids.ToDictionary(id => id, _ => new FeeHeadDependenciesDto());
+		foreach (var row in structures) { result[row.FeeHeadId].FeeStructureCount = row.StructureCount; result[row.FeeHeadId].PaymentTermCount = row.TermCount; }
+		foreach (var row in counts) { result[row.FeeHeadId].StudentCount = row.StudentCount; result[row.FeeHeadId].AssignmentCount = row.AssignmentCount; }
+		return result;
 	}
 
 	public static BusinessException Blocked(string code, string name, FeeHeadDependenciesDto dependencies) =>

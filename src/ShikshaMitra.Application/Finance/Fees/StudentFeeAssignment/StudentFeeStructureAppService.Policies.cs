@@ -33,11 +33,46 @@ public partial class StudentFeeStructureAppService
 	{
 		await AuthorizationService.CheckAsync(PolicyPermission);
 		await RequireEnrollmentAsync(studentId, academicYearId, false);
-		var versions = await financePolicyVersionRepository.GetListAsync(x => x.AcademicYearId == academicYearId);
-		return versions.Where(x => SelectablePolicyFamilies.Contains(x.PolicyType)).GroupBy(x => new { x.PolicyType, x.PolicyId })
-			.Select(g => g.OrderByDescending(x => x.VersionNumber).ThenByDescending(x => x.CreationTime).First())
-			.Where(x => x.Status.Equals("Active", StringComparison.OrdinalIgnoreCase) && IsEffectiveVersion(x))
+		var versions = await ReadCurrentPolicyOptionsAsync(academicYearId);
+		return versions.Where(IsEffectiveVersion)
 			.OrderBy(x => x.PolicyName).Select(ToAssignmentPolicy).ToList();
+	}
+
+	private sealed class AssignmentPolicyReadContext
+	{
+		public Dictionary<Guid, List<FinancePolicyVersion>> Options { get; } = [];
+		public Dictionary<Guid, FinancePolicyVersion?> Versions { get; } = [];
+	}
+
+	private async Task<List<FinancePolicyVersion>> ReadCurrentPolicyOptionsAsync(Guid year, AssignmentPolicyReadContext? policyReads = null)
+	{
+		if (policyReads != null && policyReads.Options.TryGetValue(year, out var cached)) return cached;
+		var query = await financePolicyVersionRepository.GetQueryableAsync();
+		// Latest is selected before status filtering: an archived latest revision must
+		// never revive an older active one. Only current candidates carry JSON to memory.
+		var versions = await AsyncExecuter.ToListAsync(query.Where(version => version.AcademicYearId == year &&
+			Enumerable.Contains(SelectablePolicyFamilies, version.PolicyType) && version.Status.ToLower() == "active" &&
+			!query.Any(later => later.AcademicYearId == year && later.PolicyType == version.PolicyType && later.PolicyId == version.PolicyId &&
+				(later.VersionNumber > version.VersionNumber || later.VersionNumber == version.VersionNumber && later.CreationTime > version.CreationTime))));
+		if (policyReads != null)
+		{
+			policyReads.Options[year] = versions;
+			foreach (var version in versions) policyReads.Versions[version.Id] = version;
+		}
+		return versions;
+	}
+
+	private async Task<Dictionary<Guid, FinancePolicyVersion?>> ReadPolicyVersionsAsync(IEnumerable<Guid> ids, AssignmentPolicyReadContext? policyReads = null)
+	{
+		var versions = policyReads?.Versions ?? new Dictionary<Guid, FinancePolicyVersion?>();
+		var missing = ids.Distinct().Where(id => !versions.ContainsKey(id)).ToArray();
+		if (missing.Length > 0)
+		{
+			foreach (var id in missing) versions[id] = null;
+			foreach (var version in await financePolicyVersionRepository.GetListAsync(x => Enumerable.Contains(missing, x.Id)))
+				versions[version.Id] = version;
+		}
+		return versions;
 	}
 
 	private bool IsEffectiveVersion(FinancePolicyVersion version)
@@ -63,7 +98,8 @@ public partial class StudentFeeStructureAppService
 		["refund"] = structure.RefundPolicyVersionId, ["proration"] = null };
 
 	private async Task<Dictionary<string, FinancePolicyVersion?>> ResolveAssignedPoliciesAsync(
-		FeeStructure structure, Guid year, List<AssignmentPolicySelectionDto> selections, string? reason, Guid? editingAssignmentId = null)
+		FeeStructure structure, Guid year, List<AssignmentPolicySelectionDto> selections, string? reason, Guid? editingAssignmentId = null,
+		AssignmentPolicyReadContext? policyReads = null)
 	{
 		ValidatePolicies(selections);
 		var defaults = StructurePolicyVersions(structure);
@@ -84,7 +120,9 @@ public partial class StudentFeeStructureAppService
 			await AuthorizationService.CheckAsync(PolicyPermission);
 			if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 500) throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 		}
-		var options = changes.Any(x => x.VersionId.HasValue) ? await GetPolicyOptionsAsyncForYear(year) : [];
+		var options = changes.Any(x => x.VersionId.HasValue) ? await GetPolicyOptionsAsyncForYear(year, policyReads) : [];
+		var versions = await ReadPolicyVersionsAsync(defaults.Values.Concat(selections.Select(s => s.VersionId))
+			.Where(id => id.HasValue).Select(id => id!.Value), policyReads);
 		var resolved = new Dictionary<string, FinancePolicyVersion?>();
 		foreach (var family in PolicyFamilies)
 		{
@@ -94,7 +132,7 @@ public partial class StudentFeeStructureAppService
 				if (family == "collection" || (!selections.Any(x => x.Family == family) && defaultIds[family].HasValue)) throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
 				resolved[family] = null; continue;
 			}
-			var version = await financePolicyVersionRepository.FindAsync(versionId.Value);
+			var version = versions.GetValueOrDefault(versionId.Value);
 			if (version == null || version.PolicyType != family || version.AcademicYearId != year ||
 				(versionId == defaults[family] && version.PolicyId != defaultIds[family]) ||
 				(changes.Any(x => x.Family == family) && !options.Contains(version.Id))) throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
@@ -103,11 +141,11 @@ public partial class StudentFeeStructureAppService
 		return resolved;
 	}
 
-	private async Task<List<Guid>> GetPolicyOptionsAsyncForYear(Guid year)
+	private async Task<List<Guid>> GetPolicyOptionsAsyncForYear(Guid year, AssignmentPolicyReadContext? policyReads = null)
 	{
-		var versions = await financePolicyVersionRepository.GetListAsync(x => x.AcademicYearId == year);
-		return versions.GroupBy(x => new { x.PolicyType, x.PolicyId }).Select(g => g.OrderByDescending(x => x.VersionNumber).ThenByDescending(x => x.CreationTime).First())
-			.Where(x => x.Status.Equals("Active", StringComparison.OrdinalIgnoreCase) && IsEffectiveVersion(x)).Select(x => x.Id).ToList();
+		var versions = await ReadCurrentPolicyOptionsAsync(year, policyReads);
+		// Recheck date boundaries even when immutable candidates are shared by a preview.
+		return versions.Where(IsEffectiveVersion).Select(x => x.Id).ToList();
 	}
 
 	[Authorize(PolicyPermission)]
@@ -126,10 +164,11 @@ public partial class StudentFeeStructureAppService
 		var current = new Dictionary<string, Guid?> { ["concession"] = assignment.ConcessionPolicyVersionId, ["collection"] = assignment.CollectionPolicyVersionId,
 			["refund"] = assignment.RefundPolicyVersionId, ["proration"] = assignment.ProrationPolicyVersionId };
 		var allowed = await GetPolicyOptionsAsyncForYear(input.AcademicYearId);
+		var selectedVersions = await ReadPolicyVersionsAsync(input.Policies.Where(s => s.VersionId.HasValue).Select(s => s.VersionId!.Value));
 		var policies = new Dictionary<string, FinancePolicyVersion?>();
 		foreach (var selection in input.Policies)
 		{
-			var version = selection.VersionId.HasValue ? await financePolicyVersionRepository.FindAsync(selection.VersionId.Value) : null;
+			var version = selection.VersionId.HasValue ? selectedVersions.GetValueOrDefault(selection.VersionId.Value) : null;
 			if ((selection.Family == "collection" && version == null) || (selection.VersionId.HasValue && (version == null || version.PolicyType != selection.Family ||
 				version.AcademicYearId != input.AcademicYearId || (current[selection.Family] != version.Id && !allowed.Contains(version.Id)))))
 				throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);

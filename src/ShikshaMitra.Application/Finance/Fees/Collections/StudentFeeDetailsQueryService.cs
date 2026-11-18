@@ -64,9 +64,10 @@ public partial class StudentFeeDetailsQueryService(
 		Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
 	{
 		EnsureNotEmpty(academicYearId, "academicYearId");
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId, cancellationToken);
+		await financeScopeAccessService.EnsureFeeCollectionStudentAccessibleAsync(
+			studentId, academicYearId, cancellationToken);
 
-		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
+		var student = await GetStudentSnapshotAsync(studentId, academicYearId, cancellationToken);
 		var feeStructureAssignment = await studentFeeStructureRepository.FirstOrDefaultAsync(
 			x => x.StudentId == studentId && x.AcademicYearId == academicYearId);
 		if (feeStructureAssignment == null)

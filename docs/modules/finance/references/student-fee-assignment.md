@@ -231,3 +231,16 @@ Focused coverage lives in `StudentFeeAssignmentWorkspace_Tests` and `AssignmentA
 `StudentFeeAssignmentPostgres_Correction_Tests` passes three cases on a private PostgreSQL18 database: collection wins after correction read and prevents stale archival; correction wins after collection read and rejects the obsolete payment; and an injected replacement insert failure after old-dues flush restores the original schedule, canonical snapshot/fingerprint/history. It uses the production receipt-sequence repository and checks sequence persistence/rollback. The guarded fixture requires a new empty high-port loopback `assignment_correction_test_*` database via `FEE_ASSIGNMENT_TEST_POSTGRES`, never resets populated databases, and creates the schema from the current EF model. These cases prove correction transaction behavior; they do not execute migrations or production OAuth.
 
 Frontend route, components and browser checks: [frontend assignment reference](../../../../../Shikshamitra-FE/docs/finance/references/student-fee-assignment.md).
+
+## Bounded assignment reads and captured placement
+
+Bulk contexts authorize the selected enrollments first, then batch canonical assignments, blockers, admission links and joining-date facts.
+`includeEditDetails=false` omits candidate/policy editing data for a read-only single-assignment view; the default remains true for existing editing clients.
+Bulk preview shares structure, metadata, year, head, term and current-policy inputs within that preview only.
+Each confirmation retains fresh authoritative reads and its own student transaction; cached preview inputs never authorize a write.
+
+New assignments capture academic class, division and roll at commit.
+Historical scope and labels use that placement after promotion; legacy history uses only verified recorded enrollment/account evidence and leaves unknown division or roll unknown.
+`20261117143000_IndexAssignmentHeadEvidence` adds nullable placement and selected-head evidence with a GIN index.
+Its tolerant backfill distinguishes unknown/corrupt selections from an explicitly empty set, includes selected zero-value heads, and preserves original snapshots and amounts.
+Apply the additive migration before deploying the matching backend; no deployed database was changed by this work.

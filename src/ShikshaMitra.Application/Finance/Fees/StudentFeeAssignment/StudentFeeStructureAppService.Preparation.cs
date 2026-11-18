@@ -28,13 +28,13 @@ public partial class StudentFeeStructureAppService
 		using var detailTracking = feeStructureDetailRepository.DisableTracking();
 		using var metadataTracking = feeStructureMetadataRepository.DisableTracking();
 		using var yearTracking = academicYearRepository.DisableTracking();
-		var structure = await feeStructureRepository.GetAsync(input.StandardFeeStructureId);
-		var metadata = await feeStructureMetadataRepository.GetAsync(structure.FeeStructureMetadataId);
+		var structure = await LoadPreviewEntityAsync(feeStructureRepository, previewReadBatch.Value?.Structures, input.StandardFeeStructureId);
+		var metadata = await LoadPreviewEntityAsync(feeStructureMetadataRepository, previewReadBatch.Value?.Metadata, structure.FeeStructureMetadataId);
 		if (!structure.IsLocked || structure.StandardId != standardId || metadata.AcademicYearId != input.AcademicYearId ||
 			(admission != null && (metadata.AcademicBoardId != admission.BoardId || metadata.AcademicMediumId != admission.MediumId || admission.StructureRevision.HasValue && structure.RevisionNumber != admission.StructureRevision)))
 			throw new BusinessException(AssignmentErrorCodes.StructureMismatch);
-		var year = await academicYearRepository.GetAsync(input.AcademicYearId);
-		var details = (await feeStructureDetailRepository.GetListAsync(x => x.FeeStructureId == structure.Id)).OrderBy(x => x.Id).ToList();
+		var year = await LoadPreviewEntityAsync(academicYearRepository, previewReadBatch.Value?.Years, input.AcademicYearId);
+		var details = await LoadAssignmentDetailsAsync(structure.Id);
 		if (details.Count == 0 || details.Select(x => x.FeeHeadId).Distinct().Count() != details.Count ||
 			input.SelectedOptionalFeeHeadIds.Any(id => !details.Any(d => d.FeeHeadId == id && d.IsOptional)) ||
 			input.FeeHeadDetails.Any(x => !details.Any(d => d.FeeHeadId == x.FeeHeadId && !d.IsVariable && (!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId)))) ||
@@ -47,7 +47,7 @@ public partial class StudentFeeStructureAppService
                 (!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId)))))
             throw new BusinessException(AssignmentErrorCodes.InvalidInput);
         foreach (var detail in details.Where(d => structure.FeeStructureDetails.All(x => x.Id != d.Id))) structure.AddDetail(detail);
-		var selectedPolicies = await ResolveAssignedPoliciesAsync(structure, year.Id, input.Policies, input.PolicyOverrideReason, input.EditAssignmentId);
+		var selectedPolicies = await ResolveAssignedPoliciesAsync(structure, year.Id, input.Policies, input.PolicyOverrideReason, input.EditAssignmentId, policyReads: previewReadBatch.Value?.Policies);
 		selectedPolicies["proration"] = admission != null ? admission.Proration :
 			await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(year.Id);
 		var collection = selectedPolicies["collection"];
@@ -71,7 +71,7 @@ public partial class StudentFeeStructureAppService
 			(refundRules != null && (refundRules.PolicyId != refund!.PolicyId || refundRules.AcademicYearId != year.Id || refundRules.ApplicableFeeHeadIds == null)))
 			throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
 		var headIds = details.Select(d => d.FeeHeadId).ToList();
-		var headRecords = (await feeHeadRepository.GetListAsync(h => headIds.Contains(h.Id))).ToDictionary(h => h.Id);
+		var headRecords = await LoadAssignmentHeadsAsync(headIds);
 		var applicableProration = prorationRules?.Rules.Any(r => details.Any(d => d.FeeHeadId == r.FeeHeadId && !d.IsOneTime &&
 			(!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId))) && r.ApplyOnAdmission && r.RuleType != ProrationRuleType.FullCharge) == true;
 		if (admission != null && applicableProration && !admission.JoiningDate.HasValue)
@@ -91,6 +91,7 @@ public partial class StudentFeeStructureAppService
 			PolicyOverrideReason = input.PolicyOverrideReason?.Trim(),
 			ProrationPolicyId = proration?.PolicyId, ProrationPolicyVersionId = proration?.Id
 		};
+		var terms = await LoadAssignmentTermsAsync(details.Where(detail => !detail.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(detail.FeeHeadId)));
 		var optionalDetails = new List<CustomOptionalFeeHeadDetail>();
 		foreach (var detail in details)
 		{
@@ -104,9 +105,10 @@ public partial class StudentFeeStructureAppService
 			// New assignments must preserve an explicit published term, including one-time heads.
 			if (!detail.PaymentTermId.HasValue || !detail.PaymentTermVersionId.HasValue)
 				throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid).WithData("Reason", "Publish a payment term for every included fee head.");
-			var termVersion = await paymentTermVersionRepository.GetAsync(detail.PaymentTermVersionId.Value);
-			var term = await paymentTermRepository.GetAsync(detail.PaymentTermId.Value);
-			if (termVersion.PaymentTermId != term.Id || term.AcademicYearId != year.Id)
+			if (!terms.TryGetValue(detail.PaymentTermId.Value, out var term))
+				throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
+			var termVersion = term.Versions.SingleOrDefault(version => version.Id == detail.PaymentTermVersionId.Value);
+			if (termVersion == null || termVersion.PaymentTermId != term.Id || term.AcademicYearId != year.Id)
 				throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
 			head.PaymentTermName = term.Name;
 			head.PaymentTermVersionNumber = termVersion.VersionNumber;
@@ -159,10 +161,10 @@ public partial class StudentFeeStructureAppService
 		var calculatedDues = isCorrection
 			? await dueFeeManager.CalculateForStudentAsync(studentId, structure, year,
 				input.SelectedOptionalFeeHeadIds, optionalDetails, prorationRules, proration?.Id, year.StartDate, year.EndDate,
-				financeFeeAccountId: admission?.AccountId)
+				financeFeeAccountId: admission?.AccountId, paymentTerms: terms)
 			: await dueFeeManager.GenerateForStudentAsync(studentId, structure, year,
 				input.SelectedOptionalFeeHeadIds, optionalDetails, prorationRules, proration?.Id, year.StartDate, year.EndDate,
-				financeFeeAccountId: admission?.AccountId);
+				financeFeeAccountId: admission?.AccountId, paymentTerms: terms);
 		var dues = calculatedDues.OrderBy(x => x.FeeHeadId).ThenBy(x => x.InstallmentSequence).ToList();
 		foreach (var due in dues)
 		{

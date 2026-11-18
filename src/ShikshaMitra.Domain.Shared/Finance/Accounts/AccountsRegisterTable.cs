@@ -11,7 +11,7 @@ public static class AccountsRegisterTable
             ["reference"] = new(FinanceTableValueType.Text),
             ["studentIdentity"] = new(FinanceTableValueType.Text),
             ["classDivision"] = new(FinanceTableValueType.Text),
-            ["counterparty"] = new(FinanceTableValueType.Text, Sortable: false),
+            ["counterparty"] = new(FinanceTableValueType.Text),
             ["source"] = new(FinanceTableValueType.Text, Sortable: false),
             ["categoryName"] = new(FinanceTableValueType.Text),
             ["bankLabel"] = new(FinanceTableValueType.Text),

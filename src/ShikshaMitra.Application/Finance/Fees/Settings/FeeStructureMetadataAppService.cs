@@ -45,69 +45,8 @@ public partial class FeeStructureMetadataAppService(
 
 		if (!string.IsNullOrWhiteSpace(search))
 			query = query.Where(x => x.Name != null && x.Name.Contains(search));
-		if (tableQuery.Filters.Count == 0)
-			return await GetVisiblePageAsync(query, page, pageSize,
-				item => UserScopeQueryExtensions.HasAccessToEntity(item, scope));
-
-		// A metadata row is a parent container. Reveal it only when at least one child class is accessible.
-		// Project scalars instead of materializing the recursively auto-included academic graph.
-		var all = await AsyncExecuter.ToListAsync(query.OrderByDescending(x => x.CreationTime).Select(x => new FeeStructureDetailsResponse
-		{
-			Id = x.Id, Name = x.Name, AcademicYearId = x.AcademicYearId!.Value, AcademicYearName = x.AcademicYear!.Name,
-			BoardId = x.AcademicBoardId!.Value, BoardName = x.AcademicBoard!.Type.ToString(),
-			MediumId = x.AcademicMediumId!.Value, MediumName = x.AcademicMedium!.Name,
-			ReceiptBookId = x.ReceiptBookId, ReceiptBookName = x.ReceiptBook == null ? null : x.ReceiptBook.Name
-		}));
-		var mediumIds = all.Select(x => x.MediumId).Distinct().ToList();
-		var classRows = await AsyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync())
-			.Where(x => mediumIds.Contains(x.EducationMediumStage.EducationMediumId)).Select(standard => new
-			{
-				MediumId = standard.EducationMediumStage.EducationMediumId,
-				StageId = standard.EducationMediumStageId, StageName = standard.EducationMediumStage.Name, StageSortOrder = standard.EducationMediumStage.SortOrder,
-				StandardId = standard.Id, standard.Name, standard.SortOrder
-			}));
-		var classesByMedium = classRows.ToLookup(c => c.MediumId);
-		var accessible = all.ToDictionary(x => x.Id, x => classesByMedium[x.MediumId].Where(c =>
-				UserScopeQueryExtensions.HasAccessToEntity(new MetadataScope(x.AcademicYearId, x.BoardId, x.MediumId, c.StageId, c.StandardId), scope))
-			.OrderBy(c => c.StageSortOrder).ThenBy(c => c.StageName).ThenBy(c => c.StageId).ThenBy(c => c.SortOrder).ThenBy(c => c.Name).ThenBy(c => c.StandardId)
-			.Select(c => new FeeStructureClassOptionDto { Id = c.StandardId, Name = c.Name }).ToList());
-		var visible = all.Where(x => accessible[x.Id].Count > 0).ToList();
-		var metadataIds = visible.Select(x => x.Id).ToList();
-
-		var feeStructures = await AsyncExecuter.ToListAsync(
-			(await feeStructureRepository.GetQueryableAsync())
-				.Where(x => metadataIds.Contains(x.FeeStructureMetadataId) && x.FeeStructureDetails.Any())
-				.Select(x => new { x.FeeStructureMetadataId, x.StandardId }));
-
-		var responseItems = new List<FeeStructureDetailsResponse>();
-		var structuresByMetadata = feeStructures.ToLookup(x => x.FeeStructureMetadataId);
-
-		// I want to calculate total classes and configured classes for each metadata
-		foreach (var metadata in visible)
-		{
-			var structuresForMetadata = structuresByMetadata[metadata.Id];
-			var classes = accessible[metadata.Id];
-			var classIds = classes.Select(c => c.Id).ToHashSet();
-			var configuredClasses = structuresForMetadata.Where(x => classIds.Contains(x.StandardId)).Select(x => x.StandardId).Distinct().Count();
-			var item = metadata;
-			item.TotalClasses = classes.Count;
-			item.ConfiguredClasses = configuredClasses;
-			item.Classes = classes;
-			responseItems.Add(item);
-		}
-
-		var filtered = ListFilter.Apply(responseItems.AsQueryable(), tableQuery).ToList();
-		var totalCount = filtered.Count;
-		responseItems = filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-
-		return new FeeStructureMetadataListResponse
-		{
-			TotalCount = totalCount,
-			CurrentPage = page,
-			PageSize = pageSize,
-			TotalPages = (int) Math.Ceiling(totalCount / (double) pageSize),
-			Items = responseItems
-		};
+		query = tableQuery.Apply(query, MetadataSqlFields, column => column == "name");
+		return await GetVisiblePageAsync(query, page, pageSize, scope, tableQuery);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Add)]

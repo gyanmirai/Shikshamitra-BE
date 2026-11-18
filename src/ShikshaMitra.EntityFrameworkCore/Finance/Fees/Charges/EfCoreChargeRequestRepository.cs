@@ -331,38 +331,45 @@ public class EfCoreChargeRequestRepository(
 		if (requestIds.Count == 0) return [];
 		var db = await GetDbContextAsync();
 		var lines = await db.Set<Charge>().AsNoTracking()
-			.Where(line => requestIds.Contains(line.ChargeRequestId)).ToListAsync(cancellationToken);
+			.Where(line => requestIds.Contains(line.ChargeRequestId))
+			.Select(line => new { line.Id, line.ChargeRequestId, line.Status, line.Amount })
+			.ToListAsync(cancellationToken);
 		var chargeIds = lines.Select(line => line.Id).ToList();
 		var allocations = await (from allocation in db.Set<ChargeCollectionRecord>().AsNoTracking()
 			join transaction in db.Set<FeeRecordMetadata>().AsNoTracking()
-				on allocation.FeeRecordMetadataId equals transaction.Id
-			where chargeIds.Contains(allocation.ChargeId) && transaction.Status != FeeCollectionStatus.Reversed
-			select new { allocation.ChargeId, allocation.Amount }).ToListAsync(cancellationToken);
-		var collected = allocations.GroupBy(x => x.ChargeId)
+				on allocation.FeeRecordMetadataId equals transaction.Id into transactions
+			from transaction in transactions.DefaultIfEmpty()
+			where chargeIds.Contains(allocation.ChargeId)
+			select new { allocation.ChargeId, allocation.Amount,
+				Status = transaction == null ? (FeeCollectionStatus?)null : transaction.Status })
+			.ToListAsync(cancellationToken);
+		var collected = allocations.Where(x => x.Status.HasValue && x.Status != FeeCollectionStatus.Reversed)
+			.GroupBy(x => x.ChargeId)
 			.ToDictionary(g => g.Key, g => g.Sum(x => Convert.ToDecimal(x.Amount)));
-		var waivers = await db.Set<ChargeWaiverApplication>().AsNoTracking()
-			.Where(x => chargeIds.Contains(x.ChargeId)).ToListAsync(cancellationToken);
-		var waived = waivers.GroupBy(x => x.ChargeId)
-			.ToDictionary(g => g.Key, g => g.Sum(x => x.EffectiveAmount));
+		var waived = await db.Set<ChargeWaiverApplication>().AsNoTracking()
+			.Where(x => chargeIds.Contains(x.ChargeId))
+			.GroupBy(x => x.ChargeId)
+			.Select(group => new { ChargeId = group.Key, Amount = group.Sum(x => x.EffectiveAmount) })
+			.ToDictionaryAsync(x => x.ChargeId, x => x.Amount, cancellationToken);
 		// Cancellation must also fail closed for allocations with missing transaction evidence,
 		// exactly like the command guard. Only an explicitly reversed collection is safe.
-		var activeCollectionIds = (await db.Set<ChargeCollectionRecord>().AsNoTracking()
-			.Where(allocation => chargeIds.Contains(allocation.ChargeId) &&
-				!db.Set<FeeRecordMetadata>().Any(transaction => transaction.Id == allocation.FeeRecordMetadataId &&
-					transaction.Status == FeeCollectionStatus.Reversed))
-			.Select(allocation => allocation.ChargeId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
+		var activeCollectionIds = allocations.Where(x => x.Status != FeeCollectionStatus.Reversed)
+			.Select(x => x.ChargeId).ToHashSet();
 		var visibleIds = visibleLineQuery is null ? null :
 			(await visibleLineQuery.Where(line => requestIds.Contains(line.ChargeRequestId))
 				.Select(line => line.Id).ToListAsync(cancellationToken)).ToHashSet();
 		var linesByRequest = lines.ToLookup(line => line.ChargeRequestId);
 		return requestIds.ToDictionary(id => id, id =>
 		{
-			ChargePaymentLine Map(Charge line) => new(line.Status, line.Amount,
-				collected.GetValueOrDefault(line.Id), waived.GetValueOrDefault(line.Id), activeCollectionIds.Contains(line.Id));
-			var entireBatch = ChargePaymentProgress.Resolve(linesByRequest[id].Select(Map));
+			ChargePaymentLine Map(Guid lineId, ChargeStatus lineStatus, decimal amount) =>
+				new(lineStatus, amount, collected.GetValueOrDefault(lineId),
+					waived.GetValueOrDefault(lineId), activeCollectionIds.Contains(lineId));
+			var entireBatch = ChargePaymentProgress.Resolve(linesByRequest[id]
+				.Select(line => Map(line.Id, line.Status, line.Amount)));
 			if (visibleIds is null) return entireBatch;
 			// Counts obey the same row scope and class/division filters as StudentCount.
-			var visible = ChargePaymentProgress.Resolve(linesByRequest[id].Where(line => visibleIds.Contains(line.Id)).Select(Map));
+			var visible = ChargePaymentProgress.Resolve(linesByRequest[id].Where(line => visibleIds.Contains(line.Id))
+				.Select(line => Map(line.Id, line.Status, line.Amount)));
 			return visible with { CanCancel = entireBatch.CanCancel, WorkflowStatus = entireBatch.WorkflowStatus };
 		});
 	}

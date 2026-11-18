@@ -33,6 +33,7 @@ internal sealed record WhatsAppApprovedTemplateMessage(string Destination, strin
 public sealed class WhatsAppProviderClient(IHttpClientFactory clients) : ITransientDependency
 {
 	public const string HttpClientName = "AcademicWhatsApp";
+	internal const int MaximumTextParameters = 20;
 	private const int MaximumResponseBytes = 32768;
 	private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(15);
 	private static readonly JsonSerializerOptions PayloadJson = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
@@ -100,15 +101,16 @@ public sealed class WhatsAppProviderClient(IHttpClientFactory clients) : ITransi
 			number.AsSpan(1).IndexOfAnyExceptInRange('0', '9') < 0 &&
 			message.TemplateName is { Length: > 0 and <= 160 } &&
 			message.TemplateName.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '_') &&
-			language is { Length: >= 2 and <= 6 } && ValidLanguage(language) &&
+			ValidLanguage(language) &&
 			message.Components is { Count: <= 2 } &&
-			message.Components.All(c => c.Type is "header" or "body" && c.Parameters is { Count: > 0 and <= 20 } &&
+			message.Components.All(c => c.Type is "header" or "body" && c.Parameters is { Count: > 0 and <= MaximumTextParameters } &&
 				c.Parameters.All(p => !string.IsNullOrWhiteSpace(p) && p.Length <= 1024 && !p.Any(char.IsControl))) &&
 			message.Components.Select(c => c.Type).Distinct(StringComparer.Ordinal).Count() == message.Components.Count;
 	}
 
-	private static bool ValidLanguage(string language)
+	internal static bool ValidLanguage(string? language)
 	{
+		if (language is not { Length: >= 2 and <= 6 }) return false;
 		var segments = language.Split('_');
 		return segments.Length is 1 or 2 && segments[0].Length is 2 or 3 && segments[0].All(char.IsAsciiLetterLower) &&
 			(segments.Length == 1 || segments[1].Length == 2 && segments[1].All(char.IsAsciiLetterUpper));

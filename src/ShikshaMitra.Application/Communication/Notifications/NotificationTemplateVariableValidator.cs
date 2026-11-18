@@ -95,7 +95,7 @@ public sealed partial class NotificationTemplateVariableValidator(IEnumerable<IN
 		};
 	}
 
-	private static string Format(NotificationVariableValueDto value, CultureInfo culture) => value.Type switch {
+	internal static string Format(NotificationVariableValueDto value, CultureInfo culture) => value.Type switch {
 		NotificationVariableType.Date => DateOnly.ParseExact(value.Value!, "yyyy-MM-dd", CultureInfo.InvariantCulture).ToString("dd MMM yyyy", culture),
 		NotificationVariableType.DateTime => DateTimeOffset.Parse(value.Value!, CultureInfo.InvariantCulture).ToString("dd MMM yyyy, HH:mm", culture),
 		NotificationVariableType.Number => decimal.Parse(value.Value!, CultureInfo.InvariantCulture).ToString(culture),
@@ -123,7 +123,7 @@ public sealed partial class NotificationTemplateVariableValidator(IEnumerable<IN
 	}
 
 	[GeneratedRegex(@"\{\{([a-z][a-z0-9_]*)\}\}", RegexOptions.CultureInvariant)]
-	private static partial Regex Placeholders();
+	internal static partial Regex Placeholders();
 	[GeneratedRegex(@"(?:Z|[+-]\d{2}:\d{2})$", RegexOptions.CultureInvariant)]
 	private static partial Regex OffsetSuffix();
 }

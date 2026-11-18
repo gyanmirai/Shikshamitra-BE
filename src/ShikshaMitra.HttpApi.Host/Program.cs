@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
+using ShikshaMitra.Controllers.Communication.Notifications;
 using System;
 using System.Threading.Tasks;
 
@@ -24,6 +25,9 @@ public class Program
 			.MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
 			.MinimumLevel.Override("OpenIddict", LogEventLevel.Information)
 			.MinimumLevel.Override("Volo.Abp.Authorization", LogEventLevel.Information)
+			.Filter.ByExcluding(logEvent => logEvent.Properties.ContainsKey("QueryString") &&
+				logEvent.Properties.TryGetValue("Path", out var path) && path is ScalarValue { Value: string requestPath } &&
+				requestPath.TrimEnd('/').Equals(WhatsAppNotificationWebhookController.RoutePath, StringComparison.OrdinalIgnoreCase))
 			.Enrich.FromLogContext()
 			.WriteTo.Async(c => c.File("Logs/logs.txt"))
 			.WriteTo.Async(c => c.Console())

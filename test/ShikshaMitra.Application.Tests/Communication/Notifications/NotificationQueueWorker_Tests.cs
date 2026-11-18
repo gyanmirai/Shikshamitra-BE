@@ -100,7 +100,10 @@ public class NotificationQueueWorker_Tests
 		var heartbeat = new NotificationDispatchHeartbeat(services.GetRequiredService<IServiceScopeFactory>(),
 			NullLogger<NotificationDispatchHeartbeat>.Instance);
 		var runner = new NotificationTenantQueueRunner(tenant, units, clock, queue, null!, dispatcher, heartbeat, maintenance,
-			outcome, NullLogger<NotificationTenantQueueRunner>.Instance);
+			outcome, new(tenant, units, clock, Substitute.For<INotificationPersonalWriteLock>(),
+				new(Substitute.For<INotificationPersonalWriteLock>()), delivery, Empty<NotificationProviderEvent>(), dispatches,
+				intents, Empty<WhatsAppTemplateBinding>(), queries, Substitute.For<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(),
+				NullLogger<WhatsAppProviderEventProcessor>.Instance), NullLogger<NotificationTenantQueueRunner>.Instance);
 
 		await runner.RunAsync(3, default);
 

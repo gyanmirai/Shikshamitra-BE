@@ -25,4 +25,6 @@ public class NotificationProviderEvent : FullAuditedAggregateRoot<Guid>, IMultiT
 		ProviderMessageId = providerMessageId == null ? null : NotificationDataGuard.Text(providerMessageId, nameof(providerMessageId), 256);
 		ReceivedAt = receivedAt.ToUniversalTime();
 	}
+
+	public void MarkProcessed(DateTimeOffset now) => ProcessedAt ??= now.ToUniversalTime();
 }

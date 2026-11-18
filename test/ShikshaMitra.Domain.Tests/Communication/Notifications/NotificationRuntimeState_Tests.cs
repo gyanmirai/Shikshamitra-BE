@@ -206,11 +206,61 @@ public class NotificationRuntimeState_Tests
 		row.Status.ShouldBe(NotificationDispatchState.Processing);
 	}
 
+	[Fact]
+	public void WhatsApp_delivery_progress_cannot_be_reversed_by_late_provider_statuses()
+	{
+		var (row, provider) = AcceptedWhatsAppDispatch();
+
+		row.ObserveWhatsAppReceipt(provider, "wamid.receipt", NotificationDispatchState.Read, Now.AddMinutes(3)).ShouldBeTrue();
+		row.ObserveWhatsAppReceipt(provider, "wamid.receipt", NotificationDispatchState.Delivered, Now.AddMinutes(2)).ShouldBeFalse();
+		row.ObserveWhatsAppReceipt(provider, "wamid.receipt", NotificationDispatchState.ProviderAccepted, Now.AddMinutes(1)).ShouldBeFalse();
+		row.ObserveWhatsAppReceipt(provider, "wamid.receipt", NotificationDispatchState.Failed, Now.AddMinutes(4)).ShouldBeFalse();
+		row.Status.ShouldBe(NotificationDispatchState.Read);
+		row.AcceptedAt.ShouldBe(Now);
+		row.ErrorCode.ShouldBeNull();
+	}
+
+	[Fact]
+	public void WhatsApp_failure_can_be_corrected_by_positive_delivery_evidence()
+	{
+		var (row, provider) = AcceptedWhatsAppDispatch();
+
+		row.ObserveWhatsAppReceipt(provider, "wamid.receipt", NotificationDispatchState.Failed, Now.AddMinutes(2)).ShouldBeTrue();
+		row.Status.ShouldBe(NotificationDispatchState.Failed);
+		row.ErrorCode.ShouldBe("WhatsAppDeliveryFailed");
+		row.ObserveWhatsAppReceipt(provider, "wamid.receipt", NotificationDispatchState.ProviderAccepted, Now.AddMinutes(1)).ShouldBeFalse();
+		row.ObserveWhatsAppReceipt(provider, "wamid.receipt", NotificationDispatchState.Delivered, Now.AddMinutes(3)).ShouldBeTrue();
+		row.Status.ShouldBe(NotificationDispatchState.Delivered);
+		row.ErrorCode.ShouldBeNull();
+	}
+
+	[Fact]
+	public void A_provider_receipt_cannot_change_another_message_or_provider()
+	{
+		var (row, provider) = AcceptedWhatsAppDispatch();
+
+		Should.Throw<BusinessException>(() => row.ObserveWhatsAppReceipt(provider, "wamid.other", NotificationDispatchState.Delivered, Now));
+		Should.Throw<BusinessException>(() => row.ObserveWhatsAppReceipt(Guid.NewGuid(), "wamid.receipt", NotificationDispatchState.Delivered, Now));
+		row.Status.ShouldBe(NotificationDispatchState.ProviderAccepted);
+	}
+
+	private static (NotificationDispatch Dispatch, Guid ProviderId) AcceptedWhatsAppDispatch()
+	{
+		var provider = Guid.NewGuid();
+		var row = Dispatch(channel: CommunicationChannelType.WhatsApp);
+		row.BindPlanningEvidence(Guid.NewGuid(), Guid.NewGuid(), provider);
+		var lease = HydrateClaim(row, NotificationDispatchState.Processing);
+		row.BeginIo(lease, Now, Guid.NewGuid());
+		row.RecordOutcome(lease, Now, NotificationDispatchState.ProviderAccepted, "wamid.receipt");
+		return (row, provider);
+	}
+
 	private static NotificationIntent Intent(Guid? actor = null) => new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 2,
 		"Academic.Homework.Published", "Academic.Homework", Guid.NewGuid(), "semantic-1", Guid.NewGuid().ToString("N"),
 		Now, Now, "[]", "[]", actorUserId: actor);
-	private static NotificationDispatch Dispatch(DateTimeOffset? expiresAt = null) => new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
-		"{}", "user", CommunicationChannelType.Email, "fingerprint", "protected", "hash", Guid.NewGuid().ToString("N"), Now, expiresAt);
+	private static NotificationDispatch Dispatch(DateTimeOffset? expiresAt = null, CommunicationChannelType channel = CommunicationChannelType.Email) =>
+		new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "{}", "user", channel, "fingerprint", "protected",
+			"hash", Guid.NewGuid().ToString("N"), Now, expiresAt);
 
 	// Rehydrate the same private lease fields written by the PostgreSQL claim query.
 	private static Guid HydrateClaim<T>(T row, object state)

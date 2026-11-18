@@ -93,7 +93,7 @@ public sealed class NotificationDeliveryProjection(ICurrentTenant tenant, INotif
 		var day = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, zone).DateTime);
 		var month = new DateOnly(day.Year, day.Month, 1);
 		var entries = (await attempts.GetQueryableAsync()).Where(x => x.TenantId == tenantId && x.NotificationProviderSettingId == providerId
-			&& x.NotificationDispatchId != null && !x.IsDeleted && x.Status != CommunicationDeliveryStatus.Failed &&
+			&& x.NotificationDispatchId != null && !x.IsDeleted && (x.Status != CommunicationDeliveryStatus.Failed || x.SentAt != null) &&
 			x.Status != CommunicationDeliveryStatus.Skipped);
 		if (monthlyQuota.HasValue && await IsExhaustedAsync(entries, zone, month, month.AddMonths(1), monthlyQuota.Value, cancellationToken))
 			return LocalMidnight(month.AddMonths(1), zone);

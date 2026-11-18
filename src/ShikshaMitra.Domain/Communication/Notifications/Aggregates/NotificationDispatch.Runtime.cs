@@ -60,6 +60,31 @@ public partial class NotificationDispatch
 		Status = NotificationDispatchState.Pending; NextAttemptAt = nextAttemptAt.ToUniversalTime(); ErrorCode = errorCode;
 		IoStartedAt = null; IoLeaseId = null; ClearLease();
 	}
+
+	public bool ObserveWhatsAppReceipt(Guid providerSettingId, string providerMessageId, NotificationDispatchState outcome, DateTimeOffset observedAt)
+	{
+		NotificationRuntimeGuard.State(Channel == CommunicationChannelType.WhatsApp && providerSettingId != Guid.Empty &&
+			ProviderSettingId == providerSettingId && !string.IsNullOrEmpty(providerMessageId) && ProviderMessageId == providerMessageId &&
+			IoStartedAt.HasValue && IoLeaseId.HasValue && DeliveryAttemptId.HasValue);
+		NotificationRuntimeGuard.State(outcome is NotificationDispatchState.ProviderAccepted or NotificationDispatchState.Delivered or
+			NotificationDispatchState.Read or NotificationDispatchState.Failed);
+		var advances = Status switch
+		{
+			NotificationDispatchState.UnknownAcceptance => true,
+			NotificationDispatchState.ProviderAccepted => outcome != NotificationDispatchState.ProviderAccepted,
+			NotificationDispatchState.Failed => outcome is NotificationDispatchState.Delivered or NotificationDispatchState.Read,
+			NotificationDispatchState.Delivered => outcome == NotificationDispatchState.Read,
+			_ => false
+		};
+		if (!advances) return false;
+
+		Status = outcome;
+		ErrorCode = outcome == NotificationDispatchState.Failed ? "WhatsAppDeliveryFailed" : null;
+		if (outcome != NotificationDispatchState.Failed)
+			AcceptedAt ??= observedAt > IoStartedAt ? observedAt.ToUniversalTime() : IoStartedAt;
+		return true;
+	}
+
 	public void SkipBeforeIo(Guid leaseToken, DateTimeOffset now, string errorCode)
 	{
 		RequireActiveLease(leaseToken, now); NotificationRuntimeGuard.State(!IoStartedAt.HasValue);

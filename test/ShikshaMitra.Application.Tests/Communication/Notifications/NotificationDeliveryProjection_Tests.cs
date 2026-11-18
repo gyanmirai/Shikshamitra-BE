@@ -88,6 +88,22 @@ public class NotificationDeliveryProjection_Tests
 	}
 
 	[Fact]
+	public async Task WhatsApp_delivery_failure_after_acceptance_keeps_the_send_in_its_quota_window()
+	{
+		_provider.Channel = CommunicationChannelType.WhatsApp;
+		_provider.ProviderName = WhatsAppProviderRoute.ProviderName;
+		var first = Dispatch();
+		var reserved = await _projection.ReserveAsync(first, default);
+		first.BeginIo(_lease, Now, reserved.AttemptId);
+		first.RecordOutcome(_lease, Now, NotificationDispatchState.ProviderAccepted, "wamid.test");
+		first.ObserveWhatsAppReceipt(_provider.Id, "wamid.test", NotificationDispatchState.Failed, Now.AddSeconds(1)).ShouldBeTrue();
+		await _projection.RecordAsync(first, Now.AddSeconds(1), default);
+
+		_attempts.Single().Status.ShouldBe(CommunicationDeliveryStatus.Failed);
+		(await _projection.ReserveAsync(Dispatch(), default)).ExclusionCode.ShouldBe(NotificationErrorCodes.ProviderQuotaExhausted);
+	}
+
+	[Fact]
 	public async Task A_disabled_provider_cannot_reserve_or_record_a_send_attempt()
 	{
 		_provider.IsEnabled = false;
@@ -115,7 +131,7 @@ public class NotificationDeliveryProjection_Tests
 	private NotificationDispatch Dispatch()
 	{
 		var dispatch = new NotificationDispatch(Guid.NewGuid(), _tenantId, Guid.NewGuid(), Guid.NewGuid(), "{}", "context",
-			CommunicationChannelType.Email, "fingerprint", "protected", "hash", Guid.NewGuid().ToString("N"), Now, Now.AddDays(2));
+			_provider.Channel, "fingerprint", "protected", "hash", Guid.NewGuid().ToString("N"), Now, Now.AddDays(2));
 		dispatch.BindPlanningEvidence(Guid.NewGuid(), Guid.NewGuid(), _provider.Id);
 		Set(dispatch, nameof(NotificationDispatch.Status), NotificationDispatchState.Processing);
 		Set(dispatch, nameof(NotificationDispatch.LeaseId), _lease);

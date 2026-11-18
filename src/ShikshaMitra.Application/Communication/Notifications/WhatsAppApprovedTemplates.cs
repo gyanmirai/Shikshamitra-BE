@@ -32,12 +32,15 @@ public sealed class WhatsAppApprovedTemplates(ICurrentTenant tenant, IRepository
 		NotificationRuntimeJson.Serialize(new WhatsAppBoundParameters(connection.PhoneNumberId, connection.BusinessAccountId,
 			compiler.EncodeParameters(template)), NotificationErrorCodes.TemplateInvalid);
 
-	internal static string? ReadParameters(WhatsAppTemplateBinding binding, WhatsAppProviderConnection connection)
+	internal static string? ReadParameters(WhatsAppTemplateBinding binding, WhatsAppProviderConnection connection) =>
+		ReadParameters(binding, connection.PhoneNumberId, connection.BusinessAccountId);
+
+	internal static string? ReadParameters(WhatsAppTemplateBinding binding, string phoneNumberId, string businessAccountId)
 	{
 		try
 		{
 			var parameters = NotificationRuntimeJson.Deserialize<WhatsAppBoundParameters>(binding.ParameterMappingsJson, NotificationErrorCodes.TemplateInvalid);
-			return parameters.PhoneNumberId == connection.PhoneNumberId && parameters.BusinessAccountId == connection.BusinessAccountId &&
+			return parameters.PhoneNumberId == phoneNumberId && parameters.BusinessAccountId == businessAccountId &&
 				!string.IsNullOrWhiteSpace(parameters.Mapping) ? parameters.Mapping : null;
 		}
 		catch (BusinessException error) when (error.Code == NotificationErrorCodes.TemplateInvalid)

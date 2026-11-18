@@ -78,10 +78,13 @@ public sealed class WhatsAppWebhookAppService(WhatsAppWebhookAuthenticator authe
 		foreach (var row in incoming)
 		{
 			if (!stored.Add(row.Key)) continue;
-			var protector = protection.CreateProtector("Notifications.WhatsApp.Webhook.v1", tenantId.ToString("N"), providerId.ToString("N"), row.Key);
+			var protector = ReceiptProtector(protection, tenantId, providerId, row.Key);
 			var evt = new NotificationProviderEvent(guids.Create(), tenantId, providerId, row.Key, protector.Protect(row.Payload), receivedAt, row.Receipt.MessageId);
 			await events.InsertAsync(evt, cancellationToken: cancellationToken);
 		}
 		await unit.CompleteAsync(cancellationToken);
 	}
+
+	internal static IDataProtector ReceiptProtector(IDataProtectionProvider protection, Guid tenantId, Guid providerId, string eventKey) =>
+		protection.CreateProtector("Notifications.WhatsApp.Webhook.v1", tenantId.ToString("N"), providerId.ToString("N"), eventKey);
 }

@@ -135,7 +135,7 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 				ApplyResult(row, lease, now, result, expiry);
 				await delivery.RecordAsync(row, now, CancellationToken.None);
 				if (prior == NotificationDispatchState.UnknownAcceptance && row.Status != prior)
-					await ReopenProjectedIntentAsync(tenantId, row);
+					await NotificationOutcomeProjector.ReopenIntentAsync(intents, queries, tenantId, row, CancellationToken.None);
 				await dispatches.UpdateAsync(row, cancellationToken: CancellationToken.None);
 				await unit.CompleteAsync(CancellationToken.None);
 				return;
@@ -145,17 +145,6 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 				// Recovery or a provider receipt can update the dispatch while this result arrives.
 			}
 		}
-	}
-
-	private async Task ReopenProjectedIntentAsync(Guid tenantId, NotificationDispatch dispatch)
-	{
-		var intent = await queries.FirstOrDefaultAsync((await intents.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
-			!x.IsDeleted && x.Id == dispatch.IntentId && x.CampaignId == dispatch.CampaignId && x.PlanningCompletedAt != null &&
-			(x.Status == NotificationIntentState.NeedsReview || x.Status == NotificationIntentState.Completed ||
-				x.Status == NotificationIntentState.PartiallyFailed)), CancellationToken.None);
-		if (intent == null) return;
-		intent.ReopenDeliveryProjection();
-		await intents.UpdateAsync(intent, cancellationToken: CancellationToken.None);
 	}
 
 	private async Task<NotificationDispatch?> FindAsync(Guid tenantId, Guid id, CancellationToken cancellationToken) =>

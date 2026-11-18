@@ -50,7 +50,7 @@ public class WhatsAppWebhookApiFactory : ShikshaMitraApiTestFactory
 }
 
 [Collection(WhatsAppWebhookApiCollection.Name)]
-public class WhatsAppWebhookApi_Tests(WhatsAppWebhookApiFactory factory) : ShikshaMitraApiTestBase(factory)
+public partial class WhatsAppWebhookApi_Tests(WhatsAppWebhookApiFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private const string Route = WhatsAppWebhookApiFactory.Route;
 
@@ -101,10 +101,10 @@ public class WhatsAppWebhookApi_Tests(WhatsAppWebhookApiFactory factory) : Shiks
 		row.ProtectedPayload.ShouldNotContain("15550000100");
 	}
 
-	private static string Body(string id, string businessAccount = "2001", string phone = "1001") => $$$"""
+	private static string Body(string id, string businessAccount = "2001", string phone = "1001", string status = "delivered") => $$$"""
 		{"object":"whatsapp_business_account","entry":[{"id":"{{{businessAccount}}}","changes":[{"field":"messages",
 		"value":{"messaging_product":"whatsapp","metadata":{"phone_number_id":"{{{phone}}}"},"statuses":[
-		{"id":"{{{id}}}","status":"delivered","timestamp":"1795000000","recipient_id":"15550000100"}]}}]}]}
+		{"id":"{{{id}}}","status":"{{{status}}}","timestamp":"1795000000","recipient_id":"15550000100"}]}}]}]}
 		""";
 
 	private static async Task<HttpResponseMessage> PostAsync(HttpClient client, string body, bool sign = true)
@@ -117,6 +117,7 @@ public class WhatsAppWebhookApi_Tests(WhatsAppWebhookApiFactory factory) : Shiks
 	}
 
 	private Task SeedProviderAsync() => WithDbAsync(async db => {
+		if (await db.Set<ChannelProviderSetting>().AnyAsync(x => x.Id == WhatsAppWebhookApiFactory.ProviderId)) return;
 		db.Add(new ChannelProviderSetting(WhatsAppWebhookApiFactory.ProviderId, WhatsAppWebhookApiFactory.TenantId) {
 			Channel = CommunicationChannelType.WhatsApp, ProviderName = WhatsAppProviderRoute.ProviderName,
 			IsEnabled = true, Status = CommunicationProviderStatus.Enabled,

@@ -41,6 +41,18 @@ public sealed class NotificationOutcomeProjector(ICurrentTenant tenant, IUnitOfW
 		return count;
 	}
 
+	internal static async Task ReopenIntentAsync(IRepository<NotificationIntent, Guid> intents, IAsyncQueryableExecuter queries,
+		Guid tenantId, NotificationDispatch dispatch, CancellationToken cancellationToken)
+	{
+		var intent = await queries.FirstOrDefaultAsync((await intents.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
+			!x.IsDeleted && x.Id == dispatch.IntentId && x.CampaignId == dispatch.CampaignId && x.PlanningCompletedAt != null &&
+			(x.Status == NotificationIntentState.NeedsReview || x.Status == NotificationIntentState.Completed ||
+				x.Status == NotificationIntentState.PartiallyFailed)), cancellationToken);
+		if (intent == null) return;
+		intent.ReopenDeliveryProjection();
+		await intents.UpdateAsync(intent, cancellationToken: cancellationToken);
+	}
+
 	private async Task<IReadOnlyList<Guid>> FindOperationsAsync(Guid tenantId, int batchSize, CancellationToken cancellationToken)
 	{
 		using var unit = units.Begin(requiresNew: true, isTransactional: false);

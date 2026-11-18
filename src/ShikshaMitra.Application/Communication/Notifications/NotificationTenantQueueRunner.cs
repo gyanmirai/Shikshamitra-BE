@@ -19,6 +19,7 @@ namespace ShikshaMitra.Communication.Notifications;
 public sealed class NotificationTenantQueueRunner(ICurrentTenant tenant, IUnitOfWorkManager units, IClock clock,
 	INotificationQueueRepository queue, NotificationDispatchPlanner planner, INotificationDispatcher dispatcher,
 	NotificationDispatchHeartbeat heartbeat, NotificationLeaseRecoveryService recovery, NotificationOutcomeProjector projector,
+	WhatsAppProviderEventProcessor whatsappReceipts,
 	ILogger<NotificationTenantQueueRunner> logger) : ITransientDependency
 {
 	public async Task RunAsync(int batchSize, CancellationToken cancellationToken)
@@ -29,6 +30,7 @@ public sealed class NotificationTenantQueueRunner(ICurrentTenant tenant, IUnitOf
 		await recovery.RecoverAsync(Now(), batchSize, cancellationToken);
 		await ProcessAsync(tenantId, batchSize, dispatch: false, cancellationToken);
 		await ProcessAsync(tenantId, batchSize, dispatch: true, cancellationToken);
+		await whatsappReceipts.ProcessBatchAsync(batchSize, cancellationToken);
 		await projector.RefreshBatchAsync(batchSize, cancellationToken);
 	}
 

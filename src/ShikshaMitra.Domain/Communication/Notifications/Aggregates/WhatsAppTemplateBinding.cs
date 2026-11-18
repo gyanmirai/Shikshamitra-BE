@@ -27,4 +27,16 @@ public class WhatsAppTemplateBinding : FullAuditedAggregateRoot<Guid>, IMultiTen
 		LanguageCode = NotificationDataGuard.Text(languageCode, nameof(languageCode), 16).ToLowerInvariant();
 		ParameterMappingsJson = NotificationDataGuard.Json(parameterMappingsJson, nameof(parameterMappingsJson));
 	}
+
+	public void RecordProviderStatus(string providerTemplateId, NotificationProviderTemplateState status, DateTimeOffset observedAt)
+	{
+		var id = NotificationDataGuard.Text(providerTemplateId, nameof(providerTemplateId), 256);
+		NotificationRuntimeGuard.State(Enum.IsDefined(status) && status != NotificationProviderTemplateState.Draft &&
+			(ProviderTemplateId == null || ProviderTemplateId == id));
+		if (observedAt <= LastSyncedAt) return;
+		ProviderTemplateId = id;
+		ProviderStatus = status;
+		LastSyncedAt = observedAt.ToUniversalTime();
+		ConcurrencyStamp = Guid.NewGuid().ToString("N");
+	}
 }

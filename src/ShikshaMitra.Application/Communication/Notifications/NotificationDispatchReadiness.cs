@@ -10,12 +10,12 @@ using Volo.Abp.DependencyInjection;
 namespace ShikshaMitra.Communication.Notifications;
 
 internal sealed record NotificationDispatchReadinessResult(NotificationDispatchPayload? Payload, DateTimeOffset? DueAt,
-	DateTimeOffset? ExpiresAt, string? ExclusionCode);
+	DateTimeOffset? ExpiresAt, string? ExclusionCode, Guid? WhatsAppTemplateBindingId = null);
 
 [RemoteService(false), DisableAuditing]
 public sealed class NotificationDispatchReadiness(NotificationDispatchPayloadProtector protector, NotificationIntentSourceReader sources,
 	IEnumerable<INotificationRuntimeRecipientResolver> resolvers, NotificationDispatchPolicy policy, NotificationEmailRoute emailRoute,
-	NotificationSourceLink links) : ITransientDependency
+	NotificationSourceLink links, WhatsAppProviderRoute whatsAppRoute, WhatsAppApprovedTemplates approvals) : ITransientDependency
 {
 	internal async Task<NotificationDispatchReadinessResult> CheckAsync(NotificationIntent intent, NotificationDispatch dispatch,
 		DateTimeOffset now, CancellationToken cancellationToken)
@@ -72,7 +72,18 @@ public sealed class NotificationDispatchReadiness(NotificationDispatchPayloadPro
 			return Exclude(decision.ExclusionCode ?? NotificationErrorCodes.RecipientIneligible);
 		var expiresAt = !source.ExpiresAt.HasValue || dispatch.ExpiresAt < source.ExpiresAt ? dispatch.ExpiresAt : source.ExpiresAt;
 		if (expiresAt <= decision.DueAt) return Exclude("SourceExpired");
-		return new(payload, decision.DueAt, expiresAt, null);
+		Guid? bindingId = null;
+		if (dispatch.Channel == CommunicationChannelType.WhatsApp)
+		{
+			var provider = await whatsAppRoute.FindAsync(cancellationToken);
+			if (provider == null) return Exclude(NotificationErrorCodes.ProviderUnavailable);
+			if (provider.Id != dispatch.ProviderSettingId) return Exclude("ProviderChanged");
+			var approved = await approvals.LoadAsync(provider, [dispatch.TemplateRevisionId], cancellationToken);
+			if (!approved.TryGetValue(dispatch.TemplateRevisionId, out var binding) ||
+				!WhatsAppApprovedTemplates.MatchesLanguage(binding, payload.LanguageCode)) return Exclude("WhatsAppTemplateNotApproved");
+			bindingId = binding.Id;
+		}
+		return new(payload, decision.DueAt, expiresAt, null, bindingId);
 	}
 
 	private static NotificationDispatchReadinessResult Exclude(string code) => new(null, null, null, code);

@@ -16,12 +16,13 @@ using Volo.Abp.MultiTenancy;
 namespace ShikshaMitra.Communication.Notifications;
 
 internal sealed record NotificationPreparedDispatch(NotificationRuntimeRecipient Recipient, string Language,
-	NotificationDispatch? Dispatch, string? ExclusionCode);
+	NotificationDispatch? Dispatch, string? ExclusionCode, Guid? ProviderSettingId = null);
 
 [RemoteService(false), DisableAuditing]
 public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRepository<CommunicationTemplateRevision, Guid> revisions,
 	IAsyncQueryableExecuter queries, NotificationTemplateRenderer renderer, NotificationSourceLink links,
-	NotificationDispatchPayloadProtector protector, IGuidGenerator guids) : ITransientDependency
+	NotificationDispatchPayloadProtector protector, IGuidGenerator guids, WhatsAppProviderRoute whatsAppRoute,
+	WhatsAppApprovedTemplates approvals) : ITransientDependency
 {
 	private sealed record DeliveryIdentity(string RecipientFamily, Guid? StudentId, Guid? UserId, string? ExternalDestination,
 		CommunicationChannelType Channel);
@@ -34,10 +35,13 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 		if (source.Snapshot == null || policy.ExclusionCode != null) throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
 		var results = new List<NotificationPreparedDispatch>();
 		var eligible = new List<NotificationRecipientDispatchDecision>();
+		var whatsApp = policy.Recipients.Any(x => x.Recipient.Channel == CommunicationChannelType.WhatsApp &&
+			x.ExclusionCode == null && x.DueAt.HasValue) ? await whatsAppRoute.FindAsync(cancellationToken) : null;
 		foreach (var decision in policy.Recipients)
 		{
 			var error = decision.ExclusionCode;
-			if (error == null && decision.Recipient.Channel == CommunicationChannelType.Email && email == null)
+			if (error == null && (decision.Recipient.Channel == CommunicationChannelType.Email && email == null ||
+				decision.Recipient.Channel == CommunicationChannelType.WhatsApp && whatsApp == null))
 				error = NotificationErrorCodes.ProviderUnavailable;
 			if (error != null || !decision.DueAt.HasValue)
 				results.Add(new(decision.Recipient, decision.LanguageCode, null, error ?? NotificationErrorCodes.RecipientIneligible));
@@ -46,6 +50,9 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 		if (eligible.Count == 0) return results;
 
 		var pinned = await LoadPinnedAsync(tenantId, intent, source, cancellationToken);
+		var approved = whatsApp == null ? null : await approvals.LoadAsync(whatsApp,
+			pinned.Where(x => x.Key.Channel == CommunicationChannelType.WhatsApp).SelectMany(x => x).Select(x => x.Id).ToArray(),
+			cancellationToken);
 		var overrides = (source.Snapshot.RecipientContent ?? []).ToDictionary(x => x.Recipient);
 		foreach (var group in eligible.GroupBy(Identity))
 		{
@@ -58,7 +65,7 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 				continue;
 			}
 			results.Add(PrepareOne(tenantId, intent, source, selected,
-				overrides.GetValueOrDefault(selected.Recipient.SourceRecipient), pinned));
+				overrides.GetValueOrDefault(selected.Recipient.SourceRecipient), pinned, email?.Id, whatsApp?.Id, approved));
 		}
 		return results;
 	}
@@ -78,7 +85,8 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 
 	private NotificationPreparedDispatch PrepareOne(Guid tenantId, NotificationIntent intent, NotificationCurrentSource source,
 		NotificationRecipientDispatchDecision decision, NotificationSourceRecipientContentDto? content,
-		ILookup<(string RecipientKind, CommunicationChannelType Channel, string LanguageCode), CommunicationTemplateRevision> pinned)
+		ILookup<(string RecipientKind, CommunicationChannelType Channel, string LanguageCode), CommunicationTemplateRevision> pinned,
+		Guid? emailProvider, Guid? whatsAppProvider, IReadOnlyDictionary<Guid, WhatsAppTemplateBinding>? approved)
 	{
 		var recipient = decision.Recipient;
 		var fallback = source.Runtime.Configuration.FallbackLanguage;
@@ -86,6 +94,10 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 		if (matches.Length == 0) matches = pinned[(recipient.Recipient.Kind, recipient.Channel, fallback)].ToArray();
 		if (matches.Length != 1) return Exclude(NotificationErrorCodes.TemplateInvalid);
 		var revision = matches[0];
+		if (recipient.Channel == CommunicationChannelType.WhatsApp &&
+			(approved == null || !approved.TryGetValue(revision.Id, out var binding) ||
+				!WhatsAppApprovedTemplates.MatchesLanguage(binding, revision.LanguageCode)))
+			return Exclude("WhatsAppTemplateNotApproved");
 		var link = links.Resolve(content == null ? source.Snapshot!.RelativeLink : content.RelativeLink);
 		if (link == null) return Exclude(NotificationErrorCodes.SourceUnavailable);
 		var variables = new Dictionary<string, NotificationVariableValueDto>(content?.Variables ?? source.Snapshot!.Variables, StringComparer.Ordinal)
@@ -122,7 +134,11 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 		var expiresAt = !source.ExpiresAt.HasValue || intent.ExpiresAt < source.ExpiresAt ? intent.ExpiresAt : source.ExpiresAt;
 		var dispatch = new NotificationDispatch(id, tenantId, intent.Id, revision.Id, reference, context, recipient.Channel,
 			fingerprint, encrypted, rendered.ContentHash!, deduplicationKey, decision.DueAt!.Value, expiresAt);
-		return new(recipient, revision.LanguageCode, dispatch, null);
+		return new(recipient, revision.LanguageCode, dispatch, null, recipient.Channel switch {
+			CommunicationChannelType.Email => emailProvider,
+			CommunicationChannelType.WhatsApp => whatsAppProvider,
+			_ => null
+		});
 
 		NotificationPreparedDispatch Exclude(string code) => new(recipient, decision.LanguageCode, null, code);
 	}

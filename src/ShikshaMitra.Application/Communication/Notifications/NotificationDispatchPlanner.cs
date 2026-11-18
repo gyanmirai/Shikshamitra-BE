@@ -46,7 +46,7 @@ public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWo
 			return;
 		}
 
-		var (prepared, provider, stopCode) = await PrepareAsync(intent, now, cancellationToken);
+		var (prepared, stopCode) = await PrepareAsync(intent, now, cancellationToken);
 		if (stopCode != null)
 		{
 			var stopState = stopCode switch {
@@ -64,8 +64,7 @@ public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWo
 			cancellationToken.ThrowIfCancellationRequested();
 			var row = await evidence.InsertAsync(CreateEvidence(tenantId, campaignId, intent.Id, item), cancellationToken: cancellationToken);
 			if (item.Dispatch == null) continue;
-			item.Dispatch.BindPlanningEvidence(campaignId, row.Id,
-				item.Dispatch.Channel == CommunicationChannelType.Email ? provider?.Id : null);
+			item.Dispatch.BindPlanningEvidence(campaignId, row.Id, item.ProviderSettingId);
 			await dispatches.InsertAsync(item.Dispatch, cancellationToken: cancellationToken);
 		}
 		if (prepared.All(x => x.Dispatch == null))
@@ -78,28 +77,28 @@ public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWo
 		await unit.SaveChangesAsync(cancellationToken);
 	}
 
-	private async Task<(IReadOnlyList<NotificationPreparedDispatch> Rows, NotificationEmailProvider? Provider, string? StopCode)>
+	private async Task<(IReadOnlyList<NotificationPreparedDispatch> Rows, string? StopCode)>
 		PrepareAsync(NotificationIntent intent, DateTimeOffset now, CancellationToken cancellationToken)
 	{
 		try
 		{
-			if (!Enum.IsDefined(intent.Origin)) return ([], null, NotificationErrorCodes.RuntimeSnapshotInvalid);
+			if (!Enum.IsDefined(intent.Origin)) return ([], NotificationErrorCodes.RuntimeSnapshotInvalid);
 			var source = await sources.LoadAsync(intent, now, cancellationToken);
-			if (source.ExclusionCode != null) return ([], null, source.ExclusionCode);
+			if (source.ExclusionCode != null) return ([], source.ExclusionCode);
 			var matching = resolvers.Where(x => x.Supports(intent.EventKey)).Take(2).ToArray();
-			if (matching.Length != 1) return ([], null, "RecipientResolverUnavailable");
+			if (matching.Length != 1) return ([], "RecipientResolverUnavailable");
 			var recipients = await matching[0].ResolveAsync(source, cancellationToken);
 			var provider = recipients.Any(x => x.IsEligible && x.Channel == CommunicationChannelType.Email)
 				? await emailRoute.FindAsync(cancellationToken) : null;
 			var evaluated = await policy.EvaluateAsync(intent, source, recipients, now, provider?.ConsentRequired == true, cancellationToken);
-			if (evaluated.ExclusionCode != null) return ([], null, evaluated.ExclusionCode);
+			if (evaluated.ExclusionCode != null) return ([], evaluated.ExclusionCode);
 			var rows = await materializer.PrepareAsync(intent, source, evaluated, provider, cancellationToken);
-			return (rows, provider, null);
+			return (rows, null);
 		}
 		catch (BusinessException error) when (error.Code is NotificationErrorCodes.EventUnknown or NotificationErrorCodes.TemplateInvalid or
 			NotificationErrorCodes.SourceUnavailable or NotificationErrorCodes.RuntimeSnapshotInvalid or NotificationErrorCodes.RuleConfigurationInvalid)
 		{
-			return ([], null, error.Code);
+			return ([], error.Code);
 		}
 	}
 
@@ -128,7 +127,7 @@ public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWo
 	private static bool RequiresReview(string? code) => code is NotificationErrorCodes.RequiredVariableMissing or
 		NotificationErrorCodes.TemplateInvalid or NotificationErrorCodes.PrimaryGuardianNotConfigured or NotificationErrorCodes.ProviderUnavailable or
 		NotificationErrorCodes.SourceUnavailable or "PreferenceConfigurationInvalid" or "DispatchPayloadTooLarge" or
-		"DispatchPayloadInvalid" or "RecipientContentAmbiguous";
+		"DispatchPayloadInvalid" or "RecipientContentAmbiguous" or "WhatsAppTemplateNotApproved";
 
 	private DateTimeOffset Now() => new(clock.Now.ToUniversalTime());
 }

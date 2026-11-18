@@ -32,6 +32,8 @@ public class NotificationDispatchPlanner_Tests
 	private readonly List<CommunicationRecipientSnapshot> _evidence = [];
 	private readonly List<CommunicationTemplateRevision> _revisions = [];
 	private readonly List<ChannelProviderSetting> _providers = [];
+	private readonly List<ConsentRecord> _consents = [];
+	private readonly List<WhatsAppTemplateBinding> _bindings = [];
 	private readonly List<NotificationPreference> _preferences = [];
 	private readonly List<NotificationRuntimeRecipient> _recipients = [];
 	private readonly ICurrentTenant _tenant = Substitute.For<ICurrentTenant>();
@@ -40,6 +42,7 @@ public class NotificationDispatchPlanner_Tests
 	private readonly INotificationSourceAdapter _adapter = Substitute.For<INotificationSourceAdapter>();
 	private readonly NotificationDispatchPayloadProtector _protector;
 	private readonly NotificationDispatchPlanner _planner;
+	private readonly WhatsAppTemplateCompiler _compiler;
 	private readonly NotificationIntent _intent;
 	private readonly NotificationQueueClaim _claim;
 	private readonly NotificationRecipientRefDto _child = new("Student", Guid.NewGuid());
@@ -59,13 +62,14 @@ public class NotificationDispatchPlanner_Tests
 		var codec = new NotificationRuleConfigurationCodec();
 		var snapshotCodec = new NotificationIntentSnapshotCodec(codec);
 		var config = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, [],
-			[CommunicationChannelType.Email, CommunicationChannelType.InApp], [_template],
+			[CommunicationChannelType.Email, CommunicationChannelType.InApp, CommunicationChannelType.WhatsApp], [_template],
 			NotificationRuleTimingConfiguration.Default, "en");
 		var rule = new NotificationRule(Guid.NewGuid(), _tenantId, EventKey, NotificationRuleScope.Create());
 		rule.Configure(true, codec.Serialize(config, definition), rule.ConcurrencyStamp);
 		var pin = AddVersion(1, CommunicationChannelType.Email, "en", "Published: {{task_title}}");
 		var inbox = AddVersion(2, CommunicationChannelType.InApp, "en", "{{task_title}}");
 		AddVersion(3, CommunicationChannelType.Email, "en", "Unpinned future content");
+		var whatsApp = AddVersion(4, CommunicationChannelType.WhatsApp, "en", "Homework: {{task_title}}");
 		pin.Retire();
 		var sourceId = Guid.NewGuid();
 		var operation = new CommunicationCampaign(Guid.NewGuid(), _tenantId) {
@@ -74,7 +78,7 @@ public class NotificationDispatchPlanner_Tests
 		_intent = new(Guid.NewGuid(), _tenantId, rule.Id, rule.Revision, EventKey, definition.SourceType, sourceId, "v1",
 			"test-deduplication-key", Now.AddHours(-1), Now.AddHours(-1),
 			NotificationRuntimeJson.Serialize(new[] { _child, _sibling }, NotificationErrorCodes.RuntimeSnapshotInvalid),
-			NotificationRuntimeJson.Serialize(new[] { pin.Id, inbox.Id }, NotificationErrorCodes.TemplateInvalid), Now.AddDays(1));
+			NotificationRuntimeJson.Serialize(new[] { pin.Id, inbox.Id, whatsApp.Id }, NotificationErrorCodes.TemplateInvalid), Now.AddDays(1));
 		_intent.BindRuntimeSnapshot(snapshotCodec.Serialize(new(1, new(), config), definition), NotificationIntentOrigin.Automatic);
 		_intent.BindAutomaticOperation(operation.Id);
 		SetClaim(nameof(NotificationIntent.Status), NotificationIntentState.Processing);
@@ -92,9 +96,12 @@ public class NotificationDispatchPlanner_Tests
 		var settings = Substitute.For<ISettingManager>();
 		settings.GetOrNullAsync(NotificationSettingNames.SchoolTimeZone, "T", _tenantId.ToString(), false).Returns("UTC");
 		var app = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
-			["App:ClientUrl"] = "https://school.example.invalid"
+			["App:ClientUrl"] = "https://school.example.invalid",
+			["Notifications:WhatsApp:GraphApiVersion"] = "v26.0",
+			[$"Notifications:WhatsApp:Tenants:{_tenantId:N}:AccessTokens:main"] = "fixture"
 		}).Build();
 		var validator = new NotificationTemplateVariableValidator([catalogue], app);
+		_compiler = new(validator);
 		var revisionRows = Repository(_revisions);
 		var renderer = new NotificationTemplateRenderer(_tenant, revisionRows, queries, validator);
 		var ids = Substitute.For<IGuidGenerator>();
@@ -106,10 +113,50 @@ public class NotificationDispatchPlanner_Tests
 		});
 		_planner = new(_tenant, units, _clock, new(_tenant, [catalogue], [_adapter], snapshotCodec, new()),
 			[resolver], new(_tenant, new(_tenant, Repository<NotificationRule>([rule]), queries), Repository(_preferences),
-				Repository<ConsentRecord>([]), queries, new(_tenant, settings), new()),
-			new(_tenant, Repository(_providers), queries), new(_tenant, revisionRows, queries, renderer, new(app, validator), _protector, ids),
+				Repository(_consents), queries, new(_tenant, settings), new()),
+			new(_tenant, Repository(_providers), queries), new(_tenant, revisionRows, queries, renderer, new(app, validator), _protector, ids,
+				new(_tenant, Repository(_providers), queries, app), new(_tenant, Repository(_bindings), queries)),
 			Repository<NotificationIntent>([_intent]), Repository<CommunicationCampaign>([operation]),
 			Repository(_dispatches), Repository(_evidence), queries, ids);
+	}
+
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task Consented_whatsapp_jobs_require_approval_and_pin_the_provider(bool approved)
+	{
+		var provider = new ChannelProviderSetting(Guid.NewGuid(), _tenantId) {
+			Channel = CommunicationChannelType.WhatsApp, ProviderName = WhatsAppProviderRoute.ProviderName,
+			Status = CommunicationProviderStatus.Enabled, IsEnabled = true, SecretReference = "main",
+			ConfigurationJson = """{"schemaVersion":1,"phoneNumberId":"1001","businessAccountId":"2001"}"""
+		};
+		_providers.Add(provider);
+		var recipient = Guardian(_child, CommunicationChannelType.WhatsApp);
+		_recipients.Add(recipient);
+		_consents.Add(new(Guid.NewGuid(), _tenantId) {
+			Channel = CommunicationChannelType.WhatsApp, RecipientType = "ParentGuardian", RecipientId = _child.StudentId,
+			Destination = recipient.Destination!, Status = CommunicationConsentStatus.OptedIn, ConsentCapturedAt = Now.AddDays(-1)
+		});
+		var revision = _revisions.Single(x => x.Channel == CommunicationChannelType.WhatsApp);
+		var template = _compiler.Compile(revision);
+		var binding = new WhatsAppTemplateBinding(Guid.NewGuid(), _tenantId, revision.Id, provider.Id, "academic_homework",
+			template.ProviderLanguage, WhatsAppApprovedTemplates.Encode(template, _compiler, new("v26.0", "1001", "2001", "fixture")));
+		binding.RecordProviderStatus("3001", approved ? NotificationProviderTemplateState.Approved : NotificationProviderTemplateState.Paused, Now);
+		_bindings.Add(binding);
+
+		await _planner.PlanAsync(_claim, default);
+
+		if (!approved)
+		{
+			_dispatches.ShouldBeEmpty();
+			_evidence.ShouldHaveSingleItem().BlockedReason.ShouldBe("WhatsAppTemplateNotApproved");
+			_intent.Status.ShouldBe(NotificationIntentState.NeedsReview);
+			return;
+		}
+		var dispatch = _dispatches.ShouldHaveSingleItem();
+		dispatch.ProviderSettingId.ShouldBe(provider.Id);
+		dispatch.TemplateRevisionId.ShouldBe(revision.Id);
+		_protector.Unprotect(dispatch).WhatsAppVariables.ShouldNotBeNull();
 	}
 
 	[Fact]
@@ -226,7 +273,8 @@ public class NotificationDispatchPlanner_Tests
 
 	private NotificationRuntimeRecipient Guardian(NotificationRecipientRefDto child, CommunicationChannelType channel, string relationship = "mother") =>
 		new(child, new("Guardian", child.StudentId, relationship, _contactUser), channel, null, "association-revision",
-			channel == CommunicationChannelType.Email ? "contact@example.invalid" : null, "Guardian Test", "Child Example");
+			channel switch { CommunicationChannelType.Email => "contact@example.invalid", CommunicationChannelType.WhatsApp => "+919000000012", _ => null },
+			"Guardian Test", "Child Example");
 
 	private CommunicationTemplateRevision AddVersion(int revision, CommunicationChannelType channel, string language, string body)
 	{

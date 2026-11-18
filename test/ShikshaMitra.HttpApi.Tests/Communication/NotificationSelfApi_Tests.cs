@@ -44,6 +44,8 @@ public partial class NotificationSelfApi_Tests(ShikshaMitraApiTestFactory factor
 			.ShouldBeOfType<SmtpNotificationChannelSender>();
 		scope.ServiceProvider.GetServices<INotificationChannelSender>().Single(x => x.Channel == CommunicationChannelType.InApp)
 			.ShouldBeOfType<InAppNotificationChannelSender>();
+		scope.ServiceProvider.GetServices<INotificationChannelSender>().Single(x => x.Channel == CommunicationChannelType.WhatsApp)
+			.ShouldBeOfType<WhatsAppNotificationChannelSender>();
 	}
 
 	[Fact]

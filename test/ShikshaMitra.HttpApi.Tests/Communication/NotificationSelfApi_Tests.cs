@@ -33,6 +33,7 @@ public partial class NotificationSelfApi_Tests(ShikshaMitraApiTestFactory factor
 		scope.ServiceProvider.GetRequiredService<NotificationTenantQueueRunner>().ShouldNotBeNull();
 		scope.ServiceProvider.GetRequiredService<INotificationQueueRepository>().ShouldNotBeNull();
 		scope.ServiceProvider.GetRequiredService<INotificationDueScheduler>().ShouldNotBeNull();
+		scope.ServiceProvider.GetRequiredService<WhatsAppProviderClient>().ShouldNotBeNull();
 	}
 
 	[Fact]

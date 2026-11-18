@@ -109,10 +109,11 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 			observed.Status.ShouldBe(NotificationDispatchState.Processing);
 			return new NotificationChannelSendResult(NotificationProviderAcceptance.Accepted, "inapp:receipt", null);
 		});
+		var locks = Substitute.For<INotificationPersonalWriteLock>();
 		var dispatcher = new NotificationDispatcher(runtime.Tenant, units, runtime.Clock,
 			new(runtime.Protector, runtime.Sources, [runtime.Recipients], runtime.Policy, runtime.Email, runtime.Links), [sender],
-			new(Substitute.For<INotificationPersonalWriteLock>()),
-			Repository<NotificationDispatch>(db), Repository<NotificationIntent>(db), Repository<CommunicationCampaign>(db), runtime.Queries);
+			new(locks), Repository<NotificationDispatch>(db), Repository<NotificationIntent>(db), Repository<CommunicationCampaign>(db),
+			runtime.Queries, CreateDeliveryProjection(db, runtime, locks));
 
 		await dispatcher.DispatchAsync(claimed.Id, claimed.LeaseId, default);
 
@@ -125,6 +126,9 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 		delivered.ProviderMessageId.ShouldBe("inapp:receipt");
 		delivered.AttemptNumber.ShouldBe(1);
 		delivered.LeaseId.ShouldBeNull();
+		var attempt = await final.Set<DeliveryAttempt>().SingleAsync(x => x.NotificationDispatchId == delivered.Id);
+		attempt.Status.ShouldBe(CommunicationDeliveryStatus.Delivered);
+		attempt.DeliveredAt.ShouldBe(Now);
 	}
 
 	[NotificationPostgresFact]
@@ -226,8 +230,13 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 			["App:ClientUrl"] = "https://school.example.invalid"
 		}).Build();
 		return new(runtime.Tenant, units, runtime.Clock, new(locks), Repository<NotificationDispatch>(db), Repository<NotificationIntent>(db),
-			Repository<NotificationInboxItem>(db), users, runtime.Queries, runtime.Guids, new([], config));
+			Repository<NotificationInboxItem>(db), users, runtime.Queries, runtime.Guids, new([], config),
+			CreateDeliveryProjection(db, runtime, locks));
 	}
+
+	private static NotificationDeliveryProjection CreateDeliveryProjection(DbContext db, Runtime runtime, INotificationPersonalWriteLock locks) =>
+		new(runtime.Tenant, locks, new(runtime.Tenant, Substitute.For<ISettingManager>()), Repository<ChannelProviderSetting>(db),
+			Repository<DeliveryAttempt>(db), runtime.Queries, runtime.Guids, runtime.Clock);
 
 	private async Task AssertCommittedAsync(Work work)
 	{

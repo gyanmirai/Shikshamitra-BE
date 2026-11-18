@@ -17,7 +17,8 @@ public sealed record NotificationRecoveryResult(int Intents, int Dispatches);
 
 [RemoteService(false), DisableAuditing]
 public sealed class NotificationLeaseRecoveryService(ICurrentTenant tenant, IUnitOfWorkManager units,
-	IRepository<NotificationIntent, Guid> intents, IRepository<NotificationDispatch, Guid> dispatches, IAsyncQueryableExecuter queries)
+	IRepository<NotificationIntent, Guid> intents, IRepository<NotificationDispatch, Guid> dispatches, IAsyncQueryableExecuter queries,
+	NotificationDeliveryProjection delivery)
 	: ITransientDependency
 {
 	public async Task<NotificationRecoveryResult> RecoverAsync(DateTimeOffset now, int batchSize, CancellationToken cancellationToken)
@@ -71,6 +72,7 @@ public sealed class NotificationLeaseRecoveryService(ICurrentTenant tenant, IUni
 		foreach (var row in rows)
 		{
 			if (!row.RecoverExpiredLease(now) && !row.ExpirePending(now)) continue;
+			if (row.Status == NotificationDispatchState.UnknownAcceptance) await delivery.RecordAsync(row, now, cancellationToken);
 			await dispatches.UpdateAsync(row, cancellationToken: cancellationToken);
 			count++;
 		}

@@ -20,7 +20,8 @@ namespace ShikshaMitra.Communication.Notifications;
 public sealed class InAppNotificationChannelSender(ICurrentTenant tenant, IUnitOfWorkManager units, IClock clock,
 	NotificationOutcomeLock outcomeLock, IRepository<NotificationDispatch, Guid> dispatches, IRepository<NotificationIntent, Guid> intents,
 	IRepository<NotificationInboxItem, Guid> inbox, IRepository<IdentityUser, Guid> users, IAsyncQueryableExecuter queries,
-	IGuidGenerator guids, NotificationTemplateVariableValidator validator) : INotificationChannelSender, ITransientDependency
+	IGuidGenerator guids, NotificationTemplateVariableValidator validator, NotificationDeliveryProjection delivery)
+	: INotificationChannelSender, ITransientDependency
 {
 	public CommunicationChannelType Channel => CommunicationChannelType.InApp;
 
@@ -69,6 +70,7 @@ public sealed class InAppNotificationChannelSender(ICurrentTenant tenant, IUnitO
 		var providerId = $"inbox:{item.Id:N}";
 		dispatch.RecordOutcome(lease, now, NotificationDispatchState.Delivered, providerId);
 		await inbox.InsertAsync(item, cancellationToken: cancellationToken);
+		await delivery.RecordAsync(dispatch, now, cancellationToken);
 		await dispatches.UpdateAsync(dispatch, cancellationToken: cancellationToken);
 		await unit.CompleteAsync(cancellationToken);
 		return new(NotificationProviderAcceptance.Accepted, providerId, null);

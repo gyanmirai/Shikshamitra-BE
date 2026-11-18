@@ -48,6 +48,7 @@ public class NotificationDispatcher_Tests
 	private NotificationRuntimeRecipient _current;
 	private Func<CancellationToken, Task<NotificationChannelSendResult>> _tryProvider =
 		_ => Task.FromResult(new NotificationChannelSendResult(NotificationProviderAcceptance.Accepted, "smtp:accepted", null));
+	private readonly List<DeliveryAttempt> _attempts = [];
 
 	public NotificationDispatcher_Tests()
 	{
@@ -122,8 +123,15 @@ public class NotificationDispatcher_Tests
 			return _tryProvider(call.Arg<CancellationToken>());
 		});
 		_senders.Add(_sender);
+		var attempts = Repository(_attempts);
+		attempts.InsertAsync(Arg.Any<DeliveryAttempt>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(call => {
+			var attempt = call.Arg<DeliveryAttempt>(); _attempts.Add(attempt); return attempt;
+		});
+		var guids = Substitute.For<Volo.Abp.Guids.IGuidGenerator>(); guids.Create().Returns(_ => Guid.NewGuid());
+		var delivery = new NotificationDeliveryProjection(_tenant, Substitute.For<INotificationPersonalWriteLock>(), new(_tenant, settings),
+			Repository<ChannelProviderSetting>([_provider]), attempts, queries, guids, _clock);
 		_dispatcher = new(_tenant, _units, _clock, readiness, _senders, new(Substitute.For<INotificationPersonalWriteLock>()), Repository<NotificationDispatch>([_row]),
-			Repository<NotificationIntent>([intent]), Repository<CommunicationCampaign>([campaign]), queries);
+			Repository<NotificationIntent>([intent]), Repository<CommunicationCampaign>([campaign]), queries, delivery);
 	}
 
 	[Fact]
@@ -134,9 +142,33 @@ public class NotificationDispatcher_Tests
 		_row.Status.ShouldBe(NotificationDispatchState.ProviderAccepted);
 		_row.ProviderMessageId.ShouldBe("smtp:accepted");
 		_row.AcceptedAt.ShouldBe(Now);
+		var attempt = _attempts.Single();
+		attempt.Status.ShouldBe(CommunicationDeliveryStatus.Sent);
+		attempt.DeliveredAt.ShouldBeNull();
+		attempt.Destination.ShouldBe("Hidden");
 		await _sender.Received(1).SendAsync(Arg.Is<NotificationChannelSendRequest>(x =>
 			x.DispatchId == _dispatchId && x.Destination == "guardian@example.invalid" && x.TemplateRevisionId == _templateRevisionId &&
 			x.AttemptNumber == 1 && x.ProviderSettingId == _provider.Id), default);
+	}
+
+	[Fact]
+	public async Task An_exhausted_daily_quota_defers_without_starting_or_consuming_a_provider_attempt()
+	{
+		_provider.DailyQuota = 1;
+		_attempts.Add(new DeliveryAttempt(Guid.NewGuid(), _tenantId) {
+			NotificationDispatchId = Guid.NewGuid(), NotificationProviderSettingId = _provider.Id,
+			QueuedAt = Now.AddHours(-1), Status = CommunicationDeliveryStatus.Sent
+		});
+
+		await _dispatcher.DispatchAsync(_dispatchId, _lease, default);
+
+		_steps.ShouldBe(new[] { "begin", "commit", "dispose" });
+		_row.Status.ShouldBe(NotificationDispatchState.Pending);
+		_row.IoStartedAt.ShouldBeNull();
+		_row.AttemptNumber.ShouldBe(0);
+		_row.ErrorCode.ShouldBe(NotificationErrorCodes.ProviderQuotaExhausted);
+		_row.NextAttemptAt.ShouldBe(new DateTimeOffset(Now.UtcDateTime.Date.AddDays(1)));
+		_attempts.Count.ShouldBe(1);
 	}
 
 	[Theory]

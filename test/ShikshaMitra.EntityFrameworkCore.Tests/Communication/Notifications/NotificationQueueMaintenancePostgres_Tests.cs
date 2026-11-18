@@ -62,8 +62,12 @@ public class NotificationQueueMaintenancePostgres_Tests(NotificationPostgresFixt
 		var seed = await SeedAsync(queuedExpiry: true);
 		await using var db = fixture.CreateContext();
 		var tenant = Tenant(seed.Tenant);
+		var queries = new AsyncQueryableExecuter([]);
+		var delivery = new NotificationDeliveryProjection(tenant, Substitute.For<INotificationPersonalWriteLock>(),
+			new(tenant, Substitute.For<Volo.Abp.SettingManagement.ISettingManager>()), Repository<ChannelProviderSetting>(db),
+			Repository<DeliveryAttempt>(db), queries, Substitute.For<Volo.Abp.Guids.IGuidGenerator>(), Substitute.For<Volo.Abp.Timing.IClock>());
 		var recovery = new NotificationLeaseRecoveryService(tenant, Units(db), Repository<NotificationIntent>(db),
-			Repository<NotificationDispatch>(db), new AsyncQueryableExecuter([]));
+			Repository<NotificationDispatch>(db), queries, delivery);
 		var result = await recovery.RecoverAsync(Now, 1, default);
 		result.Dispatches.ShouldBe(1);
 		result.Intents.ShouldBe(0);

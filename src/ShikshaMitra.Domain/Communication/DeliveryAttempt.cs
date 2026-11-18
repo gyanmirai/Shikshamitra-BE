@@ -9,6 +9,8 @@ public class DeliveryAttempt : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; set; }
 	public Guid CampaignId { get; set; }
 	public Guid? RecipientSnapshotId { get; set; }
+	public Guid? NotificationDispatchId { get; set; }
+	public Guid? NotificationProviderSettingId { get; set; }
 	public CommunicationChannelType Channel { get; set; }
 	public string Destination { get; set; } = string.Empty;
 	public CommunicationDeliveryStatus Status { get; set; }

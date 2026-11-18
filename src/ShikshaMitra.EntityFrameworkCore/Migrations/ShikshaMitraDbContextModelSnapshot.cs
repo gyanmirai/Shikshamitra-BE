@@ -7971,6 +7971,12 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<Guid?>("NotificationDispatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("NotificationProviderSettingId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ProviderMessageId")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
@@ -8007,6 +8013,15 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "Status");
 
                     b.HasIndex("TenantId", "CampaignId", "Channel");
+
+                    b.HasIndex("TenantId", "NotificationDispatchId", "AttemptNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_DeliveryAttempt_NotificationAttempt")
+                        .HasFilter("\"NotificationDispatchId\" IS NOT NULL");
+
+                    b.HasIndex("TenantId", "NotificationProviderSettingId", "QueuedAt")
+                        .HasDatabaseName("IX_DeliveryAttempt_NotificationQuota")
+                        .HasFilter("\"NotificationProviderSettingId\" IS NOT NULL");
 
                     b.ToTable("CommunicationDeliveryAttempts", (string)null);
                 });
@@ -40808,6 +40823,12 @@ namespace ShikshaMitra.Migrations
                     b.HasOne("ShikshaMitra.Communication.CommunicationRecipientSnapshot", null)
                         .WithMany()
                         .HasForeignKey("RecipientSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Communication.Notifications.NotificationDispatch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "NotificationDispatchId")
+                        .HasPrincipalKey("TenantId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 

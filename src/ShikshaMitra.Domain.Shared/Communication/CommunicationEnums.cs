@@ -78,7 +78,8 @@ public enum CommunicationDeliveryStatus
 	Bounced = 5,
 	Replied = 6,
 	Acknowledged = 7,
-	Skipped = 8
+	Skipped = 8,
+	UnknownAcceptance = 9
 }
 
 public enum CommunicationReplyStatus

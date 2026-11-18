@@ -23,6 +23,7 @@ public class NotificationQueueMaintenance_Tests
 	private readonly INotificationPersonalWriteLock _writeLock = Substitute.For<INotificationPersonalWriteLock>();
 	private readonly List<NotificationIntent> _intents = [];
 	private readonly List<NotificationDispatch> _dispatches = [];
+	private readonly List<DeliveryAttempt> _attempts = [];
 	private readonly List<CommunicationCampaign> _campaigns = [];
 	private readonly NotificationLeaseRecoveryService _recovery;
 	private readonly NotificationOutcomeProjector _projector;
@@ -34,7 +35,10 @@ public class NotificationQueueMaintenance_Tests
 		var queries = new AsyncQueryableExecuter([]);
 		var intents = Repository(_intents);
 		var dispatches = Repository(_dispatches);
-		_recovery = new(_tenant, _units, intents, dispatches, queries);
+		var delivery = new NotificationDeliveryProjection(_tenant, _writeLock, new(_tenant, Substitute.For<Volo.Abp.SettingManagement.ISettingManager>()),
+			Repository<ChannelProviderSetting>([]), Repository(_attempts), queries, Substitute.For<Volo.Abp.Guids.IGuidGenerator>(),
+			Substitute.For<Volo.Abp.Timing.IClock>());
+		_recovery = new(_tenant, _units, intents, dispatches, queries, delivery);
 		_projector = new(_tenant, _units, new(_writeLock), intents, dispatches, Repository(_campaigns), queries);
 	}
 
@@ -51,12 +55,18 @@ public class NotificationQueueMaintenance_Tests
 		HydrateDispatchLease(beforeIo, expired: true, startedIo: false);
 		var afterIo = Dispatch(lost, expiresAt: Now.AddMinutes(-1));
 		var ioLease = HydrateDispatchLease(afterIo, expired: true, startedIo: true);
+		var reserved = new DeliveryAttempt(Guid.NewGuid(), _tenantId) {
+			NotificationDispatchId = afterIo.Id, AttemptNumber = afterIo.AttemptNumber, QueuedAt = Now.AddMinutes(-3)
+		};
+		_attempts.Add(reserved);
+		Set(afterIo, nameof(NotificationDispatch.DeliveryAttemptId), reserved.Id);
 		var foreign = Dispatch(Intent(Operation(Guid.NewGuid())), expiresAt: Now.AddMinutes(-2));
 
 		var result = await _recovery.RecoverAsync(Now, 10, default);
 
 		result.Intents.ShouldBe(2);
 		result.Dispatches.ShouldBe(3);
+		reserved.Status.ShouldBe(CommunicationDeliveryStatus.UnknownAcceptance);
 		overdue.Status.ShouldBe(NotificationIntentState.Expired);
 		lost.Status.ShouldBe(NotificationIntentState.Ready);
 		active.Status.ShouldBe(NotificationIntentState.Processing);

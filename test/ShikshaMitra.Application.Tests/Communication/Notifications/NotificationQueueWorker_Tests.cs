@@ -90,7 +90,10 @@ public class NotificationQueueWorker_Tests
 		var queries = new AsyncQueryableExecuter([]);
 		var intents = Empty<NotificationIntent>();
 		var dispatches = Empty<NotificationDispatch>();
-		var maintenance = new NotificationLeaseRecoveryService(tenant, units, intents, dispatches, queries);
+		var delivery = new NotificationDeliveryProjection(tenant, Substitute.For<INotificationPersonalWriteLock>(),
+			new(tenant, Substitute.For<Volo.Abp.SettingManagement.ISettingManager>()), Empty<ChannelProviderSetting>(), Empty<DeliveryAttempt>(),
+			queries, Substitute.For<Volo.Abp.Guids.IGuidGenerator>(), clock);
+		var maintenance = new NotificationLeaseRecoveryService(tenant, units, intents, dispatches, queries, delivery);
 		var outcome = new NotificationOutcomeProjector(tenant, units, new(Substitute.For<INotificationPersonalWriteLock>()),
 			intents, dispatches, Empty<CommunicationCampaign>(), queries);
 		using var services = new ServiceCollection().BuildServiceProvider();

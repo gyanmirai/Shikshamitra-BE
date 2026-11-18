@@ -77,8 +77,12 @@ public class InAppNotificationChannelSender_Tests
 		});
 		var app = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["App:ClientUrl"] = "https://school.example" }).Build();
 		var guids = Substitute.For<IGuidGenerator>(); guids.Create().Returns(_ => Guid.NewGuid());
-		_sender = new(_tenant, units, clock, new(Substitute.For<INotificationPersonalWriteLock>()), dispatches, Repository(new[] { _intent }),
-			inbox, Repository(new[] { _user }), new AsyncQueryableExecuter([]), guids, new([], app));
+		var queries = new AsyncQueryableExecuter([]);
+		var locks = Substitute.For<INotificationPersonalWriteLock>();
+		var delivery = new NotificationDeliveryProjection(_tenant, locks, new(_tenant, Substitute.For<Volo.Abp.SettingManagement.ISettingManager>()),
+			Repository<ChannelProviderSetting>([]), Repository<DeliveryAttempt>([]), queries, guids, clock);
+		_sender = new(_tenant, units, clock, new(locks), dispatches, Repository(new[] { _intent }),
+			inbox, Repository(new[] { _user }), queries, guids, new([], app), delivery);
 	}
 
 	[Fact]

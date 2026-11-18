@@ -20,7 +20,7 @@ namespace ShikshaMitra.Communication.Notifications;
 public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkManager units, IClock clock,
 	NotificationDispatchReadiness readiness, IEnumerable<INotificationChannelSender> senders, NotificationOutcomeLock outcomeLock,
 	IRepository<NotificationDispatch, Guid> dispatches, IRepository<NotificationIntent, Guid> intents,
-	IRepository<CommunicationCampaign, Guid> campaigns, IAsyncQueryableExecuter queries)
+	IRepository<CommunicationCampaign, Guid> campaigns, IAsyncQueryableExecuter queries, NotificationDeliveryProjection delivery)
 	: INotificationDispatcher, ITransientDependency
 {
 	private static readonly int[] RetryMinutes = [1, 5, 15, 60];
@@ -83,10 +83,21 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 				row.SkipBeforeIo(lease, now, NotificationErrorCodes.RecipientIneligible);
 			else
 			{
-				row.BeginIo(lease, now);
-				prepared = new(matching[0], new(row.Id, row.DeduplicationKey, row.ProviderSettingId ?? Guid.Empty, row.Channel,
-					destination, payload.Subject, payload.Body, payload.LinkUrl, payload.LanguageCode, row.AttemptNumber,
-					TemplateRevisionId: row.TemplateRevisionId, Recipient: payload.Recipient, WhatsAppVariables: payload.WhatsAppVariables), decision.ExpiresAt);
+				var reservation = await delivery.ReserveAsync(row, cancellationToken);
+				now = Now();
+				if (reservation.AttemptId is Guid attemptId)
+				{
+					if (decision.ExpiresAt <= now || row.ExpiresAt <= now) throw new BusinessException(NotificationErrorCodes.LeaseLost);
+					row.BeginIo(lease, now, attemptId);
+					prepared = new(matching[0], new(row.Id, row.DeduplicationKey, row.ProviderSettingId ?? Guid.Empty, row.Channel,
+						destination, payload.Subject, payload.Body, payload.LinkUrl, payload.LanguageCode, row.AttemptNumber,
+						TemplateRevisionId: row.TemplateRevisionId, Recipient: payload.Recipient, WhatsAppVariables: payload.WhatsAppVariables), decision.ExpiresAt);
+				}
+				else if (reservation.RetryAt is DateTimeOffset retryAt && retryAt > now &&
+					!(decision.ExpiresAt <= retryAt) && !(row.ExpiresAt <= retryAt))
+					row.DeferBeforeIo(lease, now, retryAt, NotificationErrorCodes.ProviderQuotaExhausted);
+				else
+					row.SkipBeforeIo(lease, now, reservation.ExclusionCode ?? NotificationErrorCodes.ProviderUnavailable);
 			}
 		}
 		await dispatches.UpdateAsync(row, cancellationToken: cancellationToken);
@@ -119,7 +130,9 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 				var row = await FindAsync(tenantId, dispatchId, CancellationToken.None) ?? throw new BusinessException(NotificationErrorCodes.LeaseLost);
 				if (row.CampaignId is Guid operationId) await outcomeLock.AcquireAsync(operationId, CancellationToken.None);
 				var prior = row.Status;
-				ApplyResult(row, lease, Now(), result, expiry);
+				var now = Now();
+				ApplyResult(row, lease, now, result, expiry);
+				await delivery.RecordAsync(row, now, CancellationToken.None);
 				if (prior == NotificationDispatchState.UnknownAcceptance && row.Status != prior)
 					await ReopenProjectedIntentAsync(tenantId, row);
 				await dispatches.UpdateAsync(row, cancellationToken: CancellationToken.None);

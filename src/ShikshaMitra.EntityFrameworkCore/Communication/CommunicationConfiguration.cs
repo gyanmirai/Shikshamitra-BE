@@ -149,6 +149,14 @@ public class DeliveryAttemptConfiguration : IEntityTypeConfiguration<DeliveryAtt
 		builder.HasIndex(x => new { x.TenantId, x.CampaignId, x.Channel });
 		builder.HasIndex(x => new { x.TenantId, x.Status });
 
+		builder.HasIndex(x => new { x.TenantId, x.NotificationDispatchId, x.AttemptNumber }).IsUnique()
+			.HasFilter("\"NotificationDispatchId\" IS NOT NULL").HasDatabaseName("UX_DeliveryAttempt_NotificationAttempt");
+		builder.HasIndex(x => new { x.TenantId, x.NotificationProviderSettingId, x.QueuedAt })
+			.HasFilter("\"NotificationProviderSettingId\" IS NOT NULL").HasDatabaseName("IX_DeliveryAttempt_NotificationQuota");
+		builder.HasOne<NotificationDispatch>().WithMany()
+			.HasForeignKey(x => new { x.TenantId, x.NotificationDispatchId }).HasPrincipalKey(x => new { x.TenantId, x.Id })
+			.OnDelete(DeleteBehavior.Restrict);
+
 		builder.HasOne<CommunicationRecipientSnapshot>()
 			.WithMany()
 			.HasForeignKey(x => x.RecipientSnapshotId)

@@ -45,26 +45,37 @@ public class NotificationMigrationPostgres_Tests(NotificationPostgresFixture fix
 		var migration = NotificationMigrationStructure_Tests.CreateMigration();
 		var headerMigration = NotificationTemplateHeaderMigration_Tests.CreateMigration();
 		var runtimeMigration = NotificationRuntimeMigration_Tests.CreateMigration();
+		var attemptMigration = NotificationDeliveryAttemptMigration_Tests.CreateMigration();
 		var header = new CommunicationTemplate(Guid.NewGuid(), Guid.NewGuid())
 			{ TemplateName = "Legacy template", Subject = "Original subject", Body = "Original body" };
+		var priorAttempt = new DeliveryAttempt(Guid.NewGuid(), header.TenantId) {
+			CampaignId = Guid.NewGuid(), Destination = "original@example.invalid", Status = CommunicationDeliveryStatus.Sent
+		};
 		await using (var context = fixture.CreateContext())
 		{
 			context.Add(header);
+			context.Add(priorAttempt);
 			await context.SaveChangesAsync();
 		}
+		await ExecuteAsync(attemptMigration.DownOperations);
 		await ExecuteAsync(runtimeMigration.DownOperations);
 		await ExecuteAsync(headerMigration.DownOperations);
 		await ExecuteAsync(migration.DownOperations);
 		await ExecuteAsync(migration.UpOperations);
 		await ExecuteAsync(headerMigration.UpOperations);
 		await ExecuteAsync(runtimeMigration.UpOperations);
+		await ExecuteAsync(attemptMigration.UpOperations);
 		await using (var context = fixture.CreateContext())
 		{
 			context.Add(new NotificationRule(Guid.NewGuid(), header.TenantId!.Value,
 				"Academic.Homework.Published", NotificationRuleScope.Create()));
 			await context.SaveChangesAsync();
 			(await context.Set<NotificationRule>().CountAsync()).ShouldBe(1);
+			var legacy = await context.Set<DeliveryAttempt>().SingleAsync(x => x.Id == priorAttempt.Id);
+			legacy.NotificationDispatchId.ShouldBeNull();
+			legacy.NotificationProviderSettingId.ShouldBeNull();
 		}
+		await ExecuteAsync(attemptMigration.DownOperations);
 		await ExecuteAsync(runtimeMigration.DownOperations);
 		await ExecuteAsync(headerMigration.DownOperations);
 		await ExecuteAsync(migration.DownOperations);
@@ -73,6 +84,10 @@ public class NotificationMigrationPostgres_Tests(NotificationPostgresFixture fix
 			.Select(x => new { x.Body, x.Subject }).SingleAsync();
 		preserved.Body.ShouldBe("Original body");
 		preserved.Subject.ShouldBe("Original subject");
+		var attempt = await check.Set<DeliveryAttempt>().Where(x => x.Id == priorAttempt.Id)
+			.Select(x => new { x.Destination, x.Status }).SingleAsync();
+		attempt.Destination.ShouldBe(priorAttempt.Destination);
+		attempt.Status.ShouldBe(CommunicationDeliveryStatus.Sent);
 		await using var connection = fixture.CreateConnection();
 		await connection.OpenAsync();
 		await using var count = new NpgsqlCommand("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'NotificationRules'", connection);

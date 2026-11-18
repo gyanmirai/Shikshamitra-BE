@@ -12,4 +12,7 @@ public static class NotificationErrorCodes
 	public const string ReviewChanged = "Communication:Notification:ReviewChanged";
 	public const string ReviewExpired = "Communication:Notification:ReviewExpired";
 	public const string UnknownAcceptance = "Communication:Notification:UnknownAcceptance";
+	public const string TemplateImmutable = "Communication:Notification:TemplateImmutable";
+	public const string ReviewConsumed = "Communication:Notification:ReviewConsumed";
+	public const string TenantRequired = "Communication:Notification:TenantRequired";
 }

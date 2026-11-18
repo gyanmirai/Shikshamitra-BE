@@ -1,0 +1,62 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ShikshaMitra.Communication;
+using ShikshaMitra.Communication.Notifications;
+
+namespace ShikshaMitra.EntityFrameworkCore.Communication.Notifications;
+
+public sealed class NotificationIntentConfiguration : IEntityTypeConfiguration<NotificationIntent>
+{
+	public void Configure(EntityTypeBuilder<NotificationIntent> builder)
+	{
+		NotificationMapping.Configure(builder, "NotificationIntents");
+		builder.Property(x => x.EventKey).IsRequired().HasMaxLength(160);
+		builder.Property(x => x.SourceType).IsRequired().HasMaxLength(80);
+		builder.Property(x => x.SourceRevision).IsRequired().HasMaxLength(128);
+		builder.Property(x => x.DeduplicationKey).IsRequired().HasMaxLength(128);
+		builder.Property(x => x.AffectedRecipientsJson).IsRequired().HasMaxLength(65536);
+		builder.Property(x => x.TemplateRevisionIdsJson).IsRequired().HasMaxLength(65536);
+		builder.HasIndex(x => new { x.TenantId, x.DeduplicationKey }).IsUnique();
+		builder.HasIndex(x => new { x.Status, x.DueAt, x.TenantId });
+		builder.HasIndex(x => new { x.TenantId, x.SourceType, x.SourceId });
+		builder.HasOne<NotificationRule>().WithMany().HasForeignKey(x => new { x.TenantId, x.RuleId })
+			.HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+	}
+}
+
+public sealed class NotificationDispatchConfiguration : IEntityTypeConfiguration<NotificationDispatch>
+{
+	public void Configure(EntityTypeBuilder<NotificationDispatch> builder)
+	{
+		NotificationMapping.Configure(builder, "NotificationDispatches");
+		builder.Property(x => x.RecipientReferenceJson).IsRequired().HasMaxLength(65536);
+		builder.Property(x => x.RecipientContextKey).IsRequired().HasMaxLength(192);
+		builder.Property(x => x.DestinationFingerprint).IsRequired().HasMaxLength(128);
+		builder.Property(x => x.ProtectedMessageJson).IsRequired().HasMaxLength(131072);
+		builder.Property(x => x.ContentHash).IsRequired().HasMaxLength(128);
+		builder.Property(x => x.DeduplicationKey).IsRequired().HasMaxLength(128);
+		builder.Property(x => x.ProviderMessageId).HasMaxLength(256);
+		builder.Property(x => x.ErrorCode).HasMaxLength(160);
+		builder.HasIndex(x => new { x.TenantId, x.DeduplicationKey }).IsUnique();
+		builder.HasIndex(x => new { x.Status, x.NextAttemptAt, x.TenantId });
+		builder.HasOne<NotificationIntent>().WithMany().HasForeignKey(x => new { x.TenantId, x.IntentId })
+			.HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne<CommunicationTemplateRevision>().WithMany().HasForeignKey(x => new { x.TenantId, x.TemplateRevisionId })
+			.HasPrincipalKey(x => new { x.TenantId, x.Id }).OnDelete(DeleteBehavior.Restrict);
+	}
+}
+
+public sealed class NotificationProviderEventConfiguration : IEntityTypeConfiguration<NotificationProviderEvent>
+{
+	public void Configure(EntityTypeBuilder<NotificationProviderEvent> builder)
+	{
+		NotificationMapping.Configure(builder, "NotificationProviderEvents");
+		builder.Property(x => x.ProviderEventKey).IsRequired().HasMaxLength(192);
+		builder.Property(x => x.ProviderMessageId).HasMaxLength(256);
+		builder.Property(x => x.ProtectedPayload).IsRequired().HasMaxLength(131072);
+		builder.HasIndex(x => new { x.TenantId, x.ProviderSettingId, x.ProviderEventKey }).IsUnique()
+			.HasDatabaseName("UX_NotificationProviderEvent_Dedup");
+		builder.HasIndex(x => new { x.ProcessedAt, x.ReceivedAt });
+		builder.HasOne<ChannelProviderSetting>().WithMany().HasForeignKey(x => x.ProviderSettingId).OnDelete(DeleteBehavior.Restrict);
+	}
+}

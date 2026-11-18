@@ -5,7 +5,8 @@ public enum CommunicationChannelType
 	WhatsApp = 0,
 	Sms = 1,
 	Email = 2,
-	InApp = 3
+	InApp = 3,
+	WebPush = 4
 }
 
 public enum CommunicationCampaignStatus

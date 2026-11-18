@@ -74,7 +74,7 @@ public sealed partial class NotificationTemplateVariableValidator(IEnumerable<IN
 		var (titleLimit, bodyLimit) = channel switch {
 			CommunicationChannelType.WebPush => (80, 240),
 			CommunicationChannelType.WhatsApp => (60, 1024),
-			CommunicationChannelType.InApp => (256, 4096),
+			CommunicationChannelType.InApp => (256, NotificationInboxItem.MaximumBodyLength),
 			CommunicationChannelType.Email => (256, 65536),
 			_ => (0, 0)
 		};

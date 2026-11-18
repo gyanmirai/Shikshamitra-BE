@@ -8,6 +8,8 @@ namespace ShikshaMitra.Communication.Notifications;
 [DisableAuditing]
 public class NotificationInboxItem : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	public const int MaximumBodyLength = 4000;
+	public const int MaximumLinkLength = 1000;
 	public Guid? TenantId { get; private set; }
 	public Guid UserId { get; private set; }
 	public Guid DispatchId { get; private set; }
@@ -42,8 +44,8 @@ public class NotificationInboxItem : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		ContextKey = NotificationDataGuard.Text(contextKey, nameof(contextKey), 192);
 		LogicalKey = NotificationDataGuard.Text(logicalKey, nameof(logicalKey), 128);
 		Title = NotificationDataGuard.Text(title, nameof(title), 256);
-		Body = NotificationDataGuard.Text(body, nameof(body), 4000);
-		RelativeLink = NotificationDataGuard.Text(relativeLink, nameof(relativeLink), 1000);
+		Body = NotificationDataGuard.Text(body, nameof(body), MaximumBodyLength);
+		RelativeLink = NotificationDataGuard.Text(relativeLink, nameof(relativeLink), MaximumLinkLength);
 		StudentId = studentId;
 	}
 }

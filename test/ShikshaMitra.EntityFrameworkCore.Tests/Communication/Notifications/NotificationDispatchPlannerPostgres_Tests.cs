@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using ShikshaMitra.Academic.Notifications;
@@ -14,6 +15,7 @@ using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Identity;
 using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.SettingManagement;
@@ -141,6 +143,90 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 		await Should.ThrowAsync<DbUpdateException>(() => second.WaitAsync(TimeSpan.FromSeconds(10)));
 		await contenderTransaction.RollbackAsync();
 		await AssertCommittedAsync(work);
+	}
+
+	[NotificationPostgresFact]
+	public async Task Inbox_delivery_rolls_back_with_its_receipt_and_competing_senders_reuse_one_committed_item()
+	{
+		var work = await SeedAndClaimAsync();
+		var keys = new EphemeralDataProtectionProvider();
+		await using (var planning = fixture.CreateContext())
+		{
+			await using var transaction = await planning.Database.BeginTransactionAsync();
+			await CreatePlanner(planning, work, keys: keys).PlanAsync(work.Claim, default);
+			await transaction.CommitAsync();
+		}
+		await using var connection = fixture.CreateConnection();
+		var claim = (await NotificationPostgresQueueClaims.ClaimAsync(connection, null, work.TenantId, NotificationQueueKind.Dispatch,
+			Now, 1, TimeSpan.FromMinutes(5), default)).ShouldHaveSingleItem();
+		NotificationChannelSendRequest request;
+		await using (var preparation = fixture.CreateContext())
+		{
+			var row = await preparation.Set<NotificationDispatch>().SingleAsync(x => x.Id == claim.Id);
+			row.BeginIo(claim.LeaseId, Now);
+			await preparation.SaveChangesAsync();
+			request = new(row.Id, row.DeduplicationKey, Guid.Empty, row.Channel, work.UserId.ToString("N"), "Homework",
+				"Update for Secret Learner", "https://school.example.invalid/portal/homework", "en", row.AttemptNumber,
+				TemplateRevisionId: row.TemplateRevisionId, Recipient: new("Guardian", work.Student.StudentId, "mother", work.UserId));
+		}
+		await using (var interrupted = fixture.CreateContext())
+		{
+			var sender = CreateInboxSender(interrupted, work, keys, failBeforeCommit: true);
+			await Should.ThrowAsync<DbUpdateException>(() => sender.SendAsync(request, default));
+		}
+		await using (var afterRollback = fixture.CreateContext())
+		{
+			(await afterRollback.Set<NotificationInboxItem>().CountAsync(x => x.DispatchId == claim.Id)).ShouldBe(0);
+			(await afterRollback.Set<NotificationDispatch>().SingleAsync(x => x.Id == claim.Id)).Status.ShouldBe(NotificationDispatchState.Processing);
+		}
+		await using var first = fixture.CreateContext();
+		await using var second = fixture.CreateContext();
+		using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+		var results = await Task.WhenAll(CreateInboxSender(first, work, keys).SendAsync(request, timeout.Token),
+			CreateInboxSender(second, work, keys).SendAsync(request, timeout.Token));
+
+		results[0].Acceptance.ShouldBe(NotificationProviderAcceptance.Accepted);
+		results[1].ShouldBe(results[0]);
+		await using var check = fixture.CreateContext();
+		var item = await check.Set<NotificationInboxItem>().SingleAsync(x => x.DispatchId == claim.Id);
+		item.StudentId.ShouldBe(work.Student.StudentId);
+		item.UserId.ShouldBe(work.UserId);
+		var delivered = await check.Set<NotificationDispatch>().SingleAsync(x => x.Id == claim.Id);
+		delivered.Status.ShouldBe(NotificationDispatchState.Delivered);
+		delivered.ProviderMessageId.ShouldBe($"inbox:{item.Id:N}");
+	}
+
+	private static InAppNotificationChannelSender CreateInboxSender(NotificationPersistenceTestDbContext db, Work work,
+		IDataProtectionProvider keys, bool failBeforeCommit = false)
+	{
+		var runtime = CreateRuntime(db, work, keys);
+		var units = Substitute.For<IUnitOfWorkManager>();
+		units.Current.Returns((IUnitOfWork?)null);
+		units.Begin(Arg.Any<AbpUnitOfWorkOptions>(), true).Returns(_ => {
+			var transaction = db.Database.BeginTransaction();
+			var unit = Substitute.For<IUnitOfWork>();
+			unit.CompleteAsync(Arg.Any<CancellationToken>()).Returns(async call => {
+				var token = call.Arg<CancellationToken>();
+				await db.SaveChangesAsync(token);
+				if (failBeforeCommit) throw new DbUpdateException("Simulated failure before the inbox transaction commits.");
+				await transaction.CommitAsync(token);
+			});
+			unit.When(x => x.Dispose()).Do(_ => transaction.Dispose());
+			return unit;
+		});
+		var locks = Substitute.For<INotificationPersonalWriteLock>();
+		locks.AcquireAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(call =>
+			NotificationPostgresPersonalLocks.AcquireAsync(db.Database.GetDbConnection(), db.Database.CurrentTransaction?.GetDbTransaction(),
+				work.TenantId, call.Arg<IReadOnlyList<string>>(), call.Arg<CancellationToken>()));
+		var user = new IdentityUser(work.UserId, "test-account", "test@example.invalid", work.TenantId);
+		user.SetIsActive(true);
+		var users = Substitute.For<IRepository<IdentityUser, Guid>>();
+		users.GetQueryableAsync().Returns(new[] { user }.AsQueryable());
+		var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+			["App:ClientUrl"] = "https://school.example.invalid"
+		}).Build();
+		return new(runtime.Tenant, units, runtime.Clock, new(locks), Repository<NotificationDispatch>(db), Repository<NotificationIntent>(db),
+			Repository<NotificationInboxItem>(db), users, runtime.Queries, runtime.Guids, new([], config));
 	}
 
 	private async Task AssertCommittedAsync(Work work)

@@ -13,8 +13,8 @@ public sealed class NotificationInboxItemConfiguration : IEntityTypeConfiguratio
 		builder.Property(x => x.ContextKey).IsRequired().HasMaxLength(192);
 		builder.Property(x => x.LogicalKey).IsRequired().HasMaxLength(128);
 		builder.Property(x => x.Title).IsRequired().HasMaxLength(256);
-		builder.Property(x => x.Body).IsRequired().HasMaxLength(4000);
-		builder.Property(x => x.RelativeLink).IsRequired().HasMaxLength(1000);
+		builder.Property(x => x.Body).IsRequired().HasMaxLength(NotificationInboxItem.MaximumBodyLength);
+		builder.Property(x => x.RelativeLink).IsRequired().HasMaxLength(NotificationInboxItem.MaximumLinkLength);
 		builder.HasIndex(x => new { x.TenantId, x.UserId, x.LogicalKey, x.ContextKey }).IsUnique()
 			.HasDatabaseName("UX_NotificationInbox_User_Context_Logical");
 		builder.HasIndex(x => new { x.TenantId, x.UserId, x.ReadAt, x.CreationTime });

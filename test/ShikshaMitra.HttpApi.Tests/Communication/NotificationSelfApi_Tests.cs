@@ -36,11 +36,13 @@ public partial class NotificationSelfApi_Tests(ShikshaMitraApiTestFactory factor
 	}
 
 	[Fact]
-	public void The_host_resolves_the_existing_email_service_through_the_academic_smtp_sender()
+	public void The_host_resolves_the_academic_smtp_and_inbox_senders()
 	{
 		using var scope = Factory.Services.CreateScope();
 		scope.ServiceProvider.GetServices<INotificationChannelSender>().Single(x => x.Channel == CommunicationChannelType.Email)
 			.ShouldBeOfType<SmtpNotificationChannelSender>();
+		scope.ServiceProvider.GetServices<INotificationChannelSender>().Single(x => x.Channel == CommunicationChannelType.InApp)
+			.ShouldBeOfType<InAppNotificationChannelSender>();
 	}
 
 	[Fact]

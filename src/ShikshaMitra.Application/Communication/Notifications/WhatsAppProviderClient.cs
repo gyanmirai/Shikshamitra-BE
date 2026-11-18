@@ -30,7 +30,7 @@ internal sealed record WhatsAppApprovedTemplateMessage(string Destination, strin
 }
 
 [RemoteService(false), DisableAuditing]
-public sealed class WhatsAppProviderClient(IHttpClientFactory clients) : ITransientDependency
+public sealed partial class WhatsAppProviderClient(IHttpClientFactory clients) : ITransientDependency
 {
 	public const string HttpClientName = "AcademicWhatsApp";
 	internal const int MaximumTextParameters = 20;
@@ -99,8 +99,7 @@ public sealed class WhatsAppProviderClient(IHttpClientFactory clients) : ITransi
 		var language = message.LanguageCode;
 		return number is { Length: >= 8 and <= 16 } && number[0] == '+' && number[1] is >= '1' and <= '9' &&
 			number.AsSpan(1).IndexOfAnyExceptInRange('0', '9') < 0 &&
-			message.TemplateName is { Length: > 0 and <= 160 } &&
-			message.TemplateName.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '_') &&
+			ValidTemplateName(message.TemplateName) &&
 			ValidLanguage(language) &&
 			message.Components is { Count: <= 2 } &&
 			message.Components.All(c => c.Type is "header" or "body" && c.Parameters is { Count: > 0 and <= MaximumTextParameters } &&
@@ -118,19 +117,26 @@ public sealed class WhatsAppProviderClient(IHttpClientFactory clients) : ITransi
 
 	private static async Task<string?> ReadMessageIdAsync(HttpContent content, CancellationToken cancellationToken)
 	{
-		if (content.Headers.ContentLength > MaximumResponseBytes) return null;
-		await using var stream = await content.ReadAsStreamAsync(cancellationToken);
-		var buffer = new byte[MaximumResponseBytes + 1];
-		var count = await stream.ReadAtLeastAsync(buffer, buffer.Length, false, cancellationToken);
-		if (count > MaximumResponseBytes) return null;
-		using var payload = JsonDocument.Parse(buffer.AsMemory(0, count));
-		if (payload.RootElement.ValueKind != JsonValueKind.Object ||
+		using var payload = await ReadResponseAsync(content, cancellationToken);
+		if (payload?.RootElement.ValueKind != JsonValueKind.Object ||
 			!payload.RootElement.TryGetProperty("messages", out var messages) || messages.ValueKind != JsonValueKind.Array ||
 			messages.GetArrayLength() != 1 || messages[0].ValueKind != JsonValueKind.Object ||
 			!messages[0].TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.String) return null;
 		var messageId = id.GetString();
 		return ValidMessageId(messageId) ? messageId : null;
 	}
+
+	private static async Task<JsonDocument?> ReadResponseAsync(HttpContent content, CancellationToken cancellationToken)
+	{
+		if (content.Headers.ContentLength > MaximumResponseBytes) return null;
+		await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+		var buffer = new byte[MaximumResponseBytes + 1];
+		var count = await stream.ReadAtLeastAsync(buffer, buffer.Length, false, cancellationToken);
+		return count > MaximumResponseBytes ? null : JsonDocument.Parse(buffer.AsMemory(0, count));
+	}
+
+	internal static bool ValidTemplateName(string? name) => name is { Length: > 0 and <= 160 } &&
+		name.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '_');
 
 	private static TimeSpan? ReadRetryAfter(HttpResponseMessage response)
 	{

@@ -24,9 +24,12 @@ public sealed class NotificationSendReviewConfiguration : IEntityTypeConfigurati
 		NotificationMapping.Configure(builder, "NotificationSendReviews");
 		builder.Property(x => x.Digest).IsRequired().HasMaxLength(128);
 		builder.Property(x => x.IdempotencyKey).HasMaxLength(192);
+		builder.Property(x => x.ProtectedRequest).HasMaxLength(NotificationSendReview.MaximumProtectedRequestLength);
 		builder.HasIndex(x => new { x.TenantId, x.ActorUserId, x.IdempotencyKey }).IsUnique()
 			.HasFilter("\"IdempotencyKey\" IS NOT NULL").HasDatabaseName("UX_NotificationReviews_Tenant_Actor_Request");
 		builder.HasIndex(x => x.ExpiresAt);
+		builder.HasIndex(x => new { x.TenantId, x.OperationId }).IsUnique()
+			.HasFilter("\"OperationId\" IS NOT NULL").HasDatabaseName("UX_NotificationReviews_Tenant_Operation");
 	}
 }
 

@@ -15,6 +15,8 @@ public static class NotificationErrorCodes
 	public const string UnknownAcceptance = "Communication:Notification:UnknownAcceptance";
 	public const string TemplateImmutable = "Communication:Notification:TemplateImmutable";
 	public const string ReviewConsumed = "Communication:Notification:ReviewConsumed";
+	public const string ReviewInvalid = "Communication:Notification:ReviewInvalid";
+	public const string ApprovalSetupRequired = "Communication:Notification:ApprovalSetupRequired";
 	public const string TenantRequired = "Communication:Notification:TenantRequired";
 	public const string UseWorkflow = "Communication:Notification:UseNotificationWorkflow";
 	public const string PushEndpointInvalid = "Communication:Notification:PushEndpointInvalid";

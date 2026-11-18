@@ -13,7 +13,7 @@ public partial class NotificationIntent
 	public DateTimeOffset? PlanningCompletedAt { get; private set; }
 	public void BindAutomaticOperation(Guid operationId)
 	{
-		NotificationRuntimeGuard.State(operationId != Guid.Empty && !CampaignId.HasValue && Origin == NotificationIntentOrigin.Automatic &&
+		NotificationRuntimeGuard.State(operationId != Guid.Empty && RuleId.HasValue && !CampaignId.HasValue && Origin == NotificationIntentOrigin.Automatic &&
 			Status is NotificationIntentState.Ready or NotificationIntentState.Scheduled);
 		CampaignId = operationId; ConcurrencyStamp = Guid.NewGuid().ToString("N");
 	}
@@ -30,7 +30,7 @@ public partial class NotificationIntent
 		NotificationRuntimeGuard.Snapshot(configurationJson);
 		NotificationRuntimeGuard.State(Enum.IsDefined(origin) && (origin == NotificationIntentOrigin.ReviewedManual
 			? manualCampaignId.HasValue && manualCampaignId != Guid.Empty && ActorUserId.HasValue && ActorUserId != Guid.Empty
-			: !manualCampaignId.HasValue));
+			: RuleId.HasValue && !manualCampaignId.HasValue));
 		RuleConfigurationJson = configurationJson; Origin = origin;
 		if (manualCampaignId.HasValue) CampaignId = manualCampaignId;
 		ConcurrencyStamp = Guid.NewGuid().ToString("N");

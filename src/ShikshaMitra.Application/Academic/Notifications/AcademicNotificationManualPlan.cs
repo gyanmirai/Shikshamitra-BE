@@ -36,14 +36,7 @@ public sealed class AcademicNotificationManualPlanner(AcademicNotificationCatalo
 		if (!snapshot.IsEligible || snapshot.ExpiresAt <= now)
 			return new([], AcademicNotificationRulePreview.Summarize(channels, [], [], [],
 				[snapshot.ExclusionCode ?? NotificationErrorCodes.SourceUnavailable]), false);
-		if (snapshot.EligibleRecipients == null || snapshot.EligibleRecipients.Count > 10000)
-			throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
-
-		var sourceRoster = snapshot.EligibleRecipients.ToHashSet();
-		if (input.SelectedRecipients.Any(x => !sourceRoster.Contains(x))) throw new AbpAuthorizationException();
-		var sourceContext = new NotificationIntentContext(Guid.Empty, context.TenantId, input.EventKey, input.SourceType,
-			input.SourceId, snapshot.SourceRevision, now, input.SelectedRecipients);
-		var partitions = partitioner.Partition(sourceContext, definition, snapshot);
+		var partitions = await ReadAuthorizedPartitionsAsync(input, context, definition, now, cancellationToken);
 		var email = await evaluator.FindEmailProviderAsync(channels, cancellationToken);
 
 		var results = new List<AcademicNotificationManualPartition>();
@@ -52,8 +45,6 @@ public sealed class AcademicNotificationManualPlanner(AcademicNotificationCatalo
 		foreach (var group in partitions.GroupBy(x => x.Scope))
 		{
 			var scope = group.Key;
-			await scopeAccess.RequireAsync(new(scope.AcademicYearId, scope.BoardId, scope.MediumId, scope.ClassId, scope.DivisionId),
-				context.TenantId, context.Scope, cancellationToken);
 			var rule = await rules.ResolveAsync(input.EventKey, scope, cancellationToken);
 			var configured = rule != null && rule.ConfigurationJson != "{}"
 				? codec.Deserialize(rule.ConfigurationJson, definition, allowNoTemplates: !rule.IsEnabled) : null;
@@ -94,6 +85,31 @@ public sealed class AcademicNotificationManualPlanner(AcademicNotificationCatalo
 		var requiresApproval = summary.EligibleRecipientCount > 100 ||
 			await HasApprovalRuleAsync(context.TenantId, channels, summary.EligibleRecipientCount, cancellationToken);
 		return new(results, summary, requiresApproval);
+	}
+
+	internal async Task EnsureScopeAsync(PreviewAcademicNotificationManualDto input, AcademicNotificationAccessContext context,
+		CancellationToken cancellationToken)
+	{
+		if (context.Source.IsEligible)
+			await ReadAuthorizedPartitionsAsync(input, context, catalogue.Get(input.EventKey), DateTimeOffset.UtcNow, cancellationToken);
+	}
+
+	private async Task<IReadOnlyList<NotificationSourcePartition>> ReadAuthorizedPartitionsAsync(
+		PreviewAcademicNotificationManualDto input, AcademicNotificationAccessContext context,
+		NotificationEventDefinition definition, DateTimeOffset now, CancellationToken cancellationToken)
+	{
+		var snapshot = context.Source;
+		if (snapshot.EligibleRecipients == null || snapshot.EligibleRecipients.Count > 10000)
+			throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
+		var sourceRoster = snapshot.EligibleRecipients.ToHashSet();
+		if (input.SelectedRecipients.Any(x => !sourceRoster.Contains(x))) throw new AbpAuthorizationException();
+		var sourceContext = new NotificationIntentContext(Guid.Empty, context.TenantId, input.EventKey, input.SourceType,
+			input.SourceId, snapshot.SourceRevision, now, input.SelectedRecipients);
+		var partitions = partitioner.Partition(sourceContext, definition, snapshot);
+		foreach (var scope in partitions.Select(x => x.Scope).Distinct())
+			await scopeAccess.RequireAsync(new(scope.AcademicYearId, scope.BoardId, scope.MediumId, scope.ClassId, scope.DivisionId),
+				context.TenantId, context.Scope, cancellationToken);
+		return partitions;
 	}
 
 	private static CommunicationChannelType[] ValidateRequest(PreviewAcademicNotificationManualDto input, NotificationEventDefinition definition)

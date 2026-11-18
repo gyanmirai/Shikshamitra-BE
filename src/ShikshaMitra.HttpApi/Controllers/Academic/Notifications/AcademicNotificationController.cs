@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -42,4 +43,20 @@ public class AcademicNotificationController(IAcademicNotificationCatalogueAppSer
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Send)]
 	public Task<AcademicNotificationManualPreviewDto> PreviewManualAsync([FromBody] PreviewAcademicNotificationManualDto input,
 		CancellationToken cancellationToken) => manual.PreviewAsync(input, cancellationToken);
+
+	[HttpPost("manual/send")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Send)]
+	public async Task<ActionResult<AcademicNotificationOperationDto>> SendManualAsync(
+		[FromBody] ConfirmAcademicNotificationManualDto input, CancellationToken cancellationToken) =>
+		Accepted(await manual.SendAsync(input, cancellationToken));
+
+	[HttpPost("operations/{id:guid}/approve")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Add)]
+	public Task<AcademicNotificationOperationDto> ApproveManualAsync(Guid id, CancellationToken cancellationToken) =>
+		manual.ApproveAsync(id, cancellationToken);
+
+	[HttpPost("operations/{id:guid}/reject")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Add)]
+	public Task<AcademicNotificationOperationDto> RejectManualAsync(Guid id, CancellationToken cancellationToken) =>
+		manual.RejectAsync(id, cancellationToken);
 }

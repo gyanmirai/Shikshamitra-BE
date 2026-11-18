@@ -11,6 +11,8 @@ public sealed class NotificationIntentConfiguration : IEntityTypeConfiguration<N
 	{
 		NotificationMapping.Configure(builder, "NotificationIntents");
 		builder.ToTable("NotificationIntents", table => table.HasCheckConstraint("CK_NotificationIntent_Origin",
+			"((\"RuleId\" IS NOT NULL AND \"RuleId\" <> '00000000-0000-0000-0000-000000000000' AND \"RuleRevision\" > 0) " +
+			"OR (\"Origin\" = 1 AND \"RuleId\" IS NULL AND \"RuleRevision\" = 0)) AND " +
 			"\"Origin\" IN (0, 1) AND (\"Origin\" = 0 OR (\"CampaignId\" IS NOT NULL AND \"ActorUserId\" IS NOT NULL AND " +
 			"\"CampaignId\" <> '00000000-0000-0000-0000-000000000000' AND \"ActorUserId\" <> '00000000-0000-0000-0000-000000000000'))"));
 		builder.Property(x => x.EventKey).IsRequired().HasMaxLength(160);

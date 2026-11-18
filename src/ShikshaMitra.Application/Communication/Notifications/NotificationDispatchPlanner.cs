@@ -40,7 +40,10 @@ public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWo
 		if (intent.CampaignId is not Guid campaignId ||
 			!await queries.AnyAsync((await campaigns.GetQueryableAsync()).Where(x => x.TenantId == tenantId && x.Id == campaignId &&
 				!x.IsDeleted && x.CampaignType == NotificationCampaignTypes.Academic && x.SourceEntityId == intent.SourceId &&
-				x.SourceEntityType == intent.SourceType), cancellationToken))
+				x.SourceEntityType == intent.SourceType && (intent.Origin != NotificationIntentOrigin.ReviewedManual ||
+					(x.Status == CommunicationCampaignStatus.Queued || x.Status == CommunicationCampaignStatus.Scheduled ||
+						x.Status == CommunicationCampaignStatus.Sending) &&
+					(!x.ApprovalRequired || x.ApprovedByUserId.HasValue && x.ApprovedAt.HasValue))), cancellationToken))
 		{
 			await StopAsync(intent, claim.LeaseId, NotificationIntentState.NeedsReview, "NotificationOperationUnavailable", unit, cancellationToken);
 			return;
@@ -93,6 +96,9 @@ public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWo
 			var evaluated = await policy.EvaluateAsync(intent, source, recipients, now, provider?.ConsentRequired == true, cancellationToken);
 			if (evaluated.ExclusionCode != null) return ([], evaluated.ExclusionCode);
 			var rows = await materializer.PrepareAsync(intent, source, evaluated, provider, cancellationToken);
+			if (intent.Origin == NotificationIntentOrigin.ReviewedManual &&
+				!string.Equals(source.Runtime.ReviewedDeliveryDigest, NotificationDispatchMaterializer.ReviewedDeliveryDigest(rows), StringComparison.Ordinal))
+				return ([], NotificationErrorCodes.ReviewChanged);
 			return (rows, null);
 		}
 		catch (BusinessException error) when (error.Code is NotificationErrorCodes.EventUnknown or NotificationErrorCodes.TemplateInvalid or

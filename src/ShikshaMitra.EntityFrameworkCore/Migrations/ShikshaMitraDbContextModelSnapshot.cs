@@ -8520,7 +8520,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("character varying(65536)")
                         .HasDefaultValue("{}");
 
-                    b.Property<Guid>("RuleId")
+                    b.Property<Guid?>("RuleId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("RuleRevision")
@@ -8566,7 +8566,7 @@ namespace ShikshaMitra.Migrations
 
                     b.ToTable("NotificationIntents", null, t =>
                         {
-                            t.HasCheckConstraint("CK_NotificationIntent_Origin", "\"Origin\" IN (0, 1) AND (\"Origin\" = 0 OR (\"CampaignId\" IS NOT NULL AND \"ActorUserId\" IS NOT NULL AND \"CampaignId\" <> '00000000-0000-0000-0000-000000000000' AND \"ActorUserId\" <> '00000000-0000-0000-0000-000000000000'))");
+                            t.HasCheckConstraint("CK_NotificationIntent_Origin", "((\"RuleId\" IS NOT NULL AND \"RuleId\" <> '00000000-0000-0000-0000-000000000000' AND \"RuleRevision\" > 0) OR (\"Origin\" = 1 AND \"RuleId\" IS NULL AND \"RuleRevision\" = 0)) AND \"Origin\" IN (0, 1) AND (\"Origin\" = 0 OR (\"CampaignId\" IS NOT NULL AND \"ActorUserId\" IS NOT NULL AND \"CampaignId\" <> '00000000-0000-0000-0000-000000000000' AND \"ActorUserId\" <> '00000000-0000-0000-0000-000000000000'))");
                         });
                 });
 
@@ -8934,6 +8934,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("ActorUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AssignedApproverUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -8994,6 +8997,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("OperationId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ProtectedRequest")
+                        .HasMaxLength(4000000)
+                        .HasColumnType("character varying(4000000)");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
@@ -9003,6 +9010,11 @@ namespace ShikshaMitra.Migrations
                     b.HasAlternateKey("TenantId", "Id");
 
                     b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("TenantId", "OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_NotificationReviews_Tenant_Operation")
+                        .HasFilter("\"OperationId\" IS NOT NULL");
 
                     b.HasIndex("TenantId", "ActorUserId", "IdempotencyKey")
                         .IsUnique()
@@ -40874,8 +40886,7 @@ namespace ShikshaMitra.Migrations
                         .WithMany()
                         .HasForeignKey("TenantId", "RuleId")
                         .HasPrincipalKey("TenantId", "Id")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Communication.Notifications.NotificationProviderEvent", b =>

@@ -28,6 +28,8 @@ public sealed class NotificationIntentSourceReader(ICurrentTenant tenant, IEnume
 			throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
 		var definition = matchingDefinitions[0];
 		var runtime = snapshots.Deserialize(intent.RuleConfigurationJson, definition);
+		if ((intent.Origin == NotificationIntentOrigin.ReviewedManual) != (runtime.ReviewedDeliveryDigest != null))
+			throw new BusinessException(NotificationErrorCodes.RuntimeSnapshotInvalid);
 		var captured = NotificationRuntimeJson.Deserialize<NotificationRecipientRefDto[]>(
 			intent.AffectedRecipientsJson, NotificationErrorCodes.RuntimeSnapshotInvalid);
 		if (captured.Length is 0 or > 100 || captured.Distinct().Count() != captured.Length ||

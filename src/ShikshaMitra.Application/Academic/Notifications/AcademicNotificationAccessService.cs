@@ -43,8 +43,28 @@ public sealed class AcademicNotificationAccessService(ICurrentTenant tenant, ICu
 	private async Task<AcademicNotificationAccessContext> RequireSourceAsync(string eventKey, string sourceType, Guid sourceId,
 		string permission, CancellationToken cancellationToken)
 	{
-		var (tenantId, actorId, scope) = await AcademicNotificationIdentityAccess.RequireAsync(tenant, current, users,
-			scopes, permissions, permission, cancellationToken);
+		var identity = await RequireIdentityAsync(permission, cancellationToken);
+		return await LoadAuthorizedSourceAsync(eventKey, sourceType, sourceId, identity, cancellationToken);
+	}
+
+	internal Task<(Guid TenantId, Guid ActorId, UserScopeContext Scope)> RequireManualSenderAsync(CancellationToken cancellationToken) =>
+		RequireIdentityAsync(ShikshaMitraSubmodulePermissions.Academics.Notification.Send, cancellationToken);
+
+	internal Task<(Guid TenantId, Guid ActorId, UserScopeContext Scope)> RequireManualApproverAsync(CancellationToken cancellationToken) =>
+		RequireIdentityAsync(ShikshaMitraSubmodulePermissions.Academics.Notification.Add, cancellationToken);
+
+	internal Task<AcademicNotificationAccessContext> LoadManualSourceAsync(PreviewAcademicNotificationManualDto input,
+		(Guid TenantId, Guid ActorId, UserScopeContext Scope) identity, CancellationToken cancellationToken) =>
+		LoadAuthorizedSourceAsync(input.EventKey, input.SourceType, input.SourceId, identity, cancellationToken);
+
+	private Task<(Guid TenantId, Guid ActorId, UserScopeContext Scope)> RequireIdentityAsync(string permission,
+		CancellationToken cancellationToken) => AcademicNotificationIdentityAccess.RequireAsync(tenant, current, users,
+		scopes, permissions, permission, cancellationToken);
+
+	private async Task<AcademicNotificationAccessContext> LoadAuthorizedSourceAsync(string eventKey, string sourceType, Guid sourceId,
+		(Guid TenantId, Guid ActorId, UserScopeContext Scope) identity, CancellationToken cancellationToken)
+	{
+		var (tenantId, actorId, scope) = identity;
 		var definition = catalogue.Get(eventKey);
 		if (sourceType != definition.SourceType || sourceId == Guid.Empty)
 			throw new BusinessException(NotificationErrorCodes.RecipientIneligible);

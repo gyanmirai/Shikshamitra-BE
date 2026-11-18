@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -45,18 +46,20 @@ public class AcademicNotificationPreviewApiFactory : ShikshaMitraApiTestFactory
 	internal static readonly Guid TenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 	internal static readonly Guid StudentId = Guid.NewGuid();
 	internal static readonly Guid SiblingDivision = Guid.NewGuid();
+	internal static readonly Guid ApproverId = Guid.NewGuid();
+	internal Guid ActiveSourceId { get; set; } = SourceId;
 	internal string SourceRevision { get; set; } = "homework-v1";
 	internal string PrimaryEmail { get; set; } = "private@example.invalid";
 	internal Guid[] AdditionalStudents { get; set; } = [];
-	private static readonly Dictionary<string, (Guid User, Guid Link, Guid Association)> AccountIds =
-		new[] { "mother", "father", "self" }.ToDictionary(x => x, _ => (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
+	private readonly ConcurrentDictionary<(Guid Student, string Relationship), (Guid User, Guid Link, Guid Association)> _accountIds = new();
 
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
 	{
 		base.ConfigureWebHost(builder);
 		builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
 		{
-			["App:ClientUrl"] = "https://school.example.invalid"
+			["App:ClientUrl"] = "https://school.example.invalid",
+			[$"Notifications:Academic:Tenants:{TenantId:N}:ApproverUserId"] = ApproverId.ToString()
 		}));
 		builder.ConfigureTestServices(services =>
 		{
@@ -74,14 +77,14 @@ public class AcademicNotificationPreviewApiFactory : ShikshaMitraApiTestFactory
 
 		public Task EnsureCanSendAsync(string eventKey, Guid sourceId, CancellationToken cancellationToken)
 		{
-			if (sourceId != SourceId) throw new AbpAuthorizationException();
+			if (sourceId != factory.ActiveSourceId) throw new AbpAuthorizationException();
 			return Task.CompletedTask;
 		}
 
 		public Task<NotificationSourceSnapshot> LoadAsync(NotificationIntentContext context, CancellationToken cancellationToken)
 		{
 			context.TenantId.ShouldBe(TenantId);
-			context.SourceId.ShouldBe(SourceId);
+			context.SourceId.ShouldBe(factory.ActiveSourceId);
 			var scoped = new NotificationSourceScopeDto(factory.SeededAcademicYearId, factory.SeededBoardId, factory.SeededMediumId,
 				factory.SeededStandardId, factory.SeededDivisionId);
 			var child = new NotificationRecipientRefDto("Student", StudentId);
@@ -124,9 +127,9 @@ public class AcademicNotificationPreviewApiFactory : ShikshaMitraApiTestFactory
 				[Link(studentId, "guardian", "mother"), Link(studentId, "guardian", "father"), Link(studentId, "student", "self")]);
 		}
 
-		private static AcademicNotificationAccount Link(Guid studentId, string accountType, string relationship)
+		private AcademicNotificationAccount Link(Guid studentId, string accountType, string relationship)
 		{
-			var ids = studentId == StudentId ? AccountIds[relationship] : (User: Guid.NewGuid(), Link: Guid.NewGuid(), Association: Guid.NewGuid());
+			var ids = factory._accountIds.GetOrAdd((studentId, relationship), _ => (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
 			var user = new IdentityUser(ids.User, relationship, "private@example.invalid", TenantId);
 			return new(new StudentPortalAccountLink(ids.Link, TenantId, studentId, user.Id, accountType, relationship, ids.Association)
 				{ ConcurrencyStamp = "preview-fixture" }, user);

@@ -144,16 +144,13 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 			CommunicationChannelType.WhatsApp => whatsAppProvider,
 			_ => null
 		};
-		if (intent == null)
+		var reviewFingerprint = intent == null || intent.Origin == NotificationIntentOrigin.ReviewedManual ? Hash(new
 		{
-			var reviewFingerprint = Hash(new
-			{
-				recipient.SourceRecipient, recipient.Recipient, recipient.AssociationRevision, recipient.Channel,
-				TemplateRevisionId = revision.Id, providerSettingId, BindingId = binding?.Id, pushDeviceId,
-				rendered.ContentHash, rendered.LinkUrl
-			});
-			return new(recipient, revision.LanguageCode, null, null, providerSettingId, reviewFingerprint);
-		}
+			recipient.SourceRecipient, recipient.Recipient, recipient.AssociationRevision, recipient.Channel,
+			TemplateRevisionId = revision.Id, providerSettingId, BindingId = binding?.Id, pushDeviceId,
+			rendered.ContentHash, rendered.LinkUrl
+		}) : null;
+		if (intent == null) return new(recipient, revision.LanguageCode, null, null, providerSettingId, reviewFingerprint);
 
 		var identity = Identity(decision);
 		var context = Hash(new { intent.Id, identity.RecipientFamily, identity.StudentId, identity.UserId, recipient.Recipient.FamilyRelationship });
@@ -177,7 +174,7 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 		var expiresAt = !source.ExpiresAt.HasValue || intent.ExpiresAt < source.ExpiresAt ? intent.ExpiresAt : source.ExpiresAt;
 		var dispatch = new NotificationDispatch(id, tenantId, intent.Id, revision.Id, reference, context, recipient.Channel,
 			fingerprint, encrypted, rendered.ContentHash!, deduplicationKey, decision.DueAt!.Value, expiresAt);
-		return new(recipient, revision.LanguageCode, dispatch, null, providerSettingId);
+		return new(recipient, revision.LanguageCode, dispatch, null, providerSettingId, reviewFingerprint);
 
 		NotificationPreparedDispatch Exclude(string code) => new(recipient, decision.LanguageCode, null, code);
 	}
@@ -199,6 +196,9 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 		"StudentAccount" => "Student",
 		_ => "Staff member"
 	};
+
+	internal static string ReviewedDeliveryDigest(IEnumerable<NotificationPreparedDispatch> rows) =>
+		Hash(rows.Select(x => x.ReviewFingerprint).OfType<string>().Order(StringComparer.Ordinal).ToArray());
 
 	private static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
 }

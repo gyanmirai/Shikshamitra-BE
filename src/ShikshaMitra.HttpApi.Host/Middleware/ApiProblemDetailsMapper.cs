@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using ShikshaMitra.HR;
+using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Security.Roles;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.Finance.Fees.Collections;
@@ -20,6 +21,8 @@ public static class ApiProblemDetailsMapper
 
 		return errorCode switch
 		{
+			NotificationErrorCodes.ReviewChanged or NotificationErrorCodes.ReviewExpired or NotificationErrorCodes.ReviewConsumed or
+			NotificationErrorCodes.ApprovalSetupRequired => StatusCodes.Status409Conflict,
 			Academic.Curriculum.ElectivePreferenceErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionJourneyResumeErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionFormCorrectionErrorCodes.Conflict => StatusCodes.Status409Conflict,

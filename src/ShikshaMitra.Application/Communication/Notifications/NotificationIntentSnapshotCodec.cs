@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 
@@ -19,6 +20,8 @@ public sealed class NotificationIntentSnapshotCodec(NotificationRuleConfiguratio
 	private void Validate(NotificationIntentRuntimeSnapshot? snapshot, NotificationEventDefinition definition)
 	{
 		if (snapshot?.SchemaVersion != 1 || snapshot.SourceScope == null || snapshot.Configuration == null) throw Invalid();
+		if (snapshot.ReviewedDeliveryDigest != null && (snapshot.ReviewedDeliveryDigest.Length != 64 ||
+			!snapshot.ReviewedDeliveryDigest.All(Uri.IsHexDigit) || snapshot.DueOccurrenceAt.HasValue)) throw Invalid();
 		if (snapshot.DueOccurrenceAt.HasValue && (definition.TriggerType != NotificationTriggerType.Due ||
 			snapshot.DueOccurrenceAt.Value == default)) throw Invalid();
 		try

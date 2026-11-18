@@ -7,7 +7,7 @@ namespace ShikshaMitra.Communication.Notifications;
 public partial class NotificationIntent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	public Guid RuleId { get; private set; }
+	public Guid? RuleId { get; private set; }
 	public int RuleRevision { get; private set; }
 	public string EventKey { get; private set; } = string.Empty;
 	public string SourceType { get; private set; } = string.Empty;
@@ -30,11 +30,21 @@ public partial class NotificationIntent : FullAuditedAggregateRoot<Guid>, IMulti
 	public NotificationIntent(Guid id, Guid tenantId, Guid ruleId, int ruleRevision, string eventKey,
 		string sourceType, Guid sourceId, string sourceRevision, string deduplicationKey,
 		DateTimeOffset occurredAt, DateTimeOffset dueAt, string affectedRecipientsJson,
-		string templateRevisionIdsJson, DateTimeOffset? expiresAt = null, Guid? actorUserId = null) : base(id)
+		string templateRevisionIdsJson, DateTimeOffset? expiresAt = null, Guid? actorUserId = null)
+		: this(id, tenantId, (Guid?)NotificationDataGuard.Identifier(ruleId, nameof(ruleId)), ruleRevision, eventKey, sourceType,
+			sourceId, sourceRevision, deduplicationKey, occurredAt, dueAt, affectedRecipientsJson, templateRevisionIdsJson,
+			expiresAt, actorUserId)
+	{
+	}
+
+	private NotificationIntent(Guid id, Guid tenantId, Guid? ruleId, int ruleRevision, string eventKey,
+		string sourceType, Guid sourceId, string sourceRevision, string deduplicationKey,
+		DateTimeOffset occurredAt, DateTimeOffset dueAt, string affectedRecipientsJson,
+		string templateRevisionIdsJson, DateTimeOffset? expiresAt, Guid? actorUserId) : base(id)
 	{
 		TenantId = NotificationDataGuard.Identifier(tenantId, nameof(tenantId));
-		RuleId = NotificationDataGuard.Identifier(ruleId, nameof(ruleId));
-		if (ruleRevision < 1) throw new ArgumentOutOfRangeException(nameof(ruleRevision));
+		RuleId = ruleId.HasValue ? NotificationDataGuard.Identifier(ruleId.Value, nameof(ruleId)) : null;
+		if (ruleId.HasValue ? ruleRevision < 1 : ruleRevision != 0) throw new ArgumentOutOfRangeException(nameof(ruleRevision));
 		RuleRevision = ruleRevision;
 		EventKey = NotificationDataGuard.Text(eventKey, nameof(eventKey), 160);
 		SourceType = NotificationDataGuard.Text(sourceType, nameof(sourceType), 80);
@@ -48,5 +58,16 @@ public partial class NotificationIntent : FullAuditedAggregateRoot<Guid>, IMulti
 		ExpiresAt = expiresAt?.ToUniversalTime();
 		ActorUserId = actorUserId;
 		Status = DueAt > OccurredAt ? NotificationIntentState.Scheduled : NotificationIntentState.Ready;
+	}
+
+	public static NotificationIntent CreateReviewedManual(Guid id, Guid tenantId, Guid? ruleId, int ruleRevision,
+		string eventKey, string sourceType, Guid sourceId, string sourceRevision, string deduplicationKey,
+		DateTimeOffset now, string affectedRecipientsJson, string templateRevisionIdsJson,
+		DateTimeOffset? expiresAt, Guid actorId, Guid operationId, string runtimeSnapshot)
+	{
+		var intent = new NotificationIntent(id, tenantId, ruleId, ruleRevision, eventKey, sourceType, sourceId,
+			sourceRevision, deduplicationKey, now, now, affectedRecipientsJson, templateRevisionIdsJson, expiresAt, actorId);
+		intent.BindRuntimeSnapshot(runtimeSnapshot, NotificationIntentOrigin.ReviewedManual, operationId);
+		return intent;
 	}
 }

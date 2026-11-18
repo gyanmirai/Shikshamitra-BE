@@ -133,6 +133,8 @@ The authenticated API fixture covers catalogue response fields, template initial
 The source fixture exercises sibling-division exclusion, primary and optional family selection, source authorization and the ready-delivery count. It verifies that preview neither stores work nor returns actual recipient identities, contacts, or source text.
 Manual preview tests check independent View and Send grants, source-bound selections, the persisted expiry and digest, contact and source changes, and the approval threshold. The test verifies that a review creates no campaign or queued intent.
 
+Confirmation tests exercise Send without Add, exact replay, stale and expired reviews, approval and rejection, self-approval denial and the worker's delivery check after confirmation. Run the PostgreSQL test `ReviewedAcademicNotificationMigrationPostgres_Tests` with the local notification test database to verify that migration preserves existing automatic work and allows reviewed manual work without an automatic rule.
+
 ## Website push checks
 
 Run the backend delivery, subscription protection and authenticated registration tests from the backend repository.

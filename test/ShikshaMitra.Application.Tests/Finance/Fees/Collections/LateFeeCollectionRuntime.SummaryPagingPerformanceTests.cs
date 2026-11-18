@@ -50,6 +50,11 @@ public partial class LateFeeCollectionRuntime_Tests
 				dueReads.ShouldNotBeEmpty();
 				dueReads.ShouldAllBe(read => !read.Parameters.Contains(offPageStudentId.ToString(), StringComparison.OrdinalIgnoreCase),
 					"The first page must not hydrate dues belonging only to another page.");
+				var studentTable = db.Model.FindEntityType(typeof(ShikshaMitra.Students.Student))!.GetTableName()!;
+				reads.Details.ShouldContain(read => read.Sql.Contains($"\"{studentTable}\"", StringComparison.Ordinal)
+					&& read.Sql.Contains("FirstName", StringComparison.Ordinal)
+					&& read.Sql.Contains("LIMIT", StringComparison.OrdinalIgnoreCase),
+					"The summary must page payer identities in the database before hydrating them.");
 			});
 		}
 	}

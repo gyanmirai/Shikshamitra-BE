@@ -170,7 +170,7 @@ public class ConcessionPolicyAppService(
 			dto.IsUsedInDownstream = usedIds.Contains(x.Id);
 			return dto;
 		}).ToList();
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "concession", items);
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "concession", items, AsyncExecuter);
 		return new PagedResultDto<ConcessionPolicyDto>(total, items);
 	}
 
@@ -180,7 +180,7 @@ public class ConcessionPolicyAppService(
 		var entity = await GetRequiredAsync(id);
 		var dto = ConcessionPolicyMapping.ToDto(entity);
 		dto.IsUsedInDownstream = (await GetUsedIdsAsync([id])).Contains(id);
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "concession", new[] { dto });
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "concession", new[] { dto }, AsyncExecuter);
 		return dto;
 	}
 

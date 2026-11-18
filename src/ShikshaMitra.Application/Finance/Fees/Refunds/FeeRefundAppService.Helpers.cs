@@ -3,13 +3,17 @@ using ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Students;
+using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.Constants.Permissions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Fees.FeeRefund;
 
@@ -18,6 +22,7 @@ public partial class FeeRefundAppService
 	private sealed class RefundStudentSummary
 	{
 		public Guid Id { get; init; }
+		public Guid? AcademicYearId { get; init; }
 		public string? FirstName { get; init; }
 		public string? MiddleName { get; init; }
 		public string? LastName { get; init; }
@@ -42,7 +47,7 @@ public partial class FeeRefundAppService
 			.Where(s => ids.Contains(s.Id))
 			.Select(s => new RefundStudentSummary
 			{
-				Id = s.Id, FirstName = s.FirstName, MiddleName = s.MiddleName,
+				Id = s.Id, AcademicYearId = s.AcademicYearId, FirstName = s.FirstName, MiddleName = s.MiddleName,
 				LastName = s.LastName, GrNo = s.GrNo, RollNo = s.RollNo,
 				StandardId = s.StandardId, DivisionId = s.DivisionId,
 				StandardName = s.Standard == null ? null : s.Standard.Name,
@@ -54,6 +59,70 @@ public partial class FeeRefundAppService
 				AcademicMediumName = s.AcademicMedium == null ? null : s.AcademicMedium.Name
 			}));
 		return students.ToDictionary(s => s.Id);
+	}
+
+	private sealed class RefundYearPlacement
+	{
+		public Guid StudentId { get; init; }
+		public Guid AcademicYearId { get; init; }
+		public Guid BoardId { get; init; }
+		public string BoardName { get; init; } = "";
+		public Guid MediumId { get; init; }
+		public string MediumName { get; init; } = "";
+		public Guid StandardId { get; init; }
+		public string StandardName { get; init; } = "";
+		public Guid? DivisionId { get; init; }
+		public string? DivisionName { get; init; }
+		public int? RollNumber { get; init; }
+	}
+
+	private async Task<Dictionary<(Guid StudentId, Guid YearId), RefundYearPlacement>> BuildRefundYearPlacementsAsync(
+		IEnumerable<FeeRefundRequest> requests, Dictionary<Guid, RefundStudentSummary> students)
+	{
+		var historic = requests.Where(r => r.StudentId.HasValue &&
+			students.GetValueOrDefault(r.StudentId.Value)?.AcademicYearId != r.AcademicYearId).ToArray();
+		if (historic.Length == 0) return [];
+		var studentIds = historic.Select(r => r.StudentId!.Value).Distinct().ToArray();
+		var yearIds = historic.Select(r => r.AcademicYearId).Distinct().ToArray();
+		var enrollments = await LazyServiceProvider.LazyGetRequiredService<IRepository<StudentEnrollment, Guid>>().GetQueryableAsync();
+		var standards = await LazyServiceProvider.LazyGetRequiredService<IRepository<Standard, Guid>>().GetQueryableAsync();
+		var divisions = await LazyServiceProvider.LazyGetRequiredService<IRepository<Division, Guid>>().GetQueryableAsync();
+		var placements = await AsyncExecuter.ToListAsync(
+			from enrollment in enrollments
+			join standard in standards on enrollment.StandardId equals (Guid?)standard.Id
+			join division in divisions on enrollment.DivisionId equals (Guid?)division.Id into divisionMatches
+			from division in divisionMatches.DefaultIfEmpty()
+			where studentIds.Contains(enrollment.StudentId) && yearIds.Contains(enrollment.AcademicYearId) &&
+				standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId == enrollment.AcademicYearId
+			select new RefundYearPlacement
+			{
+				StudentId = enrollment.StudentId, AcademicYearId = enrollment.AcademicYearId,
+				BoardId = standard.EducationMediumStage.EducationMedium.EducationBoardId,
+				BoardName = standard.EducationMediumStage.EducationMedium.EducationBoard.Type.ToString(),
+				MediumId = standard.EducationMediumStage.EducationMediumId,
+				MediumName = standard.EducationMediumStage.EducationMedium.Name,
+				StandardId = standard.Id, StandardName = standard.Name,
+				DivisionId = enrollment.DivisionId, DivisionName = division == null ? null : division.Name,
+				RollNumber = enrollment.RollNumber
+			});
+		return placements.GroupBy(p => (p.StudentId, p.AcademicYearId))
+			.ToDictionary(g => g.Key, g => g.First());
+	}
+
+	private static void ApplyRefundYearPlacement(FeeRefundRequestDto dto, FeeRefundRequest request,
+		Dictionary<(Guid StudentId, Guid YearId), RefundYearPlacement> placements)
+	{
+		if (!request.StudentId.HasValue ||
+			!placements.TryGetValue((request.StudentId.Value, request.AcademicYearId), out var placement)) return;
+		dto.BoardId = placement.BoardId;
+		dto.BoardName = placement.BoardName;
+		dto.EducationMediumId = placement.MediumId;
+		dto.EducationMediumName = placement.MediumName;
+		dto.StandardId = placement.StandardId;
+		dto.StandardName = placement.StandardName;
+		dto.DivisionId = placement.DivisionId;
+		dto.DivisionName = placement.DivisionName;
+		dto.StudentRollNo = placement.RollNumber;
 	}
 
 	private async Task<Dictionary<Guid, FinanceFeeAccount>> BuildAccountMapAsync(IEnumerable<Guid?> accountIds)
@@ -167,8 +236,31 @@ public partial class FeeRefundAppService
 		};
 	}
 
-	private async Task FilterAvailableActionsAsync(FeeRefundRequest request, FeeRefundRequestDto dto)
+	private sealed class RefundActionCheckCache
 	{
+		public Dictionary<string, bool> Grants { get; } = new(StringComparer.Ordinal);
+		public bool? IsAdmin { get; set; }
+		public Dictionary<(Guid Maker, Guid Student, Guid Year, string Permission), Guid?> Reviewers { get; } = [];
+	}
+
+	private async Task FilterAvailableActionsAsync(FeeRefundRequest request, FeeRefundRequestDto dto,
+		RefundActionCheckCache? cache = null)
+	{
+		async Task<bool> GrantedAsync(string permission)
+		{
+			if (cache != null && cache.Grants.TryGetValue(permission, out var granted)) return granted;
+			var result = await AuthorizationService.IsGrantedAsync(permission);
+			if (cache != null) cache.Grants[permission] = result;
+			return result;
+		}
+		async Task<bool> IsAdminAsync()
+		{
+			if (!CurrentUser.Id.HasValue) return false;
+			if (cache?.IsAdmin is bool known) return known;
+			var result = await userScopeService.IsAdminUserAsync(CurrentUser.Id.Value);
+			if (cache != null) cache.IsAdmin = result;
+			return result;
+		}
 		var required = new Dictionary<string, string>
 		{
 			["edit"] = ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Edit,
@@ -185,30 +277,34 @@ public partial class FeeRefundAppService
 		{
 			if (action == "edit" && !request.CanEdit) continue;
 			if (!required.TryGetValue(action, out var permission) ||
-				!await AuthorizationService.IsGrantedAsync(permission)) continue;
+				!await GrantedAsync(permission)) continue;
 			if (action == "approve" && request.WorkflowVersion == 1 && request.RefundMethod == "Cash" &&
-				!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Process)) continue;
+				!await GrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Process)) continue;
 			if ((action == "approve" || action == "reject") &&
 				(request.SubmittedByUserId == CurrentUser.Id || request.CreatorId == CurrentUser.Id)) continue;
 			if ((action is "approve" or "reject") && !request.StudentId.HasValue &&
 				(!CurrentUser.Id.HasValue ||
-				 !await userScopeService.IsAdminUserAsync(CurrentUser.Id.Value))) continue;
+				 !await IsAdminAsync())) continue;
 			if ((action is "approve" or "reject") && request.StudentId.HasValue)
 			{
-				if (CurrentUser.Id.HasValue &&
-					await userScopeService.IsAdminUserAsync(CurrentUser.Id.Value))
+				if (await IsAdminAsync())
 				{
 					filtered.Add(action);
 					continue;
 				}
 				var makerId = request.SubmittedByUserId ?? request.CreatorId ?? Guid.Empty;
-				var reviewerId = makerId != Guid.Empty
-					? await financeReviewerAccessService.FindEligibleReviewerAsync(
-						makerId, request.StudentId.Value, request.AcademicYearId,
-						ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View, permission)
-					: null;
+				var reviewerKey = (makerId, request.StudentId.Value, request.AcademicYearId, permission);
+				if (cache == null || !cache.Reviewers.TryGetValue(reviewerKey, out var reviewerId))
+				{
+					reviewerId = makerId != Guid.Empty
+						? await financeReviewerAccessService.FindEligibleReviewerAsync(
+							makerId, request.StudentId.Value, request.AcademicYearId,
+							ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View, permission)
+						: null;
+					if (cache != null) cache.Reviewers[reviewerKey] = reviewerId;
+				}
 				if (reviewerId != CurrentUser.Id && reviewerId != Guid.Empty && !(reviewerId == null && CurrentUser.Id.HasValue &&
-					await userScopeService.IsAdminUserAsync(CurrentUser.Id.Value))) continue;
+					await IsAdminAsync())) continue;
 			}
 			if ((action == "confirmPayout" || action == "failPayout") &&
 				request.Settlements.LastOrDefault()?.InitiatedByUserId == CurrentUser.Id &&
@@ -216,23 +312,6 @@ public partial class FeeRefundAppService
 			filtered.Add(action);
 		}
 		dto.AvailableActions = filtered;
-	}
-
-	private async Task<IQueryable<Guid>> GetVisibleRefundStudentIdsAsync(Guid academicYearId)
-	{
-		var own = await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
-			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
-		var decisionPermission = await AuthorizationService.IsGrantedAsync(
-			ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve)
-			? ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve
-			: await AuthorizationService.IsGrantedAsync(
-				ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reject)
-				? ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reject : null;
-		if (decisionPermission == null) return own;
-		var review = await financeScopeAccessService.GetReviewerScopedStudentIdsQueryAsync(
-			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View,
-			decisionPermission);
-		return own.Union(review);
 	}
 
 	private async Task EnsureRefundVisibleAsync(FeeRefundRequest request)
@@ -251,8 +330,8 @@ public partial class FeeRefundAppService
 
 	private async Task<IQueryable<Guid>> GetVisibleRefundRequestIdsAsync(Guid academicYearId)
 	{
-		var own = await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
-			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
+		var own = await financeScopeAccessService.GetRefundScopedStudentIdsQueryAsync(
+			CurrentUser.Id ?? Guid.Empty, academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
 		var ownAccounts = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
 		var requests = await feeRefundRepository.GetQueryableAsync();
 		var decisionPermission = await AuthorizationService.IsGrantedAsync(
@@ -266,9 +345,9 @@ public partial class FeeRefundAppService
 				((r.StudentId.HasValue && own.Contains(r.StudentId.Value)) ||
 				 (!r.StudentId.HasValue && r.FinanceFeeAccountId.HasValue &&
 					ownAccounts.Contains(r.FinanceFeeAccountId.Value)))).Select(r => r.Id);
-		var review = await financeScopeAccessService.GetReviewerScopedStudentIdsQueryAsync(
-			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View,
-			decisionPermission);
+		var review = await financeScopeAccessService.GetRefundScopedStudentIdsQueryAsync(
+			CurrentUser.Id ?? Guid.Empty, academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View,
+			capTeacherAssignments: false);
 		var reportees = (await financeReviewerAccessService.GetReportingMakerUserIdsAsync(
 			CurrentUser.Id.Value)).ToArray();
 		var familyMakers = await financeReviewerAccessService.GetNonEmployeeMakerIdsQueryAsync();

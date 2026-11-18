@@ -8,6 +8,10 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 public interface IFeeStructureAppService : IApplicationService
 {
+ Task<List<FeeStructureSummaryDto>> GetSummariesAsync(Guid standardId);
+ Task<FeeStructureCreateResponse> GetDetailAsync(Guid id);
+ Task<FeeStructureCatalogueDto> GetCatalogueAsync(Guid feeStructureMetadataId, Guid standardId);
+ Task<FeeStructureTermOptionDto> GetTermScheduleAsync(Guid feeStructureMetadataId, Guid standardId, Guid paymentTermId, Guid versionId);
 	Task<List<FeeStructureCopyPolicyDto>> GetCopyPoliciesAsync(Guid id, Guid feeStructureMetadataId, Guid standardId);
 	Task<FeeStructureContextDto> GetContextAsync(Guid feeStructureMetadataId, Guid standardId);
 	Task<FeeStructureCreateResponse> PatchAsync(Guid id, FeeStructurePatchRequest input);

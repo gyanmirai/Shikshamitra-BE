@@ -353,15 +353,30 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 	}
 
 	[Fact]
-	public async Task Assignment_Changed_Amount_Invalidates_Preview_And_Bulk_Preserves_Valid_Student()
+	public async Task Assignment_Fixed_Amount_Override_Remains_Rejected_Without_Writing_Dues()
 	{
 		using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
-		var input = await ReadyAssignmentAsync();
+		var input = await ReadyAssignmentAsync(amount: 1000m);
 		var service = GetRequiredService<IStudentFeeStructureAppService>();
 		var preview = await service.PreviewAsync(input);
 		input.PreviewToken = preview.PreviewToken;
-		input.OverrideReason = "Approved annual amount change";
 		input.FeeHeadDetails.Add(new() { FeeHeadId = preview.Heads.Single().FeeHeadId, Amount = 800m });
+		(await Should.ThrowAsync<BusinessException>(() => service.PreviewAsync(input))).Code.ShouldBe(AssignmentErrorCodes.InvalidInput);
+		await Should.ThrowAsync<BusinessException>(() => service.AssignAsync(input));
+		(await GetRequiredService<IRepository<DueFee, Guid>>().GetListAsync(d => d.StudentId == input.StudentId)).ShouldBeEmpty();
+	}
+
+	[Fact]
+	public async Task Assignment_Changed_Amount_Invalidates_Preview_And_Bulk_Preserves_Valid_Student()
+	{
+		using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
+		// Amount edits are supported for variable fees; published fixed amounts remain immutable.
+		var (input, headId) = await VariableAssignmentAsync(variable: true, optional: false);
+		input.VariableFeeHeads.Add(new() { FeeHeadId = headId, Amount = 1000m });
+		var service = GetRequiredService<IStudentFeeStructureAppService>();
+		var preview = await service.PreviewAsync(input);
+		input.PreviewToken = preview.PreviewToken;
+		input.VariableFeeHeads.Single().Amount = 800m;
 		(await Should.ThrowAsync<BusinessException>(() => service.AssignAsync(input))).Code.ShouldBe(AssignmentErrorCodes.StalePreview);
 		var refreshed = await service.PreviewAsync(input);
 		refreshed.ProratedTotal.ShouldBe(800m);

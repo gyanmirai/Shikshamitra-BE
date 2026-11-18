@@ -43,16 +43,11 @@ public partial class StudentFeeStructureAppService
 			var headQuery = await feeHeadRepository.GetQueryableAsync();
 			var assignmentQuery = await studentFeeStructureRepository.GetQueryableAsync();
 			var detailQuery = await feeStructureDetailRepository.GetQueryableAsync();
-			var relevantAssignments = await AsyncExecuter.ToListAsync(assignmentQuery.Where(a => a.AcademicYearId == input.AcademicYearId &&
-				detailQuery.Any(d => d.FeeStructureId == a.FeeStructureStandardId && d.FeeHeadId == input.FeeHeadId))
-				.Select(a => new { a.StudentId, a.AssignmentSnapshotJson }));
-			var selectedStudentIds = relevantAssignments.Where(a => {
-				if (a.AssignmentSnapshotJson == null) return true;
-				try { return JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(a.AssignmentSnapshotJson)?.Heads?.Any(h => h.FeeHeadId == input.FeeHeadId && h.Included) ?? true; }
-				catch (JsonException) { return true; }
-			}).Select(a => a.StudentId).Distinct().ToArray();
 			enrollments = enrollments.Where(e => headQuery.Any(h => h.Id == input.FeeHeadId && h.AcademicYearId == input.AcademicYearId) &&
-				(Enumerable.Contains(selectedStudentIds, e.StudentId) || dueQuery.Any(d => d.StudentId == e.StudentId && d.FeeHeadId == input.FeeHeadId &&
+				(assignmentQuery.Any(a => a.StudentId == e.StudentId && a.AcademicYearId == input.AcademicYearId &&
+					(a.IncludedFeeHeadIds != null ? Enumerable.Contains(a.IncludedFeeHeadIds, input.FeeHeadId.Value) :
+						detailQuery.Any(d => d.FeeStructureId == a.FeeStructureStandardId && d.FeeHeadId == input.FeeHeadId))) ||
+				 dueQuery.Any(d => d.StudentId == e.StudentId && d.FeeHeadId == input.FeeHeadId &&
 					(!d.StudentFeeStructureId.HasValue || assignmentQuery.Any(a => a.Id == d.StudentFeeStructureId && a.AcademicYearId == input.AcademicYearId)))));
 		}
 		var students = await studentRepository.GetQueryableAsync();

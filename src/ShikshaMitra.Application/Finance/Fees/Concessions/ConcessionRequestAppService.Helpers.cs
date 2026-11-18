@@ -567,8 +567,21 @@ public partial class ConcessionRequestAppService
 		};
 	}
 
+	private sealed class PageDecisionChecks(bool canApprove, bool canReject, bool isAdmin)
+	{
+		public bool CanApprove { get; } = canApprove;
+		public bool CanReject { get; } = canReject;
+		public bool IsAdmin { get; } = isAdmin;
+		public Dictionary<(Guid MakerId, Guid StudentId, Guid AcademicYearId, string Permission), Guid?> Reviewers { get; } = new();
+	}
+
+	private async Task<PageDecisionChecks> CreatePageDecisionChecksAsync() => new(
+		await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve),
+		await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject),
+		currentUser.Id.HasValue && await userScopeService.IsAdminUserAsync(currentUser.Id.Value));
+
 	private async Task<List<string>> FilterDecisionActionsAsync(
-		ConcessionRequest request, List<string> actions)
+		ConcessionRequest request, List<string> actions, PageDecisionChecks? pageChecks = null)
 	{
 		if (!actions.Contains("approve") && !actions.Contains("reject")) return actions;
 		if (request.CreatorId == currentUser.Id)
@@ -584,17 +597,26 @@ public partial class ConcessionRequestAppService
 		})
 		{
 			if (!actions.Contains(action)) continue;
-			if (!await AuthorizationService.IsGrantedAsync(permission)) { actions.Remove(action); continue; }
+			var granted = pageChecks is null
+				? await AuthorizationService.IsGrantedAsync(permission)
+				: action == "approve" ? pageChecks.CanApprove : pageChecks.CanReject;
+			if (!granted) { actions.Remove(action); continue; }
 			if (currentUser.Id.HasValue &&
-				await userScopeService.IsAdminUserAsync(currentUser.Id.Value)) continue;
+				(pageChecks?.IsAdmin ?? await userScopeService.IsAdminUserAsync(currentUser.Id.Value))) continue;
 			var makerId = request.CreatorId ?? Guid.Empty;
-			var reviewerId = makerId != Guid.Empty
-				? await financeReviewerAccessService.FindEligibleReviewerAsync(
-					makerId, request.StudentId, request.AcademicYearId,
-					ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View, permission)
-				: null;
+			var key = (makerId, request.StudentId, request.AcademicYearId, permission);
+			Guid? reviewerId = null;
+			if (pageChecks is null || !pageChecks.Reviewers.TryGetValue(key, out reviewerId))
+			{
+				reviewerId = makerId != Guid.Empty
+					? await financeReviewerAccessService.FindEligibleReviewerAsync(
+						makerId, request.StudentId, request.AcademicYearId,
+						ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View, permission)
+					: null;
+				if (pageChecks is not null) pageChecks.Reviewers[key] = reviewerId;
+			}
 			if (reviewerId != currentUser.Id && reviewerId != Guid.Empty && !(reviewerId == null && currentUser.Id.HasValue &&
-				await userScopeService.IsAdminUserAsync(currentUser.Id.Value))) actions.Remove(action);
+				(pageChecks?.IsAdmin ?? await userScopeService.IsAdminUserAsync(currentUser.Id.Value)))) actions.Remove(action);
 		}
 		return actions;
 	}

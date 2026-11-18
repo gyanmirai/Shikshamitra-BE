@@ -3,7 +3,7 @@ module: finance
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-11-17
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -82,3 +82,24 @@ Operational confirmation never implies external bank settlement.
 The adapter returns composable unmapped EF read facts, so historical JSON remains queried in PostgreSQL instead of materializing tenant history.
 Malformed destination JSON fails the read rather than guessing an account.
 No production migration or normalization job is required by this change.
+
+## Accounts read boundaries
+
+Accounts settings enrich a selected page with batched downstream-reference and account-head reads.
+Write operations still revalidate usage, scope, effective dates and concurrency against authoritative records.
+Routing lookups project option fields through `IFinanceRoutingLookupReader`; PostgreSQL applies effective windows in SQL, while SQLite retains a scalar compatibility fallback.
+
+Cash balances and dated collection/expense/credit totals use `ICashReadQueries`.
+PostgreSQL aggregates exact decimal facts and applies date predicates before paging; SQLite retains narrow fallbacks for unsupported decimal/time operations.
+`CashManagementReadProjection` loads only row scalars and the deposit identity/date metadata needed to resolve saved bank labels.
+Expense, credit and command replay graphs belong to selected details and writes.
+
+Income/expense registers compose authorized transaction, receipt and refund sources before count, order and page selection.
+`IAccountsRegisterEvidenceQuery` supplies scalar counterparty JSON and immutable refund instants without loading full transaction evidence.
+The refund bridge normalizes UTC according to the runtime DateTime mapping; SQLite retains exact legacy timestamp handling.
+Reconciliation pushes scalar receipt headers into SQL and evaluates rendered legacy instrument fields in bounded candidate batches; only page IDs receive full presentation enrichment.
+
+Bank activity reads method totals and row count together, then reads the selected page and category options in the same repeatable-read snapshot.
+Exports read their complete capped result once and calculate matching totals from that same result.
+Settings history counts all entity changes and reads descending database pages, loading only the page's approved field changes and actors.
+See [frontend clients](../../../../Shikshamitra-FE/docs/finance/clients.md) for cache and history navigation behavior.

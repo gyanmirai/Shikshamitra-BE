@@ -35,4 +35,6 @@ public class AssignmentContextsInput
 {
 	public Guid AcademicYearId { get; set; }
 	public List<Guid> StudentIds { get; set; } = [];
+	/// <summary>False returns only assigned identity/source; the detail endpoint supplies view balances and edit eligibility.</summary>
+	public bool IncludeEditDetails { get; set; } = true;
 }

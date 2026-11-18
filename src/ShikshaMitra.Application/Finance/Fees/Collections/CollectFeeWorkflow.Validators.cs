@@ -48,10 +48,8 @@ public partial class CollectFeeWorkflow
 		var student = await AsyncExecuter.FirstOrDefaultAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => s.Id == input.StudentId!.Value))
             ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), input.StudentId!.Value);
 
-		if (student.AcademicYearId != input.AcademicYearId)
-			throw new BusinessException(FeeCollectionErrorCodes.StudentAcademicYearMismatch);
-
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId!.Value);
+		await financeScopeAccessService.EnsureFeeCollectionStudentAccessibleAsync(
+			input.StudentId!.Value, input.AcademicYearId);
 		return (student, academicYear);
 	}
 

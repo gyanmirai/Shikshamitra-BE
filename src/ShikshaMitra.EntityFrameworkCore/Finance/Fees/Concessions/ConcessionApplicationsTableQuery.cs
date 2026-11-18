@@ -63,6 +63,8 @@ internal static class ConcessionApplicationsTableQuery
 
     public static IQueryable<ConcessionRequest> Filter(IQueryable<ConcessionRequest> query, ShikshaMitraDbContext db, FinanceTableQuery options)
     {
+        if (string.IsNullOrEmpty(options.Search) && options.Filters.Count == 0)
+            return query;
         var rows = Rows(query, db);
         if (!string.IsNullOrEmpty(options.Search))
         {
@@ -73,6 +75,16 @@ internal static class ConcessionApplicationsTableQuery
         return options.Apply(rows, Fields).Select(r => r.Request);
     }
 
-    public static IQueryable<ConcessionRequest> Order(IQueryable<ConcessionRequest> query, ShikshaMitraDbContext db, FinanceTableQuery options) =>
-        options.Order(Rows(query, db), Fields, "createdAt", true, r => r.Request.Id).Select(r => r.Request);
+    public static IQueryable<ConcessionRequest> Order(IQueryable<ConcessionRequest> query, ShikshaMitraDbContext db, FinanceTableQuery options)
+    {
+        if (options.SortBy is null or "createdAt")
+            return options.SortBy is null || options.Descending
+                ? query.OrderByDescending(r => r.CreationTime).ThenBy(r => r.Id)
+                : query.OrderBy(r => r.CreationTime).ThenBy(r => r.Id);
+        if (options.SortBy == "status")
+            return options.Descending
+                ? query.OrderByDescending(r => r.Status).ThenBy(r => r.Id)
+                : query.OrderBy(r => r.Status).ThenBy(r => r.Id);
+        return options.Order(Rows(query, db), Fields, "createdAt", true, r => r.Request.Id).Select(r => r.Request);
+    }
 }

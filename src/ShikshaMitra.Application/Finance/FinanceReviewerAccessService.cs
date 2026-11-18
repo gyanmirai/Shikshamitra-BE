@@ -32,6 +32,20 @@ public class FinanceReviewerAccessService(
 	IDataFilter dataFilter) : ApplicationService, ITransientDependency
 {
 	private const int MaxReportingDepth = 64;
+	private sealed class PageReviewerAccess(Guid[] studentIds)
+	{
+		public Guid[] StudentIds { get; } = studentIds;
+		public HashSet<Guid> TargetIds { get; } = studentIds.ToHashSet();
+		public Dictionary<(Guid UserId, Guid AcademicYearId, string View, string Decision), HashSet<Guid>> Accessible { get; } = new();
+	}
+
+	public void PrepareReviewerAccessForStudents(IEnumerable<Guid> studentIds)
+	{
+		var items = unitOfWorkManager.Current?.Items;
+		if (items is not null)
+			items[$"FinanceReviewerPageAccess:{CurrentTenant.Id}"] =
+				new PageReviewerAccess(studentIds.Distinct().ToArray());
+	}
 
 	public async Task<IReadOnlyCollection<Guid>> GetReportingMakerUserIdsAsync(
 		Guid actorId, CancellationToken cancellationToken = default)
@@ -167,11 +181,31 @@ public class FinanceReviewerAccessService(
 	{
 		try
 		{
+			PageReviewerAccess? page = null;
+			if (unitOfWorkManager.Current?.Items is { } items &&
+				items.TryGetValue($"FinanceReviewerPageAccess:{CurrentTenant.Id}", out var cached))
+				page = cached as PageReviewerAccess;
+			var pageKey = (userId, academicYearId, viewPermission, decisionPermission);
+			if (page?.TargetIds.Contains(studentId) == true && page.Accessible.TryGetValue(pageKey, out var accessible))
+				return accessible.Contains(studentId);
 			var principal = await identities.PrincipalAsync(userId);
 			if (!await permissions.IsGrantedAsync(principal, viewPermission) ||
-				!await permissions.IsGrantedAsync(principal, decisionPermission)) return false;
+				!await permissions.IsGrantedAsync(principal, decisionPermission))
+			{
+				if (page?.TargetIds.Contains(studentId) == true) page.Accessible[pageKey] = [];
+				return false;
+			}
 			var scoped = await scopeAccess.GetRequestScopedStudentsQueryForUserAsync(
 				userId, academicYearId, cancellationToken, capTeacherAssignments: false);
+			if (page?.TargetIds.Contains(studentId) == true)
+			{
+				var ids = page.StudentIds;
+				var pageAccessible = (await AsyncExecuter.ToListAsync(scoped
+					.Where(student => Enumerable.Contains(ids, student.Id))
+					.Select(student => student.Id), cancellationToken)).ToHashSet();
+				page.Accessible[pageKey] = pageAccessible;
+				return pageAccessible.Contains(studentId);
+			}
 			return await AsyncExecuter.AnyAsync(scoped.Where(student => student.Id == studentId), cancellationToken);
 		}
 		catch (AbpAuthorizationException) { return false; }

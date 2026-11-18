@@ -21,18 +21,40 @@ public partial class ChargeCategoryAppService
 			["isActive"] = (Expression<Func<FilterRow, int>>)(x => x.Category.IsActive ? 1 : 0)
 		});
 
+	private static readonly IReadOnlyDictionary<string, LambdaExpression> SqlFilterFields = new Dictionary<string, LambdaExpression>
+	{
+		["name"] = (Expression<Func<ChargeCategory, string>>)(x => x.Name),
+		["description"] = (Expression<Func<ChargeCategory, string?>>)(x => x.Description == null || x.Description == "" ? "-" : x.Description),
+		["isApprovalRequired"] = (Expression<Func<ChargeCategory, int>>)(x => x.IsApprovalRequired ? 1 : 0),
+		["isActive"] = (Expression<Func<ChargeCategory, int>>)(x => x.IsActive ? 1 : 0)
+	};
+	private sealed record IncomeFilterRow(Guid Id, string Name);
+	private static readonly IReadOnlyDictionary<string, LambdaExpression> IncomeFilterFields = new Dictionary<string, LambdaExpression>
+	{
+		["incomeCategoryName"] = (Expression<Func<IncomeFilterRow, string>>)(x => x.Name)
+	};
 	private async Task<IQueryable<ChargeCategory>> ApplyListFiltersAsync(IQueryable<ChargeCategory> query, FinanceTableQuery filters)
 	{
-		if (filters.Filters.Count == 0) return query;
-		// Accounting routing is stored in ExtraProperties, so resolve names before counting/paging.
-		var candidates = await AsyncExecuter.ToListAsync(query);
-		var incomeIds = candidates.Where(x => x.IncomeCategoryId.HasValue).Select(x => x.IncomeCategoryId!.Value).Distinct().ToArray();
-		var names = await AsyncExecuter.ToListAsync((await transactionCategoryRepository.GetQueryableAsync())
-			.Where(x => Enumerable.Contains(incomeIds, x.Id)).Select(x => new { x.Id, x.Name }));
-		var byId = names.ToDictionary(x => x.Id, x => x.Name);
-		var rows = candidates.Select(x => new FilterRow(x, !x.IsAccountingReady ? "Income Category required" :
-			x.IncomeCategoryId.HasValue && byId.TryGetValue(x.IncomeCategoryId.Value, out var name) ? name : "-"));
-		var ids = ListFilter.Apply(rows.AsQueryable(), filters).Select(x => x.Category.Id).ToArray();
+		query = filters.Apply(query, SqlFilterFields, column => column != "incomeCategoryName");
+		if (!filters.Filters.Any(x => x.Column == "incomeCategoryName")) return query;
+		// Accounting links remain canonical ABP ExtraProperties. Bound scalar reads to
+		// filtered candidates and resolve labels per batch rather than hydrating all entities.
+		var matchingIds = new List<Guid>();
+		const int batchSize = 256;
+		for (var offset = 0; ; offset += batchSize)
+		{
+			var batch = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.Id).Skip(offset).Take(batchSize)
+				.Select(x => new { x.Id, x.ExtraProperties }));
+			var rows = batch.Select(x => new { x.Id, IncomeId = Guid.TryParse(x.ExtraProperties.GetValueOrDefault("ChargeIncomeCategoryId")?.ToString(), out var id) ? (Guid?)id : null }).ToList();
+			var incomeIds = rows.Where(x => x.IncomeId.HasValue).Select(x => x.IncomeId!.Value).Distinct().ToArray();
+			var names = await AsyncExecuter.ToListAsync((await transactionCategoryRepository.GetQueryableAsync())
+				.Where(x => Enumerable.Contains(incomeIds, x.Id)).Select(x => new { x.Id, x.Name }));
+			var byId = names.ToDictionary(x => x.Id, x => x.Name);
+			var displayed = rows.Select(x => new IncomeFilterRow(x.Id, !x.IncomeId.HasValue ? "Income Category required" : byId.GetValueOrDefault(x.IncomeId.Value, "-")));
+			matchingIds.AddRange(filters.Apply(displayed.AsQueryable(), IncomeFilterFields, column => column == "incomeCategoryName").Select(x => x.Id));
+			if (batch.Count < batchSize) break;
+		}
+		var ids = matchingIds.ToArray();
 		return query.Where(x => Enumerable.Contains(ids, x.Id));
 	}
 }

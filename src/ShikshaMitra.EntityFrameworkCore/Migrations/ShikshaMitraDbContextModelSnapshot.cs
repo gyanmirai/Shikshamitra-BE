@@ -13301,6 +13301,10 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_FeeRefundRequests_TenantId_VoucherNumber");
 
+                    b.HasIndex("TenantId", "AcademicYearId", "WorkflowVersion", "Status", "CreationTime")
+                        .HasDatabaseName("IX_FeeRefundRequests_Worklist")
+                        .HasFilter("\"IsDeleted\" = false");
+
                     b.HasIndex("StudentId", "AcademicYearId", "Status")
                         .HasDatabaseName("IX_FeeRefundRequests_Student_Year_Status");
 
@@ -13429,6 +13433,10 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "AcademicYearId", "BoardId", "EducationMediumId", "ReceiptKind")
                         .HasDatabaseName("IX_FeePaymentReceipts_ListFilter");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "BoardId", "EducationMediumId", "CreationTime", "ReceiptNumber")
+                        .IsDescending(false, false, false, false, true, true)
+                        .HasDatabaseName("IX_FeePaymentReceipts_ListOrder");
 
                     b.HasIndex("TenantId", "AcademicYearId", "ReceiptKind", "VerificationStatus", "ReceiptDate")
                         .HasDatabaseName("IX_FeePaymentReceipts_ReconciliationFilter");
@@ -13790,6 +13798,11 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AcademicStandardId").HasColumnType("uuid");
+                    b.Property<Guid?>("AcademicDivisionId").HasColumnType("uuid");
+                    b.Property<int?>("AcademicRollNumber").HasColumnType("integer");
+                    b.PrimitiveCollection<Guid[]>("IncludedFeeHeadIds").HasColumnType("uuid[]");
+
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
@@ -13903,6 +13916,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("IncludedFeeHeadIds")
+                        .HasDatabaseName("IX_StudentFeeStructures_IncludedFeeHeadIds");
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("IncludedFeeHeadIds"), "gin");
 
                     b.HasIndex("CollectionPolicyId")
                         .HasDatabaseName("IX_StudentFeeStructures_CollectionPolicyId");

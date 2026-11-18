@@ -7,6 +7,10 @@ using ShikshaMitra.Finance.Fees.Collections;
 using Volo.Abp;
 using Volo.Abp.Validation;
 namespace ShikshaMitra.Finance.Accounts.BankActivity;
+public sealed class BankActivityMethodTotals : BankActivityMethod
+{
+	public int Count { get; set; }
+}
 public static class BankActivityQueryRules
 {
 	public static readonly IReadOnlyDictionary<string, LambdaExpression> Fields = new Dictionary<string, LambdaExpression>
@@ -52,6 +56,11 @@ public static class BankActivityQueryRules
 	  (provisional || x.Source != "collection" || x.RecognitionStatus != (int) BankActivityRecognitionStatus.Pending));
 	public static IQueryable<BankActivityFact> Scope(IQueryable<BankActivityFact> facts, IQueryable<Guid> students, IQueryable<Guid> accounts, bool manual)
 	 => facts.Where(x => x.FinanceFeeAccountId.HasValue ? accounts.Contains(x.FinanceFeeAccountId.Value) : x.StudentId.HasValue ? students.Contains(x.StudentId.Value) : manual);
+	// One bounded row per method supplies the summary, method breakdown and matching count.
+	public static IQueryable<BankActivityMethodTotals> MethodTotals(IQueryable<BankActivityFact> query) => query.GroupBy(x => x.PaymentMethod).Select(g => new BankActivityMethodTotals
+	{ PaymentMethod = g.Key, Count = g.Count(), Incoming = g.Sum(x => x.Incoming), Outgoing = g.Sum(x => x.Outgoing), Net = g.Sum(x => x.Incoming - x.Outgoing), PendingIncoming = g.Sum(x => x.PendingAmount), InTransit = g.Sum(x => x.InTransitAmount) });
+	public static BankActivitySummary Summarize(IEnumerable<BankActivityMethodTotals> totals) => new()
+	{ Incoming = totals.Sum(x => x.Incoming), Outgoing = totals.Sum(x => x.Outgoing), Net = totals.Sum(x => x.Net), PendingIncoming = totals.Sum(x => x.PendingIncoming), InTransit = totals.Sum(x => x.InTransit) };
 	public static IQueryable<BankActivitySummary> Aggregates(IQueryable<BankActivityFact> query) => query.GroupBy(x => 1).Select(g => new BankActivitySummary
 	{ Incoming = g.Sum(x => x.Incoming), Outgoing = g.Sum(x => x.Outgoing), Net = g.Sum(x => x.Incoming - x.Outgoing), PendingIncoming = g.Sum(x => x.PendingAmount), InTransit = g.Sum(x => x.InTransitAmount) });
 	public static IQueryable<BankActivityFact> Filter(IQueryable<BankActivityFact> query, BankActivityQuery input, FinanceTableQuery table)

@@ -7,6 +7,9 @@ using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Students;
+using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.Divisions;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Data;
@@ -42,7 +45,9 @@ public class FeeRefundColumnFilter_Tests : IDisposable
         var filters = FeeRefundColumnFilter.Parse(JsonSerializer.Serialize(new[] { new { column, type, value } }));
         var requests = context.Set<FeeRefundRequest>().Include(r => r.Lines)
             .Include(r => r.Reservations).Include(r => r.Settlements);
-        var query = FeeRefundColumnFilterQuery.Apply(requests, context.Set<Student>(), filters, context.Set<FeePaymentReceipt>());
+        var query = FeeRefundColumnFilterQuery.Apply(requests, context.Set<Student>(), filters,
+            context.Set<FeePaymentReceipt>(), context.Set<StudentEnrollment>(), context.Set<Standard>(),
+            context.Set<Division>());
         var sql = query.OrderBy(r => r.Id).Skip(20).Take(20).ToQueryString();
         sql.ShouldContain("WHERE");
         sql.ShouldContain("LIMIT");

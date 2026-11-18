@@ -78,6 +78,14 @@ public sealed class NotificationOutcomeProjector(ICurrentTenant tenant, IUnitOfW
 	{
 		using var unit = units.Begin(requiresNew: true, isTransactional: true);
 		await outcomeLock.AcquireAsync(operationId, cancellationToken);
+		var changed = await RefreshLockedAsync(tenantId, operationId, cancellationToken);
+		await unit.CompleteAsync(cancellationToken);
+		return changed;
+	}
+
+	internal async Task<bool> RefreshLockedAsync(Guid tenantId, Guid operationId, CancellationToken cancellationToken)
+	{
+		var unit = units.Current ?? throw new BusinessException(NotificationErrorCodes.StateConflict);
 		var operation = await queries.FirstOrDefaultAsync((await OperationsAsync(tenantId)).Where(x => x.Id == operationId), cancellationToken);
 		if (operation == null) return false;
 		var owned = (await TenantIntentsAsync(tenantId)).Where(x => x.CampaignId == operationId &&
@@ -115,7 +123,6 @@ public sealed class NotificationOutcomeProjector(ICurrentTenant tenant, IUnitOfW
 			await campaigns.UpdateAsync(operation, cancellationToken: cancellationToken);
 			changed = true;
 		}
-		await unit.CompleteAsync(cancellationToken);
 		return changed;
 	}
 

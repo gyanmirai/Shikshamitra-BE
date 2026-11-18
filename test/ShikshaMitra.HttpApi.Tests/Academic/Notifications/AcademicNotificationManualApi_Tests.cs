@@ -244,14 +244,14 @@ public partial class AcademicNotificationManualApi_Tests(AcademicNotificationPre
 		channels = new[] { CommunicationChannelType.InApp }, templateId
 	};
 
-	private async Task<NotificationTemplateDto> PublishGuardianTemplateAsync()
+	private async Task<NotificationTemplateDto> PublishGuardianTemplateAsync(CommunicationChannelType channel = CommunicationChannelType.InApp)
 	{
 		using var setup = Factory.CreateClient();
 		setup.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, $"{View},{Add}");
 		using var initialize = await setup.PostAsJsonAsync($"{BasePath}/templates/initialize-defaults", new { eventKey = Event });
 		initialize.StatusCode.ShouldBe(HttpStatusCode.OK, await initialize.Content.ReadAsStringAsync());
 		var page = await setup.GetFromJsonAsync<PagedResultDto<NotificationTemplateDto>>($"{BasePath}/templates?eventKey={Event}&maxResultCount=100", JsonOptions);
-		var template = page!.Items.Single(x => x.RecipientKind == "Guardian" && x.Channel == CommunicationChannelType.InApp);
+		var template = page!.Items.Single(x => x.RecipientKind == "Guardian" && x.Channel == channel);
 		if (template.IsPublished) return template;
 		using var published = await setup.PostAsJsonAsync($"{BasePath}/templates/{template.TemplateId}/publish",
 			new NotificationTemplateRevisionCommandDto(template.RevisionId, template.ConcurrencyStamp));

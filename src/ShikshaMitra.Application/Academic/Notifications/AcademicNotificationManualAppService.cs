@@ -57,7 +57,7 @@ public class AcademicNotificationManualAppService(AcademicNotificationAccessServ
 
 	private async Task<AcademicNotificationOperationDto> DecideAsync(Guid operationId, bool approve, CancellationToken cancellationToken)
 	{
-		var identity = await sourceAccess.RequireManualApproverAsync(cancellationToken);
+		var identity = await sourceAccess.RequireStaffActionAsync(cancellationToken);
 		operations.RequireAssignedApprover(identity.TenantId, identity.ActorId);
 		var review = await reviews.LockDecisionAsync(identity.TenantId, operationId, identity.ActorId, cancellationToken);
 		var request = reviews.ReadRequest(review);

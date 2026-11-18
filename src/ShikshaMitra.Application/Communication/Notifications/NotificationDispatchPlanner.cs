@@ -21,7 +21,7 @@ public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWo
 	NotificationDispatchPolicy policy, NotificationEmailRoute emailRoute, NotificationDispatchMaterializer materializer,
 	IRepository<NotificationIntent, Guid> intents, IRepository<CommunicationCampaign, Guid> campaigns,
 	IRepository<NotificationDispatch, Guid> dispatches, IRepository<CommunicationRecipientSnapshot, Guid> evidence,
-	IAsyncQueryableExecuter queries, IGuidGenerator guids) : ITransientDependency
+	IAsyncQueryableExecuter queries, IGuidGenerator guids, NotificationOutcomeLock outcomeLock) : ITransientDependency
 {
 	public async Task PlanAsync(NotificationQueueClaim claim, CancellationToken cancellationToken)
 	{
@@ -37,6 +37,7 @@ public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWo
 			intent.LeaseId != claim.LeaseId || intent.LeaseExpiresAt <= now || !intent.LeaseExpiresAt.HasValue)
 			throw new BusinessException(NotificationErrorCodes.LeaseLost);
 
+		if (intent.CampaignId is Guid operationId) await outcomeLock.AcquireAsync(operationId, cancellationToken);
 		if (intent.CampaignId is not Guid campaignId ||
 			!await queries.AnyAsync((await campaigns.GetQueryableAsync()).Where(x => x.TenantId == tenantId && x.Id == campaignId &&
 				!x.IsDeleted && x.CampaignType == NotificationCampaignTypes.Academic && x.SourceEntityId == intent.SourceId &&

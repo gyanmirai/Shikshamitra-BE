@@ -45,6 +45,7 @@ public sealed class NotificationDispatchConfiguration : IEntityTypeConfiguration
 		builder.Property(x => x.RecipientContextKey).IsRequired().HasMaxLength(192);
 		builder.Property(x => x.DestinationFingerprint).IsRequired().HasMaxLength(128);
 		builder.Property(x => x.ProtectedMessageJson).IsRequired().HasMaxLength(131072);
+		builder.Ignore(x => x.CanRetryDefiniteRejection);
 		builder.Property(x => x.ContentHash).IsRequired().HasMaxLength(128);
 		builder.Property(x => x.DeduplicationKey).IsRequired().HasMaxLength(128);
 		builder.Property(x => x.ProviderMessageId).HasMaxLength(256);

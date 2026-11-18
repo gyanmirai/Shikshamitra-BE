@@ -47,6 +47,7 @@ public sealed class AcademicNotificationHistoryRows(IRepository<NotificationDisp
 		NotificationErrorCodes.SourceUnavailable, NotificationErrorCodes.TemplateInvalid, NotificationErrorCodes.RequiredVariableMissing,
 		NotificationErrorCodes.ProviderUnavailable, NotificationErrorCodes.ProviderQuotaExhausted, NotificationErrorCodes.UnknownAcceptance,
 		NotificationErrorCodes.ReviewChanged, NotificationErrorCodes.RuntimeSnapshotInvalid, NotificationErrorCodes.RuleConfigurationInvalid,
+		NotificationErrorCodes.CancelledBeforeDelivery, NotificationErrorCodes.StaffRetryRequested,
 		"SourceExpired", "SourceRevisionChanged", "RuleDisabled", "NoEligibleRecipients", "SomeRecipientsSkipped",
 		"DeliveryFailed", "DeliveryConfigurationNeedsReview", "ProviderChanged", "GuardianAccessReviewPending",
 		"GuardianRelationshipUnavailable", "VerifiedAccountRequired", "AccountAssociationAmbiguous", "StudentNotEnrolled", "StudentScopeChanged",
@@ -57,7 +58,7 @@ public sealed class AcademicNotificationHistoryRows(IRepository<NotificationDisp
 		"WebPushSubscriptionUnavailable", "WebPushSubscriptionExpired", "WebPushRateLimited", "WebPushProviderRejected",
 		"WebPushDispatchUnavailable", "SmtpTemporaryRejection", "SmtpPermanentRejection", "SmtpAcceptanceUnknown",
 		"DispatchPayloadInvalid", "DispatchPayloadTooLarge",
-		"LeaseExpiredBeforeIo", "NotificationOperationUnavailable", "RecipientResolverUnavailable", "RecipientNotSelected"
+		"LeaseExpiredBeforeIo", "NotificationOperationUnavailable", "RecipientResolverUnavailable", "RecipientNotSelected", "AttemptLimitReached"
 	};
 
 	internal async Task<PagedResultDto<AcademicNotificationHistoryItemDto>> GetPageAsync(Guid tenantId, Guid[] intentIds,

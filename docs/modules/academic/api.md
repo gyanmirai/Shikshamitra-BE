@@ -31,6 +31,8 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 | `POST /operations/{id}/approve` and `/{id}/reject` | Add + assigned approver + source access | Decide an Academic operation in `PendingApproval` |
 | `GET /operations/{id}` | View + source read access | Read the status, timestamps, delivery counts and intent outcomes for an operation within the caller's scope |
 | `GET /history` | View + source read access | Page delivery attempts, work awaiting an attempt, and exclusions for the authorized source |
+| `POST /dispatches/{id}/retry` | Add + source read access | Queue a verified retry of this channel's definitively rejected attempt |
+| `POST /operations/{id}/cancel` | Add + source read access | Stop unclaimed work and return cancelled intent and dispatch counts plus remaining in-flight work |
 | `GET /templates` | View | Paged template headers for the selected `eventKey` and optional `academicMediumId` |
 | `GET /templates/{id}` and `/{id}/history` | View | Current template and revision history |
 | `GET /templates/{id}/preview/{revisionId}` | View | Render with synthetic values for review |
@@ -56,6 +58,10 @@ Approval-required operations write no sendable intents until approval. Configure
 History takes `eventKey`, `sourceType`, `sourceId`, optional `operationId` and `state`, and standard `skipCount` and `maxResultCount` pagination. Staff see rows for their authorized source scopes. Whole-operation status and exclusions recorded before dispatch require access to every scope represented by that operation.
 
 History keeps provider acceptance, delivery, read, failure, skips and unknown acceptance distinct. It returns recipient references, timestamps, and recognized reason codes. Message bodies, destinations and raw provider references or errors stay private.
+
+A retry uses the original recipient and template. The saved attempt must show a recognized transient rejection with no provider acceptance. The service rechecks eligibility, consent, expiry and the provider route. It honors any saved retry window and allows one attempt beyond the automatic limit. A repeat request returns the existing queued retry. Ambiguous outcomes and changed delivery conditions return 409 with `Communication:Notification:RetryRequiresReview`.
+
+Cancellation applies to unclaimed pending dispatches, unleased intents awaiting planning, and operations awaiting approval. It preserves earlier attempts and reports any claimed work still in flight. Both commands record the actor, operation and reason in the audit log.
 
 Initializing defaults preserves previous edits and deletions and creates drafts without activating a rule.
 

@@ -75,6 +75,16 @@ public partial class NotificationIntent
 		return true;
 	}
 
+	public bool CancelPending()
+	{
+		if (Status is not (NotificationIntentState.Ready or NotificationIntentState.Scheduled) ||
+			LeaseId.HasValue || PlanningCompletedAt.HasValue) return false;
+		Status = NotificationIntentState.Cancelled;
+		ErrorCode = NotificationErrorCodes.CancelledBeforeDelivery;
+		ConcurrencyStamp = Guid.NewGuid().ToString("N");
+		return true;
+	}
+
 	public void ReopenDeliveryProjection()
 	{
 		NotificationRuntimeGuard.State(PlanningCompletedAt.HasValue && Status is

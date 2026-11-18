@@ -127,7 +127,7 @@ public class NotificationDispatchPlanner_Tests
 				new(_tenant, Repository(_providers), queries, app), new(_tenant, Repository(_bindings), queries),
 				new(_tenant, Repository(_subscriptions), queries, new(app))),
 			Repository<NotificationIntent>([_intent]), Repository<CommunicationCampaign>([operation]),
-			Repository(_dispatches), Repository(_evidence), queries, ids);
+			Repository(_dispatches), Repository(_evidence), queries, ids, new NotificationOutcomeLock(Substitute.For<INotificationPersonalWriteLock>()));
 	}
 
 	[Fact]

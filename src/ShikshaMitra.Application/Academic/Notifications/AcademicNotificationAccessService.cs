@@ -50,7 +50,7 @@ public sealed class AcademicNotificationAccessService(ICurrentTenant tenant, ICu
 	internal Task<(Guid TenantId, Guid ActorId, UserScopeContext Scope)> RequireManualSenderAsync(CancellationToken cancellationToken) =>
 		RequireIdentityAsync(ShikshaMitraSubmodulePermissions.Academics.Notification.Send, cancellationToken);
 
-	internal Task<(Guid TenantId, Guid ActorId, UserScopeContext Scope)> RequireManualApproverAsync(CancellationToken cancellationToken) =>
+	internal Task<(Guid TenantId, Guid ActorId, UserScopeContext Scope)> RequireStaffActionAsync(CancellationToken cancellationToken) =>
 		RequireIdentityAsync(ShikshaMitraSubmodulePermissions.Academics.Notification.Add, cancellationToken);
 
 	internal Task<(Guid TenantId, Guid ActorId, UserScopeContext Scope)> RequireHistoryViewerAsync(CancellationToken cancellationToken) =>

@@ -1,5 +1,4 @@
 using System;
-using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -23,7 +22,6 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 	IRepository<CommunicationCampaign, Guid> campaigns, IAsyncQueryableExecuter queries, NotificationDeliveryProjection delivery)
 	: INotificationDispatcher, ITransientDependency
 {
-	private static readonly int[] RetryMinutes = [1, 5, 15, 60];
 	private sealed record PreparedSend(INotificationChannelSender Sender, NotificationChannelSendRequest Request, DateTimeOffset? ExpiresAt);
 
 	public async Task DispatchAsync(Guid dispatchId, Guid leaseToken, CancellationToken cancellationToken)
@@ -60,7 +58,7 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 		NotificationDispatchReadinessResult decision;
 		if (matching.Length != 1)
 			decision = new(null, null, null, NotificationErrorCodes.ProviderUnavailable);
-		else if (row.AttemptNumber > RetryMinutes.Length + 1)
+		else if (row.AttemptNumber > NotificationDispatch.MaximumAttempts)
 			decision = new(null, null, null, "AttemptLimitReached");
 		else
 		{
@@ -165,25 +163,13 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 			case NotificationProviderAcceptance.Rejected when string.IsNullOrEmpty(result.ProviderMessageId):
 				var reason = SafeErrorCode(result.ErrorCode);
 				row.RecordOutcome(lease, now, NotificationDispatchState.Failed, errorCode: reason);
-				if (result.IsTransient && row.Status == NotificationDispatchState.Failed && row.ProviderMessageId == null &&
-					!row.AcceptedAt.HasValue && RetryAt(row, now, result.RetryAfter, expiry) is DateTimeOffset retryAt)
-					row.ScheduleRetry(lease, now, retryAt, reason);
+				if (result.IsTransient)
+					NotificationDispatchRetryPolicy.ScheduleAfterRejection(row, lease, now, result.RetryAfter, expiry, reason);
 				return;
 			default:
 				row.RecordOutcome(lease, now, NotificationDispatchState.UnknownAcceptance, providerId, NotificationErrorCodes.UnknownAcceptance);
 				return;
 		}
-	}
-
-	private static DateTimeOffset? RetryAt(NotificationDispatch row, DateTimeOffset now, TimeSpan? requested, DateTimeOffset? expiry)
-	{
-		if (row.AttemptNumber is < 1 || row.AttemptNumber > RetryMinutes.Length) return null;
-		var jitter = (BinaryPrimitives.ReadUInt16LittleEndian(row.Id.ToByteArray()) + row.AttemptNumber * 17) % 16;
-		var delay = TimeSpan.FromMinutes(RetryMinutes[row.AttemptNumber - 1]) + TimeSpan.FromSeconds(jitter);
-		if (requested > delay) delay = requested.Value;
-		if (delay >= DateTimeOffset.MaxValue - now) return null;
-		var due = now.Add(delay);
-		return row.ExpiresAt <= due || expiry <= due ? null : due;
 	}
 
 	private static string SafeErrorCode(string? code) => code is { Length: > 0 and <= 160 } &&

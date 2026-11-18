@@ -6,6 +6,8 @@ namespace ShikshaMitra.Communication.Notifications;
 [DisableAuditing]
 public partial class NotificationDispatch
 {
+	public const int MaximumAutomaticAttempts = 5;
+	public const int MaximumAttempts = MaximumAutomaticAttempts + 1;
 	public DateTimeOffset? IoStartedAt { get; private set; }
 	public Guid? IoLeaseId { get; private set; }
 	public DateTimeOffset? AcceptedAt { get; private set; }
@@ -59,6 +61,39 @@ public partial class NotificationDispatch
 		NotificationRuntimeGuard.ErrorCode(errorCode);
 		Status = NotificationDispatchState.Pending; NextAttemptAt = nextAttemptAt.ToUniversalTime(); ErrorCode = errorCode;
 		IoStartedAt = null; IoLeaseId = null; ClearLease();
+	}
+
+	public bool CanRetryDefiniteRejection => Status == NotificationDispatchState.Failed && !LeaseId.HasValue &&
+		IoStartedAt.HasValue && IoLeaseId.HasValue && DeliveryAttemptId.HasValue && !AcceptedAt.HasValue &&
+		ProviderMessageId == null && AttemptNumber is > 0 and < MaximumAttempts;
+
+	public void PreserveRetryWindow(DateTimeOffset nextAttemptAt)
+	{
+		NotificationRuntimeGuard.State(CanRetryDefiniteRejection && nextAttemptAt > IoStartedAt);
+		NextAttemptAt = nextAttemptAt.ToUniversalTime();
+		ConcurrencyStamp = Guid.NewGuid().ToString("N");
+	}
+
+	public void RetryDefiniteRejection(DateTimeOffset now, DateTimeOffset nextAttemptAt)
+	{
+		NotificationRuntimeGuard.State(CanRetryDefiniteRejection && nextAttemptAt >= now &&
+			nextAttemptAt >= NextAttemptAt && (!ExpiresAt.HasValue || nextAttemptAt < ExpiresAt));
+		Status = NotificationDispatchState.Pending;
+		NextAttemptAt = nextAttemptAt.ToUniversalTime();
+		ErrorCode = NotificationErrorCodes.StaffRetryRequested;
+		IoStartedAt = null;
+		IoLeaseId = null;
+		ClearLease();
+	}
+
+	public bool CancelPending()
+	{
+		if (Status != NotificationDispatchState.Pending || LeaseId.HasValue || IoStartedAt.HasValue ||
+			IoLeaseId.HasValue || AcceptedAt.HasValue || ProviderMessageId != null) return false;
+		Status = NotificationDispatchState.Skipped;
+		ErrorCode = NotificationErrorCodes.CancelledBeforeDelivery;
+		ClearLease();
+		return true;
 	}
 
 	public bool ObserveWhatsAppReceipt(Guid providerSettingId, string providerMessageId, NotificationDispatchState outcome, DateTimeOffset observedAt)

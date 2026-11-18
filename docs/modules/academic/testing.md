@@ -137,6 +137,8 @@ Confirmation tests exercise Send without Add, exact replay, stale and expired re
 
 History tests cover independent View and source authorization, per-scope attempts, cross-scope aggregate denial, page and status filters, and accepted-versus-delivered timestamps. The fixture includes sensitive stored values to verify they stay out of the response.
 
+Delivery action tests cover Add and source access, retry scheduling after a definitive transient rejection, unchanged successful channels, rejection of unknown acceptance, cancellation before planning or claim, and stored audit metadata.
+
 ## Website push checks
 
 Run the backend delivery, subscription protection and authenticated registration tests from the backend repository.

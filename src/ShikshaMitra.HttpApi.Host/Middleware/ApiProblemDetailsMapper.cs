@@ -22,7 +22,7 @@ public static class ApiProblemDetailsMapper
 		return errorCode switch
 		{
 			NotificationErrorCodes.ReviewChanged or NotificationErrorCodes.ReviewExpired or NotificationErrorCodes.ReviewConsumed or
-			NotificationErrorCodes.ApprovalSetupRequired => StatusCodes.Status409Conflict,
+			NotificationErrorCodes.ApprovalSetupRequired or NotificationErrorCodes.RetryRequiresReview => StatusCodes.Status409Conflict,
 			Academic.Curriculum.ElectivePreferenceErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionJourneyResumeErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionFormCorrectionErrorCodes.Conflict => StatusCodes.Status409Conflict,

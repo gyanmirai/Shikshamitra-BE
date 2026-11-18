@@ -309,7 +309,8 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 			new(runtime.Tenant, Repository<CommunicationTemplateRevision>(db), runtime.Queries, runtime.Renderer, runtime.Links,
 				runtime.Protector, runtime.Guids, runtime.WhatsApp, runtime.Approvals, runtime.WebPush),
 			Repository<NotificationIntent>(db), Repository<CommunicationCampaign>(db), Repository<NotificationDispatch>(db),
-			Repository<CommunicationRecipientSnapshot>(db), runtime.Queries, runtime.Guids);
+			Repository<CommunicationRecipientSnapshot>(db), runtime.Queries, runtime.Guids,
+			new NotificationOutcomeLock(Substitute.For<INotificationPersonalWriteLock>()));
 	}
 
 	private static Runtime CreateRuntime(NotificationPersistenceTestDbContext db, Work work, IDataProtectionProvider keys,

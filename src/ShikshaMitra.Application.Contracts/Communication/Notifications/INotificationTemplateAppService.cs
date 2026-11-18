@@ -16,6 +16,8 @@ public interface INotificationTemplateReadService
 
 public interface INotificationTemplateAppService : IApplicationService, INotificationTemplateReadService
 {
+	Task<PagedResultDto<PublishedNotificationTemplateOptionDto>> GetPublishedOptionsAsync(GetNotificationTemplateListInput input,
+		CancellationToken cancellationToken = default);
 	Task<int> InitializeDefaultsAsync(string eventKey, CancellationToken cancellationToken = default);
 	Task<NotificationTemplateDto> CreateAsync(CreateNotificationTemplateDto input, CancellationToken cancellationToken = default);
 	Task<NotificationTemplateDto> UpdateDraftAsync(Guid templateId, UpdateNotificationTemplateDraftDto input, CancellationToken cancellationToken = default);

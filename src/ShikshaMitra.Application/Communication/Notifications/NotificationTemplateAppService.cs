@@ -21,6 +21,8 @@ public class NotificationTemplateAppService(NotificationTemplateRevisionService 
 	public virtual Task<NotificationTemplateDto> GetAsync(Guid templateId, CancellationToken cancellationToken = default) => revisions.GetAsync(templateId, cancellationToken);
 	public virtual Task<IReadOnlyList<NotificationTemplateDto>> GetHistoryAsync(Guid templateId, CancellationToken cancellationToken = default) => revisions.GetHistoryAsync(templateId, cancellationToken);
 	public virtual Task<PagedResultDto<NotificationTemplateDto>> GetListAsync(GetNotificationTemplateListInput input, CancellationToken cancellationToken = default) => revisions.GetListAsync(input, cancellationToken);
+	public virtual Task<PagedResultDto<PublishedNotificationTemplateOptionDto>> GetPublishedOptionsAsync(GetNotificationTemplateListInput input,
+		CancellationToken cancellationToken = default) => revisions.GetPublishedOptionsAsync(input, cancellationToken);
 	public virtual Task<NotificationTemplateDto> CreateAsync(CreateNotificationTemplateDto input, CancellationToken cancellationToken = default) => revisions.CreateAsync(input, cancellationToken);
 	public virtual Task<NotificationTemplateDto> UpdateDraftAsync(Guid templateId, UpdateNotificationTemplateDraftDto input, CancellationToken cancellationToken = default) => revisions.UpdateDraftAsync(templateId, input, cancellationToken);
 	[UnitOfWork(true)]

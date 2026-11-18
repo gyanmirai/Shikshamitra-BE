@@ -28,6 +28,11 @@ public class AcademicNotificationTemplateController(INotificationTemplateAppServ
 	public Task<PagedResultDto<NotificationTemplateDto>> GetListAsync([FromQuery] GetNotificationTemplateListInput input,
 		CancellationToken cancellationToken) => templates.GetListAsync(input, cancellationToken);
 
+	[HttpGet("options"), Authorize(View)]
+	public Task<PagedResultDto<PublishedNotificationTemplateOptionDto>> GetPublishedOptionsAsync(
+		[FromQuery] GetNotificationTemplateListInput input, CancellationToken cancellationToken) =>
+		templates.GetPublishedOptionsAsync(input, cancellationToken);
+
 	[HttpGet("{id:guid}"), Authorize(View)]
 	public Task<NotificationTemplateDto> GetAsync(Guid id, CancellationToken cancellationToken) =>
 		templates.GetAsync(id, cancellationToken);

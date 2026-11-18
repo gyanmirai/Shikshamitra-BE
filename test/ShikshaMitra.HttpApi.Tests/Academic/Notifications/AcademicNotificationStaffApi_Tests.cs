@@ -75,6 +75,17 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 		var published = await PostAndReadAsync<NotificationTemplateDto>($"{Templates}/{draft.TemplateId}/publish",
 			new NotificationTemplateRevisionCommandDto(draft.RevisionId, draft.ConcurrencyStamp));
 		published.IsPublished.ShouldBeTrue();
+		var current = await GetAndReadAsync<NotificationTemplateDto>($"{Templates}/{published.TemplateId}");
+		var nextDraft = await PostAndReadAsync<NotificationTemplateDto>(Templates, new CreateNotificationTemplateDto(
+			Event, published.RecipientKind, published.Channel, published.LanguageCode, published.TemplateName,
+			published.Subject + " v2", published.Body, ExistingTemplateId: published.TemplateId,
+			HeaderConcurrencyStamp: current.HeaderConcurrencyStamp));
+		nextDraft.IsPublished.ShouldBeFalse();
+		var options = await GetAndReadAsync<PagedResultDto<JsonElement>>($"{Templates}/options?eventKey={Event}&maxResultCount=100");
+		var option = options.Items.Where(item => item.GetProperty("templateId").GetGuid() == published.TemplateId)
+			.ShouldHaveSingleItem();
+		option.TryGetProperty("body", out _).ShouldBeFalse();
+		option.GetProperty("revisionId").GetGuid().ShouldBe(published.RevisionId);
 		using var change = await Client.PutAsJsonAsync($"{Templates}/{draft.TemplateId}/draft",
 			new UpdateNotificationTemplateDraftDto(published.RevisionId, published.Subject, published.Body, published.ConcurrencyStamp));
 		change.IsSuccessStatusCode.ShouldBeFalse();

@@ -8,14 +8,29 @@ namespace ShikshaMitra.Communication.Notifications;
 
 public partial class NotificationTemplateRevisionService
 {
+	public virtual async Task<PagedResultDto<PublishedNotificationTemplateOptionDto>> GetPublishedOptionsAsync(
+		GetNotificationTemplateListInput input, CancellationToken cancellationToken = default)
+	{
+		var tenantId = await AuthorizeListAsync(input, cancellationToken);
+		var search = input.Search?.Trim();
+		var query = from header in await headers.GetQueryableAsync()
+			join revision in await revisions.GetQueryableAsync() on header.Id equals revision.TemplateId
+			where header.TenantId == tenantId && revision.TenantId == tenantId && !header.IsDeleted &&
+				!revision.IsDeleted && revision.IsPublished && !revision.IsRetired && revision.EventKey == input.EventKey &&
+				(header.AcademicMediumId == null || header.AcademicMediumId == input.AcademicMediumId) &&
+				(string.IsNullOrEmpty(search) || header.TemplateName.Contains(search))
+			orderby header.TemplateName, header.Id, revision.Id
+			select new PublishedNotificationTemplateOptionDto(header.Id, revision.Id, header.TemplateName,
+				revision.RecipientKind, revision.Channel, revision.LanguageCode, header.AcademicMediumId);
+		var count = await executer.CountAsync(query, cancellationToken);
+		var page = await executer.ToListAsync(query.Skip(input.SkipCount).Take(input.MaxResultCount), cancellationToken);
+		return new(count, page);
+	}
+
 	public virtual async Task<PagedResultDto<NotificationTemplateDto>> GetListAsync(GetNotificationTemplateListInput input,
 		CancellationToken cancellationToken = default)
 	{
-		var tenantId = RequireTenant();
-		validator.GetDefinition(input.EventKey);
-		await AuthorizeAsync(input.EventKey, input.AcademicMediumId, NotificationTemplateAction.Read, cancellationToken);
-		if (input.SkipCount < 0 || input.MaxResultCount is < 1 or > 100 || input.Search?.Length > 160)
-			throw new BusinessException(NotificationErrorCodes.TemplateInvalid);
+		var tenantId = await AuthorizeListAsync(input, cancellationToken);
 		var query = from header in await headers.GetQueryableAsync()
 			join revision in await revisions.GetQueryableAsync() on header.CurrentNotificationRevisionId equals (System.Guid?)revision.Id
 			where header.TenantId == tenantId && revision.TenantId == tenantId && header.Id == revision.TemplateId &&
@@ -31,5 +46,15 @@ public partial class NotificationTemplateRevisionService
 		var page = await executer.ToListAsync(query.OrderBy(x => x.Header.TemplateName).ThenBy(x => x.Header.Id)
 			.Skip(input.SkipCount).Take(input.MaxResultCount), cancellationToken);
 		return new(count, page.Select(x => Map(x.Header, x.Revision)).ToArray());
+	}
+
+	private async Task<System.Guid> AuthorizeListAsync(GetNotificationTemplateListInput input, CancellationToken cancellationToken)
+	{
+		var tenantId = RequireTenant();
+		validator.GetDefinition(input.EventKey);
+		await AuthorizeAsync(input.EventKey, input.AcademicMediumId, NotificationTemplateAction.Read, cancellationToken);
+		if (input.SkipCount < 0 || input.MaxResultCount is < 1 or > 100 || input.Search?.Length > 160)
+			throw new BusinessException(NotificationErrorCodes.TemplateInvalid);
+		return tenantId;
 	}
 }

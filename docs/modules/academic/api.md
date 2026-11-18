@@ -38,6 +38,7 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 | `GET /templates/{id}/preview/{revisionId}` | View | Render with synthetic values for review |
 | `POST /templates` and `PUT /templates/{id}/draft` | Add | Create or edit a draft |
 | `POST /templates/initialize-defaults` | Add + school-wide scope | Create missing English variant drafts for one `eventKey` |
+| `GET /templates/options` | View + template scope | Page published, non-retired variant names, channels and languages for an event without reading message content |
 | `POST /templates/{id}/test-send` | Add + template scope | Queue a synthetic test for a single verified account |
 | `POST /templates/{id}/publish` and `/{id}/restore-default` | Add | Publish an immutable revision or create a fresh draft from the system default |
 | `DELETE /templates/{id}/draft` | Delete | Delete the selected unused draft |

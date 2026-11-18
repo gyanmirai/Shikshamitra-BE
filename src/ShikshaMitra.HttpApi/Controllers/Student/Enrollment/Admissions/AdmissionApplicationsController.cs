@@ -167,8 +167,15 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 
 	[HttpGet("{id:guid}/finalization-preview")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
-	public async Task<Result<AdmissionFinalizationPreviewDto>> GetFinalizationPreviewAsync(Guid id) =>
-		Result.Success(await service.GetFinalizationPreviewAsync(id));
+	public async Task<Result<AdmissionFinalizationPreviewDto>> GetFinalizationPreviewAsync(Guid id, [FromQuery] bool forApproval = false) =>
+		Result.Success(await service.GetFinalizationPreviewAsync(id, forApproval));
+
+	[HttpPost("{id:guid}/approve-and-finalize")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Advance)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
+	public async Task<Result<AdmissionFinalizationResultDto>> ApproveAndFinalizeAsync(Guid id, ApproveAndFinalizeAdmissionApplicationDto input) =>
+		Result.Success(await service.ApproveAndFinalizeAsync(id, input));
 
 	[HttpPost("{id:guid}/finalize")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]

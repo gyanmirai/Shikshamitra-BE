@@ -3,12 +3,47 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-16
+updated_on: 2026-11-18
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Combined Approval and Finalization
+
+`AdmissionWorkflowRuntimeIntegration_ApproveAndFinalize_Tests.cs` covers read-only readiness, terminal-stage projection, one-click approval/stage completion/Student and case linkage, no fabricated contact verification, successful retry, missing identity or guardian, structured-parent-only contact, stale stamps, duplicate resolution, unfinished preceding stages, retained nonterminal conditional Approval, and explicit database transaction rollback. Its Finance scenario records a real test payment through the Finance owner, proves Student linkage rolls back with approval, then retries with the same due identity and confirmed amount.
+
+Run the `Combined_approval` Application filter with `AdmissionApplicationDecisionContract_Tests`, legacy certification/contact and document-finalization cases, and settled Finance handoff coverage. Run `AdmissionApproveAndFinalizeApiContract_Tests` for endpoint/query and authorization metadata. HTTP metadata checks do not establish authenticated network acceptance. Use `.artifacts/approve-finalize` to keep the active local Host outputs independent; a source build does not refresh the running Host.
+
+`AdmissionWorkflowRuntimeIntegration_TerminalApprovalDependencies_Tests.cs` isolates the stage helpers after normal fixture preparation. Terminal Approval must complete without activating unrelated Form/Inquiry/retired-stage/fact runtimes, preserve completion history, null route/assessed values and the idempotency key, and continue rejecting an undecided application. Run with nonterminal conditional Approval, Form submit/reopen, managed document handoff, payment and Finance rollback/retry coverage. `AdmissionFinanceHandoffDependency_Tests` protects the separate Finance activation boundary. Cold service-construction measurements and full HTTP timings are different evidence; report each explicitly.
+
+`AdmissionWorkflowRuntimeIntegration_ReturnDependencies_Tests.cs` protects the Records return boundary used by finalization. New admissions must complete the real combined command without constructing return readiness; direct provenance validation must avoid return-only helpers and repositories while still rejecting a former Student with no reviewed handoff. Throwing child-scope registrations detect accidental eager activation. Run these with `Combined_approval`, `Record_return_`, `Record_admission_return_`, `Record_direct_return_`, `Record_historical_admission_return_`, `Record_resume_return_`, `Record_inquiry_return_`, terminal-Approval, document and Finance handoff/rollback tests. Measure the first finalization command after a fresh Host restart separately from readiness GETs, frontend compilation and warm retries; resolve-only diagnostics never establish full API latency.
+
+Local verification passed 40 selected Application cases and two HTTP metadata cases with no skips. The refined normal paid-stage Finance rollback/retry scenario passed its additional focused rerun. Contracts, Application, EntityFrameworkCore, HttpApi and Host compiled using the pinned .NET 9 SDK and isolated outputs; existing unrelated nullable warnings remain. The all-module documentation gate passed. These overlapping selections are not a full-suite claim or an HTTP latency measurement. Evidence logs are `.artifacts/approve-finalize-regressions.log`, `.artifacts/approve-finalize-http-tests.log` and `.artifacts/approve-finalize-finance-test.log`.
+
+## Registration print validation
+
+Run `AdmissionFormPrintSettings_Tests`, the `Registration_print_settings_survive_create_get_update_clone_and_new_version` integration case and `AdmissionRegistrationRelationship_Tests` with the pinned SDK and isolated test outputs when a local Host locks assemblies.
+The focused metadata tests cover legacy Simple defaults, Boxed Grid/Structured Classic roundtrip, template omission by older clients, independent clone/version metadata, invalid template/layout/paper rejection before mutation, inheritance, frozen definitions, version comparison and separate persisted-answer DTO serialization. Application-form GET retains the saved application number. School Identity branding tests cover current-tenant school name/address, legacy location objects, empty address parts and unchanged authorization.
+The runtime integration case exercises real create/get/update/clone/publish/new-version service calls; the relationship-prefill suite protects empty persisted print answers when only editor suggestions exist.
+
+On 17 November 2026, the expanded print settings, Registration print and School Identity integration/authorization selection passed 60 tests with no failures or skips. Contracts, Application, HttpApi, Host and Application.Tests leaf builds passed using the pinned SDK; existing Application/nullable test warnings remain. The isolated `.artifacts/boxed-print-host` supplied the real local browser save/reopen/publish checks without replacing the shared API. No database migration was required.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AdmissionFormPrintSettings_Tests|FullyQualifiedName~Registration_print_settings_survive_create_get_update_clone_and_new_version|FullyQualifiedName~AdmissionRegistrationRelationship_Tests" --artifacts-path .artifacts/registration-print -m:1
+pwsh -File scripts/docs/validate-docs.ps1 -Module student
+```
+
+Retain existing Application View/Add, tenant, scope, draft/submission and correction regressions; printing does not add permission grants or relax write checks.
+Record actual command results separately from this coverage map.
+Local contract/integration tests do not establish authenticated browser, deployed-backend or physical PDF/print acceptance; those checks remain in the [frontend guide](../../../../Shikshamitra-FE/docs/student/testing.md#registration-print-checks).
+
+## Admission assessment scheduling without Academic Calendar blocking
+
+`AdmissionWorkflowRuntimeIntegration_AssessmentCalendar_Tests.cs` covers admission sessions on matching published holidays, vacations and emergency closures, including legacy calendars, confirmation, rescheduling, shared classes and linked room approval. A closure added after preview does not prevent confirmation. Ordinary scoped room checks still reject those calendar closures by default. Maintenance and another room reservation added after preview must still reject admission confirmation without creating an applicant attempt. These tests use the application's isolated SQLite harness; they do not modify a local school database or establish staging deployment acceptance.
+
+On 2026-11-17 the focused assessment/calendar run passed 33 tests with zero failures/skips using SDK 9.0.319 (selected by `global.json`) and isolated build outputs. The build reported existing nullable/analyzer warnings. Student documentation validation and `git diff --check` passed; no live deployment or browser verification is claimed.
 
 ## Assessment Catalog Academic Order
 
@@ -1543,6 +1578,7 @@ Run focused Application tests matching Full_legacy_room_and_seat_pool, Inquiry_c
 ## Student setup guide validation
 
 `Students/Setup/StudentSetupGuideApi_Tests*.cs` covers real HTTP authorization, active school identity, tenant/year/class scope, school-wide first visits, visit collisions, progress concurrency, corrupt metadata, hidden deferrals, effective Records defaults/inheritance, and selected-class numbering coverage.
+Application `Students/Setup/StudentSetupPermissionBatch_Tests.cs` checks one deduplicated permission batch, View-only visit access, View-dependent Manage output, unchanged visited/unvisited responses, rejection of invalid identities, and fail-closed permission lookup errors. Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~StudentSetupPermissionBatch_Tests|FullyQualifiedName~PermissionBatchRead_Tests"` for the batching and checker parity cases. HTTP guide tests use the test permission checker; authenticated local measurements with the real checker are separate performance evidence and do not establish deployed timings.
 Run from the backend repository with the pinned SDK:
 
 ```powershell

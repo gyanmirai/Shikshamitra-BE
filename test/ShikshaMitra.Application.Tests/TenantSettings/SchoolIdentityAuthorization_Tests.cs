@@ -30,7 +30,7 @@ public class SchoolIdentityAuthorization_Tests
 	[InlineData("preview", SchoolIdentityPermissions.View)]
 	public async Task Direct_calls_check_exact_actions_before_reading_or_writing_storage(string action, string denied)
 	{
-		var service = new SchoolIdentityAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!)
+		var service = new SchoolIdentityAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!, null!)
 			{ LazyServiceProvider = Denying(denied) };
 		Func<Task> operation = action switch
 		{
@@ -52,7 +52,7 @@ public class SchoolIdentityAuthorization_Tests
 	[Fact]
 	public async Task Public_branding_rejects_the_signature_kind_before_storage()
 	{
-		var service = new SchoolIdentityAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!);
+		var service = new SchoolIdentityAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!, null!);
 		await Should.ThrowAsync<AbpAuthorizationException>(() => service.GetBrandingAssetAsync(SchoolIdentityAssetKind.Signature));
 	}
 

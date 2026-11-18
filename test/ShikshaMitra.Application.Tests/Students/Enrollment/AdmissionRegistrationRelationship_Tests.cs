@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
@@ -49,6 +50,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		form = await _applicationAppService.GetFormAsync(application.Id);
 		form.AutoFilledFieldCodes.ShouldContain("GUARDIAN_RELATION");
 		AdmissionApplicationValueConverter.Unwrap(form.Values.Single(value => value.FieldCode == "GUARDIAN_RELATION").ValueJson).ShouldBe(display);
+		var printValues = JsonSerializer.SerializeToNode(form, new JsonSerializerOptions(JsonSerializerDefaults.Web))!["persistedValues"];
+		printValues.ShouldNotBeNull();
+		printValues!.AsArray().ShouldNotContain(value => value!["fieldCode"]!.GetValue<string>() == "GUARDIAN_RELATION");
 		(await WithUnitOfWorkAsync(() => values.CountAsync())).ShouldBe(valueCount);
 		(await WithUnitOfWorkAsync(() => histories.CountAsync())).ShouldBe(historyCount);
 		await _applicationAppService.UpdateFormValuesAsync(application.Id, new()
@@ -66,6 +70,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 			var reloaded = await _applicationAppService.GetFormAsync(application.Id);
 			AdmissionApplicationValueConverter.Unwrap(reloaded.Values.Single(value => value.FieldCode == "GUARDIAN_RELATION").ValueJson).ShouldBe(saved);
+			var persisted = JsonSerializer.SerializeToNode(reloaded, new JsonSerializerOptions(JsonSerializerDefaults.Web))!["persistedValues"];
+			persisted.ShouldNotBeNull();
+			AdmissionApplicationValueConverter.Unwrap(persisted!.AsArray().Single(value => value!["fieldCode"]!.GetValue<string>() == "GUARDIAN_RELATION")!["valueJson"]!.GetValue<string>()).ShouldBe(saved);
 			reloaded.AutoFilledFieldCodes.ShouldNotContain("GUARDIAN_RELATION");
 		}
 		var unchanged = await _applicationAppService.GetAsync(application.Id);

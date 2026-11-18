@@ -20,27 +20,37 @@ namespace ShikshaMitra.Students.Records;
 
 /// <summary>Admissions executes a frozen Records return authorization; it does not own a second approval workflow.</summary>
 [RemoteService(false)]
-public class StudentRecordAdmissionReturnService(StudentRecordsAccessService access, StudentRecordsPolicyResolver policies,
-	StudentRecordTransitionReadinessService readiness, StudentRecordTransitionAuthorityService authority,
+public class StudentRecordAdmissionReturnService(
 	IStudentRepository students, IRepository<StudentEnrollment, Guid> enrollments,
-	IRepository<StudentRecordReturnHandoff, Guid> handoffs, IRepository<StudentRecordTransition, Guid> transitions,
-	IRepository<StudentRecordTransitionBatch, Guid> batches, IRepository<StudentRecordTransitionEvent, Guid> events,
-	IRepository<StudentRecordLegacyOverride, Guid> overrides, IRepository<StudentGuardianAccessReview, Guid> guardianReviews,
+	IRepository<StudentRecordReturnHandoff, Guid> handoffs,
 	IRepository<StudentOnboardingCase, Guid> onboardingCases,
 	IRepository<AdmissionApplicant, Guid> applicants, IRepository<AdmissionApplication, Guid> applications,
 	IRepository<AdmissionFamily, Guid> families, IRepository<AdmissionGuardian, Guid> guardians,
-	IRepository<AcademicYear, Guid> years,
 	IRepository<AdmissionFormDefinition, Guid> forms, IRepository<AdmissionFormFieldDefinition, Guid> fields,
-	IRepository<AdmissionFormSectionDefinition, Guid> sections, AdmissionApplicationFormValidator formValidator,
-	AdmissionOfferingRuntimeService offeringRuntime, AdmissionInquiryPolicyResolver inquiryPolicies,
+	AdmissionApplicationFormValidator formValidator,
+	AdmissionInquiryPolicyResolver inquiryPolicies,
 	AdmissionApplicationScopeAccessService admissionScope, StudentScopeAccessService scope)
 	: ApplicationService, ITransientDependency
 {
+	// Return provenance is checked for every admission; activate return-only helpers when their operations run.
+	private IRepository<StudentRecordTransition, Guid> Transitions => LazyServiceProvider.LazyGetRequiredService<IRepository<StudentRecordTransition, Guid>>();
+	private IRepository<StudentRecordTransitionBatch, Guid> Batches => LazyServiceProvider.LazyGetRequiredService<IRepository<StudentRecordTransitionBatch, Guid>>();
+	private IRepository<StudentRecordTransitionEvent, Guid> Events => LazyServiceProvider.LazyGetRequiredService<IRepository<StudentRecordTransitionEvent, Guid>>();
+	private IRepository<StudentRecordLegacyOverride, Guid> Overrides => LazyServiceProvider.LazyGetRequiredService<IRepository<StudentRecordLegacyOverride, Guid>>();
+	private IRepository<StudentGuardianAccessReview, Guid> GuardianReviews => LazyServiceProvider.LazyGetRequiredService<IRepository<StudentGuardianAccessReview, Guid>>();
+	private IRepository<AcademicYear, Guid> Years => LazyServiceProvider.LazyGetRequiredService<IRepository<AcademicYear, Guid>>();
+	private IRepository<AdmissionFormSectionDefinition, Guid> Sections => LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionFormSectionDefinition, Guid>>();
+	private StudentRecordsAccessService Access => LazyServiceProvider.LazyGetRequiredService<StudentRecordsAccessService>();
+	private StudentRecordsPolicyResolver Policies => LazyServiceProvider.LazyGetRequiredService<StudentRecordsPolicyResolver>();
+	private StudentRecordTransitionAuthorityService Authority => LazyServiceProvider.LazyGetRequiredService<StudentRecordTransitionAuthorityService>();
+	private AdmissionOfferingRuntimeService OfferingRuntime => LazyServiceProvider.LazyGetRequiredService<AdmissionOfferingRuntimeService>();
+	private StudentRecordTransitionReadinessService Readiness => LazyServiceProvider.LazyGetRequiredService<StudentRecordTransitionReadinessService>();
+
 	public async Task<StudentRecordReturnDto?> ReplayAsync(StudentRecordReturnInput input)
 	{
 		var handoff = await handoffs.FindAsync(x => x.TenantId == CurrentTenant.Id && x.IdempotencyKey == input.IdempotencyKey);
 		if (handoff == null) return null;
-		await access.EnsureReadableAsync(input.StudentId);
+		await Access.EnsureReadableAsync(input.StudentId);
 		if (handoff.StudentId != input.StudentId || handoff.RequestJson != JsonSerializer.Serialize(input))
 			throw new BusinessException("Students:Records:IdempotencyConflict");
 		return await MapAsync(handoff);
@@ -53,22 +63,22 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 		{
 			var replay = await ReplayAsync(input);
 			if (replay != null) { await work.CompleteAsync(); return replay; }
-			var student = (await access.EnsureWritableAsync(input.StudentId, placement: true)).Student;
+			var student = (await Access.EnsureWritableAsync(input.StudentId, placement: true)).Student;
 			if (student.Status != StudentLifeCycleStatusEnum.Left || !student.AcademicYearId.HasValue ||
 				string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Trim().Length > 1000 || string.IsNullOrWhiteSpace(input.IdempotencyKey) || input.IdempotencyKey.Length > 128)
 				throw new BusinessException("Students:Records:InvalidTransition");
-			if (await transitions.AnyAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == student.Id && x.Outcome == "Return" &&
+			if (await Transitions.AnyAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == student.Id && x.Outcome == "Return" &&
 				x.Status != "Applied" && x.Status != "Rejected" && x.Status != "Cancelled")) throw new BusinessException("Students:Records:InvalidChangeState");
-			if (await batches.AnyAsync(x => x.TenantId == CurrentTenant.Id && x.IdempotencyKey == input.IdempotencyKey)) throw new BusinessException("Students:Records:IdempotencyConflict");
-			var policy = await policies.ResolveAsync(student.AcademicYearId);
+			if (await Batches.AnyAsync(x => x.TenantId == CurrentTenant.Id && x.IdempotencyKey == input.IdempotencyKey)) throw new BusinessException("Students:Records:IdempotencyConflict");
+			var policy = await Policies.ResolveAsync(student.AcademicYearId);
 			if (!policy.Policy.Transitions.AllowedReturnRoutes.Contains(route)) throw new BusinessException("Students:Records:ReturnRouteNotAllowed");
 			var source = await enrollments.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == student.Id && x.AcademicYearId == student.AcademicYearId);
 			if (source?.IsActive == true) throw new BusinessException("Students:Records:InvalidTransition");
 			if (source?.StandardId.HasValue == true) await scope.EnsureCanAccessStandardAsync(source.StandardId.Value, "return source class");
 			if (source?.DivisionId.HasValue == true) await scope.EnsureCanAccessDivisionAsync(source.DivisionId.Value, "return source division");
 			if (source == null) await RequireLegacyAuthorityAsync(student.Id);
-			await readiness.RequireAdmissionReturnOwnerChecksAsync(student, policy.Policy);
-			var runtime = route == "ResumeStage" ? await GetResumeRuntimeAsync(input, student.Id) : await offeringRuntime.GetAvailableAsync(input.AdmissionOfferingId ?? throw new BusinessException("Students:Records:AdmissionOfferingRequired"));
+			await Readiness.RequireAdmissionReturnOwnerChecksAsync(student, policy.Policy);
+			var runtime = route == "ResumeStage" ? await GetResumeRuntimeAsync(input, student.Id) : await OfferingRuntime.GetAvailableAsync(input.AdmissionOfferingId ?? throw new BusinessException("Students:Records:AdmissionOfferingRequired"));
 			await ValidateOfferingAsync(input, student, runtime);
 			var entry = route == "ResumeStage" ? (AdmissionEntryMode?)null : ResolveEntry(input.EntryPath, runtime.Offering.EntryMode);
 			var details = await students.GetWithDetailsAsync(student.Id) ?? throw new BusinessException("Students:Records:StaleSnapshot");
@@ -80,7 +90,7 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 			}
 			else await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start);
 			var date = input.EffectiveDate ?? AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now);
-			var preview = new StudentRecordTransitionPreviewRowDto(); readiness.ValidateAdmissionReturnDate(preview, date, policy.Policy);
+			var preview = new StudentRecordTransitionPreviewRowDto(); Readiness.ValidateAdmissionReturnDate(preview, date, policy.Policy);
 			if (preview.Issues.Count > 0) throw new BusinessException(preview.Issues[0].Code);
 			var command = new StudentRecordTransitionInput { StudentId = student.Id, Outcome = "Return", Reason = input.Reason, EffectiveDate = date,
 				TargetAcademicYearId = input.TargetAcademicYearId, TargetStandardId = runtime.Offering.StandardId };
@@ -101,8 +111,8 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 				handoff.ExtraProperties["IntakeContact"] = JsonSerializer.Serialize(await ResolveRegistrationAsync(input, details));
 				handoff.ExtraProperties["IntakeFamilyId"] = (await FindFamilyAsync(student.Id))?.ToString("D") ?? "";
 			}
-			await batches.InsertAsync(batch); await transitions.InsertAsync(transition); await handoffs.InsertAsync(handoff);
-			await events.InsertAsync(new(GuidGenerator.Create(), CurrentTenant.Id.Value, transition.Id, CurrentUser.Id!.Value, "Submitted", 0, input.Reason));
+			await Batches.InsertAsync(batch); await Transitions.InsertAsync(transition); await handoffs.InsertAsync(handoff);
+			await Events.InsertAsync(new(GuidGenerator.Create(), CurrentTenant.Id.Value, transition.Id, CurrentUser.Id!.Value, "Submitted", 0, input.Reason));
 			await work.CompleteAsync();
 		}
 		await LazyServiceProvider.LazyGetRequiredService<StudentRecordTransitionApplication>().ApplyAsRecordedActorAsync(transitionId);
@@ -115,7 +125,7 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 		var handoff = await GetHandoffAsync(transition);
 		var student = await ValidateOriginAsync(handoff, transition);
 		var input = JsonSerializer.Deserialize<StudentRecordReturnInput>(handoff.RequestJson)!;
-		var runtime = await offeringRuntime.GetAvailableAsync(handoff.AdmissionOfferingId!.Value);
+		var runtime = await OfferingRuntime.GetAvailableAsync(handoff.AdmissionOfferingId!.Value);
 		await ValidateOfferingAsync(input, student, runtime);
 		if (!handoff.ExtraProperties.TryGetValue("IntakeConfiguration", out var frozen) || frozen?.ToString() != await CaptureIntakeAsync(runtime.Offering))
 			throw new BusinessException("Students:Records:StaleSnapshot");
@@ -169,30 +179,30 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 				throw new BusinessException("Students:Records:InvalidReturnApplication");
 			return null;
 		}
-		var transition = await transitions.GetAsync(x => x.Id == handoff.TransitionId && x.TenantId == CurrentTenant.Id);
+		var transition = await Transitions.GetAsync(x => x.Id == handoff.TransitionId && x.TenantId == CurrentTenant.Id);
 		if (transition.Status != "AwaitingAdmission" || applicant.ExistingStudentId != handoff.StudentId) throw new BusinessException("Students:Records:InvalidReturnApplication");
 		await ValidateOriginAsync(handoff, transition); await RequireNoGuardianReviewAsync(handoff.StudentId); return handoff;
 	}
 	public async Task ValidateOnboardingAsync(StudentOnboardingCase item, bool sourceRequired = true)
 	{
 		if (!ReturnTransitionId(item).HasValue) return;
-		var transition = await transitions.GetAsync(x => x.Id == ReturnTransitionId(item) && x.TenantId == CurrentTenant.Id);
+		var transition = await Transitions.GetAsync(x => x.Id == ReturnTransitionId(item) && x.TenantId == CurrentTenant.Id);
 		var handoff = await GetHandoffAsync(transition);
 		if (handoff.AdmissionApplicationId != item.ApplicationId || handoff.StudentId != item.StudentId || handoff.AcademicYearId != item.AcademicYearId || handoff.AdmissionOfferingId != item.OfferingId)
 			throw new BusinessException("Students:Records:InvalidReturnApplication");
 		if (transition.TargetStandardId != item.IntendedStandardId) throw new BusinessException("Students:Records:InvalidReturnApplication");
 		if (!sourceRequired && item.Status == StudentOnboardingStatus.Completed && transition.Status == "Applied" && transition.TargetEnrollmentId == item.StudentEnrollmentId) return;
 		if (transition.Status != "AwaitingAdmission") throw new BusinessException("Students:Records:InvalidReturnApplication");
-		await authority.ValidateAsync(transition); await RequireNoGuardianReviewAsync(item.StudentId);
+		await Authority.ValidateAsync(transition); await RequireNoGuardianReviewAsync(item.StudentId);
 		if (sourceRequired) await ValidateOriginAsync(handoff, transition);
 	}
 	public async Task<StudentEnrollment> ActivateEnrollmentAsync(StudentOnboardingCase item)
 	{
 		await ValidateOnboardingAsync(item);
-		var transition = await transitions.GetAsync(x => x.Id == ReturnTransitionId(item) && x.TenantId == CurrentTenant.Id);
+		var transition = await Transitions.GetAsync(x => x.Id == ReturnTransitionId(item) && x.TenantId == CurrentTenant.Id);
 		var rollRules = LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>();
 		await rollRules.ValidateAsync(item.StudentId, item.AcademicYearId, item.IntendedStandardId, item.DivisionId!.Value, item.RollNumber, transition.Reason, await rollRules.CaptureForCaseAsync(item));
-		await readiness.ValidateTargetAsync(item.StudentId, transition.AcademicYearId, item.AcademicYearId, item.IntendedStandardId,
+		await Readiness.ValidateTargetAsync(item.StudentId, transition.AcademicYearId, item.AcademicYearId, item.IntendedStandardId,
 			item.DivisionId!.Value, item.RollNumber, true, allowHistoricalFirstEnrollment: !transition.SourceEnrollmentId.HasValue, excludeOnboardingCaseId: item.Id);
 		var enrollment = await enrollments.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == item.StudentId && x.AcademicYearId == item.AcademicYearId);
 		if (enrollment == null)
@@ -206,16 +216,16 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 	{
 		if (!ReturnTransitionId(item).HasValue) return;
 		await ValidateOnboardingAsync(item, false);
-		var transition = await transitions.GetAsync(x => x.Id == ReturnTransitionId(item) && x.TenantId == CurrentTenant.Id);
+		var transition = await Transitions.GetAsync(x => x.Id == ReturnTransitionId(item) && x.TenantId == CurrentTenant.Id);
 		if (item.Status == StudentOnboardingStatus.Completed && transition.Status == "Applied" && transition.TargetEnrollmentId == item.StudentEnrollmentId) return;
 		var enrollment = await enrollments.GetAsync(x => x.Id == item.StudentEnrollmentId && x.TenantId == CurrentTenant.Id && x.StudentId == item.StudentId && x.IsActive);
 		var student = await students.GetAsync(item.StudentId);
-		transition.Apply(enrollment.Id, StudentRecordTransitionReadinessService.Capture(student, enrollment), Clock.Now); await transitions.UpdateAsync(transition);
-		await events.InsertAsync(new(GuidGenerator.Create(), CurrentTenant.Id!.Value, transition.Id, CurrentUser.Id ?? transition.LastApprovedBy ?? transition.RequestedBy, "Applied", transition.CurrentApprovalStage, "Reviewed return onboarding completed."));
+		transition.Apply(enrollment.Id, StudentRecordTransitionReadinessService.Capture(student, enrollment), Clock.Now); await Transitions.UpdateAsync(transition);
+		await Events.InsertAsync(new(GuidGenerator.Create(), CurrentTenant.Id!.Value, transition.Id, CurrentUser.Id ?? transition.LastApprovedBy ?? transition.RequestedBy, "Applied", transition.CurrentApprovalStage, "Reviewed return onboarding completed."));
 	}
 	public async Task RequireNoGuardianReviewAsync(Guid studentId)
 	{
-		if (await guardianReviews.AnyAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.Status == "Pending")) throw new BusinessException("Students:Records:RenewalChecklistRequired")
+		if (await GuardianReviews.AnyAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.Status == "Pending")) throw new BusinessException("Students:Records:RenewalChecklistRequired")
 			.WithData("Reason", "Resolve the pending guardian access review before returning the student.");
 	}
 	public static Guid? ReturnTransitionId(StudentOnboardingCase item) => item.ExtraProperties.TryGetValue("RecordReturnTransitionId", out var raw) && Guid.TryParse(raw?.ToString(), out var id) ? id : null;
@@ -226,21 +236,21 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 	}
 	private async Task<Student> ValidateOriginAsync(StudentRecordReturnHandoff handoff, StudentRecordTransition transition)
 	{
-		await authority.ValidateAsync(transition);
-		var student = (await access.EnsureWritableAsync(handoff.StudentId, placement: true)).Student;
+		await Authority.ValidateAsync(transition);
+		var student = (await Access.EnsureWritableAsync(handoff.StudentId, placement: true)).Student;
 		var enrollment = await enrollments.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == student.Id && x.AcademicYearId == transition.AcademicYearId);
 		if (student.Status != StudentLifeCycleStatusEnum.Left || enrollment?.IsActive == true || transition.SourceEnrollmentId != enrollment?.Id || await CaptureSourceAsync(student, enrollment) != handoff.SourceSnapshotJson)
 			throw new BusinessException("Students:Records:StaleSnapshot");
 		if (enrollment?.StandardId.HasValue == true) await scope.EnsureCanAccessStandardAsync(enrollment.StandardId.Value, "return source class");
 		if (enrollment?.DivisionId.HasValue == true) await scope.EnsureCanAccessDivisionAsync(enrollment.DivisionId.Value, "return source division");
 		if (enrollment == null) await RequireLegacyAuthorityAsync(student.Id);
-		await readiness.RequireAdmissionReturnOwnerChecksAsync(student, StudentRecordsPolicy.FromJson(transition.PolicyJson)); return student;
+		await Readiness.RequireAdmissionReturnOwnerChecksAsync(student, StudentRecordsPolicy.FromJson(transition.PolicyJson)); return student;
 	}
 	public async Task RequireLegacyAuthorityAsync(Guid studentId)
 	{
-		var approved = (await overrides.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.Status == "Approved"))
+		var approved = (await Overrides.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.Status == "Approved"))
 			.SingleOrDefault(x => x.DecidedByUserId.HasValue && x.DecidedByUserId != x.RequestedByUserId) ?? throw new BusinessException("Students:Records:LegacyStudentNotEligible");
-		await authority.EnsureRecordedActorPermissionAsync(approved.DecidedByUserId!.Value, ShikshaMitraSubmodulePermissions.Students.Records_Overrides.Approve);
+		await Authority.EnsureRecordedActorPermissionAsync(approved.DecidedByUserId!.Value, ShikshaMitraSubmodulePermissions.Students.Records_Overrides.Approve);
 	}
 	private async Task<AdmissionOfferingRuntimeContext> GetResumeRuntimeAsync(StudentRecordReturnInput input, Guid studentId)
 	{
@@ -252,15 +262,15 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 		if (applicant.ExistingStudentId != studentId || application.StudentId.HasValue || application.OnboardingCaseId.HasValue ||
 			application.Status is AdmissionApplicationStatus.AdmissionFinalized or AdmissionApplicationStatus.Enrolled or AdmissionApplicationStatus.Rejected or AdmissionApplicationStatus.Withdrawn or AdmissionApplicationStatus.OfferDeclined)
 			throw new BusinessException("Students:Records:InvalidReturnApplication");
-		return await offeringRuntime.GetAvailableAsync(application.AdmissionOfferingId);
+		return await OfferingRuntime.GetAvailableAsync(application.AdmissionOfferingId);
 	}
 	private async Task ValidateOfferingAsync(StudentRecordReturnInput input, Student student, AdmissionOfferingRuntimeContext runtime)
 	{
 		if (runtime.Cycle.AcademicYearId != input.TargetAcademicYearId || input.TargetStandardId.HasValue && input.TargetStandardId != runtime.Offering.StandardId)
 			throw new BusinessException("Students:Records:InvalidTransitionYear");
 		await scope.EnsureCanAccessStandardAsync(runtime.Offering.StandardId, "return admission class");
-		var sourceYear = await years.GetAsync(x => x.Id == student.AcademicYearId && x.TenantId == CurrentTenant.Id);
-		var targetYear = await years.GetAsync(x => x.Id == input.TargetAcademicYearId && x.TenantId == CurrentTenant.Id);
+		var sourceYear = await Years.GetAsync(x => x.Id == student.AcademicYearId && x.TenantId == CurrentTenant.Id);
+		var targetYear = await Years.GetAsync(x => x.Id == input.TargetAcademicYearId && x.TenantId == CurrentTenant.Id);
 		if (sourceYear.Id != targetYear.Id && targetYear.StartDate <= sourceYear.StartDate) throw new BusinessException("Students:Records:InvalidTransitionYear");
 	}
 	internal static AdmissionEntryMode ResolveEntry(AdmissionEntryMode? chosen, AdmissionEntryMode configured)
@@ -283,7 +293,7 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 	public async Task<StudentRecordReturnInquiryIntakeDto> GetIntakeAsync(Guid offeringId, Guid? studentId)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Create);
-		var runtime = await offeringRuntime.GetAvailableAsync(offeringId);
+		var runtime = await OfferingRuntime.GetAvailableAsync(offeringId);
 		if (runtime.Offering.EntryMode == AdmissionEntryMode.DirectRegistration) throw new BusinessException(AdmissionErrorCodes.InquiryEntryNotAllowed);
 		var policy = (await inquiryPolicies.ResolveAsync(offeringId))?.Policy;
 		var dto = new StudentRecordReturnInquiryIntakeDto
@@ -297,8 +307,8 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 		}
 		if (studentId.HasValue)
 		{
-			var record = await access.EnsureReadableAsync(studentId.Value);
-			var roles = await access.GetDatabaseRoleNamesAsync();
+			var record = await Access.EnsureReadableAsync(studentId.Value);
+			var roles = await Access.GetDatabaseRoleNamesAsync();
 			var student = await students.GetWithDetailsAsync(studentId.Value) ?? throw new BusinessException("Students:Records:StaleSnapshot");
 			var registration = await FindFamilyAsync(student.Id) is { } ? await ResolveRegistrationAsync(new() { StudentId = student.Id }, student) : null;
 			foreach (var value in await BoundValuesAsync(student, registration, runtime.Offering))
@@ -363,7 +373,7 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 			throw new BusinessException(AdmissionErrorCodes.InquiryIdentityIncomplete);
 		if (offering.InquiryFormDefinitionId.HasValue)
 		{
-			var result = formValidator.Validate(await fields.GetListAsync(x => x.FormDefinitionId == offering.InquiryFormDefinitionId), await sections.GetListAsync(x => x.FormDefinitionId == offering.InquiryFormDefinitionId),
+			var result = formValidator.Validate(await fields.GetListAsync(x => x.FormDefinitionId == offering.InquiryFormDefinitionId), await Sections.GetListAsync(x => x.FormDefinitionId == offering.InquiryFormDefinitionId),
 				input.FormValues.ToDictionary(x => x.FieldCode, x => AdmissionApplicationValueConverter.Unwrap(x.ValueJson), StringComparer.OrdinalIgnoreCase));
 			if (result.Errors.Count > 0) throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed).WithData("Fields", string.Join(", ", result.FieldErrors.Keys));
 		}
@@ -375,7 +385,7 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 	}
 	private async Task<string> CaptureSourceAsync(Student student, StudentEnrollment? enrollment)
 	{
-		var exits = await transitions.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == student.Id && x.Status == "Applied" && (x.Outcome == "Withdraw" || x.Outcome == "Transfer" || x.Outcome == "Graduate"));
+		var exits = await Transitions.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == student.Id && x.Status == "Applied" && (x.Outcome == "Withdraw" || x.Outcome == "Transfer" || x.Outcome == "Graduate"));
 		var exit = exits.OrderByDescending(x => x.AppliedAt).ThenByDescending(x => x.CreationTime).FirstOrDefault();
 		return JsonSerializer.Serialize(new
 		{ student.AcademicYearId, student.AcademicBoardId, student.AcademicMediumId, student.AcademicMediumStageId, student.StandardId, student.DivisionId, student.RollNo, student.Status,
@@ -385,7 +395,7 @@ public class StudentRecordAdmissionReturnService(StudentRecordsAccessService acc
 	}
 	private async Task<StudentRecordReturnDto> MapAsync(StudentRecordReturnHandoff handoff)
 	{
-		var transition = handoff.TransitionId.HasValue ? await transitions.GetAsync(x => x.Id == handoff.TransitionId && x.TenantId == CurrentTenant.Id) : null;
+		var transition = handoff.TransitionId.HasValue ? await Transitions.GetAsync(x => x.Id == handoff.TransitionId && x.TenantId == CurrentTenant.Id) : null;
 		return new() { StudentId = handoff.StudentId, Route = handoff.Route, TransitionId = transition?.Id, Status = transition?.Status ?? "AdmissionHandoff",
 			AdmissionApplicationId = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View) ? handoff.AdmissionApplicationId : null,
 			AdmissionInquiryId = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View) ? handoff.AdmissionInquiryId : null };

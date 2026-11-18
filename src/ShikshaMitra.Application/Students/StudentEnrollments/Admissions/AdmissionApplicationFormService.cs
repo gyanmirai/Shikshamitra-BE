@@ -58,6 +58,8 @@ public partial class AdmissionApplicationFormService(
 		var values = await valueRepository.GetListAsync(value => value.FormInstanceId == instance.Id);
 		var storedValues = values.OrderBy(value => value.FieldCode).Select(value => new AdmissionFormValueDto
 			{ FieldCode = value.FieldCode, ValueJson = value.ValueJson }).ToList();
+		var persistedValues = storedValues.Select(value => new AdmissionFormValueDto
+			{ FieldCode = value.FieldCode, ValueJson = value.ValueJson }).ToList();
 		var applicant = context.Applicant;
 		var prefill = applicant == null || application.Status != AdmissionApplicationStatus.Draft || application.SubmittedAt.HasValue ? new AdmissionApplicationFormDto { Values = storedValues } :
 			await LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingRegistrationPrefillService>()
@@ -67,6 +69,7 @@ public partial class AdmissionApplicationFormService(
 		var correctionBlockedReason = await GetCorrectionBlockedReasonAsync(application);
 		return new AdmissionApplicationFormDto
 		{
+			ApplicationNumber = application.ApplicationNumber,
 			ConcurrencyStamp = application.ConcurrencyStamp,
 			CanCorrectForm = correctionBlockedReason == null,
 			CorrectionBlockedReason = correctionBlockedReason,
@@ -81,6 +84,7 @@ public partial class AdmissionApplicationFormService(
 			InquiryContextSections = frozen?.InquiryContextSections ?? [],
 			InquiryContextValues = frozen?.InquiryContextValues ?? [],
 			Values = prefill.Values,
+			PersistedValues = persistedValues,
 			AutoFilledFieldCodes = prefill.AutoFilledFieldCodes,
 			FamilyPrefill = prefill.FamilyPrefill
 		};
@@ -482,6 +486,7 @@ public partial class AdmissionApplicationFormService(
 			Id = definition.Id, Name = definition.Name, Code = definition.Code, Description = definition.Description,
 			Version = definition.Version, Status = definition.Status, LayoutType = definition.LayoutType, Purpose = definition.Purpose,
 			CoreFieldPolicyVersion = experience.CoreFieldPolicyVersion,
+			PrintSettings = experience.PrintSettings ?? new(),
 			FieldsPerRow = definition.FieldsPerRow, DefaultLanguage = experience.DefaultLanguage,
 			SupportedLanguages = experience.SupportedLanguages, ParentVersionId = definition.ParentVersionId,
 			PublishedAt = definition.PublishedAt, PublishedBy = definition.PublishedBy,

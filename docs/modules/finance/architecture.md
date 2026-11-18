@@ -3,7 +3,7 @@ module: finance
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-11-17
+updated_on: 2026-11-18
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -16,6 +16,10 @@ Start in contracts for DTO shape, then trace to application services and domain 
 Fee Structure configuration, publication and revision contracts: [workspace implementation](./references/fee-structure-workspace.md).
 
 Admissions collections use one Finance account and canonical due schedule through real Student linking and enrollment assignment: [admission fee collection](./references/admission-fee-collection.md).
+
+`AdmissionFeeCollectionAppService` resolves fee calculation, collection forms, payment execution, late-fee balances and collection policies through ABP's request-local `LazyServiceProvider` only in operations that use them. Finalization and activation handoffs keep their existing permissions, scope, transaction and evidence-linking checks without constructing those unrelated graphs. Keep these dependencies lazy; eager construction adds first-use repository/proxy generation to the admission request even when no fee account exists.
+
+The handoff's existing authorization and account lookup run before collection-context and ledger activation. Those repositories and the context reader are also lazy, so an admission without an account returns without generating due, payment, allocation, receipt, method or fee-definition proxies. Prepared-account operations still call the same Finance owners, with unchanged calculations, immutable evidence, linkage guards and transaction boundaries.
 
 ## Layer map
 

@@ -20,7 +20,7 @@ public partial class AdmissionFeeCollectionAppService
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View)]
     public async Task<FeeCollectFormDto> GetCollectFormAsync(Guid applicationId)
     {
-        var source = await contextReader.GetAsync(applicationId);
+        var source = await ContextReader.GetAsync(applicationId);
         var account = await accounts.FirstOrDefaultAsync(a => a.ApplicationId == applicationId && a.AcademicYearId == source.AcademicYearId)
             ?? throw new BusinessException(AdmissionFeeCollectionErrorCodes.NotPrepared);
         await scope.EnsureFeeAccountAccessibleAsync(account);
@@ -37,17 +37,17 @@ public partial class AdmissionFeeCollectionAppService
     {
         if (account.StudentFeeStructureId.HasValue && account.StudentId.HasValue)
         {
-            var actual = await studentDetails.GetCollectFormAsync(account.StudentId.Value, account.AcademicYearId);
+            var actual = await StudentDetails.GetCollectFormAsync(account.StudentId.Value, account.AcademicYearId);
             actual.Student.FinanceFeeAccountId = account.Id;
             return actual;
         }
-        var rows = preparedRows ?? await dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id);
-        var metadata = await transactions.GetListAsync(t => t.FinanceFeeAccountId == account.Id && t.Status == FeeCollectionStatus.InReconciliation);
+        var rows = preparedRows ?? await Dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id);
+        var metadata = await Transactions.GetListAsync(t => t.FinanceFeeAccountId == account.Id && t.Status == FeeCollectionStatus.InReconciliation);
         var transactionIds = metadata.Select(t => t.Id).ToList();
-        var pending = await allocations.GetListAsync(a => transactionIds.Contains(a.FeeRecordMetadataId));
+        var pending = await Allocations.GetListAsync(a => transactionIds.Contains(a.FeeRecordMetadataId));
         var reconciliation = pending.GroupBy(a => a.DueFeeId).ToDictionary(g => g.Key, g => g.Sum(a => (double)a.Amount));
-        var balances = await lateFees.GetBalancesAsync(rows, account.AcademicYearId, Clock.Now.Date);
-        var rules = await policies.ResolveEffectiveRulesForAccountAsync(account.Id);
+        var balances = await LateFees.GetBalancesAsync(rows, account.AcademicYearId, Clock.Now.Date);
+        var rules = await Policies.ResolveEffectiveRulesForAccountAsync(account.Id);
         var names = preview.Heads.ToDictionary(h => h.FeeHeadId, h => h.FeeHeadName);
         var proration = preview.Policies.FirstOrDefault(p => p.Family == "proration");
         var ledger = rows.GroupBy(d => (d.Year, d.Month)).OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month)

@@ -46,6 +46,7 @@ public class AdmissionApplicationWorkflowReadService(
 				StageType = stage.StageType,
 				DisplayOrder = stage.DisplayOrder,
 				Status = stage.Status,
+				IsTerminalStage = definitions.First(definition => definition.Id == stage.DefinitionStageId).IsTerminalStage,
 				AllowManualSkip = definitions.First(definition => definition.Id == stage.DefinitionStageId).AllowManualSkip,
 				FormStageEnabled = stage.StageType == AdmissionWorkflowStageType.Form &&
 					AdmissionFormStageAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,

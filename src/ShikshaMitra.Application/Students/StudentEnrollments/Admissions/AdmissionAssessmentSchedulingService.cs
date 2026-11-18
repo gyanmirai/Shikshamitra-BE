@@ -53,10 +53,11 @@ public partial class AdmissionAssessmentSchedulingService(
 		else if (input.InterviewerId.HasValue) throw Invalid("An exam does not require an interview slot assessor.");
 		var window = SchoolWindow(input.StartsAt.UtcDateTime, input.EndsAt.UtcDateTime);
 		var calendarScopes = await LazyServiceProvider.LazyGetRequiredService<AdmissionAssessmentCalendarScopeService>().GetAsync(offerings);
+		// Admission appointments may run during academic holidays; physical resource checks still apply.
 		foreach (var calendarScope in calendarScopes)
 		{
 			var result = await conflicts.CheckScopedConflictsAsync(calendarScope, room.Id, window.Date, window.Start, window.End,
-				ignoreReservationId, input.InterviewerId);
+				ignoreReservationId, input.InterviewerId, enforceAcademicCalendar: false);
 			if (result.OverallSeverity == "critical") throw Invalid(string.Join(" ", result.Conflicts.Where(item => item.Severity == "critical").Select(item => item.Message)));
 			if (input.InterviewerId.HasValue && !result.TeacherAvailability.Passed) throw Invalid(result.TeacherAvailability.Message ?? "The interviewer is occupied at this time.");
 		}

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Text.Json;
@@ -38,7 +38,7 @@ public class PayrollPreviewRunAppService(
 		var revision = await revisions.LockAsync();
 		var query = await runs.GetQueryableAsync();
 		var latest = await AsyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Month == canonicalMonth
-			&& x.AcademicYearId == academicYear && x.ScopeFingerprint == fingerprint).OrderByDescending(x => x.CreatedAtUtc));
+			&& x.AcademicYearId == academicYear && x.ScopeFingerprint == fingerprint).OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id));
 		if (latest != null && !latest.HasCurrentCalculationVersion && (latest.Status is "QUEUED" or "RUNNING"))
 		{
 			latest.Supersede(Clock.Now);
@@ -62,12 +62,13 @@ public class PayrollPreviewRunAppService(
 	{
 		var run = await GetAuthorizedRunAsync(id);
 		var status = ToStatus(run, await revisions.ReadAsync());
+		status.IsCurrent = status.IsCurrent && await IsLatestCompletedRunAsync(run);
 		if (run.Status != "SUCCEEDED")
 		{
 			status.LastCompletedRunId = await AsyncExecuter.FirstOrDefaultAsync((await runs.GetQueryableAsync())
 				.Where(x => x.Month == run.Month && x.AcademicYearId == run.AcademicYearId &&
 					x.ScopeFingerprint == run.ScopeFingerprint && x.Status == "SUCCEEDED")
-				.OrderByDescending(x => x.CreatedAtUtc).Select(x => (Guid?) x.Id));
+				.OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id).Select(x => (Guid?) x.Id));
 		}
 		return status;
 	}
@@ -108,9 +109,11 @@ public class PayrollPreviewRunAppService(
 			}
 			item.ReviewStatus = snapshot.IsLocked || reviewedIds.Contains(item.EmployeeId) ? snapshot.ReviewStatus : ReviewStatuses.Pending;
 			item.ReviewedAt = snapshot.IsLocked || reviewedIds.Contains(item.EmployeeId) ? snapshot.ReviewedAt : null;
+			item.ReviewedByUserId = snapshot.IsLocked || reviewedIds.Contains(item.EmployeeId) ? snapshot.ReviewedByUserId : null;
 			item.IsLocked = snapshot.IsLocked;
 		}
-		var isCurrent = run.HasCurrentCalculationVersion && run.Status == "SUCCEEDED" && run.InputRevision == await revisions.ReadAsync();
+		var isCurrent = run.HasCurrentCalculationVersion && run.Status == "SUCCEEDED"
+			&& run.InputRevision == await revisions.ReadAsync() && await IsLatestCompletedRunAsync(run);
 		summary.CanLock = isCurrent && summary.BlockingIssues.Count == 0 && summary.ReviewedCount > 0;
 		return new RunPayrollResponse
 		{
@@ -138,6 +141,16 @@ public class PayrollPreviewRunAppService(
 
 	internal static string ScopeFingerprint(System.Collections.Generic.IEnumerable<Guid> ids) =>
 		Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join(",", ids.OrderBy(x => x)))));
+
+	internal async Task<bool> IsLatestCompletedRunAsync(PayrollPreviewRun run)
+	{
+		var query = await runs.GetQueryableAsync();
+		var latestId = await AsyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Month == run.Month
+			&& x.AcademicYearId == run.AcademicYearId && x.ScopeFingerprint == run.ScopeFingerprint
+			&& x.InputRevision == run.InputRevision && x.Status == "SUCCEEDED")
+			.OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id).Select(x => x.Id));
+		return latestId == run.Id;
+	}
 
 	internal static PayrollPreviewStatusDto ToStatus(PayrollPreviewRun run, Guid revision) => new()
 	{

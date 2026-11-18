@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -32,6 +33,14 @@ public partial class NotificationSelfApi_Tests(ShikshaMitraApiTestFactory factor
 		scope.ServiceProvider.GetRequiredService<NotificationTenantQueueRunner>().ShouldNotBeNull();
 		scope.ServiceProvider.GetRequiredService<INotificationQueueRepository>().ShouldNotBeNull();
 		scope.ServiceProvider.GetRequiredService<INotificationDueScheduler>().ShouldNotBeNull();
+	}
+
+	[Fact]
+	public void The_host_resolves_the_existing_email_service_through_the_academic_smtp_sender()
+	{
+		using var scope = Factory.Services.CreateScope();
+		scope.ServiceProvider.GetServices<INotificationChannelSender>().Single(x => x.Channel == CommunicationChannelType.Email)
+			.ShouldBeOfType<SmtpNotificationChannelSender>();
 	}
 
 	[Fact]

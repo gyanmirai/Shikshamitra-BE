@@ -16,7 +16,7 @@ namespace ShikshaMitra.Academic.Notifications;
 [RemoteService(false), DisableAuditing]
 public class AcademicNotificationManualAppService(AcademicNotificationAccessService sourceAccess,
 	AcademicNotificationManualPlanner planner, AcademicNotificationReviewService reviews,
-	AcademicNotificationManualOperations operations, IClock clock)
+	AcademicNotificationManualOperations operations, AcademicNotificationStaffAudit audit, IClock clock)
 	: ApplicationService, IAcademicNotificationManualAppService
 {
 	[UnitOfWork(true)]
@@ -44,6 +44,8 @@ public class AcademicNotificationManualAppService(AcademicNotificationAccessServ
 		var plan = await RequireSameReviewAsync(review, request, context, cancellationToken);
 		var operation = await operations.AcceptAsync(review, request, plan, idempotencyHash, Now(), cancellationToken);
 		await reviews.SaveAsync(review, cancellationToken);
+		await audit.WriteAsync(identity.TenantId, identity.ActorId, "ConfirmManualSend", operation.Id, null,
+			request.EventKey, operation.Status.ToString(), null, null, cancellationToken);
 		return Map(operation);
 	}
 
@@ -82,6 +84,8 @@ public class AcademicNotificationManualAppService(AcademicNotificationAccessServ
 			operation.RejectionReason = "Rejected by the assigned approver.";
 		}
 		await operations.SaveAsync(operation, cancellationToken);
+		await audit.WriteAsync(identity.TenantId, identity.ActorId, approve ? "ApproveManualSend" : "RejectManualSend", operation.Id,
+			null, request.EventKey, approve ? "Approved" : "Rejected", null, null, cancellationToken);
 		return Map(operation);
 	}
 

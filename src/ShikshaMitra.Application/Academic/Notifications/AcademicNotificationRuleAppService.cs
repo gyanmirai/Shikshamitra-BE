@@ -24,7 +24,7 @@ public class AcademicNotificationRuleAppService(IRepository<IdentityUser, Guid> 
 	IPermissionChecker permissions, AcademicNotificationCatalogue catalogue, AcademicNotificationRuleScopeAccess scopeAccess,
 	NotificationEffectiveRuleResolver effectiveRules, IRepository<NotificationRule, Guid> rules,
 	NotificationRuleConfigurationCodec codec, AcademicNotificationRuleTemplates templates, INotificationPersonalWriteLock writeLock,
-	AcademicNotificationAccessService sourceAccess, AcademicNotificationRulePreview preview)
+	AcademicNotificationAccessService sourceAccess, AcademicNotificationRulePreview preview, AcademicNotificationStaffAudit audit)
 	: ApplicationService, IAcademicNotificationRuleAppService
 {
 	public virtual async Task<PagedResultDto<AcademicNotificationRuleListItemDto>> GetListAsync(GetAcademicNotificationRulesDto input,
@@ -54,7 +54,7 @@ public class AcademicNotificationRuleAppService(IRepository<IdentityUser, Guid> 
 	public virtual async Task<AcademicNotificationRuleDto> SaveAsync(string eventKey, SaveAcademicNotificationRuleDto input,
 		CancellationToken cancellationToken = default)
 	{
-		var (tenant, _, callerScope) = await AcademicNotificationIdentityAccess.RequireAsync(CurrentTenant, CurrentUser, users, scopes,
+		var (tenant, actor, callerScope) = await AcademicNotificationIdentityAccess.RequireAsync(CurrentTenant, CurrentUser, users, scopes,
 			permissions, ShikshaMitraSubmodulePermissions.Academics.Notification.Add, cancellationToken);
 		var definition = catalogue.Get(eventKey);
 		if (eventKey != input.EventKey) throw new BusinessException(NotificationErrorCodes.EventUnknown);
@@ -77,6 +77,7 @@ public class AcademicNotificationRuleAppService(IRepository<IdentityUser, Guid> 
 		row.Configure(input.Enabled, json, row.ConcurrencyStamp);
 		if (isNew) await rules.InsertAsync(row, autoSave: true, cancellationToken: cancellationToken);
 		else if (row.Revision != revision) await rules.UpdateAsync(row, autoSave: true, cancellationToken: cancellationToken);
+		if (isNew || row.Revision != revision) await audit.WriteRuleAsync(tenant, actor, row, cancellationToken);
 		return Map(row, definition);
 	}
 

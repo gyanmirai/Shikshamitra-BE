@@ -15,6 +15,7 @@ using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Security.UserScope;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.AuditLogging;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
@@ -228,6 +229,21 @@ public partial class AcademicNotificationManualApi_Tests(AcademicNotificationPre
 				operation.ApprovedByUserId.ShouldBe(approve ? AcademicNotificationPreviewApiFactory.ApproverId : null);
 				operation.Status.ShouldBe(approve ? CommunicationCampaignStatus.Queued : CommunicationCampaignStatus.Cancelled);
 				(await db.NotificationIntents.CountAsync(x => x.CampaignId == operation.Id)).ShouldBe(approve ? 2 : 0);
+				var logs = await db.Set<AuditLog>().AsNoTracking().Include(x => x.Actions)
+					.Where(x => x.TenantId == operation.TenantId).ToListAsync();
+				var confirmed = FindAction("ConfirmManualSend", Guid.Parse(TestAuthHandler.TestUserId));
+				var decided = FindAction(approve ? "ApproveManualSend" : "RejectManualSend", AcademicNotificationPreviewApiFactory.ApproverId);
+				confirmed.GetProperty("reasonCode").GetString().ShouldBe("PendingApproval");
+				decided.GetProperty("reasonCode").GetString().ShouldBe(approve ? "Approved" : "Rejected");
+				confirmed.EnumerateObject().Count().ShouldBe(6);
+				decided.EnumerateObject().Count().ShouldBe(6);
+
+				JsonElement FindAction(string name, Guid actor)
+				{
+					var action = logs.Where(x => x.UserId == actor).SelectMany(x => x.Actions).Where(x =>
+						x.ServiceName == "AcademicNotifications" && x.MethodName == name && x.Parameters.Contains(operation.Id.ToString())).ShouldHaveSingleItem();
+					return JsonSerializer.Deserialize<JsonElement>(action.Parameters);
+				}
 			});
 		}
 		finally

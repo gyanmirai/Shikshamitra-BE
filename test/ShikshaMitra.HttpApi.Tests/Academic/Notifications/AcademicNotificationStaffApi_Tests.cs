@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
@@ -14,6 +15,7 @@ using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Security.UserScope;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.AuditLogging;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
@@ -76,6 +78,13 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 		using var change = await Client.PutAsJsonAsync($"{Templates}/{draft.TemplateId}/draft",
 			new UpdateNotificationTemplateDraftDto(published.RevisionId, published.Subject, published.Body, published.ConcurrencyStamp));
 		change.IsSuccessStatusCode.ShouldBeFalse();
+		var audit = (await ReadStaffAuditAsync("PublishTemplate", published.RevisionId)).ShouldHaveSingleItem();
+		var metadata = JsonSerializer.Deserialize<JsonElement>(audit);
+		metadata.GetProperty("templateId").GetGuid().ShouldBe(published.TemplateId);
+		metadata.GetProperty("revisionId").GetGuid().ShouldBe(published.RevisionId);
+		metadata.GetProperty("eventKey").GetString().ShouldBe(Event);
+		metadata.GetProperty("revision").GetInt32().ShouldBe(published.Revision);
+		metadata.EnumerateObject().Count().ShouldBe(6);
 	}
 
 	[Fact]
@@ -123,6 +132,21 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 		current.Configuration.IncludeStudentAccount.ShouldBeTrue();
 		using var stale = await Client.PutAsJsonAsync(saveUrl, update);
 		stale.StatusCode.ShouldBe(HttpStatusCode.Conflict, await stale.Content.ReadAsStringAsync());
+		using var unchanged = await Client.PutAsJsonAsync(saveUrl, new SaveAcademicNotificationRuleDto { EventKey = RuleEvent, Scope = scoped,
+			ConcurrencyStamp = current.ConcurrencyStamp, GuardianMode = NotificationGuardianMode.PrimaryAndSelected,
+			AdditionalGuardianRelationships = ["mother"], IncludeStudentAccount = true });
+		unchanged.StatusCode.ShouldBe(HttpStatusCode.OK, await unchanged.Content.ReadAsStringAsync());
+		var audits = await ReadStaffAuditAsync("SaveRule", disabled.Id);
+		audits.Length.ShouldBe(2);
+		var metadata = audits.Select(x => JsonSerializer.Deserialize<JsonElement>(x)).OrderBy(x => x.GetProperty("revision").GetInt32()).ToArray();
+		metadata.Select(x => x.GetProperty("revision").GetInt32()).ShouldBe([disabled.Revision, current.Revision]);
+		foreach (var change in metadata)
+		{
+			change.GetProperty("eventKey").GetString().ShouldBe(RuleEvent);
+			change.GetProperty("enabled").GetBoolean().ShouldBeFalse();
+			change.GetProperty("ruleId").GetGuid().ShouldBe(disabled.Id);
+			change.EnumerateObject().Count().ShouldBe(4);
+		}
 	}
 
 	[Fact]
@@ -185,6 +209,22 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 		response.IsSuccessStatusCode.ShouldBeFalse();
 		var error = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
 		return error.GetProperty("errorCode").GetString();
+	}
+
+	private async Task<string[]> ReadStaffAuditAsync(string action, Guid entityId)
+	{
+		using var serviceScope = Factory.Services.CreateScope();
+		var services = serviceScope.ServiceProvider;
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var actorId = Guid.Parse(TestAuthHandler.TestUserId);
+		using var tenant = services.GetRequiredService<ICurrentTenant>().Change(tenantId);
+		using var unit = services.GetRequiredService<IUnitOfWorkManager>().Begin();
+		var db = await services.GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+		var logs = await db.Set<AuditLog>().AsNoTracking().Include(x => x.Actions)
+			.Where(x => x.TenantId == tenantId && x.UserId == actorId).ToListAsync();
+		await unit.CompleteAsync();
+		return logs.SelectMany(x => x.Actions).Where(x => x.ServiceName == "AcademicNotifications" &&
+			x.MethodName == action && x.Parameters.Contains(entityId.ToString(), StringComparison.Ordinal)).Select(x => x.Parameters).ToArray();
 	}
 
 	private async Task SeedEnabledSchoolRuleAsync()

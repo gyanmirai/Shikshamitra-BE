@@ -1085,6 +1085,12 @@ Full HTTP tests bootstrap shared demo data and can take several minutes during a
 
 ## Managed Inquiry validation
 
+`AdmissionWorkflowRuntimeIntegration_InquiryUpdatePerformance_Tests.cs` exercises published/pinned archived forms with full form values and the retained scalar-only contract. It counts SQL reads after fixture setup, requires one read of each loaded form/family/guardian input, and compares every response property with the canonical detail reader at the original unit-of-work response boundary. `PermissionConsistencyApi_Tests` additionally exercises real Student grants, explicit denials, live admin membership removal and all checker overloads. Retain the configured Inquiry, hidden/read-only fields, parent-email normalization, sibling contact, stale-stamp, post-application lock, tenant and scope regressions. Local query budgets and authenticated local timing comparisons do not establish deployed-after performance.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Inquiry_update_|FullyQualifiedName~Configured_inquiry_edit_|FullyQualifiedName~Inquiry_create_and_edit_normalize_"
+```
+
 ```powershell
 dotnet test test/ShikshaMitra.Domain.Tests/ShikshaMitra.Domain.Tests.csproj --filter FullyQualifiedName~AdmissionInquiryPolicyAndManagement_Tests
 dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~Managed_inquiry_should|FullyQualifiedName~Basic_inquiry_workflow_should|FullyQualifiedName~Inquiry_list_should_support_unassigned_and_counsellor_queues|FullyQualifiedName~Inquiry_communication_should_create_a_traceable_draft"

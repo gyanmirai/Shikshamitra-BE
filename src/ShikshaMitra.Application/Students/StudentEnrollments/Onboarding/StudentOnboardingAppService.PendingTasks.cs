@@ -19,7 +19,9 @@ public partial class StudentOnboardingAppService
 		{
 			var students = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
 			return from item in query join student in students on item.StudentId equals student.Id
-				where !item.IdentifierAllocationId.HasValue && student.GrNumber == null && !student.GrNo.HasValue select item;
+				where item.Status != StudentOnboardingStatus.Completed && !item.StudentEnrollmentId.HasValue &&
+					!item.IdentifierAllocationId.HasValue && student.GrNumber == null && !student.GrNo.HasValue
+				select item;
 		}
 		if (task is not ("fees" or "credentials")) throw OnboardingRuleConfiguration.Invalid("Choose a supported pending task.");
 		var scoped = await AsyncExecuter.ToListAsync(query);

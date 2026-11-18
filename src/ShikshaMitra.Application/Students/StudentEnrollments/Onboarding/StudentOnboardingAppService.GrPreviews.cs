@@ -19,18 +19,18 @@ public partial class StudentOnboardingAppService
 		if (configuration == null) return [];
 		var year = await academicYearRepository.GetAsync(academicYearId);
 		var rules = configuration.Rules("grNumber").Where(OnboardingRuleConfiguration.IsPublished).ToArray();
-		var ids = rules.Select(rule => ConfiguredGrSeriesId(configuration, rule, academicYearId)).Distinct().ToArray();
+		var ids = rules.Select(rule => GrNumbers.GetSeriesId(configuration, rule, academicYearId)).Distinct().ToArray();
 		// Continuous school counters may have been created in an earlier academic year.
 		var counters = await seriesRepository.GetListAsync(series => Enumerable.Contains(ids, series.Id));
 		return rules.Select(rule =>
 		{
-			var seriesId = ConfiguredGrSeriesId(configuration, rule, academicYearId);
+			var seriesId = GrNumbers.GetSeriesId(configuration, rule, academicYearId);
 			var start = OnboardingRuleConfiguration.Number(rule, "startingNumber", 1);
 			var next = Math.Max(counters.FirstOrDefault(series => series.Id == seriesId)?.NextSequence ?? start, start);
 			var maximum = OnboardingRuleConfiguration.Number(rule, "maximumNumber");
 			var exhausted = maximum > 0 && next > maximum;
 			var effective = !DateTime.TryParse(OnboardingRuleConfiguration.Text(rule, "effectiveFrom"), out var from) || from.Date <= DateTime.UtcNow.Date;
-			var (prefix, suffix) = ConfiguredGrFormat(rule, year.Name);
+			var (prefix, suffix) = StudentGrNumberAllocator.Format(rule, year.Name);
 			var padding = (int)OnboardingRuleConfiguration.Number(rule, "padding", 6);
 			return new StudentGrNumberPreviewDto
 			{

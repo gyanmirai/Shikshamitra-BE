@@ -281,6 +281,7 @@ Workflow advancement overlays backend-owned assessment facts over form values an
 
 Management is tenant scoped and linked restrictively to its Inquiry and pinned stage definition.
 The unique Inquiry index prevents two active management records for one Inquiry.
+Inquiry detail updates reuse the form, field/section definitions and related identities already loaded by `AdmissionInquiryFormEditService` to construct their response. This context belongs to that update only; it is not a shared cache. `AdmissionInquiryAppService` retains the original post-save scoped Inquiry read and live sibling visibility checks, and standalone detail reads keep their existing authorization path.
 Follow-up queue indexes cover inquiry/status/due and assigned counsellor/status/due access paths.
 Migration `20260911045603_AddAdmissionInquiryManagement` adds only the management and follow-up tables with supporting indexes and restrictive foreign keys.
 

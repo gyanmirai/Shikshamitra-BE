@@ -123,6 +123,14 @@ The suite covers two clients with pre-visit snapshots and injects an optimistic 
 Run a disposable PostgreSQL acceptance check before claiming provider-level parallel-visitor evidence.
 Do not repurpose a deployed school database for that test.
 
+## Staff notification configuration checks
+
+```powershell
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AcademicNotificationStaffApi_Tests"
+```
+
+The authenticated API fixture covers catalogue response fields, template initialization and synthetic preview, action permissions, published revision immutability, stale writes, disabled overrides, hierarchy validation and unsupported rule options.
+
 ## Website push checks
 
 Run the backend delivery, subscription protection and authenticated registration tests from the backend repository.

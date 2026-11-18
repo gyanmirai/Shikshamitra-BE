@@ -20,10 +20,10 @@ public partial class ShikshaMitraDbContext
 
 	protected override void UpdateConcurrencyStamp(EntityEntry entry)
 	{
-		if (entry.State == EntityState.Modified && entry.Entity is (NotificationDispatch or NotificationIntent))
+		if (entry.State == EntityState.Modified && entry.Entity is (NotificationDispatch or NotificationIntent or NotificationRule))
 		{
 			var stamp = entry.Property(nameof(IHasConcurrencyStamp.ConcurrencyStamp));
-			// Runtime transitions may rotate the stamp before saving. EF must compare the value loaded with the row.
+			// The aggregate can rotate the stamp before saving. EF must compare the value loaded with the row.
 			if (!Equals(stamp.OriginalValue, stamp.CurrentValue)) return;
 		}
 		base.UpdateConcurrencyStamp(entry);

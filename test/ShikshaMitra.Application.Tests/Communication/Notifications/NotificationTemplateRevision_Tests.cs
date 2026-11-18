@@ -55,7 +55,8 @@ public class NotificationTemplateRevision_Tests
 		var filters = Substitute.For<IDataFilter>(); filters.Disable<ISoftDelete>().Returns(Substitute.For<IDisposable>());
 		var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["App:ClientUrl"] = "https://school.example" }).Build();
 		_service = new(_tenant, _current, headers, revisions, new AsyncQueryableExecuter([]), guids, filters, [_policy],
-			new NotificationTemplateVariableValidator([new AcademicNotificationCatalogue([])], configuration), new());
+			new NotificationTemplateVariableValidator([new AcademicNotificationCatalogue([])], configuration), new(),
+			Substitute.For<INotificationPersonalWriteLock>());
 	}
 
 	[Fact]

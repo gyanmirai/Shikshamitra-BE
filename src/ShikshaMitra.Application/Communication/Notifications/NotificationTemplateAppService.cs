@@ -6,10 +6,11 @@ using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Auditing;
 
 namespace ShikshaMitra.Communication.Notifications;
 
-[Authorize, RemoteService(false)]
+[Authorize, RemoteService(false), DisableAuditing]
 public class NotificationTemplateAppService(NotificationTemplateRevisionService revisions, NotificationTemplatePreviewService previews)
 	: ApplicationService, INotificationTemplateAppService
 {

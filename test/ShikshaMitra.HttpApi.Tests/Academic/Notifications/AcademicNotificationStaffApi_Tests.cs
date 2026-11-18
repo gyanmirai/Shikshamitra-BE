@@ -1,0 +1,224 @@
+using System;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Communication;
+using ShikshaMitra.Communication.Notifications;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Security.UserScope;
+using Shouldly;
+using Volo.Abp.Application.Dtos;
+using Volo.Abp.EntityFrameworkCore;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
+using Xunit;
+
+namespace ShikshaMitra.Academic.Notifications;
+
+[Collection(ApiTestCollection.Name)]
+public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
+{
+	private const string Route = "/api/academic/notifications";
+	private const string Templates = Route + "/templates";
+	private const string View = ShikshaMitraSubmodulePermissions.Academics.Notification.View;
+	private const string Add = ShikshaMitraSubmodulePermissions.Academics.Notification.Add;
+	private const string Event = AcademicNotificationEventKeys.HomeworkPublished;
+	private const string RuleEvent = AcademicNotificationEventKeys.HomeworkDue;
+
+	[Fact]
+	public async Task Catalogue_reports_event_availability_and_channel_setup_independently()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, View);
+		using var result = await Client.GetAsync($"{Route}/catalogue");
+		result.StatusCode.ShouldBe(HttpStatusCode.OK, await result.Content.ReadAsStringAsync());
+		result.Headers.CacheControl?.NoStore.ShouldBe(true);
+		var data = await result.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		var homework = data.GetProperty("events").EnumerateArray()
+			.Single(x => x.GetProperty("definition").GetProperty("eventKey").GetString() == Event);
+		var availability = homework.GetProperty("availability");
+		availability.GetProperty("isAvailable").GetBoolean().ShouldBe(
+			availability.GetProperty("reasonCode").ValueKind == JsonValueKind.Null);
+		data.GetProperty("channels").GetArrayLength().ShouldBe(4);
+		var raw = await result.Content.ReadAsStringAsync();
+		raw.ShouldNotContain("privateKey", Case.Insensitive);
+		raw.ShouldNotContain("secretReference", Case.Insensitive);
+	}
+
+	[Fact]
+	public async Task Authorized_staff_can_initialize_review_and_publish_an_immutable_template()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, $"{View},{Add}");
+		var initialize = new { eventKey = Event };
+		var created = await PostAndReadAsync<int>($"{Templates}/initialize-defaults", initialize);
+		created.ShouldBeGreaterThan(0);
+		(await PostAndReadAsync<int>($"{Templates}/initialize-defaults", initialize)).ShouldBe(0);
+
+		var templates = await GetAndReadAsync<PagedResultDto<NotificationTemplateDto>>($"{Templates}?eventKey={Event}&maxResultCount=100");
+		var draft = templates.Items.Single(x => x.RecipientKind == "Guardian" && x.Channel == CommunicationChannelType.InApp);
+		draft.IsPublished.ShouldBeFalse();
+		var preview = await GetAndReadAsync<NotificationTemplatePreviewDto>($"{Templates}/{draft.TemplateId}/preview/{draft.RevisionId}");
+		preview.IsSynthetic.ShouldBeTrue();
+		using var stale = await Client.PutAsJsonAsync($"{Templates}/{draft.TemplateId}/draft",
+			new UpdateNotificationTemplateDraftDto(draft.RevisionId, draft.Subject, draft.Body, "stale-revision"));
+		stale.StatusCode.ShouldBe(HttpStatusCode.Conflict, await stale.Content.ReadAsStringAsync());
+		var published = await PostAndReadAsync<NotificationTemplateDto>($"{Templates}/{draft.TemplateId}/publish",
+			new NotificationTemplateRevisionCommandDto(draft.RevisionId, draft.ConcurrencyStamp));
+		published.IsPublished.ShouldBeTrue();
+		using var change = await Client.PutAsJsonAsync($"{Templates}/{draft.TemplateId}/draft",
+			new UpdateNotificationTemplateDraftDto(published.RevisionId, published.Subject, published.Body, published.ConcurrencyStamp));
+		change.IsSuccessStatusCode.ShouldBeFalse();
+	}
+
+	[Fact]
+	public async Task View_and_send_permissions_do_not_allow_template_creation()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var send = ShikshaMitraSubmodulePermissions.Academics.Notification.Send;
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, $"{View},{send}");
+		using var result = await Client.PostAsJsonAsync($"{Templates}/initialize-defaults", new { eventKey = Event });
+		result.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await result.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	public async Task A_disabled_division_rule_overrides_an_enabled_school_rule_and_rejects_stale_changes()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		await SeedEnabledSchoolRuleAsync();
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, $"{View},{Add}");
+		var scoped = new AcademicNotificationScopeDto(Factory.SeededAcademicYearId, Factory.SeededBoardId,
+			Factory.SeededMediumId, Factory.SeededStandardId, Factory.SeededDivisionId);
+		var list = $"{Route}/rules?eventKey={RuleEvent}&academicYearId={scoped.AcademicYearId}&boardId={scoped.BoardId}" +
+			$"&mediumId={scoped.MediumId}&classId={scoped.ClassId}&divisionId={scoped.DivisionId}";
+		var inherited = (await GetAndReadAsync<PagedResultDto<AcademicNotificationRuleListItemDto>>(list)).Items.ShouldHaveSingleItem();
+		inherited.IsInherited.ShouldBeTrue();
+		inherited.EffectiveRule!.Enabled.ShouldBeTrue();
+
+		var saveUrl = $"{Route}/rules/{RuleEvent}";
+		using var create = await Client.PutAsJsonAsync(saveUrl, new SaveAcademicNotificationRuleDto { EventKey = RuleEvent, Scope = scoped });
+		create.StatusCode.ShouldBe(HttpStatusCode.OK, await create.Content.ReadAsStringAsync());
+		var disabled = (await create.Content.ReadFromJsonAsync<AcademicNotificationRuleDto>(JsonOptions))!;
+		var result = (await GetAndReadAsync<PagedResultDto<AcademicNotificationRuleListItemDto>>(list)).Items.ShouldHaveSingleItem();
+		result.IsInherited.ShouldBeFalse();
+		result.EffectiveRule!.Id.ShouldBe(disabled.Id);
+		result.EffectiveRule.Enabled.ShouldBeFalse();
+		result.EffectiveRule.Configuration!.GuardianMode.ShouldBe(NotificationGuardianMode.PrimaryOnly);
+
+		var update = new SaveAcademicNotificationRuleDto { EventKey = RuleEvent, Scope = scoped,
+			ConcurrencyStamp = disabled.ConcurrencyStamp, GuardianMode = NotificationGuardianMode.PrimaryAndSelected,
+			AdditionalGuardianRelationships = ["mother"], IncludeStudentAccount = true };
+		using var saved = await Client.PutAsJsonAsync(saveUrl, update);
+		saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
+		var current = (await saved.Content.ReadFromJsonAsync<AcademicNotificationRuleDto>(JsonOptions))!;
+		current.Revision.ShouldBe(disabled.Revision + 1);
+		current.Configuration!.AdditionalGuardianRelationships.ShouldBe(["mother"]);
+		current.Configuration.IncludeStudentAccount.ShouldBeTrue();
+		using var stale = await Client.PutAsJsonAsync(saveUrl, update);
+		stale.StatusCode.ShouldBe(HttpStatusCode.Conflict, await stale.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	public async Task Rule_write_rejects_unknown_event_unsupported_channel_and_unresolvable_template()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, Add);
+		const string unknown = "Academic.Homework.Unknown";
+		using var eventResponse = await Client.PutAsJsonAsync($"{Route}/rules/{unknown}",
+			new SaveAcademicNotificationRuleDto { EventKey = unknown, Scope = new() });
+		(await ErrorCodeAsync(eventResponse)).ShouldBe(NotificationErrorCodes.EventUnknown);
+
+		using var channelResponse = await Client.PutAsJsonAsync($"{Route}/rules/{Event}",
+			new SaveAcademicNotificationRuleDto { EventKey = Event, Scope = new(), Channels = [CommunicationChannelType.Sms] });
+		(await ErrorCodeAsync(channelResponse)).ShouldBe(NotificationErrorCodes.RuleConfigurationInvalid);
+
+		using var templateResponse = await Client.PutAsJsonAsync($"{Route}/rules/{Event}",
+			new SaveAcademicNotificationRuleDto { EventKey = Event, Scope = new(), TemplateIds = [Guid.NewGuid()] });
+		(await ErrorCodeAsync(templateResponse)).ShouldBe(NotificationErrorCodes.TemplateInvalid);
+	}
+
+	[Fact]
+	public async Task Rule_endpoints_reject_a_mismatched_hierarchy_and_arbitrary_destinations()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, $"{View},{Add}");
+		using var foreign = await Client.GetAsync($"{Route}/rules?academicYearId={Factory.SeededAcademicYearId}&boardId={Guid.NewGuid()}");
+		foreign.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await foreign.Content.ReadAsStringAsync());
+		using var invalid = await Client.PutAsJsonAsync($"{Route}/rules/{Event}",
+			new { eventKey = Event, scope = new { }, email = "not-a-recipient@example.test" });
+		invalid.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await invalid.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	public async Task A_division_assignment_can_configure_its_division_and_cannot_write_school_settings()
+	{
+		var staffId = await SeedDivisionStaffAsync();
+		using var staff = CreateClientAs(staffId);
+		staff.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Teacher");
+		staff.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, $"{View},{Add}");
+		var url = $"{Route}/rules/{AcademicNotificationEventKeys.AssignmentDue}";
+		var selected = new AcademicNotificationScopeDto(Factory.SeededAcademicYearId, Factory.SeededBoardId,
+			Factory.SeededMediumId, Factory.SeededStandardId, Factory.SeededDivisionId);
+		using var denied = await staff.PutAsJsonAsync(url, new SaveAcademicNotificationRuleDto
+		{
+			EventKey = AcademicNotificationEventKeys.AssignmentDue,
+			Scope = new()
+		});
+		denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await denied.Content.ReadAsStringAsync());
+		using var allowed = await staff.PutAsJsonAsync(url, new SaveAcademicNotificationRuleDto
+		{
+			EventKey = AcademicNotificationEventKeys.AssignmentDue,
+			Scope = selected
+		});
+		allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
+	}
+
+	private static async Task<string?> ErrorCodeAsync(HttpResponseMessage response)
+	{
+		response.IsSuccessStatusCode.ShouldBeFalse();
+		var error = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		return error.GetProperty("errorCode").GetString();
+	}
+
+	private async Task SeedEnabledSchoolRuleAsync()
+	{
+		using var serviceScope = Factory.Services.CreateScope();
+		var services = serviceScope.ServiceProvider;
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using var tenant = services.GetRequiredService<ICurrentTenant>().Change(tenantId);
+		using var unit = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
+		var db = await services.GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+		var definition = services.GetRequiredService<AcademicNotificationCatalogue>().Get(RuleEvent);
+		var codec = services.GetRequiredService<NotificationRuleConfigurationCodec>();
+		var config = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false,
+			[], [CommunicationChannelType.InApp], [Guid.NewGuid()], NotificationRuleTimingConfiguration.Default, "en");
+		var rule = new NotificationRule(Guid.NewGuid(), tenantId, RuleEvent, NotificationRuleScope.Create());
+		rule.Configure(true, codec.Serialize(config, definition), rule.ConcurrencyStamp);
+		db.Add(rule);
+		await unit.CompleteAsync();
+	}
+
+	private async Task<Guid> SeedDivisionStaffAsync()
+	{
+		using var serviceScope = Factory.Services.CreateScope();
+		var services = serviceScope.ServiceProvider;
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using var tenant = services.GetRequiredService<ICurrentTenant>().Change(tenantId);
+		using var unit = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
+		var db = await services.GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+		var staffId = Guid.NewGuid();
+		db.Add(new IdentityUser(staffId, $"staff_{staffId:N}", $"staff_{staffId:N}@example.test", tenantId));
+		db.Add(new UserScopeAssignment(Guid.NewGuid(), tenantId, userId: staffId, academicYearId: Factory.SeededAcademicYearId,
+			educationBoardId: Factory.SeededBoardId, educationMediumId: Factory.SeededMediumId,
+			educationMediumStageId: Factory.SeededMediumStageId, standardId: Factory.SeededStandardId, divisionId: Factory.SeededDivisionId));
+		await unit.CompleteAsync();
+		return staffId;
+	}
+}

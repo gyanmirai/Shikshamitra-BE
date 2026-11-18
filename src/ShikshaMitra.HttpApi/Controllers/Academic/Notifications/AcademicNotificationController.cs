@@ -1,0 +1,33 @@
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ShikshaMitra.Academic.Notifications;
+using ShikshaMitra.Constants.Permissions;
+using Volo.Abp;
+using Volo.Abp.Application.Dtos;
+using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Auditing;
+
+namespace ShikshaMitra.Controllers.Academic.Notifications;
+
+[Authorize, DisableAuditing, Area("app"), RemoteService(Name = "ShikshaMitra")]
+[Route("api/academic/notifications")]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+public class AcademicNotificationController(IAcademicNotificationCatalogueAppService catalogue, IAcademicNotificationRuleAppService rules) : AbpControllerBase
+{
+	[HttpGet("catalogue")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
+	public Task<AcademicNotificationCatalogueDto> GetCatalogueAsync(CancellationToken cancellationToken) =>
+		catalogue.GetAsync(cancellationToken);
+
+	[HttpGet("rules")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
+	public Task<PagedResultDto<AcademicNotificationRuleListItemDto>> GetRulesAsync([FromQuery] GetAcademicNotificationRulesDto input,
+		CancellationToken cancellationToken) => rules.GetListAsync(input, cancellationToken);
+
+	[HttpPut("rules/{eventKey}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Add)]
+	public Task<AcademicNotificationRuleDto> SaveRuleAsync(string eventKey, [FromBody] SaveAcademicNotificationRuleDto input,
+		CancellationToken cancellationToken) => rules.SaveAsync(eventKey, input, cancellationToken);
+}

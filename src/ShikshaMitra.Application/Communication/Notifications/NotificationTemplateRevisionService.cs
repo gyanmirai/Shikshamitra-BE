@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp;
+using Volo.Abp.Auditing;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
@@ -15,12 +16,12 @@ using Volo.Abp.Users;
 
 namespace ShikshaMitra.Communication.Notifications;
 
-[RemoteService(false), UnitOfWork(true), ExposeServices(typeof(NotificationTemplateRevisionService), typeof(INotificationTemplateReadService))]
+[RemoteService(false), UnitOfWork(true), DisableAuditing, ExposeServices(typeof(NotificationTemplateRevisionService), typeof(INotificationTemplateReadService))]
 public partial class NotificationTemplateRevisionService(ICurrentTenant tenant, ICurrentUser current,
 	IRepository<CommunicationTemplate, Guid> headers, IRepository<CommunicationTemplateRevision, Guid> revisions,
 	IAsyncQueryableExecuter executer, IGuidGenerator guids, IDataFilter filters,
 	IEnumerable<INotificationTemplateAccessPolicy> policies, NotificationTemplateVariableValidator validator,
-	NotificationDefaultTemplateFactory defaults) : INotificationTemplateReadService, ITransientDependency
+	NotificationDefaultTemplateFactory defaults, INotificationPersonalWriteLock writeLock) : INotificationTemplateReadService, ITransientDependency
 {
 	public virtual async Task<NotificationTemplateDto> CreateAsync(CreateNotificationTemplateDto input, CancellationToken cancellationToken = default)
 	{

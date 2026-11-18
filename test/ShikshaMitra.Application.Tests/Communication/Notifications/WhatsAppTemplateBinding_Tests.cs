@@ -93,7 +93,7 @@ public class WhatsAppTemplateBinding_Tests
 		});
 		var revisions = Repository(new[] { _revision });
 		var templates = new NotificationTemplateRevisionService(tenant, _user, Repository(new[] { _header }), revisions, queries,
-			SimpleGuidGenerator.Instance, filters, [_policy], validator, new());
+			SimpleGuidGenerator.Instance, filters, [_policy], validator, new(), Substitute.For<INotificationPersonalWriteLock>());
 		_handler = new(() => _activeUnits.ShouldBeEmpty());
 		var clients = Substitute.For<IHttpClientFactory>();
 		clients.CreateClient(WhatsAppProviderClient.HttpClientName).Returns(_ => new HttpClient(_handler, disposeHandler: false));

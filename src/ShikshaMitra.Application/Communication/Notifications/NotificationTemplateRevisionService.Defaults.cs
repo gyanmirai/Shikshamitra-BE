@@ -16,6 +16,7 @@ public partial class NotificationTemplateRevisionService
 		var tenantId = RequireTenant();
 		var definition = validator.GetDefinition(eventKey);
 		await AuthorizeAsync(eventKey, null, NotificationTemplateAction.Write, cancellationToken);
+		await writeLock.AcquireAsync([$"notification-template-defaults:{eventKey}"], cancellationToken);
 		var variants = definition.RecipientSelectors.Select(x => x is "PrimaryGuardian" or "AdditionalGuardians" ? "Guardian" : x)
 			.Distinct(StringComparer.Ordinal).SelectMany(kind => definition.SupportedChannels.Select(channel => new {
 				Kind = kind, Channel = channel, Id = DefaultId($"{tenantId:N}:{eventKey}:{kind}:{(int)channel}:en")

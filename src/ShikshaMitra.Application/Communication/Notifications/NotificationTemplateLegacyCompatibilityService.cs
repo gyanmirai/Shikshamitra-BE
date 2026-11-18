@@ -28,7 +28,7 @@ public sealed class NotificationTemplateLegacyCompatibilityService(ICurrentTenan
 	}
 	public async Task EnsureGenericWorkflowAsync(string campaignType, Guid? templateId)
 	{
-		if (string.Equals(campaignType?.Trim(), "AcademicNotification", StringComparison.OrdinalIgnoreCase) ||
+		if (NotificationCampaignTypes.IsAcademic(campaignType) ||
 			templateId.HasValue && await IsBoundAsync(templateId.Value)) throw new BusinessException(NotificationErrorCodes.UseWorkflow);
 	}
 	private async Task<bool> IsBoundAsync(Guid templateId)

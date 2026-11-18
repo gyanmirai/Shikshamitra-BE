@@ -33,6 +33,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 	private readonly ICommunicationAudienceResolver _audienceResolver;
 	private readonly IEnumerable<ICommunicationChannelGateway> _channelGateways;
 	private readonly NotificationTemplateLegacyCompatibilityService _notificationCompatibility;
+	private readonly ICommunicationReplyPageQuery _replyPages;
 
 	public CommunicationAppService(
 		IRepository<CommunicationCampaign, Guid> campaignRepository,
@@ -46,7 +47,8 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 		IRepository<CommunicationApprovalRule, Guid> approvalRuleRepository,
 		ICommunicationAudienceResolver audienceResolver,
 		IEnumerable<ICommunicationChannelGateway> channelGateways,
-		NotificationTemplateLegacyCompatibilityService notificationCompatibility)
+		NotificationTemplateLegacyCompatibilityService notificationCompatibility,
+		ICommunicationReplyPageQuery replyPages)
 	{
 		_campaignRepository = campaignRepository;
 		_templateRepository = templateRepository;
@@ -60,17 +62,16 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 		_audienceResolver = audienceResolver;
 		_channelGateways = channelGateways;
 		_notificationCompatibility = notificationCompatibility;
+		_replyPages = replyPages;
 	}
 
 	public async Task<CommunicationDashboardDto> GetDashboardAsync()
 	{
 		await CheckPolicyAsync(ShikshaMitraSubmodulePermissions.Communication.Dashboard.View);
 
-		var campaignQuery = await _campaignRepository.GetQueryableAsync();
-		var replyQuery = await _replyRepository.GetQueryableAsync();
+		var operational = await GetGenericOperationalCountsAsync();
 		var providerQuery = await _providerSettingRepository.GetQueryableAsync();
 		var consentQuery = await _consentRecordRepository.GetQueryableAsync();
-		var deliveryQuery = await _deliveryAttemptRepository.GetQueryableAsync();
 		var usageQuery = await _usageLedgerRepository.GetQueryableAsync();
 
 		var recentUsageRows = await AsyncExecuter.ToListAsync(
@@ -81,19 +82,19 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 
 		return new CommunicationDashboardDto
 		{
-			TotalCampaigns = await AsyncExecuter.CountAsync(campaignQuery),
-			DraftCampaigns = await AsyncExecuter.CountAsync(campaignQuery.Where(x => x.Status == CommunicationCampaignStatus.Draft)),
-			PendingApprovalCampaigns = await AsyncExecuter.CountAsync(campaignQuery.Where(x => x.Status == CommunicationCampaignStatus.PendingApproval)),
-			ScheduledCampaigns = await AsyncExecuter.CountAsync(campaignQuery.Where(x => x.Status == CommunicationCampaignStatus.Scheduled)),
-			QueuedCampaigns = await AsyncExecuter.CountAsync(campaignQuery.Where(x => x.Status == CommunicationCampaignStatus.Queued || x.Status == CommunicationCampaignStatus.Sending)),
-			SentCampaigns = await AsyncExecuter.CountAsync(campaignQuery.Where(x => x.Status == CommunicationCampaignStatus.Sent)),
-			FailedCampaigns = await AsyncExecuter.CountAsync(campaignQuery.Where(x => x.Status == CommunicationCampaignStatus.Failed || x.Status == CommunicationCampaignStatus.PartiallyFailed)),
-			OpenReplies = await AsyncExecuter.CountAsync(replyQuery.Where(x => x.Status == CommunicationReplyStatus.Open || x.Status == CommunicationReplyStatus.Assigned)),
+			TotalCampaigns = operational.Total,
+			DraftCampaigns = operational.Draft,
+			PendingApprovalCampaigns = operational.Pending,
+			ScheduledCampaigns = operational.Scheduled,
+			QueuedCampaigns = operational.Queued,
+			SentCampaigns = operational.Sent,
+			FailedCampaigns = operational.Failed,
+			OpenReplies = operational.Replies,
 			EnabledProviders = await AsyncExecuter.CountAsync(providerQuery.Where(x => x.IsEnabled && x.Status == CommunicationProviderStatus.Enabled)),
 			ConsentOptInCount = await AsyncExecuter.CountAsync(consentQuery.Where(x => x.Status == CommunicationConsentStatus.OptedIn)),
 			ConsentOptOutCount = await AsyncExecuter.CountAsync(consentQuery.Where(x => x.Status == CommunicationConsentStatus.OptedOut || x.Status == CommunicationConsentStatus.Revoked)),
-			DeliveryAttemptCount = await AsyncExecuter.CountAsync(deliveryQuery),
-			DeliveryFailureCount = await AsyncExecuter.CountAsync(deliveryQuery.Where(x => x.Status == CommunicationDeliveryStatus.Failed || x.Status == CommunicationDeliveryStatus.Bounced || x.Status == CommunicationDeliveryStatus.Skipped)),
+			DeliveryAttemptCount = operational.Attempts,
+			DeliveryFailureCount = operational.AttemptFailures,
 			EstimatedCost = await SumEstimatedCostAsync(usageQuery),
 			RecentUsage = recentUsageRows.Select(MapUsageLedgerEntry).ToList()
 		};
@@ -106,7 +107,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.View,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.View);
 
-		var query = await _campaignRepository.GetQueryableAsync();
+		var query = GenericCampaigns(await _campaignRepository.GetQueryableAsync());
 
 		if (!input.Search.IsNullOrWhiteSpace())
 		{
@@ -160,6 +161,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 			campaign.CampaignType,
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.View,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.View);
+		if (NotificationCampaignTypes.IsAcademic(campaign.CampaignType)) throw new BusinessException(NotificationErrorCodes.UseWorkflow);
 		return MapCampaign(campaign);
 	}
 
@@ -847,7 +849,8 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 	{
 		await CheckPolicyAsync(ShikshaMitraSubmodulePermissions.Communication.History.View);
 
-		var query = await _deliveryAttemptRepository.GetQueryableAsync();
+		using var archivedParents = DataFilter.Disable<ISoftDelete>();
+		var query = (await GetGenericPayloadQueriesAsync()).Attempts;
 
 		if (input.CampaignId.HasValue)
 		{
@@ -878,7 +881,8 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 	{
 		await CheckPolicyAsync(ShikshaMitraSubmodulePermissions.Communication.Inbox.View);
 
-		var query = await _replyRepository.GetQueryableAsync();
+		using var archivedParents = DataFilter.Disable<ISoftDelete>();
+		var query = (await GetGenericPayloadQueriesAsync()).Replies;
 
 		if (input.CampaignId.HasValue)
 		{
@@ -896,11 +900,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
-		var rows = await AsyncExecuter.ToListAsync(
-			query
-				.OrderByDescending(x => x.ReceivedAt)
-				.Skip(input.SkipCount)
-				.Take(input.MaxResultCount));
+		var rows = await _replyPages.GetPageAsync(query, input.SkipCount, input.MaxResultCount);
 
 		return new PagedResultDto<CommunicationReplyDto>(totalCount, rows.Select(MapReply).ToList());
 	}
@@ -908,6 +908,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 	public async Task<CommunicationReplyDto> CaptureReplyAsync(CaptureCommunicationReplyDto input)
 	{
 		await CheckPolicyAsync(ShikshaMitraSubmodulePermissions.Communication.Inbox.View);
+		await EnsureGenericReplyReferencesAsync(input.CampaignId, input.DeliveryAttemptId, input.RecipientSnapshotId);
 
 		var reply = new CommunicationReply(GuidGenerator.Create(), CurrentTenant.Id)
 		{
@@ -929,6 +930,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 		await CheckPolicyAsync(ShikshaMitraSubmodulePermissions.Communication.Inbox.Assign);
 
 		var reply = await _replyRepository.GetAsync(id);
+		await EnsureGenericReplyReferencesAsync(reply.CampaignId, reply.DeliveryAttemptId, reply.RecipientSnapshotId);
 		reply.AssignedToUserId = input.AssignedToUserId;
 		reply.AssignedDepartment = input.AssignedDepartment;
 		reply.Status = input.Status;

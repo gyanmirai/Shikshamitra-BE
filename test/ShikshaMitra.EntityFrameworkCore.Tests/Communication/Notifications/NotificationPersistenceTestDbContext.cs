@@ -13,6 +13,8 @@ public sealed class NotificationPersistenceTestDbContext(DbContextOptions<Notifi
 		builder.Entity<CommunicationTemplate>().ConfigureByConvention();
 		builder.ApplyConfiguration(new CommunicationTemplateConfiguration());
 		builder.Entity<ChannelProviderSetting>().ConfigureByConvention();
+		builder.Entity<CommunicationReply>().ConfigureByConvention();
+		builder.Entity<CommunicationReply>().ToTable("CommunicationReplies");
 		builder.ApplyConfiguration(new ChannelProviderSettingConfiguration());
 		builder.ApplyConfiguration(new NotificationRuleConfiguration());
 		builder.ApplyConfiguration(new NotificationTemplateRevisionConfiguration());

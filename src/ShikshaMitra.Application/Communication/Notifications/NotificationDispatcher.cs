@@ -18,7 +18,7 @@ namespace ShikshaMitra.Communication.Notifications;
 
 [RemoteService(false), DisableAuditing, ExposeServices(typeof(INotificationDispatcher))]
 public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkManager units, IClock clock,
-	NotificationDispatchReadiness readiness, IEnumerable<INotificationChannelSender> senders,
+	NotificationDispatchReadiness readiness, IEnumerable<INotificationChannelSender> senders, NotificationOutcomeLock outcomeLock,
 	IRepository<NotificationDispatch, Guid> dispatches, IRepository<NotificationIntent, Guid> intents,
 	IRepository<CommunicationCampaign, Guid> campaigns, IAsyncQueryableExecuter queries)
 	: INotificationDispatcher, ITransientDependency
@@ -37,6 +37,7 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 		NotificationChannelSendResult? result;
 		try
 		{
+			cancellationToken.ThrowIfCancellationRequested();
 			result = await prepared.Sender.SendAsync(prepared.Request, cancellationToken);
 		}
 		catch (Exception)
@@ -116,7 +117,11 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 			try
 			{
 				var row = await FindAsync(tenantId, dispatchId, CancellationToken.None) ?? throw new BusinessException(NotificationErrorCodes.LeaseLost);
+				if (row.CampaignId is Guid operationId) await outcomeLock.AcquireAsync(operationId, CancellationToken.None);
+				var prior = row.Status;
 				ApplyResult(row, lease, Now(), result, expiry);
+				if (prior == NotificationDispatchState.UnknownAcceptance && row.Status != prior)
+					await ReopenProjectedIntentAsync(tenantId, row);
 				await dispatches.UpdateAsync(row, cancellationToken: CancellationToken.None);
 				await unit.CompleteAsync(CancellationToken.None);
 				return;
@@ -126,6 +131,17 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 				// Recovery or a provider receipt can update the dispatch while this result arrives.
 			}
 		}
+	}
+
+	private async Task ReopenProjectedIntentAsync(Guid tenantId, NotificationDispatch dispatch)
+	{
+		var intent = await queries.FirstOrDefaultAsync((await intents.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
+			!x.IsDeleted && x.Id == dispatch.IntentId && x.CampaignId == dispatch.CampaignId && x.PlanningCompletedAt != null &&
+			(x.Status == NotificationIntentState.NeedsReview || x.Status == NotificationIntentState.Completed ||
+				x.Status == NotificationIntentState.PartiallyFailed)), CancellationToken.None);
+		if (intent == null) return;
+		intent.ReopenDeliveryProjection();
+		await intents.UpdateAsync(intent, cancellationToken: CancellationToken.None);
 	}
 
 	private async Task<NotificationDispatch?> FindAsync(Guid tenantId, Guid id, CancellationToken cancellationToken) =>

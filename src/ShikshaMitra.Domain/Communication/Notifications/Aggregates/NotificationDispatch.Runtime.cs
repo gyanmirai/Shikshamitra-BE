@@ -82,6 +82,15 @@ public partial class NotificationDispatch
 		else ReleaseUnusedAttempt();
 		return true;
 	}
+	public bool ExpirePending(DateTimeOffset now)
+	{
+		if (Status != NotificationDispatchState.Pending || LeaseId.HasValue || IoStartedAt.HasValue ||
+			!ExpiresAt.HasValue || ExpiresAt > now) return false;
+		Status = NotificationDispatchState.Skipped;
+		ErrorCode = "SourceExpired";
+		ClearLease();
+		return true;
+	}
 	private void ReleaseUnusedAttempt()
 	{
 		if (AttemptNumber > 0) AttemptNumber--;

@@ -109,6 +109,7 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 		});
 		var dispatcher = new NotificationDispatcher(runtime.Tenant, units, runtime.Clock,
 			new(runtime.Protector, runtime.Sources, [runtime.Recipients], runtime.Policy, runtime.Email, runtime.Links), [sender],
+			new(Substitute.For<INotificationPersonalWriteLock>()),
 			Repository<NotificationDispatch>(db), Repository<NotificationIntent>(db), Repository<CommunicationCampaign>(db), runtime.Queries);
 
 		await dispatcher.DispatchAsync(claimed.Id, claimed.LeaseId, default);

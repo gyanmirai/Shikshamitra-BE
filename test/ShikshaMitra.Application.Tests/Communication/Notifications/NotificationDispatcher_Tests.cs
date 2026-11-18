@@ -38,6 +38,7 @@ public class NotificationDispatcher_Tests
 	private readonly List<ConsentRecord> _consents = [];
 	private readonly List<string> _steps = [];
 	private readonly NotificationRule _rule;
+	private readonly NotificationIntent _intent;
 	private readonly ChannelProviderSetting _provider;
 	private readonly NotificationDispatch _row;
 	private readonly NotificationDispatcher _dispatcher;
@@ -69,7 +70,7 @@ public class NotificationDispatcher_Tests
 		var campaign = new CommunicationCampaign(Guid.NewGuid(), _tenantId) {
 			CampaignType = NotificationCampaignTypes.Academic, SourceEntityId = sourceId, SourceEntityType = definition.SourceType
 		};
-		var intent = new NotificationIntent(Guid.NewGuid(), _tenantId, _rule.Id, _rule.Revision, EventKey, definition.SourceType,
+		var intent = _intent = new NotificationIntent(Guid.NewGuid(), _tenantId, _rule.Id, _rule.Revision, EventKey, definition.SourceType,
 			sourceId, "v1", "test", Now.AddHours(-1), Now.AddHours(-1),
 			NotificationRuntimeJson.Serialize(new[] { _student }, NotificationErrorCodes.RuntimeSnapshotInvalid),
 			NotificationRuntimeJson.Serialize(new[] { _templateRevisionId }, NotificationErrorCodes.TemplateInvalid));
@@ -121,7 +122,7 @@ public class NotificationDispatcher_Tests
 			return _tryProvider(call.Arg<CancellationToken>());
 		});
 		_senders.Add(_sender);
-		_dispatcher = new(_tenant, _units, _clock, readiness, _senders, Repository<NotificationDispatch>([_row]),
+		_dispatcher = new(_tenant, _units, _clock, readiness, _senders, new(Substitute.For<INotificationPersonalWriteLock>()), Repository<NotificationDispatch>([_row]),
 			Repository<NotificationIntent>([intent]), Repository<CommunicationCampaign>([campaign]), queries);
 	}
 
@@ -244,12 +245,15 @@ public class NotificationDispatcher_Tests
 	{
 		_tryProvider = _ => {
 			_row.RecoverExpiredLease(Now.AddMinutes(6)).ShouldBeTrue();
+			_intent.CompleteDelivery(NotificationIntentState.NeedsReview, NotificationErrorCodes.UnknownAcceptance);
 			_clock.Now.Returns(Now.AddMinutes(6).UtcDateTime);
 			return Task.FromResult(new NotificationChannelSendResult(NotificationProviderAcceptance.Accepted, "late-id", null));
 		};
 		await _dispatcher.DispatchAsync(_dispatchId, _lease, default);
 		_row.Status.ShouldBe(NotificationDispatchState.ProviderAccepted);
 		_row.ProviderMessageId.ShouldBe("late-id");
+		_intent.Status.ShouldBe(NotificationIntentState.AwaitingDelivery);
+		_intent.ErrorCode.ShouldBeNull();
 	}
 
 	[Fact]

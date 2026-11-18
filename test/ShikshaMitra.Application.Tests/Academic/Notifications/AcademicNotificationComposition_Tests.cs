@@ -43,6 +43,8 @@ public class AcademicNotificationComposition_Tests : ShikshaMitraApplicationTest
 		GetRequiredService<NotificationDispatchPayloadProtector>().ShouldNotBeNull();
 		GetRequiredService<NotificationDispatchPlanner>().ShouldNotBeNull();
 		GetRequiredService<INotificationDispatcher>().ShouldNotBeNull();
+		GetRequiredService<NotificationLeaseRecoveryService>().ShouldNotBeNull();
+		GetRequiredService<NotificationOutcomeProjector>().ShouldNotBeNull();
 		GetRequiredService<IEnumerable<INotificationRuntimeRecipientResolver>>().Count(x => x.Supports("Academic.Homework.Published")).ShouldBe(1);
 		GetRequiredService<NotificationSchoolTimeZone>().ShouldNotBeNull();
 		var setting = await GetRequiredService<ISettingDefinitionManager>().GetAsync(NotificationSettingNames.SchoolTimeZone);

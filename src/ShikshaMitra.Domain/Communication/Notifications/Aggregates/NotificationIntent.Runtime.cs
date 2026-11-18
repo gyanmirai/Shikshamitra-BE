@@ -66,6 +66,23 @@ public partial class NotificationIntent
 		}
 		LeaseId = null; ClaimedAt = null; LeaseExpiresAt = null; ConcurrencyStamp = Guid.NewGuid().ToString("N"); return true;
 	}
+
+	public bool ExpirePending(DateTimeOffset now)
+	{
+		if (Status is not (NotificationIntentState.Ready or NotificationIntentState.Scheduled) ||
+			LeaseId.HasValue || !ExpiresAt.HasValue || ExpiresAt > now) return false;
+		StopBeforePlanning(NotificationIntentState.Expired, "SourceExpired");
+		return true;
+	}
+
+	public void ReopenDeliveryProjection()
+	{
+		NotificationRuntimeGuard.State(PlanningCompletedAt.HasValue && Status is
+			NotificationIntentState.Completed or NotificationIntentState.PartiallyFailed or NotificationIntentState.NeedsReview);
+		Status = NotificationIntentState.AwaitingDelivery;
+		ErrorCode = null;
+		ConcurrencyStamp = Guid.NewGuid().ToString("N");
+	}
 	public void StopProcessing(Guid leaseToken, DateTimeOffset now, NotificationIntentState outcome, string errorCode)
 	{
 		NotificationRuntimeGuard.Lease(leaseToken != Guid.Empty && Status == NotificationIntentState.Processing && LeaseId == leaseToken && LeaseExpiresAt > now);

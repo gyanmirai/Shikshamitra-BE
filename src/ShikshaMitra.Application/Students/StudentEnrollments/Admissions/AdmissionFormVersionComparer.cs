@@ -19,6 +19,8 @@ internal static class AdmissionFormVersionComparer
 		if (!string.Equals(from.DefaultLanguage, to.DefaultLanguage, StringComparison.Ordinal)) changes.Add("Default language changed");
 		if (!from.SupportedLanguages.SequenceEqual(to.SupportedLanguages, StringComparer.OrdinalIgnoreCase)) changes.Add("Supported languages changed");
 		if (from.CoreFieldPolicyVersion != to.CoreFieldPolicyVersion) changes.Add("Core field policy changed");
+		if (!Equivalent(AdmissionFormMetadataStore.NormalizePrintSettings(from.PrintSettings),
+			AdmissionFormMetadataStore.NormalizePrintSettings(to.PrintSettings))) changes.Add("Print settings changed");
 		if (!Equivalent(from.Inheritance, to.Inheritance)) changes.Add("Inquiry inheritance changed");
 		var beforeSections = from.Sections.ToDictionary(section => section.Code, StringComparer.OrdinalIgnoreCase);
 		var afterSections = to.Sections.ToDictionary(section => section.Code, StringComparer.OrdinalIgnoreCase);

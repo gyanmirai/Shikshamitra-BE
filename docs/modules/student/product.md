@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-11-16
+updated_on: 2026-11-17
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,21 @@ audience: humans-and-agents
 # Understand Student Enrollment Admissions behavior
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
+
+## Registration print settings and saved answers
+
+Registration forms retain Simple, Boxed Grid or Structured Classic print templates with independent Compact/Spacious A4 spacing in their existing experience metadata, including school header, photo-space and signature-area flags. Existing definitions without a template retain Simple; new-client forms explicitly choose Boxed Grid.
+Historical definitions receive defaults; updates from older clients retain previously saved settings.
+Clone and new-version drafts copy the settings, and version comparison includes presentation changes.
+Inquiry inheritance uses the Registration settings while retaining source-owned questions and frozen Inquiry context.
+Existing frozen application definitions keep their captured settings rather than following a later publication.
+
+The application-form read exposes persisted Registration answers separately from automatic editor suggestions.
+Printing saved details consumes the stored answers, including an explicitly empty collection, together with the pinned definition and frozen Inquiry context.
+It does not promote sibling/relationship suggestions into authored answers, save a draft, create a submission or advance a stage.
+An explicit save before printing remains governed by the existing draft command, permission, validation and concurrency rules.
+Settings reuse existing extra-property storage; no schema migration or new print permission is introduced.
+See the [API contract](./api.md#registration-print-contract), [validation](./testing.md#registration-print-validation) and [frontend print workflow](../../../../Shikshamitra-FE/docs/student/workflows.md#registration-print-workflow).
 
 ## House Management
 
@@ -393,6 +408,8 @@ Existing version 1 single-score and qualitative outcomes retain their behavior.
 Sessions belong to the Offering and workflow stage; booking enforces capacity and application/session concurrency. Scheduled sessions must have started before attendance/results. Scored results are derived by the backend; unscored results need an explicit outcome. Failed, absent and retake outcomes require matching routes to leave the stage. Recording a result does not advance automatically.
 
 Assessment does not approve admission or create a Student. Approve, Waitlist and Reject belong to the active Admission decision stage. Approved plus a completed journey can finalize without Offer acceptance, preserving guardian/identity, duplicate, capacity, tenant, academic scope and concurrency checks. Finalization links the Student and Onboarding case; activation owns operational enrollment. Current Offering-linked Onboarding confirms a fee structure without payment or service-consent gates. Historical route-based and Records renewal completion retain their separately documented owner rules.
+
+Approve & Finalize combines the final Admission decision, final-stage completion and Student/Onboarding handoff in one atomic command. Staff review readiness and resolve possible existing-Student matches before applying it. Earlier stages and conditional routes cannot be skipped. Saved primary-contact validity and any separate guardian-responsibility confirmation remain required; this action does not claim mailbox/mobile ownership verification. New combined-flow cases therefore leave contact-verification time unrecorded. Existing approved/completed journeys can use the same finalization command, and successful retries do not create another Student, case or handoff.
 
 ## Managed document verification
 

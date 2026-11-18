@@ -1,9 +1,9 @@
-﻿---
+---
 module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-17
+updated_on: 2026-11-18
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -48,6 +48,8 @@ Dynamic-tenant PDF scenarios create a real tenant through the normal manager/rep
 Keep production tenant, permission and scope readers active in these fixtures.
 
 ## Admission assignment context and handoff
+
+`AdmissionFinanceHandoffDependency_Tests` replaces the pricing/form/payment dependencies with throwing registrations, then blocks the unused context reader and ledger repositories in a child scope after normal test seeding. It verifies that finalization without a prepared account completes without activating them or creating a Finance account. Run it with the combined approval, prepared-account handoff and collection suites; it does not replace their monetary or transaction assertions. Measure fresh-process service construction separately from end-to-end HTTP latency when investigating cold requests; compare matching QA Offerings and states with the same prerequisite reads.
 
 `AdmissionFinanceAssignmentContext_Tests.cs` extends the runtime Admission integration fixture.
 Run its `Finance_assignment_*`, `Finance_handoff_reuses_prepared_*`,

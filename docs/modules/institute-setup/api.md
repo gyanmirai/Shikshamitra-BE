@@ -204,9 +204,11 @@ The base route is `api/institute-setup/school-identity`. Configuration operation
 | POST preview | View; draft previews additionally require management; returns PDF without saving |
 | GET history | View; latest 100 revisions with tenant-owned creator usernames; signature selections redacted without AccessSignature |
 | POST copy | View, ManageOverrides and AccessSignature; explicit source/target, differing years, matching levels and target stamp |
-| GET branding | Authenticated current-school defaults; only nullable logo/banner metadata containing id, contentType, width and height |
+| GET branding | Authenticated current-school defaults; schoolName, addressLines and nullable logo/banner metadata containing id, contentType, width and height |
 | GET branding/logo | Authenticated school-default logo bytes, or 204 when absent/hidden |
 | GET branding/banner | Authenticated school-default banner bytes, or 204 when absent/hidden |
+
+Branding metadata reads the current tenant's persisted Institute Setup name and postal address, omits empty address components, and normalizes legacy location objects to display text. A missing institute name falls back to the tenant name; missing address data remains empty. It requires no School Identity management grant and exposes no setup drafts, contact details or principal signature.
 
 Branding images use `Cache-Control: private, no-cache`, tenant-and-asset-specific ETags, and `Vary: Authorization, Cookie, __tenant`.
 Every conditional request authenticates and resolves the current tenant before returning 304 for an unchanged image.

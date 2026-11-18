@@ -4,6 +4,17 @@ using System.Text.Json;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
+public class ApproveAndFinalizeAdmissionApplicationDtoValidator : AbstractValidator<ShikshaMitra.Students.StudentEnrollments.Admissions.ApproveAndFinalizeAdmissionApplicationDto>
+{
+	public ApproveAndFinalizeAdmissionApplicationDtoValidator()
+	{
+		RuleFor(x => x.ConcurrencyStamp).NotEmpty();
+		RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(128);
+		RuleFor(x => x).Must(x => !x.ExistingStudentId.HasValue || !x.ConfirmCreateNew)
+			.WithMessage("Choose an existing Student or confirm a new identity, not both.");
+	}
+}
+
 public class FinalizeAdmissionApplicationDtoValidator : AbstractValidator<ShikshaMitra.Students.StudentEnrollments.Admissions.FinalizeAdmissionApplicationDto>
 {
 	public FinalizeAdmissionApplicationDtoValidator()

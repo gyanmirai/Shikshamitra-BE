@@ -40,7 +40,8 @@ public interface IAdmissionApplicationAppService : IApplicationService
 	Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input);
 	Task<AdmissionApplicationDto> AcceptOfferAsync(Guid id, AdmissionApplicationDecisionDto input);
 	Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input);
-	Task<AdmissionFinalizationPreviewDto> GetFinalizationPreviewAsync(Guid id);
+	Task<AdmissionFinalizationPreviewDto> GetFinalizationPreviewAsync(Guid id, bool forApproval = false);
+	Task<AdmissionFinalizationResultDto> ApproveAndFinalizeAsync(Guid id, ApproveAndFinalizeAdmissionApplicationDto input);
 	Task<AdmissionFinalizationResultDto> FinalizeAsync(Guid id, FinalizeAdmissionApplicationDto input);
 	[Obsolete("Admissions no longer creates operational enrollment. Use FinalizeAsync and Student Onboarding.")]
 	Task<AdmissionEnrollmentResultDto> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input);

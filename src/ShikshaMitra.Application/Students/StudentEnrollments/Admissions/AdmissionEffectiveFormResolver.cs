@@ -64,6 +64,7 @@ public class AdmissionEffectiveFormResolver(AdmissionFormInheritanceService inhe
 
 	internal static AdmissionFormExperienceMetadata Experience(AdmissionFormDto definition) => new()
 	{
+		PrintSettings = AdmissionFormMetadataStore.NormalizePrintSettings(definition.PrintSettings),
 		DefaultLanguage = definition.DefaultLanguage,
 		SupportedLanguages = definition.SupportedLanguages,
 		Sections = definition.Sections.ToDictionary(section => section.Code, section => new AdmissionFormSectionExperienceMetadata

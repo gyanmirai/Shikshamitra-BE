@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -14,7 +13,7 @@ public class StudentSetupVisitService(StudentSetupAccess access, ITenantReposito
 	public async Task<StudentSetupVisitStatusDto> GetAsync()
 	{
 		var tenantId = await access.RequireIdentityAsync();
-		var canAccess = (await access.ReadPermissionsAsync()).Any(x => x.CanView);
+		var canAccess = await access.CanAccessSetupAsync();
 		if (!canAccess) return new();
 		var entry = StudentSetupVisit.Read(await tenants.GetAsync(tenantId));
 		return new() { CanAccessSetup = true, HasVisitedConfiguration = entry != null, FirstVisitedAt = entry?.VisitedAt };

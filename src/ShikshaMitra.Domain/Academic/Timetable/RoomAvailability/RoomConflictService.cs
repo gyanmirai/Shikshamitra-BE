@@ -60,9 +60,9 @@ public partial class RoomConflictService : DomainService
 
     public Task<ConflictCheckResult> CheckScopedConflictsAsync(
         RoomConflictAcademicScope academicScope, Guid roomId, DateTime date, TimeSpan startTime, TimeSpan endTime,
-        Guid? currentReservationId = null, Guid? teacherId = null) =>
+        Guid? currentReservationId = null, Guid? teacherId = null, bool enforceAcademicCalendar = true) =>
         CheckConflictsAsync(roomId, date, startTime, endTime, currentReservationId,
-            teacherId, academicScope.StandardId, null, null, academicScope);
+            teacherId, academicScope.StandardId, null, null, academicScope, enforceAcademicCalendar: enforceAcademicCalendar);
 
     /// <summary>Checks a room list using one request-local set of availability data.</summary>
     public async Task<IReadOnlyDictionary<Guid, ConflictCheckResult>> CheckRoomsAsync(
@@ -167,15 +167,15 @@ public partial class RoomConflictService : DomainService
         Guid? standardId,
         Guid? divisionId,
         RoomConflictReadContext? context,
-        RoomConflictAcademicScope? academicScope = null, Guid? academicMediumId = null)
+        RoomConflictAcademicScope? academicScope = null, Guid? academicMediumId = null, bool enforceAcademicCalendar = true)
     {
         var result = new ConflictCheckResult();
         var conflicts = new List<ConflictItem>();
 
         // 1. Check Academic Calendar
-        var mediumId = context != null ? null : academicScope?.AcademicMediumId ??
+        var mediumId = !enforceAcademicCalendar || context != null ? null : academicScope?.AcademicMediumId ??
             await ResolveCalendarMediumAsync(standardId, academicMediumId);
-        var calendar = context != null ? context.Calendar : await ReadRoomCalendarAsync(date, mediumId, academicScope);
+        var calendar = !enforceAcademicCalendar ? null : context != null ? context.Calendar : await ReadRoomCalendarAsync(date, mediumId, academicScope);
 
         bool calAllowed = true;
         string? calMsg = null;

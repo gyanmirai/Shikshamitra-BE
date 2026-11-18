@@ -50,20 +50,30 @@ public class StudentSetupAccess(
 
 	public async Task<List<StudentSetupSettingStateDto>> ReadPermissionsAsync()
 	{
+		var names = Policies.Values.SelectMany(policy => new[] { policy.View, policy.Manage }).Distinct(StringComparer.Ordinal).ToArray();
+		var grants = (await permissions.IsGrantedAsync(names)).Result;
 		var result = new List<StudentSetupSettingStateDto>();
 		foreach (var (key, policy) in Policies)
 		{
-			var view = await permissions.IsGrantedAsync(policy.View);
-			result.Add(new() { Key = key, CanView = view, CanManage = view && await permissions.IsGrantedAsync(policy.Manage) });
+			var view = grants[policy.View] == PermissionGrantResult.Granted;
+			result.Add(new() { Key = key, CanView = view, CanManage = view && grants[policy.Manage] == PermissionGrantResult.Granted });
 		}
 		return result;
+	}
+
+	public async Task<bool> CanAccessSetupAsync()
+	{
+		// Visit status only needs any View grant, not the setup editor's Manage capabilities.
+		var names = Policies.Values.Select(policy => policy.View).Distinct(StringComparer.Ordinal).ToArray();
+		var grants = (await permissions.IsGrantedAsync(names)).Result;
+		return names.Any(name => grants[name] == PermissionGrantResult.Granted);
 	}
 
 	public async Task RequireVisitPermissionAsync(string? key)
 	{
 		if (key is null or "welcome")
 		{
-			if ((await ReadPermissionsAsync()).Any(x => x.CanView)) return;
+			if (await CanAccessSetupAsync()) return;
 		}
 		else
 		{

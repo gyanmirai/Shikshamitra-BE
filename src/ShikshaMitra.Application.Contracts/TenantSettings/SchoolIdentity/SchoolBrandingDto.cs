@@ -4,6 +4,8 @@ namespace ShikshaMitra.TenantSettings.SchoolIdentity;
 
 public sealed class SchoolBrandingDto
 {
+	public string SchoolName { get; set; } = "";
+	public string[] AddressLines { get; set; } = [];
 	public SchoolBrandingAssetDto? Logo { get; set; }
 	public SchoolBrandingAssetDto? Banner { get; set; }
 }

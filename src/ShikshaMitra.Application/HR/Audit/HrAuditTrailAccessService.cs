@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization;
 using Volo.Abp.Authorization.Permissions;
@@ -11,7 +12,7 @@ using Volo.Abp;
 namespace ShikshaMitra.HR.Audit;
 
 [RemoteService(false)]
-public class HrAuditTrailAccessService(IPermissionChecker permissionChecker) : ApplicationService, ITransientDependency
+public class HrAuditTrailAccessService(IPermissionChecker permissionChecker, IUserScopeService userScopeService) : ApplicationService, ITransientDependency
 {
 	private static readonly string[] PolicyAuditEntityTypes =
 	[
@@ -28,6 +29,13 @@ public class HrAuditTrailAccessService(IPermissionChecker permissionChecker) : A
 	{
 		if (!string.IsNullOrWhiteSpace(entityType))
 		{
+			if (HrAuditTrailQuery.Normalize(entityType) == "payroll_run")
+			{
+				await CheckPermissionAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.ViewAudit);
+				if (!await HasSchoolWidePayrollScopeAsync())
+					throw new AbpAuthorizationException("School-wide HR scope is required for payroll activity.");
+				return PayrollAuditEntityTypes;
+			}
 			await CheckPermissionAsync(ResolveAuditPermission(entityType));
 			return null;
 		}
@@ -41,18 +49,26 @@ public class HrAuditTrailAccessService(IPermissionChecker permissionChecker) : A
 		{
 			allowed.AddRange(AttendanceAuditEntityTypes);
 		}
-		if (await permissionChecker.IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.ViewAudit))
+		if (await permissionChecker.IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.ViewAudit)
+			&& await HasSchoolWidePayrollScopeAsync())
 		{
 			allowed.AddRange(PayrollAuditEntityTypes);
 		}
 		return allowed.Distinct().ToArray();
 	}
 
+	private async Task<bool> HasSchoolWidePayrollScopeAsync()
+	{
+		if (!CurrentTenant.Id.HasValue || !CurrentUser.Id.HasValue)
+			return false;
+		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
+		return scope.TenantId == CurrentTenant.Id && HrUserScopeAccess.HasHrWideAccess(scope);
+	}
+
 	private static string ResolveAuditPermission(string? entityType)
 	{
 		return HrAuditTrailQuery.Normalize(entityType ?? string.Empty) switch
 		{
-			"payroll_run" => ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.ViewAudit,
 			"employee_attendance" => ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_Evaluations.ViewAudit,
 			_ => ShikshaMitraSubmodulePermissions.HR.Policies.ViewAudit
 		};

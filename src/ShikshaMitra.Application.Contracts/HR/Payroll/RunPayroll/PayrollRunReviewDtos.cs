@@ -10,6 +10,7 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 public class PayrollRunReviewRequest
 {
 	public Guid PreviewRunId { get; set; }
+	public Guid? OperationId { get; set; }
 	public string Month { get; set; } = string.Empty;
 	public Guid? AcademicYearId { get; set; }
 	public List<Guid> EmployeeIds { get; set; } = new();

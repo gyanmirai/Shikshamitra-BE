@@ -82,7 +82,7 @@ public sealed class WhatsAppProviderClient(IHttpClientFactory clients) : ITransi
 	internal static bool ValidMessageId(string? value) => value is { Length: > 6 and <= 256 } &&
 		value.StartsWith("wamid.", StringComparison.Ordinal) && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' or '+' or '/' or '=');
 
-	private static bool ValidConnection(WhatsAppProviderConnection connection)
+	internal static bool ValidConnection(WhatsAppProviderConnection connection)
 	{
 		var version = connection.GraphApiVersion;
 		return version is { Length: >= 4 and <= 10 } && version.StartsWith('v') &&

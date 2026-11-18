@@ -1,9 +1,11 @@
 using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Auditing;
 
 namespace ShikshaMitra.Communication.Notifications;
 
+[DisableAuditing]
 public class NotificationInboxItem : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
@@ -20,6 +22,13 @@ public class NotificationInboxItem : FullAuditedAggregateRoot<Guid>, IMultiTenan
 	public DateTimeOffset? ReadAt { get; private set; }
 	public DateTimeOffset? AcknowledgedAt { get; private set; }
 	protected NotificationInboxItem() { }
+
+	public void MarkRead(DateTimeOffset at) => ReadAt ??= at.ToUniversalTime();
+	public void Acknowledge(DateTimeOffset at)
+	{
+		AcknowledgedAt ??= at.ToUniversalTime();
+		MarkRead(AcknowledgedAt.Value);
+	}
 
 	public NotificationInboxItem(Guid id, Guid tenantId, Guid userId, Guid dispatchId, string sourceType,
 		Guid sourceId, string contextKey, string logicalKey, string title, string body, string relativeLink,

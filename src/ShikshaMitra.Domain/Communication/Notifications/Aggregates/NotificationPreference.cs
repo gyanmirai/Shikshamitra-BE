@@ -15,6 +15,12 @@ public class NotificationPreference : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public string LanguageCode { get; private set; } = "en";
 	protected NotificationPreference() { }
 
+	public void Configure(string configurationJson, string languageCode)
+	{
+		ConfigurationJson = NotificationDataGuard.Json(configurationJson, nameof(configurationJson));
+		LanguageCode = NotificationDataGuard.Text(languageCode, nameof(languageCode), 16).ToLowerInvariant();
+	}
+
 	public NotificationPreference(Guid id, Guid tenantId, Guid userId, string category, Guid? studentId = null) : base(id)
 	{
 		TenantId = NotificationDataGuard.Identifier(tenantId, nameof(tenantId));

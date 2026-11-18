@@ -1,9 +1,11 @@
 using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Auditing;
 
 namespace ShikshaMitra.Communication.Notifications;
 
+[DisableAuditing]
 public class WebPushSubscription : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
@@ -15,6 +17,16 @@ public class WebPushSubscription : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public bool IsEnabled { get; private set; }
 	public DateTimeOffset LastActivityAt { get; private set; }
 	protected WebPushSubscription() { }
+
+	public void Disable() => IsEnabled = false;
+	public void Rebind(Guid userId, Guid browserInstallationId, string protectedSubscription, string vapidKeyVersion, DateTimeOffset now)
+	{
+		UserId = NotificationDataGuard.Identifier(userId, nameof(userId));
+		BrowserInstallationId = NotificationDataGuard.Identifier(browserInstallationId, nameof(browserInstallationId));
+		ProtectedSubscription = NotificationDataGuard.Text(protectedSubscription, nameof(protectedSubscription), 16384);
+		VapidKeyVersion = NotificationDataGuard.Text(vapidKeyVersion, nameof(vapidKeyVersion), 64);
+		LastActivityAt = now.ToUniversalTime(); IsEnabled = true;
+	}
 
 	public WebPushSubscription(Guid id, Guid tenantId, Guid userId, Guid browserInstallationId,
 		string endpointHash, string protectedSubscription, string vapidKeyVersion, DateTimeOffset now) : base(id)

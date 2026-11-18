@@ -11,9 +11,22 @@ public partial class NotificationIntent
 	public NotificationIntentOrigin Origin { get; private set; }
 	public string? ErrorCode { get; private set; }
 	public DateTimeOffset? PlanningCompletedAt { get; private set; }
+	public void BindAutomaticOperation(Guid operationId)
+	{
+		NotificationRuntimeGuard.State(operationId != Guid.Empty && !CampaignId.HasValue && Origin == NotificationIntentOrigin.Automatic &&
+			Status is NotificationIntentState.Ready or NotificationIntentState.Scheduled);
+		CampaignId = operationId; ConcurrencyStamp = Guid.NewGuid().ToString("N");
+	}
+	public void StopBeforePlanning(NotificationIntentState outcome, string errorCode)
+	{
+		NotificationRuntimeGuard.State(Status is NotificationIntentState.Ready or NotificationIntentState.Scheduled && !LeaseId.HasValue &&
+			outcome is NotificationIntentState.NeedsReview or NotificationIntentState.Expired);
+		NotificationRuntimeGuard.ErrorCode(errorCode); Status = outcome; ErrorCode = errorCode;
+		ConcurrencyStamp = Guid.NewGuid().ToString("N");
+	}
 	public void BindRuntimeSnapshot(string configurationJson, NotificationIntentOrigin origin, Guid? manualCampaignId = null)
 	{
-		NotificationRuntimeGuard.State(RuleConfigurationJson == "{}" && Status is NotificationIntentState.Ready or NotificationIntentState.Scheduled);
+		NotificationRuntimeGuard.State(RuleConfigurationJson == "{}" && !CampaignId.HasValue && Status is NotificationIntentState.Ready or NotificationIntentState.Scheduled);
 		NotificationRuntimeGuard.Snapshot(configurationJson);
 		NotificationRuntimeGuard.State(Enum.IsDefined(origin) && (origin == NotificationIntentOrigin.ReviewedManual
 			? manualCampaignId.HasValue && manualCampaignId != Guid.Empty && ActorUserId.HasValue && ActorUserId != Guid.Empty

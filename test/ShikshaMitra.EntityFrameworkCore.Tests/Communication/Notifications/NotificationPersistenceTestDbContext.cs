@@ -15,6 +15,9 @@ public sealed class NotificationPersistenceTestDbContext(DbContextOptions<Notifi
 		builder.Entity<ChannelProviderSetting>().ConfigureByConvention();
 		builder.Entity<CommunicationReply>().ConfigureByConvention();
 		builder.Entity<CommunicationReply>().ToTable("CommunicationReplies");
+		builder.Entity<CommunicationCampaign>().ConfigureByConvention();
+		builder.Entity<CommunicationCampaign>().ToTable("CommunicationCampaigns");
+		builder.Entity<CommunicationCampaign>().Ignore(x => x.AnnouncementType);
 		builder.ApplyConfiguration(new ChannelProviderSettingConfiguration());
 		builder.ApplyConfiguration(new NotificationRuleConfiguration());
 		builder.ApplyConfiguration(new NotificationTemplateRevisionConfiguration());

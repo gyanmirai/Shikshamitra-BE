@@ -37,6 +37,7 @@ public class AcademicNotificationComposition_Tests : ShikshaMitraApplicationTest
 		GetRequiredService<NotificationEffectiveRuleResolver>().ShouldNotBeNull();
 		GetRequiredService<NotificationTemplateSnapshotSelector>().ShouldNotBeNull();
 		GetRequiredService<NotificationIntentSnapshotCodec>().ShouldNotBeNull();
+		GetRequiredService<INotificationIntentWriter>().ShouldNotBeNull();
 		GetRequiredService<NotificationSchoolTimeZone>().ShouldNotBeNull();
 		var setting = await GetRequiredService<ISettingDefinitionManager>().GetAsync(NotificationSettingNames.SchoolTimeZone);
 		setting.IsVisibleToClients.ShouldBeFalse(); setting.DefaultValue.ShouldBe("Asia/Kolkata");

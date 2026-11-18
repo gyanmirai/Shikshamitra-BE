@@ -1,0 +1,4 @@
+namespace ShikshaMitra.Communication.Notifications;
+
+public sealed record NotificationIntentRuntimeSnapshot(int SchemaVersion, NotificationSourceScopeDto SourceScope,
+	NotificationRuleRuntimeConfiguration Configuration);

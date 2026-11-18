@@ -5,7 +5,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Volo.Abp;
 using Volo.Abp.Auditing;
 using Volo.Abp.DependencyInjection;
@@ -21,8 +20,8 @@ internal sealed record NotificationPreparedDispatch(NotificationRuntimeRecipient
 
 [RemoteService(false), DisableAuditing]
 public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRepository<CommunicationTemplateRevision, Guid> revisions,
-	IAsyncQueryableExecuter queries, NotificationTemplateRenderer renderer, NotificationTemplateVariableValidator validator,
-	IConfiguration configuration, NotificationDispatchPayloadProtector protector, IGuidGenerator guids) : ITransientDependency
+	IAsyncQueryableExecuter queries, NotificationTemplateRenderer renderer, NotificationSourceLink links,
+	NotificationDispatchPayloadProtector protector, IGuidGenerator guids) : ITransientDependency
 {
 	private sealed record DeliveryIdentity(string RecipientFamily, Guid? StudentId, Guid? UserId, string? ExternalDestination,
 		CommunicationChannelType Channel);
@@ -87,8 +86,8 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 		if (matches.Length == 0) matches = pinned[(recipient.Recipient.Kind, recipient.Channel, fallback)].ToArray();
 		if (matches.Length != 1) return Exclude(NotificationErrorCodes.TemplateInvalid);
 		var revision = matches[0];
-		if (!TrySourceLink(content == null ? source.Snapshot!.RelativeLink : content.RelativeLink, out var link))
-			return Exclude(NotificationErrorCodes.SourceUnavailable);
+		var link = links.Resolve(content == null ? source.Snapshot!.RelativeLink : content.RelativeLink);
+		if (link == null) return Exclude(NotificationErrorCodes.SourceUnavailable);
 		var variables = new Dictionary<string, NotificationVariableValueDto>(content?.Variables ?? source.Snapshot!.Variables, StringComparer.Ordinal)
 		{
 			["source_link"] = new(NotificationVariableType.Link, link),
@@ -126,17 +125,6 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 		return new(recipient, revision.LanguageCode, dispatch, null);
 
 		NotificationPreparedDispatch Exclude(string code) => new(recipient, decision.LanguageCode, null, code);
-	}
-
-	private bool TrySourceLink(string? relativeLink, out string absolute)
-	{
-		absolute = string.Empty;
-		if (relativeLink == null || !relativeLink.StartsWith('/') || relativeLink.StartsWith("//", StringComparison.Ordinal) ||
-			relativeLink.Contains('\\') || relativeLink.Any(char.IsControl) ||
-			!Uri.TryCreate(configuration["App:ClientUrl"], UriKind.Absolute, out var origin) ||
-			!Uri.TryCreate(origin, relativeLink, out var link) || !validator.IsAllowedLink(link.AbsoluteUri)) return false;
-		absolute = link.AbsoluteUri;
-		return true;
 	}
 
 	private static DeliveryIdentity Identity(NotificationRecipientDispatchDecision decision)

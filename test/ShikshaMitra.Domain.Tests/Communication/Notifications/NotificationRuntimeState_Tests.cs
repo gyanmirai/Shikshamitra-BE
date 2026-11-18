@@ -171,6 +171,25 @@ public class NotificationRuntimeState_Tests
 	}
 
 	[Fact]
+	public void Deferring_or_recovering_before_io_releases_only_the_unused_claim_attempt()
+	{
+		var row = Dispatch();
+		typeof(NotificationDispatch).GetProperty(nameof(NotificationDispatch.AttemptNumber))!.SetValue(row, 3);
+		var lease = HydrateClaim(row, NotificationDispatchState.Processing);
+		row.DeferBeforeIo(lease, Now, Now.AddMinutes(20));
+		row.Status.ShouldBe(NotificationDispatchState.Pending);
+		row.NextAttemptAt.ShouldBe(Now.AddMinutes(20));
+		row.AttemptNumber.ShouldBe(2);
+		row.LeaseId.ShouldBeNull();
+		row.IoStartedAt.ShouldBeNull();
+
+		typeof(NotificationDispatch).GetProperty(nameof(NotificationDispatch.AttemptNumber))!.SetValue(row, 3);
+		HydrateClaim(row, NotificationDispatchState.Processing);
+		row.RecoverExpiredLease(Now.AddMinutes(6)).ShouldBeTrue();
+		row.AttemptNumber.ShouldBe(2);
+	}
+
+	[Fact]
 	public void Pre_io_revocation_skips_without_creating_a_false_provider_receipt()
 	{
 		var row = Dispatch(); var lease = HydrateClaim(row, NotificationDispatchState.Processing);

@@ -107,7 +107,7 @@ public class NotificationDispatchPlanner_Tests
 		_planner = new(_tenant, units, _clock, new(_tenant, [catalogue], [_adapter], snapshotCodec, new()),
 			[resolver], new(_tenant, new(_tenant, Repository<NotificationRule>([rule]), queries), Repository(_preferences),
 				Repository<ConsentRecord>([]), queries, new(_tenant, settings), new()),
-			new(_tenant, Repository(_providers), queries), new(_tenant, revisionRows, queries, renderer, validator, app, _protector, ids),
+			new(_tenant, Repository(_providers), queries), new(_tenant, revisionRows, queries, renderer, new(app, validator), _protector, ids),
 			Repository<NotificationIntent>([_intent]), Repository<CommunicationCampaign>([operation]),
 			Repository(_dispatches), Repository(_evidence), queries, ids);
 	}

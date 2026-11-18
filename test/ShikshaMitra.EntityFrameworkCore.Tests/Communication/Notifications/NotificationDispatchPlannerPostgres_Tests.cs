@@ -28,6 +28,10 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 	private const string EventKey = "Academic.Homework.Published";
 	private static readonly DateTimeOffset Now = new(2026, 11, 18, 10, 0, 0, TimeSpan.Zero);
 	private sealed record Work(Guid TenantId, Guid CampaignId, Guid UserId, NotificationRecipientRefDto Student, NotificationQueueClaim Claim);
+	private sealed record Runtime(ICurrentTenant Tenant, IClock Clock, NotificationIntentSourceReader Sources,
+		INotificationRuntimeRecipientResolver Recipients, NotificationDispatchPolicy Policy, NotificationEmailRoute Email,
+		NotificationSourceLink Links, NotificationTemplateRenderer Renderer, NotificationDispatchPayloadProtector Protector,
+		IAsyncQueryableExecuter Queries, IGuidGenerator Guids);
 
 	[NotificationPostgresFact]
 	public async Task Rolling_back_planning_reverts_evidence_dispatch_and_completion_under_the_same_lease()
@@ -53,6 +57,71 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 			await transaction.CommitAsync();
 		}
 		await AssertCommittedAsync(work);
+	}
+
+	[NotificationPostgresFact]
+	public async Task Dispatcher_commits_the_io_boundary_before_the_adapter_and_saves_its_receipt_separately()
+	{
+		var work = await SeedAndClaimAsync();
+		var keys = new EphemeralDataProtectionProvider();
+		await using (var planning = fixture.CreateContext())
+		{
+			await using var transaction = await planning.Database.BeginTransactionAsync();
+			await CreatePlanner(planning, work, keys: keys).PlanAsync(work.Claim, default);
+			await transaction.CommitAsync();
+		}
+		await using var connection = fixture.CreateConnection();
+		var claimed = (await NotificationPostgresQueueClaims.ClaimAsync(connection, null, work.TenantId,
+			NotificationQueueKind.Dispatch, Now, 1, TimeSpan.FromMinutes(5), default)).ShouldHaveSingleItem();
+		await using var db = fixture.CreateContext();
+		var runtime = CreateRuntime(db, work, keys);
+		var units = Substitute.For<IUnitOfWorkManager>();
+		var starts = 0;
+		var commits = 0;
+		IUnitOfWork? active = null;
+		units.Current.Returns(_ => active);
+		units.Begin(Arg.Any<AbpUnitOfWorkOptions>(), true).Returns(_ => {
+			active.ShouldBeNull();
+			db.ChangeTracker.Clear();
+			var transaction = db.Database.BeginTransaction();
+			var unit = Substitute.For<IUnitOfWork>();
+			starts++;
+			active = unit;
+			unit.CompleteAsync(Arg.Any<CancellationToken>()).Returns(async call => {
+				await db.SaveChangesAsync(call.Arg<CancellationToken>());
+				await transaction.CommitAsync(call.Arg<CancellationToken>());
+				commits++;
+			});
+			unit.When(x => x.Dispose()).Do(_ => { transaction.Dispose(); active = null; });
+			return unit;
+		});
+		var sender = Substitute.For<INotificationChannelSender>();
+		sender.Channel.Returns(CommunicationChannelType.InApp);
+		sender.SendAsync(Arg.Any<NotificationChannelSendRequest>(), Arg.Any<CancellationToken>()).Returns(async _ => {
+			active.ShouldBeNull();
+			commits.ShouldBe(1);
+			await using var observer = fixture.CreateContext();
+			var observed = await observer.Set<NotificationDispatch>().AsNoTracking().SingleAsync(x => x.Id == claimed.Id);
+			observed.IoStartedAt.ShouldBe(Now);
+			observed.IoLeaseId.ShouldBe(claimed.LeaseId);
+			observed.Status.ShouldBe(NotificationDispatchState.Processing);
+			return new NotificationChannelSendResult(NotificationProviderAcceptance.Accepted, "inapp:receipt", null);
+		});
+		var dispatcher = new NotificationDispatcher(runtime.Tenant, units, runtime.Clock,
+			new(runtime.Protector, runtime.Sources, [runtime.Recipients], runtime.Policy, runtime.Email, runtime.Links), [sender],
+			Repository<NotificationDispatch>(db), Repository<NotificationIntent>(db), Repository<CommunicationCampaign>(db), runtime.Queries);
+
+		await dispatcher.DispatchAsync(claimed.Id, claimed.LeaseId, default);
+
+		starts.ShouldBe(2);
+		commits.ShouldBe(2);
+		active.ShouldBeNull();
+		await using var final = fixture.CreateContext();
+		var delivered = await final.Set<NotificationDispatch>().SingleAsync(x => x.Id == claimed.Id);
+		delivered.Status.ShouldBe(NotificationDispatchState.Delivered);
+		delivered.ProviderMessageId.ShouldBe("inapp:receipt");
+		delivered.AttemptNumber.ShouldBe(1);
+		delivered.LeaseId.ShouldBeNull();
 	}
 
 	[NotificationPostgresFact]
@@ -130,15 +199,26 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 	}
 
 	private static NotificationDispatchPlanner CreatePlanner(NotificationPersistenceTestDbContext db, Work work,
-		TaskCompletionSource? loadedSource = null)
+		TaskCompletionSource? loadedSource = null, IDataProtectionProvider? keys = null)
 	{
-		var tenant = Substitute.For<ICurrentTenant>();
-		tenant.Id.Returns(work.TenantId);
+		var runtime = CreateRuntime(db, work, keys ?? new EphemeralDataProtectionProvider(), loadedSource);
 		var unit = Substitute.For<IUnitOfWork>();
 		unit.Options.Returns(new AbpUnitOfWorkOptions { IsTransactional = true });
 		unit.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(call => db.SaveChangesAsync(call.Arg<CancellationToken>()));
 		var units = Substitute.For<IUnitOfWorkManager>();
 		units.Current.Returns(unit);
+		return new(runtime.Tenant, units, runtime.Clock, runtime.Sources, [runtime.Recipients], runtime.Policy, runtime.Email,
+			new(runtime.Tenant, Repository<CommunicationTemplateRevision>(db), runtime.Queries, runtime.Renderer, runtime.Links,
+				runtime.Protector, runtime.Guids),
+			Repository<NotificationIntent>(db), Repository<CommunicationCampaign>(db), Repository<NotificationDispatch>(db),
+			Repository<CommunicationRecipientSnapshot>(db), runtime.Queries, runtime.Guids);
+	}
+
+	private static Runtime CreateRuntime(NotificationPersistenceTestDbContext db, Work work, IDataProtectionProvider keys,
+		TaskCompletionSource? loadedSource = null)
+	{
+		var tenant = Substitute.For<ICurrentTenant>();
+		tenant.Id.Returns(work.TenantId);
 		var clock = Substitute.For<IClock>();
 		clock.Now.Returns(Now.UtcDateTime);
 		var adapter = Substitute.For<INotificationSourceAdapter>();
@@ -168,13 +248,11 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 		var renderer = new NotificationTemplateRenderer(tenant, revisions, queries, validator);
 		var ids = Substitute.For<IGuidGenerator>();
 		ids.Create().Returns(_ => Guid.NewGuid());
-		return new(tenant, units, clock, new(tenant, [catalogue], [adapter], new(new()), new()), [resolver],
+		return new(tenant, clock, new(tenant, [catalogue], [adapter], new(new()), new()), resolver,
 			new(tenant, new(tenant, Repository<NotificationRule>(db), queries), Repository<NotificationPreference>(db),
 				Repository<ConsentRecord>(db), queries, new(tenant, settings), new()),
 			new(tenant, Repository<ChannelProviderSetting>(db), queries),
-			new(tenant, revisions, queries, renderer, validator, app, new(new EphemeralDataProtectionProvider(), tenant), ids),
-			Repository<NotificationIntent>(db), Repository<CommunicationCampaign>(db), Repository<NotificationDispatch>(db),
-			Repository<CommunicationRecipientSnapshot>(db), queries, ids);
+			new(app, validator), renderer, new(keys, tenant), queries, ids);
 	}
 
 	private static IRepository<T, Guid> Repository<T>(DbContext db) where T : class, Volo.Abp.Domain.Entities.IEntity<Guid>

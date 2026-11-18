@@ -60,7 +60,17 @@ public partial class NotificationDispatch
 	public void SkipBeforeIo(Guid leaseToken, DateTimeOffset now, string errorCode)
 	{
 		RequireActiveLease(leaseToken, now); NotificationRuntimeGuard.State(!IoStartedAt.HasValue);
-		NotificationRuntimeGuard.ErrorCode(errorCode); Status = NotificationDispatchState.Skipped; ErrorCode = errorCode; ClearLease();
+		NotificationRuntimeGuard.ErrorCode(errorCode); Status = NotificationDispatchState.Skipped; ErrorCode = errorCode;
+		ReleaseUnusedAttempt();
+	}
+	public void DeferBeforeIo(Guid leaseToken, DateTimeOffset now, DateTimeOffset nextAttemptAt)
+	{
+		RequireActiveLease(leaseToken, now);
+		NotificationRuntimeGuard.State(!IoStartedAt.HasValue && nextAttemptAt > now && (!ExpiresAt.HasValue || nextAttemptAt < ExpiresAt));
+		Status = NotificationDispatchState.Pending;
+		NextAttemptAt = nextAttemptAt.ToUniversalTime();
+		ErrorCode = "QuietHours";
+		ReleaseUnusedAttempt();
 	}
 	public bool RecoverExpiredLease(DateTimeOffset now)
 	{
@@ -68,7 +78,14 @@ public partial class NotificationDispatch
 		if (IoStartedAt.HasValue) { Status = NotificationDispatchState.UnknownAcceptance; ErrorCode = NotificationErrorCodes.UnknownAcceptance; }
 		else if (ExpiresAt <= now) { Status = NotificationDispatchState.Skipped; ErrorCode = "SourceExpired"; }
 		else { Status = NotificationDispatchState.Pending; NextAttemptAt = now.ToUniversalTime(); ErrorCode = "LeaseExpiredBeforeIo"; }
-		ClearLease(); return true;
+		if (IoStartedAt.HasValue) ClearLease();
+		else ReleaseUnusedAttempt();
+		return true;
+	}
+	private void ReleaseUnusedAttempt()
+	{
+		if (AttemptNumber > 0) AttemptNumber--;
+		ClearLease();
 	}
 	private void RequireActiveLease(Guid leaseToken, DateTimeOffset now) => NotificationRuntimeGuard.Lease(
 		leaseToken != Guid.Empty && Status == NotificationDispatchState.Processing && LeaseId == leaseToken && LeaseExpiresAt > now);

@@ -14,7 +14,8 @@ namespace ShikshaMitra.Controllers.Academic.Notifications;
 [Authorize, DisableAuditing, Area("app"), RemoteService(Name = "ShikshaMitra")]
 [Route("api/academic/notifications")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public class AcademicNotificationController(IAcademicNotificationCatalogueAppService catalogue, IAcademicNotificationRuleAppService rules) : AbpControllerBase
+public class AcademicNotificationController(IAcademicNotificationCatalogueAppService catalogue, IAcademicNotificationRuleAppService rules,
+	IAcademicNotificationManualAppService manual) : AbpControllerBase
 {
 	[HttpGet("catalogue")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
@@ -35,4 +36,10 @@ public class AcademicNotificationController(IAcademicNotificationCatalogueAppSer
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Add)]
 	public Task<AcademicNotificationRulePreviewDto> PreviewRuleAsync(string eventKey, [FromBody] PreviewAcademicNotificationRuleDto input,
 		CancellationToken cancellationToken) => rules.PreviewAsync(eventKey, input, cancellationToken);
+
+	[HttpPost("manual/preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Send)]
+	public Task<AcademicNotificationManualPreviewDto> PreviewManualAsync([FromBody] PreviewAcademicNotificationManualDto input,
+		CancellationToken cancellationToken) => manual.PreviewAsync(input, cancellationToken);
 }

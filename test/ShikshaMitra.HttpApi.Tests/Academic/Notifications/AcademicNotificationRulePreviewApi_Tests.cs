@@ -45,6 +45,11 @@ public class AcademicNotificationPreviewApiFactory : ShikshaMitraApiTestFactory
 	internal static readonly Guid TenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 	internal static readonly Guid StudentId = Guid.NewGuid();
 	internal static readonly Guid SiblingDivision = Guid.NewGuid();
+	internal string SourceRevision { get; set; } = "homework-v1";
+	internal string PrimaryEmail { get; set; } = "private@example.invalid";
+	internal Guid[] AdditionalStudents { get; set; } = [];
+	private static readonly Dictionary<string, (Guid User, Guid Link, Guid Association)> AccountIds =
+		new[] { "mother", "father", "self" }.ToDictionary(x => x, _ => (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
 
 	protected override void ConfigureWebHost(IWebHostBuilder builder)
 	{
@@ -80,6 +85,7 @@ public class AcademicNotificationPreviewApiFactory : ShikshaMitraApiTestFactory
 			var scoped = new NotificationSourceScopeDto(factory.SeededAcademicYearId, factory.SeededBoardId, factory.SeededMediumId,
 				factory.SeededStandardId, factory.SeededDivisionId);
 			var child = new NotificationRecipientRefDto("Student", StudentId);
+			var selectedDivision = factory.AdditionalStudents.Select(id => new NotificationRecipientRefDto("Student", id)).Prepend(child).ToArray();
 			var sibling = new NotificationRecipientRefDto("Student", Guid.NewGuid());
 			var definition = new AcademicNotificationCatalogue([]).Get(Event);
 			var variables = definition.Variables.ToDictionary(x => x.Key, x => new NotificationVariableValueDto(x.Type, x.Type switch
@@ -89,8 +95,9 @@ public class AcademicNotificationPreviewApiFactory : ShikshaMitraApiTestFactory
 				NotificationVariableType.Number => "2",
 				_ => "Private source text"
 			}));
-			return Task.FromResult(new NotificationSourceSnapshot(true, null, "homework-v1", "/academic/homework",
-				variables, [child, sibling], AudienceSlices: [new(scoped, [child]), new(scoped with { DivisionId = SiblingDivision }, [sibling])]));
+			return Task.FromResult(new NotificationSourceSnapshot(true, null, factory.SourceRevision, "/academic/homework",
+				variables, [.. selectedDivision, sibling],
+				AudienceSlices: [new(scoped, selectedDivision), new(scoped with { DivisionId = SiblingDivision }, [sibling])]));
 		}
 	}
 
@@ -100,24 +107,33 @@ public class AcademicNotificationPreviewApiFactory : ShikshaMitraApiTestFactory
 			CancellationToken cancellationToken)
 		{
 			tenantId.ShouldBe(TenantId);
-			sourceRecipients.Select(x => x.StudentId).ShouldBe([StudentId]);
-			var student = new Student(StudentId, TenantId, "Private", null, "Child", factory.SeededAcademicYearId,
+			sourceRecipients.ShouldAllBe(x => x.StudentId == StudentId ||
+				(x.StudentId.HasValue && factory.AdditionalStudents.Contains(x.StudentId.Value)));
+			return Task.FromResult(new AcademicNotificationRecipientData(
+				sourceRecipients.Select(x => BuildStudent(x.StudentId!.Value)).ToArray(), []));
+		}
+
+		private AcademicNotificationStudent BuildStudent(Guid studentId)
+		{
+			var student = new Student(studentId, TenantId, "Private", null, "Child", factory.SeededAcademicYearId,
 				factory.SeededBoardId, factory.SeededMediumId, factory.SeededMediumStageId, factory.SeededStandardId,
 				factory.SeededDivisionId, status: StudentLifeCycleStatusEnum.Enrolled);
-			student.UpdateFamilyInfo(Profile("Father"), Profile("Mother"), null, []);
+			student.UpdateFamilyInfo(Profile("Father", "father@example.invalid"), Profile("Mother", factory.PrimaryEmail), null, []);
 			StudentFamilyContactSelection.Select(student, "mother");
-			return Task.FromResult(new AcademicNotificationRecipientData([new(student, student.FamilyDetail, false,
-				[Link("guardian", "mother"), Link("guardian", "father"), Link("student", "self")])], []));
+			return new(student, student.FamilyDetail, false,
+				[Link(studentId, "guardian", "mother"), Link(studentId, "guardian", "father"), Link(studentId, "student", "self")]);
 		}
 
-		private static AcademicNotificationAccount Link(string accountType, string relationship)
+		private static AcademicNotificationAccount Link(Guid studentId, string accountType, string relationship)
 		{
-			var user = new IdentityUser(Guid.NewGuid(), relationship, "private@example.invalid", TenantId);
-			return new(new StudentPortalAccountLink(Guid.NewGuid(), TenantId, StudentId, user.Id, accountType, relationship, Guid.NewGuid()), user);
+			var ids = studentId == StudentId ? AccountIds[relationship] : (User: Guid.NewGuid(), Link: Guid.NewGuid(), Association: Guid.NewGuid());
+			var user = new IdentityUser(ids.User, relationship, "private@example.invalid", TenantId);
+			return new(new StudentPortalAccountLink(ids.Link, TenantId, studentId, user.Id, accountType, relationship, ids.Association)
+				{ ConcurrencyStamp = "preview-fixture" }, user);
 		}
 
-		private static ParentGuardianDetails Profile(string name) =>
-			new(name, null, null, "private@example.invalid", null, null, null, null, null, null, null, null, null);
+		private static ParentGuardianDetails Profile(string name, string email) =>
+			new(name, null, null, email, null, null, null, null, null, null, null, null, null);
 	}
 }
 
@@ -139,10 +155,11 @@ public class AcademicNotificationRulePreviewApi_Tests(AcademicNotificationPrevie
 		await PostAndReadAsync<int>($"{Templates}/initialize-defaults", new { eventKey = Event });
 		var page = await GetAndReadAsync<PagedResultDto<NotificationTemplateDto>>($"{Templates}?eventKey={Event}&maxResultCount=100");
 		var draft = page.Items.Single(x => x.RecipientKind == "Guardian" && x.Channel == CommunicationChannelType.InApp);
-		await PostAndReadAsync<NotificationTemplateDto>($"{Templates}/{draft.TemplateId}/publish", new
-		{
-			revisionId = draft.RevisionId, concurrencyStamp = draft.ConcurrencyStamp
-		});
+		if (!draft.IsPublished)
+			await PostAndReadAsync<NotificationTemplateDto>($"{Templates}/{draft.TemplateId}/publish", new
+			{
+				revisionId = draft.RevisionId, concurrencyStamp = draft.ConcurrencyStamp
+			});
 
 		using var response = await Client.PostAsJsonAsync(PreviewPath, Request([draft.TemplateId]));
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());

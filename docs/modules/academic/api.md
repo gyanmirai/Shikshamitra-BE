@@ -26,6 +26,7 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 | `GET /rules` | View | Paged event rules at a school, year, board, medium, class or division scope, with the effective rule and inheritance marker |
 | `PUT /rules/{eventKey}` | Add | Save an explicitly scoped rule and return its revision and concurrency stamp |
 | `POST /rules/{eventKey}/preview` | Add + source access | Preview a proposed `rule` for the given `sourceType` and `sourceId` |
+| `POST /manual/preview` | View + Send + source access | Review a saved source audience, chosen channels and published templates |
 | `GET /templates` | View | Paged template headers for the selected `eventKey` and optional `academicMediumId` |
 | `GET /templates/{id}` and `/{id}/history` | View | Current template and revision history |
 | `GET /templates/{id}/preview/{revisionId}` | View | Render with synthetic values for review |
@@ -39,6 +40,10 @@ Scope IDs form a contiguous tenant-owned hierarchy. A rule applies to the select
 Rules default to the primary guardian for family events. Other saved guardian relationships and the student account can be selected when the event supports them. Enabling a rule requires an available source and valid published template coverage for its audiences, channels and fallback language. Channel flags report configuration status. WhatsApp also requires approval for the selected template revision before dispatch.
 
 Rule preview uses the saved source audience within the proposed rule's scope. It reports eligible recipients after contact, preference, consent and timing checks, estimated ready deliveries per channel, and grouped exclusions. Ready delivery counts depend on published template coverage, channel setup, and current device or provider approval. Selected drafts can render fictional samples. The preview response omits recipient identities and destinations, and the request creates no rules, campaigns, or dispatches.
+
+Manual preview accepts `eventKey`, `sourceType`, `sourceId`, `selectedRecipients`, `channels`, and optional `templateId`. Recipient references must come from the authorized source roster. An empty selection uses the source roster, subject to scope checks for every included segment. The in-app channel is required. The optional template selects a compatible published recipient, channel, and language variant. An effective rule supplies family preferences where present. Otherwise, the family audience defaults to the primary guardian.
+
+The response reports recipient counts, exclusions, sample messages with fictional values, and whether the audience or a school approval rule requires approval. When at least one delivery is ready, it returns an opaque `reviewToken` and `expiresAt` up to ten minutes away, capped by source expiry. The server stores a digest bound to the actor, source revision, scoped audience, templates, and delivery evidence. Preview writes only the review receipt and makes no provider calls.
 
 Initializing defaults preserves previous edits and deletions and creates drafts without activating a rule.
 

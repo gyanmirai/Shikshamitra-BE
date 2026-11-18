@@ -1349,20 +1349,23 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 		var query = await _approvalRuleRepository.GetQueryableAsync();
 		var rules = await AsyncExecuter.ToListAsync(query.Where(x => x.IsEnabled && x.RequiresApproval));
 
-		return rules.Any(rule => ApprovalRuleMatches(rule, campaign, channels, audienceSize));
+		return rules.Any(rule => ApprovalRuleMatches(rule, campaign.CampaignType, campaign.SourceModule, campaign.ImportanceLevel,
+			channels, audienceSize));
 	}
 
-	private static bool ApprovalRuleMatches(
+	internal static bool ApprovalRuleMatches(
 		CommunicationApprovalRule rule,
-		CommunicationCampaign campaign,
-		List<CommunicationChannelType> channels,
+		string campaignType,
+		CommunicationSourceModule sourceModule,
+		CommunicationImportanceLevel importance,
+		IReadOnlyCollection<CommunicationChannelType> channels,
 		int audienceSize)
 	{
-		return (rule.CampaignType.IsNullOrWhiteSpace() || string.Equals(rule.CampaignType, campaign.CampaignType, StringComparison.OrdinalIgnoreCase))
-			&& (!rule.SourceModule.HasValue || rule.SourceModule == campaign.SourceModule)
+		return (rule.CampaignType.IsNullOrWhiteSpace() || string.Equals(rule.CampaignType, campaignType, StringComparison.OrdinalIgnoreCase))
+			&& (!rule.SourceModule.HasValue || rule.SourceModule == sourceModule)
 			&& (!rule.Channel.HasValue || channels.Contains(rule.Channel.Value))
 			&& (!rule.MinimumAudienceSize.HasValue || audienceSize >= rule.MinimumAudienceSize.Value)
-			&& (!rule.ImportanceLevel.HasValue || campaign.ImportanceLevel >= rule.ImportanceLevel.Value);
+			&& (!rule.ImportanceLevel.HasValue || importance >= rule.ImportanceLevel.Value);
 	}
 
 	private async Task<bool> HasCampaignHistoryAsync(Guid campaignId)

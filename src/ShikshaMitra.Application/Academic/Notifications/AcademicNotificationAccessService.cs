@@ -31,6 +31,15 @@ public sealed class AcademicNotificationAccessService(ICurrentTenant tenant, ICu
 		CancellationToken cancellationToken) => RequireSourceAsync(eventKey, sourceType, sourceId,
 		ShikshaMitraSubmodulePermissions.Academics.Notification.Add, cancellationToken);
 
+	internal async Task<AcademicNotificationAccessContext> RequireManualPreviewAsync(PreviewAcademicNotificationManualDto input,
+		CancellationToken cancellationToken)
+	{
+		if (!await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Academics.Notification.View))
+			throw new AbpAuthorizationException();
+		return await RequireSourceAsync(input.EventKey, input.SourceType, input.SourceId,
+			ShikshaMitraSubmodulePermissions.Academics.Notification.Send, cancellationToken);
+	}
+
 	private async Task<AcademicNotificationAccessContext> RequireSourceAsync(string eventKey, string sourceType, Guid sourceId,
 		string permission, CancellationToken cancellationToken)
 	{

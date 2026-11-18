@@ -16,7 +16,7 @@ using Volo.Abp.MultiTenancy;
 namespace ShikshaMitra.Communication.Notifications;
 
 internal sealed record NotificationPreparedDispatch(NotificationRuntimeRecipient Recipient, string Language,
-	NotificationDispatch? Dispatch, string? ExclusionCode, Guid? ProviderSettingId = null);
+	NotificationDispatch? Dispatch, string? ExclusionCode, Guid? ProviderSettingId = null, string? ReviewFingerprint = null);
 
 [RemoteService(false), DisableAuditing]
 public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRepository<CommunicationTemplateRevision, Guid> revisions,
@@ -120,9 +120,9 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 		if (matches.Length == 0) matches = pinned[(recipient.Recipient.Kind, recipient.Channel, fallback)].ToArray();
 		if (matches.Length != 1) return Exclude(NotificationErrorCodes.TemplateInvalid);
 		var revision = matches[0];
+		var binding = approved?.GetValueOrDefault(revision.Id);
 		if (recipient.Channel == CommunicationChannelType.WhatsApp &&
-			(approved == null || !approved.TryGetValue(revision.Id, out var binding) ||
-				!WhatsAppApprovedTemplates.MatchesLanguage(binding, revision.LanguageCode)))
+			(binding == null || !WhatsAppApprovedTemplates.MatchesLanguage(binding, revision.LanguageCode)))
 			return Exclude("WhatsAppTemplateNotApproved");
 		var link = links.Resolve(content == null ? source.Snapshot!.RelativeLink : content.RelativeLink);
 		if (link == null) return Exclude(NotificationErrorCodes.SourceUnavailable);
@@ -144,7 +144,16 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 			CommunicationChannelType.WhatsApp => whatsAppProvider,
 			_ => null
 		};
-		if (intent == null) return new(recipient, revision.LanguageCode, null, null, providerSettingId);
+		if (intent == null)
+		{
+			var reviewFingerprint = Hash(new
+			{
+				recipient.SourceRecipient, recipient.Recipient, recipient.AssociationRevision, recipient.Channel,
+				TemplateRevisionId = revision.Id, providerSettingId, BindingId = binding?.Id, pushDeviceId,
+				rendered.ContentHash, rendered.LinkUrl
+			});
+			return new(recipient, revision.LanguageCode, null, null, providerSettingId, reviewFingerprint);
+		}
 
 		var identity = Identity(decision);
 		var context = Hash(new { intent.Id, identity.RecipientFamily, identity.StudentId, identity.UserId, recipient.Recipient.FamilyRelationship });

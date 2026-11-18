@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace ShikshaMitra.Communication.Notifications;
 
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record NotificationRecipientRefDto(string Kind, Guid? StudentId = null,
 	string? FamilyRelationship = null, Guid? UserId = null, Guid? EmployeeId = null);
 

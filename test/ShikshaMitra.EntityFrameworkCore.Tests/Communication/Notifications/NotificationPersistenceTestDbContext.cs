@@ -18,6 +18,8 @@ public sealed class NotificationPersistenceTestDbContext(DbContextOptions<Notifi
 		builder.Entity<CommunicationCampaign>().ConfigureByConvention();
 		builder.Entity<CommunicationCampaign>().ToTable("CommunicationCampaigns");
 		builder.Entity<CommunicationCampaign>().Ignore(x => x.AnnouncementType);
+		builder.Entity<CommunicationRecipientSnapshot>().ConfigureByConvention();
+		builder.ApplyConfiguration(new CommunicationRecipientSnapshotConfiguration());
 		builder.ApplyConfiguration(new ChannelProviderSettingConfiguration());
 		builder.Entity<ConsentRecord>().ConfigureByConvention();
 		builder.ApplyConfiguration(new ConsentRecordConfiguration());

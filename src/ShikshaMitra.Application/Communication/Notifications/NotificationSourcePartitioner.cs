@@ -49,10 +49,29 @@ public sealed class NotificationSourcePartitioner : ITransientDependency
 		var overrides = source.RecipientContent ?? [];
 		Require(overrides.All(x => x != null && roster.Contains(x.Recipient) && x.Variables != null && SafeLink(x.RelativeLink)) &&
 			overrides.Select(x => x.Recipient).Distinct().Count() == overrides.Count);
-		return groups.OrderBy(x => x.Key.Key, StringComparer.Ordinal).SelectMany(x => x.Value.OrderBy(r => r.Kind, StringComparer.Ordinal)
-			.ThenBy(r => r.StudentId).ThenBy(r => r.UserId).ThenBy(r => r.EmployeeId).ThenBy(r => r.FamilyRelationship, StringComparer.Ordinal)
-			.Chunk(100).Select(chunk => new NotificationSourcePartition(x.Key, chunk))).ToArray();
+		return groups.OrderBy(x => x.Key.Key, StringComparer.Ordinal)
+			.SelectMany(x => Pack(x.Key, x.Value)).ToArray();
 	}
+
+	private static IEnumerable<NotificationSourcePartition> Pack(NotificationRuleScope scope, IEnumerable<NotificationRecipientRefDto> recipients)
+	{
+		var groups = recipients.OrderBy(x => x.StudentId).ThenBy(x => x.UserId).ThenBy(x => x.Kind, StringComparer.Ordinal)
+			.ThenBy(x => x.EmployeeId).GroupBy(x => (x.UserId, x.StudentId));
+		var pending = new List<NotificationRecipientRefDto>(100);
+		foreach (var group in groups)
+		{
+			var count = group.Count();
+			Require(count <= 100);
+			if (pending.Count + count > 100)
+			{
+				yield return new(scope, pending.ToArray());
+				pending.Clear();
+			}
+			pending.AddRange(group);
+		}
+		if (pending.Count != 0) yield return new(scope, pending.ToArray());
+	}
+
 	internal static bool ValidReference(NotificationRecipientRefDto? recipient, NotificationEventDefinition definition)
 	{
 		if (recipient == null || recipient.Kind == null || recipient.Kind.Length > 64 || recipient.FamilyRelationship != null ||

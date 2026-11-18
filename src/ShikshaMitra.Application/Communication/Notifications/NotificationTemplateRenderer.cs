@@ -24,9 +24,11 @@ public sealed class NotificationTemplateRenderer(ICurrentTenant tenant,
 		var query = await revisions.GetQueryableAsync();
 		var revision = await executer.FirstOrDefaultAsync(query.Where(x => x.TenantId == tenantId && x.Id == input.RevisionId &&
 			x.IsPublished && !x.IsDeleted), cancellationToken);
-		if (revision == null) return Failure(NotificationErrorCodes.TemplateInvalid);
-		return RenderContent(revision, input);
+		return revision == null ? Failure(NotificationErrorCodes.TemplateInvalid) : RenderPublished(revision, input);
 	}
+
+	internal NotificationRenderResult RenderPublished(CommunicationTemplateRevision revision, NotificationRenderInput input) =>
+		revision.IsPublished ? RenderPreview(revision, input) : Failure(NotificationErrorCodes.TemplateInvalid);
 
 	internal NotificationRenderResult RenderPreview(CommunicationTemplateRevision revision, NotificationRenderInput input)
 	{

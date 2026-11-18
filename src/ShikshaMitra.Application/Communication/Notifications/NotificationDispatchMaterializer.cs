@@ -1,0 +1,161 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+using Volo.Abp;
+using Volo.Abp.Auditing;
+using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Guids;
+using Volo.Abp.Linq;
+using Volo.Abp.MultiTenancy;
+
+namespace ShikshaMitra.Communication.Notifications;
+
+internal sealed record NotificationPreparedDispatch(NotificationRuntimeRecipient Recipient, string Language,
+	NotificationDispatch? Dispatch, string? ExclusionCode);
+
+[RemoteService(false), DisableAuditing]
+public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRepository<CommunicationTemplateRevision, Guid> revisions,
+	IAsyncQueryableExecuter queries, NotificationTemplateRenderer renderer, NotificationTemplateVariableValidator validator,
+	IConfiguration configuration, NotificationDispatchPayloadProtector protector, IGuidGenerator guids) : ITransientDependency
+{
+	private sealed record DeliveryIdentity(string RecipientFamily, Guid? StudentId, Guid? UserId, string? ExternalDestination,
+		CommunicationChannelType Channel);
+
+	internal async Task<IReadOnlyList<NotificationPreparedDispatch>> PrepareAsync(NotificationIntent intent, NotificationCurrentSource source,
+		NotificationDispatchPolicyResult policy, NotificationEmailProvider? email, CancellationToken cancellationToken)
+	{
+		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty || intent.TenantId != tenantId || source.TenantId != tenantId)
+			throw new BusinessException(NotificationErrorCodes.TenantRequired);
+		if (source.Snapshot == null || policy.ExclusionCode != null) throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
+		var results = new List<NotificationPreparedDispatch>();
+		var eligible = new List<NotificationRecipientDispatchDecision>();
+		foreach (var decision in policy.Recipients)
+		{
+			var error = decision.ExclusionCode;
+			if (error == null && decision.Recipient.Channel == CommunicationChannelType.Email && email == null)
+				error = NotificationErrorCodes.ProviderUnavailable;
+			if (error != null || !decision.DueAt.HasValue)
+				results.Add(new(decision.Recipient, decision.LanguageCode, null, error ?? NotificationErrorCodes.RecipientIneligible));
+			else eligible.Add(decision);
+		}
+		if (eligible.Count == 0) return results;
+
+		var pinned = await LoadPinnedAsync(tenantId, intent, source, cancellationToken);
+		var overrides = (source.Snapshot.RecipientContent ?? []).ToDictionary(x => x.Recipient);
+		foreach (var group in eligible.GroupBy(Identity))
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			var selected = group.OrderByDescending(x => overrides.ContainsKey(x.Recipient.SourceRecipient)).First();
+			var conflictingOverrides = group.Select(x => x.Recipient.SourceRecipient).Distinct().Count(overrides.ContainsKey) > 1;
+			if (conflictingOverrides)
+			{
+				results.Add(new(selected.Recipient, selected.LanguageCode, null, "RecipientContentAmbiguous"));
+				continue;
+			}
+			results.Add(PrepareOne(tenantId, intent, source, selected,
+				overrides.GetValueOrDefault(selected.Recipient.SourceRecipient), pinned));
+		}
+		return results;
+	}
+
+	private async Task<ILookup<(string RecipientKind, CommunicationChannelType Channel, string LanguageCode), CommunicationTemplateRevision>>
+		LoadPinnedAsync(Guid tenantId, NotificationIntent intent, NotificationCurrentSource source, CancellationToken cancellationToken)
+	{
+		var pins = NotificationRuntimeJson.Deserialize<Guid[]>(intent.TemplateRevisionIdsJson, NotificationErrorCodes.TemplateInvalid);
+		if (pins.Length is 0 or > 256 || pins.Contains(Guid.Empty) || pins.Distinct().Count() != pins.Length)
+			throw new BusinessException(NotificationErrorCodes.TemplateInvalid);
+		var headerIds = source.Runtime.Configuration.TemplateIds.ToArray();
+		var rows = await queries.ToListAsync((await revisions.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
+			!x.IsDeleted && x.IsPublished && x.EventKey == intent.EventKey && x.SchemaVersion == source.Definition.SchemaVersion &&
+			Enumerable.Contains(pins, x.Id) && Enumerable.Contains(headerIds, x.TemplateId)), cancellationToken);
+		return rows.ToLookup(x => (x.RecipientKind, x.Channel, x.LanguageCode));
+	}
+
+	private NotificationPreparedDispatch PrepareOne(Guid tenantId, NotificationIntent intent, NotificationCurrentSource source,
+		NotificationRecipientDispatchDecision decision, NotificationSourceRecipientContentDto? content,
+		ILookup<(string RecipientKind, CommunicationChannelType Channel, string LanguageCode), CommunicationTemplateRevision> pinned)
+	{
+		var recipient = decision.Recipient;
+		var fallback = source.Runtime.Configuration.FallbackLanguage;
+		var matches = pinned[(recipient.Recipient.Kind, recipient.Channel, decision.LanguageCode)].ToArray();
+		if (matches.Length == 0) matches = pinned[(recipient.Recipient.Kind, recipient.Channel, fallback)].ToArray();
+		if (matches.Length != 1) return Exclude(NotificationErrorCodes.TemplateInvalid);
+		var revision = matches[0];
+		if (!TrySourceLink(content == null ? source.Snapshot!.RelativeLink : content.RelativeLink, out var link))
+			return Exclude(NotificationErrorCodes.SourceUnavailable);
+		var variables = new Dictionary<string, NotificationVariableValueDto>(content?.Variables ?? source.Snapshot!.Variables, StringComparer.Ordinal)
+		{
+			["source_link"] = new(NotificationVariableType.Link, link),
+			["recipient_name"] = new(NotificationVariableType.Text, string.IsNullOrWhiteSpace(recipient.RecipientName)
+				? FallbackName(recipient.Recipient.Kind) : recipient.RecipientName)
+		};
+		if (!string.IsNullOrWhiteSpace(recipient.StudentName))
+			variables["student_name"] = new(NotificationVariableType.Text, recipient.StudentName);
+		var rendered = renderer.RenderPublished(revision, new(revision.Id, intent.EventKey, source.Definition.SchemaVersion,
+			recipient.Recipient.Kind, recipient.Channel, revision.LanguageCode, variables));
+		if (!rendered.IsSuccess) return Exclude(rendered.ErrorCode ?? NotificationErrorCodes.TemplateInvalid);
+		if (string.IsNullOrWhiteSpace(recipient.AssociationRevision)) return Exclude(NotificationErrorCodes.RecipientIneligible);
+
+		var identity = Identity(decision);
+		var context = Hash(new { intent.Id, identity.RecipientFamily, identity.StudentId, identity.UserId, recipient.Recipient.FamilyRelationship });
+		var deduplicationKey = Hash(new { intent.Id, context, recipient.Channel });
+		var id = guids.Create();
+		var key = new NotificationDispatchPayloadKey(tenantId, id, intent.Id, revision.Id, recipient.Channel, rendered.ContentHash!);
+		string encrypted;
+		try
+		{
+			encrypted = protector.Protect(key, new(recipient.SourceRecipient, recipient.Recipient, recipient.AssociationRevision,
+				recipient.Destination, rendered.Subject, rendered.Body!, rendered.LinkUrl!, revision.LanguageCode,
+				recipient.Channel == CommunicationChannelType.WhatsApp ? variables : null));
+		}
+		catch (BusinessException error) when (error.Code is "DispatchPayloadTooLarge" or "DispatchPayloadInvalid")
+		{
+			return Exclude(error.Code);
+		}
+		var fingerprint = Hash(new { intent.Id, recipient.Recipient, recipient.AssociationRevision, recipient.Channel });
+		var reference = NotificationRuntimeJson.Serialize(recipient.Recipient, NotificationErrorCodes.RuntimeSnapshotInvalid);
+		var expiresAt = !source.ExpiresAt.HasValue || intent.ExpiresAt < source.ExpiresAt ? intent.ExpiresAt : source.ExpiresAt;
+		var dispatch = new NotificationDispatch(id, tenantId, intent.Id, revision.Id, reference, context, recipient.Channel,
+			fingerprint, encrypted, rendered.ContentHash!, deduplicationKey, decision.DueAt!.Value, expiresAt);
+		return new(recipient, revision.LanguageCode, dispatch, null);
+
+		NotificationPreparedDispatch Exclude(string code) => new(recipient, decision.LanguageCode, null, code);
+	}
+
+	private bool TrySourceLink(string? relativeLink, out string absolute)
+	{
+		absolute = string.Empty;
+		if (relativeLink == null || !relativeLink.StartsWith('/') || relativeLink.StartsWith("//", StringComparison.Ordinal) ||
+			relativeLink.Contains('\\') || relativeLink.Any(char.IsControl) ||
+			!Uri.TryCreate(configuration["App:ClientUrl"], UriKind.Absolute, out var origin) ||
+			!Uri.TryCreate(origin, relativeLink, out var link) || !validator.IsAllowedLink(link.AbsoluteUri)) return false;
+		absolute = link.AbsoluteUri;
+		return true;
+	}
+
+	private static DeliveryIdentity Identity(NotificationRecipientDispatchDecision decision)
+	{
+		var candidate = decision.Recipient;
+		var recipient = candidate.Recipient;
+		var isFamily = recipient.Kind is "Guardian" or "StudentAccount";
+		var destination = isFamily && candidate.Channel is CommunicationChannelType.Email or CommunicationChannelType.WhatsApp
+			? candidate.Destination : null;
+		if (destination != null && candidate.Channel == CommunicationChannelType.Email) destination = destination.ToLowerInvariant();
+		return new(isFamily ? recipient.Kind : "Staff", recipient.StudentId, destination == null ? recipient.UserId : null,
+			destination, candidate.Channel);
+	}
+
+	private static string FallbackName(string kind) => kind switch {
+		"Guardian" => "Guardian",
+		"StudentAccount" => "Student",
+		_ => "Staff member"
+	};
+
+	private static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
+}

@@ -77,6 +77,25 @@ public class NotificationRuntimeState_Tests
 	}
 
 	[Fact]
+	public void Dispatch_planning_evidence_cannot_be_rebound_or_attached_after_claim()
+	{
+		var row = Dispatch();
+		var campaign = Guid.NewGuid();
+		var evidence = Guid.NewGuid();
+		var provider = Guid.NewGuid();
+		row.BindPlanningEvidence(campaign, evidence, provider);
+		Should.Throw<BusinessException>(() => row.BindPlanningEvidence(Guid.NewGuid(), Guid.NewGuid(), null));
+		row.CampaignId.ShouldBe(campaign);
+		row.RecipientSnapshotId.ShouldBe(evidence);
+		row.ProviderSettingId.ShouldBe(provider);
+
+		var claimed = Dispatch();
+		HydrateClaim(claimed, NotificationDispatchState.Processing);
+		Should.Throw<BusinessException>(() => claimed.BindPlanningEvidence(campaign, evidence, provider));
+		claimed.CampaignId.ShouldBeNull();
+	}
+
+	[Fact]
 	public void Io_start_needs_the_current_active_claim_and_is_persisted_once()
 	{
 		var row = Dispatch(); var lease = HydrateClaim(row, NotificationDispatchState.Processing);

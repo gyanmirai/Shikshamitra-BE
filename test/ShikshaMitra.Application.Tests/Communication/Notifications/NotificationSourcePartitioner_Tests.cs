@@ -74,6 +74,22 @@ public class NotificationSourcePartitioner_Tests
 		partitions.Count.ShouldBe(2); partitions.ShouldAllBe(x => x.Recipients.Count == 1);
 	}
 	[Fact]
+	public void Overlapping_roles_in_one_scope_stay_together_when_the_roster_is_chunked()
+	{
+		var context = _context with { EventKey = "Academic.Progress.BehindSchedule", SourceType = "Academic.Progress" };
+		var definition = new AcademicNotificationCatalogue([]).Get(context.EventKey);
+		var userId = Guid.NewGuid();
+		var roles = new[] {
+			new NotificationRecipientRefDto("AssignedTeacher", UserId: userId),
+			new NotificationRecipientRefDto("ClassTeacher", UserId: userId)
+		};
+		var roster = Enumerable.Range(0, 101).Select(_ => new NotificationRecipientRefDto("AssignedTeacher", UserId: Guid.NewGuid()))
+			.Concat(roles).ToArray();
+		var partitions = _partitioner.Partition(context, definition, Source(roster, [new(_first, roster)]));
+		partitions.Single(x => x.Recipients.Any(r => r.UserId == userId)).Recipients.Count(r => r.UserId == userId).ShouldBe(2);
+		partitions.ShouldAllBe(x => x.Recipients.Count <= 100);
+	}
+	[Fact]
 	public void Ineligible_sources_produce_no_work_and_unrelated_content_overrides_are_rejected()
 	{
 		var recipient = Student();

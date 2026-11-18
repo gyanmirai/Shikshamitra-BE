@@ -9,6 +9,18 @@ public partial class NotificationDispatch
 	public DateTimeOffset? IoStartedAt { get; private set; }
 	public Guid? IoLeaseId { get; private set; }
 	public DateTimeOffset? AcceptedAt { get; private set; }
+
+	public void BindPlanningEvidence(Guid campaignId, Guid recipientSnapshotId, Guid? providerSettingId)
+	{
+		NotificationRuntimeGuard.State(Status == NotificationDispatchState.Pending && AttemptNumber == 0 &&
+			!CampaignId.HasValue && !RecipientSnapshotId.HasValue && campaignId != Guid.Empty &&
+			recipientSnapshotId != Guid.Empty && providerSettingId != Guid.Empty);
+		CampaignId = campaignId;
+		RecipientSnapshotId = recipientSnapshotId;
+		ProviderSettingId = providerSettingId;
+		ConcurrencyStamp = Guid.NewGuid().ToString("N");
+	}
+
 	public void BeginIo(Guid leaseToken, DateTimeOffset now)
 	{
 		RequireActiveLease(leaseToken, now); NotificationRuntimeGuard.State(!IoStartedAt.HasValue && !AcceptedAt.HasValue && (!ExpiresAt.HasValue || ExpiresAt > now));

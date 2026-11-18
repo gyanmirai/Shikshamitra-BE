@@ -70,4 +70,15 @@ public partial class NotificationIntent : FullAuditedAggregateRoot<Guid>, IMulti
 		intent.BindRuntimeSnapshot(runtimeSnapshot, NotificationIntentOrigin.ReviewedManual, operationId);
 		return intent;
 	}
+
+	public static NotificationIntent CreateTemplateTest(Guid id, Guid tenantId, string eventKey, Guid templateId,
+		string templateContentHash, string recipientJson, string revisionIdsJson, DateTimeOffset now, DateTimeOffset expiresAt,
+		Guid actorId, Guid operationId)
+	{
+		var intent = CreateReviewedManual(id, tenantId, null, 0, eventKey, NotificationCampaignTypes.AcademicTemplateTestSource,
+			templateId, templateContentHash, $"template-test:{id:N}", now, recipientJson, revisionIdsJson, expiresAt,
+			actorId, operationId, """{"schemaVersion":1}""");
+		intent.FinishPlanning(now);
+		return intent;
+	}
 }

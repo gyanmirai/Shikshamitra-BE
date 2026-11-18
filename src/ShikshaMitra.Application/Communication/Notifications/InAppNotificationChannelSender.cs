@@ -58,12 +58,12 @@ public sealed class InAppNotificationChannelSender(ICurrentTenant tenant, IUnitO
 
 		var intent = await queries.FirstOrDefaultAsync((await intents.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
 			x.Id == dispatch.IntentId && !x.IsDeleted && x.Status == NotificationIntentState.AwaitingDelivery &&
-			x.PlanningCompletedAt != null && x.CampaignId == operationId && (!x.ExpiresAt.HasValue || x.ExpiresAt > now))
-			.Select(x => new { x.SourceId, x.SourceType }), cancellationToken);
-		if (intent == null) return Reject(NotificationErrorCodes.SourceUnavailable);
-		var active = await queries.AnyAsync((await users.GetQueryableAsync()).Where(x => x.TenantId == tenantId && x.Id == userId &&
-			!x.IsDeleted && x.IsActive && (!x.LockoutEnabled || !x.LockoutEnd.HasValue || x.LockoutEnd <= now)), cancellationToken);
-		if (!active) return Reject(NotificationErrorCodes.RecipientIneligible);
+			x.PlanningCompletedAt != null && x.CampaignId == operationId)
+			.Select(x => new { x.SourceId, x.SourceType, x.ExpiresAt }), cancellationToken);
+		if (intent == null || intent.ExpiresAt <= now) return Reject(NotificationErrorCodes.SourceUnavailable);
+		var owner = await queries.FirstOrDefaultAsync((await users.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
+			x.Id == userId && !x.IsDeleted && x.IsActive).Select(x => new { x.LockoutEnabled, x.LockoutEnd }), cancellationToken);
+		if (owner == null || owner.LockoutEnabled && owner.LockoutEnd > now) return Reject(NotificationErrorCodes.RecipientIneligible);
 
 		var item = new NotificationInboxItem(guids.Create(), tenantId, userId, dispatch.Id, intent.SourceType, intent.SourceId,
 			dispatch.RecipientContextKey, dispatch.DeduplicationKey, title, input.Body, relativeLink, recipient.StudentId);

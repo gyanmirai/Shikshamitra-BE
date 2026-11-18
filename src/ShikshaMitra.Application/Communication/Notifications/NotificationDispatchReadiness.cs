@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ShikshaMitra.Academic.Notifications;
 using Volo.Abp;
 using Volo.Abp.Auditing;
 using Volo.Abp.DependencyInjection;
@@ -16,7 +17,7 @@ internal sealed record NotificationDispatchReadinessResult(NotificationDispatchP
 public sealed class NotificationDispatchReadiness(NotificationDispatchPayloadProtector protector, NotificationIntentSourceReader sources,
 	IEnumerable<INotificationRuntimeRecipientResolver> resolvers, NotificationDispatchPolicy policy, NotificationEmailRoute emailRoute,
 	NotificationSourceLink links, WhatsAppProviderRoute whatsAppRoute, WhatsAppApprovedTemplates approvals,
-	WebPushDispatchSubscriptions webPush) : ITransientDependency
+	WebPushDispatchSubscriptions webPush, AcademicNotificationTemplateTestDelivery templateTests) : ITransientDependency
 {
 	internal async Task<NotificationDispatchReadinessResult> CheckAsync(NotificationIntent intent, NotificationDispatch dispatch,
 		DateTimeOffset now, CancellationToken cancellationToken)
@@ -40,6 +41,8 @@ public sealed class NotificationDispatchReadiness(NotificationDispatchPayloadPro
 		if (!Enum.IsDefined(intent.Origin) || !NotificationRuntimeJson.Deserialize<Guid[]>(intent.TemplateRevisionIdsJson,
 			NotificationErrorCodes.TemplateInvalid).Contains(dispatch.TemplateRevisionId)) return Exclude(NotificationErrorCodes.TemplateInvalid);
 		var payload = protector.Unprotect(dispatch);
+		if (intent.SourceType == NotificationCampaignTypes.AcademicTemplateTestSource)
+			return await templateTests.CheckAsync(intent, dispatch, payload, now, cancellationToken);
 		var source = await sources.LoadAsync(intent, now, cancellationToken);
 		if (source.ExclusionCode != null) return Exclude(source.ExclusionCode);
 		if (source.Snapshot == null || !source.CurrentRecipients.Contains(payload.SourceRecipient))

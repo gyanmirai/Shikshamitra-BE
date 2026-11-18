@@ -34,7 +34,7 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 		INotificationRuntimeRecipientResolver Recipients, NotificationDispatchPolicy Policy, NotificationEmailRoute Email,
 		NotificationSourceLink Links, NotificationTemplateRenderer Renderer, NotificationDispatchPayloadProtector Protector,
 		IAsyncQueryableExecuter Queries, IGuidGenerator Guids, WhatsAppProviderRoute WhatsApp, WhatsAppApprovedTemplates Approvals,
-		WebPushDispatchSubscriptions WebPush);
+		WebPushDispatchSubscriptions WebPush, AcademicNotificationTemplateTestDelivery TestDelivery);
 
 	[NotificationPostgresFact]
 	public async Task Rolling_back_planning_reverts_evidence_dispatch_and_completion_under_the_same_lease()
@@ -113,7 +113,7 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 		var locks = Substitute.For<INotificationPersonalWriteLock>();
 		var dispatcher = new NotificationDispatcher(runtime.Tenant, units, runtime.Clock,
 			new(runtime.Protector, runtime.Sources, [runtime.Recipients], runtime.Policy, runtime.Email, runtime.Links,
-				runtime.WhatsApp, runtime.Approvals, runtime.WebPush), [sender],
+				runtime.WhatsApp, runtime.Approvals, runtime.WebPush, runtime.TestDelivery), [sender],
 			new(locks), Repository<NotificationDispatch>(db), Repository<NotificationIntent>(db), Repository<CommunicationCampaign>(db),
 			runtime.Queries, CreateDeliveryProjection(db, runtime, locks));
 
@@ -347,14 +347,16 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 		var renderer = new NotificationTemplateRenderer(tenant, revisions, queries, validator);
 		var ids = Substitute.For<IGuidGenerator>();
 		ids.Create().Returns(_ => Guid.NewGuid());
+		var policy = new NotificationDispatchPolicy(tenant, new(tenant, Repository<NotificationRule>(db), queries), Repository<NotificationPreference>(db),
+			Repository<ConsentRecord>(db), queries, new(tenant, settings), new());
+		var providers = Repository<ChannelProviderSetting>(db);
+		var email = new NotificationEmailRoute(tenant, providers, queries);
+		var whatsApp = new WhatsAppProviderRoute(tenant, providers, queries, app);
+		var approvals = new WhatsAppApprovedTemplates(tenant, Repository<WhatsAppTemplateBinding>(db), queries);
+		var push = new WebPushDispatchSubscriptions(tenant, Repository<WebPushSubscription>(db), queries, new(app));
 		return new(tenant, clock, new(tenant, [catalogue], [adapter], new(new()), new()), resolver,
-			new(tenant, new(tenant, Repository<NotificationRule>(db), queries), Repository<NotificationPreference>(db),
-				Repository<ConsentRecord>(db), queries, new(tenant, settings), new()),
-			new(tenant, Repository<ChannelProviderSetting>(db), queries),
-			new(app, validator), renderer, new(keys, tenant), queries, ids,
-			new(tenant, Repository<ChannelProviderSetting>(db), queries, app),
-			new(tenant, Repository<WhatsAppTemplateBinding>(db), queries),
-			new(tenant, Repository<WebPushSubscription>(db), queries, new(app)));
+			policy, email, new(app, validator), renderer, new(keys, tenant), queries, ids, whatsApp, approvals, push,
+			new(app, Substitute.For<IRepository<IdentityUser, Guid>>(), revisions, queries, validator, policy, email, whatsApp, approvals, push));
 	}
 
 	private static IRepository<T, Guid> Repository<T>(DbContext db) where T : class, Volo.Abp.Domain.Entities.IEntity<Guid>

@@ -6,5 +6,6 @@ public static class NotificationCampaignTypes
 {
 	public const string Academic = "AcademicNotification";
 	public const string AcademicNormalized = "academicnotification";
+	public const string AcademicTemplateTestSource = "Academic.NotificationTemplateTest";
 	public static bool IsAcademic(string? value) => string.Equals(value?.Trim(), Academic, StringComparison.OrdinalIgnoreCase);
 }

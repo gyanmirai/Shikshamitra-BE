@@ -60,9 +60,10 @@ public class NotificationInboxAppService(NotificationSelfIdentity identity, Noti
 			join revision in await revisions.GetQueryableAsync() on dispatch.TemplateRevisionId equals revision.Id
 			where item.TenantId == owner.TenantId && item.UserId == owner.UserId && !item.IsDeleted &&
 				dispatch.TenantId == owner.TenantId && !dispatch.IsDeleted && revision.TenantId == owner.TenantId &&
-				revision.IsPublished && !revision.IsDeleted &&
-				(revision.RecipientKind == "Guardian" ? item.StudentId.HasValue && guardians.Contains(item.StudentId.Value) :
-				 revision.RecipientKind == "StudentAccount" ? item.StudentId.HasValue && self.Contains(item.StudentId.Value) : true)
+				!revision.IsDeleted &&
+				(item.SourceType == NotificationCampaignTypes.AcademicTemplateTestSource ? !item.StudentId.HasValue :
+				 revision.IsPublished && (revision.RecipientKind == "Guardian" ? item.StudentId.HasValue && guardians.Contains(item.StudentId.Value) :
+				 revision.RecipientKind == "StudentAccount" ? item.StudentId.HasValue && self.Contains(item.StudentId.Value) : true))
 			select item;
 	}
 

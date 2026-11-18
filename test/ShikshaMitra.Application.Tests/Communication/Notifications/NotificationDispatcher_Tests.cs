@@ -113,11 +113,14 @@ public class NotificationDispatcher_Tests
 		var reader = new NotificationIntentSourceReader(_tenant, [catalogue], [adapter], snapshots, new());
 		var policy = new NotificationDispatchPolicy(_tenant, new(_tenant, Repository<NotificationRule>([_rule]), queries),
 			Repository(_preferences), Repository(_consents), queries, new(_tenant, settings), new());
+		var emailRoute = new NotificationEmailRoute(_tenant, Repository<ChannelProviderSetting>([_provider]), queries);
+		var whatsAppRoute = new WhatsAppProviderRoute(_tenant, Repository<ChannelProviderSetting>([_provider]), queries, app);
+		var approvals = new WhatsAppApprovedTemplates(_tenant, Repository<WhatsAppTemplateBinding>([]), queries);
+		var webPush = new WebPushDispatchSubscriptions(_tenant, Repository<WebPushSubscription>([]), queries, new(app));
 		var readiness = new NotificationDispatchReadiness(protector, reader, [resolver], policy,
-			new(_tenant, Repository<ChannelProviderSetting>([_provider]), queries), new(app, validator),
-			new(_tenant, Repository<ChannelProviderSetting>([_provider]), queries, app),
-			new(_tenant, Repository<WhatsAppTemplateBinding>([]), queries),
-			new(_tenant, Repository<WebPushSubscription>([]), queries, new(app)));
+			emailRoute, new(app, validator), whatsAppRoute, approvals, webPush,
+			new(app, Repository<Volo.Abp.Identity.IdentityUser>([]), Repository<CommunicationTemplateRevision>([]),
+				queries, validator, policy, emailRoute, whatsAppRoute, approvals, webPush));
 		_sender.Channel.Returns(CommunicationChannelType.Email);
 		_sender.SendAsync(Arg.Any<NotificationChannelSendRequest>(), Arg.Any<CancellationToken>()).Returns(call => {
 			_active.ShouldBeNull();

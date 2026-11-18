@@ -23,6 +23,7 @@ public static class ApiProblemDetailsMapper
 		{
 			NotificationErrorCodes.ReviewChanged or NotificationErrorCodes.ReviewExpired or NotificationErrorCodes.ReviewConsumed or
 			NotificationErrorCodes.ApprovalSetupRequired or NotificationErrorCodes.RetryRequiresReview => StatusCodes.Status409Conflict,
+			NotificationErrorCodes.TemplateTestRateLimited => StatusCodes.Status429TooManyRequests,
 			Academic.Curriculum.ElectivePreferenceErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionJourneyResumeErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionFormCorrectionErrorCodes.Conflict => StatusCodes.Status409Conflict,

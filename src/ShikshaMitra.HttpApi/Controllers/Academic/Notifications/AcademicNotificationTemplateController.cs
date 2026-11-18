@@ -17,7 +17,8 @@ namespace ShikshaMitra.Controllers.Academic.Notifications;
 [Authorize, DisableAuditing, Area("app"), RemoteService(Name = "ShikshaMitra")]
 [Route("api/academic/notifications/templates")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public class AcademicNotificationTemplateController(INotificationTemplateAppService templates) : AbpControllerBase
+public class AcademicNotificationTemplateController(INotificationTemplateAppService templates,
+	IAcademicNotificationTemplateTestSendAppService tests) : AbpControllerBase
 {
 	private const string View = ShikshaMitraSubmodulePermissions.Academics.Notification.View;
 	private const string Add = ShikshaMitraSubmodulePermissions.Academics.Notification.Add;
@@ -54,6 +55,11 @@ public class AcademicNotificationTemplateController(INotificationTemplateAppServ
 	[HttpPost("{id:guid}/publish"), Authorize(Add)]
 	public Task<NotificationTemplateDto> PublishAsync(Guid id, [FromBody] NotificationTemplateRevisionCommandDto input,
 		CancellationToken cancellationToken) => templates.PublishAsync(id, input, cancellationToken);
+
+	[HttpPost("{id:guid}/test-send"), Authorize(Add)]
+	public async Task<ActionResult<AcademicNotificationTemplateTestSendDto>> TestSendAsync(Guid id,
+		[FromBody] AcademicNotificationTemplateTestSendInput input, CancellationToken cancellationToken) =>
+		Accepted(await tests.SendAsync(id, input, cancellationToken));
 
 	[HttpPost("{id:guid}/restore-default"), Authorize(Add)]
 	public Task<NotificationTemplateDto> RestoreDefaultAsync(Guid id, [FromBody] RestoreNotificationTemplateDto input,

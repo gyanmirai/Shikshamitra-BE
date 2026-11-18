@@ -141,6 +141,8 @@ Delivery action tests cover Add and source access, retry scheduling after a defi
 
 Staff API tests check stored audit fields for rule saves, template publication and manual approval decisions. They check audit counts after stale or repeated requests and verify that the serialized fields contain only approved metadata.
 
+Template test-send tests use synthetic draft content and the authenticated account. They verify the local inbox item, exact Add permission, rejected destinations and stale revisions, the per-channel limit and required WhatsApp test-account setup.
+
 ## Website push checks
 
 Run the backend delivery, subscription protection and authenticated registration tests from the backend repository.

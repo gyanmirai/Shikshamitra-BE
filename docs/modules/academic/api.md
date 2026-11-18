@@ -38,6 +38,7 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 | `GET /templates/{id}/preview/{revisionId}` | View | Render with synthetic values for review |
 | `POST /templates` and `PUT /templates/{id}/draft` | Add | Create or edit a draft |
 | `POST /templates/initialize-defaults` | Add + school-wide scope | Create missing English variant drafts for one `eventKey` |
+| `POST /templates/{id}/test-send` | Add + template scope | Queue a synthetic test for a single verified account |
 | `POST /templates/{id}/publish` and `/{id}/restore-default` | Add | Publish an immutable revision or create a fresh draft from the system default |
 | `DELETE /templates/{id}/draft` | Delete | Delete the selected unused draft |
 
@@ -55,7 +56,9 @@ Confirmation opens the protected request attached to the token and checks the li
 
 Approval-required operations write no sendable intents until approval. Configure an active independent staff account at `Notifications:Academic:Tenants:<tenantIdN>:ApproverUserId`, where `tenantIdN` is the tenant GUID without hyphens. The assigned account needs Academic Notification Add and access to the source. Confirmation returns `Communication:Notification:ApprovalSetupRequired` if that account is unavailable. Approval rechecks the same preview. Rejection ends the pending operation as `Cancelled`.
 
-Rule changes, template publication, confirmation, approval, rejection, retry and cancellation write an action audit in the same transaction as the change. Audit data is limited to the actor, tenant, action, relevant identifiers, revisions, status and counts. Replays of completed actions reuse the original audit history.
+Rule changes, template publication, test sends, confirmation, approval, rejection, retry and cancellation write an action audit in the same transaction as the change. Audit data is limited to the actor, tenant, action, relevant identifiers, revisions, status and counts. Replays of completed actions reuse the original audit history.
+
+Template test-send accepts only `revisionId` and `concurrencyStamp`. It renders sample values, queues one delivery, expires after ten minutes and returns 202 with `isSynthetic: true`. In-app, email and web push use the authenticated account by default. To designate a test account, set `Notifications:Academic:Tenants:<tenantIdN>:TemplateTest:<channel>:UserId`. WhatsApp requires a designated account with a verified number, current consent and a published revision with an approved provider binding. Email uses the account's verified address and the existing provider's consent policy. Web push uses an active subscription for that account. The test-send limit is five queued test messages per school and channel in 15 minutes.
 
 History takes `eventKey`, `sourceType`, `sourceId`, optional `operationId` and `state`, and standard `skipCount` and `maxResultCount` pagination. Staff see rows for their authorized source scopes. Whole-operation status and exclusions recorded before dispatch require access to every scope represented by that operation.
 

@@ -14,6 +14,8 @@ public static class NotificationErrorCodes
 	public const string ReviewExpired = "Communication:Notification:ReviewExpired";
 	public const string UnknownAcceptance = "Communication:Notification:UnknownAcceptance";
 	public const string TemplateImmutable = "Communication:Notification:TemplateImmutable";
+	public const string TemplateTestRateLimited = "Communication:Notification:TemplateTestRateLimited";
+	public const string TemplateTestAccountUnavailable = "Communication:Notification:TemplateTestAccountUnavailable";
 	public const string ReviewConsumed = "Communication:Notification:ReviewConsumed";
 	public const string ReviewInvalid = "Communication:Notification:ReviewInvalid";
 	public const string ApprovalSetupRequired = "Communication:Notification:ApprovalSetupRequired";

@@ -39,6 +39,11 @@ public partial class NotificationIntent
 	{
 		NotificationRuntimeGuard.Lease(leaseToken != Guid.Empty && Status == NotificationIntentState.Processing && LeaseId == leaseToken && LeaseExpiresAt > now);
 		NotificationRuntimeGuard.Snapshot(RuleConfigurationJson);
+		FinishPlanning(now);
+	}
+
+	private void FinishPlanning(DateTimeOffset now)
+	{
 		PlanningCompletedAt = now.ToUniversalTime(); Status = NotificationIntentState.AwaitingDelivery;
 		LeaseId = null; ClaimedAt = null; LeaseExpiresAt = null;
 		ConcurrencyStamp = Guid.NewGuid().ToString("N");

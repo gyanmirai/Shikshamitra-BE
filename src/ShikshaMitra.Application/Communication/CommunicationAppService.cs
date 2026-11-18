@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using ShikshaMitra.Communication;
+using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -31,6 +32,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 	private readonly IRepository<CommunicationApprovalRule, Guid> _approvalRuleRepository;
 	private readonly ICommunicationAudienceResolver _audienceResolver;
 	private readonly IEnumerable<ICommunicationChannelGateway> _channelGateways;
+	private readonly NotificationTemplateLegacyCompatibilityService _notificationCompatibility;
 
 	public CommunicationAppService(
 		IRepository<CommunicationCampaign, Guid> campaignRepository,
@@ -43,7 +45,8 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 		IRepository<UsageLedgerEntry, Guid> usageLedgerRepository,
 		IRepository<CommunicationApprovalRule, Guid> approvalRuleRepository,
 		ICommunicationAudienceResolver audienceResolver,
-		IEnumerable<ICommunicationChannelGateway> channelGateways)
+		IEnumerable<ICommunicationChannelGateway> channelGateways,
+		NotificationTemplateLegacyCompatibilityService notificationCompatibility)
 	{
 		_campaignRepository = campaignRepository;
 		_templateRepository = templateRepository;
@@ -56,6 +59,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 		_approvalRuleRepository = approvalRuleRepository;
 		_audienceResolver = audienceResolver;
 		_channelGateways = channelGateways;
+		_notificationCompatibility = notificationCompatibility;
 	}
 
 	public async Task<CommunicationDashboardDto> GetDashboardAsync()
@@ -171,6 +175,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 
 	private async Task<CommunicationCampaignDto> CreateCampaignCoreAsync(CreateUpdateCommunicationCampaignDto input)
 	{
+		await _notificationCompatibility.EnsureGenericWorkflowAsync(input.CampaignType, input.TemplateId);
 		var campaign = new CommunicationCampaign(GuidGenerator.Create(), CurrentTenant.Id);
 		ApplyCampaignInput(campaign, input);
 
@@ -191,11 +196,13 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 	public async Task<CommunicationCampaignDto> UpdateCampaignAsync(Guid id, CreateUpdateCommunicationCampaignDto input)
 	{
 		var campaign = await _campaignRepository.GetAsync(id);
-		if (campaign.SourceEntityType == ParentRegistrationSource) throw new BusinessException("Communication:IntegrationCampaignReadOnly");
 		await CheckCampaignPolicyAsync(
 			campaign.CampaignType,
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Add,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.Add);
+		await _notificationCompatibility.EnsureGenericWorkflowAsync(campaign.CampaignType, campaign.TemplateId);
+		await _notificationCompatibility.EnsureGenericWorkflowAsync(input.CampaignType, input.TemplateId);
+		if (campaign.SourceEntityType == ParentRegistrationSource) throw new BusinessException("Communication:IntegrationCampaignReadOnly");
 
 		if (campaign.PublishedAt.HasValue
 			|| campaign.Status is CommunicationCampaignStatus.Queued
@@ -233,6 +240,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 			campaign.CampaignType,
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Delete,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.Delete);
+		await _notificationCompatibility.EnsureGenericWorkflowAsync(campaign.CampaignType, campaign.TemplateId);
 
 		if (campaign.PublishedAt.HasValue || await HasCampaignHistoryAsync(id))
 		{
@@ -261,6 +269,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 			campaign.CampaignType,
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Add,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.Add);
+		await _notificationCompatibility.EnsureGenericWorkflowAsync(campaign.CampaignType, campaign.TemplateId);
 
 		campaign.Status = CommunicationCampaignStatus.PendingApproval;
 		campaign.RejectionReason = null;
@@ -275,6 +284,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 			campaign.CampaignType,
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Approve,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.Approve);
+		await _notificationCompatibility.EnsureGenericWorkflowAsync(campaign.CampaignType, campaign.TemplateId);
 
 		campaign.Status = CommunicationCampaignStatus.Approved;
 		campaign.ApprovedByUserId = CurrentUser.Id;
@@ -291,6 +301,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 			campaign.CampaignType,
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Approve,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.Approve);
+		await _notificationCompatibility.EnsureGenericWorkflowAsync(campaign.CampaignType, campaign.TemplateId);
 
 		campaign.Status = CommunicationCampaignStatus.Draft;
 		campaign.ApprovedByUserId = null;
@@ -313,6 +324,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 
 	private async Task<CommunicationCampaignDto> PublishCampaignCoreAsync(CommunicationCampaign campaign, string? privateLink = null)
 	{
+		await _notificationCompatibility.EnsureGenericWorkflowAsync(campaign.CampaignType, campaign.TemplateId);
 		if (campaign.SourceEntityType == ParentRegistrationSource && privateLink == null)
 			throw new BusinessException("Communication:UseParentRegistrationDelivery");
 		if (campaign.PublishedAt.HasValue || await HasCampaignHistoryAsync(campaign.Id))
@@ -468,6 +480,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 			campaign.CampaignType,
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Send,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.Send);
+		await _notificationCompatibility.EnsureGenericWorkflowAsync(campaign.CampaignType, campaign.TemplateId);
 
 		campaign.Status = CommunicationCampaignStatus.Cancelled;
 		await _campaignRepository.UpdateAsync(campaign, autoSave: true);
@@ -481,6 +494,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 			campaign.CampaignType,
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Add,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.Add);
+		await _notificationCompatibility.EnsureGenericWorkflowAsync(campaign.CampaignType, campaign.TemplateId);
 
 		var clone = new CommunicationCampaign(GuidGenerator.Create(), CurrentTenant.Id)
 		{
@@ -575,6 +589,8 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 		await CheckPolicyAsync(ShikshaMitraSubmodulePermissions.Communication.Notification_Templates.Add);
 
 		var template = await _templateRepository.GetAsync(id);
+		if (await _notificationCompatibility.TryAppendDraftAsync(template, input))
+			return MapTemplate(await _templateRepository.GetAsync(id));
 		ApplyTemplateInput(template, input);
 		template.Version += 1;
 		await _templateRepository.UpdateAsync(template, autoSave: true);
@@ -584,6 +600,7 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 	public async Task DeleteTemplateAsync(Guid id)
 	{
 		await CheckPolicyAsync(ShikshaMitraSubmodulePermissions.Communication.Notification_Templates.Delete);
+		await _notificationCompatibility.EnsureCanDeleteHeaderAsync(id);
 		await _templateRepository.DeleteAsync(id);
 	}
 

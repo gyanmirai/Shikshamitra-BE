@@ -43,7 +43,7 @@ public class NotificationMigrationPostgres_Tests(NotificationPostgresFixture fix
 	public async Task Migration_round_trip_keeps_existing_communication_templates_unchanged()
 	{
 		var migration = NotificationMigrationStructure_Tests.CreateMigration();
-		await ExecuteAsync(migration.DownOperations);
+		var headerMigration = NotificationTemplateHeaderMigration_Tests.CreateMigration();
 		var header = new CommunicationTemplate(Guid.NewGuid(), Guid.NewGuid())
 			{ TemplateName = "Legacy template", Subject = "Original subject", Body = "Original body" };
 		await using (var context = fixture.CreateContext())
@@ -51,7 +51,10 @@ public class NotificationMigrationPostgres_Tests(NotificationPostgresFixture fix
 			context.Add(header);
 			await context.SaveChangesAsync();
 		}
+		await ExecuteAsync(headerMigration.DownOperations);
+		await ExecuteAsync(migration.DownOperations);
 		await ExecuteAsync(migration.UpOperations);
+		await ExecuteAsync(headerMigration.UpOperations);
 		await using (var context = fixture.CreateContext())
 		{
 			context.Add(new NotificationRule(Guid.NewGuid(), header.TenantId!.Value,
@@ -59,9 +62,11 @@ public class NotificationMigrationPostgres_Tests(NotificationPostgresFixture fix
 			await context.SaveChangesAsync();
 			(await context.Set<NotificationRule>().CountAsync()).ShouldBe(1);
 		}
+		await ExecuteAsync(headerMigration.DownOperations);
 		await ExecuteAsync(migration.DownOperations);
 		await using var check = fixture.CreateContext();
-		var preserved = await check.Set<CommunicationTemplate>().SingleAsync(x => x.Id == header.Id);
+		var preserved = await check.Set<CommunicationTemplate>().Where(x => x.Id == header.Id)
+			.Select(x => new { x.Body, x.Subject }).SingleAsync();
 		preserved.Body.ShouldBe("Original body");
 		preserved.Subject.ShouldBe("Original subject");
 		await using var connection = fixture.CreateConnection();

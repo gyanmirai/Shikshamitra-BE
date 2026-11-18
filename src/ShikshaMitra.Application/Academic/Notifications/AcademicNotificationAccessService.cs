@@ -26,15 +26,8 @@ public sealed class AcademicNotificationAccessService(ICurrentTenant tenant, ICu
 	public async Task<AcademicNotificationAccessContext> RequireSendAsync(AcademicNotificationAudienceInput input,
 		CancellationToken cancellationToken)
 	{
-		cancellationToken.ThrowIfCancellationRequested();
-		if (tenant.Id is not Guid tenantId || !current.IsAuthenticated || current.Id is not Guid actorId ||
-			current.TenantId != tenantId || !await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Academics.Notification.Send))
-			throw new AbpAuthorizationException();
-		var actor = await users.FindAsync(actorId, cancellationToken: cancellationToken);
-		if (actor?.TenantId != tenantId || !actor.IsActive || actor.IsDeleted ||
-			actor.LockoutEnabled && actor.LockoutEnd > DateTimeOffset.UtcNow) throw new AbpAuthorizationException();
-		var scope = await scopes.GetCurrentUserScopeAsync();
-		if (scope.TenantId != tenantId || scope.UserId != actorId || !scope.HasAnyAccess) throw new AbpAuthorizationException();
+		var (tenantId, actorId, scope) = await AcademicNotificationIdentityAccess.RequireAsync(tenant, current, users,
+			scopes, permissions, ShikshaMitraSubmodulePermissions.Academics.Notification.Send, cancellationToken);
 		var definition = catalogue.Get(input.EventKey);
 		if (input.SourceType != definition.SourceType || input.SourceId == Guid.Empty)
 			throw new BusinessException(NotificationErrorCodes.RecipientIneligible);

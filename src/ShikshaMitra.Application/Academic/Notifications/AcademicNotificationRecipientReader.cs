@@ -20,6 +20,7 @@ using Volo.Abp.MultiTenancy;
 namespace ShikshaMitra.Academic.Notifications;
 
 [RemoteService(false)]
+[ExposeServices(typeof(AcademicNotificationRecipientReader), typeof(IAcademicNotificationRecipientProjection))]
 public sealed class AcademicNotificationRecipientReader(ICurrentTenant tenant, IStudentRepository students,
 	IRepository<StudentFamilyDetail, Guid> families, IRepository<StudentPortalAccountLink, Guid> links,
 	IRepository<StudentGuardianAccessReview, Guid> reviews, IRepository<IdentityUser, Guid> users,

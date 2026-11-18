@@ -15,4 +15,5 @@ public static class NotificationErrorCodes
 	public const string TemplateImmutable = "Communication:Notification:TemplateImmutable";
 	public const string ReviewConsumed = "Communication:Notification:ReviewConsumed";
 	public const string TenantRequired = "Communication:Notification:TenantRequired";
+	public const string UseWorkflow = "Communication:Notification:UseNotificationWorkflow";
 }

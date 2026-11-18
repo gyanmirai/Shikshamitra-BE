@@ -7,7 +7,8 @@ using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.Academic.Notifications;
 
-public sealed class AcademicNotificationCatalogue : ITransientDependency
+[ExposeServices(typeof(AcademicNotificationCatalogue), typeof(INotificationEventDefinitionProvider))]
+public sealed class AcademicNotificationCatalogue : INotificationEventDefinitionProvider, ITransientDependency
 {
 	private static readonly IReadOnlyList<NotificationEventDefinition> Definitions = AcademicNotificationDefinitions.Create();
 	private static readonly IReadOnlyDictionary<string, NotificationEventDefinition> ByKey =

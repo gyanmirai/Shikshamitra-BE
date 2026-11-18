@@ -7712,6 +7712,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<Guid?>("CurrentNotificationRevisionId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
                         .HasColumnName("DeleterId");
@@ -7778,10 +7781,16 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("TenantId", "Id", "CurrentNotificationRevisionId")
+                        .HasDatabaseName("IX_CommTemplate_CurrentRevision");
+
                     b.HasIndex("TenantId", "AcademicMediumId", "TemplateName", "LanguageCode")
                         .HasDatabaseName("IX_CommTemplates_Tenant_Medium_Name_Language");
 
-                    b.ToTable("CommunicationTemplates", (string)null);
+                    b.ToTable("CommunicationTemplates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CommTemplate_NotificationTenant", "\"CurrentNotificationRevisionId\" IS NULL OR \"TenantId\" IS NOT NULL");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.Communication.ConsentRecord", b =>
@@ -40738,6 +40747,16 @@ namespace ShikshaMitra.Migrations
                         .WithMany()
                         .HasForeignKey("RecipientSnapshotId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Communication.CommunicationTemplate", b =>
+                {
+                    b.HasOne("ShikshaMitra.Communication.Notifications.CommunicationTemplateRevision", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "Id", "CurrentNotificationRevisionId")
+                        .HasPrincipalKey("TenantId", "TemplateId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_CommTemplate_CurrentRevision");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Communication.DeliveryAttempt", b =>

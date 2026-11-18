@@ -16,15 +16,22 @@ internal static partial class AcademicNotificationFamilyRecipients
 {
 	public static IEnumerable<NotificationRecipientEligibilityDto> Resolve(AcademicNotificationStudent row,
 		Guid tenantId, AcademicNotificationRecipientPolicy policy, IReadOnlyList<CommunicationChannelType> channels,
+		IReadOnlyList<string> selectors) => ResolveRuntime(row, tenantId, policy, channels, selectors)
+		.Select(x => new NotificationRecipientEligibilityDto(x.Recipient, x.Channel, x.IsEligible, x.ExclusionCode, x.AssociationRevision));
+
+	internal static IEnumerable<NotificationRuntimeRecipient> ResolveRuntime(AcademicNotificationStudent row,
+		Guid tenantId, AcademicNotificationRecipientPolicy policy, IReadOnlyList<CommunicationChannelType> channels,
 		IReadOnlyList<string> selectors)
 	{
 		if (row.Family != null && row.Family.TenantId != tenantId) throw new Volo.Abp.Authorization.AbpAuthorizationException();
+		var source = new NotificationRecipientRefDto("Student", row.Student.Id);
+		var studentName = DisplayName(row.Student.FirstName, row.Student.MiddleName, row.Student.LastName);
 		var primary = StudentFamilyContactSelection.Resolve(row.Student, row.Family);
 		if (selectors.Contains("PrimaryGuardian"))
 		{
 			if (primary == null)
 				foreach (var channel in channels.Distinct())
-					yield return new(new("Guardian", row.Student.Id), channel, false, NotificationErrorCodes.PrimaryGuardianNotConfigured);
+					yield return new(source, new("Guardian", row.Student.Id), channel, NotificationErrorCodes.PrimaryGuardianNotConfigured);
 			var relationships = (primary == null ? Enumerable.Empty<string>() : [primary])
 				.Concat(policy.GuardianMode == NotificationGuardianMode.PrimaryAndSelected ? policy.AdditionalGuardianRelationships : [])
 				.Distinct(StringComparer.Ordinal);
@@ -41,19 +48,22 @@ internal static partial class AcademicNotificationFamilyRecipients
 						!StudentFamilyContactSelection.Present(profile) ? "GuardianRelationshipUnavailable" :
 						accounts.Length > 1 && channel is CommunicationChannelType.InApp or CommunicationChannelType.WebPush
 							? "AccountAssociationAmbiguous" : ChannelExclusion(channel, profile?.Email, profile?.ContactNo, account != null);
-					yield return new(recipient, channel, reason == null, reason, revision);
+					yield return new(source, recipient, channel, reason, revision,
+						Destination(channel, profile?.Email, profile?.ContactNo), profile?.FullName, studentName);
 				}
 			}
 		}
 		if (!policy.IncludeStudentAccount || !selectors.Contains("StudentAccount")) yield break;
 		var students = Accounts(row, tenantId, "student", "self");
 		var self = students.Length == 1 ? students[0] : null;
+		var email = self?.User.EmailConfirmed == true ? self.User.Email : null;
+		var phone = self?.User.PhoneNumberConfirmed == true ? self.User.PhoneNumber : null;
+		var selfRevision = Revision(row, "self", self);
 		foreach (var channel in channels.Distinct())
 		{
-			var reason = self == null ? "VerifiedAccountRequired" : ChannelExclusion(channel,
-				self.User.EmailConfirmed ? self.User.Email : null, self.User.PhoneNumberConfirmed ? self.User.PhoneNumber : null, true);
-			yield return new(new("StudentAccount", row.Student.Id, "self", self?.User.Id), channel,
-				reason == null, reason, Revision(row, "self", self));
+			var reason = self == null ? "VerifiedAccountRequired" : ChannelExclusion(channel, email, phone, true);
+			yield return new(source, new("StudentAccount", row.Student.Id, "self", self?.User.Id), channel,
+				reason, selfRevision, Destination(channel, email, phone), studentName, studentName);
 		}
 	}
 
@@ -72,11 +82,25 @@ internal static partial class AcademicNotificationFamilyRecipients
 		_ => "ChannelUnsupported"
 	};
 
+	internal static string? Destination(CommunicationChannelType channel, string? email, string? phone) => channel switch
+	{
+		CommunicationChannelType.Email => email,
+		CommunicationChannelType.WhatsApp => phone,
+		_ => null
+	};
+
+	internal static string? DisplayName(params string?[] names)
+	{
+		var value = string.Join(' ', names.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!.Trim()));
+		return value.Length == 0 ? null : value;
+	}
+
 	private static string Revision(AcademicNotificationStudent row, string relationship, AcademicNotificationAccount? account)
 	{
 		var profile = StudentFamilyContactSelection.Profile(row.Family, relationship);
 		var payload = JsonSerializer.Serialize(new {
-			row.Student.Id, row.Student.TenantId, row.Student.Status, row.Student.AcademicYearId, row.Student.DivisionId,
+			row.Student.Id, row.Student.TenantId, row.Student.Status, row.Student.FirstName, row.Student.MiddleName, row.Student.LastName,
+			row.Student.AcademicYearId, row.Student.AcademicBoardId, row.Student.AcademicMediumId, row.Student.StandardId, row.Student.DivisionId,
 			Relationship = relationship, Primary = StudentFamilyContactSelection.Resolve(row.Student, row.Family),
 			profile?.FullName, profile?.Email, profile?.ContactNo, row.GuardianReviewPending,
 			Link = account?.Link.Id, User = account?.User.Id, account?.Link.ConcurrencyStamp,

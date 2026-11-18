@@ -58,12 +58,14 @@ public sealed class AcademicNotificationRecipientReader(ICurrentTenant tenant, I
 			.ToLookup(x => x.StudentId, x => new AcademicNotificationAccount(x, userById[x.UserId]));
 		var children = studentRows.Select(student => new AcademicNotificationStudent(student,
 			familyById.GetValueOrDefault(student.Id), pendingReviews.Contains(student.Id), accountsByStudent[student.Id].ToArray())).ToArray();
-		var staff = sourceRecipients.Where(x => x.Kind != "Student" && x.UserId.HasValue).Distinct()
+		var staff = sourceRecipients.Where(x => x.Kind != "Student" && x.UserId.HasValue)
+			.DistinctBy(x => (x.UserId, x.EmployeeId))
 			.Select(x => {
 				var user = userById.GetValueOrDefault(x.UserId!.Value);
 				var active = user is { IsActive: true } && (!user.LockoutEnabled || user.LockoutEnd == null || user.LockoutEnd <= DateTimeOffset.UtcNow) &&
 					(!x.EmployeeId.HasValue || employeeRows.Any(e => e.Id == x.EmployeeId && e.UserId == x.UserId && e.EmployeeStatusType == EmployeeStatusType.Active));
-				return new AcademicNotificationStaff(x.UserId.Value, x.EmployeeId, active, user?.Email, user?.PhoneNumber);
+				return new AcademicNotificationStaff(x.UserId.Value, x.EmployeeId, active, user?.Email, user?.PhoneNumber,
+					AcademicNotificationFamilyRecipients.DisplayName(user?.Name, user?.Surname));
 			}).ToArray();
 		return new(children, staff);
 	}

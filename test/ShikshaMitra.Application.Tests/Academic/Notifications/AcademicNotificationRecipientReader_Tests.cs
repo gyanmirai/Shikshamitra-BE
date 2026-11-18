@@ -84,6 +84,20 @@ public class AcademicNotificationRecipientReader_Tests
 	}
 
 	[Fact]
+	public async Task Staff_identity_is_projected_once_when_multiple_roles_target_the_same_user()
+	{
+		var target = new IdentityUser(Guid.NewGuid(), "assigned", "assigned@example.invalid", _tenantId) { Name = "Class teacher" };
+		_userRows.Add(target);
+		var result = await _reader.LoadAsync(_tenantId, [
+			new("AssignedTeacher", UserId: target.Id), new("ClassTeacher", UserId: target.Id)
+		], default);
+		var person = result.Staff.ShouldHaveSingleItem();
+		person.UserId.ShouldBe(target.Id);
+		person.DisplayName.ShouldBe("Class teacher");
+		person.IsActive.ShouldBeTrue();
+	}
+
+	[Fact]
 	public async Task Host_and_wrong_tenant_calls_are_denied_without_reading_repositories()
 	{
 		_tenant.Id.Returns((Guid?)null);

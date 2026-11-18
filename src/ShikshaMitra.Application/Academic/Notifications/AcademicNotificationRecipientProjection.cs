@@ -14,7 +14,7 @@ public sealed record AcademicNotificationAccount(StudentPortalAccountLink Link, 
 public sealed record AcademicNotificationStudent(Student Student, StudentFamilyDetail? Family,
 	bool GuardianReviewPending, IReadOnlyList<AcademicNotificationAccount> Accounts);
 public sealed record AcademicNotificationStaff(Guid UserId, Guid? EmployeeId, bool IsActive,
-	string? Email, string? Phone);
+	string? Email, string? Phone, string? DisplayName = null);
 public sealed record AcademicNotificationRecipientData(IReadOnlyList<AcademicNotificationStudent> Students,
 	IReadOnlyList<AcademicNotificationStaff> Staff);
 public sealed record AcademicNotificationAccessContext(Guid TenantId, Guid UserId,

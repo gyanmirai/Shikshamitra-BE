@@ -20,7 +20,7 @@ public sealed class NotificationSourcePartitioner : ITransientDependency
 		if (!source.IsEligible) return [];
 		Require(!string.IsNullOrWhiteSpace(source.SourceRevision) && source.SourceRevision.Length <= 128 &&
 			source.SourceRevision == context.SourceRevision && source.EligibleRecipients != null && source.AudienceSlices != null &&
-			SafeLink(source.RelativeLink));
+			source.Variables != null && SafeLink(source.RelativeLink));
 		var roster = source.EligibleRecipients!.ToHashSet();
 		Require(roster.All(x => ValidReference(x, definition)) && context.AffectedRecipients != null && context.AffectedRecipients.All(roster.Contains));
 		var selected = context.AffectedRecipients.Count == 0 ? roster : context.AffectedRecipients.ToHashSet();
@@ -53,7 +53,7 @@ public sealed class NotificationSourcePartitioner : ITransientDependency
 			.ThenBy(r => r.StudentId).ThenBy(r => r.UserId).ThenBy(r => r.EmployeeId).ThenBy(r => r.FamilyRelationship, StringComparer.Ordinal)
 			.Chunk(100).Select(chunk => new NotificationSourcePartition(x.Key, chunk))).ToArray();
 	}
-	private static bool ValidReference(NotificationRecipientRefDto? recipient, NotificationEventDefinition definition)
+	internal static bool ValidReference(NotificationRecipientRefDto? recipient, NotificationEventDefinition definition)
 	{
 		if (recipient == null || recipient.Kind == null || recipient.Kind.Length > 64 || recipient.FamilyRelationship != null ||
 			recipient.StudentId == Guid.Empty || recipient.UserId == Guid.Empty || recipient.EmployeeId == Guid.Empty) return false;

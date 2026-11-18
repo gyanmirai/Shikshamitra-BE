@@ -24,7 +24,7 @@ using Xunit;
 namespace ShikshaMitra.Academic.Notifications;
 
 [Collection(AcademicNotificationPreviewApiCollection.Name)]
-public class AcademicNotificationManualApi_Tests(AcademicNotificationPreviewApiFactory factory) : ShikshaMitraApiTestBase(factory)
+public partial class AcademicNotificationManualApi_Tests(AcademicNotificationPreviewApiFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private const string BasePath = "/api/academic/notifications";
 	private const string Route = BasePath + "/manual/preview";
@@ -206,6 +206,8 @@ public class AcademicNotificationManualApi_Tests(AcademicNotificationPreviewApiF
 			}, expectedRecipients: 101, requiresApproval: true);
 			var pending = await ConfirmAsync(Client, new { reviewToken = review.Id, idempotencyKey = $"bulk-{review.Id:N}" },
 				CommunicationCampaignStatus.PendingApproval);
+			var status = await GetAndReadAsync<JsonElement>($"{BasePath}/operations/{pending.OperationId}");
+			status.GetProperty("status").GetInt32().ShouldBe((int)CommunicationCampaignStatus.PendingApproval);
 			var decisionRoute = $"{BasePath}/operations/{pending.OperationId}/{(approve ? "approve" : "reject")}";
 			await WithDatabaseAsync(async (db, _) =>
 			{

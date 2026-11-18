@@ -17,6 +17,7 @@ public static class NotificationErrorCodes
 	public const string ReviewConsumed = "Communication:Notification:ReviewConsumed";
 	public const string ReviewInvalid = "Communication:Notification:ReviewInvalid";
 	public const string ApprovalSetupRequired = "Communication:Notification:ApprovalSetupRequired";
+	public const string HistoryInvalid = "Communication:Notification:HistoryInvalid";
 	public const string TenantRequired = "Communication:Notification:TenantRequired";
 	public const string UseWorkflow = "Communication:Notification:UseNotificationWorkflow";
 	public const string PushEndpointInvalid = "Communication:Notification:PushEndpointInvalid";

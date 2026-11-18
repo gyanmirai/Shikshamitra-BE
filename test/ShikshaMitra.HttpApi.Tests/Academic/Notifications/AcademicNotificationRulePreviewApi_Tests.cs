@@ -48,6 +48,8 @@ public class AcademicNotificationPreviewApiFactory : ShikshaMitraApiTestFactory
 	internal static readonly Guid SiblingDivision = Guid.NewGuid();
 	internal static readonly Guid ApproverId = Guid.NewGuid();
 	internal Guid ActiveSourceId { get; set; } = SourceId;
+	internal bool DenySourceView { get; set; }
+	internal bool DenySourceSend { get; set; }
 	internal string SourceRevision { get; set; } = "homework-v1";
 	internal string PrimaryEmail { get; set; } = "private@example.invalid";
 	internal Guid[] AdditionalStudents { get; set; } = [];
@@ -75,9 +77,15 @@ public class AcademicNotificationPreviewApiFactory : ShikshaMitraApiTestFactory
 	{
 		public IReadOnlyCollection<string> EventKeys => [Event];
 
+		public Task EnsureCanViewAsync(string eventKey, Guid sourceId, CancellationToken cancellationToken)
+		{
+			if (sourceId != factory.ActiveSourceId || factory.DenySourceView) throw new AbpAuthorizationException();
+			return Task.CompletedTask;
+		}
+
 		public Task EnsureCanSendAsync(string eventKey, Guid sourceId, CancellationToken cancellationToken)
 		{
-			if (sourceId != factory.ActiveSourceId) throw new AbpAuthorizationException();
+			if (sourceId != factory.ActiveSourceId || factory.DenySourceSend) throw new AbpAuthorizationException();
 			return Task.CompletedTask;
 		}
 

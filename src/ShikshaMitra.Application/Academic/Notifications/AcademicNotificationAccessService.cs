@@ -53,6 +53,20 @@ public sealed class AcademicNotificationAccessService(ICurrentTenant tenant, ICu
 	internal Task<(Guid TenantId, Guid ActorId, UserScopeContext Scope)> RequireManualApproverAsync(CancellationToken cancellationToken) =>
 		RequireIdentityAsync(ShikshaMitraSubmodulePermissions.Academics.Notification.Add, cancellationToken);
 
+	internal Task<(Guid TenantId, Guid ActorId, UserScopeContext Scope)> RequireHistoryViewerAsync(CancellationToken cancellationToken) =>
+		RequireIdentityAsync(ShikshaMitraSubmodulePermissions.Academics.Notification.View, cancellationToken);
+
+	internal async Task<NotificationEventDefinition> RequireSourceViewAsync(string eventKey, string? sourceType, Guid sourceId,
+		CancellationToken cancellationToken)
+	{
+		var definition = catalogue.Get(eventKey);
+		if (sourceType != definition.SourceType || sourceId == Guid.Empty) throw new AbpAuthorizationException();
+		var guards = authorizers.Where(x => x.EventKeys.Contains(eventKey)).Take(2).ToArray();
+		if (guards.Length != 1) throw new AbpAuthorizationException();
+		await guards[0].EnsureCanViewAsync(eventKey, sourceId, cancellationToken);
+		return definition;
+	}
+
 	internal Task<AcademicNotificationAccessContext> LoadManualSourceAsync(PreviewAcademicNotificationManualDto input,
 		(Guid TenantId, Guid ActorId, UserScopeContext Scope) identity, CancellationToken cancellationToken) =>
 		LoadAuthorizedSourceAsync(input.EventKey, input.SourceType, input.SourceId, identity, cancellationToken);

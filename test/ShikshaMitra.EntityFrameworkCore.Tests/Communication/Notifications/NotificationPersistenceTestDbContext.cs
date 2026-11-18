@@ -5,6 +5,7 @@ using ShikshaMitra.EntityFrameworkCore.Communication;
 using ShikshaMitra.EntityFrameworkCore.Communication.Notifications;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp.EntityFrameworkCore.Modeling;
+using NotificationPreferenceMapping = ShikshaMitra.EntityFrameworkCore.Communication.Notifications.NotificationPreferenceConfiguration;
 
 namespace ShikshaMitra.Communication.Notifications;
 
@@ -33,7 +34,7 @@ public sealed class NotificationPersistenceTestDbContext(DbContextOptions<Notifi
 		builder.ApplyConfiguration(new NotificationIntentConfiguration());
 		builder.ApplyConfiguration(new NotificationDispatchConfiguration());
 		builder.ApplyConfiguration(new NotificationInboxItemConfiguration());
-		builder.ApplyConfiguration(new NotificationPreferenceConfiguration());
+		builder.ApplyConfiguration(new NotificationPreferenceMapping());
 		builder.ApplyConfiguration(new WebPushSubscriptionConfiguration());
 		builder.ApplyConfiguration(new NotificationScheduleCursorConfiguration());
 		builder.ApplyConfiguration(new NotificationProviderEventConfiguration());

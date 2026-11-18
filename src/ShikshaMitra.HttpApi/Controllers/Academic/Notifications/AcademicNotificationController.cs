@@ -16,7 +16,7 @@ namespace ShikshaMitra.Controllers.Academic.Notifications;
 [Route("api/academic/notifications")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class AcademicNotificationController(IAcademicNotificationCatalogueAppService catalogue, IAcademicNotificationRuleAppService rules,
-	IAcademicNotificationManualAppService manual) : AbpControllerBase
+	IAcademicNotificationManualAppService manual, IAcademicNotificationHistoryAppService history) : AbpControllerBase
 {
 	[HttpGet("catalogue")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
@@ -59,4 +59,14 @@ public class AcademicNotificationController(IAcademicNotificationCatalogueAppSer
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Add)]
 	public Task<AcademicNotificationOperationDto> RejectManualAsync(Guid id, CancellationToken cancellationToken) =>
 		manual.RejectAsync(id, cancellationToken);
+
+	[HttpGet("operations/{id:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
+	public Task<AcademicNotificationOperationStatusDto> GetOperationAsync(Guid id, CancellationToken cancellationToken) =>
+		history.GetOperationAsync(id, cancellationToken);
+
+	[HttpGet("history")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
+	public Task<PagedResultDto<AcademicNotificationHistoryItemDto>> GetHistoryAsync([FromQuery] GetAcademicNotificationHistoryDto input,
+		CancellationToken cancellationToken) => history.GetHistoryAsync(input, cancellationToken);
 }

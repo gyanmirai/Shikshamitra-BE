@@ -16,6 +16,9 @@ using Volo.Abp.Linq;
 
 namespace ShikshaMitra.Academic.Notifications;
 
+internal sealed record AcademicNotificationProtectedReview(PreviewAcademicNotificationManualDto Request,
+	NotificationSourceScopeDto[] Scopes);
+
 [RemoteService(false), DisableAuditing]
 public sealed class AcademicNotificationReviewService(IRepository<NotificationSendReview, Guid> reviews,
 	IAsyncQueryableExecuter queries, IDataProtectionProvider protection, INotificationPersonalWriteLock writeLock, IDataFilter filters) : ITransientDependency
@@ -31,7 +34,8 @@ public sealed class AcademicNotificationReviewService(IRepository<NotificationSe
 		var expiry = context.Source.ExpiresAt is DateTimeOffset sourceExpiry && sourceExpiry < timeout ? sourceExpiry : timeout;
 		if (expiry <= now) return null;
 		var review = new NotificationSendReview(Guid.NewGuid(), context.TenantId, context.UserId, Digest(request, context, plan), expiry);
-		var sealedRequest = Protector(review).Protect(JsonSerializer.Serialize(request, Json));
+		var scopes = plan.Partitions.Select(x => x.Source.Runtime.SourceScope).Distinct().ToArray();
+		var sealedRequest = Protector(review).Protect(JsonSerializer.Serialize(new AcademicNotificationProtectedReview(request, scopes), Json));
 		if (sealedRequest.Length > NotificationSendReview.MaximumProtectedRequestLength)
 			throw new BusinessException(NotificationErrorCodes.ReviewInvalid);
 		review.BindRequest(sealedRequest);
@@ -75,16 +79,25 @@ public sealed class AcademicNotificationReviewService(IRepository<NotificationSe
 			!x.IsDeleted), cancellationToken) ?? throw new Volo.Abp.Authorization.AbpAuthorizationException();
 	}
 
-	internal PreviewAcademicNotificationManualDto ReadRequest(NotificationSendReview review)
+	internal PreviewAcademicNotificationManualDto ReadRequest(NotificationSendReview review) => ReadReview(review).Request;
+
+	internal AcademicNotificationProtectedReview ReadReview(NotificationSendReview review)
 	{
 		try
 		{
 			if (review.ProtectedRequest is not { Length: > 0 and <= NotificationSendReview.MaximumProtectedRequestLength })
 				throw new CryptographicException();
-			return JsonSerializer.Deserialize<PreviewAcademicNotificationManualDto>(Protector(review).Unprotect(review.ProtectedRequest), Json)
-				?? throw new JsonException();
+			var payload = Protector(review).Unprotect(review.ProtectedRequest);
+			using var document = JsonDocument.Parse(payload);
+			if (document.RootElement.TryGetProperty("request", out _))
+			{
+				var protectedReview = document.RootElement.Deserialize<AcademicNotificationProtectedReview>(Json);
+				return protectedReview is { Request: not null, Scopes: not null } ? protectedReview : throw new JsonException();
+			}
+			var request = document.RootElement.Deserialize<PreviewAcademicNotificationManualDto>(Json) ?? throw new JsonException();
+			return new(request, []);
 		}
-		catch (Exception error) when (error is CryptographicException or JsonException or FormatException)
+		catch (Exception error) when (error is CryptographicException or JsonException or FormatException or InvalidOperationException)
 		{
 			throw new BusinessException(NotificationErrorCodes.ReviewChanged);
 		}

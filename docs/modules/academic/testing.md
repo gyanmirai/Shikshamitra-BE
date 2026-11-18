@@ -135,6 +135,8 @@ Manual preview tests check independent View and Send grants, source-bound select
 
 Confirmation tests exercise Send without Add, exact replay, stale and expired reviews, approval and rejection, self-approval denial and the worker's delivery check after confirmation. Run the PostgreSQL test `ReviewedAcademicNotificationMigrationPostgres_Tests` with the local notification test database to verify that migration preserves existing automatic work and allows reviewed manual work without an automatic rule.
 
+History tests cover independent View and source authorization, per-scope attempts, cross-scope aggregate denial, page and status filters, and accepted-versus-delivered timestamps. The fixture includes sensitive stored values to verify they stay out of the response.
+
 ## Website push checks
 
 Run the backend delivery, subscription protection and authenticated registration tests from the backend repository.

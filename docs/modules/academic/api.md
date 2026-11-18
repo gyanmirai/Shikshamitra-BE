@@ -29,6 +29,8 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 | `POST /manual/preview` | View + Send + source access | Review a saved source audience, chosen channels and published templates |
 | `POST /manual/send` | Send + source access | Confirm a `reviewToken` with an `idempotencyKey`. Returns 202 with `operationId` and `status` |
 | `POST /operations/{id}/approve` and `/{id}/reject` | Add + assigned approver + source access | Decide an Academic operation in `PendingApproval` |
+| `GET /operations/{id}` | View + source read access | Read the status, timestamps, delivery counts and intent outcomes for an operation within the caller's scope |
+| `GET /history` | View + source read access | Page delivery attempts, work awaiting an attempt, and exclusions for the authorized source |
 | `GET /templates` | View | Paged template headers for the selected `eventKey` and optional `academicMediumId` |
 | `GET /templates/{id}` and `/{id}/history` | View | Current template and revision history |
 | `GET /templates/{id}/preview/{revisionId}` | View | Render with synthetic values for review |
@@ -50,6 +52,10 @@ The response reports recipient counts, exclusions, sample messages with fictiona
 Confirmation opens the protected request attached to the token and checks the live source and reviewed delivery details. A material change, expired token, or reused token with a different key returns 409. Repeating the same token and key returns the existing operation. A `Queued` operation is awaiting delivery. The worker checks the reviewed delivery fingerprint again before creating dispatches.
 
 Approval-required operations write no sendable intents until approval. Configure an active independent staff account at `Notifications:Academic:Tenants:<tenantIdN>:ApproverUserId`, where `tenantIdN` is the tenant GUID without hyphens. The assigned account needs Academic Notification Add and access to the source. Confirmation returns `Communication:Notification:ApprovalSetupRequired` if that account is unavailable. Approval rechecks the same preview. Rejection ends the pending operation as `Cancelled`.
+
+History takes `eventKey`, `sourceType`, `sourceId`, optional `operationId` and `state`, and standard `skipCount` and `maxResultCount` pagination. Staff see rows for their authorized source scopes. Whole-operation status and exclusions recorded before dispatch require access to every scope represented by that operation.
+
+History keeps provider acceptance, delivery, read, failure, skips and unknown acceptance distinct. It returns recipient references, timestamps, and recognized reason codes. Message bodies, destinations and raw provider references or errors stay private.
 
 Initializing defaults preserves previous edits and deletions and creates drafts without activating a rule.
 

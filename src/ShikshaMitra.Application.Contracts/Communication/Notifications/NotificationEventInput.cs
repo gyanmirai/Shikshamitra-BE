@@ -18,8 +18,20 @@ public sealed record NotificationIntentContext(
 
 public sealed record NotificationVariableValueDto(NotificationVariableType Type, string? Value);
 
+public sealed record NotificationSourceScopeDto(Guid? AcademicYearId = null, Guid? BoardId = null,
+	Guid? MediumId = null, Guid? ClassId = null, Guid? DivisionId = null);
+
+public sealed record NotificationSourceAudienceSliceDto(NotificationSourceScopeDto Scope,
+	IReadOnlyList<NotificationRecipientRefDto> Recipients);
+
+/// <summary>Replaces the recipient's complete source content; never merge it with shared variables.</summary>
+public sealed record NotificationSourceRecipientContentDto(NotificationRecipientRefDto Recipient,
+	IReadOnlyDictionary<string, NotificationVariableValueDto> Variables, string? RelativeLink);
+
 public sealed record NotificationSourceSnapshot(
 	bool IsEligible, string? ExclusionCode, string SourceRevision, string? RelativeLink,
 	IReadOnlyDictionary<string, NotificationVariableValueDto> Variables,
 	IReadOnlyList<NotificationRecipientRefDto> EligibleRecipients,
-	DateTimeOffset? ExpiresAt = null);
+	DateTimeOffset? ExpiresAt = null,
+	IReadOnlyList<NotificationSourceAudienceSliceDto>? AudienceSlices = null,
+	IReadOnlyList<NotificationSourceRecipientContentDto>? RecipientContent = null);

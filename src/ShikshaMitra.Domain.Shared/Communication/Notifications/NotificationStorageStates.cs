@@ -2,8 +2,10 @@ namespace ShikshaMitra.Communication.Notifications;
 
 public enum NotificationIntentState
 {
-	Scheduled, Ready, Processing, Completed, PartiallyFailed, Cancelled, Expired, NeedsReview
+	Scheduled, Ready, Processing, Completed, PartiallyFailed, Cancelled, Expired, NeedsReview, AwaitingDelivery
 }
+
+public enum NotificationIntentOrigin { Automatic, ReviewedManual }
 
 public enum NotificationDispatchState
 {

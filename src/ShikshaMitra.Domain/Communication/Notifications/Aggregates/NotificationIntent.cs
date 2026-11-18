@@ -4,7 +4,7 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Communication.Notifications;
 
-public class NotificationIntent : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class NotificationIntent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public Guid RuleId { get; private set; }

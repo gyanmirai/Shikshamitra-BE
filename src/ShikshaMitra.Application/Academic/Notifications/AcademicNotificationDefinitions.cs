@@ -24,7 +24,8 @@ internal static partial class AcademicNotificationDefinitions
 			: new[] { CommunicationChannelType.InApp, CommunicationChannelType.WebPush, CommunicationChannelType.Email, CommunicationChannelType.WhatsApp };
 		return new(key, family, source, source, 1, trigger, profile,
 			Array.AsReadOnly(selectors.Split(',').Distinct(StringComparer.Ordinal).ToArray()),
-			Array.AsReadOnly(channels), Variables(family), Array.AsReadOnly(materialFields));
+			Array.AsReadOnly(channels), Variables(family), Array.AsReadOnly(materialFields),
+			key is "Academic.Calendar.EmergencyClosureDeclared" or "Academic.Calendar.EmergencyClosureChanged");
 	}
 
 	private const string Family = "PrimaryGuardian,AdditionalGuardians,StudentAccount";

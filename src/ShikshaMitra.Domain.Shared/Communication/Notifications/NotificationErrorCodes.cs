@@ -19,4 +19,8 @@ public static class NotificationErrorCodes
 	public const string PushEndpointInvalid = "Communication:Notification:PushEndpointInvalid";
 	public const string PushKeyChanged = "Communication:Notification:PushKeyChanged";
 	public const string PushSubscriptionInvalid = "Communication:Notification:PushSubscriptionInvalid";
+	public const string RuntimeSnapshotInvalid = "Communication:Notification:RuntimeSnapshotInvalid";
+	public const string StateConflict = "Communication:Notification:StateConflict";
+	public const string LeaseLost = "Communication:Notification:LeaseLost";
+	public const string RuleConfigurationInvalid = "Communication:Notification:RuleConfigurationInvalid";
 }

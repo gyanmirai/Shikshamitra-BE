@@ -22,6 +22,7 @@ public sealed record NotificationEventDefinition(
 	IReadOnlyList<string> RecipientSelectors,
 	IReadOnlyList<CommunicationChannelType> SupportedChannels,
 	IReadOnlyList<NotificationVariableDefinition> Variables,
-	IReadOnlyList<string> MaterialChangeFields);
+	IReadOnlyList<string> MaterialChangeFields,
+	bool AllowsQuietHoursBypass = false);
 
 public sealed record NotificationSourceAvailability(bool IsAvailable, string? ReasonCode);

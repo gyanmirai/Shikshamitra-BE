@@ -31,4 +31,14 @@ public class NotificationRule : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DivisionId = scope.DivisionId;
 		Revision = 1;
 	}
+	public void Configure(bool enabled, string configurationJson, string expectedConcurrencyStamp)
+	{
+		NotificationRuntimeGuard.State(!string.IsNullOrEmpty(expectedConcurrencyStamp) &&
+			string.Equals(ConcurrencyStamp, expectedConcurrencyStamp, StringComparison.Ordinal));
+		NotificationRuntimeGuard.Snapshot(configurationJson);
+		if (IsEnabled == enabled && string.Equals(ConfigurationJson, configurationJson, StringComparison.Ordinal)) return;
+		var nextRevision = checked(Revision + 1);
+		ConfigurationJson = configurationJson; IsEnabled = enabled; Revision = nextRevision;
+		ConcurrencyStamp = Guid.NewGuid().ToString("N");
+	}
 }

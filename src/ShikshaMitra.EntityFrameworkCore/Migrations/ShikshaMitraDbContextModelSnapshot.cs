@@ -8132,6 +8132,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("AttemptNumber")
                         .HasColumnType("integer");
 
@@ -8199,6 +8202,12 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<Guid>("IntentId")
                         .HasColumnType("uuid");
+
+                    b.Property<Guid?>("IoLeaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("IoStartedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -8269,7 +8278,12 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("Status", "NextAttemptAt", "TenantId");
 
-                    b.ToTable("NotificationDispatches", (string)null);
+                    b.HasIndex("TenantId", "Status", "LeaseExpiresAt");
+
+                    b.ToTable("NotificationDispatches", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_NotificationDispatch_IoMarkers", "((\"IoStartedAt\" IS NULL AND \"IoLeaseId\" IS NULL) OR (\"IoStartedAt\" IS NOT NULL AND \"IoLeaseId\" IS NOT NULL)) AND (\"AcceptedAt\" IS NULL OR \"IoStartedAt\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.Communication.Notifications.NotificationInboxItem", b =>
@@ -8436,6 +8450,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTimeOffset>("DueAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
                     b.Property<string>("EventKey")
                         .IsRequired()
                         .HasMaxLength(160)
@@ -8471,6 +8489,21 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Origin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTimeOffset?>("PlanningCompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RuleConfigurationJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(65536)
+                        .HasColumnType("character varying(65536)")
+                        .HasDefaultValue("{}");
 
                     b.Property<Guid>("RuleId")
                         .HasColumnType("uuid");
@@ -8514,7 +8547,12 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "SourceType", "SourceId");
 
-                    b.ToTable("NotificationIntents", (string)null);
+                    b.HasIndex("TenantId", "Status", "LeaseExpiresAt");
+
+                    b.ToTable("NotificationIntents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_NotificationIntent_Origin", "\"Origin\" IN (0, 1) AND (\"Origin\" = 0 OR (\"CampaignId\" IS NOT NULL AND \"ActorUserId\" IS NOT NULL AND \"CampaignId\" <> '00000000-0000-0000-0000-000000000000' AND \"ActorUserId\" <> '00000000-0000-0000-0000-000000000000'))");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.Communication.Notifications.NotificationPreference", b =>

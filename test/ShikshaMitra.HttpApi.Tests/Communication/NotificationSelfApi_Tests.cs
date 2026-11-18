@@ -5,6 +5,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.BackgroundWorkers;
+using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Infrastructure.Auth;
 using Shouldly;
@@ -20,6 +22,15 @@ namespace ShikshaMitra.Communication;
 public partial class NotificationSelfApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private const string Route = "/api/communication/notifications/me";
+
+	[Fact]
+	public void The_host_container_resolves_the_academic_worker_and_its_tenant_queue()
+	{
+		using var scope = Factory.Services.CreateScope();
+		scope.ServiceProvider.GetRequiredService<AcademicNotificationDispatchWorker>().ShouldNotBeNull();
+		scope.ServiceProvider.GetRequiredService<NotificationTenantQueueRunner>().ShouldNotBeNull();
+		scope.ServiceProvider.GetRequiredService<INotificationQueueRepository>().ShouldNotBeNull();
+	}
 
 	[Fact]
 	public async Task Anonymous_inbox_is_denied_and_missing_push_configuration_is_reported_without_claiming_readiness()

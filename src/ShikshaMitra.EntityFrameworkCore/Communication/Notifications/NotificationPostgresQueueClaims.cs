@@ -15,13 +15,17 @@ internal static class NotificationPostgresQueueClaims
 {
 	internal static async Task<IReadOnlyList<NotificationQueueClaim>> ClaimAsync(DbConnection connection,
 		DbTransaction? transaction, Guid tenantId, NotificationQueueKind kind, DateTimeOffset now,
-		int batchSize, TimeSpan leaseDuration, CancellationToken cancellationToken)
+		int batchSize, TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null)
 	{
 		if (connection is not NpgsqlConnection) throw new NotSupportedException("Notification queue claims require PostgreSQL.");
 		if (tenantId == Guid.Empty) throw new ArgumentException("A tenant is required.", nameof(tenantId));
 		if (batchSize is < 1 or > 1000) throw new ArgumentOutOfRangeException(nameof(batchSize));
 		if (leaseDuration <= TimeSpan.Zero || leaseDuration > TimeSpan.FromMinutes(10))
 			throw new ArgumentOutOfRangeException(nameof(leaseDuration));
+		if (maxActivePerChannel.HasValue && (kind != NotificationQueueKind.Dispatch || batchSize != 1 || maxActivePerChannel is < 1 or > 100))
+			throw new ArgumentOutOfRangeException(nameof(maxActivePerChannel));
+		if (maxActivePerChannel.HasValue && transaction?.IsolationLevel != IsolationLevel.ReadCommitted)
+			throw new InvalidOperationException("Notification channel capacity requires a read committed transaction.");
 		var (table, dueColumn, firstState, secondState, processing, attemptSql) = kind switch
 		{
 			NotificationQueueKind.Intent => ("NotificationIntents", "DueAt", (int)NotificationIntentState.Ready,
@@ -36,14 +40,23 @@ internal static class NotificationPostgresQueueClaims
 		if (openedHere) await connection.OpenAsync(cancellationToken);
 		try
 		{
+			if (maxActivePerChannel.HasValue)
+				await NotificationPostgresPersonalLocks.AcquireAsync(connection, transaction, tenantId,
+					["notification-dispatch-claim"], cancellationToken);
+			var capacity = maxActivePerChannel.HasValue ? """
+				AND (SELECT COUNT(*) FROM "NotificationDispatches" AS active
+				     WHERE active."TenantId" = @tenant AND active."Channel" = candidate."Channel"
+				       AND active."Status" = @processing AND active."IsDeleted" = false AND active."LeaseExpiresAt" > @now) < @maxActive
+				""" : "";
 			await using var command = connection.CreateCommand();
 			command.Transaction = transaction;
 			command.CommandText = $"""
 				WITH candidates AS (
-				    SELECT "Id" FROM "{table}"
+				    SELECT "Id" FROM "{table}" AS candidate
 				    WHERE "TenantId" = @tenant AND "IsDeleted" = false
 				      AND "Status" IN (@firstState, @secondState) AND "{dueColumn}" <= @now
 				      AND ("ExpiresAt" IS NULL OR "ExpiresAt" > @now)
+				      {capacity}
 				    ORDER BY "{dueColumn}", "Id" LIMIT @batch FOR UPDATE SKIP LOCKED
 				)
 				UPDATE "{table}" AS target
@@ -61,11 +74,46 @@ internal static class NotificationPostgresQueueClaims
 			Parameter(command, "lease", leaseId);
 			Parameter(command, "expires", now.ToUniversalTime().Add(leaseDuration));
 			Parameter(command, "stamp", leaseId.ToString("N"));
+			if (maxActivePerChannel.HasValue) Parameter(command, "maxActive", maxActivePerChannel.Value);
 			var claims = new List<NotificationQueueClaim>();
 			await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 			while (await reader.ReadAsync(cancellationToken))
 				claims.Add(new(reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2)));
 			return claims.AsReadOnly();
+		}
+		finally
+		{
+			if (openedHere) await connection.CloseAsync();
+		}
+	}
+
+	internal static async Task<bool> RenewDispatchAsync(DbConnection connection, DbTransaction? transaction, Guid tenantId,
+		Guid dispatchId, Guid leaseId, DateTimeOffset now, TimeSpan leaseDuration, CancellationToken cancellationToken)
+	{
+		if (connection is not NpgsqlConnection) throw new NotSupportedException("Notification queue leases require PostgreSQL.");
+		if (tenantId == Guid.Empty || dispatchId == Guid.Empty || leaseId == Guid.Empty) throw new ArgumentException("A tenant, dispatch and lease are required.");
+		if (leaseDuration <= TimeSpan.Zero || leaseDuration > TimeSpan.FromMinutes(10))
+			throw new ArgumentOutOfRangeException(nameof(leaseDuration));
+		var openedHere = connection.State != ConnectionState.Open;
+		if (openedHere) await connection.OpenAsync(cancellationToken);
+		try
+		{
+			await using var command = connection.CreateCommand();
+			command.Transaction = transaction;
+			command.CommandText = """
+				UPDATE "NotificationDispatches"
+				SET "LeaseExpiresAt" = GREATEST("LeaseExpiresAt", @expires), "ConcurrencyStamp" = @stamp
+				WHERE "Id" = @dispatch AND "TenantId" = @tenant AND "IsDeleted" = false AND "Status" = @processing
+				  AND "LeaseId" = @lease AND "LeaseExpiresAt" > @now AND ("ExpiresAt" IS NULL OR "ExpiresAt" > @now)
+				""";
+			Parameter(command, "tenant", tenantId);
+			Parameter(command, "dispatch", dispatchId);
+			Parameter(command, "lease", leaseId);
+			Parameter(command, "processing", (int)NotificationDispatchState.Processing);
+			Parameter(command, "now", now.ToUniversalTime());
+			Parameter(command, "expires", now.ToUniversalTime().Add(leaseDuration));
+			Parameter(command, "stamp", Guid.NewGuid().ToString("N"));
+			return await command.ExecuteNonQueryAsync(cancellationToken) == 1;
 		}
 		finally
 		{

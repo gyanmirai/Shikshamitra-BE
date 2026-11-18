@@ -20,18 +20,28 @@ public sealed class NotificationQueueRepository(IDbContextProvider<ShikshaMitraD
 		ClaimAsync(NotificationQueueKind.Intent, now, batchSize, leaseDuration, cancellationToken);
 
 	public Task<IReadOnlyList<NotificationQueueClaim>> ClaimDispatchesAsync(DateTimeOffset now, int batchSize,
-		TimeSpan leaseDuration, CancellationToken cancellationToken) =>
-		ClaimAsync(NotificationQueueKind.Dispatch, now, batchSize, leaseDuration, cancellationToken);
+		TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null) =>
+		ClaimAsync(NotificationQueueKind.Dispatch, now, batchSize, leaseDuration, cancellationToken, maxActivePerChannel);
+
+	public async Task<bool> RenewDispatchAsync(Guid dispatchId, Guid leaseId, DateTimeOffset now, TimeSpan leaseDuration,
+		CancellationToken cancellationToken)
+	{
+		var tenantId = RequireTenant();
+		var context = await contexts.GetDbContextAsync();
+		return await NotificationPostgresQueueClaims.RenewDispatchAsync(context.Database.GetDbConnection(),
+			context.Database.CurrentTransaction?.GetDbTransaction(), tenantId, dispatchId, leaseId, now, leaseDuration, cancellationToken);
+	}
 
 	private async Task<IReadOnlyList<NotificationQueueClaim>> ClaimAsync(NotificationQueueKind kind,
-		DateTimeOffset now, int batchSize, TimeSpan leaseDuration, CancellationToken cancellationToken)
+		DateTimeOffset now, int batchSize, TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null)
 	{
-		var tenantId = currentTenant.Id;
-		if (!tenantId.HasValue || tenantId.Value == Guid.Empty)
-			throw new BusinessException(NotificationErrorCodes.TenantRequired);
+		var tenantId = RequireTenant();
 		var context = await contexts.GetDbContextAsync();
 		return await NotificationPostgresQueueClaims.ClaimAsync(context.Database.GetDbConnection(),
-			context.Database.CurrentTransaction?.GetDbTransaction(), tenantId.Value, kind, now,
-			batchSize, leaseDuration, cancellationToken);
+			context.Database.CurrentTransaction?.GetDbTransaction(), tenantId, kind, now,
+			batchSize, leaseDuration, cancellationToken, maxActivePerChannel);
 	}
+
+	private Guid RequireTenant() => currentTenant.Id is Guid tenantId && tenantId != Guid.Empty
+		? tenantId : throw new BusinessException(NotificationErrorCodes.TenantRequired);
 }

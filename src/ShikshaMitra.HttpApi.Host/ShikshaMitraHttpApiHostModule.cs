@@ -600,6 +600,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
         if (!context.ServiceProvider.GetRequiredService<IConfiguration>().GetValue<bool>("BackgroundWorkers:IsEnabled", true)) return;
 		await ConfigureSmtpPasswordAsync(context.ServiceProvider);
 		await context.AddBackgroundWorkerAsync<AssignmentScheduledPublicationWorker>();
+		await context.AddBackgroundWorkerAsync<AcademicNotificationDispatchWorker>();
 		await context.AddBackgroundWorkerAsync<AdmissionCycleScheduleWorker>();
 		await context.AddBackgroundWorkerAsync<StudentRecordScheduleWorker>();
 		await context.AddBackgroundWorkerAsync<StudentRecordReportWorker>();

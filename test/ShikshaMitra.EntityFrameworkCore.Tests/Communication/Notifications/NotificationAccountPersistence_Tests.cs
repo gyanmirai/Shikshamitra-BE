@@ -65,16 +65,24 @@ public class NotificationAccountPersistence_Tests(NotificationPostgresFixture fi
 		await ExpectUniqueAsync(() => context.SaveChangesAsync());
 	}
 
-	internal static async Task<NotificationDispatch> SeedDispatchAsync(NotificationPersistenceTestDbContext context, Guid tenant)
+	internal static async Task<NotificationDispatch> SeedDispatchAsync(NotificationPersistenceTestDbContext context, Guid tenant,
+		CommunicationChannelType channel = CommunicationChannelType.Email)
 	{
-		var rule = new NotificationRule(Guid.NewGuid(), tenant, "Academic.Homework.Published", NotificationRuleScope.Create());
+		const string eventKey = "Academic.Homework.Published";
+		var scope = NotificationRuleScope.Create();
+		var rule = await context.Set<NotificationRule>().SingleOrDefaultAsync(x => x.TenantId == tenant && x.EventKey == eventKey && x.ScopeKey == scope.Key);
+		if (rule == null)
+		{
+			rule = new NotificationRule(Guid.NewGuid(), tenant, eventKey, scope);
+			context.Add(rule);
+		}
 		var header = new CommunicationTemplate(Guid.NewGuid(), tenant) { TemplateName = "Homework", Subject = "Homework", Body = "Body" };
 		var revision = new CommunicationTemplateRevision(Guid.NewGuid(), tenant, header.Id, 1,
-			"Academic.Homework.Published", "PrimaryGuardian", CommunicationChannelType.Email, "en", "Homework", "Body", 1);
+			eventKey, "PrimaryGuardian", channel, "en", "Homework", "Body", 1);
 		var intent = NotificationPersistence_Tests.Intent(tenant, rule.Id, Guid.NewGuid().ToString("N"));
 		var dispatch = new NotificationDispatch(Guid.NewGuid(), tenant, intent.Id, revision.Id, "{}", "student-context",
-			CommunicationChannelType.Email, "fingerprint", "protected", "hash", Guid.NewGuid().ToString("N"), DateTimeOffset.UtcNow);
-		context.AddRange(rule, header, revision, intent, dispatch);
+			channel, "fingerprint", "protected", "hash", Guid.NewGuid().ToString("N"), DateTimeOffset.UtcNow);
+		context.AddRange(header, revision, intent, dispatch);
 		await context.SaveChangesAsync();
 		return dispatch;
 	}

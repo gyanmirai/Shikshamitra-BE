@@ -3,7 +3,7 @@ module: academic
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-04
+updated_on: 2026-11-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -122,6 +122,19 @@ Simultaneous HTTP transactions fail in provider transaction creation before the 
 The suite covers two clients with pre-visit snapshots and injects an optimistic repository collision into the real visit service to verify its fresh-UOW retry contract.
 Run a disposable PostgreSQL acceptance check before claiming provider-level parallel-visitor evidence.
 Do not repurpose a deployed school database for that test.
+
+## Website push checks
+
+Run the backend delivery, subscription protection and authenticated registration tests from the backend repository.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~WebPushNotificationChannel_Tests|FullyQualifiedName~WebPushSubscriptionProtection_Tests|FullyQualifiedName~NotificationDispatchPlanner_Tests"
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~NotificationSelfApi_Tests_Push"
+```
+
+The provider fixtures cover signed encrypted requests, delivery-time DNS checks, rejection, throttling, registration expiry and account changes.
+The key-ring test reloads the same directory after rotating the Data Protection key and reads the original browser subscription from a fresh service provider.
+Production acceptance requires replica and restart verification with the deployed key repository, plus an actual notification on supported desktop and mobile browsers.
 
 ## Room calendar regression
 

@@ -72,6 +72,13 @@ public class NotificationSelfApi_Tests_Push(NotificationSelfPushApiFactory facto
 	private static readonly string BrowserAuth = NotificationSelfPushApiFactory.Base64(RandomNumberGenerator.GetBytes(16));
 
 	[Fact]
+	public void The_host_resolves_one_website_push_sender_for_the_notification_queue()
+	{
+		using var scope = Factory.Services.CreateScope();
+		scope.ServiceProvider.GetServices<INotificationChannelSender>().Count(x => x.Channel == CommunicationChannelType.WebPush).ShouldBe(1);
+	}
+
+	[Fact]
 	public async Task Rebinding_requires_the_existing_browser_keys_and_does_not_accept_a_guessed_endpoint()
 	{
 		var firstUserId = await CreateUserAsync(); using var firstUser = CreateClientAs(firstUserId);

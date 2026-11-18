@@ -92,7 +92,8 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 					prepared = new(matching[0], new(row.Id, row.DeduplicationKey, row.ProviderSettingId ?? Guid.Empty, row.Channel,
 						destination, payload.Subject, payload.Body, payload.LinkUrl, payload.LanguageCode, row.AttemptNumber,
 						WhatsAppTemplateBindingId: decision.WhatsAppTemplateBindingId,
-						TemplateRevisionId: row.TemplateRevisionId, Recipient: payload.Recipient, WhatsAppVariables: payload.WhatsAppVariables), decision.ExpiresAt);
+						TemplateRevisionId: row.TemplateRevisionId, Recipient: payload.Recipient, WhatsAppVariables: payload.WhatsAppVariables,
+						ExpiresAt: decision.ExpiresAt), decision.ExpiresAt);
 				}
 				else if (reservation.RetryAt is DateTimeOffset retryAt && retryAt > now &&
 					!(decision.ExpiresAt <= retryAt) && !(row.ExpiresAt <= retryAt))

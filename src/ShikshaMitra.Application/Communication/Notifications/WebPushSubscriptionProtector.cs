@@ -9,7 +9,10 @@ using Volo.Abp.DependencyInjection;
 namespace ShikshaMitra.Communication.Notifications;
 
 internal sealed record ProtectedWebPushSubscription(Guid TenantId, Guid UserId, Guid BrowserInstallationId,
-	string Endpoint, WebPushSubscriptionKeysDto Keys, string VapidKeyVersion);
+	string Endpoint, WebPushSubscriptionKeysDto Keys, string VapidKeyVersion)
+{
+	public override string ToString() => nameof(ProtectedWebPushSubscription);
+}
 
 public sealed class WebPushSubscriptionProtector(IDataProtectionProvider protection) : ITransientDependency
 {

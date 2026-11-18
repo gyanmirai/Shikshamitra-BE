@@ -11,7 +11,7 @@ public sealed record NotificationChannelSendRequest(
 	string? LinkUrl, string LanguageCode, int AttemptNumber,
 	Guid? WhatsAppTemplateBindingId = null, Guid? TemplateRevisionId = null,
 	NotificationRecipientRefDto? Recipient = null,
-	IReadOnlyDictionary<string, NotificationVariableValueDto>? WhatsAppVariables = null)
+	IReadOnlyDictionary<string, NotificationVariableValueDto>? WhatsAppVariables = null, DateTimeOffset? ExpiresAt = null)
 {
 	public override string ToString() => nameof(NotificationChannelSendRequest);
 }

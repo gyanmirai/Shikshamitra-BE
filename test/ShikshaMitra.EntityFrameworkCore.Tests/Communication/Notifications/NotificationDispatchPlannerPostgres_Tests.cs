@@ -33,7 +33,8 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 	private sealed record Runtime(ICurrentTenant Tenant, IClock Clock, NotificationIntentSourceReader Sources,
 		INotificationRuntimeRecipientResolver Recipients, NotificationDispatchPolicy Policy, NotificationEmailRoute Email,
 		NotificationSourceLink Links, NotificationTemplateRenderer Renderer, NotificationDispatchPayloadProtector Protector,
-		IAsyncQueryableExecuter Queries, IGuidGenerator Guids, WhatsAppProviderRoute WhatsApp, WhatsAppApprovedTemplates Approvals);
+		IAsyncQueryableExecuter Queries, IGuidGenerator Guids, WhatsAppProviderRoute WhatsApp, WhatsAppApprovedTemplates Approvals,
+		WebPushDispatchSubscriptions WebPush);
 
 	[NotificationPostgresFact]
 	public async Task Rolling_back_planning_reverts_evidence_dispatch_and_completion_under_the_same_lease()
@@ -112,7 +113,7 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 		var locks = Substitute.For<INotificationPersonalWriteLock>();
 		var dispatcher = new NotificationDispatcher(runtime.Tenant, units, runtime.Clock,
 			new(runtime.Protector, runtime.Sources, [runtime.Recipients], runtime.Policy, runtime.Email, runtime.Links,
-				runtime.WhatsApp, runtime.Approvals), [sender],
+				runtime.WhatsApp, runtime.Approvals, runtime.WebPush), [sender],
 			new(locks), Repository<NotificationDispatch>(db), Repository<NotificationIntent>(db), Repository<CommunicationCampaign>(db),
 			runtime.Queries, CreateDeliveryProjection(db, runtime, locks));
 
@@ -306,7 +307,7 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 		units.Current.Returns(unit);
 		return new(runtime.Tenant, units, runtime.Clock, runtime.Sources, [runtime.Recipients], runtime.Policy, runtime.Email,
 			new(runtime.Tenant, Repository<CommunicationTemplateRevision>(db), runtime.Queries, runtime.Renderer, runtime.Links,
-				runtime.Protector, runtime.Guids, runtime.WhatsApp, runtime.Approvals),
+				runtime.Protector, runtime.Guids, runtime.WhatsApp, runtime.Approvals, runtime.WebPush),
 			Repository<NotificationIntent>(db), Repository<CommunicationCampaign>(db), Repository<NotificationDispatch>(db),
 			Repository<CommunicationRecipientSnapshot>(db), runtime.Queries, runtime.Guids);
 	}
@@ -351,7 +352,8 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 			new(tenant, Repository<ChannelProviderSetting>(db), queries),
 			new(app, validator), renderer, new(keys, tenant), queries, ids,
 			new(tenant, Repository<ChannelProviderSetting>(db), queries, app),
-			new(tenant, Repository<WhatsAppTemplateBinding>(db), queries));
+			new(tenant, Repository<WhatsAppTemplateBinding>(db), queries),
+			new(tenant, Repository<WebPushSubscription>(db), queries, new(app)));
 	}
 
 	private static IRepository<T, Guid> Repository<T>(DbContext db) where T : class, Volo.Abp.Domain.Entities.IEntity<Guid>

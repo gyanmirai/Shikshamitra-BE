@@ -15,7 +15,8 @@ internal sealed record NotificationDispatchReadinessResult(NotificationDispatchP
 [RemoteService(false), DisableAuditing]
 public sealed class NotificationDispatchReadiness(NotificationDispatchPayloadProtector protector, NotificationIntentSourceReader sources,
 	IEnumerable<INotificationRuntimeRecipientResolver> resolvers, NotificationDispatchPolicy policy, NotificationEmailRoute emailRoute,
-	NotificationSourceLink links, WhatsAppProviderRoute whatsAppRoute, WhatsAppApprovedTemplates approvals) : ITransientDependency
+	NotificationSourceLink links, WhatsAppProviderRoute whatsAppRoute, WhatsAppApprovedTemplates approvals,
+	WebPushDispatchSubscriptions webPush) : ITransientDependency
 {
 	internal async Task<NotificationDispatchReadinessResult> CheckAsync(NotificationIntent intent, NotificationDispatch dispatch,
 		DateTimeOffset now, CancellationToken cancellationToken)
@@ -56,7 +57,11 @@ public sealed class NotificationDispatchReadiness(NotificationDispatchPayloadPro
 		var candidate = exact[0];
 		if (!candidate.IsEligible) return Exclude(candidate.ExclusionCode ?? NotificationErrorCodes.RecipientIneligible);
 		if (!string.Equals(candidate.AssociationRevision, payload.AssociationRevision, StringComparison.Ordinal) ||
+			dispatch.Channel != CommunicationChannelType.WebPush &&
 			!string.Equals(candidate.Destination, payload.Destination, StringComparison.Ordinal)) return Exclude("RecipientAssociationChanged");
+		if (dispatch.Channel == CommunicationChannelType.WebPush &&
+			(payload.Recipient.UserId is not Guid owner || !Guid.TryParseExact(payload.Destination, "N", out var device) ||
+			 !await webPush.IsAvailableAsync(owner, device, cancellationToken))) return Exclude("WebPushSubscriptionUnavailable");
 
 		NotificationEmailProvider? email = null;
 		if (dispatch.Channel == CommunicationChannelType.Email)

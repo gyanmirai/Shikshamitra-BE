@@ -3,7 +3,7 @@ module: academic
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-11-02
+updated_on: 2026-11-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -71,6 +71,26 @@ These projections report record existence only.
 They do not load usage graphs or replace domain-specific readiness checks.
 Existing configuration services in `src/ShikshaMitra.Application/Academic/**` continue to own creates, updates, validation, archive rules and their action permissions.
 Frontend wiring remains documented in the [frontend clients guide](../../../../Shikshamitra-FE/docs/academic/clients.md).
+
+## Website push delivery
+
+The notification queue plans one Web Push dispatch for each active browser subscription on the authorized recipient account.
+It pins the subscription ID in the protected dispatch payload and rechecks ownership, activity and VAPID key version before sending.
+The push payload carries an opaque notification ID.
+School content and links stay in the authenticated application.
+`src/ShikshaMitra.Application/Communication/Notifications/WebPushProviderClient.cs` owns VAPID and encrypted delivery.
+`src/ShikshaMitra.Application/Communication/Notifications/WebPushEndpointClientFactory.cs` connects directly to the validated public address over TLS and disables redirects.
+Provider acceptance records Sent, and the delivery result stays independent of user read state.
+
+| Setting | Deployment responsibility |
+|---|---|
+| `Notifications:WebPush:PublicKey`, `PrivateKey`, `KeyVersion` | Load a stable P-256 key pair from server configuration and expose only the public key and version through the authenticated API. Change the version when rotating the pair so browsers can renew their subscriptions. |
+| `Notifications:WebPush:AllowedOrigins` | List the exact HTTPS origins of the browser push services in use, including the configured port. |
+| `Notifications:WebPush:Subject` | Supply an optional HTTPS or mail address URI for the operator contact in VAPID tokens. |
+| ASP.NET Core Data Protection | Use one protected, persistent key repository and a stable application discriminator across web and worker replicas in each environment. Restrict access to deployment identities and retain earlier keys after rotation so existing registrations stay readable. |
+
+Before enabling delivery in production, verify that a registration created by one replica can be read after a restart and across replicas using the deployed key repository.
+Keep separate Data Protection repositories for environments that should be isolated. [Configure ASP.NET Core Data Protection](https://learn.microsoft.com/en-us/aspnet/core/security/data-protection/configuration/overview?view=aspnetcore-9.0)
 
 ## HR shift integration
 

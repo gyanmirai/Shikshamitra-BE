@@ -22,7 +22,7 @@ internal sealed record NotificationPreparedDispatch(NotificationRuntimeRecipient
 public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRepository<CommunicationTemplateRevision, Guid> revisions,
 	IAsyncQueryableExecuter queries, NotificationTemplateRenderer renderer, NotificationSourceLink links,
 	NotificationDispatchPayloadProtector protector, IGuidGenerator guids, WhatsAppProviderRoute whatsAppRoute,
-	WhatsAppApprovedTemplates approvals) : ITransientDependency
+	WhatsAppApprovedTemplates approvals, WebPushDispatchSubscriptions webPush) : ITransientDependency
 {
 	private sealed record DeliveryIdentity(string RecipientFamily, Guid? StudentId, Guid? UserId, string? ExternalDestination,
 		CommunicationChannelType Channel);
@@ -54,6 +54,8 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 			pinned.Where(x => x.Key.Channel == CommunicationChannelType.WhatsApp).SelectMany(x => x).Select(x => x.Id).ToArray(),
 			cancellationToken);
 		var overrides = (source.Snapshot.RecipientContent ?? []).ToDictionary(x => x.Recipient);
+		var devices = await webPush.LoadAsync(eligible.Where(x => x.Recipient.Channel == CommunicationChannelType.WebPush &&
+			x.Recipient.Recipient.UserId.HasValue).Select(x => x.Recipient.Recipient.UserId!.Value).Distinct().ToArray(), cancellationToken);
 		foreach (var group in eligible.GroupBy(Identity))
 		{
 			cancellationToken.ThrowIfCancellationRequested();
@@ -64,8 +66,21 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 				results.Add(new(selected.Recipient, selected.LanguageCode, null, "RecipientContentAmbiguous"));
 				continue;
 			}
-			results.Add(PrepareOne(tenantId, intent, source, selected,
-				overrides.GetValueOrDefault(selected.Recipient.SourceRecipient), pinned, email?.Id, whatsApp?.Id, approved));
+			var content = overrides.GetValueOrDefault(selected.Recipient.SourceRecipient);
+			if (selected.Recipient.Channel != CommunicationChannelType.WebPush)
+			{
+				results.Add(PrepareOne(tenantId, intent, source, selected, content, pinned, email?.Id, whatsApp?.Id, approved));
+				continue;
+			}
+			var subscriptions = selected.Recipient.Recipient.UserId is Guid user ? devices.Subscriptions[user] : [];
+			if (!subscriptions.Any())
+			{
+				results.Add(new(selected.Recipient, selected.LanguageCode, null,
+					devices.IsConfigured ? "WebPushSubscriptionUnavailable" : NotificationErrorCodes.ProviderUnavailable));
+				continue;
+			}
+			foreach (var device in subscriptions)
+				results.Add(PrepareOne(tenantId, intent, source, selected, content, pinned, email?.Id, whatsApp?.Id, approved, device));
 		}
 		return results;
 	}
@@ -86,7 +101,7 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 	private NotificationPreparedDispatch PrepareOne(Guid tenantId, NotificationIntent intent, NotificationCurrentSource source,
 		NotificationRecipientDispatchDecision decision, NotificationSourceRecipientContentDto? content,
 		ILookup<(string RecipientKind, CommunicationChannelType Channel, string LanguageCode), CommunicationTemplateRevision> pinned,
-		Guid? emailProvider, Guid? whatsAppProvider, IReadOnlyDictionary<Guid, WhatsAppTemplateBinding>? approved)
+		Guid? emailProvider, Guid? whatsAppProvider, IReadOnlyDictionary<Guid, WhatsAppTemplateBinding>? approved, Guid? pushDeviceId = null)
 	{
 		var recipient = decision.Recipient;
 		var fallback = source.Runtime.Configuration.FallbackLanguage;
@@ -115,14 +130,15 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 
 		var identity = Identity(decision);
 		var context = Hash(new { intent.Id, identity.RecipientFamily, identity.StudentId, identity.UserId, recipient.Recipient.FamilyRelationship });
-		var deduplicationKey = Hash(new { intent.Id, context, recipient.Channel });
+		var deduplicationKey = pushDeviceId.HasValue ? Hash(new { intent.Id, context, recipient.Channel, pushDeviceId }) :
+			Hash(new { intent.Id, context, recipient.Channel });
 		var id = guids.Create();
 		var key = new NotificationDispatchPayloadKey(tenantId, id, intent.Id, revision.Id, recipient.Channel, rendered.ContentHash!);
 		string encrypted;
 		try
 		{
 			encrypted = protector.Protect(key, new(recipient.SourceRecipient, recipient.Recipient, recipient.AssociationRevision,
-				recipient.Destination, rendered.Subject, rendered.Body!, rendered.LinkUrl!, revision.LanguageCode,
+				pushDeviceId?.ToString("N") ?? recipient.Destination, rendered.Subject, rendered.Body!, rendered.LinkUrl!, revision.LanguageCode,
 				recipient.Channel == CommunicationChannelType.WhatsApp ? variables : null));
 		}
 		catch (BusinessException error) when (error.Code is "DispatchPayloadTooLarge" or "DispatchPayloadInvalid")

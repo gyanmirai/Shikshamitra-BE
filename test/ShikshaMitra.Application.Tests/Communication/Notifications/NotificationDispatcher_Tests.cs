@@ -116,7 +116,8 @@ public class NotificationDispatcher_Tests
 		var readiness = new NotificationDispatchReadiness(protector, reader, [resolver], policy,
 			new(_tenant, Repository<ChannelProviderSetting>([_provider]), queries), new(app, validator),
 			new(_tenant, Repository<ChannelProviderSetting>([_provider]), queries, app),
-			new(_tenant, Repository<WhatsAppTemplateBinding>([]), queries));
+			new(_tenant, Repository<WhatsAppTemplateBinding>([]), queries),
+			new(_tenant, Repository<WebPushSubscription>([]), queries, new(app)));
 		_sender.Channel.Returns(CommunicationChannelType.Email);
 		_sender.SendAsync(Arg.Any<NotificationChannelSendRequest>(), Arg.Any<CancellationToken>()).Returns(call => {
 			_active.ShouldBeNull();

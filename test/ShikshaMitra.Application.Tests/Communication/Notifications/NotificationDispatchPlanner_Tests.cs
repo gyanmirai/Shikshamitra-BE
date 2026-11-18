@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.DataProtection;
@@ -34,6 +35,7 @@ public class NotificationDispatchPlanner_Tests
 	private readonly List<ChannelProviderSetting> _providers = [];
 	private readonly List<ConsentRecord> _consents = [];
 	private readonly List<WhatsAppTemplateBinding> _bindings = [];
+	private readonly List<WebPushSubscription> _subscriptions = [];
 	private readonly List<NotificationPreference> _preferences = [];
 	private readonly List<NotificationRuntimeRecipient> _recipients = [];
 	private readonly ICurrentTenant _tenant = Substitute.For<ICurrentTenant>();
@@ -62,7 +64,7 @@ public class NotificationDispatchPlanner_Tests
 		var codec = new NotificationRuleConfigurationCodec();
 		var snapshotCodec = new NotificationIntentSnapshotCodec(codec);
 		var config = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, [],
-			[CommunicationChannelType.Email, CommunicationChannelType.InApp, CommunicationChannelType.WhatsApp], [_template],
+			[CommunicationChannelType.Email, CommunicationChannelType.InApp, CommunicationChannelType.WhatsApp, CommunicationChannelType.WebPush], [_template],
 			NotificationRuleTimingConfiguration.Default, "en");
 		var rule = new NotificationRule(Guid.NewGuid(), _tenantId, EventKey, NotificationRuleScope.Create());
 		rule.Configure(true, codec.Serialize(config, definition), rule.ConcurrencyStamp);
@@ -70,6 +72,7 @@ public class NotificationDispatchPlanner_Tests
 		var inbox = AddVersion(2, CommunicationChannelType.InApp, "en", "{{task_title}}");
 		AddVersion(3, CommunicationChannelType.Email, "en", "Unpinned future content");
 		var whatsApp = AddVersion(4, CommunicationChannelType.WhatsApp, "en", "Homework: {{task_title}}");
+		var webPush = AddVersion(5, CommunicationChannelType.WebPush, "en", "There is a new homework update.");
 		pin.Retire();
 		var sourceId = Guid.NewGuid();
 		var operation = new CommunicationCampaign(Guid.NewGuid(), _tenantId) {
@@ -78,7 +81,7 @@ public class NotificationDispatchPlanner_Tests
 		_intent = new(Guid.NewGuid(), _tenantId, rule.Id, rule.Revision, EventKey, definition.SourceType, sourceId, "v1",
 			"test-deduplication-key", Now.AddHours(-1), Now.AddHours(-1),
 			NotificationRuntimeJson.Serialize(new[] { _child, _sibling }, NotificationErrorCodes.RuntimeSnapshotInvalid),
-			NotificationRuntimeJson.Serialize(new[] { pin.Id, inbox.Id, whatsApp.Id }, NotificationErrorCodes.TemplateInvalid), Now.AddDays(1));
+			NotificationRuntimeJson.Serialize(new[] { pin.Id, inbox.Id, whatsApp.Id, webPush.Id }, NotificationErrorCodes.TemplateInvalid), Now.AddDays(1));
 		_intent.BindRuntimeSnapshot(snapshotCodec.Serialize(new(1, new(), config), definition), NotificationIntentOrigin.Automatic);
 		_intent.BindAutomaticOperation(operation.Id);
 		SetClaim(nameof(NotificationIntent.Status), NotificationIntentState.Processing);
@@ -95,10 +98,16 @@ public class NotificationDispatchPlanner_Tests
 		var queries = new AsyncQueryableExecuter([]);
 		var settings = Substitute.For<ISettingManager>();
 		settings.GetOrNullAsync(NotificationSettingNames.SchoolTimeZone, "T", _tenantId.ToString(), false).Returns("UTC");
+		using var vapid = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+		var pushKeys = vapid.ExportParameters(true);
 		var app = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
 			["App:ClientUrl"] = "https://school.example.invalid",
 			["Notifications:WhatsApp:GraphApiVersion"] = "v26.0",
-			[$"Notifications:WhatsApp:Tenants:{_tenantId:N}:AccessTokens:main"] = "fixture"
+			[$"Notifications:WhatsApp:Tenants:{_tenantId:N}:AccessTokens:main"] = "fixture",
+			["Notifications:WebPush:AllowedOrigins:0"] = "https://push.example.test",
+			["Notifications:WebPush:KeyVersion"] = "local-v1",
+			["Notifications:WebPush:PublicKey"] = Encode([4, .. pushKeys.Q.X!, .. pushKeys.Q.Y!]),
+			["Notifications:WebPush:PrivateKey"] = Encode(pushKeys.D!)
 		}).Build();
 		var validator = new NotificationTemplateVariableValidator([catalogue], app);
 		_compiler = new(validator);
@@ -115,9 +124,30 @@ public class NotificationDispatchPlanner_Tests
 			[resolver], new(_tenant, new(_tenant, Repository<NotificationRule>([rule]), queries), Repository(_preferences),
 				Repository(_consents), queries, new(_tenant, settings), new()),
 			new(_tenant, Repository(_providers), queries), new(_tenant, revisionRows, queries, renderer, new(app, validator), _protector, ids,
-				new(_tenant, Repository(_providers), queries, app), new(_tenant, Repository(_bindings), queries)),
+				new(_tenant, Repository(_providers), queries, app), new(_tenant, Repository(_bindings), queries),
+				new(_tenant, Repository(_subscriptions), queries, new(app))),
 			Repository<NotificationIntent>([_intent]), Repository<CommunicationCampaign>([operation]),
 			Repository(_dispatches), Repository(_evidence), queries, ids);
+	}
+
+	[Fact]
+	public async Task Web_push_plans_separate_attempts_for_active_browsers_of_the_exact_guardian()
+	{
+		var phone = Device(_tenantId, _contactUser, "local-v1");
+		var desktop = Device(_tenantId, _contactUser, "local-v1");
+		var disabled = Device(_tenantId, _contactUser, "local-v1");
+		disabled.Disable();
+		_subscriptions.AddRange([phone, desktop, disabled, Device(Guid.NewGuid(), _contactUser, "local-v1"),
+			Device(_tenantId, Guid.NewGuid(), "local-v1"), Device(_tenantId, _contactUser, "previous-key")]);
+		_recipients.Add(Guardian(_child, CommunicationChannelType.WebPush));
+
+		await _planner.PlanAsync(_claim, default);
+
+		_dispatches.Count.ShouldBe(2);
+		_dispatches.Select(x => x.DeduplicationKey).Distinct().Count().ShouldBe(2);
+		_dispatches.Select(x => _protector.Unprotect(x).Destination)
+			.ShouldBe([phone.Id.ToString("N"), desktop.Id.ToString("N")], ignoreOrder: true);
+		_dispatches.ShouldAllBe(x => x.ProviderSettingId == null && x.Channel == CommunicationChannelType.WebPush);
 	}
 
 	[Theory]
@@ -285,6 +315,11 @@ public class NotificationDispatchPlanner_Tests
 	}
 
 	private void SetClaim(string property, object value) => typeof(NotificationIntent).GetProperty(property)!.SetValue(_intent, value);
+
+	private static WebPushSubscription Device(Guid tenant, Guid user, string version) =>
+		new(Guid.NewGuid(), tenant, user, Guid.NewGuid(), Guid.NewGuid().ToString("N"), "protected", version, Now);
+
+	private static string Encode(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
 	private static Dictionary<string, NotificationVariableValueDto> Variables(string title) => new() {
 		["school_name"] = new(NotificationVariableType.Text, "School Example"),

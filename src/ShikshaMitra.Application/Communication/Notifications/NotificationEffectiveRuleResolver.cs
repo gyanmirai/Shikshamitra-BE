@@ -39,6 +39,7 @@ public sealed class NotificationEffectiveRuleResolver(ICurrentTenant tenant, IRe
 			ancestors.Add(NotificationRuleScope.Create(sourceScope.AcademicYearId, depth >= 2 ? sourceScope.BoardId : null,
 				depth >= 3 ? sourceScope.MediumId : null, depth >= 4 ? sourceScope.ClassId : null, depth >= 5 ? sourceScope.DivisionId : null).Key);
 		var keys = ancestors.ToArray();
+		using var tracking = rules.DisableTracking();
 		var rows = await executer.ToListAsync((await rules.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
 			x.EventKey == eventKey && Enumerable.Contains(keys, x.ScopeKey)), cancellationToken);
 		if (rows.GroupBy(x => x.ScopeKey, StringComparer.Ordinal).Any(x => x.Count() > 1)) throw new BusinessException(NotificationErrorCodes.StateConflict);

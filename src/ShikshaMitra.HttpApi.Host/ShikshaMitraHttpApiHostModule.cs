@@ -601,6 +601,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		await ConfigureSmtpPasswordAsync(context.ServiceProvider);
 		await context.AddBackgroundWorkerAsync<AssignmentScheduledPublicationWorker>();
 		await context.AddBackgroundWorkerAsync<AcademicNotificationDispatchWorker>();
+		await context.AddBackgroundWorkerAsync<AcademicNotificationReminderWorker>();
 		await context.AddBackgroundWorkerAsync<AdmissionCycleScheduleWorker>();
 		await context.AddBackgroundWorkerAsync<StudentRecordScheduleWorker>();
 		await context.AddBackgroundWorkerAsync<StudentRecordReportWorker>();

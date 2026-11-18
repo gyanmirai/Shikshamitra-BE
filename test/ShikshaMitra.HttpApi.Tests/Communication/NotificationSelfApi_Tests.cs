@@ -24,12 +24,14 @@ public partial class NotificationSelfApi_Tests(ShikshaMitraApiTestFactory factor
 	private const string Route = "/api/communication/notifications/me";
 
 	[Fact]
-	public void The_host_container_resolves_the_academic_worker_and_its_tenant_queue()
+	public void The_host_container_resolves_academic_workers_and_their_tenant_services()
 	{
 		using var scope = Factory.Services.CreateScope();
 		scope.ServiceProvider.GetRequiredService<AcademicNotificationDispatchWorker>().ShouldNotBeNull();
+		scope.ServiceProvider.GetRequiredService<AcademicNotificationReminderWorker>().ShouldNotBeNull();
 		scope.ServiceProvider.GetRequiredService<NotificationTenantQueueRunner>().ShouldNotBeNull();
 		scope.ServiceProvider.GetRequiredService<INotificationQueueRepository>().ShouldNotBeNull();
+		scope.ServiceProvider.GetRequiredService<INotificationDueScheduler>().ShouldNotBeNull();
 	}
 
 	[Fact]

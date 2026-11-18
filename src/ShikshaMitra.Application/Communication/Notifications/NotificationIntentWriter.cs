@@ -23,7 +23,10 @@ public sealed class NotificationIntentWriter(ICurrentTenant tenant, IUnitOfWorkM
 	IAsyncQueryableExecuter executer, IGuidGenerator guids, IDataFilter filters) : INotificationIntentWriter, ITransientDependency
 {
 	private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-	public async Task<Guid?> WriteAsync(NotificationEventInput input, CancellationToken cancellationToken)
+	public async Task<Guid?> WriteAsync(NotificationEventInput input, CancellationToken cancellationToken) =>
+		(await WriteWithOutcomeAsync(input, cancellationToken)).OperationId;
+
+	public async Task<NotificationIntentWriteResult> WriteWithOutcomeAsync(NotificationEventInput input, CancellationToken cancellationToken)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
@@ -33,8 +36,12 @@ public sealed class NotificationIntentWriter(ICurrentTenant tenant, IUnitOfWorkM
 		var moduleName = definition.EventKey.Split('.')[0];
 		if (!Enum.GetNames<CommunicationSourceModule>().Contains(moduleName, StringComparer.Ordinal)) throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
 		var module = Enum.Parse<CommunicationSourceModule>(moduleName);
-		var eventHash = Hash(JsonSerializer.Serialize(new { tenantId, input.EventKey, input.SourceType, input.SourceId, input.SourceRevision,
-			Occurrence = definition.TriggerType == NotificationTriggerType.Due ? input.DueAt?.ToUniversalTime() : null }, Json));
+		var eventIdentity = input.DueOccurrence is { } occurrence
+			? JsonSerializer.Serialize(new { tenantId, input.EventKey, input.SourceType, input.SourceId, input.SourceRevision,
+				Occurrence = occurrence.OccurrenceAt.ToUniversalTime(), occurrence.Scope }, Json)
+			: JsonSerializer.Serialize(new { tenantId, input.EventKey, input.SourceType, input.SourceId, input.SourceRevision,
+				Occurrence = definition.TriggerType == NotificationTriggerType.Due ? input.DueAt?.ToUniversalTime() : null }, Json);
+		var eventHash = Hash(eventIdentity);
 		var reference = "notification-event:" + eventHash;
 		await unit.SaveChangesAsync(cancellationToken);
 		await writeLock.AcquireAsync(eventHash, cancellationToken);
@@ -43,10 +50,10 @@ public sealed class NotificationIntentWriter(ICurrentTenant tenant, IUnitOfWorkM
 			var previous = await executer.ToListAsync((await campaigns.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
 				x.CampaignType == NotificationCampaignTypes.Academic && x.SourceReference == reference).Select(x => x.Id).Take(2), cancellationToken);
 			if (previous.Count > 1) throw new BusinessException(NotificationErrorCodes.StateConflict);
-			if (previous.Count == 1) return previous[0];
+			if (previous.Count == 1) return new(previous[0], false);
 		}
 		var plan = await planner.PlanAsync(input, definition, cancellationToken);
-		if (plan.Count == 0) return null;
+		if (plan.Count == 0) return new(null, false);
 		var sendable = plan.Where(x => !x.CaptureOutcome.HasValue).ToArray();
 		var operation = new CommunicationCampaign(guids.Create(), tenantId) {
 			CampaignType = NotificationCampaignTypes.Academic, SourceModule = module, SourceEntityType = input.SourceType, SourceEntityId = input.SourceId,
@@ -68,7 +75,8 @@ public sealed class NotificationIntentWriter(ICurrentTenant tenant, IUnitOfWorkM
 			if (item.CaptureOutcome.HasValue) intent.StopBeforePlanning(item.CaptureOutcome.Value, item.ErrorCode ?? NotificationErrorCodes.RuntimeSnapshotInvalid);
 			await intents.InsertAsync(intent, cancellationToken: cancellationToken);
 		}
-		await unit.SaveChangesAsync(cancellationToken); return operation.Id;
+		await unit.SaveChangesAsync(cancellationToken);
+		return new(operation.Id, true);
 	}
 	private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 }

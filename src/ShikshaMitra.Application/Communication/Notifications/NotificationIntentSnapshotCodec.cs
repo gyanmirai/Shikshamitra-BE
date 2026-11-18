@@ -19,6 +19,8 @@ public sealed class NotificationIntentSnapshotCodec(NotificationRuleConfiguratio
 	private void Validate(NotificationIntentRuntimeSnapshot? snapshot, NotificationEventDefinition definition)
 	{
 		if (snapshot?.SchemaVersion != 1 || snapshot.SourceScope == null || snapshot.Configuration == null) throw Invalid();
+		if (snapshot.DueOccurrenceAt.HasValue && (definition.TriggerType != NotificationTriggerType.Due ||
+			snapshot.DueOccurrenceAt.Value == default)) throw Invalid();
 		try
 		{
 			var scope = snapshot.SourceScope;

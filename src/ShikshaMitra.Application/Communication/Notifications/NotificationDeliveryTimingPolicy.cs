@@ -36,12 +36,12 @@ public sealed class NotificationDeliveryTimingPolicy : ITransientDependency
 	private static NotificationTimingDecision Decision(DateTimeOffset due, DateTimeOffset? expiresAt) =>
 		expiresAt.HasValue && due >= expiresAt.Value ? new(null, true) : new(due, false);
 
-	private static DateTimeOffset Boundary(DateTime local, TimeZoneInfo zone, bool later)
+	internal static DateTimeOffset Boundary(DateTime local, TimeZoneInfo zone, bool later)
 	{
 		// A skipped local minute must advance, while repeated quiet hours cover both occurrences.
 		for (var minute = 0; zone.IsInvalidTime(local); minute++)
 		{
-			if (minute == 2880) throw new ArgumentException("The school timezone has no valid quiet-hour boundary.");
+			if (minute == 2880) throw new ArgumentException("The school timezone has no valid local time near this date.");
 			local = local.AddMinutes(1);
 		}
 		if (zone.IsAmbiguousTime(local))

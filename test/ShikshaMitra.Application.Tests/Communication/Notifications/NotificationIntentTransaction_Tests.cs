@@ -153,11 +153,67 @@ public class NotificationIntentTransaction_Tests
 		_operations.Count.ShouldBe(2);
 	}
 	[Fact]
+	public async Task Scoped_reminders_share_a_deadline_without_sharing_an_operation()
+	{
+		_rules.Clear(); _versions.Clear(); AddRule("Academic.Homework.Due");
+		var firstStudent = _source.Snapshot.EligibleRecipients.Single();
+		var secondStudent = firstStudent with { StudentId = Guid.NewGuid() };
+		var secondScope = _scope with { ClassId = Guid.NewGuid() };
+		_source.Snapshot = _source.Snapshot with {
+			EligibleRecipients = [firstStudent, secondStudent],
+			AudienceSlices = [new(_scope, [firstStudent]), new(secondScope, [secondStudent])]
+		};
+		var occurrence = new NotificationDueOccurrenceDto(_scope, Now.AddDays(2), _rule.Id, _rule.Revision);
+		var input = _input with { EventKey = "Academic.Homework.Due", DueAt = Now.AddDays(1), DueOccurrence = occurrence };
+
+		var first = await _writer.WriteAsync(input, default);
+		var second = await _writer.WriteAsync(input with { DueOccurrence = occurrence with { Scope = secondScope } }, default);
+
+		first.ShouldNotBeNull(); second.ShouldNotBeNull(); first.ShouldNotBe(second);
+		(await _writer.WriteAsync(input with { DueAt = input.DueAt!.Value.AddHours(1) }, default)).ShouldBe(first);
+		_intents.Count.ShouldBe(2);
+		JsonSerializer.Deserialize<NotificationRecipientRefDto[]>(_intents.Single(x => x.CampaignId == first).AffectedRecipientsJson, Json)
+			.ShouldBe(new[] { firstStudent });
+		JsonSerializer.Deserialize<NotificationRecipientRefDto[]>(_intents.Single(x => x.CampaignId == second).AffectedRecipientsJson, Json)
+			.ShouldBe(new[] { secondStudent });
+		var snapshot = new NotificationIntentSnapshotCodec(_configuration).Deserialize(_intents[0].RuleConfigurationJson, _catalogue.Get(input.EventKey));
+		snapshot.DueOccurrenceAt.ShouldBe(occurrence.OccurrenceAt);
+	}
+	[Fact]
+	public async Task A_scoped_reminder_requires_the_resolved_rule_revision_and_a_current_source_slice()
+	{
+		_rules.Clear(); _versions.Clear(); AddRule("Academic.Homework.Due");
+		var occurrence = new NotificationDueOccurrenceDto(_scope, Now.AddDays(2), _rule.Id, _rule.Revision);
+		var input = _input with { EventKey = "Academic.Homework.Due", DueAt = Now.AddDays(1) };
+
+		(await _writer.WriteAsync(input with { DueOccurrence = occurrence with { RuleRevision = _rule.Revision + 1 } }, default)).ShouldBeNull();
+		(await _writer.WriteAsync(input with { DueOccurrence = occurrence with { Scope = _scope with { ClassId = Guid.NewGuid() } } }, default)).ShouldBeNull();
+		_operations.ShouldBeEmpty();
+		_intents.ShouldBeEmpty();
+		(await _writer.WriteAsync(input with { DueOccurrence = occurrence }, default)).ShouldNotBeNull();
+	}
+	[Fact]
 	public async Task A_quiet_hour_deferral_that_reaches_expiry_is_recorded_as_expired()
 	{
 		_source.Snapshot = _source.Snapshot with { ExpiresAt = new(2026, 11, 18, 23, 0, 0, TimeSpan.Zero) };
 		(await _writer.WriteAsync(_input with { OccurredAt = new(2026, 11, 18, 15, 0, 0, TimeSpan.Zero) }, default)).ShouldNotBeNull();
 		_intents.Count.ShouldBe(1); _intents[0].Status.ShouldBe(NotificationIntentState.Expired);
+	}
+	[Fact]
+	public async Task An_overdue_reminder_cannot_send_after_its_window_when_quiet_hours_defer_it()
+	{
+		const string overdue = "Academic.Homework.Overdue";
+		_rules.Clear(); _versions.Clear(); AddRule(overdue);
+		var occurrence = Now.AddHours(6);
+		var input = _input with {
+			EventKey = overdue, OccurredAt = occurrence.AddMinutes(5), DueAt = occurrence, ExpiresAt = occurrence.AddHours(4),
+			DueOccurrence = new(_scope, occurrence, _rule.Id, _rule.Revision)
+		};
+
+		(await _writer.WriteAsync(input, default)).ShouldNotBeNull();
+
+		_intents.Single().Status.ShouldBe(NotificationIntentState.Expired);
+		_operations.Single().Status.ShouldBe(CommunicationCampaignStatus.Cancelled);
 	}
 	[Fact]
 	public async Task Cancellation_does_not_flush_or_start_capture()
@@ -186,7 +242,7 @@ public class NotificationIntentTransaction_Tests
 	{
 		public NotificationSourceSnapshot Snapshot { get; set; } = snapshot;
 		public int Calls { get; private set; }
-		public IReadOnlyCollection<string> EventKeys => ["Academic.Homework.Published", "Academic.Homework.Due"];
+		public IReadOnlyCollection<string> EventKeys => ["Academic.Homework.Published", "Academic.Homework.Due", "Academic.Homework.Overdue"];
 		public Task<NotificationSourceSnapshot> LoadAsync(NotificationIntentContext context, CancellationToken cancellationToken)
 		{
 			Calls++; trace.Add("source"); return Task.FromResult(Snapshot);

@@ -32,6 +32,15 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 		if (definition.TriggerType == NotificationTriggerType.Manual) throw new BusinessException(NotificationErrorCodes.UseWorkflow);
 		if (definition.SourceType != input.SourceType || definition.TriggerType == NotificationTriggerType.Due && !input.DueAt.HasValue ||
 			sources.Count(x => x.EventKeys.Contains(input.EventKey)) != 1) throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
+		if (input.DueOccurrence is { } occurrence)
+		{
+			if (definition.TriggerType != NotificationTriggerType.Due || occurrence.Scope == null ||
+				occurrence.RuleId == Guid.Empty || occurrence.RuleRevision < 1 || occurrence.OccurrenceAt == default)
+				throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
+			var scope = occurrence.Scope;
+			try { _ = NotificationRuleScope.Create(scope.AcademicYearId, scope.BoardId, scope.MediumId, scope.ClassId, scope.DivisionId); }
+			catch (ArgumentException) { throw new BusinessException(NotificationErrorCodes.SourceUnavailable); }
+		}
 		return definition;
 	}
 	public async Task<IReadOnlyList<NotificationIntentCaptureItem>> PlanAsync(NotificationEventInput input, NotificationEventDefinition definition,
@@ -39,10 +48,11 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
-		var source = await sources.Single(x => x.EventKeys.Contains(input.EventKey)).LoadAsync(new(Guid.Empty, tenantId, input.EventKey,
-			input.SourceType, input.SourceId, input.SourceRevision, input.OccurredAt, input.AffectedRecipients), cancellationToken);
-		var scoped = partitions.Partition(new(Guid.Empty, tenantId, input.EventKey, input.SourceType, input.SourceId, input.SourceRevision,
-			input.OccurredAt, input.AffectedRecipients), definition, source);
+		var occurrence = input.DueOccurrence;
+		var context = new NotificationIntentContext(Guid.Empty, tenantId, input.EventKey, input.SourceType, input.SourceId,
+			input.SourceRevision, input.OccurredAt, input.AffectedRecipients, occurrence?.Scope, occurrence?.OccurrenceAt);
+		var source = await sources.Single(x => x.EventKeys.Contains(input.EventKey)).LoadAsync(context, cancellationToken);
+		var scoped = partitions.Partition(context, definition, source);
 		var expiry = input.ExpiresAt.HasValue && source.ExpiresAt.HasValue
 			? (input.ExpiresAt.Value < source.ExpiresAt.Value ? input.ExpiresAt : source.ExpiresAt) : input.ExpiresAt ?? source.ExpiresAt;
 		var resolved = new Dictionary<string, NotificationRule?>(StringComparer.Ordinal);
@@ -54,11 +64,15 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 		foreach (var partition in scoped)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
+			var scope = new NotificationSourceScopeDto(partition.Scope.AcademicYearId, partition.Scope.BoardId, partition.Scope.MediumId,
+				partition.Scope.ClassId, partition.Scope.DivisionId);
+			if (occurrence != null && occurrence.Scope != scope) continue;
 			if (!resolved.TryGetValue(partition.Scope.Key, out var rule))
 			{
 				rule = await rules.ResolveAsync(input.EventKey, partition.Scope, cancellationToken); resolved[partition.Scope.Key] = rule;
 			}
 			if (rule is not { IsEnabled: true }) continue;
+			if (occurrence != null && (rule.Id != occurrence.RuleId || rule.Revision != occurrence.RuleRevision)) continue;
 			var key = (rule.Id, rule.Revision);
 			if (!configured.TryGetValue(key, out var config))
 			{
@@ -78,8 +92,7 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 			var snapshot = "{}"; var due = input.DueAt ?? input.OccurredAt;
 			try
 			{
-				snapshot = snapshots.Serialize(new(1, new(partition.Scope.AcademicYearId, partition.Scope.BoardId, partition.Scope.MediumId,
-					partition.Scope.ClassId, partition.Scope.DivisionId), config.Value), definition);
+				snapshot = snapshots.Serialize(new(1, scope, config.Value, occurrence?.OccurrenceAt.ToUniversalTime()), definition);
 				due = due.AddMinutes(config.Value.Timing.DelayMinutes);
 				zone ??= schoolZone.GetAsync(cancellationToken);
 				var decision = timing.Evaluate(due, await zone, config.Value.Timing.QuietHoursEnabled, config.Value.Timing.QuietStart,

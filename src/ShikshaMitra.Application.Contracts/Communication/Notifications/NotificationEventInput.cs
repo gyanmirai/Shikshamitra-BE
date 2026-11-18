@@ -9,12 +9,17 @@ public sealed record NotificationRecipientRefDto(string Kind, Guid? StudentId = 
 public sealed record NotificationEventInput(
 	string EventKey, string SourceType, Guid SourceId, string SourceRevision,
 	DateTimeOffset OccurredAt, IReadOnlyList<NotificationRecipientRefDto> AffectedRecipients,
-	Guid? ActorUserId = null, DateTimeOffset? DueAt = null, DateTimeOffset? ExpiresAt = null);
+	Guid? ActorUserId = null, DateTimeOffset? DueAt = null, DateTimeOffset? ExpiresAt = null,
+	NotificationDueOccurrenceDto? DueOccurrence = null);
+
+public sealed record NotificationDueOccurrenceDto(NotificationSourceScopeDto Scope, DateTimeOffset OccurrenceAt,
+	Guid RuleId, int RuleRevision);
 
 public sealed record NotificationIntentContext(
 	Guid IntentId, Guid TenantId, string EventKey, string SourceType, Guid SourceId,
 	string SourceRevision, DateTimeOffset OccurredAt,
-	IReadOnlyList<NotificationRecipientRefDto> AffectedRecipients);
+	IReadOnlyList<NotificationRecipientRefDto> AffectedRecipients,
+	NotificationSourceScopeDto? SourceScope = null, DateTimeOffset? DueOccurrenceAt = null);
 
 public sealed record NotificationVariableValueDto(NotificationVariableType Type, string? Value);
 

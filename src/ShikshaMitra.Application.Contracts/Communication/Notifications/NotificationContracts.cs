@@ -8,7 +8,10 @@ namespace ShikshaMitra.Communication.Notifications;
 public interface INotificationIntentWriter
 {
 	Task<Guid?> WriteAsync(NotificationEventInput input, CancellationToken cancellationToken);
+	Task<NotificationIntentWriteResult> WriteWithOutcomeAsync(NotificationEventInput input, CancellationToken cancellationToken);
 }
+
+public sealed record NotificationIntentWriteResult(Guid? OperationId, bool Created);
 
 public interface INotificationSourceAdapter
 {

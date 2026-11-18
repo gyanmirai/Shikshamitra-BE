@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Communication;
 using ShikshaMitra.EntityFrameworkCore.Communication;
 using ShikshaMitra.EntityFrameworkCore.Communication.Notifications;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Communication.Notifications;
@@ -34,5 +36,8 @@ public sealed class NotificationPersistenceTestDbContext(DbContextOptions<Notifi
 		builder.ApplyConfiguration(new NotificationScheduleCursorConfiguration());
 		builder.ApplyConfiguration(new NotificationProviderEventConfiguration());
 		builder.ApplyConfiguration(new NotificationSendReviewConfiguration());
+		builder.Entity<AcademicYear>().ConfigureByConvention();
+		builder.ApplyConfiguration(new AcademicCalendarConfiguration());
+		builder.ApplyConfiguration(new AcademicCalendarDayConfiguration());
 	}
 }

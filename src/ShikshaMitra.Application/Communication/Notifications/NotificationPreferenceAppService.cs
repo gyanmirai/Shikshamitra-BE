@@ -23,8 +23,6 @@ public class NotificationPreferenceAppService(NotificationSelfIdentity identity,
 	: ApplicationService, INotificationPreferenceAppService
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-	private sealed record Configuration(IReadOnlyList<CommunicationChannelType> EnabledChannels,
-		bool QuietHoursEnabled, string? QuietHoursStart, string? QuietHoursEnd);
 
 	public virtual async Task<IReadOnlyList<NotificationPreferenceDto>> GetListAsync(CancellationToken cancellationToken = default)
 	{
@@ -52,7 +50,7 @@ public class NotificationPreferenceAppService(NotificationSelfIdentity identity,
 			x.TenantId == owner.TenantId && x.UserId == owner.UserId && x.ContextKey == context && x.Category == input.Category && !x.IsDeleted), cancellationToken);
 		if (row == null ? !string.IsNullOrEmpty(input.ConcurrencyStamp) : row.ConcurrencyStamp != input.ConcurrencyStamp)
 			throw new AbpDbConcurrencyException();
-		var configuration = new Configuration(input.EnabledChannels.Distinct().ToArray(), input.QuietHoursEnabled,
+		var configuration = new NotificationPreferenceConfiguration(input.EnabledChannels.Distinct().ToArray(), input.QuietHoursEnabled,
 			input.QuietHoursEnabled ? input.QuietHoursStart : null, input.QuietHoursEnabled ? input.QuietHoursEnd : null);
 		var isNew = row == null;
 		row ??= new(GuidGenerator.Create(), owner.TenantId, owner.UserId, input.Category, input.StudentId);
@@ -64,7 +62,7 @@ public class NotificationPreferenceAppService(NotificationSelfIdentity identity,
 
 	private static NotificationPreferenceDto Map(NotificationPreference row)
 	{
-		var configuration = JsonSerializer.Deserialize<Configuration>(row.ConfigurationJson, JsonOptions);
+		var configuration = JsonSerializer.Deserialize<NotificationPreferenceConfiguration>(row.ConfigurationJson, JsonOptions);
 		return new(row.Category, row.StudentId, configuration?.EnabledChannels ?? [], row.LanguageCode,
 			configuration?.QuietHoursEnabled ?? false, configuration?.QuietHoursStart, configuration?.QuietHoursEnd, row.ConcurrencyStamp);
 	}

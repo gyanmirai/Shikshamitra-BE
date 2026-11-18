@@ -16,6 +16,19 @@ public sealed class NotificationEffectiveRuleResolver(ICurrentTenant tenant, IRe
 	IAsyncQueryableExecuter executer) : ITransientDependency
 {
 	public async Task<NotificationRule?> ResolveAsync(string eventKey, NotificationRuleScope sourceScope, CancellationToken cancellationToken = default)
+		=> (await GetApplicableAsync(eventKey, sourceScope, cancellationToken)).FirstOrDefault();
+
+	internal async Task<bool> IsEnabledForIntentAsync(NotificationIntent intent, NotificationRuleScope sourceScope,
+		CancellationToken cancellationToken)
+	{
+		if (!tenant.Id.HasValue || tenant.Id != intent.TenantId) throw new BusinessException(NotificationErrorCodes.TenantRequired);
+		var applicable = await GetApplicableAsync(intent.EventKey, sourceScope, cancellationToken);
+		return applicable.FirstOrDefault() is { IsEnabled: true } &&
+			applicable.Any(x => x.Id == intent.RuleId && x.IsEnabled && x.Revision >= intent.RuleRevision);
+	}
+
+	private async Task<IReadOnlyList<NotificationRule>> GetApplicableAsync(string eventKey, NotificationRuleScope sourceScope,
+		CancellationToken cancellationToken)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
@@ -29,6 +42,6 @@ public sealed class NotificationEffectiveRuleResolver(ICurrentTenant tenant, IRe
 		var rows = await executer.ToListAsync((await rules.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
 			x.EventKey == eventKey && Enumerable.Contains(keys, x.ScopeKey)), cancellationToken);
 		if (rows.GroupBy(x => x.ScopeKey, StringComparer.Ordinal).Any(x => x.Count() > 1)) throw new BusinessException(NotificationErrorCodes.StateConflict);
-		return rows.OrderByDescending(x => Array.IndexOf(keys, x.ScopeKey)).FirstOrDefault();
+		return rows.OrderByDescending(x => Array.IndexOf(keys, x.ScopeKey)).ToArray();
 	}
 }

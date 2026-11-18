@@ -19,6 +19,8 @@ public sealed class NotificationPersistenceTestDbContext(DbContextOptions<Notifi
 		builder.Entity<CommunicationCampaign>().ToTable("CommunicationCampaigns");
 		builder.Entity<CommunicationCampaign>().Ignore(x => x.AnnouncementType);
 		builder.ApplyConfiguration(new ChannelProviderSettingConfiguration());
+		builder.Entity<ConsentRecord>().ConfigureByConvention();
+		builder.ApplyConfiguration(new ConsentRecordConfiguration());
 		builder.ApplyConfiguration(new NotificationRuleConfiguration());
 		builder.ApplyConfiguration(new NotificationTemplateRevisionConfiguration());
 		builder.ApplyConfiguration(new WhatsAppTemplateBindingConfiguration());

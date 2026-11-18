@@ -30,4 +30,9 @@ public class AcademicNotificationController(IAcademicNotificationCatalogueAppSer
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Add)]
 	public Task<AcademicNotificationRuleDto> SaveRuleAsync(string eventKey, [FromBody] SaveAcademicNotificationRuleDto input,
 		CancellationToken cancellationToken) => rules.SaveAsync(eventKey, input, cancellationToken);
+
+	[HttpPost("rules/{eventKey}/preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Add)]
+	public Task<AcademicNotificationRulePreviewDto> PreviewRuleAsync(string eventKey, [FromBody] PreviewAcademicNotificationRuleDto input,
+		CancellationToken cancellationToken) => rules.PreviewAsync(eventKey, input, cancellationToken);
 }

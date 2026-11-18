@@ -23,23 +23,32 @@ public sealed class AcademicNotificationAccessService(ICurrentTenant tenant, ICu
 	IEnumerable<INotificationSourceAdapter> adapters, IEnumerable<IAcademicNotificationSourceAuthorizer> authorizers,
 	AcademicNotificationCatalogue catalogue) : IAcademicNotificationAccessService, ITransientDependency
 {
-	public async Task<AcademicNotificationAccessContext> RequireSendAsync(AcademicNotificationAudienceInput input,
-		CancellationToken cancellationToken)
+	public Task<AcademicNotificationAccessContext> RequireSendAsync(AcademicNotificationAudienceInput input,
+		CancellationToken cancellationToken) => RequireSourceAsync(input.EventKey, input.SourceType, input.SourceId,
+		ShikshaMitraSubmodulePermissions.Academics.Notification.Send, cancellationToken);
+
+	internal Task<AcademicNotificationAccessContext> RequireRulePreviewAsync(string eventKey, string sourceType, Guid sourceId,
+		CancellationToken cancellationToken) => RequireSourceAsync(eventKey, sourceType, sourceId,
+		ShikshaMitraSubmodulePermissions.Academics.Notification.Add, cancellationToken);
+
+	private async Task<AcademicNotificationAccessContext> RequireSourceAsync(string eventKey, string sourceType, Guid sourceId,
+		string permission, CancellationToken cancellationToken)
 	{
 		var (tenantId, actorId, scope) = await AcademicNotificationIdentityAccess.RequireAsync(tenant, current, users,
-			scopes, permissions, ShikshaMitraSubmodulePermissions.Academics.Notification.Send, cancellationToken);
-		var definition = catalogue.Get(input.EventKey);
-		if (input.SourceType != definition.SourceType || input.SourceId == Guid.Empty)
+			scopes, permissions, permission, cancellationToken);
+		var definition = catalogue.Get(eventKey);
+		if (sourceType != definition.SourceType || sourceId == Guid.Empty)
 			throw new BusinessException(NotificationErrorCodes.RecipientIneligible);
-		catalogue.EnsureAvailable(input.EventKey);
-		var sources = adapters.Where(x => x.EventKeys.Contains(input.EventKey)).ToArray();
-		var guards = authorizers.Where(x => x.EventKeys.Contains(input.EventKey)).ToArray();
+		catalogue.EnsureAvailable(eventKey);
+		var sources = adapters.Where(x => x.EventKeys.Contains(eventKey)).Take(2).ToArray();
+		var guards = authorizers.Where(x => x.EventKeys.Contains(eventKey)).Take(2).ToArray();
 		if (sources.Length != 1 || guards.Length != 1) throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
-		await guards[0].EnsureCanSendAsync(input.EventKey, input.SourceId, cancellationToken);
-		var snapshot = await sources[0].LoadAsync(new(Guid.Empty, tenantId, input.EventKey, input.SourceType,
-			input.SourceId, string.Empty, DateTimeOffset.UtcNow, []), cancellationToken);
+		await guards[0].EnsureCanSendAsync(eventKey, sourceId, cancellationToken);
+		var now = DateTimeOffset.UtcNow;
+		var snapshot = await sources[0].LoadAsync(new(Guid.Empty, tenantId, eventKey, sourceType,
+			sourceId, string.Empty, now, []), cancellationToken);
 		if (string.IsNullOrWhiteSpace(snapshot.SourceRevision)) throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
-		if (snapshot.ExpiresAt <= DateTimeOffset.UtcNow)
+		if (snapshot.ExpiresAt <= now)
 			snapshot = snapshot with { IsEligible = false, ExclusionCode = "SourceExpired", EligibleRecipients = [] };
 		return new(tenantId, actorId, scope, snapshot);
 	}

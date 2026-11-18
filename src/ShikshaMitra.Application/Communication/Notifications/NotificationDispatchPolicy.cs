@@ -44,7 +44,25 @@ public sealed class NotificationDispatchPolicy(ICurrentTenant tenant, Notificati
 		if (intent.Origin == NotificationIntentOrigin.Automatic && !await rules.IsEnabledForIntentAsync(intent,
 			NotificationRuleScope.Create(scope.AcademicYearId, scope.BoardId, scope.MediumId, scope.ClassId, scope.DivisionId), cancellationToken))
 			return new("RuleDisabled", []);
+		return await EvaluateRecipientsAsync(tenantId, source, recipients, now, intent.DueAt, expiresAt, emailRequiresOptIn, cancellationToken);
+	}
 
+	internal Task<NotificationDispatchPolicyResult> EvaluatePreviewAsync(NotificationCurrentSource source,
+		IReadOnlyList<NotificationRuntimeRecipient> recipients, DateTimeOffset now, DateTimeOffset dueAt,
+		bool emailRequiresOptIn, CancellationToken cancellationToken)
+	{
+		cancellationToken.ThrowIfCancellationRequested();
+		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty || source.TenantId != tenantId)
+			throw new BusinessException(NotificationErrorCodes.TenantRequired);
+		if (source.ExclusionCode != null) return Task.FromResult(new NotificationDispatchPolicyResult(source.ExclusionCode, []));
+		if (source.ExpiresAt <= now) return Task.FromResult(new NotificationDispatchPolicyResult("SourceExpired", []));
+		return EvaluateRecipientsAsync(tenantId, source, recipients, now, dueAt, source.ExpiresAt, emailRequiresOptIn, cancellationToken);
+	}
+
+	private async Task<NotificationDispatchPolicyResult> EvaluateRecipientsAsync(Guid tenantId, NotificationCurrentSource source,
+		IReadOnlyList<NotificationRuntimeRecipient> recipients, DateTimeOffset now, DateTimeOffset dueAt, DateTimeOffset? expiresAt,
+		bool emailRequiresOptIn, CancellationToken cancellationToken)
+	{
 		var config = source.Runtime.Configuration;
 		var roster = source.CurrentRecipients.ToHashSet();
 		var available = recipients.Where(x => x.IsEligible && roster.Contains(x.SourceRecipient) && config.Channels.Contains(x.Channel)).Distinct().ToArray();
@@ -53,7 +71,7 @@ public sealed class NotificationDispatchPolicy(ICurrentTenant tenant, Notificati
 		var reachable = available.Where(x => preferenceDecisions[x].ExclusionCode == null).ToArray();
 		var email = await ReadConsentsAsync(tenantId, reachable, CommunicationChannelType.Email, cancellationToken);
 		var whatsApp = await ReadConsentsAsync(tenantId, reachable, CommunicationChannelType.WhatsApp, cancellationToken);
-		var due = now < intent.DueAt ? intent.DueAt : now;
+		var due = now < dueAt ? dueAt : now;
 		Task<TimeZoneInfo>? zone = null;
 		var results = new List<NotificationRecipientDispatchDecision>(recipients.Count);
 		foreach (var recipient in recipients)

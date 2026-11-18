@@ -23,7 +23,8 @@ namespace ShikshaMitra.Academic.Notifications;
 public class AcademicNotificationRuleAppService(IRepository<IdentityUser, Guid> users, IUserScopeAccessService scopes,
 	IPermissionChecker permissions, AcademicNotificationCatalogue catalogue, AcademicNotificationRuleScopeAccess scopeAccess,
 	NotificationEffectiveRuleResolver effectiveRules, IRepository<NotificationRule, Guid> rules,
-	NotificationRuleConfigurationCodec codec, AcademicNotificationRuleTemplates templates, INotificationPersonalWriteLock writeLock)
+	NotificationRuleConfigurationCodec codec, AcademicNotificationRuleTemplates templates, INotificationPersonalWriteLock writeLock,
+	AcademicNotificationAccessService sourceAccess, AcademicNotificationRulePreview preview)
 	: ApplicationService, IAcademicNotificationRuleAppService
 {
 	public virtual async Task<PagedResultDto<AcademicNotificationRuleListItemDto>> GetListAsync(GetAcademicNotificationRulesDto input,
@@ -77,6 +78,19 @@ public class AcademicNotificationRuleAppService(IRepository<IdentityUser, Guid> 
 		if (isNew) await rules.InsertAsync(row, autoSave: true, cancellationToken: cancellationToken);
 		else if (row.Revision != revision) await rules.UpdateAsync(row, autoSave: true, cancellationToken: cancellationToken);
 		return Map(row, definition);
+	}
+
+	[UnitOfWork(false)]
+	public virtual async Task<AcademicNotificationRulePreviewDto> PreviewAsync(string eventKey, PreviewAcademicNotificationRuleDto input,
+		CancellationToken cancellationToken = default)
+	{
+		var definition = catalogue.Get(eventKey);
+		if (input.Rule == null || eventKey != input.Rule.EventKey) throw new BusinessException(NotificationErrorCodes.EventUnknown);
+		var context = await sourceAccess.RequireRulePreviewAsync(eventKey, input.SourceType, input.SourceId, cancellationToken);
+		var scope = await scopeAccess.RequireAsync(input.Rule.Scope, context.TenantId, context.Scope, cancellationToken);
+		var configuration = BuildConfiguration(input.Rule);
+		_ = codec.Serialize(configuration, definition, allowNoTemplates: true);
+		return await preview.BuildAsync(context, input.SourceId, definition, scope, configuration, cancellationToken);
 	}
 
 	private AcademicNotificationRuleDto Map(NotificationRule row, NotificationEventDefinition definition) =>

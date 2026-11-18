@@ -126,10 +126,11 @@ Do not repurpose a deployed school database for that test.
 ## Staff notification configuration checks
 
 ```powershell
-dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AcademicNotificationStaffApi_Tests"
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AcademicNotificationStaffApi_Tests|FullyQualifiedName~AcademicNotificationRulePreviewApi_Tests"
 ```
 
 The authenticated API fixture covers catalogue response fields, template initialization and synthetic preview, action permissions, published revision immutability, stale writes, disabled overrides, hierarchy validation and unsupported rule options.
+The source fixture exercises sibling-division exclusion, primary and optional family selection, source authorization and the ready-delivery count. It verifies that preview neither stores work nor returns actual recipient identities, contacts, or source text.
 
 ## Website push checks
 

@@ -25,6 +25,7 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 | `GET /catalogue` | View | Event schemas, audience options, source availability and channel configuration flags |
 | `GET /rules` | View | Paged event rules at a school, year, board, medium, class or division scope, with the effective rule and inheritance marker |
 | `PUT /rules/{eventKey}` | Add | Save an explicitly scoped rule and return its revision and concurrency stamp |
+| `POST /rules/{eventKey}/preview` | Add + source access | Preview a proposed `rule` for the given `sourceType` and `sourceId` |
 | `GET /templates` | View | Paged template headers for the selected `eventKey` and optional `academicMediumId` |
 | `GET /templates/{id}` and `/{id}/history` | View | Current template and revision history |
 | `GET /templates/{id}/preview/{revisionId}` | View | Render with synthetic values for review |
@@ -36,6 +37,8 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 Scope IDs form a contiguous tenant-owned hierarchy. A rule applies to the selected scope and its descendants. The nearest rule takes precedence, including a disabled override. Page items without a rule return a null `effectiveRule`. New overrides omit the concurrency stamp. Updates use the stamp of the exact rule being edited. A stale rule or draft write returns 409.
 
 Rules default to the primary guardian for family events. Other saved guardian relationships and the student account can be selected when the event supports them. Enabling a rule requires an available source and valid published template coverage for its audiences, channels and fallback language. Channel flags report configuration status. WhatsApp also requires approval for the selected template revision before dispatch.
+
+Rule preview uses the saved source audience within the proposed rule's scope. It reports eligible recipients after contact, preference, consent and timing checks, estimated ready deliveries per channel, and grouped exclusions. Ready delivery counts depend on published template coverage, channel setup, and current device or provider approval. Selected drafts can render fictional samples. The preview response omits recipient identities and destinations, and the request creates no rules, campaigns, or dispatches.
 
 Initializing defaults preserves previous edits and deletions and creates drafts without activating a rule.
 

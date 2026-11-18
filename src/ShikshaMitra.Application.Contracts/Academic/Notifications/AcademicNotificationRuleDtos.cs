@@ -56,10 +56,27 @@ public sealed record AcademicNotificationRuleDto(Guid Id, string EventKey, Acade
 public sealed record AcademicNotificationRuleListItemDto(string EventKey, AcademicNotificationScopeDto RequestedScope,
 	AcademicNotificationRuleDto? EffectiveRule, bool IsInherited);
 
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record PreviewAcademicNotificationRuleDto(string SourceType, Guid SourceId, SaveAcademicNotificationRuleDto Rule);
+
+public sealed record AcademicNotificationPreviewExclusionDto(string Code, int Count);
+
+public sealed record AcademicNotificationPreviewChannelDto(CommunicationChannelType Channel, int EligibleRecipientCount,
+	int ReadyDeliveryCount, IReadOnlyList<AcademicNotificationPreviewExclusionDto> Exclusions);
+
+public sealed record AcademicNotificationPreviewSampleDto(Guid TemplateId, Guid RevisionId, string RecipientKind,
+	CommunicationChannelType Channel, string LanguageCode, bool IsSynthetic, NotificationRenderResult Rendered);
+
+public sealed record AcademicNotificationRulePreviewDto(int EligibleRecipientCount,
+	IReadOnlyList<AcademicNotificationPreviewChannelDto> Channels, IReadOnlyList<AcademicNotificationPreviewSampleDto> Samples,
+	IReadOnlyList<string> BlockingIssues);
+
 public interface IAcademicNotificationRuleAppService : IApplicationService
 {
 	Task<PagedResultDto<AcademicNotificationRuleListItemDto>> GetListAsync(GetAcademicNotificationRulesDto input,
 		CancellationToken cancellationToken = default);
 	Task<AcademicNotificationRuleDto> SaveAsync(string eventKey, SaveAcademicNotificationRuleDto input,
+		CancellationToken cancellationToken = default);
+	Task<AcademicNotificationRulePreviewDto> PreviewAsync(string eventKey, PreviewAcademicNotificationRuleDto input,
 		CancellationToken cancellationToken = default);
 }

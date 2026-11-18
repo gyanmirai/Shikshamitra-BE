@@ -26,11 +26,15 @@ public sealed class NotificationTemplatePreviewService(INotificationTemplateRead
 		var revision = await executer.FirstOrDefaultAsync((await revisions.GetQueryableAsync()).Where(x => x.Id == revisionId &&
 			x.TemplateId == templateId && x.TenantId == tenantId && !x.IsDeleted), cancellationToken)
 			?? throw new EntityNotFoundException(typeof(CommunicationTemplateRevision), revisionId);
-		var definition = validator.GetDefinition(revision.EventKey);
+		return new(true, RenderSynthetic(revision, validator.GetDefinition(revision.EventKey)));
+	}
+
+	internal NotificationRenderResult RenderSynthetic(CommunicationTemplateRevision revision, NotificationEventDefinition definition)
+	{
 		var variables = CreateExampleVariables(definition, configuration["App:ClientUrl"]);
 		var input = new NotificationRenderInput(revision.Id, revision.EventKey, revision.SchemaVersion, revision.RecipientKind,
 			revision.Channel, revision.LanguageCode, variables);
-		return new(true, renderer.RenderPreview(revision, input));
+		return renderer.RenderPreview(revision, input);
 	}
 
 	internal static IReadOnlyDictionary<string, NotificationVariableValueDto> CreateExampleVariables(NotificationEventDefinition definition,

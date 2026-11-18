@@ -27,10 +27,20 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 	private sealed record DeliveryIdentity(string RecipientFamily, Guid? StudentId, Guid? UserId, string? ExternalDestination,
 		CommunicationChannelType Channel);
 
-	internal async Task<IReadOnlyList<NotificationPreparedDispatch>> PrepareAsync(NotificationIntent intent, NotificationCurrentSource source,
-		NotificationDispatchPolicyResult policy, NotificationEmailProvider? email, CancellationToken cancellationToken)
+	internal Task<IReadOnlyList<NotificationPreparedDispatch>> PrepareAsync(NotificationIntent intent, NotificationCurrentSource source,
+		NotificationDispatchPolicyResult policy, NotificationEmailProvider? email, CancellationToken cancellationToken) =>
+		PrepareCoreAsync(intent, source, policy, email, [], cancellationToken);
+
+	internal Task<IReadOnlyList<NotificationPreparedDispatch>> PreparePreviewAsync(NotificationCurrentSource source,
+		NotificationDispatchPolicyResult policy, NotificationEmailProvider? email, IReadOnlyList<Guid> pins,
+		CancellationToken cancellationToken) => PrepareCoreAsync(null, source, policy, email, pins, cancellationToken);
+
+	private async Task<IReadOnlyList<NotificationPreparedDispatch>> PrepareCoreAsync(NotificationIntent? intent, NotificationCurrentSource source,
+		NotificationDispatchPolicyResult policy, NotificationEmailProvider? email, IReadOnlyList<Guid> previewPins,
+		CancellationToken cancellationToken)
 	{
-		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty || intent.TenantId != tenantId || source.TenantId != tenantId)
+		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty || source.TenantId != tenantId ||
+			(intent != null && intent.TenantId != tenantId))
 			throw new BusinessException(NotificationErrorCodes.TenantRequired);
 		if (source.Snapshot == null || policy.ExclusionCode != null) throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
 		var results = new List<NotificationPreparedDispatch>();
@@ -49,7 +59,9 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 		}
 		if (eligible.Count == 0) return results;
 
-		var pinned = await LoadPinnedAsync(tenantId, intent, source, cancellationToken);
+		var pins = intent == null ? previewPins.ToArray() :
+			NotificationRuntimeJson.Deserialize<Guid[]>(intent.TemplateRevisionIdsJson, NotificationErrorCodes.TemplateInvalid);
+		var pinned = await LoadPinnedAsync(tenantId, source, pins, cancellationToken);
 		var approved = whatsApp == null ? null : await approvals.LoadAsync(whatsApp,
 			pinned.Where(x => x.Key.Channel == CommunicationChannelType.WhatsApp).SelectMany(x => x).Select(x => x.Id).ToArray(),
 			cancellationToken);
@@ -86,19 +98,18 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 	}
 
 	private async Task<ILookup<(string RecipientKind, CommunicationChannelType Channel, string LanguageCode), CommunicationTemplateRevision>>
-		LoadPinnedAsync(Guid tenantId, NotificationIntent intent, NotificationCurrentSource source, CancellationToken cancellationToken)
+		LoadPinnedAsync(Guid tenantId, NotificationCurrentSource source, Guid[] pins, CancellationToken cancellationToken)
 	{
-		var pins = NotificationRuntimeJson.Deserialize<Guid[]>(intent.TemplateRevisionIdsJson, NotificationErrorCodes.TemplateInvalid);
 		if (pins.Length is 0 or > 256 || pins.Contains(Guid.Empty) || pins.Distinct().Count() != pins.Length)
 			throw new BusinessException(NotificationErrorCodes.TemplateInvalid);
 		var headerIds = source.Runtime.Configuration.TemplateIds.ToArray();
 		var rows = await queries.ToListAsync((await revisions.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
-			!x.IsDeleted && x.IsPublished && x.EventKey == intent.EventKey && x.SchemaVersion == source.Definition.SchemaVersion &&
+			!x.IsDeleted && x.IsPublished && x.EventKey == source.Definition.EventKey && x.SchemaVersion == source.Definition.SchemaVersion &&
 			Enumerable.Contains(pins, x.Id) && Enumerable.Contains(headerIds, x.TemplateId)), cancellationToken);
 		return rows.ToLookup(x => (x.RecipientKind, x.Channel, x.LanguageCode));
 	}
 
-	private NotificationPreparedDispatch PrepareOne(Guid tenantId, NotificationIntent intent, NotificationCurrentSource source,
+	private NotificationPreparedDispatch PrepareOne(Guid tenantId, NotificationIntent? intent, NotificationCurrentSource source,
 		NotificationRecipientDispatchDecision decision, NotificationSourceRecipientContentDto? content,
 		ILookup<(string RecipientKind, CommunicationChannelType Channel, string LanguageCode), CommunicationTemplateRevision> pinned,
 		Guid? emailProvider, Guid? whatsAppProvider, IReadOnlyDictionary<Guid, WhatsAppTemplateBinding>? approved, Guid? pushDeviceId = null)
@@ -123,10 +134,17 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 		};
 		if (!string.IsNullOrWhiteSpace(recipient.StudentName))
 			variables["student_name"] = new(NotificationVariableType.Text, recipient.StudentName);
-		var rendered = renderer.RenderPublished(revision, new(revision.Id, intent.EventKey, source.Definition.SchemaVersion,
+		var rendered = renderer.RenderPublished(revision, new(revision.Id, source.Definition.EventKey, source.Definition.SchemaVersion,
 			recipient.Recipient.Kind, recipient.Channel, revision.LanguageCode, variables));
 		if (!rendered.IsSuccess) return Exclude(rendered.ErrorCode ?? NotificationErrorCodes.TemplateInvalid);
 		if (string.IsNullOrWhiteSpace(recipient.AssociationRevision)) return Exclude(NotificationErrorCodes.RecipientIneligible);
+
+		var providerSettingId = recipient.Channel switch {
+			CommunicationChannelType.Email => emailProvider,
+			CommunicationChannelType.WhatsApp => whatsAppProvider,
+			_ => null
+		};
+		if (intent == null) return new(recipient, revision.LanguageCode, null, null, providerSettingId);
 
 		var identity = Identity(decision);
 		var context = Hash(new { intent.Id, identity.RecipientFamily, identity.StudentId, identity.UserId, recipient.Recipient.FamilyRelationship });
@@ -150,11 +168,7 @@ public sealed class NotificationDispatchMaterializer(ICurrentTenant tenant, IRep
 		var expiresAt = !source.ExpiresAt.HasValue || intent.ExpiresAt < source.ExpiresAt ? intent.ExpiresAt : source.ExpiresAt;
 		var dispatch = new NotificationDispatch(id, tenantId, intent.Id, revision.Id, reference, context, recipient.Channel,
 			fingerprint, encrypted, rendered.ContentHash!, deduplicationKey, decision.DueAt!.Value, expiresAt);
-		return new(recipient, revision.LanguageCode, dispatch, null, recipient.Channel switch {
-			CommunicationChannelType.Email => emailProvider,
-			CommunicationChannelType.WhatsApp => whatsAppProvider,
-			_ => null
-		});
+		return new(recipient, revision.LanguageCode, dispatch, null, providerSettingId);
 
 		NotificationPreparedDispatch Exclude(string code) => new(recipient, decision.LanguageCode, null, code);
 	}

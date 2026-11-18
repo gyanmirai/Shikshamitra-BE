@@ -37,7 +37,11 @@ public partial class StudentFeeStructureAppService
 		if (!prorationEligible && prorationPolicyVersionId.HasValue)
 			throw new BusinessException(AssignmentErrorCodes.InvalidInput)
 				.WithData("Reason", "A proration policy cannot be selected before the academic-year start date.");
-		var defaultProration = prorationEligible ? await resolver.ResolveAsync(source.AcademicYearId) : null;
+		// An unknown date must still be validated against the default policy's
+		// applicable recurring fees. Only a known early date bypasses proration.
+		var defaultProration = !source.JoiningDate.HasValue || prorationEligible
+			? await resolver.ResolveAsync(source.AcademicYearId)
+			: null;
 		var proration = prorationPolicyVersionId.HasValue
 			? await resolver.ResolveActiveVersionAsync(source.AcademicYearId, prorationPolicyVersionId.Value)
 			: defaultProration;

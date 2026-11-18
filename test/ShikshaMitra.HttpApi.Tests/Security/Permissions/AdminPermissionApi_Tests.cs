@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Infrastructure.Auth;
 using Shouldly;
@@ -43,21 +44,23 @@ public partial class PermissionConsistencyApi_Tests
 		result.GetProperty("isReadOnly").GetBoolean().ShouldBeTrue();
 	}
 
-	[Fact]
-	public async Task Admin_checks_use_live_membership_and_ignore_old_denials_without_granting_host_permissions()
+	[Theory]
+	[InlineData(View)]
+	[InlineData(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task Admin_checks_use_live_membership_and_ignore_old_denials_without_granting_host_permissions(string permission)
 	{
 		var (tenantId, userId) = await CreateAdminTargetAsync();
 		using (var scope = Factory.Services.CreateScope())
 		{
 			using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId);
 			using var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
-			await scope.ServiceProvider.GetRequiredService<IUserPermissionDenyStore>().SetDeniedAsync(userId, View, true);
+			await scope.ServiceProvider.GetRequiredService<IUserPermissionDenyStore>().SetDeniedAsync(userId, permission, true);
 			await uow.CompleteAsync();
 		}
-		await CheckAdminAsync(tenantId, userId, "ordinary-role", View, true);
+		await CheckAdminAsync(tenantId, userId, "ordinary-role", permission, true);
 		await CheckAdminAsync(tenantId, userId, "admin", "Unknown.Future.Permission", false);
 		await CheckAdminAsync(tenantId, userId, "admin", "AbpTenantManagement.Tenants.Create", false);
-		await CheckAdminAsync(Guid.NewGuid(), userId, "admin", View, false);
+		await CheckAdminAsync(Guid.NewGuid(), userId, "admin", permission, false);
 		using (var scope = Factory.Services.CreateScope())
 		{
 			using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId);
@@ -68,7 +71,7 @@ public partial class PermissionConsistencyApi_Tests
 			await repository.UpdateAsync(user);
 			await uow.CompleteAsync();
 		}
-		await CheckAdminAsync(tenantId, userId, "admin", View, false);
+		await CheckAdminAsync(tenantId, userId, "admin", permission, false);
 	}
 
 	private async Task CheckAdminAsync(Guid tenantId, Guid userId, string roleClaim, string permission, bool granted)

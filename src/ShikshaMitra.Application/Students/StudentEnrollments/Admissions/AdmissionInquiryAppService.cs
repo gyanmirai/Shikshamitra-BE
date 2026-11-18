@@ -161,22 +161,23 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)]
-	public async Task<AdmissionInquiryDto> GetAsync(Guid id)
+	public async Task<AdmissionInquiryDto> GetAsync(Guid id) => await ReadDetailAsync(await GetInquiryAsync(id));
+
+	private async Task<AdmissionInquiryDto> ReadDetailAsync(AdmissionInquiry inquiry, AdmissionInquiryFormEditService.Context? loaded = null)
 	{
-		var inquiry = await GetInquiryAsync(id);
 		var result = Map(inquiry);
 		result.ApplicationId = (await applicationRepository.FindAsync(application => application.InquiryId == inquiry.Id))?.Id;
 		result.IsTransferred |= result.ApplicationId.HasValue;
-		if (inquiry.AdmissionOfferingId.HasValue && await offeringRepository.FindAsync(inquiry.AdmissionOfferingId.Value) is { } offering)
+		if (inquiry.AdmissionOfferingId.HasValue && (loaded?.Offering ?? await offeringRepository.FindAsync(inquiry.AdmissionOfferingId.Value)) is { } offering)
 		{
 			result.BoardId = offering.BoardId; result.MediumId = offering.MediumId; result.StandardId = offering.StandardId;
 			var boardQuery = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationBoard, Guid>>().GetQueryableAsync();
 			result.StandardName = await AsyncExecuter.FirstOrDefaultAsync(AdmissionStandardLabelQuery.ForDetail(await standardRepository.GetQueryableAsync(), boardQuery)
 				.Where(standard => standard.Id == offering.StandardId).Select(standard => standard.Name));
 		}
-		var applicant = inquiry.ApplicantId.HasValue ? await applicantRepository.FindAsync(inquiry.ApplicantId.Value) : null;
-		var family = inquiry.FamilyId.HasValue ? await familyRepository.FindAsync(inquiry.FamilyId.Value) : null;
-		var guardian = family?.PrimaryGuardianId is Guid guardianId ? await guardianRepository.FindAsync(guardianId) : null;
+		var applicant = loaded != null ? loaded.Applicant : inquiry.ApplicantId.HasValue ? await applicantRepository.FindAsync(inquiry.ApplicantId.Value) : null;
+		var family = loaded != null ? loaded.Family : inquiry.FamilyId.HasValue ? await familyRepository.FindAsync(inquiry.FamilyId.Value) : null;
+		var guardian = loaded != null ? loaded.Guardian : family?.PrimaryGuardianId is Guid guardianId ? await guardianRepository.FindAsync(guardianId) : null;
 		if (applicant != null && AdmissionSiblingFamilyLink.HasOwnContact(applicant))
 		{
 			guardian = AdmissionSiblingFamilyLink.OwnGuardian(applicant);
@@ -215,7 +216,8 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 			inquiry.FormResponseSnapshotJson);
 		if (snapshot == null) return result;
 		var answers = new Dictionary<string, string>(snapshot, StringComparer.OrdinalIgnoreCase);
-		var fields = await formFieldRepository.GetListAsync(field => field.FormDefinitionId == formId);
+		var sameForm = loaded?.FormId == formId;
+		var fields = sameForm ? loaded!.Fields : await formFieldRepository.GetListAsync(field => field.FormDefinitionId == formId);
 		if (result.SiblingFamilyConfirmed)
 			foreach (var field in fields)
 			{
@@ -228,8 +230,8 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 		foreach (var field in fields.Where(field => field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey)))
 			if (!answers.ContainsKey(field.BindingKey!) && applicant != null)
 				answers[field.BindingKey!] = JsonSerializer.Serialize(AdmissionFormBindingRegistry.GetValue(field.BindingKey!, applicant, guardian));
-		var sections = await formSectionRepository.GetListAsync(section => section.FormDefinitionId == formId);
-		if (await formRepository.FindAsync(formId) is { } formDefinition)
+		var sections = sameForm && loaded!.Sections != null ? loaded.Sections : await formSectionRepository.GetListAsync(section => section.FormDefinitionId == formId);
+		if ((sameForm ? loaded!.Form : await formRepository.FindAsync(formId)) is { } formDefinition)
 			result.FormDefinition = AdmissionApplicationFormService.MapDefinition(formDefinition, sections, fields);
 		var sectionOrder = sections.ToDictionary(section => section.Id, section => section.DisplayOrder);
 		result.FormResponseDefinitionId = formId;
@@ -749,7 +751,7 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 				MediumId = input.MediumId ?? Guid.Empty, StandardId = input.StandardId ?? Guid.Empty
 			}, offering);
 		}
-		await formEditService.ApplyAsync(inquiry, input, offering);
+		var edited = await formEditService.ApplyAsync(inquiry, input, offering);
 		var normalizedPhone = AdmissionInquiryPhoneValidator.NormalizeAndValidateIndianMobile(input.Phone);
 		await LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryStudentDuplicateGuard>()
 			.EnsureDistinctAsync(inquiry, input.ApplicantName, normalizedPhone);
@@ -782,7 +784,8 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 		await inquiryRepository.UpdateAsync(inquiry, autoSave: false);
 		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("InquiryDetailsUpdated", "Inquiry details updated", inquiry.ApplicantId, null, inquiry.Id,
 			JsonSerializer.Serialize(new { Before = before, After = input, Actor = CurrentUser.Id })), autoSave: true);
-		return await GetAsync(inquiry.Id);
+		// Preserve the post-save live scope check before returning the validated data.
+		return await ReadDetailAsync(await GetInquiryAsync(inquiry.Id), edited);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]

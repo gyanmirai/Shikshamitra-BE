@@ -90,6 +90,39 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				(await Should.ThrowAsync<AbpValidationException>(() => service.GetListAsync(input))).ValidationErrors.ShouldNotBeEmpty();
 		});
 
+	[Fact]
+	public Task GR_pending_worklist_excludes_completed_and_already_enrolled_cases() =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var fixture = await CreateOnboardingWorklistFixtureAsync();
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var now = DateTime.UtcNow;
+				var completed = await _onboardingCaseRepository.GetAsync(fixture.Cases[2].Id);
+				completed.MarkReady(now);
+				completed.Complete(Guid.NewGuid(), now);
+				await _onboardingCaseRepository.UpdateAsync(completed, true);
+
+				var enrolled = await _onboardingCaseRepository.GetAsync(fixture.Cases[1].Id);
+				enrolled.MarkReady(now);
+				enrolled.BeginProvisioning(Guid.NewGuid());
+				enrolled.RequireAttention("App access still needs review.");
+				await _onboardingCaseRepository.UpdateAsync(enrolled, true);
+			});
+
+			var service = GetRequiredService<IStudentOnboardingAppService>();
+			var pending = await service.GetListAsync(new()
+			{
+				StandardId = fixture.Offering.StandardId, PendingTask = "gr-number", MaxResultCount = 1
+			});
+			pending.TotalCount.ShouldBe(2);
+			pending.Items.Single().Id.ShouldBeOneOf(fixture.Cases[0].Id, fixture.Cases[3].Id);
+
+			var all = await service.GetListAsync(new() { StandardId = fixture.Offering.StandardId });
+			all.TotalCount.ShouldBe(4);
+			all.Items.Single(item => item.Id == fixture.Cases[2].Id).GrNumber.ShouldBeNull();
+		});
+
 	private Task<OnboardingWorklistFixture> CreateOnboardingWorklistFixtureAsync() =>
 		WithUnitOfWorkAsync(CreateOnboardingWorklistFixtureWithinUnitOfWorkAsync);
 

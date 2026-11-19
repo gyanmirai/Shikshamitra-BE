@@ -36,6 +36,8 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 				"A substitute duty was cancelled. Check your school notifications for updates.",
 			("SubstituteTeacher", AcademicNotificationEventKeys.SubstitutionAcknowledgementDue) =>
 				"Please acknowledge your substitute duty for {{period_name}} on {{session_date}}.",
+			("ConfiguredReviewer", AcademicNotificationEventKeys.SubstitutionAcknowledgementDue) =>
+				"The substitute duty for {{period_name}} on {{session_date}} still needs acknowledgement.",
 			_ => subject + "."
 		};
 		var body = channel == CommunicationChannelType.WebPush ? "An academic update is available. Open the school website for details." :

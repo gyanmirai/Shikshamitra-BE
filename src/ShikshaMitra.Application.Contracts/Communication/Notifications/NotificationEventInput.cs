@@ -14,14 +14,25 @@ public sealed record NotificationEventInput(
 	Guid? ActorUserId = null, DateTimeOffset? DueAt = null, DateTimeOffset? ExpiresAt = null,
 	NotificationDueOccurrenceDto? DueOccurrence = null);
 
+public enum NotificationDuePhase
+{
+	ReviewerEscalation = 1
+}
+
 public sealed record NotificationDueOccurrenceDto(NotificationSourceScopeDto Scope, DateTimeOffset OccurrenceAt,
-	Guid RuleId, int RuleRevision);
+	Guid RuleId, int RuleRevision)
+{
+	public NotificationDuePhase? Phase { get; init; }
+}
 
 public sealed record NotificationIntentContext(
 	Guid IntentId, Guid TenantId, string EventKey, string SourceType, Guid SourceId,
 	string SourceRevision, DateTimeOffset OccurredAt,
 	IReadOnlyList<NotificationRecipientRefDto> AffectedRecipients,
-	NotificationSourceScopeDto? SourceScope = null, DateTimeOffset? DueOccurrenceAt = null);
+	NotificationSourceScopeDto? SourceScope = null, DateTimeOffset? DueOccurrenceAt = null)
+{
+	public NotificationDuePhase? DuePhase { get; init; }
+}
 
 public sealed record NotificationVariableValueDto(NotificationVariableType Type, string? Value);
 

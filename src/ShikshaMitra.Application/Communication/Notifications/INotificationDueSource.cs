@@ -15,7 +15,11 @@ public sealed record NotificationDueScanRequest(Guid TenantId, DateTimeOffset Cy
 	string? Continuation, int PageSize);
 
 public sealed record NotificationDueSourceCandidate(string EventKey, Guid SourceId, string SourceRevision,
-	NotificationSourceScopeDto Scope, DateTimeOffset OccurrenceAt, DateTimeOffset ExpiresAt, NotificationDueTimeMode TimeMode);
+	NotificationSourceScopeDto Scope, DateTimeOffset OccurrenceAt, DateTimeOffset ExpiresAt, NotificationDueTimeMode TimeMode)
+{
+	public NotificationDuePhase? Phase { get; init; }
+	public DateTimeOffset? ScheduledAt { get; init; }
+}
 
 public sealed record NotificationDueSourcePage(IReadOnlyList<NotificationDueSourceCandidate> Candidates, string? Continuation);
 

@@ -40,7 +40,7 @@ public sealed class NotificationIntentSourceReader(ICurrentTenant tenant, IEnume
 		var matchingAdapters = adapters.Where(x => x.EventKeys.Contains(intent.EventKey)).Take(2).ToArray();
 		if (matchingAdapters.Length != 1) return Exclude(NotificationErrorCodes.SourceUnavailable);
 		var context = new NotificationIntentContext(intent.Id, tenantId, intent.EventKey, intent.SourceType, intent.SourceId,
-			intent.SourceRevision, intent.OccurredAt, captured, runtime.SourceScope, runtime.DueOccurrenceAt);
+			intent.SourceRevision, intent.OccurredAt, captured, runtime.SourceScope, runtime.DueOccurrenceAt) { DuePhase = runtime.DuePhase };
 		var source = await matchingAdapters[0].LoadAsync(context, cancellationToken);
 		if (!source.IsEligible) return Exclude(NotificationErrorCodes.SourceUnavailable);
 		if (source.SourceRevision != intent.SourceRevision) return Exclude("SourceRevisionChanged");

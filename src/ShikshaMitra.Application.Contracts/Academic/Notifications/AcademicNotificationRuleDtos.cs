@@ -26,7 +26,10 @@ public sealed class GetAcademicNotificationRulesDto : PagedResultRequestDto
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AcademicNotificationRuleTimingDto(int DelayMinutes = 0, int ReminderSchoolDaysBefore = 1,
-	TimeOnly? ReminderLocalTime = null);
+	TimeOnly? ReminderLocalTime = null)
+{
+	public int? ReviewerEscalationMinutes { get; init; }
+}
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AcademicNotificationQuietHoursDto(bool Enabled = true, TimeOnly? Start = null,

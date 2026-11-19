@@ -17,7 +17,8 @@ public sealed class SubstitutionNotificationEvidence(IRepository<CommunicationCa
 	IRepository<NotificationIntent, Guid> intents, IRepository<NotificationDispatch, Guid> dispatches,
 	IRepository<CommunicationRecipientSnapshot, Guid> recipients, IAsyncQueryableExecuter queries) : ITransientDependency
 {
-	internal async Task<List<AcceptedNotice>> ReadAsync(Guid tenantId, Guid dutyId, CancellationToken token)
+	internal async Task<List<AcceptedNotice>> ReadAsync(Guid tenantId, Guid dutyId, CancellationToken token,
+		string? eventKey = null, string? sourceRevision = null)
 	{
 		var source = SubstitutionNotificationSource.Type;
 		return await queries.ToListAsync(
@@ -33,6 +34,7 @@ public sealed class SubstitutionNotificationEvidence(IRepository<CommunicationCa
 				campaign.CampaignType == NotificationCampaignTypes.Academic && campaign.SourceModule == CommunicationSourceModule.Academic &&
 				campaign.Id == delivery.CampaignId && campaign.Id == recipient.CampaignId &&
 				delivery.AcceptedAt.HasValue && recipient.UserId.HasValue && recipient.RecipientId.HasValue &&
+				(eventKey == null || intent.EventKey == eventKey) && (sourceRevision == null || intent.SourceRevision == sourceRevision) &&
 				(intent.EventKey == SubstitutionNotificationSource.Assigned || intent.EventKey == SubstitutionNotificationSource.Changed ||
 					intent.EventKey == SubstitutionNotificationSource.AcknowledgementDue)
 			select new AcceptedNotice(recipient.RecipientType, recipient.UserId!.Value, recipient.RecipientId!.Value,

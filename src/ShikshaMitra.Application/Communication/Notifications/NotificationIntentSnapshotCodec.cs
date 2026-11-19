@@ -24,6 +24,9 @@ public sealed class NotificationIntentSnapshotCodec(NotificationRuleConfiguratio
 			!snapshot.ReviewedDeliveryDigest.All(Uri.IsHexDigit) || snapshot.DueOccurrenceAt.HasValue)) throw Invalid();
 		if (snapshot.DueOccurrenceAt.HasValue && (definition.TriggerType != NotificationTriggerType.Due ||
 			snapshot.DueOccurrenceAt.Value == default)) throw Invalid();
+		if (snapshot.DuePhase.HasValue && (snapshot.DuePhase != NotificationDuePhase.ReviewerEscalation ||
+			definition.EventKey != AcademicNotificationEventKeys.SubstitutionAcknowledgementDue || !snapshot.DueOccurrenceAt.HasValue ||
+			snapshot.Configuration.Timing?.ReviewerEscalationMinutes == null)) throw Invalid();
 		try
 		{
 			var scope = snapshot.SourceScope;

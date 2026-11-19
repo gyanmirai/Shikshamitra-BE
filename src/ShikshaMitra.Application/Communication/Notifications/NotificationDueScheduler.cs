@@ -106,6 +106,10 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 				string.IsNullOrWhiteSpace(candidate.SourceRevision) || candidate.SourceRevision.Length > 128 ||
 				candidate.EventKey == null || candidate.Scope == null || !Enum.IsDefined(candidate.TimeMode) ||
 				!dueDefinitions.TryGetValue(candidate.EventKey, out var definition)) continue;
+			if (candidate.Phase.HasValue != candidate.ScheduledAt.HasValue ||
+				(candidate.Phase.HasValue && (candidate.Phase != NotificationDuePhase.ReviewerEscalation ||
+					candidate.EventKey != AcademicNotificationEventKeys.SubstitutionAcknowledgementDue ||
+					candidate.TimeMode != NotificationDueTimeMode.FixedOccurrence))) continue;
 			var inputScope = candidate.Scope;
 			NotificationRuleScope scope;
 			try { scope = NotificationRuleScope.Create(inputScope.AcademicYearId, inputScope.BoardId, inputScope.MediumId, inputScope.ClassId, inputScope.DivisionId); }
@@ -117,7 +121,7 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 
 			DateTimeOffset? dueAt;
 			if (candidate.TimeMode == NotificationDueTimeMode.FixedOccurrence)
-				dueAt = timing.ResolveFixed(candidate.OccurrenceAt, candidate.ExpiresAt);
+				dueAt = timing.ResolveFixed(candidate.ScheduledAt ?? candidate.OccurrenceAt, candidate.ExpiresAt);
 			else
 			{
 				schoolTimeZone ??= schoolZone.GetAsync(cancellationToken);
@@ -133,7 +137,7 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 			{
 				var result = await writer.WriteWithOutcomeAsync(new(candidate.EventKey, source.SourceType, candidate.SourceId,
 					candidate.SourceRevision, now, [], DueAt: dueAt, ExpiresAt: candidate.ExpiresAt,
-					DueOccurrence: new(inputScope, candidate.OccurrenceAt, rule.Id, rule.Revision)), cancellationToken);
+					DueOccurrence: new(inputScope, candidate.OccurrenceAt, rule.Id, rule.Revision) { Phase = candidate.Phase }), cancellationToken);
 				if (result.Created || result.AddedRecipients) created++;
 			}
 			catch (BusinessException error) when (error.Code == NotificationErrorCodes.SourceUnavailable)

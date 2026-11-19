@@ -18,7 +18,7 @@ internal static partial class AcademicNotificationDefinitions
 		Event(SubstitutionChanged, $"PreviousSubstitute,SubstituteTeacher,OriginalTeacher,{Reviewer}", Important,
 			Change, "substitute", "date", "period", "startTime", "endTime", "room"),
 		Event(SubstitutionCancelled, $"PreviousSubstitute,SubstituteTeacher,OriginalTeacher,{Reviewer}", Important),
-		Event(SubstitutionAcknowledgementDue, "SubstituteTeacher", Important, Due),
+		Event(SubstitutionAcknowledgementDue, $"SubstituteTeacher,{Reviewer}", Important, Due),
 		Event(RoomApprovalRequested, Reviewer, StaffOnly),
 		Event(RoomApproved, "Requester"),
 		Event(RoomRejected, "Requester"),

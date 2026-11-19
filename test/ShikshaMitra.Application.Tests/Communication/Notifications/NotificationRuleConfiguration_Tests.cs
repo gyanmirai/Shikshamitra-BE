@@ -52,6 +52,26 @@ public class NotificationRuleConfiguration_Tests
 		error.Code.ShouldBe(NotificationErrorCodes.RuleConfigurationInvalid); error.InnerException.ShouldBeNull();
 	}
 	[Fact]
+	public void Reviewer_escalation_requires_a_teacher_reminder_and_a_positive_delay()
+	{
+		var definition = _catalogue.Get(AcademicNotificationEventKeys.SubstitutionAcknowledgementDue);
+		var teacherRule = Valid() with { StaffAudienceSelectors = ["SubstituteTeacher"] };
+		var json = _codec.Serialize(teacherRule, definition);
+		_codec.Deserialize(json, definition).StaffAudienceSelectors.ShouldBe(["SubstituteTeacher"]);
+		var configured = JsonNode.Parse(json)!.AsObject();
+		configured["staffAudienceSelectors"] = new JsonArray("SubstituteTeacher", "ConfiguredReviewer");
+		configured["timing"]!["reviewerEscalationMinutes"] = 30;
+		var rule = _codec.Deserialize(configured.ToJsonString(), definition);
+		var saved = JsonNode.Parse(_codec.Serialize(rule, definition))!;
+		saved["timing"]!["reviewerEscalationMinutes"]!.GetValue<int>().ShouldBe(30);
+		configured["staffAudienceSelectors"] = new JsonArray("ConfiguredReviewer");
+		Should.Throw<BusinessException>(() => _codec.Deserialize(configured.ToJsonString(), definition));
+		configured["staffAudienceSelectors"] = new JsonArray("SubstituteTeacher", "ConfiguredReviewer");
+		configured["timing"]!["reviewerEscalationMinutes"] = 0;
+		Should.Throw<BusinessException>(() => _codec.Deserialize(configured.ToJsonString(), definition));
+	}
+
+	[Fact]
 	public void Unsupported_staff_audiences_and_urgent_bypass_are_event_specific()
 	{
 		var staff = _catalogue.Get("Academic.LessonPlan.Submitted");

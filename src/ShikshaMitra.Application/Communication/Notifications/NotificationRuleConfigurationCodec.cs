@@ -44,6 +44,13 @@ public sealed class NotificationRuleConfigurationCodec : ITransientDependency
 			"\\A[a-z]{2,3}(?:-[a-z0-9]{2,8})*\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)));
 		var timing = config.Timing;
 		Require(timing.DelayMinutes is >= 0 and <= 10080 && timing.ReminderSchoolDaysBefore is >= 0 and <= 365);
+		var isSubstitutionReminder = definition.EventKey == AcademicNotificationEventKeys.SubstitutionAcknowledgementDue;
+		var hasReviewer = config.StaffAudienceSelectors.Contains("ConfiguredReviewer");
+		if (isSubstitutionReminder)
+			Require(hasReviewer == timing.ReviewerEscalationMinutes.HasValue);
+		if (timing.ReviewerEscalationMinutes.HasValue)
+			Require(isSubstitutionReminder && hasReviewer && config.StaffAudienceSelectors.Contains("SubstituteTeacher") &&
+				timing.ReviewerEscalationMinutes is >= 1 and <= 10080);
 		Require(!timing.QuietHoursEnabled || timing.QuietStart != timing.QuietEnd);
 		Require(!timing.BypassQuietHours || definition.AllowsQuietHoursBypass);
 	}

@@ -29,7 +29,7 @@ namespace ShikshaMitra.Academic.Notifications;
 public sealed class SubstitutionNotificationSource(IRepository<SubstitutionRequest, Guid> duties, IRepository<Standard, Guid> classes,
 	IRepository<Division, Guid> divisions, IRepository<Employee, Guid> employees, ICurrentTenant tenant, ITenantStore tenants,
 	IAsyncQueryableExecuter queries, IClock clock, IConfiguration configuration, IUserScopeService userScopes,
-	SubstitutionNotificationEvidence evidence)
+	SubstitutionNotificationEvidence evidence, SubstitutionReviewerEscalationPolicy escalation)
 	: INotificationSourceAdapter, INotificationDueSource, ITransientDependency
 {
 	internal const string Type = "Academic.Substitution";
@@ -114,6 +114,7 @@ public sealed class SubstitutionNotificationSource(IRepository<SubstitutionReque
 		var end = PeriodEnd(duty);
 		var now = new DateTimeOffset(clock.Now.ToUniversalTime());
 		var reminder = context.EventKey == AcknowledgementDue;
+		var reviewerEscalation = reminder && context.DuePhase == NotificationDuePhase.ReviewerEscalation;
 		var changed = context.EventKey == Changed;
 		var cancelled = context.EventKey == Cancelled;
 		var eligible = context.EventKey switch
@@ -131,17 +132,29 @@ public sealed class SubstitutionNotificationSource(IRepository<SubstitutionReque
 		var school = tenant.Name ?? (await tenants.FindAsync(context.TenantId))?.Name;
 		if (string.IsNullOrWhiteSpace(school)) return LearningTaskNotificationContent.Unavailable();
 		var recipients = new List<NotificationRecipientRefDto>();
-		var substitute = await FindTeacherAsync(context.TenantId, duty.SubstituteTeacherId, "SubstituteTeacher", cancellationToken);
-		if (substitute != null) recipients.Add(substitute);
+		var substitute = await FindSubstituteAsync(context.TenantId, duty, cancellationToken);
+		if (reviewerEscalation)
+		{
+			if (substitute == null || !context.DueOccurrenceAt.HasValue || context.SourceScope == null)
+				return LearningTaskNotificationContent.Unavailable();
+			var reviewer = await FindReviewerAsync(context.TenantId, match);
+			var delay = await escalation.GetDelayAsync(match.Scope, cancellationToken);
+			if (reviewer == null || reviewer.UserId == substitute.UserId || !delay.HasValue)
+				return LearningTaskNotificationContent.Unavailable();
+			var acceptedAt = await escalation.FindReminderAcceptanceAsync(context.TenantId, match, substitute, cancellationToken);
+			if (!acceptedAt.HasValue || acceptedAt > context.OccurredAt ||
+				(context.IntentId == Guid.Empty && acceptedAt.Value.AddMinutes(delay.Value) > context.OccurredAt))
+				return LearningTaskNotificationContent.Unavailable();
+			recipients.Add(reviewer);
+		}
+		else if (substitute != null) recipients.Add(substitute);
 		else if (!changed && !cancelled) return LearningTaskNotificationContent.Unavailable();
 		if (!reminder)
 		{
 			var original = await FindTeacherAsync(context.TenantId, duty.OriginalTeacherId, "OriginalTeacher", cancellationToken);
 			if (original != null) recipients.Add(original);
-			var configured = configuration[$"Notifications:Academic:Tenants:{context.TenantId:N}:SubstitutionReviewerUserId"];
-			if (Guid.TryParse(configured, out var reviewer) && reviewer != Guid.Empty &&
-				StudentRecordScope.HasAccess(match, await userScopes.GetUserScopeAsync(reviewer)))
-				recipients.Add(new("ConfiguredReviewer", UserId: reviewer));
+			var reviewer = await FindReviewerAsync(context.TenantId, match);
+			if (reviewer != null) recipients.Add(reviewer);
 		}
 
 		var overrides = new List<NotificationSourceRecipientContentDto>();
@@ -184,6 +197,19 @@ public sealed class SubstitutionNotificationSource(IRepository<SubstitutionReque
 
 	public async Task<NotificationDueSourcePage> ReadPageAsync(NotificationDueScanRequest request, CancellationToken cancellationToken)
 	{
+		var (rows, continuation) = await ReadOpenDutiesAsync(request, cancellationToken);
+		var candidates = rows.Where(x => IsOptedIn(x.Duty)).Select(x =>
+		{
+			var end = PeriodEnd(x.Duty);
+			return new NotificationDueSourceCandidate(AcknowledgementDue, x.Duty.Id, Revision(x.Duty), x.Scope, end, end,
+				NotificationDueTimeMode.PrecedingSchoolDays);
+		}).Where(x => x.ExpiresAt > request.Now).ToArray();
+		return new(candidates, continuation);
+	}
+
+	internal async Task<(IReadOnlyList<ScopedDuty> Duties, string? Continuation)> ReadOpenDutiesAsync(
+		NotificationDueScanRequest request, CancellationToken cancellationToken)
+	{
 		if (request.TenantId == Guid.Empty || request.TenantId != tenant.Id || request.PageSize is < 1 or > 100)
 			throw new BusinessException(NotificationErrorCodes.StateConflict);
 		var zone = SubstitutionAppService.GetInstitutionTimeZone();
@@ -199,13 +225,7 @@ public sealed class SubstitutionNotificationSource(IRepository<SubstitutionReque
 			query = query.Where(x => x.Duty.Id.CompareTo(id) > 0);
 		}
 		var rows = await queries.ToListAsync(query.OrderBy(x => x.Duty.Id).Take(request.PageSize + 1), cancellationToken);
-		var candidates = rows.Take(request.PageSize).Where(x => IsOptedIn(x.Duty)).Select(x =>
-		{
-			var end = PeriodEnd(x.Duty);
-			return new NotificationDueSourceCandidate(AcknowledgementDue, x.Duty.Id, Revision(x.Duty), x.Scope, end, end,
-				NotificationDueTimeMode.PrecedingSchoolDays);
-		}).Where(x => x.ExpiresAt > request.Now).ToArray();
-		return new(candidates, rows.Count > request.PageSize ? rows[request.PageSize - 1].Duty.Id.ToString("N") : null);
+		return (rows.Take(request.PageSize).ToArray(), rows.Count > request.PageSize ? rows[request.PageSize - 1].Duty.Id.ToString("N") : null);
 	}
 
 	internal async Task<ScopedDuty?> FindAsync(Guid tenantId, Guid id, CancellationToken token) =>
@@ -227,6 +247,17 @@ public sealed class SubstitutionNotificationSource(IRepository<SubstitutionReque
 			Duty = duty, Year = board.AcademicYearId, Board = board.Id, Medium = medium.Id, Stage = stage.Id,
 			Standard = standard.Id, Division = division.Id, ClassName = standard.Name
 		};
+
+	internal Task<NotificationRecipientRefDto?> FindSubstituteAsync(Guid tenantId, SubstitutionRequest duty, CancellationToken token) =>
+		FindTeacherAsync(tenantId, duty.SubstituteTeacherId, "SubstituteTeacher", token);
+
+	private async Task<NotificationRecipientRefDto?> FindReviewerAsync(Guid tenantId, ScopedDuty match)
+	{
+		var configured = configuration[$"Notifications:Academic:Tenants:{tenantId:N}:SubstitutionReviewerUserId"];
+		return Guid.TryParse(configured, out var reviewer) && reviewer != Guid.Empty &&
+			StudentRecordScope.HasAccess(match, await userScopes.GetUserScopeAsync(reviewer))
+			? new("ConfiguredReviewer", UserId: reviewer) : null;
+	}
 
 	private async Task<NotificationRecipientRefDto?> FindTeacherAsync(Guid tenantId, Guid? reference, string kind, CancellationToken token)
 	{

@@ -109,6 +109,9 @@ public class AcademicNotificationRuleAppService(IRepository<IdentityUser, Guid> 
 		return new(1, input.GuardianMode, input.AdditionalGuardianRelationships, input.IncludeStudentAccount,
 			input.StaffAudienceSelectors, input.Channels, input.TemplateIds,
 			new(timing.DelayMinutes, timing.ReminderSchoolDaysBefore, timing.ReminderLocalTime ?? defaults.ReminderLocalTime,
-				quiet.Enabled, quiet.Start ?? defaults.QuietStart, quiet.End ?? defaults.QuietEnd, quiet.Bypass), input.FallbackLanguage);
+				quiet.Enabled, quiet.Start ?? defaults.QuietStart, quiet.End ?? defaults.QuietEnd, quiet.Bypass)
+			{
+				ReviewerEscalationMinutes = timing.ReviewerEscalationMinutes
+			}, input.FallbackLanguage);
 	}
 }

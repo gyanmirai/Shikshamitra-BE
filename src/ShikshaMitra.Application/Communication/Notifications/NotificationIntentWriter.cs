@@ -38,7 +38,10 @@ public sealed class NotificationIntentWriter(ICurrentTenant tenant, IUnitOfWorkM
 		var moduleName = definition.EventKey.Split('.')[0];
 		if (!Enum.GetNames<CommunicationSourceModule>().Contains(moduleName, StringComparer.Ordinal)) throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
 		var module = Enum.Parse<CommunicationSourceModule>(moduleName);
-		var eventIdentity = input.DueOccurrence is { } occurrence
+		var eventIdentity = input.DueOccurrence is { Phase: not null } phased
+			? JsonSerializer.Serialize(new { tenantId, input.EventKey, input.SourceType, input.SourceId, input.SourceRevision,
+				Occurrence = phased.OccurrenceAt.ToUniversalTime(), phased.Scope, phased.Phase }, Json)
+			: input.DueOccurrence is { } occurrence
 			? JsonSerializer.Serialize(new { tenantId, input.EventKey, input.SourceType, input.SourceId, input.SourceRevision,
 				Occurrence = occurrence.OccurrenceAt.ToUniversalTime(), occurrence.Scope }, Json)
 			: JsonSerializer.Serialize(new { tenantId, input.EventKey, input.SourceType, input.SourceId, input.SourceRevision,

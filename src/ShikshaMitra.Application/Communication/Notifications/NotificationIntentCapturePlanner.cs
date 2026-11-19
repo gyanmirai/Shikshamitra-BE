@@ -37,6 +37,10 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 			if (definition.TriggerType != NotificationTriggerType.Due || occurrence.Scope == null ||
 				occurrence.RuleId == Guid.Empty || occurrence.RuleRevision < 1 || occurrence.OccurrenceAt == default)
 				throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
+			if (occurrence.Phase.HasValue && (occurrence.Phase != NotificationDuePhase.ReviewerEscalation ||
+				input.EventKey != AcademicNotificationEventKeys.SubstitutionAcknowledgementDue || input.ActorUserId.HasValue ||
+				input.ExpiresAt != occurrence.OccurrenceAt || input.DueAt >= input.ExpiresAt))
+				throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
 			var scope = occurrence.Scope;
 			try { _ = NotificationRuleScope.Create(scope.AcademicYearId, scope.BoardId, scope.MediumId, scope.ClassId, scope.DivisionId); }
 			catch (ArgumentException) { throw new BusinessException(NotificationErrorCodes.SourceUnavailable); }
@@ -50,7 +54,7 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
 		var occurrence = input.DueOccurrence;
 		var context = new NotificationIntentContext(Guid.Empty, tenantId, input.EventKey, input.SourceType, input.SourceId,
-			input.SourceRevision, input.OccurredAt, input.AffectedRecipients, occurrence?.Scope, occurrence?.OccurrenceAt);
+			input.SourceRevision, input.OccurredAt, input.AffectedRecipients, occurrence?.Scope, occurrence?.OccurrenceAt) { DuePhase = occurrence?.Phase };
 		var source = await sources.Single(x => x.EventKeys.Contains(input.EventKey)).LoadAsync(context, cancellationToken);
 		var scoped = partitions.Partition(context, definition, source);
 		var expiry = input.ExpiresAt.HasValue && source.ExpiresAt.HasValue
@@ -95,8 +99,9 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 			var snapshot = "{}"; var due = input.DueAt ?? input.OccurredAt;
 			try
 			{
-				snapshot = snapshots.Serialize(new(1, scope, config.Value, occurrence?.OccurrenceAt.ToUniversalTime()), definition);
-				due = due.AddMinutes(config.Value.Timing.DelayMinutes);
+				snapshot = snapshots.Serialize(new(1, scope, config.Value, occurrence?.OccurrenceAt.ToUniversalTime())
+					{ DuePhase = occurrence?.Phase }, definition);
+				if (occurrence?.Phase == null) due = due.AddMinutes(config.Value.Timing.DelayMinutes);
 				if (capturedStudents != null && due < input.OccurredAt) due = input.OccurredAt;
 				zone ??= schoolZone.GetAsync(cancellationToken);
 				var decision = timing.Evaluate(due, await zone, config.Value.Timing.QuietHoursEnabled, config.Value.Timing.QuietStart,

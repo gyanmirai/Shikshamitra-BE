@@ -213,8 +213,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, Search = "839001" })).TotalCount.ShouldBe(1);
 		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, Search = "CertificateListActive Student" })).Items.Single().StudentId.ShouldBe(active.Id);
 		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, Search = "certificate-registration-839001" })).Items.Single().StudentId.ShouldBe(active.Id);
-		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, AcademicYearId = active.AcademicYearId,
-			AcademicMediumStageId = active.AcademicMediumStageId })).TotalCount.ShouldBe(1);
+		var currentYearRow = (await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, AcademicYearId = active.AcademicYearId,
+			AcademicMediumStageId = active.AcademicMediumStageId })).Items.Single();
+		currentYearRow.IsCurrentAcademicYear.ShouldBe(true);
 		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, AcademicYearId = Guid.NewGuid() })).TotalCount.ShouldBe(0);
 		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, AcademicMediumStageId = Guid.NewGuid() })).TotalCount.ShouldBe(0);
 		(await directory.GetListAsync(new() { StudentId = former.Id, IncludeActiveStudentList = true })).TotalCount.ShouldBe(0);

@@ -15,6 +15,7 @@ public class HouseManagementQuery : PagedAndSortedResultRequestDto
 	public Guid? DivisionId { get; set; }
 	public Guid? HouseId { get; set; }
 	public bool UnassignedOnly { get; set; }
+	public bool AssignedOnly { get; set; }
 }
 
 public class HouseManagementStudentDto
@@ -43,7 +44,7 @@ public class HouseManagementHouseDto
 	public string? LogoUrl { get; set; }
 	public string? Description { get; set; }
 	public long MemberCount { get; set; }
-	public HouseManagementStudentDto? Leader { get; set; }
+	public long HouseLeaderCount { get; set; }
 	public string ConcurrencyStamp { get; set; } = "";
 	public bool CanManage { get; set; }
 }
@@ -56,6 +57,7 @@ public class HouseManagementDivisionDto
 	public string StandardName { get; set; } = "";
 	public long StudentCount { get; set; }
 	public HouseManagementStudentDto? Leader { get; set; }
+	public HouseManagementStudentDto? HouseLeader { get; set; }
 	public string ConcurrencyStamp { get; set; } = "";
 	public bool CanManage { get; set; }
 }
@@ -81,6 +83,7 @@ public class SaveHouseRequest
 public class HouseAssignmentRequest
 {
 	public Guid AcademicMediumId { get; set; }
+	public Guid DivisionId { get; set; }
 	public Guid? HouseId { get; set; }
 
 	[Required, MinLength(1), MaxLength(500)]

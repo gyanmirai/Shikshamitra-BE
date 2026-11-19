@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-11-18
+updated_on: 2026-11-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -19,6 +19,12 @@ audience: humans-and-agents
 TL;DR: Admissions remains inside the Student modular-monolith boundary and separates aggregate invariants, authoritative validation, reads, commands, and runtime availability.
 
 Saved-definition preview delegates through `AdmissionFormAppService.GetSavedInheritancePreviewAsync` to the existing inheritance service. It checks the persisted exact-source approval before loading that source and keeps the draft-preview Manage boundary separate. The Domain composer orders editable sections and Inquiry context as one source sequence while returning them separately for immutable runtime ownership.
+
+## Registration print presentation
+
+`AdmissionFormExperienceMetadata.cs` stores typed print presentation in the definition's existing experience extra property. `AdmissionFormPrintSettingsValidation.cs` bounds the advanced DTO subtree before aggregate mutation; `AdmissionFormVersionComparer.cs` compares JSON deeply. Existing metadata-copy, inheritance and effective-form snapshot owners retain registration-owned print settings across clones, versions and pinned applications. No form-answer, Domain schema or migration changes are required.
+
+`AdmissionApplicationPrintContextReader.cs` supplies only explicitly requested academic header labels after the application-form owner has authorized the application. Its single scalar tenant-filtered join uses that application's offering/cycle; it does not expose an academic catalogue or run while preview components rerender. `SchoolIdentityAppService.GetBrandingAsync` reuses its existing tenant load for school contact text, retaining the branding authentication and tenant boundary.
 
 ## Staff scope gateways
 
@@ -91,9 +97,9 @@ Tenant filters remain enabled; historical paths are independently scoped rather 
 | --- | --- |
 | Contracts | `ShikshaMitra.Application.Contracts/Students/Records/HouseManagement/` |
 | Scoped reads, assignment preview/commit and leadership commands | `ShikshaMitra.Application/Students/Records/HouseManagement/` |
-| Existing house catalogue and membership/leader invariants | `ShikshaMitra.Domain/Students/Records/Settings/`, `ShikshaMitra.Domain/Students/StudentEnrollments/` |
-| Independent division leader and EF mapping | `ShikshaMitra.Domain/TenantSettings/AcademicSetups/Divisions/Division.Leadership.cs`, `ShikshaMitra.EntityFrameworkCore/Students/Records/HouseManagementConfiguration.cs` |
-| Additive persistence migration | `ShikshaMitra.EntityFrameworkCore/Migrations/20261030111330_AddHouseManagement.cs`; nullable enrollment/leader references, revision counters, indexes and restrictive foreign keys |
+| Existing house catalogue and membership invariants | `ShikshaMitra.Domain/Students/Records/Settings/`, `ShikshaMitra.Domain/Students/StudentEnrollments/` |
+| Two independent division leadership slots and EF mapping | `ShikshaMitra.Domain/TenantSettings/AcademicSetups/Divisions/Division.Leadership.cs`, `ShikshaMitra.EntityFrameworkCore/Students/Records/HouseManagementConfiguration.cs` |
+| Leadership carryover and conflict gate | `ShikshaMitra.EntityFrameworkCore/Migrations/20261119180000_MoveHouseLeadershipToDivisions.cs`, `scripts/students/house-leaders-preflight.sql` |
 | HTTP boundary | `ShikshaMitra.HttpApi/Controllers/Student/Records/HouseManagementController.cs` |
 | Permission catalogue and visibility prerequisites | `ShikshaMitra.Domain.Shared/Constants/Permissions/SubmodulePermissions/Students/`, `ShikshaMitra.Domain.Shared/Security/Permissions/NavigationVisibilityPrerequisites.json` |
 

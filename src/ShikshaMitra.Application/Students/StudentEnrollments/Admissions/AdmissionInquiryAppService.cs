@@ -827,12 +827,27 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 		var parentMatches = await familyMatchService.FindAccessibleMatchesAsync(phone, input.GuardianEmail, input.ParentContacts);
 		var guardians = await guardianRepository.GetListAsync(x => x.Mobile == phone || (!string.IsNullOrWhiteSpace(input.GuardianEmail) && x.Email == input.GuardianEmail!.Trim().ToLowerInvariant()));
 		var applicants = await applicantRepository.GetListAsync(x => (!string.IsNullOrWhiteSpace(input.ApplicantName) && (x.FirstName + " " + (x.LastName ?? string.Empty)).Trim().Contains(input.ApplicantName)) && (!input.ApplicantDateOfBirth.HasValue || x.DateOfBirth == input.ApplicantDateOfBirth.Value.Date));
-		var familyIds = guardians.Select(x => x.FamilyId).Concat(applicants.Select(x => x.FamilyId)).Concat(parentMatches.Select(match => match.FamilyId)).Distinct().ToList();
+		var scopedInquiryQuery = await scopeAccess.GetScopedQueryAsync();
+		var applicantQuery = await applicantRepository.GetQueryableAsync();
+		var normalizedName = NormalizeDuplicateName(input.ApplicantName);
+		var birthDate = input.ApplicantDateOfBirth?.Date;
+		var identityMatches = normalizedName.Length == 0 ? [] : (await AsyncExecuter.ToListAsync(
+			scopedInquiryQuery.Where(inquiry => inquiry.AdmissionCycleId == input.AdmissionCycleId &&
+				inquiry.ApplicantId.HasValue && inquiry.FamilyId.HasValue &&
+				((phone.Length == 10 && inquiry.NormalizedPhone == phone) ||
+				(birthDate.HasValue && applicantQuery.Any(applicant =>
+					applicant.Id == inquiry.ApplicantId && applicant.DateOfBirth == birthDate))))
+			.Select(inquiry => new { inquiry.Id, inquiry.FamilyId, inquiry.ApplicantName })))
+			.Where(inquiry => NormalizeDuplicateName(inquiry.ApplicantName) == normalizedName).ToList();
+		var identityInquiryIds = identityMatches.Select(inquiry => inquiry.Id).ToHashSet();
+		var familyIds = guardians.Select(x => x.FamilyId).Concat(applicants.Select(x => x.FamilyId))
+			.Concat(parentMatches.Select(match => match.FamilyId))
+			.Concat(identityMatches.Select(inquiry => inquiry.FamilyId!.Value)).Distinct().ToList();
 		if (familyIds.Count == 0) return [];
 		var familyApplicants = await applicantRepository.GetListAsync(x => familyIds.Contains(x.FamilyId));
 		if (familyApplicants.Count == 0) return [];
 		var applicantIds = familyApplicants.Select(x => x.Id).ToList();
-		var scopedInquiries = await AsyncExecuter.ToListAsync((await scopeAccess.GetScopedQueryAsync())
+		var scopedInquiries = await AsyncExecuter.ToListAsync(scopedInquiryQuery
 			.Where(x => x.ApplicantId.HasValue && applicantIds.Contains(x.ApplicantId.Value)));
 		var candidateApplications = await AsyncExecuter.ToListAsync(
 			(await applicationScope.GetScopedApplicationsAsync()).Where(application =>
@@ -865,13 +880,15 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 			var parentMatch = parentMatches.FirstOrDefault(match => match.FamilyId == x.FamilyId);
 			var canLinkFamily = activeFamilies.TryGetValue(x.FamilyId, out var family) &&
 				(parentMatch?.Parents.Count > 0 || guardian != null && family!.PrimaryGuardianId == guardian.Id && guardian.Mobile == phone);
-			var existingInquiry = scopedInquiries.OrderByDescending(item => item.AdmissionCycleId == input.AdmissionCycleId).ThenByDescending(item => item.CreationTime)
+			var existingInquiry = scopedInquiries.OrderByDescending(item => identityInquiryIds.Contains(item.Id))
+				.ThenByDescending(item => item.AdmissionCycleId == input.AdmissionCycleId).ThenByDescending(item => item.CreationTime)
 				.FirstOrDefault(item => item.ApplicantId == x.Id);
 			return new AdmissionInquiryDuplicateMatchDto
 			{
 				ApplicantId = x.Id, FamilyId = x.FamilyId, ExistingInquiryId = existingInquiry?.Id,
 				ExistingInquiryNumber = existingInquiry?.InquiryNumber,
 				ExistingInquiryAdmissionCycleId = existingInquiry?.AdmissionCycleId,
+				ExistingInquiryMatchesMobile = existingInquiry == null ? null : phone.Length == 10 && existingInquiry.NormalizedPhone == phone,
 				ApplicantName = existingInquiry?.ApplicantName ?? string.Join(" ", new[] { x.FirstName, x.MiddleName, x.LastName }
 					.Where(y => !string.IsNullOrWhiteSpace(y))),
 				GuardianPhone = guardian?.Mobile, GuardianEmail = guardian?.Email, DateOfBirth = x.DateOfBirth,
@@ -880,6 +897,9 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 			};
 		}).ToList();
 	}
+
+	private static string NormalizeDuplicateName(string? name) =>
+		string.Join(" ", (name ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Assign)]
 	public Task<List<AdmissionInquiryCounsellorDto>> GetAssignableCounsellorsAsync(

@@ -47,6 +47,7 @@ public class StudentDirectoryItemDto : EntityDto<Guid>
 	public int? RollNo { get; set; }
 	public StudentLifeCycleStatusEnum Status { get; set; }
 	public Guid? AcademicYearId { get; set; }
+	public bool? IsCurrentAcademicYear { get; set; }
 	public Guid? StandardId { get; set; }
 	public string? StandardName { get; set; }
 	public Guid? DivisionId { get; set; }

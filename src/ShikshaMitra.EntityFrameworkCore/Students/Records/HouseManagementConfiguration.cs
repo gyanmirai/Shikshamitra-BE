@@ -6,7 +6,7 @@ using ShikshaMitra.TenantSettings.Divisions;
 
 namespace ShikshaMitra.Students.Records;
 
-public class HouseManagementConfiguration : IEntityTypeConfiguration<StudentEnrollment>, IEntityTypeConfiguration<HouseSettings>, IEntityTypeConfiguration<Division>
+public class HouseManagementConfiguration : IEntityTypeConfiguration<StudentEnrollment>, IEntityTypeConfiguration<Division>
 {
 	public void Configure(EntityTypeBuilder<StudentEnrollment> builder)
 	{
@@ -14,13 +14,9 @@ public class HouseManagementConfiguration : IEntityTypeConfiguration<StudentEnro
 		builder.HasOne<HouseSettings>().WithMany().HasForeignKey(x => x.HouseId).OnDelete(DeleteBehavior.Restrict);
 	}
 
-	public void Configure(EntityTypeBuilder<HouseSettings> builder)
-	{
-		builder.HasOne<StudentEnrollment>().WithMany().HasForeignKey(x => x.LeaderEnrollmentId).OnDelete(DeleteBehavior.Restrict);
-	}
-
 	public void Configure(EntityTypeBuilder<Division> builder)
 	{
 		builder.HasOne<StudentEnrollment>().WithMany().HasForeignKey(x => x.LeaderEnrollmentId).OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne<StudentEnrollment>().WithMany().HasForeignKey(x => x.HouseLeaderEnrollmentId).OnDelete(DeleteBehavior.Restrict);
 	}
 }

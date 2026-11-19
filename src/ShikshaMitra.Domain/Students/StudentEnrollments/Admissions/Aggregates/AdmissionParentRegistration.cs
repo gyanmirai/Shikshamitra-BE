@@ -66,7 +66,8 @@ public class AdmissionParentRegistration : FullAuditedAggregateRoot<Guid>, IMult
 	public void SetDelivery(string status, string? error = null, Guid? campaignId = null, DateTime? startedAt = null)
 	{
 		DeliveryStatus = status; DeliveryError = error; CampaignId = campaignId ?? CampaignId; DeliveryStartedAt = startedAt ?? DeliveryStartedAt;
-		if (status == "Sent") ProtectedToken = "";
+		// Initial links can be shared again by authorized staff until the request closes.
+		if (status == "Sent" && Purpose != "initial") ProtectedToken = "";
 	}
 	public bool IsReplay(string key, string fingerprint)
 	{

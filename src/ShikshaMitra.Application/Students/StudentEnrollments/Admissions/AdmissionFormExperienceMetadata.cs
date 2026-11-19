@@ -50,17 +50,20 @@ internal static class AdmissionFormMetadataStore
 			PaperSize = settings.PaperSize,
 			ShowSchoolHeader = settings.ShowSchoolHeader,
 			ShowPhoto = settings.ShowPhoto,
-			ShowSignature = settings.ShowSignature
+			ShowSignature = settings.ShowSignature,
+			Advanced = JsonSerializer.Deserialize<AdmissionFormPrintAdvancedSettingsDto>(
+				JsonSerializer.Serialize(settings.Advanced ?? saved?.Advanced, JsonOptions), JsonOptions)
 		};
 	}
 
 	internal static void ValidatePrintSettings(AdmissionFormPrintSettingsDto? settings)
 	{
 		if (settings == null) return;
-		if (settings.Layout is not ("compact" or "spacious") || settings.PaperSize != "A4" ||
+		if (settings.Layout is not ("compact" or "spacious") || settings.PaperSize is not ("A4" or "A5" or "LETTER" or "LEGAL") ||
 			settings.Template is not (null or "simple" or "boxed-grid" or "structured-classic"))
 			throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition,
-				"Choose a supported print template with a compact or spacious layout and A4 paper size.");
+				"Choose a supported print template, compact or spacious layout, and paper size.");
+		AdmissionFormPrintSettingsValidation.Validate(settings.Advanced);
 	}
 
 	public static void WriteExperience(AdmissionFormDefinition form, CreateUpdateAdmissionFormDto input)

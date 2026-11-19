@@ -29,7 +29,7 @@ public class HouseManagementApi_Tests(ShikshaMitraApiTestFactory factory) : Shik
 	[InlineData("DELETE", "houses/11111111-1111-1111-1111-111111111111", "Students.Records.HouseManagement.Add")]
 	[InlineData("POST", "assignments/preview", "Students.Records.HouseManagement.View")]
 	[InlineData("POST", "assignments/commit", "Students.Records.HouseManagement.View")]
-	[InlineData("PUT", "houses/11111111-1111-1111-1111-111111111111/leader", "Students.Records.HouseManagement.View")]
+	[InlineData("PUT", "divisions/11111111-1111-1111-1111-111111111111/house-leader", "Students.Records.HouseManagement.View")]
 	[InlineData("PUT", "divisions/11111111-1111-1111-1111-111111111111/leader", "Students.Records.HouseManagement.View")]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Every_endpoint_requires_its_exact_action(string method, string path, string unrelatedAction)
@@ -52,6 +52,22 @@ public class HouseManagementApi_Tests(ShikshaMitraApiTestFactory factory) : Shik
 		response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 	}
 
+	[Theory]
+	[InlineData("preview")]
+	[InlineData("commit")]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Membership_commands_require_a_division(string command)
+	{
+		using var response = await Client.PostAsJsonAsync($"{Root}/assignments/{command}", new
+		{
+			AcademicMediumId = Factory.SeededMediumId,
+			EnrollmentIds = new[] { Guid.NewGuid() }
+		}, JsonOptions);
+		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+		body.ShouldContain("Select a division to change house membership.");
+	}
+
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Legacy_house_settings_routes_are_retired()
@@ -71,6 +87,15 @@ public class HouseManagementApi_Tests(ShikshaMitraApiTestFactory factory) : Shik
 		}
 		using var create = await Client.PostAsJsonAsync(routes[0], new { name = "Legacy Falcons", color = "#2468ab" }, JsonOptions);
 		create.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Former_house_wide_leader_command_is_retired()
+	{
+		using var response = await Client.PutAsJsonAsync($"{Root}/houses/{Guid.NewGuid()}/leader",
+			new ReplaceStudentLeaderRequest { AcademicMediumId = Factory.SeededMediumId, ConcurrencyStamp = "previous-version" }, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 
 	[Fact]

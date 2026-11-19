@@ -9,21 +9,16 @@ namespace ShikshaMitra.Students.Records.HouseManagement;
 
 public partial class HouseManagementCommandService
 {
-	public Task ReplaceHouseLeaderAsync(Guid id, ReplaceStudentLeaderRequest input) => TransactionAsync(async () =>
-	{
-		await access.GetAsync(input.AcademicMediumId, manage: true);
-		var house = await HouseAsync(id, input.AcademicMediumId);
-		house.EnsureVersion(input.ConcurrencyStamp);
-		var enrollment = await LeaderAsync(input);
-		house.ReplaceLeader(enrollment);
-		await houses.UpdateAsync(house);
-		return true;
-	});
+	public Task ReplaceDivisionHouseLeaderAsync(Guid id, ReplaceStudentLeaderRequest input) =>
+		ReplaceLeaderAsync(id, input, houseLeader: true);
 
-	public Task ReplaceDivisionLeaderAsync(Guid id, ReplaceStudentLeaderRequest input) => TransactionAsync(async () =>
+	public Task ReplaceDivisionLeaderAsync(Guid id, ReplaceStudentLeaderRequest input) =>
+		ReplaceLeaderAsync(id, input, houseLeader: false);
+
+	private Task ReplaceLeaderAsync(Guid id, ReplaceStudentLeaderRequest input, bool houseLeader) => TransactionAsync(async () =>
 	{
-		var context = await access.GetAsync(input.AcademicMediumId);
-		await scope.EnsureCanAccessDivisionAsync(id, "HouseManagement.DivisionLeader");
+		await access.GetAsync(input.AcademicMediumId);
+		await scope.EnsureCanAccessDivisionAsync(id, houseLeader ? "HouseManagement.HouseLeader" : "HouseManagement.DivisionLeader");
 		var dq =
 			from d in await divisions.GetQueryableAsync()
 			join c in await standards.GetQueryableAsync() on d.StandardId equals c.Id
@@ -32,19 +27,25 @@ public partial class HouseManagementCommandService
 				stage.TenantId == CurrentTenant.Id && stage.EducationMediumId == input.AcademicMediumId
 			select d;
 		var division = await AsyncExecuter.SingleOrDefaultAsync(dq) ?? throw new BusinessException(UserScopeErrorCodes.AccessDenied);
-		var enrollment = await LeaderAsync(input);
-		division.ReplaceLeader(enrollment, input.ConcurrencyStamp);
+		var enrollment = await LeaderAsync(input, houseLeader);
+		if (houseLeader)
+			division.ReplaceHouseLeader(enrollment, input.ConcurrencyStamp);
+		else
+			division.ReplaceLeader(enrollment, input.ConcurrencyStamp);
 		await divisions.UpdateAsync(division);
 		return true;
 	});
 
-	private async Task<StudentEnrollment?> LeaderAsync(ReplaceStudentLeaderRequest input)
+	private async Task<StudentEnrollment?> LeaderAsync(ReplaceStudentLeaderRequest input, bool houseLeader)
 	{
 		if (!input.EnrollmentId.HasValue)
 			return null;
 		var q = await queries.StudentsAsync(input.AcademicMediumId);
-		if (!await AsyncExecuter.AnyAsync(q.Where(s => s.EnrollmentId == input.EnrollmentId)))
+		var candidate = await AsyncExecuter.SingleOrDefaultAsync(q.Where(s => s.EnrollmentId == input.EnrollmentId));
+		if (candidate == null)
 			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+		if (houseLeader && !candidate.HouseId.HasValue)
+			throw new BusinessException(HouseManagementErrorCodes.IneligibleLeader);
 		return await enrollments.GetAsync(e => e.Id == input.EnrollmentId && e.TenantId == CurrentTenant.Id);
 	}
 }

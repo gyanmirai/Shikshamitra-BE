@@ -166,6 +166,7 @@ public partial class SchoolIdentityAppService(
 		return new()
 		{
 			SchoolName = schoolName.Length > 0 ? schoolName : tenant.Name,
+			SchoolPhone = Text("ContactNumber"), SchoolEmail = Text("Email"), SchoolWebsite = Text("Website"),
 			AddressLines = new[] { Text("Address1"), Text("Address2"), Text("Address3"), localityWithPostalCode, Text("Country") }
 				.Where(value => value.Length > 0).ToArray(),
 			Logo = BrandingAsset(profile.Effective["logo"]), Banner = BrandingAsset(profile.Effective["banner"])

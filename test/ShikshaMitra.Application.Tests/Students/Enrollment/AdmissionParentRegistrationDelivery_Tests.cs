@@ -19,6 +19,49 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
+	public async Task ParentRegistration_copy_reuses_the_sent_url_and_issues_an_unsent_link_only_when_available()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var fixture = await ParentFixtureAsync();
+		var sender = Substitute.For<IEmailSender>();
+		var job = ParentDeliveryJob(sender);
+		var staff = GetRequiredService<IAdmissionParentRegistrationAppService>();
+		var parent = GetRequiredService<IAdmissionParentRegistrationPublicAppService>();
+		var config = GetRequiredService<IConfiguration>();
+		var previous = config["App:ClientUrl"];
+		config["App:ClientUrl"] = "https://school.example.test";
+		try
+		{
+			await job.ExecuteAsync(new() { TenantId = TestTenantId, RegistrationId = fixture.GrantId });
+			var sent = await staff.GetAsync(fixture.Application.Id);
+			sent.CanCopyLink.ShouldBeTrue();
+			sent.CanCreateLink.ShouldBeFalse();
+			var copy = new AdmissionParentCopyLinkInput { RequestId = sent.Request!.Id, ConcurrencyStamp = sent.ConcurrencyStamp, IdempotencyKey = "copy-sent" };
+			var link = await staff.CopyLinkAsync(fixture.Application.Id, copy);
+			link.ShouldBe("https://school.example.test/admission-registration#token=" + fixture.Token);
+			(await staff.CopyLinkAsync(fixture.Application.Id, copy)).ShouldBe(link);
+			(await parent.GetAsync(fixture.Token)).CanEdit.ShouldBeTrue();
+			await staff.RevokeAsync(fixture.Application.Id, new() { ConcurrencyStamp = sent.ConcurrencyStamp, IdempotencyKey = "revoke-before-manual-share" });
+			await Should.ThrowAsync<BusinessException>(() => staff.CopyLinkAsync(fixture.Application.Id, copy));
+
+			var fresh = await staff.GetAsync(fixture.Application.Id);
+			fresh.CanCreateLink.ShouldBeTrue();
+			var issue = new AdmissionParentCopyLinkInput { RecipientRelationship = "mother", ConcurrencyStamp = fresh.ConcurrencyStamp, IdempotencyKey = "manual-share" };
+			var manualLink = await staff.CopyLinkAsync(fixture.Application.Id, issue);
+			(await staff.CopyLinkAsync(fixture.Application.Id, issue)).ShouldBe(manualLink);
+			var manual = (await staff.GetAsync(fixture.Application.Id)).Request!;
+			manual.DeliveryStatus.ShouldBe("NotSent");
+			var manualToken = await ParentTokenAsync(manual.Id);
+			manualLink.ShouldEndWith("#token=" + manualToken);
+			(await parent.GetAsync(manualToken)).CanEdit.ShouldBeTrue();
+			await job.ExecuteAsync(new() { TenantId = TestTenantId, RegistrationId = manual.Id });
+			await sender.Received(1).SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), true);
+		}
+		finally { config["App:ClientUrl"] = previous; }
+	}
+
+	[Fact]
 	public async Task ParentRegistration_delivery_reuses_onboarding_sender_without_a_second_email_setup()
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);

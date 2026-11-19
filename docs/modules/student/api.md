@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-17
+updated_on: 2026-11-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -81,19 +81,19 @@ Changing from the default format to a school prefix carries the existing sequenc
 
 For `GET students`, `filter` matches the visible student name or GR number using a trimmed, case-insensitive substring. Search runs on the same tenant-, enrollment-, academic- and user-scoped projection as the returned rows; masked GR numbers cannot match hidden identities.
 
-Apply `20261030111330_AddHouseManagement` before starting an API that uses these endpoints. The migration adds persistence only; it does not allocate students, copy houses between years or grant permissions.
+Apply `20261119180000_MoveHouseLeadershipToDivisions` before starting this API version. Run the [read-only preflight](../../../scripts/students/house-leaders-preflight.sql) on the target database first. The migration carries eligible legacy House leaders into their current divisions and preserves Division leader appointments. Invalid appointments and two legacy House leaders in a division block deployment. Have authorized staff select the retained leader and clear the other legacy appointment through the old workflow, then rerun the preflight. A downgrade blocks if multiple current division House leaders belong to the same house, because the old schema has only one slot per house.
 
 All endpoints below use the authenticated `/api/students/records/house-management` root and existing Result envelope. Controller and application boundaries use exact `Students.Records.HouseManagement.View`, `.Add` and `.Delete` permissions. Positive permission assignments require the existing Student and Student Records visibility flags; adding the feature does not grant roles/users access. This is the only supported house catalogue API; legacy House Settings routes are retired. The separate Student Records policy settings API and permissions remain unchanged.
 
 | Method and suffix | Authority | Contract |
 | --- | --- | --- |
-| GET `houses`, `students`, `divisions` | View | Required `academicMediumId`; paging uses `skipCount` and `maxResultCount` (1–100), with optional `filter` and supported `sorting`. Student reads accept `standardId`, `divisionId`, `houseId`, `unassignedOnly`; division reads accept `standardId`. Results contain scoped counts and visible leaders only. |
+| GET `houses`, `students`, `divisions` | View | Required `academicMediumId`. Paging uses `skipCount` and `maxResultCount` (1–100), with optional `filter` and supported `sorting`. Student reads accept `standardId`, `divisionId`, `houseId`, and one of `unassignedOnly` or `assignedOnly`. Houses expose `houseLeaderCount`. Division reads accept `standardId`, `divisionId` and `houseId`. Filtering by house selects divisions with visible members of that house and returns both actual visible incumbents. `houseLeader` is the House leader and `leader` is the Division leader. |
 | POST `houses`; PUT `houses/{id}` | Add | Medium, required name/color and optional description/logo URL. Update requires current `concurrencyStamp`. Shared configuration requires medium-wide or broader scope. |
 | DELETE `houses/{id}` | Delete | Query contains medium and current stamp; populated houses are rejected. |
-| POST `assignments/preview`; POST `assignments/commit` | Add | Medium, nullable target `houseId` (null removes membership), 1–500 distinct enrollment IDs. Preview returns affected students, departing house leaders and `previewToken`; commit supplies the reviewed token and revalidates the whole atomic batch. The request bound does not limit house membership. |
-| PUT `houses/{id}/leader`; PUT `divisions/{id}/leader` | Add | Medium, nullable `enrollmentId` (null clears the role), current owner `concurrencyStamp`. House leaders must be eligible members; division leaders remain independent. |
+| POST `assignments/preview`; POST `assignments/commit` | Add | Require `academicMediumId`, a specific `divisionId`, and 1–500 distinct enrollment IDs in that division. A null `houseId` removes membership. Preview returns affected students, departing house leaders and a division-bound `previewToken`. Commit supplies that token and revalidates the atomic batch. |
+| PUT `divisions/{id}/house-leader` and `divisions/{id}/leader` | Add | Medium, nullable `enrollmentId` (null clears the specified role), and current division `concurrencyStamp`. Both candidates must be active enrolled students in the selected division. House leaders also require house membership in that medium. |
 
-The server enforces active actor, tenant, medium/year, operational enrollment and affected-record scope independently of action permission. Leaving a house clears its house-leader role while preserving independent division leadership. Missing/changed preview state rejects stale writes. Feature business codes use `Students:HouseManagement:` with `InvalidInput`, `StalePreview`, `HousePopulated` and `IneligibleLeader`. See [product rules](./product.md#house-management) and [frontend integration](../../../../Shikshamitra-FE/docs/student/clients.md#house-management-client).
+The server enforces active actor, tenant, medium/year, operational enrollment and affected-record scope independently of action permission. Leaving a house clears its house-leader role while preserving independent division leadership. Missing/changed preview state rejects stale writes. Feature business codes use `Students:HouseManagement:` with `InvalidInput`, `AssignmentDivisionMismatch`, `StalePreview`, `HousePopulated` and `IneligibleLeader`. See [product rules](./product.md#house-management) and [frontend integration](../../../../Shikshamitra-FE/docs/student/clients.md#house-management-client).
 
 ## Student action permissions
 
@@ -516,6 +516,8 @@ Selection rechecks the active family, source applicant visibility, current saved
 The selected saved parent profile wins over typed child-form values; shared family contact rows are not overwritten.
 Public Inquiry rejects trusted existing-parent selection.
 Existing duplicate previews, cycle rules, request replay and finalization identity checks remain authoritative; name/date-of-birth similarity alone introduces no new hard identity block.
+
+The staff Inquiry duplicate preview includes visible same-cycle inquiries with an exact normalized student-name match and either the same recorded inquiry mobile or the same applicant date of birth. The additive `existingInquiryMatchesMobile` flag describes the selected inquiry's own mobile, separately from family-level contact matching. Missing dates supply no date match. The preview uses the existing inquiry scope and does not change write validation.
 Direct Registration retries compare the recorded submitted email/mobile and selected relationship/source to reject changed payloads.
 Pending authored parent profiles use a parameterized provider-backed JSON contact predicate intersected with current admission scope before projecting family IDs.
 Current Student Father/Mother contacts and ordinary saved primary contacts also use targeted queries; there is no arbitrary pending-applicant ceiling, unrelated JSON-profile materialization, Student aggregate graph or per-child query.
@@ -585,11 +587,26 @@ The response returns current workflow status, stage timestamps, immutable transi
 ## Registration print contract
 
 Form read DTOs expose `printSettings`; create/update input accepts it optionally.
-The settings object contains nullable `template` (`simple`, `boxed-grid` or `structured-classic`), `layout` (`compact` or `spacious`), `paperSize` (`A4` only), and boolean `showSchoolHeader`, `showPhoto` and `showSignature` flags.
+The settings object contains nullable `template` (`simple`, `boxed-grid` or `structured-classic`), `layout` (`compact` or `spacious`), `paperSize` (`A4`, `A5`, `LETTER` or `LEGAL`), boolean `showSchoolHeader`, `showPhoto` and `showSignature` flags, and optional typed `advanced` settings.
 Legacy templates normalize to Simple with Compact A4 and all three flags enabled; new-client starters explicitly choose Boxed Grid. Template and density remain independent.
 Unsupported template/layout/paper values raise the existing `Admissions.FormInvalidDefinition` error before aggregate or metadata changes.
 Omitting the settings on an older-client update retains the saved settings; legacy definitions without settings receive defaults.
 Omitting only `template` while updating other print settings retains the current saved template.
+Omitting `advanced` or sending it as null preserves the saved advanced configuration; sending `{}` explicitly resets it. Nullable child members are omitted from JSON. Advanced groups are `paper`, `border`, `style`, `branding`, `header`, `photo`, `footer`, `flow`, `sections`, `fields`, `content` and `copies`; no executable content or arbitrary style declarations are accepted.
+
+| Advanced setting | Server bounds |
+|---|---|
+| Page margins / border inset | 5–30 mm / 2–25 mm |
+| Body / title font size | 8–14 / 12–24 points |
+| Photo width / height | 20–55 mm / 25–70 mm |
+| Logo and banner geometry | Position 0–100%; size 5–100%; contained inside the header band |
+| Per-section / per-field maps | Up to 128 / 512 distinct authored codes; codes up to 128 characters |
+| Section columns / blank rows / field writing lines | 1–4 / 1–30 / 1–8 |
+| Instructions and declaration | Up to 2000 characters per translated value |
+| Titles, captions, signature labels and checklist items | Up to 128 characters; at most 20 checklist items per language |
+| Translations / colours | Up to 8 valid language codes / `#RRGGBB` |
+
+All placement, alignment, orientation, palette, font, border, spacing, width, answer-style and copy-mode strings are allowlisted. Invalid nested values reject the command before aggregate mutation. Section/field options address authored question codes and do not alter question bindings, values, required rules or Inquiry locks.
 Clone/new-version drafts copy the experience metadata, version comparisons report print-setting changes, and Inquiry composition retains the Registration definition's settings.
 Frozen application definitions retain the settings captured with that schema.
 
@@ -598,6 +615,7 @@ An empty array means no Registration answers have been saved; it must not fall b
 The existing `values`, `autoFilledFieldCodes` and family-prefill behavior remain available to editors.
 The response still carries the pinned definition/version and separate frozen Inquiry context.
 It also exposes the existing application's `applicationNumber` for the printed Registration No. line, without another lookup.
+When the pinned print header enables academic details, `printAcademicDetails` returns the requested optional `board`, `medium`, `class` and `academicYear` display names from that authorized application's offering/cycle. One tenant-filtered scalar join supplies them per form read; there is no catalogue endpoint, permission expansion or query on each preview render. With all academic header flags off, the property is omitted and the join is skipped. Missing linked setup data is not replaced with guessed labels.
 Application View, tenant and application-scope checks remain unchanged; printing introduces no separate server PDF endpoint or write permission.
 An explicit save before printing uses the existing draft-save command and its Add permission/concurrency checks; a print read does not submit or advance the application.
 
@@ -1162,12 +1180,15 @@ Staff routes use `/api/student/enrollment/admissions/applications/{applicationId
 | GET root | Saved recipient choices, request/delivery/progress, concurrency stamp, correction choices and server capabilities; never the stored token |
 | GET `/email-history` | Registration-link snapshots and recorded Communication attempts for this application; requires Applications View and returns safe provider guidance without protected links or raw provider diagnostics |
 | POST `/send` | `{recipientRelationship, concurrencyStamp, idempotencyKey}`; create or replace a seven-day initial link |
+| POST `/copy-link` | Requires Applications Edit and scoped View. Send `{requestId, concurrencyStamp, idempotencyKey}` to copy the current writable initial link or `{recipientRelationship, concurrencyStamp, idempotencyKey}` to issue a link without email when no live link exists. Returns the private URL in a no-store response. |
 | POST `/email` | Send-command fields plus `{email,expectedEmail,reason?}`; compare the saved adult email and application stamp, save an eligible draft contact, synchronize compatible draft answers, revoke prior links and return refreshed context without sending |
 | POST `/corrections` | Send input plus `{notes,fieldCodes,documents:[{stageInstanceId,requirementCode}]}`; grant only requested eligible changes |
 | POST `/revoke`, `/takeover`, `/retry-delivery` | `{concurrencyStamp,idempotencyKey}`; retries retain the existing eligibility and uncertain-delivery safeguards |
 | POST `/apply` | Command plus `{reason}`; apply a ready post-submission proposal through the audited form-correction owner |
 
 Recipients expose `canChangeEmail` and `emailChangeBlockedReason`; submitted or linked/shared contact edits retain their governed owner. `canRequestDocumentCorrections` identifies the current eligible Documents stage; a document-only correction has empty `fieldCodes` and nonempty current-stage `documents`. `emailDeliveryBlockedReason` explains an explicitly unavailable Email setup without blocking staff form editing. Application-wide profile scope is revalidated for email changes, and exact command retries never restore an older email after a later edit.
+
+Copy-only links use the existing expiry, recipient and application scope rules and start with delivery status `NotSent`. Newly sent initial links retain the encrypted token for authorized copying while the link is writable. Older sent links whose token was cleared remain usable by the recipient until expiry, and their URL is unavailable to Copy link. Status and history return only safe metadata.
 
 Public routes use `/api/public/admission-registration` and require exactly one `X-Admission-Registration-Token` header. They return raw context rather than the staff Result envelope. Responses are private/no-store. The frontend receives its token in a URL fragment, keeping it out of route/query logging.
 
@@ -1255,8 +1276,12 @@ Invalid input returns `ShikshaMitra:StudentSetup:Invalid`; malformed persisted g
 
 ## Certificate selection context
 
+With `includeActiveStudentList=true` and an academic year, directory rows report `isCurrentAcademicYear` from the permanent Student record. A historical enrollment can still supply the displayed class and division for history. This flag lets clients withhold generation for a past placement while the server retains its issuance year guard.
+
 Directory requests with `includeActiveStudentList=true` additionally match the full student name and admission/registration form number case-insensitively. Matches remain inside the existing tenant, user scope, year and Identity-visibility predicate; the flag still requires Certificates.View.
 
 Certificate preview and creation accept optional `expectedAcademicYearId`. When supplied, it must match the permanent Student current academic year; a mismatch, including an unset current year, returns `Students:Records:CertificateYearMismatch` before preview or issuance. Creation rechecks this within the issuance transaction and before recovering an existing request. The selected-student client supplies its retained source year; omitted values preserve existing client compatibility. The guard does not create historical-placement certificates or limit all-date per-student history. GET `/api/students/records/certificates/students/{studentId}/history` returns metadata for all certificate types; GET `/api/students/records/certificates/{certificateId}` returns its saved snapshot. Reprint, duplicate and void retain their existing permissions, reasons, numbering and snapshot rules.
 
 Focused certificate previews may request `includeBranding: true`; saved reads may use `GET /api/students/records/certificates/{certificateId}?includeBranding=true`. Under the existing Certificates.View and student scope checks, the optional `branding` response contains PNG/JPEG `logoDataUrl` and `bannerDataUrl` resolved from the template's captured SchoolIdentity asset IDs. It never returns signature bytes. Plain reads/previews, generation, batch/history and PDF reads remain image-free in their JSON responses. Missing configured assets leave branding absent; saved and duplicate reads retain their original assets after Institute Setup defaults change. Existing explicit template overrides and Hidden choices retain precedence, and the PDF renderer remains unchanged.
+
+Preview and generation also accept optional `omitSchoolBranding`. With `true`, the certificate omits logo and banner after resolving its effective school assets and template overrides. School name, address and the PDF signature retain their existing behavior. The issued snapshot stores the choice for saved View, Download, Reprint and Duplicate. Omission defaults to `false` for existing callers and snapshots. A retry with the same choice recovers the existing issuance; reusing that key with the opposite choice returns `Students:Records:DocumentIdempotencyConflict`. `includeBranding` continues to control only whether the response carries image bytes.

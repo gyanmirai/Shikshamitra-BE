@@ -153,6 +153,8 @@ History tests cover independent View and source authorization, per-scope attempt
 
 Delivery action tests cover Add and source access, retry scheduling after a definitive transient rejection, unchanged successful channels, rejection of unknown acceptance, cancellation before planning or claim, and stored audit metadata.
 
+Substitution notification tests cover silent assignment, repeated assignment, exact staff targeting, queued and provider-accepted status, overlap between scheduled and explicit reminders, and suppression after acknowledgement.
+
 Staff API tests check stored audit fields for rule saves, template publication and manual approval decisions. They check audit counts after stale or repeated requests and verify that the serialized fields contain only approved metadata.
 
 Template test-send tests use synthetic draft content and the authenticated account. They verify the local inbox item, exact Add permission, rejected destinations and stale revisions, the per-channel limit and required WhatsApp test-account setup.

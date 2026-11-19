@@ -5,12 +5,13 @@ using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.WorkShifts;
 using ShikshaMitra.Security.UserScope;
-using ShikshaMitra.TenantSettings;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Claims;
 using Xunit;
 
@@ -117,15 +118,18 @@ public partial class SubstitutionAppService_Tests : ShikshaMitraApplicationTestB
     public async Task GetSuggestedTeachersAsync_Should_Match_Legacy_Attendance_Against_Configured_Shift(
         bool isFullDay, string startTime, string endTime, bool shouldBeSuggested)
     {
-        var employee = await CreateEmployeeAsync(Guid.NewGuid(), "Shift", "Teacher");
-        var shift = await GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(
-            new ShiftManagement { ShiftName = "Teaching shift", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(15, 0) },
-            autoSave: true);
-        employee.ShiftId = shift.Id;
-        await _employeeRepository.UpdateAsync(employee, autoSave: true);
+        var tenantId = Guid.NewGuid();
+        using var tenant = GetRequiredService<ICurrentTenant>().Change(tenantId);
+        var employee = await CreateEmployeeAsync(Guid.NewGuid(), "Shift", "Teacher", tenantId);
         var date = new DateTime(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc);
+        var shift = await GetRequiredService<IRepository<EmployeeWorkShift, Guid>>().InsertAsync(
+            new EmployeeWorkShift(Guid.NewGuid(), tenantId, "Teaching shift", new TimeOnly(8, 0), new TimeOnly(15, 0)),
+            autoSave: true);
+        await GetRequiredService<IRepository<EmployeeShiftAssignment, Guid>>().InsertAsync(
+            new EmployeeShiftAssignment(Guid.NewGuid(), employee.Id, shift, DateOnly.FromDateTime(date)),
+            autoSave: true);
         await _availabilityRepository.InsertAsync(new TeacherAvailability(
-            Guid.NewGuid(), null, employee.EmployeeName, date,
+            Guid.NewGuid(), tenantId, employee.EmployeeName, date,
             new TimeOnly(9, 0), isFullDay ? new TimeOnly(14, 15) : new TimeOnly(12, 0),
             TeacherAvailabilityStatus.Unavailable, TeacherAvailabilitySource.Attendance,
             "HR attendance", isFullDay, true, teacherId: employee.Id), autoSave: true);
@@ -456,20 +460,20 @@ public partial class SubstitutionAppService_Tests : ShikshaMitraApplicationTestB
         return await _substitutionRepository.InsertAsync(substitution, autoSave: true);
     }
 
-    private async Task<Employee> CreateEmployeeAsync(Guid userId, string firstName, string lastName)
+    private async Task<Employee> CreateEmployeeAsync(Guid userId, string firstName, string lastName, Guid? tenantId = null)
     {
         var suffix = Guid.NewGuid().ToString("N");
         var roleId = Guid.NewGuid();
         await _identityUserRepository.InsertAsync(
-            new IdentityUser(userId, $"substitute-{suffix[..8]}", $"{suffix[..12]}@test.local", tenantId: null),
+            new IdentityUser(userId, $"substitute-{suffix[..8]}", $"{suffix[..12]}@test.local", tenantId),
             autoSave: true);
         await _roleRepository.InsertAsync(
-            new IdentityRole(roleId, $"substitute-{suffix[..8]}", tenantId: null),
+            new IdentityRole(roleId, $"substitute-{suffix[..8]}", tenantId),
             autoSave: true);
 
         var employee = new Employee(
             Guid.NewGuid(),
-            tenantId: null,
+            tenantId,
             userId: userId,
             employeeCode: $"SUB{suffix[..10]}",
             basicInfo: new EmployeeBasicInfo(

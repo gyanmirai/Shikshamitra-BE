@@ -24,6 +24,10 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 				"Submissions recorded for {{task_title}} during this digest window: {{submitted_count}}.",
 			(_, AcademicNotificationEventKeys.HomeworkRevisionRequested or AcademicNotificationEventKeys.AssignmentRevisionRequested) =>
 				"A revision was requested for {{task_title}}.",
+			("SubstituteTeacher", AcademicNotificationEventKeys.SubstitutionAssigned) =>
+				"You have a substitute duty for {{period_name}} on {{session_date}}.",
+			("SubstituteTeacher", AcademicNotificationEventKeys.SubstitutionAcknowledgementDue) =>
+				"Please acknowledge your substitute duty for {{period_name}} on {{session_date}}.",
 			_ => subject + "."
 		};
 		var body = channel == CommunicationChannelType.WebPush ? "An academic update is available. Open the school website for details." :

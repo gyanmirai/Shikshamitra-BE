@@ -3,13 +3,16 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Common;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Academic.Timetable.Timetables;
+using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -21,6 +24,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.Timetable.Substitutions;
 
@@ -29,7 +33,6 @@ public partial class SubstitutionAppService(
     IRepository<SubstitutionRequest, Guid> substitutionRepository,
     IRepository<SubstitutionAuditLog, Guid> auditRepository,
     IRepository<TeacherAvailability, Guid> availabilityRepository,
-    IRepository<SubstitutionNotificationLog, Guid> notificationRepository,
     ITimetableRepository timetableRepository,
     IRepository<AssignedSubject, Guid> assignedSubjectRepository,
     IRepository<Standard, Guid> standardRepository,
@@ -40,7 +43,8 @@ public partial class SubstitutionAppService(
     AttendanceAvailabilityWindowResolver attendanceWindowResolver,
     IRepository<AcademicYear, Guid> academicYearRepository,
     IUserScopeAccessService userScopeAccessService,
-    IClassTeacherAccessService classTeacherAccessService
+    IClassTeacherAccessService classTeacherAccessService,
+    SubstitutionNotificationDelivery notificationDelivery
 ) : ApplicationService, ISubstitutionAppService
 {
     private static readonly SubstitutionStatus[] ActiveAssignmentStatuses =
@@ -89,6 +93,7 @@ public partial class SubstitutionAppService(
             dtoRows.Add(dto);
         }
 
+        await notificationDelivery.ApplyStatusAsync(paged, dtoRows);
         return new PagedResultDto<SubstitutionDto>(total, dtoRows);
     }
 
@@ -150,7 +155,8 @@ public partial class SubstitutionAppService(
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
-    public async Task<SubstitutionDto> CreateAsync(CreateSubstitutionDto input)
+    [UnitOfWork(true)]
+    public virtual async Task<SubstitutionDto> CreateAsync(CreateSubstitutionDto input)
     {
         var date = NormalizeDate(input.Date);
         var start = ParseTime(input.StartTime, "startTime");
@@ -252,6 +258,7 @@ public partial class SubstitutionAppService(
                 input.TimetableSlotId,
                 entity.Id);
 
+        var previousRevision = SubstitutionNotificationSource.Revision(entity);
         entity.Assign(
                 selected!.TeacherId,
                 selected.TeacherName,
@@ -261,9 +268,10 @@ public partial class SubstitutionAppService(
                 selected.LoadStatus,
                 ParseConflict(selected.ConflictSeverity),
                 selected.ConflictReason,
-                input.SendNotification);
-        entity.MarkNotificationSent();
+                sendNotification: false);
+        SubstitutionNotificationSource.RecordAssignmentChoice(entity, input.SendNotification, previousRevision);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
+        if (input.SendNotification) await notificationDelivery.CaptureAsync(entity, CurrentUser.Id);
         await WriteAuditAsync(entity.Id, "Assigned", $"Assigned to {input.SubstituteTeacherName}.");
 
         return await GetAsync(entity.Id);
@@ -325,6 +333,7 @@ public partial class SubstitutionAppService(
                 id);
         }
 
+        var previousRevision = SubstitutionNotificationSource.Revision(entity);
         entity.UpdateDetails(
             date,
             input.Period,
@@ -350,6 +359,7 @@ public partial class SubstitutionAppService(
             input.OriginalRoomId,
             input.SubjectName,
             input.Remarks);
+        SubstitutionNotificationSource.RecordAssignmentChoice(entity, SubstitutionNotificationSource.IsOptedIn(entity), previousRevision);
         await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-update");
 
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
@@ -357,7 +367,9 @@ public partial class SubstitutionAppService(
         return await GetAsync(id);
     }
 
-    public async Task<SubstitutionDto> AssignAsync(Guid id, AssignSubstituteDto input)
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
+    [UnitOfWork(true)]
+    public virtual async Task<SubstitutionDto> AssignAsync(Guid id, AssignSubstituteDto input)
     {
         await EnsureAdminAsync("assign substitutions");
         if (string.IsNullOrWhiteSpace(input.SubstituteTeacherName) && !input.SubstituteTeacherId.HasValue)
@@ -401,6 +413,14 @@ public partial class SubstitutionAppService(
             throw new UserFriendlyException(selected.ConflictReason ?? "The selected teacher has a hard conflict.");
         }
 
+        if (entity.Status == SubstitutionStatus.Acknowledged && entity.SubstituteTeacherId == selected!.TeacherId &&
+            entity.AssignedRoomId == (input.AssignedRoomId ?? entity.OriginalRoomId) &&
+            SubstitutionNotificationSource.IsOptedIn(entity) == input.SendNotification)
+        {
+            return await GetAsync(id);
+        }
+
+        var previousRevision = SubstitutionNotificationSource.IsActive(entity) ? SubstitutionNotificationSource.Revision(entity) : null;
         entity.Assign(
             selected!.TeacherId,
             selected.TeacherName,
@@ -410,31 +430,33 @@ public partial class SubstitutionAppService(
             selected?.LoadStatus ?? "Low",
             ParseConflict(selected?.ConflictSeverity),
             selected?.ConflictReason,
-            input.SendNotification);
-        entity.MarkNotificationSent();
+            sendNotification: false);
+        SubstitutionNotificationSource.RecordAssignmentChoice(entity, input.SendNotification, previousRevision);
 
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
-        await WriteNotificationAsync(entity, "Assignment", entity.SubstituteTeacherName ?? input.SubstituteTeacherName, input.SendNotification ? "Queued" : "Skipped");
+        if (input.SendNotification) await notificationDelivery.CaptureAsync(entity, CurrentUser.Id);
         await WriteAuditAsync(entity.Id, "Assigned", $"Assigned to {entity.SubstituteTeacherName}.");
         return await GetAsync(entity.Id);
     }
 
-    public async Task<SubstitutionDto> SendReminderAsync(Guid id)
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
+    [UnitOfWork(true)]
+    public virtual async Task<SubstitutionDto> SendReminderAsync(Guid id)
     {
         await EnsureAdminAsync("send reminders");
         var entity = await substitutionRepository.GetAsync(id);
         await EnsureCanViewSubstitutionAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot send a reminder after the period has ended.");
-        if (string.IsNullOrWhiteSpace(entity.SubstituteTeacherName))
+        if (!entity.SubstituteTeacherId.HasValue || !SubstitutionNotificationSource.CanRemind(entity))
         {
-            throw new UserFriendlyException("Assign a substitute teacher before sending a reminder.");
+            throw new BusinessException(NotificationErrorCodes.StateConflict);
         }
 
-        entity.MarkNotificationSent();
-        await substitutionRepository.UpdateAsync(entity, autoSave: true);
-        await WriteNotificationAsync(entity, "Reminder", entity.SubstituteTeacherName, "Queued");
-        await WriteAuditAsync(id, "Reminder Sent", $"Reminder sent to {entity.SubstituteTeacherName}.");
-        return await GetAsync(id);
+        var reminder = await notificationDelivery.CaptureAsync(entity, CurrentUser.Id, reminder: true);
+        if (reminder.Created) await WriteAuditAsync(id, "Reminder Queued", "An acknowledgement reminder was queued.");
+        var result = await MapAsync(entity, await GetAuditLogsAsync(id), reminder.OperationId);
+        if (!reminder.OperationId.HasValue) result.NotificationStatus = "Not Sent";
+        return result;
     }
 
     public async Task<SubstitutionDto> CompleteAsync(Guid id)
@@ -1172,21 +1194,6 @@ public partial class SubstitutionAppService(
         return trimmed;
     }
 
-    private async Task WriteNotificationAsync(SubstitutionRequest entity, string eventName, string recipientName, string status)
-    {
-        await notificationRepository.InsertAsync(
-            new SubstitutionNotificationLog(
-                GuidGenerator.Create(),
-                CurrentTenant.Id,
-                entity.Id,
-                eventName,
-                recipientName,
-                "InApp",
-                status,
-                $"{eventName} notification for {entity.Period} {entity.ClassName}-{entity.DivisionName}."),
-            autoSave: true);
-    }
-
     private async Task<Dictionary<Guid, List<SubstitutionAuditLogDto>>> GetAuditLookupAsync(List<Guid> ids)
     {
         if (ids.Count == 0)
@@ -1254,9 +1261,10 @@ public partial class SubstitutionAppService(
         return subject?.EducationMediumId;
     }
 
-    private async Task<SubstitutionDto> MapAsync(SubstitutionRequest row, List<SubstitutionAuditLogDto> auditLogs)
+    private async Task<SubstitutionDto> MapAsync(SubstitutionRequest row, List<SubstitutionAuditLogDto> auditLogs, Guid? notificationOperationId = null)
     {
         var dto = Map(row, auditLogs);
+        await notificationDelivery.ApplyStatusAsync([row], [dto], notificationOperationId);
         if (!string.IsNullOrWhiteSpace(dto.OriginalTeacherName))
         {
             return dto;
@@ -1432,7 +1440,7 @@ public partial class SubstitutionAppService(
         return parsed;
     }
 
-    private static TimeZoneInfo GetInstitutionTimeZone()
+    internal static TimeZoneInfo GetInstitutionTimeZone()
     {
         try
         {
@@ -1648,6 +1656,14 @@ public partial class SubstitutionAppService(
             throw new Volo.Abp.Authorization.AbpAuthorizationException(
                 "You are not authorized to view this substitution.");
         }
+    }
+
+    internal async Task EnsureCanViewNotificationSourceAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var duty = await substitutionRepository.GetAsync(id, cancellationToken: cancellationToken);
+        if (duty.TenantId == null || duty.TenantId != CurrentTenant.Id)
+            throw new Volo.Abp.Authorization.AbpAuthorizationException();
+        await EnsureCanViewSubstitutionAsync(duty);
     }
 
     private async Task<HashSet<Guid>> GetVisibleTeacherReferenceIdsAsync(Guid currentUserId)

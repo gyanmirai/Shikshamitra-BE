@@ -10,6 +10,7 @@ using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Academic.Performance;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
+using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Infrastructure.Auth;
@@ -118,6 +119,127 @@ public sealed class SubjectAllocationNotificationDelivery_Tests(ShikshaMitraApiT
 		}
 	}
 
+	[Fact]
+	public Task Division_teacher_save_queues_only_the_changed_division() => RunDivisionWorkflowAsync(concurrent: false);
+
+	internal async Task RunDivisionWorkflowAsync(bool concurrent)
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		const string changed = AcademicNotificationEventKeys.SubjectTeacherChanged;
+		var classId = Guid.Empty;
+		var divisionId = Guid.Empty;
+		var subjectId = Guid.Empty;
+		var oldTeacher = Guid.Empty;
+		var newTeacher = Guid.Empty;
+		var newUser = Guid.Empty;
+		var allocationId = Guid.NewGuid();
+		var siblingAllocationId = Guid.NewGuid();
+		await InSchoolAsync(async services =>
+		{
+			classId = (await InsertAsync(services, await services.GetRequiredService<StandardManager>()
+				.CreateAsync(Factory.SeededMediumStageId, "Division teacher notices class", 12, null))).Id;
+			var divisions = services.GetRequiredService<DivisionManager>();
+			divisionId = (await InsertAsync(services, await divisions.CreateAsync(classId, "A", 25))).Id;
+			var sibling = await InsertAsync(services, await divisions.CreateAsync(classId, "B", 25));
+			subjectId = (await InsertAsync(services, new Subject(Guid.NewGuid(), School, "Division teacher notices subject",
+				"#24597a", Factory.SeededMediumId))).Id;
+			var actor = (await services.GetRequiredService<IEmployeeRepository>().GetEmployeeByUserIdAsync(Actor))!;
+			oldTeacher = actor.Id;
+			var teacher = (await services.GetRequiredService<IRepository<Employee, Guid>>().GetListAsync(x =>
+				x.TenantId == School && x.UserId.HasValue && x.UserId != Actor && x.RoleId == actor.RoleId &&
+				x.EmployeeStatusType == EmployeeStatusType.Active && x.EmployeeGroup == EmployeeGroupType.Teaching)).First();
+			newTeacher = teacher.Id;
+			newUser = teacher.UserId!.Value;
+			var assignment = new AssignedSubject(Guid.NewGuid(), School, classId, subjectId, "DIVNOTICE");
+			assignment.SetPrimaryTeacher(oldTeacher);
+			assignment.ChangeStatus(SubjectStatus.Published);
+			await InsertAsync(services, assignment);
+			foreach (var (id, division) in new[] { (allocationId, divisionId), (siblingAllocationId, sibling.Id) })
+			{
+				var row = new TeacherSubjectAllocation(id, classId, division, subjectId);
+				row.Teachers.Add(new(id, oldTeacher));
+				await InsertAsync(services, row);
+			}
+
+			var kinds = new[] { "AssignedTeacher", "PreviousTeacher" };
+			var headers = new Guid[kinds.Length];
+			for (var i = 0; i < kinds.Length; i++)
+			{
+				var header = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), School) { TemplateName = changed + " " + kinds[i] });
+				headers[i] = header.Id;
+				var revision = new CommunicationTemplateRevision(Guid.NewGuid(), School, header.Id, 1,
+					changed, kinds[i], CommunicationChannelType.InApp, "en", "Subject allocation changed", "Open your school inbox.", 1);
+				revision.Publish(Actor, DateTimeOffset.UtcNow);
+				await InsertAsync(services, revision);
+			}
+
+			var medium = await services.GetRequiredService<IRepository<EducationMedium, Guid>>().GetAsync(Factory.SeededMediumId);
+			var board = await services.GetRequiredService<IRepository<EducationBoard, Guid>>().GetAsync(medium.EducationBoardId);
+			var rule = new NotificationRule(Guid.NewGuid(), School, changed,
+				NotificationRuleScope.Create(board.AcademicYearId, board.Id, medium.Id, classId, divisionId));
+			var settings = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, kinds,
+				[CommunicationChannelType.InApp], headers, NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");
+			rule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(
+				settings, services.GetRequiredService<AcademicNotificationCatalogue>().Get(changed)), rule.ConcurrencyStamp);
+			await InsertAsync(services, rule);
+		});
+
+		async Task SaveAsync(Guid[]? teacherIds, HttpStatusCode expected = HttpStatusCode.OK)
+		{
+			using var response = await Client.PutAsJsonAsync("/api/class-management/teacher-assignments", new
+			{
+				classId, academicMediumId = Factory.SeededMediumId, assignments = new[] { new { divisionId, subjectId, teacherIds } }
+			}, JsonOptions);
+			response.StatusCode.ShouldBe(expected, await response.Content.ReadAsStringAsync());
+		}
+
+		if (concurrent) await Task.WhenAll(SaveAsync([newTeacher]), SaveAsync([newTeacher]));
+		else
+		{
+			await SaveAsync([newTeacher]);
+			await SaveAsync([newTeacher]);
+		}
+		await SaveAsync(null, HttpStatusCode.BadRequest);
+		NotificationIntent replacement = null!;
+		await InSchoolAsync(async services =>
+		{
+			replacement = (await services.GetRequiredService<IRepository<NotificationIntent, Guid>>().GetListAsync(x =>
+				x.EventKey == changed && (x.SourceId == allocationId || x.SourceId == siblingAllocationId))).ShouldHaveSingleItem();
+			var source = await services.GetRequiredService<NotificationIntentSourceReader>()
+				.LoadAsync(replacement, DateTimeOffset.UtcNow, CancellationToken.None);
+			source.Runtime.SourceScope.DivisionId.ShouldBe(divisionId);
+			source.CurrentRecipients.ToHashSet().SetEquals(
+			[
+				new("AssignedTeacher", UserId: newUser, EmployeeId: newTeacher),
+				new("PreviousTeacher", UserId: Actor, EmployeeId: oldTeacher)
+			]).ShouldBeTrue();
+			source.Snapshot!.RecipientContent!.ShouldHaveSingleItem().Variables.Keys.ShouldBe(["school_name"]);
+			var sibling = await services.GetRequiredService<IRepository<TeacherSubjectAllocation, Guid>>()
+				.GetAsync(siblingAllocationId, includeDetails: true);
+			sibling.Teachers.Where(x => !x.IsDeleted).Select(x => x.TeacherId).ShouldBe([oldTeacher]);
+		});
+
+		var operation = $"/api/academic/notifications/operations/{replacement.CampaignId}";
+		using var viewer = Factory.CreateClient();
+		viewer.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, ShikshaMitraSubmodulePermissions.Academics.Notification.View);
+		using var denied = await viewer.GetAsync(operation);
+		denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		using var allowed = await Client.GetAsync(operation);
+		allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
+
+		await SaveAsync([]);
+		await SaveAsync([]);
+		await InSchoolAsync(async services =>
+		{
+			var removal = (await services.GetRequiredService<IRepository<NotificationIntent, Guid>>().GetListAsync(x =>
+				x.EventKey == changed && x.SourceId == allocationId && x.Id != replacement.Id)).ShouldHaveSingleItem();
+			var reader = services.GetRequiredService<NotificationIntentSourceReader>();
+			(await reader.LoadAsync(removal, DateTimeOffset.UtcNow, CancellationToken.None))
+				.CurrentRecipients.ShouldBe([new("PreviousTeacher", UserId: newUser, EmployeeId: newTeacher)]);
+			(await reader.LoadAsync(replacement, DateTimeOffset.UtcNow, CancellationToken.None)).CurrentRecipients.ShouldBeEmpty();
+		});
+	}
+
 	private static Task<TEntity> InsertAsync<TEntity>(IServiceProvider services, TEntity row) where TEntity : class, IEntity<Guid> =>
 		services.GetRequiredService<IRepository<TEntity, Guid>>().InsertAsync(row, autoSave: true);
 
@@ -140,5 +262,16 @@ public sealed class SubjectAllocationNotificationPostgres_Tests
 	{
 		await using var fixture = new AcademicPerformancePostgresTestFactory();
 		await new SubjectAllocationNotificationDelivery_Tests(fixture).RunWorkflowAsync();
+	}
+}
+
+[Collection(ApiTestCollection.Name)]
+public sealed class DivisionSubjectNotificationPostgres_Tests
+{
+	[AcademicPerformancePostgresFact]
+	public async Task Concurrent_replacements_queue_one_notice_for_the_saved_division()
+	{
+		await using var fixture = new AcademicPerformancePostgresTestFactory();
+		await new SubjectAllocationNotificationDelivery_Tests(fixture).RunDivisionWorkflowAsync(concurrent: true);
 	}
 }

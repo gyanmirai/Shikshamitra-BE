@@ -31,7 +31,7 @@ public sealed class SubjectAllocationNotificationSource(IRepository<AssignedSubj
 	IRepository<ClassTeacherRecord, Guid> classTeachers, IRepository<Student, Guid> students,
 	IRepository<StudentElectiveSelection, Guid> electives, IRepository<ElectiveGroup, Guid> electiveGroups,
 	AcademicNotificationEnrollmentRoster enrollment,
-	TimetableNotificationAudience staff, IDataFilter filters, IAsyncQueryableExecuter queries, ICurrentTenant tenant, ITenantStore tenants)
+	TimetableNotificationAudience staff, DivisionSubjectNotification divisionNotices, IDataFilter filters, IAsyncQueryableExecuter queries, ICurrentTenant tenant, ITenantStore tenants)
 	: INotificationSourceAdapter, ITransientDependency
 {
 	internal const string Type = "Academic.Subject";
@@ -62,7 +62,8 @@ public sealed class SubjectAllocationNotificationSource(IRepository<AssignedSubj
 		if (school == Guid.Empty || school != tenant.Id || context.SourceId == Guid.Empty ||
 			context.SourceType != Type || !EventKeys.Contains(context.EventKey)) return Unavailable();
 		var placement = await FindAsync(school, context.SourceId, context.EventKey == SubjectWithdrawn, token);
-		if (placement == null) return Unavailable();
+		if (placement == null)
+			return context.EventKey == SubjectTeacherChanged ? await divisionNotices.LoadAsync(context, token) : Unavailable();
 		var assignment = placement.Assignment;
 		var state = SubjectAllocationNotification.Read(assignment);
 		if (state == null || state.ClassId != assignment.StandardId || state.ElectiveGroupId != SubjectAllocationNotification.GroupId(assignment)) return Unavailable();

@@ -40463,7 +40463,6 @@ namespace ShikshaMitra.Migrations
                                 .HasColumnType("uuid");
 
                             b1.Property<Guid>("TeacherId")
-                                .ValueGeneratedOnAdd()
                                 .HasColumnType("uuid");
 
                             b1.Property<DateTime>("CreationTime")

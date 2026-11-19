@@ -127,7 +127,7 @@ An enabled `Academic.Subject.Allocated` rule can run when the existing Curriculu
 
 An enabled `Academic.Subject.Withdrawn` rule can run when a published class subject becomes unpublished through its status, archive or removal workflow. Family audiences use active enrollment in the affected class and division. For an elective, a family qualifies only through the learner's locked choice for the removed subject. The source revision suppresses pending work after restoration or republication. Publication and withdrawal capture use the existing Subject Assignment permissions and source scope. The history additionally requires Academic Notification View and Subject Assignment View.
 
-The notification source ID is the class subject allocation. Direct edits made through the separate division-teacher workspace have their own mutation source.
+For a class-level action, the notification source ID is the class subject allocation. `PUT /api/class-management/teacher-assignments` uses the saved division-subject allocation ID when a teacher set changes for a published subject. An explicit empty list clears the assigned teachers. An unchanged teacher set leaves the current notice intact. The HTTP endpoint rejects a null teacher list. Subject Assignment Add and the selected division scope are required to capture a notice. The configured audience can include newly assigned teachers, removed teachers and the active class teacher for that division. Removed teachers receive generic content. A later edit or publication change invalidates pending work for the earlier revision. History requires Academic Notification View, Subject Assignment View and access to the affected division.
 
 ### Marks review notifications
 

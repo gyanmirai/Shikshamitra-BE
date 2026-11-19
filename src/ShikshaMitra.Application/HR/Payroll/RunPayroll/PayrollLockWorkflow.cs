@@ -135,7 +135,7 @@ public class PayrollLockWorkflow(
 			lockCalendar.AcademicYearId,
 			"payroll_run",
 			guidGenerator.Create(),
-			request.Month,
+			internalMonthYear,
 			"locked",
 			$"Locked payroll for {request.Month}.",
 			context: new

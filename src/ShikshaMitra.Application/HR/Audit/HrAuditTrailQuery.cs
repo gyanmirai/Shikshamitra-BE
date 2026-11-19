@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 
 namespace ShikshaMitra.HR.Audit;
 
@@ -21,7 +22,14 @@ public static class HrAuditTrailQuery
 		}
 		if (!string.IsNullOrWhiteSpace(input.PayrollMonth))
 		{
-			query = query.Where(x => x.EntityType == "payroll_run" && x.EntityName == input.PayrollMonth);
+			var (year, month, canonicalMonth) = PayrollRunRules.ParseMonth(input.PayrollMonth);
+			// Legacy lock names preserve the submitted format. The audit writer stores these
+			// numeric fields in compact JSON before the counts, so the comma matches a whole value.
+			var yearField = FormattableString.Invariant($"\"year\":{year},");
+			var monthField = FormattableString.Invariant($"\"monthNumber\":{month},");
+			query = query.Where(x => x.EntityType == "payroll_run" &&
+				(x.EntityName == canonicalMonth || (x.Action == "locked" && x.ContextJson != null &&
+					x.ContextJson.Contains(yearField) && x.ContextJson.Contains(monthField))));
 		}
 		if (input.EntityId.HasValue)
 		{

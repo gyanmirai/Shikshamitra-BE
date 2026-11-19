@@ -74,7 +74,7 @@ public partial class SubjectAssignmentAppService(
 				Array.Empty<Guid>());
 
 			var assignedSubjects = new List<AssignedSubject>();
-			var notices = new List<SubjectNoticeCapture>();
+			var notices = new List<CurriculumNoticeCapture>();
 			foreach (var subject in createSubjectAssignmentDto.Subjects)
 			{
 				var assignedSubject =
@@ -781,7 +781,7 @@ public partial class SubjectAssignmentAppService(
 		// We match existing subjects with input subjects by SubjectId
 		var subjectsToDelete = new List<AssignedSubject>();
 		var teacherChanges = new List<SubjectTeacherChange>();
-		var notices = new List<SubjectNoticeCapture>();
+		var notices = new List<CurriculumNoticeCapture>();
 		var canNotify = await subjectNotifications.CanRecordAsync();
 		var processedSubjectIds = new HashSet<Guid>();
 		await EnsureSubjectsAreNotAlreadyAssignedAsync(
@@ -969,7 +969,7 @@ public partial class SubjectAssignmentAppService(
 			}
 		}
 
-		var notices = new List<SubjectNoticeCapture>();
+		var notices = new List<CurriculumNoticeCapture>();
 		var canNotify = await subjectNotifications.CanRecordAsync();
 		foreach (var groupAssignment in assignments)
 		{
@@ -1017,7 +1017,7 @@ public partial class SubjectAssignmentAppService(
 				await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(classGroup.ToList(), classGroup.Key);
 			}
 
-			var notices = new List<SubjectNoticeCapture>();
+			var notices = new List<CurriculumNoticeCapture>();
 			var canNotify = await subjectNotifications.CanRecordAsync();
 			foreach (var assignment in assignments)
 			{
@@ -1336,7 +1336,7 @@ public partial class SubjectAssignmentAppService(
 
 	private async Task ArchiveAndNotifyAsync(List<AssignedSubject> assignments, bool canNotify)
 	{
-		var notices = new List<SubjectNoticeCapture>();
+		var notices = new List<CurriculumNoticeCapture>();
 		foreach (var row in assignments)
 		{
 			var before = SubjectAllocationNotification.Before(row);

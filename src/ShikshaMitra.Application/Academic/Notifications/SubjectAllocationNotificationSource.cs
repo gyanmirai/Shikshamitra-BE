@@ -136,7 +136,7 @@ public sealed class SubjectAllocationNotificationSource(IRepository<AssignedSubj
 		}).Where(x => x.Recipients.Count > 0).ToArray();
 	}
 
-	private async Task<IReadOnlyList<AcademicNotificationLearner>> ReadLearnersAsync(SubjectNoticePlacement placement, Guid school,
+	internal async Task<IReadOnlyList<AcademicNotificationLearner>> ReadLearnersAsync(SubjectNoticePlacement placement, Guid school,
 		Guid[] divisionIds, CancellationToken token)
 	{
 		var scope = placement.Scope;

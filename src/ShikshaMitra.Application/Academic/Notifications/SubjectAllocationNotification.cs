@@ -23,7 +23,7 @@ internal sealed record SubjectTeacherNotice(string Revision, SubjectNoticeTeache
 internal sealed record SubjectWithdrawalNotice(string Revision, SubjectStatus Status, bool IsDeleted, Guid[] Teachers);
 internal sealed record SubjectNoticeState(Guid ClassId, Guid? ElectiveGroupId, string? Publication = null,
 	SubjectTeacherNotice? Change = null, SubjectWithdrawalNotice? Withdrawal = null);
-internal sealed record SubjectNoticeCapture(Guid AssignmentId, string EventKey, string Revision);
+internal sealed record CurriculumNoticeCapture(Guid SourceId, string EventKey, string Revision);
 
 [RemoteService(false)]
 public sealed class SubjectAllocationNotification(IRepository<NotificationRule, Guid> rules, IAsyncQueryableExecuter queries,
@@ -52,7 +52,7 @@ public sealed class SubjectAllocationNotification(IRepository<NotificationRule, 
 	internal static SubjectAllocationBefore Before(AssignedSubject assignment) =>
 		new(assignment.StandardId, GroupId(assignment), assignment.Status, Teachers(assignment));
 
-	internal static void Record(List<SubjectNoticeCapture> messages, AssignedSubject assignment, SubjectAllocationBefore? before,
+	internal static void Record(List<CurriculumNoticeCapture> messages, AssignedSubject assignment, SubjectAllocationBefore? before,
 		bool deleting = false, bool capture = true)
 	{
 		if (!assignment.TenantId.HasValue) return;
@@ -101,7 +101,8 @@ public sealed class SubjectAllocationNotification(IRepository<NotificationRule, 
 		if (eventKey != null) messages.Add(new(assignment.Id, eventKey, revision));
 	}
 
-	internal async Task CaptureAsync(IReadOnlyList<SubjectNoticeCapture> messages, Guid? actor)
+	internal async Task CaptureAsync(IReadOnlyList<CurriculumNoticeCapture> messages, Guid? actor,
+		string sourceType = SubjectAllocationNotificationSource.Type)
 	{
 		if (messages.Count == 0 || tenant.Id is not Guid school) return;
 		var token = cancellation.Token;
@@ -110,8 +111,8 @@ public sealed class SubjectAllocationNotification(IRepository<NotificationRule, 
 			x.TenantId == school && x.IsEnabled && !x.IsDeleted && Enumerable.Contains(events, x.EventKey))
 			.Select(x => x.EventKey).Distinct(), token)).ToHashSet(StringComparer.Ordinal);
 		var now = new DateTimeOffset(clock.Now.ToUniversalTime());
-		foreach (var message in messages.Where(x => enabled.Contains(x.EventKey)).OrderBy(x => x.AssignmentId))
-			await writer.WriteAsync(new(message.EventKey, SubjectAllocationNotificationSource.Type, message.AssignmentId, message.Revision,
+		foreach (var message in messages.Where(x => enabled.Contains(x.EventKey)).OrderBy(x => x.SourceId))
+			await writer.WriteAsync(new(message.EventKey, sourceType, message.SourceId, message.Revision,
 				now, [], actor), token);
 	}
 }

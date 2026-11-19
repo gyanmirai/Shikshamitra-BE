@@ -54,7 +54,7 @@ public sealed class DivisionSubjectNotification(IRepository<TeacherSubjectAlloca
 		var token = cancellation.Token;
 		var caller = actor is Guid user && await writer.CanRecordAsync() ? await scopes.GetUserScopeAsync(user) : null;
 		var checkedDivisions = new Dictionary<Guid, bool>();
-		var operations = new List<SubjectNoticeCapture>();
+		var operations = new List<CurriculumNoticeCapture>();
 		foreach (var change in changes)
 		{
 			var allocation = change.Allocation;

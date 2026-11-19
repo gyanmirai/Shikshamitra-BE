@@ -52,6 +52,12 @@ internal static class ExamScheduleStatusResolver
 	public static DateTime GetInstitutionNow(DateTime utcNow) =>
 		TimeZoneInfo.ConvertTimeFromUtc(NormalizeUtc(utcNow), InstitutionTimeZone);
 
+	internal static DateTimeOffset ToScheduledInstant(DateTime date, DateTime time)
+	{
+		var local = DateTime.SpecifyKind(date.Date.Add(time.TimeOfDay), DateTimeKind.Unspecified);
+		return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(local, InstitutionTimeZone));
+	}
+
 	private static DateTime NormalizeUtc(DateTime value) => value.Kind switch
 	{
 		DateTimeKind.Utc => value,

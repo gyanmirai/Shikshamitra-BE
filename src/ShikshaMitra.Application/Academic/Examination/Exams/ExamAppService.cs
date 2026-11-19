@@ -15,6 +15,7 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Academic.Examination.Results;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -22,6 +23,8 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Identity;
+using Volo.Abp.DependencyInjection;
+using Volo.Abp.Uow;
 using ShikshaMitra.Academic.Examination.SeatAllocation;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.HR.Employees;
@@ -577,13 +580,18 @@ public partial class ExamAppService(
 		await examRepository.DeleteAsync(exam);
 	}
 
+	[UnitOfWork(true)]
 	public async Task ChangeStatusAsync(Guid examId, ExamStatus status)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 		await EnsureCanAccessExamAsync(exam);
 		await EnsureValidExamStatusTransitionAsync(exam, status);
+		var publish = exam.Status == ExamStatus.Pending && status == ExamStatus.Published;
 		exam.ChangeStatus(status);
-		await examRepository.UpdateAsync(exam);
+		if (publish) ExamTimetablePublication.MarkReleased(exam);
+		await examRepository.UpdateAsync(exam, autoSave: publish);
+		if (publish)
+			await LazyServiceProvider.LazyGetRequiredService<ExamTimetablePublication>().CaptureAsync(exam, CurrentUser.Id);
 	}
 
 	public async Task<ExamListResultDto> GetListAsync(GetExamsInput input)
@@ -861,7 +869,7 @@ public partial class ExamAppService(
 		return scope.HasWildcardMedium && scope.MediumIds.Contains(mediumId);
 	}
 
-	private async Task EnsureCanAccessExamAsync(Exam exam)
+	internal async Task EnsureCanAccessExamAsync(Exam exam)
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
 		if (scope.IsAdmin)

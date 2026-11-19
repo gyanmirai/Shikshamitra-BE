@@ -54,7 +54,8 @@ public sealed class AcademicNotificationCatalogue : INotificationEventDefinition
 	public NotificationSourceAvailability GetManualAvailability(string eventKey)
 	{
 		Get(eventKey);
-		return eventKey != AcademicNotificationEventKeys.TimetableDayReminder && _supportedEvents.Contains(eventKey)
+		return eventKey is not (AcademicNotificationEventKeys.TimetableDayReminder or AcademicNotificationEventKeys.ExamReminder) &&
+			_supportedEvents.Contains(eventKey)
 			? new(true, null)
 			: new(false, NotificationErrorCodes.SourceUnavailable);
 	}

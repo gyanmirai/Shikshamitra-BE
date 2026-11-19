@@ -60,6 +60,8 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 			(_, AcademicNotificationEventKeys.RoomChanged) => "A room booking involving you changed.",
 			(_, AcademicNotificationEventKeys.RoomCancelled) => "Your room booking for {{room_name}} on {{session_date}} was cancelled.",
 			(_, AcademicNotificationEventKeys.ResultPublished) => "A result is available. Sign in to ShikshaMitra to view it.",
+			(_, AcademicNotificationEventKeys.ExamTimetablePublished) => "The timetable for {{exam_name}} is available. Sign in to view your exam dates.",
+			(_, AcademicNotificationEventKeys.ExamReminder) => "Your scheduled sitting for {{exam_name}} starts at {{exam_date}}.",
 			_ => subject + "."
 		};
 		var body = channel == CommunicationChannelType.WebPush ? "An academic update is available. Open the school website for details." :

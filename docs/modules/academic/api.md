@@ -97,6 +97,14 @@ Decisions target the requester. A change to a confirmed booking can target the r
 
 A series-wide decision or cancellation queues one notice for the parent. A closure can also cancel an individual confirmed occurrence through the existing calendar impact handler. Delivery history requires Academic Notification View, Timetable Management View and visibility of the booking in Room Availability.
 
+### Exam timetable notifications
+
+The successful Pending-to-Published transition in `PUT /api/academics/exams/{examId}/status` can queue `Academic.Exam.TimetablePublished` in the same transaction. A repeated save of Published preserves the revision. The saved class, division, published subject and locked elective choice identify learners. The class subject and division teaching allocations identify assigned staff. The rule determines the actual family recipients and channels.
+
+`Academic.Exam.Reminder` is automatic. A bounded scan uses upcoming published sittings and groups papers at the same start time in a division. The reminder uses the school rule's cutoff and preceding-school-day setting and expires at the sitting start. Recipient variables include the start time of their own applicable sitting. A calendar closure, changed enrollment, or a sitting that is no longer published or current can suppress pending delivery. Existing published exams can receive future reminders.
+
+History requires Academic Notification View, Schedule Exam View and the source exam's existing access check. The current exam lifecycle locks published schedules. Reschedule, cancel, approval and invigilation events require their own saved workflows.
+
 ### Result publication notifications
 
 The first successful `POST /api/academics/results/publish` can queue `Academic.Result.Published` in the publication transaction. The exam must be visible to learners and the result must have a published revision for the saved exam and division. The source uses released result rows and current enrollment. Withheld rows and students outside the division are excluded. The school's family rule and the shared guardian and student-account checks determine delivery.

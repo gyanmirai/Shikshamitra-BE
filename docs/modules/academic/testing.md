@@ -161,6 +161,8 @@ The hosted timetable workflow also verifies the automatic day reminder, includin
 
 `ResultNotificationPrivacy_Tests` exercises the actual first-publication endpoint. It covers generated and repeated publication, withheld and out-of-division results, enrollment revocation, generic variables and staff history access.
 
+`ExamNotificationEvents_Tests` exercises the real exam publish action and the due scheduler. It covers repetition, class and division staff assignments, separate locked-elective sittings, school-local timing, calendar closure suppression and Schedule Exam View for history.
+
 Substitution notification tests cover silent and repeated assignments, exact staff targeting, queued and provider-accepted status, shared scheduled and explicit reminder identity, and suppression after acknowledgement. The hosted workflow also exercises material rescheduling, no-op edits, recipient-specific removal content, cancellation for exactly the previously informed staff, and the exclusion of unconfirmed acceptance.
 
 Reviewer escalation cases verify backward-compatible rule decoding, required teacher and reviewer selectors, a positive delay, no early or duplicate reviewer intent, separate role targeting, and suppression after the substitute responds.

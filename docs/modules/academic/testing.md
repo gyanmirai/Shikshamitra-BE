@@ -138,6 +138,8 @@ The Homework Due and Assignment Due fixtures enroll an eligible learner after th
 
 Feedback release coverage exercises plain feedback and rubric approval for both Homework and Assignment. It checks draft and submit-for-approval steps, repeated edits, recipient isolation, and omission of grades and feedback text from notification data. Assignment checks also cover notification eligibility after closing, the exact history permission, and allowed and denied division viewers.
 
+Revision request tests exercise the feedback routes for both task types starting from a submission whose status was set without feedback. They verify one notice per submitted attempt, a second request after resubmission, suppression after resubmission or final review, and omission of private notes and learner work. Assignment history also checks the exact permission and submission division.
+
 Overdue coverage runs the scheduler over real Homework and Assignment schedules. It verifies fixed deadline timing, publication and division boundaries, duplicate-scan protection, a single assigned-teacher summary with a scoped count, and a fresh roster after late submission or excuse. A family template can receive only its own learner's missing count. An overdue intent expires 24 hours after the saved deadline.
 
 Submission digest coverage exercises both task types at a saved daily cutoff. It checks inclusion at the start, exclusion at the cutoff, draft and elective exclusions, one teacher operation per window, and rechecking enrollment before preparation. The digest payload contains a count and omits learner work.

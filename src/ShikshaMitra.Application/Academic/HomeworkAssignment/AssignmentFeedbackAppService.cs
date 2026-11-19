@@ -34,7 +34,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		private readonly StudentSubmissionManager _submissionManager;
 		private readonly IUserScopeService _userScopeService;
 		private readonly IAsyncQueryableExecuter _asyncExecuter;
-	private readonly LearningTaskFeedbackReleaseEventCapture _feedbackEvents;
+	private readonly LearningTaskFeedbackEventCapture _feedbackEvents;
 
 
 	public AssignmentFeedbackAppService(
@@ -47,7 +47,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			StudentSubmissionManager submissionManager,
 			IUserScopeService userScopeService,
 			IAsyncQueryableExecuter asyncExecuter,
-		LearningTaskFeedbackReleaseEventCapture feedbackEvents
+		LearningTaskFeedbackEventCapture feedbackEvents
 
 	)
 	{
@@ -354,6 +354,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 
 		// 6. Update feedback
 		var previousStatus = submission.Status;
+		var startsRevisionRequest = LearningTaskFeedbackEventCapture.StartsRevisionRequest(submission, input.Status);
 		submission.UpdateFeedback(
 			input.Marks,
 			input.TotalMarks,
@@ -365,7 +366,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 
 		// 7. Save changes
 		await _submissionRepository.UpdateAsync(submission, autoSave: true);
-		await _feedbackEvents.CaptureAsync(submission, previousStatus, CurrentUser.Id);
+		await _feedbackEvents.CaptureAsync(submission, previousStatus, CurrentUser.Id, startsRevisionRequest);
 
 		// 8. Build and return response
 		return new FeedbackResponseDto

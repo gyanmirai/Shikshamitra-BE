@@ -26,7 +26,8 @@ public sealed class HomeworkReminderSourceAuthorizer(HomeworkAppService access, 
 	{
 		LearningTaskReminderSourceAdapter.HomeworkEventKey, AcademicNotificationEventKeys.HomeworkOverdue,
 		AcademicNotificationEventKeys.HomeworkSubmitted,
-		HomeworkPublicationSourceAdapter.EventKey, LearningTaskFeedbackReleaseSourceAdapter.HomeworkEventKey,
+		HomeworkPublicationSourceAdapter.EventKey, AcademicNotificationEventKeys.HomeworkFeedbackReleased,
+		AcademicNotificationEventKeys.HomeworkRevisionRequested
 	});
 
 	public async Task EnsureCanViewAsync(string eventKey, Guid sourceId, CancellationToken cancellationToken)
@@ -36,7 +37,7 @@ public sealed class HomeworkReminderSourceAuthorizer(HomeworkAppService access, 
 			throw new AbpAuthorizationException();
 
 		var homeworkId = sourceId;
-		if (eventKey == LearningTaskFeedbackReleaseSourceAdapter.HomeworkEventKey)
+		if (eventKey is AcademicNotificationEventKeys.HomeworkFeedbackReleased or AcademicNotificationEventKeys.HomeworkRevisionRequested)
 		{
 			var owner = await queries.SingleOrDefaultAsync((await submissions.GetQueryableAsync()).Where(x =>
 				x.TenantId == tenantId && x.Id == sourceId && !x.IsDeleted && x.AssignmentId == null)

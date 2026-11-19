@@ -34,7 +34,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	private readonly IAsyncQueryableExecuter _asyncExecuter;
 	private readonly StudentSubmissionManager _submissionManager;
 	private readonly HomeworkAppService _homeworkAppService;
-	private readonly LearningTaskFeedbackReleaseEventCapture _feedbackEvents;
+	private readonly LearningTaskFeedbackEventCapture _feedbackEvents;
 
 	public HomeworkFeedbackAppService(
 		IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
@@ -46,7 +46,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		IAsyncQueryableExecuter asyncExecuter,
 		StudentSubmissionManager submissionManager,
 		HomeworkAppService homeworkAppService,
-		LearningTaskFeedbackReleaseEventCapture feedbackEvents
+		LearningTaskFeedbackEventCapture feedbackEvents
 	)
 	{
 		_homeworkRepository = homeworkRepository;
@@ -356,6 +356,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		// 5. Update feedback
 		var preservedRemarks = input.Remarks ?? submission.Remarks;
 		var previousStatus = submission.Status;
+		var startsRevisionRequest = LearningTaskFeedbackEventCapture.StartsRevisionRequest(submission, input.Status);
 		submission.UpdateFeedback(
 			submission.Marks,
 			submission.TotalMarks,
@@ -367,7 +368,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 		// 6. Save changes
 		await _submissionRepository.UpdateAsync(submission, autoSave: true);
-		await _feedbackEvents.CaptureAsync(submission, previousStatus, CurrentUser.Id);
+		await _feedbackEvents.CaptureAsync(submission, previousStatus, CurrentUser.Id, startsRevisionRequest);
 
 		// 7. Build and return response
 		return new FeedbackResponseDto

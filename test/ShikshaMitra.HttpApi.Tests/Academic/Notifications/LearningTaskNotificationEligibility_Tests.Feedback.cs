@@ -37,6 +37,7 @@ public partial class LearningTaskNotificationEligibility_Tests
 		var reviewedTaskId = seed.TaskId;
 		var rubricTaskId = seed.TaskId;
 		var eventKey = isAssignment ? AcademicNotificationEventKeys.AssignmentFeedbackReleased : AcademicNotificationEventKeys.HomeworkFeedbackReleased;
+		var revisionEventKey = isAssignment ? AcademicNotificationEventKeys.AssignmentRevisionRequested : AcademicNotificationEventKeys.HomeworkRevisionRequested;
 		var sourceType = isAssignment ? AssignmentSource : SourceType;
 		await InSchoolAsync(async services =>
 		{
@@ -53,22 +54,28 @@ public partial class LearningTaskNotificationEligibility_Tests
 				var submission = isAssignment
 					? new StudentSubmissionEntity(id, parent, student, Factory.SeededDivisionId, deadline, TenantId, isAssignment: true)
 					: new StudentSubmissionEntity(id, parent, student, Factory.SeededDivisionId, deadline, TenantId);
-				submission.Status = SubmissionStatus.Submitted;
-				submission.SubmissionDate = DateTimeOffset.UtcNow;
+				submission.RecordSubmission("Initial work");
+				if (id == feedbackId) submission.UpdateStatus(SubmissionStatus.NeedsReview);
 				await InsertAsync(services, submission);
 			}
-			var definition = services.GetRequiredService<AcademicNotificationCatalogue>().Get(eventKey);
-			var template = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), TenantId) { TemplateName = eventKey + " availability" });
-			var revision = new CommunicationTemplateRevision(Guid.NewGuid(), TenantId, template.Id, 1, eventKey, "Guardian",
-				CommunicationChannelType.InApp, "en", "Feedback available", "Sign in to read the feedback.", definition.SchemaVersion);
-			revision.Publish(Guid.NewGuid(), DateTimeOffset.UtcNow);
-			await InsertAsync(services, revision);
-			var rule = new NotificationRule(Guid.NewGuid(), TenantId, eventKey, NotificationRuleScope.Create(
-				Factory.SeededAcademicYearId, Factory.SeededBoardId, Factory.SeededMediumId, Factory.SeededStandardId, Factory.SeededDivisionId));
-			var configuration = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, [],
-				[CommunicationChannelType.InApp], [template.Id], NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");
-			rule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(configuration, definition), rule.ConcurrencyStamp);
-			await InsertAsync(services, rule);
+			await ConfigureRuleAsync(eventKey, "Feedback available");
+			await ConfigureRuleAsync(revisionEventKey, "Revision requested");
+
+			async Task ConfigureRuleAsync(string notificationEvent, string title)
+			{
+				var definition = services.GetRequiredService<AcademicNotificationCatalogue>().Get(notificationEvent);
+				var template = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), TenantId) { TemplateName = notificationEvent });
+				var revision = new CommunicationTemplateRevision(Guid.NewGuid(), TenantId, template.Id, 1, notificationEvent, "Guardian",
+					CommunicationChannelType.InApp, "en", title, "Sign in to read the details.", definition.SchemaVersion);
+				revision.Publish(Guid.NewGuid(), DateTimeOffset.UtcNow);
+				await InsertAsync(services, revision);
+				var rule = new NotificationRule(Guid.NewGuid(), TenantId, notificationEvent, NotificationRuleScope.Create(
+					Factory.SeededAcademicYearId, Factory.SeededBoardId, Factory.SeededMediumId, Factory.SeededStandardId, Factory.SeededDivisionId));
+				var configuration = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, [],
+					[CommunicationChannelType.InApp], [template.Id], NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");
+				rule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(configuration, definition), rule.ConcurrencyStamp);
+				await InsertAsync(services, rule);
+			}
 
 			async Task<Guid> CreateFeedbackAssignmentAsync(EvaluationMethod method)
 			{
@@ -88,11 +95,29 @@ public partial class LearningTaskNotificationEligibility_Tests
 			}
 		});
 
+		await VerifyRevisionRequestsAsync(0, 0);
 		await WriteFeedbackAsync(SubmissionStatus.NeedsReview);
+		await WriteFeedbackAsync(SubmissionStatus.NeedsReview);
+		await VerifyRevisionRequestsAsync(1, 1);
 		await VerifyReleasesAsync(0, 0);
+
+		await InSchoolAsync(async services =>
+		{
+			var submissions = services.GetRequiredService<IRepository<StudentSubmissionEntity, Guid>>();
+			var revised = await submissions.GetAsync(feedbackId);
+			if (isAssignment)
+				revised.SaveMobileResponse("Revised work", null, null, null, false, DateTimeOffset.UtcNow);
+			else
+				revised.RecordSubmission("Revised work");
+			await submissions.UpdateAsync(revised);
+		});
+		await VerifyRevisionRequestsAsync(1, 0);
+		await WriteFeedbackAsync(SubmissionStatus.NeedsReview);
+		await VerifyRevisionRequestsAsync(2, 1);
 
 		await WriteFeedbackAsync(SubmissionStatus.Reviewed);
 		await WriteFeedbackAsync(SubmissionStatus.Reviewed);
+		await VerifyRevisionRequestsAsync(2, 0);
 		await VerifyReleasesAsync(1, 0);
 
 		const string rubrics = "/api/academic/rubrics";
@@ -117,6 +142,7 @@ public partial class LearningTaskNotificationEligibility_Tests
 		using var approved = await Client.PostAsync($"{rubrics}/evaluations/{evaluation.Id}/approve", null);
 		approved.IsSuccessStatusCode.ShouldBeTrue(await approved.Content.ReadAsStringAsync());
 		await VerifyReleasesAsync(1, 1);
+		await VerifyRevisionRequestsAsync(2, 0);
 
 		if (isAssignment)
 		{
@@ -127,24 +153,30 @@ public partial class LearningTaskNotificationEligibility_Tests
 		}
 
 		var history = $"/api/academic/notifications/history?eventKey={eventKey}&sourceType={sourceType}&sourceId=";
+		var revisionHistory = history.Replace(eventKey, revisionEventKey, StringComparison.Ordinal) + feedbackId;
 		if (isAssignment)
 		{
 			var historyView = ShikshaMitraSubmodulePermissions.Academics.Notification.View;
 			Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, historyView + "," + SourceView);
 			using var denied = await Client.GetAsync(history + feedbackId);
 			denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+			using var deniedRevision = await Client.GetAsync(revisionHistory);
+			deniedRevision.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 			Client.DefaultRequestHeaders.Remove(AlwaysGrantPermissionChecker.TestPermissionsHeader);
 			Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, historyView + "," + AssignmentView);
 		}
 		using var releaseHistory = await Client.GetAsync(history + feedbackId);
 		releaseHistory.StatusCode.ShouldBe(HttpStatusCode.OK, await releaseHistory.Content.ReadAsStringAsync());
 		(await releaseHistory.Content.ReadAsStringAsync()).ShouldNotContain(ConfidentialFeedback);
+		using var requestHistory = await Client.GetAsync(revisionHistory);
+		requestHistory.StatusCode.ShouldBe(HttpStatusCode.OK, await requestHistory.Content.ReadAsStringAsync());
+		(await requestHistory.Content.ReadAsStringAsync()).ShouldNotContain("Review note");
 		using var taskHistory = await Client.GetAsync(history + reviewedTaskId);
 		taskHistory.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await taskHistory.Content.ReadAsStringAsync());
 		if (isAssignment)
-			await VerifyDivisionHistoryAsync(history + feedbackId);
+			await VerifyDivisionHistoryAsync(history + feedbackId, revisionHistory);
 
-		async Task VerifyDivisionHistoryAsync(string url)
+		async Task VerifyDivisionHistoryAsync(params string[] urls)
 		{
 			var inDivision = Guid.NewGuid();
 			var otherDivision = Guid.NewGuid();
@@ -169,8 +201,11 @@ public partial class LearningTaskNotificationEligibility_Tests
 				viewer.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Staff");
 				viewer.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
 					ShikshaMitraSubmodulePermissions.Academics.Notification.View + "," + AssignmentView);
-				using var result = await viewer.GetAsync(url);
-				result.StatusCode.ShouldBe(expected, await result.Content.ReadAsStringAsync());
+				foreach (var url in urls)
+				{
+					using var result = await viewer.GetAsync(url);
+					result.StatusCode.ShouldBe(expected, await result.Content.ReadAsStringAsync());
+				}
 			}
 		}
 
@@ -181,6 +216,32 @@ public partial class LearningTaskNotificationEligibility_Tests
 				new GiveFeedbackDto { Status = status, Feedback = ConfidentialFeedback, Remarks = "Review note",
 					Marks = isAssignment ? 7 : null, TotalMarks = isAssignment ? 10 : null }, JsonOptions);
 			response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		}
+
+		async Task VerifyRevisionRequestsAsync(int expected, int currentlyEligible)
+		{
+			await InSchoolAsync(async services =>
+			{
+				var intents = await services.GetRequiredService<IRepository<NotificationIntent, Guid>>().GetListAsync(x =>
+					x.TenantId == TenantId && x.EventKey == revisionEventKey && (x.SourceId == feedbackId || x.SourceId == rubricSubmissionId));
+				intents.Count.ShouldBe(expected);
+				intents.Select(x => x.SourceRevision).Distinct().Count().ShouldBe(expected);
+				var reader = services.GetRequiredService<NotificationIntentSourceReader>();
+				var ready = 0;
+				foreach (var intent in intents)
+				{
+					intent.SourceId.ShouldBe(feedbackId);
+					intent.Status.ShouldBe(NotificationIntentState.Ready);
+					var source = await reader.LoadAsync(intent, DateTimeOffset.UtcNow, CancellationToken.None);
+					if (source.ExclusionCode != null) continue;
+					ready++;
+					source.CurrentRecipients.ShouldHaveSingleItem().ShouldBe(new NotificationRecipientRefDto("Student", seed.Active));
+					source.Runtime.SourceScope.DivisionId.ShouldBe(Factory.SeededDivisionId);
+					source.Snapshot!.Variables.Values.ShouldNotContain(x =>
+						x.Value == ConfidentialFeedback || x.Value == "Review note" || x.Value == "Revised work" || x.Value == "7");
+				}
+				ready.ShouldBe(currentlyEligible);
+			});
 		}
 
 		async Task VerifyReleasesAsync(int expectedFeedback, int expectedRubric)

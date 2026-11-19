@@ -13,19 +13,37 @@ using Volo.Abp.Threading;
 namespace ShikshaMitra.Academic.Notifications;
 
 [RemoteService(false)]
-public sealed class LearningTaskFeedbackReleaseEventCapture(INotificationIntentWriter writer, IRepository<NotificationRule, Guid> rules,
+public sealed class LearningTaskFeedbackEventCapture(INotificationIntentWriter writer, IRepository<NotificationRule, Guid> rules,
 	HomeworkAppService access, IRepository<HomeworkAssignmentEntity, Guid> tasks, AssignmentNotificationSourceAuthorizer assignmentAccess,
 	IAsyncQueryableExecuter queries, ICurrentTenant tenant, ICancellationTokenProvider cancellation) : ITransientDependency
 {
-	internal async Task CaptureAsync(StudentSubmissionEntity submission, SubmissionStatus previousStatus, Guid? actorId)
+	internal static bool StartsRevisionRequest(StudentSubmissionEntity submission, SubmissionStatus requestedStatus) =>
+		requestedStatus == SubmissionStatus.NeedsReview && submission.SubmissionDate.HasValue &&
+		(submission.Status != SubmissionStatus.NeedsReview || string.IsNullOrWhiteSpace(submission.Remarks) ||
+			LearningTaskFeedbackSourceAdapter.RevisionRequestVersion(submission.SubmissionDate, submission.MobileUpdatedAt, submission.ReviewedAt) == null);
+
+	internal async Task CaptureAsync(StudentSubmissionEntity submission, SubmissionStatus previousStatus, Guid? actorId,
+		bool startsRevisionRequest = false)
 	{
-		if (previousStatus == SubmissionStatus.Reviewed || submission.Status != SubmissionStatus.Reviewed ||
+		var feedbackReleased = previousStatus != SubmissionStatus.Reviewed && submission.Status == SubmissionStatus.Reviewed;
+		var revisionRequested = startsRevisionRequest && submission.Status == SubmissionStatus.NeedsReview;
+		if ((!feedbackReleased && !revisionRequested) ||
 			submission.ReviewedAt is not DateTimeOffset reviewedAt || submission.HomeworkAssignmentId.HasValue == submission.AssignmentId.HasValue ||
 			tenant.Id is not Guid tenantId || submission.TenantId != tenantId || actorId is not Guid userId)
 			return;
 
+		var revision = revisionRequested
+			? LearningTaskFeedbackSourceAdapter.RevisionRequestVersion(submission.SubmissionDate, submission.MobileUpdatedAt, reviewedAt)
+			: LearningTaskFeedbackSourceAdapter.ReleaseRevision;
+		if (revision == null) return;
 		var isAssignment = submission.AssignmentId.HasValue;
-		var eventKey = isAssignment ? LearningTaskFeedbackReleaseSourceAdapter.AssignmentEventKey : LearningTaskFeedbackReleaseSourceAdapter.HomeworkEventKey;
+		var eventKey = (isAssignment, revisionRequested) switch
+		{
+			(true, true) => AcademicNotificationEventKeys.AssignmentRevisionRequested,
+			(false, true) => AcademicNotificationEventKeys.HomeworkRevisionRequested,
+			(true, false) => AcademicNotificationEventKeys.AssignmentFeedbackReleased,
+			_ => AcademicNotificationEventKeys.HomeworkFeedbackReleased
+		};
 		if (!await queries.AnyAsync((await rules.GetQueryableAsync()).Where(x =>
 			x.TenantId == tenantId && !x.IsDeleted && x.IsEnabled && x.EventKey == eventKey), cancellation.Token)) return;
 		if (submission.AssignmentId is Guid assignmentId)
@@ -41,7 +59,6 @@ public sealed class LearningTaskFeedbackReleaseEventCapture(INotificationIntentW
 		}
 
 		var sourceType = isAssignment ? LearningTaskReminderSourceAdapter.AssignmentSourceType : LearningTaskReminderSourceAdapter.HomeworkSourceType;
-		await writer.WriteAsync(new(eventKey, sourceType, submission.Id,
-			LearningTaskFeedbackReleaseSourceAdapter.ReleaseRevision, reviewedAt, [], userId), cancellation.Token);
+		await writer.WriteAsync(new(eventKey, sourceType, submission.Id, revision, reviewedAt, [], userId), cancellation.Token);
 	}
 }

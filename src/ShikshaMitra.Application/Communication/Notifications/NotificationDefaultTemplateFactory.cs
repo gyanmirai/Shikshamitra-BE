@@ -22,6 +22,8 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 				"{{task_title}} had {{missing_submission_count}} missing submissions when this summary was prepared.",
 			("AssignedTeacher", AcademicNotificationEventKeys.HomeworkSubmitted or AcademicNotificationEventKeys.AssignmentSubmitted) =>
 				"Submissions recorded for {{task_title}} during this digest window: {{submitted_count}}.",
+			(_, AcademicNotificationEventKeys.HomeworkRevisionRequested or AcademicNotificationEventKeys.AssignmentRevisionRequested) =>
+				"A revision was requested for {{task_title}}.",
 			_ => subject + "."
 		};
 		var body = channel == CommunicationChannelType.WebPush ? "An academic update is available. Open the school website for details." :

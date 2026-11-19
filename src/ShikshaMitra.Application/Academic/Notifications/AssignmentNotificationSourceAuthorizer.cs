@@ -29,7 +29,7 @@ public sealed class AssignmentNotificationSourceAuthorizer(IRepository<Assignmen
 		LearningTaskReminderSourceAdapter.AssignmentEventKey, AcademicNotificationEventKeys.AssignmentOverdue,
 		AcademicNotificationEventKeys.AssignmentSubmitted,
 		AssignmentPublicationSourceAdapter.EventKey,
-		LearningTaskFeedbackReleaseSourceAdapter.AssignmentEventKey
+		AcademicNotificationEventKeys.AssignmentFeedbackReleased, AcademicNotificationEventKeys.AssignmentRevisionRequested
 	});
 
 	public async Task EnsureCanViewAsync(string eventKey, Guid sourceId, CancellationToken cancellationToken)
@@ -44,7 +44,7 @@ public sealed class AssignmentNotificationSourceAuthorizer(IRepository<Assignmen
 		if (!await permissions.IsGrantedAsync(viewPermission))
 			throw new AbpAuthorizationException();
 
-		if (eventKey == LearningTaskFeedbackReleaseSourceAdapter.AssignmentEventKey)
+		if (eventKey is AcademicNotificationEventKeys.AssignmentFeedbackReleased or AcademicNotificationEventKeys.AssignmentRevisionRequested)
 		{
 			var submission = await queries.SingleOrDefaultAsync((await submissions.GetQueryableAsync()).Where(x =>
 				x.TenantId == tenantId && x.Id == sourceId && !x.IsDeleted && !x.HomeworkAssignmentId.HasValue)

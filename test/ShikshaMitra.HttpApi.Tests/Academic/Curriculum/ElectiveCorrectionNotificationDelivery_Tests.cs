@@ -36,14 +36,15 @@ namespace ShikshaMitra.Academic.ClassManagement.StudentElectiveAssignment;
 public sealed class ElectiveCorrectionNotificationDelivery_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private const string Event = AcademicNotificationEventKeys.ElectiveLockedSelectionCorrected;
+	private const string Confirmation = AcademicNotificationEventKeys.ElectiveSelectionConfirmed;
 	private const string Route = "/api/class-management/student-elective-assignments/corrections";
 	private static readonly Guid School = Guid.Parse(TestAuthHandler.TestTenantId);
 	private static readonly Guid Actor = Guid.Parse(TestAuthHandler.TestUserId);
 
 	[Fact]
-	public Task Confirmed_elective_corrections_queue_only_the_saved_learner_and_assigned_staff() => RunAsync();
+	public Task Lock_and_correction_notify_only_the_saved_learner_and_assigned_staff() => RunAsync(concurrentLock: false);
 
-	internal async Task RunAsync()
+	internal async Task RunAsync(bool concurrentLock)
 	{
 		var adminId = Guid.NewGuid();
 		var student = Guid.NewGuid();
@@ -51,6 +52,7 @@ public sealed class ElectiveCorrectionNotificationDelivery_Tests(ShikshaMitraApi
 		var request = new ConfirmStudentElectiveCorrectionInput { AcademicMediumId = Factory.SeededMediumId, StudentId = student };
 		Guid oldSubjectId = default;
 		NotificationRecipientRefDto[] expected = [];
+		NotificationRecipientRefDto[] expectedConfirmation = [];
 		await InSchoolAsync(async services =>
 		{
 			var medium = await services.GetRequiredService<IRepository<EducationMedium, Guid>>().GetAsync(Factory.SeededMediumId);
@@ -93,7 +95,6 @@ public sealed class ElectiveCorrectionNotificationDelivery_Tests(ShikshaMitraApi
 				board.Id, medium.Id, Factory.SeededMediumStageId, standard.Id, division.Id, status: StudentLifeCycleStatusEnum.Enrolled));
 			await InsertAsync(services, StudentEnrollment.Create(Guid.NewGuid(), School, student, board.AcademicYearId, standard.Id, division.Id));
 			var selection = new StudentElectiveSelection(selectionId, School, student, group.Id, oldSubject.Id, medium.Id);
-			selection.LockSelection();
 			await InsertAsync(services, selection);
 			expected =
 			[
@@ -101,27 +102,37 @@ public sealed class ElectiveCorrectionNotificationDelivery_Tests(ShikshaMitraApi
 				new("PreviousTeacher", UserId: teachers[0].UserId, EmployeeId: teachers[0].Id),
 				new("ClassTeacher", UserId: teachers[2].UserId, EmployeeId: teachers[2].Id)
 			];
-			string[] staff = ["AssignedTeacher", "PreviousTeacher", "ClassTeacher"];
-			var kinds = staff.Append("Guardian").ToArray();
-			var headers = new Guid[kinds.Length];
-			for (var i = 0; i < kinds.Length; i++)
-			{
-				var header = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), School)
-					{ TemplateName = "Elective notice " + kinds[i] });
-				headers[i] = header.Id;
-				var revision = new CommunicationTemplateRevision(Guid.NewGuid(), School, header.Id, 1, Event, kinds[i],
-					CommunicationChannelType.InApp, "en", "Elective allocation changed", "Open the school inbox.", 1);
-				revision.Publish(adminId, DateTimeOffset.UtcNow);
-				await InsertAsync(services, revision);
-			}
+			expectedConfirmation =
+			[
+				new("Student", StudentId: student),
+				new("AssignedTeacher", UserId: teachers[0].UserId, EmployeeId: teachers[0].Id)
+			];
+			await AddRuleAsync(Confirmation, ["AssignedTeacher"]);
+			await AddRuleAsync(Event, ["AssignedTeacher", "PreviousTeacher", "ClassTeacher"]);
 
-			var rule = new NotificationRule(Guid.NewGuid(), School, Event,
-				NotificationRuleScope.Create(board.AcademicYearId, board.Id, medium.Id, standard.Id, division.Id));
-			var configuration = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false,
-				staff, [CommunicationChannelType.InApp], headers, NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");
-			rule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(
-				configuration, services.GetRequiredService<AcademicNotificationCatalogue>().Get(Event)), rule.ConcurrencyStamp);
-			await InsertAsync(services, rule);
+			async Task AddRuleAsync(string eventKey, string[] staff)
+			{
+				var kinds = staff.Append("Guardian").ToArray();
+				var headers = new Guid[kinds.Length];
+				for (var i = 0; i < kinds.Length; i++)
+				{
+					var header = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), School)
+						{ TemplateName = eventKey + " " + kinds[i] });
+					headers[i] = header.Id;
+					var revision = new CommunicationTemplateRevision(Guid.NewGuid(), School, header.Id, 1, eventKey, kinds[i],
+						CommunicationChannelType.InApp, "en", "Elective allocation changed", "Open the school inbox.", 1);
+					revision.Publish(adminId, DateTimeOffset.UtcNow);
+					await InsertAsync(services, revision);
+				}
+
+				var rule = new NotificationRule(Guid.NewGuid(), School, eventKey,
+					NotificationRuleScope.Create(board.AcademicYearId, board.Id, medium.Id, standard.Id, division.Id));
+				var configuration = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false,
+					staff, [CommunicationChannelType.InApp], headers, NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");
+				rule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(
+					configuration, services.GetRequiredService<AcademicNotificationCatalogue>().Get(eventKey)), rule.ConcurrencyStamp);
+				await InsertAsync(services, rule);
+			}
 		});
 
 		using var adminClient = Factory.CreateClient();
@@ -141,6 +152,30 @@ public sealed class ElectiveCorrectionNotificationDelivery_Tests(ShikshaMitraApi
 			response.StatusCode.ShouldBe(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync());
 		}
 
+		async Task LockAsync()
+		{
+			using var response = await adminClient.PostAsJsonAsync("/api/class-management/student-elective-assignments/lock",
+				new LockStudentElectiveAssignmentsDto
+				{
+					AcademicMediumId = request.AcademicMediumId, ClassId = request.ClassId, DivisionId = request.DivisionId,
+					ElectiveGroupId = request.ElectiveGroupId
+				}, JsonOptions);
+			response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		}
+
+		if (concurrentLock) await Task.WhenAll(LockAsync(), LockAsync());
+		else { await LockAsync(); await LockAsync(); }
+		NotificationIntent confirmation = null!;
+		await InSchoolAsync(async services =>
+		{
+			confirmation = (await services.GetRequiredService<IRepository<NotificationIntent, Guid>>()
+				.GetListAsync(x => x.SourceId == selectionId && x.EventKey == Confirmation)).ShouldHaveSingleItem();
+			var source = await services.GetRequiredService<NotificationIntentSourceReader>()
+				.LoadAsync(confirmation, DateTimeOffset.UtcNow, CancellationToken.None);
+			source.Runtime.SourceScope.DivisionId.ShouldBe(request.DivisionId);
+			source.CurrentRecipients.ToHashSet().SetEquals(expectedConfirmation).ShouldBeTrue();
+		});
+
 		await PreviewAsync();
 		await InSchoolAsync(async services =>
 			(await services.GetRequiredService<IRepository<StudentElectiveCorrection, Guid>>().GetListAsync(x => x.StudentId == student)).ShouldBeEmpty());
@@ -157,6 +192,8 @@ public sealed class ElectiveCorrectionNotificationDelivery_Tests(ShikshaMitraApi
 			source.CurrentRecipients.ToHashSet().SetEquals(expected).ShouldBeTrue();
 			source.Runtime.SourceScope.DivisionId.ShouldBe(request.DivisionId);
 			source.Snapshot!.RecipientContent!.ShouldHaveSingleItem().Variables.Keys.ShouldBe(["school_name"]);
+			(await services.GetRequiredService<NotificationIntentSourceReader>()
+				.LoadAsync(confirmation, DateTimeOffset.UtcNow, CancellationToken.None)).CurrentRecipients.ShouldBeEmpty();
 		});
 
 		var operation = $"/api/academic/notifications/operations/{original.CampaignId}";
@@ -167,6 +204,11 @@ public sealed class ElectiveCorrectionNotificationDelivery_Tests(ShikshaMitraApi
 		denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 		using var allowed = await adminClient.GetAsync(operation);
 		allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
+		var confirmationOperation = $"/api/academic/notifications/operations/{confirmation.CampaignId}";
+		using var deniedConfirmation = await viewer.GetAsync(confirmationOperation);
+		deniedConfirmation.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		using var allowedConfirmation = await adminClient.GetAsync(confirmationOperation);
+		allowedConfirmation.StatusCode.ShouldBe(HttpStatusCode.OK, await allowedConfirmation.Content.ReadAsStringAsync());
 
 		request.SelectedSubjectId = oldSubjectId;
 		await PreviewAsync();
@@ -199,9 +241,9 @@ public sealed class ElectiveCorrectionNotificationDelivery_Tests(ShikshaMitraApi
 public sealed class ElectiveCorrectionNotificationPostgres_Tests
 {
 	[AcademicPerformancePostgresFact]
-	public async Task Corrections_and_atomic_notice_capture_persist_in_postgresql()
+	public async Task Concurrent_elective_locks_and_corrections_persist_scoped_notices()
 	{
 		await using var fixture = new AcademicPerformancePostgresTestFactory();
-		await new ElectiveCorrectionNotificationDelivery_Tests(fixture).RunAsync();
+		await new ElectiveCorrectionNotificationDelivery_Tests(fixture).RunAsync(concurrentLock: true);
 	}
 }

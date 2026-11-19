@@ -330,6 +330,12 @@ Visit conflicts retry with fresh units of work, up to three attempts, preserving
 Progress conflicts require refetching the current year state before deciding whether to retry.
 No request restores permissions, changes scope or resets school data.
 
+## Elective confirmation notices
+
+`POST /api/class-management/student-elective-assignments/lock` can queue an enabled `Academic.Elective.SelectionConfirmed` rule for each selection newly locked by the request. Repeating the lock, saving an editable selection or submitting a portal preference does not queue this notice. The notice uses the saved selection ID and revision. Capture requires Student Elective Assignment Add and access to the affected division. Delivery rechecks current enrollment, the published elective and the locked selection revision. The rule can notify the affected family and the teachers assigned to teach the elective. A later correction suppresses the pending confirmation. History requires Academic Notification View, Student Elective Assignment View and access to the division.
+
+The current preference flow derives submission availability from published options and learner placement. It has no saved preference-window dates, so `Academic.Elective.PreferenceOpened` and `Academic.Elective.PreferenceDue` remain unavailable.
+
 ## Locked elective corrections
 
 Both commands require `ShikshaMitraSubmodulePermissions.ClassManagement.StudentElectiveAssignment.Add` and current persisted membership of the tenant's protected `admin` role. Configured data-scope rules, including the separately configured administrator scope exception, remain enforced. The elective roster response supplies `canCorrectLockedAssignments`; client role claims do not authorize a correction.

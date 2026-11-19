@@ -73,6 +73,7 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 			(_, AcademicNotificationEventKeys.SyllabusRevised) => "A published syllabus chapter for {{subject_name}} has been updated.",
 			("PreviousTeacher", AcademicNotificationEventKeys.ElectiveLockedSelectionCorrected) => "An elective teaching assignment has changed.",
 			(_, AcademicNotificationEventKeys.ElectiveLockedSelectionCorrected) => "A confirmed elective assignment has been updated.",
+			(_, AcademicNotificationEventKeys.ElectiveSelectionConfirmed) => "An elective assignment has been confirmed.",
 			(_, AcademicNotificationEventKeys.MarksSubmitted) => "Marks for {{subject_name}} in {{exam_name}} are ready for review.",
 			(_, AcademicNotificationEventKeys.MarksChangesRequested) => "A correction was requested for {{subject_name}} in {{exam_name}}.",
 			(_, AcademicNotificationEventKeys.ResultPublished) => "A result is available. Sign in to ShikshaMitra to view it.",

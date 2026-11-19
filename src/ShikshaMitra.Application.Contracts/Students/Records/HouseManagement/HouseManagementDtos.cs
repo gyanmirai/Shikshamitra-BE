@@ -45,6 +45,7 @@ public class HouseManagementHouseDto
 	public string? Description { get; set; }
 	public long MemberCount { get; set; }
 	public long HouseLeaderCount { get; set; }
+	public HouseManagementStudentDto? Leader { get; set; }
 	public string ConcurrencyStamp { get; set; } = "";
 	public bool CanManage { get; set; }
 }
@@ -57,7 +58,6 @@ public class HouseManagementDivisionDto
 	public string StandardName { get; set; } = "";
 	public long StudentCount { get; set; }
 	public HouseManagementStudentDto? Leader { get; set; }
-	public HouseManagementStudentDto? HouseLeader { get; set; }
 	public string ConcurrencyStamp { get; set; } = "";
 	public bool CanManage { get; set; }
 }

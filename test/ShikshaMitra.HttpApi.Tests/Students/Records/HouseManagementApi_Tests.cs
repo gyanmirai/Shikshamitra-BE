@@ -29,7 +29,7 @@ public class HouseManagementApi_Tests(ShikshaMitraApiTestFactory factory) : Shik
 	[InlineData("DELETE", "houses/11111111-1111-1111-1111-111111111111", "Students.Records.HouseManagement.Add")]
 	[InlineData("POST", "assignments/preview", "Students.Records.HouseManagement.View")]
 	[InlineData("POST", "assignments/commit", "Students.Records.HouseManagement.View")]
-	[InlineData("PUT", "divisions/11111111-1111-1111-1111-111111111111/house-leader", "Students.Records.HouseManagement.View")]
+	[InlineData("PUT", "houses/11111111-1111-1111-1111-111111111111/leader", "Students.Records.HouseManagement.View")]
 	[InlineData("PUT", "divisions/11111111-1111-1111-1111-111111111111/leader", "Students.Records.HouseManagement.View")]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Every_endpoint_requires_its_exact_action(string method, string path, string unrelatedAction)
@@ -91,9 +91,9 @@ public class HouseManagementApi_Tests(ShikshaMitraApiTestFactory factory) : Shik
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Former_house_wide_leader_command_is_retired()
+	public async Task Former_division_scoped_house_leader_command_is_retired()
 	{
-		using var response = await Client.PutAsJsonAsync($"{Root}/houses/{Guid.NewGuid()}/leader",
+		using var response = await Client.PutAsJsonAsync($"{Root}/divisions/{Guid.NewGuid()}/house-leader",
 			new ReplaceStudentLeaderRequest { AcademicMediumId = Factory.SeededMediumId, ConcurrencyStamp = "previous-version" }, JsonOptions);
 		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}

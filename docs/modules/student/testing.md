@@ -183,7 +183,7 @@ dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~StudentM
 dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~House_actions_require|FullyQualifiedName~Students_catalogue_contains|FullyQualifiedName~Student_actions_follow|FullyQualifiedName~Teacher_assignment_and_development_environment"
 ```
 
-Run `HouseManagementDomain_Tests`, `HouseManagement_Tests` and `HouseManagementApi_Tests` in addition to these catalogue checks. They cover one House leader across all houses in a division, independent Division leadership, scoped eligibility and counts, filtered divisions with an incumbent from another house, preview/stamp conflicts, and placement cleanup. Run the [read-only preflight](../../../scripts/students/house-leaders-preflight.sql) before exercising migration carryover, and verify that it lists any conflicts for review. Local SQLite/synthetic tests do not establish PostgreSQL concurrency, live persistence, migration deployment or authenticated school acceptance.
+Run `HouseManagementDomain_Tests`, `HouseManagement_Tests` and `HouseManagementApi_Tests`. Cover leaders of different houses sharing a division, replacement across divisions in the same house, independent Division leadership, scoped eligibility, preview and version conflicts, and placement cleanup. On disposable PostgreSQL, check both migration paths and confirm ambiguous appointments abort without losing any data.
 
 ```powershell
 dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~HouseManagementDomain_Tests"

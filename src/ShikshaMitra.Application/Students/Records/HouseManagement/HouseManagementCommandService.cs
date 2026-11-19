@@ -77,7 +77,8 @@ public partial class HouseManagementCommandService(
 				ConcurrencyStamp = house.ConcurrencyStamp,
 				CanManage = true,
 				MemberCount = await AsyncExecuter.CountAsync(roster.Where(s => s.HouseId == house.Id)),
-				HouseLeaderCount = await AsyncExecuter.CountAsync(roster.Where(s => s.HouseId == house.Id && s.IsHouseLeader))
+				HouseLeaderCount = await AsyncExecuter.CountAsync(roster.Where(s => s.HouseId == house.Id && s.IsHouseLeader)),
+				Leader = await AsyncExecuter.SingleOrDefaultAsync(roster.Where(s => s.HouseId == house.Id && s.IsHouseLeader))
 			};
 		});
 	}
@@ -104,11 +105,10 @@ public partial class HouseManagementCommandService(
 		var state = await AssignmentStateAsync(input);
 		if (string.IsNullOrWhiteSpace(input.PreviewToken) || input.PreviewToken != state.Preview.PreviewToken)
 			throw new BusinessException(HouseManagementErrorCodes.StalePreview);
-		await ClearDepartingHouseLeadersAsync(state.Preview.ClearedHouseLeaders);
 		foreach (var enrollment in state.Enrollments.Where(e => e.HouseId != input.HouseId))
 		{
 			if (enrollment.HouseId.HasValue)
-				state.Houses.Single(h => h.Id == enrollment.HouseId).TouchMembership();
+				state.Houses.Single(h => h.Id == enrollment.HouseId).MemberDeparted(enrollment.Id);
 			enrollment.AssignHouse(input.HouseId);
 		}
 
@@ -118,22 +118,6 @@ public partial class HouseManagementCommandService(
 		await houses.UpdateManyAsync(state.Houses);
 		return true;
 	});
-
-	private async Task ClearDepartingHouseLeadersAsync(List<HouseManagementStudentDto> leaders)
-	{
-		if (leaders.Count == 0)
-			return;
-		var ids = leaders.Select(s => s.DivisionId.GetValueOrDefault()).Distinct().ToArray();
-		var involved = (await divisions.GetListAsync(d => d.TenantId == CurrentTenant.Id && Enumerable.Contains(ids, d.Id)))
-			.ToDictionary(d => d.Id);
-		foreach (var leader in leaders)
-		{
-			if (!involved.TryGetValue(leader.DivisionId.GetValueOrDefault(), out var division) ||
-				!division.HouseLeaderDeparted(leader.EnrollmentId))
-				throw new BusinessException(HouseManagementErrorCodes.StalePreview);
-		}
-		await divisions.UpdateManyAsync(involved.Values);
-	}
 
 	private async Task<(HouseAssignmentPreviewDto Preview, List<StudentEnrollment> Enrollments, List<HouseSettings> Houses)> AssignmentStateAsync(HouseAssignmentRequest input)
 	{
@@ -163,7 +147,7 @@ public partial class HouseManagementCommandService(
 			new[] { CurrentTenant.Id.ToString(), CurrentUser.Id.ToString(), input.AcademicMediumId.ToString(), input.DivisionId.ToString(), input.HouseId.ToString() }
 				.Concat(rows.OrderBy(e => e.Id).Select(e => $"{e.Id}:{e.ConcurrencyStamp}:{e.HouseId}"))
 				.Concat(involved.OrderBy(h => h.Id).Select(h => $"{h.Id}:{h.ConcurrencyStamp}:{h.MembershipRevision}"))
-				.Concat(clearedLeaders.OrderBy(s => s.EnrollmentId).Select(s => $"{s.DivisionId}:{s.EnrollmentId}")));
+				.Concat(clearedLeaders.OrderBy(s => s.EnrollmentId).Select(s => $"{s.HouseId}:{s.EnrollmentId}")));
 		return (new HouseAssignmentPreviewDto
 		{
 			Students = selected,

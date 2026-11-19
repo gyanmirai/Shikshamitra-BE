@@ -31,11 +31,11 @@ See the [API contract](./api.md#registration-print-contract), [validation](./tes
 
 ## House Management
 
-Houses belong to an academic medium and can contain any number of active enrolled students across its classes. Membership belongs to the operational enrollment. Each division has one optional House leader total across all houses and one optional Division leader. Both leaders must be active enrolled students in that division. The House leader must also belong to a house in the medium. A student can hold both roles, and a house can supply House leaders in multiple divisions.
+Houses belong to an academic medium and can contain any number of active enrolled students across its classes. Membership belongs to the operational enrollment. Each house has one optional House leader across all its divisions. Each division has one optional Division leader. A candidate must be an active enrolled member of the house or division they will lead. A student can hold both roles.
 
 View reads scoped rosters, counts and visible leaders. Add/Update controls house configuration, membership changes and leader appointment, replacement or removal. Delete removes only empty houses. Shared house configuration requires medium-wide or broader scope. Appointments require division scope and a candidate visible in that division. Both slots share one division concurrency stamp. Tenant, active identity, academic scope and concurrency checks remain server enforced.
 
-Each membership change batch is scoped to one division. Assignment previews identify departing House leaders. The reviewed batch applies atomically and clears a departing House lead while retaining the student's Division lead. A move to another division or deactivation clears both roles on the source division. Stale previews require fresh review. Houses can gain members from multiple divisions through separate batches. See the [migration preflight](./api.md#house-management) for carryover and conflicts.
+Each membership change batch is scoped to one division. Assignment previews identify departing House leaders. The reviewed batch applies atomically and clears a departing House lead while retaining the student's Division lead. A same-medium division change retains house membership and House leadership and clears the former Division leadership. A medium change or deactivation clears appointments for the roles the student leaves. Stale previews require fresh review. See the [migration notes](./api.md#house-management).
 
 ## Resume an ended admission
 

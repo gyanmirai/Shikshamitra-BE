@@ -68,7 +68,7 @@ public class HouseManagementQueryService(
 				RollNumber = e.RollNumber,
 				HouseId = h == null ? null : h.Id,
 				HouseName = h == null ? null : h.Name,
-				IsHouseLeader = h != null && d != null && d.HouseLeaderEnrollmentId == e.Id,
+				IsHouseLeader = h != null && h.LeaderEnrollmentId == e.Id,
 				IsDivisionLeader = d != null && d.LeaderEnrollmentId == e.Id,
 				ConcurrencyStamp = e.ConcurrencyStamp
 			};
@@ -135,6 +135,13 @@ public class HouseManagementQueryService(
 				MemberCount = roster.Count(s => s.HouseId == h.Id),
 				HouseLeaderCount = roster.Count(s => s.HouseId == h.Id && s.IsHouseLeader)
 			}));
+		var ids = items.Select(h => h.Id).ToArray();
+		var leaders = await AsyncExecuter.ToListAsync(roster.Where(s => s.IsHouseLeader &&
+			s.HouseId.HasValue && Enumerable.Contains(ids, s.HouseId.Value)));
+		var leadersByHouse = leaders.ToDictionary(s => s.HouseId!.Value);
+		foreach (var item in items)
+			if (leadersByHouse.TryGetValue(item.Id, out var leader))
+				item.Leader = leader;
 		return new HouseManagementHousePageDto
 		{
 			TotalCount = count,
@@ -177,13 +184,10 @@ public class HouseManagementQueryService(
 		var sorted = input.Sorting == "name desc" ? q.OrderByDescending(x => x.Name) : q.OrderBy(x => x.Name);
 		var items = await AsyncExecuter.ToListAsync(sorted.ThenBy(x => x.Id).Skip(input.SkipCount).Take(input.MaxResultCount));
 		var ids = items.Select(d => d.Id).ToArray();
-		var leaders = await AsyncExecuter.ToListAsync(roster.Where(s => (s.IsDivisionLeader || s.IsHouseLeader) &&
+		var leaders = await AsyncExecuter.ToListAsync(roster.Where(s => s.IsDivisionLeader &&
 			s.DivisionId.HasValue && Enumerable.Contains(ids, s.DivisionId.Value)));
 		foreach (var item in items)
-		{
-			item.Leader = leaders.SingleOrDefault(s => s.IsDivisionLeader && s.DivisionId == item.Id);
-			item.HouseLeader = leaders.SingleOrDefault(s => s.IsHouseLeader && s.DivisionId == item.Id);
-		}
+			item.Leader = leaders.SingleOrDefault(s => s.DivisionId == item.Id);
 		return new(count, items);
 	}
 

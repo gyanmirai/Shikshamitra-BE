@@ -1,3 +1,5 @@
+-- Historical preflight for the superseded transfer of House leaders to divisions.
+-- The house-scoped recovery migration does not require this report.
 -- Run against the intended database before MoveHouseLeadershipToDivisions.
 -- Every non-deleted legacy appointment must resolve to a single eligible division.
 WITH candidates AS (

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -7,8 +8,10 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Homework;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
@@ -16,6 +19,8 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.AcademicSetups;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
@@ -84,6 +89,146 @@ public class LearningTaskNotificationEligibility_Tests(ShikshaMitraApiTestFactor
 		outside.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await outside.Content.ReadAsStringAsync());
 	}
 
+	[Fact]
+	public async Task Due_scan_pages_saved_deadlines_and_revalidates_the_exact_occurrence()
+	{
+		var seed = await SeedAsync();
+		var legacyTaskId = Guid.NewGuid();
+		await InSchoolAsync(async services =>
+		{
+			var repository = services.GetRequiredService<IRepository<HomeworkAssignmentEntity, Guid>>();
+			var task = await repository.GetAsync(seed.TaskId);
+			var legacyType = await InsertAsync(services, new HomeworkAssignmentType(Guid.NewGuid(), "Legacy practice",
+				WorkType.Homework, Factory.SeededMediumId, TenantId) { Name = "Legacy practice" });
+			var legacy = new HomeworkAssignmentEntity(legacyTaskId, task.StandardId, Factory.SeededDivisionId,
+				task.SubjectId, "Legacy practice", "", legacyType.Id, SubmissionType.OnlineText,
+				DateTime.UtcNow.AddDays(4), TenantId);
+			legacy.Publish();
+			await InsertAsync(services, legacy);
+		});
+
+		await InSchoolAsync(async services =>
+		{
+			var source = services.GetServices<INotificationDueSource>().SingleOrDefault(x => x.SourceType == SourceType);
+			source.ShouldNotBeNull();
+			var now = DateTimeOffset.UtcNow;
+			var request = new NotificationDueScanRequest(TenantId, now, now, null, 1);
+			var found = new List<NotificationDueSourceCandidate>();
+			for (var index = 0; index < 100; index++)
+			{
+				var page = await source.ReadPageAsync(request, CancellationToken.None);
+				page.Candidates.Count.ShouldBeLessThanOrEqualTo(1);
+				found.AddRange(page.Candidates);
+				if (page.Continuation == null) break;
+				page.Continuation.ShouldNotBe(request.Continuation);
+				request = request with { Continuation = page.Continuation };
+			}
+			found.Count(x => x.SourceId == legacyTaskId).ShouldBe(1);
+			found.ShouldNotContain(x => x.SourceId == seed.DraftId || x.SourceId == seed.PastId);
+			var occurrence = found.Single(x => x.SourceId == seed.TaskId);
+			occurrence.Scope.DivisionId.ShouldBe(Factory.SeededDivisionId);
+			occurrence.OccurrenceAt.ShouldBe(occurrence.ExpiresAt);
+			occurrence.TimeMode.ShouldBe(NotificationDueTimeMode.PrecedingSchoolDays);
+
+			var adapter = services.GetServices<INotificationSourceAdapter>().Single(x => x.EventKeys.Contains(EventKey));
+			var context = new NotificationIntentContext(Guid.Empty, TenantId, EventKey, SourceType, seed.TaskId,
+				occurrence.SourceRevision, now, [], occurrence.Scope, occurrence.OccurrenceAt);
+			var initial = await adapter.LoadAsync(context, CancellationToken.None);
+			initial.IsEligible.ShouldBeTrue();
+			initial.SourceRevision.ShouldBe(occurrence.SourceRevision);
+			initial.EligibleRecipients.Select(x => x.StudentId!.Value).ToHashSet().SetEquals([seed.Active, seed.Legacy]).ShouldBeTrue();
+
+			var foreign = await source.ReadPageAsync(request with { TenantId = Guid.NewGuid(), Continuation = null }, CancellationToken.None);
+			foreign.Candidates.ShouldBeEmpty();
+
+			await InsertAsync(services, new StudentSubmissionEntity(Guid.NewGuid(), seed.TaskId, seed.Active, Factory.SeededDivisionId,
+				occurrence.OccurrenceAt.UtcDateTime, TenantId) { Status = SubmissionStatus.Submitted });
+			var reloaded = await adapter.LoadAsync(context with { IntentId = Guid.NewGuid(),
+				AffectedRecipients = [new("Student", seed.Active)] }, CancellationToken.None);
+			reloaded.EligibleRecipients.ShouldBeEmpty();
+
+			var repository = services.GetRequiredService<IRepository<HomeworkAssignmentEntity, Guid>>();
+			var task = (await repository.WithDetailsAsync(x => x.DivisionSchedules)).Single(x => x.Id == seed.TaskId);
+			task.DivisionSchedules.Single().DueDate = occurrence.OccurrenceAt.UtcDateTime.AddDays(1);
+			await repository.UpdateAsync(task, autoSave: true);
+			(await adapter.LoadAsync(context, CancellationToken.None)).IsEligible.ShouldBeFalse();
+			var refreshed = await source.ReadPageAsync(request with { Continuation = null, PageSize = 100 }, CancellationToken.None);
+			var moved = refreshed.Candidates.Single(x => x.SourceId == seed.TaskId);
+			moved.OccurrenceAt.ShouldBe(occurrence.OccurrenceAt.AddDays(1));
+			moved.SourceRevision.ShouldNotBe(occurrence.SourceRevision);
+		});
+	}
+
+	[Fact]
+	public async Task Scheduler_queues_one_real_homework_intent_and_rechecks_submissions_before_dispatch()
+	{
+		var divisionId = Guid.Empty;
+		await InSchoolAsync(async services =>
+		{
+			var division = await services.GetRequiredService<DivisionManager>().CreateAsync(Factory.SeededStandardId,
+				$"Reminder {Guid.NewGuid():N}"[..20], 32);
+			divisionId = (await InsertAsync(services, division)).Id;
+		});
+		var seed = await SeedAsync(divisionId);
+		var dueAt = DateTimeOffset.MinValue;
+		await InSchoolAsync(async services =>
+		{
+			var homework = services.GetRequiredService<IRepository<HomeworkAssignmentEntity, Guid>>();
+			var task = (await homework.WithDetailsAsync(x => x.DivisionSchedules)).Single(x => x.Id == seed.TaskId);
+			dueAt = new DateTimeOffset(DateTime.SpecifyKind(task.DivisionSchedules.Single().DueDate, DateTimeKind.Utc));
+
+			var year = await services.GetRequiredService<IRepository<AcademicYear, Guid>>().GetAsync(Factory.SeededAcademicYearId);
+			var calendar = new AcademicCalendar(Guid.NewGuid(), TenantId, Factory.SeededMediumId, year.Id,
+				$"Reminder {Guid.NewGuid():N}"[..24], year.StartDate, year.EndDate);
+			calendar.Publish(Guid.NewGuid());
+			await InsertAsync(services, calendar);
+
+			var template = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), TenantId) { TemplateName = "Homework due" });
+			var definition = services.GetRequiredService<AcademicNotificationCatalogue>().Get(EventKey);
+			var revision = new CommunicationTemplateRevision(Guid.NewGuid(), TenantId, template.Id, 1, EventKey, "Guardian",
+				CommunicationChannelType.InApp, "en", "Homework reminder", "Homework is due soon.", definition.SchemaVersion);
+			revision.Publish(Guid.NewGuid(), DateTimeOffset.UtcNow);
+			await InsertAsync(services, revision);
+
+			var rule = new NotificationRule(Guid.NewGuid(), TenantId, EventKey,
+				NotificationRuleScope.Create(year.Id, Factory.SeededBoardId, Factory.SeededMediumId, Factory.SeededStandardId, divisionId));
+			var configuration = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, [],
+				[CommunicationChannelType.InApp], [template.Id],
+				NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");
+			var codec = services.GetRequiredService<NotificationRuleConfigurationCodec>();
+			rule.Configure(true, codec.Serialize(configuration, definition), rule.ConcurrencyStamp);
+			await InsertAsync(services, rule);
+		});
+
+		var scanAt = dueAt.AddMinutes(-20);
+		using (var scope = Factory.Services.CreateScope())
+		{
+			var services = scope.ServiceProvider;
+			using var school = services.GetRequiredService<ICurrentTenant>().Change(TenantId, "Synthetic school");
+			var scheduler = services.GetRequiredService<INotificationDueScheduler>();
+			(await scheduler.ScanAsync(scanAt, 100, CancellationToken.None)).Created.ShouldBeGreaterThan(0);
+			(await scheduler.ScanAsync(scanAt.AddMinutes(2), 100, CancellationToken.None)).Created.ShouldBe(0);
+		}
+
+		await InSchoolAsync(async services =>
+		{
+			var intents = services.GetRequiredService<IRepository<NotificationIntent, Guid>>();
+			var intent = await intents.GetAsync(x => x.TenantId == TenantId && x.SourceId == seed.TaskId && x.EventKey == EventKey);
+			intent.Status.ShouldBe(NotificationIntentState.Ready);
+			intent.ExpiresAt.ShouldBe(dueAt);
+			var reader = services.GetRequiredService<NotificationIntentSourceReader>();
+			var captured = await reader.LoadAsync(intent, scanAt, CancellationToken.None);
+			captured.CurrentRecipients.Select(x => x.StudentId!.Value).ToHashSet().SetEquals([seed.Active, seed.Legacy]).ShouldBeTrue();
+			captured.Runtime.SourceScope.DivisionId.ShouldBe(divisionId);
+
+			await InsertAsync(services, new StudentSubmissionEntity(Guid.NewGuid(), seed.TaskId, seed.Active, divisionId,
+				dueAt.UtcDateTime, TenantId) { Status = SubmissionStatus.Submitted });
+			var remaining = await reader.LoadAsync(intent, scanAt, CancellationToken.None);
+			remaining.CurrentRecipients.ShouldHaveSingleItem().StudentId.ShouldBe(seed.Legacy);
+			(await reader.LoadAsync(intent, dueAt, CancellationToken.None)).ExclusionCode.ShouldBe("SourceExpired");
+		});
+	}
+
 	private Task<HttpResponseMessage> PreviewAsync(Guid taskId, Guid studentId) =>
 		Client.PostAsJsonAsync("/api/academic/notifications/manual/preview",
 			new PreviewAcademicNotificationManualDto(EventKey, SourceType, taskId,
@@ -103,21 +248,21 @@ public class LearningTaskNotificationEligibility_Tests(ShikshaMitraApiTestFactor
 
 	private sealed record Seed(Guid TaskId, Guid DraftId, Guid PastId, Guid Active, Guid Legacy, Guid Unselected);
 
-	private async Task<Seed> SeedAsync()
+	private async Task<Seed> SeedAsync(Guid? divisionId = null)
 	{
 		var seed = new Seed(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
 		await InSchoolAsync(async services =>
 		{
 			var medium = Factory.SeededMediumId;
 			var standard = Factory.SeededStandardId;
-			var division = Factory.SeededDivisionId;
+			var division = divisionId ?? Factory.SeededDivisionId;
 			var year = Factory.SeededAcademicYearId;
 			var subject = new Subject(Guid.NewGuid(), TenantId, "Reminder subject", "#24597a", medium);
 			var group = new ElectiveGroup(Guid.NewGuid(), TenantId, "Reminder electives", "#24597a", medium);
 			await InsertAsync(services, subject);
 			await InsertAsync(services, group);
 			await InsertAsync(services, new AssignedSubject(Guid.NewGuid(), TenantId, standard, subject.Id,
-				$"REM-{Guid.NewGuid():N}"[..20], SubjectStatus.Published, electiveGroupId: group.Id));
+				$"R{Guid.NewGuid():N}"[..10], SubjectStatus.Published, electiveGroupId: group.Id));
 			var type = await services.GetRequiredService<HomeworkTypeManager>().CreateAsync(medium, $"Reminder {Guid.NewGuid():N}"[..28]);
 			await SaveHomeworkAsync(seed.TaskId, DateTime.UtcNow.AddDays(3), true);
 			await SaveHomeworkAsync(seed.DraftId, DateTime.UtcNow.AddDays(3), false);

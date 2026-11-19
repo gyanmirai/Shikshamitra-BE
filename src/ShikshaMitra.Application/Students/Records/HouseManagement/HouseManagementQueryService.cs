@@ -68,7 +68,7 @@ public class HouseManagementQueryService(
 				RollNumber = e.RollNumber,
 				HouseId = h == null ? null : h.Id,
 				HouseName = h == null ? null : h.Name,
-				IsHouseLeader = h != null && h.LeaderEnrollmentId == e.Id,
+				IsHouseLeader = h != null && d != null && d.HouseLeaderEnrollmentId == e.Id,
 				IsDivisionLeader = d != null && d.LeaderEnrollmentId == e.Id,
 				ConcurrencyStamp = e.ConcurrencyStamp
 			};
@@ -86,6 +86,8 @@ public class HouseManagementQueryService(
 			q = q.Where(x => x.HouseId == input.HouseId);
 		if (input.UnassignedOnly)
 			q = q.Where(x => x.HouseId == null);
+		if (input.AssignedOnly)
+			q = q.Where(x => x.HouseId != null);
 		if (!string.IsNullOrWhiteSpace(input.Filter))
 		{
 			var term = input.Filter.Trim().ToLower();
@@ -130,12 +132,9 @@ public class HouseManagementQueryService(
 				LogoUrl = h.LogoUrl,
 				ConcurrencyStamp = h.ConcurrencyStamp,
 				CanManage = context.CanManage,
-				MemberCount = roster.Count(s => s.HouseId == h.Id)
+				MemberCount = roster.Count(s => s.HouseId == h.Id),
+				HouseLeaderCount = roster.Count(s => s.HouseId == h.Id && s.IsHouseLeader)
 			}));
-		var ids = items.Select(h => h.Id).ToArray();
-		var leaders = await AsyncExecuter.ToListAsync(roster.Where(s => s.IsHouseLeader && s.HouseId.HasValue && Enumerable.Contains(ids, s.HouseId.Value)));
-		foreach (var item in items)
-			item.Leader = leaders.SingleOrDefault(s => s.HouseId == item.Id);
 		return new HouseManagementHousePageDto
 		{
 			TotalCount = count,
@@ -155,7 +154,9 @@ public class HouseManagementQueryService(
 			join c in await standards.GetQueryableAsync() on d.StandardId equals c.Id
 			join stage in await stages.GetQueryableAsync() on c.EducationMediumStageId equals stage.Id
 			where stage.EducationMediumId == input.AcademicMediumId && c.TenantId == CurrentTenant.Id &&
-				stage.TenantId == CurrentTenant.Id && (!input.StandardId.HasValue || c.Id == input.StandardId)
+				stage.TenantId == CurrentTenant.Id && (!input.StandardId.HasValue || c.Id == input.StandardId) &&
+				(!input.DivisionId.HasValue || d.Id == input.DivisionId) &&
+				(!input.HouseId.HasValue || roster.Any(s => s.DivisionId == d.Id && s.HouseId == input.HouseId))
 			select new HouseManagementDivisionDto
 			{
 				Id = d.Id,
@@ -176,15 +177,20 @@ public class HouseManagementQueryService(
 		var sorted = input.Sorting == "name desc" ? q.OrderByDescending(x => x.Name) : q.OrderBy(x => x.Name);
 		var items = await AsyncExecuter.ToListAsync(sorted.ThenBy(x => x.Id).Skip(input.SkipCount).Take(input.MaxResultCount));
 		var ids = items.Select(d => d.Id).ToArray();
-		var leaders = await AsyncExecuter.ToListAsync(roster.Where(s => s.IsDivisionLeader && s.DivisionId.HasValue && Enumerable.Contains(ids, s.DivisionId.Value)));
+		var leaders = await AsyncExecuter.ToListAsync(roster.Where(s => (s.IsDivisionLeader || s.IsHouseLeader) &&
+			s.DivisionId.HasValue && Enumerable.Contains(ids, s.DivisionId.Value)));
 		foreach (var item in items)
-			item.Leader = leaders.SingleOrDefault(s => s.DivisionId == item.Id);
+		{
+			item.Leader = leaders.SingleOrDefault(s => s.IsDivisionLeader && s.DivisionId == item.Id);
+			item.HouseLeader = leaders.SingleOrDefault(s => s.IsHouseLeader && s.DivisionId == item.Id);
+		}
 		return new(count, items);
 	}
 
 	private static void Validate(HouseManagementQuery input)
 	{
-		if (input.SkipCount < 0 || input.MaxResultCount is < 1 or > 100 || input.Filter?.Length > 150)
+		if (input.SkipCount < 0 || input.MaxResultCount is < 1 or > 100 || input.Filter?.Length > 150 ||
+			input.AssignedOnly && input.UnassignedOnly)
 			throw new BusinessException(HouseManagementErrorCodes.InvalidInput);
 	}
 }

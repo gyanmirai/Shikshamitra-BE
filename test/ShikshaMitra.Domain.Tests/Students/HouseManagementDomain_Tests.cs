@@ -31,11 +31,11 @@ public class HouseManagementDomain_Tests
 			TenantId = tenant
 		};
 		enrollment.AssignHouse(source.Id);
-		source.ReplaceLeader(enrollment);
+		division.ReplaceHouseLeader(enrollment, division.ConcurrencyStamp);
 		division.ReplaceLeader(enrollment, division.ConcurrencyStamp);
-		source.MemberDeparted(enrollment.Id);
+		Assert.True(division.HouseLeaderDeparted(enrollment.Id));
 		enrollment.AssignHouse(Guid.NewGuid());
-		Assert.Null(source.LeaderEnrollmentId);
+		Assert.Null(division.HouseLeaderEnrollmentId);
 		Assert.Equal(enrollment.Id, division.LeaderEnrollmentId);
 	}
 
@@ -43,19 +43,20 @@ public class HouseManagementDomain_Tests
 	public void House_leadership_rejects_non_member_inactive_and_other_tenant_enrollments()
 	{
 		var tenant = Guid.NewGuid();
-		var house = new HouseSettings(Guid.NewGuid(), "Falcons", "#123456", Guid.NewGuid())
-		{
-			TenantId = tenant
-		};
-		var enrollment = StudentEnrollment.Create(Guid.NewGuid(), tenant, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
-		Assert.Throws<BusinessException>(() => house.ReplaceLeader(enrollment));
-		enrollment.AssignHouse(house.Id);
+		var standard = Guid.NewGuid();
+		var division = new Division(Guid.NewGuid(), tenant, "A", standard, 50, "");
+		var enrollment = StudentEnrollment.Create(Guid.NewGuid(), tenant, Guid.NewGuid(), Guid.NewGuid(), standard, division.Id);
+		Assert.Throws<BusinessException>(() => division.ReplaceHouseLeader(enrollment, division.ConcurrencyStamp));
+		enrollment.AssignHouse(Guid.NewGuid());
 		enrollment.Deactivate();
-		Assert.Throws<BusinessException>(() => house.ReplaceLeader(enrollment));
-		var otherTenant = StudentEnrollment.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
-		otherTenant.AssignHouse(house.Id);
-		Assert.Throws<BusinessException>(() => house.ReplaceLeader(otherTenant));
-		Assert.Null(house.LeaderEnrollmentId);
+		Assert.Throws<BusinessException>(() => division.ReplaceHouseLeader(enrollment, division.ConcurrencyStamp));
+		var otherTenant = StudentEnrollment.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), standard, division.Id);
+		otherTenant.AssignHouse(Guid.NewGuid());
+		Assert.Throws<BusinessException>(() => division.ReplaceHouseLeader(otherTenant, division.ConcurrencyStamp));
+		var otherDivision = StudentEnrollment.Create(Guid.NewGuid(), tenant, Guid.NewGuid(), Guid.NewGuid(), standard, Guid.NewGuid());
+		otherDivision.AssignHouse(Guid.NewGuid());
+		Assert.Throws<BusinessException>(() => division.ReplaceHouseLeader(otherDivision, division.ConcurrencyStamp));
+		Assert.Null(division.HouseLeaderEnrollmentId);
 	}
 
 	[Fact]
@@ -76,24 +77,24 @@ public class HouseManagementDomain_Tests
 	}
 
 	[Fact]
-	public void House_leader_replacement_has_one_slot_and_can_be_vacant()
+	public void Division_has_one_house_leader_slot_across_houses_and_can_clear_both_roles_on_departure()
 	{
 		var tenant = Guid.NewGuid();
-		var house = new HouseSettings(Guid.NewGuid(), "Falcons", "#123456", Guid.NewGuid())
-		{
-			TenantId = tenant
-		};
-		var first = StudentEnrollment.Create(Guid.NewGuid(), tenant, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null);
-		var next = StudentEnrollment.Create(Guid.NewGuid(), tenant, Guid.NewGuid(), first.AcademicYearId, Guid.NewGuid(), null);
-		first.AssignHouse(house.Id);
-		next.AssignHouse(house.Id);
-		house.ReplaceLeader(first);
-		house.ReplaceLeader(next);
-		Assert.Equal(next.Id, house.LeaderEnrollmentId);
-		house.MemberDeparted(first.Id);
-		Assert.Equal(next.Id, house.LeaderEnrollmentId);
-		house.ReplaceLeader(null);
-		Assert.Null(house.LeaderEnrollmentId);
-		Assert.Throws<BusinessException>(() => house.EnsureVersion("stale"));
+		var standard = Guid.NewGuid();
+		var division = new Division(Guid.NewGuid(), tenant, "A", standard, 50, "");
+		var first = StudentEnrollment.Create(Guid.NewGuid(), tenant, Guid.NewGuid(), Guid.NewGuid(), standard, division.Id);
+		var next = StudentEnrollment.Create(Guid.NewGuid(), tenant, Guid.NewGuid(), first.AcademicYearId, standard, division.Id);
+		first.AssignHouse(Guid.NewGuid());
+		next.AssignHouse(Guid.NewGuid());
+		division.ReplaceHouseLeader(first, division.ConcurrencyStamp);
+		Assert.Equal(HouseManagementErrorCodes.StalePreview,
+			Assert.Throws<BusinessException>(() => division.ReplaceHouseLeader(next, "stale")).Code);
+		division.ReplaceHouseLeader(next, division.ConcurrencyStamp);
+		division.ReplaceLeader(next, division.ConcurrencyStamp);
+		Assert.False(division.HouseLeaderDeparted(first.Id));
+		Assert.Equal(next.Id, division.HouseLeaderEnrollmentId);
+		division.RosterMemberDeparted(next.Id);
+		Assert.Null(division.HouseLeaderEnrollmentId);
+		Assert.Null(division.LeaderEnrollmentId);
 	}
 }

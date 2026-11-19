@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using ShikshaMitra.Students.StudentRecords;
 
 namespace ShikshaMitra.Students.Records;
@@ -10,6 +11,7 @@ public class StudentCertificatePreviewRequestDto
 	public Guid StudentId { get; set; }
 	public Guid? ExpectedAcademicYearId { get; set; }
 	public bool IncludeBranding { get; set; }
+	public bool OmitSchoolBranding { get; set; }
 	public StudentCertificateType CertificateType { get; set; }
 	public DateTimeOffset? IssueDate { get; set; }
 	public Dictionary<string, string?> CertificateFields { get; set; } = new();
@@ -73,6 +75,8 @@ public class StudentCertificateOrganizationDto
 
 public class StudentCertificateTemplateRenderDto
 {
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+	public bool OmitSchoolBranding { get; set; }
 	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityTemplateChoicesDto? IdentityChoices { get; set; }
 	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityDocumentSnapshotDto? SchoolIdentity { get; set; }
 	public StudentCertificateDocumentDto? Document { get; set; }

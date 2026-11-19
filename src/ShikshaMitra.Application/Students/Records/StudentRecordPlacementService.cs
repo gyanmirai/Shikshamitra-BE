@@ -132,7 +132,9 @@ public class StudentRecordPlacementService(
 			await ApplyAsync(studentId, new StudentRecordPlacementPayload { AcademicYearId = enrollment.AcademicYearId,
 				StandardId = enrollment.StandardId ?? Guid.Empty, DivisionId = enrollment.DivisionId ?? Guid.Empty, RollNumber = enrollment.RollNumber });
 		}
-		else enrollment.Deactivate(attendanceDate);
+		else
+			await LazyServiceProvider.LazyGetRequiredService<HouseManagement.HouseManagementPlacementService>()
+				.DeactivateAsync(enrollment, attendanceDate);
 		await enrollments.UpdateAsync(enrollment);
 		await students.UpdateAsync(student);
 	}

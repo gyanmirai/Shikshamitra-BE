@@ -77,7 +77,7 @@ public partial class HouseManagementCommandService(
 				ConcurrencyStamp = house.ConcurrencyStamp,
 				CanManage = true,
 				MemberCount = await AsyncExecuter.CountAsync(roster.Where(s => s.HouseId == house.Id)),
-				Leader = await AsyncExecuter.SingleOrDefaultAsync(roster.Where(s => s.HouseId == house.Id && s.IsHouseLeader))
+				HouseLeaderCount = await AsyncExecuter.CountAsync(roster.Where(s => s.HouseId == house.Id && s.IsHouseLeader))
 			};
 		});
 	}
@@ -104,10 +104,11 @@ public partial class HouseManagementCommandService(
 		var state = await AssignmentStateAsync(input);
 		if (string.IsNullOrWhiteSpace(input.PreviewToken) || input.PreviewToken != state.Preview.PreviewToken)
 			throw new BusinessException(HouseManagementErrorCodes.StalePreview);
+		await ClearDepartingHouseLeadersAsync(state.Preview.ClearedHouseLeaders);
 		foreach (var enrollment in state.Enrollments.Where(e => e.HouseId != input.HouseId))
 		{
 			if (enrollment.HouseId.HasValue)
-				state.Houses.Single(h => h.Id == enrollment.HouseId).MemberDeparted(enrollment.Id);
+				state.Houses.Single(h => h.Id == enrollment.HouseId).TouchMembership();
 			enrollment.AssignHouse(input.HouseId);
 		}
 
@@ -118,35 +119,57 @@ public partial class HouseManagementCommandService(
 		return true;
 	});
 
+	private async Task ClearDepartingHouseLeadersAsync(List<HouseManagementStudentDto> leaders)
+	{
+		if (leaders.Count == 0)
+			return;
+		var ids = leaders.Select(s => s.DivisionId.GetValueOrDefault()).Distinct().ToArray();
+		var involved = (await divisions.GetListAsync(d => d.TenantId == CurrentTenant.Id && Enumerable.Contains(ids, d.Id)))
+			.ToDictionary(d => d.Id);
+		foreach (var leader in leaders)
+		{
+			if (!involved.TryGetValue(leader.DivisionId.GetValueOrDefault(), out var division) ||
+				!division.HouseLeaderDeparted(leader.EnrollmentId))
+				throw new BusinessException(HouseManagementErrorCodes.StalePreview);
+		}
+		await divisions.UpdateManyAsync(involved.Values);
+	}
+
 	private async Task<(HouseAssignmentPreviewDto Preview, List<StudentEnrollment> Enrollments, List<HouseSettings> Houses)> AssignmentStateAsync(HouseAssignmentRequest input)
 	{
 		await access.GetAsync(input.AcademicMediumId);
 		if (input.EnrollmentIds == null || input.EnrollmentIds.Count is < 1 or > 500 ||
 			input.EnrollmentIds.Contains(Guid.Empty) || input.EnrollmentIds.Distinct().Count() != input.EnrollmentIds.Count ||
-			input.HouseId == Guid.Empty)
+			input.DivisionId == Guid.Empty || input.HouseId == Guid.Empty)
 			throw new BusinessException(HouseManagementErrorCodes.InvalidInput);
 		var ids = input.EnrollmentIds.ToArray();
 		var roster = await queries.StudentsAsync(input.AcademicMediumId);
 		var selected = await AsyncExecuter.ToListAsync(roster.Where(s => Enumerable.Contains(ids, s.EnrollmentId)));
 		if (selected.Count != ids.Length)
 			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+		if (selected.Any(s => s.DivisionId != input.DivisionId))
+			throw new BusinessException(HouseManagementErrorCodes.AssignmentDivisionMismatch);
 		var rows = await enrollments.GetListAsync(e => e.TenantId == CurrentTenant.Id && Enumerable.Contains(ids, e.Id));
+		if (rows.Count != ids.Length || rows.Any(e => e.DivisionId != input.DivisionId))
+			throw new BusinessException(HouseManagementErrorCodes.StalePreview);
 		var houseIds = rows.Where(e => e.HouseId.HasValue).Select(e => e.HouseId!.Value)
 			.Concat(input.HouseId.HasValue ? new[] { input.HouseId.Value } : Array.Empty<Guid>()).Distinct().ToArray();
 		var involved = await houses.GetListAsync(h => h.TenantId == CurrentTenant.Id &&
 			h.AcademicMediumId == input.AcademicMediumId && Enumerable.Contains(houseIds, h.Id));
 		if (involved.Count != houseIds.Length)
 			throw new BusinessException(HouseManagementErrorCodes.StalePreview);
+		var clearedLeaders = selected.Where(s => s.IsHouseLeader && s.HouseId != input.HouseId).ToList();
 		var signature = string.Join("|",
-			new[] { CurrentTenant.Id.ToString(), CurrentUser.Id.ToString(), input.AcademicMediumId.ToString(), input.HouseId.ToString() }
+			new[] { CurrentTenant.Id.ToString(), CurrentUser.Id.ToString(), input.AcademicMediumId.ToString(), input.DivisionId.ToString(), input.HouseId.ToString() }
 				.Concat(rows.OrderBy(e => e.Id).Select(e => $"{e.Id}:{e.ConcurrencyStamp}:{e.HouseId}"))
-				.Concat(involved.OrderBy(h => h.Id).Select(h => $"{h.Id}:{h.ConcurrencyStamp}:{h.MembershipRevision}:{h.LeaderEnrollmentId}")));
+				.Concat(involved.OrderBy(h => h.Id).Select(h => $"{h.Id}:{h.ConcurrencyStamp}:{h.MembershipRevision}"))
+				.Concat(clearedLeaders.OrderBy(s => s.EnrollmentId).Select(s => $"{s.DivisionId}:{s.EnrollmentId}")));
 		return (new HouseAssignmentPreviewDto
 		{
 			Students = selected,
 			TargetHouseId = input.HouseId,
 			TargetHouseName = involved.SingleOrDefault(h => h.Id == input.HouseId)?.Name,
-			ClearedHouseLeaders = selected.Where(s => s.IsHouseLeader && s.HouseId != input.HouseId).ToList(),
+			ClearedHouseLeaders = clearedLeaders,
 			PreviewToken = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(signature)))
 		}, rows, involved);
 	}

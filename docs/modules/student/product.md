@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-11-17
+updated_on: 2026-11-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -14,26 +14,28 @@ TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that 
 
 ## Registration print settings and saved answers
 
-Registration forms retain Simple, Boxed Grid or Structured Classic print templates with independent Compact/Spacious A4 spacing in their existing experience metadata, including school header, photo-space and signature-area flags. Existing definitions without a template retain Simple; new-client forms explicitly choose Boxed Grid.
+Registration forms retain Simple, Boxed Grid or Structured Classic print templates with independent Compact/Spacious spacing and A4/A5/Letter/Legal paper in their existing experience metadata, including school header, photo-space and signature-area flags. Existing definitions without a template retain Simple; new-client forms explicitly choose Boxed Grid.
 Historical definitions receive defaults; updates from older clients retain previously saved settings.
 Clone and new-version drafts copy the settings, and version comparison includes presentation changes.
 Inquiry inheritance uses the Registration settings while retaining source-owned questions and frozen Inquiry context.
 Existing frozen application definitions keep their captured settings rather than following a later publication.
+Advanced print presentation configures page orientation/margins, border and typography, school-image positioning, header/footer, photograph, step/section flow, authored section/field overrides, translated instructions/checklists/declaration/signatures/office-use areas and blank/filled copy display. These options do not change the online form, Inquiry ownership, validation or saved answers. Empty advanced settings explicitly reset presentation; older updates that omit them retain it. Unsupported values and oversized content are rejected before mutation.
 
 The application-form read exposes persisted Registration answers separately from automatic editor suggestions.
 Printing saved details consumes the stored answers, including an explicitly empty collection, together with the pinned definition and frozen Inquiry context.
 It does not promote sibling/relationship suggestions into authored answers, save a draft, create a submission or advance a stage.
+Optional printed academic labels come only from the authorized application's linked offering and cycle. School contact information uses the current persisted Institute Setup branding read; missing contact or website information stays empty.
 An explicit save before printing remains governed by the existing draft command, permission, validation and concurrency rules.
 Settings reuse existing extra-property storage; no schema migration or new print permission is introduced.
 See the [API contract](./api.md#registration-print-contract), [validation](./testing.md#registration-print-validation) and [frontend print workflow](../../../../Shikshamitra-FE/docs/student/workflows.md#registration-print-workflow).
 
 ## House Management
 
-Houses belong to an academic medium and can contain any number of active enrolled students across its classes. Membership belongs to the operational enrollment. Each house has at most one optional leader, selected from its eligible members. Each division independently has at most one optional leader; that student need not hold a house role. Both positions may remain vacant, and one student may hold both independent roles.
+Houses belong to an academic medium and can contain any number of active enrolled students across its classes. Membership belongs to the operational enrollment. Each division has one optional House leader total across all houses and one optional Division leader. Both leaders must be active enrolled students in that division. The House leader must also belong to a house in the medium. A student can hold both roles, and a house can supply House leaders in multiple divisions.
 
-View reads scoped rosters, counts and visible leaders. Add/Update controls house configuration, membership changes and leader appointment, replacement or removal. Delete removes only empty houses. Medium-wide or broader scope is required to change shared house configuration; commands also validate affected students and any replaced leader. Tenant, active identity, academic scope and concurrency checks remain server enforced. No role receives automatic grants.
+View reads scoped rosters, counts and visible leaders. Add/Update controls house configuration, membership changes and leader appointment, replacement or removal. Delete removes only empty houses. Shared house configuration requires medium-wide or broader scope. Appointments require division scope and a candidate visible in that division. Both slots share one division concurrency stamp. Tenant, active identity, academic scope and concurrency checks remain server enforced.
 
-Assignment previews identify departing house leaders. The reviewed batch applies atomically and clears a departing house leader while retaining independent division leadership. Stale previews require fresh review. The bounded assignment command is an operation limit, not house capacity. Existing House Settings remains compatible and cannot delete populated houses. There is no automatic balancing, year rollover, points or competition workflow.
+Each membership change batch is scoped to one division. Assignment previews identify departing House leaders. The reviewed batch applies atomically and clears a departing House lead while retaining the student's Division lead. A move to another division or deactivation clears both roles on the source division. Stale previews require fresh review. Houses can gain members from multiple divisions through separate batches. See the [migration preflight](./api.md#house-management) for carryover and conflicts.
 
 ## Resume an ended admission
 

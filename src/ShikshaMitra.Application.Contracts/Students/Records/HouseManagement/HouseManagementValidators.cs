@@ -16,6 +16,7 @@ public class HouseManagementQueryValidator : AbstractValidator<HouseManagementQu
 		RuleFor(x => x.StandardId).NotEqual(Guid.Empty).When(x => x.StandardId.HasValue);
 		RuleFor(x => x.DivisionId).NotEqual(Guid.Empty).When(x => x.DivisionId.HasValue);
 		RuleFor(x => x.HouseId).NotEqual(Guid.Empty).When(x => x.HouseId.HasValue);
+		RuleFor(x => x.AssignedOnly).Equal(false).When(x => x.UnassignedOnly);
 	}
 }
 
@@ -37,6 +38,7 @@ public class HouseAssignmentRequestValidator : AbstractValidator<HouseAssignment
 	public HouseAssignmentRequestValidator()
 	{
 		RuleFor(x => x.AcademicMediumId).NotEmpty();
+		RuleFor(x => x.DivisionId).NotEmpty().WithMessage("Select a division to change house membership.");
 		RuleFor(x => x.HouseId).NotEqual(Guid.Empty).When(x => x.HouseId.HasValue);
 		RuleFor(x => x.EnrollmentIds).NotNull().Must(x => x != null && x.Count is >= 1 and <= 500 && x.All(id => id != Guid.Empty) && x.Distinct().Count() == x.Count);
 		RuleFor(x => x.PreviewToken).MaximumLength(64);

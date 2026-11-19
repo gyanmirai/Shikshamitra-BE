@@ -3,7 +3,7 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-18
+updated_on: 2026-11-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -23,6 +23,10 @@ Run the `Combined_approval` Application filter with `AdmissionApplicationDecisio
 Local verification passed 40 selected Application cases and two HTTP metadata cases with no skips. The refined normal paid-stage Finance rollback/retry scenario passed its additional focused rerun. Contracts, Application, EntityFrameworkCore, HttpApi and Host compiled using the pinned .NET 9 SDK and isolated outputs; existing unrelated nullable warnings remain. The all-module documentation gate passed. These overlapping selections are not a full-suite claim or an HTTP latency measurement. Evidence logs are `.artifacts/approve-finalize-regressions.log`, `.artifacts/approve-finalize-http-tests.log` and `.artifacts/approve-finalize-finance-test.log`.
 
 ## Registration print validation
+
+`AdmissionFormPrintAdvancedSettings_Tests` covers all advanced groups, paper sizes, omitted/null retention versus explicit reset, safe nullable children, bounded nested collections/content, invalid enum/geometry/font/colour values, independent clone/frozen snapshots and version comparison. The Registration print read integration case checks application-number and requested Board/Medium/Class/Academic year labels against the actual linked setup. `SchoolIdentityIntegration_Tests.Branding.cs` checks current persisted school contact text and empty fallbacks.
+
+On 19 November 2026, the focused advanced/basic print, Registration lifecycle/read, school branding and School Identity authorization selection passed 60 tests with no failures or skips. Contracts, Application, HttpApi and Application.Tests leaf builds passed; existing Application and test nullable warnings remain. All-module documentation validation passed under PowerShell 7 (`pwsh`), which reads the UTF-8 documentation correctly. These source/integration checks do not establish native browser print acceptance or deployed-environment readiness.
 
 Run `AdmissionFormPrintSettings_Tests`, the `Registration_print_settings_survive_create_get_update_clone_and_new_version` integration case and `AdmissionRegistrationRelationship_Tests` with the pinned SDK and isolated test outputs when a local Host locks assemblies.
 The focused metadata tests cover legacy Simple defaults, Boxed Grid/Structured Classic roundtrip, template omission by older clients, independent clone/version metadata, invalid template/layout/paper rejection before mutation, inheritance, frozen definitions, version comparison and separate persisted-answer DTO serialization. Application-form GET retains the saved application number. School Identity branding tests cover current-tenant school name/address, legacy location objects, empty address parts and unchanged authorization.
@@ -179,7 +183,7 @@ dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~StudentM
 dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~House_actions_require|FullyQualifiedName~Students_catalogue_contains|FullyQualifiedName~Student_actions_follow|FullyQualifiedName~Teacher_assignment_and_development_environment"
 ```
 
-Run `HouseManagementDomain_Tests`, `HouseManagement_Tests` and `HouseManagementApi_Tests` in addition to these catalogue checks. They cover house validation, independent leaders, preview/stamp conflicts, scoped and mixed-batch authorization, same-year placement cleanup, legacy deletion safeguards and endpoint contracts. `House_management_search_matches_name_or_GR_number_case_insensitively` checks trimmed GR search, name search and an unmatched identifier through the application service. Local SQLite/synthetic tests do not establish PostgreSQL concurrency, live persistence, migration deployment or authenticated school acceptance.
+Run `HouseManagementDomain_Tests`, `HouseManagement_Tests` and `HouseManagementApi_Tests` in addition to these catalogue checks. They cover one House leader across all houses in a division, independent Division leadership, scoped eligibility and counts, filtered divisions with an incumbent from another house, preview/stamp conflicts, and placement cleanup. Run the [read-only preflight](../../../scripts/students/house-leaders-preflight.sql) before exercising migration carryover, and verify that it lists any conflicts for review. Local SQLite/synthetic tests do not establish PostgreSQL concurrency, live persistence, migration deployment or authenticated school acceptance.
 
 ```powershell
 dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~HouseManagementDomain_Tests"
@@ -1606,6 +1610,8 @@ Run `Certificate_directory_includes_active_student_list_without_widening_records
 The six-case selected-student certificate regression run passed with no skipped cases on 16 November 2026, including the three lookup/year/masking cases and existing active-student, grouped-batch and snapshot/idempotency/Leaving governance scenarios. The preceding red run reproduced the full-name lookup and wrong-year preview failures while the masked-identity check passed. Existing unrelated compiler warnings remain; no migration or live school data change is part of this validation.
 
 ## Certificate preview branding
+
+The branding scenario also exercises `omitSchoolBranding: true` for preview and issuance. Check that saved View, Download, Reprint and Duplicate omit the previously configured logo/banner and preserve the signature. The fixture distinguishes the image resources inside the actual generated PDF. Same-choice retry must replay the saved certificate; a changed choice with the same key must conflict.
 
 Run `Certificate_branding_is_opt_in_and_issued_and_duplicate_reads_keep_the_saved_images` and `Record_action_certificate_direct_service_rejects_denied_exact_permission` in `ShikshaMitra.Application.Tests`. The isolated scenario uploads valid logo/banner/signature fixtures, checks opt-in image payloads and signature exclusion, hides current defaults, then verifies saved and duplicate reads retain the captured assets. It also checks cross-tenant rejection. Exact View permission rejection covers both branded preview and saved reads. Keep the existing snapshot/idempotency/Leaving and active-student certificate scenarios in the focused regression run. No live Institute Setup change or certificate issuance is required for this test.
 

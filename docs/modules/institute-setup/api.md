@@ -3,7 +3,7 @@ module: institute-setup
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-03
+updated_on: 2026-11-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -204,11 +204,11 @@ The base route is `api/institute-setup/school-identity`. Configuration operation
 | POST preview | View; draft previews additionally require management; returns PDF without saving |
 | GET history | View; latest 100 revisions with tenant-owned creator usernames; signature selections redacted without AccessSignature |
 | POST copy | View, ManageOverrides and AccessSignature; explicit source/target, differing years, matching levels and target stamp |
-| GET branding | Authenticated current-school defaults; schoolName, addressLines and nullable logo/banner metadata containing id, contentType, width and height |
+| GET branding | Authenticated current-school defaults; schoolName, addressLines, schoolPhone, schoolEmail, schoolWebsite and nullable logo/banner metadata containing id, contentType, width and height |
 | GET branding/logo | Authenticated school-default logo bytes, or 204 when absent/hidden |
 | GET branding/banner | Authenticated school-default banner bytes, or 204 when absent/hidden |
 
-Branding metadata reads the current tenant's persisted Institute Setup name and postal address, omits empty address components, and normalizes legacy location objects to display text. A missing institute name falls back to the tenant name; missing address data remains empty. It requires no School Identity management grant and exposes no setup drafts, contact details or principal signature.
+Branding metadata reads the current tenant's persisted Institute Setup name, postal address and public school contact text, omits empty address components, and normalizes legacy location objects to display text. `schoolPhone` and `schoolEmail` reuse `ContactNumber` and `Email`; `schoolWebsite` reads the optional existing `Website` key. A missing institute name falls back to the tenant name; missing address/contact/website data remains empty. The existing tenant load supplies these fields without another query. It requires no School Identity management grant and exposes no setup drafts, private account credentials or principal signature.
 
 Branding images use `Cache-Control: private, no-cache`, tenant-and-asset-specific ETags, and `Vary: Authorization, Cookie, __tenant`.
 Every conditional request authenticates and resolves the current tenant before returning 304 for an unchanged image.

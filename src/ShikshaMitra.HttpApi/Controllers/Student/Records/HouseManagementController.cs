@@ -52,11 +52,11 @@ public class HouseManagementController(IHouseManagementAppService service) : Abp
 		return Result.Success();
 	}
 
-	[HttpPut("houses/{id:guid}/leader")]
+	[HttpPut("divisions/{id:guid}/house-leader")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_HouseManagement.Add)]
 	public async Task<Result> HouseLeader(Guid id, [FromBody] ReplaceStudentLeaderRequest input)
 	{
-		await service.ReplaceHouseLeaderAsync(id, input);
+		await service.ReplaceDivisionHouseLeaderAsync(id, input);
 		return Result.Success();
 	}
 

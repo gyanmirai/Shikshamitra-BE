@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Mail;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Data;
@@ -17,6 +18,15 @@ internal sealed record AdmissionParentForm(AdmissionFormInstance Instance, Admis
 [RemoteService(false)]
 public class AdmissionParentRegistrationData : ApplicationService, ITransientDependency
 {
+	internal static string? LinkPrefix(IConfiguration configuration)
+	{
+		var baseUrl = configuration["App:ClientUrl"] ?? configuration["App:AngularUrl"];
+		return Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "http" &&
+			string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) && string.IsNullOrEmpty(uri.UserInfo)
+			? uri.AbsoluteUri.TrimEnd('/') + "/admission-registration#token="
+			: null;
+	}
+
 	internal IRepository<T, Guid> Repo<T>() where T : class, Volo.Abp.Domain.Entities.IEntity<Guid> => LazyServiceProvider.LazyGetRequiredService<IRepository<T, Guid>>();
 	internal async Task<AdmissionParentForm> FormAsync(AdmissionApplication application)
 	{

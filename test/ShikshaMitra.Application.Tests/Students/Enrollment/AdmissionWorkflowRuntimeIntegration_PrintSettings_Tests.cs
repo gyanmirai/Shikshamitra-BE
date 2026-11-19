@@ -20,10 +20,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			{"name":"Printable Registration","printSettings":{"layout":"spacious","paperSize":"A4","showSchoolHeader":false,"showPhoto":true,"showSignature":false}}
 			""", options)!;
 		input.PrintSettings!.Template = template;
+		input.PrintSettings.Advanced = JsonSerializer.Deserialize<AdmissionFormPrintAdvancedSettingsDto>("""
+			{"paper":{"orientation":"landscape"},"header":{"title":"Saved print title"},"sections":{"DETAILS":{"columns":2}},"content":{"translations":{"en":{"declaration":"Saved declaration"}}}}
+			""", options);
 		var created = await _formAppService.CreateAsync(input);
 		var loaded = await _formAppService.GetAsync(created.Id);
 		var expected = JsonNode.Parse("""{"layout":"spacious","paperSize":"A4","showSchoolHeader":false,"showPhoto":true,"showSignature":false}""");
 		expected!["template"] = template;
+		expected["advanced"] = JsonSerializer.SerializeToNode(input.PrintSettings.Advanced, options);
 		var loadedSettings = JsonSerializer.SerializeToNode(loaded, options)!["printSettings"];
 		loadedSettings.ShouldNotBeNull();
 		JsonNode.DeepEquals(loadedSettings, expected).ShouldBeTrue();
@@ -34,11 +38,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		JsonNode.DeepEquals(JsonSerializer.SerializeToNode(updated, options)!["printSettings"], expected).ShouldBeTrue();
 		var oldClientUpdate = JsonSerializer.SerializeToNode(updated, options)!.AsObject();
 		oldClientUpdate["printSettings"]!.AsObject().Remove("template");
+		oldClientUpdate["printSettings"]!.AsObject().Remove("advanced");
 		updated = await _formAppService.UpdateAsync(created.Id, oldClientUpdate.Deserialize<CreateUpdateAdmissionFormDto>(options)!);
 		JsonNode.DeepEquals(JsonSerializer.SerializeToNode(updated, options)!["printSettings"], expected).ShouldBeTrue();
 		var invalidUpdate = JsonSerializer.SerializeToNode(updated, options)!.AsObject();
 		invalidUpdate["name"] = "Must not mutate the saved form";
 		invalidUpdate["printSettings"]!["template"] = "unsupported";
+		(await Should.ThrowAsync<BusinessException>(() => _formAppService.UpdateAsync(created.Id,
+			invalidUpdate.Deserialize<CreateUpdateAdmissionFormDto>(options)!))).Code.ShouldBe(AdmissionFormErrorCodes.InvalidDefinition);
+		(await _formAppService.GetAsync(created.Id)).Name.ShouldBe(updated.Name);
+		invalidUpdate["printSettings"]!["template"] = template;
+		invalidUpdate["printSettings"]!["advanced"]!["style"] = new JsonObject { ["borderColor"] = "invalid-colour" };
 		(await Should.ThrowAsync<BusinessException>(() => _formAppService.UpdateAsync(created.Id,
 			invalidUpdate.Deserialize<CreateUpdateAdmissionFormDto>(options)!))).Code.ShouldBe(AdmissionFormErrorCodes.InvalidDefinition);
 		(await _formAppService.GetAsync(created.Id)).Name.ShouldBe(updated.Name);
@@ -55,6 +65,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	{
 		var workflow = await CreateAndPublishCurrentWorkflowAsync();
 		var formId = AdmissionFormStageAccessService.ReadFormDefinitionId(workflow.Stages.Single(stage => stage.IsEntryStage).ConfigurationJson)!.Value;
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var definition = await _formRepository.GetAsync(formId);
+			AdmissionFormMetadataStore.WriteExperience(definition, JsonSerializer.Deserialize<CreateUpdateAdmissionFormDto>("""
+				{"printSettings":{"advanced":{"header":{"board":true,"medium":true,"class":true,"academicYear":true}}}}
+				""", new JsonSerializerOptions(JsonSerializerDefaults.Web))!);
+			await _formRepository.UpdateAsync(definition, true);
+		});
 		var offering = await CreatePrimaryContactInquiryOfferingAsync();
 		offering = await WithUnitOfWorkAsync(async () =>
 		{
@@ -70,6 +88,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await _applicationAppService.GetFormAsync(application.Id)).ApplicationNumber.ShouldBe(application.ApplicationNumber);
 		var reopened = await _applicationAppService.GetFormAsync(application.Id);
 		reopened.ApplicationNumber.ShouldBe(application.ApplicationNumber);
+		var academic = JsonSerializer.SerializeToNode(reopened, new JsonSerializerOptions(JsonSerializerDefaults.Web))!["printAcademicDetails"];
+		academic.ShouldNotBeNull();
+		academic!["board"]!.GetValue<string>().ShouldBe((await _boardRepository.GetAsync(offering.BoardId)).Type.ToString());
+		academic["medium"]!.GetValue<string>().ShouldBe((await _mediumRepository.GetAsync(offering.MediumId)).Name);
+		academic["class"]!.GetValue<string>().ShouldBe((await _standardRepository.GetAsync(offering.StandardId)).Name);
+		var cycle = await _cycleRepository.GetAsync(offering.AdmissionCycleId);
+		var year = await GetRequiredService<Volo.Abp.Domain.Repositories.IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, System.Guid>>().GetAsync(cycle.AcademicYearId);
+		academic["academicYear"]!.GetValue<string>().ShouldBe(year.Name);
 		(await _applicationAppService.GetAsync(application.Id)).ApplicationNumber.ShouldBe(application.ApplicationNumber);
 	});
 }

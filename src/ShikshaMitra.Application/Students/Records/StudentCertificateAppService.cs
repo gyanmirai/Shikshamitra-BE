@@ -131,7 +131,8 @@ public partial class StudentCertificateAppService(
 			certificateNo,
 			input.CertificateFields,
 			certificateId: null,
-			templateSnapshot: null);
+			templateSnapshot: null,
+			omitSchoolBranding: input.OmitSchoolBranding);
 		response.TransitionId = input.TransitionId;
 		if (exitSnapshot != null) response.CertificateData["_ExitTransition"] = exitSnapshot;
 		response.Template.Document = StudentCertificateDocumentFactory.Create(response);
@@ -158,7 +159,10 @@ public partial class StudentCertificateAppService(
 				certificateNo,
 				input.CertificateFields,
 				certificateId,
-				templateSnapshot: null), input.IdempotencyKey.Trim(), input.TransitionId, expectedAcademicYearId: input.ExpectedAcademicYearId);
+				templateSnapshot: null,
+				omitSchoolBranding: input.OmitSchoolBranding),
+			input.IdempotencyKey.Trim(), input.TransitionId, expectedAcademicYearId: input.ExpectedAcademicYearId,
+			omitSchoolBranding: input.OmitSchoolBranding);
 	}
 
 	public async Task<StudentCertificateResponseDto> GetAsync(Guid certificateId, bool includeBranding = false)
@@ -263,7 +267,8 @@ public partial class StudentCertificateAppService(
 		string certificateNo,
 		Dictionary<string, string?> inputFields,
 		Guid? certificateId,
-		StudentCertificateTemplateRenderDto? templateSnapshot)
+		StudentCertificateTemplateRenderDto? templateSnapshot,
+		bool omitSchoolBranding)
 	{
 		var studentDto = await BuildStudentDtoAsync(student);
 		var template = templateSnapshot ?? await BuildTemplateRenderDtoAsync(certificateType);
@@ -286,6 +291,13 @@ public partial class StudentCertificateAppService(
 				template.SchoolIdentity.SignatureAssetId = null;
 				template.SchoolIdentity.PrincipalName = null;
 				template.SchoolIdentity.Designation = null;
+			}
+			if (omitSchoolBranding)
+			{
+				template.OmitSchoolBranding = true;
+				template.SchoolIdentity.LogoAssetId = null;
+				template.SchoolIdentity.BannerAssetId = null;
+				template.LogoUrl = null;
 			}
 		}
 		var organization = BuildOrganizationDto(template);
@@ -378,7 +390,7 @@ public partial class StudentCertificateAppService(
 		DateTimeOffset issueDate,
 		Func<string, Guid, Task<StudentCertificateResponseDto>> responseFactory,
 		string idempotencyKey, Guid? transitionId = null, Guid? sourceCertificateId = null, string? duplicateReason = null,
-		Guid? expectedAcademicYearId = null)
+		Guid? expectedAcademicYearId = null, bool? omitSchoolBranding = null)
 	{
 		for (var attempt = 1; attempt <= MaxCertificateNumberGenerationAttempts; attempt++)
 		{
@@ -397,7 +409,10 @@ public partial class StudentCertificateAppService(
 					if (existing.StudentId != studentId || existing.CertificateType != certificateType || existing.TransitionId != transitionId || existing.SourceCertificateId != sourceCertificateId ||
 						(sourceCertificateId.HasValue && DeserializeDictionary(existing.CertificateDataJson).GetValueOrDefault("_DuplicateReason") != duplicateReason?.Trim()))
 						throw new BusinessException("Students:Records:DocumentIdempotencyConflict");
-					return BuildStoredCertificateResponse(await LoadScopedCertificateAsync(existing.Id, "recover certificate issuance"));
+					var replay = BuildStoredCertificateResponse(await LoadScopedCertificateAsync(existing.Id, "recover certificate issuance"));
+					if (omitSchoolBranding.HasValue && replay.Template.OmitSchoolBranding != omitSchoolBranding.Value)
+						throw new BusinessException("Students:Records:DocumentIdempotencyConflict");
+					return replay;
 				}
 				var exit = await ValidateIssuanceAsync(student, new() { StudentId = studentId, CertificateType = certificateType, TransitionId = transitionId, ExpectedAcademicYearId = expectedAcademicYearId });
 				var certificateNo = await GenerateCertificateNumberAsync(certificateType, issueDate.Year, student.AcademicYearId);

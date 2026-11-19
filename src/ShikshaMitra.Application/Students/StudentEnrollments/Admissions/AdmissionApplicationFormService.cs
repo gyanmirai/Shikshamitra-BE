@@ -67,8 +67,14 @@ public partial class AdmissionApplicationFormService(
 		if (applicant != null && application.Status == AdmissionApplicationStatus.Draft && !application.SubmittedAt.HasValue)
 			AdmissionRegistrationRelationshipPrefill.Project(definitionDto, applicant, prefill, formValidator);
 		var correctionBlockedReason = await GetCorrectionBlockedReasonAsync(application);
+		var printHeader = definitionDto.PrintSettings.Advanced?.Header;
+		var printAcademicDetails = printHeader != null &&
+			(printHeader.Board == true || printHeader.Medium == true || printHeader.Class == true || printHeader.AcademicYear == true)
+			? await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationPrintContextReader>().ReadAsync(application, printHeader)
+			: null;
 		return new AdmissionApplicationFormDto
 		{
+			PrintAcademicDetails = printAcademicDetails,
 			ApplicationNumber = application.ApplicationNumber,
 			ConcurrencyStamp = application.ConcurrencyStamp,
 			CanCorrectForm = correctionBlockedReason == null,

@@ -28,8 +28,10 @@ public class PayrollPreviewRun_Tests
 	public void New_previews_are_versioned_and_legacy_previews_default_to_zero()
 	{
 		var run = Create();
-		run.CalculationVersion.ShouldBe(1);
+		run.CalculationVersion.ShouldBe(2);
 		run.HasCurrentCalculationVersion.ShouldBeTrue();
+		run.ExtraProperties[PayrollPreviewRun.CalculationVersionProperty] = 1;
+		run.HasCurrentCalculationVersion.ShouldBeFalse();
 		run.ExtraProperties.Remove(PayrollPreviewRun.CalculationVersionProperty);
 		run.CalculationVersion.ShouldBe(0);
 		run.HasCurrentCalculationVersion.ShouldBeFalse();

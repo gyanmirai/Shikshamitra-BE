@@ -26,15 +26,25 @@ public static class PayrollComputation
 		decimal payableDays,
 		decimal basisDays,
 		IReadOnlyList<EmployeePayrollComponent> components,
-		PayrollStatutoryRuleSet? statutoryRules = null)
+		PayrollStatutoryRuleSet? statutoryRules = null,
+		decimal? regularGross = null,
+		bool allowUnallocatedProbe = false)
 	{
 		var factor = PayrollProrationCalculator.CalculateProrationFactor(basisDays, payableDays);
 		var deductions = new List<PayrollComputedLineItem>();
 		var statutoryIssueCodes = new List<string>();
 		var fullGrossSalary = components.Where(c => c.IsEarning && !c.IsTemp).Sum(c => c.Amount);
-		var grossSalary = Round(fullGrossSalary * factor);
-		var calculator = new PayrollOrdinaryComponentCalculator(components, grossSalary, factor);
+		var rawGross = regularGross ?? fullGrossSalary * factor;
+		var grossSalary = Round(rawGross);
+		var calculator = new PayrollOrdinaryComponentCalculator(components, rawGross, factor, allowUnallocatedProbe);
 		var earnings = calculator.CalculateEarnings();
+		if (regularGross.HasValue && factor > 0m)
+		{
+			fullGrossSalary = Round(rawGross / factor);
+			var monthly = new PayrollOrdinaryComponentCalculator(components, rawGross / factor, 1m, allowUnallocatedProbe)
+				.CalculateEarnings().ToDictionary(x => x.Source.Id, x => x.Amount);
+			earnings = earnings.Select(x => x with { FullMonthAmount = x.Source.IsTemp ? null : monthly[x.Source.Id] }).ToList();
+		}
 		var totalEarnings = earnings.Sum(x => x.Amount);
 		var basicSalary = earnings.Where(x => !x.Source.IsTemp &&
 			(x.Source.SemanticType == Templates.PayrollComponentSemanticType.Basic || IsBasicSalaryComponentName(x.Source.Name)))
@@ -140,7 +150,7 @@ public static class PayrollComputation
 				line with
 				{
 					Amount = earnings[index].Source.Id == esiContext.SystemOvertimeComponentId
-					? 0m : earnings[index].Source.Amount
+					? 0m : earnings[index].FullMonthAmount ?? earnings[index].Source.Amount
 				}).ToList();
 			var esiResult = EsiStatutoryCalculator.Calculate(
 				esiContext.PayrollMonth,
@@ -236,7 +246,7 @@ public static class PayrollComputation
 			item.Source.ComponentType,
 			item.Source.DependOn ?? SalaryComponentDependency.None)
 		{
-			FullMonthAmount = item.Source.IsTemp ? null : item.Source.Amount,
+			FullMonthAmount = item.Source.IsTemp ? null : item.FullMonthAmount ?? item.Source.Amount,
 			FormulaType = item.Source.Formula?.Type.ToString(),
 			FormulaValue = item.Source.Formula?.Value,
 			BasisComponentId = item.Source.Formula?.BasisComponentId

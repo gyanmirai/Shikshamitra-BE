@@ -9,7 +9,10 @@ namespace ShikshaMitra.HR.Payroll.Services;
 
 public sealed record PayrollComputedLineItem(
 	EmployeePayrollComponent Source,
-	decimal Amount);
+	decimal Amount)
+{
+	public decimal? FullMonthAmount { get; init; }
+}
 
 public sealed record PayrollComputedEmployerContribution(
 	string Name,
@@ -74,6 +77,7 @@ public sealed record PayrollComputationResult(
 	public PayrollStatutoryApplication? StatutoryApplication { get; init; }
 	public Guid? EsiConfigurationId { get; init; }
 	public decimal AdditionalEarnings => TotalEarnings - GrossSalary;
+	public Templates.SalaryProtectionResult? Protection { get; init; }
 }
 
 public sealed record PayrollAttendancePayableDays(

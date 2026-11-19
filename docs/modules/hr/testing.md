@@ -124,6 +124,12 @@ Compensation coverage must prove direct effective saves, effective-month resolut
 Monthly payroll coverage must prove that PF uses prorated eligible wages, professional tax uses actual monthly Gross without attendance-prorating the slab amount, cessation-month treatment follows the effective professional-tax profile, ESI uses effective coverage and wages, eligible PwD relief is government funded, employer contributions remain outside net pay, unlocked previews refresh, and locked snapshots remain immutable.
 Salary-summary API regressions compare preview and saved totals with overlapping professional-tax rules and with a cessation-month exemption.
 
+## CTC protection checks
+
+Run `PayrollSalaryProtectionTests` for period proration, PF rounding, ESIC coverage, one-time amounts, and unsolvable earning allocations.
+Run the protection migration cases in `CompensationRevisionApi_Tests` for direct-service authorization, signed preview, stale revisions, locked payroll, and idempotent apply.
+Run `Ctc_protection_rebalances_partial_month_after_pf_change_and_requires_fresh_review` against a disposable loopback PostgreSQL database through `PAYROLL_WORKFLOW_TEST_POSTGRES`.
+
 ## Required docs checks
 
 Run these from the `Shikshamitra-BE` repo root:

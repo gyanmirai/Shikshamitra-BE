@@ -97,6 +97,12 @@ Decisions target the requester. A change to a confirmed booking can target the r
 
 A series-wide decision or cancellation queues one notice for the parent. A closure can also cancel an individual confirmed occurrence through the existing calendar impact handler. Delivery history requires Academic Notification View, Timetable Management View and visibility of the booking in Room Availability.
 
+### Result publication notifications
+
+The first successful `POST /api/academics/results/publish` can queue `Academic.Result.Published` in the publication transaction. The exam must be visible to learners and the result must have a published revision for the saved exam and division. The source uses released result rows and current enrollment. Withheld rows and students outside the division are excluded. The school's family rule and the shared guardian and student-account checks determine delivery.
+
+The notice uses generic result-availability content and the authenticated school inbox link. Scores, grades, ranks, pass status and report cards stay in the authorized result views. Delivery history requires Academic Notification View, Result Creation View and current exam access. Earlier publication audit history distinguishes the first publication from a later correction release.
+
 Substitution creation and assignment use the saved Send notification choice. With an enabled rule, a checked choice queues the assignment for the substitute and any configured staff audience. The unchecked choice skips automatic assignment and acknowledgement reminders. The existing Send reminder action queues a notice for an open duty awaiting acknowledgement when a reminder rule covers the duty. An explicitly queued reminder and the school-day schedule share one operation for the current duty and period end. A response, changed assignment, cancellation or expired period makes earlier reminder work ineligible. Recipient resolution uses saved staff identities and the duty's division. Templates receive the class, subject, period and date. Staffing notes stay in the duty record.
 
 Substitution reads report Queued for active delivery work and Sent after recorded provider acceptance. The substitute acknowledgement status changes independently when the assigned teacher responds. An indeterminate provider response remains Unknown in the delivery status and history. A reminder request without eligible delivery work returns Not Sent. History requires Timetable Management View and access to the duty in addition to Academic Notification View.

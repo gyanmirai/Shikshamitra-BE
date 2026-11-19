@@ -59,6 +59,7 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 				"Your booking is now for {{room_name}} on {{session_date}} from {{start_time}} to {{end_time}}.",
 			(_, AcademicNotificationEventKeys.RoomChanged) => "A room booking involving you changed.",
 			(_, AcademicNotificationEventKeys.RoomCancelled) => "Your room booking for {{room_name}} on {{session_date}} was cancelled.",
+			(_, AcademicNotificationEventKeys.ResultPublished) => "A result is available. Sign in to ShikshaMitra to view it.",
 			_ => subject + "."
 		};
 		var body = channel == CommunicationChannelType.WebPush ? "An academic update is available. Open the school website for details." :

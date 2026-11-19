@@ -13,6 +13,7 @@ using ShikshaMitra.Academic.Timetable.Substitutions;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Common;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Infrastructure.Auth;
@@ -20,6 +21,7 @@ using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EntityFrameworkCore;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -35,19 +37,36 @@ public class SubstitutionNotificationDelivery_Tests(ShikshaMitraApiTestFactory f
 	[Fact]
 	public async Task Assignment_and_reminder_use_real_delivery_work_and_only_the_assigned_teacher()
 	{
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, string.Join(",",
+			ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View,
+			ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add,
+			ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Delete));
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		var userId = Guid.Parse(TestAuthHandler.TestUserId);
 		var teacherId = Guid.Empty;
+		var replacementTeacherId = Guid.Empty;
+		var replacementUserId = Guid.Empty;
 		var subjectId = Guid.NewGuid();
 		await InSchoolAsync(async services =>
 		{
 			var repository = services.GetRequiredService<IEmployeeRepository>();
-			teacherId = (await repository.GetEmployeeByUserIdAsync(userId))!.Id;
+			var teacher = (await repository.GetEmployeeByUserIdAsync(userId))!;
+			teacherId = teacher.Id;
+			replacementUserId = Guid.NewGuid();
+			var suffix = replacementUserId.ToString("N")[..10];
+			await services.GetRequiredService<IIdentityUserRepository>().InsertAsync(
+				new IdentityUser(replacementUserId, "substitute-" + suffix, suffix + "@example.test", TenantId), autoSave: true);
+			var replacement = await services.GetRequiredService<EmployeeManager>().CreateEmployeeAsync(replacementUserId, teacher.RoleId,
+				"Replacement", "Teacher", null, "RT", EmployeeStatusType.Active, null,
+				panNo: "ZZZZZ2345Z", adharNo: "000000000001", employeeGroup: EmployeeGroupType.Teaching);
+			await repository.InsertAsync(replacement, autoSave: true);
+			replacementTeacherId = replacement.Id;
 			var subject = new Subject(subjectId, TenantId, "Substitution science", "#24597a", Factory.SeededMediumId);
 			await services.GetRequiredService<IRepository<Subject, Guid>>().InsertAsync(subject, autoSave: true);
 			var allocation = new AssignedSubject(Guid.NewGuid(), TenantId, Factory.SeededStandardId, subjectId,
 				"SUB" + subjectId.ToString("N")[..7], SubjectStatus.Published);
 			allocation.Teachers.Add(new AssignedSubjectTeacher(allocation.Id, subjectId, teacherId, SubjectTeacherType.Primary, TenantId));
+			allocation.Teachers.Add(new AssignedSubjectTeacher(allocation.Id, subjectId, replacementTeacherId, SubjectTeacherType.Secondary, TenantId));
 			await services.GetRequiredService<IRepository<AssignedSubject, Guid>>().InsertAsync(allocation, autoSave: true);
 			await AddRuleAsync(services, AcademicNotificationEventKeys.SubstitutionAssigned);
 			await AddRuleAsync(services, AcademicNotificationEventKeys.SubstitutionAcknowledgementDue);
@@ -74,6 +93,7 @@ public class SubstitutionNotificationDelivery_Tests(ShikshaMitraApiTestFactory f
 			DivisionName = "A",
 			SubjectId = subjectId,
 			SubjectName = "Substitution science",
+			OriginalTeacherId = replacementTeacherId,
 			SubstituteTeacherId = teacherId,
 			AcknowledgementRequired = true,
 			SendNotification = false,
@@ -120,12 +140,24 @@ public class SubstitutionNotificationDelivery_Tests(ShikshaMitraApiTestFactory f
 		removed.IsSuccessStatusCode.ShouldBeFalse();
 		(await removed.Content.ReadAsStringAsync()).ShouldContain(NotificationErrorCodes.StateConflict);
 
+		await InSchoolAsync(async services =>
+		{
+			await AddRuleAsync(services, AcademicNotificationEventKeys.SubstitutionChanged, "SubstituteTeacher", "PreviousSubstitute");
+			await AddRuleAsync(services, AcademicNotificationEventKeys.SubstitutionCancelled, "SubstituteTeacher", "OriginalTeacher", "PreviousSubstitute");
+		});
+		var cancel = new SubstitutionActionDto { Reason = "Confidential cancellation reason" };
 		duty.StartTime = "11:05";
 		using var moved = await Client.PutAsJsonAsync($"{Route}/{silent.Id}", duty, JsonOptions);
 		moved.EnsureSuccessStatusCode();
+		await CheckTransitionsAsync(silent.Id, 1, 0);
+		duty.Remarks = "Internal-only edit";
+		using var notes = await Client.PutAsJsonAsync($"{Route}/{silent.Id}", duty, JsonOptions);
+		notes.EnsureSuccessStatusCode();
+		await CheckTransitionsAsync(silent.Id, 1, 0);
 		duty.StartTime = "11:00";
 		using var movedBack = await Client.PutAsJsonAsync($"{Route}/{silent.Id}", duty, JsonOptions);
 		movedBack.EnsureSuccessStatusCode();
+		await CheckTransitionsAsync(silent.Id, 2, 0);
 		await InSchoolAsync(async services =>
 		{
 			var assignment = await services.GetRequiredService<IRepository<NotificationIntent, Guid>>().GetAsync(x =>
@@ -133,6 +165,73 @@ public class SubstitutionNotificationDelivery_Tests(ShikshaMitraApiTestFactory f
 			var source = await services.GetRequiredService<NotificationIntentSourceReader>().LoadAsync(assignment, DateTimeOffset.UtcNow, CancellationToken.None);
 			source.ExclusionCode.ShouldBe("SourceRevisionChanged");
 		});
+
+		var cancelled = await PostAndReadAsync<SubstitutionDto>($"{Route}/{silent.Id}/cancel", cancel);
+		cancelled.NotificationStatus.ShouldBe("Queued");
+		await CheckTransitionsAsync(silent.Id, 2, 1);
+		await PostAndReadAsync<SubstitutionDto>($"{Route}/{silent.Id}/cancel", cancel);
+		await CheckTransitionsAsync(silent.Id, 2, 1);
+
+		duty.SendNotification = true;
+		var neverNotified = await PostAndReadAsync<SubstitutionDto>(Route, duty);
+		await CheckIntentsAsync(neverNotified.Id, 1, 0, false);
+		await RecordProviderOutcomeAsync(neverNotified.Id, AcademicNotificationEventKeys.SubstitutionAssigned, NotificationDispatchState.UnknownAcceptance);
+		var cancelledBeforeDelivery = await PostAndReadAsync<SubstitutionDto>($"{Route}/{neverNotified.Id}/cancel", cancel);
+		cancelledBeforeDelivery.NotificationStatus.ShouldBe("Not Sent");
+		await CheckTransitionsAsync(neverNotified.Id, 0, 0);
+
+		duty.OriginalTeacherId = null;
+		var toBeReassigned = await PostAndReadAsync<SubstitutionDto>(Route, duty);
+		await RecordProviderOutcomeAsync(toBeReassigned.Id, AcademicNotificationEventKeys.SubstitutionAssigned, NotificationDispatchState.ProviderAccepted);
+		var reassigned = await PostAndReadAsync<SubstitutionDto>($"{Route}/{toBeReassigned.Id}/assign",
+			new AssignSubstituteDto { SubstituteTeacherId = replacementTeacherId, SendNotification = true });
+		reassigned.NotificationStatus.ShouldBe("Queued");
+		await PostAndReadAsync<SubstitutionDto>($"{Route}/{toBeReassigned.Id}/assign",
+			new AssignSubstituteDto { SubstituteTeacherId = replacementTeacherId, SendNotification = true });
+		await CheckTransitionsAsync(toBeReassigned.Id, 1, 0);
+		await PostAndReadAsync<SubstitutionDto>($"{Route}/{toBeReassigned.Id}/assign",
+			new AssignSubstituteDto { SubstituteTeacherId = replacementTeacherId, SendNotification = true, AssignedRoomName = "Replacement room" });
+		await CheckTransitionsAsync(toBeReassigned.Id, 2, 0);
+		var former = new NotificationRecipientRefDto("PreviousSubstitute", UserId: userId, EmployeeId: teacherId);
+		await InSchoolAsync(async services =>
+		{
+			var intents = await services.GetRequiredService<IRepository<NotificationIntent, Guid>>().GetListAsync(x =>
+				x.SourceId == toBeReassigned.Id && x.EventKey == AcademicNotificationEventKeys.SubstitutionChanged);
+			var reader = services.GetRequiredService<NotificationIntentSourceReader>();
+			var preceding = await reader.LoadAsync(intents.MinBy(x => x.OccurredAt)!, DateTimeOffset.UtcNow, CancellationToken.None);
+			preceding.ExclusionCode.ShouldBe("SourceRevisionChanged");
+			var source = await reader.LoadAsync(intents.MaxBy(x => x.OccurredAt)!, DateTimeOffset.UtcNow, CancellationToken.None);
+			source.CurrentRecipients.ShouldContain(former);
+			source.CurrentRecipients.ShouldContain(new NotificationRecipientRefDto("SubstituteTeacher", UserId: replacementUserId, EmployeeId: replacementTeacherId));
+			source.Snapshot!.Variables["room_name"].Value.ShouldBe("Replacement room");
+			var removal = source.Snapshot!.RecipientContent!.ShouldHaveSingleItem();
+			removal.Recipient.ShouldBe(former);
+			removal.Variables.Values.ShouldNotContain(x => x.Value == duty.SubjectName);
+			removal.Variables.ContainsKey("room_name").ShouldBeFalse();
+			removal.Variables["period_name"].Value.ShouldBe(duty.Period);
+			removal.RelativeLink.ShouldBe(source.Snapshot.RelativeLink);
+		});
+		await PostAndReadAsync<SubstitutionDto>($"{Route}/{toBeReassigned.Id}/cancel", cancel);
+		await CheckTransitionsAsync(toBeReassigned.Id, 2, 1, former);
+
+		async Task CheckTransitionsAsync(Guid dutyId, int changes, int cancellations, NotificationRecipientRefDto? cancellationRecipient = null)
+		{
+			await InSchoolAsync(async services =>
+			{
+				var stored = await services.GetRequiredService<IRepository<NotificationIntent, Guid>>().GetListAsync(x =>
+					x.TenantId == TenantId && x.SourceId == dutyId &&
+					(x.EventKey == AcademicNotificationEventKeys.SubstitutionChanged || x.EventKey == AcademicNotificationEventKeys.SubstitutionCancelled));
+				stored.Count(x => x.EventKey == AcademicNotificationEventKeys.SubstitutionChanged).ShouldBe(changes);
+				stored.Count(x => x.EventKey == AcademicNotificationEventKeys.SubstitutionCancelled).ShouldBe(cancellations);
+				foreach (var intent in stored.Where(x => x.EventKey == AcademicNotificationEventKeys.SubstitutionCancelled))
+				{
+					var source = await services.GetRequiredService<NotificationIntentSourceReader>().LoadAsync(intent, DateTimeOffset.UtcNow, CancellationToken.None);
+					source.CurrentRecipients.ShouldHaveSingleItem()
+						.ShouldBe(cancellationRecipient ?? new("SubstituteTeacher", UserId: userId, EmployeeId: teacherId));
+					source.Snapshot!.Variables.Values.ShouldNotContain(x => x.Value == cancel.Reason);
+				}
+			});
+		}
 
 		async Task RecordProviderOutcomeAsync(Guid dutyId, string eventKey, NotificationDispatchState outcome)
 		{
@@ -142,7 +241,7 @@ public class SubstitutionNotificationDelivery_Tests(ShikshaMitraApiTestFactory f
 				var intent = await intents.GetAsync(x => x.TenantId == TenantId && x.SourceId == dutyId && x.EventKey == eventKey);
 				var snapshot = new CommunicationRecipientSnapshot(Guid.NewGuid(), TenantId)
 				{
-					CampaignId = intent.CampaignId!.Value, UserId = userId, RecipientType = "SubstituteTeacher", DisplayName = "Teacher"
+					CampaignId = intent.CampaignId!.Value, UserId = userId, RecipientId = teacherId, RecipientType = "SubstituteTeacher", DisplayName = "Teacher"
 				};
 				await services.GetRequiredService<IRepository<CommunicationRecipientSnapshot, Guid>>().InsertAsync(snapshot, autoSave: true);
 				var utcNow = DateTimeOffset.UtcNow;
@@ -198,19 +297,26 @@ public class SubstitutionNotificationDelivery_Tests(ShikshaMitraApiTestFactory f
 		}
 	}
 
-	private async Task AddRuleAsync(IServiceProvider services, string eventKey)
+	private async Task AddRuleAsync(IServiceProvider services, string eventKey, params string[] selectors)
 	{
+		if (selectors.Length == 0) selectors = ["SubstituteTeacher"];
 		var definition = services.GetRequiredService<AcademicNotificationCatalogue>().Get(eventKey);
 		var templates = services.GetRequiredService<IRepository<CommunicationTemplate, Guid>>();
-		var template = await templates.InsertAsync(new(Guid.NewGuid(), TenantId) { TemplateName = eventKey }, autoSave: true);
-		var revision = new CommunicationTemplateRevision(Guid.NewGuid(), TenantId, template.Id, 1, eventKey, "SubstituteTeacher",
-			CommunicationChannelType.InApp, "en", "Substitution duty", "Sign in for your duty details.", definition.SchemaVersion);
-		revision.Publish(Guid.NewGuid(), DateTimeOffset.UtcNow);
-		await services.GetRequiredService<IRepository<CommunicationTemplateRevision, Guid>>().InsertAsync(revision, autoSave: true);
+		var templateIds = new Guid[selectors.Length];
+		for (var index = 0; index < selectors.Length; index++)
+		{
+			var selector = selectors[index];
+			var template = await templates.InsertAsync(new(Guid.NewGuid(), TenantId) { TemplateName = eventKey + "." + selector }, autoSave: true);
+			var revision = new CommunicationTemplateRevision(Guid.NewGuid(), TenantId, template.Id, 1, eventKey, selector,
+				CommunicationChannelType.InApp, "en", "Substitution duty", "Sign in for your duty details.", definition.SchemaVersion);
+			revision.Publish(Guid.NewGuid(), DateTimeOffset.UtcNow);
+			await services.GetRequiredService<IRepository<CommunicationTemplateRevision, Guid>>().InsertAsync(revision, autoSave: true);
+			templateIds[index] = template.Id;
+		}
 		var rule = new NotificationRule(Guid.NewGuid(), TenantId, eventKey, NotificationRuleScope.Create(Factory.SeededAcademicYearId,
 			Factory.SeededBoardId, Factory.SeededMediumId, Factory.SeededStandardId, Factory.SeededDivisionId));
-		var configuration = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, ["SubstituteTeacher"],
-			[CommunicationChannelType.InApp], [template.Id], NotificationRuleTimingConfiguration.Default with
+		var configuration = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, selectors,
+			[CommunicationChannelType.InApp], templateIds, NotificationRuleTimingConfiguration.Default with
 			{ QuietHoursEnabled = false, ReminderSchoolDaysBefore = 0, ReminderLocalTime = new(9, 0) }, "en");
 		rule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(configuration, definition), rule.ConcurrencyStamp);
 		await services.GetRequiredService<IRepository<NotificationRule, Guid>>().InsertAsync(rule, autoSave: true);

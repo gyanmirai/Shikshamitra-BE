@@ -22,14 +22,17 @@ public sealed class SubstitutionNotificationDelivery(INotificationIntentWriter w
 	IRepository<CommunicationRecipientSnapshot, Guid> recipients, IAsyncQueryableExecuter queries, ICurrentTenant tenant,
 	ICancellationTokenProvider cancellation, IClock clock) : ITransientDependency
 {
-	internal async Task<NotificationIntentWriteResult> CaptureAsync(SubstitutionRequest duty, Guid? actorId, bool reminder = false)
+	internal Task RecordPreviousDutyAsync(SubstitutionRequest duty, Guid nextTeacherId) =>
+		source.RecordPreviousDutyAsync(duty, nextTeacherId, cancellation.Token);
+
+	internal async Task<NotificationIntentWriteResult> CaptureAsync(SubstitutionRequest duty, Guid? actorId, string eventKey = SubstitutionNotificationSource.Assigned)
 	{
 		var token = cancellation.Token;
 		if (tenant.Id is not Guid tenantId || duty.TenantId != tenantId || actorId is not Guid actor || actor == Guid.Empty)
 			return new(null, false);
 		var current = await source.FindAsync(tenantId, duty.Id, token);
 		if (current == null) return new(null, false);
-		var eventKey = reminder ? SubstitutionNotificationSource.AcknowledgementDue : SubstitutionNotificationSource.Assigned;
+		var reminder = eventKey == SubstitutionNotificationSource.AcknowledgementDue;
 		var scope = current.Scope;
 		var rule = await rules.ResolveAsync(eventKey, NotificationRuleScope.Create(scope.AcademicYearId, scope.BoardId, scope.MediumId,
 			scope.ClassId, scope.DivisionId), token);
@@ -62,15 +65,15 @@ public sealed class SubstitutionNotificationDelivery(INotificationIntentWriter w
 				operation.CampaignType == NotificationCampaignTypes.Academic && operation.SourceModule == CommunicationSourceModule.Academic &&
 				intent.SourceId == operation.SourceEntityId && intent.SourceType == SubstitutionNotificationSource.Type &&
 				operation.SourceEntityType == SubstitutionNotificationSource.Type && Enumerable.Contains(ids, intent.SourceId) &&
-				(intent.EventKey == SubstitutionNotificationSource.Assigned || intent.EventKey == SubstitutionNotificationSource.AcknowledgementDue)
+				(intent.EventKey == SubstitutionNotificationSource.Assigned || intent.EventKey == SubstitutionNotificationSource.Changed ||
+					intent.EventKey == SubstitutionNotificationSource.Cancelled || intent.EventKey == SubstitutionNotificationSource.AcknowledgementDue)
 			select new
 			{
 				intent.SourceId, intent.EventKey, intent.SourceRevision, intent.OccurredAt, operation.Status, OperationId = operation.Id,
 				Unknown = attempts.Any(d => d.IntentId == intent.Id && d.CampaignId == operation.Id &&
 					d.Status == NotificationDispatchState.UnknownAcceptance),
 				SubstituteAccepted = attempts.Any(d => d.IntentId == intent.Id && d.CampaignId == operation.Id &&
-					(d.Status == NotificationDispatchState.ProviderAccepted || d.Status == NotificationDispatchState.Delivered ||
-						d.Status == NotificationDispatchState.Read) &&
+					intent.EventKey != SubstitutionNotificationSource.Cancelled && d.AcceptedAt.HasValue &&
 					evidence.Any(e => e.CampaignId == operation.Id && e.Id == d.RecipientSnapshotId))
 			}, cancellation.Token);
 		var byDuty = rows.ToLookup(x => x.SourceId);
@@ -87,7 +90,8 @@ public sealed class SubstitutionNotificationDelivery(INotificationIntentWriter w
 				item.NotificationStatus = latest.Status switch
 				{
 					CommunicationCampaignStatus.Scheduled or CommunicationCampaignStatus.Queued or CommunicationCampaignStatus.Sending
-						when SubstitutionNotificationSource.IsActive(duty) && SubstitutionNotificationSource.PeriodEnd(duty) > new DateTimeOffset(clock.Now.ToUniversalTime()) => "Queued",
+						when (SubstitutionNotificationSource.IsActive(duty) || latest.EventKey == SubstitutionNotificationSource.Cancelled) &&
+							SubstitutionNotificationSource.PeriodEnd(duty) > new DateTimeOffset(clock.Now.ToUniversalTime()) => "Queued",
 					CommunicationCampaignStatus.Sent or CommunicationCampaignStatus.PartiallyFailed => "Sent",
 					_ when latest.Unknown => "Unknown",
 					CommunicationCampaignStatus.Failed => "Failed",

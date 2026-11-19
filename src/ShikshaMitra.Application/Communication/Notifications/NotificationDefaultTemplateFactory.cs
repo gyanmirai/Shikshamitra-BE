@@ -26,6 +26,14 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 				"A revision was requested for {{task_title}}.",
 			("SubstituteTeacher", AcademicNotificationEventKeys.SubstitutionAssigned) =>
 				"You have a substitute duty for {{period_name}} on {{session_date}}.",
+			("PreviousSubstitute", AcademicNotificationEventKeys.SubstitutionChanged) =>
+				"You are no longer assigned to the substitute duty for {{period_name}} on {{session_date}}.",
+			("SubstituteTeacher", AcademicNotificationEventKeys.SubstitutionChanged) =>
+				"Your substitute duty is {{period_name}} on {{session_date}}, from {{start_time}} to {{end_time}}.",
+			(_, AcademicNotificationEventKeys.SubstitutionChanged) =>
+				"The substitute duty is now {{period_name}} on {{session_date}}, from {{start_time}} to {{end_time}}.",
+			(_, AcademicNotificationEventKeys.SubstitutionCancelled) =>
+				"A substitute duty was cancelled. Check your school notifications for updates.",
 			("SubstituteTeacher", AcademicNotificationEventKeys.SubstitutionAcknowledgementDue) =>
 				"Please acknowledge your substitute duty for {{period_name}} on {{session_date}}.",
 			_ => subject + "."

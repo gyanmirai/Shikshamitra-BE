@@ -153,7 +153,7 @@ History tests cover independent View and source authorization, per-scope attempt
 
 Delivery action tests cover Add and source access, retry scheduling after a definitive transient rejection, unchanged successful channels, rejection of unknown acceptance, cancellation before planning or claim, and stored audit metadata.
 
-Substitution notification tests cover silent assignment, repeated assignment, exact staff targeting, queued and provider-accepted status, overlap between scheduled and explicit reminders, and suppression after acknowledgement.
+Substitution notification tests cover silent and repeated assignments, exact staff targeting, queued and provider-accepted status, shared scheduled and explicit reminder identity, and suppression after acknowledgement. The hosted workflow also exercises material rescheduling, no-op edits, recipient-specific removal content, cancellation for exactly the previously informed staff, and the exclusion of unconfirmed acceptance.
 
 Staff API tests check stored audit fields for rule saves, template publication and manual approval decisions. They check audit counts after stale or repeated requests and verify that the serialized fields contain only approved metadata.
 

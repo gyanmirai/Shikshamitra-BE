@@ -277,7 +277,8 @@ public partial class SubstitutionAppService(
         return await GetAsync(entity.Id);
     }
 
-    public async Task<SubstitutionDto> UpdateAsync(Guid id, UpdateSubstitutionDto input)
+    [UnitOfWork(true)]
+    public virtual async Task<SubstitutionDto> UpdateAsync(Guid id, UpdateSubstitutionDto input)
     {
         await EnsureAdminAsync("update substitutions");
         var entity = await substitutionRepository.GetAsync(id);
@@ -359,10 +360,20 @@ public partial class SubstitutionAppService(
             input.OriginalRoomId,
             input.SubjectName,
             input.Remarks);
-        SubstitutionNotificationSource.RecordAssignmentChoice(entity, SubstitutionNotificationSource.IsOptedIn(entity), previousRevision);
+        var materialChange = previousRevision != SubstitutionNotificationSource.Revision(entity);
+        var optedIn = SubstitutionNotificationSource.IsOptedIn(entity);
+        SubstitutionNotificationSource.RecordAssignmentChoice(entity, optedIn, previousRevision);
+        if (materialChange && SubstitutionNotificationSource.IsActive(entity))
+        {
+            SubstitutionNotificationSource.RecordTransition(entity, SubstitutionNotificationSource.Changed);
+        }
         await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-update");
 
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
+        if (materialChange && optedIn && SubstitutionNotificationSource.IsActive(entity))
+        {
+            await notificationDelivery.CaptureAsync(entity, CurrentUser.Id, SubstitutionNotificationSource.Changed);
+        }
         await WriteAuditAsync(id, "Updated", "Substitution details updated.");
         return await GetAsync(id);
     }
@@ -413,14 +424,23 @@ public partial class SubstitutionAppService(
             throw new UserFriendlyException(selected.ConflictReason ?? "The selected teacher has a hard conflict.");
         }
 
+        var nextRoomId = input.AssignedRoomId ?? entity.OriginalRoomId;
+        var nextRoomName = string.IsNullOrWhiteSpace(input.AssignedRoomName) ? entity.RoomName : input.AssignedRoomName;
+        var changedRoomLabel = !nextRoomId.HasValue &&
+            !string.Equals(nextRoomName?.Trim(), entity.AssignedRoomName?.Trim(), StringComparison.OrdinalIgnoreCase);
         if (entity.Status == SubstitutionStatus.Acknowledged && entity.SubstituteTeacherId == selected!.TeacherId &&
-            entity.AssignedRoomId == (input.AssignedRoomId ?? entity.OriginalRoomId) &&
+            entity.AssignedRoomId == nextRoomId && !changedRoomLabel &&
             SubstitutionNotificationSource.IsOptedIn(entity) == input.SendNotification)
         {
             return await GetAsync(id);
         }
 
         var previousRevision = SubstitutionNotificationSource.IsActive(entity) ? SubstitutionNotificationSource.Revision(entity) : null;
+        var choiceChanged = SubstitutionNotificationSource.IsOptedIn(entity) != input.SendNotification;
+        if (previousRevision != null && selected!.TeacherId is Guid nextTeacherId)
+        {
+            await notificationDelivery.RecordPreviousDutyAsync(entity, nextTeacherId);
+        }
         entity.Assign(
             selected!.TeacherId,
             selected.TeacherName,
@@ -431,10 +451,22 @@ public partial class SubstitutionAppService(
             ParseConflict(selected?.ConflictSeverity),
             selected?.ConflictReason,
             sendNotification: false);
-        SubstitutionNotificationSource.RecordAssignmentChoice(entity, input.SendNotification, previousRevision);
+        var materialChange = previousRevision != null && (changedRoomLabel || previousRevision != SubstitutionNotificationSource.Revision(entity));
+        SubstitutionNotificationSource.RecordAssignmentChoice(entity, input.SendNotification, materialChange ? null : previousRevision);
+        if (materialChange)
+        {
+            SubstitutionNotificationSource.RecordTransition(entity, SubstitutionNotificationSource.Changed);
+        }
+        else if (previousRevision == null || choiceChanged)
+        {
+            SubstitutionNotificationSource.RecordTransition(entity, SubstitutionNotificationSource.Assigned);
+        }
 
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
-        if (input.SendNotification) await notificationDelivery.CaptureAsync(entity, CurrentUser.Id);
+        if (input.SendNotification)
+        {
+            await notificationDelivery.CaptureAsync(entity, CurrentUser.Id, SubstitutionNotificationSource.AssignmentEvent(entity));
+        }
         await WriteAuditAsync(entity.Id, "Assigned", $"Assigned to {entity.SubstituteTeacherName}.");
         return await GetAsync(entity.Id);
     }
@@ -452,7 +484,7 @@ public partial class SubstitutionAppService(
             throw new BusinessException(NotificationErrorCodes.StateConflict);
         }
 
-        var reminder = await notificationDelivery.CaptureAsync(entity, CurrentUser.Id, reminder: true);
+        var reminder = await notificationDelivery.CaptureAsync(entity, CurrentUser.Id, SubstitutionNotificationSource.AcknowledgementDue);
         if (reminder.Created) await WriteAuditAsync(id, "Reminder Queued", "An acknowledgement reminder was queued.");
         var result = await MapAsync(entity, await GetAuditLogsAsync(id), reminder.OperationId);
         if (!reminder.OperationId.HasValue) result.NotificationStatus = "Not Sent";
@@ -480,13 +512,23 @@ public partial class SubstitutionAppService(
         return await GetAsync(id);
     }
 
-    public async Task<SubstitutionDto> CancelAsync(Guid id, SubstitutionActionDto input)
+    [UnitOfWork(true)]
+    public virtual async Task<SubstitutionDto> CancelAsync(Guid id, SubstitutionActionDto input)
     {
         await EnsureAdminAsync("cancel substitutions");
         var entity = await substitutionRepository.GetAsync(id);
         await EnsureCanViewSubstitutionAsync(entity);
+        var firstCancellation = entity.Status != SubstitutionStatus.Cancelled;
         entity.Cancel(input.Reason);
+        if (firstCancellation)
+        {
+            SubstitutionNotificationSource.RecordTransition(entity, SubstitutionNotificationSource.Cancelled);
+        }
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
+        if (firstCancellation)
+        {
+            await notificationDelivery.CaptureAsync(entity, CurrentUser.Id, SubstitutionNotificationSource.Cancelled);
+        }
         await WriteAuditAsync(id, "Cancelled", input.Reason);
         return await GetAsync(id);
     }

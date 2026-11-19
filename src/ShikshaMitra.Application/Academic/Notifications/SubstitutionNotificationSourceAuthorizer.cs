@@ -18,8 +18,7 @@ namespace ShikshaMitra.Academic.Notifications;
 public sealed class SubstitutionNotificationSourceAuthorizer(SubstitutionAppService duties,
 	IPermissionChecker permissions, ICurrentTenant tenant) : IAcademicNotificationSourceAuthorizer, ITransientDependency
 {
-	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[]
-		{ SubstitutionNotificationSource.Assigned, SubstitutionNotificationSource.AcknowledgementDue });
+	public IReadOnlyCollection<string> EventKeys => SubstitutionNotificationSource.SupportedEvents;
 
 	public async Task EnsureCanViewAsync(string eventKey, Guid sourceId, CancellationToken cancellationToken)
 	{

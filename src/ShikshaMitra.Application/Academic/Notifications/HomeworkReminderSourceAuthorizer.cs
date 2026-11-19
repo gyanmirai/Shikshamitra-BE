@@ -20,11 +20,14 @@ public sealed class HomeworkReminderSourceAuthorizer(HomeworkAppService access, 
 	IRepository<HomeworkAssignmentEntity, Guid> tasks, IAsyncQueryableExecuter queries, ICurrentTenant tenant)
 	: IAcademicNotificationSourceAuthorizer, ITransientDependency
 {
-	public IReadOnlyCollection<string> EventKeys => HomeworkReminderSourceAdapter.SupportedEvents;
+	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[]
+	{
+		HomeworkReminderSourceAdapter.EventKey, HomeworkPublicationSourceAdapter.EventKey,
+	});
 
 	public async Task EnsureCanViewAsync(string eventKey, Guid sourceId, CancellationToken cancellationToken)
 	{
-		if (eventKey != HomeworkReminderSourceAdapter.EventKey || sourceId == Guid.Empty || tenant.Id is not Guid tenantId ||
+		if (!EventKeys.Contains(eventKey) || sourceId == Guid.Empty || tenant.Id is not Guid tenantId ||
 			!await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View))
 			throw new AbpAuthorizationException();
 

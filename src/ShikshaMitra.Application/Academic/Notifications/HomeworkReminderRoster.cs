@@ -23,8 +23,8 @@ public sealed class HomeworkReminderRoster(IRepository<Student, Guid> students, 
 	IRepository<StudentElectiveSelection, Guid> electiveSelections, IRepository<StudentSubmissionEntity, Guid> submissions,
 	IDataFilter filters, IAsyncQueryableExecuter queries) : ITransientDependency
 {
-	internal async Task<IReadOnlyList<HomeworkReminderLearner>?> FindPendingAsync(Guid tenantId, HomeworkReminderRecord record,
-		Guid[] divisions, Guid[]? capturedStudents, CancellationToken cancellationToken)
+	internal async Task<IReadOnlyList<HomeworkReminderLearner>?> FindAsync(Guid tenantId, HomeworkReminderRecord record,
+		Guid[] divisions, Guid[]? capturedStudents, bool pendingOnly, CancellationToken cancellationToken)
 	{
 		var taskId = record.Task.Id;
 		var yearId = record.Placement.YearId;
@@ -32,15 +32,19 @@ public sealed class HomeworkReminderRoster(IRepository<Student, Guid> students, 
 		var mediumId = record.Placement.MediumId;
 		var subjectId = record.Subject.Id;
 		var electiveGroup = record.Subject.ElectiveGroupId;
-		var submitted = (await submissions.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
-			x.HomeworkAssignmentId == taskId && x.AssignmentId == null && (x.SubmissionDate.HasValue ||
-				x.Status == SubmissionStatus.Submitted || x.Status == SubmissionStatus.Late ||
-				x.Status == SubmissionStatus.Excused || x.Status == SubmissionStatus.Reviewed || x.Status == SubmissionStatus.NeedsReview));
 		var selected = (await electiveSelections.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
 			x.AcademicMediumId == mediumId && x.ElectiveGroupId == electiveGroup && x.SelectedSubjectId == subjectId && x.IsLocked);
 		var live = (await students.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
-			x.Status == StudentLifeCycleStatusEnum.Enrolled && !submitted.Any(s => s.StudentId == x.Id) &&
+			x.Status == StudentLifeCycleStatusEnum.Enrolled &&
 			(!electiveGroup.HasValue || selected.Any(s => s.StudentId == x.Id)));
+		if (pendingOnly)
+		{
+			var submitted = (await submissions.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
+				x.HomeworkAssignmentId == taskId && x.AssignmentId == null && (x.SubmissionDate.HasValue ||
+					x.Status == SubmissionStatus.Submitted || x.Status == SubmissionStatus.Late ||
+					x.Status == SubmissionStatus.Excused || x.Status == SubmissionStatus.Reviewed || x.Status == SubmissionStatus.NeedsReview));
+			live = live.Where(x => !submitted.Any(s => s.StudentId == x.Id));
+		}
 		if (capturedStudents != null) live = live.Where(x => Enumerable.Contains(capturedStudents, x.Id));
 
 		// Include revoked enrollments in the legacy check so the old Student placement cannot restore access.

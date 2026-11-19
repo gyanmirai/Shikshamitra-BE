@@ -65,6 +65,8 @@ public class AcademicNotificationPreviewApiFactory : ShikshaMitraApiTestFactory
 		}));
 		builder.ConfigureTestServices(services =>
 		{
+			services.RemoveAll<INotificationSourceAdapter>();
+			services.RemoveAll<IAcademicNotificationSourceAuthorizer>();
 			var source = new PreviewSource(this);
 			services.AddSingleton<INotificationSourceAdapter>(source);
 			services.AddSingleton<IAcademicNotificationSourceAuthorizer>(source);

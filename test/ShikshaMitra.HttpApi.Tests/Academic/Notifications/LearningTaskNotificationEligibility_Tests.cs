@@ -30,7 +30,7 @@ using Xunit;
 namespace ShikshaMitra.Academic.Notifications;
 
 [Collection(ApiTestCollection.Name)]
-public class LearningTaskNotificationEligibility_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
+public partial class LearningTaskNotificationEligibility_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private const string SourceType = "Academic.Homework";
 	private const string EventKey = AcademicNotificationEventKeys.HomeworkDue;
@@ -246,11 +246,13 @@ public class LearningTaskNotificationEligibility_Tests(ShikshaMitraApiTestFactor
 		return snapshot;
 	}
 
-	private sealed record Seed(Guid TaskId, Guid DraftId, Guid PastId, Guid Active, Guid Legacy, Guid Unselected);
+	private sealed record Seed(Guid TaskId, Guid DraftId, Guid PastId, Guid Active, Guid Legacy, Guid Unselected,
+		Guid Submitted, Guid AwaitingReview);
 
 	private async Task<Seed> SeedAsync(Guid? divisionId = null)
 	{
-		var seed = new Seed(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+		var seed = new Seed(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+			Guid.NewGuid(), Guid.NewGuid());
 		await InSchoolAsync(async services =>
 		{
 			var medium = Factory.SeededMediumId;
@@ -269,8 +271,8 @@ public class LearningTaskNotificationEligibility_Tests(ShikshaMitraApiTestFactor
 			await SaveHomeworkAsync(seed.PastId, DateTime.UtcNow.AddDays(-1), true);
 
 			var withdrawn = Guid.NewGuid();
-			var submitted = Guid.NewGuid();
-			var needsReview = Guid.NewGuid();
+			var submitted = seed.Submitted;
+			var needsReview = seed.AwaitingReview;
 			var unlocked = Guid.NewGuid();
 			var deletedEnrollment = Guid.NewGuid();
 			foreach (var id in new[] { seed.Active, seed.Legacy, seed.Unselected, withdrawn, submitted, needsReview, unlocked, deletedEnrollment })

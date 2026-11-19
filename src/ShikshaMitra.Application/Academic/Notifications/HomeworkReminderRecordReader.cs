@@ -29,7 +29,7 @@ public sealed class HomeworkReminderRecordReader(IRepository<HomeworkAssignmentE
 	{
 		var task = await queries.SingleOrDefaultAsync((await tasks.WithDetailsAsync(x => x.DivisionSchedules))
 			.Where(x => x.TenantId == tenantId && !x.IsDeleted && x.Id == sourceId), cancellationToken);
-		if (task == null || task.Status == HomeworkStatus.Closed || task.SubmissionType == SubmissionType.NoSubmissionRequired)
+		if (task == null || task.Status == HomeworkStatus.Closed)
 			return null;
 
 		var placement = await queries.SingleOrDefaultAsync((await standards.GetQueryableAsync())

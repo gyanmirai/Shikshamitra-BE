@@ -198,6 +198,7 @@ public partial class LearningTaskNotificationEligibility_Tests(ShikshaMitraApiTe
 			var codec = services.GetRequiredService<NotificationRuleConfigurationCodec>();
 			rule.Configure(true, codec.Serialize(configuration, definition), rule.ConcurrencyStamp);
 			await InsertAsync(services, rule);
+			await ResetScanCursorsAsync(services);
 		});
 
 		var scanAt = dueAt.AddMinutes(-20);
@@ -206,8 +207,8 @@ public partial class LearningTaskNotificationEligibility_Tests(ShikshaMitraApiTe
 			var services = scope.ServiceProvider;
 			using var school = services.GetRequiredService<ICurrentTenant>().Change(TenantId, "Synthetic school");
 			var scheduler = services.GetRequiredService<INotificationDueScheduler>();
-			(await scheduler.ScanAsync(scanAt, 100, CancellationToken.None)).Created.ShouldBeGreaterThan(0);
-			(await scheduler.ScanAsync(scanAt.AddMinutes(2), 100, CancellationToken.None)).Created.ShouldBe(0);
+			(await ScanDueSourcesAsync(scheduler, scanAt)).ShouldBeGreaterThan(0);
+			(await ScanDueSourcesAsync(scheduler, scanAt.AddMinutes(2))).ShouldBe(0);
 		}
 
 		await InSchoolAsync(async services =>

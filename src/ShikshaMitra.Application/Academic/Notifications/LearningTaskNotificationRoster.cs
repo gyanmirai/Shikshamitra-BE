@@ -16,17 +16,18 @@ using Volo.Abp.Linq;
 
 namespace ShikshaMitra.Academic.Notifications;
 
-internal sealed record HomeworkReminderLearner(Guid StudentId, Guid DivisionId);
+internal sealed record LearningTaskNotificationLearner(Guid StudentId, Guid DivisionId);
 
 [RemoteService(false)]
-public sealed class HomeworkReminderRoster(IRepository<Student, Guid> students, IRepository<StudentEnrollment, Guid> enrollments,
+public sealed class LearningTaskNotificationRoster(IRepository<Student, Guid> students, IRepository<StudentEnrollment, Guid> enrollments,
 	IRepository<StudentElectiveSelection, Guid> electiveSelections, IRepository<StudentSubmissionEntity, Guid> submissions,
 	IDataFilter filters, IAsyncQueryableExecuter queries) : ITransientDependency
 {
-	internal async Task<IReadOnlyList<HomeworkReminderLearner>?> FindAsync(Guid tenantId, HomeworkReminderRecord record,
+	internal async Task<IReadOnlyList<LearningTaskNotificationLearner>?> FindAsync(Guid tenantId, LearningTaskNotificationRecord record,
 		Guid[] divisions, Guid[]? capturedStudents, bool pendingOnly, CancellationToken cancellationToken)
 	{
 		var taskId = record.Task.Id;
+		var isAssignment = record.Task.IsAssignment;
 		var yearId = record.Placement.YearId;
 		var classId = record.Task.StandardId;
 		var mediumId = record.Placement.MediumId;
@@ -40,7 +41,7 @@ public sealed class HomeworkReminderRoster(IRepository<Student, Guid> students, 
 		if (pendingOnly)
 		{
 			var submitted = (await submissions.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
-				x.HomeworkAssignmentId == taskId && x.AssignmentId == null && (x.SubmissionDate.HasValue ||
+				(isAssignment ? x.AssignmentId == taskId : x.HomeworkAssignmentId == taskId && x.AssignmentId == null) && (x.SubmissionDate.HasValue ||
 					x.Status == SubmissionStatus.Submitted || x.Status == SubmissionStatus.Late ||
 					x.Status == SubmissionStatus.Excused || x.Status == SubmissionStatus.Reviewed || x.Status == SubmissionStatus.NeedsReview));
 			live = live.Where(x => !submitted.Any(s => s.StudentId == x.Id));
@@ -62,7 +63,7 @@ public sealed class HomeworkReminderRoster(IRepository<Student, Guid> students, 
 			!history.Any(enrollment => enrollment.StudentId == x.Id))
 			.Select(x => new { StudentId = x.Id, DivisionId = x.DivisionId!.Value });
 		var rows = await queries.ToListAsync(enrolled.Concat(legacy).Take(10001)
-			.Select(x => new HomeworkReminderLearner(x.StudentId, x.DivisionId)), cancellationToken);
+			.Select(x => new LearningTaskNotificationLearner(x.StudentId, x.DivisionId)), cancellationToken);
 		return rows.Count <= 10000 ? rows : null;
 	}
 }

@@ -23,7 +23,7 @@ public sealed class HomeworkNotificationTeachers(IRepository<AssignedSubject, Gu
 	IRepository<TeacherSubjectAllocation, Guid> allocations, IRepository<Employee, Guid> employees,
 	IRepository<IdentityUser, Guid> users, IAsyncQueryableExecuter queries) : ITransientDependency
 {
-	internal async Task<IReadOnlyList<HomeworkNotificationTeacher>?> FindAsync(Guid tenantId, HomeworkReminderRecord record,
+	internal async Task<IReadOnlyList<HomeworkNotificationTeacher>?> FindAsync(Guid tenantId, LearningTaskNotificationRecord record,
 		Guid[] divisions, CancellationToken cancellationToken)
 	{
 		var classId = record.Task.StandardId;

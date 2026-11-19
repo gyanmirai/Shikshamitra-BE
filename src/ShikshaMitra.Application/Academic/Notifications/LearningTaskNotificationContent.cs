@@ -5,14 +5,14 @@ using ShikshaMitra.Communication.Notifications;
 
 namespace ShikshaMitra.Academic.Notifications;
 
-internal static class HomeworkNotificationContent
+internal static class LearningTaskNotificationContent
 {
 	internal const string Link = "/dashboard?openNotifications=1";
 
-	internal static NotificationSourceScopeDto Scope(HomeworkReminderRecord record, Guid? divisionId = null) =>
+	internal static NotificationSourceScopeDto Scope(LearningTaskNotificationRecord record, Guid? divisionId = null) =>
 		new(record.Placement.YearId, record.Placement.BoardId, record.Placement.MediumId, record.Task.StandardId, divisionId);
 
-	internal static Dictionary<string, NotificationVariableValueDto> Variables(HomeworkReminderRecord record, string schoolName) =>
+	internal static Dictionary<string, NotificationVariableValueDto> Variables(LearningTaskNotificationRecord record, string schoolName) =>
 		new(StringComparer.Ordinal)
 		{
 			["school_name"] = Text(schoolName), ["class_name"] = Text(record.Placement.ClassName),

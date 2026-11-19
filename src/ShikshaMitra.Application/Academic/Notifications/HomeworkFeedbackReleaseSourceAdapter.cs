@@ -11,13 +11,13 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Timing;
-using static ShikshaMitra.Academic.Notifications.HomeworkNotificationContent;
+using static ShikshaMitra.Academic.Notifications.LearningTaskNotificationContent;
 
 namespace ShikshaMitra.Academic.Notifications;
 
 [RemoteService(false), ExposeServices(typeof(INotificationSourceAdapter))]
 public sealed class HomeworkFeedbackReleaseSourceAdapter(IRepository<StudentSubmissionEntity, Guid> submissions,
-	HomeworkReminderRecordReader records, HomeworkReminderRoster roster, IAsyncQueryableExecuter queries,
+	LearningTaskNotificationRecordReader records, LearningTaskNotificationRoster roster, IAsyncQueryableExecuter queries,
 	ICurrentTenant tenant, ITenantStore tenants, IClock clock) : INotificationSourceAdapter, ITransientDependency
 {
 	internal const string EventKey = AcademicNotificationEventKeys.HomeworkFeedbackReleased;
@@ -27,7 +27,7 @@ public sealed class HomeworkFeedbackReleaseSourceAdapter(IRepository<StudentSubm
 	public async Task<NotificationSourceSnapshot> LoadAsync(NotificationIntentContext context, CancellationToken cancellationToken)
 	{
 		if (context.TenantId == Guid.Empty || context.TenantId != tenant.Id || context.SourceId == Guid.Empty ||
-			context.EventKey != EventKey || context.SourceType != HomeworkReminderSourceAdapter.SourceType)
+			context.EventKey != EventKey || context.SourceType != LearningTaskReminderSourceAdapter.HomeworkSourceType)
 			return Unavailable();
 
 		var submission = await queries.SingleOrDefaultAsync((await submissions.GetQueryableAsync()).Where(x =>
@@ -37,7 +37,7 @@ public sealed class HomeworkFeedbackReleaseSourceAdapter(IRepository<StudentSubm
 		if (submission?.HomeworkAssignmentId is not Guid homeworkId) return Unavailable();
 
 		var now = new DateTimeOffset(clock.Now.ToUniversalTime());
-		var record = await records.FindAsync(context.TenantId, homeworkId, now, cancellationToken, includeClosed: true);
+		var record = await records.FindHomeworkAsync(context.TenantId, homeworkId, now, cancellationToken, includeClosed: true);
 		var schedule = record?.Schedules.SingleOrDefault(x => x.DivisionId == submission.DivisionId);
 		if (record == null || schedule == null) return Unavailable();
 		var eligible = await roster.FindAsync(context.TenantId, record, [submission.DivisionId], [submission.StudentId],

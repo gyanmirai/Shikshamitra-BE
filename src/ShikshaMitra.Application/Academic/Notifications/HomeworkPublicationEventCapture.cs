@@ -35,7 +35,7 @@ public sealed class HomeworkPublicationEventCapture(INotificationIntentWriter wr
 			x.IsEnabled && x.EventKey == eventKey), cancellation.Token)) return;
 
 		var now = new DateTimeOffset(clock.Now.ToUniversalTime());
-		await writer.WriteAsync(new(eventKey, HomeworkReminderSourceAdapter.SourceType, homework.Id, Revision(published),
+		await writer.WriteAsync(new(eventKey, LearningTaskReminderSourceAdapter.HomeworkSourceType, homework.Id, Revision(published),
 			now, [], actorId), cancellation.Token);
 	}
 

@@ -11,28 +11,34 @@ using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Timing;
-using static ShikshaMitra.Academic.Notifications.HomeworkNotificationContent;
+using static ShikshaMitra.Academic.Notifications.LearningTaskNotificationContent;
 
 namespace ShikshaMitra.Academic.Notifications;
 
 [RemoteService(false), ExposeServices(typeof(INotificationSourceAdapter))]
-public sealed class HomeworkReminderSourceAdapter(HomeworkReminderRecordReader records, HomeworkReminderRoster roster,
+public sealed class LearningTaskReminderSourceAdapter(LearningTaskNotificationRecordReader records, LearningTaskNotificationRoster roster,
 	ICurrentTenant tenant, ITenantStore tenants, IClock clock) : INotificationSourceAdapter, ITransientDependency
 {
-	internal const string SourceType = "Academic.Homework";
-	internal const string EventKey = AcademicNotificationEventKeys.HomeworkDue;
-	internal static IReadOnlyCollection<string> SupportedEvents { get; } = Array.AsReadOnly(new[] { EventKey });
+	internal const string HomeworkSourceType = "Academic.Homework";
+	internal const string AssignmentSourceType = "Academic.Assignment";
+	internal const string HomeworkEventKey = AcademicNotificationEventKeys.HomeworkDue;
+	internal const string AssignmentEventKey = AcademicNotificationEventKeys.AssignmentDue;
+	internal static IReadOnlyCollection<string> SupportedEvents { get; } = Array.AsReadOnly(new[] { HomeworkEventKey, AssignmentEventKey });
 
 	public IReadOnlyCollection<string> EventKeys => SupportedEvents;
 
 	public async Task<NotificationSourceSnapshot> LoadAsync(NotificationIntentContext context, CancellationToken cancellationToken)
 	{
-		if (context.TenantId == Guid.Empty || context.TenantId != tenant.Id || context.SourceType != SourceType ||
-			context.EventKey != EventKey || context.SourceId == Guid.Empty)
+		var isAssignment = context.EventKey == AssignmentEventKey;
+		var expectedSource = isAssignment ? AssignmentSourceType : HomeworkSourceType;
+		if (context.TenantId == Guid.Empty || context.TenantId != tenant.Id || context.SourceType != expectedSource ||
+			!SupportedEvents.Contains(context.EventKey) || context.SourceId == Guid.Empty)
 			return Unavailable();
 
 		var now = new DateTimeOffset(clock.Now.ToUniversalTime());
-		var record = await records.FindAsync(context.TenantId, context.SourceId, now, cancellationToken);
+		var record = isAssignment
+			? await records.FindAssignmentAsync(context.TenantId, context.SourceId, now, cancellationToken)
+			: await records.FindHomeworkAsync(context.TenantId, context.SourceId, now, cancellationToken);
 		if (record == null || record.Task.SubmissionType == SubmissionType.NoSubmissionRequired) return Unavailable();
 		var occurrence = context.DueOccurrenceAt;
 		var upcoming = record.Schedules.Where(x => x.DueAt > now &&

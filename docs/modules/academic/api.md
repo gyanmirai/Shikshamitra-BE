@@ -59,6 +59,8 @@ Homework Feedback Released uses the submission ID as the source ID. An enabled r
 
 An enabled Homework Due rule uses the school time zone and working days to queue reminders for each published division deadline. The worker scans current and legacy schedules by school, then rechecks the exact division, deadline and eligible learners. A deadline change invalidates queued work for the old occurrence. The reminder expires at the deadline.
 
+Assignment Due follows the same school-day timing. It reads the publication state and deadline of each saved assignment division. Only the assigned elective cohort is eligible where required, and submitted or excused work is excluded using submissions tied to that assignment. Manual review requires Assessment and Feedback View plus access to the assignment.
+
 The response reports recipient counts, exclusions, sample messages with fictional values, and whether the audience or a school approval rule requires approval. When at least one delivery is ready, it returns an opaque `reviewToken` and `expiresAt` up to ten minutes away, capped by source expiry. The server stores a digest bound to the actor, source revision, scoped audience, templates, and delivery evidence. Preview writes only the review receipt and makes no provider calls.
 
 Confirmation opens the protected request attached to the token and checks the live source and reviewed delivery details. A material change, expired token, or reused token with a different key returns 409. Repeating the same token and key returns the existing operation. A `Queued` operation is awaiting delivery. The worker checks the reviewed delivery fingerprint again before creating dispatches.

@@ -8,12 +8,12 @@ using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Timing;
-using static ShikshaMitra.Academic.Notifications.HomeworkNotificationContent;
+using static ShikshaMitra.Academic.Notifications.LearningTaskNotificationContent;
 
 namespace ShikshaMitra.Academic.Notifications;
 
 [RemoteService(false), ExposeServices(typeof(INotificationSourceAdapter))]
-public sealed class HomeworkPublicationSourceAdapter(HomeworkReminderRecordReader records, HomeworkReminderRoster roster,
+public sealed class HomeworkPublicationSourceAdapter(LearningTaskNotificationRecordReader records, LearningTaskNotificationRoster roster,
 	HomeworkNotificationTeachers teachers, ICurrentTenant tenant, ITenantStore tenants, IClock clock)
 	: INotificationSourceAdapter, ITransientDependency
 {
@@ -23,10 +23,10 @@ public sealed class HomeworkPublicationSourceAdapter(HomeworkReminderRecordReade
 	public async Task<NotificationSourceSnapshot> LoadAsync(NotificationIntentContext context, CancellationToken cancellationToken)
 	{
 		if (context.TenantId == Guid.Empty || context.TenantId != tenant.Id ||
-			context.SourceType != HomeworkReminderSourceAdapter.SourceType || context.EventKey != EventKey || context.SourceId == Guid.Empty)
+			context.SourceType != LearningTaskReminderSourceAdapter.HomeworkSourceType || context.EventKey != EventKey || context.SourceId == Guid.Empty)
 			return Unavailable();
 		var now = new DateTimeOffset(clock.Now.ToUniversalTime());
-		var record = await records.FindAsync(context.TenantId, context.SourceId, now, cancellationToken);
+		var record = await records.FindHomeworkAsync(context.TenantId, context.SourceId, now, cancellationToken);
 		if (record == null) return Unavailable();
 		var schedules = record.Schedules.Where(x => x.DueAt > now).ToArray();
 		if (schedules.Length == 0) return Unavailable();

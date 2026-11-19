@@ -31,7 +31,7 @@ public sealed class HomeworkFeedbackReleaseEventCapture(INotificationIntentWrite
 			x.TenantId == tenantId && !x.IsDeleted && x.Id == homeworkId));
 		if (!await queries.AnyAsync(scoped, cancellation.Token)) return;
 
-		await writer.WriteAsync(new(eventKey, HomeworkReminderSourceAdapter.SourceType, submission.Id,
+		await writer.WriteAsync(new(eventKey, LearningTaskReminderSourceAdapter.HomeworkSourceType, submission.Id,
 			HomeworkFeedbackReleaseSourceAdapter.ReleaseRevision, reviewedAt, [], actorId), cancellation.Token);
 	}
 }

@@ -23,7 +23,7 @@ public sealed class HomeworkReminderSourceAuthorizer(HomeworkAppService access, 
 {
 	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[]
 	{
-		HomeworkReminderSourceAdapter.EventKey, HomeworkPublicationSourceAdapter.EventKey, HomeworkFeedbackReleaseSourceAdapter.EventKey,
+		LearningTaskReminderSourceAdapter.HomeworkEventKey, HomeworkPublicationSourceAdapter.EventKey, HomeworkFeedbackReleaseSourceAdapter.EventKey,
 	});
 
 	public async Task EnsureCanViewAsync(string eventKey, Guid sourceId, CancellationToken cancellationToken)

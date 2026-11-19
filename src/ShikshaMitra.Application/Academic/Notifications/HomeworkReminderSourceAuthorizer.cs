@@ -25,6 +25,7 @@ public sealed class HomeworkReminderSourceAuthorizer(HomeworkAppService access, 
 	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[]
 	{
 		LearningTaskReminderSourceAdapter.HomeworkEventKey, AcademicNotificationEventKeys.HomeworkOverdue,
+		AcademicNotificationEventKeys.HomeworkSubmitted,
 		HomeworkPublicationSourceAdapter.EventKey, LearningTaskFeedbackReleaseSourceAdapter.HomeworkEventKey,
 	});
 

@@ -22,6 +22,8 @@ public sealed record NotificationDueSourcePage(IReadOnlyList<NotificationDueSour
 public interface INotificationDueSource
 {
 	string SourceType { get; }
+	string? ScanKey => null;
+	IReadOnlyCollection<string> ScheduledEventKeys => Array.Empty<string>();
 
 	/// <summary>Reads one keyset page of scoped occurrences. The source adapter must reload their eligibility at capture and dispatch.</summary>
 	Task<NotificationDueSourcePage> ReadPageAsync(NotificationDueScanRequest request, CancellationToken cancellationToken);

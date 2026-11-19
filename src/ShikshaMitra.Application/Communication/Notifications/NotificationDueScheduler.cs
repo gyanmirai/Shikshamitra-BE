@@ -33,29 +33,34 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
 		if (units.Current != null) throw new BusinessException(NotificationErrorCodes.StateConflict);
 		if (batchSize is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(batchSize));
-		var adapters = sources.ToArray();
+		var adapters = sources.Select(source =>
+		{
+			var scanKey = source.ScanKey;
+			return (Source: source, Key: string.IsNullOrEmpty(scanKey) ? source.SourceType : scanKey);
+		}).ToArray();
 		if (adapters.Length == 0) return new(0, 0, 0, false);
-		if (adapters.Any(x => string.IsNullOrWhiteSpace(x.SourceType) || x.SourceType.Length > 80) ||
-			adapters.Select(x => x.SourceType).Distinct(StringComparer.Ordinal).Count() != adapters.Length)
+		if (adapters.Any(x => string.IsNullOrWhiteSpace(x.Source.SourceType) || x.Source.SourceType.Length > 80 ||
+			string.IsNullOrWhiteSpace(x.Key) || x.Key.Length > 80) ||
+			adapters.Select(x => x.Key).Distinct(StringComparer.Ordinal).Count() != adapters.Length)
 			throw new BusinessException(NotificationErrorCodes.StateConflict);
 
 		now = now.ToUniversalTime();
 		using var unit = units.Begin(requiresNew: true, isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted);
 		await writeLock.AcquireAsync(["notification-due-scan"], cancellationToken);
-		var keys = adapters.Select(x => SchedulerKey(x.SourceType)).ToArray();
+		var keys = adapters.Select(x => SchedulerKey(x.Key)).ToArray();
 		var current = await executer.ToListAsync((await cursors.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
 			Enumerable.Contains(keys, x.SchedulerKey)), cancellationToken);
 		var bySource = current.ToDictionary(x => x.SchedulerKey, StringComparer.Ordinal);
-		var available = adapters.Select(x => (Source: x, Cursor: bySource.GetValueOrDefault(SchedulerKey(x.SourceType))))
+		var available = adapters.Select(x => (x.Source, Key: SchedulerKey(x.Key), Cursor: bySource.GetValueOrDefault(SchedulerKey(x.Key))))
 			.Where(x => x.Cursor == null || x.Cursor.NextScanAt <= now)
-			.OrderBy(x => x.Cursor?.NextScanAt).ThenBy(x => x.Source.SourceType, StringComparer.Ordinal).Take(2).ToArray();
+			.OrderBy(x => x.Cursor?.NextScanAt).ThenBy(x => x.Key, StringComparer.Ordinal).Take(2).ToArray();
 		if (available.Length == 0)
 		{
 			await unit.CompleteAsync(cancellationToken);
 			return new(0, 0, 0, false);
 		}
 
-		var (source, cursor) = available[0];
+		var (source, key, cursor) = available[0];
 		var previous = ReadContinuation(cursor, now);
 		var startedAt = previous?.CycleStartedAt ?? now;
 		var page = await source.ReadPageAsync(new(tenantId, startedAt, now, previous?.Key, batchSize), cancellationToken);
@@ -63,14 +68,14 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 			(page.Continuation != null && (!ValidContinuation(page.Continuation) || page.Continuation == previous?.Key)))
 			throw new BusinessException(NotificationErrorCodes.StateConflict);
 
-		var created = await CapturePageAsync(source.SourceType, page.Candidates, now, cancellationToken);
+		var created = await CapturePageAsync(source, page.Candidates, now, cancellationToken);
 		var hasNextPage = page.Continuation != null;
 		var snapshot = NotificationRuntimeJson.Serialize(new CursorState(1, hasNextPage ? startedAt : null, page.Continuation),
 			NotificationErrorCodes.StateConflict);
 		var nextScan = now.AddSeconds(hasNextPage ? 30 : 60);
 		if (cursor == null)
 		{
-			cursor = new NotificationScheduleCursor(guids.Create(), tenantId, SchedulerKey(source.SourceType), now);
+			cursor = new NotificationScheduleCursor(guids.Create(), tenantId, key, now);
 			cursor.Advance(snapshot, nextScan);
 			await cursors.InsertAsync(cursor, cancellationToken: cancellationToken);
 		}
@@ -83,11 +88,13 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 		return new(page.Candidates.Count, created, page.Candidates.Count - created, hasNextPage || available.Length > 1);
 	}
 
-	private async Task<int> CapturePageAsync(string sourceType, IReadOnlyList<NotificationDueSourceCandidate> candidates,
+	private async Task<int> CapturePageAsync(INotificationDueSource source, IReadOnlyList<NotificationDueSourceCandidate> candidates,
 		DateTimeOffset now, CancellationToken cancellationToken)
 	{
-		var dueDefinitions = definitions.SelectMany(x => x.GetAll()).Where(x => x.SourceType == sourceType &&
-			x.TriggerType == NotificationTriggerType.Due).ToDictionary(x => x.EventKey, StringComparer.Ordinal);
+		var events = source.ScheduledEventKeys ?? [];
+		var dueDefinitions = definitions.SelectMany(x => x.GetAll()).Where(x => x.SourceType == source.SourceType &&
+			x.TriggerType == NotificationTriggerType.Due && (events.Count == 0 || events.Contains(x.EventKey)))
+			.ToDictionary(x => x.EventKey, StringComparer.Ordinal);
 		var resolved = new Dictionary<(string, NotificationRuleScope), ScanRule?>();
 		var workingDays = new Dictionary<(NotificationRuleScope, DateOnly), NotificationWorkingDays?>();
 		Task<TimeZoneInfo>? schoolTimeZone = null;
@@ -124,7 +131,7 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 			if (!dueAt.HasValue || dueAt > now) continue;
 			try
 			{
-				var result = await writer.WriteWithOutcomeAsync(new(candidate.EventKey, sourceType, candidate.SourceId,
+				var result = await writer.WriteWithOutcomeAsync(new(candidate.EventKey, source.SourceType, candidate.SourceId,
 					candidate.SourceRevision, now, [], DueAt: dueAt, ExpiresAt: candidate.ExpiresAt,
 					DueOccurrence: new(inputScope, candidate.OccurrenceAt, rule.Id, rule.Revision)), cancellationToken);
 				if (result.Created) created++;

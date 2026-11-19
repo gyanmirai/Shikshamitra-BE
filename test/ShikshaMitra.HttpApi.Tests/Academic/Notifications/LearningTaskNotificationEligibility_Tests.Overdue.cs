@@ -34,7 +34,6 @@ public partial class LearningTaskNotificationEligibility_Tests
 		});
 		var seed = await SeedAsync(division);
 		var eventKey = isAssignment ? AcademicNotificationEventKeys.AssignmentOverdue : AcademicNotificationEventKeys.HomeworkOverdue;
-		var sourceType = isAssignment ? AssignmentSource : SourceType;
 		var start = DateTimeOffset.UtcNow;
 		var deadline = new DateTimeOffset(start.UtcDateTime.Date.AddHours(start.Hour)).AddHours(-2);
 		var sourceId = seed.TaskId;
@@ -109,7 +108,7 @@ public partial class LearningTaskNotificationEligibility_Tests
 
 		await InSchoolAsync(async services =>
 		{
-			var scanner = services.GetServices<INotificationDueSource>().Single(x => x.SourceType == sourceType);
+			var scanner = services.GetServices<INotificationDueSource>().Single(x => x.ScheduledEventKeys.Contains(eventKey));
 			var page = await scanner.ReadPageAsync(new(TenantId, start, start, null, 100), CancellationToken.None);
 			var occurrence = page.Candidates.SingleOrDefault(x => x.EventKey == eventKey && x.SourceId == sourceId);
 			occurrence.ShouldNotBeNull();

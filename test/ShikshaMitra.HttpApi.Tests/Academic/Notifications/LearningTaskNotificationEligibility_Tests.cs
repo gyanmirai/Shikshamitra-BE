@@ -109,7 +109,7 @@ public partial class LearningTaskNotificationEligibility_Tests(ShikshaMitraApiTe
 
 		await InSchoolAsync(async services =>
 		{
-			var source = services.GetServices<INotificationDueSource>().SingleOrDefault(x => x.SourceType == SourceType);
+			var source = services.GetServices<INotificationDueSource>().SingleOrDefault(x => x.ScheduledEventKeys.Contains(EventKey));
 			source.ShouldNotBeNull();
 			var now = DateTimeOffset.UtcNow;
 			var request = new NotificationDueScanRequest(TenantId, now, now, null, 1);

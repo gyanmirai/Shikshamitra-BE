@@ -14,18 +14,25 @@ public sealed class AcademicNotificationCatalogue : INotificationEventDefinition
 	private static readonly IReadOnlyDictionary<string, NotificationEventDefinition> ByKey =
 		Definitions.ToDictionary(x => x.EventKey, StringComparer.Ordinal);
 	private readonly HashSet<string> _supportedEvents;
-	private readonly HashSet<string> _dueSources;
+	private readonly HashSet<(string SourceType, string EventKey)> _scheduledEvents;
 
 	public AcademicNotificationCatalogue(IEnumerable<INotificationSourceAdapter> adapters,
 		IEnumerable<INotificationDueSource>? dueSources = null)
 	{
 		_supportedEvents = adapters.SelectMany(x => x.EventKeys).ToHashSet(StringComparer.Ordinal);
-		_dueSources = (dueSources ?? []).Select(x => x.SourceType).ToHashSet(StringComparer.Ordinal);
+		_scheduledEvents = (dueSources ?? []).SelectMany(source =>
+		{
+			var keys = source.ScheduledEventKeys ?? [];
+			return Definitions.Where(x => x.SourceType == source.SourceType && x.TriggerType == NotificationTriggerType.Due &&
+				(keys.Count == 0 || keys.Contains(x.EventKey))).Select(x => (x.SourceType, x.EventKey));
+		}).ToHashSet();
 	}
 
 	public IReadOnlyList<NotificationEventDefinition> GetAll() => Definitions;
 
-	public NotificationEventDefinition Get(string eventKey) => eventKey != null && ByKey.TryGetValue(eventKey, out var definition)
+	public NotificationEventDefinition Get(string eventKey) => GetDefinition(eventKey);
+
+	internal static NotificationEventDefinition GetDefinition(string eventKey) => eventKey != null && ByKey.TryGetValue(eventKey, out var definition)
 		? definition
 		: throw new BusinessException(NotificationErrorCodes.EventUnknown);
 
@@ -33,7 +40,7 @@ public sealed class AcademicNotificationCatalogue : INotificationEventDefinition
 	{
 		var definition = Get(eventKey);
 		return _supportedEvents.Contains(eventKey) &&
-			(definition.TriggerType != NotificationTriggerType.Due || _dueSources.Contains(definition.SourceType))
+			(definition.TriggerType != NotificationTriggerType.Due || _scheduledEvents.Contains((definition.SourceType, eventKey)))
 			? new(true, null)
 			: new(false, NotificationErrorCodes.SourceUnavailable);
 	}

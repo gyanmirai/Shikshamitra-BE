@@ -91,7 +91,7 @@ public partial class LearningTaskNotificationEligibility_Tests
 		var scanAt = deadline.AddMinutes(-20);
 		await InSchoolAsync(async services =>
 		{
-			var dueSource = services.GetServices<INotificationDueSource>().SingleOrDefault(x => x.SourceType == AssignmentSource);
+			var dueSource = services.GetServices<INotificationDueSource>().SingleOrDefault(x => x.ScheduledEventKeys.Contains(AssignmentDue));
 			dueSource.ShouldNotBeNull();
 			var page = await dueSource.ReadPageAsync(new(TenantId, scanAt, scanAt, null, 100), CancellationToken.None);
 			page.Candidates.ShouldNotContain(x => x.SourceId == futureId || x.SourceId == draftId);

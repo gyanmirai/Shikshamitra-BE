@@ -27,6 +27,7 @@ public sealed class AssignmentNotificationSourceAuthorizer(IRepository<Assignmen
 	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[]
 	{
 		LearningTaskReminderSourceAdapter.AssignmentEventKey, AcademicNotificationEventKeys.AssignmentOverdue,
+		AcademicNotificationEventKeys.AssignmentSubmitted,
 		AssignmentPublicationSourceAdapter.EventKey,
 		LearningTaskFeedbackReleaseSourceAdapter.AssignmentEventKey
 	});

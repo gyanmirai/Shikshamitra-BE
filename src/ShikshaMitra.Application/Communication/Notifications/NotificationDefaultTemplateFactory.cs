@@ -16,10 +16,14 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 		var action = definition.EventKey.Split('.')[^1];
 		var title = Words().Replace(action, "$1 $2");
 		var subject = definition.Category + ": " + title;
-		var message = recipientKind == "AssignedTeacher" &&
-			definition.EventKey is (AcademicNotificationEventKeys.HomeworkOverdue or AcademicNotificationEventKeys.AssignmentOverdue)
-			? "{{task_title}} had {{missing_submission_count}} missing submissions when this summary was prepared."
-			: subject + ".";
+		var message = (recipientKind, definition.EventKey) switch
+		{
+			("AssignedTeacher", AcademicNotificationEventKeys.HomeworkOverdue or AcademicNotificationEventKeys.AssignmentOverdue) =>
+				"{{task_title}} had {{missing_submission_count}} missing submissions when this summary was prepared.",
+			("AssignedTeacher", AcademicNotificationEventKeys.HomeworkSubmitted or AcademicNotificationEventKeys.AssignmentSubmitted) =>
+				"Submissions recorded for {{task_title}} during this digest window: {{submitted_count}}.",
+			_ => subject + "."
+		};
 		var body = channel == CommunicationChannelType.WebPush ? "An academic update is available. Open the school website for details." :
 			$"Hello {{{{recipient_name}}}},\n{message}\nView details: {{{{source_link}}}}\n{{{{school_name}}}}";
 		if (channel == CommunicationChannelType.Email)

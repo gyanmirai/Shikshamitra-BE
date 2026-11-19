@@ -15,7 +15,7 @@ internal static partial class AcademicNotificationDefinitions
 		Event(HomeworkWithdrawn, Family, Important),
 		Event(HomeworkDue, Family, Routine, Due),
 		Event(HomeworkOverdue, $"{Family},{Teacher}", Routine, Due),
-		Event(HomeworkSubmitted, Teacher, Digest),
+		Event(HomeworkSubmitted, Teacher, Digest, Due),
 		Event(HomeworkRevisionRequested, Family),
 		Event(HomeworkFeedbackReleased, Family, Private),
 		Event(AssignmentPublished, $"{Family},{Teacher}"),
@@ -23,7 +23,7 @@ internal static partial class AcademicNotificationDefinitions
 		Event(AssignmentWithdrawn, Family, Important),
 		Event(AssignmentDue, Family, Routine, Due),
 		Event(AssignmentOverdue, $"{Family},{Teacher}", Routine, Due),
-		Event(AssignmentSubmitted, Teacher, Digest),
+		Event(AssignmentSubmitted, Teacher, Digest, Due),
 		Event(AssignmentRevisionRequested, Family),
 		Event(AssignmentFeedbackReleased, Family, Private),
 		Event(EvaluationGradingDue, $"{Teacher},{Reviewer}", StaffOnly, Due)

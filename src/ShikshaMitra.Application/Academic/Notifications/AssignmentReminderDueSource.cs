@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +17,10 @@ public sealed class AssignmentReminderDueSource(IRepository<AssignmentEntity, Gu
 	ICurrentTenant tenant) : INotificationDueSource, ITransientDependency
 {
 	public string SourceType => LearningTaskReminderSourceAdapter.AssignmentSourceType;
+	public IReadOnlyCollection<string> ScheduledEventKeys { get; } = Array.AsReadOnly(new[]
+	{
+		AcademicNotificationEventKeys.AssignmentDue, AcademicNotificationEventKeys.AssignmentOverdue
+	});
 
 	public async Task<NotificationDueSourcePage> ReadPageAsync(NotificationDueScanRequest request, CancellationToken cancellationToken)
 	{

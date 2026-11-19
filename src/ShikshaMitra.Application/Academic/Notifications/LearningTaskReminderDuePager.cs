@@ -77,7 +77,7 @@ public sealed class LearningTaskReminderDuePager(IRepository<Standard, Guid> sta
 		return new(candidates, next);
 	}
 
-	private static (Guid SourceId, Guid DivisionId) ReadCursor(string cursor)
+	internal static (Guid SourceId, Guid DivisionId) ReadCursor(string cursor)
 	{
 		if (cursor.Length != 65 || cursor[32] != ':' ||
 			!Guid.TryParseExact(cursor.AsSpan(0, 32), "N", out var task) || task == Guid.Empty ||

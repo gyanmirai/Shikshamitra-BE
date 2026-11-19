@@ -2,6 +2,16 @@ namespace ShikshaMitra.Finance.Reports;
 
 public static class FinanceReportTypes
 {
+    public const string FeeDemandSummary = "Fee demand and collection summary";
+    public const string OutstandingFees = "Outstanding fees and ageing";
+    public const string StudentStatement = "Student fee statement";
+    public const string DailyCollections = "Daily collection register";
+    public const string ReceiptRegister = "Receipt register and corrections";
+    public const string PaymentVerification = "Payment verification and clearing ageing";
+
+    public static readonly string[] PhaseOne =
+        [FeeDemandSummary, OutstandingFees, StudentStatement, DailyCollections, ReceiptRegister, PaymentVerification];
+
     public const string FeeCollectionBatchAndMonthwise = "Fee Collection Batch And Monthwise";
     public const string FeeCollectionBatchwise = "Fee Collection Batchwise";
     public const string FeeCollectionMonthAndFeeHeadwise = "Fee Collection Month And FeeHeadwise";

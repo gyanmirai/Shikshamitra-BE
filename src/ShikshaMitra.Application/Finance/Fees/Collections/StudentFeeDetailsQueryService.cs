@@ -88,6 +88,7 @@ public partial class StudentFeeDetailsQueryService(
 		var feeSummary = new FeeSummaryDto();
 		var allowOnlineCollection = true;
 		CollectionPolicy? allocationPolicy = null;
+		IReadOnlyList<Guid> feeHeadOrder = [];
 
 		if (feeStructureAssignment != null)
 		{
@@ -105,6 +106,9 @@ public partial class StudentFeeDetailsQueryService(
 			var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
 			var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
 			var feeHeadNameMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
+			var assignmentHeads = ReadLedgerAssignmentHeads(feeStructureAssignment.AssignmentSnapshotJson);
+			var paymentTermNames = await GetLedgerPaymentTermNamesAsync(
+				dueFees, academicYearId, assignmentHeads, cancellationToken);
 			var prorationVersionIds = dueFees.Where(d => d.ProrationPolicyVersionId.HasValue)
 				.Select(d => d.ProrationPolicyVersionId!.Value).Distinct().ToList();
 			var prorationVersions = (await financePolicyVersionRepository.GetListAsync(v =>
@@ -130,6 +134,9 @@ public partial class StudentFeeDetailsQueryService(
 				studentId, feeStructureAssignment.FeeStructureStandardId);
 			allowOnlineCollection = effectiveRules.Policy?.AllowOnlineCollection ?? true;
 			allocationPolicy = effectiveRules.Policy;
+			if (allocationPolicy?.AllocationBasis == CollectionAllocationBasis.FeeHead)
+				feeHeadOrder = await GetLedgerFeeHeadOrderAsync(
+					feeStructureAssignment.FeeStructureStandardId, cancellationToken);
 
 			var lateFeeBalances = await lateFeeBalanceService.GetBalancesAsync(dueFees, academicYearId, today);
 
@@ -177,6 +184,7 @@ public partial class StudentFeeDetailsQueryService(
 							DueFeeId = d.Id,
 							FeeHeadId = d.FeeHeadId,
 							FeeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty),
+							PaymentTermName = paymentTermNames.GetValueOrDefault(d.Id),
 							InstallmentLabel = d.GetDisplayInstallmentLabel(),
 							InstallmentId = d.PaymentTermInstallmentId,
 							DueDate = d.ScheduleDueDate ?? d.DueDate,
@@ -317,7 +325,7 @@ public partial class StudentFeeDetailsQueryService(
 			Ledger = ledger,
 			Charges = chargeDtos,
 			AllowOnlineCollection = allowOnlineCollection,
-		}, allocationPolicy);
+		}, allocationPolicy, feeHeadOrder);
 	}
 
 	private async Task<Dictionary<Guid, (double Amount, string Description)>> GetRefundsByDueFeeAsync(Guid studentId)

@@ -68,12 +68,12 @@ public partial class FeeCollectionSummaryQueryService
 		var allAccountQuery = await BuildFilteredFeeAccountQueryAsync(input, studentQuery.Select(s => s.Id));
 		var accountQuery = allAccountQuery;
 		if (pageAccountIds is not null)
-			accountQuery = accountQuery.Where(a => pageAccountIds.Contains(a.Id));
+			accountQuery = accountQuery.Where(a => Enumerable.Contains(pageAccountIds, a.Id));
 		var accounts = await AsyncExecuter.ToListAsync(accountQuery, cancellationToken);
 		if (pageStudentIds is not null)
 		{
 			var linkedIds = accounts.Where(a => a.StudentId.HasValue).Select(a => a.StudentId!.Value).ToArray();
-			studentQuery = studentQuery.Where(s => pageStudentIds.Contains(s.Id) || linkedIds.Contains(s.Id));
+			studentQuery = studentQuery.Where(s => Enumerable.Contains(pageStudentIds, s.Id) || Enumerable.Contains(linkedIds, s.Id));
 		}
 		var students = await AsyncExecuter.ToListAsync(studentQuery.Select(s => new
 		{
@@ -88,7 +88,7 @@ public partial class FeeCollectionSummaryQueryService
 		var historicalPlacements = await AsyncExecuter.ToListAsync(
 			(await LazyServiceProvider.LazyGetRequiredService<IRepository<StudentEnrollment, Guid>>()
 				.GetQueryableAsync()).Where(enrollment => enrollment.AcademicYearId == input.AcademicYearId &&
-					historicalIds.Contains(enrollment.StudentId))
+					Enumerable.Contains(historicalIds, enrollment.StudentId))
 				.Select(enrollment => new { enrollment.StudentId, enrollment.StandardId,
 					enrollment.DivisionId, enrollment.RollNumber }), cancellationToken);
 		var placementMap = historicalPlacements.GroupBy(p => p.StudentId)
@@ -96,7 +96,7 @@ public partial class FeeCollectionSummaryQueryService
 		var assignedHistoricalIds = await AsyncExecuter.ToListAsync(
 			(await LazyServiceProvider.LazyGetRequiredService<IRepository<StudentFeeStructure, Guid>>()
 				.GetQueryableAsync()).Where(assignment => assignment.AcademicYearId == input.AcademicYearId &&
-					historicalIds.Contains(assignment.StudentId)).Select(assignment => assignment.StudentId),
+					Enumerable.Contains(historicalIds, assignment.StudentId)).Select(assignment => assignment.StudentId),
 			cancellationToken);
 		var assignedHistoricalSet = assignedHistoricalIds.ToHashSet();
 		var standardIds = accounts.Select(a => a.StandardId)
@@ -112,7 +112,7 @@ public partial class FeeCollectionSummaryQueryService
 		var linkedStudentIds = accounts.Where(a => a.StudentId.HasValue).Select(a => a.StudentId!.Value).Distinct().ToArray();
 		var accountCounts = pageAccountIds is null ? accounts.Select(a => a.StudentId).ToList()
 			: await AsyncExecuter.ToListAsync(allAccountQuery
-				.Where(a => a.StudentId.HasValue && linkedStudentIds.Contains(a.StudentId.Value))
+				.Where(a => a.StudentId.HasValue && Enumerable.Contains(linkedStudentIds, a.StudentId.Value))
 				.Select(a => a.StudentId), cancellationToken);
 		var singleAccountStudents = accountCounts.Where(id => id.HasValue).GroupBy(id => id!.Value)
 			.Where(g => g.Count() == 1).Select(g => g.Key).ToHashSet();
@@ -201,9 +201,9 @@ public partial class FeeCollectionSummaryQueryService
 		foreach (var item in charges)
 		{
 			if (!rowsByPayer.TryGetValue(FinanceReportPayerKey.From(item.Key, null), out var row)) continue;
-			row.TotalCharges += item.Value.TotalCharges;
+			row.TotalCharges += (double)item.Value.TotalCharges;
 			row.PaidCharges += item.Value.PaidCharges;
-			row.PendingCharges += item.Value.PendingCharges;
+			row.PendingCharges += (double)item.Value.PendingCharges;
 		}
 		var concessions = await AsyncExecuter.ToListAsync((await concessionRequestRepository.GetQueryableAsync())
 			.Where(c => studentIds.Contains(c.StudentId) && c.AcademicYearId == input.AcademicYearId &&
@@ -221,7 +221,8 @@ public partial class FeeCollectionSummaryQueryService
 	private async Task<Dictionary<Guid, StudentChargeAggregate>> BuildChargeAggregatesByStudentAsync(
 		List<Guid> studentIds,
 		Guid academicYearId,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+		(DateTime StartUtc, DateTime EndUtc)? duePeriod = null)
 	{
 		var result = studentIds.ToDictionary(id => id, _ => StudentChargeAggregate.Empty);
 
@@ -234,8 +235,12 @@ public partial class FeeCollectionSummaryQueryService
 				.Where(c => studentIds.Contains(c.StudentId)
 						 && c.AcademicYearId == academicYearId
 						 && c.Status == ChargeStatus.Approved)
-				.Select(c => new { c.Id, c.StudentId, Amount = (double)c.Amount }),
+				.Select(c => new { c.Id, c.StudentId, c.Amount, c.DueDate }),
 			cancellationToken);
+
+		if (duePeriod is { } period)
+			approvedCharges.RemoveAll(charge =>
+				charge.DueDate.UtcDateTime < period.StartUtc || charge.DueDate.UtcDateTime >= period.EndUtc);
 
 		if (approvedCharges.Count == 0)
 			return result;
@@ -257,20 +262,20 @@ public partial class FeeCollectionSummaryQueryService
 			.ToDictionary(g => g.Key, g => g.Sum(x => Convert.ToDecimal(x.Amount)));
 		var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
 			.GroupBy(x => x.ChargeId)
-			.ToDictionary(x => x.Key, x => x.Sum(w => (double)w.EffectiveAmount));
+			.ToDictionary(x => x.Key, x => x.Sum(w => w.EffectiveAmount));
 
 		foreach (var group in approvedCharges.GroupBy(c => c.StudentId))
 		{
-			var total   = 0d;
+			var total   = 0m;
 			var paid = 0m;
-			var pending = 0d;
+			var pending = 0m;
 			foreach (var charge in group)
 			{
-				var netAmount = Math.Max(0d, charge.Amount - waivedPerCharge.GetValueOrDefault(charge.Id, 0d));
+				var netAmount = Math.Max(0m, charge.Amount - waivedPerCharge.GetValueOrDefault(charge.Id));
 				var collected = paidDict.GetValueOrDefault(charge.Id, 0m);
 				total += netAmount;
 				paid += collected;
-				pending += Math.Max(0d, netAmount - (double)collected);
+				pending += Math.Max(0m, netAmount - collected);
 			}
 			result[group.Key] = new StudentChargeAggregate(total, paid, pending);
 		}

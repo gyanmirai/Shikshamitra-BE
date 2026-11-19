@@ -18,7 +18,7 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 public partial class StudentFeeStructureAppService
 {
-	private const string PaymentEditBlocker = "A payment has been recorded for this student and year, including reversed or refunded payments. Only assigned policies can be edited; use the existing financial correction workflows for amounts.";
+	private const string PaymentEditBlocker = "A payment has been recorded for this student and year, including reversed or refunded payments. Use the optional service cancellation or the existing financial correction workflows where applicable.";
 	private const string DownstreamEditBlocker = "A concession, adjustment, waiver, withdrawal or late-fee assessment already uses these obligations. Review that financial workflow before correcting the assignment.";
 	private const string EvidenceEditBlocker = "The saved assignment and its obligations need reconciliation before the structure can be corrected.";
 	private const string InactiveEditBlocker = "Activate the student's enrollment for this year before correcting the structure.";
@@ -126,11 +126,12 @@ public partial class StudentFeeStructureAppService
 		var assignment = await RequireCorrectionTargetAsync(input);
 		var enrollment = await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, true);
 		var facts = await ReadAssignmentAdmissionAsync(input.StudentId, input.AcademicYearId, enrollment.StandardId);
+		var previous = SavedAssignment(assignment) ?? throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
 		PreparedAssignment prepared;
 		if (!assignment.FinanceFeeAccountId.HasValue)
 		{
 			if (facts != null) throw new BusinessException(AssignmentErrorCodes.SourceUnavailable);
-			prepared = await PrepareForContextAsync(input, null, isCorrection: true);
+			prepared = await PrepareForContextAsync(input, null, previous);
 		}
 		else
 		{
@@ -140,7 +141,7 @@ public partial class StudentFeeStructureAppService
 				throw new BusinessException(AssignmentErrorCodes.StructureEditBlocked, PaymentEditBlocker);
 			var proration = await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Policies.AdmissionProrationPolicyResolver>().ResolveAsync(input.AcademicYearId);
 			prepared = await PrepareForContextAsync(input, new(facts.Account.Id, input.StudentId, enrollment.StandardId!.Value,
-				facts.Offering.BoardId, facts.Offering.MediumId, null, facts.Revision, facts.JoiningDate, proration, facts.Application.Id, IsFinanceAssignment: true), isCorrection: true);
+				facts.Offering.BoardId, facts.Offering.MediumId, null, facts.Revision, facts.JoiningDate, proration, facts.Application.Id, IsFinanceAssignment: true), previous);
 			prepared.Preview.EnrollmentId = enrollment.Id;
 			prepared = prepared with { Account = facts.Account };
 		}

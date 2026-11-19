@@ -213,7 +213,7 @@ public partial class ConcessionRequestAppService
 				"Concession request is outside your Finance scope.");
 	}
 
-	private async Task<IQueryable<Guid>> GetVisibleConcessionRequestIdsAsync(Guid academicYearId)
+	internal async Task<IQueryable<Guid>> GetVisibleConcessionRequestIdsAsync(Guid academicYearId)
 	{
 		var own = await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
 			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View);
@@ -236,7 +236,7 @@ public partial class ConcessionRequestAppService
 		return requests.Where(r => r.AcademicYearId == academicYearId &&
 			(own.Contains(r.StudentId) ||
 				(review.Contains(r.StudentId) && r.CreatorId.HasValue &&
-					(reportees.Contains(r.CreatorId.Value) || familyMakers.Contains(r.CreatorId.Value)))))
+					(Enumerable.Contains(reportees, r.CreatorId.Value) || familyMakers.Contains(r.CreatorId.Value)))))
 			.Select(r => r.Id);
 	}
 

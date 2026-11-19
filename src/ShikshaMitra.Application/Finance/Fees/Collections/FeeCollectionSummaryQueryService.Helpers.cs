@@ -210,9 +210,9 @@ public partial class FeeCollectionSummaryQueryService
 		return query;
 	}
 
-	private readonly record struct StudentChargeAggregate(double TotalCharges, decimal PaidCharges, double PendingCharges)
+	private readonly record struct StudentChargeAggregate(decimal TotalCharges, decimal PaidCharges, decimal PendingCharges)
 	{
-		public static StudentChargeAggregate Empty => new(0d, 0m, 0d);
+		public static StudentChargeAggregate Empty => new(0m, 0m, 0m);
 	}
 
 	private sealed class FeeCollectionRawRow

@@ -3,7 +3,7 @@ module: finance
 domain: admin-request-auto-approval
 content_type: Reference
 status: active
-updated_on: 2026-10-07
+updated_on: 2026-11-18
 owner: finance-product-and-engineering
 audience: humans-and-agents
 ---
@@ -12,9 +12,9 @@ audience: humans-and-agents
 
 ## Decision and scope
 
-When a tenant administrator creates and submits a **new** refund, charge, or concession request, the successful response must already report `Approved`. The record must not be committed in `Pending`/`Submitted` and then require a second browser action. Non-admin callers keep the existing maker/checker workflow. Draft saves, edits, replacements, cancellation, reversal, rejection, payout, and requests submitted by someone other than their creator retain their existing rules unless explicitly noted below.
+When a tenant administrator creates and submits a **new** refund, charge, concession, or staff fee adjustment request, the successful response returns the final approval or application state in the same command. Non-admin callers keep the existing maker/checker workflow. Draft saves, edits, replacements, cancellation, reversal, rejection, payout, and requests submitted by someone other than their creator retain their existing rules unless explicitly noted below.
 
-This is an intentional exception to the [Finance Engineering Constitution](./constitution.md) maker/checker rule. Product reason: an administrator performing the creation is the final decision-maker for these three request types. Risk: a single actor can create an incorrect financial obligation, concession, or refund reservation. Compensating controls: require the existing create/submit **and approve** action permissions, verify administrator membership from the server's configured role store, retain all scope/policy/amount checks, write distinct creation and automatic-approval audit evidence, use one transactional command, and retain normal correction flows. Owner: Finance product and engineering. Review by **2027-01-07**; remove or renew the exception based on audit findings.
+This is an intentional exception to the [Finance Engineering Constitution](./constitution.md) maker/checker rule. The administrator who creates the request is the final decision-maker. A single actor could create an incorrect financial obligation, concession, refund reservation, or adjustment. The command requires the existing create/submit and approve permissions, verifies administrator membership on the server, checks scope and amounts, and records separate creation and automatic-approval audit evidence in one transaction. Finance product and engineering owns the exception and will review it by **2027-01-07**.
 
 `admin` and `super-admin` are the currently configured administrator roles (`UserScopeOptions.AdminRoles`). Use `IUserScopeService.IsAdminUserAsync(currentUser.GetId())` or the equivalent authoritative server role lookup. A client role claim, an `isAdmin` request field, or possession of the `Approve` permission alone does not qualify. A server-side role check supplements, rather than replaces, exact permission checks. A tenant-specific configured administrator role also qualifies through that service. The current frontend confirmation recognizes `admin` and `super-admin` session roles; deployments that configure additional admin role names must expose matching frontend eligibility before assigning those roles. No role or permission seeder change is implied.
 
@@ -25,6 +25,7 @@ This is an intentional exception to the [Finance Engineering Constitution](./con
 | New charge `CreateAsync` | Every resolved student line and batch is approved in the creation transaction | Pending student lines | Approved charge event, collection availability, account routing, audit and batch counts |
 | New concession `CreateAsync` and submission of the creator's draft `SubmitAsync` | Request approved, allocations applied to `DueFee` in the same transaction | Submitted for checker | Pinned policy/version, preview fingerprint, document checks, due-fee allocation, paid-concession evidence, optional linked refund creation, approval event |
 | New refund `CreateAsync` and submission of the creator's draft `SubmitAsync` | Request approved and source payment reservations made in the same serializable transaction | Submitted for review | Receipt/assignment/policy validation, allowed payout method, expense category and bank routing, reservation uniqueness and audit |
+| Staff adjustment `CreateAsync` | Applied or Partially Applied in the creation transaction | Pending for review | Adjustment source reservations, same-student and academic-year allocation, due balances, audit, and Approved worklist counts |
 
 Approval means authorization of a refund request, **not cash disbursement**. Recording and confirming the payout remains a separate permissioned workflow. Refunds automatically generated from concession approval are system-created linked requests and keep their current submitted/checker behavior. A replacement refund follows the new-refund rule only when an admin explicitly creates it and all replacement validations pass.
 
@@ -38,6 +39,7 @@ Approval means authorization of a refund request, **not cash disbursement**. Rec
 6. Refunds: reuse the existing `FeeRefundManager.ApproveAsync` and `StageNewReservationsAsync` path inside the serializable creation/submit transaction. Resolve policy routing and payout method before approval. If required routing is unavailable, reject the command with a clear validation error and commit nothing. Do not mark paid or create a payout settlement.
 7. Keep idempotency keys and replay receipts bound to the final approved result. Retries return the same request without repeating allocations, reservations, events, or audit entries. Concurrency and unique constraints still protect duplicate student/type or refundable source use.
 8. Scope checks, policy versions, academic year, student identity, amounts, documents, and existing limits are unchanged. Approval audit records must show the same actor as creator, the automatic-admin reason, request ID, status transition, and relevant amount/count. Do not put payment details or full bank numbers in logs.
+9. Staff adjustments require `View`, `Add`, and `Approve` for administrator creation. The server selects the oldest outstanding destination installments in the student's academic year, excluding selected sources. Unpaid transfers can increase the receiving installment. Paid credit is capped at each destination's outstanding balance. Any unapplied credit remains reserved for an independent reviewer. When there is no eligible destination, creation rolls back. Existing saved requests and family submissions follow their current review flow.
 
 ## Permission and failure matrix
 
@@ -52,7 +54,7 @@ For a failed validation, permission, preview, transaction, or reservation check,
 
 ## Acceptance evidence
 
-- HTTP/application tests for all three admin create paths and the draft-submit paths: final status, actor, audit, allocations/line counts/reservations, and normal downstream events.
+- HTTP/application tests for the admin create and draft-submit paths cover final status, actor, audit, allocations, reservations, and downstream events.
 - Equivalent non-admin paths remain pending/submitted, including a non-admin granted `Approve` and a same-maker explicit approval denial.
 - Configured admin without `Approve`, cross-tenant or out-of-scope student, stale concession fingerprint, invalid refund routing, duplicate command/retry, and concurrent refund/charge requests fail or replay without partial effects.
 - Reports, list counts, and collection views use the committed approved state. Payout is still pending after an approved refund request.

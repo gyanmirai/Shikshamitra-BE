@@ -11,6 +11,7 @@ public class CollectionPolicyConfiguration : IEntityTypeConfiguration<Collection
 	public void Configure(EntityTypeBuilder<CollectionPolicy> builder)
 	{
 		builder.ToTable("Finance_CollectionPolicies", ShikshaMitraConsts.DbSchema);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory>().WithMany().HasForeignKey(x=>x.LateFeeIncomeCategoryId).OnDelete(DeleteBehavior.Restrict);
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.AcademicYearId).IsRequired();
@@ -18,7 +19,6 @@ public class CollectionPolicyConfiguration : IEntityTypeConfiguration<Collection
 		builder.Property(x => x.PolicyCode).IsRequired().HasMaxLength(32);
 		builder.Property(x => x.Description).HasMaxLength(500);
 		builder.Property(x => x.Status).IsRequired().HasConversion<int>();
-		builder.Property(x => x.GracePeriodType).IsRequired().HasConversion<int>();
 		builder.Property(x => x.LateFeeType).IsRequired().HasConversion<int>();
 		builder.Property(x => x.PercentageBase).IsRequired().HasConversion<int>();
 		builder.Property(x => x.CompoundFrequency).IsRequired().HasConversion<int>();
@@ -48,7 +48,11 @@ public class CollectionPolicyConfiguration : IEntityTypeConfiguration<Collection
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsDefault })
 			.IsUnique()
-			.HasFilter("\"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true")
+			.HasFilter("\"IsDeleted\" = false AND \"Status\" = 0 AND \"IsDefault\" = true")
 			.HasDatabaseName("IX_Finance_CollectionPolicies_Tenant_AcademicYear_Default");
+		// PostgreSQL composite uniqueness treats null TenantId values as distinct.
+		builder.HasIndex(x => x.AcademicYearId).IsUnique()
+			.HasFilter("\"TenantId\" IS NULL AND \"IsDeleted\" = false AND \"Status\" = 0 AND \"IsDefault\" = true")
+			.HasDatabaseName("IX_Finance_CollectionPolicies_Host_ActiveDefault");
 	}
 }

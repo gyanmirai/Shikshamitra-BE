@@ -49,7 +49,7 @@ public class PayrollIneligibleRowCleaner(
 		if (cleanupEmployeeIds.Count == 0)
 		{
 			logger.LogInformation(
-				"Skipped payroll ineligible-row cleanup for {MonthYear}: {IneligibleEmployeeCount} ineligible employees all have locked snapshots.",
+				"Skipped payroll ineligible-row cleanup for {MonthYear}: {IneligibleEmployeeCount} ineligible staff all have locked snapshots.",
 				monthYear,
 				ineligibleEmployeeIds.Count);
 			return;
@@ -86,7 +86,7 @@ public class PayrollIneligibleRowCleaner(
 
 		await unitOfWorkManager.Current!.SaveChangesAsync();
 		logger.LogInformation(
-			"Cleaned payroll rows for {MonthYear}: {IneligibleEmployeeCount} ineligible employees, {DeletedSnapshotCount} snapshots, {DeletedReviewCount} reviews, {DeletedAdjustmentCount} adjustments deleted.",
+			"Cleaned payroll rows for {MonthYear}: {IneligibleEmployeeCount} ineligible staff, {DeletedSnapshotCount} snapshots, {DeletedReviewCount} reviews, {DeletedAdjustmentCount} adjustments deleted.",
 			monthYear,
 			ineligibleEmployeeIds.Count,
 			deletedSnapshotCount,

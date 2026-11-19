@@ -16,6 +16,9 @@ public static class AccountSettingConsts
 {
 	public const int MaxCodeLength = 32;
 	public const int MaxNameLength = 128;
+	public const int MaxIncomeCategoryNameLength = 40;
+	public const int MaxBankNameLength = 100;
+	public const int MaxBankPurposeLength = 500;
 	public const int MaxDescriptionLength = 1000;
 	public const int MaxDeactivationReasonLength = 500;
 	public const int MaxCurrencyCodeLength = 3;

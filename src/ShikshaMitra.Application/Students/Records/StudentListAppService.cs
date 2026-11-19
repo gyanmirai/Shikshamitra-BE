@@ -3,16 +3,22 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
+using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
@@ -21,25 +27,65 @@ using DocumentTypeEntity = ShikshaMitra.Students.StudentEnrollments.Settings.Doc
 namespace ShikshaMitra.Students.Records;
 
 [RemoteService(false)]
-public class StudentListAppService(
-	IStudentRepository studentRepository,
-	IRepository<AttendanceEntry, Guid> attendanceEntryRepository,
-	IAttendanceDayRepository attendanceDayRepository,
-	IRepository<StudentDocument, Guid> studentDocumentRepository,
-	IRepository<DocumentTypeEntity, Guid> documentTypeRepository,
-	IRepository<global::ShikshaMitra.TenantSettings.Standards.Standard, Guid> standardRepository,
-	IRepository<global::ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisionRepository,
-	IBlobContainer blobContainer,
-	IUserScopeAccessService userScopeAccessService,
-	StudentScopeAccessService studentScopeAccessService
-) : ApplicationService, IStudentListAppService
+public class StudentListAppService : ApplicationService, IStudentListAppService
 {
+	private readonly IStudentRepository studentRepository;
+	private readonly IRepository<AttendanceEntry, Guid> attendanceEntryRepository;
+	private readonly IAttendanceDayRepository attendanceDayRepository;
+	private readonly IRepository<StudentEnrollment, Guid> enrollmentRepository;
+	private readonly IRepository<AcademicYear, Guid> academicYearRepository;
+	private readonly AttendanceReportService attendanceReports;
+	private readonly IRepository<StudentDocument, Guid> studentDocumentRepository;
+	private readonly IRepository<DocumentTypeEntity, Guid> documentTypeRepository;
+	private readonly IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository;
+	private readonly IRepository<Charge, Guid> chargeRepository;
+	private readonly IRepository<global::ShikshaMitra.TenantSettings.Standards.Standard, Guid> standardRepository;
+	private readonly IRepository<global::ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisionRepository;
+	private readonly IBlobContainer blobContainer;
+	private readonly StudentScopeAccessService studentScopeAccessService;
+
+	public StudentListAppService(
+		IStudentRepository studentRepository,
+		IRepository<AttendanceEntry, Guid> attendanceEntryRepository,
+		IAttendanceDayRepository attendanceDayRepository,
+		IRepository<StudentEnrollment, Guid> enrollmentRepository,
+		IRepository<AcademicYear, Guid> academicYearRepository,
+		AttendanceReportService attendanceReports,
+		IRepository<StudentDocument, Guid> studentDocumentRepository,
+		IRepository<DocumentTypeEntity, Guid> documentTypeRepository,
+		IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
+		IRepository<Charge, Guid> chargeRepository,
+		IRepository<global::ShikshaMitra.TenantSettings.Standards.Standard, Guid> standardRepository,
+		IRepository<global::ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisionRepository,
+		IBlobContainer blobContainer,
+		IUserScopeAccessService userScopeAccessService,
+		StudentScopeAccessService studentScopeAccessService
+	)
+	{
+		this.studentRepository = studentRepository;
+		this.attendanceEntryRepository = attendanceEntryRepository;
+		this.attendanceDayRepository = attendanceDayRepository;
+		this.enrollmentRepository = enrollmentRepository;
+		this.academicYearRepository = academicYearRepository;
+		this.attendanceReports = attendanceReports;
+		this.studentDocumentRepository = studentDocumentRepository;
+		this.documentTypeRepository = documentTypeRepository;
+		this.studentFeeStructureRepository = studentFeeStructureRepository;
+		this.chargeRepository = chargeRepository;
+		this.standardRepository = standardRepository;
+		this.divisionRepository = divisionRepository;
+		this.blobContainer = blobContainer;
+		_ = userScopeAccessService;
+		this.studentScopeAccessService = studentScopeAccessService;
+	}
+
 	public async Task<PagedResultDto<StudentDto>> GetStudentsByDivisionAsync(
 		Guid divisionId,
 		int skipCount = 0,
 		int maxResultCount = 10,
 		string? searchTerm = null)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, nameof(GetStudentsByDivisionAsync));
 
 		var studentsQuery = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())
@@ -87,6 +133,7 @@ public class StudentListAppService(
 					Gender = s.AdditionalDetail != null ? s.AdditionalDetail.Gender : null,
 					RollNo = s.RollNo,
 					GrNo = s.GrNo,
+					GrNumber = s.GrNumber,
 					Category = s.AdditionalDetail != null ? s.AdditionalDetail.Category : Category.General,
 					IsLibraryMember = s.AdditionalDetail != null && s.AdditionalDetail.IsLibraryMember == true,
 					IsTransportMember = s.AdditionalDetail != null && s.AdditionalDetail.IsTransportMember == true,
@@ -138,7 +185,10 @@ public class StudentListAppService(
 
 	public async Task<StudentPhotoUploadResultDto> UploadPhotoAsync(Guid studentId, UploadStudentPhotoDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add);
 		var student = await studentScopeAccessService.GetStudentAsync(studentId, nameof(UploadPhotoAsync));
+		if (student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left)
+			await LazyServiceProvider.LazyGetRequiredService<StudentRecordWriteGuard>().EnsureAsync(studentId, nameof(UploadPhotoAsync));
 
 		FileValidationService.ValidateProfilePictureUpload(input.FileName, input.Content);
 
@@ -162,7 +212,10 @@ public class StudentListAppService(
 
 	public async Task<StudentPhotoDownloadDto?> GetPhotoAsync(Guid studentId)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		var student = await studentScopeAccessService.GetStudentAsync(studentId, nameof(GetPhotoAsync));
+		if (student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left)
+			await LazyServiceProvider.LazyGetRequiredService<StudentRecordReadGuard>().EnsureAsync(studentId, "photo");
 
 		if (string.IsNullOrWhiteSpace(student.PhotoBlobName))
 		{
@@ -183,6 +236,7 @@ public class StudentListAppService(
 
 	public async Task<StudentDashboardSummaryDto> GetDashboardSummaryAsync()
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		var query = await GetScopedEnrolledStudentsQueryAsync();
 		var total = await AsyncExecuter.CountAsync(query);
 		var male = await AsyncExecuter.CountAsync(query.Where(s =>
@@ -248,119 +302,109 @@ public class StudentListAppService(
 
 	public async Task<StudentAttendanceDashboardSummaryDto> GetAttendanceDashboardSummaryAsync(GetStudentAttendanceDashboardSummaryInput input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
+		if (!CurrentTenant.Id.HasValue) return new();
 		var (startDate, endDate) = ResolveAttendanceDateRange(input.StartDate, input.EndDate);
-		var query = await GetScopedEnrolledStudentsQueryAsync();
-		var rows = await AsyncExecuter.ToListAsync(query.Select(s => new
+		if ((endDate - startDate).TotalDays > 1096) throw new BusinessException(AttendanceOperationErrorCodes.InvalidDateRange);
+		if (input.AcademicYearId.HasValue)
+			await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(input.AcademicYearId.Value, "attendance dashboard");
+		var years = await AsyncExecuter.ToListAsync((await academicYearRepository.GetQueryableAsync()).Where(y =>
+			y.TenantId == CurrentTenant.Id && (!input.AcademicYearId.HasValue || y.Id == input.AcademicYearId) &&
+			y.StartDate <= endDate && y.EndDate >= startDate).Select(y => new { y.Id, y.StartDate, y.EndDate }));
+		var slices = new List<AttendanceDashboardSlice>();
+		var partialEnrollments = new HashSet<Guid>();
+		var scopedDays = await studentScopeAccessService.ApplyCurrentUserAttendanceDayScopeAsync(await attendanceDayRepository.GetQueryableAsync());
+		// Dated placement behavior needs enrollment history, but this read never edits it.
+		using var enrollmentTracking = enrollmentRepository.DisableTracking();
+		foreach (var year in years)
 		{
-			s.StandardId,
-			Standard = s.Standard != null ? s.Standard.Name : "Unassigned",
-			s.DivisionId,
-			Division = s.Division != null ? s.Division.Name : "Unassigned"
-		}));
-		var attendanceRows = new List<StudentAttendanceSummaryRow>();
-		if (rows.Count > 0)
-		{
-			var scopedAttendanceDays = await studentScopeAccessService.ApplyCurrentUserAttendanceDayScopeAsync(
-				await attendanceDayRepository.GetQueryableAsync());
-			var attendanceEntries = await attendanceEntryRepository.GetQueryableAsync();
-			var projectedAttendanceRows = await AsyncExecuter.ToListAsync(
-				from entry in attendanceEntries
-				join day in scopedAttendanceDays on entry.AttendanceDayId equals day.Id
-				join student in query on entry.StudentId equals student.Id
-				where day.Date >= startDate
-				      && day.Date <= endDate
-				      && (entry.Status == AttendanceStatus.Present || entry.Status == AttendanceStatus.Absent)
-				select new
-				{
-					entry.Status,
-					StandardId = (Guid?)day.StandardId,
-					DivisionId = (Guid?)day.DivisionId
-				});
-			attendanceRows = projectedAttendanceRows
-				.Select(x => new StudentAttendanceSummaryRow(x.Status, x.StandardId, x.DivisionId))
-				.ToList();
-		}
-
-		var groupRows = rows
-			.Select(s => new StudentAttendanceGroupRow(s.StandardId, s.DivisionId))
-			.Concat(attendanceRows.Select(s => new StudentAttendanceGroupRow(s.StandardId, s.DivisionId)))
-			.Distinct()
-			.ToList();
-		var standardIds = groupRows
-			.Where(x => x.StandardId.HasValue)
-			.Select(x => x.StandardId!.Value)
-			.Distinct()
-			.ToList();
-		var divisionIds = groupRows
-			.Where(x => x.DivisionId.HasValue)
-			.Select(x => x.DivisionId!.Value)
-			.Distinct()
-			.ToList();
-		var standardNames = rows
-			.Where(x => x.StandardId.HasValue)
-			.GroupBy(x => x.StandardId!.Value)
-			.ToDictionary(x => x.Key, x => x.First().Standard);
-		var divisionNames = rows
-			.Where(x => x.DivisionId.HasValue)
-			.GroupBy(x => x.DivisionId!.Value)
-			.ToDictionary(x => x.Key, x => x.First().Division);
-
-		if (standardIds.Count > 0)
-		{
-			var standards = await AsyncExecuter.ToListAsync(
-				(await standardRepository.GetQueryableAsync())
-					.Where(x => standardIds.Contains(x.Id))
-					.Select(x => new { x.Id, x.Name }));
-			foreach (var standard in standards)
+			var start = startDate > year.StartDate.Date ? startDate : year.StartDate.Date;
+			var end = endDate < year.EndDate.Date ? endDate : year.EndDate.Date;
+			var members = await AsyncExecuter.ToListAsync((await enrollmentRepository.GetQueryableAsync()).Where(e =>
+				e.TenantId == CurrentTenant.Id && e.AcademicYearId == year.Id));
+			var paths = new Dictionary<(Guid Standard, Guid Division), HashSet<Guid>>();
+			void Add(Guid? standard, Guid? division, Guid enrollmentId)
 			{
-				standardNames[standard.Id] = standard.Name;
+				if (!standard.HasValue || !division.HasValue) return;
+				var path = (standard.Value, division.Value);
+				if (!paths.TryGetValue(path, out var cohort)) paths[path] = cohort = [];
+				cohort.Add(enrollmentId);
 			}
-		}
-
-		if (divisionIds.Count > 0)
-		{
-			var divisions = await AsyncExecuter.ToListAsync(
-				(await divisionRepository.GetQueryableAsync())
-					.Where(x => divisionIds.Contains(x.Id))
-					.Select(x => new { x.Id, x.Name }));
-			foreach (var division in divisions)
+			foreach (var member in members)
 			{
-				divisionNames[division.Id] = division.Name;
-			}
-		}
-
-		return new StudentAttendanceDashboardSummaryDto
-		{
-			SchoolAttendancePercentage = CalculateAttendancePercentage(attendanceRows.Select(x => x.Status)),
-			Classes = groupRows
-				.GroupBy(s => s.StandardId)
-				.OrderBy(g => GetStandardName(g.Key, standardNames))
-				.Select(g => new StudentAttendanceClassSummaryDto
+				Add(member.StandardId, member.DivisionId, member.Id);
+				for (var date = start; date <= end; date = date.AddDays(1))
 				{
-					StandardId = g.Key,
-					Name = GetStandardName(g.Key, standardNames),
-					Percentage = CalculateAttendancePercentage(attendanceRows
-						.Where(x => x.StandardId == g.Key)
-						.Select(x => x.Status)),
-					Divisions = g
-						.GroupBy(x => x.DivisionId)
-						.OrderBy(d => GetDivisionName(d.Key, divisionNames))
-						.Select(d => new StudentAttendanceDivisionSummaryDto
-						{
-							DivisionId = d.Key,
-							Name = GetDivisionName(d.Key, divisionNames),
-							Percentage = CalculateAttendancePercentage(attendanceRows
-								.Where(x => x.StandardId == g.Key && x.DivisionId == d.Key)
-								.Select(x => x.Status))
-						})
-						.ToList()
-				})
-				.ToList()
-		};
+					var placement = member.AttendancePlacementOn(date);
+					Add(placement?.StandardId, placement?.DivisionId, member.Id);
+				}
+			}
+			// Submitted day scopes retain the original class even after a later move or exit.
+			var historic = await AsyncExecuter.ToListAsync(from entry in await attendanceEntryRepository.GetQueryableAsync()
+				join day in scopedDays on entry.AttendanceDayId equals day.Id
+				where day.TenantId == CurrentTenant.Id && day.AcademicYearId == year.Id && day.Date >= start && day.Date <= end
+				select new { entry.EnrollmentId, entry.StudentId, day.StandardId, day.DivisionId });
+			var membersById = members.ToDictionary(member => member.Id);
+			var membersByStudent = members.ToLookup(member => member.StudentId);
+			foreach (var item in historic)
+			{
+				var member = item.EnrollmentId.HasValue ? membersById.GetValueOrDefault(item.EnrollmentId.Value) : membersByStudent[item.StudentId].SingleOrDefault();
+				if (member != null) Add(item.StandardId, item.DivisionId, member.Id);
+			}
+			var batch = await attendanceReports.BuildManyAsync(year.Id, start, end, paths.Select(path => new AttendanceReportSliceRequest(
+				path.Key.Standard, path.Key.Division, members.Where(member => path.Value.Contains(member.Id)).ToList())).ToList(), includeDaily: true);
+			slices.AddRange(batch.Slices.Select(slice => new AttendanceDashboardSlice(slice.StandardId, slice.DivisionId, slice.Rows)));
+			partialEnrollments.UnionWith(batch.PartialEnrollmentIds);
+		}
+		var standardIds = slices.Select(s => s.StandardId).Distinct().ToArray();
+		var divisionIds = slices.Select(s => s.DivisionId).Distinct().ToArray();
+		var standardNames = (await AsyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync())
+			.Where(s => s.TenantId == CurrentTenant.Id && Enumerable.Contains(standardIds, s.Id)).Select(s => new { s.Id, s.Name })))
+			.ToDictionary(s => s.Id, s => s.Name);
+		var divisionNames = (await AsyncExecuter.ToListAsync((await divisionRepository.GetQueryableAsync())
+			.Where(d => d.TenantId == CurrentTenant.Id && Enumerable.Contains(divisionIds, d.Id)).Select(d => new { d.Id, d.Name })))
+			.ToDictionary(d => d.Id, d => d.Name);
+		foreach (var row in slices.SelectMany(s => s.Rows)) row.IsProvisional |= partialEnrollments.Contains(row.EnrollmentId);
+		var result = new StudentAttendanceDashboardSummaryDto();
+		result.SchoolAttendancePercentage = ApplyDashboardMetrics(result, slices.SelectMany(s => s.Rows));
+		result.Classes = slices.GroupBy(s => s.StandardId).OrderBy(g => GetStandardName(g.Key, standardNames)).Select(group =>
+		{
+			var item = new StudentAttendanceClassSummaryDto { StandardId = group.Key, Name = GetStandardName(group.Key, standardNames) };
+			item.Percentage = ApplyDashboardMetrics(item, group.SelectMany(s => s.Rows));
+			item.Divisions = group.GroupBy(s => s.DivisionId).OrderBy(g => GetDivisionName(g.Key, divisionNames)).Select(division =>
+			{
+				var row = new StudentAttendanceDivisionSummaryDto { DivisionId = division.Key, Name = GetDivisionName(division.Key, divisionNames) };
+				row.Percentage = ApplyDashboardMetrics(row, division.SelectMany(s => s.Rows));
+				return row;
+			}).ToList();
+			return item;
+		}).ToList();
+		return result;
 	}
 
+	private static decimal? ApplyDashboardMetrics(StudentAttendanceDashboardMetricsDto target, IEnumerable<AttendanceSummaryDto> rows)
+	{
+		// Different students on the same date are different student-days; merge moved paths within each enrollment.
+		foreach (var group in rows.GroupBy(r => r.EnrollmentId))
+		{
+			var result = AttendanceCalculation.Calculate(group.SelectMany(r => r.Daily).Select(d => new AttendanceCalculationDay(
+				d.Date, d.Expected, d.Recorded, d.PresentCredit, d.DenominatorCredit, d.IsProvisional, d.Status)));
+			target.ExpectedDays += result.ExpectedDays;
+			target.RecordedDays += result.RecordedDays;
+			target.MissingDays += result.MissingDays;
+			target.PresentCredit += result.PresentCredit;
+			target.DenominatorDays += result.DenominatorDays;
+			target.IsProvisional |= result.IsProvisional || group.Any(row => row.IsProvisional);
+		}
+		target.CompletionPercentage = target.ExpectedDays == 0 ? null : Math.Round(target.RecordedDays * 100m / target.ExpectedDays, 2);
+		return target.DenominatorDays == 0 ? null : (decimal)Math.Round(target.PresentCredit * 100 / target.DenominatorDays, 2);
+	}
+
+	private sealed record AttendanceDashboardSlice(Guid StandardId, Guid DivisionId, List<AttendanceSummaryDto> Rows);
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add)]
 	public async Task ChangeStudentStatusAsync(Guid studentId, ChangeStudentStatusDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add);
 		var studentQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
 		var student = await AsyncExecuter.FirstOrDefaultAsync(studentQuery.Where(s => s.Id == studentId));
 		if (student == null)
@@ -368,7 +412,9 @@ public class StudentListAppService(
 			throw new EntityNotFoundException(typeof(Student), studentId);
 		}
 
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(student, nameof(ChangeStudentStatusAsync));
+		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(ChangeStudentStatusAsync));
+		await LazyServiceProvider.LazyGetRequiredService<StudentRecordWriteGuard>()
+			.EnsureAsync(studentId, nameof(ChangeStudentStatusAsync));
 
 		try
 		{
@@ -382,10 +428,12 @@ public class StudentListAppService(
 		await studentRepository.UpdateAsync(student);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 	public async Task<List<StudentStatusHistoryDto>> GetStatusHistoryAsync(Guid studentId)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(student, nameof(GetStatusHistoryAsync));
+		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(GetStatusHistoryAsync));
 
 		return student.StatusHistories
 			.OrderByDescending(h => h.CreationTime)
@@ -395,6 +443,15 @@ public class StudentListAppService(
 
 	public async Task<List<StudentLookupDto>> GetStudentsByScopeAsync(GetStudentsByScopeRequest input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
+		if ((input.ChargeCategoryId.HasValue || input.AlreadyCharged.HasValue)
+			&& !await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.View)
+			&& !await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Add)
+			&& !await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Update))
+		{
+			throw new AbpAuthorizationException("Charge permission is required to view students' charge status.");
+		}
+
 		var classIdSet = input.ClassIds.Distinct().ToList();
 
 		// Division selection is only allowed/applied when exactly one standard is selected.
@@ -435,16 +492,51 @@ public class StudentListAppService(
 			query = query.Where(s => s.DivisionId != null && divisionIdSet.Contains(s.DivisionId.Value));
 		}
 
+		if (input.RollNoFrom.HasValue && input.RollNoTo.HasValue && input.RollNoFrom > input.RollNoTo)
+			throw new UserFriendlyException("Roll No. from must not exceed Roll No. to.");
+		if (input.AlreadyCharged.HasValue && !input.ChargeCategoryId.HasValue)
+			throw new UserFriendlyException("Select a charge category before filtering charged students.");
+		if (!string.IsNullOrWhiteSpace(input.Search))
+		{
+			var search = input.Search.Trim().ToLower();
+			query = query.Where(s => (s.FirstName + " " + (s.MiddleName ?? "") + " " + s.LastName).ToLower().Contains(search)
+				|| (s.GrNo.HasValue && s.GrNo.Value.ToString().Contains(search))
+				|| (s.RollNo.HasValue && s.RollNo.Value.ToString().Contains(search)));
+		}
+		if (input.Gender.HasValue) query = query.Where(s => s.AdditionalDetail != null && s.AdditionalDetail.Gender == input.Gender);
+		if (input.RollNoFrom.HasValue) query = query.Where(s => s.RollNo >= input.RollNoFrom);
+		if (input.RollNoTo.HasValue) query = query.Where(s => s.RollNo <= input.RollNoTo);
+
+		var assignments = await studentFeeStructureRepository.GetQueryableAsync();
+		var charges = await chargeRepository.GetQueryableAsync();
+		if (input.OnlyWithFeeStructureAssignment || input.HasFeeStructureAssignment == true)
+		{
+			query = query.Where(student => assignments.Any(assignment =>
+				assignment.StudentId == student.Id
+				&& assignment.AcademicYearId == input.AcademicYearId));
+		}
+		if (input.HasFeeStructureAssignment == false)
+			query = query.Where(student => !assignments.Any(assignment => assignment.StudentId == student.Id && assignment.AcademicYearId == input.AcademicYearId));
+		if (input.AlreadyCharged.HasValue)
+			query = query.Where(student => charges.Any(charge => charge.StudentId == student.Id
+				&& charge.AcademicYearId == input.AcademicYearId && charge.ChargeCategoryId == input.ChargeCategoryId
+				&& (charge.Status == ChargeStatus.Pending || charge.Status == ChargeStatus.Approved)) == input.AlreadyCharged.Value);
+
 		// 4. Enforce row-level query filtering based on user scope
 		query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
 
-		return await AsyncExecuter.ToListAsync(
-			query
+		var lookup = query
 				.OrderBy(s => s.RollNo)
 				.ThenBy(s => s.FirstName)
+				.ThenBy(s => s.Id)
 				.Select(s => new StudentLookupDto
 				{
 					StudentId = s.Id,
+					Gender = s.AdditionalDetail != null ? s.AdditionalDetail.Gender : null,
+					HasFeeStructureAssignment = assignments.Any(assignment => assignment.StudentId == s.Id && assignment.AcademicYearId == input.AcademicYearId),
+					HasChargeInCategory = input.ChargeCategoryId.HasValue && charges.Any(charge => charge.StudentId == s.Id
+						&& charge.AcademicYearId == input.AcademicYearId && charge.ChargeCategoryId == input.ChargeCategoryId
+						&& (charge.Status == ChargeStatus.Pending || charge.Status == ChargeStatus.Approved)),
 					StudentName = (s.FirstName + " " + (s.MiddleName ?? string.Empty) + " " + s.LastName).Trim(),
 					GrNo = s.GrNo,
 					RollNo = s.RollNo,
@@ -452,7 +544,10 @@ public class StudentListAppService(
 					StandardName = s.Standard != null ? s.Standard.Name : string.Empty,
 					DivisionId = s.DivisionId,
 					DivisionName = s.Division != null ? s.Division.Name : string.Empty
-				}));
+				});
+		if (input.SkipCount > 0) lookup = lookup.Skip(input.SkipCount);
+		if (input.MaxResultCount.HasValue) lookup = lookup.Take(input.MaxResultCount.Value);
+		return await AsyncExecuter.ToListAsync(lookup);
 	}
 
 	private async Task<IQueryable<Student>> GetScopedEnrolledStudentsQueryAsync()
@@ -583,18 +678,6 @@ public class StudentListAppService(
 		return new DateTime(year, dateOfBirth.Month, day);
 	}
 
-	private static decimal CalculateAttendancePercentage(IEnumerable<AttendanceStatus> statuses)
-	{
-		var marked = statuses.Count(status => status is AttendanceStatus.Present or AttendanceStatus.Absent);
-		if (marked == 0)
-		{
-			return 0;
-		}
-
-		var present = statuses.Count(status => status == AttendanceStatus.Present);
-		return Math.Round(present * 100m / marked, 2);
-	}
-
 	private (DateTime StartDate, DateTime EndDate) ResolveAttendanceDateRange(DateTime? startDate, DateTime? endDate)
 	{
 		var now = Clock.Now.Date;
@@ -605,7 +688,7 @@ public class StudentListAppService(
 
 		if (start > end)
 		{
-			throw new BusinessException("StudentAttendance:InvalidDateRange")
+			throw new BusinessException(AttendanceOperationErrorCodes.InvalidDateRange)
 				.WithData("StartDate", start)
 				.WithData("EndDate", end);
 		}
@@ -642,12 +725,4 @@ public class StudentListAppService(
 		};
 	}
 
-	private sealed record StudentAttendanceSummaryRow(
-		AttendanceStatus Status,
-		Guid? StandardId,
-		Guid? DivisionId);
-
-	private sealed record StudentAttendanceGroupRow(
-		Guid? StandardId,
-		Guid? DivisionId);
 }

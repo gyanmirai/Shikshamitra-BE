@@ -38,8 +38,13 @@ public class PayrollPreviewRunAppService(
 		var revision = await revisions.LockAsync();
 		var query = await runs.GetQueryableAsync();
 		var latest = await AsyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Month == canonicalMonth
-			&& x.AcademicYearId == academicYear && x.ScopeFingerprint == fingerprint).OrderByDescending(x => x.CreatedAtUtc));
-		if (latest != null && ((latest.Status is "QUEUED" or "RUNNING") ||
+			&& x.AcademicYearId == academicYear && x.ScopeFingerprint == fingerprint).OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id));
+		if (latest != null && !latest.HasCurrentCalculationVersion && (latest.Status is "QUEUED" or "RUNNING"))
+		{
+			latest.Supersede(Clock.Now);
+			await runs.UpdateAsync(latest);
+		}
+		if (latest != null && latest.HasCurrentCalculationVersion && ((latest.Status is "QUEUED" or "RUNNING") ||
 			(!request.Refresh && latest.Status == "SUCCEEDED" && latest.InputRevision == revision)))
 		{
 			await uow.CompleteAsync();
@@ -57,22 +62,24 @@ public class PayrollPreviewRunAppService(
 	{
 		var run = await GetAuthorizedRunAsync(id);
 		var status = ToStatus(run, await revisions.ReadAsync());
+		status.IsCurrent = status.IsCurrent && await IsLatestCompletedRunAsync(run);
 		if (run.Status != "SUCCEEDED")
 		{
 			status.LastCompletedRunId = await AsyncExecuter.FirstOrDefaultAsync((await runs.GetQueryableAsync())
 				.Where(x => x.Month == run.Month && x.AcademicYearId == run.AcademicYearId &&
 					x.ScopeFingerprint == run.ScopeFingerprint && x.Status == "SUCCEEDED")
-				.OrderByDescending(x => x.CreatedAtUtc).Select(x => (Guid?)x.Id));
+				.OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id).Select(x => (Guid?) x.Id));
 		}
 		return status;
 	}
 
 	public virtual async Task<RunPayrollResponse> GetEmployeesAsync(Guid id, PayrollPreviewPageInput input)
 	{
-		if (input.Page < 0 || input.PageSize is < 1 or > 100 || (long)input.Page * input.PageSize > int.MaxValue)
+		if (input.Page < 0 || input.PageSize is < 1 or > 100 || (long) input.Page * input.PageSize > int.MaxValue)
 			throw new BusinessException(HRErrorCodes.PayrollInvalidPageSize);
 		var run = await GetAuthorizedRunAsync(id);
-		if (run.Status != "SUCCEEDED") throw new BusinessException(HRErrorCodes.PayrollPreviewNotReady);
+		if (run.Status != "SUCCEEDED" && !(run.Status == "SUPERSEDED" && run.SummaryJson != null))
+			throw new BusinessException(HRErrorCodes.PayrollPreviewNotReady);
 		var allResults = (await employees.GetQueryableAsync()).Where(x => x.RunId == id);
 		var query = allResults;
 		var search = input.Search?.Trim().ToLowerInvariant();
@@ -93,19 +100,32 @@ public class PayrollPreviewRunAppService(
 		var reviewedIds = (await AsyncExecuter.ToListAsync(generationReviews.Where(x => pageIds.Contains(x.EmployeeId)).Select(x => x.EmployeeId))).ToHashSet();
 		foreach (var item in items)
 		{
-			if (!reviews.TryGetValue(item.EmployeeId, out var snapshot)) continue;
+			if (!reviews.TryGetValue(item.EmployeeId, out var snapshot))
+			{
+				item.ReviewStatus = ReviewStatuses.Pending;
+				item.ReviewedAt = null;
+				item.ReviewedByUserId = null;
+				continue;
+			}
 			item.ReviewStatus = snapshot.IsLocked || reviewedIds.Contains(item.EmployeeId) ? snapshot.ReviewStatus : ReviewStatuses.Pending;
 			item.ReviewedAt = snapshot.IsLocked || reviewedIds.Contains(item.EmployeeId) ? snapshot.ReviewedAt : null;
+			item.ReviewedByUserId = snapshot.IsLocked || reviewedIds.Contains(item.EmployeeId) ? snapshot.ReviewedByUserId : null;
 			item.IsLocked = snapshot.IsLocked;
 		}
-		var isCurrent = run.InputRevision == await revisions.ReadAsync();
+		var isCurrent = run.HasCurrentCalculationVersion && run.Status == "SUCCEEDED"
+			&& run.InputRevision == await revisions.ReadAsync() && await IsLatestCompletedRunAsync(run);
 		summary.CanLock = isCurrent && summary.BlockingIssues.Count == 0 && summary.ReviewedCount > 0;
 		return new RunPayrollResponse
 		{
-			PreviewRunId = id, IsCurrent = isCurrent, IsGenerated = summary.EmployeeCount > 0 && summary.LockedCount == summary.EmployeeCount,
-			TotalCount = count, CurrentPage = input.Page, PageSize = input.PageSize,
-			TotalPages = (int)Math.Ceiling((double)count / input.PageSize),
-			Items = items, Readiness = summary
+			PreviewRunId = id,
+			IsCurrent = isCurrent,
+			IsGenerated = summary.EmployeeCount > 0 && summary.LockedCount == summary.EmployeeCount,
+			TotalCount = count,
+			CurrentPage = input.Page,
+			PageSize = input.PageSize,
+			TotalPages = (int) Math.Ceiling((double) count / input.PageSize),
+			Items = items,
+			Readiness = summary
 		};
 	}
 
@@ -122,13 +142,30 @@ public class PayrollPreviewRunAppService(
 	internal static string ScopeFingerprint(System.Collections.Generic.IEnumerable<Guid> ids) =>
 		Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join(",", ids.OrderBy(x => x)))));
 
+	internal async Task<bool> IsLatestCompletedRunAsync(PayrollPreviewRun run)
+	{
+		var query = await runs.GetQueryableAsync();
+		var latestId = await AsyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Month == run.Month
+			&& x.AcademicYearId == run.AcademicYearId && x.ScopeFingerprint == run.ScopeFingerprint
+			&& x.InputRevision == run.InputRevision && x.Status == "SUCCEEDED")
+			.OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id).Select(x => x.Id));
+		return latestId == run.Id;
+	}
+
 	internal static PayrollPreviewStatusDto ToStatus(PayrollPreviewRun run, Guid revision) => new()
 	{
-		Id = run.Id, Month = run.Month, AcademicYearId = run.AcademicYearId, Status = run.Status, EmployeeCount = run.EmployeeCount,
+		Id = run.Id,
+		Month = run.Month,
+		AcademicYearId = run.AcademicYearId,
+		Status = run.Status,
+		EmployeeCount = run.EmployeeCount,
 		CompletedEmployees = run.CompletedEmployees,
-		IsCurrent = run.Status == "SUCCEEDED" && run.InputRevision == revision,
-		CreatedAtUtc = run.CreatedAtUtc, StartedAtUtc = run.StartedAtUtc, CompletedAtUtc = run.CompletedAtUtc,
-		ErrorCode = run.ErrorCode, ErrorMessage = run.ErrorCode == null ? null :
+		IsCurrent = run.HasCurrentCalculationVersion && run.Status == "SUCCEEDED" && run.InputRevision == revision,
+		CreatedAtUtc = run.CreatedAtUtc,
+		StartedAtUtc = run.StartedAtUtc,
+		CompletedAtUtc = run.CompletedAtUtc,
+		ErrorCode = run.ErrorCode,
+		ErrorMessage = run.ErrorCode == null ? null :
 			run.ErrorCode == HRErrorCodes.PayrollPreviewStale ? "Payroll inputs changed during calculation. Refresh and review the new results."
 			: "Payroll calculation could not finish. Retry the calculation or contact support with the run reference."
 	};

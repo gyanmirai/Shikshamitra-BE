@@ -493,6 +493,136 @@ public partial class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicatio
 	}
 
 	[Fact]
+	public async Task SaveSeatingPlanBulkAsync_Should_Apply_Manual_Gapped_Seats_From_Review_Plan()
+	{
+		var (examId, planId, roomId, studentIds, version) = await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, examSubjectIds) = await CreateSessionExamAsync(scheduleSecondSubject: true);
+				var divisionId = exam.ExamDivisions.Single().DivisionId;
+				var room = await CreateRoomAsync();
+				foreach (var subject in exam.ExamSubjects)
+				{
+					subject.AddRoomAssignment(new ExamSubjectDivision(
+						Guid.NewGuid(), subject.Id, divisionId, room.Capacity, [room.Id]));
+				}
+				await _examRepository.UpdateAsync(exam, autoSave: true);
+
+				var standard = await _standardRepository.GetAsync(exam.StandardId);
+				var stage = await _stageRepository.GetAsync(standard.EducationMediumStageId);
+				var medium = await _educationMediumRepository.GetAsync(stage.EducationMediumId);
+				var board = await _educationBoardRepository.GetAsync(medium.EducationBoardId);
+				var unique = Guid.NewGuid().ToString("N");
+				var students = Enumerable.Range(1, 3)
+					.Select(rollNo => CreateStudent(board.AcademicYearId, board.Id, medium.Id,
+						stage.Id, standard.Id, divisionId, rollNo, unique))
+					.ToList();
+				await _studentRepository.InsertManyAsync(students, autoSave: true);
+
+				var prepared = await _seatAllocationAppService.PrepareSessionSeatingPlanAsync(
+					exam.Id, new PrepareSessionSeatingPlanInputDto { ExamSubjectIds = examSubjectIds });
+				var selectedPlanId = prepared.SelectedSeatingPlanId!.Value;
+				var draft = await _seatAllocationAppService.SaveSeatingPlanDraftAsync(exam.Id,
+					new SaveSeatingPlanDraftInputDto
+					{
+						SeatingPlanId = selectedPlanId,
+						RoomIds = [room.Id],
+						AllocationRulesJson = "{\"strategy\":\"alphabetical\",\"leaveGap\":true}"
+					});
+
+				return (exam.Id, selectedPlanId, room.Id, students.Select(student => student.Id).ToList(), draft.Version);
+			}
+		});
+
+		var savedVersion = await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var saved = await _seatAllocationAppService.SaveSeatingPlanBulkAsync(examId,
+					new SaveSeatingPlanBulkInputDto
+					{
+						SeatingPlanId = planId,
+						RoomIds = [roomId],
+						AllocationRulesJson = "{\"strategy\":\"alphabetical\",\"leaveGap\":true}",
+						Version = version,
+						Rooms =
+						[
+							new SaveSeatingPlanBulkRoomDto
+							{
+								RoomId = roomId,
+								Students = studentIds.Select((studentId, index) => new SaveSeatStudentDto
+								{
+									StudentId = studentId,
+									SeatNumber = index * 2 + 1,
+									IsRoomAssign = true
+								}).ToList()
+							}
+						]
+					});
+
+				saved.AllocatedStudents.ShouldBe(3);
+				var allocations = await _seatAllocationRepository.GetListAsync(row =>
+					row.ExamId == examId && row.SeatingPlanId == planId);
+				allocations.Select(row => row.SeatNumber).OrderBy(seat => seat).ShouldBe([1, 3, 5]);
+				return saved.Version;
+			}
+		});
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await _seatAllocationAppService.SaveSeatingPlanBulkAsync(examId,
+					new SaveSeatingPlanBulkInputDto
+					{
+						SeatingPlanId = planId,
+						RoomIds = [roomId],
+						AllocationRulesJson = "{\"strategy\":\"alphabetical\",\"leaveGap\":true}",
+						Version = savedVersion,
+						Rooms =
+						[
+							new SaveSeatingPlanBulkRoomDto
+							{
+								RoomId = roomId,
+								Students =
+								[
+									new SaveSeatStudentDto { StudentId = studentIds[0], SeatNumber = 3, IsRoomAssign = true },
+									new SaveSeatStudentDto { StudentId = studentIds[1], SeatNumber = 1, IsRoomAssign = true },
+									new SaveSeatStudentDto { StudentId = studentIds[2], SeatNumber = 5, IsRoomAssign = true }
+								]
+							}
+						]
+					});
+			}
+		});
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var swapped = await _seatAllocationRepository.GetListAsync(row =>
+					row.ExamId == examId && row.SeatingPlanId == planId);
+				swapped.Single(row => row.StudentId == studentIds[0]).SeatNumber.ShouldBe(3);
+				swapped.Single(row => row.StudentId == studentIds[1]).SeatNumber.ShouldBe(1);
+
+				var conflict = await Should.ThrowAsync<UserFriendlyException>(() =>
+					_seatAllocationAppService.SaveSeatingPlanBulkAsync(examId,
+						new SaveSeatingPlanBulkInputDto
+						{
+							SeatingPlanId = planId,
+							RoomIds = [roomId],
+							AllocationRulesJson = "{}",
+							Version = version,
+							Rooms = []
+						}));
+				conflict.Code.ShouldBe("SEATING_PLAN_CONCURRENCY_CONFLICT");
+			}
+		});
+	}
+
+	[Fact]
 	public async Task SaveSeatingPlanDraftAsync_Should_Reject_An_Old_Opaque_Version()
 	{
 		await WithUnitOfWorkAsync(async () =>

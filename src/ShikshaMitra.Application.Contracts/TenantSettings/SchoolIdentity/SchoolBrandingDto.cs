@@ -1,0 +1,27 @@
+using System;
+
+namespace ShikshaMitra.TenantSettings.SchoolIdentity;
+
+public sealed class SchoolBrandingDto
+{
+	public string SchoolName { get; set; } = "";
+	public string[] AddressLines { get; set; } = [];
+	public SchoolBrandingAssetDto? Logo { get; set; }
+	public SchoolBrandingAssetDto? Banner { get; set; }
+}
+
+public sealed class SchoolBrandingAssetDto
+{
+	public Guid Id { get; set; }
+	public string ContentType { get; set; } = "";
+	public int Width { get; set; }
+	public int Height { get; set; }
+}
+
+public sealed class SchoolBrandingImageDto
+{
+	public byte[] Content { get; set; } = [];
+	public string ContentType { get; set; } = "";
+	public string EntityTag { get; set; } = "";
+	public bool NotModified { get; set; }
+}

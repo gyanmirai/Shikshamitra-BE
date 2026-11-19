@@ -36,7 +36,7 @@ internal static class AttendanceImportPreviewParsing
 
 		if (string.IsNullOrWhiteSpace(previewRow.EmployeeCode))
 		{
-			previewRow.Errors.Add("Employee Code is required.");
+			previewRow.Errors.Add("Staff Code is required.");
 		}
 
 		MapTimeAndStatus(rawRow, previewRow);

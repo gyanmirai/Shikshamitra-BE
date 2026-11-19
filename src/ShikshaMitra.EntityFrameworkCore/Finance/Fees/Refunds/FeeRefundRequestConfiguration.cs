@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -15,11 +15,16 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
     public void Configure(EntityTypeBuilder<FeeRefundRequest> builder)
     {
         builder.ToTable("Finance_FeeRefundRequests", ShikshaMitraConsts.DbSchema);
+        builder.Property(x=>x.ExpenseCategoryName).HasMaxLength(500);
+        builder.Property(x=>x.PayingBankLabel).HasMaxLength(500);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory>().WithMany().HasForeignKey(x=>x.ExpenseCategoryId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount>().WithMany().HasForeignKey(x=>x.PayingBankAccountId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(x => x.VoucherNumber).HasMaxLength(50).IsRequired();
         builder.Property(x => x.OriginalReceiptNumber).HasMaxLength(100);
         builder.Property(x => x.Currency).HasMaxLength(3).IsRequired();
         builder.Property(x => x.RefundMethod).HasMaxLength(100);
+        builder.Property(x => x.RequestIdempotencyKey).HasMaxLength(100);
         builder.Property(x => x.Reason).HasMaxLength(1000);
         builder.Property(x => x.ApproverNotes).HasMaxLength(1000);
         builder.Property(x => x.FailureReason).HasMaxLength(1000);
@@ -54,6 +59,8 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
             lb.ToTable("Finance_FeeRefundLines", ShikshaMitraConsts.DbSchema);
             lb.WithOwner().HasForeignKey("FeeRefundRequestId");
             lb.HasKey(l => l.Id);
+            // The domain assigns replacement line IDs; EF must insert these new owned rows.
+            lb.Property(l => l.Id).ValueGeneratedNever();
             lb.Property(l => l.FeeHeadName).HasMaxLength(200);
             lb.Property(l => l.InstallmentLabel).HasMaxLength(200);
             lb.Property(l => l.SettledPaidAmount).HasColumnType("numeric(18,2)");
@@ -63,6 +70,10 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
             lb.Property(l => l.ProcessedAmount).HasColumnType("numeric(18,2)");
             lb.Property(l => l.ReversedAmount).HasColumnType("numeric(18,2)");
             lb.Ignore(l => l.Amount);
+            lb.HasIndex(l => l.ChargeId);
+            lb.HasIndex(l => l.LateFeeDueFeeId);
+            lb.ToTable(t => t.HasCheckConstraint("CK_FeeRefundLines_Source",
+                "(CASE WHEN \"DueFeeId\" IS NULL THEN 0 ELSE 1 END + CASE WHEN \"ChargeId\" IS NULL THEN 0 ELSE 1 END + CASE WHEN \"LateFeeDueFeeId\" IS NULL THEN 0 ELSE 1 END) = 1"));
             lb.HasIndex(l => l.DueFeeId)
                 .HasDatabaseName("IX_FeeRefundLines_DueFeeId");
         });
@@ -72,6 +83,7 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
             rb.ToTable("Finance_FeeRefundReservations", ShikshaMitraConsts.DbSchema);
             rb.WithOwner().HasForeignKey("FeeRefundRequestId");
             rb.HasKey(x => x.Id);
+            rb.HasIndex(x => new { x.ChargeId, x.Status });
             rb.Property(x => x.Amount).HasColumnType("numeric(18,2)");
             rb.HasIndex(x => new { x.DueFeeId, x.Status });
             rb.HasIndex(x => new { x.FeeRefundRequestId, x.FeeRefundLineId }).IsUnique();
@@ -89,6 +101,8 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
             sb.Property(x => x.PaymentDetailsJson).HasColumnType("jsonb");
             sb.Property(x => x.FailureReason).HasMaxLength(1000);
             sb.Property(x => x.ReversalReason).HasMaxLength(1000);
+            sb.Property(x => x.EvidenceReference).HasMaxLength(500);
+            sb.Property(x => x.VerificationKey).HasMaxLength(100);
             sb.HasIndex(x => new { x.FeeRefundRequestId, x.IdempotencyKey }).IsUnique();
         });
 
@@ -99,9 +113,23 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
 
         builder.HasIndex(x => new { x.StudentId, x.AcademicYearId, x.Status })
             .HasDatabaseName("IX_FeeRefundRequests_Student_Year_Status");
+        builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.WorkflowVersion, x.Status, x.CreationTime })
+            .HasFilter("\"IsDeleted\" = false")
+            .HasDatabaseName("IX_FeeRefundRequests_Worklist");
         builder.HasIndex(x => x.OriginalReceiptId);
+        builder.HasIndex(x => new { x.TenantId, x.RequestIdempotencyKey }).IsUnique()
+            .HasFilter("\"RequestIdempotencyKey\" IS NOT NULL");
+        builder.HasIndex(x => x.ReplacesRefundRequestId).IsUnique()
+            .HasFilter("\"ReplacesRefundRequestId\" IS NOT NULL");
         builder.HasIndex(x => x.RefundPolicyVersionId);
+        builder.HasIndex(x => new { x.ConcessionRequestId, x.OriginalReceiptId })
+            .IsUnique()
+            .HasFilter("\"ConcessionRequestId\" IS NOT NULL AND \"Status\" NOT IN (3, 8, 9)")
+            .HasDatabaseName("UX_FeeRefundRequests_Concession_Receipt");
 
         builder.ConfigureByConvention();
+        builder.ToTable(t => t.HasCheckConstraint("CK_FeeRefundRequests_Payer", "\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL"));
+        builder.HasOne<ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount>().WithMany()
+            .HasForeignKey(x => x.FinanceFeeAccountId).OnDelete(DeleteBehavior.Restrict);
     }
 }

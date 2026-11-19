@@ -10,5 +10,6 @@ public class ShiftManagementConfiguration : IEntityTypeConfiguration<ShiftManage
 	{
 		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ShiftManagements", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.HasIndex(shift => shift.TenantId);
 	}
 }

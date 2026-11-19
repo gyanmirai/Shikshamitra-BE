@@ -24,7 +24,7 @@ internal static class HrPolicyEmployeeOverridePayloadFactory
 		IsActive = true,
 		Priority = 100,
 		AssignmentReason = string.IsNullOrWhiteSpace(input.AssignmentReason)
-			? "Employee payroll step override"
+			? "Staff payroll step override"
 			: input.AssignmentReason,
 		ConfirmationToken = input.ConfirmationToken
 	};

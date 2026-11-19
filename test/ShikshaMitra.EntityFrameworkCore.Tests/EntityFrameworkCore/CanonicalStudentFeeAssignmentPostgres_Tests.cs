@@ -127,7 +127,10 @@ public class CanonicalStudentFeeAssignmentPostgres_Tests
 		(await ScalarAsync<decimal>(sql, "SELECT \"AllocationPercentage\" FROM \"Finance_DueFees\"")).ShouldBe(33.333333m);
 		var delete = await Should.ThrowAsync<PostgresException>(() => ExecuteAsync(sql,
 			$"DELETE FROM \"Finance_StudentFeeStructures\" WHERE \"Id\" = '{AssignmentId}'"));
-		delete.SqlState.ShouldBe(PostgresErrorCodes.ForeignKeyViolation);
+		// PostgreSQL 18 reports RESTRICT separately; earlier providers use foreign_key_violation.
+		delete.SqlState.ShouldBe(sql.PostgreSqlVersion.Major >= 18
+			? PostgresErrorCodes.RestrictViolation
+			: PostgresErrorCodes.ForeignKeyViolation);
 		delete.ConstraintName.ShouldBe("FK_DueFees_StudentFeeAssignment");
 		(await ScalarAsync<long>(sql, "SELECT count(*) FROM pg_indexes WHERE indexname = 'IX_Finance_DueFees_StudentFeeStructureId'")).ShouldBe(1);
 		(await ScalarAsync<decimal>(sql, "SELECT \"PaidAmount\" FROM \"Finance_DueFees\"")).ShouldBe(234.56m);

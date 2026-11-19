@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.AdmissionDocuments;
@@ -13,7 +14,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [Authorize]
 public class AdmissionDocumentVerificationAppService(AdmissionDocumentReadService reader, AdmissionDocumentCommandService commands,
-	AdmissionDocumentFileService files, IRepository<DocumentType, Guid> documentTypes) : ApplicationService, IAdmissionDocumentVerificationAppService
+	AdmissionDocumentFileService files, IRepository<DocumentType, Guid> documentTypes,
+	IRepository<Standard, Guid> standards) : ApplicationService, IAdmissionDocumentVerificationAppService
 {
 	[Authorize(Permissions.View)]
 	public Task<AdmissionDocumentVerificationDto> GetAsync(Guid applicationId, Guid stageInstanceId) => reader.GetAsync(applicationId, stageInstanceId);
@@ -27,6 +29,13 @@ public class AdmissionDocumentVerificationAppService(AdmissionDocumentReadServic
 	public Task<AdmissionDocumentVerificationDto> ReviewAsync(Guid evidenceId, AdmissionDocumentReviewInput input) => commands.ReviewAsync(evidenceId, input);
 	[Authorize(Permissions.Download)]
 	public Task<AdmissionDocumentDownloadDto> DownloadAsync(Guid evidenceId) => files.DownloadAsync(evidenceId);
+	[Authorize(WorkflowPermissions.View)]
+	public async Task<List<AdmissionDocumentClassDto>> GetClassesAsync() => await AsyncExecuter.ToListAsync(
+		(await standards.GetQueryableAsync()).Where(item => item.TenantId == CurrentTenant.Id).OrderBy(item => item.Name)
+		.Select(item => new AdmissionDocumentClassDto { Id = item.Id, Name = item.Name,
+			Context = item.EducationMediumStage.EducationMedium.EducationBoard.AcademicYear.Name + " / " +
+				item.EducationMediumStage.EducationMedium.EducationBoard.Type.ToString() + " / " +
+				item.EducationMediumStage.EducationMedium.Name + " / " + item.EducationMediumStage.Name }));
 	[Authorize(WorkflowPermissions.View)]
 	public async Task<List<AdmissionDocumentTypeDto>> GetDocumentTypesAsync() => (await documentTypes.GetListAsync()).OrderBy(item => item.DisplayOrder).ThenBy(item => item.Name)
 		.Select(item => new AdmissionDocumentTypeDto { Id = item.Id, Name = item.Name, IsRequired = item.IsRequired,

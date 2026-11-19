@@ -49,6 +49,24 @@ abp install-libs
 
 Run `ShikshaMitra.DbMigrator` to create the initial database. This should be done in the first run. It is also needed if a new database migration is added to the solution later.
 
+Before the first seed, configure the host administrator credentials. For local development, DbMigrator loads .NET user secrets when `DOTNET_ENVIRONMENT=Development` (the `DbMigrator (Development)` launch profile sets this):
+
+```powershell
+dotnet user-secrets set "ShikshaMitra:HostAdmin:Email" "your-admin-email" --project src/ShikshaMitra.DbMigrator
+dotnet user-secrets set "ShikshaMitra:HostAdmin:Password" "your-strong-password" --project src/ShikshaMitra.DbMigrator
+dotnet run --project src/ShikshaMitra.DbMigrator --launch-profile "DbMigrator (Development)"
+```
+
+The username defaults to `admin`. Existing accounts keep their passwords, roles and grants on subsequent runs. For staging or production, supply `ShikshaMitra__HostAdmin__Email` and `ShikshaMitra__HostAdmin__Password` through the environment's secure configuration. Keep bootstrap passwords out of committed appsettings and launch profiles.
+
+To verify that bootstrap credentials are loaded without running migrations or seeders:
+
+```powershell
+dotnet run --project src/ShikshaMitra.DbMigrator --launch-profile "DbMigrator (Development)" -- --check-bootstrap-configuration
+```
+
+The check reports the environment and whether the email and password are configured, without printing their values. Stop any paused debugger session before rebuilding and starting a new run.
+
 ### Solution structure
 
 This is a layered monolith application that consists of the following applications:

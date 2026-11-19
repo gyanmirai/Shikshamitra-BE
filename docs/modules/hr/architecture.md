@@ -3,7 +3,7 @@ module: hr
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-07-26
+updated_on: 2026-11-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,16 @@ audience: humans-and-agents
 
 TL;DR: HR follows the backend layered architecture.
 Contracts define data transfer objects, application services orchestrate workflows, domain objects enforce business rules, and EF Core owns persistence.
+
+Employee directory reads apply visibility and filters, count and page in the database, then project display scalars through `EmployeeSearchProjection.Summary` before materialization.
+This avoids loading employee documents, work experience, bank details, and complete role or shift entities for directory rows.
+Organization names are enriched in a batch for the returned page, with the existing tenant and UserScope filters preserved.
+
+Onboarding list reads count and page the existing tenant-filtered application query, then select `EmployeeApplicationListProjection.Item` before materialization. Only summary scalars and work-assignment arrays are read; personal/family/additional JSON snapshots, work history, tokens and the tracked application graph are excluded. Display formatting runs over those projected values. Detail/public/finalization readers retain their full snapshots and existing authorization paths.
+
+The staff profile ID reader keeps the existing employee-access check, then projects only the existing details contract and enriches organization labels. It avoids a second detailed employee read and discarded family rows; the authorization check retains its own required data access. Document reads likewise keep existing authorization, use targeted scalar metadata for the selected document or checklist definition page, and leave mutation-oriented managers unchanged.
+
+Attendance register lock lookup projects requested distinct lock dates in one query and reuses that result for page rows and summaries. Central holiday overlap is filtered before materialization. Report history authorizes its already-loaded run entities through the same tenant/owner, captured-access and interrupted-work recovery checks used by direct ID reads; it does not introduce an authorization cache.
 
 ## Layer map
 
@@ -33,13 +43,13 @@ HR source paths are organized by subsystem:
 
 | Subsystem | Main source area | Owns |
 |---|---|---|
-| Dashboard | `HR/Dashboard` | HR summary and dashboard projections |
+| Dashboard | `HR/Dashboard` | Scoped operational module reader, separate staff reader, shared daily classification, batch calendar resolution, and separate attendance/payroll previews |
 | Employees | `HR/Employees` | Employee aggregate, profile, documents, status, reporting, payroll details, and search |
 | Attendance and leaves | `HR/AttendanceAndLeaves` | Attendance facts, leave requests, leave policies, evaluation runs, and leave balances |
 | Payroll | `HR/Payroll` | Payroll settings, salary structures, payroll run, attendance imports, and salary slips |
 | Calendar | `HR/Calendar` | HR events, holidays, event types, holiday types, and calendar views |
 | Policies | `HR/Policies` | Work calendar, attendance policy, payroll policy, assignments, impact, versions, and audit |
-| Professional management | `HR/ProfessionalManagement` | Performance templates, cycles, reviews, outcomes, reports, and audit |
+| Professional management | `HR/ProfessionalManagement` | Performance templates, cycles, reviews, outcomes, reports, and audit; review reads enforce canonical employee UserScope before hydration |
 | Reports | `HR/Reports` | Report catalog, options, preview, export, and history |
 
 ## Implementation rules
@@ -55,8 +65,7 @@ Follow these rules when changing HR:
 | Use transactions for coupled writes | Employee, attendance, leave, and payroll updates must not partially apply |
 | Serialize earning-component dependency mutations | A tenant-level PostgreSQL transaction advisory lock protects the active acyclic graph across application instances |
 | Keep payroll snapshots auditable | Salary slips must explain the policy basis used at lock time |
-| Isolate scheduled report runs | Each due schedule commits or fails independently so one invalid schedule cannot roll back or starve another |
-| Defer scheduled report delivery | Email delivery runs after the export and schedule transaction commits so a failed commit cannot send a dead link or trigger duplicate retry mail |
+| Capture immutable report results | Background generation materializes tenant-owned row chunks inside a repeatable-read transaction; pagination and exports use only those chunks |
 | Update docs with behavior changes | HR docs are part of the handoff contract |
 
 ## Payroll dependency graph
@@ -79,3 +88,36 @@ Read [references/permissions.md](./references/permissions.md) before changing fr
 
 Do not restore generated contract exports or old planning docs under `docs/`.
 Use current source paths and the six canonical module pages instead.
+
+## Enrollment and salary document evidence
+
+`EmployeeStatutoryProfileVersion` is the audited, tenant-owned effective enrollment aggregate.
+`EmployeeStatutoryProfileResolver` batches profile reads and retains legacy read projections.
+`PayrollSchemeApplication.Decide` is shared by quotes and payroll to distinguish reference amounts from applied amounts.
+`EmployeeStatutoryProfileAppService` serializes changes through the existing payroll fence and invalidates only unlocked affected evidence.
+`PayrollSalaryDocumentRowReader` joins scoped issued facts and optional draft snapshots without loading PDF bytes or recalculating history.
+`PayslipLogoService` validates tenant blob references and decoded PNG/JPEG images.
+`PayslipIssuanceService` freezes presentation evidence and batches employee/bank reads during locking.
+The PayrollEnrollmentAndSalaryDocuments migration backfills only known identifiers and flags, preserves legacy payloads and adds leave/presentation evidence.
+Its operations exclude unrelated retired tables and the student custom-profile table already owned by its earlier migration.
+
+## Shared table capture
+
+HR table exports remain inside the modular monolith and reuse domain readers, current database principals, report run pages, document rendering and retention.
+See [the export reference](./references/hr-table-exports.md).
+
+## Work shift ownership
+
+EmployeeWorkShift and EmployeeShiftAssignment live under HR/WorkShifts across the DDD layers.
+The domain assignment manager owns transactional schedule changes and protects recorded attendance and payroll.
+EmployeeShiftResolver owns date-aware batched resolution and the ShikshaMitra.HR.Reporting.TimeZone setting.
+EmployeeWorkSchedule supplies per-date payroll inputs.
+EmployeeShiftWriteFence serializes attendance evaluation with assignment changes through the PostgreSQL employee row.
+
+HR_WorkShifts and HR_EmployeeShiftAssignments are independent of academic_ShiftManagements.
+The employee ShiftId column is retained as an internal onboarding/migration baseline reference to HR_WorkShifts, never the authority for dated attendance.
+PostgreSQL excludes overlapping nondeleted assignment ranges.
+Migration mapping is explicit through LegacySchoolShiftId; identical UUID values across independent tables do not establish a relationship.
+## Identity-card rendering
+
+`src/ShikshaMitra.Application/Common/IdentityCards/` owns neutral canvas models, JSON schema validation, physical A4/card geometry, SVG media/text and page composition. `HR/Employees/ICards/` retains employee field/flag policy, selection and asset authorization; its PDF composer supplies authorized values to the shared renderer. The Student Records adapter uses the same physical geometry without importing HR field policy. Shared error codes live in `src/ShikshaMitra.Domain.Shared/Common/IdentityCards/`.

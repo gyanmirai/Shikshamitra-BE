@@ -13,16 +13,20 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund;
 public interface IFeeRefundAppService : IApplicationService
 {
     /// <summary>Paginated list of refund requests, optionally filtered.</summary>
-    Task<PagedResultDto<FeeRefundRequestDto>> GetListAsync(GetFeeRefundsInput input);
+    Task<FeeRefundListResultDto> GetListAsync(GetFeeRefundsInput input);
 
     /// <summary>Single refund request with its lines.</summary>
     Task<FeeRefundRequestDto> GetAsync(Guid id);
 
+    /// <summary>Printable evidence of a recorded refund payout, retaining view scope and reference masking.</summary>
+    Task<FeeRefundReceiptFileDto> GetReceiptPdfAsync(Guid id);
+
     /// <summary>
-    /// Returns the refund eligibility summary for a student + academic year.
-    /// Used by the frontend to populate the fee-head refund table with real data.
+    /// Returns pinned refund eligibility for a Student or admission Finance account.
+    /// An original receipt limits the result to its settled source allocations.
     /// </summary>
-    Task<RefundEligibilityDto> GetEligibilityAsync(Guid studentId, Guid academicYearId);
+    Task<RefundEligibilityDto> GetEligibilityAsync(Guid? studentId, Guid academicYearId,
+        Guid? financeFeeAccountId = null, Guid? originalReceiptId = null);
 
     Task<FeeRefundPreviewDto> PreviewAsync(CreateFeeRefundRequestDto input);
 
@@ -50,5 +54,9 @@ public interface IFeeRefundAppService : IApplicationService
     Task<FeeRefundRequestDto> RejectAsync(Guid id, RejectFeeRefundDto input);
     Task<FeeRefundRequestDto> CancelAsync(Guid id, FeeRefundActionDto input);
     Task<FeeRefundRequestDto> ProcessAsync(Guid id, ProcessFeeRefundDto input);
+    Task<FeeRefundRequestDto> RecordPayoutAsync(Guid id, RecordRefundPayoutDto input);
+    Task<FeeRefundRequestDto> ConfirmPayoutAsync(Guid id, Guid payoutId, ResolveRefundPayoutDto input);
+    Task<FeeRefundRequestDto> FailPayoutAsync(Guid id, Guid payoutId, ResolveRefundPayoutDto input);
+    Task<FeeRefundRequestDto> ReturnPayoutAsync(Guid id, ReturnRefundPayoutDto input);
     Task<FeeRefundRequestDto> ReverseAsync(Guid id, ReverseFeeRefundDto input);
 }

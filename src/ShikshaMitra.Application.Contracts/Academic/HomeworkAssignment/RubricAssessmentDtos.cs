@@ -16,7 +16,7 @@ public class CreateUpdateRubricDto
 	public bool IsTemplate { get; set; }
 	public WorkType? AppliesToWorkType { get; set; }
 	public RubricScoringModel ScoringModel { get; set; }
-	public RubricVisibility Visibility { get; set; }
+	public RubricVisibility Visibility { get; set; } = RubricVisibility.Institution;
 	public string Title { get; set; } = string.Empty;
 	public string? Description { get; set; }
 	public string? EvaluationInstructions { get; set; }
@@ -43,7 +43,8 @@ public class RubricCriterionInputDto
 	public string? StudentDescription { get; set; }
 	public string? TeacherGuidance { get; set; }
 	public bool IsRequired { get; set; } = true;
-	public decimal MaxMarks { get; set; }
+	public decimal? Points { get; set; }
+	public decimal? Weight { get; set; }
 	public int DisplayOrder { get; set; }
 }
 
@@ -94,7 +95,8 @@ public class AssessmentRubricCriterionDto
 	public string? StudentDescription { get; set; }
 	public string? TeacherGuidance { get; set; }
 	public bool IsRequired { get; set; }
-	public decimal MaxMarks { get; set; }
+	public decimal? Points { get; set; }
+	public decimal? Weight { get; set; }
 	public int DisplayOrder { get; set; }
 }
 
@@ -161,6 +163,7 @@ public interface IRubricAssessmentAppService
 	Task ArchiveAsync(Guid id);
 	Task<RubricEvaluationDto> UpsertEvaluationAsync(Guid rubricId, UpsertRubricEvaluationDto input);
 	Task<List<RubricEvaluationDto>> GetEvaluationsAsync(Guid rubricId);
+	Task<RubricEvaluationDto?> GetSubmissionEvaluationAsync(Guid rubricId, Guid submissionId, Guid studentId);
 	Task<RubricEvaluationDto?> GetStudentAssignmentEvaluationAsync(Guid studentId, Guid assignmentId);
 	Task SubmitEvaluationAsync(Guid evaluationId);
 	Task ApproveEvaluationAsync(Guid evaluationId);

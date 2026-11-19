@@ -24,6 +24,8 @@ public class LeaveManagementExportService(
 		while (allItems.Count < exportMax)
 		{
 			var paged = await leaveManagementReader.GetListAsync(CloneListInputWithPage(input, page, batch));
+			if (paged.TotalCount > exportMax) throw HrReportingEngine.Invalid("This direct leave export supports up to 10,000 rows. Narrow its filters or use the table export.");
+			if (paged.Items.Count == 0 && allItems.Count < paged.TotalCount) throw HrReportingEngine.Invalid("The leave export returned an incomplete population. Retry it.");
 			if (paged.Items.Count == 0)
 			{
 				break;
@@ -38,10 +40,7 @@ public class LeaveManagementExportService(
 			page++;
 		}
 
-		if (allItems.Count > exportMax)
-		{
-			allItems = allItems.Take(exportMax).ToList();
-		}
+		if (allItems.Count > exportMax) throw HrReportingEngine.Invalid("Narrow this leave export to at most 10,000 rows.");
 
 		return hrExcelService.GenerateLeaveManagementExcel(allItems);
 	}

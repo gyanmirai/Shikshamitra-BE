@@ -8,6 +8,28 @@ namespace ShikshaMitra.Students;
 
 public class AdmissionFormDefinition_Tests
 {
+	[Theory]
+	[InlineData(AdmissionFormPurpose.Inquiry)]
+	[InlineData(AdmissionFormPurpose.Registration)]
+	public void Restore_preserves_the_published_version_and_metadata(AdmissionFormPurpose purpose)
+	{
+		var actor = Guid.NewGuid();
+		var form = new AdmissionFormDefinition(Guid.NewGuid(), Guid.NewGuid(), "School form", "SCHOOL_FORM",
+			AdmissionFormLayoutType.SinglePage, version: 3, purpose: purpose);
+		Should.Throw<BusinessException>(() => form.Restore()).Code.ShouldBe(AdmissionFormErrorCodes.ArchivedRequired);
+		form.Publish(actor);
+		var publishedAt = form.PublishedAt;
+		Should.Throw<BusinessException>(() => form.Restore()).Code.ShouldBe(AdmissionFormErrorCodes.ArchivedRequired);
+		form.Archive();
+		form.Restore();
+		form.Status.ShouldBe(AdmissionFormStatus.Published);
+		form.Version.ShouldBe(3);
+		form.PublishedAt.ShouldBe(publishedAt);
+		form.PublishedBy.ShouldBe(actor);
+		form.Purpose.ShouldBe(purpose);
+		Should.Throw<BusinessException>(() => form.UpdateDetails("Changed", "CHANGED", AdmissionFormLayoutType.SinglePage));
+	}
+
 	[Fact]
 	public void FormInstanceTracksDraftAndSubmissionState()
 	{
@@ -48,6 +70,25 @@ public class AdmissionFormDefinition_Tests
         form.IsDeleted.ShouldBeFalse();
         form.Code.ShouldBe("STUDENT_ADMISSION");
         form.Description.ShouldBe("Applicant details");
+    }
+
+    [Fact]
+    public void FormPurposeIsStoredAndCanChangeOnlyWhileDraft()
+    {
+        var form = new AdmissionFormDefinition(
+            Guid.NewGuid(), null, "Family inquiry", "FAMILY_INQUIRY",
+            AdmissionFormLayoutType.SinglePage, purpose: AdmissionFormPurpose.Inquiry);
+
+        form.Purpose.ShouldBe(AdmissionFormPurpose.Inquiry);
+        form.UpdateDetails(
+            "Parent consent", "PARENT_CONSENT", AdmissionFormLayoutType.SinglePage,
+            purpose: AdmissionFormPurpose.Consent);
+        form.Purpose.ShouldBe(AdmissionFormPurpose.Consent);
+
+        form.Publish(null);
+        Should.Throw<BusinessException>(() => form.UpdateDetails(
+            "Correction", "CORRECTION", AdmissionFormLayoutType.SinglePage,
+            purpose: AdmissionFormPurpose.Correction));
     }
 
     [Fact]

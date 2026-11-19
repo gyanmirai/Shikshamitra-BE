@@ -16,7 +16,7 @@ using Xunit;
 
 namespace ShikshaMitra.Academic.ClassManagement.ClassTeacherAssignment;
 
-public class ClassTeacherAssignmentAppService_Tests
+public partial class ClassTeacherAssignmentAppService_Tests
 	: ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private static readonly Guid TestTenantId = Guid.Parse("77777777-7777-7777-7777-777777777777");

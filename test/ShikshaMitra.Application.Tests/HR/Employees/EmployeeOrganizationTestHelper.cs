@@ -8,6 +8,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Employees;
 
@@ -15,11 +16,13 @@ internal static class EmployeeOrganizationTestHelper
 {
 	public static async Task<Guid> EnsureOrganizationExistsAsync(IServiceProvider serviceProvider)
 	{
+		using var unitOfWork = serviceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(new AbpUnitOfWorkOptions());
 		var stageRepository = serviceProvider.GetRequiredService<IEducationMediumStageRepository>();
 		var existingStages = await stageRepository.GetListAsync();
 		var existingStage = existingStages.FirstOrDefault();
 		if (existingStage != null)
 		{
+			await unitOfWork.CompleteAsync();
 			return existingStage.Id;
 		}
 
@@ -50,6 +53,7 @@ internal static class EmployeeOrganizationTestHelper
 			var stage = await educationMediumStageManager.CreateAsync(medium.Id, "Primary");
 			await stageRepository.InsertAsync(stage, autoSave: true);
 
+			await unitOfWork.CompleteAsync();
 			return stage.Id;
 		}
 	}

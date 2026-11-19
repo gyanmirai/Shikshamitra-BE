@@ -10,13 +10,12 @@ using Xunit;
 
 namespace ShikshaMitra.Finance.Accounts;
 
-[Collection(ApiTestCollection.Name)]
+[Collection(FinanceRoutingApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.Finance)]
-public class AccountSettingsPermissionApi_Tests(ShikshaMitraApiTestFactory factory)
+public class AccountSettingsPermissionApi_Tests(FinanceRoutingApiTestFactory factory)
 	: ShikshaMitraApiTestBase(factory)
 {
 	[Theory]
-	[InlineData("account-heads", "AccountHead")]
 	[InlineData("income-categories", "IncomeCategory")]
 	[InlineData("expense-categories", "ExpenseCategory")]
 	[InlineData("bank-accounts", "BankAccount")]
@@ -24,11 +23,10 @@ public class AccountSettingsPermissionApi_Tests(ShikshaMitraApiTestFactory facto
 	{
 		using var client = RestrictedClient("ShikshaMitra.Module.Finance.Accounts.Settings");
 		var response = await client.GetAsync($"/api/{route}?academicYearId={Factory.SeededAcademicYearId}");
-		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, $"The module grant must not grant {setting} view access.");
 	}
 
 	[Theory]
-	[InlineData("account-heads", "AccountHead")]
 	[InlineData("income-categories", "IncomeCategory")]
 	[InlineData("expense-categories", "ExpenseCategory")]
 	[InlineData("bank-accounts", "BankAccount")]
@@ -43,11 +41,11 @@ public class AccountSettingsPermissionApi_Tests(ShikshaMitraApiTestFactory facto
 	}
 
 	[Fact]
-	public async Task Income_Category_View_Should_Not_Grant_Account_Head_Lookup()
+	public async Task Retired_account_head_resource_returns_gone()
 	{
 		using var client = RestrictedClient("Finance.Accounts.Settings.IncomeCategory.View");
 		var response = await client.GetAsync($"/api/account-heads/options?academicYearId={Factory.SeededAcademicYearId}&headType=Income");
-		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		response.StatusCode.ShouldBe(HttpStatusCode.Gone);
 	}
 
 	private HttpClient RestrictedClient(string permission)

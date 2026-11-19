@@ -24,7 +24,12 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
             .MaximumLength(100);
 
         RuleFor(x => x.StudentId)
-            .NotEmpty();
+            .Must((input, studentId) => studentId != Guid.Empty &&
+                (studentId.HasValue || input.FinanceFeeAccountId.HasValue))
+            .WithMessage("A valid Student ID or verified Finance account is required.");
+
+        RuleFor(x => x.FinanceFeeAccountId)
+            .NotEqual((Guid?)Guid.Empty);
 
         RuleFor(x => x.AcademicYearId)
             .NotEmpty();
@@ -32,13 +37,8 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
         RuleFor(x => x.Notes)
             .MaximumLength(1000).When(x => x.Notes != null);
 
-        // ── BankReceiptConfirmed rules ────────────────────────────────────────
-        // When ANY payment method is CashierDecided, the flag is mandatory.
-        RuleFor(x => x.PaymentConfirmed)
-            .NotNull()
-            .WithMessage(
-                "BankReceiptConfirmed is required when using UPI, card, bank transfer, or online gateway.")
-            .When(x => x.Payments.Any(p => CashierDecidedMethods.Contains(p.PaymentMethod)));
+        // Legacy electronic clients may still send PaymentConfirmed. It is optional
+        // and never changes the server's non-cash verification requirement.
 
         // For Cash/Cheque/DD only transactions, the flag must not be supplied.
         RuleFor(x => x.PaymentConfirmed)
@@ -94,6 +94,18 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
         RuleFor(x => x.Payments)
             .NotEmpty().WithMessage("At least one payment method is required.")
             .Must(p => p.Count <= 5).WithMessage("Maximum 5 payment methods allowed per transaction.");
+
+        // Reconciliation currently resolves a whole collection/receipt, not an individual
+        // instrument. Until instrument-to-allocation attribution exists, prevent a
+        // provisional instrument from trapping or reversing an unrelated payment.
+        RuleFor(x => x)
+            .Must(x =>
+            {
+                var needsVerification = x.Payments.Any(p => p.PaymentMethod != PaymentMethodEnum.Cash);
+                if (!needsVerification) return true;
+                return x.Payments.Count == 1;
+            })
+            .WithMessage("Payments awaiting verification must use one payment method. Record additional payment instruments separately.");
 
         RuleForEach(x => x.Payments).ChildRules(payment =>
         {

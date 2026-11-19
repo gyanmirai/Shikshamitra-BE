@@ -27,6 +27,9 @@ public class EmployeeCompensationRevision : FullAuditedAggregateRoot<Guid>, IMul
 	public Guid? SourceSalaryTemplateVersionId { get; private set; }
 	public int? SourceSalaryTemplateVersion { get; private set; }
 	public Guid? PfRuleId { get; private set; }
+	public string EsiManagementMode { get; private set; } = ShikshaMitra.HR.Payroll.Statutory.EsiManagement.InPlatform;
+	public Guid? EsiPolicyId { get; private set; }
+	public string? EsiExternalReason { get; private set; }
 	public string StatutoryProfile { get; private set; } = "IN-GJ";
 	public string CalculationSnapshotJson { get; private set; } = "{}";
 	public string IdempotencyKey { get; private set; } = string.Empty;
@@ -39,6 +42,14 @@ public class EmployeeCompensationRevision : FullAuditedAggregateRoot<Guid>, IMul
 	public Guid? RejectedByUserId { get; private set; }
 	public DateTime? RejectedAt { get; private set; }
 	public string? RejectionReason { get; private set; }
+
+
+	public void SetEsiAssignment(string mode, Guid? policyId, string? reason)
+	{
+		EnsureDraft();
+		ShikshaMitra.HR.Payroll.Statutory.EsiManagement.Validate(mode, policyId, reason);
+		EsiManagementMode = mode; EsiPolicyId = policyId; EsiExternalReason = mode == "EXTERNAL" ? reason?.Trim() : null;
+	}
 
 	protected EmployeeCompensationRevision()
 	{

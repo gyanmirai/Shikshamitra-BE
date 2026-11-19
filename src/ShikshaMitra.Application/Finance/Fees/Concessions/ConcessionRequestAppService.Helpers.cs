@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
 using ShikshaMitra.Domain.Finance.Policies;
@@ -72,15 +73,18 @@ public partial class ConcessionRequestAppService
 			{
 				x.Id,
 				x.FeeHeadId,
-				x.OutstandingAmount,
+				OutstandingAmount = x.OutstandingAmount.ToString("G29", CultureInfo.InvariantCulture),
+				PaidAmount = x.PaidAmount.ToString("G29", CultureInfo.InvariantCulture),
+				RefundedAmount = x.RefundedAmount.ToString("G29", CultureInfo.InvariantCulture),
+				NetAmount = x.NetAmount.ToString("G29", CultureInfo.InvariantCulture),
 				x.ConcurrencyStamp
 			}),
 			Mappings = mappings.OrderBy(x => x.FeeHeadId).Select(x => new
 			{
 				x.FeeHeadId,
 				x.UserSpecifiedConcessionAmountType,
-				x.UserSpecifiedConcessionAmountValue,
-				x.FeeHeadConcessionAmount
+				UserSpecifiedConcessionAmountValue = x.UserSpecifiedConcessionAmountValue.ToString("G29", CultureInfo.InvariantCulture),
+				FeeHeadConcessionAmount = x.FeeHeadConcessionAmount.ToString("G29", CultureInfo.InvariantCulture)
 			})
 		};
 		return ComputeCommandHash(evidence);
@@ -137,10 +141,8 @@ public partial class ConcessionRequestAppService
 		if (request.Status == ConcessionRequestStatus.Pending) return;
 
 		request.EnsureDraft();
-		await concessionRequestManager.RefreshDraftAsync(request);
-		if (await concessionRequestRepository.HasPendingForStudentAndTypeAsync(
-			request.StudentId, request.ConcessionTypeId, request.AcademicYearId, request.Id))
-			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.DuplicatePendingRequest);
+		await concessionRequestManager.ValidateDraftApprovalAsync(request);
+		await concessionRequestManager.EnsureBenefitAvailableAsync(request.StudentId, request.ConcessionTypeId, request.AcademicYearId, request.Id);
 
 		request.Submit(Clock.Now);
 	}
@@ -162,6 +164,80 @@ public partial class ConcessionRequestAppService
 	{
 		if (!request.CreatorId.HasValue || currentUser.Id != request.CreatorId)
 			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ScopeMismatch);
+	}
+
+	private async Task<bool> EnsureDecisionActorAsync(ConcessionRequest request, string decisionPermission)
+	{
+		if (!currentUser.Id.HasValue)
+			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor)
+				.WithData("Message", "Decision identity is unavailable.");
+		if (currentUser.Id == request.CreatorId)
+		{
+			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor)
+				.WithData("Message", "The request creator cannot manually approve or reject their own concession request.");
+		}
+		var makerId = request.CreatorId ?? Guid.Empty;
+		var reviewerId = request.CreatorId.HasValue
+			? await financeReviewerAccessService.FindEligibleReviewerAsync(
+				makerId, request.StudentId, request.AcademicYearId,
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View, decisionPermission)
+			: null;
+		await financeReviewerAccessService.EnsureReviewerCanDecideAsync(
+			makerId, reviewerId, request.StudentId, request.AcademicYearId,
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View, decisionPermission);
+		return false;
+	}
+
+	private async Task<IQueryable<Guid>> GetVisibleConcessionStudentIdsAsync(Guid academicYearId)
+	{
+		var own = await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
+			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View);
+		var decisionPermission = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve)
+			? ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve
+			: await AuthorizationService.IsGrantedAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject)
+				? ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject : null;
+		if (decisionPermission == null) return own;
+		var review = await financeScopeAccessService.GetReviewerScopedStudentIdsQueryAsync(
+			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View,
+			decisionPermission);
+		return own.Union(review);
+	}
+
+	private async Task EnsureConcessionVisibleAsync(ConcessionRequest request)
+	{
+		var visible = await GetVisibleConcessionRequestIdsAsync(request.AcademicYearId);
+		if (!await AsyncExecuter.AnyAsync(visible.Where(id => id == request.Id)))
+			throw new Volo.Abp.Authorization.AbpAuthorizationException(
+				"Concession request is outside your Finance scope.");
+	}
+
+	private async Task<IQueryable<Guid>> GetVisibleConcessionRequestIdsAsync(Guid academicYearId)
+	{
+		var own = await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
+			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View);
+		var requests = await concessionRequestRepository.GetQueryableAsync();
+		var decisionPermission = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve)
+			? ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve
+			: await AuthorizationService.IsGrantedAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject)
+				? ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject : null;
+		if (decisionPermission == null || !currentUser.Id.HasValue)
+			return requests.Where(r => r.AcademicYearId == academicYearId && own.Contains(r.StudentId))
+				.Select(r => r.Id);
+		var review = await financeScopeAccessService.GetReviewerScopedStudentIdsQueryAsync(
+			academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View,
+			decisionPermission);
+		var reportees = (await financeReviewerAccessService.GetReportingMakerUserIdsAsync(
+			currentUser.Id.Value)).ToArray();
+		var familyMakers = await financeReviewerAccessService.GetNonEmployeeMakerIdsQueryAsync();
+		return requests.Where(r => r.AcademicYearId == academicYearId &&
+			(own.Contains(r.StudentId) ||
+				(review.Contains(r.StudentId) && r.CreatorId.HasValue &&
+					(reportees.Contains(r.CreatorId.Value) || familyMakers.Contains(r.CreatorId.Value)))))
+			.Select(r => r.Id);
 	}
 
 	private static void EnsureRequiredDocumentsPresent(ConcessionRequest request)
@@ -210,7 +286,8 @@ public partial class ConcessionRequestAppService
 
 	private static List<ConcessionEligibleDueFeeDto> MapEligibleDueFees(
 		IEnumerable<DueFee> dueFees,
-		IReadOnlyDictionary<Guid, string> feeHeadNames) => dueFees
+		IReadOnlyDictionary<Guid, string> feeHeadNames,
+		bool includePaid = false) => dueFees
 		.OrderBy(x => x.InstallmentSequence.HasValue ? 0 : 1)
 		.ThenBy(x => x.InstallmentSequence ?? int.MaxValue)
 		.ThenBy(x => x.DemandDate ?? x.CoverageStartDate ?? x.ScheduleDueDate ?? x.DueDate)
@@ -232,6 +309,8 @@ public partial class ConcessionRequestAppService
 			ConcessionAmount = x.ConcessionAmount,
 			AdjustmentCreditAmount = x.AdjustmentCreditAmount,
 			OutstandingAmount = x.OutstandingAmount,
+			EligibleConcessionAmount = includePaid
+				? Math.Max(0m, x.EffectiveObligationAmount - x.NetAmount) : x.OutstandingAmount,
 			Status = x.Status.ToString(),
 			ConcurrencyStamp = x.ConcurrencyStamp
 		}).ToList();
@@ -260,6 +339,7 @@ public partial class ConcessionRequestAppService
 			? []
 			: await dueFeeRepository.GetListAsync(x => dueFeeIds.Contains(x.Id));
 		var dueFeeMap = dueFees.ToDictionary(x => x.Id);
+		var refunds = await feeRefundRepository.GetListAsync(x => x.ConcessionRequestId == request.Id);
 		return new ConcessionApprovalResponseDto
 		{
 			ConcessionRequestId = request.Id,
@@ -270,6 +350,12 @@ public partial class ConcessionRequestAppService
 			ApproverId = request.GetApprovedBy() ?? Guid.Empty,
 			ApproverMessage = request.ApproverMessage,
 			TotalApprovedAmount = request.GetTotalApprovedConcession(),
+			RefundRequests = refunds.Select(x => new ConcessionRefundReferenceDto
+			{
+				RefundRequestId = x.Id, VoucherNumber = x.VoucherNumber,
+				OriginalReceiptId = x.OriginalReceiptId!.Value,
+				Amount = x.CalculatedAmount, Status = x.Status.ToString()
+			}).ToList(),
 			DueFeeAllocations = request.ConcessionDueFeeAllocations.Select(x =>
 			{
 				dueFeeMap.TryGetValue(x.DueFeeId, out var dueFee);
@@ -329,11 +415,20 @@ public partial class ConcessionRequestAppService
     private static List<FeeHeadConcessionInput> MapFeeHeadInputs(IEnumerable<FeeHeadConcessionDto> items) =>
         items.Select(i => new FeeHeadConcessionInput(i.FeeHeadId, (DiscountBasis)i.BasedOn, i.Amount)).ToList();
 
+    private static List<DueFeeConcessionInput> MapDueFeeInputs(IEnumerable<DueFeeConcessionDto> items) =>
+        items.Select(i => new DueFeeConcessionInput(i.DueFeeId, i.FeeHeadId, i.Amount)).ToList();
+
     private async Task<ConcessionRequestDetailDto> MapDetailAsync(ConcessionRequest request)
     {
 		var canViewDocuments = await AuthorizationService.IsGrantedAsync(
 			ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.ViewDocument);
-        var student = await studentRepository.GetAsync(request.StudentId);
+		var canViewRefunds = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
+		var linkedRefunds = canViewRefunds
+			? await feeRefundRepository.GetListAsync(x => x.ConcessionRequestId == request.Id)
+			: [];
+        var student = await studentRepository.GetForFinanceContextAsync(request.StudentId)
+            ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), request.StudentId);
         var type = await concessionTypeRepository.GetAsync(request.ConcessionTypeId);
         var feeHeadIds = request.ConcessionFeeHeadMappings.Select(m => m.FeeHeadId).ToList();
         var feeHeads = feeHeadIds.Count > 0
@@ -346,9 +441,14 @@ public partial class ConcessionRequestAppService
 		List<ConcessionTypeRequirementSnapshot> requirementSnapshot;
 		try
 		{
-			requirementSnapshot = JsonSerializer.Deserialize<List<ConcessionTypeRequirementSnapshot>>(
-				request.TypeRequirementsSnapshotJson ?? string.Empty, CommandJsonOptions)
-				?? [];
+			requirementSnapshot = string.IsNullOrWhiteSpace(request.TypeRequirementsSnapshotJson) &&
+				!request.SubmittedOn.HasValue && request.Status is
+					(ConcessionRequestStatus.Draft or ConcessionRequestStatus.Rejected or ConcessionRequestStatus.Cancelled)
+				? type.ConcessionTypeDocuments.Select(d => new ConcessionTypeRequirementSnapshot(
+					d.Id, d.DocumentName, d.IsRequired, d.MaxFileSizeBytes,
+					d.AcceptedFormats.Select(format => format.DocumentType).ToList())).ToList()
+				: JsonSerializer.Deserialize<List<ConcessionTypeRequirementSnapshot>>(
+					request.TypeRequirementsSnapshotJson ?? string.Empty, CommandJsonOptions) ?? [];
 		}
 		catch (JsonException)
 		{
@@ -387,6 +487,11 @@ public partial class ConcessionRequestAppService
             ConcessionPolicyName = policy.PolicyName,
             ConcessionPolicyCode = policy.PolicyCode,
             ConcessionPolicyVersion = policy.Version,
+			AutoCreateRefund = policy.ShouldAutoCreateRefund,
+			PaidConcessionAmount = request.GetRemainingPaidConcessionAmounts().Values.Sum(),
+			CanCreateRefundRequests = !policy.ShouldAutoCreateRefund && !request.HaveRefundRequestsBeenCreated() &&
+				request.Status is ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed &&
+				request.GetRemainingPaidConcessionAmounts().Values.Sum() > 0m,
             StudentName = FormatStudentName(student), ConcessionTypeId = request.ConcessionTypeId,
 			ConcessionTypeName = type.Name, Status = request.Status, StatusName = request.Status.ToString(),
 			ConcurrencyStamp = request.ConcurrencyStamp,
@@ -401,6 +506,12 @@ public partial class ConcessionRequestAppService
 			TotalApprovedConcessionAmount = request.GetTotalApprovedConcession(),
 			TotalReversedConcessionAmount = request.GetTotalReversedConcession(),
 			NetApprovedConcessionAmount = request.GetNetApprovedConcession(),
+			RefundRequests = linkedRefunds.Select(x => new ConcessionRefundReferenceDto
+			{
+				RefundRequestId = x.Id, VoucherNumber = x.VoucherNumber,
+				OriginalReceiptId = x.OriginalReceiptId!.Value,
+				Amount = x.CalculatedAmount, Status = x.Status.ToString()
+			}).ToList(),
             Remarks = request.Remarks,
             BoardId = request.GetBoardId(), EducationMediumId = request.GetEducationMediumId(),
             StandardId = request.GetStandardId(), DivisionId = request.GetDivisionId(),
@@ -411,6 +522,11 @@ public partial class ConcessionRequestAppService
                 Amount = m.UserSpecifiedConcessionAmountValue, DiscountAmount = m.FeeHeadConcessionAmount,
                 NetAmount = m.PostConcessionFeeHeadAmount,
             }).ToList(),
+            DueFeeConcessions = ConcessionRequestManager.ReadDueFeeEvidence(request)
+                .Select(x => new DueFeeConcessionDto
+                {
+                    DueFeeId = x.DueFeeId, FeeHeadId = x.FeeHeadId, Amount = x.Amount,
+                }).ToList(),
             RequiredDocuments = requiredDocs,
             SubmittedDocuments = request.ConcessionRequestDocuments.Select(d => new ConcessionSubmittedDocumentDto
             {
@@ -425,7 +541,8 @@ public partial class ConcessionRequestAppService
 			MissingDocumentIds = requiredDocs.Where(x => x.IsRequired && !x.IsUploaded)
 				.Select(x => x.DocumentId).ToList(),
             CreatedAt = request.CreationTime,
-			AvailableActions = BuildAvailableActions(request),
+			AvailableActions = await FilterDecisionActionsAsync(request,
+				BuildAvailableActions(request)),
 			Timeline = BuildTimeline(request),
         };
     }
@@ -433,17 +550,75 @@ public partial class ConcessionRequestAppService
 	private List<string> BuildAvailableActions(ConcessionRequest request)
 	{
 		var isOwner = request.CreatorId.HasValue && request.CreatorId == currentUser.Id;
+		var canDecide = request.CreatorId.HasValue && currentUser.Id.HasValue && !isOwner;
 		return request.Status switch
 		{
 			ConcessionRequestStatus.Draft =>
-				["view", "edit", "approve", "reject", "delete", "upload-document"],
-			ConcessionRequestStatus.Pending => ["view", "approve", "reject"],
+				isOwner && canDecide ? ["view", "edit", "delete", "upload-document", "approve", "reject"] :
+				canDecide ? ["view", "approve", "reject"] :
+				isOwner ? ["view", "edit", "delete", "upload-document"] : ["view"],
+			ConcessionRequestStatus.Pending =>
+				canDecide ? ["view", "approve", "reject"] : ["view"],
 			ConcessionRequestStatus.Rejected or ConcessionRequestStatus.Cancelled when isOwner =>
 				["view", "create-replacement"],
 			ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed =>
 				["view", "reverse"],
 			_ => ["view"],
 		};
+	}
+
+	private sealed class PageDecisionChecks(bool canApprove, bool canReject, bool isAdmin)
+	{
+		public bool CanApprove { get; } = canApprove;
+		public bool CanReject { get; } = canReject;
+		public bool IsAdmin { get; } = isAdmin;
+		public Dictionary<(Guid MakerId, Guid StudentId, Guid AcademicYearId, string Permission), Guid?> Reviewers { get; } = new();
+	}
+
+	private async Task<PageDecisionChecks> CreatePageDecisionChecksAsync() => new(
+		await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve),
+		await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject),
+		currentUser.Id.HasValue && await userScopeService.IsAdminUserAsync(currentUser.Id.Value));
+
+	private async Task<List<string>> FilterDecisionActionsAsync(
+		ConcessionRequest request, List<string> actions, PageDecisionChecks? pageChecks = null)
+	{
+		if (!actions.Contains("approve") && !actions.Contains("reject")) return actions;
+		if (request.CreatorId == currentUser.Id)
+		{
+			actions.Remove("approve");
+			actions.Remove("reject");
+			return actions;
+		}
+		foreach (var (action, permission) in new[]
+		{
+			("approve", ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve),
+			("reject", ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject)
+		})
+		{
+			if (!actions.Contains(action)) continue;
+			var granted = pageChecks is null
+				? await AuthorizationService.IsGrantedAsync(permission)
+				: action == "approve" ? pageChecks.CanApprove : pageChecks.CanReject;
+			if (!granted) { actions.Remove(action); continue; }
+			if (currentUser.Id.HasValue &&
+				(pageChecks?.IsAdmin ?? await userScopeService.IsAdminUserAsync(currentUser.Id.Value))) continue;
+			var makerId = request.CreatorId ?? Guid.Empty;
+			var key = (makerId, request.StudentId, request.AcademicYearId, permission);
+			Guid? reviewerId = null;
+			if (pageChecks is null || !pageChecks.Reviewers.TryGetValue(key, out reviewerId))
+			{
+				reviewerId = makerId != Guid.Empty
+					? await financeReviewerAccessService.FindEligibleReviewerAsync(
+						makerId, request.StudentId, request.AcademicYearId,
+						ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View, permission)
+					: null;
+				if (pageChecks is not null) pageChecks.Reviewers[key] = reviewerId;
+			}
+			if (reviewerId != currentUser.Id && reviewerId != Guid.Empty && !(reviewerId == null && currentUser.Id.HasValue &&
+				(pageChecks?.IsAdmin ?? await userScopeService.IsAdminUserAsync(currentUser.Id.Value)))) actions.Remove(action);
+		}
+		return actions;
 	}
 
 	private static List<ConcessionTimelineEventDto> BuildTimeline(ConcessionRequest request)
@@ -453,7 +628,7 @@ public partial class ConcessionRequestAppService
 			new()
 			{
 				Action = "created",
-				Status = request.SubmittedOn.HasValue ? ConcessionRequestStatus.Draft : request.Status,
+				Status = ConcessionRequestStatus.Draft,
 				ActorId = request.CreatorId,
 				OccurredAt = request.CreationTime,
 			},
@@ -628,7 +803,7 @@ public partial class ConcessionRequestAppService
 
     private StudentConcessionRequestItemDto MapStudentItem(
         ConcessionRequest request, ConcessionType? type, Dictionary<Guid, string> feeHeadMap,
-		bool canViewDocuments)
+		bool canViewDocuments, IReadOnlyList<ConcessionRefundReferenceDto> refundRequests, bool isAdministrator)
     {
 		List<ConcessionTypeRequirementSnapshot> requirements;
 		try
@@ -648,12 +823,19 @@ public partial class ConcessionRequestAppService
         return new StudentConcessionRequestItemDto
         {
             StudentConcessionTypeRequestId = request.Id, ConcessionTypeId = request.ConcessionTypeId,
+            RequesterId = request.CreatorId,
             ConcessionTypeName = type?.Name ?? string.Empty, Status = request.Status,
             TotalAmount = request.GetTotalRequestedConcession(),
             TotalRequestedAmount = request.GetTotalRequestedConcession(),
             TotalApprovedAmount = request.GetTotalApprovedConcession(),
             TotalReversedAmount = request.GetTotalReversedConcession(),
             NetApprovedAmount = request.GetNetApprovedConcession(),
+			RefundRequests = refundRequests.ToList(),
+			AutoCreateRefund = request.ShouldAutoCreateRefund(),
+			PaidConcessionAmount = request.GetRemainingPaidConcessionAmounts().Values.Sum(),
+			CanCreateRefundRequests = !request.ShouldAutoCreateRefund() && !request.HaveRefundRequestsBeenCreated() &&
+				request.Status is ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed &&
+				request.GetRemainingPaidConcessionAmounts().Values.Sum() > 0m,
             FeeHeads = request.ConcessionFeeHeadMappings.Select(m => new FeeHeadConcessionDetailDto
             {
                 FeeHeadId = m.FeeHeadId, FeeHeadName = feeHeadMap.GetValueOrDefault(m.FeeHeadId, string.Empty),
@@ -686,5 +868,10 @@ public partial class ConcessionRequestAppService
         student == null ? string.Empty
             : string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
+
+    private static string FormatStudentGrNumber(Student? student) =>
+        !string.IsNullOrWhiteSpace(student?.GrNumber)
+            ? student.GrNumber
+            : student?.GrNo?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
 
 }

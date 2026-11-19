@@ -37,15 +37,53 @@ public partial class StudentFeeStructureAppService
 		var standards = await standardRepository.GetQueryableAsync();
 		if (input.BoardId.HasValue) enrollments = enrollments.Where(e => standards.Any(s => s.Id == e.StandardId && s.EducationMediumStage.EducationMedium.EducationBoardId == input.BoardId));
 		if (input.EducationMediumId.HasValue) enrollments = enrollments.Where(e => standards.Any(s => s.Id == e.StandardId && s.EducationMediumStage.EducationMediumId == input.EducationMediumId));
+		if (input.FeeHeadId.HasValue)
+		{
+			var dueQuery = await dueFeeRepository.GetQueryableAsync();
+			var headQuery = await feeHeadRepository.GetQueryableAsync();
+			var assignmentQuery = await studentFeeStructureRepository.GetQueryableAsync();
+			var detailQuery = await feeStructureDetailRepository.GetQueryableAsync();
+			enrollments = enrollments.Where(e => headQuery.Any(h => h.Id == input.FeeHeadId && h.AcademicYearId == input.AcademicYearId) &&
+				(assignmentQuery.Any(a => a.StudentId == e.StudentId && a.AcademicYearId == input.AcademicYearId &&
+					(a.IncludedFeeHeadIds != null ? Enumerable.Contains(a.IncludedFeeHeadIds, input.FeeHeadId.Value) :
+						detailQuery.Any(d => d.FeeStructureId == a.FeeStructureStandardId && d.FeeHeadId == input.FeeHeadId))) ||
+				 dueQuery.Any(d => d.StudentId == e.StudentId && d.FeeHeadId == input.FeeHeadId &&
+					(!d.StudentFeeStructureId.HasValue || assignmentQuery.Any(a => a.Id == d.StudentFeeStructureId && a.AcademicYearId == input.AcademicYearId)))));
+		}
 		var students = await studentRepository.GetQueryableAsync();
+		var divisions = await divisionRepository.GetQueryableAsync();
 		var assignments = await studentFeeStructureRepository.GetQueryableAsync();
 		var rows = from e in enrollments join s in students on e.StudentId equals s.Id
+			join standard in standards on e.StandardId equals standard.Id into standardGroup
+			from standard in standardGroup.DefaultIfEmpty()
+			join division in divisions on e.DivisionId equals division.Id into divisionGroup
+			from division in divisionGroup.DefaultIfEmpty()
 			select new AssignmentStudentDto { EnrollmentId = e.Id, StudentId = s.Id, StandardId = e.StandardId, DivisionId = e.DivisionId,
-				StudentName = (s.FirstName ?? "") + " " + (s.LastName ?? ""), IsActive = e.IsActive,
+				StudentName = ((s.FirstName ?? "") + (s.MiddleName == null || s.MiddleName == "" ? "" : " " + s.MiddleName) + " " + (s.LastName ?? "")).Trim(),
+				GrNumber = s.GrNumber ?? (s.GrNo.HasValue ? s.GrNo!.Value.ToString() : ""),
+				RollNumber = e.RollNumber,
+				ClassName = standard == null ? "" : standard.Name,
+				DivisionName = division == null ? "" : division.Name,
+				StandardDivision = (standard == null ? "" : standard.Name) + (division == null ? "" : " - " + division.Name),
+				BoardName = standard == null ? "" : standard.EducationMediumStage.EducationMedium.EducationBoard.Type ==
+					ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards.EducationBoardType.CBSE ? "CBSE" : "GSEB",
+				MediumName = standard == null ? "" : standard.EducationMediumStage.EducationMedium.Name,
+				StageName = standard == null ? "" : standard.EducationMediumStage.Name,
+				IsActive = e.IsActive,
 				IsFeeStructureAssigned = assignments.Any(a => a.StudentId == s.Id && a.AcademicYearId == input.AcademicYearId) };
-		if (!string.IsNullOrWhiteSpace(input.Search)) rows = rows.Where(x => x.StudentName.Contains(input.Search.Trim()));
-		return new PagedResultDto<AssignmentStudentDto>(await AsyncExecuter.CountAsync(rows),
-			await AsyncExecuter.ToListAsync(rows.OrderBy(x => x.StudentName).ThenBy(x => x.EnrollmentId).Skip(input.SkipCount).Take(input.MaxResultCount)));
+		var tableQuery = ShikshaMitra.Finance.Common.FinanceTableQuery.Parse(input.Filters, input.Search, input.SortBy, input.SortOrder, AssignmentColumns);
+		if (!string.IsNullOrWhiteSpace(tableQuery.Search))
+		{
+			var search = tableQuery.Search.ToLowerInvariant();
+			rows = rows.Where(x => x.StudentName.ToLower().Contains(search) || x.GrNumber.ToLower().Contains(search) ||
+				(x.RollNumber.HasValue && x.RollNumber.Value.ToString().Contains(search)));
+		}
+		rows = tableQuery.Apply(rows, AssignmentFields);
+		var count = await AsyncExecuter.CountAsync(rows);
+		var page = await AsyncExecuter.ToListAsync(tableQuery.Order(rows, AssignmentFields, "studentName", false, x => x.EnrollmentId)
+			.Skip(input.SkipCount).Take(input.MaxResultCount));
+		await PopulateAssignmentStatesAsync(page, input.AcademicYearId);
+		return new PagedResultDto<AssignmentStudentDto>(count, page);
 	}
 
 	[Authorize(AssignPermission)]
@@ -58,14 +96,19 @@ public partial class StudentFeeStructureAppService
 		var details = await feeStructureDetailRepository.GetListAsync(x => ids.Contains(x.FeeStructureId));
 		var headIds = details.Select(x => x.FeeHeadId).Distinct().ToList();
 		var heads = (await feeHeadRepository.GetListAsync(x => headIds.Contains(x.Id))).ToDictionary(x => x.Id);
-		return structures.OrderBy(x => x.Name).ThenByDescending(x => x.RevisionNumber).Select(s => new AssignmentCandidateDto {
+		var candidates = structures.OrderBy(x => x.Name).ThenByDescending(x => x.RevisionNumber).Select(s => new AssignmentCandidateDto {
 			Id = s.Id, Name = s.Name, RevisionNumber = s.RevisionNumber, AcademicYearId = academicYearId, StandardId = s.StandardId,
-			Total = details.Where(d => d.FeeStructureId == s.Id).Sum(d => d.Amount),
+			Total = details.Where(d => d.FeeStructureId == s.Id).Sum(d => d.Amount ?? 0m),
 			Heads = details.Where(d => d.FeeStructureId == s.Id).Select(d => new AssignmentHeadDto {
-				FeeHeadId = d.FeeHeadId, FeeHeadName = heads.GetValueOrDefault(d.FeeHeadId)?.Name ?? "Fee head", SupportsTransportSource = heads.GetValueOrDefault(d.FeeHeadId)?.Module == ShikshaMitra.Finance.Fees.Settings.FeeHeadModule.Transport, IsOptional = d.IsOptional,
-				IsOneTime = d.IsOneTime, Included = !d.IsOptional, ConfiguredAmount = d.Amount, EffectiveAmount = d.Amount,
-				AmountBasis = d.IsOneTime ? "OneTime" : "AnnualTotal", PaymentTermId = d.PaymentTermId, PaymentTermVersionId = d.PaymentTermVersionId }).ToList()
+				FeeHeadId = d.FeeHeadId, FeeHeadName = heads.GetValueOrDefault(d.FeeHeadId)?.Name ?? "Fee head", SupportsTransportSource = !d.IsVariable && heads.GetValueOrDefault(d.FeeHeadId)?.Module == ShikshaMitra.Finance.Fees.Settings.FeeHeadModule.Transport, IsOptional = d.IsOptional,
+				IsVariable = d.IsVariable, IsOneTime = d.IsOneTime, Included = !d.IsOptional, ConfiguredAmount = d.Amount, EffectiveAmount = d.Amount,
+				AmountBasis = d.IsVariable ? "CoverageTotal" : d.IsOneTime ? "OneTime" : "AnnualTotal", PaymentTermId = d.PaymentTermId, PaymentTermVersionId = d.PaymentTermVersionId }).ToList()
 		}).ToList();
+		var versionIds = structures.SelectMany(s => StructurePolicyVersions(s).Values).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+		var versions = await financePolicyVersionRepository.GetListAsync(x => versionIds.Contains(x.Id));
+		foreach (var candidate in candidates)
+			candidate.Policies = versions.Where(v => StructurePolicyVersions(structures.Single(s => s.Id == candidate.Id)).Values.Contains(v.Id)).Select(ToAssignmentPolicy).ToList();
+		return candidates;
 	}
 
 	[Authorize(ViewPermission)]
@@ -74,7 +117,7 @@ public partial class StudentFeeStructureAppService
 		var enrollment = await RequireEnrollmentAsync(studentId, academicYearId, false);
 		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == studentId && x.AcademicYearId == academicYearId)
 			?? throw new BusinessException(AssignmentErrorCodes.NotAssigned);
-		var result = new StudentFeeStructureResponseDto { StudentFeeStructureId = assignment.Id, StandardFeeStructureId = assignment.FeeStructureStandardId,
+		var result = new StudentFeeStructureResponseDto { ConcurrencyStamp = assignment.ConcurrencyStamp, StudentFeeStructureId = assignment.Id, StandardFeeStructureId = assignment.FeeStructureStandardId,
 			StudentId = studentId, AcademicYearId = academicYearId, StandardId = enrollment.StandardId ?? Guid.Empty,
 			ConcessionPolicyId = assignment.ConcessionPolicyId, ConcessionPolicyVersionId = assignment.ConcessionPolicyVersionId,
 			RefundPolicyId = assignment.RefundPolicyId, RefundPolicyVersionId = assignment.RefundPolicyVersionId,
@@ -86,6 +129,9 @@ public partial class StudentFeeStructureAppService
 			catch (JsonException) { result.Warnings.Add("Historical assignment evidence is unavailable. Canonical obligations are shown without recalculation."); }
 		}
 		var dues = await dueFeeRepository.GetListAsync(d => d.StudentFeeStructureId == assignment.Id && d.StudentId == studentId);
+		result.StructureEditBlocker = (await StructureEditBlockersAsync([assignment], dues))[assignment.Id] ?? (!enrollment.IsActive ? InactiveEditBlocker : null);
+		result.CanEditStructure = result.StructureEditBlocker == null;
+		result.StructureRevision = snapshot?.RevisionNumber;
 		if (assignment.AssignmentSnapshotJson == null)
 		{
 			var year = await academicYearRepository.GetAsync(academicYearId);
@@ -110,6 +156,13 @@ public partial class StudentFeeStructureAppService
 					InstallmentLabel = d.GetDisplayInstallmentLabel(), DueDate = d.DueDate, DemandDate = d.DemandDate,
 					ScheduledAmount = d.ScheduledAmount, ProratedAmount = d.OriginalAmount, PaymentTermVersionId = d.PaymentTermVersionId }).ToList() };
 		}
+		// Resolve current master labels without changing immutable financial evidence.
+		var currentHeadIds = snapshot.Heads.Select(x => x.FeeHeadId).Concat(snapshot.Lines.Select(x => x.FeeHeadId)).Distinct().ToList();
+		var currentNames = (await feeHeadRepository.GetListAsync(x => currentHeadIds.Contains(x.Id))).ToDictionary(x => x.Id, x => x.Name);
+		foreach (var head in snapshot.Heads)
+			if (currentNames.TryGetValue(head.FeeHeadId, out var name)) head.FeeHeadName = name;
+		foreach (var line in snapshot.Lines)
+			if (currentNames.TryGetValue(line.FeeHeadId, out var name)) line.FeeHeadName = name;
 		snapshot.ScheduledTotal = snapshot.Lines.Sum(x => x.ScheduledAmount);
 		snapshot.ProratedTotal = snapshot.Lines.Sum(x => x.ProratedAmount);
 		snapshot.ReductionTotal = snapshot.ScheduledTotal - snapshot.ProratedTotal;
@@ -120,13 +173,28 @@ public partial class StudentFeeStructureAppService
 			line.PaidAmount = due.PaidAmount;
 			line.OutstandingAmount = due.OutstandingAmount;
 		}
+		snapshot.OriginalPolicies = snapshot.Policies.ToList();
+		if (assignment.FinanceFeeAccountId.HasValue) snapshot.AssignmentSource = "Admission";
+		var currentVersions = new[] { assignment.ConcessionPolicyVersionId, assignment.CollectionPolicyVersionId, assignment.RefundPolicyVersionId, assignment.ProrationPolicyVersionId }
+			.Where(x => x.HasValue).Select(x => x!.Value).ToList();
+		var currentPolicies = await financePolicyVersionRepository.GetListAsync(x => currentVersions.Contains(x.Id));
+		snapshot.Policies = currentPolicies.Select(version => {
+			var original = snapshot.OriginalPolicies.FirstOrDefault(p => p.VersionId == version.Id);
+			var policy = original ?? ToAssignmentPolicy(version);
+			if (original == null) {
+				policy.Source = "StudentOverride";
+				policy.Description = version.PolicyType == "proration" ? "Updated selection; existing obligations retain their original proration calculation." : "Applies to subsequent policy evaluations; existing financial history is preserved.";
+			}
+			return policy;
+		}).ToList();
+		if (assignment.ExtraProperties.TryGetValue("AssignedPolicyReason", out var reason)) snapshot.PolicyOverrideReason = reason?.ToString();
 		result.Assignment = snapshot;
 		result.StructureName = snapshot.StructureName;
 		result.ChargeStartDate = snapshot.ChargeStartDate;
 		result.ChargeEndDate = snapshot.ChargeEndDate;
 		result.FeeHeads = snapshot.Heads.Where(h => h.Included).Select(h => new StudentFeeHeadDto {
 			FeeHeadId = h.FeeHeadId, FeeHeadName = h.FeeHeadName, Amount = h.Obligation,
-			IsSelected = true, IsOptional = h.IsOptional, IsOneTime = h.IsOneTime, SelectedAmount = h.EffectiveAmount }).ToList();
+			IsSelected = true, IsOptional = h.IsOptional, IsOneTime = h.IsOneTime, SelectedAmount = h.EffectiveAmount ?? h.Obligation }).ToList();
 		return result;
 	}
 }

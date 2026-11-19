@@ -6,12 +6,17 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 
 public class AssignmentStudentListInput : PagedResultRequestDto
 {
+	/// <summary>Narrows the scoped list to students with obligations for this fee head.</summary>
+	public Guid? FeeHeadId { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid? BoardId { get; set; }
 	public Guid? EducationMediumId { get; set; }
 	public Guid? StandardId { get; set; }
 	public Guid? DivisionId { get; set; }
 	public string? Search { get; set; }
+	public string? Filters { get; set; }
+	public string? SortBy { get; set; }
+	public string? SortOrder { get; set; }
 }
 
 public class AssignmentTransportSourceDto
@@ -31,12 +36,29 @@ public class AssignmentStudentDto
 	public Guid? StandardId { get; set; }
 	public Guid? DivisionId { get; set; }
 	public string StudentName { get; set; } = "";
+	public string GrNumber { get; set; } = "";
+	public int? RollNumber { get; set; }
+	public string StandardDivision { get; set; } = "";
+	public string BoardName { get; set; } = "";
+	public string MediumName { get; set; } = "";
+	public string StageName { get; set; } = "";
+	public string ClassName { get; set; } = "";
+	public string DivisionName { get; set; } = "";
 	public bool IsActive { get; set; }
 	public bool IsFeeStructureAssigned { get; set; }
+	public Guid? AssignmentId { get; set; }
+	public Guid? StructureId { get; set; }
+	public int? StructureRevision { get; set; }
+	public string? AssignmentConcurrencyStamp { get; set; }
+	public bool CanEditStructure { get; set; }
+	public string? StructureEditBlocker { get; set; }
+	public string AssignmentState { get; set; } = "Unassigned";
+	public string AssignmentSource { get; set; } = "Finance";
 }
 
 public class AssignmentCandidateDto
 {
+	public List<AssignmentPolicyDto> Policies { get; set; } = [];
 	public Guid Id { get; set; }
 	public string Name { get; set; } = "";
 	public int RevisionNumber { get; set; }
@@ -63,8 +85,10 @@ public class AssignmentHeadDto
 	public bool IsOptional { get; set; }
 	public bool IsOneTime { get; set; }
 	public bool Included { get; set; }
-	public decimal ConfiguredAmount { get; set; }
-	public decimal EffectiveAmount { get; set; }
+	public decimal? ConfiguredAmount { get; set; }
+	public decimal? EffectiveAmount { get; set; }
+    public bool IsVariable { get; set; }
+    public string? ZeroAmountReason { get; set; }
 	public string AmountBasis { get; set; } = "AnnualTotal";
 	public string? PaymentTermName { get; set; }
 	public int? PaymentTermVersionNumber { get; set; }
@@ -79,6 +103,7 @@ public class AssignmentHeadDto
 
 public class AssignmentPolicyDto
 {
+	public string Source { get; set; } = "FeeStructure";
 	public string Family { get; set; } = "";
 	public Guid PolicyId { get; set; }
 	public Guid VersionId { get; set; }

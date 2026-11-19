@@ -10,6 +10,8 @@ public class RefundPolicyConfiguration : IEntityTypeConfiguration<RefundPolicy>
 	public void Configure(EntityTypeBuilder<RefundPolicy> builder)
 	{
 		builder.ToTable("Finance_RefundPolicies", ShikshaMitraConsts.DbSchema);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory>().WithMany().HasForeignKey(x=>x.ExpenseCategoryId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount>().WithMany().HasForeignKey(x=>x.DefaultPayingBankAccountId).OnDelete(DeleteBehavior.Restrict);
 		builder.ConfigureByConvention();
 		builder.Property(x => x.AcademicYearId).IsRequired();
 		builder.Property(x => x.PolicyName).IsRequired().HasMaxLength(128);
@@ -38,5 +40,9 @@ public class RefundPolicyConfiguration : IEntityTypeConfiguration<RefundPolicy>
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsDefault })
 			.IsUnique().HasFilter("\"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true")
 			.HasDatabaseName("IX_Finance_RefundPolicies_ActiveDefault");
+		// PostgreSQL composite uniqueness treats null TenantId values as distinct.
+		builder.HasIndex(x => x.AcademicYearId).IsUnique()
+			.HasFilter("\"TenantId\" IS NULL AND \"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true")
+			.HasDatabaseName("IX_Finance_RefundPolicies_Host_ActiveDefault");
 	}
 }

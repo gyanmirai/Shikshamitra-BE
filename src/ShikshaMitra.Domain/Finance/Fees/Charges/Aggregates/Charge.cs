@@ -41,11 +41,15 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? VoidedBy => this.GetProperty<Guid?>(VoidedByProperty);
 	public DateTimeOffset? VoidedOn => this.GetProperty<DateTimeOffset?>(VoidedOnProperty);
 	public string? VoidReason => this.GetProperty<string>(VoidReasonProperty);
+	public string? IncomeCategoryName { get; private set; }
 	public Guid? IncomeCategoryId => this.GetProperty<Guid?>(IncomeCategoryIdProperty);
 	public Guid? IncomeAccountHeadId => this.GetProperty<Guid?>(IncomeAccountHeadIdProperty);
 
 	private Charge()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		PurposeDescription = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -218,7 +222,15 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		this.SetProperty(VoidReasonProperty, normalizedReason);
 	}
 
-	public void SetAccountingSnapshot(Guid incomeCategoryId, Guid incomeAccountHeadId)
+	public void SetIncomeCategory(Guid categoryId, string categoryName)
+	{
+		if (Status != ChargeStatus.Pending || categoryId == Guid.Empty)
+            throw new BusinessException("Finance:Routing:MappingLocked");
+        SetAccountingSnapshot(categoryId);
+		IncomeCategoryName = categoryName;
+	}
+
+	public void SetAccountingSnapshot(Guid incomeCategoryId, Guid? incomeAccountHeadId = null)
 	{
 		this.SetProperty(IncomeCategoryIdProperty, incomeCategoryId);
 		this.SetProperty(IncomeAccountHeadIdProperty, incomeAccountHeadId);

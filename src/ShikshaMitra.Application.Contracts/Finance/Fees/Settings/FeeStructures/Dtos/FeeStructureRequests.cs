@@ -41,10 +41,6 @@ public class StandardFeeStructureRequest
 	public Guid? RefundPolicyId { get; set; }
 	/// <summary>Exact version assertion; the server validates ownership and availability.</summary>
 	public Guid? RefundPolicyVersionId { get; set; }
-	/// <summary>Optional Active Proration Policy. The server retains the selected immutable version.</summary>
-	public Guid? ProrationPolicyId { get; set; }
-	/// <summary>Exact version assertion; the server validates ownership and availability.</summary>
-	public Guid? ProrationPolicyVersionId { get; set; }
 }
 
 public class CollectionPolicyAttachmentImpactRequest
@@ -68,12 +64,6 @@ public class CollectionPolicyAttachmentImpactResponse
 	public List<Guid> StructureHeadsWithoutLateFee { get; set; } = new();
 	/// <summary>Policy late-fee heads absent from this structure; ignored for this attachment (L − S).</summary>
 	public List<Guid> PolicyLateFeeHeadsNotInStructure { get; set; } = new();
-	/// <summary>Fee heads in both the structure and the policy waiver scope (S ∩ W).</summary>
-	public List<Guid> CoveredWaiverHeadIds { get; set; } = new();
-	/// <summary>Structure fee heads that do not receive waivers from this policy (S − W).</summary>
-	public List<Guid> StructureHeadsWithoutWaiver { get; set; } = new();
-	/// <summary>Policy waiver heads absent from this structure; ignored for this attachment (W − S).</summary>
-	public List<Guid> PolicyWaiverHeadsNotInStructure { get; set; } = new();
 	public List<string> Warnings { get; set; } = new();
 	/// <summary>
 	/// True when the active policy belongs to the structure's academic year. Missing head overlap is
@@ -87,7 +77,8 @@ public class FeeHeadAssignmentRequest
 	public Guid? Id { get; set; }
 	[Required]
 	public Guid FeeHeadId { get; set; }
-	public decimal Amount { get; set; }
+	public decimal? Amount { get; set; }
+    public bool IsVariable { get; set; }
 	public bool IsOneTime { get; set; }
 	public bool IsOptional { get; set; }
 	public MonthEnum PayableMonth { get; set; }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Diagnostics.CodeAnalysis;
+using System;
 using System.Collections.Generic;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
@@ -13,10 +14,14 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 	public Guid EducationMediumId { get; private set; }
 	public string Name { get; private set; }
+	public int SortOrder { get; private set; }
 	public byte[]? BannerPicture { get; private set; }
 
 	private EducationMediumStage()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Name = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -35,6 +40,7 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetName(name);
 	}
 
+	[MemberNotNull(nameof(Name))]
 	internal EducationMediumStage SetName(string name)
 	{
 		Name = Check.NotNullOrWhiteSpace(
@@ -45,7 +51,9 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		return this;
 	}
 
+	internal void SetSortOrder(int sortOrder) => SortOrder = Check.Range(sortOrder, nameof(sortOrder), 0, int.MaxValue);
+
 	// Navigation property
-	public EducationMedium EducationMedium { get; set; }
-	public ICollection<Standard> Standards { get; set; }
+	public EducationMedium EducationMedium { get; set; } = null!; // Populated by EF relationship materialization.
+	public ICollection<Standard> Standards { get; set; } = null!; // Populated by EF relationship materialization.
 }

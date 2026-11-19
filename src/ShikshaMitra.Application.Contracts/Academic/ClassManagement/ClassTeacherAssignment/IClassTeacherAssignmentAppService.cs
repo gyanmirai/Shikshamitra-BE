@@ -6,6 +6,8 @@ namespace ShikshaMitra.Academic.ClassManagement.ClassTeacherAssignment;
 
 public interface IClassTeacherAssignmentAppService
 {
+	Task<ClassTeacherWorkspaceDto> GetWorkspaceAsync(Guid organizationId);
+
 	Task<List<ClassTeacherRowDto>> GetClassTeacherAssignmentsAsync(Guid organizationId);
 
 	Task<ClassTeacherSummaryDto> GetClassTeacherAssignmentSummaryAsync(Guid organizationId);

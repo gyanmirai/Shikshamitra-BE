@@ -1,12 +1,14 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Timetable.Substitutions;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 
@@ -15,15 +17,13 @@ public class TakeAttendanceTeacherAvailabilitySyncService(
 	IRepository<TeacherAvailability, Guid> availabilityRepository,
 	IEmployeeAttendanceRepository attendanceRepository,
 	IRepository<Employee, Guid> employeeRepository,
-	ITeacherAvailabilityAppService teacherAvailabilityAppService)
+	AttendanceAvailabilityWindowResolver windowResolver,
+	IRepository<AcademicYear, Guid> academicYearRepository)
 	: ApplicationService, ITransientDependency
 {
-	private const string FullDayStartTime = "09:00";
-	private const string FullDayEndTime = "14:15";
-	private const string HalfDayStartTime = "09:00";
-	private const string HalfDayEndTime = "12:00";
 
-	public async Task SyncDateRangeAsync(DateTime fromDate, DateTime toDate)
+	[UnitOfWork]
+	public virtual async Task SyncDateRangeAsync(DateTime fromDate, DateTime toDate)
 	{
 		var from = DateOnly.FromDateTime(fromDate.Date);
 		var to = DateOnly.FromDateTime(toDate.Date);
@@ -49,7 +49,8 @@ public class TakeAttendanceTeacherAvailabilitySyncService(
 		}
 	}
 
-	public async Task SyncAsync(TakeAttendanceSavedEntry savedEntry)
+	[UnitOfWork]
+	public virtual async Task SyncAsync(TakeAttendanceSavedEntry savedEntry)
 	{
 		var attendance = savedEntry.Attendance;
 		var employee = savedEntry.Employee;
@@ -77,8 +78,13 @@ public class TakeAttendanceTeacherAvailabilitySyncService(
 		}
 
 		var isFullDay = attendance.StatusType == EmployeeAttendanceStatusType.FullDayLeave;
-		var startTime = isFullDay ? FullDayStartTime : HalfDayStartTime;
-		var endTime = isFullDay ? FullDayEndTime : HalfDayEndTime;
+		var window = await windowResolver.ResolveAsync(
+			employee,
+			isFullDay,
+			new TimeOnly(9, 0),
+			isFullDay ? new TimeOnly(14, 15) : new TimeOnly(12, 0), attendance.AttendanceDate);
+		var startTime = window.Start.ToString("HH:mm");
+		var endTime = window.End.ToString("HH:mm");
 		var reason = isFullDay
 			? "Marked absent in HR attendance."
 			: "Marked half-day unavailable in HR attendance.";
@@ -100,23 +106,20 @@ public class TakeAttendanceTeacherAvailabilitySyncService(
 			await availabilityRepository.UpdateAsync(row, autoSave: false);
 		}
 
-		await teacherAvailabilityAppService.CreateAsync(new CreateTeacherAvailabilityDto
-		{
-			TeacherId = employee.Id,
-			TeacherName = string.IsNullOrWhiteSpace(employee.EmployeeName)
-				? employee.EmployeeCode
-				: employee.EmployeeName,
-			DepartmentName = employee.Department ?? "Academic",
-			AvailabilityDate = availabilityDate,
-			StartTime = startTime,
-			EndTime = endTime,
-			AvailabilityStatus = TeacherAvailabilityStatus.Unavailable,
-			SourceType = TeacherAvailabilitySource.Attendance,
-			SourceEntityId = attendance.Id,
-			Reason = reason,
-			IsFullDay = isFullDay,
-            NotifyLeadership = true,
-			Remarks = attendance.Remarks
-		});
+		// This is a derived attendance fact, inside the already authorized/scoped
+		// save workflow. It must not invoke the administrator-only manual API.
+		// Other sources may overlap; only attendance-owned records are replaced.
+		var years = await academicYearRepository.GetQueryableAsync();
+		var academicYearId = await AsyncExecuter.FirstOrDefaultAsync(years
+			.Where(year => year.StartDate.Date <= availabilityDate.Date && year.EndDate.Date >= availabilityDate.Date)
+			.OrderByDescending(year => year.StartDate)
+			.Select(year => (Guid?) year.Id));
+		await availabilityRepository.InsertAsync(new TeacherAvailability(
+			GuidGenerator.Create(), CurrentTenant.Id,
+			string.IsNullOrWhiteSpace(employee.EmployeeName) ? employee.EmployeeCode : employee.EmployeeName,
+			availabilityDate, window.Start, window.End,
+			TeacherAvailabilityStatus.Unavailable, TeacherAvailabilitySource.Attendance,
+			reason, isFullDay, true, academicYearId, employee.Id,
+			employee.Department ?? "Academic", attendance.Id, remarks: attendance.Remarks), autoSave: true);
 	}
 }

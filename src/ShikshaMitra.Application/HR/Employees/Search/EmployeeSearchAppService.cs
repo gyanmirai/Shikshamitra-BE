@@ -15,4 +15,9 @@ public class EmployeeSearchAppService(EmployeeSearchReader reader)
 	{
 		return await reader.GetFilteredListAsync(input);
 	}
+
+	public Task<EmployeeOptionsResponse> GetOptionsAsync(GetEmployeeListInput input)
+	{
+		return reader.GetOptionsAsync(input);
+	}
 }

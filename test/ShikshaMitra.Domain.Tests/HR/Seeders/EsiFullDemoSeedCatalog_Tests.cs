@@ -16,7 +16,7 @@ public class EsiFullDemoSeedCatalog_Tests
 	public void FullDemo_step_should_be_versioned_and_run_only_after_salary_templates()
 	{
 		EsiFullDemoConfigurationSeederContributor.StepName.ShouldBe("EsiFullDemoConfigurationSeeder");
-		EsiFullDemoConfigurationSeederContributor.StepVersion.ShouldBe("EsiFullDemoConfigurationSeeder:v1");
+		EsiFullDemoConfigurationSeederContributor.StepVersion.ShouldBe("EsiFullDemoConfigurationSeeder:v3");
 		EsiFullDemoConfigurationSeederContributor.StepOrder.ShouldBe(163);
 		EsiFullDemoConfigurationSeederContributor.StepOrder
 			.ShouldBeGreaterThan(SalaryTemplateBackfillSeederContributor.StepOrder);
@@ -90,9 +90,12 @@ public class EsiFullDemoSeedCatalog_Tests
 
 		var result = Calculate(email, salary, new DateTime(2026, 8, 1));
 		result.StatutoryWages.ShouldBe(statutoryWages);
+		result.Application!.CalculatedEmployeeAmount.ShouldBe(employeeContribution);
+		result.Application.CalculatedEmployerAmount.ShouldBe(employerContribution);
 		result.EmployeeContribution.ShouldBe(employeeContribution);
 		result.EmployerContribution.ShouldBe(employerContribution);
-		result.IssueCodes.ShouldBeEmpty();
+		if (result.IsCovered && !result.Application.NumberPresent) result.IssueCodes.ShouldBe(["ESI_NUMBER_MISSING"]);
+		else result.IssueCodes.ShouldBeEmpty();
 	}
 
 	[Theory]
@@ -206,7 +209,7 @@ public class EsiFullDemoSeedCatalog_Tests
 			establishment,
 			enrollment,
 			wageLines,
-			assumeEstablishmentActive: true);
+			assumeEstablishmentActive: true, payrollProfile: new PayrollStatutoryProfile { EsicInsuranceNumber = enrollment.InsuranceNumber });
 	}
 
 	private static IConfiguration BuildConfiguration(string profile) =>

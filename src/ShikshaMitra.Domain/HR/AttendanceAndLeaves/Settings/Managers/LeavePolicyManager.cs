@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Policies;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
@@ -12,13 +13,19 @@ public class LeavePolicyManager : DomainService
 {
 	private readonly ILeavePolicyRepository _leavePolicyRepository;
 	private readonly IEmployeeLeaveRepository _employeeLeaveRepository;
+	private readonly IRepository<HrPolicyAssignment, Guid> _assignmentRepository;
+	private readonly ILeavePolicyReferenceLock _referenceLock;
 
 	public LeavePolicyManager(
 		ILeavePolicyRepository leavePolicyRepository,
-		IEmployeeLeaveRepository employeeLeaveRepository)
+		IEmployeeLeaveRepository employeeLeaveRepository,
+		IRepository<HrPolicyAssignment, Guid> assignmentRepository,
+		ILeavePolicyReferenceLock referenceLock)
 	{
 		_leavePolicyRepository = leavePolicyRepository;
 		_employeeLeaveRepository = employeeLeaveRepository;
+		_assignmentRepository = assignmentRepository;
+		_referenceLock = referenceLock;
 	}
 
 	public async Task<LeavePolicy> CreateAsync(
@@ -50,7 +57,7 @@ public class LeavePolicyManager : DomainService
 			description
 		);
 
-		policy.ReplaceRules(await BuildRulesAsync(policy.Id, rules));
+		policy.ReplaceRules(BuildRules(policy.Id, rules));
 		return policy;
 	}
 
@@ -85,13 +92,28 @@ public class LeavePolicyManager : DomainService
 		var referencedRuleIds = await _employeeLeaveRepository.GetReferencedRuleIdsAsync(
 			leavePolicy.Rules.Select(rule => rule.Id).ToList());
 		leavePolicy.SyncRules(
-			await BuildRulesAsync(leavePolicy.Id, rules),
+			BuildRules(leavePolicy.Id, rules),
 			referencedRuleIds);
 	}
 
 	public async Task EnsureCanDeactivateAsync(LeavePolicy leavePolicy)
 	{
+		await _referenceLock.AcquireAsync(leavePolicy.Id, CurrentTenant.Id);
 		await EnsureDefaultCanChangeAsync(leavePolicy, isDefaultAfterUpdate: false, HrPolicyStatus.Archived);
+		var today = Clock.Now.Date;
+		var assignments = await _assignmentRepository.GetQueryableAsync();
+		var referenceCount = await AsyncExecuter.CountAsync(assignments.Where(assignment =>
+			assignment.TenantId == CurrentTenant.Id &&
+			assignment.AcademicYearId == leavePolicy.AcademicYearId &&
+			assignment.LeavePolicyId == leavePolicy.Id &&
+			assignment.IsActive &&
+			(!assignment.EffectiveTo.HasValue || assignment.EffectiveTo.Value >= today)));
+		if (referenceCount > 0)
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyHasActiveAssignments)
+				.WithData("policyId", leavePolicy.Id)
+				.WithData("assignmentCount", referenceCount);
+		}
 	}
 
 	public async Task SetDefaultAsync(LeavePolicy leavePolicy)
@@ -160,14 +182,14 @@ public class LeavePolicyManager : DomainService
 		}
 	}
 
-	private async Task<List<LeavePolicyRule>> BuildRulesAsync(
+	private List<LeavePolicyRule> BuildRules(
 		Guid leavePolicyId,
 		IEnumerable<LeavePolicyRuleInput> rules)
 	{
 		var materialized = rules.ToList();
 		if (materialized.Count(rule => rule.IsActive) != 2 ||
-		    materialized.All(rule => !rule.IsActive || rule.PaidType != LeavePaidType.Paid) ||
-		    materialized.All(rule => !rule.IsActive || rule.PaidType != LeavePaidType.Unpaid))
+			materialized.All(rule => !rule.IsActive || rule.PaidType != LeavePaidType.Paid) ||
+			materialized.All(rule => !rule.IsActive || rule.PaidType != LeavePaidType.Unpaid))
 		{
 			throw new BusinessException(HRErrorCodes.LeavePolicyPaidUnpaidRulesRequired);
 		}
@@ -203,7 +225,7 @@ public class LeavePolicyManager : DomainService
 				input.AllowHalfDay,
 				input.AttachmentRequiredAfterDays,
 				input.AllowNegativeBalance,
-				input.IsActive));
+				input.IsActive, input.PayrollCategory));
 		}
 
 		return result;
@@ -225,4 +247,4 @@ public sealed record LeavePolicyRuleInput(
 	bool AllowHalfDay,
 	int? AttachmentRequiredAfterDays,
 	bool AllowNegativeBalance,
-	bool IsActive);
+	bool IsActive, string PayrollCategory = "PAID");

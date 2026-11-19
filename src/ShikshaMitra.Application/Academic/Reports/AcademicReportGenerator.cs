@@ -198,6 +198,24 @@ public partial class AcademicReportGenerator(
             NormalizedFilters = request.Filters
         };
 
+        if (!exportAllRows)
+        {
+            var curriculumPreview = await TryBuildCurriculumPreviewAsync(request, payload);
+            if (curriculumPreview != null) return curriculumPreview;
+            var timetablePreview = await TryBuildTimetablePreviewAsync(request, payload);
+            if (timetablePreview != null) return timetablePreview;
+            var examPreview = await TryBuildExamPreviewAsync(request, payload);
+            if (examPreview != null) return examPreview;
+            var examSummaryPreview = await TryBuildExamSummaryPreviewAsync(request, payload);
+            if (examSummaryPreview != null) return examSummaryPreview;
+            var examMarkPreview = await TryBuildExamMarkPreviewAsync(request, payload);
+            if (examMarkPreview != null) return examMarkPreview;
+            var studentExamPreview = await TryBuildStudentExamPreviewAsync(request, payload);
+            if (studentExamPreview != null) return studentExamPreview;
+            var learningPreview = await TryBuildLearningTaskPreviewAsync(request, payload);
+            if (learningPreview != null) return learningPreview;
+        }
+
         var query = await assignedSubjectRepository.WithDetailsAsync(x => x.Subject, x => x.Chapters, x => x.Standard, x => x.Teachers);
 
         // Security scoping + filter application.

@@ -20,7 +20,12 @@ public class AdmissionFormStageReadService(
 		var context = await access.GetContextAsync(applicationId, stageId);
 		var policy = context.Policy;
 		var attempts = await submissions.GetListAsync(item => item.FormInstanceId == context.Form.Id);
-		var formSections = (await sections.GetListAsync(item => item.FormDefinitionId == context.Form.FormDefinitionId))
+		var frozen = AdmissionEffectiveFormStore.Read(context.Form);
+		if (frozen == null) AdmissionEffectiveFormStore.EnsureLegacyAllowed(
+			await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionFormDefinition, Guid>>().GetAsync(context.Form.FormDefinitionId));
+		var formSections = (frozen == null
+			? await sections.GetListAsync(item => item.FormDefinitionId == context.Form.FormDefinitionId)
+			: AdmissionEffectiveFormResolver.MaterializeSections(frozen.Definition))
 			.OrderBy(item => item.DisplayOrder).ToList();
 		var events = (await history.GetListAsync(item => item.FormInstanceId == context.Form.Id))
 			.OrderBy(item => item.OccurredAt).ToList();
@@ -64,15 +69,15 @@ public class AdmissionFormStageReadService(
 			IsOverdue = overdue,
 			SubmissionAttempts = attempts.Count,
 			ConcurrencyStamp = context.Application.ConcurrencyStamp,
-			CanSaveDraft = context.IsActive && context.Form.Status != AdmissionFormInstanceStatus.Submitted &&
+			CanSaveDraft = context.CanPrepare && context.Form.Status != AdmissionFormInstanceStatus.Submitted &&
 				(policy?.AllowSaveAndResume ?? true),
 			CanSubmit = context.IsActive && context.Application.Status == AdmissionApplicationStatus.Draft &&
 				context.Form.Status != AdmissionFormInstanceStatus.Submitted && attemptAvailable && deadlineAllowsSubmit,
-			CanVerify = context.IsActive && policy?.RequireSectionVerification == true &&
+			CanVerify = context.CanPrepare && policy?.RequireSectionVerification == true &&
 				context.Form.Status == AdmissionFormInstanceStatus.Submitted,
-			CanRequestCorrection = context.IsActive && policy?.AllowCorrectionRequests == true &&
+			CanRequestCorrection = context.CanPrepare && policy?.AllowCorrectionRequests == true &&
 				context.Form.Status == AdmissionFormInstanceStatus.Submitted && attemptAvailable,
-			CanComplete = policy != null && blockers.Count == 0,
+			CanComplete = context.IsActive && policy != null && blockers.Count == 0,
 			Blockers = blockers,
 			Sections = sectionDtos
 		};

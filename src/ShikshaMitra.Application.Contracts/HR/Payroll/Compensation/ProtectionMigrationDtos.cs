@@ -12,7 +12,9 @@ public class PreviewProtectionMigrationDto
 
 public class ApplyProtectionMigrationDto : PreviewProtectionMigrationDto
 {
-	[Required] public string PreviewToken { get; set; } = string.Empty;
+	[Volo.Abp.Auditing.DisableAuditing]
+	[Required, MaxLength(8192)]
+	public string PreviewToken { get; set; } = string.Empty;
 }
 
 public class ProtectionMigrationPreviewDto

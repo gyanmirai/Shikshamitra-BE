@@ -23,51 +23,132 @@ namespace ShikshaMitra.Finance.Fees.Receipts;
 
 [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_InvoiceReceipt.View)]
 [RemoteService(false)]
-public partial class FeeReceiptAppService(
-    IFeePaymentReceiptRepository receiptRepository,
-    FeeReceiptBlobManager blobManager,
-    IFeeReceiptPdfGenerator pdfGenerator,
-    FinanceScopeAccessService financeScopeAccessService,
-    IReadOnlyRepository<Student, Guid> studentRepository,
-    IReadOnlyRepository<AcademicYear, Guid> academicYearRepository,
-    IReadOnlyRepository<EducationBoard, Guid> boardRepository,
-    IReadOnlyRepository<EducationMedium, Guid> mediumRepository,
-    IReadOnlyRepository<Standard, Guid> standardRepository,
-    IReadOnlyRepository<Division, Guid> divisionRepository,
-    IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
-    IDueFeeRepository dueFeeRepository
-) : ApplicationService, IFeeReceiptAppService
+public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppService
 {
+	private readonly IFeePaymentReceiptRepository receiptRepository;
+	private readonly FeeReceiptBlobManager blobManager;
+	private readonly IFeeReceiptPdfGenerator pdfGenerator;
+	private readonly FinanceScopeAccessService financeScopeAccessService;
+	private readonly IReadOnlyRepository<AcademicYear, Guid> academicYearRepository;
+	private readonly IReadOnlyRepository<EducationBoard, Guid> boardRepository;
+	private readonly IReadOnlyRepository<EducationMedium, Guid> mediumRepository;
+	private readonly IReadOnlyRepository<Standard, Guid> standardRepository;
+	private readonly IReadOnlyRepository<Division, Guid> divisionRepository;
+	private readonly IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository;
+	private readonly IDueFeeRepository dueFeeRepository;
+
+	public FeeReceiptAppService(
+		IFeePaymentReceiptRepository receiptRepository,
+		FeeReceiptBlobManager blobManager,
+		IFeeReceiptPdfGenerator pdfGenerator,
+		FinanceScopeAccessService financeScopeAccessService,
+		IReadOnlyRepository<Student, Guid> studentRepository,
+		IReadOnlyRepository<AcademicYear, Guid> academicYearRepository,
+		IReadOnlyRepository<EducationBoard, Guid> boardRepository,
+		IReadOnlyRepository<EducationMedium, Guid> mediumRepository,
+		IReadOnlyRepository<Standard, Guid> standardRepository,
+		IReadOnlyRepository<Division, Guid> divisionRepository,
+		IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
+		IDueFeeRepository dueFeeRepository
+	)
+	{
+		this.receiptRepository = receiptRepository;
+		this.blobManager = blobManager;
+		this.pdfGenerator = pdfGenerator;
+		this.financeScopeAccessService = financeScopeAccessService;
+		_ = studentRepository;
+		this.academicYearRepository = academicYearRepository;
+		this.boardRepository = boardRepository;
+		this.mediumRepository = mediumRepository;
+		this.standardRepository = standardRepository;
+		this.divisionRepository = divisionRepository;
+		this.dueFeeAllocationRepository = dueFeeAllocationRepository;
+		this.dueFeeRepository = dueFeeRepository;
+	}
+
     public async Task<PagedResultDto<FeeReceiptListItemDto>> GetListAsync(
         GetFeeReceiptListInput input,
         CancellationToken cancellationToken = default)
     {
         ValidateListInput(input);
         FinanceClassDivisionFilterValidator.Validate(input);
+		var tableQuery = ParseListFilters(input.Filters);
+		var hasDisplayFilters = tableQuery.Filters.Any(f => !SqlListFilterColumns.Contains(f.Column));
 
         var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
-        var filter = new FeeReceiptListFilter
+        var scopedAccountIds = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
+        FeeReceiptListFilter CreateFilter(int skip, int take) => new()
         {
             AcademicYearId        = input.AcademicYearId,
             BoardId               = input.BoardId,
             EducationMediumId     = input.EducationMediumId,
-            Month                 = input.Month+1,
+            Month                 = input.Month,
             ReceiptKind           = input.ReceiptKind,
             Search                = input.Search,
             StandardId            = input.StandardId,
             DivisionId            = input.DivisionId,
-            SkipCount             = input.SkipCount,
-            MaxResultCount        = input.MaxResultCount,
+            SkipCount             = skip,
+            MaxResultCount        = take,
             ScopedStudentIdsQuery = scopedStudentIds,
+            ScopedAccountIdsQuery = scopedAccountIds,
+            TableQuery            = tableQuery,
         };
 
-        var (totalCount, receipts) = await receiptRepository.GetPagedListAsync(filter, cancellationToken);
+        if (hasDisplayFilters)
+        {
+            var filterRows = await receiptRepository.GetListFilterRowsAsync(
+                CreateFilter(0, 0),
+                tableQuery.Filters.Any(f => f.Column == "paymentMethodLabel"),
+                cancellationToken);
+            var filterItems = filterRows.Select(row => new FeeReceiptListItemDto
+            {
+                Id = row.Id,
+                ReceiptNumber = row.ReceiptNumber,
+                ReceiptKind = row.ReceiptKind,
+                ReceiptKindLabel = FeeReceiptPresentation.GetLabel(row.ReceiptKind, row.ReceiptScope),
+                PaymentMethodLabel = row.PaymentMethodLabel,
+                VerificationStatus = row.VerificationStatus,
+                LinkedFinalReceiptNumber = row.LinkedFinalReceiptNumber,
+                TotalPaidAmount = row.TotalPaidAmount,
+                ReceiptDate = row.ReceiptDate,
+                StudentName = row.StudentName,
+                GrNo = row.GrNo,
+                RollNo = row.RollNo,
+            }).ToList();
+            var matching = tableQuery.Apply(filterItems.AsQueryable(), ListFilterFields).ToList();
+            var pageIds = matching.Skip(input.SkipCount).Take(input.MaxResultCount)
+                .Select(item => item.Id).ToList();
+            if (pageIds.Count == 0)
+                return new PagedResultDto<FeeReceiptListItemDto>(matching.Count, []);
+
+            var pageReceipts = await receiptRepository.GetListAsync(
+                receipt => pageIds.Contains(receipt.Id), cancellationToken: cancellationToken);
+            var positions = pageIds.Select((id, index) => (id, index))
+                .ToDictionary(pair => pair.id, pair => pair.index);
+            pageReceipts = pageReceipts.OrderBy(receipt => positions[receipt.Id]).ToList();
+            return new PagedResultDto<FeeReceiptListItemDto>(matching.Count,
+                await LoadReceiptItemsAsync(pageReceipts, cancellationToken));
+        }
+
+        var (totalCount, receipts) = await receiptRepository.GetPagedListAsync(
+            CreateFilter(input.SkipCount, input.MaxResultCount), cancellationToken);
         if (totalCount == 0)
             return new PagedResultDto<FeeReceiptListItemDto>(0, []);
 
-        var studentIds = receipts.Select(r => r.StudentId).Distinct().ToList();
-        var students   = await studentRepository.GetListAsync(s => studentIds.Contains(s.Id));
+		return new PagedResultDto<FeeReceiptListItemDto>(totalCount,
+			await LoadReceiptItemsAsync(receipts, cancellationToken));
+    }
+
+	private async Task<List<FeeReceiptListItemDto>> LoadReceiptItemsAsync(
+		List<FeePaymentReceipt> receipts, CancellationToken cancellationToken)
+	{
+
+        var studentIds = receipts.Where(r => r.StudentId.HasValue).Select(r => r.StudentId!.Value).Distinct().ToList();
+        var students   = await AsyncExecuter.ToListAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => Enumerable.Contains(studentIds, s.Id)), cancellationToken);
         var studentMap = students.ToDictionary(s => s.Id);
+        var accountIds = receipts.Where(r => r.FinanceFeeAccountId.HasValue).Select(r => r.FinanceFeeAccountId!.Value).Distinct().ToList();
+        var accountRepository = LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FinanceFeeAccount, Guid>>();
+        var accountMap = (await accountRepository.GetListAsync(a => accountIds.Contains(a.Id), cancellationToken: cancellationToken)).ToDictionary(a => a.Id);
 
         var linkedFinalIds = receipts
             .Where(r => r.LinkedFinalReceiptId.HasValue)
@@ -76,16 +157,25 @@ public partial class FeeReceiptAppService(
             ? await receiptRepository.GetListAsync(r => linkedFinalIds.Contains(r.Id))
             : [];
         var linkedFinalMap = linkedFinals.ToDictionary(r => r.Id, r => r.ReceiptNumber);
+        var transactionIds = receipts.Select(r => r.FeeCollectionTransactionId).Distinct().ToList();
+        var payments = await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<PaymentMethodRecord, Guid>>()
+            .GetListAsync(p => transactionIds.Contains(p.FeeRecordMetadataId), cancellationToken: cancellationToken);
+        var methodLabels = payments.GroupBy(p => p.FeeRecordMetadataId).ToDictionary(g => g.Key,
+            g => string.Join(", ", g.Select(p => p.PaymentMethod).Distinct().OrderBy(m => m)
+                .Select(FeeReceiptPresentation.GetPaymentMethodLabel)));
 
         var items = receipts.Select(r =>
         {
-            studentMap.TryGetValue(r.StudentId, out var student);
+            var student = r.StudentId.HasValue ? studentMap.GetValueOrDefault(r.StudentId.Value) : null;
+            var account = r.FinanceFeeAccountId.HasValue ? accountMap.GetValueOrDefault(r.FinanceFeeAccountId.Value) : null;
             return new FeeReceiptListItemDto
             {
                 Id                         = r.Id,
                 ReceiptNumber              = r.ReceiptNumber,
                 ReceiptKind                = r.ReceiptKind,
-                ReceiptKindLabel           = GetKindLabel(r.ReceiptKind),
+                ReceiptKindLabel           = FeeReceiptPresentation.GetLabel(r.ReceiptKind, r.ReceiptScope),
+                PaymentMethodLabel         = methodLabels.GetValueOrDefault(r.FeeCollectionTransactionId, "Not recorded"),
+                PdfFileName                = FeeReceiptPresentation.GetPdfFileName(r.ReceiptKind, r.ReceiptScope, r.ReceiptNumber, r.ReceiptDate),
                 ReceiptScope               = r.ReceiptScope,
                 VerificationStatus         = r.VerificationStatus,
                 LinkedFinalReceiptNumber   = r.LinkedFinalReceiptId.HasValue
@@ -93,9 +183,10 @@ public partial class FeeReceiptAppService(
                     : null,
                 TotalPaidAmount            = r.TotalPaidAmount,
                 StudentId                  = r.StudentId,
+                FinanceFeeAccountId        = r.FinanceFeeAccountId,
                 StudentName                = student != null
                     ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ")
-                    : string.Empty,
+                    : account?.ApplicantName ?? string.Empty,
                 GrNo                       = student?.GrNo,
                 RollNo                     = student?.RollNo?.ToString(),
                 ReceiptDate                = r.ReceiptDate,
@@ -105,7 +196,7 @@ public partial class FeeReceiptAppService(
             };
         }).ToList();
 
-        return new PagedResultDto<FeeReceiptListItemDto>(totalCount, items);
+		return items;
     }
 
     public async Task<FeeReceiptDetailDto> GetAsync(
@@ -113,12 +204,15 @@ public partial class FeeReceiptAppService(
     {
         var receipt = await receiptRepository.GetAsync(id, cancellationToken: cancellationToken)
             ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(receipt.StudentId, cancellationToken);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId, cancellationToken);
 
-        var student      = await studentRepository.FindAsync(receipt.StudentId, cancellationToken: cancellationToken);
-        var academicYear = await academicYearRepository.FindAsync(receipt.AcademicYearId, cancellationToken: cancellationToken);
-        var board        = await boardRepository.FindAsync(receipt.BoardId, cancellationToken: cancellationToken);
-        var medium       = await mediumRepository.FindAsync(receipt.EducationMediumId, cancellationToken: cancellationToken);
+        var student      = receipt.StudentId.HasValue ? await AsyncExecuter.FirstOrDefaultAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => s.Id == receipt.StudentId.Value), cancellationToken) : null;
+        var account = receipt.FinanceFeeAccountId.HasValue
+            ? await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FinanceFeeAccount, Guid>>().GetAsync(receipt.FinanceFeeAccountId.Value, cancellationToken: cancellationToken)
+            : null;
+        var academicYear = await academicYearRepository.FindAsync(receipt.AcademicYearId, includeDetails: false, cancellationToken: cancellationToken);
+        var board        = await AsyncExecuter.FirstOrDefaultAsync((await boardRepository.GetQueryableAsync()).Where(b => b.Id == receipt.BoardId).Select(b => new { b.Type }), cancellationToken);
+        var medium       = await AsyncExecuter.FirstOrDefaultAsync((await mediumRepository.GetQueryableAsync()).Where(m => m.Id == receipt.EducationMediumId).Select(m => new { m.Name }), cancellationToken);
 
         var siblings = await receiptRepository.GetListAsync(
             r => r.FeeCollectionTransactionId == receipt.FeeCollectionTransactionId && r.Id != receipt.Id,
@@ -135,21 +229,23 @@ public partial class FeeReceiptAppService(
 
         string? className = null;
         string? division  = null;
-        if (student?.StandardId.HasValue == true)
+        var standardId = account?.StandardId ?? student?.StandardId;
+        var divisionId = account?.DivisionId ?? student?.DivisionId;
+        if (standardId.HasValue)
         {
-            var std = await standardRepository.FindAsync(student.StandardId!.Value, cancellationToken: cancellationToken);
+            var std = await AsyncExecuter.FirstOrDefaultAsync((await standardRepository.GetQueryableAsync()).Where(s => s.Id == standardId.Value).Select(s => new { s.Name }), cancellationToken);
             className = std?.Name;
         }
-        if (student?.DivisionId.HasValue == true)
+        if (divisionId.HasValue)
         {
-            var div = await divisionRepository.FindAsync(student.DivisionId!.Value, cancellationToken: cancellationToken);
+            var div = await AsyncExecuter.FirstOrDefaultAsync((await divisionRepository.GetQueryableAsync()).Where(d => d.Id == divisionId.Value).Select(d => new { d.Name }), cancellationToken);
             division = div?.Name;
         }
 
         var allocationDetails = new List<FeeReceiptAllocationLineDto>();
         var paidFeeHeads = new List<FeeReceiptPaidHeadDto>();
 
-        if (receipt.ReceiptScope == FeeReceiptScope.Fee)
+        if (receipt.ReceiptScope is FeeReceiptScope.Fee or FeeReceiptScope.Combined)
         {
             var allocations = await dueFeeAllocationRepository.GetListAsync(
                 a => a.FeeRecordMetadataId == receipt.FeeCollectionTransactionId,
@@ -194,12 +290,17 @@ public partial class FeeReceiptAppService(
                 }).ToList();
         }
 
+        var receiptPayments = await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<PaymentMethodRecord, Guid>>()
+            .GetListAsync(p => p.FeeRecordMetadataId == receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
         return new FeeReceiptDetailDto
         {
             Id                             = receipt.Id,
             ReceiptNumber                  = receipt.ReceiptNumber,
             ReceiptKind                    = receipt.ReceiptKind,
-            ReceiptKindLabel               = GetKindLabel(receipt.ReceiptKind),
+            ReceiptKindLabel               = FeeReceiptPresentation.GetLabel(receipt.ReceiptKind, receipt.ReceiptScope),
+            PaymentMethodLabel             = receiptPayments.Count == 0 ? "Not recorded" : string.Join(", ", receiptPayments.Select(p => p.PaymentMethod).Distinct().OrderBy(m => m).Select(FeeReceiptPresentation.GetPaymentMethodLabel)),
+            PaymentInstruments             = receiptPayments.OrderBy(p => p.CreationTime).Select(MapPaymentInstrument).ToList(),
+            PdfFileName                    = FeeReceiptPresentation.GetPdfFileName(receipt.ReceiptKind, receipt.ReceiptScope, receipt.ReceiptNumber, receipt.ReceiptDate),
             ReceiptScope                   = receipt.ReceiptScope,
             VerificationStatus             = receipt.VerificationStatus,
             LinkedProvisionalReceiptId     = receipt.LinkedProvisionalReceiptId,
@@ -207,10 +308,12 @@ public partial class FeeReceiptAppService(
             LinkedFinalReceiptId           = receipt.LinkedFinalReceiptId,
             LinkedFinalReceiptNumber       = linkedFinal?.ReceiptNumber,
             TotalPaidAmount                = receipt.TotalPaidAmount,
+			FeePaidAmount = receipt.FeePaidAmount, ChargePaidAmount = receipt.ChargePaidAmount,
             StudentId                      = receipt.StudentId,
+            FinanceFeeAccountId            = receipt.FinanceFeeAccountId,
             StudentName                    = student != null
                 ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ")
-                : string.Empty,
+                : account?.ApplicantName ?? string.Empty,
             GrNo                           = student?.GrNo,
             RollNo                         = student?.RollNo?.ToString(),
             ClassName                      = className,
@@ -219,6 +322,8 @@ public partial class FeeReceiptAppService(
             BoardId                        = receipt.BoardId,
             EducationMediumId              = receipt.EducationMediumId,
             AcademicYearName               = academicYear?.Name,
+            AcademicYearStartDate          = academicYear?.StartDate,
+            AcademicYearEndDate            = academicYear?.EndDate,
             BoardName                      = board?.Type.ToString(),
             MediumName                     = medium?.Name,
             ReceiptDate                    = receipt.ReceiptDate,

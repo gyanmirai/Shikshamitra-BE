@@ -65,13 +65,13 @@ public class FeeAdjustmentController(IFeeAdjustmentAppService feeAdjustmentAppSe
         feeAdjustmentAppService.GetApplicationsAsync(input);
 
     [HttpGet("{id:guid}/apply-context")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve)]
     [ProducesResponseType(typeof(FeeAdjustmentApplyContextDto), StatusCodes.Status200OK)]
     public Task<FeeAdjustmentApplyContextDto> GetApplyContextAsync(Guid id) =>
         feeAdjustmentAppService.GetApplyContextAsync(id);
 
     [HttpPost("{id:guid}/apply")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve)]
     [ProducesResponseType(typeof(ApplyFeeAdjustmentResultDto), StatusCodes.Status200OK)]
     public Task<ApplyFeeAdjustmentResultDto> ApplyAsync(
         Guid id,
@@ -80,7 +80,7 @@ public class FeeAdjustmentController(IFeeAdjustmentAppService feeAdjustmentAppSe
         feeAdjustmentAppService.ApplyAsync(id, input, idempotencyKey);
 
     [HttpPost("{id:guid}/reject")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Reject)]
     [ProducesResponseType(typeof(RejectFeeAdjustmentResultDto), StatusCodes.Status200OK)]
     public Task<RejectFeeAdjustmentResultDto> RejectAsync(Guid id, [FromBody] RejectFeeAdjustmentDto input) =>
         feeAdjustmentAppService.RejectAsync(id, input);

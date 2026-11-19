@@ -61,10 +61,8 @@ public class LateFeeCalculationService : ITransientDependency
 		}
 
 		// Step 3 — grace-period offset: student override wins if set, else the policy's own
-		// gracePeriodDays, plus any exception-window extension from step 2. GracePeriodType
-		// (Calendar vs WorkingDay) can't yet be computed differently without a holiday-calendar
-		// source (see implementation plan Open Questions) — WorkingDay degrades to Calendar-day
-		// counting rather than producing a silently wrong answer.
+		// gracePeriodDays, plus any exception-window extension from step 2. All day counts
+		// use calendar days, including weekends and holidays.
 		var effectiveGracePeriodDays =
 			(input.CustomGracePeriodDays ?? policy.GracePeriodDays) + exceptionGracePeriodExtensionDays;
 
@@ -124,7 +122,7 @@ public class LateFeeCalculationService : ITransientDependency
 		}
 
 		// Step 7 — rounding.
-		var finalAmount = ApplyRounding(cappedAmount, effectiveRule.RoundingMethod);
+		var finalAmount = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUpWithin(cappedAmount, effectiveRule.MaximumLateFeeAmount ?? decimal.MaxValue);
 
 		var explanation = BuildExplanation(effectiveRule, effectiveDaysLate, finalAmount, cappedBy);
 		if (feeHeadOverrideApplied == "CustomRule")
@@ -141,7 +139,7 @@ public class LateFeeCalculationService : ITransientDependency
 			feeHeadOverrideApplied,
 			amountBeforeCap,
 			cappedBy,
-			effectiveRule.RoundingMethod.ToString(),
+			RoundingMethodType.RoundUp.ToString(),
 			explanation);
 	}
 
@@ -214,13 +212,8 @@ public class LateFeeCalculationService : ITransientDependency
 		return total;
 	}
 
-	private static decimal ApplyRounding(decimal amount, RoundingMethodType method) => method switch
-	{
-		RoundingMethodType.RoundUp => Math.Ceiling(amount),
-		RoundingMethodType.RoundDown => Math.Floor(amount),
-		RoundingMethodType.NearestRupee => Math.Round(amount, MidpointRounding.AwayFromZero),
-		_ => amount
-	};
+	private static decimal ApplyRounding(decimal amount, RoundingMethodType method) =>
+		ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(amount);
 
 	private static int CeilDiv(int value, int divisor) => (value + divisor - 1) / divisor;
 

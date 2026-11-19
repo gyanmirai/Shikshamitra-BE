@@ -20,7 +20,11 @@ public class ChapterProgressLog : CreationAuditedEntity<Guid>
     /// <summary>Denormalized display name of the user who made the change.</summary>
     public string ChangedByName { get; private set; }
 
-    private ChapterProgressLog() { } // Required for EF Core
+    private ChapterProgressLog()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        ChangedByName = null!;
+    } // Required for EF Core
 
     public ChapterProgressLog(Guid id, Guid chapterId, Guid divisionId, int progress, string changedByName)
         : base(id)

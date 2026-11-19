@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using ShikshaMitra.EntityFrameworkCore.Students.StudentEnrollments.Admissions;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
@@ -27,6 +28,10 @@ public class StudentOnboardingConfiguration :
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentOnboardingCases", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.ConfigureUtcInstants(nameof(StudentOnboardingCase.GuardianContactVerifiedAt),
+			nameof(StudentOnboardingCase.DueAt), nameof(StudentOnboardingCase.StartedAt),
+			nameof(StudentOnboardingCase.ReadyAt), nameof(StudentOnboardingCase.CompletedAt),
+			nameof(StudentOnboardingCase.CancelledAt));
 		builder.Property(x => x.IdempotencyKey).IsRequired().HasMaxLength(128);
 		builder.Property(x => x.ActivationIdempotencyKey).HasMaxLength(128);
 		// Application services always provide the policy-derived deadline. This portable fallback keeps
@@ -41,10 +46,10 @@ public class StudentOnboardingConfiguration :
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Status });
 		builder.HasIndex(x => new { x.TenantId, x.StudentId, x.AcademicYearId })
 			.IsUnique()
-			.HasFilter("\"IsDeleted\" = false AND \"Status\" IN (0, 1, 2, 3)");
+			.HasFilter("\"IsDeleted\" = false AND \"Status\" IN (0, 1, 2, 3, 6)");
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.DivisionId, x.RollNumber })
 			.IsUnique()
-			.HasFilter("\"IsDeleted\" = false AND \"DivisionId\" IS NOT NULL AND \"RollNumber\" IS NOT NULL AND \"Status\" IN (0, 1, 2, 3)");
+			.HasFilter("\"IsDeleted\" = false AND \"DivisionId\" IS NOT NULL AND \"RollNumber\" IS NOT NULL AND \"Status\" IN (0, 1, 2, 3, 6)");
 		builder.HasOne<AdmissionApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Restrict);
 		builder.HasOne<AdmissionApplicant>().WithMany().HasForeignKey(x => x.ApplicantId).OnDelete(DeleteBehavior.Restrict);
 		builder.HasOne<Student>().WithMany().HasForeignKey(x => x.StudentId).OnDelete(DeleteBehavior.Restrict);
@@ -60,6 +65,7 @@ public class StudentOnboardingConfiguration :
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentOnboardingSteps", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.ConfigureUtcInstants(nameof(StudentOnboardingStep.CompletedAt));
 		builder.Property(x => x.Key).IsRequired().HasMaxLength(64);
 		builder.Property(x => x.Label).IsRequired().HasMaxLength(160);
 		builder.Property(x => x.Detail).HasMaxLength(1000);
@@ -113,6 +119,8 @@ public class StudentOnboardingConfiguration :
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentSeatReservations", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.ConfigureUtcInstants(nameof(StudentSeatReservation.ReservedAt), nameof(StudentSeatReservation.ExpiresAt),
+			nameof(StudentSeatReservation.CommittedAt), nameof(StudentSeatReservation.ReleasedAt));
 		builder.Property(x => x.ReleaseReason).HasMaxLength(500);
 		builder.HasIndex(x => new { x.TenantId, x.OnboardingCaseId, x.Status });
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.DivisionId, x.Status, x.ExpiresAt });
@@ -139,6 +147,7 @@ public class StudentOnboardingConfiguration :
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentIdentifierAllocations", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.ConfigureUtcInstants(nameof(StudentIdentifierAllocation.AllocatedAt), nameof(StudentIdentifierAllocation.CommittedAt));
 		builder.Property(x => x.Value).IsRequired().HasMaxLength(100);
 		builder.Property(x => x.Reason).HasMaxLength(1000);
 		builder.HasIndex(x => new { x.TenantId, x.OnboardingCaseId, x.IdentifierType }).IsUnique();
@@ -152,6 +161,7 @@ public class StudentOnboardingConfiguration :
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentOnboardingServiceHandoffs", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.ConfigureUtcInstants(nameof(StudentOnboardingServiceHandoff.LastAttemptAt), nameof(StudentOnboardingServiceHandoff.AcknowledgedAt));
 		builder.Property(x => x.ServiceKey).IsRequired().HasMaxLength(80);
 		builder.Property(x => x.IdempotencyKey).IsRequired().HasMaxLength(160);
 		builder.Property(x => x.LastError).HasMaxLength(2000);

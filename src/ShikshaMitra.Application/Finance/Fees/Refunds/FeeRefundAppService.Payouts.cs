@@ -1,0 +1,226 @@
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Finance.Audit;
+using ShikshaMitra.Finance.Events;
+using ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
+using System;
+using System.Data;
+using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Volo.Abp;
+using Volo.Abp.Uow;
+using Volo.Abp.Users;
+
+namespace ShikshaMitra.Finance.Fees.FeeRefund;
+
+public partial class FeeRefundAppService
+{
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Process)]
+    [UnitOfWork(IsDisabled = true)]
+    public async Task<FeeRefundRequestDto> RecordPayoutAsync(Guid id, RecordRefundPayoutDto input)
+    {
+        if (string.IsNullOrWhiteSpace(input.IdempotencyKey))
+            throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
+        using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
+            { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+        var request = await RequireAsync(id);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
+        EnsureSettlementMethodAllowed(request, input.Method);
+        var priorPayout = request.Settlements.FirstOrDefault(x =>
+            x.IdempotencyKey == input.IdempotencyKey || x.VerificationKey == input.IdempotencyKey);
+        var pendingPayout = request.Settlements.SingleOrDefault(x => x.Status == FeeRefundSettlementStatus.Processing);
+        var storedPayout = priorPayout ?? pendingPayout;
+        var reference = input.ExternalReference?.Trim();
+        // Read DTO references are masked. Resume the already identified server payment;
+        // never replace its immutable reference with that display value.
+        if (storedPayout?.ExternalReference is { } storedReference &&
+            (string.IsNullOrWhiteSpace(reference) || reference == Mask(storedReference)))
+            reference = storedReference;
+        if (input.Method == "Cash" && string.IsNullOrWhiteSpace(reference))
+            reference = $"CASH-{request.VoucherNumber}";
+        if (priorPayout != null)
+        {
+            if (priorPayout.Method != input.Method || priorPayout.Amount != input.Amount ||
+                (priorPayout.SettlementDate - input.PaymentDate).Duration() > TimeSpan.FromMilliseconds(1) ||
+                priorPayout.ExternalReference != reference ||
+                (priorPayout.Status == FeeRefundSettlementStatus.Processed &&
+                    ((input.Method != "Cash" && priorPayout.BankAccountId != input.BankAccountId) ||
+                     request.ExpenseCategoryId != input.ExpenseCategoryId)))
+                throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
+            if (priorPayout.Status == FeeRefundSettlementStatus.Processed)
+            {
+                var replay = await MapAsync(request);
+                await uow.CompleteAsync();
+                return replay;
+            }
+        }
+        if ((request.RefundMethod != null && request.RefundMethod != input.Method) ||
+            input.Amount != request.ApprovedAmount ||
+            input.PaymentDate == default || string.IsNullOrWhiteSpace(reference))
+            throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
+        var category = await routingManager.RequireCategoryAsync(request.AcademicYearId,
+            input.ExpenseCategoryId, ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Expense);
+        var bank = input.Method == "Cash" ? null : await routingManager.RequireBankAsync(request.AcademicYearId,
+            input.BankAccountId, input.PaymentDate);
+        if (pendingPayout != null && (pendingPayout.Method != input.Method ||
+            pendingPayout.Amount != input.Amount || pendingPayout.ExternalReference != reference ||
+            (pendingPayout.SettlementDate - input.PaymentDate).Duration() > TimeSpan.FromMilliseconds(1)))
+        {
+            throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
+        }
+        if (await feeRefundRepository.IsPayoutReferenceUsedAsync(input.Method,
+            reference!, request.Id))
+            throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
+        request.SetPayoutRouting(category.Id, category.Name, bank?.Id,
+            bank == null ? null : $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}", input.Method);
+        var evidence = string.IsNullOrWhiteSpace(input.EvidenceReference)
+            ? $"Payment recorded for {request.VoucherNumber}" : input.EvidenceReference.Trim();
+        var payout = pendingPayout ?? request.RecordPayout(GuidGenerator.Create(), currentUser.GetId(), input.IdempotencyKey,
+            input.Method, input.Amount, input.PaymentDate, reference, null, bank?.Id, evidence);
+        if (pendingPayout == null) await feeRefundRepository.StageNewSettlementAsync(payout);
+        await CompleteRecordedPayoutAsync(request, payout, input.IdempotencyKey, evidence);
+        await uow.CompleteAsync();
+        return await MapAsync(request);
+    }
+
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.VerifyPayout)]
+    [UnitOfWork(IsDisabled = true)]
+    public async Task<FeeRefundRequestDto> ConfirmPayoutAsync(Guid id, Guid payoutId, ResolveRefundPayoutDto input)
+    {
+        if (string.IsNullOrWhiteSpace(input.IdempotencyKey) ||
+            string.IsNullOrWhiteSpace(input.EvidenceReference))
+            throw new BusinessException(FeeRefundErrorCodes.PaymentNotSettled);
+        using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
+            { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+        var request = await RequireAsync(id);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
+        var payout = request.Settlements.SingleOrDefault(x => x.Id == payoutId)
+            ?? throw new BusinessException(FeeRefundErrorCodes.SettlementNotFound);
+        if (payout.VerificationKey == input.IdempotencyKey && request.Status == FeeRefundStatus.Processed)
+        {
+            if (payout.EvidenceReference != input.EvidenceReference)
+                throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
+            return await MapAsync(request);
+        }
+        if (payout.InitiatedByUserId == currentUser.GetId() && payout.Method != "Cash")
+            throw new BusinessException(FeeRefundErrorCodes.MakerCheckerViolation);
+        await CompleteRecordedPayoutAsync(request, payout, input.IdempotencyKey, input.EvidenceReference);
+        await uow.CompleteAsync();
+        return await MapAsync(request);
+    }
+
+    private async Task CompleteRecordedPayoutAsync(FeeRefundRequest request, FeeRefundSettlement payout,
+        string idempotencyKey, string evidenceReference)
+    {
+        await ValidateRefundSourceEvidenceAsync(request);
+        await feeRefundManager.ConfirmPayoutAsync(request, payout.Id, currentUser.GetId(),
+            idempotencyKey, evidenceReference);
+        var amount = request.Lines.Sum(x => x.ProcessedAmount - x.ReversedAmount);
+        if (amount != request.ProcessedAmount || amount != payout.Amount ||
+            request.Lines.Any(x => x.SourceAllocationId == null || x.SourceReceiptId == null))
+            throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
+        await refundAccountingRepository.InsertAsync(new FeeRefundAccountingEntry(
+            GuidGenerator.Create(), CurrentTenant.Id, request.Id, payout.Id,
+            request.OriginalReceiptId, payout.BankAccountId, payout.Method,
+            payout.ExternalReference, amount, false, null, FeeHeadBreakdown(request),
+            evidenceReference, currentUser.GetId()), autoSave: false);
+        if (request.ExpenseCategoryId is { } categoryId)
+            await automaticTransactions.RecordAsync(request.AcademicYearId, categoryId,
+                request.ExpenseCategoryName!, payout.BankAccountId, request.PayingBankLabel,
+                request.VoucherNumber, amount, PayoutMethodValue(payout.Method),
+                ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Expense,
+                $"refund:{payout.Id:N}", request.Id, request.StudentId, paymentDate: payout.SettlementDate.UtcDateTime,
+                financeFeeAccountId: request.FinanceFeeAccountId);
+        await WriteAuditAsync(request, FinanceAuditActions.Refund,
+            $"Refund {request.VoucherNumber} completed.",
+            context: new { PayoutId = payout.Id, request.ExpenseCategoryId, request.PayingBankAccountId });
+        await eventBus.PublishAsync(new FeeRefundApprovedEto
+        {
+            RefundRequestId = request.Id, StudentId = request.StudentId, FinanceFeeAccountId = request.FinanceFeeAccountId,
+            AcademicYearId = request.AcademicYearId, TotalRefundAmount = Convert.ToDouble(request.ProcessedAmount),
+            TenantId = CurrentTenant.Id, ApprovedAt = Clock.Now
+        });
+    }
+
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.FailPayout)]
+    [UnitOfWork(IsDisabled = true)]
+    public async Task<FeeRefundRequestDto> FailPayoutAsync(Guid id, Guid payoutId, ResolveRefundPayoutDto input)
+    {
+        if (string.IsNullOrWhiteSpace(input.IdempotencyKey) ||
+            string.IsNullOrWhiteSpace(input.EvidenceReference))
+            throw new BusinessException(FeeRefundErrorCodes.PaymentNotSettled);
+        using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
+            { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+        var request = await RequireAsync(id);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
+        var payout = request.Settlements.SingleOrDefault(x => x.Id == payoutId)
+            ?? throw new BusinessException(FeeRefundErrorCodes.SettlementNotFound);
+        if (payout.VerificationKey == input.IdempotencyKey && request.Status == FeeRefundStatus.Failed)
+        {
+            if (payout.EvidenceReference != input.EvidenceReference ||
+                payout.FailureReason != input.Reason)
+                throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
+            return await MapAsync(request);
+        }
+        if (string.IsNullOrWhiteSpace(input.Reason))
+            throw new BusinessException(FeeRefundErrorCodes.PaymentNotSettled);
+        if (payout.InitiatedByUserId == currentUser.GetId())
+            throw new BusinessException(FeeRefundErrorCodes.MakerCheckerViolation);
+        request.FailPayout(payoutId, currentUser.GetId(), input.IdempotencyKey,
+            input.Reason, input.EvidenceReference);
+        await WriteAuditAsync(request, FinanceAuditActions.Update,
+            $"Refund payout failed for {request.VoucherNumber}.", input.Reason,
+            new { PayoutId = payoutId });
+        await uow.CompleteAsync();
+        return await MapAsync(request);
+    }
+
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reverse)]
+    [UnitOfWork(IsDisabled = true)]
+    public async Task<FeeRefundRequestDto> ReturnPayoutAsync(Guid id, ReturnRefundPayoutDto input)
+    {
+        if (string.IsNullOrWhiteSpace(input.Reason) ||
+            string.IsNullOrWhiteSpace(input.EvidenceReference))
+            throw new BusinessException(FeeRefundErrorCodes.PaymentNotSettled);
+        using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
+            { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+        var request = await RequireAsync(id);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
+        var original = (await refundAccountingRepository.GetListAsync(x =>
+            x.RefundRequestId == id && !x.IsCorrection)).SingleOrDefault();
+        if (original == null || original.SettlementId != input.SettlementId ||
+            request.ProcessedAmount - request.ReversedAmount != original.Amount)
+            throw new BusinessException(FeeRefundErrorCodes.PaymentNotSettled);
+        await feeRefundManager.ReturnPayoutAsync(request, input.SettlementId, currentUser.GetId(), input.Reason);
+        if (request.ProcessedAmount - request.ReversedAmount != 0 ||
+            request.Lines.Sum(x => x.ProcessedAmount - x.ReversedAmount) != 0)
+            throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
+        await refundAccountingRepository.InsertAsync(new FeeRefundAccountingEntry(
+            GuidGenerator.Create(), CurrentTenant.Id, request.Id, input.SettlementId,
+            original.OriginalReceiptId, original.BankAccountId, original.Method,
+            original.ExternalReference, original.Amount, true, original.Id,
+            original.FeeHeadAmountsJson, input.EvidenceReference, currentUser.GetId()), autoSave: false);
+        await automaticTransactions.ReverseAsync(request.Id);
+        await WriteAuditAsync(request, FinanceAuditActions.Reverse,
+            $"Refund payout returned for {request.VoucherNumber}.", input.Reason,
+            new { input.SettlementId, input.EvidenceReference });
+        await uow.CompleteAsync();
+        return await MapAsync(request);
+    }
+
+    private static int PayoutMethodValue(string method) => method switch
+    { "Cash" => 0, "Cheque" => 1, "DemandDraft" or "Demand Draft (DD)" => 2, "BankTransfer" or "Bank Transfer (NEFT/RTGS/IMPS)" => 3, "Upi" or "UPI" => 6,
+      _ => throw new BusinessException(FeeRefundErrorCodes.PayoutMethodNotAllowed) };
+    private static string FeeHeadBreakdown(FeeRefundRequest request) => JsonSerializer.Serialize(
+        request.Lines.Select(x => new
+        {
+            x.FeeHeadId,
+            x.DueFeeId,
+            x.ChargeId,
+            x.LateFeeDueFeeId,
+            x.SourceAllocationId,
+            x.SourceReceiptId,
+            Amount = x.ProcessedAmount - x.ReversedAmount
+        }).OrderBy(x => x.FeeHeadId).ThenBy(x => x.SourceAllocationId).ToArray());
+}

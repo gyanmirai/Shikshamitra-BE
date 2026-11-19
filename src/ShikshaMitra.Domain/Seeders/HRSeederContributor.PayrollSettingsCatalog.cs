@@ -87,9 +87,28 @@ public partial class HRSeederContributor
 				autoSave: false);
 		}
 
-		if (!await _statutoryRuleRepository.AnyAsync(x =>
-			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance &&
-			x.JurisdictionCode == "IN-GJ" && x.Version == 1))
+		var esiDefault = await _esiPolicyRepository.FindAsync(x => x.IsDefault);
+		if (esiDefault == null)
+		{
+			esiDefault = new EsiPolicy(GuidGenerator.Create(), CurrentTenant.Id, "Standard ESIC", "STANDARD_ESIC", true);
+			await _esiPolicyRepository.InsertAsync(esiDefault, autoSave: true);
+		}
+		var legacyRules = await _statutoryRuleRepository.GetListAsync(x => x.SchemeCode == "ESI" && x.EsiPolicyId == null);
+		var hasAmbiguousLegacyRules = legacyRules.GroupBy(x => x.EffectiveFrom).Any(x => x.Count() > 1);
+		// Preserve all default history, including intentional gaps and deleted version identities.
+		// A different named policy's v1 must not suppress the default baseline.
+		bool hasDefaultHistory;
+		using (_dataFilter.Disable<ISoftDelete>())
+			hasDefaultHistory = await _statutoryRuleRepository.AnyAsync(x =>
+				x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance && x.EsiPolicyId == esiDefault.Id);
+		// Existing named history is authoritative. Do not merge orphan legacy rows into it.
+		if (!hasAmbiguousLegacyRules && !hasDefaultHistory)
+			foreach (var legacyRule in legacyRules)
+			{
+				legacyRule.AssignLegacyPolicy(esiDefault.Id);
+				await _statutoryRuleRepository.UpdateAsync(legacyRule);
+			}
+		if (legacyRules.Count == 0 && !hasDefaultHistory)
 		{
 			await _statutoryRuleRepository.InsertAsync(
 				new StatutoryRuleVersion(
@@ -101,7 +120,7 @@ public partial class HRSeederContributor
 					exclusionCapPercentage: 50m, inKindCapPercentage: 15m,
 					StatutoryRoundingPolicy.NextHigherRupee,
 					"https://www.labour.gov.in/offerings/schemes-and-services/details/labour-codes-gzNzQzMtQWa",
-					new DateTime(2026, 8, 18)),
+					new DateTime(2026, 8, 18), esiPolicyId: esiDefault.Id),
 				autoSave: false);
 		}
 

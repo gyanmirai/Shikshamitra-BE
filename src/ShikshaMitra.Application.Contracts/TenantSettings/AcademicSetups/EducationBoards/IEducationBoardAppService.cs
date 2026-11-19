@@ -11,4 +11,6 @@ public interface IEducationBoardAppService :
 		PagedAndSortedResultRequestDto, // Used for paging/sorting
 		CreateUpdateEducationBoardDto> // The DTO to create/update an entity
 {
+	System.Threading.Tasks.Task<System.Collections.Generic.List<EducationBoardOptionDto>> GetOptionsAsync();
+	System.Threading.Tasks.Task<ListResultDto<EducationBoardDto>> GetHierarchyAsync(Guid academicYearId);
 }

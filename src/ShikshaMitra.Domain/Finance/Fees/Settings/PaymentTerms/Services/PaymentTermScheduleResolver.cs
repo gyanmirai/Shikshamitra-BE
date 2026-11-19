@@ -32,6 +32,16 @@ public class PaymentTermScheduleResolver(
 			throw new BusinessException(PaymentTermErrorCodes.NotFound)
 				.WithData("PaymentTermId", detail.PaymentTermId);
 		}
+		return Resolve(detail, term);
+	}
+
+	/// <summary>Compose a schedule from a term already read in the current operation.</summary>
+	public ResolvedFeeHeadSchedule Resolve(FeeStructureDetail detail, PaymentTerm term)
+	{
+		if (!detail.PaymentTermId.HasValue || !detail.PaymentTermVersionId.HasValue)
+			return ResolvedFeeHeadSchedule.Legacy(detail);
+		if (term.Id != detail.PaymentTermId.Value)
+			throw new BusinessException(PaymentTermErrorCodes.NotFound).WithData("PaymentTermId", detail.PaymentTermId);
 
 		var version = term.Versions.FirstOrDefault(v => v.Id == detail.PaymentTermVersionId.Value)
 			?? throw new BusinessException(PaymentTermErrorCodes.NotFound)
@@ -45,7 +55,7 @@ public class PaymentTermScheduleResolver(
 				.WithData("Status", version.Status.ToString());
 		}
 
-		var annualAmount = (decimal)detail.Amount;
+		var annualAmount = detail.Amount.HasValue ? ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(detail.Amount.Value) : (decimal?)null;
 		var installments = new List<ResolvedInstallment>();
 		var allocated = 0m;
 		var masterInstallments = version.Installments.OrderBy(i => i.Sequence).ToList();
@@ -87,16 +97,20 @@ public class PaymentTermScheduleResolver(
 					null);
 			}
 
-			decimal calculatedAmount;
-			if (index == masterInstallments.Count - 1)
+			decimal? calculatedAmount;
+			if (!annualAmount.HasValue)
+            {
+                calculatedAmount = null;
+            }
+            else if (index == masterInstallments.Count - 1)
 			{
 				// Absorb rounding residual on the last installment.
-				calculatedAmount = Math.Round(annualAmount - allocated, 2);
+				calculatedAmount = annualAmount.Value - allocated;
 			}
 			else
 			{
-				calculatedAmount = Math.Round(annualAmount * allocationPercentage / 100m, 2);
-				allocated += calculatedAmount;
+				calculatedAmount = decimal.Floor(annualAmount.Value * allocationPercentage / 100m);
+				allocated += calculatedAmount.Value;
 			}
 
 			installments.Add(new ResolvedInstallment(
@@ -127,15 +141,30 @@ public class PaymentTermScheduleResolver(
 			isValid: true);
 	}
 
+	/// <summary>Read each distinct template once for a calculation, including its pinned versions.</summary>
+	public async Task<IReadOnlyDictionary<Guid, PaymentTerm>> LoadTermsAsync(IEnumerable<FeeStructureDetail> details)
+	{
+		var ids = details.Where(detail => detail.PaymentTermId.HasValue && detail.PaymentTermVersionId.HasValue)
+			.Select(detail => detail.PaymentTermId!.Value).Distinct().ToArray();
+		if (ids.Length == 0) return new Dictionary<Guid, PaymentTerm>();
+		using var tracking = paymentTermRepository.DisableTracking();
+		return (await paymentTermRepository.GetListAsync(term => Enumerable.Contains(ids, term.Id)))
+			.ToDictionary(term => term.Id);
+	}
+
+	public ResolvedFeeHeadSchedule ResolveFromTerms(FeeStructureDetail detail, IReadOnlyDictionary<Guid, PaymentTerm> terms)
+	{
+		if (!detail.PaymentTermId.HasValue || !detail.PaymentTermVersionId.HasValue)
+			return ResolvedFeeHeadSchedule.Legacy(detail);
+		if (!terms.TryGetValue(detail.PaymentTermId.Value, out var term))
+			throw new BusinessException(PaymentTermErrorCodes.NotFound).WithData("PaymentTermId", detail.PaymentTermId);
+		return Resolve(detail, term);
+	}
+
 	public async Task<List<ResolvedFeeHeadSchedule>> ResolveAllAsync(FeeStructure feeStructure)
 	{
-		var result = new List<ResolvedFeeHeadSchedule>();
-		foreach (var detail in feeStructure.FeeStructureDetails)
-		{
-			result.Add(await ResolveAsync(detail));
-		}
-
-		return result;
+		var terms = await LoadTermsAsync(feeStructure.FeeStructureDetails);
+		return feeStructure.FeeStructureDetails.Select(detail => ResolveFromTerms(detail, terms)).ToList();
 	}
 }
 
@@ -144,7 +173,7 @@ public sealed class ResolvedFeeHeadSchedule
 	public Guid FeeStructureDetailId { get; }
 	public Guid FeeHeadId { get; }
 	public string? FeeHeadName { get; }
-	public decimal AnnualAmount { get; }
+	public decimal? AnnualAmount { get; }
 	public Guid? PaymentTermId { get; }
 	public string? PaymentTermName { get; }
 	public Guid? PaymentTermVersionId { get; }
@@ -157,7 +186,7 @@ public sealed class ResolvedFeeHeadSchedule
 		Guid feeStructureDetailId,
 		Guid feeHeadId,
 		string? feeHeadName,
-		decimal annualAmount,
+		decimal? annualAmount,
 		Guid? paymentTermId,
 		string? paymentTermName,
 		Guid? paymentTermVersionId,
@@ -183,7 +212,7 @@ public sealed class ResolvedFeeHeadSchedule
 		detail.Id,
 		detail.FeeHeadId,
 		detail.FeeHead?.Name,
-		(decimal)detail.Amount,
+		detail.Amount,
 		null,
 		null,
 		null,
@@ -203,7 +232,7 @@ public sealed class ResolvedInstallment
 	public DateTime DemandDate { get; }
 	public DateTime DueDate { get; }
 	public decimal AllocationPercentage { get; }
-	public decimal CalculatedAmount { get; }
+	public decimal? CalculatedAmount { get; }
 	public bool? AllowPartialOverride { get; }
 	public int? GracePeriodDaysOverride { get; }
 
@@ -216,7 +245,7 @@ public sealed class ResolvedInstallment
 		DateTime demandDate,
 		DateTime dueDate,
 		decimal allocationPercentage,
-		decimal calculatedAmount,
+		decimal? calculatedAmount,
 		bool? allowPartialOverride,
 		int? gracePeriodDaysOverride)
 	{

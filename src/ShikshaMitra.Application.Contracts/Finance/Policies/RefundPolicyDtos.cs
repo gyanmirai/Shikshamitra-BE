@@ -20,6 +20,8 @@ public class RefundPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public string PolicyType { get; set; } = "refund";
 	public string FeeHeadScope { get; set; } = "AllFeeHeads";
 	public List<Guid> ApplicableFeeHeadIds { get; set; } = [];
+	public Dictionary<Guid, string> FeeHeadNames { get; set; } = [];
+	public Dictionary<Guid, string> FeeHeadStatuses { get; set; } = [];
 	public bool IncludePaidCharges { get; set; }
 	public bool IncludePaidLateFee { get; set; }
 	public bool AllowPartialRefund { get; set; }
@@ -28,13 +30,17 @@ public class RefundPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public decimal? FixedAmount { get; set; }
 	public decimal? MaximumPerRequest { get; set; }
 	public decimal? MaximumPerStudentYear { get; set; }
-	public string RoundingMethod { get; set; } = "None";
+	public string RoundingMethod { get; set; } = "RoundUp";
 	public string DeductionType { get; set; } = "None";
 	public decimal? DeductionValue { get; set; }
 	public decimal? MaximumDeduction { get; set; }
 	public string DeductionExplanation { get; set; } = string.Empty;
 	public List<string> AllowedPayoutMethods { get; set; } = [];
 	public int? ProcessingTargetDays { get; set; }
+	public Guid? ExpenseCategoryId { get; set; }
+	public Guid? DefaultPayingBankAccountId { get; set; }
+	public string? ExpenseCategoryName { get; set; }
+	public string? DefaultPayingBankAccountName { get; set; }
 	public int Version { get; set; }
 	public bool IsUsedInDownstream { get; set; }
 	public DateTime CreationTime { get; set; }
@@ -62,7 +68,7 @@ public class CreateUpdateRefundPolicyDto
 	public decimal? FixedAmount { get; set; }
 	public decimal? MaximumPerRequest { get; set; }
 	public decimal? MaximumPerStudentYear { get; set; }
-	public string RoundingMethod { get; set; } = "None";
+	public string RoundingMethod { get; set; } = "RoundUp";
 	public string DeductionType { get; set; } = "None";
 	public decimal? DeductionValue { get; set; }
 	public decimal? MaximumDeduction { get; set; }
@@ -70,6 +76,8 @@ public class CreateUpdateRefundPolicyDto
 	public List<string> AllowedPayoutMethods { get; set; } =
 		["Cash", "Cheque", "DemandDraft", "BankTransfer", "Upi"];
 	public int? ProcessingTargetDays { get; set; }
+	public Guid? ExpenseCategoryId { get; set; }
+	public Guid? DefaultPayingBankAccountId { get; set; }
 	public string? ChangeReason { get; set; }
 	public string? ConcurrencyStamp { get; set; }
 }
@@ -113,8 +121,6 @@ public class CreateUpdateRefundPolicyDtoValidator : AbstractValidator<CreateUpda
 		RuleFor(x => x).Must(x => !x.MaximumPerRequest.HasValue || !x.MaximumPerStudentYear.HasValue ||
 			x.MaximumPerRequest <= x.MaximumPerStudentYear)
 			.WithMessage("Maximum per request cannot exceed maximum per student/year.");
-		RuleFor(x => x).Must(x => !EnumValue(x.AmountMode, "ManualUpToEligible") || x.AllowPartialRefund)
-			.WithMessage("Manual up to eligible requires partial refunds to be allowed.");
 	}
 
 	private static bool EnumValue(string? value, params string[] allowed) =>
@@ -123,9 +129,19 @@ public class CreateUpdateRefundPolicyDtoValidator : AbstractValidator<CreateUpda
 
 public class RefundPolicyListRequestDto : PagedAndSortedResultRequestDto
 {
+	public bool IncludeArchived { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public string? Status { get; set; }
 	public string? Search { get; set; }
+	public string? PolicyNameFilter { get; set; }
+	public string? PolicyNameOperator { get; set; }
+	public string? AmountMode { get; set; }
+	public string? FeeHeadScope { get; set; }
+	public string? AllowedPayoutMethod { get; set; }
+	public bool? AllowPartialRefund { get; set; }
+	public string? UpdatedAtOperator { get; set; }
+	public DateTime? UpdatedAt { get; set; }
+	public DateTime? UpdatedAtEnd { get; set; }
 }
 
 public class RefundPolicyListRequestDtoValidator : AbstractValidator<RefundPolicyListRequestDto>

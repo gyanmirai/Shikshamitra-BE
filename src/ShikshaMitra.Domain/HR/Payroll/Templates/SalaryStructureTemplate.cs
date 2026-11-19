@@ -85,8 +85,19 @@ public class SalaryStructureTemplateVersion : FullAuditedAggregateRoot<Guid>, IM
 	public CompensationProtectionPolicy DefaultProtectionPolicy { get; private set; }
 	public bool DefaultPfApplicable { get; private set; }
 	public Guid? DefaultPfRuleId { get; private set; }
+	public string DefaultEsiManagementMode { get; private set; } = ShikshaMitra.HR.Payroll.Statutory.EsiManagement.InPlatform;
+	public Guid? DefaultEsiPolicyId { get; private set; }
+	public string? DefaultEsiExternalReason { get; private set; }
 	public string SaveOperationKey { get; private set; } = string.Empty;
 	public DateTime? PublishedAt { get; private set; }
+
+
+	public void SetEsiAssignment(string mode, Guid? policyId, string? reason)
+	{
+		if (Status != SalaryTemplateStatus.Draft) throw new BusinessException("HR:Payroll:SalaryTemplateVersionImmutable");
+		ShikshaMitra.HR.Payroll.Statutory.EsiManagement.Validate(mode, policyId, reason);
+		DefaultEsiManagementMode = mode; DefaultEsiPolicyId = policyId; DefaultEsiExternalReason = mode == "EXTERNAL" ? reason?.Trim() : null;
+	}
 
 	protected SalaryStructureTemplateVersion()
 	{
@@ -98,8 +109,8 @@ public class SalaryStructureTemplateVersion : FullAuditedAggregateRoot<Guid>, IM
 		Guid templateId,
 		int versionNumber,
 		IReadOnlyList<SalaryTemplateRule> rules,
-		SalaryInputBasis defaultSalaryBasis = SalaryInputBasis.Gross,
-		CompensationProtectionPolicy defaultProtectionPolicy = CompensationProtectionPolicy.ProtectGross,
+		SalaryInputBasis defaultSalaryBasis = SalaryInputBasis.EmployerCost,
+		CompensationProtectionPolicy defaultProtectionPolicy = CompensationProtectionPolicy.ProtectEmployerCost,
 		bool defaultPfApplicable = false,
 		Guid? defaultPfRuleId = null,
 		string? saveOperationKey = null) : base(id)

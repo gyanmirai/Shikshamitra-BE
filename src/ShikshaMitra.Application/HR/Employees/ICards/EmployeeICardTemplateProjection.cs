@@ -1,3 +1,6 @@
+using Volo.Abp.Data;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
+
 namespace ShikshaMitra.HR.Employees.ICards;
 
 internal static class EmployeeICardTemplateProjection
@@ -7,6 +10,7 @@ internal static class EmployeeICardTemplateProjection
 		return new EmployeeICardTemplateDto
 		{
 			Id = template.Id,
+			LogoMode = (SchoolIdentityAssetMode?)template.GetProperty<int?>("SchoolIdentityLogoMode"),
 			AcademicYearId = template.AcademicYearId,
 			MediumStageId = template.MediumStageId,
 			Name = template.Name,

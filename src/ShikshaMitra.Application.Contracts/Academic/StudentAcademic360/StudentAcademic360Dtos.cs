@@ -19,6 +19,11 @@ public class StudentAcademic360Input
     public int ExamMaxResultCount { get; set; }
     public int RecentTaskCount { get; set; } = 10;
     public int RecentExamCount { get; set; } = 5;
+    public string? TaskStatusFilter { get; set; }
+    public string? TaskSubjectName { get; set; }
+    public string? ExamStatusFilter { get; set; }
+    public string? ExamSearchTerm { get; set; }
+    public bool DetailPaging { get; set; }
 }
 
 public class StudentAcademic360Dto
@@ -31,6 +36,8 @@ public class StudentAcademic360Dto
     public TimetableResponseDto Timetable { get; set; } = new();
     public StudentAcademic360LearningTaskSummaryDto LearningTasks { get; set; } = new();
     public List<StudentAcademic360ExamResultDto> Exams { get; set; } = [];
+    public int ExamTotalCount { get; set; }
+    public StudentAcademic360ExamSummaryDto ExamSummary { get; set; } = new();
     public List<StudentAcademic360SubjectPerformanceDto> SubjectPerformance { get; set; } = [];
     public List<StudentAcademic360AlertDto> Alerts { get; set; } = [];
     public List<StudentAcademic360UpcomingItemDto> UpcomingItems { get; set; } = [];
@@ -83,6 +90,9 @@ public class StudentAcademic360AttendanceDto
 
 public class StudentAcademic360LearningTaskSummaryDto
 {
+    public int FilteredTotalCount { get; set; }
+    public List<string> SubjectNames { get; set; } = [];
+    public int ResubmissionRequired { get; set; }
     public int TotalAssigned { get; set; }
     public int Submitted { get; set; }
     public int Pending { get; set; }
@@ -91,6 +101,14 @@ public class StudentAcademic360LearningTaskSummaryDto
     public int PendingEvaluation { get; set; }
     public List<StudentAcademic360LearningTaskDto> Tasks { get; set; } = [];
     public List<StudentAcademic360LearningTaskDto> RecentTasks { get; set; } = [];
+}
+
+public class StudentAcademic360ExamSummaryDto
+{
+    public int Total { get; set; }
+    public int Upcoming { get; set; }
+    public int Completed { get; set; }
+    public double? Average { get; set; }
 }
 
 public class StudentAcademic360LearningTaskDto

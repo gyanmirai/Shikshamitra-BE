@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -29,6 +30,7 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using System.Threading.RateLimiting;
 using Volo.Abp;
 using Volo.Abp.Account;
 using Volo.Abp.Account.Web;
@@ -106,7 +108,26 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		var configuration = context.Services.GetConfiguration();
 		var hostingEnvironment = context.Services.GetHostingEnvironment();
 		var services = context.Services;
+        Configure<AbpBackgroundWorkerOptions>(options => options.IsEnabled = configuration.GetValue<bool>("BackgroundWorkers:IsEnabled", true));
+        Configure<Volo.Abp.BackgroundJobs.AbpBackgroundJobOptions>(options => options.IsJobExecutionEnabled = configuration.GetValue<bool>("BackgroundJobs:IsJobExecutionEnabled", true));
 		services.AddHttpClient();
+		services.AddHostedService<ShikshaMitra.Diagnostics.ApiDatabaseTimingObserver>();
+		services.AddRateLimiter(options =>
+		{
+			options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+			options.AddPolicy("public-admission-registration", context =>
+				RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+					_ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+			options.AddPolicy("public-admission-inquiry", context =>
+				RateLimitPartition.GetFixedWindowLimiter(
+					context.Request.RouteValues["token"]?.ToString() ?? "unknown",
+					_ => new FixedWindowRateLimiterOptions
+					{
+						PermitLimit = 120,
+						Window = TimeSpan.FromMinutes(1),
+						QueueLimit = 0
+					}));
+		});
 		services.AddHostedService<StagingDatabaseMigrationHostedService>();
 
 		if (hostingEnvironment.IsDevelopment() && configuration.GetValue<bool>("DevAutoAuth:Enabled"))
@@ -121,6 +142,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		}
 
 		ConfigureAuthentication(context);
+		Configure<AbpAspNetCoreMultiTenancyOptions>(InactiveTenantResponse.Configure);
 		ConfigureBundles();
 		ConfigureUrls(configuration);
 		ConfigureConventionalControllers();
@@ -506,11 +528,13 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		}
 
 		// Enforce RFC 7807 ProblemDetails for all /api endpoints.
+		app.UseMiddleware<ApiRequestTimingMiddleware>();
 		app.UseApiProblemDetails();
 
 		app.UseCorrelationId();
 		app.UseStaticFiles();
 		app.UseRouting();
+		app.UseRateLimiter();
 		app.UseCors();
 
 		if (env.IsDevelopment() && configuration.GetValue<bool>("DevAutoAuth:Enabled"))
@@ -573,16 +597,23 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	public override async Task OnApplicationInitializationAsync(ApplicationInitializationContext context)
 	{
 		OnApplicationInitialization(context);
+        if (!context.ServiceProvider.GetRequiredService<IConfiguration>().GetValue<bool>("BackgroundWorkers:IsEnabled", true)) return;
 		await ConfigureSmtpPasswordAsync(context.ServiceProvider);
 		await context.AddBackgroundWorkerAsync<AssignmentScheduledPublicationWorker>();
 		await context.AddBackgroundWorkerAsync<AdmissionCycleScheduleWorker>();
-		await context.AddBackgroundWorkerAsync<AdmissionWorkflowScheduleWorker>();
+		await context.AddBackgroundWorkerAsync<StudentRecordScheduleWorker>();
+		await context.AddBackgroundWorkerAsync<StudentRecordReportWorker>();
+		await context.AddBackgroundWorkerAsync<StudentRecordTransitionWorker>();
+		await context.AddBackgroundWorkerAsync<StudentCredentialEmailWorker>();
+		await context.AddBackgroundWorkerAsync<AdmissionInquiryQualificationEmailWorker>();
 		await context.AddBackgroundWorkerAsync<ExamAutoCompleteWorker>();
 		await context.AddBackgroundWorkerAsync<HrDashboardPreviewRefreshWorker>();
 		await context.AddBackgroundWorkerAsync<StudentDashboardPreviewRefreshWorker>();
-		await context.AddBackgroundWorkerAsync<HrReportScheduleWorker>();
+		await context.AddBackgroundWorkerAsync<HrReportingRetentionWorker>();
+		await context.AddBackgroundWorkerAsync<InstituteReportRetentionWorker>();
 		await context.AddBackgroundWorkerAsync<LibraryNotificationReminderWorker>();
 		await context.AddBackgroundWorkerAsync<LeaveYearEndSettlementPreviewWorker>();
 		await context.AddBackgroundWorkerAsync<ConcessionDocumentUploadCleanupWorker>();
+		await context.AddBackgroundWorkerAsync<SchoolIdentityDraftCleanupWorker>();
 	}
 }

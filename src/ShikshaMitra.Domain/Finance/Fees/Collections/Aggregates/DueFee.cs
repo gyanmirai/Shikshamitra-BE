@@ -3,8 +3,10 @@ using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.FeeAdjustment;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using System;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -17,7 +19,11 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	public Guid StudentId { get; private set; }
+	public Guid? StudentId { get; private set; }
+	public Guid? FinanceFeeAccountId { get; private set; }
+	public void LinkStudent(Guid studentId) => StudentId = FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
+	public void BindFinanceFeeAccount(Guid accountId) => FinanceFeeAccountId =
+		FinanceFeePayerIdentity.BindAccount(FinanceFeeAccountId, accountId);
     public decimal? AllocationPercentage { get; private set; }
 	public void PreserveAllocation(decimal percentage)
 	{
@@ -27,6 +33,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? StudentFeeStructureId { get; private set; }
     public void BindAssignment(Guid assignmentId)
     {
+        if (StudentFeeStructureId == assignmentId && assignmentId != Guid.Empty) return;
         if (assignmentId == Guid.Empty || StudentFeeStructureId.HasValue)
             throw new ArgumentException("A due can be bound to an assignment only once.");
         StudentFeeStructureId = assignmentId;
@@ -50,6 +57,38 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public decimal PaidAmount { get; private set; }
 	public decimal OutstandingAmount { get; private set; }
 
+	// Stored in the aggregate's existing JSON extension column; independent of principal.
+	public decimal GetAssessedLateFeeAmount() => this.GetProperty<decimal>("AssessedLateFeeAmount", 0m);
+	public string? GetLateFeeAssessmentExplanation() => this.GetProperty<string>("LateFeeAssessmentExplanation", string.Empty);
+	public string? GetLateFeeAssessmentPeriodJson() => this.GetProperty<string>("LateFeeAssessmentPeriodJson", null);
+	public DateTimeOffset? GetLateFeeAssessedAt()
+	{
+		// JSON extra properties can materialize a saved timestamp as DateTime.
+		// Legacy values without a kind represent UTC, independent of the host timezone.
+		if (this.GetProperty("LateFeeAssessedAt") is DateTime timestamp)
+			return new DateTimeOffset(timestamp.Kind == DateTimeKind.Unspecified
+				? DateTime.SpecifyKind(timestamp, DateTimeKind.Utc) : timestamp);
+		return this.GetProperty<DateTimeOffset?>("LateFeeAssessedAt");
+	}
+	public Guid? GetLateFeeAssessmentPolicyVersionId() => this.GetProperty<Guid?>("LateFeeAssessmentPolicyVersionId");
+
+	public void PreserveLateFeeAssessment(decimal amount, DateTimeOffset assessedAt, Guid policyVersionId, string explanation,
+		string? appliedPeriodJson)
+	{
+		if (amount < 0m) throw new ArgumentOutOfRangeException(nameof(amount));
+		if (policyVersionId == Guid.Empty) throw new ArgumentException("The collection policy version is required.", nameof(policyVersionId));
+		if (amount <= GetAssessedLateFeeAmount()) return;
+		this.SetProperty("AssessedLateFeeAmount", amount);
+		this.SetProperty("LateFeeAssessedAt", assessedAt);
+		this.SetProperty("LateFeeAssessmentPolicyVersionId", policyVersionId);
+		this.SetProperty("LateFeeAssessmentExplanation", explanation);
+		if (appliedPeriodJson != null) this.SetProperty("LateFeeAssessmentPeriodJson", appliedPeriodJson);
+		else ExtraProperties.Remove("LateFeeAssessmentPeriodJson");
+	}
+
+	public void PreserveLateFeeAssessment(decimal amount, DateTimeOffset assessedAt, Guid policyVersionId, string explanation) =>
+		PreserveLateFeeAssessment(amount, assessedAt, policyVersionId, explanation, null);
+
 	/// <summary>Total amount already refunded against this obligation line.</summary>
 	public decimal RefundedAmount { get; private set; }
 
@@ -58,6 +97,22 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	/// <summary>Total adjustment credit applied to this obligation line (reduces outstanding).</summary>
 	public decimal AdjustmentCreditAmount { get; private set; }
+
+	/// <summary>Permanent evidence survives payment/concession reversals.</summary>
+	public bool HasPaymentEvidence() => PaidAmount > 0 || RefundedAmount > 0 || this.GetProperty<bool>("HasPaymentEvidence");
+	public bool HasProtectedAssignmentUse() => this.GetProperty<bool>("HasProtectedAssignmentUse") ||
+		NetAmount != 0 || ConcessionAmount != 0 || AdjustmentCreditAmount != 0 ||
+		ReservedPaidCreditAmount != 0 || TransferredPaidCreditAmount != 0 ||
+		GetAssessedLateFeeAmount() != 0 || GetWithdrawalProrationSource().HasValue;
+	public void RecordPaymentEvidence() => this.SetProperty("HasPaymentEvidence", true);
+
+	/// <summary>Archives an unused schedule through a checked UPDATE, never ABP's reloading delete path.</summary>
+	public void SupersedeUnusedAssignment(Guid assignmentId)
+	{
+		if (assignmentId == Guid.Empty || StudentFeeStructureId != assignmentId || HasPaymentEvidence() || HasProtectedAssignmentUse())
+			throw new BusinessException(AssignmentErrorCodes.StructureEditBlocked);
+		IsDeleted = true;
+	}
 
 	public FeeStatus Status { get; private set; }
 
@@ -102,7 +157,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 public DueFee(
 		Guid id,
 		Guid? tenantId,
-		Guid studentId,
+		Guid? studentId,
 		Guid feeHeadId,
 		MonthEnum month,
 		int year,
@@ -133,11 +188,14 @@ public DueFee(
 		decimal? prorationFactor = null,
 		ProrationRuleType? prorationRuleType = null,
 		ProrationRoundingMode? prorationRoundingMode = null,
-		string? prorationExplanation = null)
+		string? prorationExplanation = null,
+		Guid? financeFeeAccountId = null)
 		: base(id)
 	{
 		TenantId = tenantId;
+		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
 		StudentId = studentId;
+		FinanceFeeAccountId = financeFeeAccountId;
 		FeeHeadId = feeHeadId;
 		Month = month;
 		Year = year;
@@ -235,6 +293,7 @@ public DueFee(
 				.WithData("Amount", amount);
 
 		PaidAmount += amount;
+		RecordPaymentEvidence();
 		RecalculateBalancesAndStatus();
 	}
 
@@ -244,7 +303,7 @@ public DueFee(
 			throw new BusinessException(DueFeeErrorCodes.RefundAmountMustBePositive)
 				.WithData("Amount", amount);
 
-		var available = PaidAmount - RefundedAmount;
+		var available = RefundableBalance;
 		if (amount > available)
 			throw new BusinessException(DueFeeErrorCodes.RefundExceedsPaidAmount)
 				.WithData("Requested", amount)
@@ -268,9 +327,84 @@ public DueFee(
 		RecalculateBalancesAndStatus();
 	}
 
-	public decimal RefundableBalance => Math.Max(0m, PaidAmount - RefundedAmount);
+	/// <summary>Credit held for pending transfers, stored with the due for atomic balance checks.</summary>
+	public decimal ReservedPaidCreditAmount => this.GetProperty<decimal>("ReservedPaidCreditAmount", 0m);
+	/// <summary>Settled paid value already transferred to another obligation.</summary>
+	public decimal TransferredPaidCreditAmount => this.GetProperty<decimal>("TransferredPaidCreditAmount", 0m);
+	public decimal UnpaidTransferOutAmount => this.GetProperty<decimal>("UnpaidTransferOutAmount", 0m);
+	public decimal UnpaidTransferInAmount => this.GetProperty<decimal>("UnpaidTransferInAmount", 0m);
+	public decimal EffectiveObligationAmount => OriginalAmount + UnpaidTransferInAmount - UnpaidTransferOutAmount;
+	public decimal RefundableBalance
+	{
+		get
+		{
+			var committed = ReservedPaidCreditAmount + TransferredPaidCreditAmount;
+			var retained = Math.Max(0m, PaidAmount - RefundedAmount - committed);
+			if (committed == 0m) return retained;
+			// Returning principal cash would unback a reserved or completed transfer.
+			var uncommittedExcess = Math.Max(0m,
+				PaidAmount - RefundedAmount + NetAmount - EffectiveObligationAmount - committed);
+			return Math.Min(retained, uncommittedExcess);
+		}
+	}
 
-	public decimal AdjustableBalance => Math.Max(0m, OutstandingAmount);
+	/// <summary>Paid money above the remaining obligation after approved concessions and adjustments.</summary>
+	public decimal OverpaymentAmount => Math.Max(0m,
+		PaidAmount - RefundedAmount + NetAmount - EffectiveObligationAmount - TransferredPaidCreditAmount);
+
+	/// <summary>Principal remaining after non-cash concessions and adjustment credits.</summary>
+	public decimal NetPayableAmount => Math.Max(0m, EffectiveObligationAmount - NetAmount);
+
+	/// <summary>Retained payment applied to principal; excess money remains separately refundable.</summary>
+	public decimal AppliedPaymentAmount => Math.Min(RefundableBalance, NetPayableAmount);
+
+	/// <summary>Retained payment above the remaining obligation. This is a candidate
+	/// source only; a transfer also needs an atomic reservation and consumption.</summary>
+	public decimal AdjustableBalance => Math.Max(0m, OverpaymentAmount - ReservedPaidCreditAmount);
+
+	public void TransferUnpaidOut(decimal amount)
+	{
+		if (amount <= 0m || decimal.Round(amount, 2) != amount || amount > OutstandingAmount)
+			throw new BusinessException(FeeAdjustmentErrorCodes.SourceExceedsAdjustableBalance)
+				.WithData("DueFeeId", Id).WithData("Requested", amount)
+				.WithData("Available", OutstandingAmount);
+		this.SetProperty("UnpaidTransferOutAmount", UnpaidTransferOutAmount + amount);
+		this.SetProperty("HasProtectedAssignmentUse", true);
+		RecalculateBalancesAndStatus();
+	}
+
+	public void TransferUnpaidIn(decimal amount)
+	{
+		if (amount <= 0m || decimal.Round(amount, 2) != amount)
+			throw new BusinessException(FeeAdjustmentErrorCodes.SourceLineInvalid);
+		this.SetProperty("UnpaidTransferInAmount", UnpaidTransferInAmount + amount);
+		this.SetProperty("HasProtectedAssignmentUse", true);
+		RecalculateBalancesAndStatus();
+	}
+
+	public void ReservePaidCredit(decimal amount)
+	{
+		if (amount <= 0m || decimal.Round(amount, 2) != amount || amount > AdjustableBalance)
+			throw new BusinessException(FeeAdjustmentErrorCodes.SourceExceedsAdjustableBalance)
+				.WithData("Requested", amount).WithData("Available", AdjustableBalance);
+		this.SetProperty("ReservedPaidCreditAmount", ReservedPaidCreditAmount + amount);
+	}
+
+	public void ReleaseReservedPaidCredit(decimal amount)
+	{
+		if (amount <= 0m || amount > ReservedPaidCreditAmount)
+			throw new BusinessException(FeeAdjustmentErrorCodes.SourceExceedsAdjustableBalance);
+		this.SetProperty("ReservedPaidCreditAmount", ReservedPaidCreditAmount - amount);
+	}
+
+	public void ConsumeReservedPaidCredit(decimal amount)
+	{
+		if (amount <= 0m || amount > ReservedPaidCreditAmount)
+			throw new BusinessException(FeeAdjustmentErrorCodes.SourceExceedsAdjustableBalance);
+		this.SetProperty("ReservedPaidCreditAmount", ReservedPaidCreditAmount - amount);
+		this.SetProperty("TransferredPaidCreditAmount", TransferredPaidCreditAmount + amount);
+		this.SetProperty("HasProtectedAssignmentUse", true);
+	}
 
 	public void ReversePayment(decimal amount)
 	{
@@ -295,15 +429,17 @@ public DueFee(
 				.WithData("Amount", concessionAmount);
 		}
 
-		if (concessionAmount > OutstandingAmount)
+		var remainingConcessionCapacity = Math.Max(0m, EffectiveObligationAmount - NetAmount);
+		if (concessionAmount > remainingConcessionCapacity)
 		{
 			throw new BusinessException(FinanceConcessionErrorCodes.ConcessionExceedsDueOutstanding)
 				.WithData("DueFeeId", Id)
-				.WithData("Outstanding", OutstandingAmount)
+				.WithData("Available", remainingConcessionCapacity)
 				.WithData("Requested", concessionAmount);
 		}
 
 		ConcessionAmount += concessionAmount;
+		this.SetProperty("HasProtectedAssignmentUse", true);
 		NetAmount += concessionAmount;
 		RecalculateBalancesAndStatus();
 	}
@@ -323,6 +459,10 @@ public DueFee(
 				.WithData("Requested", amount)
 				.WithData("Available", ConcessionAmount);
 		}
+		if (ReservedPaidCreditAmount + TransferredPaidCreditAmount > 0m &&
+			PaidAmount - RefundedAmount + NetAmount - amount - EffectiveObligationAmount <
+			ReservedPaidCreditAmount + TransferredPaidCreditAmount)
+			throw new BusinessException(FeeAdjustmentErrorCodes.SourceExceedsAdjustableBalance);
 
 		ConcessionAmount -= amount;
 		NetAmount -= amount;
@@ -346,17 +486,63 @@ public DueFee(
 		}
 
 		AdjustmentCreditAmount += amount;
+		this.SetProperty("HasProtectedAssignmentUse", true);
 		NetAmount += amount;
+		RecalculateBalancesAndStatus();
+	}
+
+	// Kept in the existing extension column, alongside other owner calculation evidence.
+	// This is a non-cash reduction. Original obligation, receipts and paid amounts stay immutable.
+	public decimal GetWithdrawalProrationCredit() => this.GetProperty<decimal>("WithdrawalProrationCredit", 0m);
+	public Guid? GetWithdrawalProrationSource() => this.GetProperty<Guid?>("WithdrawalProrationSource");
+	public string? GetWithdrawalProrationExplanation() => this.GetProperty<string>("WithdrawalProrationExplanation", string.Empty);
+
+	public void ApplyWithdrawalProration(Guid sourceId, decimal credit, string explanation)
+	{
+		if (sourceId == Guid.Empty || credit < 0m || decimal.Round(credit, 2) != credit ||
+			credit > Math.Max(0m, EffectiveObligationAmount - NetAmount) || string.IsNullOrWhiteSpace(explanation))
+			throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
+		if (GetWithdrawalProrationSource().HasValue)
+		{
+			if (GetWithdrawalProrationSource() == sourceId && GetWithdrawalProrationCredit() == credit) return;
+			throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
+		}
+		this.SetProperty("WithdrawalProrationCredit", credit);
+		this.SetProperty("HasProtectedAssignmentUse", true);
+		this.SetProperty("WithdrawalProrationSource", sourceId);
+		this.SetProperty("WithdrawalProrationExplanation", explanation);
+		AdjustmentCreditAmount += credit;
+		NetAmount += credit;
+		RecalculateBalancesAndStatus();
+	}
+
+	public void ReverseWithdrawalProration(Guid originalSourceId)
+	{
+		if (GetWithdrawalProrationSource() != originalSourceId)
+			throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
+		var credit = GetWithdrawalProrationCredit();
+		if (credit > AdjustmentCreditAmount || credit > NetAmount)
+			throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
+		if (ReservedPaidCreditAmount + TransferredPaidCreditAmount > 0m &&
+			PaidAmount - RefundedAmount + NetAmount - credit - EffectiveObligationAmount <
+			ReservedPaidCreditAmount + TransferredPaidCreditAmount)
+			throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
+		AdjustmentCreditAmount -= credit;
+		NetAmount -= credit;
+		this.RemoveProperty("WithdrawalProrationCredit");
+		this.RemoveProperty("WithdrawalProrationSource");
+		this.RemoveProperty("WithdrawalProrationExplanation");
 		RecalculateBalancesAndStatus();
 	}
 
 	private void RecalculateBalancesAndStatus()
 	{
-		var netPaid = Math.Max(0m, PaidAmount - RefundedAmount);
-		OutstandingAmount = Math.Max(0m, OriginalAmount - netPaid - NetAmount);
+		// A refund returns settled cash; it does not create a new fee demand.
+		// Only a payment reversal removes settlement from the original obligation.
+		OutstandingAmount = Math.Max(0m, EffectiveObligationAmount - PaidAmount - NetAmount);
 		Status = OutstandingAmount <= 0m
 			? FeeStatus.Paid
-			: netPaid > 0m || NetAmount > 0m
+			: PaidAmount > 0m || NetAmount > 0m
 				? FeeStatus.Partial
 				: FeeStatus.Pending;
 	}

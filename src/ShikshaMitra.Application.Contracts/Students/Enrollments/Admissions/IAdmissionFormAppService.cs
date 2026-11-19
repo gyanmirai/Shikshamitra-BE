@@ -9,16 +9,18 @@ public interface IAdmissionFormAppService : IApplicationService
 	Task<PagedResultDto<AdmissionFormDto>> GetListAsync(AdmissionFormListInput input);
 	Task<AdmissionFormDto> GetAsync(Guid id);
 	Task<AdmissionFormDto> PreviewAsync(Guid id);
+	Task<PagedResultDto<AdmissionFormInheritanceSourceSummaryDto>> GetInheritanceSourcesAsync(Guid id, PagedResultRequestDto input);
+	Task<AdmissionFormInheritancePreviewDto> PreviewInheritanceAsync(AdmissionFormInheritancePreviewInput input);
+	Task<AdmissionFormInheritancePreviewDto> GetSavedInheritancePreviewAsync(Guid id, Guid inquiryFormDefinitionId);
 	Task<AdmissionFormDto> CreateAsync(CreateUpdateAdmissionFormDto input);
 	Task<AdmissionFormDto> UpdateAsync(Guid id, CreateUpdateAdmissionFormDto input);
 	Task<AdmissionFormDto> CloneAsync(Guid id, CloneAdmissionFormDto input);
 	Task<AdmissionFormDto> CreateNewVersionAsync(Guid id);
 	Task DeleteAsync(Guid id, string? concurrencyStamp = null);
 	Task<AdmissionFormDto> ArchiveAsync(Guid id, string? concurrencyStamp = null);
+	Task<AdmissionFormDto> RestoreAsync(Guid id, string? concurrencyStamp = null);
+	Task<AdmissionFormArchiveImpactDto> GetArchiveImpactAsync(Guid id);
 	Task<AdmissionFormValidationResultDto> ValidateAsync(Guid id);
-	Task<AdmissionFormDto> RequestApprovalAsync(Guid id, ReviewAdmissionFormDto input);
-	Task<AdmissionFormDto> ApproveAsync(Guid id, ReviewAdmissionFormDto input);
-	Task<AdmissionFormDto> RejectAsync(Guid id, ReviewAdmissionFormDto input);
 	Task<AdmissionFormDto> PublishAsync(Guid id, string? concurrencyStamp = null);
 	Task<IReadOnlyList<AdmissionFormAuditEntryDto>> GetAuditAsync(Guid id);
 	Task<IReadOnlyList<AdmissionFormVersionSummaryDto>> GetVersionsAsync(Guid id);
@@ -27,5 +29,6 @@ public interface IAdmissionFormAppService : IApplicationService
 	Task<IReadOnlyList<AdmissionFormFieldMetadataDto>> GetFieldTypesAsync();
 	Task<IReadOnlyList<AdmissionFormSystemFieldMetadataDto>> GetSystemFieldsAsync();
 	Task<IReadOnlyList<AdmissionFormDataSourceMetadataDto>> GetDataSourcesAsync();
-	Task<IReadOnlyList<AdmissionFormOptionDto>> GetOptionsAsync(string sourceKey, Guid? parentId = null, Guid? academicYearId = null);
+	Task<IReadOnlyList<AdmissionFormOptionDto>> GetOptionsAsync(string sourceKey, Guid? parentId = null, Guid? academicYearId = null,
+		string? searchTerm = null, int skipCount = 0, int maxResultCount = 20, List<Guid>? selectedIds = null);
 }

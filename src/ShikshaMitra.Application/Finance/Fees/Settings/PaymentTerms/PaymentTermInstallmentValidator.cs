@@ -32,6 +32,11 @@ internal static class PaymentTermInstallmentValidator
 			}
 		}
 
+		if (ordered.Any(i => string.IsNullOrWhiteSpace(i.Name)))
+		{
+			throw new BusinessException(PaymentTermErrorCodes.NameRequired);
+		}
+
 		var names = ordered.Select(i => i.Name.Trim().ToLowerInvariant()).ToList();
 		if (names.Distinct().Count() != names.Count)
 		{
@@ -60,12 +65,20 @@ internal static class PaymentTermInstallmentValidator
 					.WithData("BoardEnd", boardEnd.Date);
 			}
 
-			installment.DemandDate = PaymentTermDemandDateCalculator.Calculate(
-				demandGenerationRule,
-				installment.CoverageStartDate,
-				installment.DueDate,
-				demandOffsetDays,
-				installment.DemandDate);
+			try
+			{
+				installment.DemandDate = PaymentTermDemandDateCalculator.Calculate(
+					demandGenerationRule,
+					installment.CoverageStartDate,
+					installment.DueDate,
+					demandOffsetDays,
+					installment.DemandDate);
+			}
+			catch (BusinessException exception)
+			{
+				exception.WithData("Installment", installment.Name);
+				throw;
+			}
 
 			// Coverage may intentionally end before a later due date, but every
 			// schedule event still belongs to the academic board period. Keeping
@@ -80,16 +93,6 @@ internal static class PaymentTermInstallmentValidator
 					.WithData("Installment", installment.Name)
 					.WithData("BoardStart", boardStart.Date)
 					.WithData("BoardEnd", boardEnd.Date);
-			}
-
-			// Demand/due may fall before coverage begins (common billing practice).
-			// They must not fall after each other.
-			if (installment.DemandDate.Value.Date > installment.DueDate.Date)
-			{
-				throw new BusinessException(PaymentTermErrorCodes.DemandDateAfterDueDate)
-					.WithData("Installment", installment.Name)
-					.WithData("DemandDate", installment.DemandDate.Value)
-					.WithData("DueDate", installment.DueDate);
 			}
 
 			if (installment.AllocationPercentage <= 0)
@@ -153,10 +156,15 @@ internal static class PaymentTermInstallmentValidator
 					.WithData("Installment", installment.Name);
 			}
 
-			if (installment.DemandDate.Date > installment.DueDate.Date)
+			try
 			{
-				throw new BusinessException(PaymentTermErrorCodes.DemandDateAfterDueDate)
-					.WithData("Installment", installment.Name);
+				PaymentTermDemandDateCalculator.ValidateRange(
+					installment.CoverageStart, installment.DueDate, installment.DemandDate);
+			}
+			catch (BusinessException exception)
+			{
+				exception.WithData("Installment", installment.Name);
+				throw;
 			}
 
 			if (installment.AllocationPercentage <= 0)

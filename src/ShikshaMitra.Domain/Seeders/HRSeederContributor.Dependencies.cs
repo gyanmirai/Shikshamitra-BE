@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -64,7 +65,8 @@ public partial class HRSeederContributor
 	private readonly LeavePolicyManager _leavePolicyManager;
 	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly IRepository<EducationMediumStage, Guid> _educationMediumStageRepository;
-	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+	private readonly IRepository<EmployeeWorkShift, Guid> _shiftRepository;
+	private readonly IRepository<EmployeeShiftAssignment, Guid> _shiftAssignmentRepository;
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IRepository<EmployeeOrganizationAssignment, Guid> _employeeOrganizationAssignmentRepository;
 	private readonly IRepository<EducationMediumStagePermission, Guid> _educationMediumStagePermissionRepository;

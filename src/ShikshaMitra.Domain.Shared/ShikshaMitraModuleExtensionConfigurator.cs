@@ -74,6 +74,8 @@ public static class ShikshaMitraModuleExtensionConfigurator
 		 */
 
 		#region Tenant Extra Properties
+		ObjectExtensionManager.Instance.AddOrUpdateProperty<bool>(new[] { typeof(Tenant) },
+			HostTenants.HostTenantConsts.IsActiveProperty, property => property.DefaultValue = true);
 
 		ObjectExtensionManager.Instance
 		.AddOrUpdateProperty<string>(
@@ -109,7 +111,6 @@ public static class ShikshaMitraModuleExtensionConfigurator
 		new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
 		"Address2", property =>
 		{
-			property.Attributes.Add(new RequiredAttribute());
 		}
 	);
 		ObjectExtensionManager.Instance
@@ -117,7 +118,6 @@ public static class ShikshaMitraModuleExtensionConfigurator
 		new[] { typeof(TenantDto), typeof(TenantCreateDto), typeof(TenantUpdateDto), typeof(Tenant) },
 		"Address3", property =>
 		{
-			property.Attributes.Add(new RequiredAttribute());
 		}
 	);
 

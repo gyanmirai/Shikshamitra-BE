@@ -28,10 +28,10 @@ public class FeeHeadAssignmentRequestValidator : AbstractValidator<FeeHeadAssign
 	public FeeHeadAssignmentRequestValidator()
 	{
 		RuleFor(x => x.FeeHeadId).NotEmpty();
-		RuleFor(x => x.Amount).GreaterThanOrEqualTo(0);
-		RuleFor(x => x.Amount).LessThanOrEqualTo(9999999999.99m);
-		RuleFor(x => x.Amount).Must(x => decimal.Round(x, 2) == x)
-			.WithMessage("Amounts must have at most two decimal places.");
+		RuleFor(x => x).Must(x => x.IsVariable
+            ? !x.Amount.HasValue
+            : x.Amount.HasValue && x.Amount >= 0 && x.Amount <= 9999999999.99m && decimal.Round(x.Amount.Value, 2) == x.Amount)
+            .WithMessage("Fixed fees require a valid amount; variable fees must not contain a structure amount.");
 		RuleFor(x => x.InstallmentOverrides).NotNull();
 		RuleForEach(x => x.InstallmentOverrides).NotNull().ChildRules(row =>
 		{

@@ -7,5 +7,6 @@ public class AssignReportingManagerDtoValidator : AbstractValidator<AssignReport
 	public AssignReportingManagerDtoValidator()
 	{
 		RuleFor(x => x.ReportingManagerId).NotEmpty();
+		RuleFor(x => x.ReportingManagerKind).Must(kind => kind is "Employee" or "TenantAdministrator");
 	}
 }

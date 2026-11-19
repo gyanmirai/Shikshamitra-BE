@@ -11,10 +11,13 @@ namespace ShikshaMitra.Finance.Fees.Concessions;
 
 public interface IConcessionRequestAppService : IApplicationService
 {
+	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateRefundRequestsAsync(Guid id, CreateConcessionRefundRequestsDto input);
 	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateAsync(Guid academicYearId, CreateConcessionRequestDto input);
 	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateDraftAsync(Guid academicYearId, CreateConcessionDraftDto input);
 	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> SubmitAsync(Guid id, SubmitConcessionRequestDto input);
-	Task<ConcessionRequestContextDto> GetContextAsync(Guid academicYearId, Guid studentId, Guid? studentFeeStructureId = null);
+	Task<ConcessionRequestContextDto> GetContextAsync(Guid academicYearId, Guid studentId,
+		Guid? studentFeeStructureId = null, Guid? concessionTypeId = null,
+		Guid? concessionPolicyId = null, Guid? concessionPolicyVersionId = null, Guid? requestId = null);
 	Task<ConcessionRequestPreviewDto> PreviewAsync(Guid academicYearId, ConcessionRequestPreviewInputDto input);
 	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> UpdateAsync(Guid id, Guid academicYearId, UpdateConcessionRequestDto input);
 	Task DeleteAsync(Guid id, DeleteConcessionRequestDto input);
@@ -39,6 +42,11 @@ public interface IConcessionRequestAppService : IApplicationService
 
 public class GetConcessionApplicationsInput : PagedResultRequestDto, IFinanceClassDivisionFilter
 {
+    public string? Tab { get; set; }
+    public string? Search { get; set; }
+    public string? Filters { get; set; }
+    public string? SortBy { get; set; }
+    public string? SortOrder { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid EducationMediumId { get; set; }

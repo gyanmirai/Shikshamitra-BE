@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp;
@@ -30,7 +31,7 @@ public class HomeworkType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Navigation property to EducationMedium
 	/// </summary>
-	public virtual EducationMedium AcademicMedium { get; }
+	public virtual EducationMedium AcademicMedium { get; } = null!; // Populated by EF relationship materialization.
 
 	/// <summary>
 	/// Gets the description of the homework type
@@ -72,6 +73,9 @@ public class HomeworkType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// </summary>
 	private HomeworkType()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Name = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -108,6 +112,7 @@ public class HomeworkType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>
 	/// Sets the name with validation
 	/// </summary>
+	[MemberNotNull(nameof(Name))]
 	internal HomeworkType SetName(string name)
 	{
 		Name = Check.NotNullOrWhiteSpace(

@@ -1,8 +1,11 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.AspNetCore.Identity;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.MultiTenancy;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using Volo.Abp;
 using Volo.Abp.AuditLogging;
 using Volo.Abp.Auditing;
@@ -43,6 +46,7 @@ public class ShikshaMitraDomainModule : AbpModule
 {
 	public override void ConfigureServices(ServiceConfigurationContext context)
 	{
+		context.Services.AddTransient<IUserValidator<IdentityUser>, EmployeeAccountEmailUserValidator>();
 		Configure<AbpLocalizationOptions>(options =>
 		{
 			options.Languages.Add(new LanguageInfo("en", "en", "English"));
@@ -60,9 +64,18 @@ public class ShikshaMitraDomainModule : AbpModule
 
 		Configure<AbpAuditingOptions>(options =>
 		{
+			options.EntityHistorySelectors.Add(new NamedTypeSelector("SchoolDocuments", type =>
+				type == typeof(TenantSettings.SchoolDocuments.SchoolDocument) ||
+				type == typeof(TenantSettings.SchoolDocuments.SchoolDocumentFile)));
 			options.EntityHistorySelectors.Add(new NamedTypeSelector(
 				"ConcessionType",
 				type => type == typeof(ConcessionType)));
+			options.EntityHistorySelectors.Add(new NamedTypeSelector(
+				"AccountHead",
+				type => type == typeof(AccountHead)));
+			options.EntityHistorySelectors.Add(new NamedTypeSelector(
+				"AccountSettings",
+				type => type == typeof(TransactionCategory) || type == typeof(BankAccount)));
 		});
 
 		Configure<AbpBlobStoringOptions>(options =>

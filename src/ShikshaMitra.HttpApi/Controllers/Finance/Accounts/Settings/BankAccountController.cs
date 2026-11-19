@@ -36,9 +36,10 @@ public class BankAccountController : AbpController
 		[FromQuery] int page = 1,
 		[FromQuery] int pageSize = 10,
 		[FromQuery] string? search = null,
-		[FromQuery] bool includeInactive = true)
+		[FromQuery] bool includeInactive = true,
+		[FromQuery] string? filters = null)
 	{
-		return _bankAccountAppService.GetListAsync(academicYearId, page, pageSize, search, includeInactive);
+		return _bankAccountAppService.GetListAsync(academicYearId, page, pageSize, search, includeInactive, filters);
 	}
 
 	[HttpGet("{bankAccountId}")]

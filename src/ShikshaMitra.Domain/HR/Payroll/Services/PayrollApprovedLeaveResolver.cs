@@ -72,9 +72,13 @@ public class PayrollApprovedLeaveResolver : DomainService
 					: workingUnit;
 				var dateOnly = DateOnly.FromDateTime(date);
 				var current = map.GetValueOrDefault(dateOnly, new PayrollLeaveUnits(0m, 0m));
+				var type = paidType == LeavePaidType.Unpaid ? "UNPAID" : leave.PayrollCategory == "CL" ? "CL" : "PAID";
+				var byType = current.ByType.ToDictionary(x => x.Key, x => x.Value);
+				var remaining = 1m - (paidType == LeavePaidType.Paid ? current.PaidUnits : current.UnpaidUnits);
+				byType[type] = byType.GetValueOrDefault(type) + Math.Min(Math.Max(remaining, 0m), unitsForDate);
 				map[dateOnly] = paidType == LeavePaidType.Paid
-					? new PayrollLeaveUnits(Math.Min(1m, current.PaidUnits + unitsForDate), current.UnpaidUnits)
-					: new PayrollLeaveUnits(current.PaidUnits, Math.Min(1m, current.UnpaidUnits + unitsForDate));
+					? new PayrollLeaveUnits(Math.Min(1m, current.PaidUnits + unitsForDate), current.UnpaidUnits) { ByType = byType }
+					: new PayrollLeaveUnits(current.PaidUnits, Math.Min(1m, current.UnpaidUnits + unitsForDate)) { ByType = byType };
 			}
 		}
 
@@ -90,12 +94,12 @@ public class PayrollApprovedLeaveResolver : DomainService
 	{
 		if (!workingUnitsByEmployee.TryGetValue(employeeId, out var workingUnitsByDate))
 		{
-			throw new InvalidOperationException($"Working units are required for employee {employeeId}.");
+			throw new InvalidOperationException($"Working units are required for staff {employeeId}.");
 		}
 
 		if (!workingUnitsByDate.TryGetValue(date, out var workingUnit))
 		{
-			throw new InvalidOperationException($"Working unit for employee {employeeId} on {date:yyyy-MM-dd} is required.");
+			throw new InvalidOperationException($"Working unit for staff {employeeId} on {date:yyyy-MM-dd} is required.");
 		}
 
 		return Math.Clamp(workingUnit, 0m, 1m);

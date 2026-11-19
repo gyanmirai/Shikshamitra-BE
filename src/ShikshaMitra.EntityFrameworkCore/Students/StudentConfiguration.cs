@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Students.StudentEnrollments;
+using Volo.Abp.Identity;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Students;
@@ -24,6 +25,14 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 			.HasMaxLength(512);
 		builder.Property(x => x.GrNumber)
 			.HasMaxLength(100);
+		builder.HasOne<IdentityUser>()
+			.WithMany()
+			.HasForeignKey(x => x.UserId)
+			.OnDelete(DeleteBehavior.Restrict)
+			.IsRequired(false);
+		builder.HasIndex(x => x.UserId)
+			.IsUnique()
+			.HasFilter("\"UserId\" IS NOT NULL");
 
 		// Add indexes for filtering by admission status and academic year
 		builder.HasIndex(x => new { x.AdmissionApprovalStatus, x.DivisionId });

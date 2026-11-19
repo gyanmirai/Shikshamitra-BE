@@ -34,10 +34,11 @@ public class ConcessionTypeController(
 		int maxResultCount = 10,
 		string? searchTerm = null,
 		bool includeInactive = false,
-		bool? isActive = null)
+		bool? isActive = null,
+		[FromQuery] string? filters = null)
 	{
 		var concessionTypes = await concessionTypeAppService.GetListAsync(
-			academicYearId, skipCount, maxResultCount, searchTerm, includeInactive, isActive);
+			academicYearId, skipCount, maxResultCount, searchTerm, includeInactive, isActive, filters);
 		return Result.Success(concessionTypes);
 	}
 

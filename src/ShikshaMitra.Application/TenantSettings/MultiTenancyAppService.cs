@@ -10,6 +10,12 @@ using Volo.Abp.EventBus.Distributed;
 using Volo.Abp.EventBus.Local;
 using Volo.Abp.Security.Claims;
 using Volo.Abp.TenantManagement;
+using ShikshaMitra.HostTenants;
+using Volo.Abp;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
+using ShikshaMitra.HR.Policies;
+using ShikshaMitra.TenantSettings.AcademicYears;
 
 namespace ShikshaMitra.TenantSettings;
 
@@ -20,6 +26,9 @@ public class MultiTenancyAppService : TenantAppService
 {
 	private readonly IPermissionChecker _permissionChecker;
 	private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
+	private readonly ITenantRepository _tenants;
+	private readonly IRepository<AcademicYear, Guid> _years;
+	private readonly HrStarterPolicyInitializer _hrStarter;
 
 	public MultiTenancyAppService(
 		ITenantRepository tenantRepository,
@@ -28,12 +37,17 @@ public class MultiTenancyAppService : TenantAppService
 		IDistributedEventBus distributedEventBus,
 		ILocalEventBus localEventBus,
 		IPermissionChecker permissionChecker,
-		ICurrentPrincipalAccessor currentPrincipalAccessor
+		ICurrentPrincipalAccessor currentPrincipalAccessor,
+		IRepository<AcademicYear, Guid> years,
+		HrStarterPolicyInitializer hrStarter
 	)
 		: base(tenantRepository, tenantManager, dataSeeder, distributedEventBus, localEventBus)
 	{
 		_permissionChecker = permissionChecker;
 		_currentPrincipalAccessor = currentPrincipalAccessor;
+		_tenants = tenantRepository;
+		_years = years;
+		_hrStarter = hrStarter;
 	}
 
 	[AllowAnonymous]
@@ -51,15 +65,28 @@ public class MultiTenancyAppService : TenantAppService
 		return new PagedResultDto<TenantDto>(1, new[] { currentTenant });
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public override async Task<TenantDto> CreateAsync(TenantCreateDto input)
 	{
 		await CheckHostTenantOperationAsync(TenantManagementPermissions.Tenants.Create);
-		return await base.CreateAsync(input);
+		CheckReservedProperties(input);
+		var result = await base.CreateAsync(input);
+		// The legacy endpoint may already have seeded years. Opt in only the tenant just created,
+		// then initialize empty years without replacing any policies from its existing seed pipeline.
+		var tenant = await _tenants.GetAsync(result.Id);
+		tenant.SetProperty(HrStarterPolicyDefaults.TenantEnabledProperty, true);
+		await _tenants.UpdateAsync(tenant, autoSave: true);
+		using (CurrentTenant.Change(tenant.Id))
+			foreach (var year in await _years.GetListAsync(x => x.TenantId == tenant.Id))
+				await _hrStarter.InitializeAsync(year);
+		await CurrentUnitOfWork!.SaveChangesAsync();
+		return ObjectMapper.Map<Tenant, TenantDto>(tenant);
 	}
 
 	public override async Task<TenantDto> UpdateAsync(Guid id, TenantUpdateDto input)
 	{
 		await CheckTenantUpdatePermissionAsync();
+		CheckReservedProperties(input);
 
 		var tenantId = GetEffectiveTenantId();
 		if (tenantId != null && tenantId != id)
@@ -120,8 +147,9 @@ public class MultiTenancyAppService : TenantAppService
 	{
 		if (!await _permissionChecker.IsGrantedAsync(TenantManagementPermissions.Tenants.Default))
 		{
-			
+			throw new AbpAuthorizationException("You are not authorized to view tenants.");
 		}
+		if (!CurrentUser.IsAuthenticated) throw new AbpAuthorizationException();
 	}
 
 	private async Task CheckTenantUpdatePermissionAsync()
@@ -134,7 +162,7 @@ public class MultiTenancyAppService : TenantAppService
 
 	private async Task CheckHostTenantOperationAsync(string permissionName)
 	{
-		if (GetEffectiveTenantId() != null)
+		if (!CurrentUser.IsAuthenticated || GetEffectiveTenantId() != null)
 		{
 			throw new AbpAuthorizationException("Only host users can manage tenants.");
 		}
@@ -151,6 +179,12 @@ public class MultiTenancyAppService : TenantAppService
 		{
 			throw new AbpAuthorizationException("You are not authorized to view tenant information.");
 		}
+	}
+
+	private static void CheckReservedProperties(IHasExtraProperties input)
+	{
+		if (input.ExtraProperties.ContainsKey(HostTenantConsts.IsActiveProperty))
+			throw new BusinessException(HostTenantConsts.StatusReadOnly);
 	}
 
 	private Guid? GetEffectiveTenantId()

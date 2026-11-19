@@ -38,12 +38,13 @@ public sealed class ChequeRefundDetails : RefundPaymentDetails
         Remarks           = remarks;
     }
 
-    protected override IEnumerable<object?> GetAtomicValues()
+    // ABP equality atoms intentionally include null for absent optional values.
+    protected override IEnumerable<object> GetAtomicValues()
     {
         yield return ChequeIssueDate;
         yield return ChequeNumber;
         yield return PayeeName;
         yield return SourceBankAccount;
-        yield return Remarks;
+        yield return Remarks!;
     }
 }

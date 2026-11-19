@@ -57,7 +57,7 @@ jobs:
       - name: Academic scope ownership and Finance regressions
         run: >-
           dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj -c Release --no-restore
-          --filter "FullyQualifiedName~AcademicPermissionUserScopeSyncer_Tests|FullyQualifiedName~StudentFeeAssignmentMigration_Tests|FullyQualifiedName~LateFeeCollectionRuntime_Tests"
+          --filter "FullyQualifiedName~AcademicPermissionUserScopeSyncer_Tests|FullyQualifiedName~StudentFeeAssignmentMigration_Tests|FullyQualifiedName~LateFeeCollectionRuntime_Tests|FullyQualifiedName~FeeConfigurationPermissionAuthorization_Tests"
       - name: Create separate disposable migration fixture
         env:
           PGPASSWORD: synthetic-ci-only
@@ -77,7 +77,7 @@ jobs:
       - name: Permission, ESI, and Finance HTTP enforcement
         run: >-
           dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj -c Release --no-restore
-          --filter "FullyQualifiedName~PermissionConsistencyApi_Tests|FullyQualifiedName~EsiStatutoryApi_Tests|FullyQualifiedName~StudentFeeAssignmentApi_Tests"
+          --filter "FullyQualifiedName~PermissionConsistencyApi_Tests|FullyQualifiedName~EsiStatutoryApi_Tests|FullyQualifiedName~StudentFeeAssignmentApi_Tests|FullyQualifiedName~AccountSettingsPermissionApi_Tests|FullyQualifiedName~FinancePermissionBoundaryApi_Tests"
       - name: PostgreSQL grant and upgrade regressions
         env:
           SECURITY_INTEGRATION_POSTGRES: Host=127.0.0.1;Port=5432;Database=payroll_tests_security_ci;Username=security_test;Password=synthetic-ci-only

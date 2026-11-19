@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +18,33 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public async Task<Result<Volo.Abp.Application.Dtos.PagedResultDto<AdmissionApplicationDto>>> GetListAsync([FromQuery] AdmissionApplicationListInput input) => Result.Success(await service.GetListAsync(input));
 
+	[HttpGet("pipeline")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<Volo.Abp.Application.Dtos.PagedResultDto<AdmissionPipelineItemDto>>> GetPipelineAsync([FromQuery] AdmissionPipelineListInput input) => Result.Success(await service.GetPipelineAsync(input));
+
+	[HttpGet("pipeline/options")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<AdmissionPipelineOptionsDto>> GetPipelineOptionsAsync([FromQuery] AdmissionPipelineListInput input) => Result.Success(await service.GetPipelineOptionsAsync(input));
+
+	[HttpGet("{id:guid}/follow-ups")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<AdmissionInquiryManagementDto>> GetFollowUpsAsync(Guid id) => Result.Success(await service.GetFollowUpsAsync(id));
+
+	[HttpPost("{id:guid}/follow-ups")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task<Result<AdmissionInquiryManagementDto>> ScheduleFollowUpAsync(Guid id, ScheduleAdmissionInquiryFollowUpDto input) => Result.Success(await service.ScheduleFollowUpAsync(id, input));
+
+	[HttpPost("{id:guid}/follow-ups/{followUpId:guid}/complete")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task<Result<AdmissionInquiryManagementDto>> CompleteFollowUpAsync(Guid id, Guid followUpId, CompleteAdmissionInquiryFollowUpDto input) => Result.Success(await service.CompleteFollowUpAsync(id, followUpId, input));
+
+	[HttpPost("{id:guid}/follow-ups/{followUpId:guid}/cancel")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task<Result<AdmissionInquiryManagementDto>> CancelFollowUpAsync(Guid id, Guid followUpId, CancelAdmissionInquiryFollowUpDto input) => Result.Success(await service.CancelFollowUpAsync(id, followUpId, input));
+
 	[HttpGet("{id:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public async Task<ActionResult<Result<AdmissionApplicationDto>>> GetAsync(Guid id)
@@ -28,6 +56,30 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	[HttpPost("start")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
 	public async Task<Result<AdmissionApplicationDto>> StartAsync([FromQuery] Guid applicantId, [FromQuery] Guid offeringId, [FromQuery] Guid? inquiryId = null) => Result.Success(await service.StartAsync(applicantId, offeringId, inquiryId));
+
+	[HttpPost("direct-registration")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
+	public async Task<Result<AdmissionApplicationDto>> StartDirectRegistrationAsync(
+		[FromBody] StartAdmissionDirectRegistrationDto input) =>
+		Result.Success(await service.StartDirectRegistrationAsync(input));
+
+	[HttpGet("direct-registration/family-matches")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
+	public async Task<Result<List<AdmissionDirectFamilyMatchDto>>> FindDirectRegistrationFamiliesAsync(
+		[FromQuery] Guid offeringId, [FromQuery] string guardianMobile = "", [FromQuery] string? guardianEmail = null) =>
+		Result.Success(await service.FindDirectRegistrationFamiliesAsync(offeringId, guardianMobile, guardianEmail));
+
+	[HttpGet("counsellors")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<List<AdmissionInquiryCounsellorDto>>> GetAssignableCounsellorsAsync(
+		[FromQuery] Guid? offeringId = null, [FromQuery] string? filter = null) =>
+		Result.Success(await service.GetAssignableCounsellorsAsync(offeringId, filter));
+
+	[HttpPost("{id:guid}/assign-counsellor")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit)]
+	public async Task<Result<AdmissionApplicationDto>> AssignCounsellorAsync(Guid id,
+		[FromBody] AssignAdmissionApplicationCounsellorDto input) =>
+		Result.Success(await service.AssignCounsellorAsync(id, input));
 
 	[HttpPost("/api/student/enrollment/admissions/applicants/{applicantId:guid}/applications/start")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
@@ -44,6 +96,10 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	[HttpPatch("{id:guid}/form-values")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit)]
 	public async Task<Result<AdmissionApplicationFormDto>> UpdateFormValuesAsync(Guid id, UpdateAdmissionApplicationFormValuesDto input) => Result.Success(await service.UpdateFormValuesAsync(id, input));
+
+	[HttpPost("{id:guid}/form/corrections")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit)]
+	public async Task<Result<AdmissionApplicationFormDto>> CorrectFormAsync(Guid id, [FromBody] CorrectAdmissionApplicationFormDto input) => Result.Success(await service.CorrectFormAsync(id, input));
 
 	[HttpPost("{id:guid}/submit")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Submit)]
@@ -69,6 +125,21 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	[HttpPost("{id:guid}/decision/review")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
 	public async Task<Result<AdmissionApplicationDto>> MarkInReviewAsync(Guid id, AdmissionApplicationDecisionDto input) => Result.Success(await service.MarkInReviewAsync(id, input));
+
+	[HttpPost("{id:guid}/end-journey")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public async Task<Result<AdmissionApplicationDto>> EndJourneyAsync(Guid id, [FromBody] EndAdmissionJourneyDto input) =>
+		Result.Success(await service.EndJourneyAsync(id, input));
+
+	[HttpGet("{id:guid}/resume-preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<AdmissionJourneyResumePreviewDto>> GetResumePreviewAsync(Guid id) =>
+		Result.Success(await service.GetResumePreviewAsync(id));
+
+	[HttpPost("{id:guid}/resume-journey")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public async Task<Result<AdmissionApplicationDto>> ResumeJourneyAsync(Guid id, [FromBody] ResumeAdmissionJourneyDto input) =>
+		Result.Success(await service.ResumeJourneyAsync(id, input));
 
 	[HttpPost("{id:guid}/decision/approve")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
@@ -96,8 +167,15 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 
 	[HttpGet("{id:guid}/finalization-preview")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
-	public async Task<Result<AdmissionFinalizationPreviewDto>> GetFinalizationPreviewAsync(Guid id) =>
-		Result.Success(await service.GetFinalizationPreviewAsync(id));
+	public async Task<Result<AdmissionFinalizationPreviewDto>> GetFinalizationPreviewAsync(Guid id, [FromQuery] bool forApproval = false) =>
+		Result.Success(await service.GetFinalizationPreviewAsync(id, forApproval));
+
+	[HttpPost("{id:guid}/approve-and-finalize")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Advance)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
+	public async Task<Result<AdmissionFinalizationResultDto>> ApproveAndFinalizeAsync(Guid id, ApproveAndFinalizeAdmissionApplicationDto input) =>
+		Result.Success(await service.ApproveAndFinalizeAsync(id, input));
 
 	[HttpPost("{id:guid}/finalize")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]

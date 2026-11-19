@@ -18,7 +18,12 @@ namespace ShikshaMitra.Library.Setting.ChargeCategory
 
 		public string Description { get; set; }
 
-		protected LibraryChargeCategory() { }
+		protected LibraryChargeCategory()
+		{
+			// EF materializes these required columns after this ORM constructor.
+			ChargeType = null!;
+			Description = null!;
+		}
 
 		public LibraryChargeCategory(
 			Guid id,

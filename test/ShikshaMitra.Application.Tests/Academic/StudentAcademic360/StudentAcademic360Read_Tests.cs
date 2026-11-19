@@ -1,8 +1,14 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Data.Common;
+using System.Diagnostics;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.Examination.Results;
@@ -67,6 +73,19 @@ public class StudentAcademic360Read_Tests : SubjectTeacherReassignmentTestBase
 					await GetRequiredService<IRepository<AttendanceEntry, Guid>>().InsertAsync(new AttendanceEntry(Guid.NewGuid(),
 						TenantId, day.Id, fullAttendance.Id, AttendanceStatus.Present, ActorId), autoSave: true);
 				}
+				var homeworkType = await GetRequiredService<HomeworkTypeManager>().CreateAsync(AcademicMediumId, "360 list practice");
+				var homework = await InsertHomeworkAsync(homeworkType.Id, "Shared practice", DateTime.UtcNow.Date.AddDays(5), contextYearId);
+				await GetRequiredService<IRepository<StudentSubmissionEntity, Guid>>().InsertAsync(new StudentSubmissionEntity(Guid.NewGuid(),
+					homework.Id, lowAttendance.Id, DivisionId, DateTime.UtcNow.Date, TenantId)
+				{ Status = SubmissionStatus.Submitted, Feedback = new string('x', 10000) }, autoSave: true);
+				var oldExam = await InsertExamAsync("Older list exam", 1);
+				var recentExam = await InsertExamAsync("Latest list exam", 0);
+				foreach (var values in new[] { (oldExam.Id, lowAttendance.Id, 75d), (recentExam.Id, lowAttendance.Id, 50d), (oldExam.Id, fullAttendance.Id, 90d) })
+				{
+					var mark = new ExamMark(Guid.NewGuid(), values.Item1, values.Item2, SubjectId, DivisionId, values.Item3, false, tenantId: TenantId);
+					mark.Publish();
+					await GetRequiredService<IRepository<ExamMark, Guid>>().InsertAsync(mark, autoSave: true);
+				}
 
 				var input = new GetStudentAcademic360ListInput
 				{
@@ -76,12 +95,31 @@ public class StudentAcademic360Read_Tests : SubjectTeacherReassignmentTestBase
 					SkipCount = 0,
 					MaxResultCount = 2
 				};
+				var db = await GetDbAsync();
+				using var capture = new Academic360QueryCapture(db.Database.GetDbConnection());
 				var page = await Academic360.GetListAsync(input);
 				page.TotalCount.ShouldBe(3);
 				page.Items.Count.ShouldBe(2);
 				page.Summary.TotalStudents.ShouldBe(3);
 				page.Summary.AverageAttendance.ShouldBe(75);
+				page.Summary.HomeworkCompletion.ShouldBe(33.33);
+				page.Summary.AverageExamScore.ShouldBe(76.25);
 				page.Items.First().StudentName.ShouldBe("Low Attendance");
+				var nameReads = capture.Commands.Where(sql => sql.Contains("AS \"StudentName\"", StringComparison.Ordinal)).ToList();
+				nameReads.ShouldNotBeEmpty();
+				nameReads.ShouldAllBe(sql => sql.Contains("LIMIT", StringComparison.Ordinal),
+					"A normal list page must limit student enrichment in SQL before materializing names and labels.");
+				var attendanceReads = capture.Commands.Where(sql => sql.Contains("AttendanceEntries", StringComparison.Ordinal)).ToList();
+				attendanceReads.ShouldNotBeEmpty();
+				attendanceReads.ShouldAllBe(sql => sql.Contains("GROUP BY", StringComparison.Ordinal),
+						"Attendance history must be reduced to per-student counts by the database.");
+				input.SkipCount = 2;
+				var secondPage = await Academic360.GetListAsync(input);
+				secondPage.Items.Single().StudentName.ShouldBe("No Data");
+				secondPage.Summary.AverageAttendance.ShouldBe(page.Summary.AverageAttendance);
+				secondPage.Summary.HomeworkCompletion.ShouldBe(page.Summary.HomeworkCompletion);
+				secondPage.Summary.AverageExamScore.ShouldBe(page.Summary.AverageExamScore);
+				input.SkipCount = 0;
 
 				input.SearchTerm = "1002";
 				var searched = await Academic360.GetListAsync(input);
@@ -93,6 +131,102 @@ public class StudentAcademic360Read_Tests : SubjectTeacherReassignmentTestBase
 				var filtered = await Academic360.GetListAsync(input);
 				filtered.TotalCount.ShouldBe(1);
 				filtered.Items.Single().StudentId.ShouldBe(lowAttendance.Id);
+				input.SmartFilter = StudentAcademic360SmartFilter.PerformanceDecline;
+				var declining = await Academic360.GetListAsync(input);
+				declining.Items.Single().StudentId.ShouldBe(lowAttendance.Id);
+				input.SmartFilter = StudentAcademic360SmartFilter.OverdueHomework;
+				(await Academic360.GetListAsync(input)).TotalCount.ShouldBe(2);
+				input.SmartFilter = StudentAcademic360SmartFilter.All;
+				input.Sorting = "examAverage desc";
+				var sorted = await Academic360.GetListAsync(input);
+				sorted.Items.Select(item => item.StudentId).ShouldBe(new[] { fullAttendance.Id, lowAttendance.Id });
+			}
+		});
+	}
+
+	[Fact]
+	public async Task List_Should_Preserve_Culture_Name_Ties_And_Ordinal_Search_Across_Pages()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (Tenant.Change(TenantId))
+			using (AsAdmin())
+			{
+				await SeedAllocationAsync();
+				var standard = await GetRequiredService<IRepository<Standard, Guid>>().GetAsync(StandardId);
+				var medium = await GetRequiredService<IRepository<EducationMedium, Guid>>().GetAsync(AcademicMediumId);
+				var board = await GetRequiredService<IRepository<EducationBoard, Guid>>().GetAsync(medium.EducationBoardId);
+				await GetRequiredService<IUserScopeAssignmentRepository>().InsertAsync(new UserScopeAssignment(Guid.NewGuid(),
+					TenantId, ActorId, academicYearId: board.AcademicYearId, educationBoardId: medium.EducationBoardId,
+					educationMediumId: AcademicMediumId, educationMediumStageId: standard.EducationMediumStageId,
+					standardId: StandardId, divisionId: DivisionId), autoSave: true);
+				var names = new[] { "Zoya", "Émile", "Elodie", "Åsa" };
+				foreach (var name in names)
+					await GetRequiredService<IRepository<Student, Guid>>().InsertAsync(new Student(Guid.NewGuid(), TenantId, name, null, "Student",
+						board.AcademicYearId, medium.EducationBoardId, AcademicMediumId, standard.EducationMediumStageId, StandardId, DivisionId,
+						status: StudentLifeCycleStatusEnum.Enrolled), autoSave: true);
+				var input = new GetStudentAcademic360ListInput
+				{
+					AcademicYearId = board.AcademicYearId, BoardId = medium.EducationBoardId,
+					EducationMediumId = AcademicMediumId, MaxResultCount = 2
+				};
+				var first = await Academic360.GetListAsync(input);
+				input.SkipCount = 2;
+				var second = await Academic360.GetListAsync(input);
+				first.Items.Concat(second.Items).Select(student => student.StudentName)
+					.ShouldBe(names.Select(name => $"{name} Student").OrderBy(name => name));
+				input.SkipCount = 0;
+				input.SearchTerm = "åSA";
+				(await Academic360.GetListAsync(input)).Items.Single().StudentName.ShouldBe("Åsa Student");
+				input.SearchTerm = "ELO";
+				(await Academic360.GetListAsync(input)).Items.Single().StudentName.ShouldBe("Elodie Student");
+				input.SearchTerm = "(unmatched)";
+				(await Academic360.GetListAsync(input)).Items.ShouldBeEmpty();
+			}
+		});
+	}
+
+	[Fact]
+	public async Task Overview_Should_Bound_History_Previews_And_Detail_Pages_Should_Retain_Older_Records()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (Tenant.Change(TenantId))
+			using (AsAdmin())
+			{
+				var student = await SeedStudentAsync();
+				var homeworkType = await GetRequiredService<HomeworkTypeManager>().CreateAsync(AcademicMediumId, "360 history");
+				for (var index = 0; index < 26; index++)
+					await InsertHomeworkAsync(homeworkType.Id, index == 0 ? "Resubmit oldest" : $"History {index}", DateTime.UtcNow.Date.AddDays(index + 1), YearId);
+				for (var index = 0; index < 14; index++)
+					await InsertExamAsync($"Exam history {index}", index, ExamStatus.Published);
+
+				var db = await GetDbAsync();
+				db.ChangeTracker.Clear();
+				var overview = await Academic360.GetTabAsync(student.Id, "overview", new());
+				overview.LearningTasks.TotalAssigned.ShouldBe(26);
+				overview.LearningTasks.Tasks.Count.ShouldBe(10);
+				overview.Exams.Count.ShouldBe(5);
+				db.ChangeTracker.Entries<Exam>().Count().ShouldBe(5);
+				overview.Kpis.Single(kpi => kpi.Key == "examAverage").Trend.ShouldBe("14 exams");
+
+				var first = await Academic360.GetTabAsync(student.Id, "learning", new() { TaskMaxResultCount = 20 });
+				var older = await Academic360.GetTabAsync(student.Id, "learning", new() { TaskSkipCount = 20, TaskMaxResultCount = 20 });
+				first.LearningTasks.TotalAssigned.ShouldBe(26);
+				older.LearningTasks.TotalAssigned.ShouldBe(26);
+				first.LearningTasks.Tasks.Select(task => task.Id).Concat(older.LearningTasks.Tasks.Select(task => task.Id))
+					.Distinct().Count().ShouldBe(26);
+				var firstExams = await Academic360.GetTabAsync(student.Id, "exams", new() { ExamMaxResultCount = 10 });
+				var olderExams = await Academic360.GetTabAsync(student.Id, "exams", new() { ExamSkipCount = 10, ExamMaxResultCount = 10 });
+				firstExams.Exams.Select(exam => exam.ExamId).Concat(olderExams.Exams.Select(exam => exam.ExamId))
+					.Distinct().Count().ShouldBe(14);
+				var filteredLearning = await Academic360.GetTabAsync(student.Id, "learning",
+					JsonSerializer.Deserialize<StudentAcademic360Input>("""{"TaskMaxResultCount":20,"TaskStatusFilter":"RESUBMISSION_REQUIRED"}""")!);
+				filteredLearning.LearningTasks.Tasks.Single().Title.ShouldBe("Resubmit oldest");
+				filteredLearning.LearningTasks.TotalAssigned.ShouldBe(26);
+				var filteredExams = await Academic360.GetTabAsync(student.Id, "exams",
+					JsonSerializer.Deserialize<StudentAcademic360Input>("""{"ExamMaxResultCount":10,"ExamSearchTerm":"Exam history 13","DetailPaging":true}""")!);
+				filteredExams.Exams.Single().ExamName.ShouldBe("Exam history 13");
 			}
 		});
 	}
@@ -357,4 +491,36 @@ public class StudentAcademic360Read_Tests : SubjectTeacherReassignmentTestBase
 	}
 
 	private Task<ShikshaMitraDbContext> GetDbAsync() => GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+
+	private sealed class Academic360QueryCapture : IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>, IDisposable
+	{
+		private readonly DbConnection _connection;
+		private readonly IDisposable _listener;
+		private readonly ConcurrentBag<IDisposable> _subscriptions = new();
+		private readonly ConcurrentDictionary<Guid, string> _commands = new();
+		public Academic360QueryCapture(DbConnection connection)
+		{
+			_connection = connection;
+			_listener = DiagnosticListener.AllListeners.Subscribe(this);
+		}
+		public IReadOnlyCollection<string> Commands => _commands.Values.ToList();
+		public void OnNext(DiagnosticListener listener)
+		{
+			if (listener.Name == "Microsoft.EntityFrameworkCore")
+				_subscriptions.Add(listener.Subscribe(this, name => name == RelationalEventId.CommandExecuted.Name));
+		}
+		public void OnNext(KeyValuePair<string, object?> value)
+		{
+			if (value.Value is CommandExecutedEventData data && data.Context != null &&
+				ReferenceEquals(data.Context.Database.GetDbConnection(), _connection))
+				_commands.TryAdd(data.CommandId, data.Command.CommandText);
+		}
+		public void OnCompleted() { }
+		public void OnError(Exception error) { }
+		public void Dispose()
+		{
+			_listener.Dispose();
+			foreach (var subscription in _subscriptions) subscription.Dispose();
+		}
+	}
 }

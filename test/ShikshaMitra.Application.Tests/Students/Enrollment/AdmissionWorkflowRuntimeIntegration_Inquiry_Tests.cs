@@ -12,15 +12,14 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
-	public async Task Managed_inquiry_should_require_qualification_before_starting_application()
+	public async Task Legacy_inquiry_policy_should_require_interest_before_application_start()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
 		{
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(
 				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Managed inquiry test"), autoSave: true);
-			var workflow = await CreateAndPublishManagedInquiryWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync(legacyPolicy: true);
 			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
 			var management = GetRequiredService<IAdmissionInquiryManagementAppService>();
 			var inquiry = await inquiries.CreateAsync(ManagedInquiryInput(offering));
@@ -29,14 +28,25 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			state.Managed.ShouldBeTrue();
 			state.ContactCount.ShouldBe(0);
 			state.CanStartApplication.ShouldBeFalse();
-			state.Blockers.ShouldContain(item => item.Contains("qualified", StringComparison.OrdinalIgnoreCase));
-			var blocked = await Should.ThrowAsync<BusinessException>(() =>
-				_applicationAppService.StartAsync(inquiry.ApplicantId!.Value, offering.Id, inquiry.Id));
-			blocked.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.ContactRequired);
+			state.Blockers.ShouldNotBeEmpty();
+			state.Policy.ShouldNotBeNull().ApplicationStartRequirement.ShouldBe(AdmissionInquiryApplicationStartRequirement.Captured);
+			var immediate = await inquiries.CreateAsync(ManagedInquiryInput(offering));
+			(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.StartAsync(immediate.ApplicantId!.Value, offering.Id, immediate.Id)))
+				.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.QualificationRequired);
+			immediate = await inquiries.UpdateAsync(immediate.Id, InquiryStatusUpdate(immediate, AdmissionInquiryStatus.Interested));
+			var immediateApplication = await _applicationAppService.StartAsync(immediate.ApplicantId!.Value, offering.Id, immediate.Id);
+			(await _applicationRepository.GetAsync(immediateApplication.Id)).InquiryId.ShouldBe(immediate.Id);
+			var immediateState = await management.GetAsync(immediate.Id);
+			immediateState.ContactCount.ShouldBe(0);
+			immediateState.Outcome.ShouldBe(AdmissionInquiryQualificationOutcome.Qualified);
+			immediateState.IsLocked.ShouldBeTrue();
 
 			state = await management.RecordContactAsync(inquiry.Id, new()
 			{
 				ConcurrencyStamp = state.ConcurrencyStamp,
+				Channel = "PHONE",
+				Direction = "OUTBOUND",
+				Outcome = "CONNECTED",
 				Note = "Guardian confirmed interest in a campus visit."
 			});
 			state.ContactCount.ShouldBe(1);
@@ -59,29 +69,32 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	}
 
 	[Fact]
-	public async Task Basic_inquiry_workflow_should_keep_the_existing_application_start_behavior()
+	public async Task Basic_inquiry_workflow_should_require_interest_and_preserve_duplicate_handling()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
 		{
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(
 				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Basic inquiry compatibility"), autoSave: true);
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
 			var input = ManagedInquiryInput(offering);
 			var inquiry = await inquiries.CreateAsync(input);
-			(await GetRequiredService<IAdmissionInquiryManagementAppService>().GetAsync(inquiry.Id)).Managed.ShouldBeFalse();
+			(await GetRequiredService<IAdmissionInquiryManagementAppService>().GetAsync(inquiry.Id)).Managed.ShouldBeTrue();
 			input.CreateSeparateFamily = true;
+			var reasonRequired = await Should.ThrowAsync<BusinessException>(() => inquiries.CreateAsync(input));
+			reasonRequired.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.DuplicateReasonRequired);
+			input.DuplicateOverrideReason = "Verified separate family sharing the mobile number.";
 			var separate = await inquiries.CreateAsync(input);
 			separate.Id.ShouldNotBe(inquiry.Id);
+			inquiry = await inquiries.UpdateAsync(inquiry.Id, InquiryStatusUpdate(inquiry, AdmissionInquiryStatus.Interested));
 			var application = await _applicationAppService.StartAsync(inquiry.ApplicantId!.Value, offering.Id, inquiry.Id);
 			(await _applicationRepository.GetAsync(application.Id)).InquiryId.ShouldBe(inquiry.Id);
 		}
 	}
 
 	[Fact]
-	public async Task Inquiry_list_should_support_unassigned_and_counsellor_queues()
+	public async Task Inquiry_list_should_ignore_retired_ownership_filters_and_preserve_followup_queues()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
@@ -89,14 +102,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(
 				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Inquiry owner queue"), autoSave: true);
 			var counsellorId = await CreateReviewUserAsync();
-			var workflow = await CreateAndPublishManagedInquiryWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync(legacyPolicy: true);
 			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
 			var inquiryInput = ManagedInquiryInput(offering);
 			inquiryInput.Email = "family@example.com";
-			var inquiry = await inquiries.CreateAsync(inquiryInput);
-			(await inquiries.GetAssignableCounsellorsAsync(offering.Id))
-				.ShouldContain(item => item.Id == counsellorId);
+			var inquiry = await WithUnitOfWorkAsync(() => GetRequiredService<AdmissionInquiryAppService>().CreateFromPublicLinkAsync(
+				inquiryInput, null, offering.InquiryFormDefinitionId));
+			(await inquiries.GetAssignableCounsellorsAsync(offering.Id)).ShouldBeEmpty();
 
 			var unassigned = await inquiries.GetListAsync(new() { IsAssigned = false, MaxResultCount = 50 });
 			unassigned.Items.ShouldContain(item => item.Id == inquiry.Id);
@@ -112,11 +124,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			queueItem.AdmissionCycleName.ShouldNotBeNullOrWhiteSpace();
 			queueItem.AdmissionOfferingCode.ShouldBe(offering.Code);
 
-			await inquiries.AssignCounsellorAsync(inquiry.Id, new()
+			(await Should.ThrowAsync<BusinessException>(() => inquiries.AssignCounsellorAsync(inquiry.Id, new()
 			{
 				Mode = AdmissionCounsellorAssignmentMode.Manual,
-				CounsellorId = counsellorId
-			});
+				CounsellorId = counsellorId,
+				Reason = "Transfer the case to the covering counsellor."
+			}))).Code.ShouldBe("Admissions.StaffAssignmentRetired");
+			// Preserve a historical owner fixture to verify queue and follow-up projections independently.
+			var inquiryRepository = GetRequiredService<Volo.Abp.Domain.Repositories.IRepository<AdmissionInquiry, Guid>>();
+			var ownedInquiry = await inquiryRepository.GetAsync(inquiry.Id);
+			ownedInquiry.AssignCounsellor(counsellorId);
+			await inquiryRepository.UpdateAsync(ownedInquiry, true);
 
 			var assigned = await inquiries.GetListAsync(new()
 			{
@@ -126,7 +144,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 			assigned.Items.ShouldContain(item => item.Id == inquiry.Id);
 			(await inquiries.GetListAsync(new() { IsAssigned = false, MaxResultCount = 50 }))
-				.Items.ShouldNotContain(item => item.Id == inquiry.Id);
+				.Items.ShouldContain(item => item.Id == inquiry.Id);
 
 			var management = GetRequiredService<IAdmissionInquiryManagementAppService>();
 			var state = await management.GetAsync(inquiry.Id);
@@ -145,7 +163,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var followUpItem = followUpQueue.Items.Single(item => item.Id == inquiry.Id);
 			followUpItem.OpenFollowUpCount.ShouldBe(1);
 			followUpItem.NextFollowUpAt.ShouldNotBeNull();
-			followUpItem.AssignedCounsellorName.ShouldNotBeNullOrWhiteSpace();
+			followUpItem.AssignedCounsellorName.ShouldBeNull();
 		}
 	}
 
@@ -194,13 +212,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		}
 	}
 
-	private async Task<AdmissionWorkflowDto> CreateAndPublishManagedInquiryWorkflowAsync()
+	private async Task<AdmissionWorkflowDto> CreateAndPublishManagedInquiryWorkflowAsync(bool withAdmissionDecision = false)
 	{
 		var entryId = Guid.NewGuid();
 		var terminalId = Guid.NewGuid();
 		var configuration = "{\"inquiry\":{\"version\":1,\"enabled\":true,\"applicationStartRequirement\":2," +
 			"\"qualificationChecklist\":[{\"code\":\"AGE\",\"name\":\"Age confirmed\",\"required\":true}]}}";
-		var workflow = await _workflowAppService.CreateAsync(new()
+		var workflow = await SeedPublishedHistoricalWorkflowAsync(new()
 		{
 			Name = "Managed Inquiry",
 			Code = $"INQUIRY_{Guid.NewGuid():N}"[..24],
@@ -208,12 +226,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			[
 				new() { Id = entryId, Code = "INQUIRY", Name = "Inquiry", StageType = AdmissionWorkflowStageType.Inquiry,
 					DisplayOrder = 0, IsEntryStage = true, IsRequired = true, ConfigurationJson = configuration },
-				new() { Id = terminalId, Code = "ADMISSION", Name = "Admission", StageType = AdmissionWorkflowStageType.Custom,
+				new() { Id = terminalId, Code = "ADMISSION", Name = "Admission", StageType = withAdmissionDecision ? AdmissionWorkflowStageType.Approval : AdmissionWorkflowStageType.Custom,
 					DisplayOrder = 1, IsTerminalStage = true, IsRequired = true }
 			],
 			Transitions = [new() { FromStageId = entryId, ToStageId = terminalId, Priority = 1, IsDefault = true }]
 		});
-		return await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
+		return workflow;
 	}
 
 	private static CreateAdmissionInquiryDto ManagedInquiryInput(AdmissionOffering offering) => new()

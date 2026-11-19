@@ -1,4 +1,4 @@
-using ShikshaMitra.Domain.Finance.Fees.Settings;
+﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Charges;
 using Volo.Abp.Domain.Repositories;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -20,19 +20,41 @@ public partial class StudentFeeDetailsQueryService
 		Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
 	{
 		EnsureNotEmpty(academicYearId, "academicYearId");
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId, cancellationToken);
+		await financeScopeAccessService.EnsureFeeCollectionStudentAccessibleAsync(
+			studentId, academicYearId, cancellationToken);
 
-		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
-		var feeStructureAssignment = await studentFeeStructureRepository.FirstOrDefaultAsync(
-			x => x.StudentId == studentId && x.AcademicYearId == academicYearId);
-
+		var student = await GetStudentSnapshotAsync(studentId, academicYearId, cancellationToken);
 		var dueFees = await GetDueFeesAsync(studentId, academicYearId);
 		var overdueFee = CalculateOverdueFee(dueFees);
-		var feeHeads = await BuildFeeHeadSummariesAsync(studentId, feeStructureAssignment, dueFees);
+		var feeHeads = await BuildFeeHeadSummariesAsync(studentId, dueFees);
 		var charges = await BuildChargeDetailsAsync(studentId, academicYearId);
+		var lateBalances = await lateFeeBalanceService.GetBalancesAsync(dueFees, academicYearId, clock.Now.Date);
+		var lateDues = dueFees.Where(d => lateBalances[d.Id].Total > 0m).ToList();
+		if (lateDues.Count > 0)
+		{
+			var headIds = lateDues.Select(d => d.FeeHeadId).Distinct().ToList();
+			var names = (await feeHeadRepository.GetListAsync(x => headIds.Contains(x.Id))).ToDictionary(x => x.Id, x => x.Name);
+			charges ??= [];
+			charges.InsertRange(0, lateDues.Select(d =>
+			{
+				var balance = lateBalances[d.Id];
+				return new FeeChargeDetailDto
+				{
+					ChargeId = d.Id, Name = balance.IsCommonCharge ? "Late Fee" : $"Late Fee - {names.GetValueOrDefault(d.FeeHeadId, string.Empty)} ({d.GetDisplayInstallmentLabel()})",
+					Amount = (double)balance.Total, PaidAmount = (double)balance.PaidAmount,
+					PendingAmount = (double)balance.PendingAmount, WaivedAmount = (double)balance.WaivedAmount,
+					ReconciliationAmount = balance.ReconciliationAmount,
+					CanWaive = balance.PendingAmount > 0m,
+					Status = balance.ReconciliationAmount > 0m ? FeeCollectionStatus.InReconciliation
+						: balance.PendingAmount <= 0m ? (balance.WaivedAmount > 0m ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
+						: (balance.PaidAmount > 0m ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending)
+				};
+			}));
+		}
+
 		var payments = await BuildPaymentHistoryAsync(studentId, academicYearId);
 		var concessions = await BuildConcessionDetailsAsync(studentId, academicYearId);
-		var feeOverview = BuildFeeOverview(feeHeads, concessions, overdueFee);
+		var feeOverview = BuildFeeOverview(feeHeads, overdueFee);
 
 		return new StudentFeeDetailsDto
 		{
@@ -49,9 +71,9 @@ public partial class StudentFeeDetailsQueryService
 		var academicYearFeeHeadIds = feeHeadsQ
 			.Where(fh => fh.AcademicYearId == academicYearId)
 			.Select(fh => fh.Id);
-		return dueFeesQ
+		return await AsyncExecuter.ToListAsync(dueFeesQ
 			.Where(d => d.StudentId == studentId && academicYearFeeHeadIds.Contains(d.FeeHeadId))
-			.ToList();
+			);
 	}
 
 	private async Task<IQueryable<Guid>> GetReversedTransactionIdsAsync()
@@ -61,47 +83,42 @@ public partial class StudentFeeDetailsQueryService
 	}
 
 	private async Task<List<FeeHeadSummaryDto>> BuildFeeHeadSummariesAsync(
-		Guid studentId, StudentFeeStructure? assignment, List<DueFee> dueFees)
+		Guid studentId, List<DueFee> dueFees)
 	{
-		if (assignment is null || dueFees.Count == 0) return [];
+		if (dueFees.Count == 0) return [];
 
-		var detailsQ = await feeStructureDetailRepository.GetQueryableAsync();
-		var feeHeadsQ = await feeHeadRepository.GetQueryableAsync();
 		var dueFeeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
-
-		var feeHeadDefs = (from detail in detailsQ
-						   join fh in feeHeadsQ on detail.FeeHeadId equals fh.Id
-						   where detail.FeeStructureId == assignment.FeeStructureStandardId
-								 && dueFeeHeadIds.Contains(detail.FeeHeadId)
-						   select new
-						   {
-							   detail.FeeHeadId, FeeHeadName = fh.Name,
-							   Description = fh.Description ?? string.Empty, NetAmount = detail.Amount,
-						   }).ToList();
-
-		var feeCollQ = await feeCollectionRecordRepository.GetQueryableAsync();
-		var reversedTxIds = await GetReversedTransactionIdsAsync();
-		var paidPerHead = feeCollQ
-			.Where(r => r.StudentId == studentId && !reversedTxIds.Contains(r.FeeRecordMetadataId))
-			.GroupBy(r => r.FeeHeadId)
-			.Select(g => new { FeeHeadId = g.Key, Paid = g.Sum(r => r.Amount) })
-			.ToDictionary(x => x.FeeHeadId, x => x.Paid);
-
+		var feeHeads = (await feeHeadRepository.GetListAsync(fh => dueFeeHeadIds.Contains(fh.Id)))
+			.ToDictionary(fh => fh.Id);
 		var reconByFeeHead = await GetInReconciliationByFeeHeadAsync(studentId);
+		var today = clock.Now.Date;
+		var isOverdue = DueFeeCollectionStatusResolver.OverdueOn(today).Compile();
 
-		return feeHeadDefs.Select(def =>
+		return dueFees.GroupBy(d => d.FeeHeadId).Select(group =>
 		{
-			var paid = paidPerHead.GetValueOrDefault(def.FeeHeadId, 0d);
-			var netAmount = (double)def.NetAmount;
-			var pending = Math.Max(0d, netAmount - paid);
-			var recon = reconByFeeHead.GetValueOrDefault(def.FeeHeadId, 0d);
+			var feeHead = feeHeads.GetValueOrDefault(group.Key);
+			var principal = FeePrincipalOverview.Calculate(group, clock.Now, (decimal)reconByFeeHead.GetValueOrDefault(group.Key, 0d));
+			var total = (double)principal.TotalFee;
+			var paid = (double)principal.PaidFee;
+			var pending = (double)principal.TotalOutstandingFee;
+			var recon = reconByFeeHead.GetValueOrDefault(group.Key, 0d);
 			return new FeeHeadSummaryDto
 			{
-				FeeHeadId = def.FeeHeadId, FeeHeadName = def.FeeHeadName,
-				Amount = netAmount, PaidAmount = paid, PendingAmount = pending,
-				Description = def.Description, ReconciliationAmount = recon > 0d ? recon : null,
-				Status = pending <= 0d ? FeeCollectionStatus.Paid
-					: (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
+				FeeHeadId = group.Key, FeeHeadName = feeHead?.Name ?? string.Empty,
+				Amount = total, PaidAmount = paid, PendingAmount = pending,
+				NetFee = principal.NetFee,
+				ConcessionAmount = principal.ConcessionAmount,
+				GrossPaidAmount = principal.GrossPaidAmount,
+				RefundedAmount = principal.RefundedAmount,
+				OverpaymentAmount = principal.OverpaymentAmount,
+				AdjustmentCreditAmount = principal.AdjustmentCreditAmount,
+				Description = feeHead?.Description ?? string.Empty,
+				ReconciliationAmount = recon > 0d ? recon : null,
+				Status = group.Any(isOverdue) ? FeeCollectionStatus.Overdue
+					: pending > 0d
+					? (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending)
+					: recon > 0d ? FeeCollectionStatus.InReconciliation
+					: group.Any(d => d.OutstandingAmount > 0m) ? FeeCollectionStatus.Pending : FeeCollectionStatus.Paid,
 			};
 		}).ToList();
 	}
@@ -109,30 +126,39 @@ public partial class StudentFeeDetailsQueryService
 	private async Task<List<FeeChargeDetailDto>?> BuildChargeDetailsAsync(Guid studentId, Guid academicYearId)
 	{
 		var chargesQ = await chargeRepository.GetQueryableAsync();
-		var studentCharges = chargesQ.Where(c => c.StudentId == studentId
-			&& c.AcademicYearId == academicYearId && c.Status == ChargeStatus.Approved).ToList();
+		var studentCharges = await AsyncExecuter.ToListAsync(chargesQ.Where(c => c.StudentId == studentId
+			&& c.AcademicYearId == academicYearId && c.Status == ChargeStatus.Approved));
 
 		if (studentCharges.Count == 0) return null;
+		var chargeIds = studentCharges.Select(c => c.Id).ToList();
+		var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
+			.GroupBy(x => x.ChargeId)
+			.ToDictionary(x => x.Key, x => x.Sum(w => w.EffectiveAmount));
 
 		var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
-		var reversedTxIds = await GetReversedTransactionIdsAsync();
-		var paidPerCharge = chargeCollQ
-			.Where(r => r.StudentId == studentId && !reversedTxIds.Contains(r.FeeRecordMetadataId))
-			.GroupBy(r => r.ChargeId)
-			.Select(g => new { ChargeId = g.Key, Paid = g.Sum(r => r.Amount) })
-			.ToDictionary(x => x.ChargeId, x => x.Paid);
+		var metadataQ = await feeRecordMetadataRepository.GetQueryableAsync();
+		var activeTxIds = metadataQ.Where(x => x.StudentId == studentId && x.AcademicYearId == academicYearId && x.Status != FeeCollectionStatus.Reversed).Select(x => x.Id);
+		var pendingTxIds = (await AsyncExecuter.ToListAsync(metadataQ.Where(x => x.StudentId == studentId && x.AcademicYearId == academicYearId && x.Status == FeeCollectionStatus.InReconciliation).Select(x => x.Id))).ToHashSet();
+		var allocations = await AsyncExecuter.ToListAsync(chargeCollQ.Where(r => r.StudentId == studentId && chargeIds.Contains(r.ChargeId) && activeTxIds.Contains(r.FeeRecordMetadataId)));
+		var paidPerCharge = allocations.GroupBy(x => x.ChargeId).ToDictionary(x => x.Key, x => x.Sum(r => (decimal)r.Amount));
+		var reconPerCharge = allocations.Where(x => pendingTxIds.Contains(x.FeeRecordMetadataId)).GroupBy(x => x.ChargeId)
+			.ToDictionary(x => x.Key, x => x.Sum(r => (decimal)r.Amount));
 
 		return studentCharges.Select(c =>
 		{
-			var net = (double)c.Amount;
-			var paid = paidPerCharge.GetValueOrDefault(c.Id, 0d);
-			var pending = Math.Max(0d, net - paid);
+			var net = c.Amount;
+			var paid = paidPerCharge.GetValueOrDefault(c.Id, 0m);
+			var waived = waivedPerCharge.GetValueOrDefault(c.Id, 0m);
+			var pending = Math.Max(0m, net - paid - waived);
+			var reconciliation = reconPerCharge.GetValueOrDefault(c.Id, 0m);
 			return new FeeChargeDetailDto
 			{
 				ChargeId = c.Id, Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
-				Amount = net, PaidAmount = paid, PendingAmount = pending,
-				Status = pending <= 0d ? FeeCollectionStatus.Paid
-					: (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
+				Amount = (double)net, PaidAmount = (double)paid, PendingAmount = (double)pending,
+				WaivedAmount = (double)waived, ReconciliationAmount = reconciliation, CanWaive = pending > 0m,
+				Status = reconciliation > 0m ? FeeCollectionStatus.InReconciliation
+					: pending <= 0m ? (waived > 0m ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
+					: (paid > 0m ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 			};
 		}).ToList();
 	}
@@ -140,17 +166,33 @@ public partial class StudentFeeDetailsQueryService
 	private async Task<List<FeePaymentHistoryDto>?> BuildPaymentHistoryAsync(Guid studentId, Guid academicYearId)
 	{
 		var metaQ = await feeRecordMetadataRepository.GetQueryableAsync();
-		var metadataForStudent = metaQ.Where(m => m.StudentId == studentId && m.AcademicYearId == academicYearId)
-			.OrderByDescending(m => m.CreationTime).ToList();
+		var metadataForStudent = await AsyncExecuter.ToListAsync(metaQ.Where(m => m.StudentId == studentId && m.AcademicYearId == academicYearId)
+			.OrderByDescending(m => m.CreationTime));
 
 		if (metadataForStudent.Count == 0) return null;
 
 		var paymentMethodQ = await paymentMethodRecordRepository.GetQueryableAsync();
 		var metadataIds = metadataForStudent.Select(m => m.Id).ToList();
-		var methodsByMetadata = paymentMethodQ.Where(p => metadataIds.Contains(p.FeeRecordMetadataId))
-			.GroupBy(p => p.FeeRecordMetadataId)
-			.Select(g => new { MetadataId = g.Key, PaymentMethods = g.Select(p => p.PaymentMethod).ToList() })
-			.ToDictionary(x => x.MetadataId, x => x.PaymentMethods);
+		var receipts = await paymentReceiptRepository.GetListAsync(r =>
+			r.StudentId == studentId && r.AcademicYearId == academicYearId
+			&& metadataIds.Contains(r.FeeCollectionTransactionId));
+		var receiptsByMetadata = receipts.GroupBy(r => r.FeeCollectionTransactionId)
+			.ToDictionary(g => g.Key, g => g
+				// A verified provisional document is replaced by its linked receipt.
+				.Where(r => !r.LinkedFinalReceiptId.HasValue)
+				.OrderBy(r => r.ReceiptNumber)
+				.Select(r => new FeePaymentHistoryReceiptDto
+				{
+					ReceiptId = r.Id, ReceiptNumber = r.ReceiptNumber,
+					Scope = r.ReceiptScope.ToString(), HasPdf = r.PdfBlobName != null,
+				}).ToList());
+		// Keep the database projection flat. A nested collection inside GroupBy cannot be
+		// translated reliably by the production EF provider when a student has payments.
+		var methodRows = await AsyncExecuter.ToListAsync(paymentMethodQ
+			.Where(p => metadataIds.Contains(p.FeeRecordMetadataId))
+			.Select(p => new { p.FeeRecordMetadataId, p.PaymentMethod }));
+		var methodsByMetadata = methodRows.GroupBy(p => p.FeeRecordMetadataId)
+			.ToDictionary(g => g.Key, g => g.Select(p => p.PaymentMethod).ToList());
 
 		return metadataForStudent.Select(m => new FeePaymentHistoryDto
 		{
@@ -159,6 +201,7 @@ public partial class StudentFeeDetailsQueryService
 			Amount = m.TotalPaidFee,
 			PaymentMethods = methodsByMetadata.TryGetValue(m.Id, out var methods) ? methods : [],
 			ReceiptUrl = null, Status = m.Status,
+			Receipts = receiptsByMetadata.GetValueOrDefault(m.Id, []),
 		}).ToList();
 	}
 
@@ -185,23 +228,23 @@ public partial class StudentFeeDetailsQueryService
 
 	private double CalculateOverdueFee(List<DueFee> dueFees)
 	{
-		var now = clock.Now;
-		var currentYear = now.Year;
-		var currentMonth = now.Month - 1;
-		return (double)dueFees.Where(d => d.OutstandingAmount > 0m
-			&& d.IsBillGeneratedOn(now.Date)
-			&& (d.Year < currentYear || (d.Year == currentYear && (int)d.Month < currentMonth)))
+		return (double)dueFees.Where(DueFeeCollectionStatusResolver.OverdueOn(clock.Now).Compile())
 			.Sum(d => d.OutstandingAmount);
 	}
 
 	private static FeeOverviewDto BuildFeeOverview(
-		List<FeeHeadSummaryDto> feeHeads, List<ConcessionDetailDto>? concessions, double overdueFee)
+		List<FeeHeadSummaryDto> feeHeads, double overdueFee)
 	{
-		var totalConcession = concessions?.Sum(c => c.Amount ?? 0d) ?? 0d;
+		var totalConcession = (double)feeHeads.Sum(fh => fh.ConcessionAmount);
 		var totalRecon = feeHeads.Sum(fh => fh.ReconciliationAmount ?? 0d);
 		return new FeeOverviewDto
 		{
 			TotalFee = feeHeads.Sum(fh => fh.Amount),
+			NetFee = feeHeads.Sum(fh => fh.NetFee),
+			GrossPaidAmount = feeHeads.Sum(fh => fh.GrossPaidAmount),
+			RefundedAmount = feeHeads.Sum(fh => fh.RefundedAmount),
+			OverpaymentAmount = feeHeads.Sum(fh => fh.OverpaymentAmount),
+			AdjustmentCreditAmount = feeHeads.Sum(fh => fh.AdjustmentCreditAmount),
 			PaidFee = feeHeads.Sum(fh => fh.PaidAmount),
 			PendingFee = feeHeads.Sum(fh => fh.PendingAmount ?? 0d),
 			ConcessionAmount = totalConcession > 0d ? totalConcession : null,

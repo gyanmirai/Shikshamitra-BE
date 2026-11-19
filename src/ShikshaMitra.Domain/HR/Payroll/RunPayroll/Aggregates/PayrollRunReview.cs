@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -37,6 +39,11 @@ public class PayrollRunReview : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PreviewRunId = previewRunId;
 	}
 
+	public void AcknowledgeWarnings(IEnumerable<string> warnings, Guid? profileVersionId)
+	{
+		ExtraProperties["AcknowledgedWarningCodes"] = warnings.Distinct().OrderBy(x => x).ToArray();
+		ExtraProperties["StatutoryProfileVersionId"] = profileVersionId;
+	}
 	public void Refresh(Guid reviewedByUserId, DateTime reviewedAt, Guid? previewRunId = null)
 	{
 		ReviewedByUserId = reviewedByUserId;

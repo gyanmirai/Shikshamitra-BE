@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
+using Volo.Abp;
 
 namespace ShikshaMitra.HR.Policies;
 
@@ -39,6 +40,7 @@ public class HrPolicyAffectedEmployeeResolver(
 				.ToDictionary(group => group.Id);
 		var groupsHaveRuleBasedMembership = groups.Values.Any(HasRuleBasedEmployeeMembership);
 		var employeeQuery = ActiveEmployeeQuery(await employeeRepository.GetQueryableAsync());
+		if (await asyncExecuter.CountAsync(employeeQuery) > 500000) throw new BusinessException(HRErrorCodes.ReportPopulationTooLarge);
 
 		if (groups.Count == 0)
 		{
@@ -67,7 +69,7 @@ public class HrPolicyAffectedEmployeeResolver(
 
 		return new AffectedEmployeePreview(
 			matchedEmployees.Count,
-			matchedEmployees.Take(25).ToList(),
+			matchedEmployees,
 			matchedEmployees.Select(x => x.Id).ToList());
 	}
 
@@ -82,7 +84,7 @@ public class HrPolicyAffectedEmployeeResolver(
 
 		var query = employeeQuery.Where(employee => employeeIds.Contains(employee.Id));
 		var resolvedEmployeeIds = await asyncExecuter.ToListAsync(query.Select(employee => employee.Id));
-		var sample = await asyncExecuter.ToListAsync(query.Take(25));
+		var sample = await asyncExecuter.ToListAsync(query.OrderBy(x => x.Id));
 		return new AffectedEmployeePreview(resolvedEmployeeIds.Count, sample, resolvedEmployeeIds);
 	}
 

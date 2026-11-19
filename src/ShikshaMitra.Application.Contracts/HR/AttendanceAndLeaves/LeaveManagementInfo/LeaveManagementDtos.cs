@@ -80,6 +80,7 @@ public class LeaveBalanceItemDto
 
 public class LeaveManagementDto
 {
+	public DateTime AppliedDate { get; set; }
 	public Guid Id { get; set; }
 	public int PublicId { get; set; }
 	public Guid EmployeeId { get; set; }

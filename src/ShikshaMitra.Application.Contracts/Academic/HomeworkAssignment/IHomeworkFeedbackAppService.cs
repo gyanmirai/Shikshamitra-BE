@@ -9,6 +9,8 @@ namespace ShikshaMitra.Academic.HomeworkAssignment;
 /// </summary>
 public interface IHomeworkFeedbackAppService : IApplicationService
 {
+	Task<HomeworkSubmissionDto> GetSubmissionAsync(Guid academicMediumId, Guid studentId, GetHomeworkSubmissionsFilterDto filter);
+
 	/// <summary>
 	/// Gets all submissions for a homework filtered by class, division, and subject
 	/// Shows all students in the division, even if they haven't submitted

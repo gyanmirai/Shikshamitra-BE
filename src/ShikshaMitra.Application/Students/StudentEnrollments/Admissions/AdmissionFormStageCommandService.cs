@@ -22,12 +22,14 @@ public class AdmissionFormStageCommandService(
 	public async Task<AdmissionFormStageDto> VerifySectionAsync(
 		Guid applicationId, Guid stageId, Guid sectionId, VerifyAdmissionFormSectionDto input)
 	{
-		var context = await access.GetContextAsync(applicationId, stageId, true);
+		var context = await access.GetContextAsync(applicationId, stageId, requirePreparation: true);
 		AdmissionFormStageAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 		if (context.Form.Status != AdmissionFormInstanceStatus.Submitted || context.Policy?.RequireSectionVerification != true)
 			throw new BusinessException(AdmissionFormStageErrorCodes.InvalidState,
 				"Submit the form before recording section verification.");
-		var section = await sections.FindAsync(sectionId);
+		var frozen = AdmissionEffectiveFormStore.Read(context.Form);
+		var section = frozen == null ? await sections.FindAsync(sectionId)
+			: AdmissionEffectiveFormResolver.MaterializeSections(frozen.Definition).FirstOrDefault(item => item.Id == sectionId);
 		if (section?.FormDefinitionId != context.Form.FormDefinitionId ||
 			!context.Policy.VerificationSectionCodes.Contains(section.Code, StringComparer.OrdinalIgnoreCase))
 			throw new BusinessException(AdmissionFormStageErrorCodes.InvalidSection,
@@ -41,8 +43,7 @@ public class AdmissionFormStageCommandService(
 				Reason = reason
 			}), CurrentUser.Id), false);
 		await applications.UpdateAsync(context.Application, false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			input.Verified ? "AdmissionFormSectionVerified" : "AdmissionFormSectionVerificationRevoked",
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(input.Verified ? "AdmissionFormSectionVerified" : "AdmissionFormSectionVerificationRevoked",
 			input.Verified ? $"Form section verified: {section.Name}" : $"Form section verification revoked: {section.Name}",
 			context.Application.ApplicantId, applicationId,
 			metadataJson: JsonSerializer.Serialize(new { StageId = stageId, SectionId = section.Id, Reason = reason })), false);
@@ -53,7 +54,7 @@ public class AdmissionFormStageCommandService(
 	public async Task<AdmissionFormStageDto> RequestCorrectionAsync(
 		Guid applicationId, Guid stageId, RequestAdmissionFormCorrectionDto input)
 	{
-		var context = await access.GetContextAsync(applicationId, stageId, true);
+		var context = await access.GetContextAsync(applicationId, stageId, requirePreparation: true);
 		AdmissionFormStageAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 		if (context.Policy?.AllowCorrectionRequests != true || context.Form.Status != AdmissionFormInstanceStatus.Submitted)
 			throw new BusinessException(AdmissionFormStageErrorCodes.CorrectionNotAllowed,
@@ -70,8 +71,7 @@ public class AdmissionFormStageCommandService(
 		await history.InsertAsync(new AdmissionFormChangeHistory(GuidGenerator.Create(), CurrentTenant.Id,
 			context.Form.Id, applicationId, "CorrectionRequested",
 			JsonSerializer.Serialize(new { Reason = reason }), CurrentUser.Id), false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"AdmissionFormCorrectionRequested", "Application form returned for correction",
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("AdmissionFormCorrectionRequested", "Application form returned for correction",
 			context.Application.ApplicantId, applicationId,
 			metadataJson: JsonSerializer.Serialize(new { StageId = stageId, Reason = reason })), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();

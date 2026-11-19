@@ -20,7 +20,6 @@ public class TransactionCategoryRequestValidator : AbstractValidator<CreateTrans
 	{
 		RuleFor(x => x.Name).NotEmpty().MaximumLength(AccountSettingConsts.MaxNameLength);
 		RuleFor(x => x.Description).MaximumLength(AccountSettingConsts.MaxDescriptionLength);
-		RuleFor(x => x.DefaultAccountHeadId).NotEmpty();
 	}
 }
 
@@ -30,7 +29,6 @@ public class UpdateTransactionCategoryRequestValidator : AbstractValidator<Updat
 	{
 		RuleFor(x => x.Name).NotEmpty().MaximumLength(AccountSettingConsts.MaxNameLength);
 		RuleFor(x => x.Description).MaximumLength(AccountSettingConsts.MaxDescriptionLength);
-		RuleFor(x => x.DefaultAccountHeadId).NotEmpty();
 	}
 }
 
@@ -47,8 +45,8 @@ public class CreateBankAccountRequestValidator : AbstractValidator<Dtos.CreateBa
 {
 	public CreateBankAccountRequestValidator()
 	{
-		RuleFor(x => x.Code).NotEmpty().MaximumLength(AccountSettingConsts.MaxCodeLength).Matches("^[A-Za-z0-9._-]+$");
-		RuleFor(x => x.AccountHeadId).NotEmpty();
+		RuleFor(x => x.Code).MaximumLength(AccountSettingConsts.MaxCodeLength).Matches("^[A-Za-z0-9._-]+$")
+			.When(x => !string.IsNullOrWhiteSpace(x.Code));
 		RuleFor(x => x.BankName).NotEmpty().MaximumLength(AccountSettingConsts.MaxNameLength);
 		RuleFor(x => x.BranchName).NotEmpty().MaximumLength(AccountSettingConsts.MaxNameLength);
 		RuleFor(x => x.AccountHolderName).NotEmpty().MaximumLength(AccountSettingConsts.MaxNameLength);
@@ -65,8 +63,8 @@ public class UpdateBankAccountRequestValidator : AbstractValidator<Dtos.UpdateBa
 {
 	public UpdateBankAccountRequestValidator()
 	{
-		RuleFor(x => x.Code).NotEmpty().MaximumLength(AccountSettingConsts.MaxCodeLength).Matches("^[A-Za-z0-9._-]+$");
-		RuleFor(x => x.AccountHeadId).NotEmpty();
+		RuleFor(x => x.Code).MaximumLength(AccountSettingConsts.MaxCodeLength).Matches("^[A-Za-z0-9._-]+$")
+			.When(x => !string.IsNullOrWhiteSpace(x.Code));
 		RuleFor(x => x.BankName).NotEmpty().MaximumLength(AccountSettingConsts.MaxNameLength);
 		RuleFor(x => x.BranchName).NotEmpty().MaximumLength(AccountSettingConsts.MaxNameLength);
 		RuleFor(x => x.AccountHolderName).NotEmpty().MaximumLength(AccountSettingConsts.MaxNameLength);

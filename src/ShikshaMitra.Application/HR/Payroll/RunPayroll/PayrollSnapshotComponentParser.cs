@@ -1,4 +1,4 @@
-using ShikshaMitra.HR.Employees.Payroll;
+﻿using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using System;
 using System.Collections.Generic;
@@ -17,13 +17,16 @@ internal static class PayrollSnapshotComponentParser
 		return components
 			.Select(x => new SalarySlipLineItem(
 				x.Name,
-				Math.Round((decimal)x.Amount, 2, MidpointRounding.AwayFromZero),
+				Math.Round((decimal) x.Amount, 2, MidpointRounding.AwayFromZero),
 				x.Description,
 				x.IsFixed,
 				x.IsTemp,
 				ParseSalaryComponentType(x.ComponentType),
 				ParseSalaryComponentDependency(x.DependOn))
 			{
+				ComponentId = x.ComponentId,
+				SourceLineId = x.SourceLineId,
+				SemanticType = x.SemanticType,
 				FullMonthAmount = x.FullMonthAmount,
 				FormulaType = x.FormulaType,
 				FormulaValue = x.FormulaValue,

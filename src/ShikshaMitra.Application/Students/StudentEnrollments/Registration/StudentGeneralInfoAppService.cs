@@ -1,5 +1,8 @@
 using System;
+using ShikshaMitra.Students.Records;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Compliance;
 using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -10,27 +13,49 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
-public class StudentGeneralInfoAppService(
-	IStudentRepository studentRepository,
-	IRepository<Standard, Guid> standardRepository,
-	IRepository<Division, Guid> divisionRepository,
-	EntityValidationService validationService,
-	StudentScopeAccessService studentScopeAccessService,
-	StudentIdentityComplianceAppService identityComplianceAppService
-) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
+public class StudentGeneralInfoAppService : StudentRegistrationBaseAppService,
 	IStudentGeneralInfoAppService
 {
+	private readonly IStudentRepository studentRepository;
+	private readonly IRepository<Standard, Guid> standardRepository;
+	private readonly IRepository<Division, Guid> divisionRepository;
+	private readonly EntityValidationService validationService;
+	private readonly StudentScopeAccessService studentScopeAccessService;
+	private readonly StudentIdentityComplianceAppService identityComplianceAppService;
+
+	public StudentGeneralInfoAppService(
+		IStudentRepository studentRepository,
+		IRepository<Standard, Guid> standardRepository,
+		IRepository<Division, Guid> divisionRepository,
+		EntityValidationService validationService,
+		StudentScopeAccessService studentScopeAccessService,
+		StudentIdentityComplianceAppService identityComplianceAppService
+	) : base(studentRepository, validationService, studentScopeAccessService)
+	{
+		this.studentRepository = studentRepository;
+		this.standardRepository = standardRepository;
+		this.divisionRepository = divisionRepository;
+		this.validationService = validationService;
+		this.studentScopeAccessService = studentScopeAccessService;
+		this.identityComplianceAppService = identityComplianceAppService;
+	}
+
 	public async Task<StudentGeneralDetailsDto> GetRegistrationGeneralDetailsByIdAsync(Guid studentId)
+		=> (await ReadAsync(studentId, null)).Details;
+	internal Task<StudentRecordGeneralSection> GetRecordsSectionAsync(Guid studentId, StudentRecordSectionReadScope scope) => ReadAsync(studentId, scope);
+	private async Task<StudentRecordGeneralSection> ReadAsync(Guid studentId, StudentRecordSectionReadScope? scope)
 	{
 		var student = await GetScopedRegistrationStudentAsync(
 			studentId,
 			nameof(GetRegistrationGeneralDetailsByIdAsync),
-			StudentRegistrationErrorCodes.InvalidStatusForRegistrationView);
+			StudentRegistrationErrorCodes.InvalidStatusForRegistrationView,
+			includeStudentRecords: true);
 
+		scope?.RequireContext(studentId, CurrentTenant.Id, CurrentUser.Id, CurrentUnitOfWork);
 		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
 		await ApplyComplianceMaskAsync(studentId, result);
 
-		return result;
+		return new(result, student.DivisionId, student.AdditionalDetail?.ProfilePictureUrl);
 	}
 
 	public async Task<StudentGeneralDetailsDto> UpdateGeneralInfoAsync(Guid studentId, UpdateGeneralInfoDto input)
@@ -38,9 +63,18 @@ public class StudentGeneralInfoAppService(
 		var student = await GetScopedRegistrationStudentAsync(
 			studentId,
 			nameof(UpdateGeneralInfoAsync),
-			StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo);
+			StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo,
+			forProfileWrite: true);
 
-		await UpdateAcademicPlacementAsync(student, input);
+		if (student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left)
+		{
+			if ((input.AcademicMediumId.HasValue && input.AcademicMediumId != student.AcademicMediumId) ||
+				(input.StandardId.HasValue && input.StandardId != student.StandardId) ||
+				(input.DivisionId.HasValue && input.DivisionId != student.DivisionId))
+				throw new BusinessException(StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo,
+					"Use the Student Records placement workflow to change an enrolled student's placement.");
+		}
+		else await UpdateAcademicPlacementAsync(student, input);
 
 		await studentScopeAccessService.EnsureCanUseInquiryPreferenceAsync(
 			input.InquiryPreferenceId,
@@ -88,7 +122,11 @@ public class StudentGeneralInfoAppService(
 		}
 
 		await studentRepository.UpdateAsync(student, autoSave: true);
-		var compliance = await UpsertComplianceAsync(student.Id, input);
+		// The profile form receives masked identity numbers. Keep the verified
+		// compliance record intact when an enrolled student's details are edited.
+		var compliance = student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left
+			? await identityComplianceAppService.GetAsync(student.Id)
+			: await UpsertComplianceAsync(student.Id, input);
 
 		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
 		ApplyComplianceMask(result, compliance);
@@ -98,6 +136,7 @@ public class StudentGeneralInfoAppService(
 
 	public async Task<StudentGeneralDetailsDto> CreateDirectRegistrationAsync(CreateDirectRegistrationDto createRegistrationDto)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add);
 		var academicMediumId = createRegistrationDto.AcademicMediumId;
 		if (academicMediumId == Guid.Empty)
 		{
@@ -123,7 +162,9 @@ public class StudentGeneralInfoAppService(
 			throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard does not belong to the specified Academic Medium");
 		}
 
-		await studentScopeAccessService.EnsureCanAccessStandardAsync(standardId, nameof(CreateDirectRegistrationAsync));
+		await studentScopeAccessService.EnsureCanAccessPlacementAsync(
+			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
+			standardId, createRegistrationDto.DivisionId, nameof(CreateDirectRegistrationAsync));
 		if (createRegistrationDto.DivisionId.HasValue)
 		{
 			await EnsureDivisionMatchesStandardAsync(
@@ -238,6 +279,9 @@ public class StudentGeneralInfoAppService(
 			divisionId = student.DivisionId;
 		}
 
+		await studentScopeAccessService.EnsureCanAccessPlacementAsync(
+			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
+			standardId, divisionId, nameof(UpdateGeneralInfoAsync));
 		student.UpdateAcademicPlacement(
 			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
 			standard.EducationMediumStage.EducationMedium.EducationBoardId,

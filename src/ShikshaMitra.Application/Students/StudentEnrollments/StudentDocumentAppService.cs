@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Documents;
 using ShikshaMitra.Students.StudentEnrollments.Documents;
 using Volo.Abp;
@@ -13,6 +15,7 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 /// <summary>
 /// Application service for managing student documents during registration
 /// </summary>
+[Authorize]
 public class StudentDocumentAppService : ApplicationService, IStudentDocumentAppService
 {
 	private readonly StudentDocumentManager _documentManager;
@@ -29,10 +32,12 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 	/// <summary>
 	/// Uploads a document for a student in registration
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add)]
 	public async Task<UploadDocumentResponseDto> UploadDocumentAsync(
 		Guid studentId,
 		ProcessedStudentDocumentDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add);
 		try
 		{
 			await _studentScopeAccessService.GetStudentAsync(studentId, nameof(UploadDocumentAsync));
@@ -89,8 +94,10 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 	/// <summary>
 	/// Gets list of all documents for a student
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 	public async Task<List<StudentDocumentDto>> GetDocumentListAsync(Guid studentId)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		try
 		{
 			await _studentScopeAccessService.GetStudentAsync(studentId, nameof(GetDocumentListAsync));
@@ -139,10 +146,12 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 	/// <summary>
 	/// Gets a specific document for download
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 	public async Task<StudentDocumentDownloadDto> GetDocumentAsync(
 		Guid studentId,
 		Guid documentId)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		try
 		{
 			await _studentScopeAccessService.GetStudentAsync(studentId, nameof(GetDocumentAsync));
@@ -183,8 +192,10 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 	/// <summary>
 	/// Deletes a document
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Delete)]
 	public async Task DeleteDocumentAsync(Guid studentId, Guid documentId)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Delete);
 		try
 		{
 			await _studentScopeAccessService.GetStudentAsync(studentId, nameof(DeleteDocumentAsync));
@@ -218,8 +229,10 @@ public class StudentDocumentAppService : ApplicationService, IStudentDocumentApp
 	/// <summary>
 	/// Gets the status of required documents (uploaded/missing)
 	/// </summary>
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 	public async Task<List<DocumentTypeValidationDto>> GetRequiredDocumentsStatusAsync(Guid studentId)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		try
 		{
 			await _studentScopeAccessService.GetStudentAsync(studentId, nameof(GetRequiredDocumentsStatusAsync));

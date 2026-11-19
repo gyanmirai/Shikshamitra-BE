@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Students.Enrollments.Registrations;
 
@@ -8,6 +9,12 @@ namespace ShikshaMitra.Students.Enrollments.Registrations;
 /// </summary>
 public class UpdateFamilyInfoDto
 {
+	[RegularExpression("^(father|mother|guardian)$")]
+	public string? MainContactRelationship { get; set; }
+	/// <summary>Staff acknowledgment required when changing the main school contact to Guardian.</summary>
+	public bool? GuardianResponsibilityConfirmed { get; set; }
+	[StringLength(128)]
+	public string? GuardianRelationship { get; set; }
 	/// <summary>
 	/// Father details
 	/// </summary>

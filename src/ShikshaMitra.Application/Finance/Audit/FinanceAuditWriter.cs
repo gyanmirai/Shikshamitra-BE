@@ -48,17 +48,18 @@ public class FinanceAuditWriter(
 		IReadOnlyList<FinanceAuditChangedFieldDto>? changedFields = null,
 		object? context = null,
 		string? correlationId = null,
-		Guid? sourceAuditLogId = null)
+		Guid? sourceAuditLogId = null,
+		Guid? eventId = null)
 	{
 		var subModuleCode = FinanceAuditSubModuleCodes.FromEntityType(entityType);
 		var resolvedCorrelationId = string.IsNullOrWhiteSpace(correlationId)
 			? $"fc-{entityId:N}"
 			: correlationId.Trim();
 		var actorName = await ResolveActorNameAsync();
-		var eventId = guidGenerator.Create();
+		var auditEventId = eventId ?? guidGenerator.Create();
 
 		var entity = new FinanceAuditEvent(
-			eventId,
+			auditEventId,
 			currentTenant.Id,
 			academicYearId,
 			subModuleCode,
@@ -85,7 +86,7 @@ public class FinanceAuditWriter(
 
 		return new FinanceAuditWriteResult
 		{
-			EventId = eventId,
+			EventId = auditEventId,
 			CorrelationId = resolvedCorrelationId
 		};
 	}

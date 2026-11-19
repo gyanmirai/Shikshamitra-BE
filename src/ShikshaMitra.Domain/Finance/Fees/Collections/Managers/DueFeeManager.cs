@@ -1,5 +1,6 @@
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.Services;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.Collections;
@@ -12,6 +13,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
@@ -27,7 +29,7 @@ public class DueFeeManager(
 		new DateTime(year, (int)month + 1, 1).AddDays(DefaultDueDayOfMonth - 1);
 
 	public async Task<IReadOnlyList<DueFee>> GenerateForStudentAsync(
-		Guid studentId,
+		Guid? studentId,
 		FeeStructure feeStructure,
 		AcademicYear academicYear,
 		IReadOnlyList<Guid> selectedOptionalFeeHeadIds,
@@ -35,14 +37,38 @@ public class DueFeeManager(
 		ProrationPolicySnapshot? prorationPolicy = null,
 		Guid? prorationPolicyVersionId = null,
 		DateTime? chargeStartDate = null,
-		DateTime? chargeEndDate = null)
+		DateTime? chargeEndDate = null,
+		Guid? financeFeeAccountId = null,
+		IReadOnlyDictionary<Guid, PaymentTerm>? paymentTerms = null)
 	{
-		var alreadyExists = await dueFeeRepository.ExistsForStudentInPeriodAsync(
-			studentId, academicYear.StartDate.Date, academicYear.EndDate.Date);
+		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
+		var alreadyExists = financeFeeAccountId.HasValue
+			? await dueFeeRepository.AnyAsync(d => d.FinanceFeeAccountId == financeFeeAccountId.Value)
+			: await dueFeeRepository.ExistsForStudentInPeriodAsync(
+				studentId!.Value, academicYear.StartDate.Date, academicYear.EndDate.Date);
 		if (alreadyExists)
 			throw new BusinessException(DueFeeErrorCodes.DueFeesAlreadyGenerated)
-				.WithData("StudentId", studentId);
+				.WithData("StudentId", studentId!);
+		return await CalculateForStudentAsync(studentId, feeStructure, academicYear, selectedOptionalFeeHeadIds,
+			optionalFeeHeadDetails, prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate, financeFeeAccountId, paymentTerms);
+	}
 
+	/// <summary>Constructs a transient schedule without checking or changing persisted obligations.
+	/// Assignment correction validates the existing assignment before using this calculation.</summary>
+	public async Task<IReadOnlyList<DueFee>> CalculateForStudentAsync(
+		Guid? studentId,
+		FeeStructure feeStructure,
+		AcademicYear academicYear,
+		IReadOnlyList<Guid> selectedOptionalFeeHeadIds,
+		IReadOnlyList<CustomOptionalFeeHeadDetail>? optionalFeeHeadDetails = null,
+		ProrationPolicySnapshot? prorationPolicy = null,
+		Guid? prorationPolicyVersionId = null,
+		DateTime? chargeStartDate = null,
+		DateTime? chargeEndDate = null,
+		Guid? financeFeeAccountId = null,
+		IReadOnlyDictionary<Guid, PaymentTerm>? paymentTerms = null)
+	{
+		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
 		var assignmentChargeStart = (chargeStartDate ?? academicYear.StartDate).Date;
 		var assignmentChargeEnd = (chargeEndDate ?? academicYear.EndDate).Date;
 		ValidateChargePeriod(assignmentChargeStart, assignmentChargeEnd, academicYear);
@@ -51,12 +77,17 @@ public class DueFeeManager(
 
 		var monthRange = ComputeMonthRange(academicYear);
 		var dueFees = new List<DueFee>();
-		foreach (var detail in feeStructure.FeeStructureDetails)
+		var includedDetails = feeStructure.FeeStructureDetails
+			.Where(detail => !detail.IsOptional || selectedOptionalFeeHeadIds.Contains(detail.FeeHeadId)).ToList();
+		paymentTerms ??= await scheduleResolver.LoadTermsAsync(includedDetails);
+		foreach (var detail in includedDetails)
 		{
 			if (detail.IsOptional && !selectedOptionalFeeHeadIds.Contains(detail.FeeHeadId))
 				continue;
 
 			var customDetail = optionalFeeHeadDetails?.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId);
+            if (detail.IsVariable && (customDetail == null || !detail.PaymentTermId.HasValue || !detail.PaymentTermVersionId.HasValue))
+                throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 			var detailChargeStart = (customDetail?.ChargeStartDate ?? assignmentChargeStart).Date;
 			var detailChargeEnd = (customDetail?.ChargeEndDate ?? assignmentChargeEnd).Date;
 			ValidateChargePeriod(detailChargeStart, detailChargeEnd, academicYear, detail.FeeHeadId);
@@ -65,46 +96,59 @@ public class DueFeeManager(
 			{
 				dueFees.AddRange(await GenerateFromPaymentTermAsync(
 					studentId, detail, customDetail, prorationPolicy, prorationPolicyVersionId,
-					detailChargeStart, detailChargeEnd, academicYear));
+					detailChargeStart, detailChargeEnd, academicYear, financeFeeAccountId, paymentTerms));
 				continue;
 			}
 
 			dueFees.AddRange(GenerateLegacy(
 				studentId, detail, monthRange, customDetail, prorationPolicy,
-				prorationPolicyVersionId, detailChargeStart, detailChargeEnd));
+				prorationPolicyVersionId, detailChargeStart, detailChargeEnd, financeFeeAccountId));
 		}
 
 		return dueFees;
 	}
 
-	private async Task<List<DueFee>> GenerateFromPaymentTermAsync(
-		Guid studentId,
+	private Task<List<DueFee>> GenerateFromPaymentTermAsync(
+		Guid? studentId,
 		FeeStructureDetail detail,
 		CustomOptionalFeeHeadDetail? customDetail,
 		ProrationPolicySnapshot? prorationPolicy,
 		Guid? prorationPolicyVersionId,
 		DateTime chargeStartDate,
-		DateTime chargeEndDate, AcademicYear academicYear)
+		DateTime chargeEndDate, AcademicYear academicYear, Guid? financeFeeAccountId,
+		IReadOnlyDictionary<Guid, PaymentTerm> paymentTerms)
 	{
-		var schedule = await scheduleResolver.ResolveAsync(detail);
+		var schedule = scheduleResolver.ResolveFromTerms(detail, paymentTerms);
 		if (!schedule.IsValid || schedule.Installments.Count == 0)
 			throw new BusinessException(PaymentTermErrorCodes.VersionNotPublished)
 				.WithData("FeeStructureDetailId", detail.Id)
-				.WithData("PaymentTermId", detail.PaymentTermId);
+				.WithData("PaymentTermId", detail.PaymentTermId!);
 
-		var annualAmount = customDetail?.Amount ?? detail.Amount;
+		var annualAmount = customDetail?.Amount ?? detail.Amount ?? throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 		var rows = new List<DueFee>();
-        var weights = schedule.Installments.Select(x => x.AllocationPercentage).ToArray();
+		// Validate the published allocation before selecting this student's service terms.
+		_ = AssignmentAmountCalculator.Allocate(annualAmount, schedule.Installments.Select(x => x.AllocationPercentage).ToArray());
+		var installments = schedule.Installments.Where(x => detail.IsOneTime ||
+			x.CoverageStartDate.Date <= chargeEndDate.Date && x.CoverageEndDate.Date >= chargeStartDate.Date).ToList();
+		var weightTotal = installments.Sum(x => x.AllocationPercentage);
+		if (installments.Count == 0 || weightTotal <= 0m)
+			throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid)
+				.WithData("FeeHeadId", detail.FeeHeadId)
+				.WithData("Reason", "The service period must overlap a payment term with a positive allocation.");
+		// Persist effective weights at the database's six-decimal percentage precision.
+		// The final term absorbs the residual; both saved weights and money sum exactly.
+		var weights = installments.Select(x => decimal.Floor(x.AllocationPercentage * 100_000_000m / weightTotal) / 1_000_000m).ToArray();
+		weights[^1] = 100m - weights.Take(weights.Length - 1).Sum();
         var scheduled = AssignmentAmountCalculator.Allocate(annualAmount, weights);
         var rule = prorationPolicy?.Rules.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
-            ?? new ProrationPolicyRuleSnapshot(detail.FeeHeadId, ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null, null);
-        if (detail.IsOneTime) rule = rule with { RuleType = ProrationRuleType.FullCharge };
+            ?? new ProrationPolicyRuleSnapshot(detail.FeeHeadId, ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null);
+        if (detail.IsOneTime) rule = rule with { RuleType = ProrationRuleType.FullCharge, ApplyOnAdmission = false, ApplyOnEarlyWithdrawal = false, EarlyWithdrawalRuleType = ProrationRuleType.FullCharge };
         var calculation = AssignmentAmountCalculator.Calculate(prorationCalculator, rule, annualAmount,
             academicYear.StartDate.Date, academicYear.EndDate.Date, chargeStartDate, chargeEndDate);
         var obligations = AssignmentAmountCalculator.Allocate(calculation.ProratedAmount, weights);
-		for (var i = 0; i < schedule.Installments.Count; i++)
+		for (var i = 0; i < installments.Count; i++)
 		{
-			var installment = schedule.Installments[i];
+			var installment = installments[i];
 			var scheduledAmount = scheduled[i];
 			var dueDate = installment.DueDate;
 			rows.Add(new DueFee(
@@ -128,35 +172,36 @@ public class DueFeeManager(
 				prorationFactor: calculation.Factor,
 				prorationRuleType: calculation.RuleType,
 				prorationRoundingMode: calculation.RoundingMode,
-				prorationExplanation: calculation.Explanation));
-			rows[^1].PreserveAllocation(installment.AllocationPercentage);
+				prorationExplanation: calculation.Explanation, financeFeeAccountId: financeFeeAccountId));
+			rows[^1].PreserveAllocation(weights[i]);
 		}
 
-		return rows;
+		return Task.FromResult(rows);
 	}
 
 	private List<DueFee> GenerateLegacy(
-		Guid studentId,
+		Guid? studentId,
 		FeeStructureDetail detail,
 		List<(MonthEnum Month, int Year)> monthRange,
 		CustomOptionalFeeHeadDetail? customDetail,
 		ProrationPolicySnapshot? prorationPolicy,
 		Guid? prorationPolicyVersionId,
 		DateTime chargeStartDate,
-		DateTime chargeEndDate)
+		DateTime chargeEndDate,
+		Guid? financeFeeAccountId)
 	{
 		var dueFees = new List<DueFee>();
 		if (detail.IsOneTime)
 		{
 			var month = customDetail?.PayableMonth ?? detail.PayableMonth ?? monthRange[0].Month;
 			var year = customDetail?.PayableYear ?? detail.PayableYear ?? monthRange[0].Year;
-			var amount = customDetail?.Amount ?? detail.Amount;
+			var amount = customDetail?.Amount ?? detail.Amount ?? throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 			if (!monthRange.Any(m => m.Month == month && m.Year == year))
 				throw new BusinessException("Finance:OutofAcademicYearRange")
 					.WithData("Month", month.ToString()).WithData("Year", year);
 			dueFees.Add(CreateLegacyDueFee(
 				studentId, detail, month, year, amount,
-				prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate));
+				prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate, financeFeeAccountId));
 			return dueFees;
 		}
 
@@ -176,10 +221,12 @@ public class DueFeeManager(
 			}).ToList();
 		}
 
-		var totalAmount = customDetail != null ? customDetail.Amount * selectedMonths.Count : detail.Amount;
+		var totalAmount = customDetail != null ? customDetail.Amount * selectedMonths.Count : detail.Amount ?? throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 		var baseAmount = customDetail != null
 			? customDetail.Amount
-			: Math.Round(totalAmount / selectedMonths.Count, 2, MidpointRounding.AwayFromZero);
+			: decimal.Floor(ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(totalAmount) / selectedMonths.Count);
+		totalAmount = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(totalAmount);
+		baseAmount = decimal.Floor(baseAmount);
 		var allocated = 0m;
 		for (var i = 0; i < selectedMonths.Count; i++)
 		{
@@ -187,14 +234,14 @@ public class DueFeeManager(
 			allocated += scheduledAmount;
 			dueFees.Add(CreateLegacyDueFee(
 				studentId, detail, selectedMonths[i].Month, selectedMonths[i].Year, scheduledAmount,
-				prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate));
+				prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate, financeFeeAccountId));
 		}
 
 		return dueFees;
 	}
 
 	private DueFee CreateLegacyDueFee(
-		Guid studentId,
+		Guid? studentId,
 		FeeStructureDetail detail,
 		MonthEnum month,
 		int year,
@@ -202,7 +249,9 @@ public class DueFeeManager(
 		ProrationPolicySnapshot? prorationPolicy = null,
 		Guid? prorationPolicyVersionId = null,
 		DateTime? chargeStartDate = null,
-		DateTime? chargeEndDate = null)
+		DateTime? chargeEndDate = null,
+		Guid? financeFeeAccountId = null,
+		IReadOnlyDictionary<Guid, PaymentTerm>? paymentTerms = null)
 	{
 		var coverageStart = new DateTime(year, (int)month + 1, 1);
 		var coverageEnd = coverageStart.AddMonths(1).AddDays(-1);
@@ -226,7 +275,7 @@ public class DueFeeManager(
 			prorationFactor: calculation.Factor,
 			prorationRuleType: calculation.RuleType,
 			prorationRoundingMode: calculation.RoundingMode,
-			prorationExplanation: calculation.Explanation);
+			prorationExplanation: calculation.Explanation, financeFeeAccountId: financeFeeAccountId);
 	}
 
 	private ProrationCalculationResult CalculateProration(
@@ -241,9 +290,9 @@ public class DueFeeManager(
 		var rule = policy?.Rules.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
 			?? new ProrationPolicyRuleSnapshot(
 				detail.FeeHeadId, ProrationRuleType.FullCharge,
-				ProrationRoundingMode.Currency, null, null, null);
+				ProrationRoundingMode.Currency, null, null);
 		if (detail.IsOneTime)
-			rule = rule with { RuleType = ProrationRuleType.FullCharge };
+			rule = rule with { RuleType = ProrationRuleType.FullCharge, ApplyOnAdmission = false, ApplyOnEarlyWithdrawal = false, EarlyWithdrawalRuleType = ProrationRuleType.FullCharge };
 		return prorationCalculator.Calculate(rule, scheduledAmount, coverageStart, coverageEnd, chargeStart, chargeEnd);
 	}
 

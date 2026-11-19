@@ -46,7 +46,8 @@ public sealed class DemandDraftRefundDetails : RefundPaymentDetails
         Remarks           = remarks;
     }
 
-    protected override IEnumerable<object?> GetAtomicValues()
+    // ABP equality atoms intentionally include null for absent optional values.
+    protected override IEnumerable<object> GetAtomicValues()
     {
         yield return IssueDate;
         yield return DdNumber;
@@ -54,6 +55,6 @@ public sealed class DemandDraftRefundDetails : RefundPaymentDetails
         yield return BranchName;
         yield return PayeeName;
         yield return SourceBankAccount;
-        yield return Remarks;
+        yield return Remarks!;
     }
 }

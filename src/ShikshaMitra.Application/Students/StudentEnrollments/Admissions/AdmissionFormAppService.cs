@@ -21,6 +21,7 @@ public class AdmissionFormAppService(
 	IRepository<AdmissionFormFieldDefinition, Guid> fieldRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
 	IRepository<AdmissionApplication, Guid> applicationRepository,
+	IRepository<AdmissionPublicInquiryLink, Guid> publicInquiryLinkRepository,
 	AdmissionFormDataSourceRegistry dataSourceRegistry)
 	: ApplicationService, IAdmissionFormAppService
 {
@@ -33,7 +34,7 @@ public class AdmissionFormAppService(
 		new() { FieldType = AdmissionFormFieldType.Phone, DisplayName = "Phone", Description = "Phone number.", SupportsBinding = true },
 		new() { FieldType = AdmissionFormFieldType.Date, DisplayName = "Date", Description = "Calendar date.", SupportsBinding = true },
 		new() { FieldType = AdmissionFormFieldType.Select, DisplayName = "Select", Description = "One option from a list.", SupportsOptions = true, SupportsBinding = true },
-		new() { FieldType = AdmissionFormFieldType.MultiSelect, DisplayName = "Multi-select", Description = "Multiple options from a list.", SupportsOptions = true },
+		new() { FieldType = AdmissionFormFieldType.MultiSelect, DisplayName = "Multi-select", Description = "Multiple options from a list.", SupportsOptions = true, SupportsBinding = true },
 		new() { FieldType = AdmissionFormFieldType.Radio, DisplayName = "Radio", Description = "One option shown as radio buttons.", SupportsOptions = true },
 		new() { FieldType = AdmissionFormFieldType.Checkbox, DisplayName = "Checkbox", Description = "Boolean choice.", SupportsBinding = true },
 		new() { FieldType = AdmissionFormFieldType.File, DisplayName = "File", Description = "File placeholder for the upload integration.", SupportsBinding = false, IsRuntimeReady = false },
@@ -45,21 +46,42 @@ public class AdmissionFormAppService(
 		"GreaterThan", "GreaterThanOrEqual", "LessThan", "LessThanOrEqual", "In", "NotIn"
 	];
 
+	private static void EnsureSupportedPurpose(AdmissionFormPurpose purpose)
+	{
+		if (purpose is not (AdmissionFormPurpose.Inquiry or AdmissionFormPurpose.Registration))
+			throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition,
+				"Only Inquiry and Registration forms are supported.");
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public async Task<PagedResultDto<AdmissionFormDto>> GetListAsync(AdmissionFormListInput input)
 	{
 		var query = await formRepository.GetQueryableAsync();
 		query = query.Where(form =>
+			(form.Purpose == AdmissionFormPurpose.Inquiry || form.Purpose == AdmissionFormPurpose.Registration) &&
 			(!input.Status.HasValue || form.Status == input.Status) &&
+			(!input.Purpose.HasValue || form.Purpose == input.Purpose) &&
 			(!input.Version.HasValue || form.Version == input.Version) &&
 			(string.IsNullOrWhiteSpace(input.Search) || form.Name.Contains(input.Search) || form.Code.Contains(input.Search)));
+		var sectionQuery = await sectionRepository.GetQueryableAsync();
+		if (!string.IsNullOrEmpty(input.ColumnFilters))
+		{
+			var filterRows = AdmissionFormColumnFilters.Apply(query.Select(form => new AdmissionFormColumnFilterRow
+			{
+				Id = form.Id,
+				Name = form.Name,
+				Version = form.Version,
+				SectionCount = sectionQuery.Count(section => section.FormDefinitionId == form.Id)
+			}), input.ColumnFilters);
+			query = query.Where(form => filterRows.Any(row => row.Id == form.Id));
+		}
 		var count = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query.OrderByDescending(form => form.CreationTime)
 			.Skip(input.SkipCount).Take(input.MaxResultCount));
 		var rowIds = rows.Select(form => form.Id).ToList();
 		var sectionCounts = rowIds.Count == 0
 			? new Dictionary<Guid, int>()
-			: (await AsyncExecuter.ToListAsync((await sectionRepository.GetQueryableAsync())
+			: (await AsyncExecuter.ToListAsync(sectionQuery
 				.Where(section => rowIds.Contains(section.FormDefinitionId))))
 				.GroupBy(section => section.FormDefinitionId)
 				.ToDictionary(group => group.Key, group => group.Count());
@@ -75,15 +97,43 @@ public class AdmissionFormAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public async Task<AdmissionFormDto> GetAsync(Guid id) => await MapAsync(await GetFormAsync(id));
 
+	// Only scoped staff intake owners call this; unpublished management data remains protected.
+	internal async Task<AdmissionFormDto> GetPublishedIntakeAsync(Guid id)
+	{
+		var form = await GetFormAsync(id);
+		if (form.Status != AdmissionFormStatus.Published || form.Purpose != AdmissionFormPurpose.Inquiry)
+			throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);
+		return await MapAsync(form);
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public Task<AdmissionFormDto> PreviewAsync(Guid id) => GetAsync(id);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.ViewUsage)]
+	public Task<PagedResultDto<AdmissionFormInheritanceSourceSummaryDto>> GetInheritanceSourcesAsync(Guid id, PagedResultRequestDto input) =>
+		LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>().GetSourcesAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
+	public Task<AdmissionFormInheritancePreviewDto> PreviewInheritanceAsync(AdmissionFormInheritancePreviewInput input) =>
+		LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>().PreviewAsync(input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
+	public Task<AdmissionFormInheritancePreviewDto> GetSavedInheritancePreviewAsync(Guid id, Guid inquiryFormDefinitionId) =>
+		LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>().GetSavedPreviewAsync(id, inquiryFormDefinitionId);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
 	public async Task<AdmissionFormDto> CreateAsync(CreateUpdateAdmissionFormDto input)
 	{
-		await EnsureCodeAvailableAsync(input.Code, null);
-		var form = new AdmissionFormDefinition(GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code,
-			input.LayoutType, description: input.Description, fieldsPerRow: input.FieldsPerRow);
+		EnsureSupportedPurpose(input.Purpose);
+		AdmissionFormMetadataStore.ValidatePrintSettings(input.PrintSettings);
+		AdmissionCoreFieldPolicy.PrepareNew(input);
+		AdmissionCoreFieldPolicy.EnsureValid(input);
+		AdmissionGenderChoices.NormalizeDraftDefinition(input);
+		var id = GuidGenerator.Create();
+		var code = AdmissionSettingsCode.ForCreate(input.Code, "FORM", id);
+		await EnsureCodeAvailableAsync(code, null);
+		var form = new AdmissionFormDefinition(id, CurrentTenant.Id, input.Name, code,
+			input.LayoutType, description: input.Description, fieldsPerRow: input.FieldsPerRow, purpose: input.Purpose);
 		AdmissionFormMetadataStore.WriteExperience(form, input);
 		AdmissionFormMetadataStore.AddAudit(form, "Created", CurrentUser.Id);
 		await formRepository.InsertAsync(form, autoSave: false);
@@ -95,12 +145,20 @@ public class AdmissionFormAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
 	public async Task<AdmissionFormDto> UpdateAsync(Guid id, CreateUpdateAdmissionFormDto input)
 	{
+		EnsureSupportedPurpose(input.Purpose);
+		AdmissionFormMetadataStore.ValidatePrintSettings(input.PrintSettings);
 		var form = await GetFormAsync(id);
 		EnsureConcurrency(form, input.ConcurrencyStamp);
-		await EnsureCodeAvailableAsync(input.Code, id);
-		form.UpdateDetails(input.Name, input.Code, input.LayoutType, input.Description, input.FieldsPerRow);
+		input.CoreFieldPolicyVersion = AdmissionFormMetadataStore.ReadExperience(form).CoreFieldPolicyVersion;
+		AdmissionCoreFieldPolicy.EnsureValid(input, await GuaranteedInheritedCoreKeysAsync(input));
+		AdmissionGenderChoices.NormalizeDraftDefinition(input);
+		var code = AdmissionSettingsCode.ForUpdate(input.Code, form.Code);
+		if ((form.ParentVersionId.HasValue || form.Version > 1) && !string.Equals(code, form.Code, StringComparison.Ordinal))
+			throw new BusinessException(AdmissionFormErrorCodes.VersionCodeImmutable);
+		if (!string.Equals(code, form.Code, StringComparison.Ordinal))
+			await EnsureCodeAvailableAsync(code, id);
+		form.UpdateDetails(input.Name, code, input.LayoutType, input.Description, input.FieldsPerRow, input.Purpose);
 		AdmissionFormMetadataStore.WriteExperience(form, input);
-		AdmissionFormMetadataStore.WriteApproval(form, new AdmissionFormApprovalMetadata());
 		AdmissionFormMetadataStore.AddAudit(form, "Updated", CurrentUser.Id);
 		await ReplaceChildrenAsync(id, input);
 		await formRepository.UpdateAsync(form, autoSave: false);
@@ -112,15 +170,17 @@ public class AdmissionFormAppService(
 	public async Task<AdmissionFormDto> CloneAsync(Guid id, CloneAdmissionFormDto input)
 	{
 		var source = await GetFormAsync(id);
-		var code = string.IsNullOrWhiteSpace(input.Code) ? $"{source.Code}_COPY" : input.Code;
+		EnsureSupportedPurpose(source.Purpose);
+		var cloneId = GuidGenerator.Create();
+		var code = AdmissionSettingsCode.ForCreate(input.Code, "FORM", cloneId);
 		var name = string.IsNullOrWhiteSpace(input.Name) ? $"{source.Name} copy" : input.Name;
 		await EnsureCodeAvailableAsync(code, null);
-		var clone = new AdmissionFormDefinition(GuidGenerator.Create(), CurrentTenant.Id, name, code,
-			source.LayoutType, description: input.Description ?? source.Description, fieldsPerRow: source.FieldsPerRow);
+		var clone = new AdmissionFormDefinition(cloneId, CurrentTenant.Id, name, code,
+			source.LayoutType, description: input.Description ?? source.Description, fieldsPerRow: source.FieldsPerRow, purpose: source.Purpose);
 		AdmissionFormMetadataStore.CopyExperience(source, clone);
 		AdmissionFormMetadataStore.AddAudit(clone, "Cloned", CurrentUser.Id, $"Source form {source.Id}");
 		await formRepository.InsertAsync(clone, autoSave: false);
-		await CopyChildrenAsync(source.Id, clone.Id);
+		await CopyGovernedChildrenAsync(source, clone);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		return await MapAsync(clone);
 	}
@@ -129,27 +189,35 @@ public class AdmissionFormAppService(
 	public async Task<AdmissionFormDto> CreateNewVersionAsync(Guid id)
 	{
 		var source = await GetFormAsync(id);
-		if (source.Status == AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.DraftRequired);
+		EnsureSupportedPurpose(source.Purpose);
+		if (source.Status == AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.VersionSourceRequired);
 		var query = await formRepository.GetQueryableAsync();
 		var versions = await AsyncExecuter.ToListAsync(query.Where(form => form.Code == source.Code));
-		if (versions.Any(form => form.Status == AdmissionFormStatus.Draft)) throw new BusinessException(AdmissionFormErrorCodes.DraftRequired);
+		var existingDraft = versions.FirstOrDefault(form => form.Status == AdmissionFormStatus.Draft);
+		if (existingDraft != null)
+			throw new BusinessException(AdmissionFormErrorCodes.DraftAlreadyExists).WithData("DraftId", existingDraft.Id);
 		var version = new AdmissionFormDefinition(GuidGenerator.Create(), CurrentTenant.Id, source.Name, source.Code,
-			source.LayoutType, versions.Max(form => form.Version) + 1, source.Id, source.Description, source.FieldsPerRow);
+			source.LayoutType, versions.Max(form => form.Version) + 1, source.Id, source.Description, source.FieldsPerRow, source.Purpose);
 		AdmissionFormMetadataStore.CopyExperience(source, version);
 		AdmissionFormMetadataStore.AddAudit(version, "VersionCreated", CurrentUser.Id, $"Based on version {source.Version}");
 		await formRepository.InsertAsync(version, autoSave: false);
-		await CopyChildrenAsync(source.Id, version.Id);
+		await CopyGovernedChildrenAsync(source, version);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		return await MapAsync(version);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Delete)]
 	public async Task DeleteAsync(Guid id, string? concurrencyStamp = null)
 	{
 		var form = await GetFormAsync(id);
 		EnsureConcurrency(form, concurrencyStamp);
 		if (form.Status != AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.DraftRequired);
-		if (!(await GetUsageAsync(id)).CanDelete) throw new BusinessException(AdmissionFormErrorCodes.FormInUse);
+		var usage = await GetUsageAsync(id);
+		if (!usage.CanDelete)
+			throw new BusinessException(AdmissionFormErrorCodes.FormInUse)
+				.WithData(nameof(usage.OfferingCount), usage.OfferingCount)
+				.WithData(nameof(usage.ApplicationCount), usage.ApplicationCount)
+				.WithData(nameof(usage.PublicLinkCount), usage.PublicLinkCount);
 		await formRepository.DeleteAsync(form, autoSave: true);
 	}
 
@@ -171,31 +239,25 @@ public class AdmissionFormAppService(
 		return await ValidateDefinitionAsync(id);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
-	public async Task<AdmissionFormDto> RequestApprovalAsync(Guid id, ReviewAdmissionFormDto input)
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Archive)]
+	public async Task<AdmissionFormDto> RestoreAsync(Guid id, string? concurrencyStamp = null)
 	{
 		var form = await GetFormAsync(id);
-		EnsureConcurrency(form, input.ConcurrencyStamp);
-		if (form.Status != AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.DraftRequired);
+		EnsureConcurrency(form, concurrencyStamp);
+		if (form.Status != AdmissionFormStatus.Archived) throw new BusinessException(AdmissionFormErrorCodes.ArchivedRequired);
 		var validation = await ValidateDefinitionAsync(id);
-		if (!validation.IsValid) throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition).WithData("Errors", string.Join(";", validation.Errors));
-		AdmissionFormMetadataStore.WriteApproval(form, new AdmissionFormApprovalMetadata
-		{
-			Status = AdmissionFormApprovalStatus.Pending,
-			RequestedBy = CurrentUser.Id,
-			RequestedAt = DateTime.UtcNow,
-			Comment = string.IsNullOrWhiteSpace(input.Comment) ? null : input.Comment.Trim()
-		});
-		AdmissionFormMetadataStore.AddAudit(form, "ApprovalRequested", CurrentUser.Id, input.Comment);
+		if (!validation.IsValid)
+			throw new BusinessException(AdmissionFormErrorCodes.RestoreInvalidDefinition)
+				.WithData("Errors", string.Join("; ", validation.Errors));
+		form.Restore();
+		AdmissionFormMetadataStore.AddAudit(form, "Restored", CurrentUser.Id);
 		await formRepository.UpdateAsync(form, autoSave: true);
 		return await MapAsync(form);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Publish)]
-	public Task<AdmissionFormDto> ApproveAsync(Guid id, ReviewAdmissionFormDto input) => ReviewAsync(id, input, true);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Publish)]
-	public Task<AdmissionFormDto> RejectAsync(Guid id, ReviewAdmissionFormDto input) => ReviewAsync(id, input, false);
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Archive)]
+	public Task<AdmissionFormArchiveImpactDto> GetArchiveImpactAsync(Guid id) =>
+		LazyServiceProvider.LazyGetRequiredService<AdmissionFormArchiveImpactService>().ReadAsync(id);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Publish)]
 	public async Task<AdmissionFormDto> PublishAsync(Guid id, string? concurrencyStamp = null)
@@ -204,9 +266,35 @@ public class AdmissionFormAppService(
 		EnsureConcurrency(form, concurrencyStamp);
 		var validation = await ValidateDefinitionAsync(id);
 		if (!validation.IsValid) throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition).WithData("Errors", string.Join(";", validation.Errors));
-		var approval = AdmissionFormMetadataStore.ReadApproval(form);
-		if (approval.Status != AdmissionFormApprovalStatus.Approved)
-			throw new BusinessException("Admissions.FormApprovalRequired", "This form must be approved before publishing.");
+		if (form.Status == AdmissionFormStatus.Draft)
+		{
+			var fields = await GetFieldsAsync(id);
+			var repairedCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (var field in fields)
+			{
+				var options = AdmissionGenderChoices.NormalizeDraftOptions(field.BindingType, field.BindingKey, field.FieldType, field.OptionsJson);
+				if (options == field.OptionsJson) continue;
+				field.UpdateDraftChoices(form, options, field.DefaultValue == "OPTION_3" ? "Other" : field.DefaultValue);
+				repairedCodes.Add(field.Code);
+				await fieldRepository.UpdateAsync(field, autoSave: false);
+			}
+			if (repairedCodes.Count > 0)
+			{
+				AdmissionFormMetadataStore.RepairDraftGenderTranslations(form, repairedCodes);
+				foreach (var field in fields)
+				{
+					field.UpdateDraftRules(form, AdmissionGenderChoices.NormalizeRule(field.VisibilityRuleJson, repairedCodes),
+						AdmissionGenderChoices.NormalizeRule(field.RequiredRuleJson, repairedCodes));
+					await fieldRepository.UpdateAsync(field, autoSave: false);
+				}
+				foreach (var section in await GetSectionsAsync(id))
+				{
+					section.UpdateDraftRules(form, AdmissionGenderChoices.NormalizeRule(section.VisibilityRuleJson, repairedCodes),
+						AdmissionGenderChoices.NormalizeRule(section.StepVisibilityRuleJson, repairedCodes));
+					await sectionRepository.UpdateAsync(section, autoSave: false);
+				}
+			}
+		}
 		form.Publish(CurrentUser.Id);
 		AdmissionFormMetadataStore.AddAudit(form, "Published", CurrentUser.Id);
 		await formRepository.UpdateAsync(form, autoSave: true);
@@ -251,9 +339,11 @@ public class AdmissionFormAppService(
 		await GetFormAsync(id);
 		var offerings = await offeringRepository.GetQueryableAsync();
 		var applications = await applicationRepository.GetQueryableAsync();
+		var publicLinks = await publicInquiryLinkRepository.GetQueryableAsync();
 		var offeringCount = await AsyncExecuter.CountAsync(offerings.Where(offering => offering.InquiryFormDefinitionId == id || offering.ApplicationFormDefinitionId == id));
 		var applicationCount = await AsyncExecuter.CountAsync(applications.Where(application => application.FormDefinitionId == id));
-		return new AdmissionFormUsageDto { FormDefinitionId = id, OfferingCount = offeringCount, ApplicationCount = applicationCount, CanDelete = offeringCount == 0 && applicationCount == 0 };
+		var publicLinkCount = await AsyncExecuter.CountAsync(publicLinks.Where(link => link.InquiryFormDefinitionId == id));
+		return new AdmissionFormUsageDto { FormDefinitionId = id, OfferingCount = offeringCount, ApplicationCount = applicationCount, PublicLinkCount = publicLinkCount, CanDelete = offeringCount == 0 && applicationCount == 0 && publicLinkCount == 0 };
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
@@ -265,83 +355,38 @@ public class AdmissionFormAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public Task<IReadOnlyList<AdmissionFormDataSourceMetadataDto>> GetDataSourcesAsync() => Task.FromResult(AdmissionFormDataSourceRegistry.Metadata);
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
-	public Task<IReadOnlyList<AdmissionFormOptionDto>> GetOptionsAsync(string sourceKey, Guid? parentId = null, Guid? academicYearId = null) => dataSourceRegistry.GetOptionsAsync(sourceKey, parentId, academicYearId);
-
-	private async Task<AdmissionFormDto> ReviewAsync(Guid id, ReviewAdmissionFormDto input, bool approved)
+	public async Task<IReadOnlyList<AdmissionFormOptionDto>> GetOptionsAsync(string sourceKey, Guid? parentId = null, Guid? academicYearId = null,
+		string? searchTerm = null, int skipCount = 0, int maxResultCount = 20, List<Guid>? selectedIds = null)
 	{
-		var form = await GetFormAsync(id);
-		EnsureConcurrency(form, input.ConcurrencyStamp);
-		var approval = AdmissionFormMetadataStore.ReadApproval(form);
-		if (approval.Status != AdmissionFormApprovalStatus.Pending)
-			throw new BusinessException("Admissions.FormApprovalNotPending", "This form is not awaiting review.");
-		var isSelfReview = approval.RequestedBy.HasValue && approval.RequestedBy == CurrentUser.Id;
-		var isAdministratorOverride = isSelfReview &&
-			(CurrentUser.IsInRole("admin") || CurrentUser.IsInRole("super-admin"));
-		if (isSelfReview && !isAdministratorOverride)
-			throw new BusinessException(AdmissionFormErrorCodes.MakerCheckerRequired);
-		if (isAdministratorOverride && string.IsNullOrWhiteSpace(input.Comment))
-			throw new BusinessException(AdmissionFormErrorCodes.AdminOverrideReasonRequired);
-		approval.Status = approved ? AdmissionFormApprovalStatus.Approved : AdmissionFormApprovalStatus.Rejected;
-		approval.ReviewedBy = CurrentUser.Id;
-		approval.ReviewedAt = DateTime.UtcNow;
-		approval.Comment = string.IsNullOrWhiteSpace(input.Comment) ? null : input.Comment.Trim();
-		AdmissionFormMetadataStore.WriteApproval(form, approval);
-		var auditAction = isAdministratorOverride
-			? approved ? "AdminOverrideApproved" : "AdminOverrideRejected"
-			: approved ? "Approved" : "Rejected";
-		AdmissionFormMetadataStore.AddAudit(form, auditAction, CurrentUser.Id, input.Comment);
-		await formRepository.UpdateAsync(form, autoSave: true);
-		return await MapAsync(form);
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionFormOptionsAccessService>().EnsureReadAsync(sourceKey);
+		return await dataSourceRegistry.GetOptionsAsync(sourceKey, parentId, academicYearId, searchTerm, skipCount, maxResultCount, selectedIds);
 	}
 
 	private static List<string> Compare(AdmissionFormDto from, AdmissionFormDto to)
-	{
-		var changes = new List<string>();
-		if (!string.Equals(from.Name, to.Name, StringComparison.Ordinal)) changes.Add($"Form name: '{from.Name}' to '{to.Name}'");
-		if (!string.Equals(from.Description, to.Description, StringComparison.Ordinal)) changes.Add("Form description changed");
-		if (from.LayoutType != to.LayoutType) changes.Add($"Layout changed from {from.LayoutType} to {to.LayoutType}");
-		if (from.FieldsPerRow != to.FieldsPerRow) changes.Add($"Desktop columns changed from {from.FieldsPerRow} to {to.FieldsPerRow}");
-		if (!from.SupportedLanguages.SequenceEqual(to.SupportedLanguages, StringComparer.OrdinalIgnoreCase)) changes.Add("Supported languages changed");
-		var fromSections = from.Sections.ToDictionary(section => section.Code, StringComparer.OrdinalIgnoreCase);
-		var toSections = to.Sections.ToDictionary(section => section.Code, StringComparer.OrdinalIgnoreCase);
-		foreach (var code in toSections.Keys.Except(fromSections.Keys, StringComparer.OrdinalIgnoreCase)) changes.Add($"Section added: {code}");
-		foreach (var code in fromSections.Keys.Except(toSections.Keys, StringComparer.OrdinalIgnoreCase)) changes.Add($"Section removed: {code}");
-		foreach (var code in fromSections.Keys.Intersect(toSections.Keys, StringComparer.OrdinalIgnoreCase))
-		{
-			var before = fromSections[code];
-			var after = toSections[code];
-			if (!string.Equals(before.Name, after.Name, StringComparison.Ordinal)) changes.Add($"Section renamed: {code}");
-			if (before.IsRepeatable != after.IsRepeatable || before.MinEntries != after.MinEntries || before.MaxEntries != after.MaxEntries) changes.Add($"Repeat settings changed: {code}");
-			var beforeFields = before.Fields.ToDictionary(field => field.Code, StringComparer.OrdinalIgnoreCase);
-			var afterFields = after.Fields.ToDictionary(field => field.Code, StringComparer.OrdinalIgnoreCase);
-			foreach (var fieldCode in afterFields.Keys.Except(beforeFields.Keys, StringComparer.OrdinalIgnoreCase)) changes.Add($"Field added: {code}.{fieldCode}");
-			foreach (var fieldCode in beforeFields.Keys.Except(afterFields.Keys, StringComparer.OrdinalIgnoreCase)) changes.Add($"Field removed: {code}.{fieldCode}");
-			foreach (var fieldCode in beforeFields.Keys.Intersect(afterFields.Keys, StringComparer.OrdinalIgnoreCase))
-			{
-				var beforeField = beforeFields[fieldCode];
-				var afterField = afterFields[fieldCode];
-				if (beforeField.Label != afterField.Label || beforeField.FieldType != afterField.FieldType || beforeField.Required != afterField.Required || beforeField.OptionsJson != afterField.OptionsJson)
-					changes.Add($"Field changed: {code}.{fieldCode}");
-			}
-		}
-		if (changes.Count == 0) changes.Add("No structural differences");
-		return changes;
-	}
+		=> AdmissionFormVersionComparer.Compare(from, to);
 
 	private async Task<AdmissionFormValidationResultDto> ValidateDefinitionAsync(Guid id)
 	{
 		var form = await GetFormAsync(id);
 		var sections = await GetSectionsAsync(id);
-		var fields = await GetFieldsAsync(id);
+		var fields = (await GetFieldsAsync(id)).Select(field => AdmissionGenderChoices.ForValidation(field, form.Status)).ToList();
 		var result = new AdmissionFormValidationResultDto();
+		ValidateClassInterestQuestions(fields, result);
+		ValidateApplicantNameMappings(form.Purpose, fields, result);
 		var experience = AdmissionFormMetadataStore.ReadExperience(form);
+		var inheritance = AdmissionFormInheritanceMetadataStore.ReadPolicy(form);
+		var coreInput = ToInput(Map(form, sections, fields));
+		result.Errors.AddRange(AdmissionCoreFieldPolicy.Validate(coreInput, await GuaranteedInheritedCoreKeysAsync(coreInput)));
+		var usesInheritedFields = inheritance?.Enabled == true && inheritance.Sources.Count > 0;
+		if (form.Purpose == AdmissionFormPurpose.Inquiry)
+			result.Errors.AddRange(AdmissionInquiryConfiguredFields.Validate(fields, sections,
+				sections.Where(section => experience.Sections.GetValueOrDefault(section.Code)?.IsRepeatable == true).Select(section => section.Id).ToHashSet()));
 		if (experience.SupportedLanguages.Count == 0 || !experience.SupportedLanguages.Contains(experience.DefaultLanguage, StringComparer.OrdinalIgnoreCase)) result.Errors.Add("Admissions.FormInvalidLanguages");
 		if (experience.SupportedLanguages.Count > 10 || experience.SupportedLanguages.Any(language => !Regex.IsMatch(language, "^[a-z]{2,3}(-[a-z0-9]{2,8})?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))) result.Errors.Add("Admissions.FormInvalidLanguages");
-		if (sections.Count == 0) result.Errors.Add(AdmissionFormErrorCodes.NoSections);
+		if (sections.Count == 0 && !usesInheritedFields) result.Errors.Add(AdmissionFormErrorCodes.NoSections);
 		if (sections.GroupBy(section => section.Code, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1)) result.Errors.Add("Admissions.FormDuplicateSectionCode");
 		if (sections.Any(section => !Regex.IsMatch(section.Code, "^[A-Z][A-Z0-9_-]*$", RegexOptions.CultureInvariant))) result.Errors.Add("Admissions.FormInvalidSectionCode");
-		if (form.LayoutType == AdmissionFormLayoutType.Stepper)
+		if (form.LayoutType == AdmissionFormLayoutType.Stepper && !usesInheritedFields)
 		{
 			var steps = sections.GroupBy(section => section.StepId ?? section.Id).Select(group => group.First()).ToList();
 			if (steps.Count < 2) result.Errors.Add("Admissions.FormStepperRequiresTwoSteps");
@@ -349,7 +394,7 @@ public class AdmissionFormAppService(
 			if (stepCodes.Any(code => !Regex.IsMatch(code, "^[A-Z][A-Z0-9_-]*$", RegexOptions.CultureInvariant))) result.Errors.Add("Admissions.FormInvalidStepCode");
 			if (stepCodes.GroupBy(code => code, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1)) result.Errors.Add("Admissions.FormDuplicateStepCode");
 		}
-		if (fields.Count == 0) result.Errors.Add("Admissions.FormNoFields");
+		if (fields.Count == 0 && !usesInheritedFields) result.Errors.Add("Admissions.FormNoFields");
 		if (fields.GroupBy(field => field.Code, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1)) result.Errors.Add(AdmissionFormErrorCodes.DuplicateFieldCode);
 		if (fields.Any(field => !Regex.IsMatch(field.Code, "^[A-Z][A-Z0-9_-]*$", RegexOptions.CultureInvariant))) result.Errors.Add("Admissions.FormInvalidFieldCode");
 		var fieldCodes = fields.Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -369,6 +414,8 @@ public class AdmissionFormAppService(
 			ValidateRule(step.StepVisibilityRuleJson, fieldCodes, $"Step:{step.StepCode ?? step.Code}", result);
 		foreach (var field in fields)
 		{
+			if (form.Purpose != AdmissionFormPurpose.Inquiry && field.BindingKey?.StartsWith("Inquiry.", StringComparison.OrdinalIgnoreCase) == true)
+				result.Errors.Add($"{AdmissionFormErrorCodes.InvalidSystemBinding}:{field.Code}");
 			var fieldMetadata = FieldTypes.FirstOrDefault(metadata => metadata.FieldType == field.FieldType);
 			if (fieldMetadata is null) result.Errors.Add($"{AdmissionFormErrorCodes.InvalidFieldType}:{field.Code}");
 			else if (!fieldMetadata.IsRuntimeReady) result.Errors.Add($"UnsupportedRuntimeField:{field.Code}");
@@ -386,11 +433,40 @@ public class AdmissionFormAppService(
 			ValidateValidationJson(field.ValidationJson, field.Code, fieldCodes, result);
 		}
 		ValidateDependencyCycles(fields, result);
+		if (inheritance?.Enabled == true)
+		{
+			var inheritanceIssues = await LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>().ValidatePolicyAsync(id);
+			result.Errors.AddRange(inheritanceIssues.Select(issue => $"{AdmissionFormInheritanceErrorCodes.IncompatibleSource}:{issue.Message}"));
+		}
 		return result;
 	}
 
-	private static void ValidateOptions(AdmissionFormFieldDefinition field, HashSet<string> knownFields, AdmissionFormValidationResultDto result)
+	internal static void ValidateClassInterestQuestions(IEnumerable<AdmissionFormFieldDefinition> fields, AdmissionFormValidationResultDto result)
 	{
+		var questions = fields.Where(field => field.FieldType != AdmissionFormFieldType.Static && AdmissionClassInterestQuestion.Matches(field.Code, field.Label, field.BindingType, field.BindingKey, field.OptionsJson)).ToList();
+		if (questions.Count > 1) result.Errors.Add(AdmissionClassInterestQuestion.DuplicateMessage);
+		if (questions.Any(field => !AdmissionClassInterestQuestion.IsConfigured(field.FieldType, field.OptionsJson)))
+			result.Errors.Add(AdmissionClassInterestQuestion.ConfigurationMessage);
+	}
+
+	internal static void ValidateApplicantNameMappings(AdmissionFormPurpose purpose, IEnumerable<AdmissionFormFieldDefinition> fields,
+		AdmissionFormValidationResultDto result)
+	{
+		if (purpose != AdmissionFormPurpose.Registration) return;
+		var mapped = fields.Where(field => field.BindingType == AdmissionFormBindingType.System && field.FieldType != AdmissionFormFieldType.Static).ToList();
+		if (mapped.Any(field => !field.ReadOnly && string.Equals(field.BindingKey, "Applicant.Name", StringComparison.OrdinalIgnoreCase)) &&
+			mapped.Any(field => new[] { "Applicant.FirstName", "Applicant.MiddleName", "Applicant.LastName" }.Contains(field.BindingKey, StringComparer.OrdinalIgnoreCase)))
+			result.Errors.Add("Use either a writable full student name or separate student name fields before publishing.");
+	}
+
+	internal static void ValidateOptions(AdmissionFormFieldDefinition field, HashSet<string> knownFields, AdmissionFormValidationResultDto result)
+	{
+		if (field.BindingType == AdmissionFormBindingType.System && field.BindingKey == "Inquiry.ParentRelationship" &&
+			!AdmissionInquiryConfiguredFields.HasPrimaryContactChoices(field.OptionsJson))
+		{
+			result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}");
+			return;
+		}
 		if (string.IsNullOrWhiteSpace(field.OptionsJson)) { result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}"); return; }
 		try
 		{
@@ -416,12 +492,17 @@ public class AdmissionFormAppService(
 						? valueProperty.GetString()
 						: null;
 				if (string.IsNullOrWhiteSpace(value) || !values.Add(value)) result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}");
+				if (field.BindingType == AdmissionFormBindingType.System && field.BindingKey == "Applicant.Gender" && value is not ("Male" or "Female" or "Other"))
+					result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}");
+				if (option.ValueKind == JsonValueKind.Object && option.TryGetProperty("label", out var labelProperty) &&
+					(labelProperty.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(labelProperty.GetString())))
+					result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}");
 			}
 		}
 		catch (JsonException) { result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}"); }
 	}
 
-	private static void ValidateRule(string? rule, HashSet<string> knownFields, string owner, AdmissionFormValidationResultDto result)
+	internal static void ValidateRule(string? rule, HashSet<string> knownFields, string owner, AdmissionFormValidationResultDto result)
 	{
 		if (string.IsNullOrWhiteSpace(rule)) return;
 		try { using var document = JsonDocument.Parse(rule); ValidateRuleNode(document.RootElement, knownFields, owner, result); }
@@ -481,7 +562,7 @@ public class AdmissionFormAppService(
 		if (!root.TryGetProperty("format", out var formatProperty)) return;
 		if (formatProperty.ValueKind != JsonValueKind.String) { result.Errors.Add($"{AdmissionFormErrorCodes.InvalidValidationRule}:{code}"); return; }
 		var format = formatProperty.GetString();
-		if (!new[] { "email", "phone", "aadhaar", "pan", "pincode", "country", "state", "city" }.Contains(format, StringComparer.OrdinalIgnoreCase))
+		if (!new[] { "email", "phone", "aadhaar", "pan", "pincode", "country", "state", "city", "photo" }.Contains(format, StringComparer.OrdinalIgnoreCase))
 		{
 			result.Errors.Add($"{AdmissionFormErrorCodes.InvalidValidationRule}:{code}");
 			return;
@@ -499,7 +580,7 @@ public class AdmissionFormAppService(
 			result.Errors.Add($"{AdmissionFormErrorCodes.InvalidRuleReference}:{code}");
 	}
 
-	private static void ValidateDependencyCycles(IEnumerable<AdmissionFormFieldDefinition> fields, AdmissionFormValidationResultDto result)
+	internal static void ValidateDependencyCycles(IEnumerable<AdmissionFormFieldDefinition> fields, AdmissionFormValidationResultDto result)
 	{
 		var graph = fields.ToDictionary(field => field.Code, _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
 		foreach (var field in fields)
@@ -554,27 +635,35 @@ public class AdmissionFormAppService(
 		}
 	}
 
-	private async Task CopyChildrenAsync(Guid sourceId, Guid targetId)
+	private async Task<HashSet<string>> GuaranteedInheritedCoreKeysAsync(CreateUpdateAdmissionFormDto input)
 	{
-		var sourceSections = await GetSectionsAsync(sourceId);
-		var sourceFields = await GetFieldsAsync(sourceId);
-		var sectionMap = new Dictionary<Guid, Guid>();
-		foreach (var sourceSection in sourceSections)
-		{
-			var sectionId = GuidGenerator.Create(); sectionMap[sourceSection.Id] = sectionId;
-			await sectionRepository.InsertAsync(new AdmissionFormSectionDefinition(sectionId, targetId, sourceSection.Code, sourceSection.Name, sourceSection.DisplayOrder, sourceSection.VisibilityRuleJson,
-				sourceSection.StepId, sourceSection.StepCode, sourceSection.StepName, sourceSection.StepDisplayOrder, sourceSection.StepVisibilityRuleJson), autoSave: false);
-		}
-		foreach (var sourceField in sourceFields)
-			await fieldRepository.InsertAsync(new AdmissionFormFieldDefinition(GuidGenerator.Create(), targetId, sectionMap[sourceField.SectionId], sourceField.Code, sourceField.Label, sourceField.FieldType, sourceField.BindingType, sourceField.BindingKey, sourceField.Required, sourceField.ReadOnly, sourceField.DisplayOrder, sourceField.Placeholder, sourceField.HelpText, sourceField.DefaultValue, sourceField.ValidationJson, sourceField.VisibilityRuleJson, sourceField.OptionsJson, sourceField.RequiredRuleJson), autoSave: false);
+		var guaranteed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		if (input.Inheritance?.Enabled != true || input.Inheritance.Sources.Count == 0) return guaranteed;
+		var sourceReader = LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>();
+		var sources = new List<AdmissionFormDto>();
+		foreach (var source in input.Inheritance.Sources) sources.Add(await sourceReader.ReadDefinitionAsync(source.InquiryFormDefinitionId));
+		foreach (var key in new[] { "Applicant.DateOfBirth", "Applicant.Gender" })
+			if (sources.All(source => AdmissionCoreFieldPolicy.IsGuaranteed(source, key))) guaranteed.Add(key);
+		return guaranteed;
 	}
 
+	private async Task CopyGovernedChildrenAsync(AdmissionFormDefinition source, AdmissionFormDefinition target)
+	{
+		var draft = ToInput(await MapAsync(source));
+		AdmissionCoreFieldPolicy.PrepareNew(draft);
+		AdmissionCoreFieldPolicy.UpgradeDraft(draft);
+		AdmissionFormMetadataStore.WriteExperience(target, draft);
+		await ReplaceChildrenAsync(target.Id, draft);
+	}
+
+	private static CreateUpdateAdmissionFormDto ToInput(AdmissionFormDto definition) =>
+		JsonSerializer.Deserialize<CreateUpdateAdmissionFormDto>(JsonSerializer.Serialize(definition))!;
 	private AdmissionFormFieldDefinition CreateField(Guid formId, Guid sectionId, CreateUpdateAdmissionFormFieldDto input) => new(GuidGenerator.Create(), formId, sectionId, input.Code, input.Label, input.FieldType, input.BindingType, input.BindingKey, input.Required, input.ReadOnly, input.DisplayOrder, input.Placeholder, input.HelpText, input.DefaultValue, input.ValidationJson, input.VisibilityRuleJson, input.OptionsJson, input.RequiredRuleJson);
 	private async Task EnsureCodeAvailableAsync(string code, Guid? excludingId) { var normalized = code.Trim().ToUpperInvariant(); var query = await formRepository.GetQueryableAsync(); if (await AsyncExecuter.AnyAsync(query.Where(form => form.Code == normalized && (!excludingId.HasValue || form.Id != excludingId.Value)))) throw new BusinessException(AdmissionFormErrorCodes.CodeAlreadyExists); }
 	private async Task<AdmissionFormDefinition> GetFormAsync(Guid id) => await formRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionFormDefinition), id);
 	private async Task<List<AdmissionFormSectionDefinition>> GetSectionsAsync(Guid id) => await AsyncExecuter.ToListAsync((await sectionRepository.GetQueryableAsync()).Where(section => section.FormDefinitionId == id).OrderBy(section => section.DisplayOrder));
 	private async Task<List<AdmissionFormFieldDefinition>> GetFieldsAsync(Guid id) => await AsyncExecuter.ToListAsync((await fieldRepository.GetQueryableAsync()).Where(field => field.FormDefinitionId == id).OrderBy(field => field.DisplayOrder));
-	private async Task<AdmissionFormDto> MapAsync(AdmissionFormDefinition form)
+	internal async Task<AdmissionFormDto> MapAsync(AdmissionFormDefinition form)
 	{
 		var fields = await GetFieldsAsync(form.Id);
 		return MapWithRequiredRules(form, await GetSectionsAsync(form.Id), fields);
@@ -588,22 +677,21 @@ public class AdmissionFormAppService(
 			if (rules.TryGetValue(field.Code, out var rule)) field.RequiredRuleJson = rule;
 		return dto;
 	}
-	private static AdmissionFormDto Map(AdmissionFormDefinition form, List<AdmissionFormSectionDefinition> sections, List<AdmissionFormFieldDefinition> fields)
+	internal static AdmissionFormDto Map(AdmissionFormDefinition form, List<AdmissionFormSectionDefinition> sections, List<AdmissionFormFieldDefinition> fields)
 	{
 		var experience = AdmissionFormMetadataStore.ReadExperience(form);
-		var approval = AdmissionFormMetadataStore.ReadApproval(form);
 		return new AdmissionFormDto
 		{
 			Id = form.Id, Name = form.Name, Code = form.Code, Description = form.Description,
-			Version = form.Version, Status = form.Status, LayoutType = form.LayoutType,
+			Version = form.Version, Status = form.Status, LayoutType = form.LayoutType, Purpose = form.Purpose,
+			CoreFieldPolicyVersion = experience.CoreFieldPolicyVersion,
+			PrintSettings = experience.PrintSettings ?? new(),
 			FieldsPerRow = form.FieldsPerRow, DefaultLanguage = experience.DefaultLanguage,
-			SupportedLanguages = experience.SupportedLanguages, ApprovalStatus = approval.Status,
-			ApprovalRequestedBy = approval.RequestedBy, ApprovalRequestedAt = approval.RequestedAt,
-			ReviewedBy = approval.ReviewedBy, ReviewedAt = approval.ReviewedAt, ReviewComment = approval.Comment,
+			SupportedLanguages = experience.SupportedLanguages,
 			ParentVersionId = form.ParentVersionId, PublishedAt = form.PublishedAt, PublishedBy = form.PublishedBy,
 			ConcurrencyStamp = form.ConcurrencyStamp, CreationTime = form.CreationTime, CreatorId = form.CreatorId,
 			LastModificationTime = form.LastModificationTime, LastModifierId = form.LastModifierId,
-			SectionCount = sections.Count,
+			SectionCount = sections.Count, Inheritance = AdmissionFormInheritanceMetadataStore.ReadPolicy(form),
 			Sections = sections.Select(section =>
 			{
 				experience.Sections.TryGetValue(section.Code, out var sectionExperience);
@@ -622,6 +710,7 @@ public class AdmissionFormAppService(
 					{
 						Id = field.Id, FormDefinitionId = field.FormDefinitionId, SectionId = field.SectionId,
 						Code = field.Code, Label = field.Label, FieldType = field.FieldType, BindingType = field.BindingType,
+						FieldIdentity = AdmissionFormInheritanceMetadataStore.Identity(form, field),
 						BindingKey = field.BindingKey, Placeholder = field.Placeholder, HelpText = field.HelpText,
 						DefaultValue = field.DefaultValue, OptionsJson = field.OptionsJson, Required = field.Required,
 						ReadOnly = field.ReadOnly, DisplayOrder = field.DisplayOrder, ValidationJson = field.ValidationJson,

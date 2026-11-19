@@ -38,7 +38,7 @@ public class StudentIdentityComplianceAppService(
 		return await UpsertFromRegistrationAsync(studentId, input);
 	}
 
-	public async Task<StudentIdentityComplianceDto> UpsertFromRegistrationAsync(Guid studentId, UpdateStudentIdentityComplianceDto input)
+	internal async Task<StudentIdentityComplianceDto> UpsertFromRegistrationAsync(Guid studentId, UpdateStudentIdentityComplianceDto input)
 	{
 		var compliance = await GetOrCreateAsync(studentId);
 
@@ -88,6 +88,30 @@ public class StudentIdentityComplianceAppService(
 
 		await complianceRepository.UpdateAsync(compliance, autoSave: true);
 		return MapToDto(compliance);
+	}
+
+	/// <summary>Admission creates unverified identity data without resetting existing consent or benefit facts.</summary>
+	internal async Task CaptureAdmissionIdentityAsync(Student student, string? aadhaar, string? apaar,
+		string? pen, string? udise, string? documentName)
+	{
+		if (student.TenantId != CurrentTenant.Id || student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left)
+			throw new BusinessException("StudentCompliance:AdmissionIdentityNotAllowed");
+		if (new[] { aadhaar, apaar, pen, udise }.All(string.IsNullOrWhiteSpace)) return;
+		var compliance = await GetOrCreateAsync(student.Id);
+		if (!string.IsNullOrWhiteSpace(aadhaar))
+		{
+			var digits = NormalizeDigits(aadhaar)!;
+			if (digits.Length != 12) throw new BusinessException("StudentCompliance:AadhaarInvalid");
+			if (Sha256(digits) != compliance.AadhaarHash)
+				compliance.SetAadhaar(stringEncryptionService.Encrypt(digits), Sha256(digits), digits[^4..], documentName, IdentityVerificationStatus.Pending);
+		}
+		if (!string.IsNullOrWhiteSpace(apaar) && NormalizeIdentifier(apaar) != compliance.ApaarId)
+			compliance.SetApaar(NormalizeIdentifier(apaar), compliance.ApaarConsentStatus, compliance.ApaarConsentDate, IdentityVerificationStatus.Pending);
+		var proposedPen = NormalizeIdentifier(pen) ?? compliance.PenNumber;
+		var proposedUdise = NormalizeIdentifier(udise) ?? compliance.UdiseStudentCode;
+		if (proposedPen != compliance.PenNumber || proposedUdise != compliance.UdiseStudentCode)
+			compliance.SetAdministrativeIdentifiers(proposedPen, proposedUdise, UdiseSyncStatus.NotReady);
+		await complianceRepository.UpdateAsync(compliance, autoSave: false);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.IdentityCompliance.ManageSensitive)]

@@ -13,6 +13,7 @@ public class StudentOnboardingDocumentsDto
 	public Guid StudentId { get; set; }
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public bool CanUpload { get; set; }
+	public bool CanOverride { get; set; }
 	public List<StudentOnboardingDocumentDto> Documents { get; set; } = [];
 }
 
@@ -27,6 +28,17 @@ public class StudentOnboardingDocumentDto
 	public string? FileName { get; set; }
 	public bool HasStudentUpload { get; set; }
 	public bool HasAcceptedAdmissionEvidence { get; set; }
+	public bool IsValidated { get; set; }
+	public bool IsOverridden { get; set; }
+	public string? OverrideReason { get; set; }
+}
+
+public class StudentOnboardingDocumentOverrideInput
+{
+	public List<Guid> DocumentTypeIds { get; set; } = [];
+	public bool OverrideAll { get; set; }
+	[Required, StringLength(2000)] public string Reason { get; set; } = string.Empty;
+	[Required] public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
 public class StudentOnboardingDocumentUploadInput
@@ -40,4 +52,5 @@ public interface IStudentOnboardingDocumentAppService : IApplicationService
 {
 	Task<StudentOnboardingDocumentsDto> GetAsync(Guid caseId);
 	Task<StudentOnboardingDocumentsDto> UploadAsync(Guid caseId, StudentOnboardingDocumentUploadInput input);
+	Task<StudentOnboardingDocumentsDto> OverrideAsync(Guid caseId, StudentOnboardingDocumentOverrideInput input);
 }

@@ -16,7 +16,8 @@ public interface IAcademicCalendarManager : IDomainService
         string? description = null,
         bool isDefault = false);
 
-    Task GenerateWeekendDaysAsync(AcademicCalendar calendar, WeekendRule rule);
+    Task GenerateWeekendDaysAsync(
+        AcademicCalendar calendar, WeekendRule rule, DateTime? startDate = null, DateTime? endDate = null);
 
     Task ValidateDayRangeAsync(AcademicCalendar calendar, DateTime date);
 

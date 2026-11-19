@@ -15,6 +15,10 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 [Route("api/student/enrollment/admissions/workflows")]
 public class AdmissionWorkflowsController(IAdmissionWorkflowAppService appService) : AbpController
 {
+	[HttpGet("assessment-catalog")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
+	public async Task<Result<AdmissionAssessmentCatalogDto>> GetAssessmentCatalog() => Result.Success(await appService.GetAssessmentCatalogAsync());
+
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
 	public async Task<Result<PagedResultDto<AdmissionWorkflowDto>>> GetList([FromQuery] AdmissionWorkflowListInput input) => Result.Success(await appService.GetListAsync(input));
@@ -64,6 +68,9 @@ public class AdmissionWorkflowsController(IAdmissionWorkflowAppService appServic
 	[HttpPost("{id:guid}/archive")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Archive)]
 	public async Task<Result<AdmissionWorkflowDto>> Archive(Guid id, [FromQuery] string? concurrencyStamp = null) => Result.Success(await appService.ArchiveAsync(id, concurrencyStamp));
+	[HttpPost("{id:guid}/reopen")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Publish)]
+	public async Task<Result<AdmissionWorkflowDto>> Reopen(Guid id, [FromQuery] string? concurrencyStamp = null) => Result.Success(await appService.ReopenAsync(id, concurrencyStamp));
 	[HttpGet("{id:guid}/versions")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
 	public async Task<Result<System.Collections.Generic.List<AdmissionWorkflowDto>>> GetVersionHistory(Guid id) => Result.Success(await appService.GetVersionHistoryAsync(id));

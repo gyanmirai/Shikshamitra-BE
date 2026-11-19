@@ -15,6 +15,10 @@ public class FeeReceiptDetailDto
     public string ReceiptNumber { get; set; } = string.Empty;
     public FeeReceiptKind ReceiptKind { get; set; }
     public string ReceiptKindLabel { get; set; } = string.Empty;
+    public string PaymentMethodLabel { get; set; } = string.Empty;
+    /// <summary>Original collection evidence, shared by provisional and official receipts.</summary>
+    public List<FeeReceiptPaymentInstrumentDto> PaymentInstruments { get; set; } = [];
+    public string PdfFileName { get; set; } = string.Empty;
     public FeeReceiptScope ReceiptScope { get; set; }
 
     // ── Verification ──────────────────────────────────────────────────────────
@@ -28,10 +32,13 @@ public class FeeReceiptDetailDto
     // ── Amounts ───────────────────────────────────────────────────────────────
 
     public double TotalPaidAmount { get; set; }
+	public decimal FeePaidAmount { get; set; }
+	public decimal ChargePaidAmount { get; set; }
 
     // ── Student ───────────────────────────────────────────────────────────────
 
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public int? GrNo { get; set; }
     public string? RollNo { get; set; }
@@ -44,6 +51,8 @@ public class FeeReceiptDetailDto
     public Guid BoardId { get; set; }
     public Guid EducationMediumId { get; set; }
     public string? AcademicYearName { get; set; }
+    public DateTime? AcademicYearStartDate { get; set; }
+    public DateTime? AcademicYearEndDate { get; set; }
     public string? BoardName { get; set; }
     public string? MediumName { get; set; }
 

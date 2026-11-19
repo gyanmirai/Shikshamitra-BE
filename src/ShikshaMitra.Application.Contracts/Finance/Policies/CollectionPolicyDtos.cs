@@ -26,7 +26,7 @@ public class LateFeeRuleOverrideDto
 	public decimal? AmountPerMonth { get; set; }
 	public string CompoundFrequency { get; set; } = "Daily";
 	public List<CollectionPolicyEscalationRuleDto> EscalationRules { get; set; } = new();
-	public string RoundingMethod { get; set; } = "None";
+	public string RoundingMethod { get; set; } = "RoundUp";
 	public decimal? MaximumLateFeeAmount { get; set; }
 	public int? MaximumChargingDays { get; set; }
 }
@@ -54,8 +54,9 @@ public class CollectionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public string PolicyType { get; set; } = "collection";
 
 	public bool EnableLateFee { get; set; }
+	/// <summary>True for common rules; false for historical selected-head policies.</summary>
+	public bool ApplyLateFeeToAllFeeHeads { get; set; }
 	public int GracePeriodDays { get; set; }
-	public string GracePeriodType { get; set; } = "Calendar";
 	public List<Guid> LateFeeApplyOnFeeHeads { get; set; } = new();
 	public string LateFeeType { get; set; } = "Flat";
 	public decimal? FlatAmount { get; set; }
@@ -67,18 +68,16 @@ public class CollectionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public string CompoundFrequency { get; set; } = "Daily";
 	public List<CollectionPolicyEscalationRuleDto> EscalationRules { get; set; } = new();
 	public List<CollectionPolicyFeeHeadOverrideDto> FeeHeadOverrides { get; set; } = new();
-	public string RoundingMethod { get; set; } = "None";
+	public string RoundingMethod { get; set; } = "RoundUp";
 	public bool ConsiderAsIncome { get; set; }
 	public Guid? LateFeeIncomeHeadId { get; set; }
+	public Guid? LateFeeIncomeCategoryId { get; set; }
 	public decimal? MaximumLateFeeAmount { get; set; }
 	public int? MaximumChargingDays { get; set; }
 
-	public bool EnableWaiver { get; set; }
-	public bool EnableChargeWaiver { get; set; }
-	public bool RequiresApproval { get; set; }
-	public List<Guid> ApprovalRoleIds { get; set; } = new();
-
 	public bool AllowOnlineCollection { get; set; }
+	public string AllocationBasis { get; set; } = "Legacy";
+	public string ReceiptGrouping { get; set; } = "Separate";
 
 	public int Version { get; set; }
 	public bool IsUsedInDownstream { get; set; }
@@ -100,7 +99,6 @@ public class CreateUpdateCollectionPolicyDto
 
 	public bool EnableLateFee { get; set; }
 	public int GracePeriodDays { get; set; }
-	public string GracePeriodType { get; set; } = "Calendar";
 	public List<Guid> LateFeeApplyOnFeeHeads { get; set; } = new();
 	public string LateFeeType { get; set; } = "Flat";
 	public decimal? FlatAmount { get; set; }
@@ -112,28 +110,58 @@ public class CreateUpdateCollectionPolicyDto
 	public string CompoundFrequency { get; set; } = "Daily";
 	public List<CollectionPolicyEscalationRuleDto> EscalationRules { get; set; } = new();
 	public List<CollectionPolicyFeeHeadOverrideDto> FeeHeadOverrides { get; set; } = new();
-	public string RoundingMethod { get; set; } = "None";
+	public string RoundingMethod { get; set; } = "RoundUp";
 	public bool ConsiderAsIncome { get; set; }
 	public Guid? LateFeeIncomeHeadId { get; set; }
+	public Guid? LateFeeIncomeCategoryId { get; set; }
 	public decimal? MaximumLateFeeAmount { get; set; }
 	public int? MaximumChargingDays { get; set; }
 
-	public bool EnableWaiver { get; set; }
-	public bool EnableChargeWaiver { get; set; }
-	public bool RequiresApproval { get; set; }
-	public List<Guid> ApprovalRoleIds { get; set; } = new();
-
 	public bool AllowOnlineCollection { get; set; } = true;
+	/// <summary>Omitted on older clients: preserve the saved mode on update; Legacy on create.</summary>
+	public string? AllocationBasis { get; set; }
+	public string? ReceiptGrouping { get; set; }
 }
 
 public class CreateUpdateCollectionPolicyDtoValidator : AbstractValidator<CreateUpdateCollectionPolicyDto>
 {
 	public CreateUpdateCollectionPolicyDtoValidator()
 	{
+		RuleFor(x => x.ReceiptGrouping).Must(value => value is null or "Separate" or "Combined")
+			.WithMessage("Choose single combined or separate receipts.");
+		RuleFor(x => x.AllocationBasis).Must(value => value is null or "Legacy" or "Installment" or "FeeHead")
+			.WithMessage("Choose By installment or By fee head.");
 		RuleFor(x => x.ChangeReason).MaximumLength(500);
+		RuleFor(x => x.GracePeriodDays).InclusiveBetween(0, CollectionPolicyNumericLimits.MaximumDays);
+		RuleFor(x => x.MaximumChargingDays).InclusiveBetween(1, CollectionPolicyNumericLimits.MaximumDays);
+		RuleFor(x => x.FlatAmount).Must(IsOptionalAmount).WithMessage("Enter an amount between 0.01 and 999999 with up to 2 decimals.");
+		RuleFor(x => x.AmountPerDay).Must(IsOptionalAmount).WithMessage("Enter an amount between 0.01 and 999999 with up to 2 decimals.");
+		RuleFor(x => x.AmountPerWeek).Must(IsOptionalAmount).WithMessage("Enter an amount between 0.01 and 999999 with up to 2 decimals.");
+		RuleFor(x => x.AmountPerMonth).Must(IsOptionalAmount).WithMessage("Enter an amount between 0.01 and 999999 with up to 2 decimals.");
+		RuleFor(x => x.MaximumLateFeeAmount).Must(IsOptionalAmount).WithMessage("Enter an amount between 0.01 and 999999 with up to 2 decimals, or leave empty for no limit.");
+		RuleFor(x => x.Percentage).Must(value => !value.HasValue || CollectionPolicyNumericLimits.IsPercentage(value.Value))
+			.WithMessage("Enter a percentage between 0.01 and 100 with up to 2 decimals.");
+		RuleForEach(x => x.EscalationRules).SetValidator(new CollectionPolicyEscalationRuleDtoValidator());
 		RuleFor(x => x).Must(x => !x.IsDefault ||
 			string.Equals(x.Status, "Active", StringComparison.OrdinalIgnoreCase))
 			.WithMessage("Only an Active collection policy can be the default.");
+	}
+
+	private static bool IsOptionalAmount(decimal? value) => !value.HasValue || CollectionPolicyNumericLimits.IsAmount(value.Value);
+}
+
+public class CollectionPolicyEscalationRuleDtoValidator : AbstractValidator<CollectionPolicyEscalationRuleDto>
+{
+	public CollectionPolicyEscalationRuleDtoValidator()
+	{
+		RuleFor(x => x.StartDay).InclusiveBetween(1, CollectionPolicyNumericLimits.MaximumDays);
+		RuleFor(x => x.EndDay).InclusiveBetween(1, CollectionPolicyNumericLimits.MaximumDays);
+		RuleFor(x => x.EndDay).Must((rule, end) => !end.HasValue || end >= rule.StartDay)
+			.WithMessage("To Day must be greater than or equal to From Day.");
+		RuleFor(x => x.Value).Must((rule, value) => string.Equals(rule.CalculationType, "Percentage", StringComparison.OrdinalIgnoreCase)
+			? CollectionPolicyNumericLimits.IsPercentage(value) : CollectionPolicyNumericLimits.IsAmount(value))
+			.WithMessage("Enter a valid slab amount or percentage with up to 2 decimals.");
+		RuleFor(x => x.MaxFee).Must(value => !value.HasValue || CollectionPolicyNumericLimits.IsAmount(value.Value));
 	}
 }
 
@@ -143,6 +171,17 @@ public class CollectionPolicyListRequestDto : PagedAndSortedResultRequestDto
 	public string? Status { get; set; }
 	public bool IncludeArchived { get; set; }
 	public string? Search { get; set; }
+	public string? PolicyNameFilter { get; set; }
+	public string? PolicyNameOperator { get; set; }
+	public bool? EnableLateFee { get; set; }
+	public string? LateFeeType { get; set; }
+	public string? GraceDaysOperator { get; set; }
+	public int? GraceDaysValue { get; set; }
+	public int? GraceDaysMax { get; set; }
+	public bool? AllowOnlineCollection { get; set; }
+	public string? UpdatedAtOperator { get; set; }
+	public DateTime? UpdatedAt { get; set; }
+	public DateTime? UpdatedAtEnd { get; set; }
 }
 
 public class CollectionPolicyCloneRequestDto
@@ -163,8 +202,21 @@ public class CollectionPolicySimulateRequestDto
 	public Guid? FeeStructureId { get; set; }
 	public bool IsLateFeeExempt { get; set; }
 	public int? CustomGracePeriodDays { get; set; }
-	public decimal? RequestedWaiverAmount { get; set; }
-	public decimal? RequestedWaiverPercentage { get; set; }
+}
+
+public class CollectionPolicySimulateRequestDtoValidator : AbstractValidator<CollectionPolicySimulateRequestDto>
+{
+	public CollectionPolicySimulateRequestDtoValidator()
+	{
+		RuleFor(x => x.DaysLate).InclusiveBetween(0, CollectionPolicyNumericLimits.MaximumDays);
+		RuleFor(x => x.CustomGracePeriodDays).InclusiveBetween(0, CollectionPolicyNumericLimits.MaximumDays);
+		RuleFor(x => x.OutstandingAmount).Must(IsSimulationAmount);
+		RuleFor(x => x.OriginalFeeAmount).Must(value => !value.HasValue || IsSimulationAmount(value.Value));
+		RuleFor(x => x.RemainingBalance).Must(value => !value.HasValue || IsSimulationAmount(value.Value));
+	}
+
+	private static bool IsSimulationAmount(decimal value) => value >= 0 &&
+		value <= CollectionPolicyNumericLimits.MaximumAmount && CollectionPolicyNumericLimits.HasCurrencyPrecision(value);
 }
 
 public class CollectionPolicySimulateResponseDto
@@ -180,8 +232,4 @@ public class CollectionPolicySimulateResponseDto
 	public string RoundingApplied { get; set; } = "None";
 	public string Explanation { get; set; } = string.Empty;
 
-	public decimal? EffectiveWaiverAmount { get; set; }
-	public bool? WaiverIsExpired { get; set; }
-	public bool? WaiverRequiresApproval { get; set; }
-	public string? WaiverExplanation { get; set; }
 }

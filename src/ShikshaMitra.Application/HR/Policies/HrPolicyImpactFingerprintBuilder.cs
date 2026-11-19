@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -11,6 +11,7 @@ internal static class HrPolicyImpactFingerprintBuilder
 	{
 		var payload = new
 		{
+			LeaveFingerprint = preview.LeaveImpact?.Fingerprint,
 			preview.AffectedEmployeeCount,
 			preview.AffectedAssignmentCount,
 			Warnings = preview.Warnings

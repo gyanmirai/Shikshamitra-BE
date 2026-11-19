@@ -6,16 +6,30 @@ Read it before changing permissions, navigation guards, identity, user scope, or
 ## Authorization model
 
 - Action permission: whether the caller may perform the exact operation.
-- Module visibility: whether navigation exposes a module, independent of action grants.
+- Module visibility: whether navigation exposes a module. Effective visibility is required when assigning a mapped feature's action grants.
 - Tenant boundary: which tenant owns the target, enforced by the server.
 - User scope: which records within that tenant the caller may access.
 
 All four concerns are separate.
 Hidden controls are not authorization.
-A role name must not bypass an action check.
+Action checks use enabled, tenancy-side-eligible catalogue definitions and allowed providers.
+The built-in `admin` role is the protected full-permission exception: its current database members receive every eligible role permission by default, including newly defined permissions. Token role claims alone do not establish membership.
+Admin role grants, member overrides, and module visibility are read-only. Flat and user-override writes reject the entire request with `ADMIN_PERMISSIONS_READ_ONLY`; nested reads expose the same effective grants. Old user denials are ignored while the user is an admin and take effect again if that membership is removed.
+Other roles, including `super-admin`, retain their existing configurable action grants. This permission rule does not change the separately configured administrator data-scope exception.
 The existing configured administrator data-scope exception remains server-controlled and uses current database role membership, never a client claim alone.
 
 ## Catalogue and editor
+
+Student uses the user-approved three-action contract: View, Add (displayed as Add/Update), and supported Delete.
+Staff Student sensitive commands use the owning Add permission; action permission is always independent of teacher-assignment scope.
+Student has no Development authorization bypass or Academic assignment-to-action fallback.
+The canonical Student registry has 33 feature groups and 111 distinct action leaves, including House Management and Portal Profile Photo; Overrides, Guardian Access, and Portal Profile Photo have no Delete leaf.
+The legacy `Students.Portal.ProfilePhoto.View` and `.Add` definitions remain for catalogue compatibility; their grants and explicit denials no longer govern mobile profile-photo access. Valid authenticated student-self and guardian associations grant the built-in capability to view/add/replace that child's photo, without staff permissions, Records onboarding/editability/masking gates, or school photo approval. Every operation revalidates the tenant, active portal account and persisted association; a role name alone grants nothing.
+The mobile photo entry retains an empty staff navigation mapping and grants no staff route access. Staff Records photo commands retain their existing permission, masking and approval rules. No grants are seeded or restored for this change. See [mobile photo contracts](../../modules/student/api.md#mobile-student-profile-photo).
+Student List groups its profile workflows (Changes, Transitions, Overrides, Guardian Access and Identity Compliance) without separate editor rows; Overrides and Guardian Access have no Delete leaf.
+Grouping does not rename permissions, migrate saved grants or change endpoint enforcement. The Student List editor controls manage the existing exact action names together; opening the editor preserves partial grants and user overrides.
+Retired specialized positive grants are inert until an administrator explicitly assigns canonical access, while retired explicit user denials conservatively map to canonical actions.
+See [Student API permissions](../../modules/student/api.md#student-action-permissions) for the coordinated rollout and denial compatibility rules.
 
 The current security release retains the old frontend UI at the user's request.
 The replacement-editor redesign remains withdrawn.
@@ -26,11 +40,11 @@ Do not add individual backend action tiles, catalogue search, or a replacement e
 The backend permission definitions are authoritative for names, hierarchy, display labels, allowed providers, and tenancy side.
 Retain the complete server catalogue in the draft and preserve entries outside the displayed navigation groups.
 Grouped frontend controls may only submit names present in that catalogue and eligible for the selected provider.
-A missing visibility grant must not lock an authorized administrator out of configuring a known module.
+A missing visibility grant must not hide a known module from an authorized administrator's permission editor. It prevents new action grants until an administrator explicitly grants the required visibility, either beforehand or in the same permission batch.
 
 Frontend grouping follows the staging mappings and dependencies; it does not change backend permission definitions or endpoint enforcement.
 The user-approved Statutory Schemes exception retains the same UI with View/Edit/Delete controls.
-Edit groups the existing Edit, Activate, ManageEnrollment, and ApproveOverride permissions; View remains independent.
+Edit groups Edit, Activate, ManageEnrollment, ApproveOverride, and ConfigureCalculation permissions when present in the server catalogue; View remains independent.
 Delete is disabled unless the server defines that action; this permission-editor change does not add a deletion operation.
 Statutory Schemes Revoke All clears every provider-eligible direct grant at or beneath its exact feature namespace, including undisplayed actions, without touching neighboring features or inherited role grants.
 It remains available for partial direct grants, while Grant All only grants explicitly mapped catalogue actions.
@@ -40,18 +54,31 @@ The editor must not invent distinct grants for those aliases.
 
 Bulk operations use the complete mapped navigation subtree, deduplicate names, and include collapsed descendants.
 Expanding or collapsing a group never changes a grant.
-Only changed direct grants are submitted.
-Role-inherited grants remain effective after a direct user grant is removed.
-Explain remaining inherited providers in control tooltips and do not describe removal of direct grants as revocation of role access.
+Only changed direct role grants or explicit user override states are submitted.
+Users follow live role grants by default. Multiple role grants combine; role edits affect only permissions without an explicit user override.
+A user Allow is a direct ABP user grant. Except for protected admin members, a user Deny is an audited, tenant-scoped `UserPermissionDeny` record and takes precedence over role grants, aliases, and assignment-derived access in both single and batch checks.
+Follow role removes both the direct user grant and the denial. Role edits never rewrite these user exceptions.
+Overrides do not widen tenant or record scope. An authorized permission manager configures them; users cannot grant themselves access through the self-read exception.
+Explain both the role source and the effective result in the editor.
 
 Retain drafts across loading failures, background refetches, and provider changes.
 Never submit one provider's draft to another provider.
-Refetch and verify persisted direct grants after saving.
+Refetch and verify persisted direct grants or explicit override states after saving.
 A pre-save comparison reduces accidental concurrent overwrites but is not a compare-and-swap guarantee under the unchanged API contract.
 
 ## Server enforcement
 
-Both permission-service entry points use the same validation and ABP permission manager.
+The flat, nested, and user-override permission-service entry points share provider policy and catalogue validation.
+
+| API | Contract |
+| --- | --- |
+| `GET /api/shikshamitra-permissions/users/{userId}/permissions` | Flat ABP catalogue plus `overrides`, a dictionary of exact permission names to `allow` or `deny`. Missing entries mean `inherit`. Grant sources remain available even when a denial makes `isGranted` false. |
+| `PUT /api/shikshamitra-permissions/users/{userId}/permissions` | `{ "permissions": [{ "name": "<exact catalogue name>", "state": "inherit|allow|deny" }] }`; changed entries only; 204 on success. |
+
+The legacy binary U update remains compatible: true means direct Allow, false removes that direct grant, and either clears any prior explicit Deny for that entry. New user editors must use the override API to express Deny.
+Existing direct U grants for active canonical permissions migrate logically to Allow without copying role permissions or reseeding users. Retired Student positive grants follow the explicit reassignment rule above.
+Apply the `AddUserPermissionDenies` migration before starting a backend with override support; it adds storage only and does not alter existing role/user grants.
+The deny value provider and the replacement permission checker enforce denial precedence, including legacy catalogue reads. Denial lookup reuse is limited to a unit of work and invalidated by persisted denial changes.
 Role management requires the configured R provider policy, normally `AbpIdentity.Roles.ManagePermissions`.
 User management requires the configured U provider policy, normally `AbpIdentity.Users.ManagePermissions`.
 Authenticated users may read their own effective grants without receiving permission to grant themselves access.
@@ -62,6 +89,16 @@ Reject unknown, duplicate, disabled, wrong-tenancy-side, and provider-ineligible
 Validate role names and user IDs against current-tenant identity records.
 Never normalize Add/Create/Edit aliases or silently discard unknown entries.
 
+### Navigation visibility prerequisite
+
+Positive action assignments through the flat, nested, and user-override services require effective visibility for the target provider, including each mapped navigation ancestor. A complete alternative navigation path is sufficient when a feature has multiple entries. API-only actions without a mapped navigation entry retain their existing behavior.
+
+The service evaluates the final requested batch before any writes. Explicit visibility Allow in that batch satisfies the prerequisite; Revoke removes only the selected provider's direct grant, and user Deny blocks inherited visibility. Follow role clears a user visibility override and evaluates the remaining role grants. Existing role visibility can satisfy a user's prerequisite without copying grants into the user.
+
+Missing prerequisites reject the entire batch with HTTP 400 and `VISIBILITY_PREREQUISITE_MISSING`, following the shared business-rule error contract. Visibility changes alone do not remove existing action grants or change endpoint authorization. Revoking existing actions, denying user access, and clearing overrides remain available for hidden features. No data migration, reseeding, or automatic access repair is performed.
+
+`src/ShikshaMitra.Domain.Shared/Security/Permissions/NavigationVisibilityPrerequisites.json` is the versioned server mapping from exact action namespaces to alternative navigation visibility paths. The longest exact or dot-boundary namespace match applies. Exact visibility flags remain independently configurable, including Institute Setup flags whose action children share the `ShikshaMitra.Module.*` namespace. Navigation changes that move a mapped feature or change its visibility controls require a coordinated mapping update and frontend/backend contract checks. Do not infer prerequisites from similar permission names or require flags absent from Set Visibility.
+
 Use ABP permission-management writes for provider semantics, cache invalidation, and audit participation.
 Use a transaction for the whole batch, reusing an existing transactional unit of work.
 Application services enforce authorization even when called without the HTTP controller.
@@ -71,6 +108,7 @@ Employee-targeted ESI reads and writes require the exact ESI action plus employe
 
 Baseline grants belong only to the creation transaction of a new built-in role.
 An existing role must receive no automatic restoration of missing grants.
+Admin full access is evaluated by the runtime role provider; it does not restore or rewrite stored grants through seeding.
 A changed seeder version, missing marker, profile switch, or rerun is not authorization to widen access.
 Custom roles and administrator-managed grants remain untouched.
 For new databases, Clerk and Office Assistant receive only HR leave self-service: HR/leave navigation and Leave Center View, Add, and Delete.
@@ -105,6 +143,12 @@ Missing scope yields no access.
 Cancellation, missing identity, query failures, and timeouts must not become unrestricted access.
 Keep tenant filters explicit and preserve year filtering, wildcard boundaries, ordering, reporting inheritance, and full-access flags.
 
+Generic API 403 responses identify the requested controller and action from static MVC metadata and ask the caller to contact an administrator to review permissions and assigned data access.
+This describes the blocked request, not a guessed missing grant; the shared error pipeline does not recheck or change authorization.
+When static metadata is unavailable, the response retains the same recovery guidance without deriving labels from request paths, IDs, query strings, or payloads.
+Specific business-coded, tenant, and record-scope messages remain unchanged.
+Known ABP authorization codes retain their original 401/403 status and code; their generic 403 text receives the same request context without exposing technical permission or resource identifiers.
+
 ## Approved access repair
 
 A suspected broad grant is not proof of incorrect access.
@@ -121,9 +165,10 @@ Never use a database reset or blanket reseed as an access repair.
 ## Mandatory change checklist
 
 - Catalogue, editor, route/action guards, and API enforcement agree.
-- Preserve approved frontend grouping without inventing API permission names, role-name action bypasses, development bypasses, or blanket reseeding.
+- Preserve approved frontend grouping without inventing API permission names, action bypasses outside the protected admin policy, development bypasses, or blanket reseeding.
 - Allowed and denied action tests, direct/inherited grant round trips, invalid-batch rollback, tenant/scope tests, and upgrade-seeding tests pass.
 - Direct application calls are covered where controllers duplicate a security boundary.
+- `PermissionConsistencyApi_Tests` covers user overrides, role-update persistence, Follow role, invalid-batch rollback, management policy, tenant isolation, and real single/principal/batch checker denial precedence.
 - Revocations and membership changes take effect on subsequent requests.
 - Permission changes in unrelated module PRs and reverts receive explicit review.
 - Browser tests cover dirty state, focus, accessible labels, 44px targets, narrow layouts, and contained scrolling.
@@ -141,3 +186,11 @@ Document Passed, Failed, and Not run cases explicitly.
 Local synthetic tests do not prove deployed acceptance.
 Keep deployed DDVS verification read-only unless writes are separately authorized.
 An exposed database credential remains an outstanding security risk until rotation is verified.
+
+## School and employee shift boundaries
+
+School-shift CRUD enforces InstituteSetup.ShiftManagement actions.
+HR work-shift CRUD enforces HR.AttendanceAndLeave.Setting.ShiftManagement actions.
+Employee shift assignment reads/writes additionally enforce the owning employee action and employee scope.
+The minimal active HR shift lookup is available to authorized employee creators/editors without catalogue administration.
+No migration or seeder copies grants between these namespaces.

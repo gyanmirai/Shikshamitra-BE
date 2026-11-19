@@ -44,8 +44,8 @@ public class EmployeePayrollContractWriter(
 				input.BankDetails?.AccountNumber,
 				input.BankDetails?.IfscCode,
 				input.SalaryDetails?.PfRuleId?.ToString(),
-				input.SalaryDetails?.EpfNumber,
-				input.SalaryDetails?.UanNumber,
+				null,
+				null,
 				input.SalaryDetails?.PunchId,
 				input.SalaryDetails?.TotalWorkingHourPerMonth);
 			ApplySalaryGeneration(payrollDetails, input.SalaryDetails);
@@ -61,8 +61,8 @@ public class EmployeePayrollContractWriter(
 			bank != null ? bank.AccountNumber : payrollDetails.AccountNumber,
 			bank != null ? bank.IfscCode : payrollDetails.IfscCode,
 			salary != null ? salary.PfRuleId?.ToString() : payrollDetails.PfRule,
-			salary != null ? salary.EpfNumber : payrollDetails.EpfNumber,
-			salary != null ? salary.UanNumber : payrollDetails.UanNumber,
+			payrollDetails.EpfNumber,
+			payrollDetails.UanNumber,
 			salary != null ? salary.PunchId : payrollDetails.PunchId,
 			salary != null ? salary.TotalWorkingHourPerMonth : payrollDetails.TotalWorkingHourPerMonth);
 		var salaryGenerationRefreshed = IsSalaryGenerationRefreshed(payrollDetails, salary);

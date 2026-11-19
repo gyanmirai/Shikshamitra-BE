@@ -8,6 +8,8 @@ namespace ShikshaMitra.Students.Enrollments.Registrations;
 /// </summary>
 public class StudentFamilyInfoDto
 {
+	public string? MainContactRelationship { get; set; }
+	public string? GuardianRelationship { get; set; }
 	public Guid StudentId { get; set; }
 	public StudentLifeCycleStatusEnum Status { get; set; }
 

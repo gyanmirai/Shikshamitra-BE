@@ -1,0 +1,20 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Volo.Abp.Application.Services;
+
+namespace ShikshaMitra.TenantSettings.SchoolIdentity;
+
+public interface ISchoolIdentityAppService : IApplicationService
+{
+	Task<SchoolIdentityProfileDto> GetAsync(SchoolIdentityContextDto input);
+	Task<SchoolBrandingDto> GetBrandingAsync();
+	Task<SchoolBrandingImageDto?> GetBrandingAssetAsync(SchoolIdentityAssetKind kind, string? ifNoneMatch = null);
+	Task<SchoolIdentityAssetDownloadDto> PreviewAsync(SchoolIdentityPreviewDto input);
+	Task<SchoolIdentityProfileDto> UpdateAsync(SchoolIdentityUpdateDto input);
+	Task<SchoolIdentityProfileDto> CopyAsync(SchoolIdentityCopyDto input);
+	Task<List<SchoolIdentityRevisionDto>> GetHistoryAsync(SchoolIdentityContextDto input);
+	Task<SchoolIdentityAssetDto> UploadAsync(SchoolIdentityAssetKind kind, Guid? boardId, Guid? mediumId,
+		string fileName, byte[] bytes, Guid? organizationId = null);
+	Task<SchoolIdentityAssetDownloadDto> DownloadAsync(Guid id, SchoolIdentityContextDto input);
+}

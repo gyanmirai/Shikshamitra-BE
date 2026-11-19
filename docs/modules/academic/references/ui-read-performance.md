@@ -1,0 +1,131 @@
+---
+module: academic
+domain: read-contracts
+content_type: Reference
+status: active
+updated_on: 2026-11-14
+owner: backend-team
+audience: humans-and-agents
+---
+
+# Read Academic workspaces and report pages
+
+TL;DR: Academic screens use additive lookup, workspace, summary and page contracts to avoid loading full operational graphs for every UI request.
+Existing APIs remain compatible; each read retains its existing action permission, tenant boundary and user-scope rules.
+The [frontend client map](../../../../../Shikshamitra-FE/docs/academic/clients.md) owns screen wiring, cache behavior and browser lifecycle.
+
+## Read contracts
+
+Routes below include the `/api` prefix.
+Controllers delegate authorization and scoped reads to their application services.
+
+| Method and route | Input and result |
+|---|---|
+| `GET /api/app/standard/lookup` | Complete `items` of class `id`, `name`, and scoped `divisions` containing `id`, `name`. Uses the existing authenticated Standard-list policy, Academic hierarchy predicates and academic ordering, including explicit Standard-only scope. It adds no academic-year filter or result cap; existing Standard CRUD/list responses remain unchanged. |
+| `GET /api/class-management/class-teacher-assignments/workspace` | `organizationId`; returns assignment `items`, `summary` and `eligibleTeachers` together. |
+| `GET /api/academic-mediums/{academicMediumId}/subjects/lookup` | Optional `searchTerm`, `includeArchived` (default false); lightweight subject options without operational usage enrichment. |
+| `GET /api/academic/curriculum/chapters/lookup` | Required `standardId`, `subjectId`, optional `divisionId`; chapter ID, number and name options. |
+| `GET /api/academic/curriculum/lesson-plans/workspace` | Existing lesson scope and paging plus `view`, `uiCriteria`, `searchTerm`, `searchColumns`, `filters`, `sorts`; returns `totalCount`, page `items`, associated `diaries` and `summary`. |
+| `GET /api/academic/rubrics/templates/paged` | Existing rubric filters plus one-based `page`, `pageSize` (1 to 100), JSON `filters`/`sorts`, optional `timeZoneId`; template summaries, total and status/usage counts. |
+| `GET /api/academic/rubrics/{id}/evaluations/submission/{submissionId}` | Required `studentId`; returns only the selected student's submission evaluation, or no content. |
+| `GET /api/homework/submissions`, `GET /api/assignments/submissions` | Existing medium/class/division/subject/task context; optional `Lightweight=true` projects the full scalar roster and global summary without submission answers or attachment payloads. The default retains the legacy full list. |
+| `GET /api/homework/{homeworkId}/submissions/{studentId}`, `GET /api/assignments/{assignmentId}/submissions/{studentId}` | Existing medium/class/division/subject context; returns only the selected roster student's latest submission, including answer text and attachments. Reuses task, context, scope and roster authorization; non-submitters remain represented. |
+| `POST /api/class-management/student-elective-assignments/selection-counts` | Body: `academicMediumId`, `classId`, `divisionIds`, `electiveGroupIds`; counts grouped by elective group, division and subject. |
+| `GET /api/class-management/student-elective-assignments` | Existing context/search plus `includeSelectableSubjects` (default true); pass false to omit per-student option arrays and use the shared `subjectOptions` response. Each record includes `isLocked`; response `isLocked` requires every student in the full context roster to have a locked selection, independently of search. |
+| `GET /api/academics/timetable/by-standard/{standardId}/division/{divisionId}` | Existing complete class timetable and subject summary. Subject, elective-group and room lookup reads select referenced IDs instead of complete tenant catalogues; action permission and resource scope remain unchanged. |
+| `GET /api/academics/timetable/room-reservations/page` | `skipCount`, `maxResultCount`, `sorting`, optional created date, room, approval view, status group, search and JSON filters; page plus status counts. |
+| `GET /api/academics/timetable/room-availability` | Dated checks use `date`. Weekly planning sends `weeklyTimetableDay` (`Monday` through `Saturday`), period times and current class/division instead; it checks recurring timetable and class-shift allocations, excludes the current timetable, and ignores date-specific calendar closures, reservations and maintenance. Existing tenant filters, metadata filters and `includeOccupied` apply to both modes. |
+| `GET /api/academics/timetable/room-reservations/summary` | Existing reservation context; status counts for badges without loading reservation details. |
+| `GET /api/academics/timetable/room-availability/buildings/lookup` | Requires `Academics.Timetable.TimetableManagement.View` at the application-service boundary. Returns current-tenant building `id`, `buildingName`, and `floors` (`id`, `floorName`, `floorNo`) for availability filters. Floors join through authorized-tenant buildings. Building management permissions and user overrides remain independent; no grants, scope rules or management endpoints are widened. |
+| `GET /api/academics/timetable/room-availability/audit-logs/page` | Paging/sorting, optional room, date range, action and search; selected audit rows with their complete snapshots and inline differences. |
+| `GET /api/academics/student-academic-360` | Year, board, education medium, optional class/division, search, smart filter and paging; page items plus the existing all-selection summary. |
+| `GET /api/academics/student-academic-360/{studentId}/tabs/{tab}` | Existing tab/context plus task/exam offsets, limits and filters; detail totals allow access to older records. |
+
+Grade filter options remain documented with their owning [Examination API](../../examination/api.md).
+The class-teacher, elective, lesson-plan, rubric and room DTO sources are under `src/ShikshaMitra.Application.Contracts/Academic/`.
+Student list validation caps `maxResultCount` at 100 in `src/ShikshaMitra.Application.Contracts/Academic/StudentAcademic360/StudentAcademic360ListInputValidator.cs`.
+
+## Active workflow query boundaries
+
+The active Homework list applies teacher/subject ownership and all-target division access in SQL before display filtering and page graph hydration. Missing identities fail closed under the [security standard](../../../common/security/permission-consistency.md#scope-caching-and-failures).
+Evaluation metadata intentionally remains proportional to the authorized division roster so existing whole-cohort client filtering, sorting, summaries and navigation stay complete; large answer and attachment columns are deferred to the selected read.
+
+Substitution lecture labels and Weekly Lecture detail labels load referenced records rather than unrelated catalogues. Substitution room validation checks published overlapping rows through their timetable parent without requiring tracked slot graphs. Cross-board/medium conflicts and tenant/soft-delete boundaries remain enforced.
+Room reservation visibility projects reporting links and traverses a manager lookup; room suggestion enrichment selects only returned references. Global suggestion ranking remains complete.
+
+The guided manual seating bulk save shares request-local eligibility and overlap reads across submitted rooms, while retaining transaction/version checks and temporary seat-key flushing for swaps. Every submitted room is validated before any seat-key or allocation changes. Overlap schedules are projected through tenant-filtered exam parents for the relevant dates, including sibling plans and incomplete time ranges under the existing overlap policy.
+Grade Entry unlock persists mark publication changes with the workflow transition in one flush. Manual exam-completion batching, legacy seating review pages, commented Resources/LMS/quiz/question pages and uninvoked diagnostic APIs are outside this change.
+
+## Counts, history and compatibility
+
+| Surface | Contract to preserve |
+|---|---|
+| Lesson workspace | Exact views: `lessonList`, `teacherDiary`, `reviewQueue`; unknown views fail with `LessonPlan:InvalidWorkspaceView`. Counts and filter options describe the authorized cohort before table paging. Review queue spans authorized media. Full plans and diary responses belong only to selected page plan IDs. |
+| Rubric list | Template summaries omit criterion graphs. Open details separately. Selection, evaluation and save permissions remain distinct from listing. |
+| Student Academic 360 | Overview defaults to 10 recent tasks and 5 recent exams; attendance returns full-range totals and at most 30 recent rows. Detail paging and filters retain historical access. Legacy zero-limit detail behavior remains compatible for older clients. |
+| Academic audit | Default time-ordered reads merge bounded event keys from relevant authorized sources before hydrating page context. Search, rendered values and alternate ordering can require broader narrow metadata. No history cutoff removes older events. |
+| Room audit | Page selection precedes full snapshot loading; snapshots and inline differences remain complete for the selected events. |
+| Legacy substitution year | GET infers the effective academic year without saving. A separate non-remote repair service provides bounded, authorized, locked and audited writes for maintenance. |
+| Class timetable lookups | Subjects include raw saved-slot IDs, every published assignment subject, and division-selected subjects for saved elective groups, including synthesized unsaved subjects without an allocation. Groups include saved-slot and published-assignment references; rooms include raw saved-slot references. Existing repository filters/includes, archived or inactive labels, draft saved allocations, complete summaries, per-day/config ordering, culture-sensitive time strings and missing-reference fallbacks remain unchanged. No new year/status/medium filter or result cap applies. |
+
+These changes bound graph hydration, rather than guaranteeing constant SQL work for every query.
+Student name/culture ordering, rendered audit search, rubric date/culture matching and subject-allocation group order retain narrow metadata fallbacks where required for compatibility.
+Lesson workspace summaries likewise read cohort keys before selecting full page records.
+See `src/ShikshaMitra.Application/Academic/Audit/AcademicAuditTrailAppService*.cs`, `src/ShikshaMitra.Application/Academic/Curriculum/LessonPlanAppService.Workspace*.cs` and `src/ShikshaMitra.Application/Academic/StudentAcademic360/StudentAcademic360AppService.List.cs` before changing those semantics.
+
+## Reports
+
+`POST /api/app/academic-report/preview` selects page content for all 68 standard report types while retaining full filtered totals, ordering and summaries.
+Preview page size defaults to 50 and rejects values over 500; export generation keeps its complete filtered dataset.
+The focused builders are `src/ShikshaMitra.Application/Academic/Reports/AcademicReportGenerator.*Preview*.cs`.
+Dynamic dataset queries and AI catalogue reuse have separate coverage below.
+
+Export jobs retain the existing create/status routes under `/api/app/academic-report/exports`.
+`GET /api/app/academic-report/exports/{jobId}/download` returns file bytes with content type and filename headers.
+The frontend consumes a native Blob and can download a completed file without regenerating it.
+Export history returns the latest 100 jobs for the current user and tenant.
+
+Academic PDF downloads resolve saved School Identity assets in organization, medium, board, then school-default order.
+A configured banner replaces the school letterhead; otherwise the resolved logo and school name appear above the report title.
+Hidden asset choices remain hidden. Reports spanning organizations use their nearest shared medium, board or school context.
+Standard reports derive context from class filters, or division filters when classes are absent. Dynamic reports retain resolved class IDs from their validated catalogue, including class, division and chapter tokens, so an explicit board/medium does not skip organization branding.
+Image bytes remain internal to PDF generation; on-screen previews and spreadsheet exports retain their existing behavior.
+
+## Focused validation map
+
+Tests below are executable coverage, not a claim that a provider or deployment passed.
+Paths are relative to the backend repository root.
+
+| Concern | Test source |
+|---|---|
+| Class-teacher combined workspace and elective grouped reads | `test/ShikshaMitra.Application.Tests/Academic/ClassManagement/ClassTeacherWorkspaceRead_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/ClassManagement/StudentElectiveReadPerformance_Tests.cs` |
+| Active substitution/weekly detail references, reporting visibility and suggestion enrichment | `test/ShikshaMitra.Application.Tests/Academic/Timetable/TimetableReferencedRead_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Timetable/RoomAvailability/RoomReferencedRead_Tests.cs` |
+| Teacher ownership and lightweight selected evaluations | `test/ShikshaMitra.Application.Tests/Academic/HomeworkAssignment/HomeworkOwnershipReadPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/HomeworkAssignment/LearningTaskReadPerformance_Tests.cs` |
+| Guided manual seating saves and Grade Entry unlock persistence | `test/ShikshaMitra.Application.Tests/Academic/Examination/SeatAllocation/ExamSeatAllocationSavePerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Examination/Exams/ExamMarksUnlockPerformance_Tests.cs` |
+| Subject lookup/bulk reads, allocation paging and chapter enrichment | `test/ShikshaMitra.Application.Tests/Academic/Curriculum/SubjectCreationReadPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Curriculum/SubjectAssignmentReadBatching_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Curriculum/SubjectAllocationPagingPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Curriculum/ChapterReadPerformance_Tests.cs` |
+| All lesson workspace views and global counts | `test/ShikshaMitra.Application.Tests/Academic/Curriculum/LessonPlanWorkspacePerformance_Tests.cs` |
+| Template paging and selected submission evaluation authorization | `test/ShikshaMitra.HttpApi.Tests/Academic/HomeworkAssignment/RubricReadPerformanceApi_Tests.cs` |
+| Reservation pages, audit snapshots and recurrence parity | `test/ShikshaMitra.Application.Tests/Academic/Timetable/RoomAvailability/RoomReadPerformance_Tests.cs` |
+| Read-only legacy year inference | `test/ShikshaMitra.Application.Tests/Academic/Timetable/Substitutions/SubstitutionYearReadOnly_Tests.cs` |
+| Complete audit history, key ordering and scope | `test/ShikshaMitra.Application.Tests/Academic/Audit/AcademicAuditReadPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Audit/AcademicAuditKeyParity_Tests.cs` |
+| Student list summaries, culture/search parity, bounded details and scope | `test/ShikshaMitra.Application.Tests/Academic/StudentAcademic360/StudentAcademic360Read_Tests.cs` |
+| Standard preview/page/export parity and dynamic projections | `test/ShikshaMitra.Application.Tests/Academic/Reports/*Preview*.cs`, `test/ShikshaMitra.Application.Tests/Academic/Reports/AcademicDynamicReportProjection_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Reports/AcademicLearningTaskExportParity_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Reports/AcademicExamExportParity_Tests.cs` |
+| PDF organization branding, shared fallback, hidden assets, tenant boundaries and dynamic class context | `test/ShikshaMitra.Application.Tests/TenantSettings/SchoolIdentityIntegration_Tests.AcademicReports.cs`, `test/ShikshaMitra.Application.Tests/Academic/Reports/AcademicDynamicReportBranding_Tests.cs` |
+| Dashboard sections, timetable settings and calendar batching | `test/ShikshaMitra.Application.Tests/Academic/Dashboard/AcademicDashboardSectionQueries_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Timetable/TimetableSettingsReadPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Calendar/AcademicCalendarReadPerformance_Tests.cs` |
+| Class timetable catalogue hydration and elective response parity | `test/ShikshaMitra.Application.Tests/Academic/Timetable/TimetableClassReadPerformance_Tests.cs`, `test/ShikshaMitra.Application.Tests/Academic/Timetable/TimetableElectiveAssignments_Tests.cs` |
+| PostgreSQL translation, HTTP commands and plans | `test/ShikshaMitra.HttpApi.Tests/Academic/Performance/AcademicReportPostgresSmoke_Tests.cs`, `test/ShikshaMitra.HttpApi.Tests/Academic/Performance/AcademicPostgresPerformance_Tests.cs` |
+
+Run focused suites from `Shikshamitra-BE` with its pinned SDK:
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~LessonPlanWorkspacePerformance_Tests|FullyQualifiedName~StudentElectiveReadPerformance_Tests|FullyQualifiedName~StudentAcademic360Read_Tests|FullyQualifiedName~AcademicReportPerformance_Tests|FullyQualifiedName~AcademicExamExportParity_Tests|FullyQualifiedName~AcademicLearningTaskExportParity_Tests" --artifacts-path .artifacts/academic-read-tests
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter FullyQualifiedName~RubricReadPerformanceApi_Tests --artifacts-path .artifacts/academic-read-api-tests
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter "FullyQualifiedName~AcademicReportPostgresSmoke_Tests|FullyQualifiedName~AcademicPostgresPerformance_Tests" --artifacts-path .artifacts/academic-read-postgres
+powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module academic
+git diff --check
+```
+
+The PostgreSQL tests skip unless `ACADEMIC_PERF_TEST_POSTGRES` identifies a new empty loopback database named `academic_tests_*`; the factory rejects other targets.
+Use the normal disposable test setup to supply credentials, never a school database.
+`ACADEMIC_PERF_OUTPUT` optionally selects an artifact directory outside maintained docs.
+Measurements use synthetic data and sequential warm requests; they do not establish production latency, concurrent load or deployment acceptance.

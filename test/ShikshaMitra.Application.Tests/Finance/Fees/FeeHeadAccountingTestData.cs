@@ -14,7 +14,8 @@ internal static class FeeHeadAccountingTestData
 		IRepository<TransactionCategory, Guid> incomeCategoryRepository,
 		Guid academicYearId,
 		Guid? tenantId,
-		string label)
+		string label,
+		DateTimeOffset? now = null)
 	{
 		var suffix = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
 		var accountHead = new AccountHead(
@@ -24,7 +25,7 @@ internal static class FeeHeadAccountingTestData
 		var category = new TransactionCategory(
 			Guid.NewGuid(), tenantId, academicYearId, TransactionType.Income, $"{label} Income {suffix}",
 			null, [], true, $"TEST-INC-{suffix}", accountHead.Id,
-			DateTimeOffset.UtcNow.AddDays(-1), null);
+			(now ?? DateTimeOffset.UtcNow).AddDays(-1), null);
 		await incomeCategoryRepository.InsertAsync(category, autoSave: true);
 		return category.Id;
 	}

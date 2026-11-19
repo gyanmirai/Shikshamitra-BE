@@ -16,54 +16,176 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund;
 
 public partial class FeeRefundAppService
 {
-    private sealed record PreparedRefund(Guid AssignmentId, Guid PolicyId, Guid PolicyVersionId,
+    private sealed record PreparedRefund(Guid? AssignmentId, Guid PolicyId, Guid PolicyVersionId,
         FeePaymentReceipt Receipt, RefundPolicySnapshot Policy, List<RefundLineSpec> Lines,
-        RefundPolicyCalculationResult Calculation, string PolicyJson, string CalculationJson, string Hash);
+        RefundPolicyCalculationResult Calculation, string PolicyJson, string CalculationJson, string Hash,
+        Guid? StudentId, Guid? FinanceFeeAccountId);
 
-    private async Task<PreparedRefund> PrepareAsync(CreateFeeRefundRequestDto input, Guid? excludingRequestId = null)
+    private sealed record RefundPolicyEvidence(Guid? StudentId, Guid? FinanceFeeAccountId,
+        Guid? AssignmentId, FinancePolicyVersion Version, RefundPolicySnapshot Policy);
+
+    private async Task<RefundPolicyEvidence> RequirePolicyEvidenceAsync(Guid? studentId,
+        Guid academicYearId, Guid? accountId, Guid? assignmentId = null, bool familyAuthorized = false)
     {
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
-        var receipt = await feePaymentReceiptRepository.FindAsync(input.OriginalReceiptId)
-            ?? throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
-        if (receipt.StudentId != input.StudentId || receipt.AcademicYearId != input.AcademicYearId ||
-            receipt.ReceiptScope != FeeReceiptScope.Fee ||
-            (receipt.ReceiptKind != FeeReceiptKind.FinalFee &&
-             !(receipt.ReceiptKind == FeeReceiptKind.ProvisionalFee && receipt.VerificationStatus == FeeReceiptVerificationStatus.Verified)))
-            throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
-
-        var collection = await collectionRepository.FindAsync(receipt.FeeCollectionTransactionId)
-            ?? throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
-        if (collection.Status is FeeCollectionStatus.Reversed or FeeCollectionStatus.InReconciliation)
-            throw new BusinessException(FeeRefundErrorCodes.PaymentNotSettled);
-
-        var allocationIds = input.Lines.Select(x => x.SourceAllocationId).Distinct().ToList();
-        var allocations = await allocationRepository.GetListAsync(x => allocationIds.Contains(x.Id));
-        if (allocations.Count != allocationIds.Count || allocations.Any(x => x.FeeRecordMetadataId != collection.Id))
-            throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
-        var allocationMap = allocations.ToDictionary(x => x.Id);
-
-        var dueIds = input.Lines.Select(x => x.DueFeeId).Distinct().ToList();
-        var dues = await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id));
-        if (dues.Count != dueIds.Count || dues.Any(x => x.StudentId != input.StudentId))
-            throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
-        if (dues.Any(x => !x.StudentFeeStructureId.HasValue) || dues.Select(x => x.StudentFeeStructureId).Distinct().Count() != 1)
-            throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
-        var assignmentId = dues[0].StudentFeeStructureId!.Value;
-        var assignment = await assignmentRepository.FindAsync(assignmentId)
-            ?? throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
-        if (assignment.StudentId != input.StudentId || assignment.AcademicYearId != input.AcademicYearId ||
-            !assignment.RefundPolicyId.HasValue || !assignment.RefundPolicyVersionId.HasValue)
-            throw new BusinessException(FeeRefundErrorCodes.PolicyNotAssigned);
-
-        var version = await policyVersionRepository.FindAsync(assignment.RefundPolicyVersionId.Value);
-        if (version == null || version.PolicyType != "refund" || version.PolicyId != assignment.RefundPolicyId ||
-            version.AcademicYearId != input.AcademicYearId)
+        if (!familyAuthorized) await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(studentId, accountId);
+        Guid policyId;
+        Guid versionId;
+        if (accountId.HasValue)
+        {
+            var account = await accountRepository.GetAsync(accountId.Value);
+            if (account.AcademicYearId != academicYearId || studentId.HasValue && account.StudentId != studentId)
+                throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+            studentId = account.StudentId;
+            assignmentId = account.StudentFeeStructureId;
+            if (assignmentId.HasValue)
+            {
+                // The account snapshot remains original payment evidence. Explicit
+                // student policy edits live on its exact linked assignment.
+                var assignment = await assignmentRepository.FindAsync(assignmentId.Value);
+                if (assignment == null || assignment.StudentId != studentId || assignment.AcademicYearId != academicYearId ||
+                    assignment.FinanceFeeAccountId != account.Id)
+                    throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
+                policyId = assignment.RefundPolicyId ?? throw new BusinessException(FeeRefundErrorCodes.PolicyNotAssigned);
+                versionId = assignment.RefundPolicyVersionId ?? throw new BusinessException(FeeRefundErrorCodes.PolicyNotAssigned);
+            }
+            else
+            {
+                var reference = account.GetPolicyReference("refund")
+                    ?? throw new BusinessException(FeeRefundErrorCodes.PolicyNotAssigned);
+                policyId = reference.PolicyId;
+                versionId = reference.VersionId;
+            }
+        }
+        else
+        {
+            if (!studentId.HasValue) throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+            var assignments = await assignmentRepository.GetListAsync(x => x.StudentId == studentId && x.AcademicYearId == academicYearId);
+            var assignment = assignmentId.HasValue
+                ? assignments.SingleOrDefault(x => x.Id == assignmentId.Value)
+                : assignments.OrderByDescending(x => x.CreationTime).FirstOrDefault();
+            if (assignment == null || !assignment.RefundPolicyId.HasValue || !assignment.RefundPolicyVersionId.HasValue)
+                throw new BusinessException(FeeRefundErrorCodes.PolicyNotAssigned);
+            assignmentId = assignment.Id;
+            policyId = assignment.RefundPolicyId.Value;
+            versionId = assignment.RefundPolicyVersionId.Value;
+        }
+        var version = await policyVersionRepository.FindAsync(versionId);
+        if (version == null || version.PolicyType != "refund" || version.PolicyId != policyId || version.AcademicYearId != academicYearId)
             throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
         RefundPolicySnapshot policy;
         try { policy = JsonSerializer.Deserialize<RefundPolicySnapshot>(version.SnapshotJson)!; }
         catch (JsonException) { throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid); }
-        if (policy == null || policy.PolicyId != version.PolicyId)
+        if (policy == null || policy.PolicyId != policyId)
             throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
+        return new RefundPolicyEvidence(studentId, accountId, assignmentId, version, policy);
+    }
+
+    private Task<decimal> GetPayerYearCommittedAsync(RefundPolicyEvidence payer, Guid yearId, Guid? excludingId = null) =>
+        payer.StudentId.HasValue
+            ? feeRefundRepository.GetStudentYearCommittedAmountAsync(payer.StudentId.Value, yearId, excludingId)
+            : feeRefundRepository.GetAccountYearCommittedAmountAsync(payer.FinanceFeeAccountId!.Value, yearId, excludingId);
+
+    private async Task EnsureApprovalWithinAnnualCapAsync(FeeRefundRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.PolicySnapshotJson)) return;
+        var policy = JsonSerializer.Deserialize<RefundPolicySnapshot>(request.PolicySnapshotJson)
+            ?? throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
+        if (!policy.MaximumPerStudentYear.HasValue) return;
+        var committed = request.StudentId.HasValue
+            ? await feeRefundRepository.GetStudentYearCommittedAmountAsync(request.StudentId.Value, request.AcademicYearId, request.Id)
+            : await feeRefundRepository.GetAccountYearCommittedAmountAsync(request.FinanceFeeAccountId!.Value, request.AcademicYearId, request.Id);
+        var remaining = Math.Max(0m, policy.MaximumPerStudentYear.Value - committed);
+        if (request.CalculatedAmount > remaining)
+            throw new BusinessException(FeeRefundErrorCodes.RefundExceedsPolicyAmount)
+                .WithData("Requested", request.CalculatedAmount).WithData("Allowed", remaining);
+    }
+
+    private async Task<PreparedRefund> PrepareAsync(CreateFeeRefundRequestDto input, Guid? excludingRequestId = null, bool familyAuthorized = false)
+    {
+        if (input.Lines.Count == 0 || input.Lines.Any(x => x.Amount <= 0 || (x.DueFeeId.HasValue ? 1 : 0) + (x.ChargeId.HasValue ? 1 : 0) + (x.LateFeeDueFeeId.HasValue ? 1 : 0) != 1) ||
+            input.Lines.Select(x => x.SourceAllocationId).Distinct().Count() != input.Lines.Count)
+            throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
+        var receipt = await feePaymentReceiptRepository.FindAsync(input.OriginalReceiptId)
+            ?? throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+        if (!familyAuthorized) await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId);
+        if (familyAuthorized && receipt.StudentId != input.StudentId) throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+        if (input.FinanceFeeAccountId.HasValue && receipt.FinanceFeeAccountId != input.FinanceFeeAccountId ||
+            !receipt.FinanceFeeAccountId.HasValue && receipt.StudentId != input.StudentId ||
+            receipt.AcademicYearId != input.AcademicYearId ||
+            !RefundReceiptEvidencePolicy.IsSettled(receipt) ||
+            input.Lines.Any(x => x.DueFeeId.HasValue && (x.SourceReceiptId ?? input.OriginalReceiptId) == receipt.Id) && !RefundReceiptEvidencePolicy.CoversPrincipal(receipt))
+            throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+
+        var collection = await collectionRepository.FindAsync(receipt.FeeCollectionTransactionId)
+            ?? throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+        if (collection.FinanceFeeAccountId != receipt.FinanceFeeAccountId ||
+            collection.AcademicYearId != receipt.AcademicYearId ||
+            !receipt.FinanceFeeAccountId.HasValue && collection.StudentId != receipt.StudentId)
+            throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+        if (collection.Status is FeeCollectionStatus.Reversed or FeeCollectionStatus.InReconciliation)
+            throw new BusinessException(FeeRefundErrorCodes.PaymentNotSettled);
+
+        var receiptIds = input.Lines.Select(x => x.SourceReceiptId ?? input.OriginalReceiptId)
+            .Append(input.OriginalReceiptId).Distinct().ToArray();
+        var receipts = (await feePaymentReceiptRepository.GetListAsync(x => Enumerable.Contains(receiptIds, x.Id)))
+            .ToDictionary(x => x.Id);
+        if (receipts.Count != receiptIds.Length)
+            throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+        var collectionIds = receipts.Values.Select(x => x.FeeCollectionTransactionId).Distinct().ToArray();
+        var collections = (await collectionRepository.GetListAsync(x => Enumerable.Contains(collectionIds, x.Id)))
+            .ToDictionary(x => x.Id);
+        if (collections.Count != collectionIds.Length)
+            throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+        foreach (var source in receipts.Values)
+        {
+            if (source.FinanceFeeAccountId != receipt.FinanceFeeAccountId ||
+                !receipt.FinanceFeeAccountId.HasValue && source.StudentId != receipt.StudentId ||
+                receipt.FinanceFeeAccountId.HasValue && source.StudentId.HasValue && input.StudentId.HasValue && source.StudentId != input.StudentId ||
+                source.AcademicYearId != input.AcademicYearId || !RefundReceiptEvidencePolicy.IsSettled(source) ||
+                input.Lines.Any(x => x.DueFeeId.HasValue && (x.SourceReceiptId ?? input.OriginalReceiptId) == source.Id) &&
+                !RefundReceiptEvidencePolicy.CoversPrincipal(source))
+                throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+            var payment = collections[source.FeeCollectionTransactionId];
+            if (payment.FinanceFeeAccountId != source.FinanceFeeAccountId || payment.AcademicYearId != source.AcademicYearId ||
+                !source.FinanceFeeAccountId.HasValue && payment.StudentId != source.StudentId)
+                throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+            if (payment.Status is FeeCollectionStatus.Reversed or FeeCollectionStatus.InReconciliation)
+                throw new BusinessException(FeeRefundErrorCodes.PaymentNotSettled);
+        }
+
+        var allocationIds = input.Lines.Where(x => x.DueFeeId.HasValue).Select(x => x.SourceAllocationId).Distinct().ToList();
+        var allocations = await allocationRepository.GetListAsync(x => allocationIds.Contains(x.Id));
+        if (allocations.Count != allocationIds.Count || allocations.Any(x => !collections.ContainsKey(x.FeeRecordMetadataId)))
+            throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+        var allocationMap = allocations.ToDictionary(x => x.Id);
+
+        var dueIds = input.Lines.Where(x => x.DueFeeId.HasValue).Select(x => x.DueFeeId!.Value).Distinct().ToList();
+        var dues = await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id));
+        if (dues.Count != dueIds.Count || dues.Any(x => receipt.FinanceFeeAccountId.HasValue
+            ? x.FinanceFeeAccountId != receipt.FinanceFeeAccountId
+            : x.StudentId != input.StudentId))
+            throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
+        if (!receipt.FinanceFeeAccountId.HasValue && (dues.Any(x => !x.StudentFeeStructureId.HasValue) || dues.Select(x => x.StudentFeeStructureId).Distinct().Count() > 1))
+            throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
+        var payer = await RequirePolicyEvidenceAsync(input.StudentId, input.AcademicYearId,
+            receipt.FinanceFeeAccountId, receipt.FinanceFeeAccountId.HasValue || dues.Count == 0 ? null : dues[0].StudentFeeStructureId, familyAuthorized);
+        if (!receipt.FinanceFeeAccountId.HasValue)
+        {
+            // Adoption binds the existing dues to an account; historical receipts and
+            // collection allocations retain their original real-Student identity.
+            var adoptedAccountIds = dues.Where(x => x.FinanceFeeAccountId.HasValue)
+                .Select(x => x.FinanceFeeAccountId!.Value).Distinct().ToList();
+            if (adoptedAccountIds.Count > 0)
+            {
+                var accounts = await accountRepository.GetListAsync(x => adoptedAccountIds.Contains(x.Id));
+                if (accounts.Count != adoptedAccountIds.Count || accounts.Any(x =>
+                    x.StudentId != payer.StudentId || x.AcademicYearId != input.AcademicYearId ||
+                    x.StudentFeeStructureId != payer.AssignmentId))
+                    throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
+            }
+        }
+        var version = payer.Version;
+        var policy = payer.Policy;
         ValidatePolicyContext(policy, receipt, collection, input.RefundMethod, dues);
 
         var feeHeadIds = dues.Select(x => x.FeeHeadId).Distinct().ToList();
@@ -71,80 +193,93 @@ public partial class FeeRefundAppService
         var allocationCommitted = await feeRefundRepository.GetCommittedAllocationAmountsAsync(allocationIds, excludingRequestId);
         var dueReserved = await feeRefundRepository.GetActiveReservedAmountsAsync(dueIds, excludingRequestId);
         var dueMap = dues.ToDictionary(x => x.Id);
+        var dueRemaining = dues.ToDictionary(x => x.Id,
+            x => Math.Max(0m, x.RefundableBalance - dueReserved.GetValueOrDefault(x.Id)));
         var specs = new List<RefundLineSpec>();
-        foreach (var item in input.Lines)
+        foreach (var item in input.Lines.Where(x => x.DueFeeId.HasValue))
         {
             var allocation = allocationMap[item.SourceAllocationId];
-            if (allocation.DueFeeId != item.DueFeeId)
+            var sourceReceipt = receipts[item.SourceReceiptId ?? input.OriginalReceiptId];
+            if (allocation.DueFeeId != item.DueFeeId || allocation.FeeRecordMetadataId != sourceReceipt.FeeCollectionTransactionId)
                 throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
-            var due = dueMap[item.DueFeeId];
+            var due = dueMap[item.DueFeeId!.Value];
             var allocationAvailable = Math.Max(0m, Convert.ToDecimal(allocation.Amount) - allocationCommitted.GetValueOrDefault(allocation.Id));
-            var dueAvailable = Math.Max(0m, due.RefundableBalance - dueReserved.GetValueOrDefault(due.Id));
-            var available = Math.Min(allocationAvailable, dueAvailable);
+            var available = Math.Min(allocationAvailable, dueRemaining[due.Id]);
             if (item.Amount > available)
                 throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance)
                     .WithData("DueFeeId", due.Id).WithData("Requested", item.Amount).WithData("Available", available);
-            var requestedAmount = policy.AmountMode == RefundAmountMode.ManualUpToEligible ? item.Amount : available;
-            specs.Add(new RefundLineSpec(due.Id, allocation.Id, receipt.Id, due.FeeHeadId,
+            var requestedAmount = item.Amount;
+            dueRemaining[due.Id] -= requestedAmount;
+            specs.Add(new RefundLineSpec(due.Id, allocation.Id, sourceReceipt.Id, due.FeeHeadId,
                 heads.GetValueOrDefault(due.FeeHeadId, allocation.FeeHeadName ?? "Fee head"),
                 due.GetDisplayInstallmentLabel(), available, requestedAmount, 0m));
         }
 
+        var chargeLines = input.Lines.Where(x => x.ChargeId.HasValue).ToList();
+        if (chargeLines.Count > 0)
+        {
+            if (!policy.IncludePaidCharges) throw new BusinessException(FeeRefundErrorCodes.FeeHeadNotEligible);
+            var sources = await paidChargeRefundService.GetSourcesAsync(payer.StudentId, input.AcademicYearId,
+                payer.FinanceFeeAccountId, null, excludingRequestId);
+            foreach (var item in chargeLines)
+            {
+                var source = sources.SingleOrDefault(x => x.ChargeId == item.ChargeId && x.AllocationId == item.SourceAllocationId &&
+                    x.ReceiptId == (item.SourceReceiptId ?? input.OriginalReceiptId));
+                if (source == null) throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+                if (item.Amount > source.Available) throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
+                var amount = item.Amount;
+                specs.Add(new RefundLineSpec(null, source.AllocationId, source.ReceiptId, null, "Paid charges",
+                    source.ChargeName, source.Available, amount, 0m, source.ChargeId));
+            }
+        }
+        var lateLines = input.Lines.Where(x => x.LateFeeDueFeeId.HasValue).ToList();
+        if (lateLines.Count > 0)
+        {
+            if (!policy.IncludePaidLateFee) throw new BusinessException(FeeRefundErrorCodes.FeeHeadNotEligible);
+            var sources = await paidLateFeeRefundService.GetSourcesAsync(payer.StudentId, input.AcademicYearId,
+                payer.FinanceFeeAccountId, null, excludingRequestId, payer.AssignmentId);
+            foreach (var item in lateLines)
+            {
+                var source = sources.SingleOrDefault(x => x.DueFeeId == item.LateFeeDueFeeId && x.AllocationId == item.SourceAllocationId &&
+                    x.ReceiptId == (item.SourceReceiptId ?? input.OriginalReceiptId));
+                if (source == null) throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+                if (item.Amount > source.Available) throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
+                var amount = item.Amount;
+                specs.Add(new RefundLineSpec(null, source.AllocationId, source.ReceiptId, null, "Paid late fees",
+                    source.Name, source.Available, amount, 0m, LateFeeDueFeeId: source.DueFeeId));
+            }
+        }
         var requested = specs.Sum(x => x.Amount);
         var policyBase = specs.Sum(x => x.SettledPaidAmount);
-        if (!policy.AllowPartialRefund)
-            await EnsureWholeReceiptSelectedAsync(collection.Id, assignment.Id, policy, allocationIds, excludingRequestId);
-        var studentYearCommitted = await feeRefundRepository.GetStudentYearCommittedAmountAsync(input.StudentId, input.AcademicYearId, excludingRequestId);
+        var studentYearCommitted = await GetPayerYearCommittedAsync(payer, input.AcademicYearId, excludingRequestId);
         var calculation = refundPolicyCalculationService.Calculate(policy, new RefundPolicyCalculationInput(
             policyBase, 0m, 0m, studentYearCommitted,
-            policy.AmountMode == RefundAmountMode.ManualUpToEligible ? requested : null));
+            requested));
         if (calculation.FinalRefund <= 0 || calculation.FinalRefund > requested)
             throw new BusinessException(FeeRefundErrorCodes.RefundExceedsPolicyAmount)
                 .WithData("Requested", requested).WithData("Allowed", calculation.FinalRefund);
         specs = AllocateCalculatedAmounts(specs, calculation.FinalRefund);
         var calculationJson = JsonSerializer.Serialize(new
         {
-            SourceReceiptId = receipt.Id, SourceReceiptNumber = receipt.ReceiptNumber,
-            PolicyVersionId = version.Id, RequestedAmount = requested, Result = calculation,
+            SourceReceiptId = receipt.Id,
+            SourceReceiptNumber = receipt.ReceiptNumber,
+            SourceReceipts = receipts.Values.OrderBy(x => x.Id).Select(x => new { ReceiptId = x.Id, x.ReceiptNumber }),
+            PolicyVersionId = version.Id,
+            RequestedAmount = requested,
+            Result = calculation,
             Lines = specs.OrderBy(x => x.SourceAllocationId)
         });
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(calculationJson))).ToLowerInvariant();
-        return new PreparedRefund(assignment.Id, version.PolicyId, version.Id, receipt, policy,
-            specs, calculation, version.SnapshotJson, calculationJson, hash);
-    }
-
-    private async Task EnsureWholeReceiptSelectedAsync(Guid collectionId, Guid assignmentId,
-        RefundPolicySnapshot policy, IReadOnlyCollection<Guid> selectedAllocationIds, Guid? excludingRequestId)
-    {
-        var eligibleDues = await dueFeeRepository.GetListAsync(x => x.StudentFeeStructureId == assignmentId && x.PaidAmount > 0);
-        if (policy.FeeHeadScope == RefundFeeHeadScope.SelectedFeeHeads)
-            eligibleDues = eligibleDues.Where(x => policy.ApplicableFeeHeadIds.Contains(x.FeeHeadId)).ToList();
-        var eligibleDueIds = eligibleDues.Select(x => x.Id).ToList();
-        var receiptAllocations = await allocationRepository.GetListAsync(x =>
-            x.FeeRecordMetadataId == collectionId && eligibleDueIds.Contains(x.DueFeeId));
-        var receiptAllocationIds = receiptAllocations.Select(x => x.Id).ToList();
-        var committed = await feeRefundRepository.GetCommittedAllocationAmountsAsync(receiptAllocationIds, excludingRequestId);
-        var reserved = await feeRefundRepository.GetActiveReservedAmountsAsync(eligibleDueIds, excludingRequestId);
-        var dueRemaining = eligibleDues.ToDictionary(x => x.Id,
-            x => Math.Max(0m, x.RefundableBalance - reserved.GetValueOrDefault(x.Id)));
-        var expected = new HashSet<Guid>();
-        foreach (var allocation in receiptAllocations.OrderBy(x => x.Id))
-        {
-            var available = Math.Min(dueRemaining.GetValueOrDefault(allocation.DueFeeId),
-                Math.Max(0m, Convert.ToDecimal(allocation.Amount) - committed.GetValueOrDefault(allocation.Id)));
-            if (available <= 0) continue;
-            expected.Add(allocation.Id);
-            dueRemaining[allocation.DueFeeId] -= available;
-        }
-        if (!expected.SetEquals(selectedAllocationIds))
-            throw new BusinessException(FeeRefundErrorCodes.RefundExceedsPolicyAmount)
-                .WithData("Reason", "All currently eligible allocations on the receipt must be selected.");
+        return new PreparedRefund(payer.AssignmentId, version.PolicyId, version.Id, receipt, policy,
+            specs, calculation, version.SnapshotJson, calculationJson, hash, payer.StudentId, payer.FinanceFeeAccountId);
     }
 
     private static List<RefundLineSpec> AllocateCalculatedAmounts(
         IReadOnlyCollection<RefundLineSpec> source, decimal finalAmount)
     {
-        const decimal factor = 100m;
+        // Preserve source precision for historic fractional receipt allocations.
+        // New whole-rupee sources allocate whole rupees, with no lost remainder.
+        var factor = source.Any(x => x.Amount != decimal.Truncate(x.Amount)) ? 100m : 1m;
         var targetUnits = decimal.ToInt64(decimal.Round(finalAmount * factor, 0, MidpointRounding.AwayFromZero));
         var totalWeight = source.Sum(x => x.Amount);
         if (targetUnits <= 0 || totalWeight <= 0)
@@ -196,11 +331,11 @@ public partial class FeeRefundAppService
         {
             "Cash" => RefundPayoutMethod.Cash,
             "Cheque" => RefundPayoutMethod.Cheque,
-            "Demand Draft (DD)" => RefundPayoutMethod.DemandDraft,
-            "Bank Transfer (NEFT/RTGS/IMPS)" => RefundPayoutMethod.BankTransfer,
-            "UPI" => RefundPayoutMethod.Upi,
-            _ => (RefundPayoutMethod)(-1)
+            "DemandDraft" or "Demand Draft (DD)" => RefundPayoutMethod.DemandDraft,
+            "BankTransfer" or "Bank Transfer (NEFT/RTGS/IMPS)" => RefundPayoutMethod.BankTransfer,
+            "Upi" or "UPI" => RefundPayoutMethod.Upi,
+            _ => (RefundPayoutMethod) (-1)
         };
-        return (int)method >= 0;
+        return (int) method >= 0;
     }
 }

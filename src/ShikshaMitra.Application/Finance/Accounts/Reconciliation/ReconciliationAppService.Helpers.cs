@@ -18,7 +18,8 @@ public partial class ReconciliationAppService
         CancellationToken cancellationToken)
     {
         var counts = await receiptRepository
-            .GetReconciliationStatusCountsAsync(academicYearId, month, year, scopedStudentIds, cancellationToken);
+            .GetReconciliationStatusCountsAsync(academicYearId, month, year, scopedStudentIds, cancellationToken,
+                await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync());
         return BuildTabCounts(counts);
     }
 
@@ -43,7 +44,7 @@ public partial class ReconciliationAppService
             Success = true,
             Data = new ReconciliationActionData
             {
-                ReceiptId          = receipt.LinkedFinalReceiptId ?? Guid.Empty,
+                ReceiptId          = receipt.Id,
                 VerificationStatus = receipt.VerificationStatus,
                 Status             = statusInt,
                 StatusLabel        = statusLabel,
@@ -61,6 +62,7 @@ public partial class ReconciliationAppService
     {
         var statusInt = row.VerificationStatus switch
         {
+            FeeReceiptVerificationStatus.NotApplicable => 1,
             FeeReceiptVerificationStatus.Verified => 1,
             FeeReceiptVerificationStatus.Rejected => 2,
             _                                     => 0,
@@ -74,10 +76,12 @@ public partial class ReconciliationAppService
 
         return new ReconciliationListItemDto
         {
+            ReceiptScope = row.ReceiptScope.ToString(), PaymentReceiptCount = row.PaymentReceiptCount,
             Id                         = row.ReceiptId,
-            ProvisionalReceiptId       = row.ReceiptId,
+            ProvisionalReceiptId       = row.VerificationStatus == FeeReceiptVerificationStatus.NotApplicable ? null : row.ReceiptId,
             ReceiptNumber              = row.ReceiptNumber,
             StudentId                  = row.StudentId,
+            FinanceFeeAccountId        = row.FinanceFeeAccountId,
             StudentName                = row.StudentName,
             GrNumber                   = row.GrNumber,
             RollNumber                 = row.RollNumber,
@@ -87,16 +91,19 @@ public partial class ReconciliationAppService
             Division                   = row.Division,
             FeeCollectionTransactionId = row.FeeCollectionTransactionId,
             PaymentMethod              = row.PaymentMethod,
-            PaymentMethodLabel         = row.PaymentMethod.ToString(),
+            PaymentMethodLabel         = FeeReceiptPresentation.GetPaymentMethodLabel(row.PaymentMethod),
             Amount                     = row.TotalPaidAmount,
+            BankAccountId              = row.BankAccountId,
+            BankLabel                  = row.BankLabel,
             InstrumentDetails          = ParseInstrumentDetails(row.PaymentDetailsJson),
             Status                     = statusInt,
-            StatusLabel                = statusLabel,
+            StatusLabel                = row.VerificationStatus == FeeReceiptVerificationStatus.NotApplicable ? "Receipt issued" : statusLabel,
             VerificationStatus         = row.VerificationStatus,
-            FinalReceiptNumber         = row.LinkedFinalReceiptNumber,
+            FinalReceiptNumber         = row.VerificationStatus == FeeReceiptVerificationStatus.NotApplicable ? row.ReceiptNumber : row.LinkedFinalReceiptNumber,
             ReceiptDate                = row.ReceiptDate,
+            PaymentDate                = row.PaymentDate,
             Remarks                    = row.Remarks,
-            FinalReceiptId             = row.LinkedFinalReceiptId,
+            FinalReceiptId             = row.VerificationStatus == FeeReceiptVerificationStatus.NotApplicable ? row.ReceiptId : row.LinkedFinalReceiptId,
         };
     }
 
@@ -105,7 +112,7 @@ public partial class ReconciliationAppService
         if (string.IsNullOrWhiteSpace(json)) return [];
         try
         {
-            var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(json);
             var result = new Dictionary<string, string?>();
             foreach (var prop in doc.RootElement.EnumerateObject())
             {
@@ -128,6 +135,9 @@ public partial class ReconciliationAppService
 
             switch (c.PaymentMethod)
             {
+                case PaymentMethodEnum.Cash:
+                    dto.CashOfficial += c.Count;
+                    break;
                 case PaymentMethodEnum.Cheque:
                     if (pending)  dto.ChequePending  += c.Count;
                     if (approved) dto.ChequeApproved += c.Count;

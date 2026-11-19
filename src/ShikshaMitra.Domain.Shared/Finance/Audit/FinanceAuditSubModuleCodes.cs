@@ -2,6 +2,7 @@ namespace ShikshaMitra.Finance.Audit;
 
 public static class FinanceAuditSubModuleCodes
 {
+	public const string PaymentTerms = "payment_terms";
 	public const string Collections = "collections";
 	public const string Charges = "charges";
 	public const string Refunds = "refunds";
@@ -15,6 +16,7 @@ public static class FinanceAuditSubModuleCodes
 	public static string FromEntityType(string entityType) =>
 		(entityType ?? string.Empty).Trim().ToLowerInvariant().Replace("-", "_") switch
 		{
+			FinanceAuditEntityTypes.PaymentTerm => PaymentTerms,
 			FinanceAuditEntityTypes.FeePayment or FinanceAuditEntityTypes.DueFee => Collections,
 			FinanceAuditEntityTypes.FeeCharge => Charges,
 			FinanceAuditEntityTypes.FeeRefund => Refunds,
@@ -30,6 +32,7 @@ public static class FinanceAuditSubModuleCodes
 	public static string ToDisplayName(string subModuleCode) =>
 		(subModuleCode ?? string.Empty).Trim().ToLowerInvariant() switch
 		{
+			PaymentTerms => "Payment Terms",
 			Collections => "Collections",
 			Charges => "Charges",
 			Refunds => "Refunds",

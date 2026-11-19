@@ -22,6 +22,55 @@ public class AdmissionSeatCommandService(
 	AdmissionSeatAccessService access,
 	AdmissionSeatReadService reader) : ApplicationService, ITransientDependency
 {
+	// Invoked only by the transactional resume owner after restoring its saved runtime state.
+	internal async Task ReacquireForResumeAsync(Guid applicationId, Guid stageId, Guid closureId, string reason, AdmissionSeatReservationStatus previous)
+	{
+		var context = await ManagedAsync(applicationId, stageId, requireActive: false);
+		if (context.Application.Status == AdmissionApplicationStatus.Withdrawn || context.Workflow.Status is not
+			(AdmissionWorkflowInstanceStatus.Active or AdmissionWorkflowInstanceStatus.Completed) ||
+			context.Stage.Status is not (AdmissionRuntimeStageStatus.Active or AdmissionRuntimeStageStatus.Completed))
+			throw Invalid("Restore the saved admission stage before reacquiring its seat.");
+		var key = $"resume-seat:{closureId:N}:{stageId:N}";
+		var pool = await GetOrCreatePoolAsync(context);
+		await ReconcileExpiredAsync(pool);
+		var reservation = await reservations.FindAsync(x => x.ApplicationId == applicationId && x.StageInstanceId == stageId);
+		if (reservation?.Status == AdmissionSeatReservationStatus.Confirmed) return;
+		var completed = context.Stage.Status == AdmissionRuntimeStageStatus.Completed;
+		if (completed && previous is not (AdmissionSeatReservationStatus.Confirmed or AdmissionSeatReservationStatus.Reserved))
+		{
+			if (previous == AdmissionSeatReservationStatus.Waitlisted && context.Policy!.AllowWaitlist)
+				await WaitlistInternalAsync(context, pool, reservation, reason, key, Fingerprint("resume", closureId), "seat-reserve");
+			else if (!context.Policy!.AllowedCompletionOutcomes.Contains(previous.ToString().ToLowerInvariant(), StringComparer.Ordinal))
+				throw Invalid("The previous seat outcome is no longer allowed by the saved policy.");
+			return;
+		}
+		if (pool.OccupiedCount >= pool.Capacity)
+		{
+			if (!completed && context.Policy!.AllowWaitlist)
+			{
+				await WaitlistInternalAsync(context, pool, reservation, reason, key, Fingerprint("resume", closureId), "seat-reserve");
+				return;
+			}
+			throw new BusinessException(AdmissionSeatStageErrorCodes.CapacityFull,
+				"No admission seat is available. Review seat capacity before resuming this admission.");
+		}
+		var expiresAt = Expiry(context.Policy!, null);
+		pool.Reserve(false);
+		if (reservation == null)
+		{
+			reservation = new AdmissionSeatReservation(GuidGenerator.Create(), CurrentTenant.Id, pool.Id,
+				applicationId, stageId, AdmissionSeatReservationStatus.Reserved, Clock.Now, expiresAt, CurrentUser.Id, reason);
+			await reservations.InsertAsync(reservation, false);
+		}
+		else
+		{
+			reservation.Reserve(Clock.Now, expiresAt, CurrentUser.Id, reason);
+			await reservations.UpdateAsync(reservation, false);
+		}
+		if (completed && previous == AdmissionSeatReservationStatus.Confirmed) { pool.Confirm(); reservation.Confirm(Clock.Now, CurrentUser.Id, reason); }
+		await SaveAsync(context, pool, "seat-resume", key, Fingerprint("resume", closureId), reason, new { ClosureHistoryId = closureId, Reconfirmed = completed });
+	}
+
 	public async Task<AdmissionSeatStageDto> ReserveAsync(Guid applicationId, Guid stageId, ReserveAdmissionSeatDto input)
 	{
 		var context = await ManagedAsync(applicationId, stageId);
@@ -215,8 +264,7 @@ public class AdmissionSeatCommandService(
 		await history.InsertAsync(new AdmissionApplicationDecisionHistory(GuidGenerator.Create(), CurrentTenant.Id,
 			context.Application.Id, context.Application.Status, reason, CurrentUser.Id, action,
 			context.Stage.Id, key, metadataJson), false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			$"AdmissionSeat{string.Concat(action.Split('-').Skip(1).Select(value => char.ToUpperInvariant(value[0]) + value[1..]))}",
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity($"AdmissionSeat{string.Concat(action.Split('-').Skip(1).Select(value => char.ToUpperInvariant(value[0]) + value[1..]))}",
 			$"{context.Stage.Name}: {action.Replace('-', ' ')} recorded.", context.Application.ApplicantId,
 			context.Application.Id, metadataJson: metadataJson), false);
 		try { await CurrentUnitOfWork!.SaveChangesAsync(); }

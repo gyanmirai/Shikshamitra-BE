@@ -3,6 +3,14 @@
 This guide explains how ShikshaMitra roles relate to permissions and data scope.
 Use it when you create test roles, verify seeded roles, or debug role assignment failures.
 
+## Read user role assignments
+
+`GET /api/security/user-directory` accepts the existing ABP `GetIdentityUsersInput` paging, filtering, and sorting contract and returns `{ totalCount, items }`. Each item includes `id`, `userName`, `name`, `surname`, `email`, `phoneNumber`, and `roleNames` (an array, empty for no assigned role). Role names preserve their stored spelling.
+
+`UserDirectoryAppService` enforces `AbpIdentity.Users` and delegates the account list to the existing identity service. `IUserScopeResolutionRepository.GetRoleNamesByUserIdsAsync` batches membership for that page using explicit current-tenant predicates on users and roles. Direct permission overrides do not become role assignments. This read adds no grants or schema changes.
+
+The frontend loads every page with stable `userName,id` ordering before its local table filtering and sorting. See the [frontend client](https://github.com/gyanmirai/Shikshamitra-FE/blob/main/docs/security/clients.md#user-directory) for presentation and the `UserDirectoryApi_Tests` HTTP suite for tenant isolation, paging, and authorization checks. Filter by `FullyQualifiedName~UserDirectoryApi_Tests` to run this suite with its identity-only test data.
+
 ## Role basics
 
 Roles define what a user can do.
@@ -80,6 +88,32 @@ Use this checklist when user creation fails with a missing role error.
 3. Create the missing role through the Identity API
 4. Re-run the user creation request
 5. Check `src/ShikshaMitra.HttpApi.Host/Logs/` if the error persists
+
+## Delete an unused role
+
+`DELETE /api/identity/roles/{id}` requires `AbpIdentity.Roles.Delete` and current-tenant ownership.
+`SchoolIdentityRoleAppService` checks dependencies before delegating to ABP, retaining its static-role protection and normal deletion behavior.
+
+| Dependency | Response |
+| --- | --- |
+| Direct user membership or a linked employee account | 409, `ShikshaMitra:RoleAssignedToUsers`, `data.UserCount` (distinct accounts), and instructions to reassign or remove users first |
+| Employee record without a login, including archived records | 409, `ShikshaMitra:RoleReferencedByEmployees`, `data.EmployeeCount`, and instructions to reassign employees first |
+| No user or employee references | 204; the role is deleted |
+
+Employee references are checked with soft-delete filtering disabled while tenant isolation remains enabled.
+PostgreSQL deletion holds a role row lock through the dependency check and commit, so an in-flight foreign-key assignment cannot slip between the check and deletion.
+The `AppEmployees.RoleId` restrictive foreign key remains intact; no migration or automatic reassignment is required.
+Unexpected 500 responses include `traceId`, which is also written to the request's server error log.
+
+Focused validation:
+
+```powershell
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter 'FullyQualifiedName~RoleDeletion|FullyQualifiedName~ApiProblemDetails'
+```
+
+Set `ROLE_DELETION_TEST_POSTGRES` to a loopback administrator connection to include the PostgreSQL gate.
+It creates and removes a new `role_deletion_tests_*` database, reproduces the employee foreign-key violation, verifies the HTTP contracts and checks concurrent assignment.
+It never reuses or resets the configured school database.
 
 ## Related docs
 

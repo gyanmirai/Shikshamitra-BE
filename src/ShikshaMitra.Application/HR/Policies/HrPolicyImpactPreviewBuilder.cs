@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,7 +19,8 @@ public class HrPolicyImpactPreviewBuilder(
 	HrPolicyAffectedEmployeeResolver affectedEmployeeResolver,
 	HrPolicyPayrollRiskReader payrollRiskReader,
 	HrPolicyDefaultReplacementWarningService defaultReplacementWarningService,
-	IAsyncQueryableExecuter asyncExecuter)
+	HrPolicyProposedRuleDifferenceReader ruleDifferences,
+	IAsyncQueryableExecuter asyncExecuter, EmployeeShiftResolver shiftResolver)
 	: ITransientDependency
 {
 	public async Task<HrPolicyImpactPreviewDto> BuildAsync(HrPolicyImpactPreviewRequestDto input)
@@ -34,6 +36,7 @@ public class HrPolicyImpactPreviewBuilder(
 		};
 
 		await FillCurrentVersionAsync(preview);
+		await ruleDifferences.FillAsync(preview, input);
 		preview.ProposedVersion = preview.CurrentVersion.HasValue ? preview.CurrentVersion.Value + 1 : 1;
 		var isRestoreDraft = string.Equals(preview.Action, "restore-draft", StringComparison.OrdinalIgnoreCase);
 		var includeDraftReferences = string.Equals(preview.Action, "archive", StringComparison.OrdinalIgnoreCase);
@@ -49,7 +52,8 @@ public class HrPolicyImpactPreviewBuilder(
 
 		var affectedEmployees = await affectedEmployeeResolver.ResolveAsync(academicYearId, affectedAssignments);
 		preview.AffectedEmployeeCount = affectedEmployees.Count;
-		preview.AffectedEmployees = affectedEmployees.Sample.Select(HrPolicyAssignmentProjection.MapAffectedEmployee).ToList();
+		var currentShifts = await shiftResolver.ForDateAsync(affectedEmployees.Sample.Select(x => x.Id), await shiftResolver.TodayAsync());
+		preview.AffectedEmployees = affectedEmployees.Sample.Select(employee => HrPolicyAssignmentProjection.MapAffectedEmployee(employee, currentShifts.GetValueOrDefault(employee.Id)?.Id)).ToList();
 		if (!isRestoreDraft)
 		{
 			await payrollRiskReader.FillPayrollRiskAsync(preview, policyType, input.PolicyId);
@@ -177,7 +181,7 @@ public class HrPolicyImpactPreviewBuilder(
 		{
 			"payroll" when input.PayrollPolicy != null => HrPolicyMapping.ParsePolicyStatus(input.PayrollPolicy.Status),
 			"attendance" when input.AttendancePolicy != null => HrPolicyMapping.ParsePolicyStatus(input.AttendancePolicy.Status),
-			_ => (HrPolicyStatus?)null
+			_ => (HrPolicyStatus?) null
 		};
 
 		HrPolicyImpactWarningBuilder.AddWorkCalendarStatusWarning(preview, workCalendar, proposedPolicyStatus);

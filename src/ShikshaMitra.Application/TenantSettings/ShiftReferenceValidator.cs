@@ -4,11 +4,13 @@ using ShikshaMitra.HR;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.TenantSettings;
 
 public class ShiftReferenceValidator(
-	IRepository<ShiftManagement, Guid> shiftRepository) : ITransientDependency
+	IRepository<ShiftManagement, Guid> shiftRepository,
+	ICurrentTenant currentTenant) : ITransientDependency
 {
 	public async Task EnsureExistsAsync(Guid? shiftId)
 	{
@@ -17,7 +19,7 @@ public class ShiftReferenceValidator(
 			return;
 		}
 
-		if (!await shiftRepository.AnyAsync(x => x.Id == shiftId.Value))
+		if (!await shiftRepository.AnyAsync(x => x.Id == shiftId.Value && x.TenantId == currentTenant.Id))
 		{
 			throw new BusinessException(
 				HRErrorCodes.AttendancePolicyEvaluationShiftRequired,

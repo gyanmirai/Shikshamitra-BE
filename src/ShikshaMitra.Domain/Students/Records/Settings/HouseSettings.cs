@@ -4,7 +4,7 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Students.Records.Settings;
 
-public class HouseSettings : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class HouseSettings : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; set; }
 	public string Name { get; set; }
@@ -15,6 +15,9 @@ public class HouseSettings : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	protected HouseSettings()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Color = null!;
+		Name = null!;
 	}
 
 	public HouseSettings(
@@ -26,7 +29,7 @@ public class HouseSettings : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? description = null
 	) : base(id)
 	{
-		Name = name;
+		Name = ValidateName(name);
 		Color = color;
 		AcademicMediumId = academicMediumId;
 		LogoUrl = logoUrl;
@@ -40,7 +43,7 @@ public class HouseSettings : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? description = null
 	)
 	{
-		Name = name;
+		Name = ValidateName(name);
 		Color = color;
 		LogoUrl = logoUrl;
 		Description = description;

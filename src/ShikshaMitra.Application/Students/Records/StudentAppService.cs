@@ -1,6 +1,8 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Students.StudentEnrollments;
 using Volo.Abp;
@@ -28,6 +30,7 @@ public class StudentAppService(
 		string? searchTerm = null
 	)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		try
 		{
 			// Validate input parameters
@@ -140,8 +143,9 @@ public class StudentAppService(
 				(s.FirstName != null && s.FirstName.ToLower().Contains(normalizedSearchTerm)) ||
 				(s.MiddleName != null && s.MiddleName.ToLower().Contains(normalizedSearchTerm)) ||
 				(s.LastName != null && s.LastName.ToLower().Contains(normalizedSearchTerm)) ||
-				(s.GrNo.HasValue && s.GrNo.ToString().Contains(normalizedSearchTerm)) ||
-				(s.RollNo.HasValue && s.RollNo.ToString().Contains(normalizedSearchTerm))
+				(s.GrNo.HasValue && s.GrNo.ToString()!.Contains(normalizedSearchTerm)) ||
+				(s.GrNumber != null && s.GrNumber.ToLower().Contains(normalizedSearchTerm)) ||
+				(s.RollNo.HasValue && s.RollNo.ToString()!.Contains(normalizedSearchTerm))
 			);
 		}
 
@@ -179,6 +183,9 @@ public class StudentAppService(
 			return new StudentDto
 			{
 				StudentId = student.Id,
+				GrNo = student.GrNo,
+				GrNumber = student.GrNumber,
+				RollNo = student.RollNo,
 				InquiryNo = student.AdditionalDetail?.InquiryNo ?? string.Empty,
 				FormNo = student.AdditionalDetail?.RegistrationFormNo,
 				StudentName = BuildFullName(student.FirstName, student.MiddleName, student.LastName),

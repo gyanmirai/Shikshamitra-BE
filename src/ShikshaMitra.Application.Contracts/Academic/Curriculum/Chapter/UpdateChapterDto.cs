@@ -22,7 +22,7 @@ public class UpdateChapterDto : IValidatableObject
 	/// </summary>
 	[Required(ErrorMessage = "Chapter Name is required")]
 	[StringLength(ChapterConsts.MaxChapterNameLength, MinimumLength = ChapterConsts.MinChapterNameLength, ErrorMessage = "Chapter name must be between {2} and {1} characters")]
-	public string ChapterName { get; set; }
+	public string ChapterName { get; set; } = null!; // The response mapper populates these members after construction.
 
 	/// <summary>
 	/// Chapter description (HTML content)

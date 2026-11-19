@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Concurrent;
 using System.Threading;
@@ -22,7 +23,8 @@ public class EmployeePersonalInfoCreationWorkflow(
 	EmployeePersonalInfoPostCommitEffects postCommitEffects,
 	EmployeePersonalInfoPolicyOverrideWriter policyOverrideWriter,
 	EmployeeCreationContactGuard contactGuard,
-	ShiftReferenceValidator shiftReferenceValidator,
+	WorkShiftReferenceValidator shiftReferenceValidator,
+ EmployeeShiftAssignmentManager shiftAssignments,
 	ICurrentTenant currentTenant,
 	IUnitOfWorkManager unitOfWorkManager,
 	ILogger<EmployeePersonalInfoCreationWorkflow> logger) : ITransientDependency
@@ -50,7 +52,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 		if (unitOfWorkManager.Current is null)
 		{
 			throw new InvalidOperationException(
-				"Atomic employee creation requires an active unit of work.");
+				"Atomic staff creation requires an active unit of work.");
 		}
 
 		return await CreateAsync(
@@ -66,6 +68,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 		byte[]? profilePictureContent,
 		bool useCurrentUnitOfWork)
 	{
+		await policyOverrideWriter.CheckAccessAsync(input.PolicyOverride);
 		// Every creation path enters the same activation gate. Imports and onboarding cannot bypass payroll readiness.
 		input.EmployeeStatusType = EmployeeStatusType.Inactive;
 		var contact = contactGuard.RequireContactDetails(input.Email, input.MobileNo);
@@ -73,6 +76,8 @@ public class EmployeePersonalInfoCreationWorkflow(
 		input.MobileNo = contact.MobileNo;
 		input.PanNo = EmployeeIdentityUniquenessChecker.NormalizePan(input.PanNo)!;
 		await identityUniquenessChecker.EnsurePanAndAdharAreUniqueAsync(input.PanNo, input.AdharNo);
+		if (input.InitialWorkShiftAssignment == null) throw new BusinessException(HRErrorCodes.WorkShiftInvalid, "An initial work shift assignment is required.");
+		input.ShiftId = input.InitialWorkShiftAssignment.WorkShiftId;
 		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
 
 		Employee employee;
@@ -146,14 +151,14 @@ public class EmployeePersonalInfoCreationWorkflow(
 			{
 				logger.LogWarning(
 					ex,
-					"Employee code collision detected for {Email}. Retrying create flow (attempt {Attempt}/{MaxAttempts}).",
+					"Staff code collision detected for {Email}. Retrying create flow (attempt {Attempt}/{MaxAttempts}).",
 					input.Email,
 					attempt + 1,
 					MaxEmployeeCodeInsertAttempts);
 			}
 		}
 
-		throw new InvalidOperationException("Employee creation retry loop exited unexpectedly.");
+		throw new InvalidOperationException("Staff creation retry loop exited unexpectedly.");
 	}
 
 	private async Task<Employee> CreateAndInsertEmployeeAsync(
@@ -179,6 +184,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 			shiftId: input.ShiftId);
 
 		employee = await employeeRepository.InsertAsync(employee, autoSave: true);
+		await shiftAssignments.InitializeAsync(employee, input.InitialWorkShiftAssignment!.WorkShiftId, input.InitialWorkShiftAssignment.EffectiveFrom);
 		if (input.PolicyOverride != null)
 		{
 			await policyOverrideWriter.ApplyAsync(employee, input.PolicyOverride);

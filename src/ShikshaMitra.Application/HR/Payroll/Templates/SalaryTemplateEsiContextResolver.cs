@@ -12,15 +12,17 @@ namespace ShikshaMitra.HR.Payroll.Templates;
 internal sealed record SalaryTemplateEsiResolution(
 	SalaryTemplateEsiEvaluationContext? Context,
 	IReadOnlyList<string> Warnings,
-	bool RegistrationPending);
+	bool RegistrationPending,
+	Guid? ConfigurationId, bool IsEnabled = false, Guid? PolicyId = null, string? PolicyName = null);
 
 public class SalaryTemplateEsiContextResolver(
-	IRepository<StatutoryRuleVersion, Guid> ruleRepository,
-	IRepository<StatutoryEstablishment, Guid> establishmentRepository,
-	IRepository<EmployeeStatutoryEnrollment, Guid> enrollmentRepository,
+	EsiPolicyResolver policyResolver,
+	EsiPayrollConfigurationResolver configurationResolver,
+	EsiEnrollmentResolver enrollmentResolver,
 	IRepository<PayrollComponentStatutoryTreatment, Guid> treatmentRepository,
 	IRepository<StatutoryOverride, Guid> overrideRepository,
-	IDeductionComponentRepository deductionComponentRepository)
+	IEarningComponentRepository earningComponentRepository,
+	IDeductionComponentRepository deductionComponentRepository, EmployeeStatutoryProfileResolver profileResolver)
 	: ITransientDependency
 {
 	private const string SchemeCode = StatutorySchemeCodes.EmployeeStateInsurance;
@@ -29,36 +31,19 @@ public class SalaryTemplateEsiContextResolver(
 	internal async Task<SalaryTemplateEsiResolution> ResolveAsync(
 		DateTime effectiveMonth,
 		string jurisdictionCode,
-		Guid? employeeId)
+		Guid? employeeId, Guid? policyId = null, bool allowArchived = true)
 	{
 		var monthStart = new DateTime(effectiveMonth.Year, effectiveMonth.Month, 1);
 		var monthEnd = monthStart.AddMonths(1).AddDays(-1);
-		var establishment = (await establishmentRepository.GetListAsync(x =>
-			x.SchemeCode == SchemeCode &&
-			x.JurisdictionCode == jurisdictionCode &&
-			x.Status == StatutoryEstablishmentStatus.Active &&
-			x.BenefitsActiveFrom.HasValue &&
-			x.BenefitsActiveFrom.Value <= monthEnd))
-			.OrderByDescending(x => x.BenefitsActiveFrom)
-			.FirstOrDefault();
+		var configuration = await configurationResolver.ResolveAsync(monthStart);
+		var establishment = configuration?.ToCalculationEstablishment();
 		if (establishment == null)
 		{
-			return new SalaryTemplateEsiResolution(null, ["ESI_ESTABLISHMENT_INACTIVE"], false);
+			return new SalaryTemplateEsiResolution(null, [], false, configuration?.Id);
 		}
 
-		var rule = (await ruleRepository.GetListAsync(x =>
-			x.SchemeCode == SchemeCode &&
-			x.JurisdictionCode == jurisdictionCode &&
-			x.IsActive &&
-			x.EffectiveFrom <= monthEnd &&
-			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= monthStart)))
-			.OrderByDescending(x => x.EffectiveFrom)
-			.ThenByDescending(x => x.Version)
-			.FirstOrDefault();
-		if (rule == null)
-		{
-			return new SalaryTemplateEsiResolution(null, ["ESI_RULE_NOT_FOUND"], false);
-		}
+		var policy = await policyResolver.ResolveAsync(policyId, monthStart, allowArchived);
+		var rule = policy.Rule;
 
 		var treatments = (await treatmentRepository.GetListAsync(x =>
 			x.SchemeCode == SchemeCode &&
@@ -69,13 +54,14 @@ public class SalaryTemplateEsiContextResolver(
 				x => x.Key,
 				x => x.OrderByDescending(item => item.EffectiveFrom).First().Treatment);
 		EmployeeStatutoryEnrollment? enrollment = null;
+		var activeEarnings = await earningComponentRepository.GetListAsync(x => x.IsActive);
+		foreach (var earning in activeEarnings)
+			treatments.TryAdd(earning.Id, EsiWageDefaults.ByName.GetValueOrDefault(earning.Name, StatutoryWageTreatment.Unclassified));
+		foreach (var treatment in configuration!.GetTreatments()) treatments[treatment.Key] = treatment.Value;
 		IReadOnlyList<StatutoryOverride> overrides = [];
 		if (employeeId.HasValue)
 		{
-			enrollment = (await enrollmentRepository.GetListAsync(x =>
-				x.SchemeCode == SchemeCode && x.EmployeeId == employeeId.Value))
-				.OrderByDescending(x => x.CreationTime)
-				.FirstOrDefault();
+			enrollment = (await enrollmentResolver.ResolveAsync(monthStart, [employeeId.Value])).GetValueOrDefault(employeeId.Value);
 			overrides = await overrideRepository.GetListAsync(x =>
 				x.SchemeCode == SchemeCode &&
 				x.EmployeeId == employeeId.Value &&
@@ -84,6 +70,14 @@ public class SalaryTemplateEsiContextResolver(
 		}
 
 		var canonicalDeduction = await deductionComponentRepository.FindByNameAsync(CanonicalEsiComponentName);
+		var calculationSettings = rule.GetPolicySettings() ?? configuration.GetCalculationSettings();
+		calculationSettings = calculationSettings with
+		{
+			EligibilityComponentIsActive = calculationSettings.EligibilityComponentId == null ||
+			activeEarnings.Any(x => x.Id == calculationSettings.EligibilityComponentId),
+			CalculationComponentIsActive = calculationSettings.CalculationComponentId == null ||
+			activeEarnings.Any(x => x.Id == calculationSettings.CalculationComponentId)
+		};
 		var context = new SalaryTemplateEsiEvaluationContext(
 			monthStart,
 			rule,
@@ -92,12 +86,13 @@ public class SalaryTemplateEsiContextResolver(
 			treatments,
 			overrides,
 			canonicalDeduction?.Id ?? Guid.Empty,
-			canonicalDeduction?.Name ?? CanonicalEsiComponentName);
+			canonicalDeduction?.Name ?? CanonicalEsiComponentName)
+		{ CalculationSettings = calculationSettings, PayrollProfile = employeeId.HasValue ? await profileResolver.ResolveAsync(employeeId.Value, monthStart) : null };
 		return new SalaryTemplateEsiResolution(
 			context,
 			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending
 				? ["ESI_REGISTRATION_PENDING"]
 				: [],
-			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending);
+			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending, configuration?.Id, true, policy.Policy.Id, policy.Policy.Name);
 	}
 }

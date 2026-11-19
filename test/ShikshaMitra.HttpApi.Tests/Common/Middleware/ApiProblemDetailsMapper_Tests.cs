@@ -1,13 +1,45 @@
 using Microsoft.AspNetCore.Http;
 using ShikshaMitra.Common.Middleware;
 using ShikshaMitra.HR;
+using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Security.Roles;
+using ShikshaMitra.TenantSettings.AcademicSetups;
 using Shouldly;
+using Volo.Abp.Authorization;
 using Xunit;
 
 namespace ShikshaMitra.Common.Tests.Middleware;
 
 public class ApiProblemDetailsMapper_Tests
 {
+	[Theory]
+	[InlineData(AbpAuthorizationErrorCodes.GivenPolicyHasNotGranted)]
+	[InlineData(AbpAuthorizationErrorCodes.GivenPolicyHasNotGrantedWithPolicyName)]
+	[InlineData(AbpAuthorizationErrorCodes.GivenPolicyHasNotGrantedForGivenResource)]
+	[InlineData(AbpAuthorizationErrorCodes.GivenRequirementHasNotGrantedForGivenResource)]
+	[InlineData(AbpAuthorizationErrorCodes.GivenRequirementsHasNotGrantedForGivenResource)]
+	public void Framework_authorization_codes_should_preserve_actual_authentication_and_authorization_status(string errorCode)
+	{
+		ApiProblemDetailsMapper.NormalizeStatusCode(401, errorCode).ShouldBe(401);
+		ApiProblemDetailsMapper.NormalizeStatusCode(403, errorCode).ShouldBe(403);
+	}
+
+	[Theory]
+	[InlineData(RoleErrorCodes.AssignedToUsers)]
+	[InlineData(RoleErrorCodes.ReferencedByEmployees)]
+	[InlineData(TenantSettingsDomainErrorCodes.DuplicateStandardName)]
+	[InlineData(TenantSettingsDomainErrorCodes.DuplicateDivisionName)]
+	[InlineData(FeeCollectionErrorCodes.IdempotencyConflict)]
+	[InlineData("HR:Payroll:SalaryTemplateSaveConflict")]
+	[InlineData(HRErrorCodes.CompensationPreviewStale)]
+	public void Conflict_errors_should_resolve_and_normalize_to_409(string errorCode)
+	{
+		ApiProblemDetailsMapper.ResolveBusinessStatusCode(errorCode)
+			.ShouldBe(StatusCodes.Status409Conflict);
+		ApiProblemDetailsMapper.NormalizeStatusCode(StatusCodes.Status400BadRequest, errorCode)
+			.ShouldBe(StatusCodes.Status409Conflict);
+	}
+
 	[Fact]
 	public void ResolveBusinessStatusCode_Should_Return_403_For_Known_Authz_Business_Codes()
 	{

@@ -7,6 +7,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Infrastructure.Auth;
 using Shouldly;
 using Xunit;
 
@@ -18,6 +19,69 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 {
 	public ConcessionRequestWorkflowApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
 	{
+	}
+
+	[Theory]
+	[InlineData("approve")]
+	[InlineData("reject")]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Creator_Cannot_Decide_Own_Pending_Request(string decision)
+	{
+		var pendingId = await CreatePendingRequestWithFeeHeadAsync();
+		var detailResponse = await Client.GetAsync($"{BaseUrl}/{pendingId}");
+		detailResponse.EnsureSuccessStatusCode();
+		var detail = (await detailResponse.Content
+			.ReadFromJsonAsync<ApiDataResponseDto<ConcessionRequestDetailDto>>(JsonOptions))!.Data!;
+		detail.RequesterId.ShouldBe(Guid.Parse(TestAuthHandler.TestUserId));
+		detail.AvailableActions.ShouldNotContain(decision);
+
+		object input = decision == "approve"
+			? new ApproveConcessionRequestDto
+			{
+				RequestConcurrencyStamp = detail.ConcurrencyStamp,
+				PreviewFingerprint = "irrelevant-for-creator-denial",
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
+			}
+			: new RejectConcessionRequestDto
+			{
+				Message = "Creator must not decide this request.",
+				RequestConcurrencyStamp = detail.ConcurrencyStamp,
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
+			};
+		var denied = await Client.PostAsJsonAsync(
+			$"{ConcessionRequestsBaseUrl}/{pendingId}/{decision}", input, JsonOptions);
+		denied.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await denied.Content.ReadAsStringAsync())
+			.ShouldContain(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
+
+		var unchanged = (await (await Client.GetAsync($"{BaseUrl}/{pendingId}"))
+			.Content.ReadFromJsonAsync<ApiDataResponseDto<ConcessionRequestDetailDto>>(JsonOptions))!.Data!;
+		unchanged.Status.ShouldBe(ConcessionRequestStatus.Pending);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Creator_Cannot_Replay_Independent_Checkers_Decision()
+	{
+		var pendingId = await CreatePendingRequestWithFeeHeadAsync();
+		var detail = (await (await Client.GetAsync($"{BaseUrl}/{pendingId}"))
+			.Content.ReadFromJsonAsync<ApiDataResponseDto<ConcessionRequestDetailDto>>(JsonOptions))!.Data!;
+		var input = new RejectConcessionRequestDto
+		{
+			Message = "Rejected after independent review.",
+			RequestConcurrencyStamp = detail.ConcurrencyStamp,
+			IdempotencyKey = Guid.NewGuid().ToString("N"),
+		};
+		using var checker = await CreateScopedCheckerClientAsync();
+		var accepted = await checker.PostAsJsonAsync(
+			$"{ConcessionRequestsBaseUrl}/{pendingId}/reject", input, JsonOptions);
+		accepted.StatusCode.ShouldBe(HttpStatusCode.OK, await accepted.Content.ReadAsStringAsync());
+
+		var denied = await Client.PostAsJsonAsync(
+			$"{ConcessionRequestsBaseUrl}/{pendingId}/reject", input, JsonOptions);
+		denied.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await denied.Content.ReadAsStringAsync())
+			.ShouldContain(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
 	}
 
 	[Fact]
@@ -38,30 +102,16 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 			return;
 		}
 
-		var perLine = group.RequestedConcessionAmount / selectable.Count;
 		var approval = new ApproveConcessionRequestDto
 		{
 			Message = "Approved for tests",
 			RequestConcurrencyStamp = context.RequestConcurrencyStamp,
 			PreviewFingerprint = context.PreviewFingerprint,
 			IdempotencyKey = Guid.NewGuid().ToString("N"),
-			FeeHeadApprovals =
-			[
-				new FeeHeadApprovalDto
-				{
-					FeeHeadId = group.FeeHeadId,
-					ApprovedConcessionAmount = group.RequestedConcessionAmount,
-					DueFeeAllocations = selectable.Select(l => new DueFeeAllocationDto
-					{
-						DueFeeId = l.DueFeeId,
-						ConcessionAmount = perLine,
-						ConcurrencyStamp = l.ConcurrencyStamp,
-					}).ToList(),
-				},
-			],
 		};
 
-		var response = await Client.PostAsJsonAsync(
+		using var checker = await CreateScopedCheckerClientAsync();
+		var response = await checker.PostAsJsonAsync(
 			$"{ConcessionRequestsBaseUrl}/{pendingId}/approve", approval, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -81,7 +131,8 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		var detail = await detailResponse.Content
 			.ReadFromJsonAsync<ApiDataResponseDto<ConcessionRequestDetailDto>>(JsonOptions);
 
-		var response = await Client.PostAsJsonAsync(
+		using var checker = await CreateScopedCheckerClientAsync();
+		var response = await checker.PostAsJsonAsync(
 			$"{ConcessionRequestsBaseUrl}/{pendingId}/reject",
 			new RejectConcessionRequestDto
 			{
@@ -110,9 +161,9 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		var group = context!.FeeHeadGroups.First();
 		var selectable = group.DueFeeLines.Where(line => line.IsSelectable).ToList();
 		selectable.ShouldNotBeEmpty();
-		var perLine = group.RequestedConcessionAmount / selectable.Count;
 
-		var approveResp = await Client.PostAsJsonAsync(
+		using var checker = await CreateScopedCheckerClientAsync();
+		var approveResp = await checker.PostAsJsonAsync(
 			$"{ConcessionRequestsBaseUrl}/{pendingId}/approve",
 			new ApproveConcessionRequestDto
 			{
@@ -120,20 +171,6 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 				RequestConcurrencyStamp = context.RequestConcurrencyStamp,
 				PreviewFingerprint = context.PreviewFingerprint,
 				IdempotencyKey = Guid.NewGuid().ToString("N"),
-				FeeHeadApprovals =
-				[
-					new FeeHeadApprovalDto
-					{
-						FeeHeadId = group.FeeHeadId,
-						ApprovedConcessionAmount = group.RequestedConcessionAmount,
-						DueFeeAllocations = selectable.Select(line => new DueFeeAllocationDto
-						{
-							DueFeeId = line.DueFeeId,
-							ConcessionAmount = perLine,
-							ConcurrencyStamp = line.ConcurrencyStamp,
-						}).ToList(),
-					},
-				],
 			},
 			JsonOptions);
 		approveResp.StatusCode.ShouldBe(HttpStatusCode.OK, await approveResp.Content.ReadAsStringAsync());
@@ -186,34 +223,16 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		var context = await contextResp.Content.ReadFromJsonAsync<ConcessionApprovalContextDto>(JsonOptions);
 		context.ShouldNotBeNull();
 
-		var group = context!.FeeHeadGroups.First();
-		var line = group.DueFeeLines.First(candidate => candidate.IsSelectable);
 		var approval = new ApproveConcessionRequestDto
 		{
 			Message = "Attempt with stale request state",
 			RequestConcurrencyStamp = "stale-request-stamp",
 			PreviewFingerprint = context.PreviewFingerprint,
 			IdempotencyKey = Guid.NewGuid().ToString("N"),
-			FeeHeadApprovals =
-			[
-				new FeeHeadApprovalDto
-				{
-					FeeHeadId = group.FeeHeadId,
-					ApprovedConcessionAmount = Math.Min(group.RequestedConcessionAmount, line.OutstandingAmount),
-					DueFeeAllocations =
-					[
-						new DueFeeAllocationDto
-						{
-							DueFeeId = line.DueFeeId,
-							ConcessionAmount = Math.Min(group.RequestedConcessionAmount, line.OutstandingAmount),
-							ConcurrencyStamp = line.ConcurrencyStamp,
-						},
-					],
-				},
-			],
 		};
 
-		var response = await Client.PostAsJsonAsync(
+		using var checker = await CreateScopedCheckerClientAsync();
+		var response = await checker.PostAsJsonAsync(
 			$"{ConcessionRequestsBaseUrl}/{pendingId}/approve", approval, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -222,7 +241,7 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Reject_Approval_When_DueFee_ConcurrencyStamp_Is_Stale()
+	public async Task Should_Reject_Client_Approval_Amount_Overrides()
 	{
 		var pendingId = await CreatePendingRequestWithFeeHeadAsync();
 		var contextResp = await Client.GetAsync($"{BaseUrl}/{pendingId}/approval-context");
@@ -262,6 +281,7 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 			$"{ConcessionRequestsBaseUrl}/{pendingId}/approve", approval, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		(await response.Content.ReadAsStringAsync()).ShouldContain(FinanceConcessionErrorCodes.ConcurrencyConflict);
+		(await response.Content.ReadAsStringAsync()).ShouldContain(
+			ShikshaMitra.Domain.Finance.Policies.ConcessionPolicyErrorCodes.InputNotAllowed);
 	}
 }

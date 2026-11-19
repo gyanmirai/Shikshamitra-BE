@@ -12,7 +12,7 @@ using Volo.Abp.Domain.Services;
 
 namespace ShikshaMitra.Academic.Timetable.RoomAvailability;
 
-public class RoomConflictService : DomainService
+public partial class RoomConflictService : DomainService
 {
     private readonly IRepository<RoomReservation, Guid> _reservationRepository;
     private readonly IRepository<RoomMaintenanceBlock, Guid> _maintenanceRepository;
@@ -51,11 +51,18 @@ public class RoomConflictService : DomainService
         Guid? currentReservationId = null,
         Guid? teacherId = null,
         Guid? standardId = null,
-        Guid? divisionId = null)
+        Guid? divisionId = null,
+        Guid? academicMediumId = null)
     {
         return await CheckConflictsAsync(roomId, date, startTime, endTime, currentReservationId,
-            teacherId, standardId, divisionId, null);
+            teacherId, standardId, divisionId, null, academicMediumId: academicMediumId);
     }
+
+    public Task<ConflictCheckResult> CheckScopedConflictsAsync(
+        RoomConflictAcademicScope academicScope, Guid roomId, DateTime date, TimeSpan startTime, TimeSpan endTime,
+        Guid? currentReservationId = null, Guid? teacherId = null, bool enforceAcademicCalendar = true) =>
+        CheckConflictsAsync(roomId, date, startTime, endTime, currentReservationId,
+            teacherId, academicScope.StandardId, null, null, academicScope, enforceAcademicCalendar: enforceAcademicCalendar);
 
     /// <summary>Checks a room list using one request-local set of availability data.</summary>
     public async Task<IReadOnlyDictionary<Guid, ConflictCheckResult>> CheckRoomsAsync(
@@ -64,43 +71,20 @@ public class RoomConflictService : DomainService
         TimeSpan startTime,
         TimeSpan endTime,
         Guid? standardId = null,
-        Guid? divisionId = null)
+        Guid? divisionId = null,
+        Guid? academicMediumId = null)
+    {
+        return await CheckRoomSnapshotsAsync(rooms.Select(room => new RoomConflictRoom(room.Id, room.RoomName)).ToList(),
+            date, startTime, endTime, standardId, divisionId, academicMediumId);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, ConflictCheckResult>> CheckRoomSnapshotsAsync(
+        IReadOnlyCollection<RoomConflictRoom> rooms, DateTime date, TimeSpan startTime, TimeSpan endTime,
+        Guid? standardId = null, Guid? divisionId = null, Guid? academicMediumId = null)
     {
         if (rooms.Count == 0) return new Dictionary<Guid, ConflictCheckResult>();
 
-        var roomIds = rooms.Select(room => room.Id).ToList();
-        var calendar = await _calendarRepository.FirstOrDefaultAsync(c =>
-            c.Status == CalendarStatus.Published && date.Date >= c.StartDate.Date && date.Date <= c.EndDate.Date);
-        var days = calendar == null
-            ? []
-            : await _calendarDayRepository.GetListAsync(d => d.AcademicCalendarId == calendar.Id &&
-                d.Date.Date >= date.Date && d.Date.Date <= calendar.EndDate.Date && d.Status == CalendarDayStatus.Active &&
-                (d.AppliesToAll || (standardId.HasValue && d.StandardId == standardId.Value)));
-        var currentDay = days.FirstOrDefault(d => d.Date.Date == date.Date &&
-            (d.AppliesToAll || (!d.DivisionId.HasValue || (divisionId.HasValue && d.DivisionId == divisionId.Value))));
-        var calendarAllowed = currentDay == null || !CalendarDayBlockingRules.Blocks(currentDay.DayType, "timetable");
-        var requestedStart = date.Date.Add(startTime);
-        var requestedEnd = date.Date.Add(endTime);
-        var maintenance = await _maintenanceRepository.GetListAsync(m => roomIds.Contains(m.RoomId) &&
-            m.Status != MaintenanceStatus.Cancelled && m.StartDateTime < requestedEnd && m.EndDateTime > requestedStart);
-        var reservations = await _reservationRepository.GetListAsync(r => roomIds.Contains(r.RoomId) && r.Date == date.Date);
-        var checkClassSchedule = calendarAllowed && date.DayOfWeek != DayOfWeek.Sunday;
-        var timetables = checkClassSchedule ? await _timetableRepository.GetAllWithSlotsAsync() : [];
-        var occupations = checkClassSchedule
-            ? FindRoomOccupations(timetables, GetTimetableDayOfWeek(date.DayOfWeek), startTime, endTime)
-                .Where(occupation => roomIds.Contains(occupation.RoomId)).ToList()
-            : [];
-        var timetableDivisionIds = occupations.Select(occupation => occupation.Timetable.DivisionId).Distinct().ToList();
-        var divisions = checkClassSchedule
-            ? await _divisionRepository.GetListAsync(d => (d.RoomNumber != null && d.RoomNumber != string.Empty) ||
-                timetableDivisionIds.Contains(d.Id))
-            : [];
-        var standardIds = divisions.Select(division => division.StandardId)
-            .Concat(occupations.Select(occupation => occupation.Timetable.StandardId)).Distinct().ToList();
-        var standards = standardIds.Count == 0 ? [] : await _standardRepository.GetListAsync(s => standardIds.Contains(s.Id));
-        var context = new RoomConflictReadContext(calendar, days, maintenance.ToLookup(row => row.RoomId),
-            reservations.ToLookup(row => row.RoomId), occupations.ToLookup(row => row.RoomId), rooms.ToDictionary(room => room.Id),
-            divisions, standards.ToDictionary(standard => standard.Id));
+        var context = await BuildReadContextAsync(rooms, date, startTime, endTime, standardId, divisionId, academicMediumId);
         var results = new Dictionary<Guid, ConflictCheckResult>();
         foreach (var room in rooms)
         {
@@ -109,6 +93,68 @@ public class RoomConflictService : DomainService
         }
 
         return results;
+    }
+
+    /// <summary>Checks a room's periods against one request-local set of availability data.</summary>
+    public async Task<IReadOnlyList<ConflictCheckResult>> CheckRoomPeriodsAsync(
+        Room room,
+        DateTime date,
+        IReadOnlyList<(TimeSpan Start, TimeSpan End)> periods, Guid? academicMediumId = null)
+    {
+        if (periods.Count == 0) return [];
+
+        var context = await BuildReadContextAsync([new RoomConflictRoom(room.Id, room.RoomName)], date,
+            periods.Min(period => period.Start), periods.Max(period => period.End), null, null, academicMediumId);
+        var results = new List<ConflictCheckResult>(periods.Count);
+        foreach (var period in periods)
+        {
+            results.Add(await CheckConflictsAsync(room.Id, date, period.Start, period.End,
+                null, null, null, null, context));
+        }
+
+        return results;
+    }
+
+    private async Task<RoomConflictReadContext> BuildReadContextAsync(
+        IReadOnlyCollection<RoomConflictRoom> rooms,
+        DateTime date,
+        TimeSpan startTime,
+        TimeSpan endTime,
+        Guid? standardId,
+        Guid? divisionId, Guid? academicMediumId)
+    {
+        var roomIds = rooms.Select(room => room.Id).ToList();
+        var mediumId = await ResolveCalendarMediumAsync(standardId, academicMediumId);
+        var calendar = await ReadRoomCalendarAsync(date, mediumId);
+        var days = calendar == null
+            ? []
+            : await _calendarDayRepository.GetListAsync(d => d.AcademicCalendarId == calendar.Id &&
+                d.Date.Date >= date.Date && d.Date.Date <= calendar.EndDate.Date && d.Status == CalendarDayStatus.Active &&
+                (d.AppliesToAll || (standardId.HasValue && d.StandardId == standardId.Value) ||
+                    (divisionId.HasValue && d.DivisionId == divisionId.Value)));
+        var currentDay = days.FirstOrDefault(d => d.Date.Date == date.Date && BlocksRoomDay(d, standardId, divisionId));
+        var calendarAllowed = currentDay == null || !CalendarDayBlockingRules.Blocks(currentDay.DayType, "timetable");
+        var requestedStart = date.Date.Add(startTime);
+        var requestedEnd = date.Date.Add(endTime);
+        var maintenance = await _maintenanceRepository.GetListAsync(m => roomIds.Contains(m.RoomId) &&
+            m.Status != MaintenanceStatus.Cancelled && m.StartDateTime < requestedEnd && m.EndDateTime > requestedStart);
+        var reservations = await _reservationRepository.GetListAsync(r => roomIds.Contains(r.RoomId) && r.Date == date.Date);
+        var checkClassSchedule = calendarAllowed && date.DayOfWeek != DayOfWeek.Sunday;
+        var occupations = checkClassSchedule
+            ? await _timetableRepository.GetRoomOccupationsAsync(roomIds,
+                GetTimetableDayOfWeek(date.DayOfWeek), TimeOnly.FromTimeSpan(startTime), TimeOnly.FromTimeSpan(endTime))
+            : [];
+        var timetableDivisionIds = occupations.Select(occupation => occupation.DivisionId).Distinct().ToList();
+        var divisions = checkClassSchedule
+            ? await ReadRoomDivisionsAsync((await _divisionRepository.GetQueryableAsync()).Where(d => (d.RoomNumber != null && d.RoomNumber != string.Empty) ||
+                timetableDivisionIds.Contains(d.Id)))
+            : [];
+        var standardIds = divisions.Select(division => division.StandardId)
+            .Concat(occupations.Select(occupation => occupation.StandardId)).Distinct().ToList();
+        var standards = await ReadRoomStandardsAsync(standardIds);
+        return new RoomConflictReadContext(calendar, days.ToLookup(row => row.Date.Date), maintenance.ToLookup(row => row.RoomId),
+            reservations.ToLookup(row => row.RoomId), occupations.ToLookup(row => row.RoomId!.Value), rooms.ToDictionary(room => room.Id),
+            divisions, standards, Array.Empty<RoomReservation>().ToLookup(row => row.TeacherId.GetValueOrDefault()));
     }
 
     private async Task<ConflictCheckResult> CheckConflictsAsync(
@@ -120,16 +166,16 @@ public class RoomConflictService : DomainService
         Guid? teacherId,
         Guid? standardId,
         Guid? divisionId,
-        RoomConflictReadContext? context)
+        RoomConflictReadContext? context,
+        RoomConflictAcademicScope? academicScope = null, Guid? academicMediumId = null, bool enforceAcademicCalendar = true)
     {
         var result = new ConflictCheckResult();
         var conflicts = new List<ConflictItem>();
 
         // 1. Check Academic Calendar
-        var calendar = context != null ? context.Calendar : await _calendarRepository.FirstOrDefaultAsync(c =>
-            c.Status == CalendarStatus.Published &&
-            date.Date >= c.StartDate.Date &&
-            date.Date <= c.EndDate.Date);
+        var mediumId = !enforceAcademicCalendar || context != null ? null : academicScope?.AcademicMediumId ??
+            await ResolveCalendarMediumAsync(standardId, academicMediumId);
+        var calendar = !enforceAcademicCalendar ? null : context != null ? context.Calendar : await ReadRoomCalendarAsync(date, mediumId, academicScope);
 
         bool calAllowed = true;
         string? calMsg = null;
@@ -137,17 +183,11 @@ public class RoomConflictService : DomainService
 
         if (calendar != null)
         {
-            var day = context != null
-                ? context.Days.FirstOrDefault(d => d.Date.Date == date.Date &&
-                    (d.AppliesToAll || (standardId.HasValue && d.StandardId == standardId.Value &&
-                        (!d.DivisionId.HasValue || (divisionId.HasValue && d.DivisionId == divisionId.Value)))))
-                : await _calendarDayRepository.FirstOrDefaultAsync(d =>
-                d.AcademicCalendarId == calendar.Id &&
-                d.Date.Date == date.Date &&
-                d.Status == CalendarDayStatus.Active &&
-                (d.AppliesToAll || 
-                 (standardId.HasValue && d.StandardId == standardId.Value && 
-                  (!d.DivisionId.HasValue || (divisionId.HasValue && d.DivisionId == divisionId.Value)))));
+            var calendarDays = context != null ? null : await _calendarDayRepository.GetListAsync(d =>
+                d.AcademicCalendarId == calendar.Id && d.Date.Date >= date.Date &&
+                d.Date.Date <= calendar.EndDate.Date && d.Status == CalendarDayStatus.Active);
+            var day = (context != null ? context.Days[date.Date] : calendarDays!.Where(d => d.Date.Date == date.Date))
+                .Where(d => BlocksRoomDay(d, standardId, divisionId)).OrderBy(d => d.Id).FirstOrDefault();
 
             if (day != null)
             {
@@ -159,16 +199,11 @@ public class RoomConflictService : DomainService
 
                     // Suggest next working day
                     var nextWorking = date.AddDays(1);
-                    while (nextWorking <= calendar.EndDate)
+                    while (nextWorking.Date <= calendar.EndDate.Date)
                     {
-                        var nextDay = context != null
-                            ? context.Days.FirstOrDefault(d => d.Date.Date == nextWorking.Date &&
-                                (d.AppliesToAll || (standardId.HasValue && d.StandardId == standardId.Value)))
-                            : await _calendarDayRepository.FirstOrDefaultAsync(d =>
-                            d.AcademicCalendarId == calendar.Id &&
-                            d.Date.Date == nextWorking.Date &&
-                            d.Status == CalendarDayStatus.Active &&
-                            (d.AppliesToAll || (standardId.HasValue && d.StandardId == standardId.Value)));
+                        var nextDay = (context != null ? context.Days[nextWorking.Date] :
+                            calendarDays!.Where(d => d.Date.Date == nextWorking.Date))
+                            .FirstOrDefault(d => BlocksRoomDay(d, standardId, divisionId));
                         
                         bool nextBlocked = nextDay != null && CalendarDayBlockingRules.Blocks(nextDay.DayType, "timetable");
                         if (!nextBlocked)
@@ -177,7 +212,7 @@ public class RoomConflictService : DomainService
                         }
                         nextWorking = nextWorking.AddDays(1);
                     }
-                    suggestedNextWorking = nextWorking;
+                    suggestedNextWorking = nextWorking.Date <= calendar.EndDate.Date ? nextWorking : null;
                 }
             }
         }
@@ -199,7 +234,8 @@ public class RoomConflictService : DomainService
         var requestedStart = date.Date.Add(startTime);
         var requestedEnd = date.Date.Add(endTime);
 
-        var maintenanceBlocks = context != null ? context.Maintenance[roomId].ToList() : await _maintenanceRepository.GetListAsync(m =>
+        var maintenanceBlocks = context != null ? context.Maintenance[roomId]
+            .Where(m => m.StartDateTime < requestedEnd && m.EndDateTime > requestedStart).ToList() : await _maintenanceRepository.GetListAsync(m =>
             m.RoomId == roomId &&
             m.Status != MaintenanceStatus.Cancelled &&
             m.StartDateTime < requestedEnd &&
@@ -219,7 +255,7 @@ public class RoomConflictService : DomainService
         }
 
         // 3. Check Overlapping Room Reservations
-        var existingReservations = (context != null ? context.Reservations[roomId].ToList() : await _reservationRepository.GetListAsync(r =>
+        var existingReservations = (context != null ? context.Reservations[roomId].Where(row => row.Date == date.Date).ToList() : await _reservationRepository.GetListAsync(r =>
             r.RoomId == roomId &&
             r.Date == date.Date
         )).Where(r =>
@@ -254,18 +290,17 @@ public class RoomConflictService : DomainService
             if (calAllowed)
             {
                 var slotOccupations = context != null
-                    ? context.Occupations[roomId].ToList()
-                    : FindRoomOccupations(await _timetableRepository.GetAllWithSlotsAsync(), timetableDay, startTime, endTime)
-                        .Where(occupation => occupation.RoomId == roomId).ToList();
+                    ? context.Occupations[roomId]
+                        .Where(occupation => occupation.StartTime < TimeOnly.FromTimeSpan(endTime) &&
+                            occupation.EndTime > TimeOnly.FromTimeSpan(startTime)).ToList()
+                    : await _timetableRepository.GetRoomOccupationsAsync([roomId], timetableDay,
+                        TimeOnly.FromTimeSpan(startTime), TimeOnly.FromTimeSpan(endTime));
 
                 if (slotOccupations.Any())
                 {
                     var firstOccupation = slotOccupations.First();
                     var timetableRoomMessage = await BuildTimetableRoomConflictMessageAsync(
-                        firstOccupation.Timetable,
-                        firstOccupation.Slot,
-                        date,
-                        context);
+                        firstOccupation, context);
 
                     conflicts.Add(new ConflictItem(
                         "roomAvailability",
@@ -290,21 +325,9 @@ public class RoomConflictService : DomainService
                 context);
             if (classOccupancy != null)
             {
-                var shiftName = string.IsNullOrWhiteSpace(classOccupancy.ShiftName)
-                    ? "configured class shift"
-                    : classOccupancy.ShiftName;
-
-                var message =
-                    $"Room is occupied by {classOccupancy.StandardName} Division {classOccupancy.DivisionName} " +
-                    $"from {classOccupancy.StartTime:hh\\:mm} to {classOccupancy.EndTime:hh\\:mm} based on institute setup shift '{shiftName}'.";
-
-                conflicts.Add(new ConflictItem(
-                    "classAvailability",
-                    "critical",
-                    message,
-                    "Choose another room or change the division room assignment / class shift in institute setup."
-                ));
-                result.ClassAvailability = new ValidationPass(false, message);
+                var conflict = CreateClassShiftConflict(classOccupancy);
+                conflicts.Add(conflict);
+                result.ClassAvailability = new ValidationPass(false, conflict.Message);
                 result.RoomAvailability = new ValidationPass(false, "Class shift assignment conflict.");
             }
         }
@@ -312,7 +335,9 @@ public class RoomConflictService : DomainService
         // 6. Check Teacher Double-booking (Warning)
         if (teacherId.HasValue)
         {
-            var teacherReservations = await _reservationRepository.GetListAsync(r =>
+            var teacherReservations = context != null
+                ? context.TeacherReservations[teacherId.Value].Where(row => row.Date == date.Date).ToList()
+                : await _reservationRepository.GetListAsync(r =>
                 r.TeacherId == teacherId.Value &&
                 r.Date == date.Date
             );
@@ -347,25 +372,18 @@ public class RoomConflictService : DomainService
     }
 
     private async Task<string> BuildTimetableRoomConflictMessageAsync(
-        Timetables.Timetable? timetable,
-        TimetableSlot slot,
-        DateTime date,
+        TimetableConflictCandidate occupation,
         RoomConflictReadContext? context)
     {
-        var classLabel = "another class";
-
-        if (timetable != null)
-        {
-            var standard = context != null ? context.Standards.GetValueOrDefault(timetable.StandardId)
-                : await _standardRepository.FindAsync(timetable.StandardId);
-            var division = context != null ? context.Divisions.FirstOrDefault(d => d.Id == timetable.DivisionId)
-                : await _divisionRepository.FindAsync(timetable.DivisionId);
-            classLabel = $"{standard?.Name ?? "Class"} Division {division?.Name ?? "-"}";
-        }
+        var standard = context != null ? context.Standards.GetValueOrDefault(occupation.StandardId)
+            : (await ReadRoomStandardsAsync(new[] { occupation.StandardId })).GetValueOrDefault(occupation.StandardId);
+        var division = context != null ? context.Divisions.FirstOrDefault(d => d.Id == occupation.DivisionId)
+            : (await ReadRoomDivisionsAsync((await _divisionRepository.GetQueryableAsync()).Where(d => d.Id == occupation.DivisionId))).FirstOrDefault();
+        var classLabel = $"{standard?.Name ?? "Class"} Division {division?.Name ?? "-"}";
 
         return
-            $"Room is already allocated in the timetable for {classLabel} on {date:dddd} " +
-            $"{slot.StartTime:HH\\:mm}-{slot.EndTime:HH\\:mm}.";
+            $"Room is already allocated in the timetable for {classLabel} on {occupation.Day} " +
+            $"{occupation.StartTime:HH\\:mm}-{occupation.EndTime:HH\\:mm}.";
     }
 
     private async Task<ClassShiftOccupancy?> FindClassShiftOccupancyAsync(
@@ -376,12 +394,18 @@ public class RoomConflictService : DomainService
         Guid? currentDivisionId,
         RoomConflictReadContext? context)
     {
-        var room = context != null ? context.Rooms[roomId] : await _roomRepository.GetAsync(roomId);
+        RoomConflictRoom room;
+        if (context != null) room = context.Rooms[roomId];
+        else
+        {
+            var entity = await _roomRepository.GetAsync(roomId);
+            room = new RoomConflictRoom(entity.Id, entity.RoomName);
+        }
         var divisions = context != null
             ? context.Divisions.Where(d => d.RoomNumber != null && d.RoomNumber != string.Empty).ToList()
-            : await _divisionRepository.GetListAsync(d => d.RoomNumber != null && d.RoomNumber != string.Empty);
+            : await ReadRoomDivisionsAsync((await _divisionRepository.GetQueryableAsync()).Where(d => d.RoomNumber != null && d.RoomNumber != string.Empty));
         var matchedDivisions = divisions
-            .Where(d => IsAssignedToRoom(d.RoomNumber, room))
+            .Where(d => IsAssignedToRoom(d.RoomNumber!, room))
             .ToList();
 
         if (!matchedDivisions.Any())
@@ -390,8 +414,7 @@ public class RoomConflictService : DomainService
         }
 
         var standardIds = matchedDivisions.Select(d => d.StandardId).Distinct().ToList();
-        var standardsById = context?.Standards ?? (await _standardRepository.GetListAsync(s => standardIds.Contains(s.Id)))
-            .ToDictionary(s => s.Id);
+        var standardsById = context?.Standards ?? await ReadRoomStandardsAsync(standardIds);
 
         foreach (var division in matchedDivisions.OrderBy(d => d.Name))
         {
@@ -400,19 +423,19 @@ public class RoomConflictService : DomainService
                 continue;
             }
 
-            if (!standardsById.TryGetValue(division.StandardId, out var standard) || standard.Shift == null)
+            if (!standardsById.TryGetValue(division.StandardId, out var standard) || !standard.ShiftStart.HasValue || !standard.ShiftEnd.HasValue)
             {
                 continue;
             }
 
-            var shiftStart = standard.Shift.StartTime.ToTimeSpan();
-            var shiftEnd = standard.Shift.EndTime.ToTimeSpan();
+            var shiftStart = standard.ShiftStart.Value.ToTimeSpan();
+            var shiftEnd = standard.ShiftEnd.Value.ToTimeSpan();
             if (shiftStart < endTime && shiftEnd > startTime)
             {
                 return new ClassShiftOccupancy(
                     standard.Name,
                     division.Name,
-                    standard.Shift.ShiftName,
+                    standard.ShiftName ?? "",
                     shiftStart,
                     shiftEnd);
             }
@@ -421,7 +444,7 @@ public class RoomConflictService : DomainService
         return null;
     }
 
-    private static bool IsAssignedToRoom(string roomNumber, Room room)
+    private static bool IsAssignedToRoom(string roomNumber, RoomConflictRoom room)
     {
         var assignedRoom = roomNumber.Trim();
 
@@ -443,27 +466,14 @@ public class RoomConflictService : DomainService
 
     private sealed record RoomConflictReadContext(
         AcademicCalendar? Calendar,
-        List<AcademicCalendarDay> Days,
+        ILookup<DateTime, AcademicCalendarDay> Days,
         ILookup<Guid, RoomMaintenanceBlock> Maintenance,
         ILookup<Guid, RoomReservation> Reservations,
-        ILookup<Guid, RoomTimetableOccupation> Occupations,
-        Dictionary<Guid, Room> Rooms,
-        List<Division> Divisions,
-        Dictionary<Guid, Standard> Standards);
-
-    private sealed record RoomTimetableOccupation(Guid RoomId, Timetables.Timetable Timetable, TimetableSlot Slot);
-
-    private static IEnumerable<RoomTimetableOccupation> FindRoomOccupations(
-        IEnumerable<Timetables.Timetable> timetables, TimetableDayOfWeek day, TimeSpan startTime, TimeSpan endTime)
-    {
-        var start = TimeOnly.FromTimeSpan(startTime);
-        var end = TimeOnly.FromTimeSpan(endTime);
-        return timetables.Where(timetable => timetable.Status != TimetableStatus.NotCreated)
-            .SelectMany(timetable => timetable.Slots
-                .Where(slot => slot.Day == day && slot.StartTime < end && slot.EndTime > start)
-                .SelectMany(slot => slot.Subjects.Where(subject => subject.RoomId.HasValue)
-                    .Select(subject => new RoomTimetableOccupation(subject.RoomId!.Value, timetable, slot))));
-    }
+        ILookup<Guid, TimetableConflictCandidate> Occupations,
+        Dictionary<Guid, RoomConflictRoom> Rooms,
+        List<RoomDivisionRead> Divisions,
+        Dictionary<Guid, RoomStandardRead> Standards,
+        ILookup<Guid, RoomReservation> TeacherReservations);
 
     private TimetableDayOfWeek GetTimetableDayOfWeek(DayOfWeek dayOfWeek)
     {

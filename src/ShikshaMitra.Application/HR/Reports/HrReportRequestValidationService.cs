@@ -33,6 +33,7 @@ public class HrReportRequestValidationService : ITransientDependency
 	public void Validate(HrReportRequestDto input)
 	{
 		HrReportRequestProcessor.Normalize(input, exportAllRows: false);
+		PayrollIssuedReportBoundary.EnsureLegacyPayslipRequest(input);
 		CanonicalizeEnumLikeValues(input);
 		var source = ResolveSource(input);
 		var metadata = HrReportCatalog.GetSource(source);

@@ -1,9 +1,11 @@
 using ShikshaMitra.Extensions;
 using ShikshaMitra.Onboarding.AcademicYears;
+using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Threading.Tasks;
+using System.Linq;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
 
@@ -12,7 +14,9 @@ namespace ShikshaMitra.TenantSettings.AcademicSetups;
 /// <summary>
 /// Manages operations related to the EducationBoard entity, including creating and updating education boards.
 /// </summary>
-public class EducationBoardManager(IEducationBoardRepository educationBoardRepository) : DomainService
+public class EducationBoardManager(
+	IEducationBoardRepository educationBoardRepository,
+	AcademicCalendarDateSynchronizer calendarDates) : DomainService
 {
 	/// <summary>
 	/// Gets the name of the entity managed by this class.
@@ -30,10 +34,12 @@ public class EducationBoardManager(IEducationBoardRepository educationBoardRepos
 		Guid academicYearId,
 		EducationBoardType educationBoardType,
 		DateTime? startDate = null,
-		DateTime? endDate = null)
+		DateTime? endDate = null,
+		string? customName = null)
 	{
 		// Validate the name is unique within the same academic year.
-		await ValidateEducationBoardAsync(educationBoardType, academicYearId);
+		var normalizedName = EducationBoardNames.NormalizeCustomName(educationBoardType, customName);
+		await ValidateEducationBoardAsync(educationBoardType, academicYearId, normalizedName);
 
 		var start = startDate ?? DateTime.UtcNow;
 		var end = endDate ?? DateTime.UtcNow.AddYears(1);
@@ -45,7 +51,7 @@ public class EducationBoardManager(IEducationBoardRepository educationBoardRepos
 			academicYearId,
 			start,
 			end
-		);
+		).SetCustomName(normalizedName);
 	}
 
 	/// <summary>
@@ -61,20 +67,24 @@ public class EducationBoardManager(IEducationBoardRepository educationBoardRepos
 		EducationBoard educationBoard,
 		EducationBoardType newEducationBoardType,
 		DateTime? startDate = null,
-		DateTime? endDate = null)
+		DateTime? endDate = null,
+		string? customName = null)
 	{
 		Check.NotNull(educationBoard, nameof(educationBoard));
 
 		// Validate the name is unique within the same academic year if changed.
-		if (educationBoard.Type != newEducationBoardType)
+		var normalizedName = EducationBoardNames.NormalizeCustomName(newEducationBoardType, customName);
+		if (educationBoard.Type != newEducationBoardType || educationBoard.CustomName != normalizedName)
 		{
-			await ValidateEducationBoardAsync(newEducationBoardType, educationBoard.AcademicYearId);
+			await ValidateEducationBoardAsync(newEducationBoardType, educationBoard.AcademicYearId, normalizedName, educationBoard.Id);
 			educationBoard.SetEducationBoardType(newEducationBoardType);
+			educationBoard.SetCustomName(normalizedName);
 		}
 
 		// Update start and end dates if provided.
 		if (startDate.HasValue && endDate.HasValue)
 		{
+			await calendarDates.SynchronizeBoardAsync(educationBoard, startDate.Value, endDate.Value);
 			educationBoard.SetDates(startDate.Value, endDate.Value);
 		}
 
@@ -87,11 +97,14 @@ public class EducationBoardManager(IEducationBoardRepository educationBoardRepos
 	/// <param name="educationBoardType">The education board type to validate.</param>
 	/// <param name="academicYearId">The ID of the academic year.</param>
 	/// <exception cref="AlreadyExistsException">Thrown if an education board with the specified name already exists.</exception>
-	private async Task ValidateEducationBoardAsync(EducationBoardType educationBoardType, Guid academicYearId)
+	private async Task ValidateEducationBoardAsync(EducationBoardType educationBoardType, Guid academicYearId, string? customName, Guid? excludeId = null)
 	{
-		if (await educationBoardRepository.FindByNameAndAcademicYearIdAsync(educationBoardType, academicYearId) != null)
+		var candidates = await educationBoardRepository.GetListAsync(board =>
+			board.TenantId == CurrentTenant.Id && board.AcademicYearId == academicYearId &&
+			board.Type == educationBoardType && (!excludeId.HasValue || board.Id != excludeId.Value));
+		if (candidates.Count > 0)
 		{
-			throw new AlreadyExistsException(EntityName, educationBoardType.ToString());
+			throw new AlreadyExistsException(EntityName, customName ?? EducationBoardNames.DisplayName(educationBoardType));
 		}
 	}
 }

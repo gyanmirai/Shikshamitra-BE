@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 using System;
 
@@ -7,10 +7,10 @@ namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
 public class CreateChargeCategoryRequest
 {
     [Required]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
     [Required]
-    public bool IsApprovalRequired { get; set; }
+    public bool IsApprovalRequired { get; set; } = true;
 
     public string? Description { get; set; }
 
@@ -21,7 +21,7 @@ public class CreateChargeCategoryRequest
 public class UpdateChargeCategoryRequest
 {
     [Required]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
     public bool? IsApprovalRequired { get; set; } // Marked optional in docs example but could be treated as update-if-present or required logic. Let's make it nullable to support partial updates if needed, though docs imply full object. Actually docs say required: false for Update.
 

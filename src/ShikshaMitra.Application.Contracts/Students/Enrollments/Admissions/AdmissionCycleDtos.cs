@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Timing;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
@@ -14,7 +16,9 @@ public class AdmissionCycleDto : AuditedEntityDto<Guid>
 	public string? Description { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public string AcademicYearName { get; set; } = string.Empty;
+	[DisableDateTimeNormalization, JsonConverter(typeof(AdmissionCalendarDateJsonConverter))]
 	public DateTime StartDate { get; set; }
+	[DisableDateTimeNormalization, JsonConverter(typeof(AdmissionCalendarDateJsonConverter))]
 	public DateTime EndDate { get; set; }
 	public AdmissionCycleStatus Status { get; set; }
 	public AdmissionCycleWindowStatus WindowStatus { get; set; }
@@ -39,12 +43,14 @@ public class CreateUpdateAdmissionCycleDto
 	public string? ConcurrencyStamp { get; set; }
 	[Required, StringLength(AdmissionCycleConsts.MaxNameLength)]
 	public string Name { get; set; } = string.Empty;
-	[Required, StringLength(AdmissionCycleConsts.MaxCodeLength)]
-	public string Code { get; set; } = string.Empty;
+	[StringLength(AdmissionCycleConsts.MaxCodeLength)]
+	public string? Code { get; set; }
 	[StringLength(AdmissionCycleConsts.MaxDescriptionLength)]
 	public string? Description { get; set; }
 	public Guid AcademicYearId { get; set; }
+	[DisableDateTimeNormalization, JsonConverter(typeof(AdmissionCalendarDateJsonConverter))]
 	public DateTime StartDate { get; set; }
+	[DisableDateTimeNormalization, JsonConverter(typeof(AdmissionCalendarDateJsonConverter))]
 	public DateTime EndDate { get; set; }
 }
 
@@ -54,6 +60,7 @@ public class AdmissionCycleListInput : PagedAndSortedResultRequestDto
 	public Guid? AcademicYearId { get; set; }
 	public AdmissionCycleStatus? Status { get; set; }
 	public AdmissionCycleWindowStatus? WindowStatus { get; set; }
+	public string? ColumnFilters { get; set; }
 }
 
 public class AdmissionCycleActionDto
@@ -66,12 +73,15 @@ public class AdmissionCycleActionDto
 
 public class ReopenAdmissionCycleDto : AdmissionCycleActionDto
 {
+	[DisableDateTimeNormalization, JsonConverter(typeof(AdmissionNullableCalendarDateJsonConverter))]
 	public DateTime? NewEndDate { get; set; }
 }
 
 public class UpdateAdmissionCycleWindowDto : AdmissionCycleActionDto
 {
+	[DisableDateTimeNormalization, JsonConverter(typeof(AdmissionCalendarDateJsonConverter))]
 	public DateTime StartDate { get; set; }
+	[DisableDateTimeNormalization, JsonConverter(typeof(AdmissionCalendarDateJsonConverter))]
 	public DateTime EndDate { get; set; }
 }
 

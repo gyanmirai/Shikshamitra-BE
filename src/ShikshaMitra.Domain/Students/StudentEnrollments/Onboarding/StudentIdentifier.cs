@@ -59,12 +59,35 @@ public class StudentIdentifierSeries : FullAuditedAggregateRoot<Guid>, IMultiTen
 	public void EnsureAvailable(DateTime at)
 	{
 		var now = at.ToUniversalTime();
+		if (MaximumSequence.HasValue && NextSequence > MaximumSequence.Value)
+			throw new BusinessException(StudentOnboardingErrorCodes.IdentifierSeriesUnavailable)
+				.WithData("ReasonCode", "SeriesLimitReached")
+				.WithData("MaximumNumber", MaximumSequence.Value).WithData("NextSequence", NextSequence);
 		if (!IsActive || now < EffectiveFrom || EffectiveUntil.HasValue && now > EffectiveUntil.Value ||
 		    MaximumSequence.HasValue && NextSequence > MaximumSequence.Value)
 			throw new BusinessException(StudentOnboardingErrorCodes.IdentifierSeriesUnavailable);
 	}
 
 	public void Deactivate() => IsActive = false;
+
+	public void AdvancePastManualSequence(long sequence)
+	{
+		if (sequence < 1 || sequence == long.MaxValue || MaximumSequence.HasValue && sequence > MaximumSequence.Value)
+			throw new BusinessException(StudentOnboardingErrorCodes.IdentifierSeriesUnavailable);
+		NextSequence = Math.Max(NextSequence, sequence + 1);
+	}
+
+	public void ApplyRule(string name, string prefix, string suffix, int padding, long startingNumber, long? maximumNumber)
+	{
+		if (padding is < 1 or > 20 || startingNumber < 1) throw new ArgumentOutOfRangeException(nameof(padding));
+		Name = Check.NotNullOrWhiteSpace(name, nameof(name), 120).Trim();
+		Prefix = NormalizeAffix(prefix, nameof(prefix));
+		Suffix = NormalizeAffix(suffix, nameof(suffix));
+		Padding = padding;
+		// Editing a rule must never rewind a committed or reserved sequence.
+		NextSequence = Math.Max(NextSequence, startingNumber);
+		MaximumSequence = maximumNumber;
+	}
 
 	private static string NormalizeAffix(string? value, string parameterName)
 	{
@@ -115,6 +138,15 @@ public class StudentIdentifierAllocation : FullAuditedAggregateRoot<Guid>, IMult
 			throw new BusinessException(StudentOnboardingErrorCodes.IdentifierAlreadyAllocated);
 		Status = StudentIdentifierAllocationStatus.Committed;
 		CommittedAt = at.ToUniversalTime();
+	}
+
+	public void CorrectReservation(Guid seriesId, long sequence, string value, string reason, DateTime at)
+	{
+		if (Status != StudentIdentifierAllocationStatus.Reserved) throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
+		Reason = Check.NotNullOrWhiteSpace(reason, nameof(reason), 2000).Trim();
+		NumberSeriesId = seriesId; Sequence = sequence;
+		Value = Check.NotNullOrWhiteSpace(value, nameof(value), 100).Trim();
+		IsManual = true; AllocatedAt = at.ToUniversalTime();
 	}
 
 	public void Release()

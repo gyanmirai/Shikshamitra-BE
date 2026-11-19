@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -10,12 +11,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Audit;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.Infrastructure.Auth;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
@@ -25,7 +28,8 @@ using Xunit.Abstractions;
 namespace ShikshaMitra.HR.Payroll;
 
 [Trait("Database", "PostgreSQL")]
-public class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory factory, ITestOutputHelper output)
+[Collection(PayrollCalculationTestCollection.Name)]
+public partial class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory factory, ITestOutputHelper output)
 	: ShikshaMitraApiTestBase(factory), IClassFixture<PayrollPostgresTestFactory>
 {
 	private static readonly Guid TenantId = Guid.Parse(TestAuthHandler.TestTenantId);
@@ -276,10 +280,73 @@ public class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory factory, IT
 		(await GetAndReadAsync<PayrollPreviewStatusDto>($"{Previews}/{run.Id}")).IsCurrent.ShouldBeFalse();
 	}
 
-	private async Task<PayrollPreviewStatusDto> StartAsync(string month)
+	[PayrollPostgresFact]
+	public async Task Review_activity_is_durable_and_new_completed_preview_rejects_old_commands()
+	{
+		const string month = "2026-05";
+		const string reviews = "/api/payroll/run/reviews";
+		const string activity = $"/api/hr/audit-events?entityType=payroll_run&payrollMonth={month}";
+		var original = await StartAsync(month);
+		await ExecuteAsync(original.Id);
+		var page = await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{original.Id}/employees?pageSize=10");
+		var staff = page.Items.First();
+		var command = new PayrollRunReviewRequest
+		{
+			Month = month, PreviewRunId = original.Id, AcademicYearId = original.AcademicYearId,
+			EmployeeIds = [staff.EmployeeId], OperationId = Guid.NewGuid()
+		};
+
+		factory.Barrier.FailNextCommand("INSERT INTO \"HR_AuditEvents\"");
+		(await Client.PostAsJsonAsync(reviews, command)).IsSuccessStatusCode.ShouldBeFalse();
+		(await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{original.Id}/employees"))
+			.Items.Single(x => x.EmployeeId == staff.EmployeeId).ReviewStatus.ShouldBe(ReviewStatuses.Pending);
+		(await GetAndReadAsync<PagedResultDto<HrAuditEventDto>>(activity)).TotalCount.ShouldBe(0);
+
+		(await Client.PostAsJsonAsync(reviews, command)).EnsureSuccessStatusCode();
+		(await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{original.Id}/employees"))
+			.Items.Single(x => x.EmployeeId == staff.EmployeeId).ReviewStatus.ShouldBe(ReviewStatuses.Reviewed);
+		using var remove = new HttpRequestMessage(HttpMethod.Delete, reviews)
+		{
+			Content = JsonContent.Create(new PayrollRunReviewRequest
+			{
+				Month = month, PreviewRunId = original.Id, AcademicYearId = original.AcademicYearId,
+				EmployeeIds = [staff.EmployeeId], OperationId = Guid.NewGuid()
+			})
+		};
+		(await Client.SendAsync(remove)).EnsureSuccessStatusCode();
+		(await Client.PostAsJsonAsync(reviews, command)).EnsureSuccessStatusCode();
+		(await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{original.Id}/employees"))
+			.Items.Single(x => x.EmployeeId == staff.EmployeeId).ReviewStatus.ShouldBe(ReviewStatuses.Pending);
+
+		var replacement = await StartAsync(month, refresh: true);
+		replacement.Id.ShouldNotBe(original.Id);
+		(await GetAndReadAsync<PayrollPreviewStatusDto>($"{Previews}/{original.Id}")).IsCurrent.ShouldBeTrue();
+		await ExecuteAsync(replacement.Id);
+		(await GetAndReadAsync<PayrollPreviewStatusDto>($"{Previews}/{replacement.Id}")).IsCurrent.ShouldBeTrue();
+		(await GetAndReadAsync<PayrollPreviewStatusDto>($"{Previews}/{original.Id}")).IsCurrent.ShouldBeFalse();
+		(await Client.PostAsJsonAsync(reviews, command)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+		(await Client.PostAsJsonAsync("/api/payroll/run", command)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+		var history = await GetAndReadAsync<PagedResultDto<HrAuditEventDto>>(activity);
+		history.TotalCount.ShouldBe(2);
+		history.Items.Select(x => x.Action).ShouldBe(["review_removed", "reviewed"]);
+		history.Items.ShouldAllBe(x => x.EntityId == original.Id && x.ActorUserId.HasValue);
+		history.Items.ShouldAllBe(x => x.ContextJson != null && !x.ContextJson.Contains(staff.EmployeeId.ToString()));
+		(await GetAndReadAsync<PagedResultDto<HrAuditEventDto>>($"{activity}&academicYearId={Guid.NewGuid()}"))
+			.TotalCount.ShouldBe(0);
+		(await GetAndReadAsync<PagedResultDto<HrAuditEventDto>>(activity.Replace(month, "2026-04")))
+			.Items.ShouldAllBe(x => x.EntityName == "2026-04");
+		using var unauthenticated = Factory.CreateClient();
+		unauthenticated.DefaultRequestHeaders.Add("X-Skip-Auth", "true");
+		(await unauthenticated.GetAsync(activity)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+		(await unauthenticated.GetAsync($"/api/hr/payroll_run/{original.Id}/audit-events"))
+			.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+	}
+
+	private async Task<PayrollPreviewStatusDto> StartAsync(string month, bool refresh = false)
 	{
 		var watch = Stopwatch.StartNew();
-		var response = await Client.PostAsJsonAsync(Previews, new { month });
+		var response = await Client.PostAsJsonAsync(Previews, new { month, refresh });
 		response.StatusCode.ShouldBe(HttpStatusCode.Accepted, await response.Content.ReadAsStringAsync());
 		output.WriteLine($"Start {month}: {watch.Elapsed.TotalMilliseconds:F0}ms");
 		return (await response.Content.ReadFromJsonAsync<PayrollPreviewStatusDto>(JsonOptions))!;

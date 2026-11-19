@@ -13,6 +13,8 @@ public class StudentEnrollmentConfiguration : IEntityTypeConfiguration<StudentEn
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentEnrollments", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 		builder.Property(x => x.IsActive).IsRequired().HasDefaultValue(true);
+		builder.Property(x => x.AttendanceStartDate).HasColumnType("date");
+		builder.Property(x => x.AttendancePlacementHistoryJson).IsRequired().HasDefaultValue("[]");
 		builder.HasIndex(x => new { x.TenantId, x.StudentId, x.AcademicYearId }).IsUnique();
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.StandardId, x.DivisionId });
 		builder.HasIndex(x => new { x.TenantId, x.OnboardingCaseId })

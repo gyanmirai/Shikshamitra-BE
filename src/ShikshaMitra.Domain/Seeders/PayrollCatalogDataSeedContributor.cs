@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Payroll.Statutory;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.MultiTenancy;
@@ -13,13 +14,15 @@ public sealed class PayrollCatalogDataSeedContributor : IDataSeedContributor, IT
 {
 	private readonly ICurrentTenant _currentTenant;
 	private readonly HRSeederContributor _hrSeederContributor;
+	private readonly EsiPayrollConfigurationResolver _esiConfiguration;
 
 	public PayrollCatalogDataSeedContributor(
 		ICurrentTenant currentTenant,
-		HRSeederContributor hrSeederContributor)
+		HRSeederContributor hrSeederContributor, EsiPayrollConfigurationResolver esiConfiguration)
 	{
 		_currentTenant = currentTenant;
 		_hrSeederContributor = hrSeederContributor;
+		_esiConfiguration = esiConfiguration;
 	}
 
 	public async Task SeedAsync(DataSeedContext context)
@@ -30,5 +33,6 @@ public sealed class PayrollCatalogDataSeedContributor : IDataSeedContributor, IT
 		}
 
 		await _hrSeederContributor.SeedPayrollCatalogDefaultsAsync();
+		await _esiConfiguration.EnsureDefaultAsync();
 	}
 }

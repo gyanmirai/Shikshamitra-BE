@@ -3,17 +3,26 @@ module: finance
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-09-21
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Understand the Finance backend module
 
+Receipt classification, approval, PDF format and naming: [Receipts and provisional receipts](./references/receipt-lifecycle.md).
+
+Pooled cash expenses, academic-year cash deposits and legacy bank credits: [Cash Management](./references/cash-management.md).
+
 TL;DR: use this page as the entrypoint for Finance behavior, API families, architecture, workflows, and validation.
 Finance covers fees, collections, concessions, adjustments, refunds, receipts, accounts, audit, and reports.
 
 Fee Structure configuration, publication and revision contracts: [workspace implementation](./references/fee-structure-workspace.md).
+For current Fees-to-Accounts work, use the [integration-only posting foundation](./references/accounts-posting-foundation.md); older Accounts proposals in this directory include credit and collection-flow changes outside that scope.
+
+Category-based income, refund expenses, and school bank selections: [Income and expense routing](./references/income-expense-routing.md).
+
+Variable structure pricing and manual student entry: [variable fee assignment](./references/variable-fee-assignment.md).
 
 ## Read order
 
@@ -31,7 +40,12 @@ Fee Structure configuration, publication and revision contracts: [workspace impl
 | 10 | [Proration Policy end-to-end](./references/proration-policy-end-to-end.md) | Review the current gap and implement policy versioning, fee attachment, charge periods, demand calculation, downstream integrations, and rollout |
 | 11 | [Concession flow review](./references/concession-flow-end-to-end-review.md) | Review the current cross-stack verdict, defects, edge cases, test gaps, remediation priorities, and release gates |
 | 12 | [Charge management end to end](./references/charge-management-end-to-end.md) | Review the shipped charge, collection, receipt, source-integration flow, release gaps, target contract, and phased delivery gates |
-| 13 | [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md) | Review the approved target for per-late-fee/per-charge eligibility and immediate amount-plus-reason application in Fee Collection |
+| 13 | [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md) | Review the approved target for a reason-only full-balance waiver toggle on eligible late-fee and charge rows in Fee Collection |
+| 14 | [Fee Collection to reconciliation](./references/fee-collection-reconciliation-flow.md) | Trace the current payment-verification path, release gaps, bank-match target, and edge-case acceptance gates |
+| 15 | [Simplified Accounts operating flow](./references/accounts-simplified-operating-flow.md) | Reorganize Fees and Accounts around officer workflows, add the missing submodules, automatic accounting, target APIs, and rollout gates |
+| 16 | [Accounts frontend/backend delivery](./references/accounts-frontend-backend-delivery.md) | Track shipped versus target behavior, Fee Collections payment-method reuse, cross-stack work, examples, and acceptance gates |
+| 17 | [Integrated Accounts end-to-end flow](./references/accounts-integrated-end-to-end-flow.md) | Implement one source-to-journal chain for Fees, credit, refunds, other income/expense, settlement, and close with simple staff forms |
+| 18 | [Accounts posting foundation](./references/accounts-posting-foundation.md) | Inspect the partial event and journal schema, invariants, and live-posting gates |
 
 ## Source of truth
 
@@ -63,6 +77,8 @@ Use this table before searching code:
 | Is the current concession flow production-ready, and which scenarios must be covered? | [Concession flow review](./references/concession-flow-end-to-end-review.md) |
 | How does Charge Management connect to fee structures, policies, collections, receipts, accounts, and source modules? | [Charge management end to end](./references/charge-management-end-to-end.md) |
 | How should late-fee and charge waivers work in Fee Collection? | [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md) |
+| How should Fees and Accounts be reorganized into a simpler finance-officer flow? | [Simplified Accounts operating flow](./references/accounts-simplified-operating-flow.md) |
+| Which Accounts and Fees changes must frontend and backend deliver, and what is already shipped? | [Accounts frontend/backend delivery](./references/accounts-frontend-backend-delivery.md) |
 
 ## Validation
 
@@ -76,3 +92,7 @@ git diff --check
 ## Student fee assignment
 
 The current preview/commit, year-scoped history, permission and migration contracts are documented in [Student fee assignment](./references/student-fee-assignment.md). That contract supersedes older assignment descriptions that require concession configuration.
+
+## Income and Expenses workspaces
+
+See [the workspace contract](./references/income-expense-workspaces.md) for separate registers, academic-year months, selected-record details, manual creation and automatic refund visibility.

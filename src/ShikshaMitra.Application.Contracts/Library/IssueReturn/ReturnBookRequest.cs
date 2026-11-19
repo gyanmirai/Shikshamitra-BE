@@ -7,7 +7,7 @@ namespace ShikshaMitra.Library.IssueReturn;
 public class ReturnBookRequest
 {
     [Required]
-    public string AccessionNo { get; set; }
+    public string AccessionNo { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
     [Required]
     public Guid MemberId { get; set; }

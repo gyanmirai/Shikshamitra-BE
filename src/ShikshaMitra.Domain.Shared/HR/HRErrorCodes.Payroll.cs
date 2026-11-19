@@ -2,6 +2,19 @@ namespace ShikshaMitra.HR;
 
 public static partial class HRErrorCodes
 {
+	public const string PayslipNotAvailable = "HR:Payroll:PayslipNotAvailable";
+	public const string PayslipReportRequiresIssued = "HR:Payroll:PayslipReportRequiresIssued";
+	public const string CompensationTargetNotSolvable = "HR:Payroll:CompensationTargetNotSolvable";
+	public const string PayslipDocumentInvalid = "HR:Payroll:030044";
+	public const string PayslipDocumentRequired = "HR:Payroll:030045";
+	public const string PayslipSchoolDetailsRequired = "HR:Payroll:030046";
+	public const string PayslipConflict = "HR:Payroll:030047";
+	public const string PayslipCorrectionPending = "HR:Payroll:030048";
+	public const string PayslipSettlementInvalid = "HR:Payroll:030049";
+	public const string EsiConfigurationInvalidMonth = "HR:Payroll:EsiConfigurationInvalidMonth";
+	public const string EsiConfigurationLocked = "HR:Payroll:EsiConfigurationLocked";
+	public const string EsiConfigurationReasonRequired = "HR:Payroll:EsiConfigurationReasonRequired";
+	public const string EsiConfigurationCancellationInvalid = "HR:Payroll:EsiConfigurationCancellationInvalid";
 	public const string PayrollPreviewStale = "PAYROLL_PREVIEW_STALE";
 	public const string PayrollPreviewNotFound = "PAYROLL_PREVIEW_NOT_FOUND";
 	public const string PayrollPreviewNotReady = "PAYROLL_PREVIEW_NOT_READY";

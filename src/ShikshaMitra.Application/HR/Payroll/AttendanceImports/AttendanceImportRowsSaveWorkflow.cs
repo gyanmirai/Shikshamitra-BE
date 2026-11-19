@@ -67,7 +67,7 @@ public class AttendanceImportRowsSaveWorkflow(
 		    .Count() != normalizedEntries.Count)
 		{
 			throw new BusinessException(HRErrorCodes.AttendanceImportRowMismatch)
-				.WithData("reason", "Duplicate employee/date entries are not allowed.");
+				.WithData("reason", "Duplicate staff/date entries are not allowed.");
 		}
 
 		var upsertedCount = await SaveAttendanceByDateAsync(normalizedEntries);

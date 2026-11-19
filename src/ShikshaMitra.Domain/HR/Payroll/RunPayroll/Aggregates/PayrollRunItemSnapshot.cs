@@ -64,6 +64,11 @@ public class PayrollRunItemSnapshot : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public int? ProvidentFundRuleVersion { get; set; }
 	public Guid? ProfessionalTaxRuleId { get; set; }
 	public int? ProfessionalTaxRuleVersion { get; set; }
+	public string? EsiCalculationDetailsJson { get; set; }
+	public string? PfEligibilityDetailsJson { get; set; }
+	public string? StatutoryApplicationJson { get; set; }
+	public string? LeaveUnitsByTypeJson { get; set; }
+	public Guid? EsiConfigurationId { get; set; }
 	public Guid? EmployeeStateInsuranceRuleId { get; set; }
 	public int? EmployeeStateInsuranceRuleVersion { get; set; }
 	public decimal EmployeeStateInsuranceWages { get; set; }

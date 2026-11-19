@@ -24,6 +24,28 @@ public class SubjectAuditWriter(
     ICurrentUser currentUser,
     IGuidGenerator guidGenerator) : ITransientDependency
 {
+    public sealed record ActorSnapshot(string? Name, string? Role, string? Email);
+
+    public async Task<ActorSnapshot> CaptureActorAsync()
+    {
+        var (name, role, email) = await ResolveActorAsync();
+        return new ActorSnapshot(name, role, email);
+    }
+
+    public async Task WriteCreatedManyAsync(IReadOnlyList<(Guid SubjectId, string Snapshot, string Name)> subjects)
+    {
+        if (subjects.Count == 0) return;
+        var actor = await CaptureActorAsync();
+        var (source, ipAddress, device, browser, operatingSystem, requestPath, httpMethod) = ResolveRequestContext();
+        var logs = subjects.Select(subject => new SubjectAuditLog(
+            guidGenerator.Create(), currentTenant.Id, subject.SubjectId, "Created", string.Empty, subject.Snapshot,
+            currentUser.Id ?? Guid.Empty, module: "SubjectCreation", entityType: "subject", entityName: subject.Name,
+            actorNameSnapshot: actor.Name, actorRoleSnapshot: actor.Role, actorEmailSnapshot: actor.Email,
+            source: source, ipAddress: ipAddress, device: device, browser: browser,
+            operatingSystem: operatingSystem, requestPath: requestPath, httpMethod: httpMethod)).ToList();
+        await repository.InsertManyAsync(logs);
+    }
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] DefaultIgnoredDiffFields =
     [
@@ -48,9 +70,10 @@ public class SubjectAuditWriter(
         string? reason = null,
         string module = "SubjectCreation",
         string? subModule = null,
-        string? correlationId = null)
+        string? correlationId = null,
+        ActorSnapshot? actor = null)
     {
-        var (actorName, actorRole, actorEmail) = await ResolveActorAsync();
+        var (actorName, actorRole, actorEmail) = actor ?? await CaptureActorAsync();
         var changedFields = Diff(beforeJson, afterJson);
         var changedFieldsJson = changedFields.Count > 0 ? JsonSerializer.Serialize(changedFields, JsonOptions) : null;
 

@@ -113,6 +113,11 @@ public class AdmissionReviewUserDto
 public class AdmissionReviewQueueInput : PagedResultRequestDto
 {
 	public AdmissionReviewQueueInput() => MaxResultCount = 20;
+	public Guid? AcademicYearId { get; set; }
+	public Guid? BoardId { get; set; }
+	public Guid? MediumId { get; set; }
+	public Guid? StandardId { get; set; }
+	public List<Guid> StandardIds { get; set; } = [];
 	public bool OverdueOnly { get; set; }
 	public bool AssignedToMe { get; set; }
 }

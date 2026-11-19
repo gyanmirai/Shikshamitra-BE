@@ -80,7 +80,7 @@ public partial class FeeStructureAppService
 		if (patch.TryGetPropertyValue("policies", out var policyNode))
 		{
 			var policies = policyNode?.AsObject() ?? throw InvalidPatch("Policies must be an object.");
-			Allowed(policies, "collection", "concession", "proration", "refund");
+			Allowed(policies, "collection", "concession", "refund");
 			foreach (var (family, value) in policies)
 			{
 				var selection = value?.AsObject();
@@ -118,7 +118,7 @@ public partial class FeeStructureAppService
 			foreach (var update in Array(operations, "update"))
 			{
 				var fields = update!.AsObject();
-				Allowed(fields, "lineId", "amount", "isOneTime", "isOptional", "payableMonth", "payableYear", "schedule");
+				Allowed(fields, "lineId", "amount", "isVariable", "isOneTime", "isOptional", "payableMonth", "payableYear", "schedule");
 				var lineId = fields["lineId"]!.GetValue<Guid>();
 				if (!touched.Add(lineId)) throw InvalidPatch("A Fee Head line can be changed only once per request.");
 				var line = lines.SingleOrDefault(x => x?["id"]?.GetValue<Guid>() == lineId)?.AsObject() ?? throw InvalidPatch("The updated line does not belong to this structure.");
@@ -134,7 +134,7 @@ public partial class FeeStructureAppService
 			foreach (var addition in Array(operations, "add"))
 			{
 				var line = addition!.AsObject();
-				Allowed(line, "feeHeadId", "amount", "isOneTime", "isOptional", "payableMonth", "payableYear", "paymentTermId", "paymentTermVersionId", "scheduleMode", "installmentOverrides");
+				Allowed(line, "feeHeadId", "amount", "isVariable", "isOneTime", "isOptional", "payableMonth", "payableYear", "paymentTermId", "paymentTermVersionId", "scheduleMode", "installmentOverrides");
 				lines.Add(line.DeepClone());
 			}
 		}

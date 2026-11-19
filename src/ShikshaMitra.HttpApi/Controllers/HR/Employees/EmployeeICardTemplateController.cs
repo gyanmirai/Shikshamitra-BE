@@ -42,6 +42,10 @@ public class EmployeeICardTemplateController : AbpControllerBase
 		return _appService.GetListAsync(academicYearId, mediumStageId, page, pageSize, search);
 	}
 
+	[HttpGet("photos/{employeeId:guid}")]
+	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+	public Task<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto> PhotoAsync(Guid employeeId) => _appService.GetPhotoAsync(employeeId);
+
 	[HttpGet("{id}")]
 	[ProducesResponseType(typeof(EmployeeICardTemplateDto), StatusCodes.Status200OK)]
 	public Task<EmployeeICardTemplateDto> GetAsync(Guid id)
@@ -85,6 +89,13 @@ public class EmployeeICardTemplateController : AbpControllerBase
 	{
 		var asset = await _appService.DownloadAssetAsync(blobName);
 		return File(asset.Content, asset.ContentType, asset.FileName);
+	}
+
+	[HttpGet("school-logo")]
+	public async Task<IActionResult> SchoolLogoAsync([FromQuery] Guid? mediumStageId)
+	{
+		var asset = await _appService.GetSchoolLogoAsync(mediumStageId);
+		return asset == null ? NoContent() : File(asset.Content, asset.ContentType, asset.FileName);
 	}
 
 	[HttpPost("{id}/pdf")]

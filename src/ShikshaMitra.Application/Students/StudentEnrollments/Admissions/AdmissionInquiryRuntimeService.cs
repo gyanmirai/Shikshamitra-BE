@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -15,19 +16,64 @@ public class AdmissionInquiryRuntimeService(
 	IRepository<AdmissionInquiryManagement, Guid> management,
 	AdmissionInquiryPolicyResolver policies) : ApplicationService, ITransientDependency
 {
+	public async Task UpdateStatusAsync(AdmissionInquiry inquiry, AdmissionInquiryStatus status, string? reason)
+	{
+		EnsureValidStatusChange(inquiry, status, reason);
+		if (status == AdmissionInquiryStatus.Interested) await EnsurePrimaryContactReadyAsync(inquiry);
+		if (inquiry.Status == status) return;
+		var state = await EnsureManagementAsync(inquiry);
+		if (state != null)
+		{
+			var policy = AdmissionInquiryPolicyResolver.ReadSnapshot(state.PolicySnapshotJson);
+			if (status == AdmissionInquiryStatus.New) { if (state.Outcome.HasValue) state.Reopen(); }
+			else state.RecordOutcome(status == AdmissionInquiryStatus.Interested ? AdmissionInquiryQualificationOutcome.Qualified : AdmissionInquiryQualificationOutcome.NotInterested,
+				"[]", status == AdmissionInquiryStatus.NotInterested ? "OTHER" : null, string.IsNullOrWhiteSpace(reason) ? "Family confirmed interest in admission." : reason, CurrentUser.Id ?? Guid.Empty, Clock.Now);
+			await management.UpdateAsync(state, false);
+		}
+		inquiry.SetStatus(status);
+	}
+
+	public static void EnsureValidStatusChange(AdmissionInquiry inquiry, AdmissionInquiryStatus status, string? reason)
+	{
+		if (!AdmissionInquiryStatusRules.IsBusinessStatus(status) || AdmissionInquiryStatusRules.IsTransferred(inquiry.Status) || inquiry.Status == AdmissionInquiryStatus.Duplicate)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState, "Choose Pending, Interested, or Not interested for an open inquiry.");
+		if (inquiry.Status == status) return;
+		if ((status == AdmissionInquiryStatus.NotInterested || status == AdmissionInquiryStatus.New && AdmissionInquiryStatusRules.Display(inquiry.Status) == AdmissionInquiryStatus.NotInterested) && string.IsNullOrWhiteSpace(reason))
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Provide a reason for closing or reopening the inquiry.");
+	}
+
+	public async Task RefreshPolicyAsync(AdmissionInquiry inquiry)
+	{
+		var state = await management.FindAsync(item => item.InquiryId == inquiry.Id);
+		if (state == null) { await EnsureManagementAsync(inquiry); return; }
+		var context = await policies.ResolveAsync(inquiry.AdmissionOfferingId);
+		if (context == null) return;
+		state.UpdatePolicy(context.Definition?.Id, context.SnapshotJson, inquiry.CreationTime,
+			context.Policy.FirstContactDueInHours, context.Policy.QualificationDueInDays);
+		await management.UpdateAsync(state, false);
+	}
 	public async Task<AdmissionInquiryManagement?> EnsureManagementAsync(AdmissionInquiry inquiry)
 	{
 		var existing = await management.FindAsync(item => item.InquiryId == inquiry.Id);
 		if (existing != null) return existing;
 		var context = await policies.ResolveAsync(inquiry.AdmissionOfferingId);
-		if (context == null) return null;
+		if (context == null)
+		{
+			// Notes and reminders are available even when optional intake settings are not configured.
+			var policy = new AdmissionInquiryPolicy { Version = 1, Enabled = true };
+			context = new AdmissionInquiryPolicyContext(null, policy, JsonSerializer.Serialize(policy));
+		}
 		return await management.InsertAsync(new AdmissionInquiryManagement(GuidGenerator.Create(), CurrentTenant.Id,
-			inquiry.Id, context.Definition.Id, context.SnapshotJson, inquiry.CreationTime == default ? Clock.Now : inquiry.CreationTime,
+			inquiry.Id, context.Definition?.Id, context.SnapshotJson, inquiry.CreationTime == default ? Clock.Now : inquiry.CreationTime,
 			context.Policy.FirstContactDueInHours, context.Policy.QualificationDueInDays), false);
 	}
 
 	public async Task EnsureCanStartApplicationAsync(Guid offeringId, AdmissionInquiry? inquiry)
 	{
+		if (inquiry != null) await EnsurePrimaryContactReadyAsync(inquiry);
+		if (inquiry != null && inquiry.Status != AdmissionInquiryStatus.Interested)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.QualificationRequired,
+				"Mark the inquiry Interested before moving to the next stage.");
 		var context = await policies.ResolveAsync(offeringId);
 		if (context == null) return;
 		if (inquiry == null)
@@ -37,7 +83,14 @@ public class AdmissionInquiryRuntimeService(
 					"Complete the managed inquiry before starting this application.");
 			return;
 		}
-		await EnsureReadinessAsync(inquiry, await EnsureManagementAsync(inquiry), context.Policy);
+		if (await EnsureManagementAsync(inquiry) == null)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
+	}
+
+	private async Task EnsurePrimaryContactReadyAsync(AdmissionInquiry inquiry)
+	{
+		if (inquiry.ApplicantId.HasValue)
+			AdmissionPrimaryContactSelection.EnsureReady(await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionApplicant, Guid>>().GetAsync(inquiry.ApplicantId.Value));
 	}
 
 	public async Task<AdmissionInquiryManagement?> EnsureStageCompleteAsync(AdmissionApplication application,
@@ -55,7 +108,7 @@ public class AdmissionInquiryRuntimeService(
 			inquiry.AdmissionOfferingId != application.AdmissionOfferingId)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.LinkedInquiryRequired);
 		var state = await EnsureManagementAsync(inquiry);
-		await EnsureReadinessAsync(inquiry, state, policy);
+		if (state == null) throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
 		return state;
 	}
 
@@ -78,30 +131,4 @@ public class AdmissionInquiryRuntimeService(
 		(!state.LastContactAt.HasValue && state.FirstContactDueAt < now) ||
 		(!state.Outcome.HasValue && state.QualificationDueAt < now);
 
-	public static List<string> GetReadinessBlockers(AdmissionInquiry inquiry, AdmissionInquiryManagement state,
-		AdmissionInquiryPolicy policy)
-	{
-		var blockers = new List<string>();
-		if (policy.ApplicationStartRequirement >= AdmissionInquiryApplicationStartRequirement.Contacted &&
-			!inquiry.ContactedAt.HasValue && state.ContactCount == 0)
-			blockers.Add("Record the first contact.");
-		if (policy.ApplicationStartRequirement == AdmissionInquiryApplicationStartRequirement.Qualified &&
-			state.Outcome != AdmissionInquiryQualificationOutcome.Qualified)
-			blockers.Add("Record a qualified outcome.");
-		return blockers;
-	}
-
-	private static Task EnsureReadinessAsync(AdmissionInquiry inquiry, AdmissionInquiryManagement? state,
-		AdmissionInquiryPolicy policy)
-	{
-		if (state == null) throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
-		var blockers = GetReadinessBlockers(inquiry, state, policy);
-		if (blockers.Contains("Record the first contact."))
-			throw new BusinessException(AdmissionInquiryManagementErrorCodes.ContactRequired,
-				"Record the first contact before starting or completing the application Inquiry stage.");
-		if (blockers.Count > 0)
-			throw new BusinessException(AdmissionInquiryManagementErrorCodes.QualificationRequired,
-				"Qualify the inquiry before starting or completing the application Inquiry stage.");
-		return Task.CompletedTask;
-	}
 }

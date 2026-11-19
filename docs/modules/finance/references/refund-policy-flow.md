@@ -213,7 +213,7 @@ This mapping prevents old compatibility fields from surviving without a business
 | `refundDueWithin` | Remove from Refund Policy. A processing target may describe operational SLA, but policy setup does not impose a request deadline. |
 | `bankDetailsRequired` | Remove; required details are derived from the selected allowed payout method. |
 | `refundMethod` | Replace with the multi-select `allowedPayoutMethods`. |
-| `allowPartialRefund` | Keep as `allowPartialRequest` and validate it against Amount Mode. |
+| `allowPartialRefund` | Deprecated compatibility/snapshot field. It no longer restricts request selection or amounts and is absent from policy configuration. Full/Partial remains a per-request choice within the canonical eligible formula and caps. |
 | `requireApproval` | Remove from the form; maker-checker approval is mandatory for every refund. |
 | `approvalRoleIds` | Remove; Security permissions and assignment determine actors, never stored role-name logic. |
 | `deductionRules` | Replace the loose structure with one typed, versioned deduction rule. |

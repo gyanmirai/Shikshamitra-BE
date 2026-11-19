@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -62,7 +62,7 @@ public class LibrarySectionAppService(
 
 		var query = await _sectionRepository.GetQueryableAsync();
 		var normalizedSectionName = input.SectionName.Trim().ToLower();
-		var exists = await AsyncExecuter.AnyAsync(query.Where(x => x.SectionName.ToLower() == normalizedSectionName && x.AcademicYearId == academicYearId));
+		var exists = await AsyncExecuter.AnyAsync(query.Where(x => x.SectionName!.ToLower() == normalizedSectionName && x.AcademicYearId == academicYearId));
 		if (exists)
 		{
 			throw LibraryException(LibraryErrorCodes.SectionAlreadyExists, "Section already exists.");
@@ -120,7 +120,7 @@ public class LibrarySectionAppService(
 		var exists = await AsyncExecuter.AnyAsync(sectionQuery.Where(x =>
 			x.Id != sectionId &&
 			x.AcademicYearId == academicYearId &&
-			x.SectionName.ToLower() == normalizedSectionName));
+			x.SectionName!.ToLower() == normalizedSectionName));
 		if (exists)
 		{
 			throw LibraryException(LibraryErrorCodes.SectionAlreadyExists, "Section already exists.");
@@ -214,7 +214,7 @@ public class LibrarySectionAppService(
 		}
 	}
 
-	private static void ValidateShelfPayload(string sectionName, int numberOfShelf, IReadOnlyCollection<string> shelfItems)
+	private static void ValidateShelfPayload([System.Diagnostics.CodeAnalysis.NotNull] string? sectionName, int numberOfShelf, IReadOnlyCollection<string> shelfItems)
 	{
 		if (string.IsNullOrWhiteSpace(sectionName))
 		{

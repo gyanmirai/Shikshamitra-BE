@@ -3,7 +3,7 @@ module: institute-setup
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-07-08
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,16 +11,21 @@ audience: humans-and-agents
 # Understand the Institute Setup backend module
 
 TL;DR: use this page as the entrypoint for Institute Setup behavior, API families, architecture, workflows, and validation.
-The active curated docs currently focus on Rooms Management under Tenant Settings.
+The curated surface includes durable institute initial setup, Rooms Management and Shift Management tenant isolation under Tenant Settings.
+School Identity adds shared/scoped assets, immutable uploads, template integration and historical document references. See [product rules](./product.md), [API contracts](./api.md) and the [frontend guide](../../../../Shikshamitra-FE/docs/institute-setup/README.md).
+
+School Documents adds a tenant-wide approval and permission library with grouped private attachments, audited mutations and authenticated file access. Start with its [product rules](./product.md#school-documents) and [API](./api.md#school-documents).
 
 ## Read order
 
+Reports adds permission-checked previews, manual/AI generation, private history and expiring downloads for core setup datasets. Start with [product rules](./product.md#reports) and [API contracts](./api.md#reports).
+
 | Step | File | Use it to |
 |---|---|---|
-| 1 | [product.md](./product.md) | Understand Rooms Management product behavior |
-| 2 | [api.md](./api.md) | Find building, room type, and room routes |
+| 1 | [product.md](./product.md) | Understand initial setup and Rooms Management behavior |
+| 2 | [api.md](./api.md) | Find initial setup, building, room type, and room routes |
 | 3 | [architecture.md](./architecture.md) | Locate Tenant Settings source paths |
-| 4 | [workflows.md](./workflows.md) | Trace building, room type, and room flows |
+| 4 | [workflows.md](./workflows.md) | Trace setup persistence, completion and room flows |
 | 5 | [testing.md](./testing.md) | Pick focused validation commands |
 
 ## Source of truth
@@ -35,6 +40,8 @@ The active curated docs currently focus on Rooms Management under Tenant Setting
 | Tests | `test/ShikshaMitra.*.Tests/TenantSettings/**` |
 
 ## For agents
+
+The [frontend initial setup docs](../../../../Shikshamitra-FE/docs/initial-setup/README.md) own route guards, wizard layout and browser workflows.
 
 Use this table before searching code:
 
@@ -54,3 +61,8 @@ Run these commands from the `Shikshamitra-BE` repo root:
 powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module institute-setup
 git diff --check
 ```
+
+## School shift boundary
+
+Institute Setup owns academic school shifts only.
+Employee work shifts and assignments belong to [HR](../hr/product.md#employee-work-shifts).

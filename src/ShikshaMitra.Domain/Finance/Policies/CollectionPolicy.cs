@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,8 +32,10 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	// Late Fee
 	public bool EnableLateFee { get; protected set; }
+	/// <summary>Absent on historical rows: their selected-head scope remains authoritative.</summary>
+	[NotMapped]
+	public bool ApplyLateFeeToAllFeeHeads => this.GetProperty<bool>(nameof(ApplyLateFeeToAllFeeHeads), false);
 	public int GracePeriodDays { get; protected set; }
-	public GracePeriodType GracePeriodType { get; protected set; }
 	public string LateFeeApplyOnFeeHeadsJson { get; protected set; } = "[]";
 	public LateFeeCalculationType LateFeeType { get; protected set; }
 	public decimal? FlatAmount { get; protected set; }
@@ -47,6 +50,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public RoundingMethodType RoundingMethod { get; protected set; }
 	public bool ConsiderAsIncome { get; protected set; }
 	public Guid? LateFeeIncomeHeadId { get; protected set; }
+	public Guid? LateFeeIncomeCategoryId { get; private set; }
 	/// <summary>Absolute ceiling on computed late fee, regardless of formula — closes the "runaway compounding" gap.</summary>
 	public decimal? MaximumLateFeeAmount { get; protected set; }
 	/// <summary>Stop accruing additional late fee once daysLate exceeds this many days — independent of the amount cap above.</summary>
@@ -72,6 +76,15 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Online Collection
 	public bool AllowOnlineCollection { get; protected set; }
 
+	// Stored in the existing JSON extension column, so historical rows remain Legacy.
+	[NotMapped]
+	public CollectionAllocationBasis AllocationBasis => Enum.Parse<CollectionAllocationBasis>(
+		this.GetProperty<string>(nameof(AllocationBasis), nameof(CollectionAllocationBasis.Legacy))!);
+
+	[NotMapped]
+	public CollectionReceiptGrouping ReceiptGrouping => Enum.Parse<CollectionReceiptGrouping>(
+		this.GetProperty<string>(nameof(ReceiptGrouping), nameof(CollectionReceiptGrouping.Separate))!);
+
 	public int Version { get; protected set; }
 
 	protected CollectionPolicy()
@@ -91,7 +104,12 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	public void Update(CollectionPolicyUpdateModel model)
+		=> ApplyUpdate(model.NormalizeForWrite(), validateInputBounds: true, applyLateFeeToAllFeeHeads: true);
+
+	private void ApplyUpdate(CollectionPolicyUpdateModel model, bool validateInputBounds, bool applyLateFeeToAllFeeHeads)
 	{
+		if (IsDefault && (!model.IsDefault || model.Status != CollectionPolicyStatus.Active))
+			throw new BusinessException(CollectionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if (Status == CollectionPolicyStatus.Archived && Version > 0)
 		{
 			throw new BusinessException(CollectionPolicyErrorCodes.ArchivedPolicyNotEditable);
@@ -122,9 +140,13 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(CollectionPolicyErrorCodes.DefaultPolicyMustBeActive);
 		}
 
-		ValidateRules(model, model.Status == CollectionPolicyStatus.Active);
+		if (!Enum.IsDefined(model.AllocationBasis))
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidAllocationBasis).WithData("field", "allocationBasis");
+		if (!Enum.IsDefined(model.ReceiptGrouping))
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidReceiptGrouping).WithData("field", "receiptGrouping");
+		ValidateRules(model, model.Status == CollectionPolicyStatus.Active, validateInputBounds, applyLateFeeToAllFeeHeads);
 
-		PolicyName = model.PolicyName.Trim();
+		PolicyName = FinanceName.Normalize(model.PolicyName);
 		PolicyCode = model.PolicyCode.Trim().ToUpperInvariant();
 		Description = model.Description?.Trim() ?? string.Empty;
 		Status = model.Status;
@@ -133,23 +155,24 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EffectiveTo = model.EffectiveTo?.Date;
 
 		EnableLateFee = model.EnableLateFee;
+		this.SetProperty(nameof(ApplyLateFeeToAllFeeHeads), applyLateFeeToAllFeeHeads);
 		GracePeriodDays = model.GracePeriodDays;
-		GracePeriodType = model.GracePeriodType;
 		LateFeeApplyOnFeeHeadsJson = SerializeGuids(model.LateFeeApplyOnFeeHeads);
 		LateFeeType = model.LateFeeType;
-		FlatAmount = model.FlatAmount;
+		FlatAmount = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.FlatAmount);
 		Percentage = model.Percentage;
 		PercentageBase = model.PercentageBase;
-		AmountPerDay = model.AmountPerDay;
-		AmountPerWeek = model.AmountPerWeek;
-		AmountPerMonth = model.AmountPerMonth;
+		AmountPerDay = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.AmountPerDay);
+		AmountPerWeek = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.AmountPerWeek);
+		AmountPerMonth = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.AmountPerMonth);
 		CompoundFrequency = model.CompoundFrequency;
 		EscalationRulesJson = SerializeEscalationRules(model.EscalationRules);
 		FeeHeadOverridesJson = SerializeFeeHeadOverrides(model.FeeHeadOverrides);
-		RoundingMethod = model.RoundingMethod;
+		RoundingMethod = RoundingMethodType.RoundUp;
 		ConsiderAsIncome = model.ConsiderAsIncome;
 		LateFeeIncomeHeadId = model.LateFeeIncomeHeadId;
-		MaximumLateFeeAmount = model.MaximumLateFeeAmount;
+		LateFeeIncomeCategoryId = model.LateFeeIncomeCategoryId;
+		MaximumLateFeeAmount = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.MaximumLateFeeAmount);
 		MaximumChargingDays = model.MaximumChargingDays;
 
 		EnableWaiver = model.EnableWaiver;
@@ -166,6 +189,8 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		this.SetProperty(EnableChargeWaiverProperty, model.EnableChargeWaiver);
 
 		AllowOnlineCollection = model.AllowOnlineCollection;
+		this.SetProperty(nameof(AllocationBasis), model.AllocationBasis.ToString());
+		this.SetProperty(nameof(ReceiptGrouping), model.ReceiptGrouping.ToString());
 
 		Version++;
 	}
@@ -184,6 +209,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Unarchive()
 	{
+		if (Status != CollectionPolicyStatus.Archived) return;
 		Status = CollectionPolicyStatus.Draft;
 		IsDefault = false;
 		Version++;
@@ -199,7 +225,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	public bool AppliesLateFeeTo(Guid feeHeadId) =>
-		EnableLateFee && GetLateFeeApplyOnFeeHeads().Contains(feeHeadId);
+		EnableLateFee && (ApplyLateFeeToAllFeeHeads || GetLateFeeApplyOnFeeHeads().Contains(feeHeadId));
 
 	public bool AppliesWaiverTo(Guid feeHeadId) =>
 		EnableWaiver && AppliesLateFeeTo(feeHeadId);
@@ -222,11 +248,11 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public bool TryGetFeeHeadOverride(Guid feeHeadId, out CollectionPolicyFeeHeadOverride? feeHeadOverride)
 	{
-		feeHeadOverride = GetFeeHeadOverrides().FirstOrDefault(o => o.FeeHeadId == feeHeadId);
+		feeHeadOverride = ApplyLateFeeToAllFeeHeads ? null : GetFeeHeadOverrides().FirstOrDefault(o => o.FeeHeadId == feeHeadId);
 		return feeHeadOverride is not null;
 	}
 
-	private static void ValidateFeeHeadOverrides(IReadOnlyList<CollectionPolicyFeeHeadOverride>? overrides)
+	private static void ValidateFeeHeadOverrides(IReadOnlyList<CollectionPolicyFeeHeadOverride>? overrides, bool validateInputBounds)
 	{
 		if (overrides is null || overrides.Count == 0)
 		{
@@ -253,9 +279,13 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 					.WithData("feeHeadId", feeHeadOverride.FeeHeadId);
 			}
 
-			if (feeHeadOverride.LateFeeRule.LateFeeType == LateFeeCalculationType.Slab)
+			var rule = feeHeadOverride.LateFeeRule;
+			if (validateInputBounds)
+				ValidateNumericRule(rule.FlatAmount, rule.Percentage, rule.AmountPerDay, rule.AmountPerWeek,
+					rule.AmountPerMonth, rule.MaximumLateFeeAmount, rule.MaximumChargingDays);
+			if (rule.LateFeeType == LateFeeCalculationType.Slab)
 			{
-				CollectionPolicySlabValidator.EnsureNoOverlapsOrGaps(feeHeadOverride.LateFeeRule.EscalationRules);
+				CollectionPolicySlabValidator.EnsureNoOverlapsOrGaps(rule.EscalationRules, rule.MaximumChargingDays, validateInputBounds);
 			}
 		}
 	}
@@ -270,8 +300,8 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EffectiveFrom = EffectiveFrom,
 		EffectiveTo = EffectiveTo,
 		EnableLateFee = EnableLateFee,
+		ApplyLateFeeToAllFeeHeads = ApplyLateFeeToAllFeeHeads,
 		GracePeriodDays = GracePeriodDays,
-		GracePeriodType = GracePeriodType,
 		LateFeeApplyOnFeeHeads = GetLateFeeApplyOnFeeHeads().ToList(),
 		LateFeeType = LateFeeType,
 		FlatAmount = FlatAmount,
@@ -286,13 +316,16 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RoundingMethod = RoundingMethod,
 		ConsiderAsIncome = ConsiderAsIncome,
 		LateFeeIncomeHeadId = LateFeeIncomeHeadId,
+		LateFeeIncomeCategoryId = LateFeeIncomeCategoryId,
 		MaximumLateFeeAmount = MaximumLateFeeAmount,
 		MaximumChargingDays = MaximumChargingDays,
 		EnableWaiver = EnableWaiver,
 		EnableChargeWaiver = EnableChargeWaiver,
 		RequiresApproval = RequiresApproval,
 		ApprovalRoleIds = GetApprovalRoleIds().ToList(),
-		AllowOnlineCollection = AllowOnlineCollection
+		AllowOnlineCollection = AllowOnlineCollection,
+		AllocationBasis = AllocationBasis,
+		ReceiptGrouping = ReceiptGrouping
 	};
 
 	public static CollectionPolicy FromSnapshot(
@@ -302,12 +335,14 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		int version,
 		CollectionPolicySnapshot snapshot)
 	{
-		var entity = new CollectionPolicy(policyId, tenantId, academicYearId, snapshot.ToUpdateModel());
+		// Input limits apply to new writes; immutable historical versions retain their original economics.
+		var entity = new CollectionPolicy { Id = policyId, TenantId = tenantId, AcademicYearId = academicYearId };
+		entity.ApplyUpdate(snapshot.ToUpdateModel(), validateInputBounds: false, applyLateFeeToAllFeeHeads: snapshot.ApplyLateFeeToAllFeeHeads);
 		entity.Version = version;
 		return entity;
 	}
 
-	private static void ValidateRules(CollectionPolicyUpdateModel model, bool requireComplete)
+	private static void ValidateRules(CollectionPolicyUpdateModel model, bool requireComplete, bool validateInputBounds, bool commonScope)
 	{
 		if (model.EffectiveFrom.HasValue && model.EffectiveTo.HasValue &&
 			model.EffectiveFrom.Value.Date > model.EffectiveTo.Value.Date)
@@ -315,20 +350,18 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidEffectiveDates);
 		}
 
-		if (model.GracePeriodDays is < 0 or > 365 || model.MaximumChargingDays is <= 0 ||
-			model.MaximumLateFeeAmount is < 0)
+		if (model.GracePeriodDays is < 0 or > CollectionPolicyNumericLimits.MaximumDays ||
+			model.MaximumChargingDays is <= 0 || model.MaximumLateFeeAmount is < 0)
 		{
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidLateFeeRule);
 		}
-
-		if (model.Status == CollectionPolicyStatus.Active && model.GracePeriodType == GracePeriodType.WorkingDay)
-		{
-			throw new BusinessException(CollectionPolicyErrorCodes.WorkingDayGraceNotSupported);
-		}
+		if (validateInputBounds)
+			ValidateNumericRule(model.FlatAmount, model.Percentage, model.AmountPerDay, model.AmountPerWeek,
+				model.AmountPerMonth, model.MaximumLateFeeAmount, model.MaximumChargingDays);
 
 		if (model.EnableLateFee)
 		{
-			if (requireComplete && model.LateFeeApplyOnFeeHeads.Count == 0)
+			if (requireComplete && !commonScope && model.LateFeeApplyOnFeeHeads.Count == 0)
 			{
 				throw new BusinessException(CollectionPolicyErrorCodes.InvalidFeeHeadReference);
 			}
@@ -350,20 +383,16 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 			if (model.LateFeeType == LateFeeCalculationType.Slab && model.EscalationRules.Count > 0)
 			{
-				CollectionPolicySlabValidator.EnsureNoOverlapsOrGaps(model.EscalationRules);
+				CollectionPolicySlabValidator.EnsureNoOverlapsOrGaps(model.EscalationRules, model.MaximumChargingDays, validateInputBounds);
 			}
 
-			if (model.ConsiderAsIncome && requireComplete && model.LateFeeIncomeHeadId is null)
-			{
-				throw new BusinessException(CollectionPolicyErrorCodes.InvalidLateFeeRule)
-					.WithData("field", "lateFeeIncomeHeadId");
-			}
+
 		}
 
 		if (model.EnableWaiver && requireComplete)
 		{
 			if (!model.EnableLateFee ||
-				model.LateFeeApplyOnFeeHeads.Count == 0)
+				(!commonScope && model.LateFeeApplyOnFeeHeads.Count == 0))
 			{
 				throw new BusinessException(CollectionPolicyErrorCodes.InvalidWaiverRule);
 			}
@@ -377,7 +406,8 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidWaiverRule);
 		}
 
-		ValidateFeeHeadOverrides(model.FeeHeadOverrides);
+		if (commonScope) return;
+		ValidateFeeHeadOverrides(model.FeeHeadOverrides, validateInputBounds);
 		var lateFeeHeads = model.LateFeeApplyOnFeeHeads.ToHashSet();
 		if (model.FeeHeadOverrides.Any(x => !lateFeeHeads.Contains(x.FeeHeadId)))
 		{
@@ -388,6 +418,19 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private static string SerializeFeeHeadOverrides(IReadOnlyList<CollectionPolicyFeeHeadOverride>? overrides) =>
 		overrides is null || overrides.Count == 0 ? "[]" : JsonSerializer.Serialize(overrides);
+
+	private static void ValidateNumericRule(decimal? flat, decimal? percentage, decimal? perDay,
+		decimal? perWeek, decimal? perMonth, decimal? ceiling, int? cutoff)
+	{
+		// A draft may omit a formula, but any supplied value must still be safe to persist.
+		if (new[] { flat, perDay, perWeek, perMonth, ceiling }.Any(value =>
+			value.HasValue && !CollectionPolicyNumericLimits.IsAmount(value.Value)) ||
+			percentage.HasValue && !CollectionPolicyNumericLimits.IsPercentage(percentage.Value) ||
+			cutoff is < 1 or > CollectionPolicyNumericLimits.MaximumDays)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidLateFeeRule);
+		}
+	}
 
 	private static string SerializeGuids(IReadOnlyList<Guid>? values) =>
 		values is null || values.Count == 0 ? "[]" : JsonSerializer.Serialize(values);
@@ -421,7 +464,6 @@ public sealed record CollectionPolicyUpdateModel(
 	DateTime? EffectiveTo,
 	bool EnableLateFee,
 	int GracePeriodDays,
-	GracePeriodType GracePeriodType,
 	IReadOnlyList<Guid> LateFeeApplyOnFeeHeads,
 	LateFeeCalculationType LateFeeType,
 	decimal? FlatAmount,
@@ -442,4 +484,15 @@ public sealed record CollectionPolicyUpdateModel(
 	bool EnableChargeWaiver,
 	bool RequiresApproval,
 	IReadOnlyList<Guid> ApprovalRoleIds,
-	bool AllowOnlineCollection);
+	bool AllowOnlineCollection,
+	Guid? LateFeeIncomeCategoryId = null,
+	CollectionAllocationBasis AllocationBasis = CollectionAllocationBasis.Legacy,
+	CollectionReceiptGrouping ReceiptGrouping = CollectionReceiptGrouping.Separate)
+{
+	/// <summary>Public writes retire selected-head scope and per-head deviations.</summary>
+	public CollectionPolicyUpdateModel NormalizeForWrite() => this with
+	{
+		LateFeeApplyOnFeeHeads = Array.Empty<Guid>(),
+		FeeHeadOverrides = Array.Empty<CollectionPolicyFeeHeadOverride>()
+	};
+}

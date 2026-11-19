@@ -1,5 +1,9 @@
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using ShikshaMitra.HR;
+using ShikshaMitra.Security.Roles;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 namespace ShikshaMitra.Common.Middleware;
 
@@ -16,15 +20,43 @@ public static class ApiProblemDetailsMapper
 
 		return errorCode switch
 		{
+			Academic.Curriculum.ElectivePreferenceErrorCodes.Conflict => StatusCodes.Status409Conflict,
+			Students.StudentEnrollments.Admissions.AdmissionJourneyResumeErrorCodes.Conflict => StatusCodes.Status409Conflict,
+			Students.StudentEnrollments.Admissions.AdmissionFormCorrectionErrorCodes.Conflict => StatusCodes.Status409Conflict,
+			Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Conflict => StatusCodes.Status409Conflict,
+			Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Unavailable => StatusCodes.Status404NotFound,
+			Academic.Mobile.MobileSubmissionErrorCodes.SubmissionConflict or
+			Academic.Mobile.MobileSubmissionErrorCodes.IdempotencyConflict => StatusCodes.Status409Conflict,
+			StudentRollNumberErrorCodes.StalePreview or StudentRollNumberErrorCodes.InvalidState => StatusCodes.Status409Conflict,
+			StudentRollNumberErrorCodes.AdminRequired or StudentRollNumberErrorCodes.ApproverRequired => StatusCodes.Status403Forbidden,
+			RoleErrorCodes.AssignedToUsers or RoleErrorCodes.ReferencedByEmployees => StatusCodes.Status409Conflict,
+			TenantSettingsDomainErrorCodes.DuplicateStandardName or
+			TenantSettingsDomainErrorCodes.DuplicateDivisionName => StatusCodes.Status409Conflict,
+			FeeCollectionErrorCodes.IdempotencyConflict => StatusCodes.Status409Conflict,
+			Finance.Accounts.CashManagement.CashManagementErrorCodes.Stale or
+			Finance.Accounts.CashManagement.CashManagementErrorCodes.RetryConflict or
+			Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidState or
+			Finance.Accounts.CashManagement.CashManagementErrorCodes.InsufficientCash or
+			Finance.Accounts.CashManagement.CashManagementErrorCodes.Immutable => StatusCodes.Status409Conflict,
+			Finance.Accounts.Reconciliation.ReconciliationErrorCodes.AlreadyVerified or
+			Finance.Accounts.Reconciliation.ReconciliationErrorCodes.AlreadyRejected or
+			Finance.Accounts.Reconciliation.ReconciliationErrorCodes.TerminalStatus => StatusCodes.Status409Conflict,
+			HRErrorCodes.WorkShiftReferenced or HRErrorCodes.ShiftAssignmentProtected => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewStale or HRErrorCodes.PayrollPreviewNotReady => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewNotFound => StatusCodes.Status404NotFound,
 			HRErrorCodes.LeaveEmployeeNotFound => StatusCodes.Status403Forbidden,
+			HRErrorCodes.EmployeePolicyAccessRequired => StatusCodes.Status403Forbidden,
 			HRErrorCodes.TakeAttendanceMediumStageOutOfScope => StatusCodes.Status403Forbidden,
 			HRErrorCodes.LeaveInsufficientBalance => StatusCodes.Status400BadRequest,
 			HRErrorCodes.LeaveAlreadyCancelled => StatusCodes.Status409Conflict,
 			HRErrorCodes.LeaveConflictTerminalState => StatusCodes.Status409Conflict,
 			HRErrorCodes.TakeAttendanceApprovedLeaveMutationNotAllowed => StatusCodes.Status409Conflict,
 			HRErrorCodes.StatutoryPreviewStale => StatusCodes.Status409Conflict,
+			HRErrorCodes.EsiPolicyInUse => StatusCodes.Status409Conflict,
+			HRErrorCodes.CompensationPreviewStale => StatusCodes.Status409Conflict,
+			"HR:Payroll:StatutoryProfileConflict" or "HR:Payroll:PfCoverageSaveConflict" or "HR:Payroll:CompensationSaveConflict" or
+			"HR:Payroll:SalaryTemplateSaveConflict" => StatusCodes.Status409Conflict,
+			HRErrorCodes.EsiConfigurationLocked or HRErrorCodes.EsiConfigurationCancellationInvalid => StatusCodes.Status409Conflict,
 			HRErrorCodes.LeaveAttachmentNotFound => StatusCodes.Status404NotFound,
 			HRErrorCodes.LeaveFileTooLarge => StatusCodes.Status413PayloadTooLarge,
 			ValidationErrorCode => StatusCodes.Status400BadRequest,
@@ -34,7 +66,9 @@ public static class ApiProblemDetailsMapper
 
 	public static int NormalizeStatusCode(int currentStatus, string? errorCode)
 	{
-		if (string.IsNullOrWhiteSpace(errorCode))
+		if (string.IsNullOrWhiteSpace(errorCode) ||
+			(currentStatus is StatusCodes.Status401Unauthorized or StatusCodes.Status403Forbidden &&
+			 ApiPermissionDeniedDetails.IsFrameworkAuthorizationCode(errorCode)))
 		{
 			return currentStatus;
 		}
@@ -76,7 +110,7 @@ public static class ApiProblemDetailsMapper
 		{
 			StatusCodes.Status400BadRequest => "One or more business rules were violated.",
 			StatusCodes.Status401Unauthorized => "Authentication is required to access this resource.",
-			StatusCodes.Status403Forbidden => "You don't have permission to access this resource.",
+			StatusCodes.Status403Forbidden => ApiPermissionDeniedDetails.DefaultDetail,
 			StatusCodes.Status404NotFound => "The requested resource was not found.",
 			StatusCodes.Status409Conflict => "The request could not be completed because of a conflict.",
 			StatusCodes.Status413PayloadTooLarge => "The request payload is too large.",

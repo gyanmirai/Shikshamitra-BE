@@ -8,9 +8,9 @@ public class OrganizationUnitDto
 
     public Guid? TenantId { get; set; }
 
-    public string Code { get; set; }
+    public string Code { get; set; } = null!; // The response mapper populates these members after construction.
 
-    public string DisplayName { get; set; }
+    public string DisplayName { get; set; } = null!;
 
     public  Guid? ParentId { get;  set; }
 }

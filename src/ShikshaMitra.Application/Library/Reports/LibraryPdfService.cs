@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
+using ShikshaMitra.Common.PDF;
 using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.Library.Reports;
@@ -17,7 +18,7 @@ public class LibraryPdfService : ITransientDependency
 			{
 				page.Size(PageSizes.A4.Landscape());
 				page.Margin(20);
-				page.DefaultTextStyle(x => x.FontSize(8.5f).FontColor(Colors.Grey.Darken4));
+				page.DefaultTextStyle(x => x.FontSize(8.5f).FontColor(Colors.Grey.Darken4).WithPortableFonts());
 				page.Header().Element(c => ComposeHeader(c, report));
 				page.Content().Element(c => ComposeTable(c, report));
 				page.Footer().AlignRight().Text(text =>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using FluentValidation;
@@ -8,8 +8,10 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 /// <summary>Input DTO for creating a new fee-refund request.</summary>
 public class CreateFeeRefundRequestDto
 {
-    [Required]
-    public Guid StudentId { get; set; }
+    [Required, MaxLength(100)] public string IdempotencyKey { get; set; } = string.Empty;
+    public Guid? ReplacesRefundRequestId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
 
     [Required]
     public Guid AcademicYearId { get; set; }
@@ -37,19 +39,28 @@ public class CreateFeeRefundRequestDto
     /// </summary>
     public Dictionary<string, object?>? PaymentDetails { get; set; }
 
+    /// <summary>Explicit validated expense routing for an administrator's immediate cash payout.</summary>
+    public Guid? ExpenseCategoryId { get; set; }
+    public Guid? BankAccountId { get; set; }
+
     /// <summary>Optional reason / taxonomy for the refund (TC, excess payment, transfer, etc.).</summary>
     [MaxLength(1000)]
     public string? Reason { get; set; }
 }
 
-/// <summary>One refund line pointing to a specific DueFee row.</summary>
+/// <summary>One refund line identifying either a fee due or a paid charge and its payment allocation.</summary>
 public class CreateFeeRefundLineDto
 {
-    [Required]
-    public Guid DueFeeId { get; set; }
+    public Guid? ChargeId { get; set; }
+    /// <summary>Due line whose collected late fee is being refunded; distinct from principal.</summary>
+    public Guid? LateFeeDueFeeId { get; set; }
+    public Guid? DueFeeId { get; set; }
 
     [Required]
     public Guid SourceAllocationId { get; set; }
+
+    /// <summary>Receipt owning this allocation; legacy clients omit this to use OriginalReceiptId.</summary>
+    public Guid? SourceReceiptId { get; set; }
 
     [Range(typeof(decimal), "0.01", "9999999999999999")]
     public decimal Amount { get; set; }
@@ -70,9 +81,15 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
 
     public CreateFeeRefundRequestDtoValidator()
     {
-        RuleFor(x => x.StudentId).NotEmpty();
+        RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(100);
+        RuleFor(x => x).Must(x => x.StudentId.HasValue || x.FinanceFeeAccountId.HasValue)
+            .WithMessage("A Student or Finance fee account is required.");
+        RuleFor(x => x.StudentId).NotEqual(Guid.Empty).When(x => x.StudentId.HasValue);
+        RuleFor(x => x.FinanceFeeAccountId).NotEqual(Guid.Empty).When(x => x.FinanceFeeAccountId.HasValue);
         RuleFor(x => x.AcademicYearId).NotEmpty();
         RuleFor(x => x.OriginalReceiptId).NotEmpty();
+        RuleFor(x => x.ExpenseCategoryId).NotEqual(Guid.Empty).When(x => x.ExpenseCategoryId.HasValue);
+        RuleFor(x => x.BankAccountId).NotEqual(Guid.Empty).When(x => x.BankAccountId.HasValue);
 
         RuleFor(x => x.Lines)
             .NotNull()
@@ -81,8 +98,13 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
 
         RuleForEach(x => x.Lines).ChildRules(line =>
         {
-            line.RuleFor(l => l.DueFeeId).NotEmpty();
+            line.RuleFor(l => l).Must(l => (l.DueFeeId.HasValue ? 1 : 0) + (l.ChargeId.HasValue ? 1 : 0) + (l.LateFeeDueFeeId.HasValue ? 1 : 0) == 1)
+                .WithMessage("Specify exactly one fee due, charge, or paid late fee.");
+            line.RuleFor(l => l.DueFeeId).NotEqual(Guid.Empty).When(l => l.DueFeeId.HasValue);
+            line.RuleFor(l => l.ChargeId).NotEqual(Guid.Empty).When(l => l.ChargeId.HasValue);
+            line.RuleFor(l => l.LateFeeDueFeeId).NotEqual(Guid.Empty).When(l => l.LateFeeDueFeeId.HasValue);
             line.RuleFor(l => l.SourceAllocationId).NotEmpty();
+            line.RuleFor(l => l.SourceReceiptId).NotEqual(Guid.Empty).When(l => l.SourceReceiptId.HasValue);
             line.RuleFor(l => l.Amount).GreaterThan(0);
         });
 
@@ -101,5 +123,21 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
             .NotNull()
             .WithMessage("PaymentDetails are required for the selected refund method.")
             .When(x => !string.IsNullOrWhiteSpace(x.RefundMethod));
+
+        RuleFor(x => x).Must(x =>
+        {
+            bool Has(string key) => x.PaymentDetails != null &&
+                x.PaymentDetails.TryGetValue(key, out var value) &&
+                !string.IsNullOrWhiteSpace(value?.ToString());
+            return x.RefundMethod switch
+            {
+                "Cash" => Has("receivedBy"),
+                "Cheque" or "Demand Draft (DD)" => Has("payeeName"),
+                "Bank Transfer (NEFT/RTGS/IMPS)" => Has("beneficiaryName") &&
+                    Has("beneficiaryBankName") && Has("beneficiaryAccountNumber") && Has("ifscCode"),
+                "UPI" => Has("beneficiaryName") && Has("upiId"),
+                _ => false,
+            };
+        }).WithMessage("Provide the beneficiary details required for the selected refund method.");
     }
 }

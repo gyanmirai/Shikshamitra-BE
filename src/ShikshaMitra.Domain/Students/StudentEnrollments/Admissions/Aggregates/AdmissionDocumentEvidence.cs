@@ -5,7 +5,7 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
-public sealed record AdmissionDocumentFile(string FileName, string ContentType, long Size, string Sha256Hash, string BlobName, Guid SubmittedBy);
+public sealed record AdmissionDocumentFile(string FileName, string ContentType, long Size, string Sha256Hash, string BlobName, Guid? SubmittedBy);
 
 public class AdmissionDocumentEvidence : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
@@ -28,7 +28,9 @@ public class AdmissionDocumentEvidence : FullAuditedAggregateRoot<Guid>, IMultiT
 	public Guid? OriginalSeenBy { get; private set; }
 	public DateTime? OriginalSeenAt { get; private set; }
 	public bool OriginalSeen => OriginalSeenBy.HasValue && OriginalSeenAt.HasValue;
-	public Guid SubmittedBy { get; private set; }
+	public Guid? SubmittedBy { get; private set; }
+	public Guid? ParentRegistrationId { get; private set; }
+	public string? ParentContactJson { get; private set; }
 	public DateTime SubmittedAt { get; private set; }
 	public string? Notes { get; private set; }
 	public string PolicySnapshotJson { get; private set; } = string.Empty;
@@ -37,10 +39,13 @@ public class AdmissionDocumentEvidence : FullAuditedAggregateRoot<Guid>, IMultiT
 	public DateTime? StudentLinkedAt { get; private set; }
 	protected AdmissionDocumentEvidence() { }
 	public AdmissionDocumentEvidence(Guid id, Guid? tenantId, Guid applicationId, Guid stageId,
-		AdmissionDocumentRequirement requirement, int version, string kind, Guid submittedBy, DateTime submittedAt,
-		string policySnapshotJson, AdmissionDocumentFile? file = null, Guid? originalSeenBy = null, DateTime? originalSeenAt = null, string? notes = null) : base(id)
+		AdmissionDocumentRequirement requirement, int version, string kind, Guid? submittedBy, DateTime submittedAt,
+		string policySnapshotJson, AdmissionDocumentFile? file = null, Guid? originalSeenBy = null, DateTime? originalSeenAt = null, string? notes = null, Guid? parentRegistrationId = null, string? parentContactJson = null) : base(id)
 	{
 		requirement.Validate();
+		if ((!submittedBy.HasValue && (!parentRegistrationId.HasValue || parentRegistrationId == Guid.Empty || string.IsNullOrWhiteSpace(parentContactJson) || kind != "upload")) ||
+			(submittedBy.HasValue && parentRegistrationId.HasValue)) throw Invalid("Record the actual staff or invited parent actor.");
+		ParentRegistrationId = parentRegistrationId; ParentContactJson = parentContactJson;
 		if (version < 1 || submittedBy == Guid.Empty || kind is not ("upload" or "original" or "waiver")) throw Invalid("Invalid document evidence.");
 		if (kind == "upload" && file == null || kind == "original" && (!originalSeenBy.HasValue || !originalSeenAt.HasValue)) throw Invalid("Record the required document evidence.");
 		if (kind is "original" or "waiver" && string.IsNullOrWhiteSpace(notes)) throw Invalid("Record a reason or original-document observation.");
@@ -56,7 +61,7 @@ public class AdmissionDocumentEvidence : FullAuditedAggregateRoot<Guid>, IMultiT
 		OriginalSeenBy = originalSeenBy; OriginalSeenAt = originalSeenAt;
 		Notes = string.IsNullOrWhiteSpace(notes) ? null : Check.Length(notes.Trim(), nameof(notes), 1024);
 	}
-	public AdmissionDocumentFile? GetFile() => BlobName == null ? null : new(FileName!, ContentType!, Size!.Value, Sha256Hash!, BlobName, FileSubmittedBy!.Value);
+	public AdmissionDocumentFile? GetFile() => BlobName == null ? null : new(FileName!, ContentType!, Size!.Value, Sha256Hash!, BlobName, FileSubmittedBy);
 	public void LinkToStudent(Guid studentId, Guid linkedBy, DateTime at)
 	{
 		if (studentId == Guid.Empty || linkedBy == Guid.Empty || StudentId.HasValue && StudentId != studentId) throw Invalid("Document evidence cannot be linked to a different Student.");

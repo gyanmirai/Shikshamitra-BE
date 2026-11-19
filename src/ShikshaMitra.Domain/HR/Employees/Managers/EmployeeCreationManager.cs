@@ -53,11 +53,11 @@ public class EmployeeCreationManager(
 		{
 			throw new BusinessException(
 				HRErrorCodes.EmployeeGroupRequired,
-				"Employee group is required.");
+				"Staff group is required.");
 		}
 
 		logger.LogDebug(
-			"[EmployeeManager] Creating employee: UserId={UserId}, RoleId={RoleId}, Name={FirstName} {LastName}",
+			"[EmployeeManager] Creating staff: UserId={UserId}, RoleId={RoleId}, Name={FirstName} {LastName}",
 			userId,
 			roleId,
 			firstName,
@@ -73,7 +73,7 @@ public class EmployeeCreationManager(
 		);
 
 		logger.LogInformation(
-			"[EmployeeManager] Generated employee code: {EmployeeCode} for UserId={UserId}",
+			"[EmployeeManager] Generated staff code: {EmployeeCode} for UserId={UserId}",
 			employeeCode,
 			userId
 		);
@@ -117,7 +117,7 @@ public class EmployeeCreationManager(
 		);
 
 		logger.LogInformation(
-			"[EmployeeManager] Employee entity created: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}, UserId={UserId}, RoleId={RoleId}",
+			"[EmployeeManager] Staff entity created: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}, UserId={UserId}, RoleId={RoleId}",
 			employee.Id,
 			employee.EmployeeCode,
 			userId,

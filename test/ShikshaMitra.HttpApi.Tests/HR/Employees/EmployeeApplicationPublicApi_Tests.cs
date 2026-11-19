@@ -236,7 +236,7 @@ public class EmployeeApplicationPublicApi_Tests : ShikshaMitraApiTestBase
 			?? throw new InvalidOperationException("Invite response was empty.");
 	}
 
-	private static MultipartFormDataContent BuildMultipart(
+	internal static MultipartFormDataContent BuildMultipart(
 		object payload,
 		bool includeValidFiles = false,
 		bool includeInvalidResume = false,
@@ -387,7 +387,7 @@ public class EmployeeApplicationPublicApi_Tests : ShikshaMitraApiTestBase
 		workExperiences = Array.Empty<object>()
 	};
 
-	private static object ValidPayload(string prefix) => new
+	internal static object ValidPayload(string prefix) => new
 	{
 		personalInfo = new
 		{

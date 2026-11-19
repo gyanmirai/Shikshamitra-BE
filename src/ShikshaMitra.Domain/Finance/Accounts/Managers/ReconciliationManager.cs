@@ -21,23 +21,56 @@ namespace ShikshaMitra.Finance.Accounts.Reconciliation;
 /// Domain manager that orchestrates the reconciliation approve/reject workflow for both
 /// provisional fee receipts (KFE) and provisional charge receipts (KCH).
 /// </summary>
-public class ReconciliationManager(
-	IFeePaymentReceiptRepository receiptRepository,
-	IRepository<FeeRecordMetadata, Guid> metadataRepository,
-	IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
-	IDueFeeRepository dueFeeRepository,
-	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
-	IRepository<Charge, Guid> chargeRepository,
-	IRepository<Student, Guid> studentRepository,
-	IRepository<AcademicYear, Guid> academicYearRepository,
-	FeeReceiptManager feeReceiptManager,
-	FeeCollectionManager feeCollectionManager,
-	IFeeReceiptPdfGenerator pdfGenerator,
-	FeeReceiptBlobManager blobManager,
-	IClock clock,
-	ICurrentTenant currentTenant
-) : DomainService
+public class ReconciliationManager : DomainService
 {
+	private readonly IFeePaymentReceiptRepository receiptRepository;
+	private readonly IRepository<FeeRecordMetadata, Guid> metadataRepository;
+	private readonly IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository;
+	private readonly IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository;
+	private readonly IDueFeeRepository dueFeeRepository;
+	private readonly IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository;
+	private readonly IRepository<Charge, Guid> chargeRepository;
+	private readonly IRepository<AcademicYear, Guid> academicYearRepository;
+	private readonly FeeReceiptManager feeReceiptManager;
+	private readonly FeeCollectionManager feeCollectionManager;
+	private readonly IFeeReceiptPdfGenerator pdfGenerator;
+	private readonly FeeReceiptBlobManager blobManager;
+	private readonly ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions;
+
+	public ReconciliationManager(
+		IFeePaymentReceiptRepository receiptRepository,
+		IRepository<FeeRecordMetadata, Guid> metadataRepository,
+		IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
+		IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
+		IDueFeeRepository dueFeeRepository,
+		IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+		IRepository<Charge, Guid> chargeRepository,
+		IRepository<Student, Guid> studentRepository,
+		IRepository<AcademicYear, Guid> academicYearRepository,
+		FeeReceiptManager feeReceiptManager,
+		FeeCollectionManager feeCollectionManager,
+		IFeeReceiptPdfGenerator pdfGenerator,
+		FeeReceiptBlobManager blobManager,
+		ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions,
+		IClock clock,
+		ICurrentTenant currentTenant
+	)
+	{
+		this.receiptRepository = receiptRepository;
+		this.metadataRepository = metadataRepository;
+		this.paymentMethodRecordRepository = paymentMethodRecordRepository;
+		this.allocationRepository = allocationRepository;
+		this.dueFeeRepository = dueFeeRepository;
+		this.chargeCollectionRecordRepository = chargeCollectionRecordRepository;
+		this.chargeRepository = chargeRepository;
+		this.academicYearRepository = academicYearRepository;
+		this.feeReceiptManager = feeReceiptManager;
+		this.feeCollectionManager = feeCollectionManager;
+		this.pdfGenerator = pdfGenerator;
+		this.blobManager = blobManager;
+		this.automaticTransactions = automaticTransactions;
+	}
+
 	/// <summary>
 	/// Approves a provisional receipt (KFE or KCH):
 	/// - KFE → creates FIN-* final fee receipt, updates DueFee allocation statuses
@@ -55,32 +88,31 @@ public class ReconciliationManager(
 
 		EnsureProvisional(provisional);
 		EnsureNotTerminal(provisional);
-
-		var finalKind = provisional.ReceiptKind == FeeReceiptKind.ProvisionalFee
-			? FeeReceiptKind.FinalFee
-			: FeeReceiptKind.FinalCharge;
-
-		var finalReceiptNumber = await feeReceiptManager.GenerateReceiptNumberAsync(finalKind);
-		var finalReceipt = feeReceiptManager.CreateReceipt(
-			feeCollectionTransactionId: provisional.FeeCollectionTransactionId,
-			studentId: provisional.StudentId, academicYearId: provisional.AcademicYearId,
-			boardId: provisional.BoardId, educationMediumId: provisional.EducationMediumId,
-			scope: provisional.ReceiptScope, kind: finalKind,
-			totalPaidAmount: provisional.TotalPaidAmount,
-			receiptNumber: finalReceiptNumber, remarks: remarks,
-			receiptBookId: provisional.ReceiptBookId);
-
-		finalReceipt.SetLinkedProvisionalReceiptId(provisional.Id);
-		await receiptRepository.InsertAsync(finalReceipt, autoSave: false);
-
-		var student = await studentRepository.GetAsync(provisional.StudentId, cancellationToken: cancellationToken)
-			?? throw new BusinessException("Student not found").WithData("StudentId", provisional.StudentId);
-		AcademicYear? academicYear = provisional.AcademicYearId != Guid.Empty
-			? await academicYearRepository.FindAsync(provisional.AcademicYearId, cancellationToken: cancellationToken)
-			: null;
-
-		await GenerateAndStoreReceiptPdfsAsync(new[] { finalReceipt }, student, academicYear, cancellationToken);
-		provisional.MarkVerified(finalReceipt.Id, remarks);
+		var originals = await GetVerifiableReceiptsAsync(provisional, cancellationToken);
+        FeePaymentReceipt? selectedFinal = null;
+        foreach (var original in originals)
+        {
+            var finalKind = original.ReceiptKind == FeeReceiptKind.ProvisionalFee ? FeeReceiptKind.FinalFee : FeeReceiptKind.FinalCharge;
+            var finalReceiptNumber = await feeReceiptManager.GenerateReceiptNumberAsync(finalKind);
+            var finalReceipt = feeReceiptManager.CreateReceipt(
+                original.FeeCollectionTransactionId, original.StudentId, original.AcademicYearId,
+                original.BoardId, original.EducationMediumId, original.ReceiptScope, finalKind,
+                original.TotalPaidAmount, finalReceiptNumber, remarks, original.ReceiptBookId, original.FinanceFeeAccountId);
+            if (original.ReceiptScope == FeeReceiptScope.Combined)
+                finalReceipt.SetAmountBreakdown(original.FeePaidAmount, original.ChargePaidAmount);
+            if (original.LateFeePaidAmount.HasValue)
+                finalReceipt.SetLateFeePaidAmount(original.LateFeePaidAmount.Value);
+            finalReceipt.SetLinkedProvisionalReceiptId(original.Id);
+            await receiptRepository.InsertAsync(finalReceipt, autoSave: false);
+            var student = original.StudentId.HasValue
+                ? await LazyServiceProvider.LazyGetRequiredService<Volo.Abp.Linq.IAsyncQueryableExecuter>().FirstOrDefaultAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => s.Id == original.StudentId.Value), cancellationToken) : null;
+            var academicYear = original.AcademicYearId != Guid.Empty
+                ? await academicYearRepository.FindAsync(original.AcademicYearId, includeDetails: false, cancellationToken: cancellationToken) : null;
+            await GenerateAndStoreReceiptPdfsAsync(new[] { finalReceipt }, student, academicYear, cancellationToken);
+            original.MarkVerified(finalReceipt.Id, remarks);
+            await receiptRepository.UpdateAsync(original, autoSave: false, cancellationToken: cancellationToken);
+            if (original.Id == provisionalReceiptId) selectedFinal = finalReceipt;
+        }
 
 		var metadata = await metadataRepository.FindAsync(provisional.FeeCollectionTransactionId, cancellationToken: cancellationToken);
 		if (metadata != null)
@@ -91,7 +123,8 @@ public class ReconciliationManager(
 			await metadataRepository.UpdateAsync(metadata, autoSave: false);
 		}
 
-		return finalReceipt;
+		await automaticTransactions.ConfirmAsync(provisional.FeeCollectionTransactionId);
+		return selectedFinal!;
 	}
 
 	/// <summary>
@@ -111,10 +144,14 @@ public class ReconciliationManager(
 
 		EnsureProvisional(provisional);
 		EnsureNotTerminal(provisional);
+		var originals = await GetVerifiableReceiptsAsync(provisional, cancellationToken);
+        foreach (var original in originals)
+        {
+            original.MarkRejected(remarks);
+            await receiptRepository.UpdateAsync(original, autoSave: false, cancellationToken: cancellationToken);
+        }
 
-		provisional.MarkRejected(remarks);
-
-		if (provisional.ReceiptKind == FeeReceiptKind.ProvisionalFee)
+		if (originals.Any(r => r.ReceiptScope is FeeReceiptScope.Fee or FeeReceiptScope.Combined))
 		{
 			var allocations = await allocationRepository.GetListAsync(
 				a => a.FeeRecordMetadataId == provisional.FeeCollectionTransactionId, cancellationToken: cancellationToken);
@@ -125,7 +162,7 @@ public class ReconciliationManager(
 				await dueFeeRepository.UpdateManyAsync(dueFees, autoSave: false);
 			}
 		}
-		else
+		if (originals.Any(r => r.ReceiptScope is FeeReceiptScope.Charge or FeeReceiptScope.Combined))
 		{
 			// Reverse ChargeCollectionRecord entries for charge receipts
 			var chargeRecords = await chargeCollectionRecordRepository.GetListAsync(
@@ -139,11 +176,41 @@ public class ReconciliationManager(
 			?? throw new BusinessException(ReconciliationErrorCodes.ReceiptNotFound)
 				.WithData("FeeCollectionTransactionId", provisional.FeeCollectionTransactionId);
 
+		await automaticTransactions.ReverseAsync(metadata.Id);
 		metadata.MarkReversed(remarks);
 		return provisional;
 	}
 
 	// ── Private helpers ───────────────────────────────────────────────────────
+
+	/// <summary>
+	/// The current model links allocations to a collection, not to an instrument or
+	/// receipt. With one instrument, all original documents are verified together.
+	/// Multiple instruments remain blocked because their allocation shares are ambiguous.
+	/// </summary>
+	private async Task<List<FeePaymentReceipt>> GetVerifiableReceiptsAsync(
+        FeePaymentReceipt provisional, CancellationToken cancellationToken)
+    {
+        var payments = await paymentMethodRecordRepository.GetListAsync(
+            p => p.FeeRecordMetadataId == provisional.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+        var originals = await receiptRepository.GetListAsync(
+            r => r.FeeCollectionTransactionId == provisional.FeeCollectionTransactionId && r.LinkedProvisionalReceiptId == null,
+            cancellationToken: cancellationToken);
+        // One instrument is settled as one atomic decision. Separate documents remain
+        // two queue rows, each linked to its own final document. Never guess mixed-instrument shares.
+        if (payments.Count != 1 || originals.Count is < 1 or > 2 ||
+            originals.Select(r => r.ReceiptScope).Distinct().Count() != originals.Count ||
+            originals.Any(r => r.StudentId != provisional.StudentId || r.FinanceFeeAccountId != provisional.FinanceFeeAccountId ||
+                r.AcademicYearId != provisional.AcademicYearId ||
+                r.VerificationStatus != FeeReceiptVerificationStatus.PendingVerification ||
+                r.ReceiptKind is not (FeeReceiptKind.ProvisionalFee or FeeReceiptKind.ProvisionalCharge)) ||
+            originals.Sum(r => (decimal)r.TotalPaidAmount) != payments[0].Amount ||
+            originals.Count == 2 && (originals.All(r => r.ReceiptScope != FeeReceiptScope.Fee) ||
+                originals.All(r => r.ReceiptScope != FeeReceiptScope.Charge)))
+            throw new BusinessException(ReconciliationErrorCodes.InstrumentAttributionRequired)
+                .WithData("FeeCollectionTransactionId", provisional.FeeCollectionTransactionId);
+        return originals;
+    }
 
 	private async Task<FeeCollectionStatus> DeterminePostApprovalStatusAsync(
 		Guid metadataId, CancellationToken cancellationToken)
@@ -194,7 +261,7 @@ public class ReconciliationManager(
 
 	private async Task GenerateAndStoreReceiptPdfsAsync(
 		IReadOnlyList<FeePaymentReceipt> receipts,
-		Student student,
+		Student? student,
 		AcademicYear? academicYear,
 		CancellationToken cancellationToken = default)
 	{

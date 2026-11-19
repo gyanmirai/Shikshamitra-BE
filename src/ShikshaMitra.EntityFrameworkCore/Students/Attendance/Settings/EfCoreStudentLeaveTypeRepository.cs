@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Dynamic.Core;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -77,7 +76,13 @@ public class EfCoreStudentLeaveTypeRepository :
 
 		var query = ApplyFilter(dbSet, filterText, isActive, tenantId);
 
-		query = query.OrderBy(sorting.IsNullOrWhiteSpace() ? nameof(StudentLeaveType.LeaveTypeName) : sorting);
+		query = sorting?.Trim().ToLowerInvariant() switch
+		{
+			"leavetypename desc" => query.OrderByDescending(x => x.LeaveTypeName).ThenBy(x => x.Id),
+			"isactive" or "isactive asc" => query.OrderBy(x => x.IsActive).ThenBy(x => x.LeaveTypeName),
+			"isactive desc" => query.OrderByDescending(x => x.IsActive).ThenBy(x => x.LeaveTypeName),
+			_ => query.OrderBy(x => x.LeaveTypeName).ThenBy(x => x.Id)
+		};
 
 		return await query
 			.PageBy(skipCount, maxResultCount)

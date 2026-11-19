@@ -1,3 +1,5 @@
+﻿using ShikshaMitra.HR.Payroll.RunPayroll;
+using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -22,8 +24,8 @@ public sealed record AttendancePolicyEvaluationPunchContext(
 
 public class AttendancePolicyWorkedTimeEvaluator(
 	HrPolicyResolver policyResolver,
-	IRepository<ShiftManagement, Guid> shiftRepository,
-	AttendancePolicyLateArrivalEvaluator lateArrivalEvaluator)
+	EmployeeShiftResolver shiftResolver,
+	AttendancePolicyLateArrivalEvaluator lateArrivalEvaluator, IEmployeeShiftWriteFence shiftFence, IPayrollInputRevisionStore payrollFence)
 	: ITransientDependency
 {
 	public async Task<AttendanceWorkedTimeEvaluation> EvaluateAsync(
@@ -35,6 +37,8 @@ public class AttendancePolicyWorkedTimeEvaluator(
 		IReadOnlyCollection<AttendancePolicyEvaluationPunchContext>? currentMonthPunchContext = null,
 		CancellationToken cancellationToken = default)
 	{
+		await payrollFence.LockAsync();
+		await shiftFence.LockAsync(employee.Id);
 		var hasTimeIn = timeIn.HasValue;
 		var hasTimeOut = timeOut.HasValue;
 
@@ -78,28 +82,18 @@ public class AttendancePolicyWorkedTimeEvaluator(
 				"Time Out must be after Time In.");
 		}
 
-		if (!employee.ShiftId.HasValue)
-		{
-			throw new BusinessException(
-				HRErrorCodes.AttendancePolicyEvaluationShiftRequired,
-				"Employee shift is required to evaluate worked-time attendance policy.");
-		}
-
-		var shift = await shiftRepository.FindAsync(employee.ShiftId.Value, cancellationToken: cancellationToken)
-			?? throw new BusinessException(
-				HRErrorCodes.AttendancePolicyEvaluationShiftRequired,
-				"Employee shift was not found for worked-time attendance policy evaluation.");
+		var shift = EmployeeShiftResolver.Snapshot(await shiftResolver.RequireAsync(employee.Id, attendanceDate));
 
 		var shiftMinutes = (shift.EndTime.ToTimeSpan() - shift.StartTime.ToTimeSpan()).TotalMinutes;
 		if (shiftMinutes <= 0)
 		{
 			throw new BusinessException(
 				HRErrorCodes.AttendancePolicyEvaluationInvalidShift,
-				"Employee shift start and end time must define a positive duration.");
+				"Staff shift start and end time must define a positive duration.");
 		}
 
 		if (policy.AbsentThresholdPercentage > policy.HalfDayThresholdPercentage ||
-		    policy.HalfDayThresholdPercentage >= policy.FullDayThresholdPercentage)
+			policy.HalfDayThresholdPercentage >= policy.FullDayThresholdPercentage)
 		{
 			throw new BusinessException(
 				HRErrorCodes.AttendancePolicyEvaluationInvalidPolicy,

@@ -24,20 +24,63 @@ public partial class ConcessionRequestAppService
 	public async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> GetAsync(Guid id)
 	{
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+		await EnsureConcessionVisibleAsync(request);
 		return ApiDataResponseDto<ConcessionRequestDetailDto>.SuccessResult(await MapDetailAsync(request));
 	}
 
 	public async Task<ConcessionRequestContextDto> GetContextAsync(
 		Guid academicYearId,
 		Guid studentId,
-		Guid? studentFeeStructureId = null)
+		Guid? studentFeeStructureId = null,
+		Guid? concessionTypeId = null,
+		Guid? concessionPolicyId = null,
+		Guid? concessionPolicyVersionId = null,
+		Guid? requestId = null)
 	{
 		await EnsureAnyPermissionAsync(
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Add,
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Edit,
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Submit);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
+		await ValidateContextRequestAsync(requestId, studentId, academicYearId);
+		var benefits = await concessionRequestRepository.GetBlockingBenefitsAsync(studentId, academicYearId, requestId);
+		var activePolicies = await concessionPolicyRepository.GetListAsync(x =>
+			x.AcademicYearId == academicYearId && x.Status == ConcessionPolicyStatus.Active);
+		var activePolicyIds = activePolicies.Select(x => x.Id).ToList();
+		var policyVersions = activePolicyIds.Count == 0
+			? []
+			: await financePolicyVersionRepository.GetListAsync(x =>
+				x.PolicyType == "concession" && activePolicyIds.Contains(x.PolicyId));
+		var currentVersionByPolicyId = policyVersions
+			.GroupBy(x => x.PolicyId)
+			.ToDictionary(group => group.Key,
+				group => group.OrderByDescending(x => x.VersionNumber).First());
+		var policyOptions = activePolicies
+			.Where(policy => currentVersionByPolicyId.ContainsKey(policy.Id))
+			.OrderByDescending(policy => policy.IsDefault)
+			.ThenBy(policy => policy.PolicyName)
+			.Select(policy => new ConcessionPolicyOptionDto
+			{
+				ConcessionPolicyId = policy.Id,
+				ConcessionPolicyVersionId = currentVersionByPolicyId[policy.Id].Id,
+				PolicyName = policy.PolicyName,
+				PolicyCode = policy.PolicyCode,
+				Version = currentVersionByPolicyId[policy.Id].VersionNumber,
+				IsDefault = policy.IsDefault,
+				ValueSource = policy.ValueSource.ToString(),
+				CalculationMethod = policy.CalculationMethod.ToString(),
+				PercentageValue = policy.PercentageValue,
+				FixedAmount = policy.FixedAmount,
+				MaximumPercentage = policy.MaximumPercentage,
+				MaximumFixedAmount = policy.MaximumFixedAmount,
+				ApplyOn = policy.ApplyOn.ToString(),
+				AutoCreateRefund = policy.AutoCreateRefund,
+				RoundingMethod = policy.RoundingMethod.ToString(),
+				ApplicableConcessionTypeIds = policy.ApplicableConcessionTypeIds.ToList(),
+				FeeHeadScope = policy.FeeHeadScope.ToString(),
+				ApplicableFeeHeadIds = policy.ApplicableFeeHeadIds.ToList(),
+			})
+			.ToList();
 		var assignments = await studentFeeStructureRepository.GetListAsync(x =>
 			x.StudentId == studentId && x.AcademicYearId == academicYearId);
 		var feeStructureIds = assignments.Select(x => x.FeeStructureStandardId).Distinct().ToList();
@@ -60,7 +103,8 @@ public partial class ConcessionRequestAppService
 			.ToList();
 		if (!studentFeeStructureId.HasValue && assignments.Count > 1)
 		{
-			var student = await studentRepository.GetAsync(studentId);
+			var student = await studentRepository.GetForFinanceContextAsync(studentId)
+				?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
 			return new ConcessionRequestContextDto
 			{
 				AcademicYearId = academicYearId,
@@ -68,30 +112,55 @@ public partial class ConcessionRequestAppService
 				StudentName = FormatStudentName(student),
 				AssignmentSelectionRequired = true,
 				Assignments = assignmentOptions,
+				ConcessionPolicies = policyOptions,
 				Blockers = ["Select the fee assignment for this concession request."],
 			};
 		}
+		if (concessionPolicyId.HasValue || concessionPolicyVersionId.HasValue)
+		{
+			var selected = activePolicies.FirstOrDefault(x => x.Id == concessionPolicyId);
+			if (selected is null || !currentVersionByPolicyId.TryGetValue(selected.Id, out var version) ||
+				version.Id != concessionPolicyVersionId)
+				throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
+		}
 		var context = await concessionRequestManager.GetContextAsync(
-			academicYearId, studentId, studentFeeStructureId);
+			academicYearId, studentId, studentFeeStructureId, concessionPolicyId, concessionPolicyVersionId);
 		var feeHeadIds = context.EligibleDueFees.Select(x => x.FeeHeadId).Distinct().ToList();
 		var feeHeads = feeHeadIds.Count == 0
 			? []
 			: await feeHeadRepository.GetListAsync(x => feeHeadIds.Contains(x.Id));
 		var feeHeadNames = feeHeads.ToDictionary(x => x.Id, x => x.Name);
+		var concessionEnabledHeadIds = feeHeads.Where(x => x.AcademicYearId == academicYearId &&
+			x.IsActive && x.IsConcessionApplied).Select(x => x.Id).ToHashSet();
+		var hasConcessionEnabledHeads = concessionEnabledHeadIds.Count > 0;
+		if (context.Assignment.ConcessionFeeHeadScope == ConcessionFeeHeadScope.SelectedFeeHeads)
+			concessionEnabledHeadIds.IntersectWith(context.Assignment.GetConcessionApplicableFeeHeadIds());
+		var eligibleDues = context.EligibleDueFees.Where(x => concessionEnabledHeadIds.Contains(x.FeeHeadId)).ToList();
+		var includePaid = context.ApplyOn == ConcessionApplyOn.AllFees;
 		var concessionTypes = await concessionTypeRepository.GetListAsync(x =>
 			x.AcademicYearId == academicYearId && x.IsActive);
-		var activePolicies = await concessionPolicyRepository.GetListAsync(x =>
-			x.AcademicYearId == academicYearId && x.Status == ConcessionPolicyStatus.Active);
-		var activePolicyIds = activePolicies.Select(x => x.Id).ToList();
-		var policyVersions = activePolicyIds.Count == 0
-			? []
-			: await financePolicyVersionRepository.GetListAsync(x =>
-				x.PolicyType == "concession" && activePolicyIds.Contains(x.PolicyId));
-		var currentVersionByPolicyId = policyVersions
-			.GroupBy(x => x.PolicyId)
-			.ToDictionary(
-				group => group.Key,
-				group => group.OrderByDescending(x => x.VersionNumber).First());
+		if (concessionPolicyId.HasValue || concessionPolicyVersionId.HasValue)
+		{
+			eligibleDues = ConcessionRequestManager.GetEligibleDueFees(eligibleDues, context.ApplyOn);
+		}
+		var blockers = new List<string>();
+		if (eligibleDues.Count == 0)
+		{
+			if (context.EligibleDueFees.Count == 0)
+				blockers.Add("This fee assignment has no eligible installment amount to discount.");
+			else if (!hasConcessionEnabledHeads)
+			{
+				var blockedHeadNames = feeHeads
+					.Select(x => x.Name)
+					.OrderBy(x => x)
+					.ToList();
+				blockers.Add($"Outstanding fee heads are not eligible for concessions: {string.Join(", ", blockedHeadNames)}. Check 'Enable concessions', active status, and academic year for the intended heads in Finance > Fees > Settings > Fee Head.");
+			}
+			else if (concessionEnabledHeadIds.Count == 0)
+				blockers.Add("This fee assignment excludes all concession-enabled fee heads. Review concession eligibility on its fee structure.");
+			else
+				blockers.Add("No installments match this policy's application rule.");
+		}
 
 		return new ConcessionRequestContextDto
 		{
@@ -101,42 +170,24 @@ public partial class ConcessionRequestAppService
 			StudentFeeStructureId = context.Assignment.Id,
 			FeeStructureName = context.FeeStructure.Name,
 			Assignments = assignmentOptions,
-			FeeHeads = context.EligibleDueFees
+			Blockers = blockers,
+			FeeHeads = eligibleDues
 				.GroupBy(x => x.FeeHeadId)
 				.Select(group => new ConcessionEligibleFeeHeadDto
 				{
 					FeeHeadId = group.Key,
 					FeeHeadName = feeHeadNames.GetValueOrDefault(group.Key, string.Empty),
-					EligibleOutstanding = group.Sum(x => x.OutstandingAmount),
+					EligibleOutstanding = group.Sum(x => includePaid
+						? Math.Max(0m, x.EffectiveObligationAmount - x.NetAmount) : x.OutstandingAmount),
 				})
 				.OrderBy(x => x.FeeHeadName)
 				.ToList(),
-			EligibleDueFees = MapEligibleDueFees(context.EligibleDueFees, feeHeadNames),
-			ConcessionPolicies = activePolicies
-				.Where(policy => currentVersionByPolicyId.ContainsKey(policy.Id))
-				.OrderByDescending(policy => policy.IsDefault)
-				.ThenBy(policy => policy.PolicyName)
-				.Select(policy => new ConcessionPolicyOptionDto
-				{
-					ConcessionPolicyId = policy.Id,
-					ConcessionPolicyVersionId = currentVersionByPolicyId[policy.Id].Id,
-					PolicyName = policy.PolicyName,
-					PolicyCode = policy.PolicyCode,
-					Version = policy.Version,
-					IsDefault = policy.IsDefault,
-					ValueSource = policy.ValueSource.ToString(),
-					CalculationMethod = policy.CalculationMethod.ToString(),
-					PercentageValue = policy.PercentageValue,
-					FixedAmount = policy.FixedAmount,
-					MaximumPercentage = policy.MaximumPercentage,
-					MaximumFixedAmount = policy.MaximumFixedAmount,
-					ApplyOn = policy.ApplyOn.ToString(),
-					RoundingMethod = policy.RoundingMethod.ToString(),
-				})
-				.ToList(),
+			EligibleDueFees = MapEligibleDueFees(eligibleDues, feeHeadNames, includePaid),
+			ConcessionPolicies = policyOptions,
 			ConcessionTypes = concessionTypes.OrderBy(x => x.Name).Select(type => new ConcessionTypeOptionDto
 			{
 				ConcessionTypeId = type.Id,
+				BenefitBlocker = MapBenefitBlocker(benefits.FirstOrDefault(x => x.ConcessionTypeId == type.Id)),
 				Name = type.Name,
 				Description = type.Description,
 				Documents = type.ConcessionTypeDocuments.OrderBy(x => x.DocumentName)
@@ -163,23 +214,34 @@ public partial class ConcessionRequestAppService
 				.WithData("Status", input.Status.Value);
 		FinanceClassDivisionFilterValidator.Validate(input);
 
-		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		var scopedStudentIds = await GetVisibleConcessionStudentIdsAsync(input.AcademicYearId);
+		var visibleRequestIds = await GetVisibleConcessionRequestIdsAsync(input.AcademicYearId);
+		var canReviewDrafts = currentUser.Id.HasValue &&
+			(await AuthorizationService.IsGrantedAsync(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve) ||
+			 await AuthorizationService.IsGrantedAsync(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject));
+        var tableQuery = ShikshaMitra.Finance.Common.FinanceTableQuery.Parse(input.Filters, input.Search,
+            input.SortBy, input.SortOrder, ConcessionApplicationsTable.Columns);
+        ConcessionApplicationsTable.Statuses(input.Tab);
 		var pageSize = Math.Min(input.MaxResultCount, 100);
 		var skip     = input.SkipCount;
 		var status   = input.Status.HasValue ? (ConcessionRequestStatus)input.Status.Value : (ConcessionRequestStatus?)null;
 
 		var counts = await concessionRequestRepository.GetStatusCountsAsync(
 			input.AcademicYearId, input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId,
-			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id);
+			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id, tableQuery: tableQuery,
+			includeReviewableDrafts: canReviewDrafts, visibleRequestIdsQuery: visibleRequestIds);
 		var items  = await concessionRequestRepository.GetListForApplicationsAsync(
 			input.AcademicYearId, input.BoardId, input.EducationMediumId, status, input.StandardId, input.DivisionId, skip, pageSize,
-			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id);
+			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id, tableQuery: tableQuery, tab: input.Tab,
+			includeReviewableDrafts: canReviewDrafts, visibleRequestIdsQuery: visibleRequestIds);
 		var total  = await concessionRequestRepository.CountForApplicationsAsync(
 			input.AcademicYearId, input.BoardId, input.EducationMediumId, status, input.StandardId, input.DivisionId,
-			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id);
+			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id, tableQuery: tableQuery, tab: input.Tab,
+			includeReviewableDrafts: canReviewDrafts, visibleRequestIdsQuery: visibleRequestIds);
 
 		var studentIds  = items.Select(i => i.StudentId).Distinct().ToList();
-		var students    = await studentRepository.GetListAsync(s => studentIds.Contains(s.Id));
+		var students    = await AsyncExecuter.ToListAsync((await studentRepository.GetQueryableWithoutAutoIncludesAsync())
+			.Where(s => studentIds.Contains(s.Id)));
 		var studentMap  = students.ToDictionary(s => s.Id);
 
 		var typeIds     = items.Select(i => i.ConcessionTypeId).Distinct().ToList();
@@ -200,7 +262,7 @@ public partial class ConcessionRequestAppService
 		var standardMap = standards.ToDictionary(s => s.Id, s => s.Name);
 		var divisionMap = divisions.ToDictionary(d => d.Id, d => d.Name);
 
-		return new ConcessionApplicationsDto
+		var result = new ConcessionApplicationsDto
 		{
 			DraftCount     = counts.GetValueOrDefault(ConcessionRequestStatus.Draft),
 			PendingCount   = counts.GetValueOrDefault(ConcessionRequestStatus.Pending),
@@ -221,8 +283,9 @@ public partial class ConcessionRequestAppService
 				return new ConcessionApplicationItemDto
 				{
 					Id = r.Id, StudentId = r.StudentId, ConcessionTypeId = r.ConcessionTypeId,
+					RequesterId = r.CreatorId,
 					StudentName        = FormatStudentName(student),
-					GrNumber           = student?.GrNo?.ToString() ?? string.Empty,
+					GrNumber           = FormatStudentGrNumber(student),
 					RollNo             = student?.RollNo?.ToString() ?? string.Empty,
 					StandardName       = standardMap.GetValueOrDefault(r.StandardId, string.Empty),
 					DivisionName       = divisionMap.GetValueOrDefault(r.DivisionId, string.Empty),
@@ -241,6 +304,18 @@ public partial class ConcessionRequestAppService
 				};
 			}).ToList(),
 		};
+		var decisionChecks = result.Items.Any(item =>
+			item.AvailableActions.Contains("approve") || item.AvailableActions.Contains("reject"))
+			? await CreatePageDecisionChecksAsync() : null;
+		if (decisionChecks is { IsAdmin: false })
+			financeReviewerAccessService.PrepareReviewerAccessForStudents(items.Select(request => request.StudentId));
+		var requestsById = items.ToDictionary(request => request.Id);
+		foreach (var item in result.Items)
+		{
+			var request = requestsById[item.Id];
+			item.AvailableActions = await FilterDecisionActionsAsync(request, item.AvailableActions, decisionChecks);
+		}
+		return result;
 	}
 
 	[Authorize(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View)]
@@ -267,9 +342,12 @@ public partial class ConcessionRequestAppService
 			.Skip(skip)
 			.Take(pageSize));
 
-		var student  = await studentRepository.GetAsync(studentId) ?? throw new BusinessException("Student not found.");
-		var standard = student?.Standard?.Name;
-		var division = student?.Division?.Name;
+		var students = await studentRepository.WithDetailsAsync(
+			x => x.AcademicBoard!, x => x.AcademicMedium!, x => x.Standard!, x => x.Division!);
+		var student = await AsyncExecuter.FirstOrDefaultAsync(students.Where(x => x.Id == studentId))
+			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
+		var standard = student.Standard?.Name;
+		var division = student.Division?.Name;
 
 		var typeIds  = page.Select(r => r.ConcessionTypeId).Distinct().ToList();
 		var types    = typeIds.Count > 0
@@ -284,12 +362,39 @@ public partial class ConcessionRequestAppService
 		var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
 		var canViewDocuments = await AuthorizationService.IsGrantedAsync(
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.ViewDocument);
+		var canViewRefunds = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
+		var requestIds = page.Select(x => x.Id).ToList();
+		var refundMap = canViewRefunds
+			? (await feeRefundRepository.GetListAsync(x => requestIds.Contains(x.ConcessionRequestId ?? Guid.Empty)))
+				.GroupBy(x => x.ConcessionRequestId!.Value)
+				.ToDictionary(x => x.Key, x => (IReadOnlyList<ConcessionRefundReferenceDto>)x.Select(r =>
+					new ConcessionRefundReferenceDto
+					{
+						RefundRequestId = r.Id, VoucherNumber = r.VoucherNumber,
+						OriginalReceiptId = r.OriginalReceiptId!.Value,
+						Amount = r.CalculatedAmount, Status = r.Status.ToString()
+					}).ToList())
+			: new Dictionary<Guid, IReadOnlyList<ConcessionRefundReferenceDto>>();
 
+		var isAdministrator = currentUser.Id.HasValue && await userScopeService.IsAdminUserAsync(currentUser.Id.Value);
 		var items = page.Select(r =>
 		{
 			typeMap.TryGetValue(r.ConcessionTypeId, out var type);
-			return MapStudentItem(r, type, feeHeadMap, canViewDocuments);
+			return MapStudentItem(r, type, feeHeadMap, canViewDocuments,
+				refundMap.GetValueOrDefault(r.Id, []), isAdministrator);
 		}).ToList();
+		var studentDecisionChecks = items.Any(item =>
+			item.AvailableActions.Contains("approve") || item.AvailableActions.Contains("reject"))
+			? await CreatePageDecisionChecksAsync() : null;
+		if (studentDecisionChecks is { IsAdmin: false })
+			financeReviewerAccessService.PrepareReviewerAccessForStudents(page.Select(request => request.StudentId));
+		var studentRequestsById = page.ToDictionary(request => request.Id);
+		foreach (var item in items)
+		{
+			var request = studentRequestsById[item.StudentConcessionTypeRequestId];
+			item.AvailableActions = await FilterDecisionActionsAsync(request, item.AvailableActions, studentDecisionChecks);
+		}
 
 		return new StudentConcessionRequestsDto
 		{
@@ -298,9 +403,11 @@ public partial class ConcessionRequestAppService
 				StudentId    = student.Id,
 				Name         = FormatStudentName(student),
 				RollNo       = student.RollNo?.ToString() ?? string.Empty,
-				GrNumber     = student.GrNo?.ToString() ?? string.Empty,
+				GrNumber     = FormatStudentGrNumber(student),
 				StandardName = standard ?? string.Empty,
 				DivisionName = division ?? string.Empty,
+				BoardName = student.AcademicBoard?.Name ?? string.Empty,
+				EducationMediumName = student.AcademicMedium?.Name ?? string.Empty,
 			},
 			ConcessionBasicDetail = new ConcessionBasicDetailDto
 			{
@@ -321,7 +428,7 @@ public partial class ConcessionRequestAppService
 	public async Task<ConcessionApprovalContextDto> GetApprovalContextAsync(Guid id)
 	{
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+		await EnsureConcessionVisibleAsync(request);
 		ConcessionRequestLiveEvaluation? evaluation = null;
 		List<DueFee> dueFees;
 		if (request.Status is ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending)
@@ -344,6 +451,8 @@ public partial class ConcessionRequestAppService
 		var policy = JsonSerializer.Deserialize<ConcessionPolicySnapshot>(version.SnapshotJson)
 			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
 		var isReversal = request.Status is ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed;
+		var requestedDueAmounts = ConcessionRequestManager.ReadDueFeeEvidence(request)
+			.ToDictionary(x => x.DueFeeId, x => x.RequestedAmount);
 
 		var groups = request.ConcessionFeeHeadMappings.Select(m =>
 		{
@@ -351,12 +460,15 @@ public partial class ConcessionRequestAppService
 			var liveMaximum = liveMapping?.FeeHeadConcessionAmount ?? m.FeeHeadConcessionAmount;
 			var suggestedTotal = isReversal ? 0m : Math.Min(m.FeeHeadConcessionAmount, liveMaximum);
 			var eligibleHeadDues = dueFees
-				.Where(df => df.FeeHeadId == m.FeeHeadId && df.OutstandingAmount > 0m)
+				.Where(df => df.FeeHeadId == m.FeeHeadId && ConcessionRequestManager.GetConcessionCapacity(df, policy) > 0m)
 				.ToList();
-			var suggestedByDue = isReversal || eligibleHeadDues.Count == 0
+			var suggestedByDue = !isReversal && requestedDueAmounts.Count > 0
+				? eligibleHeadDues.ToDictionary(x => x.Id, x => requestedDueAmounts.GetValueOrDefault(x.Id))
+				: isReversal || eligibleHeadDues.Count == 0
 				? new Dictionary<Guid, decimal>()
 				: ConcessionAmountAllocator.AllocateProportionally(
-					eligibleHeadDues.Select(x => new ConcessionAmountCapacity(x.Id, x.OutstandingAmount)).ToList(),
+					eligibleHeadDues.Select(x => new ConcessionAmountCapacity(x.Id,
+						ConcessionRequestManager.GetConcessionCapacity(x, policy))).ToList(),
 					suggestedTotal).ToDictionary(x => x.Key, x => x.Amount);
 			var lines = dueFees
 				.Where(df => df.FeeHeadId == m.FeeHeadId)
@@ -380,8 +492,8 @@ public partial class ConcessionRequestAppService
 						PaidAmount = df.PaidAmount,
 						OutstandingAmount = df.OutstandingAmount,
 						Status = df.Status.ToString(),
-						IsSelectable = isReversal ? reversible > 0m : df.OutstandingAmount > 0m,
-						MaxConcessionAmount = isReversal ? reversible : df.OutstandingAmount,
+						IsSelectable = isReversal ? reversible > 0m : ConcessionRequestManager.GetConcessionCapacity(df, policy) > 0m,
+						MaxConcessionAmount = isReversal ? reversible : ConcessionRequestManager.GetConcessionCapacity(df, policy),
 						SuggestedConcessionAmount = suggestedByDue.GetValueOrDefault(df.Id),
 						AppliedConcessionAmount = allocation?.ConcessionAmount ?? 0m,
 						ReversedConcessionAmount = reversed,
@@ -397,7 +509,10 @@ public partial class ConcessionRequestAppService
 				RequestedConcessionAmount = m.FeeHeadConcessionAmount,
 				LiveMaximumConcessionAmount = liveMaximum,
 				SuggestedConcessionAmount = suggestedTotal,
-				HasChangedSinceSubmission = liveMaximum != m.FeeHeadConcessionAmount,
+				HasChangedSinceSubmission = liveMaximum < m.FeeHeadConcessionAmount ||
+					dueFees.Where(x => x.FeeHeadId == m.FeeHeadId)
+						.Any(x => requestedDueAmounts.GetValueOrDefault(x.Id) >
+							ConcessionRequestManager.GetConcessionCapacity(x, policy)),
 				DueFeeLines = lines,
 			};
 		}).ToList();
@@ -408,6 +523,9 @@ public partial class ConcessionRequestAppService
 
 		return new ConcessionApprovalContextDto
 		{
+			BenefitBlocker = request.Status is ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending
+				? MapBenefitBlocker(await concessionRequestRepository.FindBlockingBenefitAsync(
+					request.StudentId, request.ConcessionTypeId, request.AcademicYearId, request.Id)) : null,
 			ConcessionRequestId = request.Id,
 			StudentId           = request.StudentId,
 			ConcessionPolicyName = policy.PolicyName,

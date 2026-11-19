@@ -68,7 +68,7 @@ public class AcademicAiReportPlanner(
 		guard.EnsureRequestAllowed(prompt, module);
 		var normalizedAnswers = NormalizeClarificationAnswers(clarificationAnswers);
 		var apiKey = ResolveApiKey();
-		var snapshot = await catalogService.BuildSnapshotAsync(catalogScope);
+		var snapshot = await catalogService.BuildSnapshotAsync(catalogScope, module);
 		var datasets = catalogService.GetDatasets(module);
 		if (datasets.Count == 0)
 		{

@@ -11,6 +11,8 @@ using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.Payroll.Compensation;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -41,12 +43,18 @@ public class EmployeeApplicationAppService(
 	IUnitOfWorkManager unitOfWorkManager,
 	IStringEncryptionService stringEncryptionService,
 	IEmployeeOnboardingInvitationEmailService invitationEmailService,
-	EmployeeOnboardingAcademicScopeAssigner academicScopeAssigner)
+	EmployeeOnboardingAcademicScopeAssigner academicScopeAssigner,
+	ICompensationRevisionAppService compensationRevisions,
+	IRepository<EmployeeCompensationRevision, Guid> compensationRepository,
+	IPayrollInputRevisionStore payrollFence,
+	EmployeePersonalInfoProjection personalInfoProjection,
+	EmployeeActivationReadinessService activationReadiness,
+	EmployeeWorkAssignmentValidator workAssignmentValidator)
 	: ApplicationService, IEmployeeApplicationAppService
 {
 	private const int TokenExpiryDays = 30;
 	private const int MaxApplicationNumberInsertAttempts = 5;
-	private const string DefaultPolicyAssignmentReason = "Employee onboarding default policy assignment";
+	private const string DefaultPolicyAssignmentReason = "Staff onboarding default policy assignment";
 	private const string DefaultPolicyConfirmationTokenMarker = "__employee_onboarding_default_policy_assignment__";
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.View)]
@@ -75,24 +83,26 @@ public class EmployeeApplicationAppService(
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var applications = await AsyncExecuter.ToListAsync(
 			query
-				.OrderByDescending(x => x.CreationTime)
+				.OrderByDescending(x => x.CreationTime).ThenBy(x => x.Id)
 				.Skip(input.SkipCount)
-				.Take(input.MaxResultCount));
+				.Take(input.MaxResultCount)
+				.Select(EmployeeApplicationListProjection.Item));
 
 		return new PagedResultDto<EmployeeApplicationListItemDto>(
 			totalCount,
-			applications.Select(MapToListItemDto).ToList());
+			applications);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.Add)]
 	public async Task<EmployeeApplicationInviteDto> CreateAsync(CreateEmployeeApplicationInviteDto input)
 	{
 		await EnsureInviteEmailAvailableAsync(input.Email);
+		var workAssignment = input.WorkAssignment == null ? null : await workAssignmentValidator.ValidateAsync(input.WorkAssignment);
 
 		var token = CreateRawToken();
 		var now = Clock.Now;
 		var publicPath = CreatePublicPath(token);
-		var application = await InsertInvitationWithRetryAsync(input, token, now);
+		var application = await InsertInvitationWithRetryAsync(input, token, now, workAssignment);
 		var emailResult = await invitationEmailService.SendInvitationAsync(application, publicPath);
 		return CreateInviteResponse(application, token, emailResult);
 	}
@@ -100,7 +110,7 @@ public class EmployeeApplicationAppService(
 	private async Task<EmployeeApplication> InsertInvitationWithRetryAsync(
 		CreateEmployeeApplicationInviteDto input,
 		string token,
-		DateTime now)
+		DateTime now, EmployeeWorkAssignmentSummaryDto? workAssignment)
 	{
 		for (var attempt = 1; attempt <= MaxApplicationNumberInsertAttempts; attempt++)
 		{
@@ -120,6 +130,8 @@ public class EmployeeApplicationAppService(
 				input.PositionAppliedFor,
 				input.DepartmentAppliedFor);
 
+			if (workAssignment != null) ApplyWorkAssignment(application, workAssignment);
+
 			try
 			{
 				using var insertionUnitOfWork = unitOfWorkManager.Begin(
@@ -135,14 +147,14 @@ public class EmployeeApplicationAppService(
 			{
 				Logger.LogWarning(
 					ex,
-					"Employee application number collision detected. Retrying invitation creation (attempt {Attempt}/{MaxAttempts}).",
+					"Staff application number collision detected. Retrying invitation creation (attempt {Attempt}/{MaxAttempts}).",
 					attempt + 1,
 					MaxApplicationNumberInsertAttempts);
 			}
 		}
 
 		throw new InvalidOperationException(
-			"Employee application invitation retry loop exited unexpectedly.");
+			"Staff application invitation retry loop exited unexpectedly.");
 	}
 
 	private async Task EnsureInviteEmailAvailableAsync(string email)
@@ -153,7 +165,7 @@ public class EmployeeApplicationAppService(
 		{
 			throw new BusinessException(
 					HRErrorCodes.EmployeeApplicationEmailAlreadyInUse,
-					"An employee or open onboarding application already uses this email.")
+					"A staff member or open onboarding application already uses this email.")
 				.WithData("field", nameof(CreateEmployeeApplicationInviteDto.Email));
 		}
 
@@ -172,7 +184,7 @@ public class EmployeeApplicationAppService(
 		{
 			throw new BusinessException(
 					HRErrorCodes.EmployeeApplicationEmailAlreadyInUse,
-					"An employee or open onboarding application already uses this email.")
+					"A staff member or open onboarding application already uses this email.")
 				.WithData("field", nameof(CreateEmployeeApplicationInviteDto.Email));
 		}
 	}
@@ -215,7 +227,25 @@ public class EmployeeApplicationAppService(
 		using var finalizationUnitOfWork = unitOfWorkManager.Begin(
 			new AbpUnitOfWorkOptions { IsTransactional = true },
 			requiresNew: true);
+		// Serialize with salary saves before reading application state. A lost response may be retried safely.
+		await payrollFence.LockAsync();
 		var application = await GetApplicationAsync(id);
+		var salaryRequestKey = $"onboarding:{id:D}";
+		if (application.Status == EmployeeApplicationStatus.Finalized && application.FinalizedEmployeeId is { } finalizedEmployeeId)
+		{
+			if (!await compensationRepository.AnyAsync(x => x.EmployeeId == finalizedEmployeeId && x.IdempotencyKey == salaryRequestKey))
+				throw new BusinessException(HRErrorCodes.EmployeeApplicationAlreadyFinalized);
+			var completed = new EmployeeApplicationFinalizeResultDto
+			{
+				Application = MapToDto(application, includePublicPath: true),
+				Employee = await personalInfoProjection.ToPersonalInfoDtoAsync(await employeeRepository.GetAsync(finalizedEmployeeId)),
+				ActivationReadiness = await activationReadiness.GetAsync(finalizedEmployeeId)
+			};
+			await finalizationUnitOfWork.CompleteAsync();
+			return completed;
+		}
+		if (input.Salary == null)
+			throw new AbpValidationException("Preview and assign salary before finalizing onboarding.");
 		if (!application.SubmittedAt.HasValue)
 		{
 			throw new BusinessException(
@@ -228,6 +258,14 @@ public class EmployeeApplicationAppService(
 			throw new BusinessException(HRErrorCodes.EmployeeApplicationInvalidStatusTransition);
 		}
 
+		var assignment = input.WorkAssignment ?? MapWorkAssignment(application);
+		if (assignment != null)
+		{
+			if (!input.WorkAssignmentConfirmed)
+				throw new AbpValidationException("Confirm the organization / work assignment before finalizing.");
+			ApplyWorkAssignment(application, await workAssignmentValidator.ValidateAsync(assignment));
+		}
+
 		await EnsureFinalizationPolicyOverrideAsync(input.PersonalInfo);
 
 		var isTeachingEmployee = input.PersonalInfo.EmployeeGroup == EmployeeGroupType.Teaching;
@@ -238,7 +276,7 @@ public class EmployeeApplicationAppService(
 			    input.AcademicScopes is not { Count: > 0 })
 			{
 				throw new AbpValidationException(
-					"Teaching employee academic permission validation failed.");
+					"Teaching staff academic permission validation failed.");
 			}
 
 			await academicScopeAssigner.ValidateAsync(
@@ -259,7 +297,7 @@ public class EmployeeApplicationAppService(
 			    input.AcademicScopes is not { Count: > 0 })
 			{
 				throw new AbpValidationException(
-					"Teaching employee academic permission validation failed.");
+					"Teaching staff academic permission validation failed.");
 			}
 
 			await academicScopeAssigner.AssignAsync(
@@ -267,6 +305,15 @@ public class EmployeeApplicationAppService(
 				input.AcademicYearId.Value,
 				input.AcademicScopes);
 		}
+
+		// Reuse the canonical compensation validation, permissions, statutory snapshot and calculation.
+		// All writes enlist in this finalization transaction; no employee survives a failed salary save.
+		input.Salary.IdempotencyKey = salaryRequestKey;
+		if (input.StatutoryProfile != null)
+			input.Salary.StatutoryProfileOverride = input.StatutoryProfile;
+		var salary = await compensationRevisions.SaveAsync(employee.Id, input.Salary);
+		if (salary.ActivationReadiness.BlockerCodes.Contains("PAYROLL_SETUP_REQUIRED"))
+			throw new AbpValidationException("Salary must cover the employee's required activation month.");
 
 		var workExperiences = (input.WorkExperiences.Count > 0
 				? input.WorkExperiences
@@ -300,7 +347,8 @@ public class EmployeeApplicationAppService(
 		var result = new EmployeeApplicationFinalizeResultDto
 		{
 			Application = MapToDto(application, includePublicPath: true),
-			Employee = employee
+			Employee = employee,
+			ActivationReadiness = salary.ActivationReadiness
 		};
 		await finalizationUnitOfWork.CompleteAsync();
 		return result;
@@ -425,7 +473,7 @@ public class EmployeeApplicationAppService(
 			PublicEmployeeApplicationSubmitValidation.GetInstitutionDate(now));
 		if (validationResults.Count > 0)
 		{
-			throw new AbpValidationException("Employee application validation failed.", validationResults.ToList());
+			throw new AbpValidationException("Staff application validation failed.", validationResults.ToList());
 		}
 	}
 
@@ -626,7 +674,7 @@ public class EmployeeApplicationAppService(
 			EmployeeApplicationUploadKind.Resume);
 		FileValidationService.ValidateDocumentUpload(fileName, file.Content, file.Size);
 
-		var blobName = $"employee-applications/{applicationId}/resume/{GuidGenerator.Create():N}_{fileName}";
+		var blobName = $"staff-applications/{applicationId}/resume/{GuidGenerator.Create():N}_{fileName}";
 		await blobContainer.SaveAsync(blobName, file.Content, overrideExisting: true);
 		return new EmployeeApplicationUploadMetadata
 		{
@@ -652,7 +700,7 @@ public class EmployeeApplicationAppService(
 			EmployeeApplicationUploadKind.Photo);
 		FileValidationService.ValidateProfilePictureUpload(fileName, file.Content);
 
-		var blobName = $"employee-applications/{applicationId}/photo/{GuidGenerator.Create():N}_{fileName}";
+		var blobName = $"staff-applications/{applicationId}/photo/{GuidGenerator.Create():N}_{fileName}";
 		await blobContainer.SaveAsync(blobName, file.Content, overrideExisting: true);
 		return new EmployeeApplicationUploadMetadata
 		{
@@ -772,25 +820,18 @@ public class EmployeeApplicationAppService(
 		return false;
 	}
 
-	private static EmployeeApplicationListItemDto MapToListItemDto(EmployeeApplication application) =>
-		new()
+	private static void ApplyWorkAssignment(EmployeeApplication application, EmployeeWorkAssignmentSummaryDto assignment) =>
+		application.SetWorkAssignment(assignment.Mode, assignment.AcademicYearId, assignment.AcademicYearName,
+			assignment.OrganizationIds, assignment.OrganizationLabels);
+
+	private static EmployeeWorkAssignmentSummaryDto? MapWorkAssignment(EmployeeApplication application) =>
+		application.WorkAssignmentMode == null ? null : new EmployeeWorkAssignmentSummaryDto
 		{
-			Id = application.Id,
-			ApplicationNumber = application.ApplicationNumber,
-			Status = application.Status,
-			FullName = application.FullName,
-			Email = application.Email,
-			MobileNo = application.MobileNo,
-			PositionAppliedFor = application.PositionAppliedFor,
-			DepartmentAppliedFor = application.DepartmentAppliedFor,
-			TokenExpiresAt = application.TokenExpiresAt,
-			LinkLastIssuedAt = application.LinkLastIssuedAt,
-			SubmittedAt = application.SubmittedAt,
-			FinalizedAt = application.FinalizedAt,
-			FinalizedEmployeeId = application.FinalizedEmployeeId,
-			HasResume = application.HasResume,
-			HasPhoto = application.HasPhoto,
-			CreationTime = application.CreationTime
+			Mode = application.WorkAssignmentMode,
+			AcademicYearId = application.WorkAssignmentAcademicYearId,
+			AcademicYearName = application.WorkAssignmentAcademicYearName,
+			OrganizationIds = application.WorkAssignmentOrganizationIds.ToList(),
+			OrganizationLabels = application.WorkAssignmentOrganizationLabels.ToList()
 		};
 
 	private EmployeeApplicationDto MapToDto(EmployeeApplication application, bool includePublicPath = true)
@@ -810,6 +851,8 @@ public class EmployeeApplicationAppService(
 			SecondaryMobileNo = application.SecondaryMobileNo,
 			PositionAppliedFor = application.PositionAppliedFor,
 			DepartmentAppliedFor = application.DepartmentAppliedFor,
+			WorkAssignment = MapWorkAssignment(application),
+			WorkAssignmentDisplay = application.WorkAssignmentDisplay,
 			DateOfBirth = application.DateOfBirth?.ToDateTime(TimeOnly.MinValue),
 			Gender = application.Gender,
 			Religion = application.Religion,
@@ -867,7 +910,7 @@ public class EmployeeApplicationAppService(
 		{
 			Logger.LogWarning(
 				ex,
-				"Employee application {ApplicationId} has an encrypted invite token that could not be decrypted.",
+				"Staff application {ApplicationId} has an encrypted invite token that could not be decrypted.",
 				application.Id);
 			return null;
 		}
@@ -894,6 +937,8 @@ public class EmployeeApplicationAppService(
 			MobileNo = application.MobileNo,
 			PositionAppliedFor = application.PositionAppliedFor,
 			DepartmentAppliedFor = application.DepartmentAppliedFor,
+			WorkAssignment = MapWorkAssignment(application),
+			WorkAssignmentDisplay = application.WorkAssignmentDisplay,
 			TokenExpiresAt = application.TokenExpiresAt,
 			IsExpired = isExpired,
 			IsSubmitted = isSubmitted,

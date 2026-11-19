@@ -24,16 +24,16 @@ public class AdmissionApplicationWorkflowReadService(
 		var stages = await stageRepository.GetListAsync(stage => stage.WorkflowInstanceId == workflow.Id);
 		var definitions = await stageDefinitionRepository.GetListAsync(stage => stage.WorkflowDefinitionId == workflow.WorkflowDefinitionId);
 		var current = stages.SingleOrDefault(stage => stage.Id == application.CurrentStageInstanceId);
-		var transitions = current == null ? [] : await transitionRepository.GetListAsync(transition =>
-			transition.WorkflowDefinitionId == workflow.WorkflowDefinitionId &&
-			transition.FromStageId == current.DefinitionStageId);
+		var allTransitions = await transitionRepository.GetListAsync(item => item.WorkflowDefinitionId == workflow.WorkflowDefinitionId);
+		var transitions = allTransitions.Where(transition => transition.FromStageId == current?.DefinitionStageId).ToList();
 		var history = await historyRepository.GetListAsync(item => item.WorkflowInstanceId == workflow.Id);
+		var actorNames = await LazyServiceProvider.LazyGetRequiredService<StudentJourneyActorReader>().ReadAsync(stages.Select(item => item.CompletedBy).Concat(history.Select(item => item.CreatorId)));
 		return new AdmissionApplicationWorkflowDto
 		{
 			WorkflowDefinitionId = application.WorkflowDefinitionId,
 			Status = workflow.Status,
-			StartedAt = workflow.StartedAt,
-			CompletedAt = workflow.CompletedAt,
+			StartedAt = AdmissionOfferUtcTime.Normalize(workflow.StartedAt),
+			CompletedAt = NormalizeUtc(workflow.CompletedAt),
 			CurrentStageInstanceId = application.CurrentStageInstanceId,
 			NextRequiredAction = workflow.Status != AdmissionWorkflowInstanceStatus.Active || current == null
 				? null : AdmissionWorkflowStageTypeRegistry.Find(current.StageType)?.NextRequiredAction,
@@ -46,26 +46,31 @@ public class AdmissionApplicationWorkflowReadService(
 				StageType = stage.StageType,
 				DisplayOrder = stage.DisplayOrder,
 				Status = stage.Status,
+				IsTerminalStage = definitions.First(definition => definition.Id == stage.DefinitionStageId).IsTerminalStage,
 				AllowManualSkip = definitions.First(definition => definition.Id == stage.DefinitionStageId).AllowManualSkip,
 				FormStageEnabled = stage.StageType == AdmissionWorkflowStageType.Form &&
 					AdmissionFormStageAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
-				PaymentStageEnabled = stage.StageType == AdmissionWorkflowStageType.Payment &&
-					AdmissionPaymentAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
-				OfferStageEnabled = stage.StageType == AdmissionWorkflowStageType.Offer &&
-					AdmissionOfferAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
+				PaymentStageEnabled = stage.StageType == AdmissionWorkflowStageType.Payment,
+				OfferStageEnabled = false,
 				SeatStageEnabled = stage.StageType == AdmissionWorkflowStageType.Seat &&
 					AdmissionSeatAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
 				AssessmentEnabled = stage.StageType == AdmissionWorkflowStageType.Assessment &&
 					AdmissionAssessmentAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
 				DocumentVerificationEnabled = stage.StageType == AdmissionWorkflowStageType.DocumentVerification &&
 					AdmissionDocumentAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
-				EligibilityEnabled = stage.StageType == AdmissionWorkflowStageType.Eligibility &&
-					AdmissionEligibilityAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
-				ReviewEnabled = stage.StageType == AdmissionWorkflowStageType.Review &&
-					AdmissionReviewAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
-				EnteredAt = stage.EnteredAt,
-				CompletedAt = stage.CompletedAt,
+				DocumentCollectionAvailable = workflow.Status == AdmissionWorkflowInstanceStatus.Active &&
+					application.Status is AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted &&
+					current?.StageType == AdmissionWorkflowStageType.Form && current.Status == AdmissionRuntimeStageStatus.Active &&
+					stage.StageType == AdmissionWorkflowStageType.DocumentVerification && stage.Status == AdmissionRuntimeStageStatus.Pending &&
+					AdmissionDocumentAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) is { CollectionFormStageCode: not null } documentPolicy &&
+					AdmissionDocumentCollectionRules.IsLinkedForm(definitions.First(item => item.Id == current.DefinitionStageId),
+						definitions.First(item => item.Id == stage.DefinitionStageId), documentPolicy, allTransitions),
+				EligibilityEnabled = false,
+				ReviewEnabled = false,
+				EnteredAt = NormalizeUtc(stage.EnteredAt),
+				CompletedAt = NormalizeUtc(stage.CompletedAt),
 				CompletedBy = stage.CompletedBy,
+				CompletedByName = StudentJourneyActorReader.Name(actorNames, stage.CompletedBy),
 				CompletionReason = stage.CompletionReason
 			}).ToList(),
 			AvailableTransitions = transitions.OrderBy(transition => transition.Priority).Select(transition =>
@@ -85,16 +90,19 @@ public class AdmissionApplicationWorkflowReadService(
 			History = history.OrderBy(item => item.OccurredAt).Select(item => new AdmissionWorkflowTransitionHistoryDto
 			{
 				Id = item.Id,
+				ActorName = item.ExtraProperties.TryGetValue("ActorName", out var capturedName) && capturedName is string name && !string.IsNullOrWhiteSpace(name) ? name : StudentJourneyActorReader.Name(actorNames, item.CreatorId),
 				FromStageInstanceId = item.FromStageInstanceId,
 				ToStageInstanceId = item.ToStageInstanceId,
 				TransitionDefinitionId = item.TransitionDefinitionId,
 				Action = item.Action,
 				Reason = item.Reason,
 				ConditionEvaluationSnapshotJson = item.ConditionEvaluationSnapshotJson,
-				OccurredAt = item.OccurredAt
+				OccurredAt = AdmissionOfferUtcTime.Normalize(item.OccurredAt)
 			}).ToList()
 		};
 	}
+
+	private static DateTime? NormalizeUtc(DateTime? value) => value.HasValue ? AdmissionOfferUtcTime.Normalize(value.Value) : null;
 
 	public async Task<AdmissionApplicationWorkflowInstance> GetInstanceAsync(Guid applicationId) =>
 		await workflowRepository.FindAsync(instance => instance.ApplicationId == applicationId) ??

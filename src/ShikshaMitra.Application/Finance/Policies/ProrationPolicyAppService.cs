@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,7 +23,6 @@ public class ProrationPolicyAppService(
 	IRepository<ProrationPolicy, Guid> repository,
 	IRepository<FinancePolicyVersion, Guid> versionRepository,
 	IRepository<FeeStructure, Guid> feeStructureRepository,
-	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
@@ -40,17 +40,67 @@ public class ProrationPolicyAppService(
 			var status = ParseListStatus(input.Status);
 			query = query.Where(x => x.Status == status);
 		}
+		else if (!input.IncludeArchived)
+		{
+			query = query.Where(x => x.Status != ProrationPolicyStatus.Archived);
+		}
 		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
 			var search = input.Search.Trim().ToLower();
 			query = query.Where(x => x.PolicyName.ToLower().Contains(search) || x.PolicyCode.ToLower().Contains(search));
 		}
+		if (!string.IsNullOrWhiteSpace(input.PolicyNameFilter))
+		{
+			var name = input.PolicyNameFilter.Trim().ToLower();
+			query = input.PolicyNameOperator?.ToLowerInvariant() switch
+			{
+				"equals" => query.Where(x => x.PolicyName.ToLower() == name),
+				"startswith" => query.Where(x => x.PolicyName.ToLower().StartsWith(name)),
+				"endswith" => query.Where(x => x.PolicyName.ToLower().EndsWith(name)),
+				_ => query.Where(x => x.PolicyName.ToLower().Contains(name))
+			};
+		}
+		if (input.RuleCountValue.HasValue)
+		{
+			var count = input.RuleCountValue.Value;
+			var max = input.RuleCountMax ?? count;
+			query = input.RuleCountOperator?.ToLowerInvariant() switch
+			{
+				"greaterthan" => query.Where(x => x.Rules.Count > count),
+				"lessthan" => query.Where(x => x.Rules.Count < count),
+				"between" => query.Where(x => x.Rules.Count >= count && x.Rules.Count <= max),
+				_ => query.Where(x => x.Rules.Count == count)
+			};
+		}
+		if (input.UpdatedAt.HasValue && input.UpdatedAtEnd.HasValue)
+		{
+			var start = input.UpdatedAt.Value;
+			var end = input.UpdatedAtEnd.Value;
+			query = input.UpdatedAtOperator?.ToLowerInvariant() switch
+			{
+				"after" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) >= start),
+				"before" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) < end),
+				_ => query.Where(x => (x.LastModificationTime ?? x.CreationTime) >= start &&
+					(x.LastModificationTime ?? x.CreationTime) < end)
+			};
+		}
 
 		var total = await AsyncExecuter.CountAsync(query);
-		var rows = await AsyncExecuter.ToListAsync(query
-			.OrderByDescending(x => x.Status == ProrationPolicyStatus.Active)
-			.ThenByDescending(x => x.IsDefault)
-			.ThenByDescending(x => x.CreationTime)
+		var sortParts = input.Sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+		var sortColumn = sortParts.Length > 0 ? sortParts[0].ToLowerInvariant() : string.Empty;
+		var descending = sortParts.Length > 1 && sortParts[1].Equals("desc", StringComparison.OrdinalIgnoreCase);
+		var sorted = sortColumn switch
+		{
+			"policyname" => descending ? query.OrderByDescending(x => x.PolicyName) : query.OrderBy(x => x.PolicyName),
+			"feeheadrules" => descending ? query.OrderByDescending(x => x.Rules.Count) : query.OrderBy(x => x.Rules.Count),
+			"updatedat" => descending ? query.OrderByDescending(x => x.LastModificationTime ?? x.CreationTime) : query.OrderBy(x => x.LastModificationTime ?? x.CreationTime),
+			"status" => descending ? query.OrderByDescending(x => x.Status) : query.OrderBy(x => x.Status),
+			_ => query.OrderByDescending(x => x.Status == ProrationPolicyStatus.Active)
+				.ThenByDescending(x => x.IsDefault)
+				.ThenByDescending(x => x.CreationTime)
+		};
+		var rows = await AsyncExecuter.ToListAsync(sorted
+			.ThenBy(x => x.Id)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
 		var usedIds = await GetUsedIdsAsync(rows.Select(x => x.Id).ToList());
@@ -63,7 +113,7 @@ public class ProrationPolicyAppService(
 			dto.IsUsedInDownstream = usedIds.Contains(x.Id);
 			return dto;
 		}).ToList();
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "proration", items);
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "proration", items, AsyncExecuter);
 		return new PagedResultDto<ProrationPolicyDto>(total, items);
 	}
 
@@ -72,7 +122,7 @@ public class ProrationPolicyAppService(
 	{
 		var entity = await GetRequiredAsync(id);
 		var dto = await ToDtoAsync(entity);
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "proration", new[] { dto });
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "proration", new[] { dto }, AsyncExecuter);
 		return dto;
 	}
 
@@ -100,11 +150,14 @@ public class ProrationPolicyAppService(
 				ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add);
 		await academicYearRepository.GetAsync(input.AcademicYearId);
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode)
-			? $"PRO-{GuidGenerator.Create():N}"[..16].ToUpperInvariant()
+			? $"PRO-{Guid.NewGuid():N}"[..28].ToUpperInvariant()
 			: input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, null);
 		await ValidateReferencesAsync(input.AcademicYearId, input.FeeHeadRules.Select(x => x.FeeHeadId));
 		var model = ProrationPolicyMapping.ToUpdateModel(input, code, GuidGenerator.Create);
+		if (model.Status == ProrationPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
 		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, null, input.PolicyName, input.ChangeReason);
 		var entity = new ProrationPolicy(GuidGenerator.Create(), CurrentTenant.Id, input.AcademicYearId, model);
@@ -134,6 +187,11 @@ public class ProrationPolicyAppService(
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, id);
 		await ValidateReferencesAsync(input.AcademicYearId, input.FeeHeadRules.Select(x => x.FeeHeadId));
 		var model = ProrationPolicyMapping.ToUpdateModel(input, code, GuidGenerator.Create);
+		if (entity.IsDefault && (!model.IsDefault || model.Status != ProrationPolicyStatus.Active))
+			throw new BusinessException(ProrationPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
+		if (model.Status == ProrationPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
 		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, id, input.PolicyName, input.ChangeReason);
 		entity.Update(model);
@@ -148,9 +206,11 @@ public class ProrationPolicyAppService(
 		var entity = await GetRequiredAsync(id);
 		if (entity.Status == ProrationPolicyStatus.Active)
 			return await ToDtoAsync(entity);
+		entity.Activate();
+		if (!await HasActiveDefaultAsync(entity.AcademicYearId))
+			entity.SetDefault(true);
 		if (entity.IsDefault)
 			await ReplaceExistingDefaultAsync(entity.AcademicYearId, id, entity.PolicyName, changeReason);
-		entity.Activate();
 		await repository.UpdateAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "activated", changeReason);
 		return await ToDtoAsync(entity);
@@ -160,10 +220,15 @@ public class ProrationPolicyAppService(
 	public async Task<ProrationPolicyDto> CloneAsync(Guid id, ProrationPolicyCloneRequestDto input)
 	{
 		var source = await GetRequiredAsync(id);
+		var targetAcademicYearId = input.TargetAcademicYearId ?? source.AcademicYearId;
 		return await CreateAsync(new CreateUpdateProrationPolicyDto
 		{
-			AcademicYearId = input.TargetAcademicYearId ?? source.AcademicYearId,
-			PolicyName = string.IsNullOrWhiteSpace(input.Name) ? $"{source.PolicyName} Copy" : input.Name,
+			AcademicYearId = targetAcademicYearId,
+			PolicyName = string.IsNullOrWhiteSpace(input.Name)
+				? FinanceName.NextCopy(source.PolicyName, await AsyncExecuter.ToListAsync(
+					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == targetAcademicYearId)
+					.Select(x => x.PolicyName)))
+				: FinanceName.Normalize(input.Name),
 			Description = source.Description,
 			Status = "Draft",
 			IsDefault = false,
@@ -172,9 +237,13 @@ public class ProrationPolicyAppService(
 				FeeHeadId = x.FeeHeadId,
 				RuleType = x.RuleType.ToString(),
 				RoundingMode = x.RoundingMode.ToString(),
-				MinimumChargeDays = x.MinimumChargeDays,
 				CutoffDay = x.CutoffDay,
-				AfterCutoffAction = x.AfterCutoffAction?.ToString()
+				AfterCutoffAction = x.AfterCutoffAction?.ToString(),
+				ApplyOnAdmission = x.ApplyOnAdmission,
+				ApplyOnEarlyWithdrawal = x.ApplyOnEarlyWithdrawal,
+				EarlyWithdrawalRuleType = x.EarlyWithdrawalRuleType?.ToString(),
+				EarlyWithdrawalCutoffDay = x.EarlyWithdrawalCutoffDay,
+				EarlyWithdrawalBeforeCutoffAction = x.EarlyWithdrawalBeforeCutoffAction?.ToString()
 			}).ToList()
 		});
 	}
@@ -184,6 +253,8 @@ public class ProrationPolicyAppService(
 	{
 		var entity = await GetRequiredAsync(id);
 		if (entity.Status == ProrationPolicyStatus.Archived) return;
+		if (entity.IsDefault)
+			throw new BusinessException(ProrationPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if ((await GetUsedIdsAsync([id])).Contains(id))
 			throw new BusinessException(ProrationPolicyErrorCodes.PolicyInUse);
 		entity.Archive();
@@ -230,41 +301,10 @@ public class ProrationPolicyAppService(
 		var entity = await GetRequiredAsync(id);
 		var rule = entity.Rules.FirstOrDefault(x => x.FeeHeadId == input.FeeHeadId)?.ToSnapshot()
 			?? new ProrationPolicyRuleSnapshot(input.FeeHeadId, ProrationRuleType.FullCharge,
-				ProrationRoundingMode.Currency, null, null, null);
+			ProrationRoundingMode.Currency, null, null);
 		var result = calculationService.Calculate(rule, input.ScheduledAmount, input.CoverageStartDate,
 			input.CoverageEndDate, input.ChargeStartDate, input.ChargeEndDate);
 		return ToCalculationDto(entity, input.FeeHeadId, result);
-	}
-
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.View)]
-	public async Task<ProrationPolicyAttachmentImpactDto> GetAttachmentImpactAsync(
-		Guid id, ProrationPolicyAttachmentImpactRequestDto input)
-	{
-		var entity = await GetRequiredAsync(id);
-		if (entity.Status != ProrationPolicyStatus.Active)
-			throw new BusinessException(ProrationPolicyErrorCodes.PolicyNotActive);
-		var structure = await feeStructureRepository.GetAsync(input.FeeStructureId);
-		var metadata = await feeStructureMetadataRepository.GetAsync(structure.FeeStructureMetadataId);
-		if (metadata.AcademicYearId != entity.AcademicYearId)
-			throw new BusinessException(ProrationPolicyErrorCodes.AcademicYearMismatch);
-		var ruleIds = entity.Rules.Select(x => x.FeeHeadId).ToHashSet();
-		var structureIds = structure.FeeStructureDetails.Select(x => x.FeeHeadId).ToHashSet();
-		var oneTime = structure.FeeStructureDetails.Where(x => x.IsOneTime).Select(x => x.FeeHeadId).Distinct().Order().ToList();
-		var prorated = structure.FeeStructureDetails.Where(x => !x.IsOneTime && ruleIds.Contains(x.FeeHeadId) &&
-			entity.Rules.Any(r => r.FeeHeadId == x.FeeHeadId && r.RuleType != ProrationRuleType.FullCharge))
-			.Select(x => x.FeeHeadId).Distinct().Order().ToList();
-		var full = structureIds.Except(prorated).Order().ToList();
-		var impact = new ProrationPolicyAttachmentImpactDto
-		{
-			PolicyId = id, PolicyVersion = entity.Version, IsAttachable = true,
-			ProratedFeeHeadIds = prorated, FullChargeFeeHeadIds = full, OneTimeFeeHeadIds = oneTime,
-			PolicyFeeHeadsNotInStructure = ruleIds.Except(structureIds).Order().ToList()
-		};
-		if (impact.PolicyFeeHeadsNotInStructure.Count > 0)
-			impact.Warnings.Add("Some policy Fee Heads are not present in this Fee Structure and will be ignored.");
-		if (oneTime.Any(ruleIds.Contains))
-			impact.Warnings.Add("One-time Fee Structure details always remain full charge.");
-		return impact;
 	}
 
 	private async Task<ProrationPolicy> GetRequiredAsync(Guid id)
@@ -290,7 +330,14 @@ public class ProrationPolicyAppService(
 		var count = await feeHeadRepository.CountAsync(x =>
 			ids.Contains(x.Id) && x.IsActive && x.AcademicYearId == academicYearId);
 		if (count != ids.Count)
-			throw new BusinessException(ProrationPolicyErrorCodes.FeeHeadRequired);
+		{
+			var unavailable = await feeHeadRepository.GetListAsync(x => ids.Contains(x.Id) &&
+				(!x.IsActive || x.AcademicYearId != academicYearId));
+			var names = string.Join(", ", unavailable.Select(x => x.Name).OrderBy(x => x));
+			throw new BusinessException(ProrationPolicyErrorCodes.FeeHeadUnavailable)
+				.WithData("FeeHeadNames", string.IsNullOrWhiteSpace(names) ? "One or more selected fee heads" : names)
+				.WithData("AcademicYearId", academicYearId);
+		}
 	}
 
 	private async Task<Dictionary<Guid, string>> GetFeeHeadNamesAsync(IEnumerable<Guid> ids)
@@ -302,15 +349,19 @@ public class ProrationPolicyAppService(
 
 	private async Task EnsureUniqueAsync(Guid yearId, string name, string code, Guid? excludeId)
 	{
-		var normalizedName = name.Trim().ToLower();
-		var normalizedCode = code.Trim().ToLower();
+		var normalizedName = FinanceName.Normalize(name);
+		var normalizedCode = code.Trim().ToUpperInvariant();
 		var query = await repository.GetQueryableAsync();
+		var candidates = await AsyncExecuter.ToListAsync(query.Where(x => x.AcademicYearId == yearId &&
+			(!excludeId.HasValue || x.Id != excludeId.Value)).Select(x => new { x.PolicyName, x.Status }));
+		var existing = candidates.FirstOrDefault(x => FinanceName.Equals(x.PolicyName, normalizedName));
+		if (existing != null)
+			throw new BusinessException(ProrationPolicyErrorCodes.DuplicateName)
+				.WithData("Name", normalizedName)
+				.WithData("Location", existing.Status == ProrationPolicyStatus.Archived ? "Archived" : "Current");
 		if (await AsyncExecuter.AnyAsync(query.Where(x => x.AcademicYearId == yearId &&
-			x.PolicyName.ToLower() == normalizedName && (!excludeId.HasValue || x.Id != excludeId.Value))))
-			throw new BusinessException(ProrationPolicyErrorCodes.DuplicateName);
-		if (await AsyncExecuter.AnyAsync(query.Where(x => x.AcademicYearId == yearId &&
-			x.PolicyCode.ToLower() == normalizedCode && (!excludeId.HasValue || x.Id != excludeId.Value))))
-			throw new BusinessException(ProrationPolicyErrorCodes.DuplicateCode);
+			x.PolicyCode.ToUpper() == normalizedCode && (!excludeId.HasValue || x.Id != excludeId.Value))))
+			throw new BusinessException(ProrationPolicyErrorCodes.DuplicateCode).WithData("Code", normalizedCode);
 	}
 
 	private async Task ReplaceExistingDefaultAsync(
@@ -330,13 +381,22 @@ public class ProrationPolicyAppService(
 		}
 	}
 
+	private async Task<bool> HasActiveDefaultAsync(Guid academicYearId) =>
+		await repository.AnyAsync(x => x.AcademicYearId == academicYearId &&
+			x.Status == ProrationPolicyStatus.Active && x.IsDefault);
+
 	private async Task<HashSet<Guid>> GetUsedIdsAsync(List<Guid> ids)
 	{
 		if (ids.Count == 0) return [];
-		var structureIds = await feeStructureRepository.GetListAsync(x => x.ProrationPolicyId.HasValue && ids.Contains(x.ProrationPolicyId.Value));
-		var assignmentIds = await studentFeeStructureRepository.GetListAsync(x => x.ProrationPolicyId.HasValue && ids.Contains(x.ProrationPolicyId.Value));
-		return structureIds.Select(x => x.ProrationPolicyId!.Value)
-			.Concat(assignmentIds.Select(x => x.ProrationPolicyId!.Value)).ToHashSet();
+		var structures = await feeStructureRepository.GetQueryableAsync();
+		var assignments = await studentFeeStructureRepository.GetQueryableAsync();
+		var structureIds = await AsyncExecuter.ToListAsync(structures
+			.Where(x => x.ProrationPolicyId.HasValue && ids.Contains(x.ProrationPolicyId.Value))
+			.Select(x => x.ProrationPolicyId!.Value).Distinct());
+		var assignmentIds = await AsyncExecuter.ToListAsync(assignments
+			.Where(x => x.ProrationPolicyId.HasValue && ids.Contains(x.ProrationPolicyId.Value))
+			.Select(x => x.ProrationPolicyId!.Value).Distinct());
+		return structureIds.Concat(assignmentIds).ToHashSet();
 	}
 
 	private async Task WriteVersionAsync(ProrationPolicy entity, string action, string? reason = null)

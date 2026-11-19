@@ -1,4 +1,5 @@
 ﻿using System;
+using ShikshaMitra.Domain.Finance.Policies;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -21,25 +22,56 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 /// All monetary invariants (payment details validation, DueFee allocation) live here
 /// so that the application service remains a thin coordinator.
 /// </summary>
-public class FeeCollectionManager(
-	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
-	IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository,
-	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
-	IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
-	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
-	IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
-	IDueFeeRepository dueFeeRepository,
-	IRepository<FeeHead, Guid> feeHeadRepository,
-	IFeePaymentReceiptRepository feePaymentReceiptRepository,
-	FeeReceiptManager feeReceiptManager,
-	IReceiptNumberSequenceRepository receiptNumberSequenceRepository,
-	IClock clock,
-	ICurrentTenant currentTenant,
-	ICurrentUser currentUser
-) : DomainService
+public class FeeCollectionManager : DomainService
 {
+	private readonly IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository;
+	private readonly IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository;
+	private readonly IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository;
+	private readonly IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository;
+	private readonly IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository;
+	private readonly IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository;
+	private readonly IDueFeeRepository dueFeeRepository;
+	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
+	private readonly IFeePaymentReceiptRepository feePaymentReceiptRepository;
+	private readonly FeeReceiptManager feeReceiptManager;
+	private readonly IReceiptNumberSequenceRepository receiptNumberSequenceRepository;
+	private readonly IClock clock;
+	private readonly ICurrentTenant currentTenant;
+
+	public FeeCollectionManager(
+		IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
+		IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository,
+		IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+		IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
+		IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
+		IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
+		IDueFeeRepository dueFeeRepository,
+		IRepository<FeeHead, Guid> feeHeadRepository,
+		IFeePaymentReceiptRepository feePaymentReceiptRepository,
+		FeeReceiptManager feeReceiptManager,
+		IReceiptNumberSequenceRepository receiptNumberSequenceRepository,
+		IClock clock,
+		ICurrentTenant currentTenant,
+		ICurrentUser currentUser
+	)
+	{
+		this.feeRecordMetadataRepository = feeRecordMetadataRepository;
+		this.feeCollectionRecordRepository = feeCollectionRecordRepository;
+		this.chargeCollectionRecordRepository = chargeCollectionRecordRepository;
+		this.paymentMethodRecordRepository = paymentMethodRecordRepository;
+		this.dueFeeAllocationRepository = dueFeeAllocationRepository;
+		this.lateFeeAllocationRepository = lateFeeAllocationRepository;
+		this.dueFeeRepository = dueFeeRepository;
+		this.feeHeadRepository = feeHeadRepository;
+		this.feePaymentReceiptRepository = feePaymentReceiptRepository;
+		this.feeReceiptManager = feeReceiptManager;
+		this.receiptNumberSequenceRepository = receiptNumberSequenceRepository;
+		this.clock = clock;
+		this.currentTenant = currentTenant;
+	}
+
 	public sealed record CollectFeeTransactionCommand(
-		Guid StudentId,
+		Guid? StudentId,
 		Guid AcademicYearId,
 		Guid BoardId,
 		Guid EducationMediumId,
@@ -53,7 +85,9 @@ public class FeeCollectionManager(
 		IReadOnlyList<(PaymentMethodEnum Method, double Amount, PaymentDetails? Details)> Payments,
 		IReadOnlyList<(Guid DueFeeId, double Amount)>? LateFeeAllocations = null,
 		string? IdempotencyKey = null,
-		string? CommandFingerprint = null);
+		string? CommandFingerprint = null,
+		Guid? FinanceFeeAccountId = null,
+		CollectionReceiptGrouping ReceiptGrouping = CollectionReceiptGrouping.Separate);
 
 	public sealed record CollectFeeTransactionResult(
 		FeeRecordMetadata Metadata,
@@ -63,10 +97,13 @@ public class FeeCollectionManager(
 		List<FeePaymentReceipt> Receipts,
 		double FeeLinesTotal,
 		double ChargeLinesTotal,
-		double LateFeeLinesTotal = 0);
+		double LateFeeLinesTotal = 0, List<PaymentMethodRecord>? PaymentRecords = null);
 
 	public async Task<CollectFeeTransactionResult> ExecuteCollectionTransactionAsync(CollectFeeTransactionCommand command)
 	{
+		FinanceFeePayerIdentity.Validate(command.StudentId, command.FinanceFeeAccountId);
+		if (command.ChargePayments.Count > 0 && !command.StudentId.HasValue)
+			throw new BusinessException(FeeCollectionErrorCodes.InvalidCharge);
 		var receiptNumber = await GenerateReceiptNumberAsync();
 
 		var metadata = CreateMetadata(
@@ -77,20 +114,21 @@ public class FeeCollectionManager(
 			receiptNumber,
 			command.Notes,
 			command.IdempotencyKey,
-			command.CommandFingerprint);
+			command.CommandFingerprint,
+			command.FinanceFeeAccountId);
 		await feeRecordMetadataRepository.InsertAsync(metadata, autoSave: false);
 
 		var feeCollectionRecords = CreateFeeCollectionRecords(
 			command.StudentId,
 			metadata.Id,
-			command.FeeHeadGroups);
+			command.FeeHeadGroups, command.FinanceFeeAccountId);
 		await feeCollectionRecordRepository.InsertManyAsync(feeCollectionRecords, autoSave: false);
 
 		var chargeCollectionRecords = new List<ChargeCollectionRecord>();
 		if (command.ChargePayments.Count > 0)
 		{
 			chargeCollectionRecords = CreateChargeCollectionRecords(
-				command.StudentId,
+				command.StudentId!.Value,
 				metadata.Id,
 				command.ChargePayments);
 			await chargeCollectionRecordRepository.InsertManyAsync(chargeCollectionRecords, autoSave: false);
@@ -100,7 +138,7 @@ public class FeeCollectionManager(
 			command.StudentId,
 			metadata.Id,
 			command.Payments,
-			command.Notes);
+			command.Notes, command.FinanceFeeAccountId);
 		await paymentMethodRecordRepository.InsertManyAsync(paymentRecords, autoSave: false);
 
 		if (command.DueFeeAllocations.Count > 0)
@@ -141,6 +179,13 @@ public class FeeCollectionManager(
 		var lateFeeAllocations = command.LateFeeAllocations ?? [];
 		if (lateFeeAllocations.Count > 0)
 		{
+			// Late-fee-only collections must contend on the same due concurrency token
+			// as an unpaid assignment correction, even though principal is unchanged.
+			var lateDueIds = lateFeeAllocations.Select(a => a.DueFeeId).Distinct().ToArray();
+			var lateDues = await dueFeeRepository.GetListAsync(d => Enumerable.Contains(lateDueIds, d.Id));
+			if (lateDues.Count != lateDueIds.Length) throw new BusinessException(DueFeeErrorCodes.DueFeeNotFound);
+			foreach (var due in lateDues) due.RecordPaymentEvidence();
+			await dueFeeRepository.UpdateManyAsync(lateDues, autoSave: false);
 			// Deliberately does not call DueFee.ApplyPayment — late fee is not part of
 			// DueFee.OutstandingAmount (see LateFeeCollectionAllocation's class doc). This
 			// only records that the amount was collected, for income-booking and audit.
@@ -159,21 +204,20 @@ public class FeeCollectionManager(
 		var chargeLinesTotal = chargeCollectionRecords.Sum(r => r.Amount);
 		var lateFeeLinesTotal = lateFeeAllocations.Sum(a => a.Amount);
 
-		// Known gap (implementation plan Phase 3): late fee is folded into the fee receipt's
-		// total rather than itemized as its own line — a separate PDF line item requires
-		// touching FeeReceiptManager's template, deferred to keep this session's change to the
-		// live collection transaction as small and additive as possible.
+		// Receipt grouping follows the ledger: principal is fees; late fees are charges.
 		var receipts = await feeReceiptManager.CreateReceiptsForTransactionAsync(
 			feeCollectionTransactionId: metadata.Id,
 			studentId: command.StudentId,
 			academicYearId: command.AcademicYearId,
 			boardId: command.BoardId,
 			educationMediumId: command.EducationMediumId,
-			feeLinesTotal: feeLinesTotal + lateFeeLinesTotal,
+			feeLinesTotal: feeLinesTotal,
 			chargeLinesTotal: chargeLinesTotal,
 			paymentMethods: command.Payments.Select(p => p.Method).ToList(),
 			bankReceiptConfirmed: command.BankReceiptConfirmed,
-			remarks: command.Notes);
+			remarks: command.Notes, financeFeeAccountId: command.FinanceFeeAccountId,
+			receiptGrouping: command.ReceiptGrouping,
+			lateFeeLinesTotal: lateFeeAllocations.Sum(a => (decimal)a.Amount));
 
 		if (receipts.Count > 0)
 			await feePaymentReceiptRepository.InsertManyAsync(receipts, autoSave: false);
@@ -186,7 +230,7 @@ public class FeeCollectionManager(
 			receipts,
 			feeLinesTotal,
 			chargeLinesTotal,
-			lateFeeLinesTotal);
+			lateFeeLinesTotal, paymentRecords);
 	}
 
 	/// <summary>
@@ -204,14 +248,15 @@ public class FeeCollectionManager(
 	/// Creates the <see cref="FeeRecordMetadata"/> root record for a collection transaction.
 	/// </summary>
 	public FeeRecordMetadata CreateMetadata(
-		Guid studentId,
+		Guid? studentId,
 		Guid academicYearId,
 		double received,
 		FeeCollectionStatus status,
 		string receiptNumber,
 		string? remarks,
 		string? idempotencyKey = null,
-		string? commandFingerprint = null)
+		string? commandFingerprint = null,
+		Guid? financeFeeAccountId = null)
 	{
 		return new FeeRecordMetadata(
 			GuidGenerator.Create(),
@@ -223,26 +268,28 @@ public class FeeCollectionManager(
 			status,
 			remarks,
 			idempotencyKey,
-			commandFingerprint);
+			commandFingerprint, financeFeeAccountId);
 	}
 
 	/// <summary>
 	/// Creates one <see cref="FeeCollectionRecord"/> per selected fee head.
 	/// </summary>
 	public List<FeeCollectionRecord> CreateFeeCollectionRecords(
-		Guid studentId,
+		Guid? studentId,
 		Guid metadataId,
-		IEnumerable<(Guid FeeHeadId, double Amount)> feeHeads)
+		IEnumerable<(Guid FeeHeadId, double Amount)> feeHeads,
+		Guid? financeFeeAccountId = null)
 	{
 		var now = clock.Now;
-		return feeHeads.Select(fh => new FeeCollectionRecord(GuidGenerator.Create())
+		return feeHeads.Select(fh =>
 		{
-			TenantId = currentTenant.Id,
-			StudentId = studentId,
-			FeeHeadId = fh.FeeHeadId,
-			Amount = fh.Amount,
-			PaymentDate = now,
-			FeeRecordMetadataId = metadataId,
+			var record = new FeeCollectionRecord(GuidGenerator.Create())
+			{
+				TenantId = currentTenant.Id, StudentId = studentId, FeeHeadId = fh.FeeHeadId,
+				Amount = fh.Amount, PaymentDate = now, FeeRecordMetadataId = metadataId,
+			};
+			if (financeFeeAccountId.HasValue) record.SetFinanceFeeAccount(financeFeeAccountId.Value);
+			return record;
 		}).ToList();
 	}
 
@@ -270,10 +317,11 @@ public class FeeCollectionManager(
 	/// Creates one <see cref="PaymentMethodRecord"/> per payment instrument in the input.
 	/// </summary>
 	public List<PaymentMethodRecord> CreatePaymentRecords(
-		Guid studentId,
+		Guid? studentId,
 		Guid metadataId,
 		IEnumerable<(PaymentMethodEnum Method, double Amount, PaymentDetails? Details)> payments,
-		string? notes)
+		string? notes,
+		Guid? financeFeeAccountId = null)
 	{
 		var now = clock.Now;
 		return payments.Select(p => PaymentMethodRecord.Create(
@@ -284,7 +332,7 @@ public class FeeCollectionManager(
 			paymentMethod: p.Method,
 			paymentDetails: p.Details,
 			tenantId: currentTenant.Id,
-			notes: notes)).ToList();
+			notes: notes, financeFeeAccountId: financeFeeAccountId)).ToList();
 	}
 
 	/// <summary>
@@ -348,6 +396,16 @@ public class FeeCollectionManager(
 		string Get(string key) =>
 			details.TryGetValue(key, out var v) ? v?.ToString() ?? string.Empty : string.Empty;
 
+		DateOnly? GetDate(string key)
+		{
+			var value = Get(key);
+			if (DateOnly.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+				System.Globalization.DateTimeStyles.None, out var date)) return date;
+			return DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+				System.Globalization.DateTimeStyles.None, out var timestamp)
+				? DateOnly.FromDateTime(timestamp.DateTime) : null;
+		}
+
 		return method switch
 		{
 			PaymentMethodEnum.Cheque => new ChequeDetails(
@@ -359,15 +417,18 @@ public class FeeCollectionManager(
 
 			PaymentMethodEnum.DemandDraft => new DemandDraftDetails(
 				ddNumber: Get("ddNumber"),
-				issuingBankName: Get("issuingBankName"),
+				issuingBankName: string.IsNullOrWhiteSpace(Get("issuingBankName")) ? Get("bankName") : Get("issuingBankName"),
 				branchName: Get("branchName"),
-				ddDate: DateOnly.TryParse(Get("ddDate"), out var dd)
-					? dd : DateOnly.FromDateTime(DateTime.UtcNow)),
+				ddDate: GetDate(string.IsNullOrWhiteSpace(Get("issueDate")) ? "ddDate" : "issueDate"),
+				paymentDate: GetDate("paymentDate")),
 
 			PaymentMethodEnum.BankTransfer => new BankTransferDetails(
-				transactionReferenceNumber: Get("transactionReferenceNumber"),
+				transactionReferenceNumber: string.IsNullOrWhiteSpace(Get("transactionReferenceNumber"))
+					? Get("transactionId") : Get("transactionReferenceNumber"),
 				bankName: Get("bankName"),
-				ifscCode: Get("ifscCode")),
+				ifscCode: Get("ifscCode"),
+				transferDate: GetDate("transferDate"),
+				accountHolderName: details.ContainsKey("accountHolderName") ? Get("accountHolderName") : null),
 
 			PaymentMethodEnum.UPI => new UpiDetails(
 				upiTransactionId: Get("upiTransactionId"),
@@ -376,13 +437,15 @@ public class FeeCollectionManager(
 
 			PaymentMethodEnum.CreditCard => new CreditCardDetails(
 				transactionId: Get("transactionId"),
-				cardLast4: Get("cardLast4"),
-				bankName: Get("bankName")),
+				cardLast4: string.IsNullOrWhiteSpace(Get("cardLast4")) ? Get("last4Digits") : Get("cardLast4"),
+				bankName: Get("bankName"),
+				cardHolderName: details.ContainsKey("cardHolderName") ? Get("cardHolderName") : null),
 
 			PaymentMethodEnum.DebitCard => new CreditCardDetails(
 				transactionId: Get("transactionId"),
-				cardLast4: Get("cardLast4"),
-				bankName: Get("bankName")),
+				cardLast4: string.IsNullOrWhiteSpace(Get("cardLast4")) ? Get("last4Digits") : Get("cardLast4"),
+				bankName: Get("bankName"),
+				cardHolderName: details.ContainsKey("cardHolderName") ? Get("cardHolderName") : null),
 
 			_ => null,
 		};

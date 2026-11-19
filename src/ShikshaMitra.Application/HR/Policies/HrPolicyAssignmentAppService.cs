@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
@@ -54,4 +54,8 @@ public class HrPolicyAssignmentAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.View)]
 	public Task<EffectiveEmployeePoliciesDto> GetPreviewAsync(PolicyAssignmentPreviewRequestDto input) =>
 		reader.GetPreviewAsync(input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.PreviewImpact)]
+	public Task<PolicyAssignmentResolutionPreviewDto> PreviewResolutionAsync(PolicyAssignmentResolutionPreviewRequestDto input) =>
+		reader.PreviewResolutionAsync(input);
 }

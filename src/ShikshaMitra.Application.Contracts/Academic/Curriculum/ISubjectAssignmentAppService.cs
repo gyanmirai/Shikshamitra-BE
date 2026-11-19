@@ -61,7 +61,7 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// <param name="academicMediumId">Academic medium ID</param>
 	/// <param name="input">Update input DTO</param>
 	/// <returns>Updated assignment group</returns>
-	Task<SubjectAssignmentDto> UpdateAsync(
+	Task<SubjectAssignmentDto?> UpdateAsync(
 		Guid assignmentId,
 		Guid academicMediumId,
 		CreateUpdateSubjectAssignmentDto input

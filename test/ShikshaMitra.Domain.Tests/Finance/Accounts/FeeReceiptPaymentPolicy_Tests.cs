@@ -5,16 +5,7 @@ using Xunit;
 
 namespace ShikshaMitra.Finance.Accounts;
 
-/// <summary>
-/// Tests for the three-bucket receipt-kind policy.
-/// Matrix:
-///   Cash              → FinalFee           (no bank confirmation asked)
-///   Cheque / DD       → ProvisionalFee     (always, regardless of flag)
-///   UPI / Card / ...  + confirmed=true  → FinalFee
-///   UPI / Card / ...  + confirmed=false → ProvisionalFee
-///   UPI / Card / ...  + confirmed=null  → ProvisionalFee  (defensive default)
-///   Mixed Cheque+UPI  + confirmed=true  → ProvisionalFee  (AlwaysProvisional wins)
-/// </summary>
+/// <summary>Only cash finalizes immediately; cashier confirmation cannot finalize a non-cash receipt.</summary>
 public class FeeReceiptPaymentPolicy_Tests
 {
     // ── AlwaysFinal bucket ────────────────────────────────────────────────────
@@ -76,10 +67,10 @@ public class FeeReceiptPaymentPolicy_Tests
     [InlineData(PaymentMethodEnum.CreditCard)]
     [InlineData(PaymentMethodEnum.DebitCard)]
     [InlineData(PaymentMethodEnum.BankTransfer)]
-    public void CashierDecided_With_Confirmed_True_Produces_FinalFee(PaymentMethodEnum method)
+    public void Electronic_With_Confirmed_True_Remains_Provisional(PaymentMethodEnum method)
     {
         var kind = FeeReceiptPaymentPolicy.DetermineFeeReceiptKind([method], bankReceiptConfirmed: true);
-        Assert.Equal(FeeReceiptKind.FinalFee, kind);
+        Assert.Equal(FeeReceiptKind.ProvisionalFee, kind);
     }
 
     [Theory]
@@ -108,9 +99,9 @@ public class FeeReceiptPaymentPolicy_Tests
     [InlineData(PaymentMethodEnum.UPI)]
     [InlineData(PaymentMethodEnum.CreditCard)]
     [InlineData(PaymentMethodEnum.BankTransfer)]
-    public void CashierDecided_Methods_Require_BankConfirmation(PaymentMethodEnum method)
+    public void Electronic_Methods_Do_Not_Ask_Cashier_To_Finalize(PaymentMethodEnum method)
     {
-        Assert.True(FeeReceiptPaymentPolicy.RequiresBankConfirmation([method]));
+        Assert.False(FeeReceiptPaymentPolicy.RequiresBankConfirmation([method]));
     }
 
     // ── Mixed-method (most-restrictive wins) ──────────────────────────────────
@@ -126,13 +117,13 @@ public class FeeReceiptPaymentPolicy_Tests
     }
 
     [Fact]
-    public void Mixed_Cash_And_UPI_With_Confirmed_True_Produces_FinalFee()
+    public void Mixed_Cash_And_UPI_With_Confirmed_True_Remains_Provisional()
     {
-        // No AlwaysProvisional method; CashierDecided with confirmed=true → Final
+        // Cash cannot bypass verification for the non-cash share.
         var kind = FeeReceiptPaymentPolicy.DetermineFeeReceiptKind(
             [PaymentMethodEnum.Cash, PaymentMethodEnum.UPI],
             bankReceiptConfirmed: true);
-        Assert.Equal(FeeReceiptKind.FinalFee, kind);
+        Assert.Equal(FeeReceiptKind.ProvisionalFee, kind);
     }
 
     [Fact]

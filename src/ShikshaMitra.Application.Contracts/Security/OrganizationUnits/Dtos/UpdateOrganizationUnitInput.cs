@@ -6,7 +6,7 @@ namespace ShikshaMitra.Security.OrganizationUnits.Dtos;
 
 public class UpdateOrganizationUnitInput : IValidatableObject
 {
-	public string DisplayName { get; set; }
+	public string DisplayName { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
 	public Guid Id { get; set; }
 

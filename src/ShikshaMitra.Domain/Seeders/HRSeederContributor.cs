@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using Microsoft.AspNetCore.Identity;
 using ShikshaMitra.Common;
 using ShikshaMitra.Groups;
@@ -46,6 +47,7 @@ namespace ShikshaMitra.Seeders;
 /// </summary>
 public partial class HRSeederContributor : BaseSeederContributor
 {
+	private readonly IRepository<EsiPolicy, Guid> _esiPolicyRepository;
 	public HRSeederContributor(
 		ICurrentTenant currentTenant,
 		IGuidGenerator guidGenerator,
@@ -57,6 +59,7 @@ public partial class HRSeederContributor : BaseSeederContributor
 		IProvidentFundRepository providentFundRepository,
 		IProfessionalTaxRepository professionalTaxRepository,
 		IRepository<StatutoryRuleVersion, Guid> statutoryRuleRepository,
+		IRepository<EsiPolicy, Guid> esiPolicyRepository,
 		IRepository<SalaryStructureTemplate, Guid> salaryStructureTemplateRepository,
 		IRepository<SalaryStructureTemplateVersion, Guid> salaryStructureTemplateVersionRepository,
 		IRepository<WorkCalendarPolicy, Guid> workCalendarPolicyRepository,
@@ -71,7 +74,8 @@ public partial class HRSeederContributor : BaseSeederContributor
 		LeavePolicyManager leavePolicyManager,
 		IAcademicYearRepository academicYearRepository,
 		IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
-			IRepository<ShiftManagement, Guid> shiftRepository,
+			IRepository<EmployeeWorkShift, Guid> shiftRepository,
+			IRepository<EmployeeShiftAssignment, Guid> shiftAssignmentRepository,
 			IEmployeeRepository employeeRepository,
 			IRepository<EmployeeOrganizationAssignment, Guid> employeeOrganizationAssignmentRepository,
 			IRepository<EducationMediumStagePermission, Guid> educationMediumStagePermissionRepository,
@@ -118,6 +122,7 @@ public partial class HRSeederContributor : BaseSeederContributor
 		_providentFundRepository = providentFundRepository;
 		_professionalTaxRepository = professionalTaxRepository;
 		_statutoryRuleRepository = statutoryRuleRepository;
+		_esiPolicyRepository = esiPolicyRepository;
 		_salaryStructureTemplateRepository = salaryStructureTemplateRepository;
 		_salaryStructureTemplateVersionRepository = salaryStructureTemplateVersionRepository;
 		_workCalendarPolicyRepository = workCalendarPolicyRepository;
@@ -133,6 +138,7 @@ public partial class HRSeederContributor : BaseSeederContributor
 		_academicYearRepository = academicYearRepository;
 		_educationMediumStageRepository = educationMediumStageRepository;
 		_shiftRepository = shiftRepository;
+		_shiftAssignmentRepository = shiftAssignmentRepository;
 		_employeeRepository = employeeRepository;
 		_employeeOrganizationAssignmentRepository = employeeOrganizationAssignmentRepository;
 		_educationMediumStagePermissionRepository = educationMediumStagePermissionRepository;

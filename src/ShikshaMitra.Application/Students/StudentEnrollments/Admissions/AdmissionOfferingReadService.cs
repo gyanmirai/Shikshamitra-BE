@@ -4,9 +4,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
+using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
@@ -21,6 +23,7 @@ public class AdmissionOfferingReadService(
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
+	IRepository<AdmissionIntakeProfile, Guid> intakeProfileRepository,
 	IRepository<AdmissionApplication, Guid> applicationRepository,
 	IRepository<EducationBoard, Guid> boardRepository,
 	IRepository<EducationMedium, Guid> mediumRepository,
@@ -28,13 +31,14 @@ public class AdmissionOfferingReadService(
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
 	IUserScopeAccessService scopeAccessService,
-	AdmissionEligibilityOfferingValidator eligibilityValidator)
+	AdmissionEligibilityOfferingValidator eligibilityValidator,
+	AdmissionOfferingConfigurationValidator configurationValidator)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<PagedResultDto<AdmissionOfferingListDto>> GetListAsync(AdmissionOfferingListInput input)
 	{
 		var read = await GetRowsQueryAsync(input);
-		var query = read.Query;
+		var query = AdmissionOfferingColumnFilters.Apply(read.Query, input.ColumnFilters);
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var pageRows = await AsyncExecuter.ToListAsync(
 			ApplySorting(query, input.Sorting)
@@ -45,7 +49,22 @@ public class AdmissionOfferingReadService(
 			pageRows.Select(row => MapList(row, read.Errors.GetValueOrDefault(row.Offering.Id))).ToList());
 	}
 
+	/// <summary>Complete choices for already selected cycles, using the same scoped validation and ordering as the list.</summary>
+	internal async Task<List<CatalogueItem>> GetCatalogueAsync(Guid[] cycleIds)
+	{
+		if (cycleIds.Length == 0) return [];
+		var read = await GetRowsQueryAsync(new AdmissionOfferingListInput(), cycleIds: cycleIds);
+		var rows = await AsyncExecuter.ToListAsync(ApplySorting(read.Query, null));
+		return rows.Select(row => new CatalogueItem(MapList(row, read.Errors.GetValueOrDefault(row.Offering.Id)),
+			row.Offering.WorkflowDefinitionId)).ToList();
+	}
+
+	internal sealed record CatalogueItem(AdmissionOfferingListDto Row, Guid? WorkflowDefinitionId);
+
 	public async Task<AdmissionOfferingDto> GetAsync(Guid id)
+		=> (await ReadDetailAsync(id)).Detail;
+
+	private async Task<(AdmissionOfferingReadRow Row, AdmissionOfferingDto Detail, AdmissionOfferingAvailability Availability)> ReadDetailAsync(Guid id)
 	{
 		var read = await GetRowsQueryAsync(new AdmissionOfferingListInput
 		{
@@ -54,27 +73,57 @@ public class AdmissionOfferingReadService(
 		}, id);
 		var rows = await AsyncExecuter.ToListAsync(read.Query);
 		var row = rows.SingleOrDefault() ?? throw new EntityNotFoundException(typeof(AdmissionOffering), id);
-		return MapDetail(row, read.Errors.GetValueOrDefault(row.Offering.Id));
+		var detail = MapDetail(row, read.Errors.GetValueOrDefault(row.Offering.Id));
+		var usage = LazyServiceProvider.LazyGetRequiredService<AdmissionOfferingConfigurationUsageService>();
+		detail.InquiryCount = await usage.GetInquiryCountAsync(id);
+		detail.HasConfigurationUsage = await usage.HasUsageAsync(row.Offering);
+		AdmissionOfferingValidationResult validation;
+		try
+		{
+			validation = row.Offering.IsActive
+				? await configurationValidator.ValidateStoredAsync(row.Offering)
+				: await configurationValidator.ValidateForActivationAsync(row.Offering);
+		}
+		catch (BusinessException exception) when (exception.Code == AdmissionFormInheritanceErrorCodes.InvalidPolicy)
+		{
+			validation = new(read.Errors.GetValueOrDefault(row.Offering.Id) ??
+				[new(AdmissionFormInheritanceErrorCodes.IncompatibleSource,
+					"Open the linked Admission forms and repair their Inquiry inheritance settings before using this offering.")]);
+		}
+		detail.Configuration = MapValidation(validation);
+		detail.ConfigurationStatus = validation.Status;
+		var availability = AdmissionOfferingAvailabilityEvaluator.Evaluate(
+			row.Offering, row.Cycle, validation.IsValid, new DateTimeOffset(Clock.Now.ToUniversalTime()));
+		if (availability.Status == AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete)
+			availability = availability with { ReasonMessage = string.Join(" ", validation.Errors.Select(error => error.Message).Distinct()) };
+		detail.AvailabilityStatus = availability.Status;
+		detail.UnavailableReason = availability.ReasonMessage;
+		return (row, detail, availability);
 	}
 
 	public async Task<AdmissionOfferingAvailabilityDto> GetAvailabilityAsync(Guid id)
+		=> (await GetWithAvailabilityAsync(id)).Availability;
+
+	internal async Task<(AdmissionOfferingDto Offering, AdmissionOfferingAvailabilityDto Availability)> GetWithAvailabilityAsync(Guid id)
 	{
-		var detail = await GetAsync(id);
-		return new AdmissionOfferingAvailabilityDto
+		var read = await ReadDetailAsync(id);
+		var detail = read.Detail;
+		var intake = AdmissionInquiryAvailabilityService.ReadEvaluated(read.Row.Offering, read.Availability);
+		return (detail, new AdmissionOfferingAvailabilityDto
 		{
 			IsAvailable = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open,
 			Status = detail.AvailabilityStatus,
-			CanCreateInquiry = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open,
+			CanCreateInquiry = intake.CanCreateInquiry,
 			CanStartApplication = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open,
-			ReasonCode = detail.Configuration.IsValid ? StatusReasonCode(detail.AvailabilityStatus) : AdmissionErrorCodes.OfferingConfigurationIncomplete,
-			ReasonMessage = detail.Configuration.IsValid ? StatusReasonMessage(detail.AvailabilityStatus) :
-				detail.Configuration.Errors.FirstOrDefault()?.Message
-		};
+			ReasonCode = read.Availability.ReasonCode,
+			ReasonMessage = intake.Reason ?? read.Availability.ReasonMessage
+		});
 	}
 
 	private async Task<AdmissionOfferingReadQuery> GetRowsQueryAsync(
 		AdmissionOfferingListInput input,
-		Guid? offeringId = null)
+		Guid? offeringId = null,
+		Guid[]? cycleIds = null)
 	{
 		var offerings = await offeringRepository.GetQueryableAsync();
 		var campuses = await campusRepository.GetQueryableAsync();
@@ -85,8 +134,12 @@ public class AdmissionOfferingReadService(
 		var standards = await standardRepository.GetQueryableAsync();
 		var workflows = await workflowRepository.GetQueryableAsync();
 		var forms = await formRepository.GetQueryableAsync();
+		var intakeProfiles = await intakeProfileRepository.GetQueryableAsync();
 		var applications = await applicationRepository.GetQueryableAsync();
 		var divisions = await divisionRepository.GetQueryableAsync();
+		var scope = await scopeAccessService.GetCurrentUserScopeAsync();
+		offerings = AdmissionOfferingScopeQuery.Apply(offerings.Where(offering => offering.TenantId == CurrentTenant.Id), cycles, divisions, scope);
+		if (cycleIds != null) offerings = offerings.Where(offering => Enumerable.Contains(cycleIds, offering.AdmissionCycleId));
 
 		var query =
 			from offering in offerings
@@ -103,48 +156,182 @@ public class AdmissionOfferingReadService(
 			from inquiryForm in inquiryFormGroup.DefaultIfEmpty()
 			join applicationFormValue in forms on offering.ApplicationFormDefinitionId equals applicationFormValue.Id into applicationFormGroup
 			from applicationForm in applicationFormGroup.DefaultIfEmpty()
+			join inquiryProfileValue in intakeProfiles on offering.InquiryIntakeProfileId equals inquiryProfileValue.Id into inquiryProfileGroup
+			from inquiryProfile in inquiryProfileGroup.DefaultIfEmpty()
+			join assignmentProfileValue in intakeProfiles on offering.CounsellorAssignmentProfileId equals assignmentProfileValue.Id into assignmentProfileGroup
+			from assignmentProfile in assignmentProfileGroup.DefaultIfEmpty()
 			where (!offeringId.HasValue || offering.Id == offeringId.Value) &&
 				(!input.AdmissionCycleId.HasValue || offering.AdmissionCycleId == input.AdmissionCycleId.Value) &&
+				(!input.Track.HasValue || offering.Track == input.Track.Value) &&
+				(!input.EntryMode.HasValue || offering.EntryMode == input.EntryMode.Value) &&
 				(!input.CampusId.HasValue || offering.CampusId == input.CampusId.Value) &&
 				(!input.BoardId.HasValue || offering.BoardId == input.BoardId.Value) &&
 				(!input.MediumId.HasValue || offering.MediumId == input.MediumId.Value) &&
 				(!input.StageId.HasValue || offering.StageId == input.StageId.Value) &&
 				(!input.StandardId.HasValue || offering.StandardId == input.StandardId.Value) &&
+				(input.StandardIds.Count == 0 || Enumerable.Contains(input.StandardIds, offering.StandardId)) &&
 				(!input.IsActive.HasValue || offering.IsActive == input.IsActive.Value) &&
 				(string.IsNullOrWhiteSpace(input.Search) || offering.Name.Contains(input.Search) || offering.Code.Contains(input.Search) ||
 					cycle.Name.Contains(input.Search) || (campus != null && campus.Name.Contains(input.Search)) || medium.Name.Contains(input.Search) ||
 					stage.Name.Contains(input.Search) || standard.Name.Contains(input.Search))
 			select new AdmissionOfferingReadRow
 			{
+				Name = offering.Name == "" ? offering.Code : offering.Name,
+				EffectiveOpenDate = offering.OpenDate.HasValue ? offering.OpenDate!.Value.Date : cycle.StartDate.Date,
+				EffectiveCloseDate = offering.CloseDate.HasValue ? offering.CloseDate!.Value.Date : cycle.EndDate.Date,
 				Offering = offering,
 				Campus = campus,
 				Cycle = cycle,
-				Board = board,
-				Medium = medium,
-				Stage = stage,
-				Standard = standard,
+				// Scalar academic columns avoid the model's recursive hierarchy AutoIncludes.
+				BoardId = board.Id,
+				BoardAcademicYearId = board.AcademicYearId,
+				BoardType = board.Type,
+				MediumId = medium.Id,
+				MediumBoardId = medium.EducationBoardId,
+				MediumName = medium.Name,
+				StageId = stage.Id,
+				StageMediumId = stage.EducationMediumId,
+				StageName = stage.Name,
+				StandardId = standard.Id,
+				StandardStageId = standard.EducationMediumStageId,
+				StandardName = standard.Name,
 				Workflow = workflow,
 				InquiryForm = inquiryForm,
 				ApplicationForm = applicationForm,
+				InquiryProfile = inquiryProfile,
+				AssignmentProfile = assignmentProfile,
 				ApplicationCount = applications.Count(application => application.AdmissionOfferingId == offering.Id)
 			};
 
-		var scope = await scopeAccessService.GetCurrentUserScopeAsync();
-		if (!scope.IsAdmin && !scope.HasTenantWideScope())
+		// Filter before Count/Skip/Take so inquiry-first rows cannot hide eligible later pages.
+		if (input.ForSpecialRegistration)
 		{
 			query = query.Where(row =>
-				scope.WildcardBoardAcademicYearIds.Contains(row.Cycle.AcademicYearId) ||
-				scope.BoardIds.Contains(row.Offering.BoardId) || scope.WildcardMediumBoardIds.Contains(row.Offering.BoardId) ||
-				scope.MediumIds.Contains(row.Offering.MediumId) || scope.WildcardMediumStageMediumIds.Contains(row.Offering.MediumId) ||
-				scope.MediumStageIds.Contains(row.Offering.StageId) || scope.WildcardStandardMediumStageIds.Contains(row.Offering.StageId) ||
-				scope.StandardIds.Contains(row.Offering.StandardId) || scope.WildcardDivisionStandardIds.Contains(row.Offering.StandardId) ||
-				divisions.Any(division => division.StandardId == row.Offering.StandardId && scope.DivisionIds.Contains(division.Id)));
+				(row.Offering.Track == AdmissionTrack.Rte && row.Offering.EntryMode == AdmissionEntryMode.DirectRegistration) ||
+				((row.Offering.Track == AdmissionTrack.Management || row.Offering.Track == AdmissionTrack.Staff) &&
+					(row.Offering.EntryMode == AdmissionEntryMode.DirectRegistration || row.Offering.EntryMode == AdmissionEntryMode.Both)));
 		}
 
 		var eligibilityErrors = await eligibilityValidator.GetErrorsAsync(query.Select(row => row.Offering));
-		query = ApplyDerivedFilters(query, input, Clock.Now.Date, eligibilityErrors.Keys.ToList());
+		await AddFormCompatibilityErrorsAsync(query, eligibilityErrors);
+		// Availability uses the institution's calendar day, including before 05:30 IST.
+		var today = DateTime.SpecifyKind(AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now.ToUniversalTime()), DateTimeKind.Utc);
+		query = ApplyDerivedFilters(query, input, today, eligibilityErrors.Keys.ToList());
 
 		return new(query, eligibilityErrors);
+	}
+
+	private async Task AddFormCompatibilityErrorsAsync(IQueryable<AdmissionOfferingReadRow> query,
+		Dictionary<Guid, List<AdmissionOfferingValidationError>> errors)
+	{
+		// Read scoped references and their dependencies in batches before paging/filtering.
+		// A per-row full validation here would turn catalogue reads into N+1 queries.
+		var references = await AsyncExecuter.ToListAsync(query.Select(row => new
+		{
+			row.Offering.Id, row.Offering.WorkflowDefinitionId, row.Offering.InquiryFormDefinitionId,
+			row.Offering.ApplicationFormDefinitionId, row.Offering.IsActive, row.Offering.EntryMode,
+			Registration = row.ApplicationForm, Inquiry = row.InquiryForm
+		}));
+		var workflowIds = references.Where(row => row.WorkflowDefinitionId.HasValue)
+			.Select(row => row.WorkflowDefinitionId!.Value).Distinct().ToArray();
+		var stages = workflowIds.Length == 0 ? [] : await LazyServiceProvider
+			.LazyGetRequiredService<IRepository<AdmissionWorkflowStageDefinition, Guid>>()
+			.GetListAsync(stage => Enumerable.Contains(workflowIds, stage.WorkflowDefinitionId) && stage.StageType == AdmissionWorkflowStageType.Form);
+		var stageForms = stages.Select(stage => (Stage: stage, FormId: AdmissionFormStageAccessService.ReadFormDefinitionId(stage.ConfigurationJson)))
+			.Where(item => item.FormId.HasValue).ToList();
+		var byForm = references.Where(row => row.Registration != null).Select(row => row.Registration!)
+			.DistinctBy(form => form.Id).ToDictionary(form => form.Id);
+		var formIds = stageForms.Select(item => item.FormId!.Value).Where(id => !byForm.ContainsKey(id)).Distinct().ToArray();
+		if (formIds.Length > 0)
+			foreach (var form in await formRepository.GetListAsync(form => Enumerable.Contains(formIds, form.Id))) byForm[form.Id] = form;
+		var byWorkflow = stageForms.ToLookup(item => item.Stage.WorkflowDefinitionId);
+		// Identity prerequisites apply to activation preparation, not existing active legacy routes.
+		// Batch all fields/sections once; do not call the full validator for each list row.
+		var identityForms = references.Where(row => !row.IsActive)
+			.SelectMany(row => new[] { row.Registration, row.Inquiry }).Where(form => form != null)
+			.Select(form => form!).DistinctBy(form => form.Id).ToList();
+		var identityIds = identityForms.Select(form => form.Id).ToArray();
+		var identitySections = identityIds.Length == 0 ? [] : await LazyServiceProvider
+			.LazyGetRequiredService<IRepository<AdmissionFormSectionDefinition, Guid>>()
+			.GetListAsync(section => Enumerable.Contains(identityIds, section.FormDefinitionId));
+		var identityFields = identityIds.Length == 0 ? [] : await LazyServiceProvider
+			.LazyGetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>()
+			.GetListAsync(field => Enumerable.Contains(identityIds, field.FormDefinitionId));
+		var sectionsByForm = identitySections.ToLookup(section => section.FormDefinitionId);
+		var fieldsByForm = identityFields.ToLookup(field => field.FormDefinitionId);
+		var definitions = identityForms.ToDictionary(form => form.Id, form => AdmissionOfferingFormDefinitionReader.Read(form,
+			sectionsByForm[form.Id].OrderBy(section => section.DisplayOrder).ToList(),
+			fieldsByForm[form.Id].OrderBy(field => field.DisplayOrder).ToList()));
+		foreach (var reference in references)
+		{
+			var blockers = new List<AdmissionOfferingValidationError>();
+			var invalidForms = new[] { reference.Registration, reference.Inquiry }
+				.Where(form => form != null && definitions.TryGetValue(form.Id, out var definition) && definition == null)
+				.Select(form => form!).DistinctBy(form => form.Id).ToList();
+			foreach (var invalidForm in invalidForms)
+				blockers.Add(new(AdmissionFormInheritanceErrorCodes.IncompatibleSource,
+					$"Open Admission form '{invalidForm.Name}' and repair its Inquiry inheritance settings before using this offering.")
+				{
+					FormDefinitionId = invalidForm.Id, FormName = invalidForm.Name, FormPurpose = invalidForm.Purpose,
+					WorkflowDefinitionId = reference.WorkflowDefinitionId
+				});
+			if (!reference.IsActive && invalidForms.Count == 0 &&
+				reference.Registration is { Status: AdmissionFormStatus.Published, Purpose: AdmissionFormPurpose.Registration } registration)
+			{
+				var inquiry = reference.Inquiry is { Status: AdmissionFormStatus.Published, Purpose: AdmissionFormPurpose.Inquiry }
+					? definitions.GetValueOrDefault(reference.Inquiry.Id) : null;
+				blockers.AddRange(AdmissionOfferingConfigurationValidator.EvaluateJourneyIdentity(
+					definitions[registration.Id]!, inquiry, reference.EntryMode, reference.WorkflowDefinitionId));
+			}
+			if (reference.Registration != null)
+			{
+				try
+				{
+					var policy = AdmissionFormInheritanceMetadataStore.ReadPolicy(reference.Registration);
+					if (policy?.Enabled == true && reference.InquiryFormDefinitionId.HasValue &&
+						policy.Sources.All(source => source.InquiryFormDefinitionId != reference.InquiryFormDefinitionId.Value))
+						blockers.Add(new(AdmissionFormInheritanceErrorCodes.SourceNotApproved,
+							"Review and approve this Inquiry version in the workflow's Registration form before activating the Offering.", ActivationOnly: true)
+						{
+							FormDefinitionId = reference.Registration.Id, FormName = reference.Registration.Name,
+							FormPurpose = AdmissionFormPurpose.Registration, WorkflowDefinitionId = reference.WorkflowDefinitionId
+						});
+				}
+				catch (BusinessException)
+				{
+					blockers.Add(new(AdmissionFormInheritanceErrorCodes.IncompatibleSource,
+						"Open the Registration form and repair its Inquiry inheritance settings before using this offering.")
+					{
+						FormDefinitionId = reference.Registration.Id, FormName = reference.Registration.Name,
+						FormPurpose = AdmissionFormPurpose.Registration, WorkflowDefinitionId = reference.WorkflowDefinitionId
+					});
+				}
+			}
+			var linkedStages = reference.WorkflowDefinitionId.HasValue ? byWorkflow[reference.WorkflowDefinitionId.Value].ToList() : [];
+			foreach (var linked in linkedStages.Where(item => item.FormId != reference.ApplicationFormDefinitionId))
+			{
+				var form = byForm.GetValueOrDefault(linked.FormId!.Value);
+				if (form == null || form.Status != AdmissionFormStatus.Published)
+					blockers.Add(new(form == null ? AdmissionOfferingValidationCodes.ApplicationFormMissing : AdmissionOfferingValidationCodes.ApplicationFormNotPublished,
+						form == null ? $"Registration form in workflow stage '{linked.Stage.Name}' was not found. Open the workflow and select a published Registration form." :
+						$"Registration form '{form.Name}' in workflow stage '{linked.Stage.Name}' is {form.Status.ToString().ToLowerInvariant()}. Restore it or select another published form in the workflow.")
+					{
+						FormDefinitionId = linked.FormId, FormName = form?.Name, FormPurpose = AdmissionFormPurpose.Registration,
+						WorkflowDefinitionId = linked.Stage.WorkflowDefinitionId, WorkflowStageId = linked.Stage.Id, WorkflowStageName = linked.Stage.Name
+					});
+			}
+			if (linkedStages.Select(item => item.FormId).Distinct().Count() > 1 ||
+				reference.ApplicationFormDefinitionId.HasValue && linkedStages.Any(item => item.FormId != reference.ApplicationFormDefinitionId))
+				blockers.Add(new(AdmissionOfferingValidationCodes.WorkflowFormMismatch,
+					"Open the workflow and set every Registration Form stage to the same published form version, then select that workflow in this offering.")
+				{
+					FormDefinitionId = reference.ApplicationFormDefinitionId, FormPurpose = AdmissionFormPurpose.Registration,
+					WorkflowDefinitionId = reference.WorkflowDefinitionId
+				});
+			if (blockers.Count == 0) continue;
+			if (!errors.TryGetValue(reference.Id, out var existing)) errors[reference.Id] = blockers;
+			else existing.AddRange(blockers);
+		}
 	}
 
 	private static IQueryable<AdmissionOfferingReadRow> ApplyDerivedFilters(
@@ -201,10 +388,10 @@ public class AdmissionOfferingReadService(
 			!incompatibleOfferingIds.Contains(row.Offering.Id) &&
 			(!row.Offering.CampusId.HasValue || row.Campus != null && row.Campus.IsActive) &&
 			row.Cycle.Status == AdmissionCycleStatus.Published &&
-			row.Board.AcademicYearId == row.Cycle.AcademicYearId &&
-			row.Medium.EducationBoardId == row.Board.Id &&
-			row.Stage.EducationMediumId == row.Medium.Id &&
-			row.Standard.EducationMediumStageId == row.Stage.Id &&
+			row.BoardAcademicYearId == row.Cycle.AcademicYearId &&
+			row.MediumBoardId == row.BoardId &&
+			row.StageMediumId == row.MediumId &&
+			row.StandardStageId == row.StageId &&
 			(!row.Offering.OpenDate.HasValue || row.Offering.OpenDate.Value.Date >= row.Cycle.StartDate.Date) &&
 			(!row.Offering.CloseDate.HasValue || row.Offering.CloseDate.Value.Date <= row.Cycle.EndDate.Date) &&
 			(!row.Offering.OpenDate.HasValue || !row.Offering.CloseDate.HasValue ||
@@ -212,18 +399,23 @@ public class AdmissionOfferingReadService(
 			row.Workflow != null &&
 			(row.Workflow.Status == AdmissionWorkflowStatus.Published ||
 				row.Workflow.Status == AdmissionWorkflowStatus.Superseded) &&
-			row.InquiryForm != null && row.InquiryForm.Status == AdmissionFormStatus.Published &&
-			row.ApplicationForm != null && row.ApplicationForm.Status == AdmissionFormStatus.Published);
+			(row.Offering.EntryMode == AdmissionEntryMode.DirectRegistration ||
+				row.InquiryForm != null && row.InquiryForm.Status == AdmissionFormStatus.Published &&
+				row.InquiryForm.Purpose == AdmissionFormPurpose.Inquiry) &&
+			(!row.Offering.InquiryFormDefinitionId.HasValue ||
+				row.InquiryForm != null && row.InquiryForm.Purpose == AdmissionFormPurpose.Inquiry) &&
+			row.ApplicationForm != null && row.ApplicationForm.Status == AdmissionFormStatus.Published &&
+			row.ApplicationForm.Purpose == AdmissionFormPurpose.Registration);
 
 	private static IQueryable<AdmissionOfferingReadRow> ApplyConfigurationIncompleteFilter(
 		IQueryable<AdmissionOfferingReadRow> query, List<Guid> incompatibleOfferingIds) => query.Where(row =>
 			incompatibleOfferingIds.Contains(row.Offering.Id) ||
 			(row.Offering.CampusId.HasValue && (row.Campus == null || !row.Campus.IsActive)) ||
 			row.Cycle.Status != AdmissionCycleStatus.Published ||
-			row.Board.AcademicYearId != row.Cycle.AcademicYearId ||
-			row.Medium.EducationBoardId != row.Board.Id ||
-			row.Stage.EducationMediumId != row.Medium.Id ||
-			row.Standard.EducationMediumStageId != row.Stage.Id ||
+			row.BoardAcademicYearId != row.Cycle.AcademicYearId ||
+			row.MediumBoardId != row.BoardId ||
+			row.StageMediumId != row.MediumId ||
+			row.StandardStageId != row.StageId ||
 			(row.Offering.OpenDate.HasValue && row.Offering.OpenDate.Value.Date < row.Cycle.StartDate.Date) ||
 			(row.Offering.CloseDate.HasValue && row.Offering.CloseDate.Value.Date > row.Cycle.EndDate.Date) ||
 			(row.Offering.OpenDate.HasValue && row.Offering.CloseDate.HasValue &&
@@ -231,8 +423,13 @@ public class AdmissionOfferingReadService(
 			row.Workflow == null ||
 			(row.Workflow.Status != AdmissionWorkflowStatus.Published &&
 				row.Workflow.Status != AdmissionWorkflowStatus.Superseded) ||
-			row.InquiryForm == null || row.InquiryForm.Status != AdmissionFormStatus.Published ||
-			row.ApplicationForm == null || row.ApplicationForm.Status != AdmissionFormStatus.Published);
+			(row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration &&
+				(row.InquiryForm == null || row.InquiryForm.Status != AdmissionFormStatus.Published ||
+				row.InquiryForm.Purpose != AdmissionFormPurpose.Inquiry)) ||
+			(row.Offering.InquiryFormDefinitionId.HasValue &&
+				(row.InquiryForm == null || row.InquiryForm.Purpose != AdmissionFormPurpose.Inquiry)) ||
+			row.ApplicationForm == null || row.ApplicationForm.Status != AdmissionFormStatus.Published ||
+			row.ApplicationForm.Purpose != AdmissionFormPurpose.Registration);
 
 	private AdmissionOfferingListDto MapList(AdmissionOfferingReadRow row, List<AdmissionOfferingValidationError>? eligibilityErrors)
 	{
@@ -247,21 +444,27 @@ public class AdmissionOfferingReadService(
 			AdmissionCycleName = row.Cycle.Name,
 			CampusId = row.Offering.CampusId,
 			CampusName = row.Campus?.Name,
-			BoardId = row.Board.Id,
-			BoardName = row.Board.Type.ToString(),
-			MediumId = row.Medium.Id,
-			MediumName = row.Medium.Name,
-			StageId = row.Stage.Id,
-			StageName = row.Stage.Name,
-			StandardId = row.Standard.Id,
-			StandardName = row.Standard.Name,
+			BoardId = row.BoardId,
+			BoardName = row.BoardType.ToString(),
+			MediumId = row.MediumId,
+			MediumName = row.MediumName,
+			StageId = row.StageId,
+			StageName = row.StageName,
+			StandardId = row.StandardId,
+			StandardName = row.StandardName,
+			Track = row.Offering.Track,
+			EntryMode = row.Offering.EntryMode,
 			Code = row.Offering.Code,
 			EffectiveOpenDate = row.Offering.GetEffectiveOpenDate(row.Cycle.StartDate),
 			EffectiveCloseDate = row.Offering.GetEffectiveCloseDate(row.Cycle.EndDate),
 			WorkflowName = row.Workflow?.Name,
 			WorkflowVersion = row.Workflow?.Version,
+			CoreFieldPolicyVersion = row.ApplicationForm == null ? null : AdmissionFormMetadataStore.ReadExperience(row.ApplicationForm).CoreFieldPolicyVersion,
 			IsActive = row.Offering.IsActive,
 			AvailabilityStatus = availability.Status,
+			UnavailableReason = availability.Status == AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete
+				? string.Join(" ", validation.Errors.Select(error => error.Message).Distinct())
+				: availability.ReasonMessage,
 			ConfigurationStatus = validation.Status,
 			ApplicationCount = row.ApplicationCount
 		};
@@ -286,13 +489,17 @@ public class AdmissionOfferingReadService(
 			StageName = list.StageName,
 			StandardId = list.StandardId,
 			StandardName = list.StandardName,
+			Track = list.Track,
+			EntryMode = list.EntryMode,
 			Code = list.Code,
 			EffectiveOpenDate = list.EffectiveOpenDate,
 			EffectiveCloseDate = list.EffectiveCloseDate,
 			WorkflowName = list.WorkflowName,
 			WorkflowVersion = list.WorkflowVersion,
+			CoreFieldPolicyVersion = list.CoreFieldPolicyVersion,
 			IsActive = list.IsActive,
 			AvailabilityStatus = list.AvailabilityStatus,
+			UnavailableReason = list.UnavailableReason,
 			ConfigurationStatus = list.ConfigurationStatus,
 			ApplicationCount = list.ApplicationCount,
 			UseCycleDates = !row.Offering.OpenDate.HasValue && !row.Offering.CloseDate.HasValue,
@@ -301,6 +508,8 @@ public class AdmissionOfferingReadService(
 			WorkflowDefinitionId = row.Offering.WorkflowDefinitionId,
 			InquiryFormDefinitionId = row.Offering.InquiryFormDefinitionId,
 			ApplicationFormDefinitionId = row.Offering.ApplicationFormDefinitionId,
+			InquiryIntakeProfileId = row.Offering.InquiryIntakeProfileId,
+			CounsellorAssignmentProfileId = row.Offering.CounsellorAssignmentProfileId,
 			InquiryFormName = row.InquiryForm?.Name,
 			InquiryFormVersion = row.InquiryForm?.Version,
 			ApplicationFormName = row.ApplicationForm?.Name,
@@ -323,8 +532,8 @@ public class AdmissionOfferingReadService(
 			errors.Add(new(AdmissionOfferingValidationCodes.CampusMissing, "Selected Campus was not found."));
 		else if (row.Campus is { IsActive: false })
 			errors.Add(new(AdmissionOfferingValidationCodes.CampusInactive, "Selected Campus is inactive."));
-		if (row.Board.AcademicYearId != row.Cycle.AcademicYearId || row.Medium.EducationBoardId != row.Board.Id ||
-			row.Stage.EducationMediumId != row.Medium.Id || row.Standard.EducationMediumStageId != row.Stage.Id)
+		if (row.BoardAcademicYearId != row.Cycle.AcademicYearId || row.MediumBoardId != row.BoardId ||
+			row.StageMediumId != row.MediumId || row.StandardStageId != row.StageId)
 			errors.Add(new(AdmissionOfferingValidationCodes.HierarchyInvalid, "Academic hierarchy is invalid."));
 		if (row.Offering.GetEffectiveOpenDate(row.Cycle.StartDate).Date < row.Cycle.StartDate.Date ||
 			row.Offering.GetEffectiveCloseDate(row.Cycle.EndDate).Date > row.Cycle.EndDate.Date ||
@@ -334,14 +543,27 @@ public class AdmissionOfferingReadService(
 			errors.Add(new(AdmissionOfferingValidationCodes.WorkflowMissing, "Published Admission Workflow is required."));
 		else if (!row.Workflow.Status.CanConfigureOffering())
 			errors.Add(new(AdmissionOfferingValidationCodes.WorkflowNotPublished, "Admission Workflow is not published."));
-		if (row.InquiryForm == null)
+		if (row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration && row.InquiryForm == null)
 			errors.Add(new(AdmissionOfferingValidationCodes.InquiryFormMissing, "Published Inquiry Form is required."));
-		else if (row.InquiryForm.Status != AdmissionFormStatus.Published)
-			errors.Add(new(AdmissionOfferingValidationCodes.InquiryFormNotPublished, "Inquiry Form is not published."));
+		else if (row.InquiryForm != null && row.InquiryForm.Status != AdmissionFormStatus.Published)
+			errors.Add(new(AdmissionOfferingValidationCodes.InquiryFormNotPublished,
+				AdmissionOfferingConfigurationValidator.GetUnpublishedFormMessage(row.InquiryForm, row.InquiryForm.Id, AdmissionFormPurpose.Inquiry)));
+		else if (row.InquiryForm != null && row.InquiryForm.Purpose != AdmissionFormPurpose.Inquiry)
+			errors.Add(new(AdmissionOfferingValidationCodes.InquiryFormPurposeMismatch, "The selected Inquiry Form must have the Inquiry purpose."));
 		if (row.ApplicationForm == null)
 			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormMissing, "Published Application Form is required."));
 		else if (row.ApplicationForm.Status != AdmissionFormStatus.Published)
-			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormNotPublished, "Application Form is not published."));
+			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormNotPublished,
+				AdmissionOfferingConfigurationValidator.GetUnpublishedFormMessage(row.ApplicationForm, row.ApplicationForm.Id, AdmissionFormPurpose.Registration)));
+		else if (row.ApplicationForm.Purpose != AdmissionFormPurpose.Registration)
+			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormPurposeMismatch, "The selected Application Form must have the Registration purpose."));
+		var usingIntake = row.Offering.InquiryIntakeProfileId.HasValue || row.Offering.CounsellorAssignmentProfileId.HasValue;
+		if (row.Offering.InquiryIntakeProfileId.HasValue && row.InquiryProfile?.Kind != AdmissionIntakeProfileKind.Inquiry ||
+			usingIntake && row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration && row.InquiryProfile == null)
+			errors.Add(new(AdmissionOfferingValidationCodes.InquiryIntakeProfileInvalid, "Inquiry profile is unavailable."));
+		if (row.Offering.CounsellorAssignmentProfileId.HasValue && row.AssignmentProfile?.Kind != AdmissionIntakeProfileKind.CounsellorAssignment ||
+			usingIntake && row.AssignmentProfile == null)
+			errors.Add(new(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid, "Counsellor assignment profile is unavailable."));
 		return new AdmissionOfferingValidationResult(errors);
 	}
 
@@ -352,65 +574,66 @@ public class AdmissionOfferingReadService(
 		Errors = validation.Errors.Select(error => new AdmissionOfferingValidationErrorDto
 		{
 			Code = error.Code,
-			Message = error.Message
+			Message = error.Message,
+			FormDefinitionId = error.FormDefinitionId,
+			FormName = error.FormName,
+			FormPurpose = error.FormPurpose,
+			WorkflowDefinitionId = error.WorkflowDefinitionId,
+			WorkflowStageId = error.WorkflowStageId,
+			WorkflowStageName = error.WorkflowStageName
 		}).ToList()
 	};
 
-	private static IQueryable<AdmissionOfferingReadRow> ApplySorting(
+	private static IOrderedQueryable<AdmissionOfferingReadRow> ApplySorting(
 		IQueryable<AdmissionOfferingReadRow> query,
 		string? sorting)
 	{
 		var descending = sorting?.Contains("desc", StringComparison.OrdinalIgnoreCase) == true;
 		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
-		return field switch
+		var ordered = field switch
 		{
-			"name" => descending ? query.OrderByDescending(x => x.Offering.Name) : query.OrderBy(x => x.Offering.Name),
+			"name" => descending ? query.OrderByDescending(x => x.Name) : query.OrderBy(x => x.Name),
 			"code" => descending ? query.OrderByDescending(x => x.Offering.Code) : query.OrderBy(x => x.Offering.Code),
-			"boardname" => descending ? query.OrderByDescending(x => x.Board.Type) : query.OrderBy(x => x.Board.Type),
-			"mediumname" => descending ? query.OrderByDescending(x => x.Medium.Name) : query.OrderBy(x => x.Medium.Name),
-			"stagename" => descending ? query.OrderByDescending(x => x.Stage.Name) : query.OrderBy(x => x.Stage.Name),
-			"standardname" => descending ? query.OrderByDescending(x => x.Standard.Name) : query.OrderBy(x => x.Standard.Name),
+			"boardname" => descending ? query.OrderByDescending(x => x.BoardType) : query.OrderBy(x => x.BoardType),
+			"mediumname" => descending ? query.OrderByDescending(x => x.MediumName) : query.OrderBy(x => x.MediumName),
+			"stagename" => descending ? query.OrderByDescending(x => x.StageName) : query.OrderBy(x => x.StageName),
+			"standardname" => descending ? query.OrderByDescending(x => x.StandardName) : query.OrderBy(x => x.StandardName),
+			"applicationcount" => descending ? query.OrderByDescending(x => x.ApplicationCount) : query.OrderBy(x => x.ApplicationCount),
 			"effectiveopendate" => descending
 				? query.OrderByDescending(x => x.Offering.OpenDate.HasValue ? x.Offering.OpenDate.Value.Date : x.Cycle.StartDate.Date)
 				: query.OrderBy(x => x.Offering.OpenDate.HasValue ? x.Offering.OpenDate.Value.Date : x.Cycle.StartDate.Date),
 			"effectiveclosedate" => descending
 				? query.OrderByDescending(x => x.Offering.CloseDate.HasValue ? x.Offering.CloseDate.Value.Date : x.Cycle.EndDate.Date)
 				: query.OrderBy(x => x.Offering.CloseDate.HasValue ? x.Offering.CloseDate.Value.Date : x.Cycle.EndDate.Date),
-			_ => query.OrderBy(x => x.Standard.Name).ThenBy(x => x.Offering.Code)
+			_ => query.OrderBy(x => x.StandardName).ThenBy(x => x.Offering.Code)
 		};
+		return ordered.ThenBy(row => row.Offering.Id);
 	}
-
-	private static string? StatusReasonCode(AdmissionOfferingAvailabilityStatus status) => status switch
-	{
-		AdmissionOfferingAvailabilityStatus.Inactive => AdmissionErrorCodes.OfferingInactive,
-		AdmissionOfferingAvailabilityStatus.NotOpenYet => AdmissionErrorCodes.OfferingNotOpenYet,
-		AdmissionOfferingAvailabilityStatus.Closed => AdmissionErrorCodes.OfferingClosed,
-		_ => null
-	};
-
-	private static string? StatusReasonMessage(AdmissionOfferingAvailabilityStatus status) => status switch
-	{
-		AdmissionOfferingAvailabilityStatus.Inactive => "This Admission Offering is inactive.",
-		AdmissionOfferingAvailabilityStatus.NotOpenYet => "Applications for this Admission Offering are not open yet.",
-		AdmissionOfferingAvailabilityStatus.Closed => "Applications for this Admission Offering are closed.",
-		_ => null
-	};
 
 	private sealed record AdmissionOfferingReadQuery(IQueryable<AdmissionOfferingReadRow> Query,
 		Dictionary<Guid, List<AdmissionOfferingValidationError>> Errors);
 
-	private sealed class AdmissionOfferingReadRow
+	private sealed class AdmissionOfferingReadRow : AdmissionOfferingColumnFilterRow
 	{
 		public required AdmissionOffering Offering { get; init; }
 		public AdmissionCampus? Campus { get; init; }
 		public required AdmissionCycle Cycle { get; init; }
-		public required EducationBoard Board { get; init; }
-		public required EducationMedium Medium { get; init; }
-		public required EducationMediumStage Stage { get; init; }
-		public required Standard Standard { get; init; }
+		public Guid BoardId { get; init; }
+		public Guid BoardAcademicYearId { get; init; }
+		public EducationBoardType BoardType { get; init; }
+		public Guid MediumId { get; init; }
+		public Guid MediumBoardId { get; init; }
+		public required string MediumName { get; init; }
+		public Guid StageId { get; init; }
+		public Guid StageMediumId { get; init; }
+		public required string StageName { get; init; }
+		public Guid StandardId { get; init; }
+		public Guid StandardStageId { get; init; }
+		public required string StandardName { get; init; }
 		public AdmissionWorkflowDefinition? Workflow { get; init; }
 		public AdmissionFormDefinition? InquiryForm { get; init; }
 		public AdmissionFormDefinition? ApplicationForm { get; init; }
-		public int ApplicationCount { get; init; }
+		public AdmissionIntakeProfile? InquiryProfile { get; init; }
+		public AdmissionIntakeProfile? AssignmentProfile { get; init; }
 	}
 }

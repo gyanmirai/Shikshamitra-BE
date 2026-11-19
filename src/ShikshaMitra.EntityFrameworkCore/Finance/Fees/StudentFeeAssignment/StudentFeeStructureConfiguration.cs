@@ -11,6 +11,11 @@ public class StudentFeeStructureConfiguration : IEntityTypeConfiguration<Student
 	{
 		builder.ToTable("Finance_StudentFeeStructures", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.HasOne<ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount>().WithMany()
+			.HasForeignKey(x => x.FinanceFeeAccountId).OnDelete(DeleteBehavior.Restrict);
+		builder.HasIndex(x => x.FinanceFeeAccountId).IsUnique()
+			.HasFilter("\"IsDeleted\" = false AND \"FinanceFeeAccountId\" IS NOT NULL")
+			.HasDatabaseName("UX_StudentFeeStructures_FinanceFeeAccountId");
 
 		builder.HasIndex(x => x.StudentId)
 			.HasDatabaseName("IX_StudentFeeStructures_StudentId");
@@ -21,6 +26,12 @@ public class StudentFeeStructureConfiguration : IEntityTypeConfiguration<Student
 		builder.Property(x => x.ConcessionPolicyId).IsRequired(false);
 		builder.Property(x => x.ConcessionPolicyVersionId).IsRequired(false);
 		builder.Property(x => x.AssignmentSnapshotJson).HasColumnType("text");
+		builder.PrimitiveCollection(x => x.IncludedFeeHeadIds);
+		builder.HasIndex(x => x.IncludedFeeHeadIds).HasMethod("gin")
+			.HasDatabaseName("IX_StudentFeeStructures_IncludedFeeHeadIds");
+		builder.Property(x => x.AcademicStandardId);
+		builder.Property(x => x.AcademicDivisionId);
+		builder.Property(x => x.AcademicRollNumber);
 		builder.Property(x => x.ConcessionApplicableFeeHeadIdsJson).HasColumnType("text").IsRequired();
 		builder.HasIndex(x => x.ConcessionPolicyId)
 			.HasDatabaseName("IX_StudentFeeStructures_ConcessionPolicyId");

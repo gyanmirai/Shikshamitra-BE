@@ -23,7 +23,7 @@ public class PayrollSnapshotAdjustmentInvalidationReader(
 			if (SnapshotAdjustmentsChanged(snapshot, adjustmentsByEmployee))
 			{
 				logger.LogDebug(
-					"Payroll snapshot for employee {EmployeeId} in {MonthYear} is stale after adjustment change.",
+					"Payroll snapshot for staff {EmployeeId} in {MonthYear} is stale after adjustment change.",
 					snapshot.EmployeeId,
 					snapshot.MonthYear);
 				return true;

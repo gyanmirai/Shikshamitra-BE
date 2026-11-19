@@ -6,6 +6,7 @@ Multi-tenant architecture for ShikshaMitra.
 
 - **[tenants.md](./tenants.md)** - Tenant management and architecture
 - **[roles.md](./roles.md)** - Role configuration and setup
+- **[Host tenant management](../../modules/host-tenants/README.md)** - Host administration, typed tenant APIs, activation and suspension.
 
 ## Quick Overview
 

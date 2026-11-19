@@ -2,6 +2,7 @@ namespace ShikshaMitra.Finance.Accounts.Settings;
 
 public static class AccountSettingErrorCodes
 {
+	public const string SystemCategoryReadOnly = "Finance:Accounts:Settings:SystemCategoryReadOnly";
 	public const string DuplicateCode = "Finance:Accounts:Settings:DuplicateCode";
 	public const string DuplicateName = "Finance:Accounts:Settings:DuplicateName";
 	public const string InvalidAccountHeadType = "Finance:Accounts:Settings:InvalidAccountHeadType";

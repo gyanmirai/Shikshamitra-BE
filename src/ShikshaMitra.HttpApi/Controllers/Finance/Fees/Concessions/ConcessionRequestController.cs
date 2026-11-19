@@ -22,6 +22,10 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Concessions;
 public class ConcessionRequestController(IConcessionRequestAppService concessionRequestAppService)
 	: AbpController
 {
+	[HttpPost("{id:guid}/refund-requests")]
+	public Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateRefundRequestsAsync(
+		Guid id, [FromBody] CreateConcessionRefundRequestsDto input) =>
+		concessionRequestAppService.CreateRefundRequestsAsync(id, input);
 	[HttpPost]
 	[ProducesResponseType(typeof(ApiDataResponseDto<ConcessionRequestDetailDto>), StatusCodes.Status200OK)]
 	public Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateAsync(
@@ -48,8 +52,13 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 	public Task<ConcessionRequestContextDto> GetContextAsync(
 		[FromQuery] Guid academicYearId,
 		[FromQuery] Guid studentId,
-		[FromQuery] Guid? studentFeeStructureId = null) =>
-		concessionRequestAppService.GetContextAsync(academicYearId, studentId, studentFeeStructureId);
+		[FromQuery] Guid? studentFeeStructureId = null,
+		[FromQuery] Guid? concessionTypeId = null,
+		[FromQuery] Guid? concessionPolicyId = null,
+		[FromQuery] Guid? concessionPolicyVersionId = null,
+		[FromQuery] Guid? requestId = null) =>
+		concessionRequestAppService.GetContextAsync(academicYearId, studentId, studentFeeStructureId,
+			concessionTypeId, concessionPolicyId, concessionPolicyVersionId, requestId);
 
 	[HttpPost("preview")]
 	[ProducesResponseType(typeof(ConcessionRequestPreviewDto), StatusCodes.Status200OK)]
@@ -136,7 +145,12 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 		[FromQuery] Guid? divisionId = null,
 		[FromQuery, Range(1, int.MaxValue)] int page = 1,
 		[FromQuery, Range(1, 100)] int pageSize = 20,
-		[FromQuery] int? status = null) =>
+		[FromQuery] int? status = null,
+        [FromQuery] string? tab = null,
+        [FromQuery] string? search = null,
+        [FromQuery] string? filters = null,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] string? sortOrder = null) =>
 		concessionRequestAppService.GetApplicationsAsync(new GetConcessionApplicationsInput
 		{
 			AcademicYearId = academicYearId,
@@ -147,6 +161,7 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 			SkipCount = (page - 1) * pageSize,
 			MaxResultCount = pageSize,
 			Status = status,
+            Tab = tab, Search = search, Filters = filters, SortBy = sortBy, SortOrder = sortOrder,
 		});
 
 	[HttpGet("{id:guid}/approval-context")]

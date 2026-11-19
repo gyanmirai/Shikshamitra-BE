@@ -1,12 +1,14 @@
 using System;
+using System.Linq;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
-public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private Guid? _legacyCampusId;
 	public Guid? TenantId { get; private set; }
 	public Guid ApplicationId { get; private set; }
 	public Guid ApplicantId { get; private set; }
@@ -17,6 +19,21 @@ public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenan
 	public Guid IntendedMediumId { get; private set; }
 	public Guid IntendedStageId { get; private set; }
 	public Guid IntendedStandardId { get; private set; }
+	public bool HasCampusSnapshot => ExtraProperties.ContainsKey("AdmissionCampusId");
+	public Guid? GetCampusId()
+	{
+		if (!ExtraProperties.TryGetValue("AdmissionCampusId", out var value)) return _legacyCampusId;
+		return Guid.TryParse(value?.ToString(), out var id) && id != Guid.Empty ? id : null;
+	}
+	public void UseLegacyCampusId(Guid? campusId)
+	{
+		if (!HasCampusSnapshot) _legacyCampusId = campusId;
+	}
+	public void SetCampusId(Guid? campusId)
+	{
+		ExtraProperties["AdmissionCampusId"] = campusId?.ToString("D") ?? string.Empty;
+		_legacyCampusId = null;
+	}
 	public StudentOnboardingStatus Status { get; private set; }
 	public string IdempotencyKey { get; private set; } = string.Empty;
 	public string? ActivationIdempotencyKey { get; private set; }
@@ -123,6 +140,9 @@ public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenan
 	public void RecordIdentifier(Guid? allocationId, int rollNumber, DateTime at)
 	{
 		EnsureEditable();
+		if (RollNumber.HasValue && RollNumber != rollNumber && IsIdentifierLocked("roll") ||
+			IdentifierAllocationId.HasValue && IdentifierAllocationId != allocationId && IsIdentifierLocked("gr"))
+			throw new BusinessException("Students:Onboarding:IdentifierLocked");
 		if (rollNumber <= 0) throw new BusinessException(StudentOnboardingErrorCodes.RollNumberInvalid);
 		Start(at);
 		IdentifierAllocationId = allocationId;
@@ -131,9 +151,22 @@ public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		ReadyAt = null;
 	}
 
+	public void RecordGrIdentifier(Guid allocationId, DateTime at)
+	{
+		EnsureEditable();
+		if (IdentifierAllocationId.HasValue && IdentifierAllocationId != allocationId && IsIdentifierLocked("gr"))
+			throw new BusinessException("Students:Onboarding:IdentifierLocked");
+		IdentifierAllocationId = Check.NotDefaultOrNull<Guid>(allocationId, nameof(allocationId));
+		RecordProgress(at);
+	}
+
+	public bool IsIdentifierLocked(string type) => ExtraProperties.TryGetValue($"IdentifierLocked:{type}", out var value) && bool.TryParse(value?.ToString(), out var locked) && locked;
+	public void SetIdentifierLocked(string type, bool locked) => ExtraProperties[$"IdentifierLocked:{type}"] = locked;
+
 	public void ClearRollNumberForPlacementChange(DateTime at)
 	{
 		EnsureEditable();
+		if (RollNumber.HasValue && IsIdentifierLocked("roll")) throw new BusinessException("Students:Onboarding:IdentifierLocked");
 		RollNumber = null;
 		Start(at);
 		Status = StudentOnboardingStatus.InProgress;
@@ -160,7 +193,8 @@ public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenan
 
 	public void RequireAttention(string reason)
 	{
-		EnsureEditable();
+		if (Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
+			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
 		LastError = Check.NotNullOrWhiteSpace(reason, nameof(reason), 2000).Trim();
 		Status = StudentOnboardingStatus.NeedsAttention;
 	}
@@ -176,6 +210,62 @@ public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		LastError = null;
 	}
 
+	public string GetAdmissionRoute() => ExtraProperties.TryGetValue("AdmissionRoute", out var route)
+		? route?.ToString() ?? "Fresh admission" : "Fresh admission";
+
+	public void SetAdmissionRoute(string route)
+	{
+		EnsureEditable();
+		if (string.IsNullOrWhiteSpace(route) || route.Length > 100 || route != route.Trim() ||
+			route.Any(char.IsControl))
+			throw new BusinessException(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+		ExtraProperties["AdmissionRoute"] = route;
+		RecordProgress(DateTime.UtcNow);
+	}
+
+	public void BeginProvisioning(Guid studentEnrollmentId)
+	{
+		if (StudentEnrollmentId == studentEnrollmentId) return;
+		if (Status != StudentOnboardingStatus.ReadyForActivation)
+			throw new BusinessException(StudentOnboardingErrorCodes.RequiredStepsIncomplete);
+		StudentEnrollmentId = Check.NotDefaultOrNull<Guid>(studentEnrollmentId, nameof(studentEnrollmentId));
+		Status = StudentOnboardingStatus.Provisioning;
+		CompletedAt = null;
+		LastError = null;
+	}
+
+	public void ChangeProvisioningPlacement(Guid boardId, Guid mediumId, Guid stageId, Guid standardId,
+		Guid divisionId, Guid reservationId, int rollNumber)
+	{
+		if (Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled || !StudentEnrollmentId.HasValue)
+			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
+		if (rollNumber <= 0) throw new BusinessException(StudentOnboardingErrorCodes.RollNumberInvalid);
+        if (RollNumber.HasValue && RollNumber != rollNumber && IsIdentifierLocked("roll"))
+            throw new BusinessException("Students:Onboarding:IdentifierLocked");
+		IntendedBoardId = boardId; IntendedMediumId = mediumId; IntendedStageId = stageId;
+		IntendedStandardId = standardId; DivisionId = divisionId; SeatReservationId = reservationId;
+		RollNumber = rollNumber;
+	}
+
+	public void SynchronizeProvisioningRoll(Guid enrollmentId, int number)
+	{
+		if (StudentEnrollmentId != enrollmentId || Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
+			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
+		if (number <= 0 || RollNumber.HasValue && RollNumber != number && IsIdentifierLocked("roll"))
+			throw new BusinessException(StudentOnboardingErrorCodes.RollNumberInvalid);
+		RollNumber = number;
+	}
+
+	public void CompleteProvisioning(DateTime at)
+	{
+		if (Status == StudentOnboardingStatus.Completed) return;
+		if (!StudentEnrollmentId.HasValue || Status == StudentOnboardingStatus.Cancelled)
+			throw new BusinessException(StudentOnboardingErrorCodes.RequiredStepsIncomplete);
+		Status = StudentOnboardingStatus.Completed;
+		CompletedAt = at.ToUniversalTime();
+		LastError = null;
+	}
+
 	public void Cancel(string reason, DateTime at)
 	{
 		EnsureEditable();
@@ -186,7 +276,7 @@ public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenan
 
 	private void EnsureEditable()
 	{
-		if (Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
+		if (StudentEnrollmentId.HasValue || Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
 			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
 	}
 }

@@ -8,5 +8,5 @@ public class ReceiptBookListResponse
     public int CurrentPage { get; set; }
     public int PageSize { get; set; }
     public int TotalPages { get; set; }
-    public List<ReceiptBookResponse> Items { get; set; }
+    public List<ReceiptBookResponse> Items { get; set; } = null!; // The response mapper populates these members after construction.
 }

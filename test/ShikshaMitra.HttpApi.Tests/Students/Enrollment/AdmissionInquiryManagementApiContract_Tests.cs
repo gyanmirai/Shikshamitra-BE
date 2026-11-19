@@ -85,6 +85,19 @@ public class AdmissionInquiryManagementApiContract_Tests
 	}
 
 	[Fact]
+	public void Duplicate_family_preview_keeps_inquiry_manage_permission_and_link_flag()
+	{
+		var controllerMethod = typeof(AdmissionInquiriesController).GetMethod("DuplicateCheckAsync")!;
+		controllerMethod.GetCustomAttribute<HttpPostAttribute>()!.Template.ShouldBe("duplicate-check");
+		controllerMethod.GetCustomAttributes<AuthorizeAttribute>().Select(item => item.Policy)
+			.ShouldContain(Permissions.Manage);
+		typeof(AdmissionInquiryAppService).GetMethod("DuplicateCheckAsync")!
+			.GetCustomAttributes<AuthorizeAttribute>().Select(item => item.Policy)
+			.ShouldContain(Permissions.Manage);
+		typeof(AdmissionInquiryDuplicateMatchDto).GetProperty("CanLinkFamily").ShouldNotBeNull();
+	}
+
+	[Fact]
 	public void Inquiry_communication_is_a_managed_CRM_action_with_an_explicit_result_contract()
 	{
 		var controllerMethod = typeof(AdmissionInquiriesController).GetMethod("CreateCommunicationAsync")!;

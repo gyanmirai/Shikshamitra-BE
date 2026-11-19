@@ -5,7 +5,7 @@ using Xunit;
 
 namespace ShikshaMitra.HR.Employees.Onboarding;
 
-public class EmployeeApplication_Tests
+public partial class EmployeeApplication_Tests
 {
 	[Fact]
 	public void Submit_Sets_Applied_Status_And_Blocks_Duplicate_Submission()

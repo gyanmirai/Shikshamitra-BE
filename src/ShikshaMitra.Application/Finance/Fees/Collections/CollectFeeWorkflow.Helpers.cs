@@ -23,15 +23,15 @@ public partial class CollectFeeWorkflow
 			Dictionary<Guid, double> dueFeeBeforeSnapshots,
 			List<PaymentMethodEnum> paymentMethods,
 			FeeCollectionManager.CollectFeeTransactionResult transaction,
-			Student student)
+			Student? student, FinanceFeeAccount? account = null)
 	{
 		var correlationId = $"fc-{transaction.Metadata.Id:N}";
 		var studentContext = new FinanceAuditStudentContext
 		{
 			StudentId = input.StudentId,
-			StudentName = BuildFullName(student.FirstName, student.MiddleName, student.LastName),
-			GrNo = student.GrNo?.ToString(),
-			RollNo = student.RollNo?.ToString()
+			StudentName = account?.ApplicantName ?? BuildFullName(student!.FirstName, student.MiddleName, student.LastName),
+			GrNo = student?.GrNo?.ToString(),
+			RollNo = student?.RollNo?.ToString()
 		};
 
 		var allocationLines = new List<FinanceAuditAllocationLineDto>();
@@ -73,7 +73,7 @@ public partial class CollectFeeWorkflow
 
 		var auditEventIds = new List<Guid> { paymentWrite.EventId };
 
-		var feeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope == FeeReceiptScope.Fee);
+		var feeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope is FeeReceiptScope.Fee or FeeReceiptScope.Combined);
 		if (feeReceipt != null)
 		{
 			var receiptWrite = await financeAuditWriter.WriteAsync(
@@ -112,7 +112,7 @@ public partial class CollectFeeWorkflow
 
 	private async Task GenerateAndStoreReceiptPdfsAsync(
 		IReadOnlyList<FeePaymentReceipt> receipts,
-		Student student,
+		Student? student,
 		AcademicYear academicYear,
 		CancellationToken cancellationToken = default)
 	{
@@ -135,7 +135,7 @@ public partial class CollectFeeWorkflow
 		var isAnyPartial = dueFeePayments.Any(dfp => (decimal)dfp.Amount < dueFeeMap[dfp.DueFeeId].OutstandingAmount)
 			|| chargePayments.Any(cp => cp.Amount < pendingChargeMap[cp.ChargeId]);
 
-		return FeeReceiptPaymentPolicy.RequiresVerification(paymentMethods) || !isBankReceiptConfirmed
+		return FeeReceiptPaymentPolicy.RequiresVerification(paymentMethods)
 			? FeeCollectionStatus.InReconciliation
 			: (isAnyPartial ? FeeCollectionStatus.Partial : FeeCollectionStatus.Paid);
 	}

@@ -16,11 +16,13 @@ public class TransactionCategoryResponse
 	public DateTimeOffset? EffectiveFrom { get; set; }
 	public DateTimeOffset? EffectiveTo { get; set; }
 	public bool IsActive { get; set; }
+	public bool IsSystemCategory { get; set; }
 	public string? DeactivationReason { get; set; }
 	public int Version { get; set; }
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public bool IsUsedInDownstream { get; set; }
-	public bool CanDelete => !IsActive && !IsUsedInDownstream;
+	public string? DeletionBlockedReason { get; set; }
+	public bool CanDelete { get; set; }
 }
 
 public class PaginatedTransactionCategoryResponse

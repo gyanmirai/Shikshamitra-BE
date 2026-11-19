@@ -183,6 +183,9 @@ public static class ShikshaMitraSubModulePermissions
 	public const string AcademicSetup = $"{ShikshaMitraModulePermissions.InstituteSetup}.AcademicSetup";
 	public const string ShiftManagement = $"{ShikshaMitraModulePermissions.InstituteSetup}.ShiftManagement";
 	public const string RoomManagement = $"{ShikshaMitraModulePermissions.InstituteSetup}.RoomManagement";
+	public const string BuildingManagement = $"{ShikshaMitraModulePermissions.InstituteSetup}.BuildingManagement";
+	public const string RoomTypeManagement = $"{ShikshaMitraModulePermissions.InstituteSetup}.RoomTypeManagement";
+	public const string Rooms = $"{RoomManagement}.Room";
 
 	public static readonly string[] All =
 	{
@@ -337,7 +340,10 @@ public static class ShikshaMitraSubModulePermissions
 		BasicInformation,
 		AcademicSetup,
 		ShiftManagement,
-		RoomManagement
+		RoomManagement,
+		BuildingManagement,
+		RoomTypeManagement,
+		Rooms
 	};
 
 	private const string DisplayNamePrefix = "Permission:SubModule";
@@ -522,6 +528,9 @@ public static class ShikshaMitraSubModulePermissions
 		{ BasicInformation, $"{DisplayNamePrefix}.BasicInformation" },
 		{ AcademicSetup, $"{DisplayNamePrefix}.AcademicSetup" },
 		{ ShiftManagement, $"{DisplayNamePrefix}.ShiftManagement" },
-		{ RoomManagement, $"{DisplayNamePrefix}.RoomManagement" }
+		{ RoomManagement, $"{DisplayNamePrefix}.RoomManagement" },
+		{ BuildingManagement, "Permission:InstituteSetup.BuildingManagement" },
+		{ RoomTypeManagement, "Permission:InstituteSetup.RoomTypeManagement" },
+		{ Rooms, "Permission:InstituteSetup.RoomManagement.Room" }
 	};
 }

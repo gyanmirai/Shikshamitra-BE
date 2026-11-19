@@ -12,7 +12,9 @@ public class StudentCertificateConfiguration : IEntityTypeConfiguration<StudentC
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentCertificates", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
-		builder.Property(x => x.CertificateNumber).HasMaxLength(32).IsRequired();
+		builder.Property(x => x.CertificateNumber).HasMaxLength(80).IsRequired();
+		builder.Property(x => x.IdempotencyKey).HasMaxLength(100);
+		builder.HasIndex(x => new { x.TenantId, x.IdempotencyKey }).IsUnique().HasFilter("\"IdempotencyKey\" IS NOT NULL");
 		builder.Property(x => x.CertificateDataJson).HasColumnType("jsonb").IsRequired();
 		builder.Property(x => x.TemplateSnapshotJson).HasColumnType("jsonb").IsRequired();
 

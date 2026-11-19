@@ -1,13 +1,85 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
-public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private const string FeeSelectionProperty = "AdmissionFeeSelection";
+	public void RecordFinanceFeePayment(Guid accountId)
+	{
+		if (accountId == Guid.Empty || GetFeeSelection() == null) throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState);
+		this.SetProperty("FinanceFeeAccountId", accountId.ToString());
+		this.SetProperty("HasFinanceFeePayment", true);
+	}
+
+	public bool HasFinanceFeePayment => this.GetProperty<bool>("HasFinanceFeePayment");
+	public AdmissionFeeSelectionSnapshot? GetFeeSelection() =>
+		this.GetProperty<string>(FeeSelectionProperty) is string json
+			? JsonSerializer.Deserialize<AdmissionFeeSelectionSnapshot>(json) : null;
+
+	public void SaveFeeSelection(AdmissionFeeSelectionSnapshot selection, bool hasPaymentEvidence)
+	{
+		if (hasPaymentEvidence || HasFinanceFeePayment) throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked,
+			"Payment evidence already exists. Ask Finance to review a correction or refund.");
+		if (Status is AdmissionApplicationStatus.Withdrawn or AdmissionApplicationStatus.Rejected or AdmissionApplicationStatus.OfferDeclined or
+			AdmissionApplicationStatus.AdmissionFinalized or AdmissionApplicationStatus.Enrolled)
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState);
+		if (selection.StructureId == Guid.Empty || selection.OwnerStageId == Guid.Empty || selection.SavedBy == Guid.Empty ||
+			selection.RevisionNumber < 1 || selection.Heads.Count == 0 ||
+			selection.Heads.Select(h => h.FeeHeadId).Distinct().Count() != selection.Heads.Count ||
+			selection.Heads.Any(h => h.FeeHeadId == Guid.Empty || (h.IsVariable ? h.ConfiguredAmount.HasValue : !h.ConfiguredAmount.HasValue || h.ConfiguredAmount < 0 || decimal.Round(h.ConfiguredAmount.Value, 2) != h.ConfiguredAmount)))
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidSelection);
+		this.SetProperty(FeeSelectionProperty, JsonSerializer.Serialize(selection with { ConfirmedBy = null, OnboardingConfirmedAt = null }));
+	}
+
+	public void ConfirmOnboardingFeeSelection(Guid actorId, DateTimeOffset now)
+	{
+		var selection = GetFeeSelection() ?? throw new BusinessException(AdmissionFeeSelectionErrorCodes.Required);
+		if (!OnboardingCaseId.HasValue || !StudentId.HasValue || actorId == Guid.Empty)
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState);
+		if (selection.OnboardingConfirmedAt.HasValue) return;
+		this.SetProperty(FeeSelectionProperty, JsonSerializer.Serialize(selection with
+		{ ConfirmedBy = actorId, OnboardingConfirmedAt = now.ToUniversalTime() }));
+	}
+
+	public void SaveOnboardingFeeSelection(AdmissionFeeSelectionSnapshot selection)
+	{
+		if (HasFinanceFeePayment)
+		{
+			var saved = GetFeeSelection();
+			if (saved == null || saved.StructureId != selection.StructureId || saved.RevisionNumber != selection.RevisionNumber ||
+				!saved.Heads.OrderBy(h => h.FeeHeadId).SequenceEqual(selection.Heads.OrderBy(h => h.FeeHeadId)))
+				throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked, "Payment evidence already exists. Ask Finance to review a correction or refund.");
+			ConfirmOnboardingFeeSelection(selection.SavedBy, selection.SavedAt);
+			return;
+		}
+		if (Status != AdmissionApplicationStatus.AdmissionFinalized || !OnboardingCaseId.HasValue || !StudentId.HasValue ||
+			selection.StructureId == Guid.Empty || selection.SavedBy == Guid.Empty || selection.Heads.Count == 0)
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState);
+		this.SetProperty(FeeSelectionProperty, JsonSerializer.Serialize(selection));
+		ConfirmOnboardingFeeSelection(selection.SavedBy, selection.SavedAt);
+	}
+
+	/// <summary>Finance alone coordinates this transition with the linked unused assignment.</summary>
+	public void CorrectUnpaidFinanceSelection(Guid accountId, AdmissionFeeSelectionSnapshot selection, string reason)
+	{
+		if (HasFinanceFeePayment || accountId == Guid.Empty || (!StudentId.HasValue && !EnrolledStudentId.HasValue) ||
+			selection.StructureId == Guid.Empty || selection.SavedBy == Guid.Empty || selection.RevisionNumber < 1 ||
+			selection.Heads.Count == 0 || string.IsNullOrWhiteSpace(reason))
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked);
+		var history = this.GetProperty<string>("FinanceFeeSelectionCorrectionHistory", "[]");
+		var entries = JsonSerializer.Deserialize<System.Collections.Generic.List<JsonElement>>(history ?? "[]") ?? [];
+		entries.Add(JsonSerializer.SerializeToElement(new { Before = GetFeeSelection(), After = selection, AccountId = accountId, Reason = reason.Trim() }));
+		this.SetProperty("FinanceFeeSelectionCorrectionHistory", JsonSerializer.Serialize(entries));
+		this.SetProperty(FeeSelectionProperty, JsonSerializer.Serialize(selection));
+	}
+
 	public Guid? TenantId { get; private set; }
 	public string ApplicationNumber { get; private set; }
 	public Guid ApplicantId { get; private set; }
@@ -16,6 +88,7 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid AdmissionOfferingId { get; private set; }
 	public Guid WorkflowDefinitionId { get; private set; }
 	public Guid FormDefinitionId { get; private set; }
+	public Guid? AssignedCounsellorId { get; private set; }
 	public AdmissionApplicationStatus Status { get; private set; }
 	public string? DecisionReason { get; private set; }
 	public Guid? DecisionBy { get; private set; }
@@ -30,7 +103,11 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? CurrentStageInstanceId { get; private set; }
 	public DateTime? LastSavedAt { get; private set; }
 	public DateTime? SubmittedAt { get; private set; }
-	protected AdmissionApplication() { }
+	protected AdmissionApplication()
+	{
+		// EF materializes these required columns after this ORM constructor.
+		ApplicationNumber = null!;
+	}
 
 	public AdmissionApplication(Guid id, Guid? tenantId, string applicationNumber, Guid applicantId, Guid? inquiryId,
 		Guid cycleId, Guid offeringId, Guid workflowDefinitionId, Guid formDefinitionId) : base(id)
@@ -41,9 +118,48 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	public void SetCurrentStage(Guid stageInstanceId) => CurrentStageInstanceId = stageInstanceId;
+	public void AssignCounsellor(Guid counsellorId) =>
+		AssignedCounsellorId = Check.NotDefaultOrNull<Guid>(counsellorId, nameof(counsellorId));
 	public void CompleteWorkflow() => CurrentStageInstanceId = null;
+	public bool CanEndJourney => !StudentId.HasValue && !OnboardingCaseId.HasValue &&
+		!EnrolledStudentId.HasValue && !StudentEnrollmentId.HasValue &&
+		Status is AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted or
+		AdmissionApplicationStatus.InReview or AdmissionApplicationStatus.Waitlisted or AdmissionApplicationStatus.Approved or
+		AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted;
+
+	public void EndJourney(Guid actorId, string reason)
+	{
+		if (actorId == Guid.Empty || string.IsNullOrWhiteSpace(reason))
+			throw new BusinessException(AdmissionErrorCodes.ApplicationDecisionReasonRequired,
+				"Enter a reason for ending the admission journey.");
+		var normalized = Check.Length(reason.Trim(), nameof(reason), 512);
+		if (Status == AdmissionApplicationStatus.Withdrawn && DecisionReason == normalized) return;
+		if (!CanEndJourney)
+			throw new BusinessException(AdmissionErrorCodes.ApplicationDecisionInvalidState,
+				"Only an open admission journey can be ended. Finalized admissions are managed in Student Onboarding.");
+		SetDecision(AdmissionApplicationStatus.Withdrawn, actorId, normalized, requireReason: true);
+		CurrentStageInstanceId = null;
+	}
 	public void RecordWorkflowStarted(Guid workflowInstanceId, Guid entryStageInstanceId) =>
 		AddLocalEvent(new ApplicationWorkflowStartedEvent(Id, workflowInstanceId, WorkflowDefinitionId, entryStageInstanceId, TenantId));
+	public void ResumeJourney(AdmissionJourneyClosureSnapshot snapshot, DateTime now)
+	{
+		if (Status != AdmissionApplicationStatus.Withdrawn || StudentId.HasValue || OnboardingCaseId.HasValue ||
+			EnrolledStudentId.HasValue || StudentEnrollmentId.HasValue || snapshot.Version != 1 ||
+			snapshot.OfferingId != AdmissionOfferingId || snapshot.CycleId != AdmissionCycleId ||
+			snapshot.WorkflowDefinitionId != WorkflowDefinitionId || snapshot.PreviousStatus is not
+			(AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted or AdmissionApplicationStatus.InReview or
+			 AdmissionApplicationStatus.Waitlisted or AdmissionApplicationStatus.Approved or AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted))
+			throw new BusinessException(AdmissionJourneyResumeErrorCodes.Blocked, "This admission cannot be resumed from its saved state.");
+		if (snapshot.PreviousStatus is AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted &&
+			(!snapshot.OfferExpiresAt.HasValue || snapshot.OfferExpiresAt.Value <= now))
+			throw new BusinessException(AdmissionJourneyResumeErrorCodes.Blocked, "The previous offer has expired. An authorized offer review is required.");
+		Status = snapshot.PreviousStatus;
+		CurrentStageInstanceId = snapshot.CurrentStageId;
+		DecisionReason = snapshot.DecisionReason; DecisionBy = snapshot.DecisionBy; DecisionAt = snapshot.DecisionAt;
+		// Offer dates, submitted form, fee selection and Finance evidence are deliberately not mutated.
+		LastSavedAt = now;
+	}
 	public void RecordStageEntered(Guid workflowInstanceId, Guid stageInstanceId) =>
 		AddLocalEvent(new ApplicationWorkflowStageEnteredEvent(Id, workflowInstanceId, stageInstanceId, TenantId));
 	public void RecordStageCompleted(Guid workflowInstanceId, Guid stageInstanceId) =>
@@ -55,6 +171,13 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void RecordWorkflowCompleted(Guid workflowInstanceId, Guid terminalStageInstanceId) =>
 		AddLocalEvent(new ApplicationWorkflowCompletedEvent(Id, workflowInstanceId, terminalStageInstanceId, TenantId));
 	public void SaveDraft() { if (Status != AdmissionApplicationStatus.Draft) throw new BusinessException(AdmissionApplicationErrorCodes.AlreadySubmitted); LastSavedAt = DateTime.UtcNow; }
+	public bool CanCorrectForm => CanEndJourney && Status != AdmissionApplicationStatus.Draft && !FinalizedAt.HasValue;
+	public void RecordFormCorrection(DateTime now)
+	{
+		if (!CanCorrectForm) throw new BusinessException(AdmissionFormCorrectionErrorCodes.Blocked,
+			"Only an open application before admission finalization can be corrected.");
+		LastSavedAt = now;
+	}
 	public void Submit() { if (Status != AdmissionApplicationStatus.Draft) throw new BusinessException(AdmissionApplicationErrorCodes.AlreadySubmitted); Status = AdmissionApplicationStatus.Submitted; SubmittedAt = DateTime.UtcNow; LastSavedAt = SubmittedAt; }
 	public void Reopen() { if (Status != AdmissionApplicationStatus.Submitted) throw new BusinessException(AdmissionApplicationErrorCodes.FormNotSubmitted); Status = AdmissionApplicationStatus.Draft; LastSavedAt = DateTime.UtcNow; }
 	public void ReopenForManagedReview()
@@ -154,6 +277,23 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		    StudentId == studentId && OnboardingCaseId == onboardingCaseId)
 			return;
 		EnsureStatus(AdmissionApplicationStatus.OfferAccepted);
+		CompleteFinalization(studentId, onboardingCaseId, finalizedAt);
+	}
+
+	public void FinalizeApprovedDirectAdmission(Guid studentId, Guid onboardingCaseId, DateTime finalizedAt)
+		=> FinalizeApprovedAdmission(studentId, onboardingCaseId, finalizedAt);
+
+	public void FinalizeApprovedAdmission(Guid studentId, Guid onboardingCaseId, DateTime finalizedAt)
+	{
+		if (Status == AdmissionApplicationStatus.AdmissionFinalized &&
+		    StudentId == studentId && OnboardingCaseId == onboardingCaseId)
+			return;
+		EnsureStatus(AdmissionApplicationStatus.Approved);
+		CompleteFinalization(studentId, onboardingCaseId, finalizedAt);
+	}
+
+	private void CompleteFinalization(Guid studentId, Guid onboardingCaseId, DateTime finalizedAt)
+	{
 		StudentId = Check.NotDefaultOrNull<Guid>(studentId, nameof(studentId));
 		OnboardingCaseId = Check.NotDefaultOrNull<Guid>(onboardingCaseId, nameof(onboardingCaseId));
 		FinalizedAt = finalizedAt.ToUniversalTime();

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
@@ -8,6 +8,10 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 /// </summary>
 public class RunPayrollItem
 {
+	public string? EsiCalculationDetailsJson { get; set; }
+	public string? PfEligibilityDetailsJson { get; set; }
+	public string? StatutoryApplicationJson { get; set; }
+	public string? LeaveUnitsByTypeJson { get; set; }
 	public double TotalEarnings => Math.Round(NetPay + TotalDeduction, 2, MidpointRounding.AwayFromZero);
 	public double AdditionalEarnings => Math.Round(TotalEarnings - GrossSalary, 2, MidpointRounding.AwayFromZero);
 	/// <summary>
@@ -167,6 +171,7 @@ public class RunPayrollItem
 	public int? ProvidentFundRuleVersion { get; set; }
 	public Guid? ProfessionalTaxRuleId { get; set; }
 	public int? ProfessionalTaxRuleVersion { get; set; }
+	public Guid? EsiConfigurationId { get; set; }
 	public Guid? EmployeeStateInsuranceRuleId { get; set; }
 	public int? EmployeeStateInsuranceRuleVersion { get; set; }
 	public double EmployeeStateInsuranceWages { get; set; }
@@ -187,6 +192,9 @@ public class RunPayrollItem
 /// </summary>
 public class RunPayrollComponentItem
 {
+	public Guid? ComponentId { get; set; }
+	public Guid? SourceLineId { get; set; }
+	public string? SemanticType { get; set; }
 	public decimal? FullMonthAmount { get; set; }
 	public string? FormulaType { get; set; }
 	public decimal? FormulaValue { get; set; }

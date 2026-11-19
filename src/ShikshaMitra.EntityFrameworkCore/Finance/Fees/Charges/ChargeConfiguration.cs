@@ -9,6 +9,7 @@ public class ChargeConfiguration : IEntityTypeConfiguration<Charge>
 	public void Configure(EntityTypeBuilder<Charge> builder)
 	{
 		builder.ToTable("Finance_Charges", ShikshaMitraConsts.DbSchema);
+        builder.Property(x=>x.IncomeCategoryName).HasMaxLength(500);
 		builder.ConfigureByConvention();
 
 		// Configure properties

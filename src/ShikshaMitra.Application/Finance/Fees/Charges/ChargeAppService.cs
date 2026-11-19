@@ -5,7 +5,9 @@ using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Students;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
 using Volo.Abp;
@@ -26,11 +28,15 @@ public partial class ChargeAppService(
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<IdentityUser, Guid> userRepository,
 	IRepository<ChargeCategory, Guid> chargeCategoryRepository,
-	IRepository<Student, Guid> studentRepository,
+	IStudentRepository studentRepository,
+	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+	IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
 	FinanceScopeAccessService financeScopeAccessService,
+	FinanceReviewerAccessService financeReviewerAccessService,
 	ICurrentUser currentUser,
+	IUserScopeService userScopeService,
 	ChargeRequestManager chargeRequestManager,
 	ChargeAudienceResolver chargeAudienceResolver,
 	FinanceAuditWriter financeAuditWriter,

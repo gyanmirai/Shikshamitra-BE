@@ -19,6 +19,9 @@ public interface IStudentRepository : IRepository<Student, Guid>
     /// </summary>
     Task<Student?> GetForFeeAssignmentAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>Loads the student root for Finance checks without the profile and academic navigation graph.</summary>
+    Task<Student?> GetForFinanceContextAsync(Guid id, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Returns a student query without configured automatic navigation includes.
     /// Use for list projections where loading the whole aggregate graph would be wasteful.
@@ -40,6 +43,9 @@ public interface IStudentRepository : IRepository<Student, Guid>
     /// Gets a student with the registration section aggregate parts used by registration forms.
     /// </summary>
     Task<Student?> GetRegistrationAggregateAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Loads only app-login contact/family data, untracked by default; email writes explicitly request tracking.</summary>
+    Task<Student?> GetCredentialsProfileAsync(Guid id, bool trackChanges = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets a student with all 1:1 aggregate parts eagerly loaded

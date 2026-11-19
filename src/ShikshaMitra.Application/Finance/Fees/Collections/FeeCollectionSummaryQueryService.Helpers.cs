@@ -39,6 +39,7 @@ public partial class FeeCollectionSummaryQueryService
 			return new FeeCollectionSummaryItemDto
 			{
 				StudentId        = r.StudentId,
+				FinanceFeeAccountId = r.FinanceFeeAccountId,
 				StudentName      = BuildFullName(r.FirstName, r.MiddleName, r.LastName),
 				GrNumber         = r.GrNo,
 				RollNumber       = r.RollNo,
@@ -49,22 +50,38 @@ public partial class FeeCollectionSummaryQueryService
 					: $"{r.StandardName} - {r.DivisionName}",
 				TotalFees              = r.TotalFees ?? 0d,
 				PaidFees               = r.PaidFees ?? 0d,
+				RefundAmount           = r.RefundAmount,
 				PendingFees            = outstanding ?? 0d,
 				OverdueFees            = overdue ?? 0d,
 				TotalCharges           = r.TotalCharges ?? 0d,
+				PaidCharges            = r.PaidCharges,
 				PendingCharges         = r.PendingCharges ?? 0d,
 				TotalConcessionAmount  = r.TotalConcessionAmount ?? 0d,
 				IsFeeStructureAssigned = r.IsFeeStructureAssigned,
-				Status = ((outstanding ?? 0d) <= 0d && r.PendingCharges <= 0d)
-					? FeeCollectionStatus.Paid
-					: (overdue ?? 0d) > 0d
-						? FeeCollectionStatus.Overdue
-						: FeeCollectionStatus.Pending,
+				Status = GetSummaryStatus(r),
 			};
 		});
 
 	private static string BuildFullName(string? first, string? middle, string? last)
 		=> string.Join(" ", new[] { first, middle, last }.Where(p => !string.IsNullOrWhiteSpace(p)));
+
+	private static FeeCollectionStatus GetSummaryStatus(FeeCollectionRawRow row)
+	{
+		if (!row.IsFeeStructureAssigned
+			&& (row.TotalFees ?? 0d) == 0d
+			&& (row.PaidFees ?? 0d) == 0d
+			&& (row.OutstandingFees ?? 0d) == 0d
+			&& (row.OverdueFees ?? 0d) == 0d
+			&& (row.TotalCharges ?? 0d) == 0d
+			&& (row.PendingCharges ?? 0d) == 0d)
+			return FeeCollectionStatus.NoFeeAssigned;
+
+		return (row.OutstandingFees ?? 0d) <= 0d && (row.PendingCharges ?? 0d) <= 0d
+			? FeeCollectionStatus.Paid
+			: (row.OverdueFees ?? 0d) > 0d
+				? FeeCollectionStatus.Overdue
+				: FeeCollectionStatus.Pending;
+	}
 
 	private static List<FeeCollectionRawRow> ApplyStatusFilter(
 		List<FeeCollectionRawRow> rows, FeeCollectionStatus? status)
@@ -72,9 +89,9 @@ public partial class FeeCollectionSummaryQueryService
 		if (!status.HasValue) return rows;
 		return status.Value switch
 		{
-			FeeCollectionStatus.Paid    => rows.Where(x => (x.OutstandingFees ?? 0d) <= 0d).ToList(),
-			FeeCollectionStatus.Overdue => rows.Where(x => (x.OutstandingFees ?? 0d) > 0d && (x.OverdueFees ?? 0d) > 0d).ToList(),
-			FeeCollectionStatus.Pending => rows.Where(x => (x.OutstandingFees ?? 0d) > 0d && (x.OverdueFees ?? 0d) <= 0d).ToList(),
+			FeeCollectionStatus.Paid or FeeCollectionStatus.Overdue
+				or FeeCollectionStatus.Pending or FeeCollectionStatus.NoFeeAssigned
+				=> rows.Where(x => GetSummaryStatus(x) == status.Value).ToList(),
 			_                           => rows,
 		};
 	}
@@ -95,12 +112,16 @@ public partial class FeeCollectionSummaryQueryService
 			"totalfees desc"                              => rows.OrderByDescending(x => x.TotalFees),
 			"paidfees asc"         or "paidfees"          => rows.OrderBy(x => x.PaidFees),
 			"paidfees desc"                               => rows.OrderByDescending(x => x.PaidFees),
+			"refundamount asc"     or "refundamount"      => rows.OrderBy(x => x.RefundAmount),
+			"refundamount desc"                           => rows.OrderByDescending(x => x.RefundAmount),
 			"pendingfees asc"      or "pendingfees"       => rows.OrderBy(x => x.OutstandingFees),
 			"pendingfees desc"                            => rows.OrderByDescending(x => x.OutstandingFees),
 			"overduefees asc"      or "overduefees"       => rows.OrderBy(x => x.OverdueFees),
 			"overduefees desc"                            => rows.OrderByDescending(x => x.OverdueFees),
 			"totalcharges asc"     or "totalcharges"      => rows.OrderBy(x => x.TotalCharges),
 			"totalcharges desc"                           => rows.OrderByDescending(x => x.TotalCharges),
+			"paidcharges asc"      or "paidcharges"       => rows.OrderBy(x => x.PaidCharges),
+			"paidcharges desc"                            => rows.OrderByDescending(x => x.PaidCharges),
 			"pendingcharges asc"   or "pendingcharges"    => rows.OrderBy(x => x.PendingCharges),
 			"pendingcharges desc"                         => rows.OrderByDescending(x => x.PendingCharges),
 			"standarddivision asc" or "standarddivision"  => rows.OrderBy(x => x.StandardName).ThenBy(x => x.DivisionName),
@@ -114,49 +135,90 @@ public partial class FeeCollectionSummaryQueryService
 		CancellationToken cancellationToken = default)
 	{
 		var studentQ = await studentRepository.GetQueryableAsync();
+		var currentScopedIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		var historicalIds = await financeScopeAccessService.GetScopedFeeCollectionEnrollmentIdsQueryAsync(
+			input.AcademicYearId, input.BoardId, input.EducationMediumId, input.StandardId,
+			input.DivisionId, cancellationToken);
+		var privileged = IsPrivilegedUser();
 		studentQ = studentQ.Where(s =>
-			s.AcademicYearId   == input.AcademicYearId   &&
-			s.AcademicBoardId  == input.BoardId           &&
-			s.AcademicMediumId == input.EducationMediumId);
-
-		studentQ = IsPrivilegedUser()
-			? studentQ.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled
-								|| s.Status == StudentLifeCycleStatusEnum.Left
-								|| s.Status == StudentLifeCycleStatusEnum.InActive)
-			: studentQ.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled);
-
-		if (input.StandardId.HasValue)
-			studentQ = studentQ.Where(s => s.StandardId == input.StandardId.Value);
-		if (input.DivisionId.HasValue)
-			studentQ = studentQ.Where(s => s.DivisionId == input.DivisionId.Value);
-		if (!string.IsNullOrWhiteSpace(input.Search) && input.Search.Length >= 2)
+			(s.AcademicYearId == input.AcademicYearId && s.AcademicBoardId == input.BoardId &&
+			 s.AcademicMediumId == input.EducationMediumId &&
+			 (!input.StandardId.HasValue || s.StandardId == input.StandardId.Value) &&
+			 (!input.DivisionId.HasValue || s.DivisionId == input.DivisionId.Value) &&
+			 currentScopedIds.Contains(s.Id) &&
+			 (s.Status == StudentLifeCycleStatusEnum.Enrolled ||
+			  privileged && (s.Status == StudentLifeCycleStatusEnum.Left ||
+			                         s.Status == StudentLifeCycleStatusEnum.InActive))) ||
+			(s.AcademicYearId != input.AcademicYearId && historicalIds.Contains(s.Id)));
+		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
-			var term = input.Search.Trim().ToLower();
-			studentQ = studentQ.Where(s =>
-				(s.FirstName  != null && s.FirstName.ToLower().Contains(term))  ||
-				(s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) ||
-				(s.LastName   != null && s.LastName.ToLower().Contains(term))   ||
-				(s.RollNo     != null && s.RollNo.ToString()!.Contains(term)));
+			var terms = input.Search.Split((char[]?)null,
+				StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+			if (terms.Length == 1 && terms[0].Length >= 2)
+			{
+				var term = terms[0].ToLower();
+				studentQ = studentQ.Where(s =>
+					(s.FirstName  != null && s.FirstName.ToLower().Contains(term))  ||
+					(s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) ||
+					(s.LastName   != null && s.LastName.ToLower().Contains(term))   ||
+					(s.RollNo     != null && s.RollNo.ToString()!.Contains(term)) ||
+					(s.GrNo       != null && s.GrNo.ToString()!.Contains(term)));
+			}
+			else if (terms.Length > 1)
+			{
+				foreach (var word in terms)
+				{
+					var term = word.ToLower();
+					studentQ = studentQ.Where(s =>
+						(s.FirstName  != null && s.FirstName.ToLower().Contains(term))  ||
+						(s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) ||
+						(s.LastName   != null && s.LastName.ToLower().Contains(term)) ||
+						(s.GrNo       != null && s.GrNo.ToString()!.Contains(term)));
+				}
+			}
 		}
-		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
-		return studentQ
-			.Where(s => scopedStudentIds.Contains(s.Id))
-			.OrderBy(s => s.Standard.CreationTime)
-			.ThenBy(s => s.Division.CreationTime)
-			.ThenBy(s => s.RollNo);
+		return studentQ;
 	}
 
 	private bool IsPrivilegedUser() =>
 		CurrentUser.IsInRole("admin") || CurrentUser.IsInRole("Finance Officer");
 
-	private readonly record struct StudentChargeAggregate(double TotalCharges, double PendingCharges)
+	private async Task<IQueryable<FinanceFeeAccount>> BuildFilteredFeeAccountQueryAsync(
+		GetFeeCollectionSummaryInput input, IQueryable<Guid> matchingStudentIds)
 	{
-		public static StudentChargeAggregate Empty => new(0d, 0d);
+		var accountIds = await financeScopeAccessService.GetScopedFeeCollectionAccountIdsQueryAsync(
+			input.AcademicYearId);
+		var query = (await accountRepository.GetQueryableAsync()).Where(a =>
+			accountIds.Contains(a.Id) && a.AcademicYearId == input.AcademicYearId &&
+			a.BoardId == input.BoardId && a.EducationMediumId == input.EducationMediumId &&
+			a.StructureId.HasValue);
+		if (input.StandardId.HasValue) query = query.Where(a => a.StandardId == input.StandardId.Value);
+		if (input.DivisionId.HasValue) query = query.Where(a => a.DivisionId == input.DivisionId.Value);
+		if (!string.IsNullOrWhiteSpace(input.Search))
+		{
+			var terms = input.Search.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+			if (terms.Length > 1 || terms.Length == 1 && terms[0].Length >= 2)
+			{
+				foreach (var word in terms)
+				{
+					var term = word.ToLower();
+					query = query.Where(a => a.ApplicantName.ToLower().Contains(term) ||
+						a.StudentId.HasValue && matchingStudentIds.Contains(a.StudentId.Value));
+				}
+			}
+		}
+		return query;
+	}
+
+	private readonly record struct StudentChargeAggregate(double TotalCharges, decimal PaidCharges, double PendingCharges)
+	{
+		public static StudentChargeAggregate Empty => new(0d, 0m, 0d);
 	}
 
 	private sealed class FeeCollectionRawRow
 	{
-		public Guid    StudentId       { get; init; }
+		public Guid?   StudentId       { get; init; }
+		public Guid?   FinanceFeeAccountId { get; init; }
 		public string? FirstName       { get; init; }
 		public string? MiddleName      { get; init; }
 		public string? LastName        { get; init; }
@@ -166,12 +228,14 @@ public partial class FeeCollectionSummaryQueryService
 		public string  StandardName    { get; init; } = string.Empty;
 		public Guid    DivisionId      { get; set; }
 		public string  DivisionName    { get; init; } = string.Empty;
-		public double? TotalFees       { get; init; }
-		public double? PaidFees        { get; init; }
-		public double? OutstandingFees { get; init; }
-		public double? OverdueFees     { get; init; }
-		public double? TotalCharges    { get; init; }
-		public double? PendingCharges  { get; init; }
+		public double? TotalFees       { get; set; }
+		public double? PaidFees        { get; set; }
+		public decimal RefundAmount    { get; set; }
+		public double? OutstandingFees { get; set; }
+		public double? OverdueFees     { get; set; }
+		public double? TotalCharges    { get; set; }
+		public decimal PaidCharges     { get; set; }
+		public double? PendingCharges  { get; set; }
 		public double? TotalConcessionAmount   { get; set; }
 		public bool    IsFeeStructureAssigned  { get; set; }
 	}

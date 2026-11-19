@@ -3,6 +3,18 @@ using System.Collections.Generic;
 
 namespace ShikshaMitra.HR.Employees.Documents;
 
+public class EmployeeDocumentChecklistItemDto
+{
+	public Guid Id { get; set; }
+	public Guid EmployeeId { get; set; }
+	public string Title { get; set; } = "";
+	public float DocumentSize { get; set; }
+	public List<int> DocumentTypes { get; set; } = [];
+	public string DocType { get; set; } = "";
+	public string StatusVal { get; set; } = "Not Uploaded";
+	public EmployeeDocumentResponseDto? UploadedDoc { get; set; }
+}
+
 public class EmployeeDocumentResponseDto
 {
 	public Guid DocumentId { get; set; }

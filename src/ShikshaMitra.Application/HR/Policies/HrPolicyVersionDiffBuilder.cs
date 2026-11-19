@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -17,8 +17,8 @@ internal static class HrPolicyVersionDiffBuilder
 	{
 		using var fromDoc = ParseSnapshot(fromJson);
 		using var toDoc = ParseSnapshot(toJson);
-		var fromProps = fromDoc.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone());
-		var toProps = toDoc.RootElement.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone());
+		var fromProps = FlattenSnapshot(fromDoc.RootElement);
+		var toProps = FlattenSnapshot(toDoc.RootElement);
 		return fromProps.Keys.Union(toProps.Keys)
 			.Where(field => !JsonValuesEqual(
 				field,
@@ -28,8 +28,8 @@ internal static class HrPolicyVersionDiffBuilder
 			{
 				Field = field,
 				FieldKey = field,
-				FieldLabel = FieldLabel(field),
-				Category = FieldCategory(field),
+				FieldLabel = field.StartsWith("rules.", StringComparison.Ordinal) ? $"{field.Split('.')[1]}: {FieldLabel(field.Split('.')[2])}" : FieldLabel(field),
+				Category = field.StartsWith("rules.", StringComparison.Ordinal) ? "Leave rules" : FieldCategory(field),
 				FromRawValue = GetRawValue(fromProps.GetValueOrDefault(field)),
 				ToRawValue = GetRawValue(toProps.GetValueOrDefault(field)),
 				FromDisplayValue = FormatDisplayValue(field, fromProps.GetValueOrDefault(field), displayContext),
@@ -40,6 +40,28 @@ internal static class HrPolicyVersionDiffBuilder
 			.OrderBy(x => x.Category)
 			.ThenBy(x => x.FieldLabel)
 			.ToList();
+	}
+
+	private static Dictionary<string, JsonElement> FlattenSnapshot(JsonElement root)
+	{
+		if (root.ValueKind != JsonValueKind.Object)
+			throw new Volo.Abp.BusinessException(HRErrorCodes.HrPolicyInvalidVersionSnapshot);
+		var fields = root.EnumerateObject().ToDictionary(x => x.Name, x => x.Value.Clone());
+		// Leave snapshots use the existing Paid/Unpaid bucket as the stable comparison key.
+		if (!fields.TryGetValue("rules", out var rules) || rules.ValueKind != JsonValueKind.Array) return fields;
+		fields.Remove("rules");
+		foreach (var rule in rules.EnumerateArray())
+		{
+			if (rule.ValueKind != JsonValueKind.Object || !rule.TryGetProperty("paidType", out var paidType) ||
+				paidType.ValueKind != JsonValueKind.String || paidType.GetString() is not ("Paid" or "Unpaid"))
+				throw new Volo.Abp.BusinessException(HRErrorCodes.HrPolicyInvalidVersionSnapshot);
+			foreach (var property in rule.EnumerateObject().Where(x => x.Name != "id" && x.Name != "paidType"))
+			{
+				if (!fields.TryAdd($"rules.{paidType.GetString()}.{property.Name}", property.Value.Clone()))
+					throw new Volo.Abp.BusinessException(HRErrorCodes.HrPolicyInvalidVersionSnapshot);
+			}
+		}
+		return fields;
 	}
 
 	public static void CollectGuids(JsonElement element, HashSet<Guid> ids)

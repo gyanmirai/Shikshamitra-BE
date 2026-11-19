@@ -23,6 +23,7 @@ public class ChargeData
 	public DateTimeOffset AppliedOn { get; set; }
 	public int Priority { get; set; }
 	public int Status { get; set; }
+	public ChargeWorkflowStatus WorkflowStatus { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid EducationMediumId { get; set; }
 	public string? AdditionalNotes { get; set; }
@@ -45,8 +46,11 @@ public class ChargeListResponse
 	public int TotalPages { get; set; }
 	/// <summary>Number of charge requests that still have at least one pending line.</summary>
 	public int PendingCount { get; set; }
-	/// <summary>Number of charge requests where all lines are actioned (approved or rejected).</summary>
+	/// <summary>Compatibility alias for InProcessCount.</summary>
 	public int ProcessedCount { get; set; }
+	public int InProcessCount { get; set; }
+	public int CompletedCount { get; set; }
+	public int RejectedCount { get; set; }
 	public string Message { get; set; } = string.Empty;
 }
 
@@ -61,12 +65,19 @@ public class ChargeListItem
 	public DateTimeOffset DueDate { get; set; }
 	public DateTimeOffset AppliedOn { get; set; }
 	public int Priority { get; set; }
-	/// <summary>0 = Pending, 1 = Processed</summary>
+	/// <summary>Batch workflow: 0 = Pending, 1 = In Process, 2 = Completed, 3 = Rejected</summary>
 	public int DisplayStatus { get; set; }
+	public ChargeWorkflowStatus WorkflowStatus { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid EducationMediumId { get; set; }
 	/// <summary>Total number of student lines in this charge request.</summary>
 	public int StudentCount { get; set; }
+	/// <summary>Approved students fully settled with a positive collected amount.</summary>
+	public int PaidStudentCount { get; set; }
+	/// <summary>Approved students with a positive remaining collectible amount.</summary>
+	public int OutstandingStudentCount { get; set; }
+	/// <summary>Approved students with an effective waiver; may also be paid or outstanding.</summary>
+	public int WaivedStudentCount { get; set; }
 	/// <summary>Number of lines that are no longer pending (approved + rejected).</summary>
 	public int ProcessedCount { get; set; }
 	public Guid RequestorId { get; set; }
@@ -102,7 +113,9 @@ public class ChargeLineListItem
 	public string PurposeDescription { get; set; } = string.Empty;
 	public DateTimeOffset DueDate { get; set; }
 	public int Status { get; set; }
+	public ChargeWorkflowStatus WorkflowStatus { get; set; }
 	public decimal CollectedAmount { get; set; }
+	public decimal WaivedAmount { get; set; }
 	public decimal OutstandingAmount { get; set; }
 }
 
@@ -125,6 +138,7 @@ public class ChargeDetailData
 	public DateTimeOffset AppliedOn { get; set; }
 	public int Priority { get; set; }
 	public int Status { get; set; }
+	public ChargeWorkflowStatus WorkflowStatus { get; set; }
 	public string? AdditionalNotes { get; set; }
 	public ChargeAudienceDto Audience { get; set; } = new();
 	public int AppliedCount { get; set; }
@@ -148,7 +162,9 @@ public class ChargeStudentLineDto
 	public string StandardName { get; set; } = string.Empty;
 	public string DivisionName { get; set; } = string.Empty;
 	public int Status { get; set; }
+	public ChargeWorkflowStatus WorkflowStatus { get; set; }
 	public decimal CollectedAmount { get; set; }
+	public decimal WaivedAmount { get; set; }
 	public decimal OutstandingAmount { get; set; }
 }
 
@@ -179,6 +195,7 @@ public class ApprovalData
 {
 	public Guid ChargeId { get; set; }
 	public int Status { get; set; }
+	public ChargeWorkflowStatus WorkflowStatus { get; set; }
 	public int ProcessedCount { get; set; }
 	public int RemainingPendingCount { get; set; }
 	public Guid ApprovedBy { get; set; }
@@ -198,6 +215,7 @@ public class RejectionData
 {
 	public Guid ChargeId { get; set; }
 	public int Status { get; set; }
+	public ChargeWorkflowStatus WorkflowStatus { get; set; }
 	public int ProcessedCount { get; set; }
 	public int RemainingPendingCount { get; set; }
 	public Guid RejectedBy { get; set; }

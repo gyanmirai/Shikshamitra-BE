@@ -56,6 +56,7 @@ public class SubjectUsageSummaryDto
 	public int LessonPlansCount { get; set; }
 	public int HomeworkCount { get; set; }
 	public int TeacherMappingsCount { get; set; }
+	public int AdmissionAssessmentsCount { get; set; }
 }
 
 public class SubjectAllocationUsageDto

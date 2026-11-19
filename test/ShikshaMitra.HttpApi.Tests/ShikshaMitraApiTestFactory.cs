@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ShikshaMitra.HR.WorkShifts;
+using System;
 using System.Data.Common;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,6 +17,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using OpenIddict.Server.AspNetCore;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Common;
@@ -28,6 +30,7 @@ using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
@@ -67,9 +70,11 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	public Guid SeededMediumId { get; private set; }
 	public Guid SeededStandardId { get; private set; }
 	public Guid SeededDivisionId { get; private set; }
+	protected virtual bool InitializeTestData => true;
 	protected override IHost CreateHost(IHostBuilder builder)
 	{
 		var host = base.CreateHost(builder);
+		if (!InitializeTestData) return host;
 
 		Task.Run(async () =>
 		{
@@ -87,7 +92,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		return host;
 	}
 
-	private async Task ResolveSeededLookupsAsync(IServiceProvider services)
+	protected async Task ResolveSeededLookupsAsync(IServiceProvider services, bool includeHrFixtures = true)
 	{
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 		var currentTenant = services.GetRequiredService<ICurrentTenant>();
@@ -108,13 +113,24 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			// correctly. Without this, the charge requestor JOIN returns null and the charge is
 			// reported as "not found" immediately after creation.
 			await EnsureTestAuthUserExistsAsync(services, tenantId, lookupNormalizer);
-			await EnsureTestAuthEmployeeExistsAsync(services);
+			if (includeHrFixtures) await EnsureTestAuthEmployeeExistsAsync(services);
 			await EnsureTestAuthUserHasTenantWideScopeAsync(services, tenantId);
+			if (includeHrFixtures)
+			{
+				var payslipSettings = services.GetRequiredService<IRepository<ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings, Guid>>();
+				if (await payslipSettings.FindAsync(tenantId) == null)
+				{
+					var school = new ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings(tenantId);
+					school.Configure("Synthetic Payroll Test School", "Synthetic Test Road, Ahmedabad, Gujarat", false, Guid.NewGuid());
+					await payslipSettings.InsertAsync(school);
+				}
 
-			var shiftRepo = services.GetRequiredService<IRepository<ShiftManagement, Guid>>();
-			var fullDayShift = await (await shiftRepo.GetQueryableAsync()).AsNoTracking()
-				.FirstOrDefaultAsync(s => s.ShiftName == "Full Day Shift");
-			SeededShiftId = fullDayShift?.Id ?? Guid.Empty;
+				var shiftRepo = services.GetRequiredService<IRepository<EmployeeWorkShift, Guid>>();
+				var fullDayShift = await (await shiftRepo.GetQueryableAsync()).AsNoTracking()
+					.FirstOrDefaultAsync(s => s.ShiftName == "Full Day Shift");
+				SeededShiftId = fullDayShift?.Id ?? Guid.Empty;
+			}
+
 
 			var academicYearRepo = services.GetRequiredService<IAcademicYearRepository>();
 			var firstYear = await (await academicYearRepo.GetQueryableAsync()).AsNoTracking()
@@ -154,10 +170,16 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 				var medium = await (await mediumRepo.GetQueryableAsync()).AsNoTracking()
 					.FirstOrDefaultAsync(m => m.Id == SeededMediumId);
 				SeededBoardId = medium?.EducationBoardId ?? Guid.Empty;
+				// Resolve the year from the selected hierarchy, not an independently ordered row.
+				var boardRepo = services.GetRequiredService<IRepository<EducationBoard, Guid>>();
+				var board = await (await boardRepo.GetQueryableAsync()).AsNoTracking()
+					.FirstOrDefaultAsync(b => b.Id == SeededBoardId);
+				SeededAcademicYearId = board?.AcademicYearId ?? Guid.Empty;
 			}
 
 			var divisionRepo = services.GetRequiredService<IDivisionRepository>();
 			var firstDivision = await (await divisionRepo.GetQueryableAsync()).AsNoTracking()
+				.Where(d => d.StandardId == SeededStandardId)
 				.OrderBy(d => d.Id)
 				.FirstOrDefaultAsync();
 			SeededDivisionId = firstDivision?.Id ?? Guid.Empty;
@@ -230,14 +252,14 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		var queryable = await scopeRepository.GetQueryableAsync();
 
 		if (!queryable.Any(x =>
-			    x.UserId == testUserId &&
-			    x.AcademicYearId == null &&
-			    x.EducationBoardId == null &&
-			    x.EducationMediumId == null &&
-			    x.EducationMediumStageId == null &&
-			    x.StandardId == null &&
-			    x.DivisionId == null &&
-			    x.IsActive))
+				x.UserId == testUserId &&
+				x.AcademicYearId == null &&
+				x.EducationBoardId == null &&
+				x.EducationMediumId == null &&
+				x.EducationMediumStageId == null &&
+				x.StandardId == null &&
+				x.DivisionId == null &&
+				x.IsActive))
 		{
 			await scopeRepository.InsertAsync(
 				new UserScopeAssignment(
@@ -364,7 +386,9 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 
 			foreach (var scheme in options.SchemeMap.Values)
 			{
-				if (scheme.Name != TestAuthHandler.SchemeName)
+				// Keep token request parsing/sign-in native so security regressions can
+				// exercise /connect/token. Normal API auth still defaults to TestAuth.
+				if (scheme.Name != TestAuthHandler.SchemeName && scheme.Name != OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)
 				{
 					scheme.HandlerType = typeof(TestAuthHandler);
 				}
@@ -392,7 +416,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	private sealed class NoOpEmployeeEmailService : IEmployeeEmailService
 	{
 		public Task SendWelcomeEmailAsync(
-			string employeeEmail,
+			string? employeeEmail,
 			string employeeName,
 			string username,
 			string password)

@@ -2,6 +2,18 @@
 
 **ShikshaMitra** is a multi-tenant **school management / CRM backend** built with **ABP Framework** and **.NET 9**.
 
+## Superpowers integration
+
+Use the installed Superpowers skills for applicable planning, debugging, implementation, review, and verification.
+Within project guidance, this guide, applicable nested `AGENTS.md` files, and the canonical engineering and module documentation take precedence over generic Superpowers procedures and examples.
+
+- Read the affected module documentation and trace existing source behavior before planning changes. Resolve unclear workflow, money, permission, or business rules with the user before changing that behavior.
+- Carry the applicable domain invariants, tenant/user-scope boundaries, API contracts, permission rules, and validation commands into implementation plans, delegated task prompts, and review checklists.
+- For work involving the frontend, also read `../Shikshamitra-FE/AGENTS.md` and strictly follow the applicable sections of `../Shikshamitra-FE/DESIGN.md` and its required project skills. Keep frontend/client behavior aligned with backend contracts and permissions.
+- Keep temporary designs and implementation plans in the conversation or session artifacts. Do not use Superpowers' default `docs/superpowers/` location or commit temporary plans into maintained module documentation. Follow this guide's documentation practice for durable changes.
+- Preserve unrelated local changes and existing implementation. Do not delete existing code to retrofit a test-first workflow. Follow the existing Git hygiene, worktree tooling, publishing approval, and main-only GitHub Actions rules.
+- Verify changes using the pinned SDK and relevant local builds, focused tests, and documentation checks. Report source checks, automated tests, local runtime results, and unverified states separately; Superpowers review alone is not proof of completion.
+
 ## Publishing approval
 
 Commits and feature-branch pushes for authorized work do not require a separate permission request.
@@ -240,10 +252,3 @@ dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Module=HR"
 | Backend docs stale-review gate | `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -AllModules -MaxAgeDays 365` |
 
 When in doubt, search `docs/` for the module name and open the nearest `README.md`.
-
-## Salary protection contract
-
-Before changing salary templates, compensation, payroll, or payslips, read [Salary package protection](docs/modules/hr/product.md#salary-package-protection).
-Use one package policy: employer cost by default, or take-home protected against PT and employee PF/ESI only.
-Keep preview and payroll on the shared calculation engine, prorate the target once, and preserve locked snapshots.
-PT selection is a template rule; never add an independent tax-bearer flag or silently migrate legacy gross protection.

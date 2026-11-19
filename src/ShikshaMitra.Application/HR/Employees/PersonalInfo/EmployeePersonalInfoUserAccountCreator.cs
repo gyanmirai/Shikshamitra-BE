@@ -68,7 +68,7 @@ public class EmployeePersonalInfoUserAccountCreator(
 		{
 			logger.LogWarning(
 				ex,
-				"Employee creation failed and cleanup user delete also threw for {Email}.",
+				"Staff creation failed and cleanup user delete also threw for {Email}.",
 				email);
 			return;
 		}
@@ -80,7 +80,7 @@ public class EmployeePersonalInfoUserAccountCreator(
 
 		var deleteErrors = string.Join(", ", deleteResult.Errors.Select(e => e.Description));
 		logger.LogWarning(
-			"Employee creation failed and cleanup user delete also failed for {Email}: {Errors}",
+			"Staff creation failed and cleanup user delete also failed for {Email}: {Errors}",
 			email,
 			deleteErrors);
 	}

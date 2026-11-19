@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text.Json;
@@ -9,6 +10,7 @@ using NSubstitute;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
@@ -29,7 +31,7 @@ public class TimetableConflictBatch_Tests
 	public TimetableConflictBatch_Tests()
 	{
 		_manager = new TimetableManager(_repository, EmptyRepository<Standard>(), EmptyRepository<Division>(),
-			EmptyRepository<Subject>(), EmptyRepository<Room>(), EmptyRepository<Employee>());
+            EmptyRepository<Subject>(), EmptyRepository<Room>(), EmptyRepository<Employee>(), EmptyRepository<AcademicYear>());
 		_repository.GetConflictCandidatesAsync(Arg.Any<Guid>(), Arg.Any<Guid>(),
 			Arg.Any<IReadOnlyCollection<TimetableDayOfWeek>>(), Arg.Any<TimeOnly>(), Arg.Any<TimeOnly>(),
 			Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<IReadOnlyCollection<Guid>>())
@@ -55,14 +57,17 @@ public class TimetableConflictBatch_Tests
 		await _repository.DidNotReceive().GetAllWithSlotsAsync();
 	}
 
-	[Fact]
-	public async Task Validation_Should_Preserve_Teacher_First_Error_And_Conflict_Details()
+	[Theory]
+	[InlineData(":")]
+	[InlineData(".")]
+	public async Task Validation_Should_Preserve_Teacher_First_Error_And_Conflict_Details(string timeSeparator)
 	{
+		using var culture = new CultureScope(timeSeparator);
 		var candidate = Candidate(TimetableDayOfWeek.Monday, new TimeOnly(9, 15), new TimeOnly(10, 0));
 		SetCandidates(candidate);
 
-		var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
-			Guid.NewGuid(), Guid.NewGuid(), [CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 30)]));
+			var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
+				Guid.NewGuid(), Guid.NewGuid(), [CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 30)]));
 
 		error.Code.ShouldBe(TimetableErrorCodes.TeacherConflict);
 		error.Data["message"].ShouldBe(
@@ -73,6 +78,10 @@ public class TimetableConflictBatch_Tests
 		detail.GetProperty("ResourceId").GetGuid().ShouldBe(_teacherId);
 		detail.GetProperty("ConflictingStandardId").GetGuid().ShouldBe(candidate.StandardId);
 		detail.GetProperty("ConflictingDivisionId").GetGuid().ShouldBe(candidate.DivisionId);
+		detail.GetProperty("StartTime").GetString().ShouldBe("09:15");
+		detail.GetProperty("EndTime").GetString().ShouldBe("10:00");
+		error.Data["StartTime"].ShouldBe("09:15");
+		error.Data["EndTime"].ShouldBe("10:00");
 	}
 
 	[Fact]
@@ -87,20 +96,24 @@ public class TimetableConflictBatch_Tests
 			[CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 60)]);
 	}
 
-	[Fact]
-	public async Task Validation_Should_Report_First_Submitted_Period_Before_Later_Teacher_Conflict()
+	[Theory]
+	[InlineData(":")]
+	[InlineData(".")]
+	public async Task Validation_Should_Report_First_Submitted_Period_Before_Later_Teacher_Conflict(string timeSeparator)
 	{
+		using var culture = new CultureScope(timeSeparator);
 		SetCandidates(
 			Candidate(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), new TimeOnly(10, 0)) with { TeacherId = null },
 			Candidate(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), new TimeOnly(11, 0)));
 
-		var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
-			Guid.NewGuid(), Guid.NewGuid(),
-			[CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 60),
-			 CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), 60)]));
+			var error = await Should.ThrowAsync<BusinessException>(() => _manager.CheckConflictsAsync(
+				Guid.NewGuid(), Guid.NewGuid(),
+				[CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(9, 0), 60),
+				 CreateSlot(TimetableDayOfWeek.Monday, new TimeOnly(10, 0), 60)]));
 
 		error.Code.ShouldBe(TimetableErrorCodes.RoomConflict);
 		error.Data["StartTime"].ShouldBe("09:00");
+		error.Data["EndTime"].ShouldBe("10:00");
 	}
 
 	[Fact]
@@ -114,6 +127,20 @@ public class TimetableConflictBatch_Tests
 
 		await _repository.DidNotReceiveWithAnyArgs().GetConflictCandidatesAsync(
 			default, default, [], default, default, [], []);
+	}
+
+	private sealed class CultureScope : IDisposable
+	{
+		private readonly CultureInfo previousCulture = CultureInfo.CurrentCulture;
+
+		public CultureScope(string timeSeparator)
+		{
+			var culture = (CultureInfo)CultureInfo.GetCultureInfo("en-US").Clone();
+			culture.DateTimeFormat.TimeSeparator = timeSeparator;
+			CultureInfo.CurrentCulture = culture;
+		}
+
+		public void Dispose() => CultureInfo.CurrentCulture = previousCulture;
 	}
 
 	private TimetableSlot CreateSlot(TimetableDayOfWeek day, TimeOnly start, int duration)

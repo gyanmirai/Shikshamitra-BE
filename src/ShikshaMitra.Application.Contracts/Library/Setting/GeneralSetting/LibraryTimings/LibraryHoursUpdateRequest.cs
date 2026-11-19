@@ -12,13 +12,13 @@ public class LibraryHoursUpdateRequest
 public class LibraryHourItemRequest
 {
 	[Required]
-	public string Day { get; set; }
+	public string Day { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
 	[Required]
-	public string StartTime { get; set; }
+	public string StartTime { get; set; } = null!;
 
 	[Required]
-	public string EndTime { get; set; }
+	public string EndTime { get; set; } = null!;
 
 	[Required]
 	public int Status { get; set; }

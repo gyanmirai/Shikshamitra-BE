@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Examination.Exams;
@@ -57,18 +58,7 @@ public partial class StudentAcademic360AppService
 		var students = await AsyncExecuter.ToListAsync(studentQuery.Select(student => new StudentListRead
 		{
 			StudentId = student.Id,
-			StudentName = string.IsNullOrEmpty(student.MiddleName)
-				? ((student.FirstName ?? string.Empty) + " " + (student.LastName ?? string.Empty)).Trim()
-				: ((student.FirstName ?? string.Empty) + " " + student.MiddleName + " " +
-					(student.LastName ?? string.Empty)).Trim(),
-			HasPhoto = student.PhotoBlobName != null && student.PhotoBlobName != string.Empty,
-			GrNo = student.GrNo,
-			RollNo = student.RollNo,
-			StandardId = student.StandardId!.Value,
-			StandardName = student.Standard != null ? student.Standard.Name : string.Empty,
-			DivisionId = student.DivisionId!.Value,
-			DivisionName = student.Division != null ? student.Division.Name : string.Empty,
-			LastUpdatedAt = student.LastModificationTime ?? student.CreationTime
+			DivisionId = student.DivisionId!.Value
 		}));
 
 		if (students.Count == 0)
@@ -79,10 +69,85 @@ public partial class StudentAcademic360AppService
 		var studentIds = students.Select(student => student.StudentId).ToList();
 		var divisionIds = students.Select(student => student.DivisionId).Distinct().ToList();
 		var attendance = await LoadAttendanceSummariesAsync(studentIds, input.AcademicYearId);
-		var learning = await LoadLearningSummariesAsync(students, studentIds, divisionIds, input.AcademicYearId);
+		var learning = await LoadLearningSummariesAsync(studentQuery, divisionIds, input.AcademicYearId);
 		var exams = await LoadExamSummariesAsync(studentIds);
-		var items = students.Select(student => BuildListItem(student, attendance, learning, exams)).ToList();
-		var summary = BuildListSummary(items);
+		var summary = BuildListSummary(students, attendance, learning, exams);
+		var pageIds = await SelectListPageIdsAsync(studentQuery, students, input, attendance, learning, exams);
+		var pageStudents = await AsyncExecuter.ToListAsync(ProjectListStudents(studentQuery
+			.Where(student => pageIds.Ids.Contains(student.Id))).Take(input.MaxResultCount));
+		var pageById = pageStudents.ToDictionary(student => student.StudentId);
+		var page = pageIds.Ids.Where(pageById.ContainsKey)
+			.Select(id => BuildListItem(pageById[id], attendance, learning, exams)).ToList();
+
+		return new StudentAcademic360ListResultDto
+		{
+			TotalCount = pageIds.Total,
+			Items = page,
+			Summary = summary
+		};
+	}
+
+	private static IQueryable<StudentListRead> ProjectListStudents(IQueryable<Student> students) =>
+		students.Select(student => new StudentListRead
+		{
+			StudentId = student.Id,
+			StudentName = string.IsNullOrEmpty(student.MiddleName)
+				? ((student.FirstName ?? string.Empty) + " " + (student.LastName ?? string.Empty)).Trim()
+				: ((student.FirstName ?? string.Empty) + " " + student.MiddleName + " " + (student.LastName ?? string.Empty)).Trim(),
+			HasPhoto = student.PhotoBlobName != null && student.PhotoBlobName != string.Empty,
+			GrNo = student.GrNo,
+			RollNo = student.RollNo,
+			StandardId = student.StandardId!.Value,
+			StandardName = student.Standard != null ? student.Standard.Name : string.Empty,
+			DivisionId = student.DivisionId!.Value,
+			DivisionName = student.Division != null ? student.Division.Name : string.Empty,
+			LastUpdatedAt = student.LastModificationTime ?? student.CreationTime
+		});
+
+	private async Task<(List<Guid> Ids, long Total)> SelectListPageIdsAsync(
+		IQueryable<Student> studentQuery,
+		IReadOnlyCollection<StudentListRead> cohort,
+		GetStudentAcademic360ListInput input,
+		IReadOnlyDictionary<Guid, AttendanceSummaryRead> attendance,
+		IReadOnlyDictionary<Guid, LearningSummaryRead> learning,
+		IReadOnlyDictionary<Guid, ExamSummaryRead> exams)
+	{
+		if (input.SmartFilter != StudentAcademic360SmartFilter.All)
+		{
+			var matchingIds = ApplySmartFilter(cohort.Select(student => BuildListItem(student, attendance, learning, exams)), input.SmartFilter)
+				.Select(student => student.StudentId).ToArray();
+			studentQuery = studentQuery.Where(student => Enumerable.Contains(matchingIds, student.Id));
+		}
+		if (!string.IsNullOrWhiteSpace(input.SearchTerm))
+			studentQuery = await ApplyExactListSearchAsync(studentQuery, input.SearchTerm.Trim());
+		if (string.IsNullOrWhiteSpace(input.Sorting))
+		{
+			var total = await AsyncExecuter.LongCountAsync(studentQuery);
+			var rolls = await AsyncExecuter.ToListAsync(studentQuery
+				.OrderBy(student => student.RollNo ?? int.MaxValue)
+				.Select(student => student.RollNo ?? int.MaxValue)
+				.Skip(input.SkipCount).Take(input.MaxResultCount));
+			if (rolls.Count == 0) return ([], total);
+			var boundaryRolls = rolls.Distinct().ToArray();
+			var candidates = studentQuery.Where(student => Enumerable.Contains(boundaryRolls, student.RollNo ?? int.MaxValue));
+			var candidateCount = await AsyncExecuter.CountAsync(candidates);
+			// SQL selects roll partitions; CLR resolves only ties using the existing culture comparer.
+			var keys = await AsyncExecuter.ToListAsync(candidates.Select(student => new StudentListRead
+			{
+				StudentId = student.Id,
+				RollNo = student.RollNo,
+				StudentName = string.IsNullOrEmpty(student.MiddleName)
+					? ((student.FirstName ?? string.Empty) + " " + (student.LastName ?? string.Empty)).Trim()
+					: ((student.FirstName ?? string.Empty) + " " + student.MiddleName + " " + (student.LastName ?? string.Empty)).Trim()
+			}).Take(candidateCount));
+			var firstRoll = rolls[0];
+			var preceding = await AsyncExecuter.CountAsync(studentQuery.Where(student => (student.RollNo ?? int.MaxValue) < firstRoll));
+			return (keys.OrderBy(student => student.RollNo ?? int.MaxValue).ThenBy(student => student.StudentName)
+				.Skip(input.SkipCount - preceding).Take(input.MaxResultCount).Select(student => student.StudentId).ToList(), total);
+		}
+
+		var students = await AsyncExecuter.ToListAsync(ProjectListStudents(studentQuery));
+		var items = students.Select(student => BuildListItem(student, attendance, learning, exams));
 
 		IEnumerable<StudentAcademic360ListItemDto> filtered = items;
 		if (!string.IsNullOrWhiteSpace(input.SearchTerm))
@@ -99,14 +164,33 @@ public partial class StudentAcademic360AppService
 		filtered = ApplySmartFilter(filtered, input.SmartFilter);
 		var ordered = ApplyListSorting(filtered, input.Sorting);
 		var totalCount = ordered.LongCount();
-		var page = ordered.Skip(input.SkipCount).Take(input.MaxResultCount).ToList();
+		return (ordered.Skip(input.SkipCount).Take(input.MaxResultCount).Select(item => item.StudentId).ToList(), totalCount);
+	}
 
-		return new StudentAcademic360ListResultDto
+	private async Task<IQueryable<Student>> ApplyExactListSearchAsync(IQueryable<Student> students, string search)
+	{
+		var keys = ProjectListStudents(students);
+		if (search.All(character => character is >= ' ' and <= '~'))
 		{
-			TotalCount = totalCount,
-			Items = page,
-			Summary = summary
-		};
+			var pattern = string.Concat(search.Select(character => char.IsAsciiLetter(character)
+				? $"[{char.ToLowerInvariant(character)}{char.ToUpperInvariant(character)}]"
+				: Regex.Escape(character.ToString())));
+			// Non-ASCII text stays in the candidate set for exact OrdinalIgnoreCase refinement.
+			keys = keys.Where(student => Regex.IsMatch(student.StudentName, pattern) ||
+				Regex.IsMatch(student.StandardName, pattern) || Regex.IsMatch(student.DivisionName, pattern) ||
+				Regex.IsMatch(student.StudentName + student.StandardName + student.DivisionName, "[^ -~]") ||
+				(student.GrNo.HasValue && student.GrNo.Value.ToString().Contains(search)) ||
+				(student.RollNo.HasValue && student.RollNo.Value.ToString().Contains(search)));
+		}
+		var candidates = await AsyncExecuter.ToListAsync(keys);
+		var ids = candidates.Where(student =>
+			student.StudentName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+			(student.GrNo?.ToString().Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+			(student.RollNo?.ToString().Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+			student.StandardName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+			student.DivisionName.Contains(search, StringComparison.OrdinalIgnoreCase))
+			.Select(student => student.StudentId).ToArray();
+		return students.Where(student => Enumerable.Contains(ids, student.Id));
 	}
 
 	private async Task EnsureListContextAsync(GetStudentAcademic360ListInput input)
@@ -157,7 +241,7 @@ public partial class StudentAcademic360AppService
 		var days = await studentScopeAccessService.ApplyCurrentUserAttendanceDayScopeAsync(
 			await attendanceDayRepository.GetQueryableAsync());
 		var entries = await attendanceEntryRepository.GetQueryableAsync();
-		var rows = await AsyncExecuter.ToListAsync(
+		var history =
 			from entry in entries
 			join day in days on entry.AttendanceDayId equals day.Id
 			where studentIds.Contains(entry.StudentId) && day.AcademicYearId == academicYearId &&
@@ -167,28 +251,35 @@ public partial class StudentAcademic360AppService
 				StudentId = entry.StudentId,
 				Status = entry.Status,
 				UpdatedAt = entry.LastModificationTime ?? entry.CreationTime
-			});
-
-		return rows.GroupBy(row => row.StudentId).ToDictionary(group => group.Key, group =>
+			};
+		var rows = await AsyncExecuter.ToListAsync(history.GroupBy(row => row.StudentId).Select(group => new
 		{
-			var present = group.Count(row => row.Status == AttendanceStatus.Present);
-			var absent = group.Count(row => row.Status == AttendanceStatus.Absent);
+			StudentId = group.Key,
+			Present = group.Count(row => row.Status == AttendanceStatus.Present),
+			Absent = group.Count(row => row.Status == AttendanceStatus.Absent),
+			Pending = group.Count(row => row.Status == AttendanceStatus.Pending),
+			UpdatedAt = group.Max(row => row.UpdatedAt)
+		}));
+
+		return rows.ToDictionary(row => row.StudentId, row =>
+		{
+			var present = row.Present;
+			var absent = row.Absent;
 			var counted = present + absent;
 			return new AttendanceSummaryRead
 			{
 				Present = present,
 				Absent = absent,
-				Pending = group.Count(row => row.Status == AttendanceStatus.Pending),
+				Pending = row.Pending,
 				Total = counted,
 				Percentage = counted == 0 ? null : Math.Round(present * 100d / counted, 2),
-				LastUpdatedAt = group.Max(row => row.UpdatedAt)
+				LastUpdatedAt = row.UpdatedAt
 			};
 		});
 	}
 
 	private async Task<Dictionary<Guid, LearningSummaryRead>> LoadLearningSummariesAsync(
-		IReadOnlyCollection<StudentListRead> students,
-		IReadOnlyCollection<Guid> studentIds,
+		IQueryable<Student> students,
 		IReadOnlyCollection<Guid> divisionIds,
 		Guid academicYearId)
 	{
@@ -207,13 +298,12 @@ public partial class StudentAcademic360AppService
 					UpdatedAt = schedule.PublishedAt ?? homework.LastModificationTime ?? homework.CreationTime,
 					IsAssignment = false
 				};
-		var scheduledHomework = await AsyncExecuter.ToListAsync(scheduledHomeworkQuery);
-
-		var scheduledHomeworkKeys = scheduledHomework.Select(task => (task.TaskId, task.DivisionId)).ToHashSet();
-		var legacyHomework = await AsyncExecuter.ToListAsync(homeworkQuery
+		var legacyHomework = homeworkQuery
 			.Where(homework => homework.DivisionId.HasValue && divisionIds.Contains(homework.DivisionId.Value) &&
 				(!homework.AcademicYearId.HasValue || homework.AcademicYearId == academicYearId) &&
-				(homework.IsPublished || homework.Status == HomeworkStatus.Published))
+				(homework.IsPublished || homework.Status == HomeworkStatus.Published) &&
+				(homework.StandardId == Guid.Empty || !homework.DivisionSchedules.Any(schedule =>
+					schedule.DivisionId == homework.DivisionId.Value && schedule.IsPublished)))
 			.Select(homework => new LearningTaskScopeRead
 			{
 				TaskId = homework.Id,
@@ -221,8 +311,7 @@ public partial class StudentAcademic360AppService
 				DueDate = homework.DueDate,
 				UpdatedAt = homework.LastModificationTime ?? homework.CreationTime,
 				IsAssignment = false
-			}));
-		legacyHomework.RemoveAll(task => scheduledHomeworkKeys.Contains((task.TaskId, task.DivisionId)));
+			});
 
 		var assignmentQuery = await assignmentRepository.GetQueryableAsync();
 		var scheduledAssignmentQuery =
@@ -238,64 +327,44 @@ public partial class StudentAcademic360AppService
 					UpdatedAt = schedule.PublishedAt ?? assignment.LastModificationTime ?? assignment.CreationTime,
 					IsAssignment = true
 				};
-		var scheduledAssignments = await AsyncExecuter.ToListAsync(scheduledAssignmentQuery);
-
-		var tasks = scheduledHomework.Concat(legacyHomework).Concat(scheduledAssignments)
-			.GroupBy(task => new { task.TaskId, task.DivisionId, task.IsAssignment })
-			.Select(group => group.First())
-			.ToList();
-		var homeworkIds = tasks.Where(task => !task.IsAssignment).Select(task => task.TaskId).Distinct().ToList();
-		var assignmentIds = tasks.Where(task => task.IsAssignment).Select(task => task.TaskId).Distinct().ToList();
+		var tasks = scheduledHomeworkQuery.Concat(legacyHomework).Concat(scheduledAssignmentQuery);
 		var submissionQuery = await submissionRepository.GetQueryableAsync();
-		var submissions = await AsyncExecuter.ToListAsync(submissionQuery.Where(submission =>
-				studentIds.Contains(submission.StudentId) &&
-				((submission.HomeworkAssignmentId.HasValue && homeworkIds.Contains(submission.HomeworkAssignmentId.Value)) ||
-				 (submission.AssignmentId.HasValue && assignmentIds.Contains(submission.AssignmentId.Value))))
-			.Select(submission => new SubmissionSummaryRead
+		var today = Clock.Now.Date;
+		var statuses =
+			from student in students
+			join task in tasks on student.DivisionId equals (Guid?)task.DivisionId
+			let status = submissionQuery.Where(submission => submission.StudentId == student.Id &&
+				(task.IsAssignment ? submission.AssignmentId == task.TaskId :
+					!submission.AssignmentId.HasValue && submission.HomeworkAssignmentId == task.TaskId))
+				.OrderByDescending(submission => submission.LastModificationTime ?? submission.CreationTime)
+				.Select(submission => (SubmissionStatus?)submission.Status).FirstOrDefault()
+			let updatedAt = submissionQuery.Where(submission => submission.StudentId == student.Id &&
+				(task.IsAssignment ? submission.AssignmentId == task.TaskId :
+					!submission.AssignmentId.HasValue && submission.HomeworkAssignmentId == task.TaskId))
+				.OrderByDescending(submission => submission.LastModificationTime ?? submission.CreationTime)
+				.Select(submission => (DateTime?)(submission.LastModificationTime ?? submission.CreationTime)).FirstOrDefault()
+			select new
 			{
-				StudentId = submission.StudentId,
-				TaskId = submission.AssignmentId ?? submission.HomeworkAssignmentId!.Value,
-				IsAssignment = submission.AssignmentId.HasValue,
-				Status = submission.Status,
-				UpdatedAt = submission.LastModificationTime ?? submission.CreationTime
-			}));
-		var latestSubmissions = submissions
-			.GroupBy(submission => new { submission.StudentId, submission.TaskId, submission.IsAssignment })
-			.ToDictionary(group => (group.Key.StudentId, group.Key.TaskId, group.Key.IsAssignment),
-				group => group.OrderByDescending(submission => submission.UpdatedAt).First());
-		var tasksByDivision = tasks.ToLookup(task => task.DivisionId);
-		var result = new Dictionary<Guid, LearningSummaryRead>();
-
-		foreach (var student in students)
-		{
-			var assigned = tasksByDivision[student.DivisionId].ToList();
-			if (assigned.Count == 0)
-			{
-				continue;
-			}
-
-			var statuses = assigned.Select(task =>
-			{
-				latestSubmissions.TryGetValue((student.StudentId, task.TaskId, task.IsAssignment), out var submission);
-				return new
-				{
-					Status = submission?.Status ?? (task.DueDate.HasValue && task.DueDate.Value.Date < Clock.Now.Date
-						? SubmissionStatus.Late
-						: SubmissionStatus.NotSubmitted),
-					UpdatedAt = submission?.UpdatedAt ?? task.UpdatedAt
-				};
-			}).ToList();
-			result[student.StudentId] = new LearningSummaryRead
-			{
-				Total = statuses.Count,
-				Submitted = statuses.Count(row => IsSubmitted(row.Status)),
-				Pending = statuses.Count(row => row.Status is SubmissionStatus.NotSubmitted or SubmissionStatus.Draft),
-				Late = statuses.Count(row => row.Status == SubmissionStatus.Late),
-				LastUpdatedAt = statuses.Max(row => row.UpdatedAt)
+				StudentId = student.Id,
+				Status = status ?? (task.DueDate.HasValue && (task.DueDate ?? today).Date < today
+					? SubmissionStatus.Late : SubmissionStatus.NotSubmitted),
+				UpdatedAt = updatedAt ?? task.UpdatedAt
 			};
-		}
-
-		return result;
+		var rows = await AsyncExecuter.ToListAsync(statuses.GroupBy(row => row.StudentId).Select(group => new
+		{
+			StudentId = group.Key,
+			Total = group.Count(),
+			Submitted = group.Count(row => row.Status == SubmissionStatus.Submitted || row.Status == SubmissionStatus.Late ||
+				row.Status == SubmissionStatus.Reviewed || row.Status == SubmissionStatus.Excused || row.Status == SubmissionStatus.NeedsReview),
+			Pending = group.Count(row => row.Status == SubmissionStatus.NotSubmitted || row.Status == SubmissionStatus.Draft),
+			Late = group.Count(row => row.Status == SubmissionStatus.Late),
+			UpdatedAt = group.Max(row => row.UpdatedAt)
+		}));
+		return rows.ToDictionary(row => row.StudentId, row => new LearningSummaryRead
+		{
+			Total = row.Total, Submitted = row.Submitted, Pending = row.Pending, Late = row.Late,
+			LastUpdatedAt = row.UpdatedAt
+		});
 	}
 
 	private async Task<Dictionary<Guid, ExamSummaryRead>> LoadExamSummariesAsync(IReadOnlyCollection<Guid> studentIds)
@@ -319,12 +388,13 @@ public partial class StudentAcademic360AppService
 		var markQuery = await examMarkRepository.GetQueryableAsync();
 		var marks = await AsyncExecuter.ToListAsync(markQuery.Where(mark =>
 				studentIds.Contains(mark.StudentId) && mark.IsPublished)
-			.Select(mark => new PublishedMarkRead
+			.GroupBy(mark => new { mark.StudentId, mark.ExamId })
+			.Select(group => new PublishedMarkRead
 			{
-				StudentId = mark.StudentId,
-				ExamId = mark.ExamId,
-				MarksObtained = mark.IsAbsent ? 0 : mark.MarksObtained ?? 0,
-				UpdatedAt = mark.LastModificationTime ?? mark.CreationTime
+				StudentId = group.Key.StudentId,
+				ExamId = group.Key.ExamId,
+				MarksObtained = group.Sum(mark => mark.IsAbsent ? 0 : mark.MarksObtained ?? 0),
+				UpdatedAt = group.Max(mark => mark.LastModificationTime ?? mark.CreationTime)
 			}));
 		var examIds = resultRows.Select(row => row.ExamId).Concat(marks.Select(mark => mark.ExamId)).Distinct().ToList();
 		if (examIds.Count == 0)
@@ -460,18 +530,24 @@ public partial class StudentAcademic360AppService
 		return score >= 80 ? "On Track" : score >= 65 ? "Improving" : score >= 50 ? "Needs Attention" : "Support Recommended";
 	}
 
-	private static StudentAcademic360ListSummaryDto BuildListSummary(IReadOnlyCollection<StudentAcademic360ListItemDto> items)
+	private static StudentAcademic360ListSummaryDto BuildListSummary(
+		IReadOnlyCollection<StudentListRead> students,
+		IReadOnlyDictionary<Guid, AttendanceSummaryRead> attendanceByStudent,
+		IReadOnlyDictionary<Guid, LearningSummaryRead> learningByStudent,
+		IReadOnlyDictionary<Guid, ExamSummaryRead> examsByStudent)
 	{
-		var attendance = items.Where(item => item.Attendance?.Percentage.HasValue == true)
-			.Select(item => item.Attendance!.Percentage!.Value).ToList();
-		var homework = items.Where(item => item.Homework?.Percentage.HasValue == true)
-			.Select(item => item.Homework!.Percentage!.Value).ToList();
-		var exams = items.Where(item => item.ExamAverage?.Percentage.HasValue == true)
-			.Select(item => item.ExamAverage!.Percentage!.Value).ToList();
+		var attendance = students.Select(student => attendanceByStudent.GetValueOrDefault(student.StudentId))
+			.Where(row => row?.Total > 0 && row.Percentage.HasValue).Select(row => row!.Percentage!.Value).ToList();
+		var homework = students.Select(student => learningByStudent.GetValueOrDefault(student.StudentId))
+			.Where(row => row?.Total > 0).Select(row => Math.Round(row!.Submitted * 100d / row.Total, 2)).ToList();
+		var exams = students.Select(student => examsByStudent.GetValueOrDefault(student.StudentId))
+			.Where(row => row?.Count > 0).Select(row => row!.Average).ToList();
 		return new StudentAcademic360ListSummaryDto
 		{
-			TotalStudents = items.Count,
-			NeedsAttention = items.Count(item => item.AcademicHealth is "Needs Attention" or "Support Recommended"),
+			TotalStudents = students.Count,
+			NeedsAttention = students.Count(student => BuildListHealth(
+				attendanceByStudent.GetValueOrDefault(student.StudentId), learningByStudent.GetValueOrDefault(student.StudentId),
+				examsByStudent.GetValueOrDefault(student.StudentId)) is "Needs Attention" or "Support Recommended"),
 			AverageAttendance = attendance.Count == 0 ? null : Math.Round(attendance.Average(), 2),
 			HomeworkCompletion = homework.Count == 0 ? null : Math.Round(homework.Average(), 2),
 			AverageExamScore = exams.Count == 0 ? null : Math.Round(exams.Average(), 2)

@@ -9,21 +9,49 @@ public class StudentOnboardingListInput : PagedAndSortedResultRequestDto
 	public string? Search { get; set; }
 	public StudentOnboardingStatus? Status { get; set; }
 	public Guid? AcademicYearId { get; set; }
+	public Guid? BoardId { get; set; }
+	public Guid? MediumId { get; set; }
+	public Guid? DivisionId { get; set; }
+	public List<Guid> DivisionIds { get; set; } = [];
+	public Guid? PlacementDivisionId { get; set; }
+	public string? StudentNameFilter { get; set; }
+	public string? StudentNameOperator { get; set; }
+	public string? OwnerNameFilter { get; set; }
+	public string? OwnerNameOperator { get; set; }
+	public int? RollNumberFilter { get; set; }
+	public int? RollNumberMin { get; set; }
+	public int? RollNumberMax { get; set; }
+	public string? RollNumberOperator { get; set; }
 	public Guid? StandardId { get; set; }
+	public List<Guid> StandardIds { get; set; } = [];
 	public Guid? AssignedToUserId { get; set; }
 	public bool? OverdueOnly { get; set; }
 	public bool? UnassignedOnly { get; set; }
+	public bool? EnteredToday { get; set; }
+	public string? PendingTask { get; set; }
+	public string? DashboardQueue { get; set; }
 }
 
 public class StudentOnboardingFilterOptionDto : EntityDto<Guid>
 {
 	public string Name { get; set; } = string.Empty;
+	public Guid? ParentId { get; set; }
+}
+
+public class StudentOnboardingCampusDto : EntityDto<Guid>
+{
+	public string Code { get; set; } = string.Empty;
+	public string Name { get; set; } = string.Empty;
 }
 
 public class StudentOnboardingFilterOptionsDto
 {
+    public bool CanUnlockIdentifiers { get; set; }
 	public IReadOnlyList<StudentOnboardingFilterOptionDto> AcademicYears { get; set; } = [];
+	public IReadOnlyList<StudentOnboardingFilterOptionDto> Boards { get; set; } = [];
+	public IReadOnlyList<StudentOnboardingFilterOptionDto> Mediums { get; set; } = [];
 	public IReadOnlyList<StudentOnboardingFilterOptionDto> Standards { get; set; } = [];
+	public IReadOnlyList<StudentOnboardingFilterOptionDto> Divisions { get; set; } = [];
 }
 
 public class StudentOnboardingAnalyticsDto
@@ -40,6 +68,7 @@ public class StudentOnboardingAnalyticsDto
 
 public class StudentOnboardingStepDto
 {
+	public string? CompletedByName { get; set; }
 	public Guid Id { get; set; }
 	public string Key { get; set; } = string.Empty;
 	public string Label { get; set; } = string.Empty;
@@ -54,6 +83,7 @@ public class StudentOnboardingStepDto
 
 public class StudentOnboardingEventDto
 {
+	public string? ActorName { get; set; }
 	public Guid Id { get; set; }
 	public string EventType { get; set; } = string.Empty;
 	public string Description { get; set; } = string.Empty;
@@ -74,8 +104,37 @@ public class StudentOnboardingServiceHandoffDto : EntityDto<Guid>
 	public string? LastError { get; set; }
 }
 
+public class CapturedStudentFieldDto
+{
+	public string Key { get; set; } = string.Empty;
+	public string Label { get; set; } = string.Empty;
+	public string Value { get; set; } = string.Empty;
+}
+
 public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 {
+	public IReadOnlyList<StudentPortalAccountOwnerDto>? PortalAccountOwners { get; set; }
+	public bool GrNumberLocked { get; set; }
+	public bool RollNumberLocked { get; set; }
+	public bool RollChangeReasonRequired { get; set; }
+	public bool GrManualEntryAllowed { get; set; }
+	public bool RequirementsNeedReview { get; set; }
+	public bool AdmissionConfirmed { get; set; }
+    public bool HasDocumentRequirementsSnapshot { get; set; }
+	public bool CredentialsPending { get; set; }
+	public bool? RequiredCredentialDeliveryConfirmed { get; set; }
+	public IReadOnlyList<StudentOnboardingServiceHandoffDto> RequiredServiceHandoffs { get; set; } = [];
+	public Guid? SelectedFeeStructureId { get; set; }
+	public bool FeeStructureConfirmed { get; set; }
+	public IReadOnlyList<CapturedStudentFieldDto> CapturedStudentFields { get; set; } = [];
+	public string AdmissionRoute { get; set; } = "Fresh admission";
+	public bool? FeeAssignmentConfirmed { get; set; }
+	public bool? FirstPaymentConfirmed { get; set; }
+	public string? FinanceReadinessDetail { get; set; }
+	public bool StudentAccountRequired { get; set; }
+	public bool GuardianAccountRequired { get; set; }
+	public StudentOnboardingServiceHandoffStatus? StudentAccountStatus { get; set; }
+	public StudentOnboardingServiceHandoffStatus? GuardianAccountStatus { get; set; }
 	public bool DocumentUploadsEnabled { get; set; } = true;
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public Guid ApplicationId { get; set; }
@@ -85,10 +144,13 @@ public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 	public string StudentName { get; set; } = string.Empty;
 	public Guid OfferingId { get; set; }
 	public string OfferingCode { get; set; } = string.Empty;
+	public Guid? CampusId { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public string AcademicYearName { get; set; } = string.Empty;
 	public Guid IntendedBoardId { get; set; }
+	public string IntendedBoardName { get; set; } = string.Empty;
 	public Guid IntendedMediumId { get; set; }
+	public string IntendedMediumName { get; set; } = string.Empty;
 	public Guid IntendedStageId { get; set; }
 	public Guid IntendedStandardId { get; set; }
 	public string IntendedStandardName { get; set; } = string.Empty;
@@ -102,6 +164,7 @@ public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 	public Guid? SeatReservationId { get; set; }
 	public string? GrNumber { get; set; }
 	public int? RollNumber { get; set; }
+	public string RollAssignmentMode { get; set; } = "manual";
 	public Guid? StudentEnrollmentId { get; set; }
 	public DateTime? StartedAt { get; set; }
 	public DateTime? ReadyAt { get; set; }
@@ -114,6 +177,20 @@ public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 	public bool IsOverdue { get; set; }
 	public IReadOnlyList<StudentOnboardingStepDto> Steps { get; set; } = [];
 	public IReadOnlyList<StudentOnboardingEventDto> Events { get; set; } = [];
+}
+
+public class StudentPortalAccountOwnerDto
+{
+	public string AccountType { get; set; } = string.Empty;
+	public string Relationship { get; set; } = string.Empty;
+	public string? Name { get; set; }
+	public string? Email { get; set; }
+}
+
+public class SetStudentOnboardingRouteDto
+{
+	public string? ConcurrencyStamp { get; set; }
+	public string AdmissionRoute { get; set; } = "Fresh admission";
 }
 
 public class StudentOnboardingPlacementOptionDto : EntityDto<Guid>
@@ -144,6 +221,7 @@ public class SetStudentOnboardingPlacementDto
 {
 	public string? ConcurrencyStamp { get; set; }
 	public Guid DivisionId { get; set; }
+	public string? Reason { get; set; }
 }
 
 public class AllocateStudentOnboardingIdentifierDto
@@ -151,21 +229,80 @@ public class AllocateStudentOnboardingIdentifierDto
 	public string? ConcurrencyStamp { get; set; }
 	public Guid NumberSeriesId { get; set; }
 	public int RollNumber { get; set; }
+	public string? RollAssignmentMode { get; set; }
 	public string? ManualValue { get; set; }
 	public long? ManualSequence { get; set; }
 	public string? OverrideReason { get; set; }
+}
+
+public class AssignStudentOnboardingGrNumberDto
+{
+	public string? ConcurrencyStamp { get; set; }
+	public Guid NumberSeriesId { get; set; }
+	public string? ManualValue { get; set; }
+	public long? ManualSequence { get; set; }
+	public string? Reason { get; set; }
+}
+
+public class AssignStudentOnboardingRollNumberDto
+{
+	public string? ConcurrencyStamp { get; set; }
+	public int RollNumber { get; set; }
+	public string? RollAssignmentMode { get; set; }
+	public string? Reason { get; set; }
+}
+
+public class SetStudentIdentifierLockDto
+{
+	public Guid AcademicYearId { get; set; }
+	public Guid DivisionId { get; set; }
+	public string IdentifierType { get; set; } = "gr";
+	public bool IsLocked { get; set; }
+	public string? Reason { get; set; }
+}
+
+public class SaveStudentOnboardingFeeStructureDto
+{
+	public string? ConcurrencyStamp { get; set; }
+	public Guid StructureId { get; set; }
+	public List<Guid> OptionalHeadIds { get; set; } = [];
+}
+
+public class StudentOnboardingRollPreviewInput
+{
+	/// <summary>Optional selected division to preview before placement is saved.</summary>
+	public Guid? DivisionId { get; set; }
+	public int? RollNumber { get; set; }
+	public string? RollAssignmentMode { get; set; }
+	public string? Reason { get; set; }
+}
+public class StudentOnboardingRollPreviewDto
+{
+	public Guid? DivisionId { get; set; }
+	public string SchoolAssignmentMode { get; set; } = "manual";
+	public string RollAssignmentMode { get; set; } = "manual";
+	public int ProposedRollNumber { get; set; }
+	public string ConcurrencyStamp { get; set; } = "";
 }
 
 public class ActivateStudentOnboardingDto
 {
 	public string? ConcurrencyStamp { get; set; }
 	public string IdempotencyKey { get; set; } = string.Empty;
+	public StudentSiblingParentSelectionDto? SiblingParentSelection { get; set; }
+	public StudentGuardianAccessSelectionDto? GuardianAccessSelection { get; set; }
 }
 
 public class CancelStudentOnboardingDto
 {
 	public string? ConcurrencyStamp { get; set; }
 	public string Reason { get; set; } = string.Empty;
+}
+
+public class ConfirmStudentOnboardingServiceConsentDto
+{
+	public string? ConcurrencyStamp { get; set; }
+	public string EvidenceReference { get; set; } = string.Empty;
 }
 
 public class UpsertStudentOnboardingPolicyDto
@@ -224,6 +361,16 @@ public class StudentOnboardingSettingsDto : EntityDto<Guid>
 	public string ConfigurationJson { get; set; } = "{}";
 }
 
+public class StudentGrNumberPreviewDto
+{
+	public string RuleId { get; set; } = string.Empty;
+	public long NextSequence { get; set; }
+	public long? MaximumNumber { get; set; }
+	public bool LimitReached { get; set; }
+	public bool IsEffective { get; set; }
+	public string? NextPreview { get; set; }
+}
+
 public class CreateStudentIdentifierSeriesDto
 {
 	public Guid AcademicYearId { get; set; }
@@ -274,4 +421,10 @@ public class HistoricalAdmissionReconciliationDto
 	public int Backfilled { get; set; }
 	public int Invalid { get; set; }
 	public List<HistoricalAdmissionReconciliationIssueDto> Issues { get; set; } = [];
+}
+
+public class OnboardingAvailableOfferingDto : ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionOfferingListDto
+{
+    public Guid AcademicYearId { get; set; }
+    public Guid? WorkflowDefinitionId { get; set; }
 }

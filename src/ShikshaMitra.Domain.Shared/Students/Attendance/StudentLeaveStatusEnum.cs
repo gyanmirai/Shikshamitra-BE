@@ -18,5 +18,6 @@ public enum StudentLeaveStatusEnum
 	/// <summary>
 	/// Leave request has been rejected
 	/// </summary>
-	Rejected = 2
+	Rejected = 2,
+	Cancelled = 3
 }

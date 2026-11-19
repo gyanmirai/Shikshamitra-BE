@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
@@ -19,6 +19,9 @@ public class HrReportTemplateConfiguration : IEntityTypeConfiguration<HrReportTe
 		builder.Property(x => x.Visibility).IsRequired().HasMaxLength(32);
 		builder.Property(x => x.Status).IsRequired().HasMaxLength(32);
 		builder.Property(x => x.DefinitionJson).IsRequired().HasColumnType("jsonb");
+		builder.Property(x => x.PublishedDefinitionJson).HasColumnType("jsonb");
+		builder.Property(x => x.PublishedName).HasMaxLength(128);
+		builder.Property(x => x.PublishedDescription).HasMaxLength(512);
 
 		builder.HasIndex(x => new { x.TenantId, x.OwnerUserId, x.Name })
 			.HasDatabaseName("IX_HR_ReportTemplates_Tenant_Owner_Name");

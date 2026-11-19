@@ -8,7 +8,7 @@ public class AccountSettingVersionHistoryItemDto : EntityDto<Guid>
 {
 	public int VersionNumber { get; set; }
 	public string ChangeAction { get; set; } = string.Empty;
-	public DateTime ChangeTime { get; set; }
+	public DateTime? ChangeTime { get; set; }
 	public Guid? ActorId { get; set; }
 	public string? ActorName { get; set; }
 	public List<AccountSettingVersionFieldChangeDto> ChangedFields { get; set; } = [];

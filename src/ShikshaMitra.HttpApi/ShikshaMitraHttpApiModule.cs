@@ -25,6 +25,30 @@ public class ShikshaMitraHttpApiModule : AbpModule
 	public override void ConfigureServices(ServiceConfigurationContext context)
 	{
 		ConfigureLocalization();
+		Configure<Volo.Abp.AspNetCore.ExceptionHandling.AbpExceptionHttpStatusCodeOptions>(options =>
+		{
+			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Conflict, System.Net.HttpStatusCode.Conflict);
+			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Unavailable, System.Net.HttpStatusCode.NotFound);
+			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Invalid, System.Net.HttpStatusCode.BadRequest);
+			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Incomplete, System.Net.HttpStatusCode.BadRequest);
+			options.Map("MobileAcademics:SubmissionConflict", System.Net.HttpStatusCode.Conflict);
+			options.Map(Academic.Curriculum.ElectivePreferenceErrorCodes.Conflict, System.Net.HttpStatusCode.Conflict);
+			options.Map(Academic.Curriculum.ElectivePreferenceErrorCodes.InvalidRequest, System.Net.HttpStatusCode.BadRequest);
+			options.Map("MobileAcademics:IdempotencyConflict", System.Net.HttpStatusCode.Conflict);
+			foreach (var code in new[] {
+				Academic.Mobile.MobileSubmissionErrorCodes.AmbiguousAnswer,
+				Academic.Mobile.MobileSubmissionErrorCodes.InvalidRequestId,
+				Academic.Mobile.MobileSubmissionErrorCodes.RequestMetadataRequired,
+				Academic.Mobile.MobileSubmissionErrorCodes.InvalidAttachments,
+				Academic.Mobile.MobileSubmissionErrorCodes.InvalidFile,
+				Academic.Mobile.MobileSubmissionErrorCodes.SubmissionTooLarge,
+				Academic.Mobile.MobileSubmissionErrorCodes.SubmissionRequired,
+				Academic.Mobile.MobileSubmissionErrorCodes.AcknowledgmentRequired,
+				Academic.Mobile.MobileSubmissionErrorCodes.SubmissionNotSupported,
+				Academic.Mobile.MobileSubmissionErrorCodes.DraftAfterSubmission,
+				Academic.Mobile.MobileSubmissionErrorCodes.FinalAttachmentProtected })
+				options.Map(code, System.Net.HttpStatusCode.BadRequest);
+		});
 	}
 
 	private void ConfigureLocalization()

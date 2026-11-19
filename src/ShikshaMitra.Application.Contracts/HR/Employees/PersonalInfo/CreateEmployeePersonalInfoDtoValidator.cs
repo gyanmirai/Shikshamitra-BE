@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using FluentValidation;
@@ -24,8 +24,8 @@ public class CreateEmployeePersonalInfoDtoValidator : AbstractValidator<CreateEm
 		RuleFor(x => x.DateOfJoining).NotEmpty().WithMessage("Date of joining is required.");
 		RuleFor(x => x.RoleId).NotEmpty().WithMessage("Role is required.");
 		RuleFor(x => x.EmployeeGroup)
-			.NotNull().WithMessage("Employee group is required.")
-			.IsInEnum().WithMessage("Employee group is invalid.");
+			.NotNull().WithMessage("Staff group is required.")
+			.IsInEnum().WithMessage("Staff group is invalid.");
 		RuleFor(x => x.MiddleName).MaximumLength(256);
 		RuleFor(x => x.ShortName).MaximumLength(128);
 		RuleFor(x => x.CastType)
@@ -58,8 +58,7 @@ public class CreateEmployeePersonalInfoDtoValidator : AbstractValidator<CreateEm
 		RuleFor(x => x.Address2).MaximumLength(512);
 		RuleFor(x => x.Address3).MaximumLength(512);
 		RuleFor(x => x.City).MaximumLength(128);
-		RuleFor(x => x.ShiftId).Must(s => s.HasValue && s.Value != Guid.Empty)
-			.WithMessage("Shift is required.");
+		RuleFor(x => x.InitialWorkShiftAssignment).NotNull().WithMessage("An initial work shift assignment is required.");
 		RuleFor(x => x.SecondaryMobileNo)
 			.Must((dto, secondary) => string.IsNullOrWhiteSpace(secondary) ||
 				NormalizeDigits(dto.MobileNo) != NormalizeDigits(secondary))
@@ -73,7 +72,7 @@ public class CreateEmployeePersonalInfoDtoValidator : AbstractValidator<CreateEm
 
 		RuleFor(x => x)
 			.Must(x => !x.DateOfBirth.HasValue || CalculateAge(x.DateOfBirth.Value, x.DateOfJoining) >= 18)
-			.WithMessage("Employee must be at least 18 years old at the time of joining.");
+			.WithMessage("Staff must be at least 18 years old at the time of joining.");
 
 		RuleFor(x => x.DateOfJoining)
 			.Must((dto, dateOfJoining) => !dto.DateOfBirth.HasValue || dateOfJoining >= dto.DateOfBirth.Value)

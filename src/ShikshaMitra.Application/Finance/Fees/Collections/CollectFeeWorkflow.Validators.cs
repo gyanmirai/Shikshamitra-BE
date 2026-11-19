@@ -16,33 +16,40 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 
 public partial class CollectFeeWorkflow
 {
-	private async Task ValidatePaymentChannelPolicyAsync(CollectFeeInput input)
+	private async Task<CollectionPolicy?> ValidatePaymentChannelPolicyAsync(CollectFeeInput input)
 	{
+		if (input.FinanceFeeAccountId.HasValue)
+		{
+			var rules = await policyResolver.ResolveEffectiveRulesForAccountAsync(input.FinanceFeeAccountId.Value);
+			if (rules.Policy?.AllowOnlineCollection == false && input.Payments.Any(p => p.PaymentMethod is
+				PaymentMethodEnum.BankTransfer or PaymentMethodEnum.CreditCard or PaymentMethodEnum.DebitCard or PaymentMethodEnum.UPI))
+				throw new BusinessException(FinanceChargeErrorCodes.OnlineCollectionNotAllowed);
+			return rules.Policy;
+		}
 		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
 			x.StudentId == input.StudentId && x.AcademicYearId == input.AcademicYearId);
-		if (assignment is null) return;
+		if (assignment is null) return null;
 
 		var effectiveRules = await policyResolver.ResolveEffectiveRulesForStudentAsync(
-			input.StudentId, assignment.FeeStructureStandardId);
-		if (effectiveRules.Policy?.AllowOnlineCollection != false) return;
+			input.StudentId!.Value, assignment.FeeStructureStandardId);
 
 		var containsOnlineMethod = input.Payments.Any(payment => payment.PaymentMethod is
 			PaymentMethodEnum.BankTransfer or PaymentMethodEnum.CreditCard or
 			PaymentMethodEnum.DebitCard or PaymentMethodEnum.UPI);
-		if (containsOnlineMethod)
+		if (effectiveRules.Policy?.AllowOnlineCollection == false && containsOnlineMethod)
 			throw new BusinessException(FinanceChargeErrorCodes.OnlineCollectionNotAllowed);
+		return effectiveRules.Policy;
 	}
 
 	private async Task<(Student Student, AcademicYear AcademicYear)> ValidateAndLoadStudentForCollectionAsync(
 		CollectFeeInput input)
 	{
-		var academicYear = await academicYearRepository.GetAsync(input.AcademicYearId);
-		var student = await studentRepository.GetAsync(input.StudentId);
+		var academicYear = await academicYearRepository.GetAsync(input.AcademicYearId, includeDetails: false);
+		var student = await AsyncExecuter.FirstOrDefaultAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => s.Id == input.StudentId!.Value))
+            ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), input.StudentId!.Value);
 
-		if (student.AcademicYearId != input.AcademicYearId)
-			throw new BusinessException(FeeCollectionErrorCodes.StudentAcademicYearMismatch);
-
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
+		await financeScopeAccessService.EnsureFeeCollectionStudentAccessibleAsync(
+			input.StudentId!.Value, input.AcademicYearId);
 		return (student, academicYear);
 	}
 
@@ -69,9 +76,11 @@ public partial class CollectFeeWorkflow
 		foreach (var dfp in input.DueFeePayments)
 		{
 			var df = dueFeeMap[dfp.DueFeeId];
-			if (df.StudentId != input.StudentId) throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
+			if (input.FinanceFeeAccountId.HasValue ? df.FinanceFeeAccountId != input.FinanceFeeAccountId : df.StudentId != input.StudentId)
+				throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
 			if (df.FeeHeadId != dfp.FeeHeadId) throw new BusinessException(FeeCollectionErrorCodes.InvalidFeeHead);
-			if ((decimal)dfp.Amount > df.OutstandingAmount)
+			var maxCollectible = Math.Ceiling(df.OutstandingAmount);
+			if ((decimal)dfp.Amount > maxCollectible)
 				throw new BusinessException(FeeCollectionErrorCodes.AmountExceedsOutstanding)
 					.WithData("DueFeeId", df.Id).WithData("Outstanding", df.OutstandingAmount).WithData("Amount", dfp.Amount);
 		}
@@ -87,11 +96,11 @@ public partial class CollectFeeWorkflow
 	/// without it, a client could submit an arbitrary DueFeeId + amount as "late fee collected"
 	/// with no server-side check at all.
 	/// </summary>
-	private async Task ValidateLateFeePaymentsAsync(CollectFeeInput input)
+	private async Task<Dictionary<Guid, DueFee>> ValidateLateFeePaymentsAsync(CollectFeeInput input)
 	{
 		if (input.LateFeePayments is not { Count: > 0 })
 		{
-			return;
+			return [];
 		}
 
 		var dueFeeIds = input.LateFeePayments.Select(lfp => lfp.DueFeeId).Distinct().ToList();
@@ -102,70 +111,36 @@ public partial class CollectFeeWorkflow
 		}
 
 		var dueFeeMap = dueFees.ToDictionary(df => df.Id);
-		if (dueFeeMap.Values.Any(df => df.StudentId != input.StudentId))
+		if (dueFeeMap.Values.Any(df => input.FinanceFeeAccountId.HasValue ? df.FinanceFeeAccountId != input.FinanceFeeAccountId : df.StudentId != input.StudentId))
 		{
 			throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
 		}
 
-		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == input.StudentId);
-		var effectiveRules = assignment is null
-			? new EffectiveCollectionRules(null, false, null, false)
-			: await policyResolver.ResolveEffectiveRulesForStudentAsync(input.StudentId, assignment.FeeStructureStandardId);
-
-		var waivedByDueFee = await waiverLookupService.GetAppliedWaivedAmountsAsync(dueFeeIds);
-		var paidAllocations = await lateFeeAllocationRepository.GetListAsync(x => dueFeeIds.Contains(x.DueFeeId));
-		var paidTransactionIds = paidAllocations.Select(x => x.FeeRecordMetadataId).Distinct().ToList();
-		var reversedTransactionIds = (await feeRecordMetadataRepository.GetListAsync(x =>
-			paidTransactionIds.Contains(x.Id) && x.Status == FeeCollectionStatus.Reversed))
-			.Select(x => x.Id).ToHashSet();
-		var paidByDueFee = paidAllocations
-			.Where(x => !reversedTransactionIds.Contains(x.FeeRecordMetadataId))
-			.GroupBy(x => x.DueFeeId)
-			.ToDictionary(x => x.Key, x => x.Sum(a => (decimal)a.Amount));
-
-		var today = clock.Now.Date;
-		var activeWindow = assignment is null
-			? null
-			: await exceptionWindowResolver.ResolveActiveWindowAsync(input.AcademicYearId, assignment.FeeStructureStandardId, today);
-
+		var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
+		var heads = await feeHeadRepository.GetListAsync(x => feeHeadIds.Contains(x.Id));
+		if (heads.Any(x => x.AcademicYearId != input.AcademicYearId))
+			throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
+		var balances = await lateFeeBalanceService.GetBalancesAsync(dueFees, input.AcademicYearId, clock.Now, preserveAssessment: true);
 		foreach (var lfp in input.LateFeePayments)
 		{
-			var dueFee = dueFeeMap[lfp.DueFeeId];
-			var ceiling = 0m;
-			if (effectiveRules.Policy is not null && !effectiveRules.IsLateFeeExempt)
-			{
-				var daysLate = (today - dueFee.DueDate.Date).Days;
-				var result = lateFeeCalculationService.Calculate(effectiveRules.Policy, new LateFeeCalculationInput(
-					daysLate,
-					(decimal)dueFee.OutstandingAmount,
-					(decimal)dueFee.OriginalAmount,
-					(decimal)dueFee.OutstandingAmount,
-					dueFee.FeeHeadId,
-					effectiveRules.IsLateFeeExempt,
-					effectiveRules.CustomGracePeriodDays,
-					activeWindow?.Effect,
-					activeWindow?.ExtensionDays,
-					activeWindow?.Label));
-				ceiling = Math.Max(0, result.LateFee
-					- waivedByDueFee.GetValueOrDefault(lfp.DueFeeId, 0m)
-					- paidByDueFee.GetValueOrDefault(lfp.DueFeeId, 0m));
-			}
-
+			var ceiling = balances[lfp.DueFeeId].PendingAmount;
 			if ((decimal)lfp.Amount > ceiling)
 			{
 				throw new BusinessException(FeeCollectionErrorCodes.LateFeeAmountExceedsComputed)
 					.WithData("DueFeeId", lfp.DueFeeId).WithData("Ceiling", ceiling).WithData("Amount", lfp.Amount);
 			}
 		}
+		return dueFeeMap;
 	}
 
 	private async Task<ChargeValidationContext> LoadAndValidateChargesContextAsync(CollectFeeInput input)
 	{
 		var chargeMap = new Dictionary<Guid, Charge>();
 		var pendingChargeMap = new Dictionary<Guid, double>();
+		var payableChargeMap = new Dictionary<Guid, decimal>();
 
 		if (input.ChargePayments is not { Count: > 0 })
-			return new ChargeValidationContext(chargeMap, pendingChargeMap);
+			return new ChargeValidationContext(chargeMap, pendingChargeMap, payableChargeMap);
 
 		var chargeIds = input.ChargePayments.Select(cp => cp.ChargeId).Distinct().ToList();
 		var charges = await chargeRepository.GetListAsync(c => chargeIds.Contains(c.Id) && c.Status == ChargeStatus.Approved);
@@ -182,6 +157,9 @@ public partial class CollectFeeWorkflow
 			.GroupBy(r => r.ChargeId)
 			.Select(g => new { ChargeId = g.Key, Paid = g.Sum(r => r.Amount) })
 			.ToDictionary(x => x.ChargeId, x => x.Paid);
+		var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
+			.GroupBy(x => x.ChargeId)
+			.ToDictionary(x => x.Key, x => x.Sum(w => (double)w.EffectiveAmount));
 
 		foreach (var cp in input.ChargePayments)
 		{
@@ -189,13 +167,15 @@ public partial class CollectFeeWorkflow
 			if (charge.StudentId != input.StudentId || charge.AcademicYearId != input.AcademicYearId)
 				throw new BusinessException(FeeCollectionErrorCodes.InvalidCharge);
 			var paid = paidPerCharge.GetValueOrDefault(cp.ChargeId, 0d);
-			var pending = Math.Max(0d, (double)charge.Amount - paid);
+			var pending = Math.Max(0d, (double)charge.Amount - paid
+				- waivedPerCharge.GetValueOrDefault(cp.ChargeId, 0d));
 			pendingChargeMap[cp.ChargeId] = pending;
+			payableChargeMap[cp.ChargeId] = charge.Amount - (decimal)waivedPerCharge.GetValueOrDefault(cp.ChargeId, 0d);
 			if (cp.Amount > pending)
 				throw new BusinessException(FeeCollectionErrorCodes.AmountExceedsOutstanding)
 					.WithData("ChargeId", charge.Id).WithData("Pending", pending).WithData("Amount", cp.Amount);
 		}
 
-		return new ChargeValidationContext(chargeMap, pendingChargeMap);
+		return new ChargeValidationContext(chargeMap, pendingChargeMap, payableChargeMap);
 	}
 }

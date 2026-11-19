@@ -11,7 +11,7 @@ namespace ShikshaMitra.HR.Payroll;
 public class SalarySlipResponseMapping_Tests
 {
 	[Fact]
-	public async Task Response_preserves_finalized_esi_and_compensation_evidence()
+	public async Task Response_preserves_finalized_esi_and_omits_internal_compensation_evidence()
 	{
 		var dto = new SalarySlipDto
 		{
@@ -39,19 +39,16 @@ public class SalarySlipResponseMapping_Tests
 		response.EmployeeStateInsuranceRuleId.ShouldBe(dto.EmployeeStateInsuranceRuleId);
 		response.EmployeeStateInsuranceRuleVersion.ShouldBe(dto.EmployeeStateInsuranceRuleVersion);
 		response.EmployeeStateInsuranceWages.ShouldBe(dto.EmployeeStateInsuranceWages);
-		response.EmployeeStateInsuranceGovernmentContribution.ShouldBe(dto.EmployeeStateInsuranceGovernmentContribution);
 		response.EmployeeStateInsuranceCoverageDecision.ShouldBe(dto.EmployeeStateInsuranceCoverageDecision);
 		response.EmployeeStateInsuranceNumber.ShouldBe(dto.EmployeeStateInsuranceNumber);
 		response.EmployeeStateInsuranceContributionPeriodStart.ShouldBe(dto.EmployeeStateInsuranceContributionPeriodStart);
 		response.EmployeeStateInsuranceContributionPeriodEnd.ShouldBe(dto.EmployeeStateInsuranceContributionPeriodEnd);
-		response.CompensationRevisionId.ShouldBe(dto.CompensationRevisionId);
-		response.CompensationRevisionNumber.ShouldBe(dto.CompensationRevisionNumber);
-		response.CompensationSalaryBasis.ShouldBe(dto.CompensationSalaryBasis);
-		response.CompensationProtectionPolicy.ShouldBe(dto.CompensationProtectionPolicy);
-		response.CompensationQuotedAmount.ShouldBe(dto.CompensationQuotedAmount);
-		response.CompensationProtectedAmount.ShouldBe(dto.CompensationProtectedAmount);
-		response.CompensationNormalizedProtectedAmount.ShouldBe(dto.CompensationNormalizedProtectedAmount);
-		response.CompensationTargetDifference.ShouldBe(dto.CompensationTargetDifference);
+		var json = System.Text.Json.JsonSerializer.Serialize(response);
+		json.ShouldNotContain("GovernmentContribution");
+		json.ShouldNotContain("ProtectedAmount");
+		json.ShouldNotContain("ProtectionPolicy");
+		json.ShouldNotContain("CompensationRevision");
+		json.ShouldNotContain("CompensationSalaryBasis");
 	}
 
 	[Fact]
@@ -63,7 +60,6 @@ public class SalarySlipResponseMapping_Tests
 		var response = await new SalarySlipController(service).GetSalarySlipAsync(dto.EmployeeId, "2026-06");
 		response.EmployeeStateInsuranceRuleId.ShouldBeNull();
 		response.EmployeeStateInsuranceNumber.ShouldBeNull();
-		response.CompensationRevisionId.ShouldBeNull();
 		response.EmployeeStateInsuranceWages.ShouldBe(0m);
 	}
 }

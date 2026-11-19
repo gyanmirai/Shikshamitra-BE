@@ -15,14 +15,14 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Upload = Add;
 			public const string RecordOriginal = Add;
 			public const string Review = Add;
-			public const string Waive = Delete;
+			public const string Waive = Add;
 			public const string Download = View;
 			public static readonly string[] All = [View, Add, Delete];
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				[View] = "View admission document verification",
 				[Add] = "Add or update admission document verification",
-				[Delete] = "Delete or waive admission document verification"
+				[Delete] = "Delete admission document verification"
 			};
 		}
 	}

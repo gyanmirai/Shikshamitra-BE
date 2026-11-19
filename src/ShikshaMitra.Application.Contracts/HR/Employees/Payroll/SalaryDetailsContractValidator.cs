@@ -42,9 +42,9 @@ public class SalaryDetailsContractValidator : AbstractValidator<SalaryDetailsCon
 			.When(x => !string.IsNullOrEmpty(x.UanNumber));
 
 		RuleFor(x => x.QuotedSalaryBasis)
-			.Must(x => x is "GROSS" or "TAKE_HOME")
+			.Must(x => x is "GROSS" or "EMPLOYER_COST")
 			.When(x => !string.IsNullOrWhiteSpace(x.QuotedSalaryBasis))
-			.WithMessage("Quoted salary basis must be GROSS or TAKE_HOME.");
+			.WithMessage("Quoted salary basis must be GROSS or EMPLOYER_COST.");
 		RuleFor(x => x.QuotedMonthlyAmount)
 			.GreaterThan(0m)
 			.LessThanOrEqualTo(100_000_000m)
@@ -66,6 +66,6 @@ public class SalaryDetailsContractValidator : AbstractValidator<SalaryDetailsCon
 			salary.SourceSalaryTemplateVersion > 0 &&
 			salary.SalaryGeneratedAt.HasValue &&
 			salary.QuotedMonthlyAmount > 0m &&
-			salary.QuotedSalaryBasis is "GROSS" or "TAKE_HOME";
+			salary.QuotedSalaryBasis is "GROSS" or "EMPLOYER_COST";
 	}
 }

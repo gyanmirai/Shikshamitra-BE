@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.AttendanceAndLeaves;
@@ -16,7 +17,7 @@ internal static class PayrollLateArrivalDeductionDiagnostics
 		int year,
 		int month,
 		AttendancePolicy policy,
-		ShiftManagement? shift)
+		EmployeeWorkSchedule? shift)
 	{
 		if (policy.PenaltyType != AttendancePenaltyType.SalaryDeduction)
 		{
@@ -30,7 +31,7 @@ internal static class PayrollLateArrivalDeductionDiagnostics
 
 		if (shift == null)
 		{
-			return "Late arrival salary deduction is enabled, but the employee has no shift assigned.";
+			return "Late arrival salary deduction is enabled, but the staff has no shift assigned.";
 		}
 
 		var monthAttendance = attendanceRecords

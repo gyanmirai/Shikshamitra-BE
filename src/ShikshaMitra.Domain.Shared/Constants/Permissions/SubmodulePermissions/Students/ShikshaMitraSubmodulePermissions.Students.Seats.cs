@@ -15,7 +15,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Reserve = Add;
 			public const string Confirm = Add;
 			public const string Renew = Add;
-			public const string Release = Delete;
+			public const string Release = Add;
 			public const string Waitlist = Add;
 			public const string ManageCapacity = Add;
 			public const string OverrideCapacity = Add;

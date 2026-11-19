@@ -411,6 +411,46 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		exception.Data["employeeGroupAudience"].ShouldBe(EmployeeGroupAudience.Teaching);
 	}
 
+	[Theory]
+	[InlineData(false, null)]
+	[InlineData(true, null)]
+	[InlineData(true, "")]
+	[InlineData(true, "Revised value")]
+	public async Task UpdateAsync_Should_Preserve_Only_Unspecified_Supplementary_Fields(bool specified, string? value)
+	{
+		var input = await BuildCreateDtoAsync($"supplementary.{Guid.NewGuid():N}@test.com");
+		input.Designation = "Senior Teacher";
+		input.Qualification = "M.Ed.";
+		input.IdentificationMark1 = "Mole on left cheek";
+		var created = await _personalInfoAppService.CreateAsync(input);
+		var update = new UpdateEmployeePersonalInfoDto
+		{
+			FirstName = created.FirstName,
+			LastName = "RevisedSurname",
+			MobileNo = created.MobileNo,
+			Email = created.Email,
+			DateOfBirth = created.DateOfBirth,
+			GenderType = created.GenderType,
+			DateOfJoining = created.DateOfJoining,
+			EmployeeGroup = created.EmployeeGroup,
+			RoleId = created.RoleId
+		};
+		if (specified)
+		{
+			update.Designation = value;
+			update.Qualification = value;
+			update.IdentificationMark1 = value;
+		}
+
+		await _personalInfoAppService.UpdateAsync(created.Id, update);
+		var saved = await _personalInfoAppService.GetAsync(created.Id);
+
+		saved.LastName.ShouldBe("RevisedSurname");
+		saved.Designation.ShouldBe(specified ? value : input.Designation);
+		saved.Qualification.ShouldBe(specified ? value : input.Qualification);
+		saved.IdentificationMark1.ShouldBe(specified ? value : input.IdentificationMark1);
+	}
+
 	[Fact]
 	public async Task UpdateAsync_Should_Update_Basic_Info_Without_Activating_Employee()
 	{

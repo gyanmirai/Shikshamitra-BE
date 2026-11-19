@@ -17,6 +17,13 @@ public class SalarySlipAccessService(
 	HrEmployeeScopeQueryService employeeScopeQueryService)
 	: ApplicationService
 {
+	public async Task EnsureHrWideAccessAsync()
+	{
+		var scope = await EnsureCanOperatePayrollAsync();
+		if (scope.TenantId != CurrentTenant.Id || !HrUserScopeAccess.HasHrWideAccess(scope))
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+	}
+
 	public async Task EnsureEmployeeScopeAllowedAsync(Guid employeeId)
 	{
 		var scope = await EnsureCanOperatePayrollAsync();

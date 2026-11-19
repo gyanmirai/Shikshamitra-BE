@@ -15,6 +15,14 @@ namespace ShikshaMitra.Controllers.Academic.Curriculum;
 [Authorize]
 public class SubjectController(ISubjectAppService subjectAppService) : AbpController
 {
+	[HttpGet("lookup")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_SettingsSubjectCreation.View)]
+	public async Task<IActionResult> GetLookupAsync(Guid academicMediumId,
+		[FromQuery] string? searchTerm = null, [FromQuery] bool includeArchived = false)
+	{
+		return Ok(await subjectAppService.GetLookupAsync(academicMediumId, searchTerm, includeArchived));
+	}
+
 	/// <summary>
 	/// Get all subjects for a specific education medium
 	/// </summary>

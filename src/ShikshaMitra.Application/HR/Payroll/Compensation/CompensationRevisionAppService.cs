@@ -16,6 +16,7 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
 using Volo.Abp.Timing;
 using Volo.Abp.Users;
+using Volo.Abp.Authorization;
 
 namespace ShikshaMitra.HR.Payroll.Compensation;
 
@@ -28,12 +29,14 @@ public partial class CompensationRevisionAppService(
 	EmployeeActivationReadinessService activationReadinessService,
 	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator,
 	SalaryTemplatePreviewProofService previewProofService,
-	IPayrollInputRevisionStore payrollInputRevisions,
+	IPayrollInputRevisionStore inputRevisionStore,
+	EsiPolicyResolver esiPolicies,
 	IAsyncQueryableExecuter asyncExecuter,
-	IClock clock) : ApplicationService, ICompensationRevisionAppService
+	IClock clock, IEmployeeAuthorizationService employeeAuthorizationService, EmployeeStatutoryProfileAppService profileService, EmployeeStatutoryProfileResolver profileResolver) : ApplicationService, ICompensationRevisionAppService
 {
 	public async Task<CompensationRevisionListDto> GetListAsync(Guid employeeId)
 	{
+		await CheckReadAccessAsync(employeeId);
 		var revisions = await asyncExecuter.ToListAsync(
 			(await revisionRepository.GetQueryableAsync())
 				.Where(x => x.EmployeeId == employeeId)
@@ -48,6 +51,7 @@ public partial class CompensationRevisionAppService(
 
 	public async Task<CompensationRevisionDto?> GetEffectiveAsync(Guid employeeId, DateTime month)
 	{
+		await CheckReadAccessAsync(employeeId);
 		var effectiveMonth = NormalizeMonth(month);
 		var revision = await asyncExecuter.FirstOrDefaultAsync(
 			(await revisionRepository.GetQueryableAsync())
@@ -59,18 +63,42 @@ public partial class CompensationRevisionAppService(
 			: await MapAsync(revision, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
 	}
 
-	public async Task<CompensationRevisionDto> SaveAsync(Guid employeeId, SaveEmployeeCompensationDto input)
+	private async Task CheckReadAccessAsync(Guid employeeId)
 	{
-		await payrollInputRevisions.LockAsync();
+		if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.View) &&
+			!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage))
+			throw new AbpAuthorizationException("Salary history requires compensation View or Manage permission.");
+		await employeeAuthorizationService.CheckEmployeeScopeAccessAsync(employeeId);
+	}
+
+	[Volo.Abp.Uow.UnitOfWork(true)]
+	public virtual async Task<CompensationRevisionDto> SaveAsync(Guid employeeId, SaveEmployeeCompensationDto input)
+	{
+		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId,
+			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage);
+		await inputRevisionStore.LockAsync();
 		var replay = await asyncExecuter.FirstOrDefaultAsync(
 			(await revisionRepository.GetQueryableAsync()).Where(x =>
 				x.EmployeeId == employeeId && x.IdempotencyKey == input.IdempotencyKey));
 		if (replay != null)
 		{
-			return await MapAsync(replay, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
+			var original = TryDeserializeCalculation(replay.CalculationSnapshotJson);
+			if (original != null && input.ExpectedEsiPolicyVersionId != original.EmployeeStateInsurance.RuleId)
+				throw new BusinessException(HRErrorCodes.CompensationPreviewStale);
+			if (original != null && (original.PfEnrollment != input.PfEnrollment || replay.EsiManagementMode != input.EsiManagementMode || replay.EsiPolicyId != input.EsiPolicyId || replay.EsiExternalReason != input.EsiExternalReason?.Trim() || input.PfApplicable && replay.PfRuleId != input.PfRuleId || input.StatutoryProfileOverride != null && NormalizeProfile(original.StatutoryApplication?.Profile) != NormalizeProfile(input.StatutoryProfileOverride)))
+				throw new BusinessException("HR:Payroll:CompensationSaveConflict");
+			var replayResult = await MapAsync(replay, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
+			replayResult.SavedStatutoryProfile = await profileService.GetAsync(employeeId, replay.EffectiveMonth.ToString("yyyy-MM"));
+			return replayResult;
 		}
 
 		var effectiveMonth = NormalizeMonth(input.EffectiveMonth);
+		if (input.EsiManagementMode == EsiManagement.InPlatform)
+		{
+			var policy = await esiPolicies.ResolveAsync(input.EsiPolicyId, effectiveMonth);
+			if (input.ExpectedEsiPolicyVersionId != policy.Rule.Id)
+				throw new BusinessException(HRErrorCodes.CompensationPreviewStale);
+		}
 		await EnsureNoLockedPayrollAsync(employeeId, effectiveMonth);
 		var revisions = await revisionRepository.GetListAsync(x => x.EmployeeId == employeeId);
 		var effectiveForMonth = revisions
@@ -81,9 +109,21 @@ public partial class CompensationRevisionAppService(
 		{
 			throw new BusinessException("HR:Payroll:CompensationSaveConflict")
 				.WithData("effectiveMonth", effectiveMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture))
-				.WithData("currentRevision", effectiveForMonth?.RevisionNumber);
+				.WithData("currentRevision", (effectiveForMonth?.RevisionNumber)!);
 		}
 
+		if (input.StatutoryProfileOverride != null)
+		{
+			var draft = await profileService.ValidateDraftAsync(employeeId, effectiveMonth, input.StatutoryProfileOverride,
+				input.StatutoryProfileConcurrencyStamp, input.StatutoryProfileUpdatePf, input.StatutoryProfileUpdateEsic);
+			var previous = await profileResolver.ResolveAsync(employeeId, effectiveMonth);
+			if (draft != previous)
+			{
+				await profileService.SaveAsync(employeeId, new SaveEmployeeStatutoryProfileDto
+				{ Profile = draft, EffectiveMonth = effectiveMonth.ToString("yyyy-MM"), ConcurrencyStamp = input.StatutoryProfileConcurrencyStamp,
+					IdempotencyKey = Guid.NewGuid(), UpdatePf = input.StatutoryProfileUpdatePf, UpdateEsic = input.StatutoryProfileUpdateEsic });
+			}
+		}
 		var calculation = await salaryTemplateAppService.CalculateAsync(
 			input.TemplateVersionId,
 			new CalculateSalaryTemplateRequestDto
@@ -93,8 +133,9 @@ public partial class CompensationRevisionAppService(
 				MonthlyAmount = input.MonthlyAmount,
 				EffectiveMonth = effectiveMonth,
 				EmployeeId = employeeId,
-				PfApplicable = input.PfApplicable,
+				PfEnrollment = input.PfEnrollment, PfApplicable = input.PfApplicable,
 				PfRuleId = input.PfRuleId,
+				EsiManagementMode = input.EsiManagementMode, EsiPolicyId = input.EsiPolicyId, EsiExternalReason = input.EsiExternalReason,
 				StatutoryProfile = input.StatutoryProfile,
 				Overrides = input.Overrides,
 				CustomizationReason = input.CustomizationReason
@@ -128,17 +169,29 @@ public partial class CompensationRevisionAppService(
 			JsonSerializer.Serialize(calculation),
 			JsonSerializer.Serialize(input.Overrides),
 			input.CustomizationReason);
+		revision.SetEsiAssignment(input.EsiManagementMode, input.EsiPolicyId, input.EsiExternalReason);
 		revision.MakeEffective(CurrentUser.GetId(), clock.Now);
 		await revisionRepository.InsertAsync(revision, autoSave: false);
 		await InsertLinesAsync(revision, calculation);
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
 		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync([employeeId]);
-		return await MapAsync(revision, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
+		var result = await MapAsync(revision, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
+		result.SavedStatutoryProfile = await profileService.GetAsync(employeeId, effectiveMonth.ToString("yyyy-MM"));
+		return result;
 	}
 
+	private static PayrollStatutoryProfile? NormalizeProfile(PayrollStatutoryProfile? profile) => profile == null ? null : profile with
+	{
+		VersionId = null, EffectiveMonth = default,
+		PfNumber = EmployeeStatutoryProfileVersion.NormalizeNumber(profile.PfNumber), UanNumber = EmployeeStatutoryProfileVersion.NormalizeNumber(profile.UanNumber),
+		EsicInsuranceNumber = EmployeeStatutoryProfileVersion.NormalizeNumber(profile.EsicInsuranceNumber),
+		PfDisabledReason = profile.ApplyPf ? null : profile.PfDisabledReason?.Trim(), EsicDisabledReason = profile.ApplyEsic ? null : profile.EsicDisabledReason?.Trim()
+	};
 	private static void EnsureCalculationCanBeSaved(SalaryTemplateCalculationDto calculation)
 	{
-		if (!calculation.TargetResult.IsExact)
+		if (calculation.PfEligibility is { CanSave: false } decision)
+			throw new BusinessException("HR:Payroll:PfEnrollmentBlocked").WithData("issueCode", decision.IssueCode!);
+		if (!calculation.TargetResult.IsExact && !calculation.TargetResult.IsExplainedByEnrollment)
 		{
 			throw new BusinessException("HR:Payroll:CompensationTargetNotExact")
 				.WithData("difference", calculation.TargetResult.Difference);
@@ -150,7 +203,7 @@ public partial class CompensationRevisionAppService(
 		}
 		var blockingIssues = calculation.EmployeeStateInsurance.IssueCodes.Where(code =>
 			code is EsiStatutoryCalculator.EnrollmentReviewIssue or EsiStatutoryCalculator.InsuranceNumberIssue or
-				EsiStatutoryCalculator.WageClassificationIssue or EsiStatutoryCalculator.EstablishmentInactiveIssue or
+				EsiStatutoryCalculator.BasicComponentIssue or EsiStatutoryCalculator.WageClassificationIssue or EsiStatutoryCalculator.EstablishmentInactiveIssue or
 				EsiStatutoryCalculator.DisabilityReliefEvidenceIssue).ToList();
 		if (calculation.EmployeeStateInsurance.RegistrationPending)
 		{
@@ -234,7 +287,7 @@ public partial class CompensationRevisionAppService(
 		var overrides = TryDeserializeOverrides(revision.OverridesJson);
 		return new CompensationRevisionDto
 		{
-			ProtectionCalculationVersion = calculation?.ProtectionCalculationVersion ?? 0,
+			PfEnrollment = calculation?.PfEnrollment ?? new(), PfEligibility = calculation?.PfEligibility,
 			Id = revision.Id,
 			EmployeeId = revision.EmployeeId,
 			RevisionNumber = revision.RevisionNumber,
@@ -258,11 +311,13 @@ public partial class CompensationRevisionAppService(
 			SourceSalaryTemplateVersionId = revision.SourceSalaryTemplateVersionId,
 			SourceSalaryTemplateVersion = revision.SourceSalaryTemplateVersion,
 			PfRuleId = revision.PfRuleId,
+			EsiManagementMode = revision.EsiManagementMode, EsiPolicyId = revision.EsiPolicyId, EsiExternalReason = revision.EsiExternalReason,
 			StatutoryProfile = revision.StatutoryProfile,
 			IsCustomized = overrides.Count > 0,
 			Overrides = overrides,
 			CustomizationReason = revision.CustomizationReason,
 			Warnings = calculation?.Warnings ?? [],
+			EstimatedStatutoryDeductions = calculation?.Deductions.Where(x => x.IsStatutory && !x.Persistable).ToList() ?? [],
 			ActivationReadiness = readiness,
 			CalculationSnapshotJson = includeAudit ? revision.CalculationSnapshotJson : null,
 			CreatorId = includeAudit ? revision.CreatorId : null,

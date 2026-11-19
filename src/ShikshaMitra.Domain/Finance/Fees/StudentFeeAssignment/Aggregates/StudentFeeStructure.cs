@@ -8,11 +8,15 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
-public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 
 	public Guid StudentId { get; private set; }
+	/// <summary>Original applicant collection account; student assignments still require a real student.</summary>
+	public Guid? FinanceFeeAccountId { get; private set; }
+	public void BindFinanceFeeAccount(Guid accountId) => FinanceFeeAccountId =
+		ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.BindAccount(FinanceFeeAccountId, accountId);
 
 	public Guid FeeStructureStandardId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
@@ -42,6 +46,7 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
         if (AssignmentSnapshotJson != null) throw new InvalidOperationException("Assignment evidence is immutable.");
         AssignmentRequestFingerprint = Volo.Abp.Check.NotNullOrWhiteSpace(fingerprint, nameof(fingerprint), maxLength: 64);
         AssignmentSnapshotJson = Volo.Abp.Check.NotNullOrWhiteSpace(snapshot, nameof(snapshot));
+		IncludedFeeHeadIds = ReadIncludedFeeHeadIds(snapshot);
     }
     protected StudentFeeStructure() { }
 
@@ -50,10 +55,12 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		Guid studentId,
 		Guid feeStructureStandardId,
-		Guid academicYearId = default) : base(id)
+		Guid academicYearId = default,
+		Guid? financeFeeAccountId = null) : base(id)
 	{
 		TenantId = tenantId;
 		StudentId = studentId;
+		FinanceFeeAccountId = financeFeeAccountId;
 		FeeStructureStandardId = feeStructureStandardId;
 		AcademicYearId = academicYearId;
 		ConcessionFeeHeadScope = ConcessionFeeHeadScope.EntireFeeStructure;
@@ -80,10 +87,12 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ChargePeriodSource chargePeriodSource = ChargePeriodSource.AcademicYear,
 		Guid? chargePeriodSourceReferenceId = null,
 		string? chargePeriodOverrideReason = null,
-		string? assignmentRequestFingerprint = null) : base(id)
+		string? assignmentRequestFingerprint = null,
+		Guid? financeFeeAccountId = null) : base(id)
 	{
 		TenantId = tenantId;
 		StudentId = studentId;
+		FinanceFeeAccountId = financeFeeAccountId;
 		FeeStructureStandardId = feeStructureStandardId;
 		AcademicYearId = academicYearId;
 		ConcessionPolicyId = concessionPolicyId;
@@ -129,6 +138,69 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public IReadOnlyList<Guid> GetConcessionApplicableFeeHeadIds() =>
 		JsonSerializer.Deserialize<List<Guid>>(ConcessionApplicableFeeHeadIdsJson) ?? [];
+
+	/// <summary>Supersedes a proven unused schedule while retaining all original evidence.</summary>
+	public void CorrectUnpaidAssignment(StudentFeeStructure replacement, string fingerprint, string snapshot,
+		int originalRevision, string dueEvidence, string reason, Guid actorId, DateTimeOffset occurredAt)
+	{
+		if (replacement.Id != Id || replacement.TenantId != TenantId || replacement.StudentId != StudentId ||
+			replacement.AcademicYearId != AcademicYearId || replacement.FinanceFeeAccountId != FinanceFeeAccountId ||
+			AssignmentSnapshotJson == null || actorId == Guid.Empty || string.IsNullOrWhiteSpace(reason))
+			throw new Volo.Abp.BusinessException(AssignmentErrorCodes.InvalidInput);
+		var history = ExtraProperties.TryGetValue("AssignmentCorrectionHistory", out var saved)
+			? JsonSerializer.Deserialize<List<JsonElement>>(saved?.ToString() ?? "[]") ?? [] : [];
+		history.Add(JsonSerializer.SerializeToElement(new {
+			CommandFingerprint = fingerprint, FromStructureId = FeeStructureStandardId, FromRevision = originalRevision,
+			BeforeSnapshotJson = AssignmentSnapshotJson, BeforeFingerprint = AssignmentRequestFingerprint, BeforeDuesJson = dueEvidence,
+			BeforePolicyReason = ExtraProperties.TryGetValue("AssignedPolicyReason", out var policyReason) ? policyReason?.ToString() : null,
+			BeforePolicies = new { ConcessionPolicyId, ConcessionPolicyVersionId, CollectionPolicyId, CollectionPolicyVersionId,
+				RefundPolicyId, RefundPolicyVersionId, ProrationPolicyId, ProrationPolicyVersionId },
+			AfterSnapshotJson = snapshot, Reason = reason.Trim(), ActorId = actorId, OccurredAt = occurredAt.ToUniversalTime() }));
+		ExtraProperties["AssignmentCorrectionHistory"] = JsonSerializer.Serialize(history);
+		ExtraProperties.Remove("AssignedPolicyReason");
+		FeeStructureStandardId = replacement.FeeStructureStandardId;
+		ConcessionPolicyId = replacement.ConcessionPolicyId;
+		ConcessionPolicyVersionId = replacement.ConcessionPolicyVersionId;
+		SetConcessionApplicability(replacement.ConcessionFeeHeadScope, replacement.GetConcessionApplicableFeeHeadIds());
+		CollectionPolicyId = replacement.CollectionPolicyId; CollectionPolicyVersionId = replacement.CollectionPolicyVersionId;
+		RefundPolicyId = replacement.RefundPolicyId; RefundPolicyVersionId = replacement.RefundPolicyVersionId;
+		ProrationPolicyId = replacement.ProrationPolicyId; ProrationPolicyVersionId = replacement.ProrationPolicyVersionId;
+		ChargeStartDate = replacement.ChargeStartDate; ChargeEndDate = replacement.ChargeEndDate;
+		ChargePeriodSource = replacement.ChargePeriodSource; ChargePeriodSourceReferenceId = replacement.ChargePeriodSourceReferenceId;
+		ChargePeriodOverrideReason = replacement.ChargePeriodOverrideReason;
+		AssignmentRequestFingerprint = Volo.Abp.Check.NotNullOrWhiteSpace(fingerprint, nameof(fingerprint), maxLength: 64);
+		AssignmentSnapshotJson = Volo.Abp.Check.NotNullOrWhiteSpace(snapshot, nameof(snapshot));
+		IncludedFeeHeadIds = ReadIncludedFeeHeadIds(snapshot);
+	}
+
+	public void ChangeAssignedPolicies(
+		Guid? concessionId, Guid? concessionVersion, ConcessionFeeHeadScope concessionScope, IReadOnlyCollection<Guid> concessionHeads,
+		Guid collectionId, Guid collectionVersion, Guid? refundId, Guid? refundVersion, Guid? prorationId, Guid? prorationVersion,
+		string reason, Guid actorId, DateTime occurredAt)
+	{
+		if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 500 || actorId == Guid.Empty ||
+			collectionId == Guid.Empty || collectionVersion == Guid.Empty ||
+			concessionId.HasValue != concessionVersion.HasValue || refundId.HasValue != refundVersion.HasValue || prorationId.HasValue != prorationVersion.HasValue)
+			throw new Volo.Abp.BusinessException(AssignmentErrorCodes.InvalidInput);
+		var before = new { ConcessionPolicyVersionId, CollectionPolicyVersionId, RefundPolicyVersionId, ProrationPolicyVersionId };
+		SetConcessionApplicability(concessionScope, concessionHeads);
+		ConcessionPolicyId = concessionId;
+		ConcessionPolicyVersionId = concessionVersion;
+		CollectionPolicyId = collectionId;
+		CollectionPolicyVersionId = collectionVersion;
+		RefundPolicyId = refundId;
+		RefundPolicyVersionId = refundVersion;
+		ProrationPolicyId = prorationId;
+		ProrationPolicyVersionId = prorationVersion;
+		// ABP persists ExtraProperties with the aggregate and its concurrency token.
+		var history = ExtraProperties.TryGetValue("AssignedPolicyHistory", out var saved)
+			? JsonSerializer.Deserialize<List<JsonElement>>(saved?.ToString() ?? "[]") ?? [] : [];
+		history.Add(JsonSerializer.SerializeToElement(new {
+			Before = before, After = new { ConcessionPolicyVersionId, CollectionPolicyVersionId, RefundPolicyVersionId, ProrationPolicyVersionId },
+			Reason = reason.Trim(), ActorId = actorId, OccurredAt = occurredAt }));
+		ExtraProperties["AssignedPolicyHistory"] = JsonSerializer.Serialize(history);
+		ExtraProperties["AssignedPolicyReason"] = reason.Trim();
+	}
 
 	private void SetConcessionApplicability(
 		ConcessionFeeHeadScope scope,

@@ -7,6 +7,15 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionPaymentStagePolicy_Tests
 {
+	[Fact]
+	public void Fee_selection_requirement_is_explicit_and_historical_policies_remain_optional()
+	{
+		var json = JsonSerializer.Serialize(new { payment = Policy() });
+		AdmissionPaymentStagePolicy.Read(json)!.RequiresFeeStructureSelection.ShouldBeFalse();
+		var optedIn = Policy() with { RequiresFeeStructureSelection = true };
+		AdmissionPaymentStagePolicy.Read(JsonSerializer.Serialize(new { payment = optedIn }))!.RequiresFeeStructureSelection.ShouldBeTrue();
+	}
+
 	[Theory]
 	[InlineData(null)]
 	[InlineData("")]

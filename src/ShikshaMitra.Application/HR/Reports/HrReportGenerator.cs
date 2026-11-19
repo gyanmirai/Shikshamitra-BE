@@ -19,7 +19,7 @@ public class HrReportGenerator(
 	HrReportRequestValidationService requestValidationService,
 	ICurrentTenant currentTenant,
 	IAsyncQueryableExecuter asyncExecuter,
-	IClock clock) : ITransientDependency
+	IClock clock, Volo.Abp.Domain.Repositories.IRepository<ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings, Guid> payslipSettings, ShikshaMitra.HR.Payroll.SalarySlips.PayrollDocumentSchoolService school) : ITransientDependency
 {
 	public async Task<HrReportExportScopeSnapshot?> ResolveExportScopeAsync(
 		Guid userId,
@@ -162,9 +162,10 @@ public class HrReportGenerator(
 			: HrReportRequestProcessor.ShapeRows(rowResult.Rows, input);
 
 		var totalCount = rowResult.IsDatabaseBacked ? rowResult.TotalCount : rows.Count;
+		if (exportAllRows && totalCount > HrReportRequestProcessor.MaxExportRows) throw HrReportingEngine.Invalid("This legacy export exceeds its row limit. Use the complete table export or narrow its filters.");
 		var columns = HrReportCatalog.ResolveColumns(source, input, rows);
 		var pageRows = exportAllRows
-			? rows.Take(HrReportRequestProcessor.MaxExportRows).ToList()
+			? rows
 			: rowResult.IsDatabaseBacked
 				? rows
 				: rows.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize).ToList();
@@ -175,8 +176,20 @@ public class HrReportGenerator(
 			totalCount,
 			rowResult.IsDatabaseBacked);
 
+		warnings.AddRange(rowResult.Warnings);
+		var salaryDocument = source is HrReportDataSources.PayrollStatement or HrReportDataSources.PayrollRegister;
+		var settings = salaryDocument ? await payslipSettings.FindAsync(x => x.TenantId == currentTenant.Id) : null;
+		var options = settings?.GetPresentation() ?? new ShikshaMitra.HR.Payroll.SalarySlips.SalaryDocumentPresentation();
+		options = options with { LogoBlobName = null };
+		var identity = salaryDocument ? await school.ReadAsync() : null;
+		var logo = salaryDocument ? await school.LogoAsync() : null;
 		return new HrReportPreviewDto
 		{
+			Branding = identity == null ? null : new(settings?.PresentationVersionId ?? Guid.Empty, identity.Name, identity.Address, options,
+				logo == null ? null : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(logo))),
+			LogoBytes = logo,
+			TotalsLabel = exportAllRows ? "Totals for exported rows" : "Totals for all available payroll in the selected period",
+			Totals = salaryDocument ? exportAllRows ? PayrollSalaryDocumentTotals.Sum(pageRows) : rowResult.Totals ?? PayrollSalaryDocumentTotals.Sum(pageRows) : new(),
 			DataSource = source,
 			ReportType = string.IsNullOrWhiteSpace(input.ReportType) ? HrReportCatalog.GetSource(source).Label : input.ReportType,
 			TotalCount = totalCount,

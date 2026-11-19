@@ -1,9 +1,10 @@
 using System;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Authorization;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
-using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
@@ -15,7 +16,10 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public sealed record AdmissionDocumentContext(AdmissionApplication Application, AdmissionApplicationStageInstance Stage,
 	AdmissionWorkflowStageDefinition Definition, AdmissionDocumentPolicy? Policy, AdmissionWorkflowInstanceStatus WorkflowStatus)
 {
-	public bool IsActive => WorkflowStatus == AdmissionWorkflowInstanceStatus.Active && Application.CurrentStageInstanceId == Stage.Id &&
+	public bool CanCollectDuringForm { get; init; }
+	public bool IsOnboarding { get; init; }
+	public bool CanPrepare => IsOnboarding || AdmissionStagePreparationRules.CanPrepare(Application, WorkflowStatus, Stage.Status);
+	public bool IsActive => IsOnboarding || WorkflowStatus == AdmissionWorkflowInstanceStatus.Active && Application.CurrentStageInstanceId == Stage.Id &&
 		Stage.Status == AdmissionRuntimeStageStatus.Active && Application.Status is AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted or
 		AdmissionApplicationStatus.InReview or AdmissionApplicationStatus.Approved or AdmissionApplicationStatus.Waitlisted or
 		AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted;
@@ -24,17 +28,15 @@ public sealed record AdmissionDocumentContext(AdmissionApplication Application, 
 [RemoteService(false)]
 public class AdmissionDocumentAccessService(IRepository<AdmissionApplication, Guid> applications,
 	IRepository<AdmissionApplicationStageInstance, Guid> stages, IRepository<AdmissionApplicationWorkflowInstance, Guid> workflows,
-	IRepository<AdmissionWorkflowStageDefinition, Guid> definitions, IRepository<AdmissionOffering, Guid> offerings,
-	IRepository<AdmissionCycle, Guid> cycles, IRepository<Division, Guid> divisions, IUserScopeAccessService scopes,
-	IRepository<DocumentType, Guid> documentTypes) : ApplicationService, ITransientDependency
+	IRepository<AdmissionWorkflowStageDefinition, Guid> definitions, AdmissionApplicationScopeAccessService applicationScope,
+	IRepository<DocumentType, Guid> documentTypes, IRepository<Standard, Guid> standards,
+	IRepository<AdmissionWorkflowTransitionDefinition, Guid> transitions,
+	IRepository<ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingCase, Guid> onboardingCases) : ApplicationService, ITransientDependency
 {
-	public async Task<AdmissionDocumentContext> GetContextAsync(Guid applicationId, Guid stageId, bool requireActive = true)
+	public async Task<AdmissionDocumentContext> GetContextAsync(Guid applicationId, Guid stageId, bool requireActive = true, bool onboarding = false)
 	{
 		var application = await applications.FindAsync(applicationId) ?? throw new EntityNotFoundException(typeof(AdmissionApplication), applicationId);
-		var offeringQuery = AdmissionOfferingScopeQuery.Apply(await offerings.GetQueryableAsync(), await cycles.GetQueryableAsync(),
-			await divisions.GetQueryableAsync(), await scopes.GetCurrentUserScopeAsync());
-		if (!await AsyncExecuter.AnyAsync(offeringQuery.Where(item => item.Id == application.AdmissionOfferingId)))
-			throw new EntityNotFoundException(typeof(AdmissionOffering), application.AdmissionOfferingId);
+		await applicationScope.EnsureCanAccessAsync(application);
 		var stage = await stages.FindAsync(stageId) ?? throw new EntityNotFoundException(typeof(AdmissionApplicationStageInstance), stageId);
 		var workflow = await workflows.FindAsync(stage.WorkflowInstanceId);
 		if (workflow?.ApplicationId != applicationId || workflow.WorkflowDefinitionId != application.WorkflowDefinitionId || stage.StageType != AdmissionWorkflowStageType.DocumentVerification)
@@ -43,8 +45,92 @@ public class AdmissionDocumentAccessService(IRepository<AdmissionApplication, Gu
 		if (definition.WorkflowDefinitionId != application.WorkflowDefinitionId || definition.StageType != AdmissionWorkflowStageType.DocumentVerification)
 			throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), definition.Id);
 		var context = new AdmissionDocumentContext(application, stage, definition, ReadPolicy(definition), workflow.Status);
+		if (onboarding)
+		{
+			var item = application.OnboardingCaseId.HasValue ? await onboardingCases.FindAsync(application.OnboardingCaseId.Value) : null;
+			if (item == null || item.ApplicationId != application.Id || item.StudentId != application.StudentId ||
+				application.Status != AdmissionApplicationStatus.AdmissionFinalized || item.Status == ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingStatus.Cancelled)
+				throw Invalid("Document actions are available only before Onboarding activation.");
+			if (requireActive)
+			{
+				await AuthorizationService.CheckAsync(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
+				if (item.StudentEnrollmentId.HasValue) throw Invalid("Document changes are available only before activation.");
+			}
+			var snapshot = ShikshaMitra.Students.StudentEnrollments.Onboarding.OnboardingRequirementSnapshotService.Read(item).SingleOrDefault(p => p.StageId == stageId);
+			if (snapshot == null) throw Invalid("This stage is not part of the saved onboarding document requirements.");
+			context = context with { Policy = snapshot.Policy, IsOnboarding = !item.StudentEnrollmentId.HasValue };
+		}
+		if (context.Policy?.CollectionFormStageCode != null && workflow.Status == AdmissionWorkflowInstanceStatus.Active &&
+			stage.Status == AdmissionRuntimeStageStatus.Pending && application.Status is AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted &&
+			application.CurrentStageInstanceId.HasValue)
+		{
+			var current = await stages.FindAsync(application.CurrentStageInstanceId.Value);
+			if (current?.WorkflowInstanceId == workflow.Id && current.Status == AdmissionRuntimeStageStatus.Active && current.StageType == AdmissionWorkflowStageType.Form)
+				context = context with { CanCollectDuringForm = AdmissionDocumentCollectionRules.IsLinkedForm(
+					await definitions.FindAsync(current.DefinitionStageId), definition, context.Policy,
+					await transitions.GetListAsync(item => item.WorkflowDefinitionId == workflow.WorkflowDefinitionId)) };
+		}
 		if (requireActive && (!context.IsActive || context.Policy == null)) throw Invalid("The managed document verification stage must be active.");
 		return context;
+	}
+
+	internal async Task<List<AdmissionDocumentContext>> GetReadContextsAsync(Guid applicationId, IReadOnlyCollection<Guid> stageIds, bool onboarding)
+	{
+		if (stageIds.Count == 0) return [];
+		var application = await applications.FindAsync(applicationId) ?? throw new EntityNotFoundException(typeof(AdmissionApplication), applicationId);
+		await applicationScope.EnsureCanAccessAsync(application);
+		var ids = stageIds.ToArray();
+		var stageRows = await stages.GetListAsync(stage => Enumerable.Contains(ids, stage.Id));
+		var workflowIds = stageRows.Select(stage => stage.WorkflowInstanceId).Distinct().ToArray();
+		var workflowRows = (await workflows.GetListAsync(workflow => Enumerable.Contains(workflowIds, workflow.Id))).ToDictionary(workflow => workflow.Id);
+		var definitionIds = stageRows.Select(stage => stage.DefinitionStageId).Distinct().ToArray();
+		var definitionRows = (await definitions.GetListAsync(definition => Enumerable.Contains(definitionIds, definition.Id))).ToDictionary(definition => definition.Id);
+		var stagesById = stageRows.ToDictionary(stage => stage.Id);
+		var item = onboarding && application.OnboardingCaseId.HasValue ? await onboardingCases.FindAsync(application.OnboardingCaseId.Value) : null;
+		List<ShikshaMitra.Students.StudentEnrollments.Onboarding.OnboardingDocumentPolicySnapshot>? snapshots = null;
+		var result = new List<AdmissionDocumentContext>();
+		foreach (var stageId in stageIds)
+		{
+			var stage = stagesById.GetValueOrDefault(stageId) ?? throw new EntityNotFoundException(typeof(AdmissionApplicationStageInstance), stageId);
+			var workflow = workflowRows.GetValueOrDefault(stage.WorkflowInstanceId);
+			if (workflow?.ApplicationId != applicationId || workflow.WorkflowDefinitionId != application.WorkflowDefinitionId || stage.StageType != AdmissionWorkflowStageType.DocumentVerification)
+				throw new EntityNotFoundException(typeof(AdmissionApplicationStageInstance), stageId);
+			var definition = definitionRows.GetValueOrDefault(stage.DefinitionStageId) ?? throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), stage.DefinitionStageId);
+			if (definition.WorkflowDefinitionId != application.WorkflowDefinitionId || definition.StageType != AdmissionWorkflowStageType.DocumentVerification)
+				throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), definition.Id);
+			var context = new AdmissionDocumentContext(application, stage, definition, ReadPolicy(definition), workflow.Status);
+			if (onboarding)
+			{
+				if (item == null || item.ApplicationId != application.Id || item.StudentId != application.StudentId ||
+					application.Status != AdmissionApplicationStatus.AdmissionFinalized || item.Status == ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingStatus.Cancelled)
+					throw Invalid("Document actions are available only before Onboarding activation.");
+				snapshots ??= ShikshaMitra.Students.StudentEnrollments.Onboarding.OnboardingRequirementSnapshotService.Read(item);
+				var snapshot = snapshots.SingleOrDefault(policy => policy.StageId == stageId);
+				if (snapshot == null) throw Invalid("This stage is not part of the saved onboarding document requirements.");
+				context = context with { Policy = snapshot.Policy, IsOnboarding = !item.StudentEnrollmentId.HasValue };
+			}
+			result.Add(context);
+		}
+		var collectionContexts = result.Where(context => context.Policy?.CollectionFormStageCode != null &&
+			context.WorkflowStatus == AdmissionWorkflowInstanceStatus.Active && context.Stage.Status == AdmissionRuntimeStageStatus.Pending &&
+			application.Status is AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted).ToList();
+		if (collectionContexts.Count > 0 && application.CurrentStageInstanceId is Guid currentId)
+		{
+			var current = stagesById.GetValueOrDefault(currentId) ?? await stages.FindAsync(currentId);
+			if (current?.Status == AdmissionRuntimeStageStatus.Active && current.StageType == AdmissionWorkflowStageType.Form)
+			{
+				var currentDefinition = definitionRows.GetValueOrDefault(current.DefinitionStageId) ?? await definitions.FindAsync(current.DefinitionStageId);
+				var links = await transitions.GetListAsync(link => link.WorkflowDefinitionId == application.WorkflowDefinitionId);
+				for (var index = 0; index < result.Count; index++)
+				{
+					var context = result[index];
+					if (collectionContexts.Contains(context) && current.WorkflowInstanceId == context.Stage.WorkflowInstanceId)
+						result[index] = context with { CanCollectDuringForm = AdmissionDocumentCollectionRules.IsLinkedForm(currentDefinition,
+							context.Definition, context.Policy!, links) };
+				}
+			}
+		}
+		return result;
 	}
 	public static AdmissionDocumentRequirement GetRequirement(AdmissionDocumentContext context, string code) =>
 		context.Policy?.Requirements.SingleOrDefault(item => item.Code == code) ?? throw Invalid("This document requirement does not belong to the application stage.");
@@ -52,15 +138,34 @@ public class AdmissionDocumentAccessService(IRepository<AdmissionApplication, Gu
 	{
 		if (!requirement.DocumentTypeId.HasValue) return null;
 		var documentType = await documentTypes.FindAsync(requirement.DocumentTypeId.Value);
+		return ValidateMapping(requirement, documentType);
+	}
+
+	internal async Task<Dictionary<Guid, DocumentType>> ReadMappingTypesAsync(IEnumerable<AdmissionDocumentRequirement> requirements)
+	{
+		var ids = requirements.Where(requirement => requirement.DocumentTypeId.HasValue).Select(requirement => requirement.DocumentTypeId!.Value).Distinct().ToArray();
+		return ids.Length == 0 ? [] : (await documentTypes.GetListAsync(type => Enumerable.Contains(ids, type.Id))).ToDictionary(type => type.Id);
+	}
+
+	internal DocumentType? ValidateMapping(AdmissionDocumentRequirement requirement, DocumentType? documentType)
+	{
+		if (!requirement.DocumentTypeId.HasValue) return null;
 		if (documentType == null || documentType.TenantId != CurrentTenant.Id) throw Invalid("The mapped document type is unavailable for this school.");
 		if (requirement.CollectionMode != "original" && (!double.IsFinite(documentType.MaxSizeMB) || documentType.MaxSizeMB <= 0 ||
 			!requirement.AllowedExtensions.Any(extension => documentType.GetAcceptedFormats().Any(format => format.ToString().Equals(extension, StringComparison.OrdinalIgnoreCase)))))
 			throw Invalid("The mapped document type must allow at least one configured safe file format and a positive size limit.");
 		return documentType;
 	}
+	public async Task ValidateClassesAsync(AdmissionDocumentRequirement requirement)
+	{
+		if (requirement.StandardIds == null) return;
+		var ids = requirement.StandardIds.ToArray();
+		var count = await standards.CountAsync(item => item.TenantId == CurrentTenant.Id && Enumerable.Contains(ids, item.Id));
+		if (count != ids.Length) throw Invalid("One or more selected classes are unavailable for this school. Update the document requirement.");
+	}
 	public static AdmissionDocumentPolicy? ReadPolicy(AdmissionWorkflowStageDefinition definition)
 	{
-		try { return AdmissionDocumentPolicy.Read(definition.ConfigurationJson); }
+		try { return AdmissionDocumentPolicy.Read(AdmissionStageConfiguration.Normalize(AdmissionWorkflowStageType.DocumentVerification, definition.ConfigurationJson)); }
 		catch (Exception exception) when (exception is ArgumentException or System.Text.Json.JsonException or InvalidOperationException)
 		{ throw new BusinessException(AdmissionDocumentErrorCodes.InvalidPolicy, exception.Message); }
 	}

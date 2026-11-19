@@ -6,6 +6,7 @@ namespace ShikshaMitra.HR.Employees.ICards;
 
 public interface IEmployeeICardTemplateAppService : IApplicationService
 {
+	Task<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto> GetPhotoAsync(Guid employeeId);
 	Task<EmployeeICardTemplateListResponse> GetListAsync(
 		Guid? academicYearId = null,
 		Guid? mediumStageId = null,
@@ -18,6 +19,7 @@ public interface IEmployeeICardTemplateAppService : IApplicationService
 	Task<EmployeeICardTemplateDto> UpdateAsync(Guid id, EmployeeICardTemplateRequest input);
 	Task<EmployeeICardAssetUploadResult> UploadAssetAsync(string fileName, string contentType, byte[] content);
 	Task<EmployeeICardAssetDownloadResult> DownloadAssetAsync(string blobName);
+	Task<EmployeeICardAssetDownloadResult?> GetSchoolLogoAsync(Guid? mediumStageId = null);
 	Task<byte[]> GenerateEmployeeICardsPdfAsync(Guid templateId, EmployeeICardPdfRequest input);
 	Task DeleteAsync(Guid id);
 }

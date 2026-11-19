@@ -14,7 +14,7 @@ public class MainDashboardAppService(DashboardSummaryReader summaryReader)
 	: ApplicationService, IMainDashboardAppService
 {
 	public Task<DashboardSummaryDto> GetSummaryAsync(DashboardSummaryRequestDto input) =>
-		summaryReader.GetSummaryAsync(input, Clock.Now.Date);
+		summaryReader.GetSummaryAsync(input, Clock.Now);
 
 	public Task<List<DashboardWidgetMetadataDto>> GetWidgetMetadataAsync() =>
 		Task.FromResult(DashboardWidgetCatalog.WidgetDefinitions

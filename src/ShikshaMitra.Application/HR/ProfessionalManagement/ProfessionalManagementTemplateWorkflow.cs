@@ -40,7 +40,7 @@ public class ProfessionalManagementTemplateWorkflow(
 		var templates = await asyncExecuter.ToListAsync(
 			query
 				.OrderBy(x => x.StaffCategory)
-				.ThenBy(x => x.Name)
+				.ThenBy(x => x.Name).ThenBy(x => x.Id)
 				.Skip((page - 1) * pageSize)
 				.Take(pageSize));
 		return new PerformanceTemplateListResponse

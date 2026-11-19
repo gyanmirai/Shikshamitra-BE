@@ -5,6 +5,11 @@ using Volo.Abp.Content;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
+public partial class AdmissionApplicationStageDto
+{
+	public bool DocumentCollectionAvailable { get; set; }
+}
+
 public class AdmissionDocumentVerificationDto
 {
 	public Guid ApplicationId { get; set; }
@@ -12,6 +17,7 @@ public class AdmissionDocumentVerificationDto
 	public bool DocumentVerificationEnabled { get; set; }
 	public AdmissionDocumentPolicy? Policy { get; set; }
 	public bool IsActive { get; set; }
+	public bool CanCollectDuringForm { get; set; }
 	public bool CanComplete { get; set; }
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public List<string> Blockers { get; set; } = [];
@@ -49,7 +55,9 @@ public class AdmissionDocumentEvidenceDto
 	public bool OriginalSeen { get; set; }
 	public Guid? OriginalSeenBy { get; set; }
 	public DateTime? OriginalSeenAt { get; set; }
-	public Guid SubmittedBy { get; set; }
+	public Guid? SubmittedBy { get; set; }
+	public Guid? ParentRegistrationId { get; set; }
+	public string? ParentContactJson { get; set; }
 	public DateTime SubmittedAt { get; set; }
 	public string? Notes { get; set; }
 	public string Status { get; set; } = string.Empty;
@@ -87,6 +95,12 @@ public class AdmissionDocumentDownloadDto
 	public byte[] Content { get; set; } = [];
 	public string FileName { get; set; } = string.Empty;
 	public string ContentType { get; set; } = string.Empty;
+}
+public class AdmissionDocumentClassDto
+{
+	public Guid Id { get; set; }
+	public string Name { get; set; } = string.Empty;
+	public string Context { get; set; } = string.Empty;
 }
 public class AdmissionDocumentTypeDto
 {

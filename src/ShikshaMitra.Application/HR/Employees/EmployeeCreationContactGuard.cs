@@ -25,7 +25,7 @@ public class EmployeeCreationContactGuard(
 		if (mobileNo.Length < 4)
 		{
 			logger.LogWarning(
-				"Employee creation failed: mobile number length {Length} is below the accepted minimum for email {Email}.",
+				"Staff creation failed: mobile number length {Length} is below the accepted minimum for email {Email}.",
 				mobileNo.Length,
 				email);
 			throw new BusinessException(HRErrorCodes.EmployeeMobileTooShort);

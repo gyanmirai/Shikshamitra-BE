@@ -19,23 +19,56 @@ using Volo.Abp.Linq;
 
 namespace ShikshaMitra.MapperProfile;
 
-public class AcademicSetupPermissionAppService(
-	IAsyncQueryableExecuter asyncQueryableExecuter,
-	IRepository<AcademicYearPermission, Guid> academicYearPermissionRepository,
-	IRepository<EducationBoardPermission, Guid> educationBoardPermissionRepository,
-	IRepository<EducationMediumPermission, Guid> educationMediumPermissionRepository,
-	IRepository<EducationMediumStagePermission, Guid> educationMediumStagePermissionRepository,
-	IRepository<StandardPermission, Guid> standardPermissionRepository,
-	IRepository<DivisionPermission, Guid> divisionPermissionRepository,
-	   IRepository<AcademicYear, Guid> academicYearRepository,
-	IRepository<EducationBoard, Guid> educationBoardRepository,
-	IRepository<EducationMedium, Guid> educationMediumRepository,
-	IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
-	IRepository<Standard, Guid> standardRepository,
-	IRepository<Division, Guid> divisionRepository,
-	AcademicSetupPermissionManager academicSetupPermissionManager)
+public class AcademicSetupPermissionAppService
 	: ApplicationService
 {
+	private readonly IRepository<AcademicYearPermission, Guid> academicYearPermissionRepository;
+	private readonly IRepository<EducationBoardPermission, Guid> educationBoardPermissionRepository;
+	private readonly IRepository<EducationMediumPermission, Guid> educationMediumPermissionRepository;
+	private readonly IRepository<EducationMediumStagePermission, Guid> educationMediumStagePermissionRepository;
+	private readonly IRepository<StandardPermission, Guid> standardPermissionRepository;
+	private readonly IRepository<DivisionPermission, Guid> divisionPermissionRepository;
+	private readonly IRepository<AcademicYear, Guid> academicYearRepository;
+	private readonly IRepository<EducationBoard, Guid> educationBoardRepository;
+	private readonly IRepository<EducationMedium, Guid> educationMediumRepository;
+	private readonly IRepository<EducationMediumStage, Guid> educationMediumStageRepository;
+	private readonly IRepository<Standard, Guid> standardRepository;
+	private readonly IRepository<Division, Guid> divisionRepository;
+	private readonly AcademicSetupPermissionManager academicSetupPermissionManager;
+
+	public AcademicSetupPermissionAppService(
+		IAsyncQueryableExecuter asyncQueryableExecuter,
+		IRepository<AcademicYearPermission, Guid> academicYearPermissionRepository,
+		IRepository<EducationBoardPermission, Guid> educationBoardPermissionRepository,
+		IRepository<EducationMediumPermission, Guid> educationMediumPermissionRepository,
+		IRepository<EducationMediumStagePermission, Guid> educationMediumStagePermissionRepository,
+		IRepository<StandardPermission, Guid> standardPermissionRepository,
+		IRepository<DivisionPermission, Guid> divisionPermissionRepository,
+		IRepository<AcademicYear, Guid> academicYearRepository,
+		IRepository<EducationBoard, Guid> educationBoardRepository,
+		IRepository<EducationMedium, Guid> educationMediumRepository,
+		IRepository<EducationMediumStage, Guid> educationMediumStageRepository,
+		IRepository<Standard, Guid> standardRepository,
+		IRepository<Division, Guid> divisionRepository,
+		AcademicSetupPermissionManager academicSetupPermissionManager
+	)
+	{
+		_ = asyncQueryableExecuter;
+		this.academicYearPermissionRepository = academicYearPermissionRepository;
+		this.educationBoardPermissionRepository = educationBoardPermissionRepository;
+		this.educationMediumPermissionRepository = educationMediumPermissionRepository;
+		this.educationMediumStagePermissionRepository = educationMediumStagePermissionRepository;
+		this.standardPermissionRepository = standardPermissionRepository;
+		this.divisionPermissionRepository = divisionPermissionRepository;
+		this.academicYearRepository = academicYearRepository;
+		this.educationBoardRepository = educationBoardRepository;
+		this.educationMediumRepository = educationMediumRepository;
+		this.educationMediumStageRepository = educationMediumStageRepository;
+		this.standardRepository = standardRepository;
+		this.divisionRepository = divisionRepository;
+		this.academicSetupPermissionManager = academicSetupPermissionManager;
+	}
+
 	// create one api that retrivers all employee with permissions
 	//public async Task<List<AcademicSetupPermissionsDto>> GetAllPermissions()
 	//{

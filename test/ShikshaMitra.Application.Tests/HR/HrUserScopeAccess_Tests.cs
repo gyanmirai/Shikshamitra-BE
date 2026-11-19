@@ -9,6 +9,15 @@ namespace ShikshaMitra.HR;
 
 public class HrUserScopeAccess_Tests
 {
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public void Leave_Request_Visibility_Should_Use_Resolved_Admin_Scope(bool isAdmin)
+	{
+		var scope = new UserScopeContext { IsAdmin = isAdmin, HasWildcardAcademicYear = true };
+		HrUserScopeAccess.CanReadAllLeaveRequests(scope).ShouldBe(isAdmin);
+	}
+
 	[Fact]
 	public void CanAccessEmployeeStage_Should_Allow_TenantWide_Scope()
 	{

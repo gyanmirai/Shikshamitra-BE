@@ -7,7 +7,8 @@ namespace ShikshaMitra.Finance.Events;
 public class FeeCollectedEto
 {
     public Guid FeeCollectionTransactionId { get; set; }
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
     public Guid AcademicYearId { get; set; }
     public double TotalPaidFee { get; set; }
     public FeeCollectionStatus Status { get; set; }

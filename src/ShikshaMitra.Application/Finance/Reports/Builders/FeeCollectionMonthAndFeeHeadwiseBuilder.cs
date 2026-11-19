@@ -18,15 +18,17 @@ public class FeeCollectionMonthAndFeeHeadwiseBuilder(
     IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
     IRepository<DueFee, Guid> dueFeeRepository,
     IRepository<FeeHead, Guid> feeHeadRepository,
-    IAsyncQueryableExecuter asyncExecuter)
+    IAsyncQueryableExecuter asyncExecuter,
+    FinanceReportPayerQueryService payerService)
     : IFinanceReportBuilder, ITransientDependency
 {
     public string ReportType => FinanceReportTypes.FeeCollectionMonthAndFeeHeadwise;
 
     public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)
     {
-        var targetMonths = request.Filters.Months != null && request.Filters.Months.Any() 
-            ? request.Filters.Months 
+        var payers = await payerService.GetPayersAsync(request.Filters, executionScope);
+        var targetMonths = request.Filters.Months != null && request.Filters.Months.Any()
+            ? request.Filters.Months
             : Enumerable.Range(1, 12).ToList();
 
         var feeHeadIds = request.Filters.FeeHeadIds ?? new List<Guid>();
@@ -48,7 +50,7 @@ public class FeeCollectionMonthAndFeeHeadwiseBuilder(
 
         var academicYearIds = request.Filters.AcademicYearIds ?? [];
         var scopedMetadataIds = await asyncExecuter.ToListAsync(
-            (await feeRecordRepository.GetQueryableAsync())
+            FinanceReportPayerQueryService.FilterCollections(await feeRecordRepository.GetQueryableAsync(), payers)
                 .Where(metadata => academicYearIds.Contains(metadata.AcademicYearId))
                 .Select(metadata => metadata.Id));
 
@@ -87,7 +89,7 @@ public class FeeCollectionMonthAndFeeHeadwiseBuilder(
 
             // Take the month from the first payment of the transaction (they should all be on the same date typically)
             var month = txPayments.First().PaymentDate.Month;
-            
+
             if (!allocationsByTx.TryGetValue(txId, out var txAllocations)) continue;
 
             if (!groupedData.ContainsKey(month)) groupedData[month] = new();
@@ -105,7 +107,7 @@ public class FeeCollectionMonthAndFeeHeadwiseBuilder(
 
                 // Here we just take the raw allocation amount, because we are not splitting by Cash/Gateway.
                 // The allocation tells us exactly how much of the transaction went to this FeeHead.
-                // Note: The allocation amount might exceed the payments if partial payment was made and some allocations were dropped, 
+                // Note: The allocation amount might exceed the payments if partial payment was made and some allocations were dropped,
                 // but usually Sum(Allocation.Amount) == txTotalPaid. Let's just use Allocation.Amount.
                 groupedData[month][feeHeadId] += allocation.Amount;
             }
@@ -132,7 +134,7 @@ public class FeeCollectionMonthAndFeeHeadwiseBuilder(
             {
                 if (feeHeadData.TryGetValue(feeHead.Id, out var amount))
                 {
-                    row[$"FH_{feeHead.Id}"] = amount.ToString("N2");
+                    row[$"FH_{feeHead.Id}"] = Math.Ceiling(amount).ToString("N0");
                     rowTotal += amount;
                 }
                 else
@@ -141,7 +143,7 @@ public class FeeCollectionMonthAndFeeHeadwiseBuilder(
                 }
             }
 
-            row["Total"] = rowTotal.ToString("N2");
+            row["Total"] = Math.Ceiling(rowTotal).ToString("N0");
             rows.Add(row);
         }
 
@@ -150,7 +152,7 @@ public class FeeCollectionMonthAndFeeHeadwiseBuilder(
         payload.PageSize = request.PageSize;
 
         var sortedRows = rows.OrderBy(r => int.Parse(r["MonthIndex"]!)).ToList();
-        
+
         payload.Rows = exportAllRows
             ? sortedRows
             : sortedRows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();

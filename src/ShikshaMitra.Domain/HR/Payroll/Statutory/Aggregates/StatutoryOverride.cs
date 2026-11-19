@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -33,6 +34,10 @@ public class StatutoryOverride : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? approvedByUserId) : base(id)
 	{
 		TenantId = tenantId;
+		if (string.Equals(schemeCode, "ESI", StringComparison.OrdinalIgnoreCase) &&
+			(effectiveFrom.Day != 1 || effectiveTo.Day != DateTime.DaysInMonth(effectiveTo.Year, effectiveTo.Month) || effectiveTo.Date < effectiveFrom.Date))
+			throw new BusinessException(HRErrorCodes.StatutoryOverrideInvalid)
+				.WithData("reason", "ESIC exceptions must cover complete calendar months.");
 		EmployeeId = employeeId;
 		SchemeCode = schemeCode.Trim().ToUpperInvariant();
 		OverrideType = overrideType;

@@ -79,7 +79,7 @@ internal static class RefundPolicyMapping
 		input.MaximumDeduction,
 		input.DeductionExplanation,
 		input.AllowedPayoutMethods.Select(ParsePayoutMethod).ToList(),
-		input.ProcessingTargetDays);
+		input.ProcessingTargetDays, input.ExpenseCategoryId, input.DefaultPayingBankAccountId);
 
 	public static RefundPolicyDto ToDto(RefundPolicy entity) => new()
 	{
@@ -107,6 +107,8 @@ internal static class RefundPolicyMapping
 		DeductionExplanation = entity.DeductionExplanation,
 		AllowedPayoutMethods = entity.GetAllowedPayoutMethods().Select(x => x.ToString()).ToList(),
 		ProcessingTargetDays = entity.ProcessingTargetDays,
+		ExpenseCategoryId = entity.ExpenseCategoryId,
+		DefaultPayingBankAccountId = entity.DefaultPayingBankAccountId,
 		Version = entity.Version,
 		CreationTime = entity.CreationTime,
 		CreatorId = entity.CreatorId,

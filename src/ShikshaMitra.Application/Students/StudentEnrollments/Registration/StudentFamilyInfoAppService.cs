@@ -1,33 +1,58 @@
 ﻿using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.StudentEnrollments.Helpers;
 using System;
+using ShikshaMitra.Students.Records;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp;
+using Volo.Abp.Data;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
-public class StudentFamilyInfoAppService(
-    IStudentRepository studentRepository,
-    IRepository<StudentFamilyDetail, Guid> familyDetailRepository,
-    EntityValidationService validationService,
-    StudentRegistrationMappingHelper mappingHelper,
-    StudentScopeAccessService studentScopeAccessService
-) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
+public class StudentFamilyInfoAppService : StudentRegistrationBaseAppService,
     IStudentFamilyInfoAppService
 {
-    public async Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId)
+	private readonly IStudentRepository studentRepository;
+	private readonly IRepository<StudentFamilyDetail, Guid> familyDetailRepository;
+	private readonly EntityValidationService validationService;
+	private readonly StudentRegistrationMappingHelper mappingHelper;
+	private readonly StudentScopeAccessService studentScopeAccessService;
+
+	public StudentFamilyInfoAppService(
+		IStudentRepository studentRepository,
+		IRepository<StudentFamilyDetail, Guid> familyDetailRepository,
+		EntityValidationService validationService,
+		StudentRegistrationMappingHelper mappingHelper,
+		StudentScopeAccessService studentScopeAccessService
+	) : base(studentRepository, validationService, studentScopeAccessService)
+	{
+		this.studentRepository = studentRepository;
+		this.familyDetailRepository = familyDetailRepository;
+		this.validationService = validationService;
+		this.mappingHelper = mappingHelper;
+		this.studentScopeAccessService = studentScopeAccessService;
+	}
+
+    public Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId) => ReadAsync(studentId, null);
+    internal Task<StudentFamilyInfoDto> GetFamilyInfoAsync(Guid studentId, StudentRecordSectionReadScope scope) => ReadAsync(studentId, scope);
+    private async Task<StudentFamilyInfoDto> ReadAsync(Guid studentId, StudentRecordSectionReadScope? scope)
     {
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(GetFamilyInfoAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyInfo);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyInfo,
+            includeStudentRecords: true);
 
-        var familyDetail = await familyDetailRepository.FindAsync(studentId);
+        scope?.RequireContext(studentId, CurrentTenant.Id, CurrentUser.Id, CurrentUnitOfWork);
+        var familyDetail = scope == null ? await familyDetailRepository.FindAsync(studentId) :
+            await scope.ReadAsync("family", () => familyDetailRepository.FindAsync(studentId));
 
         var result = new StudentFamilyInfoDto
         {
+            MainContactRelationship = StudentFamilyContactSelection.Resolve(student, familyDetail),
+            GuardianRelationship = student.GetProperty<string>(StudentFamilyContactSelection.GuardianRelationshipKey),
             StudentId = student.Id,
             Status = student.Status,
             FatherDetails = familyDetail?.FatherDetails != null
@@ -69,7 +94,8 @@ public class StudentFamilyInfoAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(UpdateFamilyInfoAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyUpdate);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyUpdate,
+            forProfileWrite: true);
 
         await validationService.ValidateSiblingStudentsExistAsync(input.SiblingStudentIds);
         if (input.SiblingStudentIds != null)
@@ -87,9 +113,33 @@ public class StudentFamilyInfoAppService(
             ? mappingHelper.MapDtoToParentGuardianDetails(input.GuardianDetails) : null;
 
         var existingFamilyDetail = await familyDetailRepository.FindAsync(studentId);
+        var selectsGuardian = input.MainContactRelationship == "guardian" || input.MainContactRelationship == null &&
+            string.IsNullOrEmpty(student.GetProperty<string>(StudentFamilyContactSelection.SelectionKey)) &&
+            !StudentFamilyContactSelection.Present(fatherDetails) && !StudentFamilyContactSelection.Present(motherDetails) &&
+            StudentFamilyContactSelection.Present(guardianDetails);
+        var confirmGuardian = selectsGuardian &&
+            StudentFamilyContactSelection.Resolve(student, existingFamilyDetail) != "guardian";
+        if (confirmGuardian && (input.GuardianResponsibilityConfirmed != true || !CurrentUser.Id.HasValue || CurrentUser.Id == Guid.Empty))
+            throw new BusinessException("Students:Family:GuardianResponsibilityConfirmationRequired",
+                "Confirm that neither parent is handling school-contact responsibility before choosing Guardian.");
         var familyDetail = existingFamilyDetail ?? new StudentFamilyDetail(student.Id, student.TenantId);
         var shouldCreateFamilyDetail = existingFamilyDetail == null;
-        familyDetail.UpdateFamilyInformation(fatherDetails, motherDetails, guardianDetails, input.SiblingStudentIds);
+        // Omitted sibling IDs are a contact edit, never an instruction to remove sibling links.
+        familyDetail.UpdateFamilyInformation(fatherDetails, motherDetails, guardianDetails, input.SiblingStudentIds ?? familyDetail.SiblingStudentIds);
+        if (input.MainContactRelationship != null)
+            StudentFamilyContactSelection.Select(student, input.MainContactRelationship, familyDetail);
+        if (confirmGuardian)
+        {
+            student.SetProperty("SchoolContactGuardianResponsibilityConfirmedBy", CurrentUser.Id!.Value.ToString("D"));
+            student.SetProperty("SchoolContactGuardianResponsibilityConfirmedAt", Clock.Now.ToUniversalTime().ToString("O"));
+        }
+        if (input.GuardianRelationship != null)
+        {
+            if (input.GuardianRelationship.Trim().Length > 128)
+                throw new BusinessException("Students:Family:GuardianRelationshipInvalid");
+            student.SetProperty(StudentFamilyContactSelection.GuardianRelationshipKey, input.GuardianRelationship.Trim());
+        }
+        await studentRepository.UpdateAsync(student, autoSave: false);
 
         if (shouldCreateFamilyDetail)
         {

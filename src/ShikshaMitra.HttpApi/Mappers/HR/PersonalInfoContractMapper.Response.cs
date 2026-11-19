@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ShikshaMitra.Common;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
@@ -37,6 +37,7 @@ public static partial class PersonalInfoContractMapper
 			Qualification = dto.Qualification,
 			IdentificationMark1 = dto.IdentificationMark1,
 			RoleId = dto.RoleId,
+
 			ShiftId = dto.ShiftId ?? Guid.Empty,
 			Shift = dto.Shift == null
 				? null

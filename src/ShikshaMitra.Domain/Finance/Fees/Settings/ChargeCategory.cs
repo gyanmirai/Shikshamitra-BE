@@ -20,9 +20,13 @@ public class ChargeCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public bool IsActive { get; set; }
 	public Guid? IncomeCategoryId => this.GetProperty<Guid?>(IncomeCategoryIdProperty);
 	public Guid? IncomeAccountHeadId => this.GetProperty<Guid?>(IncomeAccountHeadIdProperty);
-	public bool IsAccountingReady => IncomeCategoryId.HasValue && IncomeAccountHeadId.HasValue;
+	public bool IsAccountingReady => IncomeCategoryId.HasValue;
 
-    protected ChargeCategory() { }
+    protected ChargeCategory()
+    {
+        // EF materializes these required columns after this ORM constructor.
+        Name = null!;
+    }
 
     public ChargeCategory(
         Guid id,
@@ -42,7 +46,7 @@ public class ChargeCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
         IsActive = isActive;
     }
 
-	public void SetAccountingMapping(Guid incomeCategoryId, Guid incomeAccountHeadId)
+	public void SetAccountingMapping(Guid incomeCategoryId, Guid? incomeAccountHeadId = null)
 	{
 		this.SetProperty(IncomeCategoryIdProperty, incomeCategoryId);
 		this.SetProperty(IncomeAccountHeadIdProperty, incomeAccountHeadId);

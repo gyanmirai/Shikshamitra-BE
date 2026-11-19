@@ -15,6 +15,10 @@ namespace ShikshaMitra.EntityFrameworkCore;
 public partial class ShikshaMitraDbContext
 {
 	public DbSet<AdmissionAssessmentSession> AdmissionAssessmentSessions { get; set; }
+	public DbSet<AdmissionApplicationNumberingRule> AdmissionApplicationNumberingRules { get; set; }
+	public DbSet<AdmissionApplicationNumberCounter> AdmissionApplicationNumberCounters { get; set; }
+	public DbSet<AdmissionAssessmentSessionScope> AdmissionAssessmentSessionScopes { get; set; }
+	public DbSet<AdmissionAssessmentBookingBatch> AdmissionAssessmentBookingBatches { get; set; }
 	public DbSet<AdmissionAssessmentAttempt> AdmissionAssessmentAttempts { get; set; }
     // ───────────────────────────────────────────────
     // Students — Core
@@ -44,6 +48,7 @@ public partial class ShikshaMitraDbContext
 	public DbSet<AdmissionCycleHistory> AdmissionCycleHistories { get; set; }
 	public DbSet<AdmissionCampus> AdmissionCampuses { get; set; }
 	public DbSet<AdmissionOffering> AdmissionOfferings { get; set; }
+	public DbSet<AdmissionClassRoomAllocation> AdmissionClassRoomAllocations { get; set; }
 	public DbSet<AdmissionReferenceSequence> AdmissionReferenceSequences { get; set; }
 	public DbSet<AdmissionInquiry> AdmissionInquiries { get; set; }
 	public DbSet<AdmissionWorkflowDefinition> AdmissionWorkflowDefinitions { get; set; }
@@ -68,6 +73,10 @@ public partial class ShikshaMitraDbContext
 	public DbSet<AdmissionFormChangeHistory> AdmissionFormChangeHistories { get; set; }
 	public DbSet<AdmissionActivity> AdmissionActivities { get; set; }
 	public DbSet<AdmissionInquiryManagement> AdmissionInquiryManagement { get; set; }
+	public DbSet<AdmissionIntakeProfile> AdmissionIntakeProfiles { get; set; }
+	public DbSet<AdmissionIntakeSetup> AdmissionIntakeSetups { get; set; }
+	public DbSet<AdmissionParentRegistration> AdmissionParentRegistrations { get; set; }
+	public DbSet<AdmissionPublicInquiryLink> AdmissionPublicInquiryLinks { get; set; }
 	public DbSet<AdmissionInquiryFollowUp> AdmissionInquiryFollowUps { get; set; }
 	public DbSet<AdmissionDocumentEvidence> AdmissionDocumentEvidence { get; set; }
 	public DbSet<AdmissionDocumentReview> AdmissionDocumentReviews { get; set; }
@@ -85,6 +94,8 @@ public partial class ShikshaMitraDbContext
 	public DbSet<StudentOnboardingEvent> StudentOnboardingEvents { get; set; }
 	public DbSet<StudentOnboardingPolicy> StudentOnboardingPolicies { get; set; }
 	public DbSet<StudentOnboardingSettings> StudentOnboardingSettings { get; set; }
+	public DbSet<StudentRollNumberBatch> StudentRollNumberBatches { get; set; }
+	public DbSet<ShikshaMitra.Students.Portal.StudentPortalAccountLink> StudentPortalAccountLinks { get; set; }
 	public DbSet<StudentSeatReservation> StudentSeatReservations { get; set; }
 	public DbSet<StudentIdentifierSeries> StudentIdentifierSeries { get; set; }
 	public DbSet<StudentIdentifierAllocation> StudentIdentifierAllocations { get; set; }
@@ -94,13 +105,28 @@ public partial class ShikshaMitraDbContext
     // Students — Records
     // ───────────────────────────────────────────────
     public DbSet<HouseSettings> HouseSettings { get; set; }
-    public DbSet<StudentManagementSettings> StudentManagementSettings { get; set; }
     public DbSet<StudentStatusHistory> StudentStatusHistories { get; set; }
     public DbSet<StudentDashboardPreview> StudentDashboardPreviews { get; set; }
-    public DbSet<AcademicTerm> AcademicTerms { get; set; }
-    public DbSet<StudentRollNumberAssignment> StudentRollNumberAssignments { get; set; }
     public DbSet<StudentCertificate> StudentCertificates { get; set; }
     public DbSet<StudentCertificateTemplate> StudentCertificateTemplates { get; set; }
+	public DbSet<StudentRecordChange> StudentRecordChanges { get; set; }
+	public DbSet<StudentRecordCustomProfile> StudentRecordCustomProfiles { get; set; }
+	public DbSet<StudentRecordChangeDecision> StudentRecordChangeDecisions { get; set; }
+	public DbSet<StudentRecordDocumentEvent> StudentRecordDocumentEvents { get; set; }
+	public DbSet<StudentRecordPhotoDraft> StudentRecordPhotoDrafts { get; set; }
+	public DbSet<StudentRecordReportJob> StudentRecordReportJobs { get; set; }
+	public DbSet<StudentRecordDuplicateReview> StudentRecordDuplicateReviews { get; set; }
+	public DbSet<StudentRecordTransition> StudentRecordTransitions { get; set; }
+	public DbSet<StudentRecordTransitionBatch> StudentRecordTransitionBatches { get; set; }
+	public DbSet<StudentRecordTransitionEvent> StudentRecordTransitionEvents { get; set; }
+	public DbSet<StudentRecordRenewalCase> StudentRecordRenewalCases { get; set; }
+	public DbSet<StudentRecordReturnHandoff> StudentRecordReturnHandoffs { get; set; }
+	public DbSet<StudentGuardianAccessReview> StudentGuardianAccessReviews { get; set; }
+	public DbSet<StudentIdCard> StudentIdCards { get; set; }
+	public DbSet<StudentIdCardTemplate> StudentIdCardTemplates { get; set; }
+	public DbSet<StudentRecordLegacyOverride> StudentRecordLegacyOverrides { get; set; }
+	public DbSet<ShikshaMitra.Students.StudentRecords.StudentRecordsConfiguration> StudentRecordsConfigurations { get; set; }
+	public DbSet<ShikshaMitra.Students.StudentRecords.StudentRecordsPolicyVersion> StudentRecordsPolicyVersions { get; set; }
 
     // ───────────────────────────────────────────────
     // Students — Attendance

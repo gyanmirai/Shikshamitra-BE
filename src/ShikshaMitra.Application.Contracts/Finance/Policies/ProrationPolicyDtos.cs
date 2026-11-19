@@ -11,10 +11,14 @@ public class ProrationPolicyRuleDto
 	public Guid FeeHeadId { get; set; }
 	public string? FeeHeadName { get; set; }
 	public string RuleType { get; set; } = "FullCharge";
-	public string RoundingMode { get; set; } = "Currency";
-	public int? MinimumChargeDays { get; set; }
+	public string RoundingMode { get; set; } = "RoundUpRupee";
 	public int? CutoffDay { get; set; }
 	public string? AfterCutoffAction { get; set; }
+	public bool ApplyOnAdmission { get; set; } = true;
+	public bool ApplyOnEarlyWithdrawal { get; set; } = true;
+	public string? EarlyWithdrawalRuleType { get; set; }
+	public int? EarlyWithdrawalCutoffDay { get; set; }
+	public string? EarlyWithdrawalBeforeCutoffAction { get; set; }
 }
 
 public class ProrationPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
@@ -69,9 +73,9 @@ public class CreateUpdateProrationPolicyDtoValidator : AbstractValidator<CreateU
 		RuleFor(x => x.FeeHeadRules).NotEmpty();
 		RuleFor(x => x.FeeHeadRules)
 			.Must(rules => rules.Any(rule =>
-				string.Equals(rule.RuleType, "Daily", StringComparison.OrdinalIgnoreCase) ||
-				string.Equals(rule.RuleType, "MonthlyCutoff", StringComparison.OrdinalIgnoreCase)))
-			.WithMessage("At least one Fee Head must use Daily or MonthlyCutoff proration.");
+				(rule.ApplyOnAdmission && EnumValue(rule.RuleType, "Daily", "MonthlyCutoff", "FullMonthCharge")) ||
+				(rule.ApplyOnEarlyWithdrawal && EnumValue(rule.EarlyWithdrawalRuleType ?? rule.RuleType, "Daily", "MonthlyCutoff", "FullMonthCharge"))))
+			.WithMessage("At least one Fee Head must use Daily, MonthlyCutoff or FullMonthCharge proration.");
 		RuleFor(x => x.FeeHeadRules).Must(x => x.Select(r => r.FeeHeadId).Distinct().Count() == x.Count)
 			.WithMessage("A Fee Head can have only one proration rule.");
 		RuleForEach(x => x.FeeHeadRules).SetValidator(new ProrationPolicyRuleDtoValidator());
@@ -86,14 +90,17 @@ public class ProrationPolicyRuleDtoValidator : AbstractValidator<ProrationPolicy
 	public ProrationPolicyRuleDtoValidator()
 	{
 		RuleFor(x => x.FeeHeadId).NotEmpty();
-		RuleFor(x => x.RuleType).Must(x => EnumValue(x, "FullCharge", "Daily", "MonthlyCutoff"));
+		RuleFor(x => x.RuleType).Must(x => EnumValue(x, "FullCharge", "Daily", "MonthlyCutoff", "FullMonthCharge"));
 		RuleFor(x => x.RoundingMode).Must(x => EnumValue(x, "Currency", "NearestRupee", "RoundUpRupee", "RoundDownRupee"));
-		RuleFor(x => x.MinimumChargeDays).InclusiveBetween(0, 366)
-			.When(x => EnumValue(x.RuleType, "Daily"));
 		RuleFor(x => x.CutoffDay).NotNull().InclusiveBetween(1, 31)
-			.When(x => EnumValue(x.RuleType, "MonthlyCutoff"));
+			.When(x => x.ApplyOnAdmission && EnumValue(x.RuleType, "MonthlyCutoff"));
 		RuleFor(x => x.AfterCutoffAction).NotNull().Must(x => EnumValue(x, "NoCharge", "HalfCharge"))
-			.When(x => EnumValue(x.RuleType, "MonthlyCutoff"));
+			.When(x => x.ApplyOnAdmission && EnumValue(x.RuleType, "MonthlyCutoff"));
+		RuleFor(x => x.EarlyWithdrawalRuleType).Must(x => x == null || EnumValue(x, "FullCharge", "Daily", "MonthlyCutoff", "FullMonthCharge"));
+		RuleFor(x => x.EarlyWithdrawalCutoffDay).NotNull().InclusiveBetween(1, 31)
+			.When(x => x.ApplyOnEarlyWithdrawal && EnumValue(x.EarlyWithdrawalRuleType, "MonthlyCutoff"));
+		RuleFor(x => x.EarlyWithdrawalBeforeCutoffAction).NotNull().Must(x => EnumValue(x, "NoCharge", "HalfCharge"))
+			.When(x => x.ApplyOnEarlyWithdrawal && EnumValue(x.EarlyWithdrawalRuleType, "MonthlyCutoff"));
 	}
 
 	private static bool EnumValue(string? value, params string[] allowed) =>
@@ -102,9 +109,18 @@ public class ProrationPolicyRuleDtoValidator : AbstractValidator<ProrationPolicy
 
 public class ProrationPolicyListRequestDto : PagedAndSortedResultRequestDto
 {
+	public bool IncludeArchived { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public string? Status { get; set; }
 	public string? Search { get; set; }
+	public string? PolicyNameFilter { get; set; }
+	public string? PolicyNameOperator { get; set; }
+	public string? RuleCountOperator { get; set; }
+	public int? RuleCountValue { get; set; }
+	public int? RuleCountMax { get; set; }
+	public string? UpdatedAtOperator { get; set; }
+	public DateTime? UpdatedAt { get; set; }
+	public DateTime? UpdatedAtEnd { get; set; }
 }
 
 public class ProrationPolicyListRequestDtoValidator : AbstractValidator<ProrationPolicyListRequestDto>
@@ -179,21 +195,4 @@ public class ProrationPolicyImpactDto
 	public int AttachedFeeStructureCount { get; set; }
 	public int StudentAssignmentCount { get; set; }
 	public bool ChangeReasonRequired { get; set; }
-}
-
-public class ProrationPolicyAttachmentImpactRequestDto
-{
-	public Guid FeeStructureId { get; set; }
-}
-
-public class ProrationPolicyAttachmentImpactDto
-{
-	public Guid PolicyId { get; set; }
-	public int PolicyVersion { get; set; }
-	public bool IsAttachable { get; set; }
-	public List<Guid> ProratedFeeHeadIds { get; set; } = [];
-	public List<Guid> FullChargeFeeHeadIds { get; set; } = [];
-	public List<Guid> OneTimeFeeHeadIds { get; set; } = [];
-	public List<Guid> PolicyFeeHeadsNotInStructure { get; set; } = [];
-	public List<string> Warnings { get; set; } = [];
 }

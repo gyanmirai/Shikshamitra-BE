@@ -275,12 +275,13 @@ public partial class AcademicReportPerformance_Tests : ShikshaMitraApplicationTe
         return job;
     }
 
-    private sealed class ReportQueryCapture : IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>, IDisposable
+    internal sealed class ReportQueryCapture : IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>, IDisposable
     {
         private readonly DbConnection _connection;
         private readonly IDisposable _listenerSubscription;
         private readonly ConcurrentBag<IDisposable> _subscriptions = new();
         private readonly ConcurrentDictionary<Guid, string> _commands = new();
+        private readonly ConcurrentBag<(string Sql, long Rows)> _reads = new();
 
         public ReportQueryCapture(DbConnection connection)
         {
@@ -289,12 +290,14 @@ public partial class AcademicReportPerformance_Tests : ShikshaMitraApplicationTe
         }
 
         public IReadOnlyCollection<string> Commands => _commands.Values.ToList();
+        public IReadOnlyCollection<(string Sql, long Rows)> Reads => _reads.ToList();
 
         public void OnNext(DiagnosticListener listener)
         {
             if (listener.Name == "Microsoft.EntityFrameworkCore")
             {
-                _subscriptions.Add(listener.Subscribe(this, name => name == RelationalEventId.CommandExecuted.Name));
+                _subscriptions.Add(listener.Subscribe(this, name => name == RelationalEventId.CommandExecuted.Name ||
+                    name == RelationalEventId.DataReaderDisposing.Name));
             }
         }
 
@@ -305,6 +308,9 @@ public partial class AcademicReportPerformance_Tests : ShikshaMitraApplicationTe
             {
                 _commands.TryAdd(data.CommandId, data.Command.CommandText);
             }
+            if (value.Value is DataReaderDisposingEventData reader && reader.Context != null &&
+                ReferenceEquals(reader.Context.Database.GetDbConnection(), _connection))
+                _reads.Add((reader.Command.CommandText, reader.ReadCount));
         }
 
         public void OnCompleted() { }

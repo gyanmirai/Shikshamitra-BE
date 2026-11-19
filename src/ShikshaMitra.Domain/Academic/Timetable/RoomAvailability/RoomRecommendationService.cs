@@ -30,11 +30,12 @@ public class RoomRecommendationService : DomainService
         Guid? preferredBuildingId = null,
         Guid? standardId = null,
         int? page = null,
-        int? limit = null)
+        int? limit = null, Guid? academicMediumId = null)
     {
         var allRooms = await _roomRepository.GetListAsync();
         var suggestions = new List<SuggestedRoom>();
-        var availability = await _conflictService.CheckRoomsAsync(allRooms, date, startTime, endTime, standardId);
+        var availability = await _conflictService.CheckRoomsAsync(allRooms, date, startTime, endTime, standardId,
+            academicMediumId: academicMediumId);
 
         foreach (var room in allRooms)
         {

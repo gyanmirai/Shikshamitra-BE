@@ -16,7 +16,7 @@ public class AttendanceImportTemplateService(IExcelService excelService)
 	{
 		var document = new ExcelDocument
 		{
-			OutputFileName = "employee-attendance-import-template.xlsx",
+			OutputFileName = "staff-attendance-import-template.xlsx",
 			Sheets =
 			[
 				new ExcelSheet
@@ -35,7 +35,7 @@ public class AttendanceImportTemplateService(IExcelService excelService)
 
 		return Task.FromResult(new AttendanceImportTemplateDto
 		{
-			FileName = document.OutputFileName ?? "employee-attendance-import-template.xlsx",
+			FileName = document.OutputFileName ?? "staff-attendance-import-template.xlsx",
 			Content = excelService.GenerateExcelAsBytes(document)
 		});
 	}

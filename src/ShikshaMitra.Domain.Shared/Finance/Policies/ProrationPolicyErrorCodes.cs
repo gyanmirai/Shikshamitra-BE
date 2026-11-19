@@ -2,6 +2,15 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 
 public static class ProrationPolicyErrorCodes
 {
+	public const string JoiningDateRequired = "Finance:Proration:JoiningDateRequired";
+	public const string JoiningDateInvalid = "Finance:Proration:JoiningDateInvalid";
+	public const string PolicyAmbiguous = "Finance:Proration:PolicyAmbiguous";
+	public const string PolicyVersionMissing = "Finance:Proration:PolicyVersionMissing";
+	public const string WithdrawalEvidenceInvalid = "Finance:Proration:WithdrawalEvidenceInvalid";
+	public const string ReconciliationPending = "Finance:Proration:ReconciliationPending";
+	public const string RecalculationPermissionRequired = "Finance:Proration:RecalculationPermissionRequired";
+	public const string AdjustmentConflict = "Finance:Proration:AdjustmentConflict";
+	public const string DefaultPolicyCannotBeRemoved = "Finance:ProrationPolicy:010026";
 	private const string Prefix = "Finance:ProrationPolicy:";
 
 	public const string PolicyNotFound = Prefix + "010001";
@@ -29,4 +38,5 @@ public static class ProrationPolicyErrorCodes
 	public const string OneTimeFeeCannotBeProrated = Prefix + "010023";
 	public const string ScheduleCoverageRequired = Prefix + "010024";
 	public const string DefaultPolicyMustBeActive = Prefix + "010025";
+	public const string FeeHeadUnavailable = Prefix + "010027";
 }

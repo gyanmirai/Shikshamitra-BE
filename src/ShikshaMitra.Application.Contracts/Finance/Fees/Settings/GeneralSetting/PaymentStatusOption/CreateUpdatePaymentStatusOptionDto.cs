@@ -8,5 +8,5 @@ namespace ShikshaMitra.Finance.Fees.Settings.GeneralSetting.PaymentStatusOption;
 
 public class CreateUpdatePaymentStatusOptionDto
 {
-	public string PaymentStatusOptionName { get; set; }
+	public string PaymentStatusOptionName { get; set; } = null!; // Retained mutation contract: initialized by request binding before validation.
 }

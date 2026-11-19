@@ -229,8 +229,8 @@ public class LibrarySeederContributor : BaseSeederContributor
 
 	private async Task<List<BookCopy>> SeedBooksAndCopiesAsync(Guid academicYearId, IReadOnlyList<BookCategory> categories, IReadOnlyList<LibraryShelf> shelves)
 	{
-		var referenceShelf = shelves.First(x => x.ShelfName.StartsWith("R-", StringComparison.OrdinalIgnoreCase));
-		var generalShelf = shelves.First(x => x.ShelfName.StartsWith("G-", StringComparison.OrdinalIgnoreCase));
+		var referenceShelf = shelves.First(x => x.ShelfName!.StartsWith("R-", StringComparison.OrdinalIgnoreCase));
+		var generalShelf = shelves.First(x => x.ShelfName!.StartsWith("G-", StringComparison.OrdinalIgnoreCase));
 
 		var books = new[]
 		{

@@ -10,7 +10,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public sealed record AdmissionInquiryPolicyContext(
-	AdmissionWorkflowStageDefinition Definition,
+	AdmissionWorkflowStageDefinition? Definition,
 	AdmissionInquiryPolicy Policy,
 	string SnapshotJson);
 
@@ -56,6 +56,7 @@ public class AdmissionInquiryPolicyResolver(
 			var policy = JsonSerializer.Deserialize<AdmissionInquiryPolicy>(snapshotJson,
 				new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ??
 				throw new ArgumentException("Inquiry policy snapshot is missing.");
+			policy = policy.WithStandardBehavior();
 			policy.Validate();
 			return policy;
 		}

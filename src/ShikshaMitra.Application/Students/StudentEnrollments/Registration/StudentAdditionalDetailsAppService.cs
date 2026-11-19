@@ -6,21 +6,33 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
-public class StudentAdditionalDetailsAppService(
-    IStudentRepository studentRepository,
-    IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
-    EntityValidationService validationService,
-    ILibraryMemberAppService libraryMemberAppService,
-    StudentScopeAccessService studentScopeAccessService
-) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
+public class StudentAdditionalDetailsAppService : StudentRegistrationBaseAppService,
     IStudentAdditionalDetailsAppService
 {
+	private readonly IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository;
+	private readonly EntityValidationService validationService;
+	private readonly ILibraryMemberAppService libraryMemberAppService;
+
+	public StudentAdditionalDetailsAppService(
+		IStudentRepository studentRepository,
+		IRepository<StudentAdditionalDetail, Guid> studentAdditionalDetailRepository,
+		EntityValidationService validationService,
+		ILibraryMemberAppService libraryMemberAppService,
+		StudentScopeAccessService studentScopeAccessService
+	) : base(studentRepository, validationService, studentScopeAccessService)
+	{
+		this.studentAdditionalDetailRepository = studentAdditionalDetailRepository;
+		this.validationService = validationService;
+		this.libraryMemberAppService = libraryMemberAppService;
+	}
+
     public async Task<StudentAdditionalDetailsDto> GetAdditionalDetailsAsync(Guid studentId)
     {
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(GetAdditionalDetailsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForAdditionalDetails);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForAdditionalDetails,
+            includeStudentRecords: true);
 
         var additionalDetail = student.AdditionalDetail;
 
@@ -48,11 +60,12 @@ public class StudentAdditionalDetailsAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(UpdateAdditionalDetailsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForAdditionalDetailsUpdate);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForAdditionalDetailsUpdate,
+            forProfileWrite: true);
 
         validationService.ValidateAdditionalDetailExists(student);
 
-        student.AdditionalDetail.UpdateAdditionalDetails(
+        student.AdditionalDetail!.UpdateAdditionalDetails(
             input.IsBPLStudent,
             input.BPLCardNo,
             input.SecondLanguage,

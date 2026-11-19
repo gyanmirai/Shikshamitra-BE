@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using Volo.Abp.Data;
 using Shouldly;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Xunit;
@@ -20,8 +22,36 @@ public class AdmissionInquiry_Tests
 	{
 		var inquiry = new AdmissionInquiry(Guid.NewGuid(), null, "INQ-2026-000001", Guid.NewGuid(), null, "Asha", "987654", null, AdmissionInquirySource.Phone, null);
 		inquiry.MarkContacted(DateTime.UtcNow);
-		inquiry.Status.ShouldBe(AdmissionInquiryStatus.Contacted);
+		inquiry.Status.ShouldBe(AdmissionInquiryStatus.New);
 		inquiry.ContactedAt.ShouldNotBeNull();
+	}
+
+	[Fact]
+	public void Contact_does_not_clear_confirmed_interest_and_email_intent_is_recorded_once()
+	{
+		var inquiry = new AdmissionInquiry(Guid.NewGuid(), null, "INQ-2026-000001", Guid.NewGuid(), Guid.NewGuid(), "Asha", "9876543210", null, AdmissionInquirySource.Phone, null);
+		inquiry.SetStatus(AdmissionInquiryStatus.Interested);
+		var requestedAt = inquiry.GetProperty<DateTime?>("QualificationEmailRequestedAt");
+		requestedAt.ShouldNotBeNull();
+		inquiry.MarkContacted(DateTime.UtcNow);
+		inquiry.Status.ShouldBe(AdmissionInquiryStatus.Interested);
+		inquiry.SetStatus(AdmissionInquiryStatus.NotInterested);
+		inquiry.SetStatus(AdmissionInquiryStatus.Interested);
+		inquiry.GetProperty<DateTime?>("QualificationEmailRequestedAt").ShouldBe(requestedAt);
+		inquiry.GetDistributedEvents().Count().ShouldBe(1);
+	}
+
+	[Theory]
+	[InlineData(AdmissionInquiryStatus.Contacted, AdmissionInquiryStatus.New)]
+	[InlineData(AdmissionInquiryStatus.FollowUp, AdmissionInquiryStatus.New)]
+	[InlineData(AdmissionInquiryStatus.ApplicationStarted, AdmissionInquiryStatus.Interested)]
+	[InlineData(AdmissionInquiryStatus.Converted, AdmissionInquiryStatus.Interested)]
+	[InlineData(AdmissionInquiryStatus.Lost, AdmissionInquiryStatus.NotInterested)]
+	[InlineData(AdmissionInquiryStatus.Duplicate, AdmissionInquiryStatus.NotInterested)]
+	public void Historical_statuses_have_three_business_labels_without_changing_lifecycle(AdmissionInquiryStatus raw, AdmissionInquiryStatus display)
+	{
+		AdmissionInquiryStatusRules.Display(raw).ShouldBe(display);
+		AdmissionInquiryStatusRules.IsTransferred(raw).ShouldBe(raw is AdmissionInquiryStatus.ApplicationStarted or AdmissionInquiryStatus.Converted);
 	}
 
 	[Fact]

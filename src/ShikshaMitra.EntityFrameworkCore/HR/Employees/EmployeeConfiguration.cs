@@ -66,6 +66,12 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 			.IsRequired(false);
 
 		// Self-referencing relationship for reporting manager
+		builder.HasOne(e => e.ReportingManagerUser)
+			.WithMany()
+			.HasForeignKey(e => e.ReportingManagerUserId)
+			.OnDelete(DeleteBehavior.Restrict);
+		builder.ToTable(table => table.HasCheckConstraint("CK_Employees_ReportingManagerIdentity",
+			"\"ReportingManagerId\" IS NULL OR \"ReportingManagerUserId\" IS NULL"));
 		builder.HasOne(e => e.ReportingManager)
 			.WithMany()
 			.HasForeignKey(e => e.ReportingManagerId)

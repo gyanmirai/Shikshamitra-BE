@@ -19,8 +19,8 @@ public class HrPolicyVersionsController(IHrPolicyVersionAppService appService) :
 	public Task<PagedResultDto<HrPolicyVersionDto>> GetListAsync(
 		string policyType,
 		Guid policyId,
-		[FromQuery] PagedAndSortedResultRequestDto input) =>
-		appService.GetListAsync(policyType, policyId, input);
+		[FromQuery] PagedAndSortedResultRequestDto input, [FromQuery] string? search = null, [FromQuery] string? action = null) =>
+		appService.GetListAsync(policyType, policyId, input, search, action);
 
 	[HttpGet("{versionId:guid}")]
 	public Task<HrPolicyVersionDto> GetAsync(string policyType, Guid policyId, Guid versionId) =>

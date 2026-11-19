@@ -7,6 +7,7 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Timing;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 
 namespace ShikshaMitra.Domain.Finance.Policies;
 
@@ -20,13 +21,14 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 /// a second, independently-passed academicYearId would just be a second source of truth that
 /// could disagree with the Fee Structure's actual year.
 /// </summary>
-public class CollectionPolicyResolver(
+public partial class CollectionPolicyResolver(
 	IRepository<FeeStructure, Guid> feeStructureRepository,
 	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
 	IRepository<CollectionPolicy, Guid> collectionPolicyRepository,
 	IRepository<StudentFeePolicyOverride, Guid> overrideRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<FinancePolicyVersion, Guid> versionRepository,
+	IRepository<FinanceFeeAccount, Guid> accountRepository,
 	IClock clock)
 	: DomainService
 {
@@ -71,29 +73,18 @@ public class CollectionPolicyResolver(
 	/// returns. Override composition happens in exactly this one place — no other caller
 	/// should read StudentFeePolicyOverride directly.
 	/// </summary>
-	public async Task<EffectiveCollectionRules> ResolveEffectiveRulesForStudentAsync(Guid studentId, Guid feeStructureId)
+	public async Task<EffectiveCollectionRules> ResolveEffectiveRulesForStudentAsync(Guid studentId, Guid feeStructureId, Guid? assignmentId = null)
 	{
 		CollectionPolicy? policy = null;
 		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
-			x.StudentId == studentId && x.FeeStructureStandardId == feeStructureId);
+			x.StudentId == studentId && x.FeeStructureStandardId == feeStructureId &&
+            (!assignmentId.HasValue || x.Id == assignmentId.Value));
+        if (assignmentId.HasValue && assignment == null)
+            throw new Volo.Abp.BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
 		if (assignment?.CollectionPolicyVersionId is { } versionId && versionId != Guid.Empty)
 		{
 			var version = await versionRepository.FindAsync(versionId);
-			if (version is not null && version.PolicyType == "collection" &&
-				version.PolicyId == assignment.CollectionPolicyId &&
-				version.AcademicYearId == assignment.AcademicYearId)
-			{
-				try
-				{
-					var snapshot = CollectionPolicySnapshot.Deserialize(version.SnapshotJson);
-					policy = CollectionPolicy.FromSnapshot(
-						version.PolicyId, version.TenantId, version.AcademicYearId, version.VersionNumber, snapshot);
-				}
-				catch (System.Text.Json.JsonException)
-				{
-					policy = null;
-				}
-			}
+			policy = ReadStudentPinnedPolicy(assignment, version);
 		}
 		if (assignment != null && policy == null)
             throw new Volo.Abp.BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
@@ -113,6 +104,13 @@ public class CollectionPolicyResolver(
 	private static bool IsEffective(CollectionPolicy policy, DateTime date) =>
 		(!policy.EffectiveFrom.HasValue || policy.EffectiveFrom.Value.Date <= date.Date) &&
 		(!policy.EffectiveTo.HasValue || policy.EffectiveTo.Value.Date >= date.Date);
+
+	/// <summary>Resolves the payer's pinned Finance policy before a student assignment exists.</summary>
+	public async Task<EffectiveCollectionRules> ResolveEffectiveRulesForAccountAsync(Guid accountId)
+	{
+		var account = await accountRepository.GetAsync(accountId);
+		return await ResolveEffectiveRulesForAccountAsync(account, null);
+	}
 }
 
 public sealed record EffectiveCollectionRules(

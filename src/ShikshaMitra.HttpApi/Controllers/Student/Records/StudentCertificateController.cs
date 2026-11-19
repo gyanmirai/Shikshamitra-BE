@@ -14,6 +14,16 @@ namespace ShikshaMitra.HttpApi.Controllers.Students.Records;
 public class StudentCertificateController(
 	IStudentCertificateAppService certificateAppService) : AbpController
 {
+	[HttpGet("batches")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View)]
+	public async Task<Result<Volo.Abp.Application.Dtos.PagedResultDto<StudentCertificateBatchDto>>> GetBatches([FromQuery] StudentCertificateBatchQuery input) =>
+		Result.Success(await certificateAppService.GetBatchesAsync(input));
+
+	[HttpGet("batches/{batchId:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View)]
+	public async Task<Result<StudentCertificateBatchDetailDto>> GetBatch(Guid batchId, [FromQuery] StudentCertificateType certificateType) =>
+		Result.Success(await certificateAppService.GetBatchAsync(batchId, certificateType));
+
 	[HttpGet("placeholders")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View)]
 	public async Task<Result<List<string>>> GetSupportedPlaceholders()
@@ -53,9 +63,9 @@ public class StudentCertificateController(
 
 	[HttpGet("{certificateId}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View)]
-	public async Task<Result<StudentCertificateResponseDto>> Get(Guid certificateId)
+	public async Task<Result<StudentCertificateResponseDto>> Get(Guid certificateId, [FromQuery] bool includeBranding = false)
 	{
-		return Result.Success(await certificateAppService.GetAsync(certificateId));
+		return Result.Success(await certificateAppService.GetAsync(certificateId, includeBranding));
 	}
 
 	[HttpGet("students/{studentId}/history")]
@@ -67,10 +77,20 @@ public class StudentCertificateController(
 
 	[HttpPost("{certificateId}/duplicate")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.Add)]
-	public async Task<Result<StudentCertificateResponseDto>> Duplicate(Guid certificateId)
+	public async Task<Result<StudentCertificateResponseDto>> Duplicate(Guid certificateId, [FromBody] StudentDocumentActionDto input)
 	{
-		return Result.Success(await certificateAppService.DuplicateAsync(certificateId));
+		return Result.Success(await certificateAppService.DuplicateAsync(certificateId, input));
 	}
+	[HttpPost("{certificateId:guid}/reprint")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.Add)]
+	public async Task<IActionResult> Reprint(Guid certificateId, [FromBody] StudentDocumentActionDto input)
+	{
+		var pdf = await certificateAppService.ReprintAsync(certificateId, input);
+		return File(pdf.Content, pdf.ContentType, pdf.FileName);
+	}
+	[HttpPost("{certificateId:guid}/void")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.Add)]
+	public async Task<Result<StudentCertificateResponseDto>> Void(Guid certificateId, [FromBody] StudentDocumentActionDto input) => Result.Success(await certificateAppService.VoidAsync(certificateId, input));
 
 	[HttpGet("{certificateId}/pdf")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View)]

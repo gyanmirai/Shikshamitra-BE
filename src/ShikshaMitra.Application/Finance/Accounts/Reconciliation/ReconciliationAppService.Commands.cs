@@ -1,3 +1,6 @@
+using System.Data;
+using Volo.Abp.Uow;
+using ShikshaMitra.Finance.Fees.Receipts;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,13 +20,15 @@ public partial class ReconciliationAppService
         ApproveReconciliationInput input,
         CancellationToken cancellationToken = default)
     {
+        using var verificationUow = LazyServiceProvider.LazyGetRequiredService<IUnitOfWorkManager>().Begin(
+            new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var validator  = new ApproveReconciliationRequestValidator();
         var validation = validator.Validate(input);
         if (!validation.IsValid)
             throw new Volo.Abp.UserFriendlyException(validation.Errors[0].ErrorMessage);
 
         var provisionalForScope = await receiptRepository.GetAsync(provisionalReceiptId, cancellationToken: cancellationToken);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(provisionalForScope.StudentId, cancellationToken);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(provisionalForScope.StudentId, provisionalForScope.FinanceFeeAccountId, cancellationToken);
 
         var finalReceipt = await reconciliationManager.ApproveAsync(
             provisionalReceiptId, input.Remarks, cancellationToken);
@@ -32,20 +37,23 @@ public partial class ReconciliationAppService
             "[ReconciliationAppService] Approved: ProvisionalId={ProvisionalId}, FinalReceiptId={FinalId}, ActedBy={Actor}",
             provisionalReceiptId, finalReceipt.Id, currentUser.Id);
 
-        await eventBus.PublishAsync(new FeeReconciliationApprovedEto
-        {
-            ProvisionalReceiptId = provisionalReceiptId,
-            FinalReceiptId       = finalReceipt.Id,
-            FinalReceiptNumber   = finalReceipt.ReceiptNumber,
-            StudentId            = finalReceipt.StudentId,
-            AcademicYearId       = finalReceipt.AcademicYearId,
-            ReceiptKind          = finalReceipt.ReceiptKind,
-            TotalPaidAmount      = finalReceipt.TotalPaidAmount,
-            TenantId             = CurrentTenant.Id,
-            ApprovedAt           = DateTime.UtcNow,
-        });
+        await verificationUow.SaveChangesAsync(cancellationToken);
+        var finals = await receiptRepository.GetListAsync(r => r.FeeCollectionTransactionId == finalReceipt.FeeCollectionTransactionId &&
+            r.LinkedProvisionalReceiptId != null, cancellationToken: cancellationToken);
+        foreach (var document in finals)
+            await eventBus.PublishAsync(new FeeReconciliationApprovedEto
+            {
+                ProvisionalReceiptId = document.LinkedProvisionalReceiptId!.Value,
+                FinalReceiptId = document.Id, FinalReceiptNumber = document.ReceiptNumber,
+                StudentId = document.StudentId, FinanceFeeAccountId = document.FinanceFeeAccountId,
+                AcademicYearId = document.AcademicYearId, ReceiptKind = document.ReceiptKind,
+                TotalPaidAmount = document.TotalPaidAmount, TenantId = CurrentTenant.Id, ApprovedAt = DateTime.UtcNow
+            });
 
-        return BuildActionResponse(finalReceipt, finalReceipt.ReceiptNumber, input.Remarks);
+        var verifiedProvisional = await receiptRepository.GetAsync(provisionalReceiptId, cancellationToken: cancellationToken);
+        var response = BuildActionResponse(verifiedProvisional, finalReceipt.ReceiptNumber, input.Remarks);
+        await verificationUow.CompleteAsync(cancellationToken);
+        return response;
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Accounts_Reconciliation.Add)]
@@ -54,13 +62,15 @@ public partial class ReconciliationAppService
         RejectReconciliationInput input,
         CancellationToken cancellationToken = default)
     {
+        using var verificationUow = LazyServiceProvider.LazyGetRequiredService<IUnitOfWorkManager>().Begin(
+            new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var validator  = new RejectReconciliationRequestValidator();
         var validation = validator.Validate(input);
         if (!validation.IsValid)
             throw new Volo.Abp.UserFriendlyException(validation.Errors[0].ErrorMessage);
 
         var provisionalForScope = await receiptRepository.GetAsync(provisionalReceiptId, cancellationToken: cancellationToken);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(provisionalForScope.StudentId, cancellationToken);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(provisionalForScope.StudentId, provisionalForScope.FinanceFeeAccountId, cancellationToken);
 
         var rejected = await reconciliationManager.RejectAsync(
             provisionalReceiptId, input.Remarks, cancellationToken);
@@ -69,17 +79,17 @@ public partial class ReconciliationAppService
             "[ReconciliationAppService] Rejected: ReceiptId={ReceiptId}, ActedBy={Actor}, Remarks={Remarks}",
             rejected.Id, currentUser.Id, input.Remarks);
 
-        await eventBus.PublishAsync(new FeeReconciliationRejectedEto
-        {
-            ProvisionalReceiptId     = rejected.Id,
-            ProvisionalReceiptNumber = rejected.ReceiptNumber,
-            StudentId                = rejected.StudentId,
-            AcademicYearId           = rejected.AcademicYearId,
-            ReceiptKind              = rejected.ReceiptKind,
-            Remarks                  = input.Remarks,
-            TenantId                 = CurrentTenant.Id,
-            RejectedAt               = DateTime.UtcNow,
-        });
+        var rejectedDocuments = await receiptRepository.GetListAsync(r => r.FeeCollectionTransactionId == rejected.FeeCollectionTransactionId &&
+            r.LinkedProvisionalReceiptId == null, cancellationToken: cancellationToken);
+        foreach (var document in rejectedDocuments)
+            await eventBus.PublishAsync(new FeeReconciliationRejectedEto
+            {
+                ProvisionalReceiptId = document.Id, ProvisionalReceiptNumber = document.ReceiptNumber,
+                StudentId = document.StudentId, FinanceFeeAccountId = document.FinanceFeeAccountId,
+                AcademicYearId = document.AcademicYearId, ReceiptKind = document.ReceiptKind,
+                Remarks = input.Remarks, TenantId = CurrentTenant.Id, RejectedAt = DateTime.UtcNow
+            });
+        await verificationUow.CompleteAsync(cancellationToken);
 
         return BuildActionResponse(rejected, null, input.Remarks);
     }

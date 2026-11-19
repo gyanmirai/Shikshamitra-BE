@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.Constants.Permissions;
 
@@ -39,6 +39,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 		public static readonly Dictionary<string, SubmoduleInfo> Submodules = new()
 		{
+			{ "Finance.SelfService", new SubmoduleInfo(SelfService.All, SelfService.DisplayNames) },
 			// Fees submodules
 			{ "Finance.Fees.FeeCollections", new SubmoduleInfo(Fees_FeeCollections.All, Fees_FeeCollections.DisplayNames) },
 			{ "Finance.Fees.Charges", new SubmoduleInfo(Fees_Charges.All, Fees_Charges.DisplayNames) },
@@ -58,6 +59,8 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Finance.Settings.ChargeCategory", new SubmoduleInfo(Fees_Settings_ChargeCategory.All, Fees_Settings_ChargeCategory.DisplayNames) },
 
 			// Accounts submodules
+			{ "Finance.Accounts.CashManagement", new SubmoduleInfo(Accounts_CashManagement.All, Accounts_CashManagement.DisplayNames) },
+			{ "Finance.Accounts.Activity", new SubmoduleInfo(Accounts_Activity.All, Accounts_Activity.DisplayNames) },
 			{ "Finance.Accounts.Reconciliation", new SubmoduleInfo(Accounts_Reconciliation.All, Accounts_Reconciliation.DisplayNames) },
 			{ "Finance.Accounts.ExpenseTracking", new SubmoduleInfo(Accounts_ExpenseTracking.All, Accounts_ExpenseTracking.DisplayNames) },
 			{ "Finance.Accounts.IncomeTracking", new SubmoduleInfo(Accounts_IncomeTracking.All, Accounts_IncomeTracking.DisplayNames) },
@@ -67,6 +70,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Finance.Accounts.Settings.ExpenseCategory", new SubmoduleInfo(Accounts_Settings_ExpenseCategory.All, Accounts_Settings_ExpenseCategory.DisplayNames) },
 			{ "Finance.Accounts.Settings.BankAccount", new SubmoduleInfo(Accounts_Settings_BankAccount.All, Accounts_Settings_BankAccount.DisplayNames) },
 			{ "Finance.Accounts.Settings.AccountHead", new SubmoduleInfo(Accounts_Settings_AccountHead.All, Accounts_Settings_AccountHead.DisplayNames) },
+			{ "Finance.Accounts.Settings.PostingSetup", new SubmoduleInfo(Accounts_Settings_PostingSetup.All, Accounts_Settings_PostingSetup.DisplayNames) },
 
 			// Finance root-level submodules
 			{ "Finance.AuditTrail", new SubmoduleInfo(AuditTrail.All, AuditTrail.DisplayNames) },

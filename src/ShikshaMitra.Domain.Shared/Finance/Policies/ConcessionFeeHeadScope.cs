@@ -1,6 +1,6 @@
 namespace ShikshaMitra.Domain.Finance.Policies;
 
-/// <summary>Fee-head selection belongs to a fee-structure policy attachment, not to the reusable policy.</summary>
+/// <summary>Fee-head coverage for an assignment or a request-selected concession policy.</summary>
 public enum ConcessionFeeHeadScope
 {
 	EntireFeeStructure = 0,

@@ -21,12 +21,14 @@ public partial class TransactionAppService
 	private static TransactionListItem MapToListItem(Transaction transaction, TransactionCategory category) =>
 		new()
 		{
-			Id           = transaction.Id,
+			IsAutomatic = transaction.IsAutomatic, SourceId = transaction.SourceId,
+            BankAccountId = transaction.BankAccountId, BankLabel = transaction.BankLabelSnapshot,
+            Id           = transaction.Id,
 			CategoryId   = transaction.CategoryId,
-			CategoryName = category.Name,
+			CategoryName = transaction.CategoryNameSnapshot ?? category.Name,
 			CategoryTags = ToTagValues(transaction.CategoryTags),
 			Name         = transaction.Name,
-			Amount       = (double)transaction.Amount,
+			Amount       = transaction.Amount,
 			PaymentMethod = transaction.PaymentMethod,
 			PaymentDate  = transaction.PaymentDate,
 			Notes        = transaction.Notes,
@@ -40,7 +42,7 @@ public partial class TransactionAppService
 			IncomeName    = transaction.Name,
 			ReceivedDate  = transaction.PaymentDate,
 			PaymentMethod = transaction.PaymentMethod,
-			Amount        = (double)transaction.Amount,
+			Amount        = transaction.Amount,
 		};
 
 	private static TransactionCreateUpdateResponse MapToCreateUpdateResponse(
@@ -48,14 +50,15 @@ public partial class TransactionAppService
 		new()
 		{
 			Success = true,
+			Message = transaction.TransactionType == ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Income && transaction.CashCollectionId.HasValue ? "Cash recorded. Income is pending independent Cash Management approval." : null,
 			Data = new TransactionResponseData
 			{
 				Id           = transaction.Id,
 				CategoryId   = transaction.CategoryId,
-				CategoryName = category.Name,
+				CategoryName = transaction.CategoryNameSnapshot ?? category.Name,
 				CategoryTags = ToTagValues(transaction.CategoryTags),
 				Name         = transaction.Name,
-				Amount       = (double)transaction.Amount,
+				Amount       = transaction.Amount,
 				PaymentMethod = transaction.PaymentMethod,
 				PaymentDate  = transaction.PaymentDate,
 				Notes        = transaction.Notes,

@@ -1,4 +1,5 @@
 using System;
+using ShikshaMitra.HR.Payroll.Statutory;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FluentValidation;
@@ -46,9 +47,13 @@ public class SaveSalaryTemplateDto
 	public string Name { get; set; } = string.Empty;
 	public string? Description { get; set; }
 	public string DefaultSalaryBasis { get; set; } = "EMPLOYER_COST";
-	public string DefaultProtectionPolicy { get; set; } = "PROTECT_EMPLOYER_COST";
+	[System.Text.Json.Serialization.JsonIgnore]
+	public string DefaultProtectionPolicy { get => DefaultSalaryBasis == "EMPLOYER_COST" ? "PROTECT_EMPLOYER_COST" : "PROTECT_GROSS"; set { } }
 	public bool DefaultPfApplicable { get; set; }
 	public Guid? DefaultPfRuleId { get; set; }
+	public string DefaultEsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? DefaultEsiPolicyId { get; set; }
+	public string? DefaultEsiExternalReason { get; set; }
 	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
 	public string IdempotencyKey { get; set; } = string.Empty;
 	public Guid? ExpectedActiveVersionId { get; set; }
@@ -65,10 +70,13 @@ public class SalaryTemplateVersionDto : EntityDto<Guid>
 	public int VersionNumber { get; set; }
 	public string Status { get; set; } = "ACTIVE";
 	public DateTime? ActivatedAt { get; set; }
-	public string DefaultSalaryBasis { get; set; } = "EMPLOYER_COST";
-	public string DefaultProtectionPolicy { get; set; } = "PROTECT_EMPLOYER_COST";
+	public string DefaultSalaryBasis { get; set; } = "GROSS";
+	public string DefaultProtectionPolicy { get; set; } = "PROTECT_GROSS";
 	public bool DefaultPfApplicable { get; set; }
 	public Guid? DefaultPfRuleId { get; set; }
+	public string DefaultEsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? DefaultEsiPolicyId { get; set; }
+	public string? DefaultEsiExternalReason { get; set; }
 	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
 }
 
@@ -105,13 +113,24 @@ public class SalaryRuleOverrideDto
 
 public class CalculateSalaryTemplateRequestDto
 {
+	[Volo.Abp.Auditing.DisableAuditing]
+	public PayrollStatutoryProfile? StatutoryProfileOverride { get; set; }
+	public string? StatutoryProfileConcurrencyStamp { get; set; }
+	public bool StatutoryProfileUpdatePf { get; set; } = true;
+	public bool StatutoryProfileUpdateEsic { get; set; } = true;
+	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
-	public string ProtectionPolicy { get; set; } = "PROTECT_EMPLOYER_COST";
+	[System.Text.Json.Serialization.JsonIgnore]
+	public string ProtectionPolicy { get => SalaryBasis == "EMPLOYER_COST" ? "PROTECT_EMPLOYER_COST" : "PROTECT_GROSS"; set { } }
 	public decimal MonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; } = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 	public Guid? EmployeeId { get; set; }
+	[System.Text.Json.Serialization.JsonRequired]
 	public bool PfApplicable { get; set; }
 	public Guid? PfRuleId { get; set; }
+	public string EsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? EsiPolicyId { get; set; }
+	public string? EsiExternalReason { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";
 	public List<SalaryRuleOverrideDto> Overrides { get; set; } = [];
 	public string? CustomizationReason { get; set; }
@@ -124,11 +143,15 @@ public class PreviewSalaryTemplateRequestDto
 	public string? ConcurrencyStamp { get; set; }
 	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
 	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
-	public string ProtectionPolicy { get; set; } = "PROTECT_EMPLOYER_COST";
+	[System.Text.Json.Serialization.JsonIgnore]
+	public string ProtectionPolicy { get => SalaryBasis == "EMPLOYER_COST" ? "PROTECT_EMPLOYER_COST" : "PROTECT_GROSS"; set { } }
 	public decimal MonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; }
 	public bool PfApplicable { get; set; }
 	public Guid? PfRuleId { get; set; }
+	public string EsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? EsiPolicyId { get; set; }
+	public string? EsiExternalReason { get; set; }
 }
 
 public class SalaryTemplatePreviewDto
@@ -143,8 +166,7 @@ public class PreviewSalaryTemplateRequestDtoValidator : AbstractValidator<Previe
 {
 	public PreviewSalaryTemplateRequestDtoValidator()
 	{
-		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "TAKE_HOME" or "EMPLOYER_COST");
-		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
+		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "EMPLOYER_COST");
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
 		RuleFor(x => x.EffectiveMonth).Must(x => x.Year >= 1900 && x.Day == 1);
 		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);
@@ -173,11 +195,26 @@ public class SalaryTemplateTargetResultDto
 	public decimal Requested { get; set; }
 	public decimal Achieved { get; set; }
 	public decimal Difference { get; set; }
+	public bool IsExplainedByEnrollment { get; set; }
 	public bool IsExact { get; set; }
+}
+
+public class SalaryTemplateUnclassifiedEarningDto
+{
+	public Guid ComponentId { get; set; }
+	public string Name { get; set; } = string.Empty;
 }
 
 public class SalaryTemplateEsiPreviewDto
 {
+	public Guid? PolicyId { get; set; }
+	public string? PolicyName { get; set; }
+	public string ManagementMode { get; set; } = EsiManagement.InPlatform;
+	public decimal EligibilityWages { get; set; }
+	public decimal EmployeePercentage { get; set; }
+	public decimal EmployerPercentage { get; set; }
+	public EsiCalculationSettings CalculationSettings { get; set; } = new();
+	public Guid? ConfigurationId { get; set; }
 	public bool IsConfigured { get; set; }
 	public bool IsCovered { get; set; }
 	public bool CanCalculate { get; set; }
@@ -191,16 +228,20 @@ public class SalaryTemplateEsiPreviewDto
 	public Guid? RuleId { get; set; }
 	public int? RuleVersion { get; set; }
 	public List<string> IssueCodes { get; set; } = [];
+	public List<SalaryTemplateUnclassifiedEarningDto> UnclassifiedEarnings { get; set; } = [];
 }
 
 public class SalaryTemplateCalculationDto
 {
-	public int ProtectionCalculationVersion { get; set; }
+	public List<ShikshaMitra.HR.Payroll.Compensation.SalaryStatutorySummaryDto> StatutorySummary { get; set; } = [];
+	public PayrollStatutoryApplication? StatutoryApplication { get; set; }
+	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
+	public PfEligibilityDecision? PfEligibility { get; set; }
 	public Guid TemplateId { get; set; }
 	public Guid TemplateVersionId { get; set; }
 	public int TemplateVersion { get; set; }
-	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
-	public string ProtectionPolicy { get; set; } = "PROTECT_EMPLOYER_COST";
+	public string SalaryBasis { get; set; } = "GROSS";
+	public string ProtectionPolicy { get; set; } = "PROTECT_GROSS";
 	public decimal QuotedMonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; }
 	public decimal GrossSalary { get; set; }
@@ -218,6 +259,9 @@ public class SalaryTemplateCalculationDto
 	public List<string> FormulaTrace { get; set; } = [];
 	public List<string> Warnings { get; set; } = [];
 	public Guid? PfRuleId { get; set; }
+	public string EsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? EsiPolicyId { get; set; }
+	public string? EsiExternalReason { get; set; }
 	public int? PfRuleVersion { get; set; }
 	public string ProfessionalTaxProfile { get; set; } = "IN-GJ";
 	public DateTime GeneratedAt { get; set; }
@@ -245,15 +289,14 @@ public class SaveSalaryTemplateDtoValidator : AbstractValidator<SaveSalaryTempla
 		RuleFor(x => x.Name).NotEmpty().MaximumLength(160);
 		RuleFor(x => x.Description).MaximumLength(500);
 		RuleFor(x => x.DefaultSalaryBasis).Must(BeSalaryBasis);
-		RuleFor(x => x.DefaultProtectionPolicy).Must(BeProtectionPolicy);
 		RuleFor(x => x.DefaultPfRuleId).NotEmpty().When(x => x.DefaultPfApplicable)
 			.WithMessage("Choose an effective PF rule when PF applies by default.");
 		RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(100);
 		RuleForEach(x => x.Rules).SetValidator(new SalaryTemplateRuleDtoValidator());
 	}
 
-	private static bool BeSalaryBasis(string value) => Enum.TryParse<SalaryInputBasis>(Normalize(value), true, out _);
-	private static bool BeProtectionPolicy(string value) => value is "PROTECT_EMPLOYER_COST" or "PROTECT_TAKE_HOME";
+	private static bool BeSalaryBasis(string value) => value is "GROSS" or "EMPLOYER_COST";
+	private static bool BeProtectionPolicy(string value) => Enum.TryParse<CompensationProtectionPolicy>(Normalize(value), true, out _);
 	private static string Normalize(string? value) => value?.Replace("_", string.Empty).Replace("-", string.Empty) ?? string.Empty;
 }
 
@@ -289,8 +332,7 @@ public class CalculateSalaryTemplateRequestDtoValidator : AbstractValidator<Calc
 {
 	public CalculateSalaryTemplateRequestDtoValidator()
 	{
-		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "TAKE_HOME" or "EMPLOYER_COST");
-		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
+		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "EMPLOYER_COST");
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
 		RuleFor(x => x.EffectiveMonth).Must(x => x.Day == 1).WithMessage("EffectiveMonth must be the first day of a month.");
 		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);

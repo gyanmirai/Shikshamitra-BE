@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,7 +7,6 @@ using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
-using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Policies;
@@ -32,10 +32,10 @@ internal sealed record PayrollRunItemPreview(
 		IReadOnlyDictionary<DateOnly, PayrollLeaveUnits>? leaveUnitsByDate,
 		decimal? previousMonthNetPay,
 		DateOnly? employmentStartDate,
-		ShiftManagement? shift = null,
+		EmployeeWorkSchedule? shift = null,
 		AttendancePolicy? attendancePolicy = null,
 		PayrollStatutoryRuleSet? statutoryRules = null,
-		EmployeeCompensationRevision? compensationRevision = null)
+		decimal? protectedMonthlyCost = null)
 	{
 		var attendanceSummary = PayrollAttendanceCalculator.CalculatePayableDays(
 			attendanceRecords,
@@ -60,9 +60,14 @@ internal sealed record PayrollRunItemPreview(
 		if (overtimeComponent != null)
 		{
 			allComponents.Add(overtimeComponent);
+			if (statutoryRules?.EmployeeStateInsurance is { } esi)
+				statutoryRules = statutoryRules with
+				{
+					EmployeeStateInsurance = esi with { SystemOvertimeComponentId = overtimeComponent.Id }
+				};
 		}
 
-		var computation = compensationRevision == null ? PayrollComputation.Calculate(
+		var computation = !protectedMonthlyCost.HasValue ? PayrollComputation.Calculate(
 			attendanceSummary.PresentDays,
 			attendanceSummary.HalfWorkingDays,
 			attendanceSummary.PayableDays,
@@ -70,8 +75,7 @@ internal sealed record PayrollRunItemPreview(
 			allComponents,
 			statutoryRules) : PayrollSalaryProtection.Calculate(
 			attendanceSummary.PresentDays, attendanceSummary.HalfWorkingDays, attendanceSummary.PayableDays,
-			basis.BasisDays, allComponents, statutoryRules, compensationRevision.ProtectionPolicy,
-			compensationRevision.ProtectedMonthlyAmount);
+			basis.BasisDays, allComponents, statutoryRules, protectedMonthlyCost.Value);
 		var netPayDelta = previousMonthNetPay.HasValue
 			? computation.NetPay - previousMonthNetPay.Value
 			: (decimal?) null;
@@ -100,56 +104,31 @@ internal sealed record PayrollRunItemPreview(
 		int year,
 		int month,
 		DateOnly? employmentStartDate,
-		ShiftManagement? shift,
+		EmployeeWorkSchedule? shift,
 		AttendancePolicy? attendancePolicy)
 	{
 		if (shift == null ||
-		    attendancePolicy?.OvertimeEnabled != true ||
-		    attendancePolicy.OvertimeRate == AttendanceOvertimeRate.Flat ||
-		    !attendancePolicy.MinOvertimeMinutes.HasValue ||
-		    basis.BasisDays <= 0m)
+			attendancePolicy?.OvertimeEnabled != true ||
+			attendancePolicy.OvertimeRate == AttendanceOvertimeRate.Flat ||
+			!attendancePolicy.MinOvertimeMinutes.HasValue ||
+			basis.BasisDays <= 0m)
 		{
 			return null;
 		}
 
-		var shiftMinutes = (decimal)(shift.EndTime.ToTimeSpan() - shift.StartTime.ToTimeSpan()).TotalMinutes;
-		if (shiftMinutes <= 0m)
-		{
-			return null;
-		}
-
-		var overtimeMinutes = CalculateOvertimeMinutes(
-			attendanceRecords,
-			year,
-			month,
-			employmentStartDate,
-			shift.EndTime);
-		if (overtimeMinutes < attendancePolicy.MinOvertimeMinutes.Value)
-		{
-			return null;
-		}
-
-		var multiplier = attendancePolicy.OvertimeRate switch
-		{
-			AttendanceOvertimeRate.OnePointFiveX => 1.5m,
-			AttendanceOvertimeRate.TwoX => 2m,
-			_ => 0m
-		};
-		if (multiplier <= 0m)
-		{
-			return null;
-		}
-
+		var eligible = attendanceRecords.Where(x => x.AttendanceDate.Year == year && x.AttendanceDate.Month == month && (!employmentStartDate.HasValue || x.AttendanceDate >= employmentStartDate) && x.StatusType == EmployeeAttendanceStatusType.Present && x.TimeIn.HasValue && x.TimeOut.HasValue).GroupBy(x => x.AttendanceDate).Select(x => x.Last()).ToList();
 		var fullGrossSalary = components.Where(c => c.IsEarning && !c.IsTemp).Sum(c => c.Amount);
-		if (fullGrossSalary <= 0m)
+		var multiplier = attendancePolicy.OvertimeRate == AttendanceOvertimeRate.OnePointFiveX ? 1.5m : attendancePolicy.OvertimeRate == AttendanceOvertimeRate.TwoX ? 2m : 0m;
+		decimal overtimeMinutes = 0, weightedDays = 0;
+		foreach (var day in eligible)
 		{
-			return null;
+			var effective = shift.Require(day.AttendanceDate);
+			var duration = (decimal) (effective.EndTime - effective.StartTime).TotalMinutes;
+			var minutes = CalculateOvertimeMinutes([day], year, month, employmentStartDate, effective.EndTime);
+			overtimeMinutes += minutes; weightedDays += minutes / duration;
 		}
-
-		var scheduledHours = shiftMinutes / 60m;
-		var overtimeHours = overtimeMinutes / 60m;
-		var dailyRate = fullGrossSalary / basis.BasisDays;
-		var amount = Math.Round(dailyRate / scheduledHours * overtimeHours * multiplier, 2, MidpointRounding.AwayFromZero);
+		if (overtimeMinutes < attendancePolicy.MinOvertimeMinutes.Value) return null;
+		var amount = Math.Round(fullGrossSalary / basis.BasisDays * weightedDays * multiplier, 2, MidpointRounding.AwayFromZero);
 		if (amount <= 0m)
 		{
 			return null;
@@ -201,7 +180,7 @@ internal sealed record PayrollRunItemPreview(
 				var dayOffset = utcTimeOutDate.DayNumber - a.AttendanceDate.DayNumber;
 				var minutesAfterShiftEnd =
 					dayOffset * 24m * 60m +
-					(decimal)(utcTimeOut.TimeOfDay - shiftEndTime.ToTimeSpan()).TotalMinutes;
+					(decimal) (utcTimeOut.TimeOfDay - shiftEndTime.ToTimeSpan()).TotalMinutes;
 				return Math.Max(0m, minutesAfterShiftEnd);
 			});
 	}

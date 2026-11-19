@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Net;
 using System.Net.Http;
@@ -34,6 +35,68 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	#region Tier 0 — Critical
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Create_Employee_With_Staff_Add_And_No_Policy_Permissions()
+	{
+		using var client = CreatePermissionClient(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add);
+		var input = EmployeeTestHelper.BuildPersonalInfoRequest("DelegatedCreator");
+		input.PolicyOverride.ShouldBeNull();
+		using var content = new MultipartFormDataContent();
+		content.Add(new StringContent(JsonSerializer.Serialize(input, JsonOptions)), "data");
+
+		var response = await client.PostAsync($"{BaseUrl}/personal-info", content);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var created = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions);
+		created.ShouldNotBeNull();
+		created.Id.ShouldNotBe(Guid.Empty);
+		created.UserId.ShouldNotBeNull();
+		created.FirstName.ShouldBe(input.FirstName);
+		created.PolicyOverride.ShouldBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Staff_Creation_Without_Staff_Add_Even_With_Policy_Access()
+	{
+		using var client = CreatePermissionClient(
+			ShikshaMitraSubmodulePermissions.HR.Policies.View,
+			ShikshaMitraSubmodulePermissions.HR.Policies.Assign,
+			ShikshaMitraSubmodulePermissions.HR.Policies.PreviewImpact);
+		using var content = new MultipartFormDataContent();
+		content.Add(new StringContent(JsonSerializer.Serialize(
+			EmployeeTestHelper.BuildPersonalInfoRequest("NoStaffAdd"), JsonOptions)), "data");
+
+		var response = await client.PostAsync($"{BaseUrl}/personal-info", content);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Explicit_Policy_Override_With_Staff_Add_Only()
+	{
+		using var client = CreatePermissionClient(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add);
+		var input = EmployeeTestHelper.BuildPersonalInfoRequest("DeniedOverride");
+		input.PolicyOverride = new PersonalInfoPolicyOverrideRequest
+		{
+			AcademicYearId = Factory.SeededAcademicYearId,
+			PayrollPolicyId = Guid.NewGuid(),
+			AttendancePolicyId = Guid.NewGuid(),
+			LeavePolicyId = Guid.NewGuid(),
+			EffectiveFrom = DateTime.UtcNow.Date,
+			ConfirmationToken = "__employee_onboarding_default_policy_assignment__"
+		};
+		using var content = new MultipartFormDataContent();
+		content.Add(new StringContent(JsonSerializer.Serialize(input, JsonOptions)), "data");
+
+		var response = await client.PostAsync($"{BaseUrl}/personal-info", content);
+
+		response.IsSuccessStatusCode.ShouldBeFalse();
+		(await response.Content.ReadAsStringAsync()).ShouldContain(HRErrorCodes.EmployeePolicyAccessRequired);
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
@@ -126,6 +189,78 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		body.Shift.Name.ShouldNotBeNullOrWhiteSpace();
 	}
 
+	[Theory]
+	[InlineData("omitted")]
+	[InlineData("null")]
+	[InlineData("empty")]
+	[InlineData("replacement")]
+	[InlineData("mixed")]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Preserve_Or_Explicitly_Change_Supplementary_Personal_Info(string mode)
+	{
+		var input = EmployeeTestHelper.BuildFullPersonalInfoRequest("Supplementary");
+		input.Designation = "Senior Teacher";
+		input.Qualification = "M.Ed.";
+		input.IdentificationMark1 = "Mole on left cheek";
+		using var createContent = new MultipartFormDataContent();
+		createContent.Add(new StringContent(JsonSerializer.Serialize(input, JsonOptions)), "data");
+		using var createResponse = await Client.PostAsync($"{BaseUrl}/personal-info", createContent);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+		var created = (await createResponse.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions))!;
+		created.Designation.ShouldBe(input.Designation);
+		created.Qualification.ShouldBe(input.Qualification);
+		created.IdentificationMark1.ShouldBe(input.IdentificationMark1);
+
+		var payload = JsonSerializer.SerializeToNode(input, JsonOptions)!.AsObject();
+		payload["lastName"] = "RevisedSurname";
+		payload["address3"] = null; // Other optional fields retain their replacement semantics.
+		foreach (var field in new[] { "designation", "qualification", "identificationMark1" })
+		{
+			payload.Remove(field);
+			if (mode != "omitted" && mode != "mixed")
+			{
+				payload[field] = mode == "null" ? null : mode == "empty" ? "" : "Revised value";
+			}
+		}
+		if (mode == "mixed")
+		{
+			payload["designation"] = "Head Teacher";
+			payload["qualification"] = null;
+		}
+
+		using var updateContent = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
+		using var updateResponse = await Client.PutAsync($"{BaseUrl}/{created.Id}/personal-info", updateContent);
+		updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updateResponse.Content.ReadAsStringAsync());
+		using var getResponse = await Client.GetAsync($"{BaseUrl}/{created.Id}/personal-info");
+		getResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await getResponse.Content.ReadAsStringAsync());
+		var body = (await getResponse.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions))!;
+
+		body.LastName.ShouldBe("RevisedSurname");
+		body.Address3.ShouldBeNull();
+		body.Designation.ShouldBe(mode switch
+		{
+			"omitted" => input.Designation,
+			"null" => null,
+			"empty" => "",
+			"mixed" => "Head Teacher",
+			_ => "Revised value"
+		});
+		body.Qualification.ShouldBe(mode switch
+		{
+			"omitted" => input.Qualification,
+			"null" or "mixed" => null,
+			"empty" => "",
+			_ => "Revised value"
+		});
+		body.IdentificationMark1.ShouldBe(mode switch
+		{
+			"omitted" or "mixed" => input.IdentificationMark1,
+			"null" => null,
+			"empty" => "",
+			_ => "Revised value"
+		});
+	}
+
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Update_Personal_Info()
@@ -143,7 +278,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			Doj = DateTime.UtcNow.AddMonths(-3),
 			IsTeaching = false,
 			RoleId = created.RoleId,
-			ShiftId = EmployeeTestHelper.DefaultShiftId,
+			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = EmployeeTestHelper.DefaultShiftId, EffectiveFrom = EmployeeTestHelper.SchoolToday },
 			Email = created.Email,
 			PanNo = TestDataHelper.UniquePan(),
 			AdharNo = TestDataHelper.UniqueAdhar(),
@@ -174,7 +309,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 			Doj = created.Doj,
 			IsTeaching = created.IsTeaching,
 			RoleId = created.RoleId,
-			ShiftId = created.ShiftId,
+			InitialWorkShiftAssignment = new InitialWorkShiftInput { WorkShiftId = created.ShiftId, EffectiveFrom = EmployeeTestHelper.SchoolToday },
 			Email = created.Email,
 			Gender = created.Gender,
 			Department = "Identity Preserve"
@@ -238,6 +373,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		var originalEmail = created.Email;
 		originalEmail.ShouldNotBeNull();
 		var updateRequest = EmployeeTestHelper.BuildPersonalInfoRequest("RejectEmailChangeUpdate");
+		updateRequest.InitialWorkShiftAssignment = null;
 		var requestedEmail = TestDataHelper.UniqueEmail("upd-email-change");
 		updateRequest.Email = requestedEmail;
 
@@ -246,7 +382,7 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldNotBe(HttpStatusCode.OK);
 		var responseBody = await response.Content.ReadAsStringAsync();
 		responseBody.ShouldContain(HRErrorCodes.EmployeeEmailCannotBeChanged);
-		responseBody.ShouldContain("Employee email cannot be changed after employee creation.");
+		responseBody.ShouldContain("Use the controlled account email change to update a staff member's email.");
 		responseBody.ShouldNotContain(originalEmail);
 		responseBody.ShouldNotContain(requestedEmail);
 	}

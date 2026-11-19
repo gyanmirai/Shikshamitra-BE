@@ -18,8 +18,8 @@ public class UpdateAdmissionApplicantProfileDtoValidator : AbstractValidator<Upd
 		RuleFor(input => input.MiddleName).MaximumLength(100);
 		RuleFor(input => input.LastName).MaximumLength(100);
 		RuleFor(input => input.DateOfBirth).NotEmpty().LessThanOrEqualTo(DateTime.UtcNow.Date);
-		RuleFor(input => input.Gender).Must(value => value is "Male" or "Female")
-			.WithMessage("Gender must be Male or Female.");
+		RuleFor(input => input.Gender).Must(value => value is "Male" or "Female" or "Other")
+			.WithMessage("Gender must be Male, Female or Other.");
 		RuleFor(input => input.GuardianMobile).Matches("^[6-9][0-9]{9}$")
 			.When(input => input.GuardianMobile != null)
 			.WithMessage("Guardian mobile must be a valid 10-digit Indian mobile number.");

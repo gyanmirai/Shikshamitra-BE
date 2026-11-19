@@ -60,24 +60,28 @@ public partial class StudentAcademic360AppService(
         var timetable = await BuildTimetableAsync(student.StandardId, student.DivisionId);
         var learningTasks = await BuildLearningTasksAsync(student, input, academicYearId);
         var exams = await BuildExamResultsAsync(student, input, academicYearId);
-        var subjectPerformance = BuildSubjectPerformance(exams);
-        var alerts = BuildAlerts(attendance, learningTasks, exams, timetable);
-        var academicHealth = BuildAcademicHealth(attendance, learningTasks, exams);
-        var upcomingItems = BuildUpcomingItems(timetable, learningTasks, exams);
-        var timeline = BuildTimeline(attendance, learningTasks, exams, alerts);
-        var achievements = BuildAchievements(attendance, learningTasks, exams, subjectPerformance);
-        var dataCompleteness = BuildDataCompleteness(attendance, learningTasks, exams, timetable, subjectPerformance);
+        var allExams = input.ExamMaxResultCount > 0 || input.ExamSkipCount > 0
+            ? await LoadExamSummaryAsync(student) : exams;
+        var subjectPerformance = BuildSubjectPerformance(allExams);
+        var alerts = BuildAlerts(attendance, learningTasks, allExams, timetable);
+        var academicHealth = BuildAcademicHealth(attendance, learningTasks, allExams);
+        var upcomingItems = BuildUpcomingItems(timetable, learningTasks, allExams);
+        var timeline = BuildTimeline(attendance, learningTasks, allExams, alerts);
+        var achievements = BuildAchievements(attendance, learningTasks, allExams, subjectPerformance);
+        var dataCompleteness = BuildDataCompleteness(attendance, learningTasks, allExams, timetable, subjectPerformance);
 
         return new StudentAcademic360Dto
         {
             GeneratedAtUtc = Clock.Now.ToUniversalTime(),
             Student = studentDto,
             AcademicHealth = academicHealth,
-            Kpis = BuildKpis(attendance, learningTasks, exams, academicHealth),
+            Kpis = BuildKpis(attendance, learningTasks, allExams, academicHealth),
             Attendance = attendance,
             Timetable = timetable,
             LearningTasks = learningTasks,
             Exams = exams,
+            ExamTotalCount = allExams.Count,
+            ExamSummary = BuildExamSummary(allExams),
             SubjectPerformance = subjectPerformance,
             Alerts = alerts,
             UpcomingItems = upcomingItems,
@@ -85,7 +89,7 @@ public partial class StudentAcademic360AppService(
             Achievements = achievements,
             Interventions = [],
             DataCompleteness = dataCompleteness,
-            SourceSnapshot = BuildSourceSnapshot(attendance, learningTasks, exams, timetable, subjectPerformance),
+            SourceSnapshot = BuildSourceSnapshot(attendance, learningTasks, allExams, timetable, subjectPerformance),
             Permissions = new StudentAcademic360PermissionsDto
             {
                 CanViewRank = true,
@@ -111,24 +115,41 @@ public partial class StudentAcademic360AppService(
         switch (tab.Trim().ToLowerInvariant())
         {
             case "overview":
+                input.TaskSkipCount = 0;
+                input.TaskMaxResultCount = input.RecentTaskCount;
+                input.ExamSkipCount = 0;
+                input.ExamMaxResultCount = input.RecentExamCount;
                 return await GetAsync(studentId, input);
             case "attendance":
                 response.Attendance = await BuildAttendanceAsync(studentId, input, academicYearId);
                 break;
             case "learning":
+                input.TaskMaxResultCount = Math.Clamp(input.TaskMaxResultCount <= 0 ? 20 : input.TaskMaxResultCount, 1, 100);
                 response.LearningTasks = await BuildLearningTasksAsync(student, input, academicYearId);
                 break;
             case "exams":
-                response.Exams = await BuildExamResultsAsync(student, input, academicYearId);
-                response.SubjectPerformance = BuildSubjectPerformance(response.Exams);
+                input.ExamMaxResultCount = Math.Clamp(input.ExamMaxResultCount <= 0 ? 10 : input.ExamMaxResultCount, 1, 100);
+                var allExams = await LoadExamSummaryAsync(student);
+                var filteredExams = FilterDetailExams(allExams, input);
+                if (input.DetailPaging) filteredExams = filteredExams.OrderByDescending(exam => exam.ExamDate ?? DateTime.MinValue);
+                var matchingExams = filteredExams.ToList();
+                var examIds = matchingExams.Skip(input.ExamSkipCount).Take(input.ExamMaxResultCount).Select(exam => exam.ExamId).ToList();
+                var examDetails = await BuildExamResultsAsync(student, input, academicYearId, examIds);
+                var detailsById = examDetails.ToDictionary(exam => exam.ExamId);
+                response.Exams = examIds.Where(detailsById.ContainsKey).Select(id => detailsById[id]).ToList();
+                response.ExamTotalCount = matchingExams.Count;
+                response.ExamSummary = BuildExamSummary(allExams);
+                response.SubjectPerformance = BuildSubjectPerformance(allExams);
                 break;
             case "timetable":
                 response.Timetable = await BuildTimetableAsync(student.StandardId, student.DivisionId);
                 break;
             case "timeline":
+                input.TaskSkipCount = 0;
+                input.TaskMaxResultCount = input.RecentTaskCount;
                 var attendance = await BuildAttendanceAsync(studentId, input, academicYearId);
                 var learningTasks = await BuildLearningTasksAsync(student, input, academicYearId);
-                var exams = await BuildExamResultsAsync(student, input, academicYearId);
+                var exams = await LoadExamSummaryAsync(student);
                 var timetable = await BuildTimetableAsync(student.StandardId, student.DivisionId);
                 response.Timeline = BuildTimeline(attendance, learningTasks, exams, BuildAlerts(attendance, learningTasks, exams, timetable));
                 break;
@@ -384,10 +405,11 @@ public partial class StudentAcademic360AppService(
                  (submission.AssignmentId.HasValue && assignmentIds.Contains(submission.AssignmentId.Value))))
             .Select(submission => new SubmissionRead
             {
+                Id = submission.Id,
                 HomeworkAssignmentId = submission.HomeworkAssignmentId, AssignmentId = submission.AssignmentId,
                 Status = submission.Status, SubmissionDate = submission.SubmissionDate, CreationTime = submission.CreationTime,
                 ReviewedAt = submission.ReviewedAt, GradedDate = submission.GradedDate,
-                Marks = submission.Marks, TotalMarks = submission.TotalMarks, Feedback = submission.Feedback
+                Marks = submission.Marks, TotalMarks = submission.TotalMarks
             }));
         var submissionByHomework = submissions.Where(submission => submission.HomeworkAssignmentId.HasValue)
             .GroupBy(submission => submission.HomeworkAssignmentId!.Value)
@@ -452,28 +474,49 @@ public partial class StudentAcademic360AppService(
         }));
 
         var ordered = tasks.OrderByDescending(t => t.DueDate).ToList();
-
+        var filtered = ordered.Where(task =>
+            (string.IsNullOrEmpty(input.TaskStatusFilter) || input.TaskStatusFilter == "ALL" ||
+             ResolveTaskFilterCategory(task) == input.TaskStatusFilter) &&
+            (string.IsNullOrEmpty(input.TaskSubjectName) || input.TaskSubjectName == "ALL" ||
+             task.SubjectName == input.TaskSubjectName)).ToList();
         var requestedTasks = input.TaskMaxResultCount <= 0
-            ? ordered.Skip(input.TaskSkipCount).ToList()
-            : ordered.Skip(input.TaskSkipCount).Take(input.TaskMaxResultCount).ToList();
+            ? filtered.Skip(input.TaskSkipCount).ToList()
+            : filtered.Skip(input.TaskSkipCount).Take(input.TaskMaxResultCount).ToList();
+        var recentTasks = ordered.Take(input.RecentTaskCount).ToList();
+        var selectedTaskIds = requestedTasks.Concat(recentTasks).Select(task => task.Id).ToHashSet();
+        var selectedSubmissions = submissionByHomework.Where(pair => selectedTaskIds.Contains(pair.Key)).Select(pair => pair.Value)
+            .Concat(submissionByAssignment.Where(pair => selectedTaskIds.Contains(pair.Key)).Select(pair => pair.Value)).ToList();
+        var selectedSubmissionIds = selectedSubmissions.Select(submission => submission.Id).ToArray();
+        var feedback = await AsyncExecuter.ToListAsync(submissionQuery.Where(submission =>
+            Enumerable.Contains(selectedSubmissionIds, submission.Id)).Select(submission => new { submission.Id, submission.Feedback }));
+        var feedbackById = feedback.ToDictionary(row => row.Id, row => row.Feedback);
+        foreach (var task in requestedTasks.Concat(recentTasks))
+        {
+            var submissionsByTask = task.Type == "Assignment" ? submissionByAssignment : submissionByHomework;
+            if (submissionsByTask.TryGetValue(task.Id, out var submission)) task.Feedback = feedbackById.GetValueOrDefault(submission.Id);
+        }
 
         return new StudentAcademic360LearningTaskSummaryDto
         {
             TotalAssigned = ordered.Count,
+            FilteredTotalCount = filtered.Count,
+            SubjectNames = ordered.Select(task => task.SubjectName).Distinct().ToList(),
+            ResubmissionRequired = ordered.Count(task => ResolveTaskFilterCategory(task) == "RESUBMISSION_REQUIRED"),
             Submitted = ordered.Count(t => IsSubmitted((SubmissionStatus)t.StatusCode)),
             Pending = ordered.Count(t => t.StatusCode is (int)SubmissionStatus.NotSubmitted or (int)SubmissionStatus.Draft),
             Late = ordered.Count(t => t.StatusCode == (int)SubmissionStatus.Late),
             Reviewed = ordered.Count(t => t.StatusCode == (int)SubmissionStatus.Reviewed),
             PendingEvaluation = ordered.Count(t => t.StatusCode is (int)SubmissionStatus.Submitted or (int)SubmissionStatus.NeedsReview or (int)SubmissionStatus.Late),
             Tasks = requestedTasks,
-            RecentTasks = ordered.Take(input.RecentTaskCount).ToList()
+            RecentTasks = recentTasks
         };
     }
 
     private async Task<List<StudentAcademic360ExamResultDto>> BuildExamResultsAsync(
         Student student,
         StudentAcademic360Input input,
-        Guid? academicYearId)
+        Guid? academicYearId,
+        IReadOnlyCollection<Guid>? selectedExamIds = null)
     {
         if (!student.StandardId.HasValue || !student.DivisionId.HasValue)
         {
@@ -487,16 +530,16 @@ public partial class StudentAcademic360AppService(
             (header.Status == ExamResultStatus.Published || header.Status == ExamResultStatus.Frozen));
         var publishedMarks = (await examMarkRepository.GetQueryableAsync()).Where(mark =>
             mark.StudentId == student.Id && mark.DivisionId == divisionId && mark.IsPublished);
-        var visibleExams = examQuery
+        var visibleQuery = examQuery
             .Where(e => e.StandardId == student.StandardId.Value
                 && e.ExamDivisions.Any(d => d.DivisionId == divisionId)
                 && (e.Status == ExamStatus.Published || e.Status == ExamStatus.Completed ||
                     publishedHeaders.Any(header => header.ExamId == e.Id) ||
-                    publishedMarks.Any(mark => mark.ExamId == e.Id)))
-            .OrderByDescending(e => e.CreationTime)
-            .Skip(input.ExamSkipCount);
+                    publishedMarks.Any(mark => mark.ExamId == e.Id)));
+        if (selectedExamIds != null) visibleQuery = visibleQuery.Where(exam => selectedExamIds.Contains(exam.Id));
+        var visibleExams = visibleQuery.OrderByDescending(e => e.CreationTime).Skip(selectedExamIds == null ? input.ExamSkipCount : 0);
 
-        if (input.ExamMaxResultCount > 0)
+        if (selectedExamIds == null && input.ExamMaxResultCount > 0)
         {
             visibleExams = visibleExams.Take(input.ExamMaxResultCount);
         }
@@ -1037,6 +1080,7 @@ public partial class StudentAcademic360AppService(
 
     private sealed class SubmissionRead
     {
+        public Guid Id { get; init; }
         public Guid? HomeworkAssignmentId { get; init; }
         public Guid? AssignmentId { get; init; }
         public SubmissionStatus Status { get; init; }

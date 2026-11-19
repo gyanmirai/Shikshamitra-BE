@@ -22,15 +22,18 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 [RemoteService(false)]
 public partial class FeeCollectionSummaryQueryService(
 	IReadOnlyRepository<Student, Guid> studentRepository,
+	IReadOnlyRepository<FinanceFeeAccount, Guid> accountRepository,
 	IReadOnlyRepository<Standard, Guid> standardRepository,
 	IReadOnlyRepository<Division, Guid> divisionRepository,
 	IReadOnlyRepository<FeeHead, Guid> feeHeadRepository,
 	IDueFeeRepository dueFeeRepository,
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+	IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<ConcessionRequest, Guid> concessionRequestRepository,
 	FinanceScopeAccessService financeScopeAccessService,
+	LateFeeBalanceService lateFeeBalanceService,
 	IClock clock
 ) : ApplicationService, ITransientDependency
 {
@@ -38,19 +41,35 @@ public partial class FeeCollectionSummaryQueryService(
 		GetFeeCollectionSummaryInput input,
 		CancellationToken cancellationToken = default)
 	{
+        var tableQuery = ShikshaMitra.Finance.Common.FinanceTableQuery.Parse(input.Filters, null,
+            input.SortBy, input.SortOrder, TableColumns);
+		// The ordinary list is ordered by payer identity, so only its visible page needs balance work.
+		// Derived amount/status filters and sorts still calculate the complete scoped set first.
+		if (tableQuery.Filters.Count == 0 && !input.Status.HasValue && tableQuery.SortBy is null &&
+			string.IsNullOrWhiteSpace(input.Sorting))
+		{
+			var (pagePayers, singleAccountStudents, pageTotalCount) =
+				await BuildPagedPayerRowsAsync(input, cancellationToken);
+			await PopulateBalancesAsync(input, pagePayers, singleAccountStudents, cancellationToken);
+			return new PagedResultDto<FeeCollectionSummaryItemDto>(pageTotalCount, MapToDto(pagePayers));
+		}
 		var allRows = await BuildRawRowsAsync(input, cancellationToken);
-		var filtered = ApplyStatusFilter(allRows, input.Status);
+        // Keep the canonical balances/status mapping; apply header filters to those same values before counting or paging.
+		var rawFiltered = ApplyStatusFilter(allRows, input.Status);
+        var rows = MapToDto(ApplySorting(rawFiltered, input.Sorting).ThenBy(r => r.StudentId).ToList()).AsQueryable();
+        var filtered = tableQuery.Apply(rows, TableFields);
 
-		var totalCount = filtered.Count;
+		var totalCount = filtered.Count();
 		if (totalCount == 0)
-			return new PagedResultDto<FeeCollectionSummaryItemDto>(0, []);
+            return new PagedResultDto<FeeCollectionSummaryItemDto>(0, []);
 
-		var page = ApplySorting(filtered, input.Sorting)
+        var ordered = tableQuery.SortBy is null ? filtered : tableQuery.Order(filtered, TableFields, "name", false, r => r.FinanceFeeAccountId ?? r.StudentId ?? Guid.Empty);
+		var page = ordered
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount)
 			.ToList();
 
-		return new PagedResultDto<FeeCollectionSummaryItemDto>(totalCount, MapToDto(page));
+		return new PagedResultDto<FeeCollectionSummaryItemDto>(totalCount, page);
 	}
 
 	public async Task<byte[]> ExportAsync(

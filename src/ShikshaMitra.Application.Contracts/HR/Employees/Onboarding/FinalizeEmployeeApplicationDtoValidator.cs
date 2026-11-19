@@ -10,19 +10,22 @@ public class FinalizeEmployeeApplicationDtoValidator : AbstractValidator<Finaliz
 {
 	public FinalizeEmployeeApplicationDtoValidator(IClock clock)
 	{
+		RuleFor(x => x.Salary).NotNull()
+			.SetValidator(new ShikshaMitra.HR.Payroll.Compensation.SaveEmployeeCompensationDtoValidator());
+
 		RuleFor(x => x.PersonalInfo)
 			.NotNull()
 			.SetValidator(new CreateEmployeePersonalInfoDtoValidator(clock));
 
 		RuleFor(x => x.AcademicYearId)
 			.NotEmpty()
-			.WithMessage("Academic year is required for a teaching employee.")
+			.WithMessage("Academic year is required for a teaching staff.")
 			.When(IsTeaching);
 
 		RuleFor(x => x.AcademicScopes)
 			.NotNull()
 			.NotEmpty()
-			.WithMessage("At least one academic scope is required for a teaching employee.")
+			.WithMessage("At least one academic scope is required for a teaching staff.")
 			.Must(scopes => scopes is { Count: <= 100 })
 			.WithMessage("No more than 100 academic scope rows can be assigned during onboarding.")
 			.When(IsTeaching);
@@ -35,7 +38,7 @@ public class FinalizeEmployeeApplicationDtoValidator : AbstractValidator<Finaliz
 			.Must(input =>
 				IsTeaching(input) ||
 				(!input.AcademicYearId.HasValue && (input.AcademicScopes == null || input.AcademicScopes.Count == 0)))
-			.WithMessage("Academic scopes can only be supplied for a teaching employee.")
+			.WithMessage("Academic scopes can only be supplied for a teaching staff.")
 			.WithName(nameof(FinalizeEmployeeApplicationDto.AcademicScopes));
 	}
 

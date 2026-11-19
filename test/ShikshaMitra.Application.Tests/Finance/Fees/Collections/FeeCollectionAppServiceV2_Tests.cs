@@ -4,19 +4,24 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
+using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Students;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Identity;
+using Volo.Abp.Users;
 using Xunit;
 
 namespace ShikshaMitra.Finance.Fees;
@@ -30,7 +35,7 @@ namespace ShikshaMitra.Finance.Fees;
 ///   KFE-* → ProvisionalFee    (Cheque/DD, or CashierDecided with BankReceiptConfirmed=false)
 ///   KCH-* → ProvisionalCharge (Charges, always provisional regardless of payment method)
 /// </summary>
-public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<ShikshaMitra.Finance.FinanceReceiptIdentityTestModule>
 {
     private readonly IFeeCollectionAppService _service;
     private readonly IFinanceAuditTrailAppService _auditTrail;
@@ -42,6 +47,7 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     private readonly IRepository<EducationMedium, Guid> _mediumRepo;
     private readonly IRepository<EducationMediumStage, Guid> _stageRepo;
     private readonly ICurrentTenant _currentTenant;
+    private readonly Dictionary<Guid, Guid> _bankByYear = new();
 
     public FeeCollectionAppServiceV2_Tests()
     {
@@ -89,10 +95,46 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
         }
     }
 
+    [Fact]
+    public async Task Cash_Charges_Can_Be_Collected_Without_A_Bank()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var (yearId, headId, studentId, _) = await SeedCoreDataAsync();
+            var student = await _studentRepo.GetAsync(studentId);
+            var head = await _feeHeadRepo.GetAsync(headId);
+            var charge = new Charge(
+                Guid.NewGuid(), TestTenantId, yearId, Guid.NewGuid(), "Cash charge", Guid.NewGuid(),
+                studentId, student.AcademicBoardId!.Value, student.AcademicMediumId,
+                Guid.NewGuid(), Guid.NewGuid(), "Cash charge collection", 100m,
+                DateTimeOffset.UtcNow.AddDays(1), ChargePriority.Medium, ChargeStatus.Pending,
+                Guid.NewGuid());
+            charge.SetIncomeCategory(head.IncomeCategoryId, "Collection Tuition");
+            charge.Approve(Guid.NewGuid());
+            await GetRequiredService<IRepository<Charge, Guid>>().InsertAsync(charge, autoSave: true);
+
+            var output = await _service.CollectFeeAsync(new CollectFeeInput
+            {
+                IdempotencyKey = Guid.NewGuid().ToString("N"), StudentId = studentId, AcademicYearId = yearId,
+                ChargePayments = [new() { ChargeId = charge.Id, Amount = 100d }],
+                Payments = [new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 100d }],
+            });
+
+            output.TotalAmount.ShouldBe(100d);
+            output.ChargeReceiptNumber.ShouldNotBeNullOrWhiteSpace();
+            output.PaidCharges.ShouldNotBeEmpty();
+            var record = await GetRequiredService<IRepository<PaymentMethodRecord, Guid>>()
+                .GetAsync(x => x.FeeRecordMetadataId == output.Id);
+            record.BankAccountId.ShouldBeNull();
+            record.BankLabelSnapshot.ShouldBeNull();
+            record.Amount.ShouldBe(100m);
+        }
+    }
+
     // ── Scenario: UPI + BankReceiptConfirmed=true → FinalFee receipt (FIN-*) ─
 
     [Fact]
-    public async Task UPI_BankConfirmed_True_Should_Generate_FinalFee_Receipt()
+    public async Task UPI_BankConfirmed_True_Should_Still_Generate_Provisional_Receipt()
     {
         using (_currentTenant.Change(TestTenantId))
         {
@@ -106,8 +148,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
             var output = await _service.CollectFeeAsync(input);
 
             output.FeeReceiptNumber.ShouldNotBeNull();
-            output.FeeReceiptNumber!.StartsWith("FIN-").ShouldBeTrue(
-                $"UPI with bank confirmed=true must be FinalFee; got: {output.FeeReceiptNumber}");
+            output.FeeReceiptNumber!.StartsWith("KFE-").ShouldBeTrue(
+                $"UPI with cashier confirmation must remain provisional; got: {output.FeeReceiptNumber}");
+            output.Status.ShouldBe(FeeCollectionStatus.InReconciliation);
         }
     }
 
@@ -212,7 +255,7 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     // ── Scenario: DebitCard + confirmed=true → FinalFee ──────────────────────
 
     [Fact]
-    public async Task DebitCard_BankConfirmed_True_Should_Generate_FinalFee_Receipt()
+    public async Task DebitCard_BankConfirmed_True_Should_Still_Generate_Provisional_Receipt()
     {
         using (_currentTenant.Change(TestTenantId))
         {
@@ -226,8 +269,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
             var output = await _service.CollectFeeAsync(input);
 
             output.FeeReceiptNumber.ShouldNotBeNull();
-            output.FeeReceiptNumber!.StartsWith("FIN-").ShouldBeTrue(
-                $"DebitCard confirmed must be FinalFee; got: {output.FeeReceiptNumber}");
+            output.FeeReceiptNumber!.StartsWith("KFE-").ShouldBeTrue(
+                $"DebitCard with cashier confirmation must remain provisional; got: {output.FeeReceiptNumber}");
+            output.Status.ShouldBe(FeeCollectionStatus.InReconciliation);
         }
     }
 
@@ -279,7 +323,8 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     /// → FeeCategory → FeeHead → Student → DueFee.
     /// Returns (academicYearId, feeHeadId, studentId, dueFeeId).
     /// </summary>
-    private async Task<(Guid AcademicYearId, Guid FeeHeadId, Guid StudentId, Guid DueFeeId)> SeedCoreDataAsync()
+    private Task<(Guid AcademicYearId, Guid FeeHeadId, Guid StudentId, Guid DueFeeId)> SeedCoreDataAsync() =>
+        WithUnitOfWorkAsync(async () =>
     {
         var yearId    = Guid.NewGuid();
         var boardId   = Guid.NewGuid();
@@ -294,6 +339,22 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
             yearId, TestTenantId, "2025-26",
             new DateTime(2025, 4, 1), new DateTime(2026, 3, 31));
         await _academicYearRepo.InsertAsync(year, autoSave: true);
+
+        // Nominal collection scenarios need an actual tenant member and explicit
+        // scope; the default test principal alone is not authorization evidence.
+        var actorId = GetRequiredService<ICurrentUser>().Id!.Value;
+        var actors = GetRequiredService<IRepository<IdentityUser, Guid>>();
+        if (!await actors.AnyAsync(user => user.Id == actorId))
+            await actors.InsertAsync(new IdentityUser(actorId, "collection-reviewer",
+                "collection-reviewer@example.test", TestTenantId), autoSave: true);
+        await GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(
+            new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: actorId,
+                academicYearId: yearId, description: "Collection receipt test year"), autoSave: true);
+        var bank = new BankAccount(Guid.NewGuid(), yearId, "QA Bank", "QA branch", null,
+            "QA School", BankAccountType.Current, "1234567890", "Collection test bank",
+            "TEST0000001", null, tenantId: TestTenantId);
+        await GetRequiredService<IRepository<BankAccount, Guid>>().InsertAsync(bank, autoSave: true);
+        _bankByYear[yearId] = bank.Id;
 
         // 2. EducationBoard → AcademicYear
         var board = new EducationBoard(boardId, TestTenantId, EducationBoardType.CBSE, yearId);
@@ -344,9 +405,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
         await dueFeeRepo.InsertAsync(dueFee, autoSave: true);
 
         return (yearId, feeHeadId, studentId, dueFeeId);
-    }
+    });
 
-    private static CollectFeeInput MakeInput(
+    private CollectFeeInput MakeInput(
         Guid studentId,
         Guid academicYearId,
         Guid feeHeadId,
@@ -366,6 +427,7 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
             [
                 new FeePaymentDto
                 {
+                    BankAccountId = method == PaymentMethodEnum.Cash ? null : _bankByYear[academicYearId],
                     PaymentMethod = method,
                     Amount        = 1000d,
                     Details       = details,

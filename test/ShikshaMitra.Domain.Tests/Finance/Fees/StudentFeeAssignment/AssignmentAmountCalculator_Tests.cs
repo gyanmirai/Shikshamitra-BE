@@ -22,7 +22,8 @@ public class AssignmentAmountCalculator_Tests
 	{
 		var amounts = AssignmentAmountCalculator.Allocate(.02m, [25m, 25m, 25m, 25m]);
 		Assert.All(amounts, x => Assert.True(x >= 0));
-		Assert.Equal(.02m, amounts.Sum());
+		Assert.Equal(1m, amounts.Sum());
+		Assert.Equal(new[] { 0m, 0m, 0m, 1m }, amounts);
 	}
 
 	[Fact]
@@ -35,9 +36,9 @@ public class AssignmentAmountCalculator_Tests
 	[Fact]
 	public void Daily_service_charge_is_independent_of_payment_frequency()
 	{
-		var rule = new ProrationPolicyRuleSnapshot(Guid.NewGuid(), ProrationRuleType.Daily, ProrationRoundingMode.Currency, 0, null, null);
+		var rule = new ProrationPolicyRuleSnapshot(Guid.NewGuid(), ProrationRuleType.Daily, ProrationRoundingMode.Currency, null, null);
 		var result = AssignmentAmountCalculator.Calculate(new(), rule, 12000m, new(2026, 4, 1), new(2027, 3, 31), new(2026, 10, 1), new(2027, 3, 31));
-		Assert.Equal(5983.56m, result.ProratedAmount);
+		Assert.Equal(5984m, result.ProratedAmount);
 		Assert.Equal(result.ProratedAmount, AssignmentAmountCalculator.Allocate(result.ProratedAmount, [100m]).Sum());
 		Assert.Equal(result.ProratedAmount, AssignmentAmountCalculator.Allocate(result.ProratedAmount, [25m, 25m, 25m, 25m]).Sum());
 	}
@@ -45,7 +46,7 @@ public class AssignmentAmountCalculator_Tests
 	[Fact]
 	public void Monthly_cutoff_prices_service_months_before_quarterly_allocation()
 	{
-		var rule = new ProrationPolicyRuleSnapshot(Guid.NewGuid(), ProrationRuleType.MonthlyCutoff, ProrationRoundingMode.Currency, null, 15, ProrationAfterCutoffAction.HalfCharge);
+		var rule = new ProrationPolicyRuleSnapshot(Guid.NewGuid(), ProrationRuleType.MonthlyCutoff, ProrationRoundingMode.Currency, 15, ProrationAfterCutoffAction.HalfCharge);
 		var result = AssignmentAmountCalculator.Calculate(new(), rule, 12000m, new(2026, 4, 1), new(2027, 3, 31), new(2026, 8, 20), new(2027, 3, 31));
 		Assert.Equal(7500m, result.ProratedAmount);
 		Assert.Equal(new[] { 1875m, 1875m, 1875m, 1875m }, AssignmentAmountCalculator.Allocate(result.ProratedAmount, [25m, 25m, 25m, 25m]));

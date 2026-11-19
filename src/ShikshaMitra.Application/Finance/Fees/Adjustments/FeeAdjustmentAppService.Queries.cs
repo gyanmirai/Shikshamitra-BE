@@ -1,10 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Common;
+using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 
 namespace ShikshaMitra.Finance.Fees.FeeAdjustment;
 
@@ -13,56 +16,55 @@ public partial class FeeAdjustmentAppService
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View)]
     public async Task<AdjustmentEligibilityDto> GetEligibilityAsync(Guid studentId, Guid academicYearId)
     {
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
-
-        var dueFees = await dueFeeRepository.GetListAsync(
-            df => df.StudentId == studentId && df.OutstandingAmount > 0);
-        var pendingSource = await feeAdjustmentRepository.GetPendingSourceAmountsByDueFeeAsync(studentId);
-
-        if (dueFees.Count == 0)
-            return new AdjustmentEligibilityDto { StudentId = studentId, AcademicYearId = academicYearId };
-
-        var feeHeadIds = dueFees.Select(df => df.FeeHeadId).Distinct().ToList();
-        var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
-        var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
-
-        var grouped = dueFees
-            .GroupBy(df => df.FeeHeadId)
-            .Select(g =>
-            {
-                var months = g
-                    .OrderBy(df => df.Year).ThenBy(df => df.Month)
-                    .Select(df =>
-                    {
-                        pendingSource.TryGetValue(df.Id, out var reserved);
-						var adjustable = (double)Math.Max(0m, df.AdjustableBalance - (decimal)reserved);
-                        return new AdjustmentEligibilityMonthDto
-                        {
-                            DueFeeId = df.Id, Month = df.Month, Year = df.Year,
-							Total = (double)df.OriginalAmount, Paid = (double)df.PaidAmount,
-							Refunded = (double)df.RefundedAmount, Adjusted = (double)df.AdjustmentCreditAmount,
-                            Adjustable = adjustable,
-                        };
-                    })
-                    .Where(m => m.Adjustable > 0.001).ToList();
-
-                return new AdjustmentEligibilityFeeHeadDto
+        await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(studentId, academicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View);
+        var feeHeads = await feeHeadRepository.GetListAsync(head => head.AcademicYearId == academicYearId);
+        var headIds = feeHeads.Select(head => head.Id).ToList();
+        var dues = await dueFeeRepository.GetListAsync(due =>
+            due.StudentId == studentId && headIds.Contains(due.FeeHeadId));
+        var reservations = await feeRefundRepository.GetActiveReservedAmountsAsync(
+            dues.Select(due => due.Id).ToList());
+        var settledPaid = await feeAdjustmentManager.GetSettledPaidAmountsAsync(
+            dues.Select(due => due.Id).ToList(), studentId, academicYearId);
+        var headNames = feeHeads.ToDictionary(head => head.Id, head => head.Name);
+        var grouped = dues.GroupBy(due => due.FeeHeadId).Select(group =>
+        {
+            var months = group.OrderBy(due => due.Year).ThenBy(due => due.Month)
+                .Select(due =>
                 {
-                    FeeHeadId = g.Key,
-                    FeeHeadName = feeHeadMap.GetValueOrDefault(g.Key, g.Key.ToString()),
-					TotalPaid = (double)g.Sum(df => df.PaidAmount),
-                    TotalAdjustable = months.Sum(m => m.Adjustable),
-                    Months = months,
-                };
-            })
-            .Where(fh => fh.Months.Count > 0).ToList();
-
+                    var unpaid = due.OutstandingAmount > 0m;
+                    var settledCredit = Math.Max(0m,
+                        settledPaid.GetValueOrDefault(due.Id) - due.RefundedAmount +
+                        due.NetAmount - due.EffectiveObligationAmount -
+                        due.ReservedPaidCreditAmount - due.TransferredPaidCreditAmount);
+                    return new AdjustmentEligibilityMonthDto
+                    {
+                        DueFeeId = due.Id, Month = due.Month, Year = due.Year,
+                        Kind = unpaid ? FeeAdjustmentKind.UnpaidTransfer : FeeAdjustmentKind.PaidCredit,
+                        Status = DueFeeCollectionStatusResolver.Resolve(due, Clock.Now, 0d),
+                        OutstandingAmount = (double)due.OutstandingAmount,
+                        Total = (double)due.EffectiveObligationAmount, Paid = (double)due.PaidAmount,
+                        Refunded = (double)due.RefundedAmount, Adjusted = (double)due.AdjustmentCreditAmount,
+                        Adjustable = unpaid ? (double)due.OutstandingAmount : (double)Math.Max(0m,
+                            Math.Min(due.AdjustableBalance, settledCredit) -
+                            reservations.GetValueOrDefault(due.Id)),
+                    };
+                }).Where(month => month.Adjustable > 0).ToList();
+            return new AdjustmentEligibilityFeeHeadDto
+            {
+                FeeHeadId = group.Key,
+                FeeHeadName = headNames.GetValueOrDefault(group.Key, group.Key.ToString()),
+                TotalPaid = (double)group.Sum(due => due.PaidAmount),
+                TotalAdjustable = months.Sum(month => month.Adjustable),
+                Months = months,
+            };
+        }).Where(head => head.Months.Count > 0).ToList();
         return new AdjustmentEligibilityDto
         {
             StudentId = studentId, AcademicYearId = academicYearId,
-            TotalPaid = grouped.Sum(f => f.TotalPaid),
-            TotalAdjustable = grouped.Sum(f => f.TotalAdjustable),
-			TotalAlreadyAdjusted = (double)dueFees.Sum(df => df.AdjustmentCreditAmount),
+            TotalPaid = (double)dues.Sum(due => due.PaidAmount),
+            TotalAdjustable = grouped.Sum(head => head.TotalAdjustable),
+            TotalAlreadyAdjusted = (double)dues.Sum(due => due.AdjustmentCreditAmount),
             FeeHeads = grouped,
         };
     }
@@ -71,7 +73,8 @@ public partial class FeeAdjustmentAppService
     public async Task<FeeAdjustmentDetailDto> GetAsync(Guid id)
     {
         var request = await feeAdjustmentRepository.GetWithDetailsAsync(id);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+        await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(request.StudentId, request.AcademicYearId,
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View);
         return await MapDetailAsync(request);
     }
 
@@ -81,36 +84,103 @@ public partial class FeeAdjustmentAppService
         FinanceClassDivisionFilterValidator.Validate(input);
         await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
             input.AcademicYearId, input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId);
+        var tableQuery = ParseListFilters(input.Filters, input.Filter);
+        var page = Math.Max(input.Page, 1);
+        var pageSize = Math.Clamp(input.PageSize, 1, 100);
+        var skip = (int)Math.Min((long)(page - 1) * pageSize, int.MaxValue);
 
-        var pageSize = Math.Min(Math.Max(input.PageSize, 1), 100);
-        var skip = (Math.Max(input.Page, 1) - 1) * pageSize;
-
-        var counts = await feeAdjustmentRepository.GetStatusCountsAsync(
-            input.BoardId, input.EducationMediumId, input.AcademicYearId, input.StandardId, input.DivisionId);
-        var items = await feeAdjustmentRepository.GetListForApplicationsAsync(
-            input.BoardId, input.EducationMediumId, input.AcademicYearId, input.Status,
-            input.CompletedOnly, input.Filter, input.StandardId, input.DivisionId, skip, pageSize);
-        var total = await feeAdjustmentRepository.CountForApplicationsAsync(
-            input.BoardId, input.EducationMediumId, input.AcademicYearId, input.Status,
-            input.CompletedOnly, input.Filter, input.StandardId, input.DivisionId);
-
-        // Batch-load related entities
-        var studentIds = items.Select(i => i.StudentId).Distinct().ToList();
-        var students = studentIds.Count > 0
-            ? await studentRepository.GetListAsync(s => studentIds.Contains(s.Id)) : [];
-        var studentMap = students.ToDictionary(s => s.Id);
-
-        var standardIds = students.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
-        var divisionIds = students.Where(s => s.DivisionId.HasValue).Select(s => s.DivisionId!.Value).Distinct().ToList();
-        var standards = standardIds.Count > 0 ? await standardRepository.GetListAsync(s => standardIds.Contains(s.Id)) : [];
-        var divisions = divisionIds.Count > 0 ? await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id)) : [];
-        var standardMap = standards.ToDictionary(s => s.Id, s => s.Name);
-        var divisionMap = divisions.ToDictionary(d => d.Id, d => d.Name);
-
-        var userIds = items.Where(i => i.CreatorId.HasValue).Select(i => i.CreatorId!.Value).Distinct().ToList();
-        var users = userIds.Count > 0 ? await identityUserRepository.GetListAsync(u => userIds.Contains(u.Id)) : [];
-        var userMap = users.ToDictionary(u => u.Id, u => u.Name ?? u.UserName ?? string.Empty);
-
+        // Count and list share exactly the same database-enforced tenant/student/context scope.
+        var query = await BuildApplicationsListQueryAsync(input);
+        var counts = (await AsyncExecuter.ToListAsync(query.GroupBy(row => row.Status)
+            .Select(group => new { Status = group.Key, Count = group.Count() })))
+            .ToDictionary(row => row.Status, row => row.Count);
+        if (input.CompletedOnly == true)
+            query = query.Where(row => row.Status == FeeAdjustmentStatus.PartiallyApplied || row.Status == FeeAdjustmentStatus.Applied);
+        else if (input.Status.HasValue)
+            query = query.Where(row => row.Status == input.Status.Value);
+        var students = await studentRepository.GetQueryableAsync();
+        var standards = await standardRepository.GetQueryableAsync();
+        var divisions = await divisionRepository.GetQueryableAsync();
+        var users = await identityUserRepository.GetQueryableAsync();
+        // Project only list scalars. This prevents the request and student AutoInclude
+        // graphs from being loaded before filtering and paging.
+        var rows = from request in query
+            join student in students on request.StudentId equals student.Id
+            join standard in standards on request.StandardId equals standard.Id into standardJoin
+            from standard in standardJoin.DefaultIfEmpty()
+            join division in divisions on request.DivisionId equals division.Id into divisionJoin
+            from division in divisionJoin.DefaultIfEmpty()
+            join user in users on request.CreatorId equals (Guid?)user.Id into userJoin
+            from user in userJoin.DefaultIfEmpty()
+            select new AdjustmentListRow
+            {
+                Id = request.Id, StudentId = request.StudentId, CreatorId = request.CreatorId,
+                StudentName = student.FirstName + (student.MiddleName == null || student.MiddleName == "" ? " " : " " + student.MiddleName + " ") + student.LastName,
+                GrNumber = student.GrNo.HasValue ? student.GrNo.Value.ToString() : "",
+                RollNo = student.RollNo.HasValue ? student.RollNo.Value.ToString() : "",
+                StandardName = standard == null ? "" : standard.Name,
+                DivisionName = division == null ? "" : division.Name,
+                RequestedByName = user == null ? "" : (user.Name ?? user.UserName ?? ""),
+                StatusName = request.Status == FeeAdjustmentStatus.Pending ? "Pending" :
+                    request.Status == FeeAdjustmentStatus.Rejected ? "Rejected" :
+                    request.Status == FeeAdjustmentStatus.PartiallyApplied ? "Partially applied" :
+                    request.Status == FeeAdjustmentStatus.Applied ? "Approved" : "Cancelled",
+                Reason = request.Reason, VoucherNumber = request.VoucherNumber,
+                RequestedAmount = request.RequestedAmount, AppliedAmount = request.AppliedAmount,
+                RemainingAmount = request.RemainingAmount, Status = request.Status,
+                CreatedAt = request.CreationTime
+            };
+        rows = tableQuery.Apply(rows, ListFilterFields);
+        if (!string.IsNullOrEmpty(tableQuery.Search))
+        {
+            var search = tableQuery.Search.ToLowerInvariant();
+            var isDate = DateTime.TryParseExact(tableQuery.Search,
+                ["dd-MM-yyyy", "yyyy-MM-dd", "O"], CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind, out var parsedDate);
+            var nextDate = parsedDate.Date.AddDays(1);
+            var isAmount = double.TryParse(tableQuery.Search, NumberStyles.Number,
+                CultureInfo.InvariantCulture, out var parsedAmount);
+            rows = rows.Where(row =>
+                row.StudentName.ToLower().Contains(search) || row.GrNumber.Contains(search) ||
+                (row.StudentName + " (" + row.GrNumber + ")").ToLower().Contains(search) ||
+                row.RollNo.Contains(search) || row.StandardName.ToLower().Contains(search) ||
+                (row.StandardName + " / " + row.DivisionName).ToLower().Contains(search) ||
+                row.DivisionName.ToLower().Contains(search) || row.RequestedByName.ToLower().Contains(search) ||
+                row.StatusName.ToLower().Contains(search) || row.VoucherNumber.ToLower().Contains(search) ||
+                row.Reason.ToLower().Contains(search) ||
+                (isAmount && row.RequestedAmount == parsedAmount) ||
+                (isDate && row.CreatedAt >= parsedDate.Date && row.CreatedAt < nextDate));
+        }
+        var hasCriteria = tableQuery.Filters.Count > 0 || !string.IsNullOrEmpty(tableQuery.Search);
+        var total = hasCriteria ? await AsyncExecuter.CountAsync(rows) : await AsyncExecuter.CountAsync(query);
+        var pageRows = await AsyncExecuter.ToListAsync(rows.OrderByDescending(row => row.CreatedAt)
+            .ThenBy(row => row.Id).Skip(skip).Take(pageSize));
+        var pageIds = pageRows.Select(row => row.Id).ToList();
+        var visibleRequests = (await feeAdjustmentRepository.GetListForActionAvailabilityAsync(pageIds))
+            .ToDictionary(request => request.Id);
+        var mayApprove = await AuthorizationService.IsGrantedAsync(
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve);
+        var mayReject = await AuthorizationService.IsGrantedAsync(
+            ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Reject);
+        var isAdministrator = (mayApprove || mayReject) && currentUser.Id.HasValue &&
+            await userScopeService.IsAdminUserAsync(currentUser.Id.Value);
+        var dtos = new List<FeeAdjustmentApplicationItemDto>(pageRows.Count);
+        foreach (var row in pageRows)
+        {
+            var request = visibleRequests[row.Id];
+            dtos.Add(new FeeAdjustmentApplicationItemDto
+            {
+                Id = row.Id, StudentId = row.StudentId, RequestedByUserId = row.CreatorId,
+                StudentName = row.StudentName, GrNumber = row.GrNumber, RollNo = row.RollNo,
+                StandardName = row.StandardName, DivisionName = row.DivisionName,
+                RequestedByName = row.RequestedByName, StatusName = row.StatusName,
+                RequestedAmount = row.RequestedAmount, AppliedAmount = row.AppliedAmount,
+                RemainingAmount = row.RemainingAmount, Status = row.Status, CreatedAt = row.CreatedAt,
+                UnavailableReason = request.HasPaidCreditReservation || request.Kind == FeeAdjustmentKind.UnpaidTransfer
+                    ? null : PaidCreditTransferUnavailableReason,
+                AvailableActions = await GetAvailableActionsAsync(request, mayApprove, mayReject, isAdministrator)
+            });
+        }
         return new FeeAdjustmentApplicationsDto
         {
             PendingCount = counts.GetValueOrDefault(FeeAdjustmentStatus.Pending),
@@ -118,27 +188,8 @@ public partial class FeeAdjustmentAppService
             AppliedCount = counts.GetValueOrDefault(FeeAdjustmentStatus.Applied),
             RejectedCount = counts.GetValueOrDefault(FeeAdjustmentStatus.Rejected),
             CancelledCount = counts.GetValueOrDefault(FeeAdjustmentStatus.Cancelled),
-            TotalCount = total,
-            CurrentPage = input.Page, PageSize = pageSize,
-            TotalPages = (int)Math.Ceiling(total / (double)pageSize),
-            Items = items.Select(r =>
-            {
-                studentMap.TryGetValue(r.StudentId, out var student);
-                return new FeeAdjustmentApplicationItemDto
-                {
-                    Id = r.Id, StudentId = r.StudentId,
-                    StudentName = FormatStudentName(student),
-                    GrNumber = student?.GrNo?.ToString() ?? string.Empty,
-                    RollNo = student?.RollNo?.ToString() ?? string.Empty,
-                    StandardName = student?.StandardId is Guid sid && standardMap.TryGetValue(sid, out var sn) ? sn : string.Empty,
-                    DivisionName = student?.DivisionId is Guid did && divisionMap.TryGetValue(did, out var dn) ? dn : string.Empty,
-                    RequestedAmount = r.RequestedAmount, AppliedAmount = r.AppliedAmount,
-                    RemainingAmount = r.RemainingAmount, Status = r.Status,
-                    StatusName = FormatStatus(r.Status),
-                    RequestedByName = r.CreatorId.HasValue && userMap.TryGetValue(r.CreatorId.Value, out var un) ? un : string.Empty,
-                    CreatedAt = r.CreationTime,
-                };
-            }).ToList(),
+            TotalCount = total, CurrentPage = page, PageSize = pageSize,
+            TotalPages = (int)Math.Ceiling(total / (double)pageSize), Items = dtos,
         };
     }
 }

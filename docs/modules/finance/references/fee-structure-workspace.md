@@ -3,7 +3,7 @@ module: finance
 domain: fee-structure
 content_type: Reference
 status: canonical
-updated_on: 2026-09-10
+updated_on: 2026-10-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -19,7 +19,7 @@ flowchart LR
     M[Academic board and medium workspace] --> C[Authorized class]
     C --> D[Draft Fee Structure]
     H[Active Fee Heads and accounting mappings] --> D
-    P[Four policy masters and immutable versions] --> D
+    P[Collection and Refund immutable versions] --> D
     T[Published Payment Term versions] --> L[Per-head schedules and local overrides]
     L --> D
     D --> V[Authoritative readiness review]
@@ -31,16 +31,32 @@ flowchart LR
 |---|---|
 | Metadata | Academic year + board + medium parent workspace; exposes only accessible child classes |
 | Structure | Named class configuration and revision lineage; owns exact policy attachments |
-| Structure detail | Unique Fee Head, total service-coverage amount, one-time/optional flags, exact Payment Term version, schedule mode |
+| Structure detail | Unique Fee Head, fixed amount or variable pricing, independent one-time/optional flags, exact Payment Term version, schedule mode |
 | Schedule override | Structure-local dates and percentages referencing an installment in the pinned Payment Term version |
 | Policy attachment | One exact immutable version per family; monetary applicability is resolved per matching structure Fee Head |
 | Publication review | Saved coverage, exact configuration, policy labels and resolved schedule in aggregate `ExtraProperties.PublicationReview` |
 
 Drafts may be incomplete. New/changed attachments must be valid: wrong-year, inactive, foreign-version, duplicate-head, corrupt-snapshot, and invalid-custom-schedule errors block relationship changes. Name/amount-only PATCH operations validate the command and monetary shape without revalidating unrelated master settings; full preview/publication always revalidates everything. `SaveAsDraft=false` requests complete validation on a save; publication remains a separate explicit action.
 
-Publication requires at least one active Fee Head, an active valid accounting mapping for every head, a Collection policy, and a published/superseded version of an active Payment Term for every head. Refund and Proration are optional. A structure without Proration uses full-charge coverage labels; no Refund attachment means no refund policy has been configured by this workspace.
+Publication requires at least one active Fee Head, a Collection policy, and an active valid accounting mapping plus a published/superseded version of an active Payment Term for every head. Refund is optional. Proration is removed from request/response contracts, settings catalogs, context capabilities, attachment validation, coverage and publication warnings; no Refund attachment means no refund policy has been configured by this workspace.
+
+## Fee head collection
+
+Every assigned Fee Head participates in normal due generation and Fee Collection. The retired `collectAtAdmission` field is absent from request/response DTOs and domain entities, and explicit PATCH add/update operations reject it. Older create payloads cannot activate the retired behavior. Candidates include every configured head; optional heads generate dues only when selected, and included variable heads still require a student-specific amount.
+
+Each head receives the normal schedule, accounting and policy validation. Configuration and assignment do not record payment or income; collection retains its existing receipt, allocation and posting rules.
+
+`RemoveFeeStructureAdmissionCollection` drops only the retired configuration column. It does not rewrite existing assignments, dues, receipts or accounting evidence, and rollback restores the column with `false`. Historical migration files remain intact. If the former option cleared a head's payment term, select a valid payment frequency in a draft/revision before publication and new assignment; the migration does not invent a schedule. Previously assigned students whose heads never generated dues require the existing controlled reassignment/correction workflow, not an automatic historical backfill.
+
+Saved reviews containing the retired collection exclusion are omitted from current responses without rewriting their stored evidence. Automatic fee-assignment repair skips published structures with a missing required-head schedule, rather than generating legacy dues or assignment evidence; actual legacy structures without a publication review retain their existing repair behavior.
+
+Regression proof: `FeeStructureCollectionHeads_Tests.cs` checks rejection of the retired patch field, preserved historical evidence, safe repair, and all-head visibility through candidates, assignment, generated dues and the Fee Collection form, including assignment retry. `VariableFeeAssignment_Tests.cs` retains fixed/variable and optional/required coverage.
 
 Concession Policy setup has been removed from the Fee Structure UI. New structures can be published and assigned without an attachment; no default concession is selected and no discount is granted. Existing attachment/version/scope fields remain for compatibility and historical request processing; supplied legacy attachments still receive their existing validation. The request flow has not moved to request-level policy selection: a new assignment without a snapshot cannot create a concession request, and its legacy concession-context read returns `PolicyNotAttached`. Existing snapshots are preserved. No database migration or historical rewrite is required.
+
+Proration attachment PATCH fields are rejected as unsupported. Older create/update payload fields are ignored and never persisted. New drafts and revisions cannot attach proration, and new student assignments do not inherit old structure pins. Existing nullable structure columns, publication JSON, assignment snapshots and DueFee calculations are retained as historical evidence; no destructive migration is required. Reads project retired proration labels/fields/warnings out of publication responses without rewriting the stored snapshot. The separate Proration Policy lifecycle and simulation remain available; its structure attachment-impact endpoint is retired.
+
+Regression coverage lives in `FeeStructureProrationRemoval_Tests.cs`, the malformed PATCH cases, the supported policy-default tests and `StudentFeeAssignmentPolicies_Tests.cs`. These check unsupported inputs, publication without proration, historical evidence projection, no template inheritance, independent simulation and preservation of assigned policy pins.
 
 ## Policy and Fee Head mismatch rules
 
@@ -55,8 +71,6 @@ Policies attach to the **Fee Structure**; the policy's head rules apply to the *
 | Concession scope is selected heads | Every selected ID must be present in the structure and concession-enabled; empty selection is invalid |
 | No concession-enabled heads at publication | Allowed when no legacy concession policy is attached; an existing attachment still requires compatible coverage |
 | Refund selected-head policy has no intersection | Warn in an incomplete draft; block publication until matching heads are added or the attachment is changed/cleared |
-| Proration policy does not mention a structure head | Full charge; warn in review |
-| One-time structure head has a recurring Proration rule | Reject the conflicting configuration |
 | Extra policy heads are added later to a draft | Recompute coverage on preview, save and publication |
 | A selected concession head is removed | Selected scope becomes invalid; require explicit correction |
 | Master or snapshot is unavailable/inactive/wrong-year | Reject new or changed draft use; published review remains readable |
@@ -119,7 +133,7 @@ Academic workspace, scope and calendar lookups project only the required fields.
 | `DELETE /api/fee-structures/{id}` | `.Delete` | Unused draft only |
 | `PATCH /api/fee-structures/{id}/lock` | `.Add` | Retired compatibility route: rejects with instructions to review and use stamped publication |
 
-Permission prefix in abbreviated rows is `Finance.Settings.FeeStructure`. Changed attachments additionally require `Finance.Policies.{CollectionPolicy|ConcessionPolicy|ProrationPolicy|RefundPolicy}.Add`; changing selected concession coverage is an attachment change. Existing unchanged attachments do not require every policy-management permission merely to edit a fee amount.
+Permission prefix in abbreviated rows is `Finance.Settings.FeeStructure`. Changed attachments additionally require `Finance.Policies.{CollectionPolicy|ConcessionPolicy|RefundPolicy}.Add`; changing selected concession coverage is an attachment change. Existing unchanged attachments do not require every policy-management permission merely to edit a fee amount.
 
 The `Finance:FeeStructure:*` error family includes InvalidConfiguration, ScopeMismatch, VersionMismatch, ConcurrencyConflict, DuplicateName and RevisionRequiresPublication. Validation failures include human-readable `error.data.Errors`; clients should retain unsaved input and display this list. Database uniqueness/concurrency failures must not be interpreted as a successful save; refresh the canonical resource before retrying.
 
@@ -170,7 +184,7 @@ The active frontend no longer calls the combined `/api/fee-structures/settings` 
 
 Each owning policy list/detail now exposes `currentVersionId`, `currentVersionNumber` and `isAttachable`. A current ID must match the active master's exact version number, academic year and active immutable snapshot. Missing snapshots are not replaced with arbitrary history. GET lists continue to return one row per master. Payment Term lists expose `publishedVersionId` and `publishedVersionNumber`; `currentVersionNumber` alone may describe an unpublished working draft and is unsuitable for attachment.
 
-New draft policy defaults are a frontend initialization choice: select a single eligible current default once per family, after all lookup pages finish. Never initialize saved records or overwrite a clear/manual selection. No default means no attachment; ambiguous defaults require explicit selection. Backend commands still validate the supplied IDs and versions. Defaults do not create any server row until Save.
+New draft policy defaults are a frontend initialization choice: select a single eligible current default once per family, after the scoped catalogue finishes. Never initialize saved records or overwrite a clear/manual selection. No default means no attachment; ambiguous defaults require explicit selection. Backend commands still validate the supplied IDs and versions. Defaults do not create any server row until Save.
 
 Receipt Book no longer participates in candidate application, catalogs or publication validation. Legacy request/response fields and the stored column remain for compatibility; old request values are ignored. Existing historical values/publication snapshots are retained. This refactor adds no destructive migration and changes no receipt numbering or collection behavior.
 
@@ -210,3 +224,15 @@ The added cases cover exact current policy identity, stale new selection rejecti
 
 
 Configuration actions use the [three-permission contract](../api.md#fee-configuration-permissions). View reads/reviews, Add creates/edits/publishes/revises, and Delete removes unused drafts.
+
+
+Variable rows store no configured amount and retain Payment Terms; see [variable fee assignment](./variable-fee-assignment.md) for the active conditions and nullable preview contract.
+
+## Lightweight structure reads
+
+The class navigator uses `GET /api/fee-structures/summaries?standardId` and fetches full configuration through `GET /api/fee-structures/{id}` only when needed.
+`GET /api/fee-structures/catalogue?feeStructureMetadataId&standardId` returns scoped head, eligible term and current policy choices without register usage payloads or full version histories.
+`GET /api/fee-structures/term-schedule?scope&paymentTermId&versionId` resolves only the selected immutable schedule.
+These reads retain the existing structure permissions and class scope; save, publication and assignment commands still validate authoritative configuration.
+Fee-head dependency counts aggregate normalized selected-head evidence and legacy due references in SQL rather than retrieving every assignment snapshot.
+Simple settings header filters run before count/page; display-derived filters scan bounded scalar batches.

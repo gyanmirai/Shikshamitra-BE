@@ -11,7 +11,8 @@ public enum AdmissionWorkflowGovernanceAction
 	Published = 6,
 	Superseded = 7,
 	Archived = 8,
-	RollbackDraftCreated = 9
+	RollbackDraftCreated = 9,
+	Reopened = 10
 }
 
 public enum AdmissionWorkflowNotificationType

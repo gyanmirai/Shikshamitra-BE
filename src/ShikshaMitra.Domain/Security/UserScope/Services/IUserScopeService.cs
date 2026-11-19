@@ -23,6 +23,12 @@ public interface IUserScopeService
         CancellationToken cancellationToken = default
     );
 
+    /// <summary>Resolves multiple users with one reporting hierarchy and assignment read.</summary>
+    Task<IReadOnlyDictionary<Guid, UserScopeContext>> GetUserScopesAsync(
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken cancellationToken = default
+    );
+
     /// <summary>
     /// Invalidates the cached scope for a user.
     /// Should be called whenever a user's scope assignments change.

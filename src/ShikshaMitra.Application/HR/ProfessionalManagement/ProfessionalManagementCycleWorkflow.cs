@@ -35,7 +35,7 @@ public class ProfessionalManagementCycleWorkflow(
 		var totalCount = await asyncExecuter.CountAsync(query);
 		var cycles = await asyncExecuter.ToListAsync(
 			query
-				.OrderByDescending(x => x.PeriodStart)
+				.OrderByDescending(x => x.PeriodStart).ThenBy(x => x.Id)
 				.Skip((page - 1) * pageSize)
 				.Take(pageSize));
 		var ids = cycles.Select(x => x.Id).ToList();
@@ -113,7 +113,7 @@ public class ProfessionalManagementCycleWorkflow(
 			await cycleRepository.UpdateAsync(cycle, autoSave: true);
 		}
 
-		await AuditAsync(null, "CycleAssigned", $"Assigned {createdCount} employees to {cycle.Name}");
+		await AuditAsync(null, "CycleAssigned", $"Assigned {createdCount} staff to {cycle.Name}");
 		return ProfessionalManagementProjection.ToCycleDto(cycle, await assignmentWorkflow.GetAssignmentsForCycleAsync(id));
 	}
 

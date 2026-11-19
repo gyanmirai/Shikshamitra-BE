@@ -9,7 +9,7 @@ namespace ShikshaMitra.Finance.Fees.Settings.ConcessionType;
 public interface IConcessionTypeAppService : IApplicationService
 {
     Task CreateAsync(Guid academicYearId, ConcessionTypeRequest concessionTypeCreateRequest);
-	Task<PagedResultDto<ConcessionTypeResponse>> GetListAsync(Guid academicYearId, int skipCount = 0, int maxResultCount = 10, string? searchTerm = null, bool includeInactive = false, bool? isActive = null);
+	Task<PagedResultDto<ConcessionTypeResponse>> GetListAsync(Guid academicYearId, int skipCount = 0, int maxResultCount = 10, string? searchTerm = null, bool includeInactive = false, bool? isActive = null, string? filters = null);
     Task<ConcessionTypeResponse> GetAsync(Guid id);
 	Task<PagedResultDto<ConcessionTypeVersionHistoryItemDto>> GetVersionHistoryAsync(Guid id, int skipCount = 0, int maxResultCount = 50);
 	Task<ConcessionTypeDocumentDefaultsResponse> GetDocumentDefaultsAsync();

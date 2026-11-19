@@ -1,7 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
+using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Security.UserScope;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Finance.ConcessionRequests;
 
@@ -20,12 +28,40 @@ public abstract class ConcessionRequestApiTestsBase : ShikshaMitraApiTestBase
 
 	protected async Task<Guid> CreatePendingRequestWithFeeHeadAsync()
 	{
-		var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
 		var typeId = await ConcessionRequestTestHelper.CreateConcessionTypeAsync(Client);
 		var feeCategoryId = await ConcessionRequestTestHelper.CreateFeeCategoryAsync(Client);
 		var feeHeadId = await ConcessionRequestTestHelper.CreateFeeHeadAsync(Client, feeCategoryId);
 
 		return await ConcessionRequestTestHelper.CreateConcessionRequestAsync(
 			Client, studentId, typeId, new[] { feeHeadId });
+	}
+
+	protected async Task<HttpClient> CreateScopedCheckerClientAsync()
+	{
+		var checkerId = Guid.NewGuid();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using var scope = Factory.Services.CreateScope();
+		var services = scope.ServiceProvider;
+		var tenant = services.GetRequiredService<ICurrentTenant>();
+		var uowManager = services.GetRequiredService<IUnitOfWorkManager>();
+		var assignments = services.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		using (tenant.Change(tenantId))
+		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var userName = $"concession-checker-{checkerId:N}";
+			var user = new IdentityUser(checkerId, userName,
+				$"{userName}@example.test", tenantId);
+			user.AddRole(Factory.SeededRoleId);
+			await services.GetRequiredService<IRepository<IdentityUser, Guid>>()
+				.InsertAsync(user, autoSave: true);
+			await assignments.InsertAsync(new UserScopeAssignment(
+				Guid.NewGuid(), tenantId, checkerId,
+				academicYearId: Factory.SeededAcademicYearId,
+				description: "Concession API checker scope"), autoSave: false);
+			await uow.CompleteAsync();
+		}
+		await services.GetRequiredService<IUserScopeService>().InvalidateUserScopeCacheAsync(checkerId);
+		return CreateClientAs(checkerId);
 	}
 }

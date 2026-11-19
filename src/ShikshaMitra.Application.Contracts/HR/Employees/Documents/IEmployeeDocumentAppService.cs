@@ -11,6 +11,7 @@ namespace ShikshaMitra.HR.Employees.Documents;
 /// </summary>
 public interface IEmployeeDocumentAppService : IApplicationService
 {
+	Task<Volo.Abp.Application.Dtos.PagedResultDto<EmployeeDocumentChecklistItemDto>> GetChecklistAsync(Guid employeeId, int page = 1, int pageSize = 20, string? search = null);
 	Task UploadDocumentsAsync(Guid employeeId, List<DocumentDto> documents);
 	Task UploadDocumentAsync(Guid employeeId, Guid documentNameId, string fileName, string contentType, byte[] content, long size);
 	Task<EmployeeDocumentListResponse> GetDocumentListAsync(Guid employeeId, int page, int pageSize, string? search);

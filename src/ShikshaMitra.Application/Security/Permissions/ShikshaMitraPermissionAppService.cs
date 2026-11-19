@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Identity;
 using Volo.Abp.Uow;
@@ -28,12 +30,13 @@ namespace ShikshaMitra.Security.Permissions;
 [RemoteService(false)]
 [Dependency(ReplaceServices = true)]
 [ExposeServices(typeof(IPermissionAppService), typeof(IShikshaMitraPermissionAppService), typeof(ShikshaMitraPermissionAppService))]
-public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionAppService, IShikshaMitraPermissionAppService
+public partial class ShikshaMitraPermissionAppService : ApplicationService, IPermissionAppService, IShikshaMitraPermissionAppService
 {
 	private readonly IIdentityRoleRepository _roles;
 	private readonly IIdentityUserRepository _users;
 	private readonly IUnitOfWorkManager _unitOfWorkManager;
 	private readonly IServiceProvider _services;
+	private readonly IUserPermissionDenyStore _denies;
 	protected PermissionManagementOptions Options { get; }
 	protected IPermissionManager PermissionManager { get; }
 	protected IPermissionDefinitionManager PermissionDefinitionManager { get; }
@@ -51,12 +54,14 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		IIdentityRoleRepository roles,
 		IIdentityUserRepository users,
 		IUnitOfWorkManager unitOfWorkManager,
-		IServiceProvider services)
+		IServiceProvider services,
+		IUserPermissionDenyStore denies)
 	{
 		_roles = roles;
 		_users = users;
 		_unitOfWorkManager = unitOfWorkManager;
 		_services = services;
+		_denies = denies;
 		Options = options.Value;
 		PermissionManager = permissionManager;
 		PermissionDefinitionManager = permissionDefinitionManager;
@@ -67,9 +72,12 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 
 	public virtual async Task<GetPermissionListResultDto> GetAsync(string providerName, string providerKey)
 	{
+		var timer = Stopwatch.StartNew();
 		var isCurrentUserRead = IsCurrentUserProvider(providerName, providerKey);
 
 		await CheckProviderPolicy(providerName, providerKey, allowCurrentUserRead: true);
+		var protectedAdmin = await IsProtectedAdminAsync(providerName, providerKey);
+		var policyMs = timer.ElapsedMilliseconds;
 
 		var result = new GetPermissionListResultDto
 		{
@@ -78,10 +86,26 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		};
 
 		var multiTenancySide = CurrentTenant.GetMultiTenancySide();
-
-		foreach (var group in await PermissionDefinitionManager.GetGroupsAsync())
+		var enabledGroups = new List<(PermissionGroupDto Group, List<PermissionGrantInfoDto> Permissions)>();
+		long localizationTicks = 0;
+		var groups = await PermissionDefinitionManager.GetGroupsAsync();
+		var stateDefinitions = new HashSet<PermissionDefinition>();
+		foreach (var permission in groups.SelectMany(group => group.GetPermissionsWithChildren()))
 		{
+			if (!permission.MultiTenancySide.HasFlag(multiTenancySide)) continue;
+			for (var current = permission; current != null; current = current.Parent)
+			{
+				if (!current.IsEnabled) break;
+				stateDefinitions.Add(current);
+			}
+		}
+		var stateResults = await SimpleStateCheckerManager.IsEnabledAsync(stateDefinitions.ToArray());
+
+		foreach (var group in groups)
+		{
+			var localizationStarted = Stopwatch.GetTimestamp();
 			var groupDto = CreatePermissionGroupDto(group);
+			localizationTicks += Stopwatch.GetTimestamp() - localizationStarted;
 
 			var neededCheckPermissions = new List<PermissionDefinition>();
 
@@ -91,7 +115,7 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 			{
 				var enabled = permission.MultiTenancySide.HasFlag(multiTenancySide);
 				for (var current = permission; current != null && enabled; current = current.Parent)
-					enabled = current.IsEnabled && await SimpleStateCheckerManager.IsEnabledAsync(current);
+					enabled = current.IsEnabled && stateResults[current];
 				if (enabled)
 				{
 					neededCheckPermissions.Add(permission);
@@ -103,23 +127,43 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 				continue;
 			}
 
+			localizationStarted = Stopwatch.GetTimestamp();
 			var grantInfoDtos = neededCheckPermissions
 				.Select(CreatePermissionGrantInfoDto)
 				.ToList();
+			localizationTicks += Stopwatch.GetTimestamp() - localizationStarted;
 
-			var permissionNames = neededCheckPermissions.Select(x => x.Name).ToArray();
-			var effectiveGrantLookup = isCurrentUserRead
-				? await GetCurrentUserEffectivePermissionLookupAsync(permissionNames)
-				: null;
-			var multipleGrantInfo = await PermissionManager.GetAsync(permissionNames, providerName, providerKey);
+			enabledGroups.Add((groupDto, grantInfoDtos));
+		}
 
+		var denied = providerName == "U" ? await _denies.GetDeniedAsync(Guid.Parse(providerKey)) : new HashSet<string>();
+		var permissionNames = enabledGroups.SelectMany(group => group.Permissions).Select(permission => permission.Name).ToArray();
+		if (permissionNames.Length == 0) return result;
+		var catalogueMs = timer.ElapsedMilliseconds - policyMs;
+
+		var effectiveGrantLookup = isCurrentUserRead
+			? (await PermissionChecker.IsGrantedAsync(permissionNames)).Result
+			: null;
+		var effectiveMs = timer.ElapsedMilliseconds - policyMs - catalogueMs;
+		var grantInfoLookup = (await PermissionManager.GetAsync(permissionNames, providerName, providerKey))
+			.Result.ToDictionary(grant => grant.Name, StringComparer.Ordinal);
+		var grantSourcesMs = timer.ElapsedMilliseconds - policyMs - catalogueMs - effectiveMs;
+
+		foreach (var (groupDto, grantInfoDtos) in enabledGroups)
+		{
 			foreach (var grantInfoDto in grantInfoDtos)
 			{
-				var grantInfo = multipleGrantInfo!.Result.First(x => x.Name == grantInfoDto.Name);
-				grantInfoDto.IsGranted = effectiveGrantLookup?.GetValueOrDefault(grantInfoDto.Name) ?? grantInfo.IsGranted;
+				var grantInfo = grantInfoLookup[grantInfoDto.Name];
+				var adminGrant = protectedAdmin && (!grantInfoDto.AllowedProviders.Any() || grantInfoDto.AllowedProviders.Contains("R"));
+				grantInfoDto.IsGranted = adminGrant || (!denied.Contains(grantInfoDto.Name) && (effectiveGrantLookup != null
+					? effectiveGrantLookup[grantInfoDto.Name] == PermissionGrantResult.Granted
+					: grantInfo.IsGranted));
+				if (adminGrant)
+					grantInfoDto.GrantedProviders.Add(new ProviderInfoDto { ProviderName = "R", ProviderKey = AdminPermissionAccess.RoleName });
 
 				foreach (var provider in grantInfo.Providers)
 				{
+					if (adminGrant && provider.Name == "R" && provider.Key == AdminPermissionAccess.RoleName) continue;
 					grantInfoDto.GrantedProviders.Add(new ProviderInfoDto
 					{
 						ProviderName = provider.Name,
@@ -130,11 +174,14 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 				groupDto.Permissions.Add(grantInfoDto);
 			}
 
-			if (groupDto.Permissions.Any())
-			{
-				result.Groups.Add(groupDto);
-			}
+			result.Groups.Add(groupDto);
 		}
+		if (timer.ElapsedMilliseconds >= 1000)
+			Logger.LogWarning(
+				"Permission catalogue read took {TotalMs} ms: policy={PolicyMs}, catalogue={CatalogueMs}, localization={LocalizationMs}, effective={EffectiveMs}, grantSources={GrantSourcesMs}, groups={GroupCount}, permissions={PermissionCount}, selfRead={SelfRead}",
+				timer.ElapsedMilliseconds, policyMs, catalogueMs,
+				TimeSpan.FromSeconds(localizationTicks / (double)Stopwatch.Frequency).TotalMilliseconds,
+				effectiveMs, grantSourcesMs, result.Groups.Count, permissionNames.Length, isCurrentUserRead);
 
 		return result;
 	}
@@ -144,7 +191,7 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		return new PermissionGrantInfoDto
 		{
 			Name = permission.Name,
-			DisplayName = permission.DisplayName?.Localize(StringLocalizerFactory),
+			DisplayName = (permission.DisplayName?.Localize(StringLocalizerFactory))!,
 			ParentName = permission.Parent?.Name,
 			AllowedProviders = permission.Providers,
 			GrantedProviders = new List<ProviderInfoDto>()
@@ -158,7 +205,7 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		return new PermissionGroupDto
 		{
 			Name = group.Name,
-			DisplayName = group.DisplayName?.Localize(StringLocalizerFactory),
+			DisplayName = (group.DisplayName?.Localize(StringLocalizerFactory))!,
 			DisplayNameKey = localizableDisplayName?.Name,
 			DisplayNameResource = localizableDisplayName?.ResourceType != null
 				? LocalizationResourceNameAttribute.GetName(localizableDisplayName.ResourceType)
@@ -167,7 +214,11 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		};
 	}
 
-	public virtual async Task UpdateAsync(string providerName, string providerKey, UpdatePermissionsDto input)
+	public virtual Task UpdateAsync(string providerName, string providerKey, UpdatePermissionsDto input) =>
+		UpdatePermissionsAsync(providerName, providerKey, input);
+
+	private async Task UpdatePermissionsAsync(string providerName, string providerKey, UpdatePermissionsDto input,
+		UserPermissionOverrideDto[]? overrides = null)
 	{
 		// Reuse the request transaction. A direct invocation still owns a transaction when needed.
 		using var ownedTransaction = _unitOfWorkManager.Current?.Options.IsTransactional == true
@@ -176,6 +227,7 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		try
 		{
 			await CheckProviderPolicy(providerName, providerKey);
+			await CheckAdminPermissionsEditableAsync(providerName, providerKey);
 			if (input?.Permissions == null || input.Permissions.Any(x => x == null || string.IsNullOrWhiteSpace(x.Name)) ||
 				input.Permissions.Select(x => x.Name).Distinct(StringComparer.Ordinal).Count() != input.Permissions.Length)
 				throw InvalidPermissions();
@@ -192,6 +244,7 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 					if (!current.IsEnabled || !await SimpleStateCheckerManager.IsEnabledAsync(current))
 						throw InvalidPermissions();
 			}
+			await ValidateVisibilityPrerequisitesAsync(providerName, providerKey, input.Permissions, overrides);
 			// ABP 9 PermissionManager.SetAsync compares effective access, so an inherited grant can
 			// suppress a requested direct grant. Use its registered management provider after validation.
 			var provider = Options.ManagementProviders
@@ -199,7 +252,10 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 				.SingleOrDefault(candidate => candidate.Name == providerName)
 				?? throw new AbpException("The permission management provider is unavailable.");
 			foreach (var item in input.Permissions)
+			{
 				await provider.SetAsync(item.Name, providerKey, item.IsGranted);
+				if (providerName == "U") await _denies.SetDeniedAsync(Guid.Parse(providerKey), item.Name, false);
+			}
 			if (ownedTransaction != null) await ownedTransaction.CompleteAsync();
 		}
 		catch
@@ -258,18 +314,6 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 			throw new AbpAuthorizationException();
 		}
 		await ValidateProviderAsync(providerName, providerKey);
-	}
-
-	private async Task<Dictionary<string, bool>> GetCurrentUserEffectivePermissionLookupAsync(string[] permissionNames)
-	{
-		var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-
-		foreach (var permissionName in permissionNames)
-		{
-			result[permissionName] = await PermissionChecker.IsGrantedAsync(permissionName);
-		}
-
-		return result;
 	}
 
 	private bool IsCurrentUserProvider(string providerName, string providerKey)

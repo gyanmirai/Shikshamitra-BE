@@ -38,6 +38,7 @@ internal static class ApiProblemDetailsErrorMessages
 	internal static bool IsGenericBusinessRuleDetail(string? detail)
 	{
 		return string.Equals(detail?.Trim(), GenericBusinessRuleDetail, StringComparison.OrdinalIgnoreCase) ||
-		       string.Equals(detail?.Trim(), "Business rule violated", StringComparison.OrdinalIgnoreCase);
+		       string.Equals(detail?.Trim(), "Business rule violated", StringComparison.OrdinalIgnoreCase) ||
+		       string.Equals(detail?.Trim(), "One or more business rules were violated.", StringComparison.OrdinalIgnoreCase);
 	}
 }

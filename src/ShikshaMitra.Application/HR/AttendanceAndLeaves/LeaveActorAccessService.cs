@@ -88,7 +88,7 @@ public class LeaveActorAccessService(
 			return;
 		}
 
-		throw new AbpAuthorizationException("Access denied: You can only access your own or reporting employees' leave requests.");
+		throw new AbpAuthorizationException("Access denied: You can only access your own or reporting staff' leave requests.");
 	}
 
 	public async Task<IReadOnlyCollection<Guid>?> ResolveScopedEmployeeIdsAsync(LeaveActorContext actorContext)

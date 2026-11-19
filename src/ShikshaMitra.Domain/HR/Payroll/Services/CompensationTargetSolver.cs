@@ -7,7 +7,7 @@ using Volo.Abp;
 namespace ShikshaMitra.HR.Payroll.Services;
 
 /// <summary>Searches whole paise within each statutory interval, then verifies a strict allocation.</summary>
-public static class CompensationTargetSolver
+internal static class CompensationTargetSolver
 {
 	public const string NotSolvable = "HR:Payroll:CompensationTargetNotSolvable";
 
@@ -49,8 +49,8 @@ public static class CompensationTargetSolver
 			Math.Min(maximum, Math.Floor(onlyGross * 100m) / 100m));
 	}
 
-	public static decimal Solve(decimal target, bool protectTakeHome, decimal minimum, decimal maximum,
-		IEnumerable<decimal> statutoryBoundaries, Func<decimal, bool, decimal?> evaluate, int roundingWindow = 200)
+	public static decimal Solve(decimal target, decimal minimum, decimal maximum,
+		IEnumerable<decimal> statutoryBoundaries, Func<decimal, bool, decimal?> evaluate, int roundingWindow = 2)
 	{
 		var boundaries = statutoryBoundaries.Append(minimum).Append(maximum)
 			.Select(GrossEarningAllocation.Money).Where(x => x >= minimum && x <= maximum)
@@ -60,7 +60,7 @@ public static class CompensationTargetSolver
 		{
 			if (gross < minimum || gross > maximum || candidates.ContainsKey(gross)) return;
 			var achieved = evaluate(gross, false);
-			if (achieved.HasValue && (protectTakeHome ? achieved >= target : achieved <= target))
+			if (achieved.HasValue && achieved <= target)
 				candidates[gross] = achieved.Value;
 		}
 		foreach (var boundary in boundaries) Add(boundary);
@@ -75,18 +75,15 @@ public static class CompensationTargetSolver
 				var mid = low + (high - low) / 2;
 				var achieved = evaluate(mid / 100m, true);
 				if (!achieved.HasValue) { low = mid + 1; continue; }
-				Add(mid / 100m);
-				if (protectTakeHome ? achieved >= target : achieved > target) high = mid - 1;
+				if (achieved > target) high = mid - 1;
 				else low = mid + 1;
 			}
-			// ESI rupee rounding introduces small downward steps in take-home.
+			// Check nearby paise against strict allocation and statutory rounding.
 			for (var paise = Math.Max(first, high - roundingWindow); paise <= Math.Min(last, low + roundingWindow); paise++)
 				Add(paise / 100m);
 		}
 		if (candidates.Count == 0) throw new BusinessException(NotSolvable).WithData("target", target);
-		var selected = protectTakeHome
-			? candidates.OrderBy(x => x.Key).First()
-			: candidates.OrderByDescending(x => x.Key).First();
+		var selected = candidates.OrderByDescending(x => x.Value).ThenByDescending(x => x.Key).First();
 		if (Math.Abs(selected.Value - target) > 0.01m)
 			throw new BusinessException(NotSolvable).WithData("target", target).WithData("achieved", selected.Value);
 		return selected.Key;

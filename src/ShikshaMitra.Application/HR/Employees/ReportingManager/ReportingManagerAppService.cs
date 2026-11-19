@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -18,17 +18,44 @@ public class ReportingManagerAppService(
 	ICurrentUser currentUser,
 	IEmployeeAuthorizationService employeeAuthorizationService,
 	IUserScopeService userScopeService,
-	IReportingManagerAccessService reportingManagerAccessService)
+	IReportingManagerAccessService reportingManagerAccessService,
+	TenantAdministratorReportingManagerReader administratorReader,
+	Search.EmployeeSearchReader searchReader)
 	: ApplicationService, IReportingManagerAppService
 {
 	private const int MaxHierarchyDepth = 64;
+
+	[Microsoft.AspNetCore.Authorization.Authorize(Constants.Permissions.ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
+	public async Task<List<EmployeeBasicDto>> GetManagerOptionsAsync(string? search = null)
+	{
+		var employees = await searchReader.GetFilteredListAsync(new GetEmployeeListInput
+		{
+			Status = "Active", MaxResultCount = 500, Search = search
+		});
+		var options = employees.Items.Select(employee => new EmployeeBasicDto
+		{
+			Id = employee.Id, FullName = employee.FullName, EmployeeCode = employee.EmployeeIdentifier,
+			Status = employee.Status
+		}).ToList();
+		var administrators = (await administratorReader.GetEligibleAsync()).Select(ReportingManagerProjection.ToAdministrator);
+		if (!string.IsNullOrWhiteSpace(search))
+			administrators = administrators.Where(admin => admin.FullName!.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase) ||
+				(admin.Email?.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false));
+		options.AddRange(administrators);
+		return options;
+	}
 
 	public async Task<EmployeeReportingResponseDto> AssignReportingManagerAsync(
 		Guid employeeId,
 		AssignReportingManagerDto input)
 	{
 		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
-		await reportingManager.AssignReportingManagerAsync(employeeId, input.ReportingManagerId);
+		if (input.ReportingManagerKind == "TenantAdministrator")
+			await reportingManager.AssignAdministratorAsync(employeeId, input.ReportingManagerId);
+		else if (input.ReportingManagerKind == "Employee")
+			await reportingManager.AssignReportingManagerAsync(employeeId, input.ReportingManagerId);
+		else
+			throw new BusinessException(HRErrorCodes.ReportingManagerMustBeActive);
 		var affectedUserIds = (await employeeRepository.GetListAsync())
 			.Where(employee => employee.UserId.HasValue)
 			.Select(employee => employee.UserId!.Value)
@@ -75,7 +102,7 @@ public class ReportingManagerAppService(
 	public async Task<EmployeesByManagerResponseDto> GetMyEmployeesByManagerAsync()
 	{
 		var actorEmployee = await ResolveCurrentEmployeeAsync()
-			?? throw new AbpAuthorizationException("Access denied: Employee profile not found.");
+			?? throw new AbpAuthorizationException("Access denied: Staff profile not found.");
 
 		return await GetEmployeesByManagerAsync(actorEmployee.Id);
 	}

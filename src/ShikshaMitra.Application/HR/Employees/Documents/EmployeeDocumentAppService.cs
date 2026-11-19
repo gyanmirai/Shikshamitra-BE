@@ -16,9 +16,15 @@ public class EmployeeDocumentAppService(
 	EmployeeDocumentManager employeeDocumentManager,
 	EmployeeDocumentConfigurationValidator documentConfigurationValidator,
 	EmployeeDocumentReadService documentReadService,
+	IEmployeeAuthorizationService authorization,
 	EmployeeProfilePictureWorkflow profilePictureWorkflow)
 	: ApplicationService, IEmployeeDocumentAppService
 {
+	public async Task<Volo.Abp.Application.Dtos.PagedResultDto<EmployeeDocumentChecklistItemDto>> GetChecklistAsync(Guid employeeId, int page = 1, int pageSize = 20, string? search = null)
+	{
+		await authorization.CheckEmployeeAccessAsync(employeeId);
+		return await documentReadService.GetChecklistAsync(employeeId, page, pageSize, search);
+	}
 	public async Task UploadDocumentsAsync(Guid employeeId, List<DocumentDto> documents)
 	{
 		var employeeDocuments = documents.ConvertAll(doc => new EmployeeDocumentData

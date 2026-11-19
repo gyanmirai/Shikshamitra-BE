@@ -17,8 +17,8 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Create = Add;
 			public const string Edit = Add;
 			public const string Publish = Add;
-			public const string Close = Delete;
-			public const string Archive = Delete;
+			public const string Close = Add;
+			public const string Archive = Add;
 
 			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
@@ -40,7 +40,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Create = Add;
 			public const string Edit = Add;
 			public const string Activate = Add;
-			public const string Deactivate = Delete;
+			public const string Deactivate = Add;
 			public const string Clone = Add;
 			public const string BulkCreate = Add;
 			public const string Validate = Add;
@@ -89,21 +89,18 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Validate = Add;
 			public const string Manage = Add;
 			public const string Publish = Add;
-			public const string Archive = Delete;
+			public const string Archive = Add;
 			public const string ViewUsage = View;
 			public const string SubmitForApproval = Add;
-			public const string Approve = $"{SubmoduleName}.Approve";
-			public const string ManageGovernance = $"{SubmoduleName}.ManageGovernance";
-			public const string Rollback = $"{SubmoduleName}.Rollback";
-			public static readonly string[] All = { View, Add, Delete, Approve, ManageGovernance, Rollback };
+			public const string Approve = Add;
+			public const string ManageGovernance = Add;
+			public const string Rollback = Add;
+			public static readonly string[] All = { View, Add, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Delete, $"{SubmoduleDisplayName}.Delete" },
-				{ Approve, $"{SubmoduleDisplayName}.Approve" },
-				{ ManageGovernance, $"{SubmoduleDisplayName}.Manage governance" },
-				{ Rollback, $"{SubmoduleDisplayName}.Rollback" }
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 
@@ -116,7 +113,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Delete = $"{SubmoduleName}.Delete";
 			public const string Manage = Add;
 			public const string Publish = Add;
-			public const string Archive = Delete;
+			public const string Archive = Add;
 			public const string CreateVersion = Add;
 			public const string ViewUsage = View;
 			public static readonly string[] All = { View, Add, Delete };
@@ -168,7 +165,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string AllocateSeat = Add;
 			public const string AllocateIdentifier = Add;
 			public const string Activate = Add;
-			public const string Cancel = Delete;
+			public const string Cancel = Add;
 			public const string Repair = Add;
 			public const string Configure = Add;
 			public static readonly string[] All = { View, Add, Delete };

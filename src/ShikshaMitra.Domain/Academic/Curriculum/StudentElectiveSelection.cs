@@ -8,8 +8,10 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// <summary>
 /// Represents a student's elective subject selection
 /// </summary>
-public class StudentElectiveSelection : FullAuditedEntity<Guid>, IMultiTenant
+public class StudentElectiveSelection : FullAuditedEntity<Guid>, IMultiTenant, Volo.Abp.Domain.Entities.IHasConcurrencyStamp
 {
+	public string ConcurrencyStamp { get; set; } = Guid.NewGuid().ToString("N");
+	public Guid? PreferenceOverrideSubjectId { get; private set; }
 	public Guid? TenantId { get; private set; }
 
 	/// <summary>
@@ -79,5 +81,16 @@ public class StudentElectiveSelection : FullAuditedEntity<Guid>, IMultiTenant
 	public void LockSelection()
 	{
 		IsLocked = true;
+	}
+
+	public void CorrectLockedSelection(Guid subjectId, Guid? preferenceSubjectId, string? preferenceName)
+	{
+		if (!IsLocked) throw new BusinessException("ClassManagement:CorrectionRequiresLockedSelection");
+		UpdateSelection(subjectId);
+		if (preferenceSubjectId.HasValue)
+		{
+			PreferenceOverrideSubjectId = Check.NotDefaultOrNull<Guid>(preferenceSubjectId.Value, nameof(preferenceSubjectId));
+			StudentPreference = Check.NotNullOrWhiteSpace(preferenceName, nameof(preferenceName), 512);
+		}
 	}
 }

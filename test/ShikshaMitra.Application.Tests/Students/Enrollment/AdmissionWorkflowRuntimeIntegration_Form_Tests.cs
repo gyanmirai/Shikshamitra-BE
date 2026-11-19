@@ -65,8 +65,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		}
 	}
 
-	[Fact]
-	public async Task Managed_Form_Should_Hold_The_Workflow_For_Verification_And_Audit_Corrections()
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Managed_Form_Should_Ignore_Legacy_Verification_And_Audit_Corrections(bool endsAtForm)
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
@@ -75,7 +77,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Managed Form integration test"), true);
 			var basicWorkflow = await CreateAndPublishWorkflowAsync();
 			var offering = await CreateAvailableOfferingAsync(basicWorkflow.Id);
-			var managedWorkflow = await CreateManagedFormWorkflowAsync(offering.ApplicationFormDefinitionId!.Value);
+			var managedWorkflow = await CreateManagedFormWorkflowAsync(offering.ApplicationFormDefinitionId!.Value, endsAtForm);
 			await WithUnitOfWorkAsync(async () =>
 			{
 				var stored = await _offeringRepository.GetAsync(offering.Id);
@@ -83,7 +85,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				await _offeringRepository.UpdateAsync(stored, true);
 			});
 
-			var application = await _applicationAppService.StartAsync((await CreateApplicantAsync("Mira")).Id, offering.Id);
+			var application = await StartFixtureApplicationAsync((await CreateApplicantAsync("Mira")).Id, offering.Id);
 			var workflow = await _applicationAppService.GetWorkflowAsync(application.Id);
 			var stage = workflow.Stages.Single(item => item.StageType == AdmissionWorkflowStageType.Form);
 			stage.FormStageEnabled.ShouldBeTrue();
@@ -97,39 +99,59 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			workflow.CurrentStageInstanceId.ShouldBe(stage.Id);
 			var submitted = await service.GetAsync(application.Id, stage.Id);
 			submitted.SubmissionAttempts.ShouldBe(1);
-			submitted.CanComplete.ShouldBeFalse();
-			var section = submitted.Sections.Single(item => item.Required);
-
-			var verified = await service.VerifySectionAsync(application.Id, stage.Id, section.SectionId,
-				new VerifyAdmissionFormSectionDto { ConcurrencyStamp = submitted.ConcurrencyStamp, Verified = true });
-			verified.CanComplete.ShouldBeTrue();
-			verified.Sections.Single(item => item.Required).Verified.ShouldBeTrue();
+			submitted.CanComplete.ShouldBeTrue();
+			submitted.CanVerify.ShouldBeFalse();
+			submitted.Sections.ShouldAllBe(item => !item.Required);
+			submitted.Policy!.RequireSectionVerification.ShouldBeFalse();
+			var storedDefinition = await WithUnitOfWorkAsync(() =>
+				GetRequiredService<IRepository<AdmissionWorkflowStageDefinition, Guid>>().GetAsync(stage.DefinitionStageId));
+			AdmissionFormStagePolicy.Read(storedDefinition.ConfigurationJson)!.RequireSectionVerification.ShouldBeTrue();
+			var legacyHistoryId = Guid.NewGuid();
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var instance = await GetRequiredService<IRepository<AdmissionFormInstance, Guid>>()
+					.GetAsync(item => item.ApplicationId == application.Id);
+				await GetRequiredService<IRepository<AdmissionFormChangeHistory, Guid>>().InsertAsync(
+					new AdmissionFormChangeHistory(legacyHistoryId, TestTenantId, instance.Id, application.Id,
+						"SectionVerification", JsonSerializer.Serialize(new { SectionCode = "STUDENT", Verified = true }), TestUserId), true);
+			});
 
 			var corrected = await service.RequestCorrectionAsync(application.Id, stage.Id,
 				new RequestAdmissionFormCorrectionDto
 				{
-					ConcurrencyStamp = verified.ConcurrencyStamp,
+					ConcurrencyStamp = submitted.ConcurrencyStamp,
 					Reason = "Confirm the guardian contact before final review."
 				});
 			corrected.FormStatus.ShouldBe(AdmissionFormInstanceStatus.Reopened);
-			corrected.Sections.Single(item => item.Required).Verified.ShouldBeFalse();
+			corrected.Sections.ShouldAllBe(item => !item.Required);
 			(await _applicationAppService.SubmitAsync(application.Id)).ValidationErrors.ShouldBeEmpty();
 			var resubmitted = await service.GetAsync(application.Id, stage.Id);
 			resubmitted.SubmissionAttempts.ShouldBe(2);
-			var ready = await service.VerifySectionAsync(application.Id, stage.Id, section.SectionId,
-				new VerifyAdmissionFormSectionDto { ConcurrencyStamp = resubmitted.ConcurrencyStamp, Verified = true });
+			resubmitted.CanComplete.ShouldBeTrue();
+			resubmitted.CanVerify.ShouldBeFalse();
 
 			workflow = await _applicationAppService.AdvanceWorkflowAsync(application.Id,
 				new AdvanceAdmissionWorkflowDto
 				{
 					ExpectedCurrentStageInstanceId = stage.Id,
 					IdempotencyKey = "managed-form-complete",
-					ConcurrencyStamp = ready.ConcurrencyStamp
+					ConcurrencyStamp = resubmitted.ConcurrencyStamp
 				});
-			workflow.Stages.Single(item => item.Code == "DONE").Status.ShouldBe(AdmissionRuntimeStageStatus.Active);
+			if (endsAtForm)
+			{
+				workflow.Status.ShouldBe(AdmissionWorkflowInstanceStatus.Completed);
+				workflow.CompletedAt.ShouldNotBeNull();
+				workflow.Stages.Single().Status.ShouldBe(AdmissionRuntimeStageStatus.Completed);
+				workflow.NextRequiredAction.ShouldBeNull();
+			}
+			else
+			{
+				workflow.Stages.Single(item => item.Code == "DONE").Status.ShouldBe(AdmissionRuntimeStageStatus.Active);
+			}
 			var history = await _applicationAppService.GetFormHistoryAsync(application.Id);
 			history.ShouldContain(item => item.ChangeType == "CorrectionRequested");
-			history.Count(item => item.ChangeType == "SectionVerification").ShouldBe(2);
+			history.ShouldContain(item => item.Id == legacyHistoryId && item.ChangeType == "SectionVerification");
+			history.Count(item => item.ChangeType == "SectionVerification").ShouldBe(1);
 		}
 	}
 
@@ -164,7 +186,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		return workflowId;
 	}
 
-	private async Task<AdmissionWorkflowDto> CreateManagedFormWorkflowAsync(Guid formId)
+	private async Task<AdmissionWorkflowDto> CreateManagedFormWorkflowAsync(Guid formId, bool endsAtForm = false)
 	{
 		var formStageId = Guid.NewGuid();
 		var doneStageId = Guid.NewGuid();
@@ -181,7 +203,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			RequireSectionVerification = true,
 			VerificationSectionCodes = ["STUDENT"]
 		};
-		var workflow = await _workflowAppService.CreateAsync(new CreateUpdateAdmissionWorkflowDto
+		var input = new CreateUpdateAdmissionWorkflowDto
 		{
 			Name = "Managed application form",
 			Code = $"FORM_{Guid.NewGuid():N}"[..24],
@@ -197,7 +219,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				new CreateUpdateAdmissionWorkflowStageDto
 				{
 					Id = doneStageId, Code = "DONE", Name = "Ready for review",
-					StageType = AdmissionWorkflowStageType.Custom, DisplayOrder = 1,
+					StageType = AdmissionWorkflowStageType.Approval, DisplayOrder = 1,
 					IsTerminalStage = true, IsRequired = true
 				}
 			],
@@ -208,7 +230,33 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					FromStageId = formStageId, ToStageId = doneStageId, Priority = 1, IsDefault = true
 				}
 			]
+		};
+		if (endsAtForm)
+		{
+			input.Stages.RemoveAt(1);
+			input.Stages[0].IsTerminalStage = true;
+			input.Transitions.Clear();
+		}
+		var workflow = await _workflowAppService.CreateAsync(input);
+		workflow = await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
+		// Re-create a previously published definition; ordinary saves now retire verification.
+		await SetLegacyFormStagePolicyAsync(workflow.Id, policy);
+		return workflow;
+	}
+
+	private async Task SetLegacyFormStagePolicyAsync(Guid workflowId, AdmissionFormStagePolicy policy)
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var repository = GetRequiredService<IRepository<AdmissionWorkflowStageDefinition, Guid>>();
+			var definition = await repository.GetAsync(item => item.WorkflowDefinitionId == workflowId &&
+				item.StageType == AdmissionWorkflowStageType.Form);
+			var formId = AdmissionFormStageAccessService.ReadFormDefinitionId(definition.ConfigurationJson);
+			definition.Update(definition.Code, definition.Name, definition.StageType, definition.DisplayOrder,
+				definition.IsRequired, definition.AllowManualSkip, definition.Description,
+				JsonSerializer.Serialize(new { formDefinitionId = formId, form = policy }),
+				definition.IsEntryStage, definition.IsTerminalStage);
+			await repository.UpdateAsync(definition, true);
 		});
-		return await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
 	}
 }

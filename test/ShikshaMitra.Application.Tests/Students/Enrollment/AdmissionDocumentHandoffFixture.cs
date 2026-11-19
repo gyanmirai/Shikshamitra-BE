@@ -16,36 +16,58 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	private static readonly Guid HandoffReviewer = Guid.Parse("38383838-3838-3838-3838-383838383838");
 
 	private async Task<DocumentHandoffFixture> CreateDocumentHandoffFixtureAsync(
-		AdmissionDocumentPolicy policy, bool existingStudent = false)
+		AdmissionDocumentPolicy policy, bool existingStudent = false, bool documentsBeforeForm = false)
 	{
 		if (!await WithUnitOfWorkAsync(() => _scopeRepository.AnyAsync(item => item.UserId == TestUserId)))
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId,
 				userId: TestUserId, description: "Document handoff fixture scope"), autoSave: true);
-		var legacy = await CreateAndPublishWorkflowAsync();
+		var legacy = await CreateAndPublishCurrentWorkflowAsync();
 		var draft = await _workflowAppService.CreateNewVersionAsync(legacy.Id);
 		var input = ToUpdateInput(draft);
 		var entry = input.Stages.Single(item => item.IsEntryStage);
 		var terminal = input.Stages.Single(item => item.IsTerminalStage);
 		terminal.DisplayOrder = 2;
 		var documentStageId = Guid.NewGuid();
+		if (documentsBeforeForm) { entry.IsEntryStage = false; entry.DisplayOrder = 1; }
 		input.Stages.Add(new CreateUpdateAdmissionWorkflowStageDto
 		{
-			Id = documentStageId, Code = "DOCUMENTS", Name = "Verify documents", DisplayOrder = 1,
+			Id = documentStageId, Code = "DOCUMENTS", Name = "Verify documents", DisplayOrder = documentsBeforeForm ? 0 : 1,
+			IsEntryStage = documentsBeforeForm,
 			StageType = AdmissionWorkflowStageType.DocumentVerification, IsRequired = true,
-			ConfigurationJson = JsonSerializer.Serialize(new { documentVerification = policy })
+			ConfigurationJson = JsonSerializer.Serialize(new { documentVerification = policy with {
+				Requirements = policy.Requirements.Select(requirement => requirement with {
+					Requirement = requirement.Requirement == "conditional" ? "required" : requirement.Requirement,
+					ConditionJson = null }).ToList() } })
 		});
 		input.Transitions =
 		[
 			new() { FromStageId = entry.Id!.Value, ToStageId = documentStageId, IsDefault = true },
 			new() { FromStageId = documentStageId, ToStageId = terminal.Id!.Value, IsDefault = true }
 		];
+		if (documentsBeforeForm) input.Transitions =
+		[
+			new() { FromStageId = documentStageId, ToStageId = entry.Id!.Value, IsDefault = true },
+			new() { FromStageId = entry.Id!.Value, ToStageId = terminal.Id!.Value, IsDefault = true }
+		];
 		draft = await _workflowAppService.UpdateAsync(draft.Id, input);
 		var published = await _workflowAppService.PublishAsync(draft.Id, draft.ConcurrencyStamp);
-		var offering = await CreateAvailableOfferingAsync(published.Id);
+		// Historical published policies retain their original evidence/review settings.
+		// Current authoring intentionally normalizes those retired editor options.
+		if (!policy.Requirements.Any(requirement => requirement.Requirement == "conditional"))
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var repository = GetRequiredService<IRepository<AdmissionWorkflowStageDefinition, Guid>>();
+			var stored = await repository.GetAsync(published.Stages.Single(stage => stage.StageType == AdmissionWorkflowStageType.DocumentVerification).Id);
+			stored.Update(stored.Code, stored.Name, stored.StageType, stored.DisplayOrder, stored.IsRequired,
+				stored.AllowManualSkip, stored.Description, JsonSerializer.Serialize(new { documentVerification = policy }), stored.IsEntryStage, stored.IsTerminalStage);
+			await repository.UpdateAsync(stored, true);
+		});
+		var offering = await CreateAvailableOfferingAsync(published.Id, registrationFormId:
+			AdmissionFormStageAccessService.ReadFormDefinitionId(published.Stages.Single(stage => stage.StageType == AdmissionWorkflowStageType.Form).ConfigurationJson));
 		Guid? studentId = existingStudent ? (await CreateExistingStudentAsync(offering, "Handoff", "Patel")).Id : null;
 		var applicant = await CreateCertificationApplicantAsync("Handoff", true, true, studentId);
-		var application = await _applicationAppService.StartAsync(applicant.Id, offering.Id);
-		await _applicationAppService.SubmitAsync(application.Id);
+		var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
+		if (!documentsBeforeForm) await _applicationAppService.SubmitAsync(application.Id);
 		var workflow = await _applicationAppService.GetWorkflowAsync(application.Id);
 		if (workflow.Stages.Single(item => item.Id == workflow.CurrentStageInstanceId).StageType != AdmissionWorkflowStageType.DocumentVerification)
 			workflow = await _applicationAppService.AdvanceWorkflowAsync(application.Id, new AdvanceAdmissionWorkflowDto
@@ -56,6 +78,16 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 		return new DocumentHandoffFixture(application, offering, workflow.CurrentStageInstanceId!.Value, policy, studentId);
 	}
+
+	private Task RestoreHistoricalDocumentPolicyAsync(DocumentHandoffFixture fixture) => WithUnitOfWorkAsync(async () =>
+	{
+		var runtime = await GetRequiredService<IRepository<AdmissionApplicationStageInstance, Guid>>().GetAsync(fixture.StageId);
+		var repository = GetRequiredService<IRepository<AdmissionWorkflowStageDefinition, Guid>>();
+		var stored = await repository.GetAsync(runtime.DefinitionStageId);
+		stored.Update(stored.Code, stored.Name, stored.StageType, stored.DisplayOrder, stored.IsRequired,
+			stored.AllowManualSkip, stored.Description, JsonSerializer.Serialize(new { documentVerification = fixture.Policy }), stored.IsEntryStage, stored.IsTerminalStage);
+		await repository.UpdateAsync(stored, true);
+	});
 
 	private async Task<AdmissionDocumentEvidence> AddHandoffEvidenceAsync(DocumentHandoffFixture fixture,
 		AdmissionDocumentRequirement requirement, int version = 1, string kind = "upload", string? decision = "accepted")
@@ -87,13 +119,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 	private async Task<AdmissionApplicationDto> CompleteDocumentHandoffApplicationAsync(DocumentHandoffFixture fixture)
 	{
-		await CompleteCertificationWorkflowAsync(fixture.Application.Id);
+		await CompleteCertificationWorkflowAsync(fixture.Application.Id, stopBeforeApproval: true);
 		var application = await _applicationAppService.GetAsync(fixture.Application.Id);
-		application = await _applicationAppService.MarkInReviewAsync(application.Id, Decision(application, "Reviewed"));
 		application = await _applicationAppService.ApproveAsync(application.Id, Decision(application, "Approved"));
-		application = await _applicationAppService.IssueOfferAsync(application.Id,
-			Decision(application, "Offer issued", DateTime.UtcNow.AddDays(7)));
-		return await _applicationAppService.AcceptOfferAsync(application.Id, Decision(application, "Offer accepted"));
+		await CompleteCertificationWorkflowAsync(fixture.Application.Id);
+		return await _applicationAppService.GetAsync(application.Id);
 	}
 
 	private async Task<DocumentType> CreateHandoffDocumentTypeAsync() => await WithUnitOfWorkAsync(async () =>

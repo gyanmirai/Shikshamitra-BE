@@ -40,8 +40,8 @@ public class PermissionConsistencyPostgres_Tests
         await api.Both_read_routes_deny_unauthenticated_and_unauthorized_management_but_allow_self_reads();
         await api.Cross_tenant_provider_keys_are_not_readable_or_writable();
         await api.Unproxied_application_calls_cannot_bypass_esi_authorization();
-        await api.Esi_classification_edit_does_not_require_the_separate_view_action();
-        await api.Esi_activation_only_grant_reaches_freshness_check_without_granting_view_or_edit();
+        await api.Esi_configuration_requires_both_mutation_permissions("HR.PayrollManagement.Settings.StatutorySchemes.Edit");
+        await api.Esi_configuration_requires_both_mutation_permissions("HR.PayrollManagement.Settings.StatutorySchemes.Activate");
         await api.Esi_employee_action_grants_cannot_bypass_scope_or_cross_tenant_boundaries();
         await api.Esi_employee_actions_do_not_require_employee_profile_editing();
 

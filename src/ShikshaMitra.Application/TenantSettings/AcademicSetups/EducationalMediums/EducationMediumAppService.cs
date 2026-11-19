@@ -15,7 +15,8 @@ namespace ShikshaMitra.TenantSettings.AcademicSetups.EducationalMediums;
 public class EducationMediumAppService(
 	IEducationMediumRepository educationMediumRepository,
 	EducationMediumManager educationMediumManager,
-	AcademicOrganizationScopeAccessService scopeAccessService) : CrudAppService<
+	AcademicHierarchyQueryScope queryScope,
+	AcademicHierarchyReader hierarchy) : CrudAppService<
 	EducationMedium,
 	EducationMediumDto,
 	Guid,
@@ -23,6 +24,14 @@ public class EducationMediumAppService(
 	CreateUpdateEducationMediumDto>(educationMediumRepository), IEducationMediumAppService
 
 {
+	public override async Task<EducationMediumDto> GetAsync(Guid id)
+	{
+		await CheckGetPolicyAsync();
+		var query = await queryScope.MediumsAsync(await educationMediumRepository.GetQueryableAsync());
+		return (await hierarchy.ReadMediumsAsync(query.Where(x => x.Id == id))).FirstOrDefault()
+			?? throw new Volo.Abp.Authorization.AbpAuthorizationException();
+	}
+
 	public override async Task<EducationMediumDto> CreateAsync(CreateUpdateEducationMediumDto input)
 	{
 		var educationMedium = await educationMediumManager.CreateAsync(
@@ -44,11 +53,10 @@ public class EducationMediumAppService(
 	public override async Task<PagedResultDto<EducationMediumDto>> GetListAsync(
 		PagedAndSortedResultRequestDto input)
 	{
-		var result = await base.GetListAsync(input);
-
-		result.Items = (await scopeAccessService.FilterMediumsAsync(result.Items)).ToList();
-		result.TotalCount = result.Items.Count;
-
-		return result;
+		await CheckGetListPolicyAsync();
+		var query = await queryScope.MediumsAsync(await base.CreateFilteredQueryAsync(input));
+		var total = await AsyncExecuter.CountAsync(query);
+		var items = await hierarchy.ReadMediumsAsync(ApplyPaging(ApplySorting(query, input), input));
+		return new(total, items);
 	}
 }

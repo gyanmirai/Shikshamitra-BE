@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -21,6 +21,7 @@ public class LeaveBalanceReader(
 	LeaveActorAccessService leaveActorAccessService,
 	HrPolicyResolver hrPolicyResolver,
 	LeaveCarryForwardBalanceReader carryForwardBalanceReader,
+	LeaveWorkCalendarUnitService workCalendarUnits,
 	IClock clock)
 	: ITransientDependency
 {
@@ -48,6 +49,25 @@ public class LeaveBalanceReader(
 		var academicYear = await academicYearRepository.GetAsync(academicYearId);
 		var targetId = employeeId;
 		var targetEmployee = await employeeRepository.GetAsync(targetId);
+		return await CalculateAsync(academicYear, targetEmployee);
+	}
+
+	internal async Task<Dictionary<Guid, LeaveBalanceListDto>> GetBalancesForAuthorizedEmployeesAsync(Guid academicYearId, List<Employee> employees)
+	{
+		var year = await academicYearRepository.GetAsync(academicYearId);
+		var ids = employees.Select(x => x.Id).ToArray();
+		using var policies = hrPolicyResolver.BeginReadBatch(employees);
+		using var units = await leaveBalanceUnitService.BeginReadBatchAsync(ids);
+		using var carry = await carryForwardBalanceReader.BeginReadBatchAsync(ids, academicYearId);
+		using var calendars = workCalendarUnits.BeginReadBatch();
+		var result = new Dictionary<Guid, LeaveBalanceListDto>();
+		foreach (var employee in employees) result[employee.Id] = await CalculateAsync(year, employee);
+		return result;
+	}
+	private async Task<LeaveBalanceListDto> CalculateAsync(AcademicYear academicYear, Employee targetEmployee)
+	{
+		var targetId = targetEmployee.Id;
+		var academicYearId = academicYear.Id;
 
 		var resolved = await hrPolicyResolver.ResolveAsync(
 			targetId,
@@ -84,7 +104,7 @@ public class LeaveBalanceReader(
 				clock.Now.Date);
 			var remaining = rule.IsUnlimited
 				? null
-				: (decimal?)((accrued ?? 0m) + carryIn - used);
+				: (decimal?) ((accrued ?? 0m) + carryIn - used);
 
 			items.Add(new LeaveBalanceItemDto
 			{

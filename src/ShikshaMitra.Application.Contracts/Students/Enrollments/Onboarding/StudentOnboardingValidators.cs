@@ -1,7 +1,19 @@
 using FluentValidation;
+using System.Linq;
 using System.Text.Json;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
+
+public class ApproveAndFinalizeAdmissionApplicationDtoValidator : AbstractValidator<ShikshaMitra.Students.StudentEnrollments.Admissions.ApproveAndFinalizeAdmissionApplicationDto>
+{
+	public ApproveAndFinalizeAdmissionApplicationDtoValidator()
+	{
+		RuleFor(x => x.ConcurrencyStamp).NotEmpty();
+		RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(128);
+		RuleFor(x => x).Must(x => !x.ExistingStudentId.HasValue || !x.ConfirmCreateNew)
+			.WithMessage("Choose an existing Student or confirm a new identity, not both.");
+	}
+}
 
 public class FinalizeAdmissionApplicationDtoValidator : AbstractValidator<ShikshaMitra.Students.StudentEnrollments.Admissions.FinalizeAdmissionApplicationDto>
 {
@@ -57,6 +69,7 @@ public class SetStudentOnboardingPlacementDtoValidator : AbstractValidator<SetSt
 	{
 		RuleFor(x => x.ConcurrencyStamp).NotEmpty();
 		RuleFor(x => x.DivisionId).NotEmpty();
+		RuleFor(x => x.Reason).MaximumLength(1000);
 	}
 }
 
@@ -78,6 +91,10 @@ public class ActivateStudentOnboardingDtoValidator : AbstractValidator<ActivateS
 	{
 		RuleFor(x => x.ConcurrencyStamp).NotEmpty();
 		RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(128);
+		RuleFor(x => x.GuardianAccessSelection).SetValidator(new StudentGuardianAccessSelectionDtoValidator()!)
+			.When(x => x.GuardianAccessSelection != null);
+		RuleFor(x => x).Must(input => input.GuardianAccessSelection == null || input.SiblingParentSelection == null)
+			.WithMessage("Choose one adult app-access recipient for this case.");
 	}
 }
 
@@ -87,6 +104,17 @@ public class CancelStudentOnboardingDtoValidator : AbstractValidator<CancelStude
 	{
 		RuleFor(x => x.ConcurrencyStamp).NotEmpty();
 		RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
+	}
+}
+
+public class ConfirmStudentOnboardingServiceConsentDtoValidator : AbstractValidator<ConfirmStudentOnboardingServiceConsentDto>
+{
+	public ConfirmStudentOnboardingServiceConsentDtoValidator()
+	{
+		RuleFor(x => x.ConcurrencyStamp).NotEmpty();
+		RuleFor(x => x.EvidenceReference).NotEmpty().MinimumLength(3).MaximumLength(200)
+			.Must(value => !string.IsNullOrWhiteSpace(value) && value == value.Trim() && !value.Any(char.IsControl))
+			.WithMessage("Enter a valid reference to the saved consent record.");
 	}
 }
 

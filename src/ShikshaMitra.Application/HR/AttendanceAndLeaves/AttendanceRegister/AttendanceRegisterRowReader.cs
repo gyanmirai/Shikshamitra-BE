@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -25,10 +25,13 @@ public class AttendanceRegisterRowReader(
 		GetAttendanceRegisterInput input,
 		DateOnly startDate,
 		DateOnly endDate,
-		UserScopeContext scope)
+		UserScopeContext scope,
+		IReadOnlyCollection<Guid>? selectedEmployeeIds = null,
+		bool includeWeeklyOffs = false)
 	{
 		var employees = await BuildFilteredEmployeesAsync(input, startDate, endDate, scope);
-		return await BuildEmployeeDrivenRowsAsync(input, startDate, endDate, employees);
+		if (selectedEmployeeIds != null) { var selected = selectedEmployeeIds.ToHashSet(); employees = employees.Where(x => selected.Contains(x.EmployeeId)).ToList(); }
+		return await BuildEmployeeDrivenRowsAsync(input, startDate, endDate, employees, includeWeeklyOffs);
 	}
 
 	private async Task<List<EmployeeProjection>> BuildFilteredEmployeesAsync(
@@ -64,11 +67,18 @@ public class AttendanceRegisterRowReader(
 					.Where(x => x == input.EducationMediumStageId.Value)
 					.ToList();
 			}
+			if (input.EducationMediumStageIds.Count > 0)
+			{
+				stages = stages.Where(input.EducationMediumStageIds.Contains).ToList();
+			}
 			employee.AssignedStageIds = stages;
 			employee.EducationMediumStageId = await hrEmployeeScopeQueryService.ResolveDisplayStageAsync(stages, scope, input.EducationMediumStageId);
 		}
 
-		return employees;
+		// Filter the complete scoped population before generating days, totals and pagination.
+		return input.EducationMediumStageIds.Count == 0
+			? employees
+			: employees.Where(x => x.AssignedStageIds.Count > 0).ToList();
 	}
 
 	private async Task<List<EmployeeProjection>> LoadFilteredEmployeesAsync(
@@ -165,13 +175,14 @@ public class AttendanceRegisterRowReader(
 	private static bool ShouldRetryExplicitEmployeeWithoutAcademicYear(GetAttendanceRegisterInput input) =>
 		input.EmployeeId.HasValue &&
 		input.AcademicYearId.HasValue &&
-		!input.EducationMediumStageId.HasValue;
+		!input.EducationMediumStageId.HasValue && input.EducationMediumStageIds.Count == 0;
 
 	private async Task<List<RegisterProjection>> BuildEmployeeDrivenRowsAsync(
 		GetAttendanceRegisterInput input,
 		DateOnly startDate,
 		DateOnly endDate,
-		List<EmployeeProjection> employees)
+		List<EmployeeProjection> employees,
+		bool includeWeeklyOffs)
 	{
 		if (employees.Count == 0)
 		{
@@ -193,7 +204,7 @@ public class AttendanceRegisterRowReader(
 		var dates = Enumerable.Range(0, endDate.DayNumber - startDate.DayNumber + 1)
 			.Select(offset => startDate.AddDays(offset))
 			.ToList();
-		var holidayLookup = await lookupReader.BuildEmployeeHolidayLookupAsync(employeeIds, dates);
+		var holidayLookup = await lookupReader.BuildEmployeeHolidayLookupAsync(employeeIds, dates, includeWeeklyOffs);
 		var captureModeLookup = await captureModeLookupResolver.ResolveForDatesOrDefaultAsync(employeeIds, dates);
 
 		return rowProjectionBuilder.Build(

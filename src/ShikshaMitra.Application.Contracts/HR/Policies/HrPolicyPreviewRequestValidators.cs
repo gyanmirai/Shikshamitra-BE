@@ -1,3 +1,4 @@
+﻿using System;
 using FluentValidation;
 
 namespace ShikshaMitra.HR.Policies;
@@ -25,7 +26,18 @@ public class PolicyAssignmentPreviewRequestDtoValidator :
 			.WithMessage("Preview date is required.");
 		RuleFor(x => x)
 			.Must(x => x.EmployeeId.HasValue || x.GroupId.HasValue)
-			.WithMessage("Employee or group is required for policy assignment preview.");
+			.WithMessage("Staff or group is required for policy assignment preview.");
+	}
+}
+
+public class PolicyAssignmentResolutionPreviewRequestDtoValidator : AbstractValidator<PolicyAssignmentResolutionPreviewRequestDto>
+{
+	public PolicyAssignmentResolutionPreviewRequestDtoValidator()
+	{
+		RuleFor(x => x.Date).NotEmpty();
+		RuleFor(x => x.Assignment).NotNull().SetValidator(new CreateUpdateHrPolicyAssignmentDtoValidator());
+		RuleFor(x => x.AssignmentId).NotEqual(Guid.Empty).When(x => x.AssignmentId.HasValue);
+		RuleFor(x => x.SampleEmployeeId).NotEqual(Guid.Empty).When(x => x.SampleEmployeeId.HasValue);
 	}
 }
 

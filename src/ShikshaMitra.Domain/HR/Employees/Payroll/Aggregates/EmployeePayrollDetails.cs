@@ -82,13 +82,17 @@ public class EmployeePayrollDetails : Entity<Guid>
 		DateTime? generatedAt,
 		bool wasModified)
 	{
+		if (!string.IsNullOrWhiteSpace(quotedSalaryBasis) && quotedSalaryBasis is not ("GROSS" or "EMPLOYER_COST"))
+		{
+			throw new Volo.Abp.BusinessException("HR:Payroll:SalaryGenerationProvenanceInvalid");
+		}
 		var hasAnyProvenance = sourceTemplateId.HasValue || sourceTemplateVersionId.HasValue ||
 			sourceTemplateVersion.HasValue || generatedAt.HasValue;
 		if (hasAnyProvenance &&
 			(sourceTemplateId is not { } templateId || templateId == Guid.Empty ||
 			 sourceTemplateVersionId is not { } versionId || versionId == Guid.Empty ||
 			 sourceTemplateVersion is not > 0 || !generatedAt.HasValue ||
-			 quotedMonthlyAmount is not > 0m || quotedSalaryBasis is not ("GROSS" or "TAKE_HOME")))
+			 quotedMonthlyAmount is not > 0m || quotedSalaryBasis is not ("GROSS" or "EMPLOYER_COST")))
 		{
 			throw new Volo.Abp.BusinessException("HR:Payroll:SalaryGenerationProvenanceInvalid");
 		}

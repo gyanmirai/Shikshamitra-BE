@@ -2,6 +2,7 @@ using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
@@ -30,14 +31,19 @@ public class CreatePaymentTermInstallmentDto
 	public int Sequence { get; set; }
 	[Required, StringLength(100)]
 	public string Name { get; set; } = string.Empty;
+	[JsonConverter(typeof(PaymentTermCalendarDateJsonConverter))]
 	public DateTime CoverageStartDate { get; set; }
+	[JsonConverter(typeof(PaymentTermCalendarDateJsonConverter))]
 	public DateTime CoverageEndDate { get; set; }
+	[JsonConverter(typeof(PaymentTermNullableCalendarDateJsonConverter))]
 	public DateTime? DemandDate { get; set; }
+	[JsonConverter(typeof(PaymentTermCalendarDateJsonConverter))]
 	public DateTime DueDate { get; set; }
 	[Range(typeof(decimal), "0.01", "100")]
 	public decimal AllocationPercentage { get; set; }
 	public bool DemandEnabled { get; set; }
 	public bool ReminderEnabled { get; set; }
+	[JsonConverter(typeof(PaymentTermNullableCalendarDateJsonConverter))]
 	public DateTime? ReminderDate { get; set; }
 	public bool? AllowPartialOverride { get; set; }
 	public int? GracePeriodDaysOverride { get; set; }
@@ -106,6 +112,7 @@ public class PaymentTermDto : EntityDto<Guid>
 
 public class PaymentTermListDto : EntityDto<Guid>
 {
+	public PaymentTermUsageDto? Usage { get; set; }
 	public Guid? PublishedVersionId { get; set; }
 	public int? PublishedVersionNumber { get; set; }
 	public string Name { get; set; } = string.Empty;
@@ -126,10 +133,12 @@ public class PaymentTermListDto : EntityDto<Guid>
 
 public class CreatePaymentTermDto
 {
+	private string _name = string.Empty;
+
 	public Guid AcademicYearId { get; set; }
 	public Guid BoardId { get; set; }
 	[Required, StringLength(100, MinimumLength = 3)]
-	public string Name { get; set; } = string.Empty;
+	public string Name { get => _name; set => _name = value?.Trim() ?? string.Empty; }
 	[Required, StringLength(24, MinimumLength = 3)]
 	[RegularExpression("^[A-Z0-9-]+$")]
 	public string Code { get; set; } = string.Empty;
@@ -147,8 +156,10 @@ public class CreatePaymentTermDto
 
 public class UpdatePaymentTermDraftDto
 {
+	private string _name = string.Empty;
+
 	[Required, StringLength(100, MinimumLength = 3)]
-	public string Name { get; set; } = string.Empty;
+	public string Name { get => _name; set => _name = value?.Trim() ?? string.Empty; }
 	[Required, StringLength(24, MinimumLength = 3)]
 	[RegularExpression("^[A-Z0-9-]+$")]
 	public string Code { get; set; } = string.Empty;
@@ -190,6 +201,9 @@ public class PreviewPaymentTermTemplateDto
 	public DemandGenerationRule DemandGenerationRule { get; set; } = DemandGenerationRule.OnInstallmentStartDate;
 	[Range(1, 365)]
 	public int? DemandOffsetDays { get; set; }
+	/// <summary>One invoice calendar date per generated installment, in sequence order. Required for SpecificDate.</summary>
+	[JsonConverter(typeof(PaymentTermCalendarDateListJsonConverter))]
+	public List<DateTime>? SpecificDemandDates { get; set; }
 }
 
 public class ArchivePaymentTermDto
@@ -252,5 +266,7 @@ public class PaymentTermGetListInput : PagedAndSortedResultRequestDto
 	public Guid? BoardId { get; set; }
 	public PaymentTermStatus? Status { get; set; }
 	public string? Search { get; set; }
+	/// <summary>Serialized header criteria for name, currentVersionNumber, usage and lifecycle status.</summary>
+	public string? Filters { get; set; }
 	public bool IncludeArchived { get; set; }
 }

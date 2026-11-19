@@ -31,7 +31,13 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? FormResponseSnapshotJson => this.GetProperty<string>(FormResponseSnapshotProperty);
 	public Guid? FormResponseDefinitionId => this.GetProperty<Guid?>("AdmissionFormResponseDefinitionId");
 
-	protected AdmissionInquiry() { }
+	protected AdmissionInquiry()
+	{
+		// EF materializes these required columns after this ORM constructor.
+		ApplicantName = null!;
+		InquiryNumber = null!;
+		NormalizedPhone = null!;
+	}
 
 	public AdmissionInquiry(Guid id, Guid? tenantId, string inquiryNumber, Guid admissionCycleId, Guid? admissionOfferingId,
 		string applicantName, string phone, string? email, AdmissionInquirySource source, string? sourceDetail)
@@ -76,13 +82,17 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void MarkContacted(DateTime contactedAt)
 	{
-		Status = AdmissionInquiryStatus.Contacted;
 		ContactedAt = contactedAt;
 		LastActivityAt = contactedAt;
 	}
 
 	public void SetStatus(AdmissionInquiryStatus status, Guid? duplicateOfId = null)
 	{
+		if (status == AdmissionInquiryStatus.Interested && !this.GetProperty<DateTime?>("QualificationEmailRequestedAt").HasValue)
+		{
+			this.SetProperty("QualificationEmailRequestedAt", DateTime.UtcNow);
+			AddDistributedEvent(new AdmissionInquiryInterestedEto(Id, TenantId));
+		}
 		Status = status;
 		DuplicateOfId = duplicateOfId;
 		LastActivityAt = DateTime.UtcNow;
@@ -92,6 +102,24 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		FamilyId = Check.NotDefaultOrNull<Guid>(familyId, nameof(familyId));
 		ApplicantId = Check.NotDefaultOrNull<Guid>(applicantId, nameof(applicantId));
+	}
+
+	public void ConfirmPendingSiblingFamily(AdmissionApplicant applicant, Guid originalFamilyId, Guid confirmedFamilyId, DateTime confirmedAt)
+	{
+		if (IsDeleted || Status is not (AdmissionInquiryStatus.New or AdmissionInquiryStatus.Contacted or AdmissionInquiryStatus.FollowUp) ||
+			DuplicateOfId.HasValue || ApplicantId != applicant.Id || FamilyId != originalFamilyId || TenantId != applicant.TenantId)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
+		applicant.ReassignPendingInquiryFamily(originalFamilyId, confirmedFamilyId);
+		FamilyId = confirmedFamilyId;
+		LastActivityAt = confirmedAt;
+	}
+
+	public void ConfirmOffering(Guid offeringId)
+	{
+		if (Status is AdmissionInquiryStatus.ApplicationStarted or AdmissionInquiryStatus.Converted)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
+		AdmissionOfferingId = Check.NotDefaultOrNull<Guid>(offeringId, nameof(offeringId));
+		LastActivityAt = DateTime.UtcNow;
 	}
 
 	public void AssignCounsellor(Guid counsellorId)

@@ -76,7 +76,7 @@ public class StudentOnboardingStep : FullAuditedEntity<Guid>, IMultiTenant
 	public void SetRequired(bool required)
 	{
 		Required = required;
-		if (!required && Status == StudentOnboardingStepStatus.Pending)
+		if (!required && Status is StudentOnboardingStepStatus.Pending or StudentOnboardingStepStatus.Blocked or StudentOnboardingStepStatus.InProgress)
 			Status = StudentOnboardingStepStatus.NotRequired;
 		else if (required && Status == StudentOnboardingStepStatus.NotRequired)
 			Status = StudentOnboardingStepStatus.Pending;

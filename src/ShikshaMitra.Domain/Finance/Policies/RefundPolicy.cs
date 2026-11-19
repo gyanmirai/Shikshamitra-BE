@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -35,6 +36,8 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string AllowedPayoutMethodsJson { get; protected set; } = "[]";
 	public int? ProcessingTargetDays { get; protected set; }
 	public int Version { get; protected set; }
+	public Guid? ExpenseCategoryId { get; private set; }
+	public Guid? DefaultPayingBankAccountId { get; private set; }
 
 	protected RefundPolicy()
 	{
@@ -50,6 +53,8 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Update(RefundPolicyUpdateModel model)
 	{
+		if (IsDefault && (!model.IsDefault || model.Status != RefundPolicyStatus.Active))
+			throw new BusinessException(RefundPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if (Status == RefundPolicyStatus.Archived && Version > 0)
 			throw new BusinessException(RefundPolicyErrorCodes.ArchivedPolicyNotEditable);
 		if (AcademicYearId == Guid.Empty)
@@ -65,7 +70,7 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		ValidateRules(model);
 
-		PolicyName = model.PolicyName.Trim();
+		PolicyName = FinanceName.Normalize(model.PolicyName);
 		PolicyCode = model.PolicyCode.Trim().ToUpperInvariant();
 		Description = model.Description?.Trim() ?? string.Empty;
 		Status = model.Status;
@@ -80,10 +85,10 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AllowPartialRefund = model.AllowPartialRefund;
 		AmountMode = model.AmountMode;
 		PercentageValue = model.AmountMode == RefundAmountMode.Percentage ? model.PercentageValue : null;
-		FixedAmount = model.AmountMode == RefundAmountMode.FixedAmount ? model.FixedAmount : null;
-		MaximumPerRequest = model.MaximumPerRequest;
-		MaximumPerStudentYear = model.MaximumPerStudentYear;
-		RoundingMethod = model.RoundingMethod;
+		FixedAmount = model.AmountMode == RefundAmountMode.FixedAmount ? ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.FixedAmount) : null;
+		MaximumPerRequest = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.MaximumPerRequest);
+		MaximumPerStudentYear = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.MaximumPerStudentYear);
+		RoundingMethod = RoundingMethodType.RoundUp;
 		DeductionType = model.DeductionType;
 		DeductionValue = model.DeductionType == RefundDeductionType.None ? null : model.DeductionValue;
 		MaximumDeduction = model.DeductionType == RefundDeductionType.None ? null : model.MaximumDeduction;
@@ -92,11 +97,15 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			: model.DeductionExplanation?.Trim() ?? string.Empty;
 		AllowedPayoutMethodsJson = JsonSerializer.Serialize(model.AllowedPayoutMethods.Distinct().Order().ToList());
 		ProcessingTargetDays = model.ProcessingTargetDays;
+		ExpenseCategoryId = model.ExpenseCategoryId;
+		DefaultPayingBankAccountId = model.DefaultPayingBankAccountId;
 		Version++;
 	}
 
 	public void Archive()
 	{
+		if (IsDefault)
+			throw new BusinessException(RefundPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		Status = RefundPolicyStatus.Archived;
 		IsDefault = false;
 		Version++;
@@ -104,6 +113,7 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Unarchive()
 	{
+		if (Status != RefundPolicyStatus.Archived) return;
 		Status = RefundPolicyStatus.Draft;
 		IsDefault = false;
 		Version++;
@@ -148,7 +158,7 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DeductionExplanation,
 		GetAllowedPayoutMethods(),
 		ProcessingTargetDays,
-		Version);
+		Version, ExpenseCategoryId, DefaultPayingBankAccountId);
 
 	private static void ValidateRules(RefundPolicyUpdateModel model)
 	{
@@ -166,8 +176,6 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		if (model.AmountMode == RefundAmountMode.FixedAmount && model.FixedAmount is null or <= 0)
 			throw new BusinessException(RefundPolicyErrorCodes.InvalidAmountRule);
 		if (model.AmountMode == RefundAmountMode.Percentage && model.PercentageValue is null or <= 0 or > 100)
-			throw new BusinessException(RefundPolicyErrorCodes.InvalidAmountRule);
-		if (model.AmountMode == RefundAmountMode.ManualUpToEligible && !model.AllowPartialRefund)
 			throw new BusinessException(RefundPolicyErrorCodes.InvalidAmountRule);
 		if (model.DeductionType != RefundDeductionType.None)
 		{
@@ -203,7 +211,9 @@ public sealed record RefundPolicyUpdateModel(
 	decimal? MaximumDeduction,
 	string? DeductionExplanation,
 	IReadOnlyCollection<RefundPayoutMethod> AllowedPayoutMethods,
-	int? ProcessingTargetDays);
+	int? ProcessingTargetDays,
+	Guid? ExpenseCategoryId = null,
+	Guid? DefaultPayingBankAccountId = null);
 
 public sealed record RefundPolicySnapshot(
 	Guid PolicyId,
@@ -229,4 +239,13 @@ public sealed record RefundPolicySnapshot(
 	string DeductionExplanation,
 	IReadOnlyList<RefundPayoutMethod> AllowedPayoutMethods,
 	int? ProcessingTargetDays,
-	int Version);
+	int Version,
+	Guid? ExpenseCategoryId = null,
+	Guid? DefaultPayingBankAccountId = null)
+{
+	// Display names are captured with the version so later renames and archives do not
+	// change what an auditor sees. Older snapshots deserialize with null names.
+	public IReadOnlyDictionary<Guid, string>? FeeHeadNames { get; init; }
+	public string? ExpenseCategoryName { get; init; }
+	public string? DefaultPayingBankAccountName { get; init; }
+}

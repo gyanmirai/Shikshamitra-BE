@@ -12,8 +12,10 @@ public class CollectFeeOutput
 
     /// <summary>Unique receipt number formatted as REC-{YYYY}-{NNNNNN}.</summary>
     public string ReceiptNumber { get; set; } = string.Empty;
+	public string ReceiptGrouping { get; set; } = "Separate";
 
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+	public Guid? FinanceFeeAccountId { get; set; }
     public Guid AcademicYearId { get; set; }
 
     /// <summary>Total amount collected.</summary>
@@ -42,6 +44,12 @@ public class CollectFeeOutput
     /// Null when no fee lines were present.
     /// </summary>
     public string? FeeReceiptNumber { get; set; }
+    /// <summary>Actual immutable amount on the returned fee/combined document.</summary>
+    public decimal? FeeReceiptAmount { get; set; }
+    /// <summary>Actual immutable amount on the returned charge document, including its late fees.</summary>
+    public decimal? ChargeReceiptAmount { get; set; }
+    public string? FeeReceiptPdfFileName { get; set; }
+    public string? ChargeReceiptPdfFileName { get; set; }
 
     /// <summary>
     /// Database ID of the primary fee receipt (FIN-* or KFE-*) created for this transaction.

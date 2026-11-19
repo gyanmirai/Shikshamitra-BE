@@ -2,7 +2,22 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Academic.ClassTeacher;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Common;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using System.Text.Json;
+using System.Linq;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -17,13 +32,126 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 	{
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Charge_Category_Search_Matches_Income_And_Approval_Default_And_False_Persist()
+	{
+		var incomeName = $"10th Income {Guid.NewGuid():N}"[..39];
+		var incomeResponse = await Client.PostAsJsonAsync($"/api/income-categories?academicYearId={Factory.SeededAcademicYearId}",
+			new { name = incomeName, tags = Array.Empty<string>() }, JsonOptions);
+		incomeResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await incomeResponse.Content.ReadAsStringAsync());
+		var income = await incomeResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		var incomeId = income.GetProperty("id").GetGuid();
+		var name = $"Test Charge {Guid.NewGuid():N}";
+		// Omit the approval field on the wire to exercise the server's backwards-compatible true default.
+		var createdResponse = await Client.PostAsJsonAsync($"{ChargeCategoriesUrl}?academicYearId={Factory.SeededAcademicYearId}",
+			new { name, incomeCategoryId = incomeId, description = "Approval configuration regression" }, JsonOptions);
+		createdResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createdResponse.Content.ReadAsStringAsync());
+		var category = await createdResponse.Content.ReadFromJsonAsync<ChargeCategoryResponse>(JsonOptions);
+		category.ShouldNotBeNull();
+		category.IsApprovalRequired.ShouldBeTrue();
+		var search = await Client.GetFromJsonAsync<PaginatedChargeCategoryResponse>(
+			$"{ChargeCategoriesUrl}?academicYearId={Factory.SeededAcademicYearId}&search={Uri.EscapeDataString(incomeName.ToUpperInvariant())}", JsonOptions);
+		search.ShouldNotBeNull();
+		search.TotalCount.ShouldBe(1);
+		search.Items.Single().Id.ShouldBe(category.Id);
+		var updated = await Client.PutAsJsonAsync($"{ChargeCategoriesUrl}/{category.Id}",
+			new UpdateChargeCategoryRequest { Name = name, IncomeCategoryId = incomeId, IsApprovalRequired = false }, JsonOptions);
+		updated.StatusCode.ShouldBe(HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
+		var saved = await Client.GetFromJsonAsync<ChargeCategoryResponse>($"{ChargeCategoriesUrl}/{category.Id}", JsonOptions);
+		saved.ShouldNotBeNull();
+		saved.IsApprovalRequired.ShouldBeFalse();
+	}
+
 	#region Tier 0 — Critical
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Administrator_creation_returns_approved_charge()
+	{
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
+		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: true);
+		var administratorId = Guid.NewGuid();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+		using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>()
+			.Begin(requiresNew: true, isTransactional: true))
+		{
+			var db = scope.ServiceProvider.GetRequiredService<ShikshaMitraDbContext>();
+			var role = await db.Set<IdentityRole>().FirstOrDefaultAsync(x => x.Name == "admin")
+				?? new IdentityRole(Guid.NewGuid(), "admin", tenantId);
+			if (db.Entry(role).State == EntityState.Detached)
+				db.Set<IdentityRole>().Add(role);
+			var user = new IdentityUser(administratorId, $"charge-admin-{administratorId:N}",
+				$"charge-admin-{administratorId:N}@example.test", tenantId);
+			user.AddRole(role.Id);
+			db.Set<IdentityUser>().Add(user);
+			db.Set<UserScopeAssignment>().Add(new UserScopeAssignment(Guid.NewGuid(), tenantId,
+				userId: administratorId, academicYearId: Factory.SeededAcademicYearId,
+				educationBoardId: Factory.SeededBoardId, description: "Charge administrator regression scope"));
+			await db.SaveChangesAsync();
+			await uow.CompleteAsync();
+		}
+		using var adminClient = CreateClientAs(administratorId);
+		var response = await adminClient.PostAsJsonAsync(
+			$"{BaseUrl}?academicYearId={ChargeTestHelper.DefaultAcademicYearId}",
+			ChargeTestHelper.BuildCreateDto(studentId, categoryId), JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var body = await response.Content.ReadFromJsonAsync<ChargeResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Data.Status.ShouldBe(1);
+		body.Data.ResolvedStudentCount.ShouldBe(1);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Class_teacher_charge_in_no_approval_category_still_requires_manager_review()
+	{
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
+		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: false);
+		var userId = Guid.NewGuid();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+		using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>()
+			.Begin(requiresNew: true, isTransactional: true))
+		{
+			var services = scope.ServiceProvider;
+			var user = new IdentityUser(userId, $"charge-teacher-{userId:N}",
+				$"charge-teacher-{userId:N}@example.test", tenantId);
+			user.AddRole(Factory.SeededRoleId);
+			await services.GetRequiredService<IRepository<IdentityUser, Guid>>().InsertAsync(user, autoSave: true);
+			var employee = await services.GetRequiredService<EmployeeManager>().CreateEmployeeAsync(
+				userId, Factory.SeededRoleId, "Charge", "Teacher", null, "Charge Teacher",
+				EmployeeStatusType.Active, null, panNo: "ABCDE1234F", adharNo: "900000000002",
+				employeeGroup: EmployeeGroupType.Teaching);
+			await services.GetRequiredService<IRepository<Employee, Guid>>().InsertAsync(employee, autoSave: true);
+			await services.GetRequiredService<IRepository<ClassTeacher, Guid>>().InsertAsync(
+				new ClassTeacher(Guid.NewGuid(), tenantId, Factory.SeededStandardId,
+					Factory.SeededDivisionId, employee.Id, Factory.SeededMediumId,
+					Factory.SeededAcademicYearId, Factory.SeededBoardId, Factory.SeededMediumId,
+					Factory.SeededMediumStageId), autoSave: true);
+			await services.GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(
+				new UserScopeAssignment(Guid.NewGuid(), tenantId, userId: userId,
+					description: "Charge teacher scope test"), autoSave: true);
+			await uow.CompleteAsync();
+		}
+		using var teacherClient = CreateClientAs(userId);
+		var response = await teacherClient.PostAsJsonAsync(
+			$"{BaseUrl}?academicYearId={Factory.SeededAcademicYearId}",
+			ChargeTestHelper.BuildCreateDto(studentId, categoryId), JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var body = await response.Content.ReadFromJsonAsync<ChargeResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Data.Status.ShouldBe((int)ShikshaMitra.Finance.Fees.Charges.ChargeStatus.Pending);
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Create_Charge_With_Approval_Required_Category_Returns_Pending_Status()
 	{
-		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: true);
 		var request = ChargeTestHelper.BuildCreateDto(studentId, categoryId);
 
@@ -43,9 +171,9 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Create_Charge_With_No_Approval_Category_Returns_Approved_Status_Immediately()
+	public async Task Should_Create_Charge_With_No_Approval_Category_Returns_Approved_Status()
 	{
-		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: false);
 		var request = ChargeTestHelper.BuildCreateDto(studentId, categoryId);
 
@@ -56,14 +184,18 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 		var body = await response.Content.ReadFromJsonAsync<ChargeResponse>(JsonOptions);
 		body.ShouldNotBeNull();
 		body.Data.ShouldNotBeNull();
-		body.Data.Status.ShouldBe(1); // Approved
+		body.Data.Status.ShouldBe(1); // Category explicitly permits charges without approval
+		var detail = await Client.GetFromJsonAsync<ChargeDetailResponse>($"{BaseUrl}/{body.Data.ChargeId}", JsonOptions);
+		detail.ShouldNotBeNull();
+		detail.Data.IsApprovalRequired.ShouldBeFalse();
+		detail.Data.Students.ShouldAllBe(x => x.Status == 1 && x.OutstandingAmount == request.Amount);
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Create_Charge_Response_Has_All_Scope_Fields_Populated()
 	{
-		var (studentId, boardId) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, boardId) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: true);
 		var request = ChargeTestHelper.BuildCreateDto(studentId, categoryId);
 

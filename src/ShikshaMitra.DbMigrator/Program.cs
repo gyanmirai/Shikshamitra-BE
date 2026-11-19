@@ -30,6 +30,18 @@ static class Program
 
 		try
 		{
+			if (Array.IndexOf(args, "--check-bootstrap-configuration") >= 0)
+			{
+				using var host = CreateHostBuilder(args).Build();
+				var configuration = host.Services.GetRequiredService<IConfiguration>();
+				var environment = host.Services.GetRequiredService<IHostEnvironment>();
+				var hasEmail = !string.IsNullOrWhiteSpace(configuration["ShikshaMitra:HostAdmin:Email"]);
+				var hasPassword = !string.IsNullOrWhiteSpace(configuration["ShikshaMitra:HostAdmin:Password"]);
+				Log.Information("Bootstrap configuration check: Environment={Environment}, EmailConfigured={EmailConfigured}, PasswordConfigured={PasswordConfigured}. No migrations or seeders were run.",
+					environment.EnvironmentName, hasEmail, hasPassword);
+				return hasEmail && hasPassword ? 0 : 1;
+			}
+
 			await CreateHostBuilder(args).RunConsoleAsync();
 			return 0;
 		}

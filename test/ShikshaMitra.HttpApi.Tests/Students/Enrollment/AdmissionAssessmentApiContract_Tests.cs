@@ -14,10 +14,19 @@ public class AdmissionAssessmentApiContract_Tests
 {
 	[Theory]
 	[InlineData(nameof(AdmissionAssessmentAppService.GetAsync), Permissions.View)]
+	[InlineData(nameof(AdmissionAssessmentAppService.GetApplicantsAsync), Permissions.View)]
+	[InlineData(nameof(AdmissionAssessmentAppService.GetSessionWorkbenchAsync), Permissions.View)]
+	[InlineData(nameof(AdmissionAssessmentAppService.GetSessionAsync), Permissions.View)]
+	[InlineData(nameof(AdmissionAssessmentAppService.GetSessionResourcesAsync), Permissions.ManageSessions)]
+	[InlineData(nameof(AdmissionAssessmentAppService.GetInterviewersAsync), Permissions.ManageSessions)]
+	[InlineData(nameof(AdmissionAssessmentAppService.GetSessionSlotsAsync), Permissions.Book)]
+	[InlineData(nameof(AdmissionAssessmentAppService.PreviewSessionAsync), Permissions.ManageSessions)]
+	[InlineData(nameof(AdmissionAssessmentAppService.ConfirmSessionAsync), Permissions.ManageSessions)]
 	[InlineData(nameof(AdmissionAssessmentAppService.CreateSessionAsync), Permissions.ManageSessions)]
 	[InlineData(nameof(AdmissionAssessmentAppService.BookAsync), Permissions.Book)]
 	[InlineData(nameof(AdmissionAssessmentAppService.RecordAttendanceAsync), Permissions.RecordAttendance)]
 	[InlineData(nameof(AdmissionAssessmentAppService.RecordResultAsync), Permissions.RecordResults)]
+	[InlineData(nameof(AdmissionAssessmentAppService.SaveResultDraftAsync), Permissions.RecordResults)]
 	[InlineData(nameof(AdmissionAssessmentAppService.ReviewAsync), Permissions.Review)]
 	[InlineData(nameof(AdmissionAssessmentAppService.WaiveAsync), Permissions.Waive)]
 	public void Assessment_operations_enforce_distinct_permissions_at_both_boundaries(string method, string permission)
@@ -33,5 +42,15 @@ public class AdmissionAssessmentApiContract_Tests
 		typeof(AdmissionApplicationStageDto).GetProperty("AssessmentEnabled")!.PropertyType.ShouldBe(typeof(bool));
 		AdmissionWorkflowStageTypeRegistry.All.Single(item => item.Type == AdmissionWorkflowStageType.Assessment)
 			.SupportedConfiguration.ShouldContain("assessment");
+	}
+
+	[Fact]
+	public void Applicant_roster_is_a_query_bound_additive_endpoint()
+	{
+		var method = typeof(AdmissionAssessmentsController).GetMethod(nameof(AdmissionAssessmentsController.GetApplicantsAsync))!;
+		method.GetCustomAttribute<HttpGetAttribute>()!.Template.ShouldBe("applicants");
+		method.GetParameters().Single().GetCustomAttribute<FromQueryAttribute>().ShouldNotBeNull();
+		typeof(IAdmissionAssessmentAppService).GetMethod(nameof(IAdmissionAssessmentAppService.GetApplicantsAsync))!.ReturnType
+			.ShouldBe(typeof(System.Threading.Tasks.Task<AdmissionAssessmentRosterDto>));
 	}
 }

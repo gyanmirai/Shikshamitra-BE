@@ -1,94 +1,399 @@
----
+﻿---
 module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-09-21
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Use Finance backend APIs
 
+## Finance setup guide
+
+| Endpoint | Contract |
+|---|---|
+| `GET /api/finance/setup/{academicYearId}` | Read the selected year's saved guide position and permitted configuration presence. |
+| `PUT /api/finance/setup/{academicYearId}/progress` | Save `concurrencyStamp`, `currentStageKey`, nullable `currentSettingKey`, `deferredSettingKeys` and `finishReview`. |
+
+Both endpoints require a current active tenant identity, the existing Finance year scope check, and at least one exact setup or operational View grant.
+Setup reads use each setting's own existing View permission; operational access covers StructureAssign, FeeCollections, Charges, Refund, Concession, InvoiceReceipt, IncomeTracking, ExpenseTracking, CashManagement, Reconciliation or Auditing View.
+No new permission or inferred grant is introduced.
+Each of the twelve settings returns `key`, `canView`, `canManage` and `configurationState` (`configured|empty|unavailable`).
+Manage means View plus that setting's existing Add or supported Edit; unavailable settings are never queried.
+Presence uses active records in the selected year, including valid system None categories, active fee categories with at least one active associated fee head, published payment-term versions in accessible boards and published nonempty fee structures in accessible classes.
+Presence is not full class coverage, policy applicability, effective-date validation or transaction readiness.
+The response also contains `academicYearId`, `concurrencyStamp`, `currentStageKey`, nullable `currentSettingKey`, visible `deferredSettingKeys` and nullable `reviewedAt`.
+
+Stages are `accounts, fees, policies, structures, assignment, operations, review`; the initial position is `accounts/income-categories`.
+The setting keys are `income-categories, expense-categories, bank-accounts, fee-categories, payment-terms, charge-categories, concession-types, collection-policy, refund-policy, concession-policy, proration-policy, fee-structures`.
+Settings must belong to their stage and be readable; deferred keys must be known, unique and readable.
+Hidden deferred keys survive another viewer's save and are omitted from that viewer's response.
+Progress is stored solely under `AcademicYear.ExtraProperties.FinanceSetupGuideProgressV1`, with optimistic concurrency (409 on stale stamp), without a migration.
+Invalid progress returns 400 with `ShikshaMitra:FinanceSetup:Invalid`; unsupported/corrupt saved metadata returns `ShikshaMitra:FinanceSetup:InvalidStoredState` without resetting it.
+`finishReview` is allowed only on review and records a review timestamp and actor; it never changes financial configuration or creates transactions.
+
+## Admission assignment context
+
+`POST /api/student-fee-structure/contexts` is a read-only batch query requiring
+`Finance.Fees.StructureAssign.View`. Body: `academicYearId` and 1–100 distinct `studentIds`.
+Every student must be accessible in that year. The response resolves `Unassigned`, `Selected`,
+`Prepared`, `Assigned` or `NeedsAttention`, plus source, assignment/application/account references,
+confirmed structure, joining date, bounded charge dates, applicable admission head IDs,
+proration policy/version, optional selections, variable amounts, blocker and prepared evidence.
+It performs no assignment writes. Student list rows also expose `assignmentState` and `assignmentSource`.
+
+Existing `/preview` and `/assign` commands accept the confirmed student/year selection. `Registration`
+service periods are verified against Admission, including source reference and exact calendar dates;
+omitted periods resolve on the server. Proration cannot be chosen through the policy override array.
+An existing assignment rejects new preview with `Finance:Assignment:AlreadyAssigned`. Prepared accounts
+use the saved calculation and reuse dues on commit; changed financial inputs return `SourceUnavailable`
+and require review/correction. Existing preview-token and retry validation remains active. Preview
+evidence includes `assignmentSource`, `applicationId` and `registrationJoiningDate`.
+
+## Combined configuration lists
+
+The Collection, Concession, Refund and Proration policy list requests accept optional `includeArchived` (default `false`).
+Management tables set it to `true` and omit `status` to return Draft, Active and Archived records through one filtered, sorted, paged query with a combined total count.
+An explicit `status` still narrows the result, including Archived-only queries; tenant and academic-year scope remain enforced.
+Callers omitting `includeArchived` retain the existing current-record behavior, including attachment pickers.
+Fee and Charge Category lists support all statuses by omitting `isActive`; Concession Type uses `includeInactive=true`; Payment Terms already support `includeArchived=true`.
+
+## Collection receipt amounts
+
+Collection results add nullable decimal `feeReceiptAmount` and `chargeReceiptAmount`, the
+actual totals on the returned documents. A missing receipt has no amount. Idempotent replay
+of an older saved response reads these totals from its original issued receipts, preserving
+historical late-fee attribution. New Separate collections put principal on Fee receipts and
+all additional charges, including late fees, on Charge receipts; Combined returns one total.
+
+## Staff collection pending balances
+
+`GET /api/fee-collections` returns `pendingFees` as all outstanding academic-year principal,
+including future Payment Term installments. The student `fee-details` response's
+`feeOverview.pendingFee` and fee-head `pendingAmount` use the same full balance as
+`collect-form.summary.pendingFee`. Overdue principal remains a subset; pending charges
+are separate. Sorting, numeric filters and summary exports consume the full pending balance.
+The mobile overview retains its generated-bill `pendingFee` and separate future partition
+described below; staff pending semantics do not change that contract.
+
+### Staff collection charge balances
+
+Summary rows add decimal `paidCharges` for active collected additional-charge payments, including late fees and payments awaiting verification. Reversed payments and waivers do not contribute to paid amounts. `totalCharges` is net of applied waivers; `pendingCharges` deducts active payments from that net amount and clamps each source balance to zero. Waivers are deducted once. Sorting, numeric table filters and CSV/XLSX exports use these same server projections; exports place Paid Charges between Total Charges and Pending Charges. Tenant, academic-year and academic scope remain unchanged.
+
+Collection summary `paidFees` uses gross principal payments (`DueFee.PaidAmount`), excluding payment reversals without subtracting refunds or capping payments after concessions. Decimal `refundAmount` (INR) sums recorded principal refunds (`DueFee.RefundedAmount`), net of returns/reversals; approved refunds awaiting payout do not contribute. Pending fees and status continue to use the canonical outstanding balance. Numeric filters, sorting and CSV/XLSX exports use these same amounts. The fee columns in exports are Total Fees, Total Concession Amount, Refund Amount, Paid Fees and Pending Fees, followed by the existing overdue and charge fields.
+
+### Installment refunds
+
+The collect-form ledger keeps `refundAmount` as cumulative completed principal
+refunds, separately from the additive decimal `pendingRefundAmount`. The latter
+sums approved but unpaid principal lines from workflow version 1 requests in
+Approved or Processing state, using `max(0, approvedAmount - processedAmount)`.
+`pendingRefundDescription` identifies those requests by voucher and reason.
+Failed requests do not contribute because their reservations are released; a
+replacement contributes only after its own approval. Approval alone changes
+neither paid refunds nor the installment's paid/outstanding balance. Queries
+retain tenant filters and restrict pending requests to the student and academic year.
+
+## Fee structure copy policy preflight
+
+`GET /api/fee-structures/{id}/copy-policies?feeStructureMetadataId=...&standardId=...`
+requires Fee Structure View and checks source/target tenant and academic scope. It returns
+linked policy family/name, source snapshot ID/version, current active snapshot ID/version
+and an actionable error when unavailable. Current means the active master's version,
+not the highest historical snapshot number. It performs no writes. Legacy concession
+attachments can be inspected; existing retirement of structure-level concessions is preserved.
+Draft creation retains its existing permissions, idempotency and authoritative validation.
+Stale attachments identify policy name and selected/current versions before any insertion.
+
+## Demand Draft collection dates
+
+Collection DD details accept `issueDate` and `paymentDate` from the collection form;
+legacy `ddDate` remains an issue-date alias. Both are preserved independently as calendar
+dates in the existing instrument JSON. Missing issue dates remain null instead of defaulting
+to today. Reconciliation adds nullable `paymentDate` from the linked payment record, allowing
+legacy instruments without an entered payment date to show their recorded collection date.
+Receipt issuance date is a separate fact. No schema migration or historical rewrite occurs;
+previously discarded entered dates or substituted issue dates cannot be reconstructed.
+
+## Card collection evidence
+
+Credit/debit card details preserve optional `cardHolderName` and the final four digits in the
+existing payment-details JSON. Collection accepts the form's `last4Digits` alias; an explicitly
+provided `cardLast4` takes precedence. Reconciliation returns the stored values as
+`instrumentDetails.cardHolderName` and `instrumentDetails.cardLast4`. Historical records without
+a holder remain null. This adds no schema migration or historical rewrite; evidence discarded
+by the old mapper cannot be reconstructed.
+
+## Refund receipt PDF
+
+`GET /api/fee-refunds/{id}/receipt/pdf` returns `application/pdf` under the existing `Finance.Fees_Refund.View` permission constant and the same authorized payer scope as refund details.
+
+`GET /api/fee-refunds` accepts `boardId` alongside academic year, medium, standard and division filters. Student-linked refund history uses the enrollment placement for the refund's academic year for visibility, filtering and displayed academic labels after promotion. Current grants and tenant scope still apply; prior access alone does not grant access. Applicant-account requests continue to use their saved account placement.
+Processing payouts produce a Provisional Refund Receipt; completed payouts produce a Refund Receipt.
+Unpaid, failed, cancelled, rejected and reversed requests fail with the existing `PaymentNotSettled` business error.
+The PDF uses the scoped refund detail projection, preserving `ViewSensitivePaymentDetails` masking of payout references, and the configured school identity.
+Content-Disposition uses `<Provisional-Refund-Receipt|Refund-Receipt>_<safe-voucher-number>_<yyyy-MM-dd>.pdf` without pupil names or bank identifiers.
+The endpoint is read-only and does not issue another voucher, record a payout or change balances.
+
+## Refund source receipts and cash approval
+
+Create and preview lines accept optional `sourceReceiptId`, with `originalReceiptId` as the legacy fallback. A request may include multiple settled source receipts in one authorized payer/year/assignment-policy context. Responses expose `sourceReceipts: [{ receiptId, receiptNumber }]`; `originalReceiptId` remains the immutable lead reference. The server checks each source allocation, receipt and remaining balance. The deprecated policy `allowPartialRefund` flag does not disable Partial requests.
+
+An administrator's explicit Cash creation requires Add, Approve and Process and returns Completed (7). An independent checker's Cash approval requires Approve and Process and completes atomically without a persisted Approved stage. Missing authority or invalid pinned/action payout routing rolls back all state and accounting. Non-cash approval and historical Approved Cash retain the existing payment-recording flow. See the [payout contract](./references/fee-refund-payout-workflow.md) for routing, retry and source evidence.
+
+## Paid charges in refund requests
+
+`GET /api/fee-refunds/eligibility` includes settled charge payments when the assignment's pinned
+refund policy has `includePaidCharges=true`. The separate **Paid charges** group has a null
+`feeHeadId`; its rows carry `chargeId`, `chargeName`, `sourceAllocationId` (the charge payment),
+and `sourceReceiptId`. A create/preview line supplies exactly one of `dueFeeId`, `chargeId`, or `lateFeeDueFeeId`.
+The server checks the policy, payer, academic year, receipt and available payment balance.
+Reversed collections and unverified provisional receipts are excluded. Reservations and net
+processed refunds reduce eligibility; returned payouts restore it. Charges participate in the
+same policy amount limits, whole-receipt selection rule, approval, payout and refund subledger.
+Fee-head scope applies to fee dues; the paid-charge toggle independently controls charge sources.
+
+Apply `EnablePaidChargeRefunds` before deploying this contract. It adds nullable charge references
+to refund lines/reservations and makes the alternative fee-due references nullable, retaining all
+existing refund history. Its downgrade rejects removal after charge-refund evidence exists.
+Focused regression cases are `FeeRefundApi_Tests.Paid_Charges_*`.
+
+The independent pinned `includePaidLateFee` setting enables a **Paid late fees** group with
+null `feeHeadId`. Its rows carry `lateFeeDueFeeId` (the source due, without refunding its
+principal), `chargeName` (the late-fee display label), the late-fee `sourceAllocationId`, and
+`sourceReceiptId`. Only settled `LateFeeCollectionAllocation` payments for the payer, year,
+and assignment qualify. The same reservation, payout, return, whole-receipt selection and
+policy caps apply; principal paid/refunded balances remain separate. Apply
+`EnablePaidLateFeeRefunds` before deployment. It adds one nullable refund-line reference,
+preserves history, and rejects a downgrade after late-fee refund evidence exists.
+Focused regression cases are `FeeRefundApi_Tests.Paid_Late_Fees_*`.
+
+Student-only eligibility also includes settled extras paid through accounts bound to that exact student's academic-year assignment, while preserving legacy student receipt sources.
+For an account linked to an enrolled assignment, new refunds resolve that assignment's current pinned policy version; the account's original assignment snapshot remains immutable.
+Editing a policy definition alone does not change the student's assigned version.
+Each `receipts[]` entry includes nullable `financeFeeAccountId` from the original receipt: null denotes a legacy student payment.
+One request may combine receipts for the same original payer; legacy and account payments require separate requests, and server validation continues to reject mixed payers.
+
+Whole-receipt requests retain every selected source when a cap or deduction rounds an
+individual calculated share to zero. Such a line preserves selection evidence without a
+reservation or principal balance mutation; the request still requires a positive total payout.
+
+## Collection grace period
+
+Collection Policy grace periods and late-fee day counts always use calendar days, including weekends and holidays.
+`gracePeriodDays` remains an integer from 0 to 365; `gracePeriodType` is removed from create/update/read/clone contracts and new version snapshots.
+Legacy snapshots containing either the string or numeric day type remain readable: the obsolete property is ignored, retaining the existing calendar-day calculation and all stored historical JSON.
+The `RemoveCollectionPolicyGracePeriodType` migration removes only the unused column from `Finance_CollectionPolicies`; it does not rewrite policy versions, dues, collections or receipts.
+Rollback restores the obsolete column with its Calendar value (0), since working-day counting was never implemented.
+
+## Automatic collection allocation
+
+Collection Policy DTOs accept `allocationBasis`: `Installment` or `FeeHead`; `Legacy` preserves
+deployed behavior. Omitted values preserve the saved basis on update and use Legacy on older
+create clients. The UI defaults new policies to Installment. Invalid values fail validation.
+The enum is persisted in the aggregate's existing `ExtraProperties` JSON, copied by clone and
+included in immutable `CollectionPolicySnapshot` versions. Existing rows/snapshots need no
+schema migration and resolve to Legacy. No fee-head priority/rank records are introduced.
+
+Student and Admission collect-form responses add `allocationBasis`, `collectionPolicyId`,
+`collectionPolicyName`, `collectionPolicyVersion`, `allocationDueFeeOrder` and `allocationRevision`.
+Configured modes use the same ordered ledger in the screen and command validation. Installment
+groups use schedule installment IDs (date/label fallback for legacy dues), not month labels alone.
+Fee-head groups retain the collection head-name order. Both retain the displayed line sequence.
+
+Configured collection commands require `automaticAllocation: { revision, dueFeeIds, chargeIds }`.
+Selection includes unfunded rows. The server reloads the scope-checked, assignment/account-pinned
+collect form inside the existing serializable transaction, checks its revision and recalculates
+allocations in decimal currency. Principal retains the existing whole-rupee ceiling; no additional
+rounding mode is added. Linked late fee follows its principal, and selected charges follow fees.
+The sum of accepted allocations equals tendered money; partial and exact payments work, excess
+is rejected. Unknown/duplicate selections, stale revisions and altered amounts fail before writes.
+`ShikshaMitra:FeeCollection:AllocationChanged` instructs the caller to refresh and review again.
+Retry replay is checked before current-balance validation, preserving the original result.
+
+The collection metadata's `AutomaticAllocation` extension stores the applied policy/version,
+basis, revision and selected sequence with the existing immutable allocation and receipt evidence.
+Policy changes do not rewrite existing assignment snapshots or posted receipts. Basis resolution
+uses `CollectionPolicyResolver`: pinned assignment/account version, with existing direct-attachment
+and academic-year-default resolution where applicable. Student late-fee overrides do not alter basis.
+Permissions remain the existing Collection Policy View/Add and Fee Collection View/Add plus payer
+scope; no override grant is added. Legacy calls retain their existing request/fingerprint behavior.
+
 TL;DR: use this page to find Finance endpoint families and route ownership.
 Controller source paths are canonical when a route detail changes.
 
 Fee Structure configuration, publication and revision contracts: [workspace implementation](./references/fee-structure-workspace.md).
 
+Contextual Admissions/Onboarding collections, nullable applicant payers and Finance receipt/refund continuity: [admission fee collection](./references/admission-fee-collection.md).
+
 ## Shared request rules
+
+Admission collection summary/prepare responses include nullable, output-only `proration` (`FeeProrationResultDto`): policy/version IDs, joining/service dates, scheduled fees, admission reduction, withdrawal credit, payable fees, excess paid and explanations. Admission fee preparation accepts an optional `prorationPolicyVersionId` only for an authorized policy override and only while the preparation remains replaceable; Finance revalidates the active same-year version. It accepts no computed totals. If a non-default version is selected without a user-entered reason, Finance stores its fixed admission-selection audit note. `FeeLedgerLineDto` separately exposes withdrawal credit/explanation without replacing original or paid totals.
+`FeeProrationResultDto.joiningDate` is nullable and contains only the recorded actual joining date; unknown dates remain null instead of being replaced by academic-year or manual service boundaries.
+New Finance structure assignments automatically pin the same active academic-year default Proration Policy as Admission preparation, including students without an Admission link; the context and preview identify it as `FinanceDefault`.
+
+Records withdrawal preview rows use the same Finance result. There is no new public recalculation endpoint. An actual monetary adjustment requires existing `Finance.Policies.ProrationPolicy.Recalculate` and the approved transition's serializable transaction; Collection View/Add and Records permissions stay unchanged. Stable `Finance:Proration:*` errors identify missing/invalid joining date, ambiguous default, unavailable version, invalid evidence, pending owner workflows, denied recalculation and adjustment conflicts.
 
 Finance APIs require authenticated access and tenant context through the platform pipeline.
 Mutations must enforce backend permissions and audit important financial actions.
+Year-only setup checks permit users with database-backed tenant-wide scope to configure an existing current-tenant academic year before its first Student exists. Unknown or foreign-tenant years remain denied. Board, medium, class, division and individual Student checks continue to use the scoped Student query.
+
+## Charge workflow contract
+
+`GET api/charges` filters the batch lifecycle with `status=0` (Pending), `1` (In Process), `2` (Completed), or `3` (Rejected). Responses expose `workflowStatus` separately from the existing student approval `status`. New charges always await an independent checker; completion is derived from settlement evidence and reversals reopen outstanding batches. See [the charge lifecycle contract](./references/charge-management-end-to-end.md#four-state-batch-lifecycle) for totals, mixed decisions, waivers and compatibility.
 
 ## Fees API families
 
-| Family | Controller path | Main routes or base route |
-|---|---|---|
-| Charges | `Controllers/Finance/Fees/Charges/ChargeController.cs` | `api/charges` |
-| Concession requests | `Controllers/Finance/Fees/Concessions/ConcessionRequestController.cs` | `api/concession-request`, `api/concession-requests` |
-| Fee adjustments | `Controllers/Finance/Fees/Adjustments/FeeAdjustmentController.cs` | `api/fee-adjustments` |
-| Fee collection | `Controllers/Finance/Fees/Collections/FeeCollectionController.cs` | Fee collection routes |
-| Fee receipts | `Controllers/Finance/Fees/Receipts/FeeReceiptController.cs` | Fee receipt routes |
-| Fee refunds | `Controllers/Finance/Fees/Refunds/FeeRefundController.cs` | Fee refund routes |
-| Student fee assignment | `Controllers/Finance/Fees/StudentFeeAssignment/StudentFeeStructureController.cs` | Student fee structure routes |
-| Fee settings | `Controllers/Finance/Fees/Settings/**` | Fee category, fee head, fee structure, receipt book, concession type, and charge category routes |
+| Family                 | Controller path                                                                  | Main routes or base route                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Charges                | `Controllers/Finance/Fees/Charges/ChargeController.cs`                           | `api/charges`                                                                                    |
+| Concession requests    | `Controllers/Finance/Fees/Concessions/ConcessionRequestController.cs`            | `api/concession-request`, `api/concession-requests`                                              |
+| Fee adjustments        | `Controllers/Finance/Fees/Adjustments/FeeAdjustmentController.cs`                | `api/fee-adjustments`                                                                            |
+| Fee collection         | `Controllers/Finance/Fees/Collections/FeeCollectionController.cs`                | Fee collection routes                                                                            |
+| Fee receipts           | `Controllers/Finance/Fees/Receipts/FeeReceiptController.cs`                      | Fee receipt routes                                                                               |
+| Fee refunds            | `Controllers/Finance/Fees/Refunds/FeeRefundController.cs`                        | Fee refund routes                                                                                |
+| Student fee assignment | `Controllers/Finance/Fees/StudentFeeAssignment/StudentFeeStructureController.cs` | Student fee structure routes                                                                     |
+| Fee settings           | `Controllers/Finance/Fees/Settings/**`                                           | Fee category, fee head, fee structure, receipt book, concession type, and charge category routes |
 
-Fee-category and fee-head create/update contracts accept `module` as an optional numeric `FeeHeadModule` enum value. Send `null` or omit the property when no module applies. The fee-head module lookup returns numeric `value` fields with user-facing `displayName` labels. Every standalone or nested Fee Head request must also send `incomeCategoryId`. Responses return the Income Category plus its resolved default Income Account Head ID and name. The backend accepts only active Income Categories from the Fee Head's academic year whose default account is an active Income head.
+`GET /api/fee-categories` accepts academic year, active status, search, page, and page size. Its optional `filters` query value is a JSON array of `{column,type,value}` entries: `name` and `description` support contains, equals, startsWith, and endsWith; `totalFeeHeads` supports equals, greaterThan, lessThan, and an inclusive `{min,max}` between range. `sortBy` accepts `name`, `description`, or `totalFeeHeads`, with `sortDirection` `asc` or `desc`. Filtering and sorting run before pagination; ties use category ID.
+
+`GET api/v1/fee-receipts` requires `academicYearId`, `boardId`, and
+`educationMediumId`. Its optional `month` is a calendar month from 1 (January)
+through 12 (December), applied directly to `ReceiptDate.Month`. Omit `month` to
+list every month in the selected academic year. The list retains tenant and user
+scope filtering, optional class/division and receipt-kind filters, and server pagination.
+
+Fee-category and fee-head create/update contracts accept `module` as an optional numeric `FeeHeadModule` enum value. Send `null` or omit the property when no module applies. The fee-head module lookup returns numeric `value` fields with user-facing `displayName` labels. Every standalone or nested Fee Head request must also send `incomeCategoryId`. Responses return the Income Category. Historical Income Account Head fields are compatibility evidence. The backend accepts active, effective Income Categories from the Fee Head's academic year without requiring an Account Head.
+
+Fee Head list/detail responses and nested Fee Category heads expose `dependencies` with distinct `studentCount`, `assignmentCount`, `feeStructureCount`, `paymentTermCount`, and `isBlocked`. Deactivation and category head removal repeat these checks on the server and return `Finance:FeeHead:010002` and `:010001` respectively, with the head name and numeric counts in error data. Legacy student obligations remain dependencies even when they have no assignment ID. `GET api/student-fee-structure/students` accepts optional `feeHeadId` to narrow the existing tenant/year/user-scoped student list to affected obligations. Assignment details resolve current master fee-head labels while preserving the original stored pricing, policy, service-period, and label evidence.
+
+Charge Category creation defaults omitted `isApprovalRequired` to true and accepts explicit false; omitted update values preserve the stored flag. Charge Category search matches name, description and linked Income Category name before pagination. Interactive charge creation with explicit no-approval configuration applies collectible lines through the existing approval side effects and pins the approval rule on the request. Approval-required categories retain the existing checker flow and documented administrator creation exception. Existing pending requests and source-module commands keep their current workflow.
+
+Fee Head status changes reject an archived parent category with `Finance:FeeHead:010007` (restore the category before changing status). This rejects both activation and deactivation; active-head lookups also exclude archived categories.
 
 Charge endpoints and exact permissions are documented in [Charge management end to end](./references/charge-management-end-to-end.md). The current base route is `api/charges`, with Add, View, Update, Approve, Reject, and Delete action permissions. The reference also records current contract defects: academic-year filtering is not consistently applied, row-level caller scope is incomplete, and the API has no charge-specific correction/refund or command concurrency contract. Do not treat those gaps as supported behavior.
 
 Payment-term requests and responses serialize lifecycle, version, holiday-shifting, demand-generation, and initial-demand enums by name. For example, `demandGenerationRule` uses `OnInstallmentStartDate`, `XDaysBeforeDue`, `OnDueDate`, or `SpecificDate`; numeric enum values are not the canonical wire representation.
 
+Payment-term installment coverage, demand, due, and reminder fields are calendar dates. Create and draft-update requests may send ISO 8601 timestamps with offsets; the API uses the date written in each field, independent of the server time zone. The installment dates must stay within the selected Education Board's start and end dates.
+
 `isDefault: true` is valid only when the same create/update request uses `status: Active`. At most one Active Payment Term may be default per tenant, academic year, and Education Board. Selecting another default atomically removes the previous flag for that board; other boards retain their own defaults. Draft and Archived terms cannot retain the flag. List requests accept `boardId` to filter the workspace to one board.
+
+`GET api/finance/payment-terms/{paymentTermId}/usage` returns distinct Fee Head, Fee Structure and Class counts plus assignment rows (class, structure, head and saved term version). Omit `versionId` for all versions, or supply a version belonging to that term. Usage rows respect tenant and caller academic scope. `GET api/finance/payment-terms/default-impact` accepts `academicYearId`, `boardId` and optional `paymentTermId` and identifies the existing board default, its published version, usage and whether it will be replaced. Default replacement records the old/new term identities and versions in Finance audit with the actor/time; it never updates Fee Structure term/version assignments.
 
 Payment-term version history is exposed separately from the full detail snapshot through `GET api/finance/payment-terms/{paymentTermId}/versions`. It accepts the standard `skipCount` and `maxResultCount` paging parameters and returns version number, lifecycle status, change action/reason, creation time, creator id, and hydrated creator name for the history drawer.
 
-`POST api/finance/payment-terms/templates/preview` is an Add-permission authoring preview. It accepts a board, built-in template (`Annual`, `HalfYearly`, `Quarterly`, `Monthly`, or `Custom`), due-date rule, custom count when applicable, and the draft's demand-generation rule. The server partitions the authoritative board window, allocates exactly 100% with the rounding remainder on the final installment, derives demand dates, and runs the normal Payment Term validator. It does not persist data; the returned installment DTOs may be reviewed, edited, and submitted through the ordinary create/update contract.
+`POST api/finance/payment-terms/templates/preview` is an Add-permission authoring preview. It accepts a board, built-in template (`Annual`, `HalfYearly`, `Quarterly`, `Monthly`, or `Custom`), due-date rule, custom count when applicable, and the selected invoice rule (`demandGenerationRule`) with `demandOffsetDays` for `XDaysBeforeDue`.
+The optional additive `specificDemandDates` array contains user-selected invoice calendar dates in generated installment sequence order and is required with exactly one date per installment for `SpecificDate`; no date is silently substituted.
+An omitted invoice rule retains the existing `OnInstallmentStartDate` default. The save payload and existing version snapshots are unchanged.
+The server partitions the authoritative board window, allocates exactly 100% with the rounding remainder on the final installment, returns each invoice date as `demandDate` alongside start/end/due dates, and runs the normal Payment Term validator.
+Template offsets are capped at 365 days and the smallest generated start-to-due gap; rejected offsets include that global maximum, including zero for same-day due dates.
+The preview does not persist data; the returned installment DTOs may be reviewed, edited, and submitted through the ordinary create/update contract.
+
+Create, update, publish, template preview and resolved fee-structure customization reject invoice dates before their installment start or after their payment due date. Coverage and schedule events must remain within the selected board's academic period. `XDaysBeforeDue` requires an integer of at least one day and at most the smallest start-to-due gap across installments. Errors `Finance:PaymentTerm:000040` (invoice before start) and `:000041` (offset exceeds maximum) identify the violated rule; save-time errors identify the affected installment, and offset errors include `Maximum` and `Actual`. Dates inside the valid range may precede today for backfilled terms. Due dates after coverage end remain supported within the board period. Existing published snapshots are not rewritten.
 
 Concession Type settings use `GET/POST api/{academicYearId}/concession-types`, `GET/PUT/DELETE api/concession-types/{id}`, `PATCH api/concession-types/{id}/status`, `GET api/concession-types/{id}/versions`, and `GET api/concession-types/document-defaults`. The paged versions endpoint returns the audited action, actor, timestamp, version number, and changed business fields. Administrative lists pass `includeInactive=true`; request creation omits it so only active types are returned. Document contracts use `documentName`, `maxFileSizeBytes`, `acceptedFormats`, and `isRequired`. Active records and used records cannot be deleted; deletion is allowed only after deactivation and while unused. Duplicate normalized names, edits to used document definitions, and missing deactivation reasons return stable business errors. `POST api/concession-request/types/{concessionTypeId}/documents/{documentId}/file` accepts multipart `File` and validates the selected definition's size, extension, MIME type, and file signature before storage. It returns an opaque staged route; `GET api/concession-request/staged-documents/{uploadId}/file` works only for the uploader while the receipt remains unattached and unexpired. Attached evidence is downloaded through `GET api/concession-request/{id}/documents/{documentId}/file`, which requires `ViewDocument` and repeats student-scope validation. Concession responses never expose the underlying shared-storage identifier.
 
-Concession requests select their policy at request time. `GET api/concession-request/context` returns active academic-year policy/version options, eligible heads, outstanding due rows, types, and evidence requirements. If more than one current assignment matches, it returns `assignmentSelectionRequired=true` plus scoped assignment choices; the caller repeats the query with one `studentFeeStructureId`. It never selects an ambiguous assignment. Preview, draft, create, and update inputs carry `concessionPolicyId` plus `concessionPolicyVersionId`; the backend verifies that they identify the current active version and pins both values on the request. `POST api/concession-request/preview` returns server-calculated values and a 64-character fingerprint. An incomplete draft may omit fee selections and required evidence, but Submit always reruns strict policy, value, due-row, and evidence validation.
+Concession requests select their policy at request time. `GET api/concession-request/context` returns active academic-year policy/version options, eligible heads, outstanding due rows, types, and evidence requirements. When no heads are eligible, `blockers` explains whether the assignment has no outstanding dues, its heads are not concession-enabled/active for the year, its fee-structure scope excludes the enabled heads, or the selected policy has no matching installments. Blockers are explanatory and never relax server-side eligibility. If more than one current assignment matches, it returns `assignmentSelectionRequired=true` plus scoped assignment choices; the caller repeats the query with one `studentFeeStructureId`. It never selects an ambiguous assignment. Preview, draft, create, and update inputs carry `concessionPolicyId` plus `concessionPolicyVersionId`; the backend verifies that they identify the current active version and pins both values on the request. `POST api/concession-request/preview` returns server-calculated values and a 64-character fingerprint. An incomplete draft may omit fee selections and required evidence, but Submit always reruns strict policy, value, due-row, and evidence validation.
 
 Drafts use `POST api/concession-request/drafts`, `PUT api/concession-request/{id}`, and `POST api/concession-request/{id}/submit`; the compatibility `POST api/concession-request` performs create-and-submit and requires both Add and Submit. `POST api/concession-requests/{id}/approval-preview` is the authoritative pre-commit approval calculation, and `POST api/concession-requests/{id}/reversal-preview` returns the balance impact before reversal. Approve repeats approval validation using the preview fingerprint and request/due stamps. Reverse repeats reversal validation using request and allocation due-row stamps. Detail and list responses expose state-derived `availableActions`; detail and student applications also expose the stored lifecycle `timeline` so clients do not infer legal transitions from labels.
 
+An `AllFees` concession policy permits paid installments. Approval preview reports the paid refund amount and `autoCreateRefund` mode. The pinned policy controls automatic creation on approval or manual creation through `POST /api/concession-request/{id}/refund-requests` (Refund Add plus Concession View, student scope, request stamp and idempotency key). Linked requests are grouped by settled source fee receipt. Concession detail reports `paidConcessionAmount`, `autoCreateRefund`, `canCreateRefundRequests`, and refund references for callers with Refund View. Each refund exposes `concessionRequestId`. Refund approval and settlement retain the normal Refund permissions and maker-checker flow; the payout method is selected during settlement. A linked refund blocks concession reversal until cancelled, rejected, or reversed, and linked concessions require a full reversal. See [the concession contract](./references/concession-policy-end-to-end.md#paid-concession-refund-creation).
+
 Every retryable command requires its idempotency key; every mutation of an existing request requires the request concurrency stamp, and submit/approve also require the current preview fingerprint. Approval requires explicit due-row allocations and due-row stamps. Exact actions are `View`, `Add`, `Edit`, `Submit`, `Cancel`, `UploadDocument`, `ViewDocument`, `Delete`, `Approve`, `Reject`, and `Reverse` under `Finance.Fees.Concession`.
+
+Draft update flushes its changes before returning the detail response so `concurrencyStamp` matches the persisted request even when the command joins an ambient HTTP transaction. A subsequent Submit uses that returned stamp; an older editor's stamp still fails with `Finance:Concession:030003`. Editing a non-draft returns `Finance:Concession:010033` with `Status` and a localized explanation. Ineligible selected heads (`Finance:Concession:020006`), inactive policy versions (`Finance:ConcessionPolicy:010010`), and missing, mismatched or superseded policy versions (`Finance:ConcessionPolicy:010012`) also return actionable details. Problem responses retain `errorCode` and `traceId` for support; an unknown rule keeps the generic fallback.
+
+One benefit is available per tenant, student, academic year and concession type. Another request in Pending blocks with `Finance:Concession:010010`; Approved or PartiallyReversed blocks with `Finance:Concession:010034`. Drafts do not reserve a benefit. Rejected, Cancelled and fully Reversed requests release it. The rule spans every policy, version, assignment and fee head. Create, draft save, submit and approval enforce it, including administrator automatic approval and family commands. An existing request excludes only its own server-loaded ID. Historical collisions remain readable and can be rejected, cancelled or reversed; they cannot receive another approval.
+
+Context GET accepts optional `requestId` and individual preview accepts optional `requestId` for verified read-side self exclusion. Each concession type option and approval context exposes nullable `benefitBlocker` (`code`, `message`, `blockingRequestId`, `blockingStatus`). Approval context still returns its groups for review and rejection. Create never trusts a supplied read-side exclusion. PostgreSQL mutations serialize the annual type claim with a transaction-scoped advisory lock and validate committed evidence through an independent, non-pooled read connection, preserving the caller's isolation level, including family Serializable transactions. Idempotency receipts are re-read after the lock so a committed identical command replays its result.
 
 Staged concession uploads are tenant- and uploader-bound. Their stored receipt records the concession type and document definition; attaching a URL binds it to one request and rejects another uploader, requirement, type, tenant, request, or an upload older than 24 hours. Removing or replacing evidence on a Draft releases its old upload for cleanup in the same transaction. An hourly worker removes at most 100 expired unattached uploads per tenant per run and never selects evidence still attached to a request. Submitted requirement and due-row selections are immutable snapshots. Only approval changes due balances, and reversal reopens the linked obligation without rewriting payment or receipt history.
 
+The student concession detail endpoint, `GET api/concession-requests/{studentId}`, includes
+`studentDetails.boardName` and `studentDetails.educationMediumName` from the saved student's
+academic board and medium. Existing Concession View authorization and student-scope checks apply.
+
 ## Accounts API families
 
-| Family | Controller path |
-|---|---|
-| Income | `Controllers/Finance/Accounts/Income/IncomeController.cs` |
-| Expense | `Controllers/Finance/Accounts/Expense/ExpenseController.cs` |
-| Bank accounts | `Controllers/Finance/Accounts/Settings/BankAccountController.cs` |
-| Account heads | `Controllers/Finance/Accounts/Settings/AccountHeadController.cs` |
+### Category and bank settings data
+
+| Contract                  | Validation and exposure                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Income Category name      | Required trimmed business text, maximum 40 characters on create/update; Expense Category maximum remains 128; numbers, punctuation and Unicode are preserved                                                                                                                                                                                                                                                                                                                 |
+| Category deletion         | Income Category `canDelete` is true whenever unused, including newly created active categories. DELETE checks Fee Head, charge-category, policy and transaction references; `deletionBlockedReason` identifies an actual dependency. PostgreSQL uses a shared tenant transaction lock for income-category deletion and its initial reference writers, preventing concurrent creation after the usage proof. Expense Categories still require deactivation and no references. |
+| Bank names                | Bank, branch and holder names are required trimmed business text, maximum 100 characters; Purpose maximum 500                                                                                                                                                                                                                                                                                                                                                                |
+| Bank list/status response | Full `accountNumber` and `upiId` remain null; `maskedAccountNumber`, masked `ifscCode` and `maskedUpiId` are the safe display/export values; UPI masks the entire local part (`***@handle`)                                                                                                                                                                                                                                                                                  |
+| Bank detail/edit response | Existing authorized detail route retains full identifiers; list projection is never used as an edit payload                                                                                                                                                                                                                                                                                                                                                                  |
+| Versions                  | Categories and banks register with ABP entity-history selectors; edits and status changes record safe field diffs; sensitive bank identifiers remain excluded from entity and input-argument auditing                                                                                                                                                                                                                                                                        |
+| Older versions            | Known versions without recorded details are explicitly unavailable; actors/times/values are never reconstructed                                                                                                                                                                                                                                                                                                                                                              |
+
+No schema narrowing or automatic cleanup of historical over-limit names is performed.
+Existing over-limit text must be corrected before a subsequent details save; lifecycle checks do not silently rename it.
+
+| Family                 | Controller path                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| Income                 | `Controllers/Finance/Accounts/Income/IncomeController.cs`                                           |
+| Expense                | `Controllers/Finance/Accounts/Expense/ExpenseController.cs`                                         |
+| Bank accounts          | `Controllers/Finance/Accounts/Settings/BankAccountController.cs`                                    |
+| Account heads          | `Controllers/Finance/Accounts/Settings/AccountHeadController.cs`                                    |
 | Transaction categories | `Controllers/Finance/Accounts/Settings/IncomeCategoryController.cs`, `ExpenseCategoryController.cs` |
-| Reconciliation | `Controllers/Finance/Accounts/Reconciliation/ReconciliationController.cs` |
+| Reconciliation         | `Controllers/Finance/Accounts/Reconciliation/ReconciliationController.cs`                           |
+| Cash Management | `Controllers/Finance/Accounts/CashManagement/CashManagementController.cs`; [commands and exact authorities](./references/cash-management.md) |
+
+Cash approval validates `countedAmount` against the remaining pending cash after paid expenses and immediately confirms that bank deposit and net Income.
+`amount` retains original collection, `spentAmount` retains actual expenses, `depositedAmount` becomes the net deposit and `remainingAmount` becomes 0.
+A fully spent source accepts count 0 without a visible Income/deposit row.
+Expense options expose only pending positive sources; deposit/credit endpoints remain for legacy approved-held/transit history.
+Original manual Income creation retries retain their gross request amount after net finalization.
 
 ## Reports and audit API families
 
-| Family | Controller path |
-|---|---|
-| Finance reports | `Controllers/Finance/Reports/FinanceReportController.cs` |
+| Family              | Controller path                                            |
+| ------------------- | ---------------------------------------------------------- |
+| Finance reports     | `Controllers/Finance/Reports/FinanceReportController.cs`   |
 | Finance audit trail | `Controllers/Finance/Audit/FinanceAuditTrailController.cs` |
 
 ## Permission families
 
 Current individual late-fee waivers use `Finance.Policies.CollectionPolicy.ViewWaivers`, `RequestWaiver`, `ApproveWaiver`, and `RejectWaiver` with the scoped `GET /api/finance/late-fee-waivers/list` queue.
-The approved but unshipped target removes that queue and approval lifecycle.
-It adds `AllowWaiver` to each effective late-fee rule and charge, then applies an eligible waiver immediately from Fee Collection through the proposed `Finance.Fees.FeeCollections.ApplyWaiver` permission and one amount-plus-reason command documented in [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md).
+The approved but unshipped target removes that queue and approval lifecycle, along with every Collection Policy and Charge Management waiver field.
+Fee Collection instead exposes a toggle on each eligible late-fee and approved charge row; the collector enters only a reason and the server waives the full live remaining balance through `Finance.Fees.FeeCollections.ApplyWaiver` as documented in [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md).
 
 Use backend constants as the security source of truth.
 Known Finance families include `Finance.Fees.Charges.*`, `Finance.Fees.Concession.*`, `Finance.Fees.Adjustment.*`, and related Fees, Accounts, Reports, and Audit permissions.
 
-Accounts settings use `Finance.Accounts.Settings.{AccountHead|IncomeCategory|ExpenseCategory|BankAccount}.{View|Add|Edit|ChangeStatus|Delete}`.
+Fee adjustments define `Finance.Fees.Adjustment.{View|Add|Approve|Reject|Delete}`.
+Add does not confer a decision grant; Apply and its context require Approve, while
+Reject requires Reject. The reviewer must have View, the exact decision grant,
+current student scope, and a current reporting-manager route. The creator cannot
+review their own request. No existing Add grant is promoted or reseeded.
+
+Paid-credit transfer sources are capped by retained overpayment from settled
+principal receipt allocations. Outstanding debt and provisional unverified
+collections contribute no source credit. Creating a request reserves the source
+on each due row after subtracting active refund reservations; approval consumes
+the reservation and credits target outstanding balances in one serializable
+transaction. Reject, delete, and replacement release pending reservations.
+Refund and payment/concession reversal checks exclude both reserved and already
+transferred credit. Create/update require a stable `idempotencyKey` in the body;
+Apply requires the existing `Idempotency-Key` header. Duplicate command keys
+replay the original result and changed payloads fail. List/detail include
+`availableActions` (`Approve` and `Reject`) computed from current reviewer
+authority. Historical requests without source reservations remain readable and
+may be rejected, but application returns
+`Finance:FeeAdjustment:PaidCreditTransferUnavailable`. Existing applied history
+is unchanged. There is no adjustment administrator auto-approval.
+
+Accounts settings use `Finance.Accounts.Settings.{IncomeCategory|ExpenseCategory|BankAccount}.{View|Add|Edit|ChangeStatus|Delete}`.
 Each action is independent; module visibility and Add do not authorize Edit or ChangeStatus.
-`GET /api/account-heads/options` requires `Finance.Accounts.Settings.AccountHead.View`. Category form lookups use `GET /api/{income|expense}-categories/account-head-options?academicYearId=...`, authorized by the corresponding category `Add` OR `Edit` action. They return only active, same-year heads of the matching type (`id`, `name`, `headType`, `displayName`). Category View alone, another category's grants, and module grants do not authorize these lookups or the Account Head master.
+Authenticated requests to `/api/account-heads`, including former options and CRUD routes, return HTTP 410. Category head lookups return empty options for authorized category editors. Income and Expense Category requests accept name, description, optional tags, and concurrency stamps; they do not require or accept a new Account Head mapping. Internal codes are generated on create and existing historical metadata is preserved.
 
-Account Head create/update contracts accept `headName`, `headType`, optional `parentAccountHeadId`, `notes`, and the update `concurrencyStamp`. Code, currency, posting/control flags, and effective dates are removed from requests, responses, the domain, and EF mapping. Active status determines availability; tenant/year/type, name uniqueness, parent-cycle, dependency, and concurrency checks remain enforced.
+Bank Accounts require school bank details, year/scope, uniqueness, and concurrency checks. They no longer require an Asset Account Head. Refer to [Income, expense, and bank routing](./references/income-expense-routing.md) for the required charge, policy, collection, and refund fields and the workflow-owned options endpoint.
 
-Income and Expense Category create/update requests accept `name`, `description`, `tags`, `defaultAccountHeadId`, and the update `concurrencyStamp`. They no longer accept code or effective dates. Creation generates a unique internal code from the complete category ID and has no date window; editing preserves existing code and date metadata. Existing legacy category date windows still govern transactions. Default-head changes remain rejected once a category is referenced by transactions or Fee Heads.
+The previous simplification migration remains historical rollout evidence:
 
 Deploy FE and BE together after applying `20260909183000_SimplifyAccountHeads`. The migration archives the seven removed Account Head columns in `ExtraProperties.LegacyAccountHeadSettings20260909`, then drops those columns and the code index; it preserves IDs, name uniqueness, category/bank links, and transaction records. Rollback restores archived values; heads created after migration receive ID-based codes, INR, posting enabled, and an unrestricted start date. Old control/non-posting/date restrictions no longer determine head eligibility. This is the requested simplification of master configuration; it does not alter transaction currency or monetary calculations. Run on a backed-up database during release coordination, with the old host stopped before schema changes.
 
@@ -108,18 +413,33 @@ Do not create a parallel curated contract tree for Finance.
 Add endpoint details here when Finance API docs need more route detail.
 Do not restore generated exports under `docs/`.
 
+## Receipt Book and audit authorization
+
+Receipt Book list/detail reads require `Finance.Settings.ReceiptBook.View`.
+Creation, editing and status changes require `.Add`; deletion requires `.Delete`.
+These checks apply in the application service, including direct service calls.
+
+Finance audit list, detail, correlation, entity, student history and student lookup
+require `Finance.Auditing.View`. Module visibility, `Finance.AuditTrail.View` and
+Collection View do not substitute for this action. Tenant and payer scope still apply.
 
 ## Fee configuration permissions
 
+Refund and Proration list endpoints (`GET /api/finance/refund-policies` and `GET /api/finance/proration-policies`) exclude Archived policies when `status` is omitted and `includeArchived` is false, matching Concession.
+An explicit `status=Archived` selects only archived policies; Draft and Active select their respective current states.
+Academic-year and search filters apply before counting and pagination, so archive badges and list totals reflect the same scoped records.
+Existing archive and unarchive endpoints retain lifecycle guards and version history; unarchive restores Draft.
+Application regression coverage: `RefundProrationPolicyArchiveFiltering_Tests.cs` under `test/ShikshaMitra.Application.Tests/Finance/Policies`.
+
 Fee Structure and each of the four policy configuration families expose exactly three actions: `View`, `Add`, and `Delete`.
 
-| Action | Fee Structure | Collection, Concession, Refund and Proration policies |
-|---|---|---|
-| View | Lists, details, context, readiness review | Lists, detail, version/audit history, simulation |
-| Add | Create, edit/PATCH, publish and create revision | Create, edit, activate, clone, restore and manage attachments |
-| Delete | Delete an unused draft | Archive/delete where the existing endpoint supports it |
+| Action | Fee Structure                                   | Collection, Concession, Refund and Proration policies         |
+| ------ | ----------------------------------------------- | ------------------------------------------------------------- |
+| View   | Lists, details, context, readiness review       | Lists, detail, version/audit history, simulation              |
+| Add    | Create, edit/PATCH, publish and create revision | Create, edit, activate, clone, restore and manage attachments |
+| Delete | Delete an unused draft                          | Archive/delete where the existing endpoint supports it        |
 
-Canonical roots are `Finance.Settings.FeeStructure` and `Finance.Policies.{CollectionPolicy,ConcessionPolicy,RefundPolicy,ProrationPolicy}`. Menu/module visibility grants do not authorize these API actions. Structure attachment changes require both structure Add and the changed policy family's Add. Context capability flags named `edit` and `publish` both derive from structure Add.
+Canonical roots are `Finance.Settings.FeeStructure` and `Finance.Policies.{CollectionPolicy,ConcessionPolicy,RefundPolicy,ProrationPolicy}`. Menu/module visibility grants do not authorize these API actions. Structure attachment changes require both structure Add and the supported changed policy family's Add. Proration is not a supported structure attachment; its attachment-impact endpoint is retired. Context capability flags named `edit` and `publish` both derive from structure Add.
 
 Student overrides, exception windows, and charge-period overrides retain their existing permission keys and grants.
 The target retires waiver approval and threshold permissions, replacing them with one dedicated Fee Collection apply-waiver permission; configuration Add does not grant authority to reduce receivables.
@@ -128,4 +448,321 @@ Deployment: rebuild/restart the API so its permission definitions and permission
 
 ## Student fee assignment
 
+The existing student `by-scope` lookup accepts optional `search`, `gender`, `rollNoFrom`,
+`rollNoTo`, `hasFeeStructureAssignment`, `chargeCategoryId`, `alreadyCharged`, `skipCount`
+and `maxResultCount` parameters. Pagination is opt-in for compatibility with callers that
+need the complete scoped audience. Charged status means Pending or Approved charges in
+the selected category and academic year. Requests for charge metadata or charged-status
+filtering require Charges View, Add, or Update as well as the endpoint's student access.
+Charge creation still requires a fee structure assignment; these filters do not relax
+that audience rule. Student results retain tenant and current-user academic scope.
+
 The current preview/commit, year-scoped history, permission and migration contracts are documented in [Student fee assignment](./references/student-fee-assignment.md). That contract supersedes older assignment descriptions that require concession configuration.
+
+## Category and bank routing
+
+See [Income and expense routing](./references/income-expense-routing.md) for the current category selection, school bank, recognition, historical compatibility, and validation contracts.
+
+## Separate Income and Expenses registers
+
+GET `/api/accounts/register` accepts direction=income|expense, academicYearId, optional month/year/categoryId/source/search and page/pageSize.
+GET `/api/accounts/register/{source}/{id}` accepts academicYearId and enforces the matching Accounts View permission plus year/student scope.
+POST `/api/incomes` and `/api/expenses` accept optional bankAccountId, counterparty, paymentReference and UUID idempotencyKey alongside the existing manual fields.
+Financial routing lookups add income-entry and expense-entry operations using the exact owning Add grant.
+See [the workspace contract](./references/income-expense-workspaces.md) for field meanings, lifecycle, compatibility and integrity.
+
+## Configuration name validation and cloning
+
+Fee Category and all four Finance policy types trim names, collapse Unicode whitespace, and compare names case-insensitively within the current tenant and academic year, including archived records. Duplicate errors carry `Name` and `Location` (`Current` or `Archived`); Fee Category additionally carries `CorrectiveAction`. Archived conflicts direct users to restore the record or choose another name. Existing records and historical snapshots are not rewritten.
+
+Cloning without an explicit name selects the first available `Copy`, `Copy 2`, etc. name across Current and Archived policies, bounded to the 128-character name limit. Explicit names still undergo duplicate validation. Copies remain Draft and nondefault; cloning the default leaves the source default unchanged. Automatically generated policy codes use random GUID material rather than truncated sequential GUID prefixes, which can repeat across clones. Existing database unique indexes remain the final exact-name/code collision guard. Legacy normalization collisions must be reconciled before introducing a database normalized-key index.
+
+Payment Term create and draft-update requests trim `name` before required/minimum/maximum-length validation and save the trimmed display name. Name comparisons use `FinanceName.Equals` (collapsed whitespace, case-insensitive) across all boards and archived/current terms in the current tenant and academic year, excluding the edited term itself. Duplicate names return `Finance:PaymentTerm:000042` with `Name`; duplicate generated codes retain `Finance:PaymentTerm:000023`. Academic-year cloning also skips name conflicts, reporting each skipped source code in `conflictedCodes`. Create/update and target-year bulk-clone name checks and persistence share a tenant/year PostgreSQL transaction advisory lock through commit or rollback. These commands require an actual Read Committed transaction; a stricter ambient snapshot is rejected rather than permitting a stale duplicate comparison. Existing stored names and version snapshots remain unchanged. Concession policy percentages accept at most two decimal places; excessive precision is rejected rather than rounded silently (`Finance:ConcessionPolicy:010027`).
+
+Concession Apply On retains the canonical enum contract: `0 = AllOutstanding`, `1 = CurrentInstallment`, `2 = FutureInstallments`, `3 = AllFees`. DTOs expose the symbolic strings; immutable historical snapshot JSON retains its original numeric enum representation. History presentation must compare canonical enum values before displaying labels.
+
+## Bank transfer evidence
+
+Bank transfer collection details retain `transactionReferenceNumber`, `transferDate` (the entered calendar date), and `accountHolderName` in the original payment instrument JSON. Collection also accepts the existing `transactionId` input alias; a nonblank canonical reference takes precedence. The selected receiving bank remains the validated payment-level `bankAccountId`, with a masked `bankLabel` snapshot captured during collection.
+
+Reconciliation list rows expose the stored evidence in `instrumentDetails` and the original receiving bank through `bankAccountId` and `bankLabel`. Receipt detail responses expose the same evidence in `paymentInstruments[]`, including method, amount, collection timestamp, bank snapshot and instrument details. Provisional and receipt PDFs show the bank transfer reference, transfer date, account holder and masked receiving bank for fee, charge and combined receipts. Verification reads the original payment instrument rather than recreating its evidence.
+
+Missing historical transfer dates and account holder names remain unknown; receipt or collection dates must not be substituted for the entered transfer date. Previously discarded references or names cannot be recovered without independent evidence. This change uses the existing JSONB column and requires no schema migration or automatic backfill. Receipt PDF cache version `v3` regenerates earlier cached documents from the available original evidence without altering amounts, payment status or receipt numbering. Existing tenant, academic scope and action permissions continue to apply.
+
+## Family mobile Finance
+
+Dedicated read-only charge routes below use `Charge.Id` (never the batch request ID), and require the exact existing `Finance.Fees.Charges.View` action plus a live child/year association:
+
+| GET suffix | Response |
+|---|---|
+| `charges/page` | `{studentId,academicYearId,currency,asOf,items,totalCount,currentPage,pageSize,summary,counts,categories}` |
+| `charges/{chargeId}` | `{studentId,academicYearId,currency,asOf,charge}` |
+| `charges/{chargeId}/payments` | `{studentId,academicYearId,chargeLineId,currency,items,totalCount,currentPage,pageSize}` |
+
+The page supports `filter=all|open|settled|voided`, trimmed search (maximum 100 characters) over name/category/public reason, and optional `chargeCategoryId`. Order is applied timestamp descending then charge ID descending. Counts and summary apply search/category before the selected tab/page; summary excludes voided obligations. Categories come from the entire visible approved/voided child/year set. The `charges` array uses the same canonical charge-line projection as the page, including approved and voided visible lines.
+
+Charge amounts are distinct fixed two-decimal strings: `amount`, `collectedAmount`, `verifiedPaidAmount`, `reconciliationAmount`, `waivedAmount`, `outstandingAmount`, `refundedAmount`. Due date and overdue checks use Asia/Kolkata calendar dates; event instants are UTC. Detail includes public reason, category, approval/void timestamps and approval/payment statuses, without staff identities or private notes/reasons. Missing category display text is `Category unavailable`.
+
+Payment history returns the real charge allocation ID, owned transaction ID, allocation amount, canonical payment methods and transaction status, ordered by payment timestamp then allocation ID descending. Receipt metadata additionally requires `Finance.Fees.InvoiceReceipt.View`: only actual owned Charge/Combined documents appear, with whole-document totals and owned replacement links; fee-only sibling documents are excluded. PDF downloads retain the existing receipt endpoint and grant. Refund references additionally require `Finance.Fees.Refund.View`; only processed/reversed owned charge outcomes appear, without beneficiary fields. Aggregate refunded amounts remain visible with Charges View. No receipt or source provenance is invented.
+
+Family monetary responses identify `currency: "INR"` and encode amounts as decimal strings. Concession and adjustment preview fingerprints normalize equivalent decimal scales before hashing. Clients must refresh older previews after this normalization; existing command receipts continue matching their original submitted payloads for replay.
+
+Root: `/api/mobile/v1/finance/students/{studentId}`. Reads return the standard
+`{success:true,data:...}` envelope; PDF routes return `application/pdf`.
+
+Family refund eligibility (`refunds/eligibility`) adds `formRules` from the pinned assigned policy: amount mode, manual-edit capability, paid-charge/late-fee inclusion and optional configured rate/amount. Eligible rows carry their original allocation/payment identifiers, installment label and payment date. Parent refund lines accept exactly one of `dueFeeId`, `chargeId` or `lateFeeDueFeeId`. Each preview/create remains bound to one original payment and at most 100 allocations. Full-only requests require every eligible source from that payment; manual full-only requests cannot reduce individual amounts. Decimal-string money, guardian/tenant/child/year checks, existing permissions, preview fingerprints and durable idempotency remain in force. New null source identifiers are omitted from serialization to preserve existing fee-only command hashes. Preview requested/policy-calculated amounts are prepared on the server; submission creates a request for staff review and does not execute a payout. Staff endpoints and shared policy calculations are unchanged.
+`academicYearId` is required except for `context`. Charges use `page=1&pageSize=20` (maximum 100), returning `currentPage` and `pageSize`.
+Payment, receipt and request GETs use `skipCount=0&maxResultCount=20` (maximum 100) and return `{items,totalCount,currency}`; concession request pages additionally return `currentPage,pageSize,totalPages`. Money is an INR
+fixed two-decimal string; due dates are date-only, activity timestamps UTC instants.
+
+| GET suffix | Existing permission | Result |
+|---|---|---|
+| `context` | `Finance.Fees.FeeCollections.View` | Linked student, enrolled years, selected year, section/action capabilities and disabled reasons |
+| `overview`, `installments`, `payments`, `transactions` | `Finance.Fees.FeeCollections.View` | Collection-account summary, obligations and payment history; embedded receipt details additionally require Receipts View; transaction refund/return rows additionally require Refund View |
+| `charges` | `Finance.Fees.Charges.View` | Detailed approved/voided child/year charges |
+| `receipts`, `receipts/{receiptId}/pdf` | `Finance.Fees.InvoiceReceipt.View` | Receipts and PDF after tenant/student/year ownership checks |
+| `requests?kind=concession` | `Finance.Fees.Concession.View` | Authorized concession history |
+| `requests?kind=refund` | `Finance.Fees.Refund.View` | Authorized refund history |
+| `requests?kind=adjustment` | `Finance.Fees.Adjustment.View` | Authorized adjustment history |
+| `requests` without kind | `Finance.Fees.FeeCollections.View` plus at least one request-family View | Only permitted request families; pagination/count excludes denied families |
+| `statement/pdf` | `Finance.Fees.FeeCollections.View` | Official statement of the collection-account summary, installments and payment history |
+
+Every call reloads persisted portal association and identity through `StudentPortalAccessService`.
+Existing Finance grants authorize actions; class assignments or a Parent/Student role name alone never establish a family association.
+Inactive/departed students, revoked links, revoked enrollments, foreign children and years fail closed.
+Legacy year fallback is allowed only without enrollment history.
+A student-self identity stays read-only even when also linked as guardian.
+Parent commands additionally require a persisted guardian association and the exact existing write action below.
+
+`MobileFinancePermissions` references existing constants and is not a new permission catalogue or a runtime fallback.
+Old `Finance.SelfService.*` entries/grants remain untouched, but no longer authorize these routes.
+Existing role grants and explicit user denials are not reseeded or rewritten.
+The context requires Collections View and adds `canViewCharges`, `canViewReceipts`, `canViewConcessions`, `canViewRefunds` and `canViewAdjustments`.
+Request capabilities require the corresponding View and write grants; refund creation also requires Submit.
+The overview/statement is the collection-account financial summary (including charge, concession and refund totals); detailed feature lists require their separate View grant.
+Deploy this backend before the companion mobile update, whose missing section capabilities fail closed.
+
+The overview response always includes a non-null `feeOverview` object with the web
+Fee Details names below. Every value is a fixed two-decimal string; absent amounts
+are `"0.00"`, never null. The unpublished v1 contract is replaced directly with canonical
+web names; there are no compatibility aliases or v2 endpoint. The companion mobile client must use this contract.
+
+| Field | Principal meaning |
+|---|---|
+| `totalFee` | Original annual demand across all owned year dues, including future installments |
+| `netFee` | Annual principal after concessions and adjustment credits |
+| `paidFee` | Retained principal applied to net fees, capped per due; excludes refunds and excess |
+| `pendingFee` | Outstanding principal only for bills generated as of the server clock |
+| `concessionAmount` | Applied principal concessions |
+| `overdueFee` | Outstanding principal meeting the shared generated-bill overdue rule |
+| `reconciliationAmount` | Principal FeeCollectionRecord amounts for owned child/year InReconciliation metadata and year fee heads |
+| `grossPaidAmount` | Gross payments recorded on principal dues |
+| `refundedAmount` | Processed principal refunds recorded on dues |
+| `overpaymentAmount` | Retained payment above net principal |
+| `adjustmentCreditAmount` | Noncash principal adjustment credits |
+
+This projection shares annual principal calculation with staff Fee Details without calling
+a staff API. The existing persisted family association and enrolled-year guard remains mandatory.
+Reconciliation is separate information; provisional allocations already reduce outstanding.
+Overview no longer exposes `billedAmount`, `verifiedPaidAmount`, `pendingVerificationAmount`,
+`outstandingAmount`, or flat concession/adjustment/refund aliases.
+Additional charges and late fees remain separate. `chargeOutstandingAmount` covers
+ad hoc charges only; it is not the web `pendingCharges`, which also includes late fees.
+Statement summary labels and amounts use the canonical fee overview and show extra charges separately.
+
+The mobile Fees card also consumes additive two-decimal overview strings `dueNowAmount`
+(generated-bill pending principal minus overdue principal) and `remainingAmount`
+(generated-bill pending principal plus future unbilled outstanding). These exclude charges
+and late fees. Deploy these server fields before the updated mobile Fees screen; that screen
+rejects a missing partition rather than calculating financial amounts on the device.
+Installments expose additive `scheduleStatus`: unbilled Pending/Partial rows display Upcoming,
+while Paid and InReconciliation retain their canonical payment/clearance status. Existing
+`status` remains unchanged.
+
+The existing payments list includes `paymentSummary` with exact `studentId`,
+`academicYearId`, decimal-string `paidAmount`, `successfulPaymentCount` and nullable
+`latestPaymentDate`. It covers the full selected academic year before pagination or
+status filtering. Only Paid transactions count; amounts use their validated decimal
+payment-method evidence, including principal/charge components of the transaction.
+This is successful-payment history, not retained principal after refunds. InReconciliation
+and Reversed transactions remain visible under their actual list statuses but are excluded
+from this summary. Receipt visibility still requires its independent existing grant.
+
+`GET /api/mobile/v1/finance/students/{studentId}/transactions?academicYearId={yearId}&skipCount=0&maxResultCount=20`
+returns the standard result envelope containing `{items,totalCount,currency,paymentSummary}`.
+It requires Collection View and the current persisted tenant/child/enrolled-year association.
+Offsets must be nonnegative, page size is 1-100, and offset plus size must fit a signed 32-bit integer.
+Each source contributes at most offset plus size candidates; counts cover the complete authorized union.
+Ordering is `occurredAt` descending followed by `transactionId` ordinal ascending, with pagination after merging.
+
+| Transaction field | Contract |
+|---|---|
+| `transactionId` | Stable string: `payment:{collectionGuid}`, `refund:{settlementGuid}`, or `refundReturn:{accountingEntryGuid}`; GUIDs use lowercase hyphenated form |
+| `kind`, `direction` | `payment` / `in`, `refund` / `out`, or `refundReturn` / `in` |
+| `date`, `occurredAt` | Source calendar date (`yyyy-MM-dd`) and authoritative event instant (UTC ISO timestamp) |
+| `amount`, `currency` | Positive fixed two-decimal string and `INR` |
+| `status` | Existing collection/settlement status; recorded returns use `Reversed` |
+| `paymentMethods`, `receipts` | Method names and existing receipt references; receipt references require the independent Receipts View action |
+| `paymentId` | Collection GUID for payment rows; null for refund and return rows |
+
+Fee, charge and combined collections each appear once by collection metadata ID, with validated decimal payment-method evidence.
+Collection calendar dates and instants retain the existing payment history's creation timestamp semantics.
+Zero-value metadata is omitted from this positive-amount cash feed; `/payments` retains its existing contract.
+Refund View independently controls inclusion of both payout and return rows and their contribution to `totalCount`.
+Immutable refund accounting postings are authoritative, including historical payouts whose current settlement status is Reversed.
+Payout `date` comes from the recorded settlement date where available, otherwise its immutable posting date; `occurredAt` is the immutable posting timestamp.
+Return `date` and `occurredAt` come from the correction posting.
+For older payouts with no outgoing accounting posting, only positive Processed/Reversed settlements with their own nondefault settlement date and completion timestamp qualify; completion time supplies `occurredAt`.
+The settlement and its accounting posting never produce duplicate payout rows.
+Request approvals, concessions, noncash adjustments, pending/failed payout attempts, aggregate-only legacy refund amounts and undated legacy records do not establish a transaction.
+Legacy reversals lacking a correction posting do not create an invented incoming return entry.
+Refund rows have no receipt references because this endpoint has no authentic refund PDF route.
+No beneficiary, bank account, external reference, private reason or payout evidence is exposed.
+The annual `paymentSummary` remains gross successful collection history, independent of feed page and refund permission; refunds and returns never subtract from it.
+
+`requests?kind=concession|refund` includes `requestSummary` with `studentId`,
+`academicYearId`, `kind`, decimal-string `totalAmount` and `completedRequestCount`.
+Concession total is the applied owned-year DueFee concession ledger, including its
+reversals; the request-count field is unused (zero) for that kind. Refund total is the
+retained processed payout (`ProcessedAmount - ReversedAmount`), while completed count
+includes only fully Processed requests with positive payout and no reversal. Pending
+approval amounts never count as refunded. Summaries precede pagination and retain each
+endpoint's existing permission, tenant, enrolled-year and family-association checks.
+Mixed-kind/adjustment requests and receipts responses have no added summary. Deploy
+these backend additions before the companion Concession/Refunds/Payment history client.
+
+Principal amounts come from decimal DueFee ledger values; transaction amounts come
+from decimal PaymentMethodRecord splits. Legacy charge/receipt storage is converted
+per row at the boundary, never summed through the legacy double DTOs. Stored
+outstanding already reflects provisional allocations; pending verification is shown
+separately. Future scheduled amount is remaining principal before demand generation.
+LateFeeAmount is outstanding policy-assessed late fee; ChargeOutstandingAmount is
+outstanding approved ad hoc charge. Neither is hidden inside billed principal.
+Concession and noncash adjustment are principal credits. WaiverAmount covers charge
+and late-fee waiver evidence. `feeOverview.refundedAmount` is refunded principal.
+
+Canonical family read contracts use the web facts and retain only necessary family extensions:
+
+| Surface | Canonical identity, amounts and metadata |
+|---|---|
+| Installments | `dueFeeId`, nullable actual schedule `installmentId`, `installmentLabel`, `feeHeadId`, `feeHeadName`, dates, `total`, retained applied `paid`, `due`, `reconciliationAmount`, `concessionAmount`, `refundAmount`, `status`, `currency` |
+| Charges | `chargeLineId` is the owned student line; `chargeId` is its batch request, nullable for absent legacy evidence. `chargeName`, `purposeDescription`, `chargeCategoryId`, `categoryName`, dates, approval `status`, `paymentStatus`, `isOverdue`, `amount`, `collectedAmount`, `verifiedPaidAmount`, `reconciliationAmount`, `waivedAmount`, `outstandingAmount`, `refundedAmount`, `currency` |
+| Charge allocations | `sourceAllocationId`, `paymentId`, `date`, line `amountPaid`, `status`, `paymentMethods`, `refundedAmount`, `receipts`, `refunds`, `currency`. Refund refs use `id,status,processedAmount`; this amount is processed less reversals |
+| Payments | `paymentId`, `receiptNumber`, `date`, `amount`, `status`, `paymentMethods`, `receipts`, `currency`. Receipt refs use `receiptId,receiptNumber,scope,hasPdf` plus kind/verification and owned linked receipt IDs |
+| Receipts | `id,receiptNumber,receiptKind,receiptScope,verificationStatus,totalPaidAmount,receiptDate,creationTime,feeCollectionTransactionId,hasPdf`, owned linked final/provisional IDs and numbers, `currency` |
+| Concession requests | Typed `kind=concession`, `id`, child/year, `concessionTypeName`, `concessionAmount`, `requestedConcessionAmount`, `approvedConcessionAmount`, `createdAt`, `status,statusName,concurrencyStamp,availableActions`, creator-only `remarks` |
+| Refund requests/results | Typed `kind=refund`, `id,voucherNumber,totalAmount,calculatedAmount,approvedAmount,processedAmount,reversedAmount,creationTime,submittedAt,status,availableActions`, creator-only `reason`, original receipt identity/number, `currency` |
+
+`collectedAmount` includes verified and pending allocations; reconciliation is a subset, not a second deduction from due. Charge allocation `amountPaid` is never the whole transaction total. Refund requested base, policy-calculated, approved, processed and reversed amounts remain separate. Mixed request pages serialize explicit derived concession/refund/adjustment records with a `kind` discriminator; they have no generic `title,amount,date` aliases.
+
+Concession eligibility accepts optional `studentFeeStructureId`. Its typed context follows web `ConcessionRequestContextDto`: assignment options, selection flag, blockers, selected assignment's `feeHeads`, `eligibleDueFees`, `concessionPolicies` and `concessionTypes`. Only the exact child's/year's assigned current active policy is offered. Due rows use `installmentLabel,originalAmount,eligibleConcessionAmount`; types use `concessionTypeId`, document requirements `documentName`. No selection returns nullable `studentFeeStructureId` and requires explicit assignment choice when multiple assignments exist. Family create/edit/submit/upload capabilities are extensions.
+Concession preview uses `totalConcessionAmount,concessionPolicyName,totalEligibleBase,netPayable` and the preview fingerprint. Owner detail/save/action results use `concessionRequestId,totalRequestedConcessionAmount,totalApprovedConcessionAmount,totalReversedConcessionAmount,netApprovedConcessionAmount,submittedDocuments` with canonical web fields, decimal strings and family-only available actions. Document downloads additionally require ViewDocument; no staff approval/actor projection is exposed.
+Concession type options and owner request details include nullable `benefitBlocker` with `code,message,blockingRequestId,blockingStatus`. A Pending, Approved or PartiallyReversed request for the same student, academic year and concession type blocks another benefit; detail excludes the current request. A blocker removes draft edit/submit actions while leaving permitted cancellation available. These hints supplement the existing server-side benefit lock and validation; the typed eligibility, preview, document and monetary fields remain available. Submit uses `concurrencyStamp`, while cancellation uses `requestConcurrencyStamp`; both preserve idempotent replay.
+Refund eligibility follows web `RefundEligibilityDto`: `refundPolicyName,allowedPayoutMethods,totalRefundable,receipts[receiptId,...],feeHeads[feeHeadId,feeHeadName,totalPaid,totalRefunded,totalRefundable,months[dueFeeId,sourceAllocationId,sourceReceiptId,receiptNumber,month,year,total,paid,refunded,refundable]]`. Supported family commands remain fee-allocation based. Preview follows `FeeRefundPreviewDto` including `requestedAmount,maximumAllowedAmount,settledPaidAmount,priorProcessedRefund,activeReservation,deductionAmount,capAdjustment,isAllowed,reasons` plus `previewFingerprint`. Numeric enums retain their existing wire identity; money always uses invariant two-decimal strings.
+
+Request history includes submitted staff-created requests and the current actor's
+drafts. Other people's drafts, evidence, payout beneficiaries, internal notes and
+rejection/approval commentary are excluded. Own draft concessions expose actions
+only to the owning guardian with each exact edit, submit or cancel grant. Receipt PDFs reuse the official
+receipt generator directly after ownership checks; no staff API bypass is added.
+Statements use the same overview, installment and payment projection, show the academic year,
+INR, as-of date and provisional-payment distinction, and create no financial writes.
+
+Family command contracts live in `Application.Contracts/Finance/Mobile`; each group
+uses the same student/year root above and the standard response envelope.
+
+| Method / suffix | Existing permission | Behavior |
+|---|---|---|
+| GET `concessions/eligibility`, GET `concessions/{requestId}` | `Finance.Fees.Concession.View` | Child-assigned policy/form, owner-only detail; eligibility includes create/edit/submit/upload capabilities |
+| POST `concessions/preview` | Concession View plus one of Add/Edit/Submit | Canonical preview; no financial mutation |
+| POST `concessions/drafts` | `Finance.Fees.Concession.Add` | Own draft, nested source validation and idempotency |
+| PUT `concessions/{requestId}` | `Finance.Fees.Concession.Edit` | Own draft, concurrency stamp and current state |
+| POST `concessions/{requestId}/submit` | `Finance.Fees.Concession.Submit` | Own request, reviewed preview fingerprint, concurrency and idempotency |
+| POST `concessions/{requestId}/cancel` | `Finance.Fees.Concession.Cancel` | Own request cancellation, reason, concurrency and idempotency |
+| POST `concessions/documents/{concessionTypeId}/{documentId}` | `Finance.Fees.Concession.UploadDocument` | Requirement/signature/size validated staged upload (10 MiB hard cap) |
+| GET `concessions/{requestId}/documents/{documentId}` | `Finance.Fees.Concession.ViewDocument` | Exact creator/child/year evidence download |
+| GET `refunds/eligibility`, POST `refunds/preview` | `Finance.Fees.Refund.Add` | Eligible settled receipt/allocation IDs, assigned policy and canonical preview |
+| POST `refunds` | `Finance.Fees.Refund.Add` and `.Submit` | Beneficiary validation, fingerprint and pending review |
+| GET `adjustments/eligibility`, POST `adjustments/preview`, POST `adjustments` | `Finance.Fees.Adjustment.Add` | Exact child/year sources, canonical preview and pending noncash review |
+| GET `activity`, GET `notifications` | `Finance.Fees.FeeCollections.View` | Safe status events filtered by each feature's View; `unreadOnly=true` supported |
+| POST `notifications/{eventId}/read` | `Finance.Fees.FeeCollections.View` and visibility of that event | Per-user marker for an event in this exact child/year |
+
+Financial mutations require a stable nonempty `idempotencyKey` (maximum 100
+characters); reuse the key and original payload after an unknown outcome. Changed
+payloads do not reuse a key. Concession edits and actions include the current
+`concurrencyStamp`; cancellation uses `requestConcurrencyStamp`. Submission and refund/adjustment creation include the server
+`previewFingerprint`. Parent-created submissions always wait for staff review,
+including when the guardian also has administrator permissions. Source receipt,
+allocation, due, policy, type and document IDs are checked against the authorized
+child/year and current workflow state. Payout references, school bank choices,
+staff approval fields and caller-calculated final amounts are not trusted inputs.
+
+Activity and notification content is a fixed safe status projection over durable
+Finance audit events; private audit payloads and evidence are excluded. Per-user
+read markers deduplicate by event identity and survive reloads. Marking a status
+message read does not mutate financial history. There is no push delivery or
+scheduled reminder worker in this surface.
+A missing or incomplete decimal payment-method split does not become a zero payment. `Finance:SelfService:PaymentEvidenceIncomplete` fails the affected overview/history/statement and directs the caller to school Finance for reconciliation; the legacy header is used only to check evidence completeness.
+
+## Bank account activity
+
+The read-only bank activity family requires `Finance.Accounts.Settings.BankAccount.View` and at least one exact operational View grant.
+Bank settings View alone returns 403 for these operational reads; masked settings remain available from the existing bank list.
+
+| Method | Path | Contract |
+|---|---|---|
+| GET | `/api/bank-accounts/{id}/activity` | `BankActivityQuery` to `BankActivityPage` |
+| GET | `/api/bank-accounts/{id}/deposits` | Same query, deposit panel |
+| GET | `/api/bank-accounts/{id}/activity/{movementKey}?academicYearId={year}` | Stable scoped movement to `BankActivityDetail`; owning source View is checked before detail enrichment |
+| POST | `/api/bank-accounts/{id}/activity/export` | `{query,format:'excel'|'pdf',columns:[{id,label}]}` to XLSX/PDF stream |
+
+Income/collection slices require `Finance.Accounts.IncomeTracking.View`, expense/refund slices require `Finance.Accounts.ExpenseTracking.View`, and cash-credit/deposit slices require `Finance.Accounts.CashManagement.View`.
+Collection/refund source opening and details additionally require their existing receipt/refund View authority.
+Capabilities require the destination's View plus Add/Deposit grant and a currently active/effective account.
+No permission definitions, grants or seed data are added.
+
+The query requires `academicYearId`; optional filters are offset-aware half-open `from`/`toExclusive`, direction, source, shared numeric payment method, category, recognition status, global search, and allowlisted shared table filters/sort.
+Paging requires page >= 1 and page size 1..100; search is limited to 100 characters.
+The default window starts at the selected academic-year school-calendar start and ends after today in the India calendar.
+Year ownership is independent of movement date, allowing historical-year cash to be credited later.
+`BankActivityRecognitionStatus` is Recorded/Pending/Reversed/Unverified; independent `BankActivityConfirmationStatus` is Unavailable/CreditConfirmed/InTransit.
+Pending incoming includes provisional noncash payments only; outstanding cash transit is separate.
+Account numbers, IFSC, UPI and payment references are masked; creator labels remain absent when unavailable.
+
+All rows, counts, totals, method breakdowns, details and exports preserve original student/admission-account scope.
+Coverage is explicitly limited to visible recorded activity; no bank balance or excluded amount/count is inferred.
+Mixed-scope cash batches expose individual authorized source shares only.
+Batch evidence downloads are deliberately unavailable from this aggregate detail because a source file can contain inaccessible shares; the existing Cash Management endpoint retains its own authorization.
+
+Exports read all matching rows in the same repeatable-read snapshot, ignoring table page selection.
+More than 5000 matching rows fails with `Finance:BankActivity:ExportLimit`; no truncation or page-only export is presented as complete.
+Unsupported queries fail with `Finance:BankActivity:InvalidQuery`.
+The read adapter uses PostgreSQL and fails explicitly on unsupported providers rather than silently loading history into memory.
+
+
+## Collection and charge table search
+
+`GET /api/fee-collections` applies its existing search rules to student names, roll numbers and GR numbers before counting and paging.
+Multiple search terms may combine name and GR tokens; tenant, academic scope and student access predicates still apply.
+
+`GET /api/charges` accepts the optional `filters` JSON query parameter and forwards it to the existing allowlisted charge column-filter parser.
+The same criteria apply to list totals, lifecycle counts and paging; invalid criteria retain the parser’s existing validation behavior.
+
+
+### Finance settings table filters (2026-10-30)
+
+The Fee Structure metadata, Concession Type, Charge Category, Income Category, Expense Category and Bank Account GET lists accept optional `filters` JSON, using the same column criteria serialized by their Finance tables. Criteria apply before filtered totals and pagination; same-column alternatives use OR and different columns use AND. Invalid fields, shapes, operators and enum values raise validation errors. Existing scope, tenant, academic-year, status and permission rules remain in force.
+
+Bank account number, IFSC and UPI header criteria match the masked table values; hidden bank fragments are not searchable through masked headers. Concession document criteria match document names. Fee Structure board/medium and configured-class criteria match their displayed text, including the configured/total fraction. Display-only mappings require materializing the complete authorized candidate set before returning matching IDs for count and pagination; production-scale performance requires separate measurement.
+
+Receipt and reconciliation list header filters: `GET /api/v1/fee-receipts` and `GET /api/v1/finance/reconciliations` accept optional serialized `filters` with the existing Finance table operators. Receipt fields cover displayed identity/kind/method/verification/roll, paid amount and date; the six reconciliation methods expose their displayed student/academic/instrument/status/amount/date fields. Method-specific allowlists reject unsupported or malformed criteria, including empty-result searches. Header filters intersect the existing tenant, student/applicant, academic context, month/status and global search scopes before count/page. Bank Transfer account-holder and Credit/Debit Card holder/digit criteria match the table’s displayed dash for missing values; explicitly empty holder text remains blank, and card digits remain masked. Receipt display-column filters read lightweight authorized keys before count/page and hydrate only the selected page. Other filtered requests may still materialize complete authorized candidates. There is no first-100 cap; filtered-request cost still scales with candidate volume, and production load is not verified.
+
+The receipt read-index migration requires PostgreSQL `pg_trgm` for substring search indexes. Allow the extension before running migrations on managed PostgreSQL services that restrict extensions (for Azure Database for PostgreSQL Flexible Server, add `pg_trgm` to `azure.extensions`). The migration does not change receipt numbers, amounts, scope, or PDF content.
+
+Fee Head and Receipt Book list endpoints accept an optional appended `filters` query parameter and forward it unchanged with existing year/category/search/paging context. Their allowlists match displayed text, numeric ranges and active-state values; malformed criteria fail before an empty result. Header filtering counts the complete authorized match before paging, while ordinary lists retain provider pagination.
+Fee Head and Receipt Book name search trims surrounding whitespace and ignores case; it remains limited to the existing name field.
+Adjustment applications add `Filters` alongside existing global `Filter`; the query intersects tenant, scoped student IDs and year/board/medium/class/division before status counts and rows. Search preserves voucher/reason and includes displayed identity/GR/roll/requester/amount/date/status. Text/header requests filter complete authorized candidates before count/page; ordinary requests remain provider-paged. Existing adjustment wire states are unchanged. No command or lifecycle transition is modified.
+
+## Policy list read bounds
+
+Refund Policy list filtering, display sorting (including selected fee-head and payout-method counts), deterministic ID ties and pagination execute before DTO mapping. Proration downstream-use flags project distinct policy references from fee structures and student assignments, without materializing assignment snapshots. Current-version IDs across all four policy families are resolved by exact policy/year/version keys using an ID-only projection; list and detail current-version lookups do not read historical snapshot payloads. Tenant and soft-delete filters remain active. Existing list and paged version endpoint contracts are unchanged.

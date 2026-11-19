@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
@@ -55,6 +55,7 @@ public interface IHrPolicyAssignmentAppService : IApplicationService
 	Task DeleteAsync(Guid id);
 	Task<EffectiveEmployeePoliciesDto> GetEffectivePoliciesAsync(Guid employeeId, DateTime date);
 	Task<EffectiveEmployeePoliciesDto> GetPreviewAsync(PolicyAssignmentPreviewRequestDto input);
+	Task<PolicyAssignmentResolutionPreviewDto> PreviewResolutionAsync(PolicyAssignmentResolutionPreviewRequestDto input);
 }
 
 public interface IHrPolicySafetyAppService : IApplicationService
@@ -65,7 +66,7 @@ public interface IHrPolicySafetyAppService : IApplicationService
 
 public interface IHrPolicyVersionAppService : IApplicationService
 {
-	Task<PagedResultDto<HrPolicyVersionDto>> GetListAsync(string policyType, Guid policyId, PagedAndSortedResultRequestDto input);
+	Task<PagedResultDto<HrPolicyVersionDto>> GetListAsync(string policyType, Guid policyId, PagedAndSortedResultRequestDto input, string? search = null, string? action = null);
 	Task<HrPolicyVersionDto> GetAsync(string policyType, Guid policyId, Guid versionId);
 	Task<HrPolicyVersionCompareDto> CompareAsync(string policyType, Guid policyId, Guid fromVersionId, Guid toVersionId);
 	Task<HrPolicyImpactPreviewDto> GetRestorePreviewAsync(string policyType, Guid policyId, Guid versionId);

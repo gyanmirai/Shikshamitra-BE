@@ -42,7 +42,7 @@ public class EarningComponentReader(
 			queryable = queryable.Where(x => x.Name.ToLower().Contains(term));
 		}
 
-		queryable = queryable.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name);
+		queryable = queryable.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Name).ThenBy(x => x.Id);
 
 		var totalCount = await asyncExecuter.CountAsync(queryable);
 		var items = await asyncExecuter.ToListAsync(
@@ -76,7 +76,7 @@ public class EarningComponentReader(
 		var totalCount = await asyncExecuter.CountAsync(query);
 		var items = await asyncExecuter.ToListAsync(
 			query.OrderBy(x => x.DisplayOrder)
-				.ThenBy(x => x.Name)
+				.ThenBy(x => x.Name).ThenBy(x => x.Id)
 				.Skip(input.SkipCount)
 				.Take(input.MaxResultCount));
 

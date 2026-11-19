@@ -8,10 +8,10 @@ namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
 public class FeeCategoryResponse : EntityDto<Guid>
 {
     public Guid AcademicYearId { get; set; }
-    public string Name { get; set; }
-    public string Description { get; set; }
+    public string Name { get; set; } = null!; // The response mapper populates these members after construction.
+    public string? Description { get; set; }
     public bool IsActive { get; set; }
-    public string DeactivationReason { get; set; }
+    public string? DeactivationReason { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 	public bool IsUsedInDownstream { get; set; } = false;

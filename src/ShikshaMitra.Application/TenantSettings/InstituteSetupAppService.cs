@@ -1,57 +1,32 @@
-﻿using System;
 using System.Threading.Tasks;
-using Volo.Abp.Application.Services;
-using Volo.Abp.Domain.Repositories;
-using Volo.Abp.MultiTenancy;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.TenantSettings.InitialSetup;
+using Volo.Abp;
 
 namespace ShikshaMitra.TenantSettings;
 
-public class InstituteSetupAppService(IRepository<InstituteSetupExtraProperties, Guid> instituteSetupRepository) : ApplicationService, IInstituteSetupAppService
+/// <summary>Compatibility reads; legacy callers cannot bypass validated completion.</summary>
+[Authorize]
+public class InstituteSetupAppService(IInitialSetupAppService setup) : ShikshaMitraAppService, IInstituteSetupAppService
 {
-	public async Task<InstituteSetupState> GetCurrentInstituteSetupState()
-	{
-		try
-		{
-			Guid? tenantId = CurrentTenant?.Id;
-
-			var instituteSetup = await instituteSetupRepository.FindAsync(x => x.TenantId == tenantId);
-
-			if (instituteSetup == null)
-			{
-				return InstituteSetupState.WelcomeScreen;
-			}
-			else
-			{
-				return instituteSetup.State;
-			}
-		}
-		catch (Exception ex)
-		{
-			throw new Exception("Error retrieving current institute setup state", ex);
-		}
-	}
-
-	public async Task<InstituteSetupState> UpdateInstituteSetupStateAsync(InstituteSetupState newState)
-	{
-		try
-		{
-			Guid? tenantId = CurrentTenant?.Id;
-			var instituteSetup = await instituteSetupRepository.FindAsync(x => x.TenantId == tenantId);
-			if (instituteSetup == null)
-			{
-				instituteSetup = new InstituteSetupExtraProperties(tenantId, newState);
-				await instituteSetupRepository.InsertAsync(instituteSetup, autoSave: true);
-			}
-			else
-			{
-				instituteSetup.UpdateState(newState);
-				await instituteSetupRepository.UpdateAsync(instituteSetup, autoSave: true);
-			}
-			return instituteSetup.State;
-		}
-		catch (Exception ex)
-		{
-			throw new Exception("Error updating institute setup state", ex);
-		}
-	}
+    public async Task<InstituteSetupState> GetCurrentInstituteSetupState()
+    {
+        var progress = await setup.GetAsync();
+        return progress.IsCompleted ? InstituteSetupState.SetupCompleted : progress.CurrentStep switch
+        {
+            0 => InstituteSetupState.WelcomeScreen,
+            1 => InstituteSetupState.TenantDetails,
+            _ => InstituteSetupState.AcademicSetup
+        };
+    }
+    public async Task<InstituteSetupState> UpdateInstituteSetupStateAsync(InstituteSetupState newState)
+    {
+        var current = await setup.GetAsync();
+        if (newState == InstituteSetupState.SetupCompleted)
+            await setup.CompleteAsync(new SetupConcurrencyInput { ConcurrencyStamp = current.ConcurrencyStamp });
+        else if (newState == InstituteSetupState.TenantDetails && current.CurrentStep == 0)
+            await setup.AdvanceAsync(new AdvanceSetupInput { Step = 0, ConcurrencyStamp = current.ConcurrencyStamp });
+        else throw new BusinessException(InitialSetupErrorCodes.LegacyWriteUnsupported);
+        return await GetCurrentInstituteSetupState();
+    }
 }

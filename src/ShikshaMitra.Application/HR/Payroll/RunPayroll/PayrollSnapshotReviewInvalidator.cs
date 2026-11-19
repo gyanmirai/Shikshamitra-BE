@@ -13,7 +13,7 @@ public class PayrollSnapshotReviewInvalidator(
 	IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
 	IAsyncQueryableExecuter asyncExecuter,
-	IUnitOfWorkManager unitOfWorkManager) : ITransientDependency
+	IUnitOfWorkManager unitOfWorkManager, IRepository<ShikshaMitra.HR.Payroll.SalarySlips.SalarySlip, Guid> slips) : ITransientDependency
 {
 	public async Task InvalidateUnlockedForEmployeesAsync(IEnumerable<Guid> employeeIds)
 	{
@@ -24,9 +24,11 @@ public class PayrollSnapshotReviewInvalidator(
 		}
 
 		var snapshotQuery = await payrollRunItemSnapshotRepository.GetQueryableAsync();
+		var issued = await slips.GetQueryableAsync();
 		var snapshots = await asyncExecuter.ToListAsync(snapshotQuery.Where(x =>
 			employeeIdSet.Contains(x.EmployeeId) &&
-			!x.IsLocked));
+			!x.IsLocked && !issued.Any(slip => slip.EmployeeId == x.EmployeeId && slip.MonthYear == x.MonthYear &&
+			(slip.Status == ShikshaMitra.HR.Payroll.SalarySlips.SalarySlipStatus.Finalized || slip.Status == ShikshaMitra.HR.Payroll.SalarySlips.SalarySlipStatus.Paid))));
 		if (snapshots.Count == 0)
 		{
 			return;

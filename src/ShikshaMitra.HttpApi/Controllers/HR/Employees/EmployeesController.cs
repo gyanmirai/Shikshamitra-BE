@@ -28,21 +28,18 @@ public class EmployeesController : AbpControllerBase
 	private const int MaxEmployeePageSize = 500;
 
 	private readonly IEmployeeSearchAppService _searchAppService;
-	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
-	private readonly IEmployeeAuthorizationService _authorizationService;
+	private readonly IEmployeeProfileAppService _profileAppService;
 	private readonly ICurrentEmployeeProfileAppService _currentEmployeeProfileAppService;
 	private readonly IEmployeeDashboardAppService _employeeDashboardAppService;
 
 	public EmployeesController(
 		IEmployeeSearchAppService searchAppService,
-		IEmployeePersonalInfoAppService personalInfoAppService,
-		IEmployeeAuthorizationService authorizationService,
+		IEmployeeProfileAppService profileAppService,
 		ICurrentEmployeeProfileAppService currentEmployeeProfileAppService,
 		IEmployeeDashboardAppService employeeDashboardAppService)
 	{
 		_searchAppService = searchAppService;
-		_personalInfoAppService = personalInfoAppService;
-		_authorizationService = authorizationService;
+		_profileAppService = profileAppService;
 		_currentEmployeeProfileAppService = currentEmployeeProfileAppService;
 		_employeeDashboardAppService = employeeDashboardAppService;
 	}
@@ -60,7 +57,8 @@ public class EmployeesController : AbpControllerBase
 		[FromQuery] bool? isTeaching = null,
 		[FromQuery] Guid? roleId = null,
 		[FromQuery] string? designation = null,
-		[FromQuery] string? search = null)
+		[FromQuery] string? search = null,
+		[FromQuery] Guid? standardId = null)
 	{
 		pageSize = Math.Min(pageSize, MaxEmployeePageSize);
 
@@ -72,11 +70,29 @@ public class EmployeesController : AbpControllerBase
 			IsTeaching = isTeaching,
 			RoleId = roleId,
 			MediumStageId = mediumStageId,
+			StandardId = standardId,
 			Designation = designation,
 			Search = search
 		};
 
 		return await _searchAppService.GetFilteredListAsync(input);
+	}
+
+	[HttpGet("options")]
+	[ProducesResponseType(typeof(EmployeeOptionsResponse), StatusCodes.Status200OK)]
+	public Task<EmployeeOptionsResponse> GetEmployeeOptionsAsync(
+		[FromQuery, Range(1, 1000000)] int page = 1,
+		[FromQuery, Range(1, 50)] int pageSize = 25,
+		[FromQuery] string? search = null,
+		[FromQuery] string? status = null)
+	{
+		return _searchAppService.GetOptionsAsync(new GetEmployeeListInput
+		{
+			SkipCount = (page - 1) * pageSize,
+			MaxResultCount = pageSize,
+			Search = search,
+			Status = status
+		});
 	}
 
 	/// <summary>
@@ -119,10 +135,7 @@ public class EmployeesController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public virtual async Task<EmployeeDetails> GetEmployeeByIdAsync(Guid employeeId)
 	{
-		await _authorizationService.CheckEmployeeAccessAsync(employeeId);
-
-		var employee = await _personalInfoAppService.GetWithDetailsAsync(employeeId);
-		return MapToEmployeeDetails(employee);
+		return await _profileAppService.GetAsync(employeeId);
 	}
 
 	private static EmployeeDetails MapToEmployeeDetails(EmployeeDto employee)

@@ -35,7 +35,6 @@ public class FeeStructureCoverageDto
 	public string Name { get; set; } = string.Empty;
 	public string Collection { get; set; } = "No late fee";
 	public string Concession { get; set; } = "Not eligible";
-	public string Proration { get; set; } = "Full charge";
 	public string Refund { get; set; } = "No refund policy attached";
 	public string Accounting { get; set; } = string.Empty;
 }
@@ -75,10 +74,12 @@ public class FeeStructurePolicyOptionDto
 	public string Name { get; set; } = string.Empty;
 	public int VersionNumber { get; set; }
 	public bool IsCurrent { get; set; }
+	public bool IsDefault { get; set; }
 }
 
 public class FeeStructureTermOptionDto
 {
+ public bool IsDefault { get; set; }
 	public Guid Id { get; set; }
 	public Guid VersionId { get; set; }
 	public string Name { get; set; } = string.Empty;

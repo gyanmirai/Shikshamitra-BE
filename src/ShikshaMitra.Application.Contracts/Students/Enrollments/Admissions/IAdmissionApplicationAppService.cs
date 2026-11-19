@@ -9,12 +9,23 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public interface IAdmissionApplicationAppService : IApplicationService
 {
 	Task<PagedResultDto<AdmissionApplicationDto>> GetListAsync(AdmissionApplicationListInput input);
+	Task<PagedResultDto<AdmissionPipelineItemDto>> GetPipelineAsync(AdmissionPipelineListInput input);
+	Task<AdmissionPipelineOptionsDto> GetPipelineOptionsAsync(AdmissionPipelineListInput input);
+	Task<AdmissionInquiryManagementDto> GetFollowUpsAsync(Guid id);
+	Task<AdmissionInquiryManagementDto> ScheduleFollowUpAsync(Guid id, ScheduleAdmissionInquiryFollowUpDto input);
+	Task<AdmissionInquiryManagementDto> CompleteFollowUpAsync(Guid id, Guid followUpId, CompleteAdmissionInquiryFollowUpDto input);
+	Task<AdmissionInquiryManagementDto> CancelFollowUpAsync(Guid id, Guid followUpId, CancelAdmissionInquiryFollowUpDto input);
 	Task<AdmissionApplicationDto> GetAsync(Guid id);
 	Task<AdmissionApplicationDto?> FindAsync(Guid id);
 	Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId = null);
+	Task<AdmissionApplicationDto> StartDirectRegistrationAsync(StartAdmissionDirectRegistrationDto input);
+	Task<List<AdmissionDirectFamilyMatchDto>> FindDirectRegistrationFamiliesAsync(Guid offeringId, string guardianMobile, string? guardianEmail = null);
+	Task<List<AdmissionInquiryCounsellorDto>> GetAssignableCounsellorsAsync(Guid? offeringId = null, string? filter = null);
+	Task<AdmissionApplicationDto> AssignCounsellorAsync(Guid id, AssignAdmissionApplicationCounsellorDto input);
 	Task<AdmissionApplicationWorkflowDto> GetWorkflowAsync(Guid id);
 	Task<AdmissionApplicationFormDto> GetFormAsync(Guid id);
 	Task<AdmissionApplicationFormDto> UpdateFormValuesAsync(Guid id, UpdateAdmissionApplicationFormValuesDto input);
+	Task<AdmissionApplicationFormDto> CorrectFormAsync(Guid id, CorrectAdmissionApplicationFormDto input);
 	Task<AdmissionApplicationSubmitResultDto> SubmitAsync(Guid id);
 	Task<AdmissionApplicationFormDto> ReopenFormAsync(Guid id);
 	Task<List<AdmissionFormChangeHistoryDto>> GetFormHistoryAsync(Guid id);
@@ -23,10 +34,14 @@ public interface IAdmissionApplicationAppService : IApplicationService
 	Task<AdmissionApplicationDto> ApproveAsync(Guid id, AdmissionApplicationDecisionDto input);
 	Task<AdmissionApplicationDto> RejectAsync(Guid id, AdmissionApplicationDecisionDto input);
 	Task<AdmissionApplicationDto> WaitlistAsync(Guid id, AdmissionApplicationDecisionDto input);
+	Task<AdmissionApplicationDto> EndJourneyAsync(Guid id, EndAdmissionJourneyDto input);
+	Task<AdmissionJourneyResumePreviewDto> GetResumePreviewAsync(Guid id);
+	Task<AdmissionApplicationDto> ResumeJourneyAsync(Guid id, ResumeAdmissionJourneyDto input);
 	Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input);
 	Task<AdmissionApplicationDto> AcceptOfferAsync(Guid id, AdmissionApplicationDecisionDto input);
 	Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input);
-	Task<AdmissionFinalizationPreviewDto> GetFinalizationPreviewAsync(Guid id);
+	Task<AdmissionFinalizationPreviewDto> GetFinalizationPreviewAsync(Guid id, bool forApproval = false);
+	Task<AdmissionFinalizationResultDto> ApproveAndFinalizeAsync(Guid id, ApproveAndFinalizeAdmissionApplicationDto input);
 	Task<AdmissionFinalizationResultDto> FinalizeAsync(Guid id, FinalizeAdmissionApplicationDto input);
 	[Obsolete("Admissions no longer creates operational enrollment. Use FinalizeAsync and Student Onboarding.")]
 	Task<AdmissionEnrollmentResultDto> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input);

@@ -29,15 +29,15 @@ public class ConcessionAmountAllocator_Tests
 	}
 
 	[Fact]
-	public void Minor_unit_remainder_never_exceeds_line_capacity()
+	public void Whole_rupee_remainder_never_exceeds_line_capacity()
 	{
 		var inputs = Enumerable.Range(1, 3)
-			.Select(i => new ConcessionAmountCapacity(new Guid(i, 0, 0, new byte[8]), 0.01m))
+			.Select(i => new ConcessionAmountCapacity(new Guid(i, 0, 0, new byte[8]), 1.20m))
 			.ToArray();
 
-		var result = ConcessionAmountAllocator.AllocateProportionally(inputs, 0.02m);
+		var result = ConcessionAmountAllocator.AllocateProportionally(inputs, 2m);
 
-		Assert.Equal(0.02m, result.Sum(x => x.Amount));
-		Assert.All(result, x => Assert.InRange(x.Amount, 0m, 0.01m));
+		Assert.Equal(2m, result.Sum(x => x.Amount));
+		Assert.All(result, x => Assert.InRange(x.Amount, 0m, 1m));
 	}
 }

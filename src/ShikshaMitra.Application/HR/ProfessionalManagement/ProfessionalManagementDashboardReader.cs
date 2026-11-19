@@ -16,15 +16,16 @@ public class ProfessionalManagementDashboardReader(
 	IRepository<DevelopmentPlan, Guid> developmentPlanRepository,
 	ProfessionalManagementDashboardLookupReader lookupReader,
 	ProfessionalManagementSqaaDashboardReader sqaaDashboardReader,
-	IAsyncQueryableExecuter asyncExecuter)
+	IAsyncQueryableExecuter asyncExecuter,
+    ProfessionalManagementReadScopeService readScope)
 	: ITransientDependency
 {
 	public async Task<PerformanceDashboardDto> GetDashboardAsync(DateTime today)
 	{
 		var cycleQuery = await cycleRepository.GetQueryableAsync();
-		var assignmentQuery = await assignmentRepository.GetQueryableAsync();
+		var assignmentQuery = await readScope.ApplyAsync(await assignmentRepository.GetQueryableAsync());
 		var stageQuery = await stageRepository.GetQueryableAsync();
-		var outcomeQuery = await outcomeRepository.GetQueryableAsync();
+		var outcomeQuery = (await outcomeRepository.GetQueryableAsync()).Where(x => assignmentQuery.Select(review => review.Id).Contains(x.ReviewAssignmentId));
 		var cycles = await asyncExecuter.ToListAsync(cycleQuery.Where(x =>
 			x.Status == ProfessionalReviewCycleStatus.Published ||
 			x.Status == ProfessionalReviewCycleStatus.InProgress ||
@@ -54,7 +55,7 @@ public class ProfessionalManagementDashboardReader(
 
 	public async Task<List<RatingDistributionDto>> GetRatingDistributionAsync(Guid? cycleId)
 	{
-		var query = await assignmentRepository.GetQueryableAsync();
+		var query = await readScope.ApplyAsync(await assignmentRepository.GetQueryableAsync());
 		if (cycleId.HasValue)
 		{
 			query = query.Where(x => x.CycleId == cycleId);
@@ -72,7 +73,6 @@ public class ProfessionalManagementDashboardReader(
 	{
 		var reviews = (await lookupReader.GetReviewsAsync(cycleId, null, null, null))
 			.Where(x => x.Status != ProfessionalReviewStatus.Finalized)
-			.Take(100)
 			.ToList();
 		var cycles = await lookupReader.GetCyclesByIdsAsync(reviews.Select(x => x.CycleId).Distinct().ToList());
 		var stageQuery = await stageRepository.GetQueryableAsync();
@@ -105,7 +105,8 @@ public class ProfessionalManagementDashboardReader(
 
 	public async Task<List<DevelopmentPlanDto>> GetTrainingNeedsAsync(Guid? cycleId)
 	{
-		var query = await developmentPlanRepository.GetQueryableAsync();
+		var reviews = await readScope.ApplyAsync(await assignmentRepository.GetQueryableAsync());
+        var query = (await developmentPlanRepository.GetQueryableAsync()).Where(x => reviews.Select(review => review.Id).Contains(x.ReviewAssignmentId));
 		var rows = await asyncExecuter.ToListAsync(query
 			.Where(x => x.Status != DevelopmentPlanStatus.Completed)
 			.OrderBy(x => x.TargetDate));
@@ -120,7 +121,8 @@ public class ProfessionalManagementDashboardReader(
 
 	public async Task<List<PerformanceOutcomeDto>> GetIncrementRecommendationsAsync(Guid? cycleId)
 	{
-		var query = await outcomeRepository.GetQueryableAsync();
+		var reviews = await readScope.ApplyAsync(await assignmentRepository.GetQueryableAsync());
+        var query = (await outcomeRepository.GetQueryableAsync()).Where(x => reviews.Select(review => review.Id).Contains(x.ReviewAssignmentId));
 		var outcomes = await asyncExecuter.ToListAsync(query.Where(x =>
 			x.IncrementRecommended ||
 			x.PromotionRecommended ||

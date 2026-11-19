@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,21 +13,21 @@ using Volo.Abp.DependencyInjection;
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 public class AttendancePolicyLateArrivalEvaluator(
-	IEmployeeAttendanceRepository employeeAttendanceRepository)
+	IEmployeeAttendanceRepository employeeAttendanceRepository, EmployeeShiftResolver shiftResolver)
 	: ITransientDependency
 {
 	public async Task<EmployeeAttendanceStatusType> EvaluateAsync(
 		Guid employeeId,
 		DateOnly attendanceDate,
 		AttendancePolicy policy,
-		ShiftManagement shift,
+		EmployeeWorkShift shift,
 		DateTimeOffset timeIn,
 		EmployeeAttendanceStatusType evaluatedStatus,
 		List<string> warnings,
 		IReadOnlyCollection<AttendancePolicyEvaluationPunchContext>? currentMonthPunchContext,
 		CancellationToken cancellationToken)
 	{
-		var lateMinutes = (timeIn.TimeOfDay - shift.StartTime.ToTimeSpan()).TotalMinutes;
+		var lateMinutes = (timeIn.UtcDateTime.TimeOfDay - shift.StartTime.ToTimeSpan()).TotalMinutes;
 		if (lateMinutes <= policy.GraceTime)
 		{
 			return evaluatedStatus;
@@ -47,7 +48,7 @@ public class AttendancePolicyLateArrivalEvaluator(
 		{
 			AttendancePenaltyType.DeductHalfDay => EmployeeAttendanceStatusType.HalfDayLeave,
 			AttendancePenaltyType.DeductFullDay => EmployeeAttendanceStatusType.FullDayLeave,
-			_ => (EmployeeAttendanceStatusType?)null
+			_ => (EmployeeAttendanceStatusType?) null
 		};
 
 		if (policy.PenaltyType == AttendancePenaltyType.None)
@@ -109,7 +110,7 @@ public class AttendancePolicyLateArrivalEvaluator(
 	private async Task<int> CountMonthlyLateArrivalsAsync(
 		Guid employeeId,
 		DateOnly attendanceDate,
-		ShiftManagement shift,
+		EmployeeWorkShift shift,
 		int graceTime,
 		IReadOnlyCollection<AttendancePolicyEvaluationPunchContext>? currentMonthPunchContext,
 		CancellationToken cancellationToken)
@@ -117,9 +118,9 @@ public class AttendancePolicyLateArrivalEvaluator(
 		var monthStart = new DateOnly(attendanceDate.Year, attendanceDate.Month, 1);
 		var rows = await employeeAttendanceRepository.GetListAsync(
 			x => x.EmployeeId == employeeId &&
-			     x.AttendanceDate >= monthStart &&
-			     x.AttendanceDate < attendanceDate &&
-			     x.TimeIn.HasValue,
+				 x.AttendanceDate >= monthStart &&
+				 x.AttendanceDate < attendanceDate &&
+				 x.TimeIn.HasValue,
 			cancellationToken: cancellationToken);
 
 		var currentBatchPunches = currentMonthPunchContext?
@@ -128,15 +129,21 @@ public class AttendancePolicyLateArrivalEvaluator(
 		var currentBatchDates = currentBatchPunches
 			.Select(x => x.AttendanceDate)
 			.ToHashSet();
+		var assignments = await shiftResolver.LoadAsync([employeeId], monthStart, attendanceDate);
+		bool IsLateOn(DateOnly date, DateTimeOffset punch)
+		{
+			var assignment = assignments.SingleOrDefault(x => x.Covers(date)) ?? throw new Volo.Abp.BusinessException(HRErrorCodes.ShiftAssignmentMissing, "An earlier attendance date has no work shift assignment.");
+			return IsLateArrival(punch, EmployeeShiftResolver.Snapshot(assignment), graceTime);
+		}
 		var persistedLateCount = rows.Count(x =>
-			!currentBatchDates.Contains(x.AttendanceDate) &&
-			IsLateArrival(x.TimeIn!.Value, shift, graceTime));
-		var currentBatchLateCount = currentBatchPunches.Count(x => IsLateArrival(x.TimeIn, shift, graceTime));
+				  !currentBatchDates.Contains(x.AttendanceDate) &&
+				  IsLateOn(x.AttendanceDate, x.TimeIn!.Value));
+		var currentBatchLateCount = currentBatchPunches.Count(x => IsLateOn(x.AttendanceDate, x.TimeIn));
 
 		return persistedLateCount + currentBatchLateCount;
 	}
 
-	private static bool IsLateArrival(DateTimeOffset timeIn, ShiftManagement shift, int graceTime) =>
+	private static bool IsLateArrival(DateTimeOffset timeIn, EmployeeWorkShift shift, int graceTime) =>
 		(timeIn.TimeOfDay - shift.StartTime.ToTimeSpan()).TotalMinutes > graceTime;
 
 	private static int GetStatusSeverity(EmployeeAttendanceStatusType status) => status switch

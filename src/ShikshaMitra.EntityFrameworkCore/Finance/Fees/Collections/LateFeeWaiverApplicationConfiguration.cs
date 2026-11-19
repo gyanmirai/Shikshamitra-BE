@@ -17,11 +17,17 @@ public class LateFeeWaiverApplicationConfiguration : IEntityTypeConfiguration<La
 		builder.Property(x => x.ComputedLateFeeAmount).HasColumnType("numeric(18,2)").IsRequired();
 		builder.Property(x => x.RequestedAmount).HasColumnType("numeric(18,2)").IsRequired();
 		builder.Property(x => x.EffectiveAmount).HasColumnType("numeric(18,2)").IsRequired();
+		builder.Property(x => x.IdempotencyKey).HasMaxLength(100);
 
 		builder.HasIndex(x => x.DueFeeId)
 			.HasDatabaseName("IX_LateFeeWaiverApplications_DueFeeId");
 
 		builder.HasIndex(x => new { x.TenantId, x.Status })
 			.HasDatabaseName("IX_LateFeeWaiverApplications_Tenant_Status");
+
+		builder.HasIndex(x => new { x.AppliedByUserId, x.IdempotencyKey })
+			.IsUnique()
+			.HasFilter("\"IdempotencyKey\" IS NOT NULL")
+			.HasDatabaseName("UX_LateFeeWaiverApplications_Actor_IdempotencyKey");
 	}
 }

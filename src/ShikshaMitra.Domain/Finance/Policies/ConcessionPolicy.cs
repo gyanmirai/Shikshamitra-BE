@@ -1,4 +1,8 @@
+using ShikshaMitra.Finance;
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -21,8 +25,14 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public decimal? MaximumPercentage { get; protected set; }
 	public decimal? MaximumFixedAmount { get; protected set; }
 	public ConcessionApplyOn ApplyOn { get; protected set; }
+	public bool AutoCreateRefund { get; protected set; }
 	public RoundingMethodType RoundingMethod { get; protected set; }
 	public int Version { get; protected set; }
+	public string ApplicableConcessionTypeIdsJson { get; protected set; } = "[]";
+	public ConcessionFeeHeadScope FeeHeadScope { get; protected set; }
+	public string ApplicableFeeHeadIdsJson { get; protected set; } = "[]";
+	public IReadOnlyList<Guid> ApplicableConcessionTypeIds => ReadIds(ApplicableConcessionTypeIdsJson);
+	public IReadOnlyList<Guid> ApplicableFeeHeadIds => ReadIds(ApplicableFeeHeadIdsJson);
 
 	protected ConcessionPolicy() { }
 
@@ -40,6 +50,8 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Update(ConcessionPolicyUpdateModel model)
 	{
+		if (IsDefault && (!model.IsDefault || model.Status != ConcessionPolicyStatus.Active))
+			throw new BusinessException(ConcessionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if (Status == ConcessionPolicyStatus.Archived && Version > 0)
 			throw new BusinessException(ConcessionPolicyErrorCodes.ArchivedPolicyNotEditable);
 		if (AcademicYearId == Guid.Empty)
@@ -55,7 +67,7 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		ValidateRules(model);
 
-		PolicyName = model.PolicyName.Trim();
+		PolicyName = FinanceName.Normalize(model.PolicyName);
 		PolicyCode = model.PolicyCode.Trim().ToUpperInvariant();
 		Description = model.Description?.Trim() ?? string.Empty;
 		Status = model.Status;
@@ -65,18 +77,25 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PercentageValue = model.CalculationMethod == ConcessionCalculationMethod.Percentage
 			? model.PercentageValue : null;
 		FixedAmount = model.CalculationMethod == ConcessionCalculationMethod.FixedAmount
-			? model.FixedAmount : null;
+			? ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.FixedAmount) : null;
 		MaximumPercentage = model.ValueSource == ConcessionValueSource.RequestEnteredWithinLimits &&
 			model.CalculationMethod == ConcessionCalculationMethod.Percentage ? model.MaximumPercentage : null;
 		MaximumFixedAmount = model.ValueSource == ConcessionValueSource.RequestEnteredWithinLimits &&
-			model.CalculationMethod == ConcessionCalculationMethod.FixedAmount ? model.MaximumFixedAmount : null;
+			model.CalculationMethod == ConcessionCalculationMethod.FixedAmount ? ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.MaximumFixedAmount) : null;
 		ApplyOn = model.ApplyOn;
-		RoundingMethod = model.RoundingMethod;
+		AutoCreateRefund = model.ApplyOn == ConcessionApplyOn.AllFees && (model.AutoCreateRefund ?? true);
+		RoundingMethod = RoundingMethodType.RoundUp;
+		ApplicableConcessionTypeIdsJson = JsonSerializer.Serialize(NormalizeIds(model.ApplicableConcessionTypeIds));
+		FeeHeadScope = model.FeeHeadScope;
+		ApplicableFeeHeadIdsJson = JsonSerializer.Serialize(model.FeeHeadScope == ConcessionFeeHeadScope.SelectedFeeHeads
+			? NormalizeIds(model.ApplicableFeeHeadIds) : []);
 		Version++;
 	}
 
 	public void Archive()
 	{
+		if (IsDefault)
+			throw new BusinessException(ConcessionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		Status = ConcessionPolicyStatus.Archived;
 		IsDefault = false;
 		Version++;
@@ -84,6 +103,7 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Unarchive()
 	{
+		if (Status != ConcessionPolicyStatus.Archived) return;
 		Status = ConcessionPolicyStatus.Draft;
 		IsDefault = false;
 		Version++;
@@ -113,10 +133,24 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MaximumFixedAmount,
 		ApplyOn,
 		RoundingMethod,
-		Version);
+		Version,
+		ApplicableConcessionTypeIds.ToList(),
+		FeeHeadScope,
+		ApplicableFeeHeadIds.ToList(), AutoCreateRefund);
+
+	private static List<Guid> NormalizeIds(IReadOnlyList<Guid>? ids) =>
+		(ids ?? []).Where(id => id != Guid.Empty).Distinct().OrderBy(id => id).ToList();
+
+	private static List<Guid> ReadIds(string? json) =>
+		string.IsNullOrWhiteSpace(json) ? [] : JsonSerializer.Deserialize<List<Guid>>(json) ?? [];
 
 	private static void ValidateRules(ConcessionPolicyUpdateModel model)
 	{
+		if ((model.PercentageValue.HasValue && decimal.Round(model.PercentageValue.Value, 2) != model.PercentageValue.Value) ||
+			(model.MaximumPercentage.HasValue && decimal.Round(model.MaximumPercentage.Value, 2) != model.MaximumPercentage.Value))
+			throw new BusinessException(ConcessionPolicyErrorCodes.PercentagePrecision);
+		if (model.AutoCreateRefund == true && model.ApplyOn != ConcessionApplyOn.AllFees)
+			throw new BusinessException(ConcessionPolicyErrorCodes.RefundRequiresPaidScope);
 		if (model.ValueSource == ConcessionValueSource.PolicyFixed)
 		{
 			if (model.CalculationMethod == ConcessionCalculationMethod.Percentage &&
@@ -156,7 +190,11 @@ public sealed record ConcessionPolicyUpdateModel(
 	decimal? MaximumPercentage,
 	decimal? MaximumFixedAmount,
 	ConcessionApplyOn ApplyOn,
-	RoundingMethodType RoundingMethod);
+	RoundingMethodType RoundingMethod,
+	IReadOnlyList<Guid>? ApplicableConcessionTypeIds = null,
+	ConcessionFeeHeadScope FeeHeadScope = ConcessionFeeHeadScope.EntireFeeStructure,
+	IReadOnlyList<Guid>? ApplicableFeeHeadIds = null,
+	bool? AutoCreateRefund = null);
 
 public sealed record ConcessionPolicySnapshot(
 	Guid PolicyId,
@@ -173,4 +211,12 @@ public sealed record ConcessionPolicySnapshot(
 	decimal? MaximumFixedAmount,
 	ConcessionApplyOn ApplyOn,
 	RoundingMethodType RoundingMethod,
-	int Version);
+	int Version,
+	List<Guid>? ApplicableConcessionTypeIds = null,
+	ConcessionFeeHeadScope FeeHeadScope = ConcessionFeeHeadScope.EntireFeeStructure,
+	List<Guid>? ApplicableFeeHeadIds = null,
+	bool? AutoCreateRefund = null)
+{
+	// Older immutable versions omitted this field and always created paid-concession refunds.
+	public bool ShouldAutoCreateRefund => ApplyOn == ConcessionApplyOn.AllFees && (AutoCreateRefund ?? true);
+}

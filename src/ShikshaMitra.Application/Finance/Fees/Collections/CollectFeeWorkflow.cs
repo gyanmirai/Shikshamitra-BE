@@ -21,6 +21,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Data;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
@@ -31,59 +32,157 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.Finance.Fees.Collections;
 
 [RemoteService(false)]
-public partial class CollectFeeWorkflow(
-	IReadOnlyRepository<Student, Guid> studentRepository,
-	IDueFeeRepository dueFeeRepository,
-	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
-	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
-	IRepository<FeeHead, Guid> feeHeadRepository,
-	IRepository<Charge, Guid> chargeRepository,
-	IRepository<AcademicYear, Guid> academicYearRepository,
-	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
-	IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
-	LateFeeWaiverLookupService waiverLookupService,
-	CollectionPolicyResolver policyResolver,
-	LateFeeCalculationService lateFeeCalculationService,
-	ExceptionWindowResolver exceptionWindowResolver,
-	FeeCollectionManager feeCollectionManager,
-	FinanceAuditWriter financeAuditWriter,
-	FinanceScopeAccessService financeScopeAccessService,
-	IFeeReceiptPdfGenerator pdfGenerator,
-	FeeReceiptBlobManager blobManager,
-	IDistributedEventBus eventBus,
-	IClock clock,
-	IUnitOfWorkManager unitOfWorkManager
-) : ApplicationService, ITransientDependency
+public partial class CollectFeeWorkflow : ApplicationService, ITransientDependency
 {
+	private readonly IDueFeeRepository dueFeeRepository;
+	private readonly IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository;
+	private readonly IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository;
+	private readonly IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository;
+	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
+	private readonly IRepository<Charge, Guid> chargeRepository;
+	private readonly IRepository<AcademicYear, Guid> academicYearRepository;
+	private readonly IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository;
+	private readonly ShikshaMitra.Domain.Finance.Accounts.Settings.FinanceRoutingManager routingManager;
+	private readonly ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions;
+	private readonly LateFeeBalanceService lateFeeBalanceService;
+	private readonly CollectionPolicyResolver policyResolver;
+	private readonly FeeCollectionManager feeCollectionManager;
+	private readonly FinanceAuditWriter financeAuditWriter;
+	private readonly FinanceScopeAccessService financeScopeAccessService;
+	private readonly IFeeReceiptPdfGenerator pdfGenerator;
+	private readonly FeeReceiptBlobManager blobManager;
+	private readonly IDistributedEventBus eventBus;
+	private readonly IClock clock;
+	private readonly IUnitOfWorkManager unitOfWorkManager;
+
+	public CollectFeeWorkflow(
+		IReadOnlyRepository<Student, Guid> studentRepository,
+		IDueFeeRepository dueFeeRepository,
+		IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
+		IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+		IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
+		IRepository<FeeHead, Guid> feeHeadRepository,
+		IRepository<Charge, Guid> chargeRepository,
+		IRepository<AcademicYear, Guid> academicYearRepository,
+		IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
+		ShikshaMitra.Domain.Finance.Accounts.Settings.FinanceRoutingManager routingManager,
+		ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions,
+		LateFeeBalanceService lateFeeBalanceService,
+		CollectionPolicyResolver policyResolver,
+		FeeCollectionManager feeCollectionManager,
+		FinanceAuditWriter financeAuditWriter,
+		FinanceScopeAccessService financeScopeAccessService,
+		IFeeReceiptPdfGenerator pdfGenerator,
+		FeeReceiptBlobManager blobManager,
+		IDistributedEventBus eventBus,
+		IClock clock,
+		IUnitOfWorkManager unitOfWorkManager
+	)
+	{
+		_ = studentRepository;
+		this.dueFeeRepository = dueFeeRepository;
+		this.feeRecordMetadataRepository = feeRecordMetadataRepository;
+		this.chargeCollectionRecordRepository = chargeCollectionRecordRepository;
+		this.chargeWaiverRepository = chargeWaiverRepository;
+		this.feeHeadRepository = feeHeadRepository;
+		this.chargeRepository = chargeRepository;
+		this.academicYearRepository = academicYearRepository;
+		this.studentFeeStructureRepository = studentFeeStructureRepository;
+		this.routingManager = routingManager;
+		this.automaticTransactions = automaticTransactions;
+		this.lateFeeBalanceService = lateFeeBalanceService;
+		this.policyResolver = policyResolver;
+		this.feeCollectionManager = feeCollectionManager;
+		this.financeAuditWriter = financeAuditWriter;
+		this.financeScopeAccessService = financeScopeAccessService;
+		this.pdfGenerator = pdfGenerator;
+		this.blobManager = blobManager;
+		this.eventBus = eventBus;
+		this.clock = clock;
+		this.unitOfWorkManager = unitOfWorkManager;
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.Add)]
 	public async Task<CollectFeeOutput> CollectFeeAsync(CollectFeeInput input)
 	{
 		using var serializableUow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
 			{ IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
-		var idempotencyKey = input.IdempotencyKey.Trim();
+		var admissionEntry = input.FinanceFeeAccountId.HasValue;
 		var commandFingerprint = ComputeCommandFingerprint(input);
+		if (!admissionEntry && input.StudentId.HasValue)
+		{
+			// Finance's existing Student collection entry joins the same ledger after
+			// activation. Preserve its original retry fingerprint for legacy clients.
+			var assignment = await studentFeeStructureRepository.FindAsync(a => a.StudentId == input.StudentId.Value && a.AcademicYearId == input.AcademicYearId);
+			var resolvedAccountId = assignment?.FinanceFeeAccountId ??
+				(await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().FindAsync(a =>
+					a.StudentId == input.StudentId.Value && a.AcademicYearId == input.AcademicYearId && a.AssignmentSnapshotJson != null))?.Id;
+			if (resolvedAccountId.HasValue)
+			{
+				// Keep the caller's command unchanged, so an in-process retry uses the
+				// same legacy fingerprint as a fresh HTTP request.
+				input = new CollectFeeInput
+				{
+					IdempotencyKey = input.IdempotencyKey, StudentId = input.StudentId,
+					FinanceFeeAccountId = resolvedAccountId, AcademicYearId = input.AcademicYearId,
+					Notes = input.Notes, PaymentConfirmed = input.PaymentConfirmed,
+					DueFeePayments = input.DueFeePayments, ChargePayments = input.ChargePayments,
+					LateFeePayments = input.LateFeePayments, Payments = input.Payments,
+					AutomaticAllocation = input.AutomaticAllocation
+				};
+			}
+		}
+		var account = input.FinanceFeeAccountId.HasValue
+			? await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().GetAsync(input.FinanceFeeAccountId.Value) : null;
+		if (account != null)
+		{
+			await financeScopeAccessService.EnsureFeeCollectionAccountAccessibleAsync(account);
+		}
+		var idempotencyKey = input.IdempotencyKey.Trim();
 		var replay = await feeRecordMetadataRepository.FirstOrDefaultAsync(x =>
 			x.TenantId == CurrentTenant.Id && x.IdempotencyKey == idempotencyKey);
 		if (replay != null)
 		{
-			await financeScopeAccessService.EnsureStudentAccessibleAsync(replay.StudentId);
+			if ((admissionEntry || replay.FinanceFeeAccountId.HasValue) && replay.FinanceFeeAccountId != input.FinanceFeeAccountId)
+				throw new BusinessException(AdmissionFeeCollectionErrorCodes.RetryConflict);
+			if (replay.FinanceFeeAccountId.HasValue) await financeScopeAccessService.EnsureFeeCollectionAccountAccessibleAsync(account!);
+			else await financeScopeAccessService.EnsureFeeCollectionStudentAccessibleAsync(
+				replay.StudentId!.Value, replay.AcademicYearId);
 			if (!string.Equals(replay.CommandFingerprint, commandFingerprint, StringComparison.Ordinal))
-				throw new UserFriendlyException("This retry key was already used for a different fee collection request.");
+				throw new UserFriendlyException("This retry key was already used for a different fee collection request.",
+					code: FeeCollectionErrorCodes.IdempotencyConflict);
 
 			if (string.IsNullOrWhiteSpace(replay.CommandResultJson))
 				throw new UserFriendlyException("This fee collection request is still being processed. Please retry shortly.");
 
 			var replayOutput = JsonSerializer.Deserialize<CollectFeeOutput>(replay.CommandResultJson)
 				?? throw new UserFriendlyException("The saved fee collection result could not be read.");
+			await PopulateSavedReceiptAmountsAsync(replayOutput, replay.Id);
 			await serializableUow.CompleteAsync();
 			return replayOutput;
 		}
 
-		var (student, academicYear) = await ValidateAndLoadStudentForCollectionAsync(input);
-		await ValidatePaymentChannelPolicyAsync(input);
+		if (account != null && (admissionEntry || !account.StudentFeeStructureId.HasValue))
+		{
+			var source = await LazyServiceProvider.LazyGetRequiredService<IAdmissionFinanceContextReader>().GetAsync(account.ApplicationId);
+			if (!source.CanCollect || source.StudentId != account.StudentId || source.AcademicYearId != account.AcademicYearId)
+				throw new BusinessException(AdmissionFeeCollectionErrorCodes.InvalidState);
+			var saved = account.AssignmentSnapshotJson == null ? null :
+				JsonSerializer.Deserialize<ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos.StudentFeeAssignmentPreviewDto>(account.AssignmentSnapshotJson);
+			if (saved == null || !AdmissionFeeCollectionAppService.SelectionMatches(source, saved))
+				throw new BusinessException(AdmissionFeeCollectionErrorCodes.SelectionChanged);
+		}
+		var student = account == null ? (await ValidateAndLoadStudentForCollectionAsync(input)).Student :
+			account.StudentId.HasValue ? await AsyncExecuter.FirstOrDefaultAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => s.Id == account.StudentId.Value)) : null;
+		var academicYear = await academicYearRepository.GetAsync(input.AcademicYearId, includeDetails: false);
+		var effectivePolicy = await ValidatePaymentChannelPolicyAsync(input);
+		var allocationContext = await ValidateAutomaticAllocationAsync(input, account, effectivePolicy);
 		var dueFeeContext = await LoadAndValidateDueFeesContextAsync(input);
 		var chargeContext = await LoadAndValidateChargesContextAsync(input);
-		await ValidateLateFeePaymentsAsync(input);
+		var lateFeeMap = await ValidateLateFeePaymentsAsync(input);
+		// Snapshot all accrued charges before principal can change, even when charges are unselected.
+		await lateFeeBalanceService.GetBalancesAsync(dueFeeContext.DueFeeMap.Values.ToList(),
+			input.AcademicYearId, clock.Now, preserveAssessment: true);
 
 		var paymentMethods = input.Payments.Select(p => p.PaymentMethod).ToList();
 		var received = input.DueFeePayments.Sum(dfp => dfp.Amount) + input.ChargePayments.Sum(cp => cp.Amount)
@@ -93,7 +192,8 @@ public partial class CollectFeeWorkflow(
 			input.ChargePayments, chargeContext.PendingChargeMap,
 			paymentMethods, input.PaymentConfirmed ?? true);
 
-		var dueFeeBeforeSnapshots = BuildDueFeeBeforeSnapshots(input.DueFeePayments, dueFeeContext.DueFeeMap);
+		var routing = await PrepareIncomeRoutingAsync(input, dueFeeContext, chargeContext, lateFeeMap);
+        var dueFeeBeforeSnapshots = BuildDueFeeBeforeSnapshots(input.DueFeePayments, dueFeeContext.DueFeeMap);
 
 		var feeHeadGroups = input.DueFeePayments
 			.GroupBy(dfp => dfp.FeeHeadId)
@@ -102,19 +202,45 @@ public partial class CollectFeeWorkflow(
 		var paymentRows = input.Payments
 			.Select(p => (p.PaymentMethod, p.Amount, FeeCollectionManager.MapPaymentDetails(p.PaymentMethod, p.Details)))
 			.ToList();
+		var receiptLines = await CaptureReceiptLinesAsync(input, dueFeeContext, chargeContext, lateFeeMap);
 
 		var transaction = await feeCollectionManager.ExecuteCollectionTransactionAsync(
 			new FeeCollectionManager.CollectFeeTransactionCommand(
 				StudentId: input.StudentId, AcademicYearId: input.AcademicYearId,
-				BoardId: student.AcademicBoardId ?? Guid.Empty, EducationMediumId: student.AcademicMediumId,
+				BoardId: account?.BoardId ?? student!.AcademicBoardId ?? Guid.Empty, EducationMediumId: account?.EducationMediumId ?? student!.AcademicMediumId,
 				Status: status, ReceivedAmount: received, Notes: input.Notes,
 				BankReceiptConfirmed: input.PaymentConfirmed, FeeHeadGroups: feeHeadGroups,
 				ChargePayments: input.ChargePayments.Select(cp => (cp.ChargeId, cp.Amount)).ToList(),
 				DueFeeAllocations: allAllocations, Payments: paymentRows,
 				LateFeeAllocations: input.LateFeePayments.Select(lfp => (lfp.DueFeeId, lfp.Amount)).ToList(),
-				IdempotencyKey: idempotencyKey, CommandFingerprint: commandFingerprint));
+				IdempotencyKey: idempotencyKey, CommandFingerprint: commandFingerprint, FinanceFeeAccountId: account?.Id,
+				ReceiptGrouping: effectivePolicy?.ReceiptGrouping ?? CollectionReceiptGrouping.Separate));
+		if (account != null)
+		{
+			account.RecordPaymentEvidence();
+			await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().UpdateAsync(account, false);
+			await LazyServiceProvider.LazyGetRequiredService<IAdmissionFinanceContextReader>().RecordPaymentEvidenceAsync(account.ApplicationId, account.Id);
+		}
+		if (allocationContext != null)
+			transaction.Metadata.SetProperty("AutomaticAllocation", new
+			{
+				allocationContext.AllocationBasis, allocationContext.CollectionPolicyId,
+				allocationContext.CollectionPolicyVersion, allocationContext.AllocationRevision,
+				DueFeeOrder = allocationContext.AllocationDueFeeOrder.Where(input.AutomaticAllocation!.DueFeeIds.Contains).ToArray(),
+				input.AutomaticAllocation.ChargeIds
+			});
 
-		// Flush the unique retry key before creating external blob side effects. A racing
+		ShikshaMitra.Application.Finance.Fees.Receipts.ReceiptCollectionSnapshot.Capture(transaction.Metadata, receiptLines);
+		ShikshaMitra.Application.Finance.Fees.Receipts.ReceiptCollectionSnapshot.CaptureOrganization(
+			transaction.Metadata, account?.MediumStageId ?? student?.AcademicMediumStageId);
+		transaction.Metadata.SetProperty("ReceiptPolicy", new
+		{
+			ReceiptGrouping = (effectivePolicy?.ReceiptGrouping ?? CollectionReceiptGrouping.Separate).ToString(),
+			PolicyId = effectivePolicy?.Id, PolicyVersion = effectivePolicy?.Version
+		});
+
+		await SaveIncomeRoutingAsync(input, transaction, routing, status != FeeCollectionStatus.InReconciliation);
+        // Flush the unique retry key before creating external blob side effects. A racing
 		// duplicate fails here and the unit of work rolls back all collection mutations.
 		await CurrentUnitOfWork!.SaveChangesAsync();
 
@@ -122,18 +248,23 @@ public partial class CollectFeeWorkflow(
 
 		var (auditEventIds, paymentChangedFields, allocationLines) =
 			await WriteAuditTrailAsync(input, received, status, dueFeeContext, dueFeeBeforeSnapshots,
-				paymentMethods, transaction, student);
+				paymentMethods, transaction, student, account);
 
-		var feeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope == FeeReceiptScope.Fee);
+		var feeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope is FeeReceiptScope.Fee or FeeReceiptScope.Combined);
 		var chargeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope == FeeReceiptScope.Charge);
 		var collectedAt = clock.Now;
 
 		var output = new CollectFeeOutput
 		{
 			Id = transaction.Metadata.Id, ReceiptNumber = transaction.ReceiptNumber,
+			ReceiptGrouping = (effectivePolicy?.ReceiptGrouping ?? CollectionReceiptGrouping.Separate).ToString(),
 			FeeReceiptNumber = feeReceipt?.ReceiptNumber, FeeReceiptId = feeReceipt?.Id,
 			ChargeReceiptId = chargeReceipt?.Id, ChargeReceiptNumber = chargeReceipt?.ReceiptNumber,
-			StudentId = input.StudentId, AcademicYearId = input.AcademicYearId,
+			FeeReceiptAmount = feeReceipt == null ? null : (decimal)feeReceipt.TotalPaidAmount,
+			ChargeReceiptAmount = chargeReceipt == null ? null : (decimal)chargeReceipt.TotalPaidAmount,
+            FeeReceiptPdfFileName = feeReceipt == null ? null : FeeReceiptPresentation.GetPdfFileName(feeReceipt.ReceiptKind, feeReceipt.ReceiptScope, feeReceipt.ReceiptNumber, feeReceipt.ReceiptDate),
+            ChargeReceiptPdfFileName = chargeReceipt == null ? null : FeeReceiptPresentation.GetPdfFileName(chargeReceipt.ReceiptKind, chargeReceipt.ReceiptScope, chargeReceipt.ReceiptNumber, chargeReceipt.ReceiptDate),
+			StudentId = input.StudentId, FinanceFeeAccountId = account?.Id, AcademicYearId = input.AcademicYearId,
 			TotalAmount = received, ReceivedAmount = received, Status = status,
 			CollectedBy = CurrentUser.Id ?? Guid.Empty, CollectedAt = collectedAt, CreatedAt = collectedAt,
 			ReceiptUrl = null,
@@ -144,7 +275,7 @@ public partial class CollectFeeWorkflow(
 			PaidLateFees = input.LateFeePayments.Select(lfp => new PaidDueFeeInfoDto
 			{
 				DueFeeId = lfp.DueFeeId,
-				FeeHeadId = dueFeeContext.DueFeeMap.GetValueOrDefault(lfp.DueFeeId)?.FeeHeadId ?? Guid.Empty,
+				FeeHeadId = lateFeeMap[lfp.DueFeeId].FeeHeadId,
 				AmountPaid = lfp.Amount,
 			}).ToList(),
 			PaidFeeHeads = transaction.FeeCollectionRecords.Select(r => new PaidFeeHeadInfoDto
@@ -178,6 +309,7 @@ public partial class CollectFeeWorkflow(
 		{
 			FeeCollectionTransactionId = transaction.Metadata.Id,
 			StudentId      = input.StudentId,
+			FinanceFeeAccountId = account?.Id,
 			AcademicYearId = input.AcademicYearId,
 			TotalPaidFee   = received,
 			Status         = status,
@@ -196,7 +328,13 @@ public partial class CollectFeeWorkflow(
 
 	private static string ComputeCommandFingerprint(CollectFeeInput input)
 	{
-		var json = JsonSerializer.Serialize(input);
+		// Student identity can be linked later. The application's retry fingerprint
+		// contains payment facts and its stable Finance account, never the derived link.
+		var json = input.FinanceFeeAccountId.HasValue ? input.AutomaticAllocation == null ? JsonSerializer.Serialize(new {
+			input.FinanceFeeAccountId, input.AcademicYearId, input.IdempotencyKey, input.Notes, input.PaymentConfirmed,
+			input.DueFeePayments, input.ChargePayments, input.LateFeePayments, input.Payments }) : JsonSerializer.Serialize(new {
+			input.FinanceFeeAccountId, input.AcademicYearId, input.IdempotencyKey, input.Notes, input.PaymentConfirmed,
+			input.DueFeePayments, input.ChargePayments, input.LateFeePayments, input.Payments, input.AutomaticAllocation }) : JsonSerializer.Serialize(input);
 		return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
 	}
 
@@ -204,5 +342,6 @@ public partial class CollectFeeWorkflow(
 		Dictionary<Guid, DueFee> DueFeeMap, Dictionary<Guid, FeeHead> FeeHeadMap);
 
 	private sealed record ChargeValidationContext(
-		Dictionary<Guid, Charge> ChargeMap, Dictionary<Guid, double> PendingChargeMap);
+		Dictionary<Guid, Charge> ChargeMap, Dictionary<Guid, double> PendingChargeMap,
+		Dictionary<Guid, decimal> PayableChargeMap);
 }

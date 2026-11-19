@@ -8,6 +8,49 @@ namespace ShikshaMitra.Students.Enrollment;
 
 public class AdmissionOffering_Tests
 {
+	[Theory]
+	[InlineData(true, false)]
+	[InlineData(true, true)]
+	[InlineData(false, true)]
+	public void Locked_configuration_rejects_each_changed_reference(bool active, bool hasUsage)
+	{
+		var offering = CreateOffering(true, null, null);
+		var workflow = Guid.NewGuid();
+		var inquiry = Guid.NewGuid();
+		var registration = Guid.NewGuid();
+		offering.ConfigureReferences(workflow, inquiry, registration);
+		if (!active) offering.Deactivate();
+		foreach (var reference in new[] { "workflow", "inquiry", "registration" })
+			Should.Throw<BusinessException>(() => offering.EnsureConfigurationReferencesUnchanged(
+				reference == "workflow" ? Guid.NewGuid() : workflow,
+				reference == "inquiry" ? Guid.NewGuid() : inquiry,
+				reference == "registration" ? Guid.NewGuid() : registration, hasUsage))
+				.Code.ShouldBe(AdmissionErrorCodes.OfferingConfigurationLocked);
+	}
+
+	[Fact]
+	public void Inactive_never_used_configuration_can_change_references()
+	{
+		var offering = CreateOffering(true, null, null);
+		offering.Deactivate();
+		offering.EnsureConfigurationReferencesUnchanged(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), false);
+	}
+
+	[Fact]
+	public void Locked_configuration_allows_unchanged_or_omitted_derived_registration_reference()
+	{
+		var offering = CreateOffering(true, null, null);
+		var workflow = Guid.NewGuid();
+		var inquiry = Guid.NewGuid();
+		var registration = Guid.NewGuid();
+		offering.ConfigureReferences(workflow, inquiry, registration);
+		offering.EnsureConfigurationReferencesUnchanged(workflow, inquiry, registration, true);
+		offering.EnsureConfigurationReferencesUnchanged(workflow, inquiry, null, true);
+		Should.Throw<BusinessException>(() => offering.EnsureConfigurationReferencesUnchanged(null, inquiry, null, true));
+		Should.Throw<BusinessException>(() => offering.EnsureConfigurationReferencesUnchanged(workflow, null, null, true));
+		offering.ApplicationFormDefinitionId.ShouldBe(registration);
+	}
+
 	[Fact]
 	public void Offering_normalizes_code_and_defaults_active()
 	{
@@ -18,6 +61,22 @@ public class AdmissionOffering_Tests
 		offering.Code.ShouldBe("GRADE-5");
 		offering.Name.ShouldBe("GRADE-5");
 		offering.IsActive.ShouldBeTrue();
+		offering.Track.ShouldBe(AdmissionTrack.General);
+		offering.EntryMode.ShouldBe(AdmissionEntryMode.Inquiry);
+	}
+
+	[Fact]
+	public void Direct_registration_track_is_independent_of_workflow_configuration()
+	{
+		var offering = CreateOffering(useCycleDates: true, null, null);
+
+		offering.UpdateRouting(AdmissionTrack.Rte, AdmissionEntryMode.DirectRegistration, identityLocked: false);
+
+		offering.Track.ShouldBe(AdmissionTrack.Rte);
+		offering.EntryMode.ShouldBe(AdmissionEntryMode.DirectRegistration);
+		Should.Throw<BusinessException>(() => offering.UpdateRouting(
+			AdmissionTrack.General, AdmissionEntryMode.Inquiry, identityLocked: true))
+			.Code.ShouldBe(AdmissionErrorCodes.OfferingIdentityLocked);
 	}
 
 	[Fact]
@@ -104,7 +163,7 @@ public class AdmissionOffering_Tests
 		var cycle = CreatePublishedCycle();
 
 		var availability = AdmissionOfferingAvailabilityEvaluator.Evaluate(
-			offering, cycle, true, new DateTimeOffset(2026, 9, 30, 23, 59, 59, TimeSpan.Zero));
+			offering, cycle, true, new DateTimeOffset(2026, 9, 30, 23, 59, 59, TimeSpan.FromHours(5.5)));
 
 		availability.Status.ShouldBe(AdmissionOfferingAvailabilityStatus.NotOpenYet);
 		availability.CanCreateInquiry.ShouldBeFalse();
@@ -148,9 +207,9 @@ public class AdmissionOffering_Tests
 		var cycle = CreatePublishedCycle();
 
 		AdmissionOfferingAvailabilityEvaluator.Evaluate(offering, cycle, true,
-			new DateTimeOffset(2026, 10, 1, 23, 59, 59, TimeSpan.Zero)).IsAvailable.ShouldBeTrue();
+			new DateTimeOffset(2026, 10, 1, 23, 59, 59, TimeSpan.FromHours(5.5))).IsAvailable.ShouldBeTrue();
 		AdmissionOfferingAvailabilityEvaluator.Evaluate(offering, cycle, true,
-			new DateTimeOffset(2026, 10, 31, 23, 59, 59, TimeSpan.Zero)).IsAvailable.ShouldBeTrue();
+			new DateTimeOffset(2026, 10, 31, 23, 59, 59, TimeSpan.FromHours(5.5))).IsAvailable.ShouldBeTrue();
 	}
 
 	[Fact]

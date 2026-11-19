@@ -41,10 +41,10 @@ internal sealed class PayrollLockBatchResult
 
 	public string BuildResponseMessage() =>
 		FailedCount > 0
-			? $"Payroll generated and locked for {GeneratedCount} employees. {SkippedCount} already finalized. {FailedCount} failed."
+			? $"Payroll generated and locked for {GeneratedCount} staff. {SkippedCount} already finalized. {FailedCount} failed."
 			: SkippedCount > 0
-				? $"Payroll generated and locked for {GeneratedCount} employees. {SkippedCount} were already finalized."
-				: $"Payroll generated and locked successfully for {GeneratedCount} employees.";
+				? $"Payroll generated and locked for {GeneratedCount} staff. {SkippedCount} were already finalized."
+				: $"Payroll generated and locked successfully for {GeneratedCount} staff.";
 
 	public List<string>? BuildResponseErrors() =>
 		FailedCount > 0 ? errors.Select(e => $"{e.EmployeeCode}: {e.Error}").ToList() : null;

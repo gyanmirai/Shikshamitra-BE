@@ -32,7 +32,8 @@ public partial class AcademicReportGenerator
     }
 
     private async IAsyncEnumerable<Dictionary<string, string?>> ReadExamSummaryExportAsync(AcademicReportRequestDto request,
-        Exam? exam, ExamReportData metadata, IQueryable<ExamMark> marks, int batchSize, [EnumeratorCancellation] CancellationToken cancellationToken)
+        Exam? exam, ExamReportData metadata, IQueryable<ExamMark> marks, int batchSize, [EnumeratorCancellation] CancellationToken cancellationToken,
+        IAsyncEnumerable<ExamExportStudentTotal>? studentTotals = null)
     {
         var type = request.ReportType;
         if (type is AcademicReportTypes.AverageSubjectMarkAnalysis or AcademicReportTypes.SubjectAverageClassMarkAnalysis
@@ -45,8 +46,8 @@ public partial class AcademicReportGenerator
         var groups = new Dictionary<(Guid? StandardId, Guid DivisionId, string Label), ExamExportStatistics>();
         var total = 0;
         var rank = 0;
-        var source = ReadExamStudentTotalsAsync(marks, batchSize, cancellationToken);
-        if (type == AcademicReportTypes.ResultListOverallGradeAnalysis)
+        var source = studentTotals ?? ReadExamStudentTotalsAsync(marks, batchSize, cancellationToken);
+        if (type == AcademicReportTypes.ResultListOverallGradeAnalysis && studentTotals == null)
             source = AcademicReportExternalSort.SortAsync(ReadExamGradeRankTotalsAsync(request, batchSize, cancellationToken), (left, right) =>
             {
                 var order = right.Obtained.CompareTo(left.Obtained);

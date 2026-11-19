@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -24,14 +24,25 @@ public class HrPolicyVersionReadService(
 	public async Task<PagedResultDto<HrPolicyVersionDto>> GetListAsync(
 		string policyType,
 		Guid policyId,
-		PagedAndSortedResultRequestDto input)
+		PagedAndSortedResultRequestDto input, string? search = null, string? action = null)
 	{
 		var normalized = HrPolicyVersionProjection.NormalizePolicyType(policyType);
 		var query = (await versionRepository.GetQueryableAsync())
-			.Where(x => x.PolicyType == normalized && x.PolicyId == policyId);
+			.Where(x => x.TenantId == CurrentTenant.Id && x.PolicyType == normalized && x.PolicyId == policyId);
+		if (!string.IsNullOrWhiteSpace(action) && action != "all") query = query.Where(x => x.ChangeAction == action);
+		if (!string.IsNullOrWhiteSpace(search))
+		{
+			var term = search.Trim().ToLowerInvariant().Replace('_', ' ').Replace('-', ' ');
+			var userIds = (await userRepository.GetQueryableAsync()).Where(x =>
+				(x.Name ?? "").ToLower().Contains(term) || (x.Surname ?? "").ToLower().Contains(term) || x.UserName.ToLower().Contains(term)).Select(x => x.Id);
+			var versionNumber = int.TryParse(term.TrimStart('v'), out var number) ? number : -1;
+			query = query.Where(x => x.Name.ToLower().Contains(term) || (x.ChangeReason ?? "").ToLower().Contains(term)
+				|| x.ChangeAction.ToLower().Replace("_", " ").Replace("-", " ").Contains(term) || x.VersionNumber == versionNumber
+				|| (x.CreatorId.HasValue && userIds.Contains(x.CreatorId.Value)));
+		}
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query
-			.OrderByDescending(x => x.VersionNumber)
+			.OrderByDescending(x => x.VersionNumber).ThenBy(x => x.Id)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount <= 0 ? 20 : input.MaxResultCount));
 		var dtos = rows.Select(HrPolicyVersionProjection.ToDto).ToList();
@@ -74,7 +85,7 @@ public class HrPolicyVersionReadService(
 	{
 		var normalized = HrPolicyVersionProjection.NormalizePolicyType(policyType);
 		var entity = await versionRepository.GetAsync(versionId);
-		if (entity.PolicyType != normalized || entity.PolicyId != policyId)
+		if (entity.TenantId != CurrentTenant.Id || entity.PolicyType != normalized || entity.PolicyId != policyId)
 		{
 			throw new BusinessException(HRErrorCodes.HrPolicyVersionNotFound);
 		}
@@ -104,6 +115,28 @@ public class HrPolicyVersionReadService(
 				version.CreatedByName = namesById.GetValueOrDefault(version.CreatorId.Value) ?? "Unknown user";
 			}
 		}
+	}
+
+	public async Task<List<HrPolicyVersionDifferenceDto>> CompareProposedRulesAsync(object current, object proposed)
+	{
+		var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+		var currentProperties = JsonSerializer.SerializeToElement(current, options).EnumerateObject()
+			.ToDictionary(x => x.Name, x => x.Value.Clone());
+		var proposedProperties = JsonSerializer.SerializeToElement(proposed, options).EnumerateObject()
+			.Where(x => currentProperties.ContainsKey(x.Name)).ToDictionary(x => x.Name, x => x.Value.Clone());
+		HrPolicyProposalCollectionComparison.Normalize(currentProperties);
+		HrPolicyProposalCollectionComparison.Normalize(proposedProperties);
+		// Compare the update contract only. IDs, versions, audit timestamps and other
+		// response-only metadata are not removed rules when a form omits them.
+		var fromJson = JsonSerializer.Serialize(currentProperties.Where(x => proposedProperties.ContainsKey(x.Key)).ToDictionary(x => x.Key, x => x.Value), options);
+		var toJson = JsonSerializer.Serialize(proposedProperties, options);
+		var differences = HrPolicyVersionDiffBuilder.BuildDifferences(fromJson, toJson, await BuildDisplayContextAsync(fromJson, toJson));
+		foreach (var difference in differences.Where(x => HrPolicyProposalCollectionComparison.Supports(x.Field)))
+		{
+			difference.FromDisplayValue = difference.FromValue = HrPolicyProposalCollectionComparison.Display(difference.Field, currentProperties[difference.Field]);
+			difference.ToDisplayValue = difference.ToValue = HrPolicyProposalCollectionComparison.Display(difference.Field, proposedProperties[difference.Field]);
+		}
+		return differences;
 	}
 
 	private async Task<HrPolicyVersionDisplayContext> BuildDisplayContextAsync(params string[] snapshots)

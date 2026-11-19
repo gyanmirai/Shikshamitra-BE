@@ -30,6 +30,11 @@ public class ChapterController(
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+	[HttpGet("lookup")]
+	public Task<List<ChapterLookupDto>> GetLookupAsync([FromQuery] Guid standardId,
+		[FromQuery] Guid subjectId, [FromQuery] Guid? divisionId = null) =>
+		chapterAppService.GetLookupAsync(standardId, subjectId, divisionId);
+
 	[HttpPost]
 	public Task<ApiSuccessResponseDto> CreateAsync(
 		[FromQuery] Guid standardId,

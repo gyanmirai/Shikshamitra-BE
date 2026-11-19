@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -12,13 +12,23 @@ public class LeaveBalanceUnitService(
 	IEmployeeLeaveRepository employeeLeaveRepository,
 	LeaveWorkCalendarUnitService leaveWorkCalendarUnitService) : DomainService
 {
+	private List<LeaveBalanceUnitRow>? batchRows;
+	public async Task<IDisposable> BeginReadBatchAsync(IReadOnlyCollection<Guid> employeeIds)
+	{
+		var ids = employeeIds.ToArray();
+		var query = (await employeeLeaveRepository.GetQueryableAsync()).Where(x => Enumerable.Contains(ids, x.EmployeeId) && (x.Status == EmployeeLeaveStatusType.Approved || x.Status == EmployeeLeaveStatusType.Pending));
+		if (await AsyncExecuter.CountAsync(query) > 500000) throw new Volo.Abp.BusinessException(HRErrorCodes.ReportPopulationTooLarge);
+		var previous = batchRows;
+		batchRows = await AsyncExecuter.ToListAsync(query.Select(x => new LeaveBalanceUnitRow(x.EmployeeId, x.LeavePolicyId, x.LeavePolicyRuleId, x.PaidType, x.Status, x.ApprovedLeaveUnits, x.StartDate, x.EndDate, x.HalfDay, x.LeavePolicy != null ? x.LeavePolicy.AcademicYearId : null)));
+		return new Volo.Abp.DisposeAction(() => batchRows = previous);
+	}
 	public async Task<decimal> GetApprovedUsedByPolicyAndPaidTypeAsync(
 		Guid employeeId,
 		Guid leavePolicyId,
 		LeavePaidType paidType,
 		CancellationToken cancellationToken = default)
 	{
-		var rows = await employeeLeaveRepository.GetLeaveBalanceRowsByPolicyAndPaidTypeAsync(
+		var rows = batchRows?.Where(x => x.EmployeeId == employeeId && x.LeavePolicyId == leavePolicyId && x.PaidType == paidType).ToList() ?? await employeeLeaveRepository.GetLeaveBalanceRowsByPolicyAndPaidTypeAsync(
 			employeeId,
 			leavePolicyId,
 			[paidType],
@@ -66,7 +76,7 @@ public class LeaveBalanceUnitService(
 			return new Dictionary<LeavePaidType, LeavePaidTypeBalanceUnits>();
 		}
 
-		var rows = await employeeLeaveRepository.GetLeaveBalanceRowsByPolicyAndPaidTypeAsync(
+		var rows = batchRows?.Where(x => x.EmployeeId == employeeId && x.LeavePolicyId == leavePolicyId && paidTypes.Contains(x.PaidType)).ToList() ?? await employeeLeaveRepository.GetLeaveBalanceRowsByPolicyAndPaidTypeAsync(
 			employeeId,
 			leavePolicyId,
 			paidTypes,

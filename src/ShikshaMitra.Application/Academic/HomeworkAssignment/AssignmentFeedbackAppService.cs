@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students;
-using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.Standards;
@@ -67,6 +66,18 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		Guid academicMediumId,
 		GetAssignmentSubmissionsFilterDto filter
 	)
+		=> await ReadSubmissionsAsync(academicMediumId, filter, null);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View)]
+	public async Task<HomeworkSubmissionDto> GetSubmissionAsync(Guid academicMediumId, Guid studentId,
+		GetAssignmentSubmissionsFilterDto filter)
+	{
+		var result = await ReadSubmissionsAsync(academicMediumId, filter, studentId);
+		return result.Data.SingleOrDefault() ?? throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
+	}
+
+	private async Task<AssignmentSubmissionsResponseDto> ReadSubmissionsAsync(Guid academicMediumId,
+		GetAssignmentSubmissionsFilterDto filter, Guid? studentId)
 	{
 		// 1. Get assignment with division schedules (eager loading)
 		var queryable = await _assignmentRepository.WithDetailsAsync(a => a.DivisionSchedules, a => a.AssignmentType);
@@ -82,6 +93,9 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 
 			EnsureEvaluationRequired(assignment);
 			await EnsureCurrentUserCanAccessDivisionAsync(assignment, filter.DivisionId, nameof(GetSubmissionsAsync));
+			if ((filter.Lightweight || studentId.HasValue) &&
+				(assignment.StandardId != filter.ClassId || assignment.SubjectId != filter.SubjectId))
+				throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
 			// 2. Validate requested division is in assignment.DivisionSchedules
 
 		var divisionSchedule = assignment.DivisionSchedules
@@ -93,24 +107,32 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				.WithData("DivisionId", filter.DivisionId);
 		}
 
-		// 3. Get ALL students in the division (approved students only)
+		// Current onboarding activates enrollment without setting the legacy admission approval flag.
 		var studentsQuery = await _studentRepository.GetQueryableAsync();
 		var students = await _asyncExecuter.ToListAsync(
 			studentsQuery.Where(s =>
-				s.DivisionId == filter.DivisionId
+				(!studentId.HasValue || s.Id == studentId.Value)
+				&& s.DivisionId == filter.DivisionId
 				&& s.StandardId == filter.ClassId
 				&& s.AcademicMediumId == academicMediumId
 				&& s.Status == StudentLifeCycleStatusEnum.Enrolled
-				&& s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved
 				&& !s.IsDeleted
-			)
+			).OrderBy(student => student.Id).Select(student => new
+			{
+				student.Id, student.RollNo, student.GrNo, student.GrNumber, student.FirstName, student.MiddleName, student.LastName
+			})
 		);
 
 		// 4. Get existing submissions for this assignment and division
-		var submissions = await _submissionRepository.GetSubmissionsByAssignmentAndDivisionAsync(
-			filter.AssignmentId,
-			filter.DivisionId
-		);
+		if (studentId.HasValue && students.Count == 0)
+			throw new BusinessException(HomeworkAssignmentErrorCodes.AccessDenied);
+		var submissionsQuery = (await _submissionRepository.GetQueryableAsync()).Where(row =>
+			row.AssignmentId == filter.AssignmentId && row.DivisionId == filter.DivisionId &&
+			(!studentId.HasValue || row.StudentId == studentId.Value));
+		if (studentId.HasValue)
+			submissionsQuery = await EvaluationSubmissionRead.KeepLatestAsync(submissionsQuery, _asyncExecuter);
+		var submissions = await _asyncExecuter.ToListAsync(EvaluationSubmissionRead.Project(submissionsQuery,
+			filter.Lightweight && !studentId.HasValue));
 
 		// Use the latest row if legacy data already contains duplicate submissions.
 		var submissionDict = submissions
@@ -138,7 +160,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				Id = submission?.Id.ToString() ?? Guid.Empty.ToString(),
 				StudentId = student.Id,
 				RollNumber = student.RollNo?.ToString() ?? string.Empty,
-				GrNumber = student.GrNo?.ToString() ?? string.Empty,
+				GrNumber = student.GrNumber ?? student.GrNo?.ToString() ?? string.Empty,
 				StudentName =
 					$"{student.FirstName} {student.MiddleName} {student.LastName}".Trim(),
 				Homework = assignment.Title,
@@ -163,7 +185,8 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 				Percentage = CalculatePercentage(submission?.Marks, submission?.TotalMarks ?? assignment.TotalMarks),
 				SubmittedContent = submission?.SubmittedContent,
 				SubmittedDocumentUrl = submission?.SubmittedDocumentUrl,
-				OriginalFileName = submission?.OriginalFileName
+				OriginalFileName = submission?.OriginalFileName,
+				SubmissionAttachments = SubmissionAttachmentMapper.Map(submission)
 			};
 
 			submissionDtos.Add(dto);
@@ -282,7 +305,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			{
 				throw new BusinessException("ShikshaMitra.Assignment:StudentNotInAssignedDivision")
 					.WithData("StudentId", studentId)
-					.WithData("DivisionId", student.DivisionId);
+					.WithData("DivisionId", student.DivisionId!);
 			}
 			await EnsureCurrentUserCanAccessDivisionAsync(assignment, divisionSchedule.DivisionId, nameof(GiveFeedbackAsync));
 

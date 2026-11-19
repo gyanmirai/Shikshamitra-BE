@@ -92,6 +92,37 @@ public class StudentLeave : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// MIME type of the attachment
 	/// </summary>
 	public string? AttachmentContentType { get; private set; }
+	public string? MobileAttachmentsJson { get; private set; }
+	public TimeOnly? HalfDayStartTime { get; private set; }
+	public TimeOnly? HalfDayEndTime { get; private set; }
+	public void SetHalfDayTimes(TimeOnly? start, TimeOnly? end)
+	{
+		if (Status != StudentLeaveStatusEnum.Pending || start.HasValue != end.HasValue ||
+			start.HasValue && (!IsHalfDay || end <= start)) throw new BusinessException("StudentLeave:InvalidSessionTime");
+		HalfDayStartTime = start;
+		HalfDayEndTime = end;
+	}
+
+	public void SetMobileAttachments(string? json) => MobileAttachmentsJson = json;
+	public void SetEnrollmentPlacement(Guid mediumId, Guid standardId, Guid divisionId)
+	{
+		if (Status != StudentLeaveStatusEnum.Pending || mediumId == Guid.Empty || standardId == Guid.Empty || divisionId == Guid.Empty)
+			throw new BusinessException("StudentLeave:InvalidPlacement");
+		EducationMediumId = mediumId;
+		StandardId = standardId;
+		DivisionId = divisionId;
+	}
+	public void SetSchoolDayDuration(decimal duration)
+	{
+		if (duration <= 0 || Status != StudentLeaveStatusEnum.Pending) throw new BusinessException("StudentLeave:InvalidDuration");
+		TotalDays = duration;
+	}
+
+	public void Cancel()
+	{
+		if (Status != StudentLeaveStatusEnum.Pending) throw new BusinessException("StudentLeave:CannotCancelNonPending");
+		Status = StudentLeaveStatusEnum.Cancelled;
+	}
 
 	// Navigation properties
 	public Student? Student { get; private set; }

@@ -3,246 +3,221 @@ module: finance
 domain: fee-collection-waiver
 content_type: Reference
 status: active
-updated_on: 2026-09-23
+updated_on: 2026-09-24
 owner: finance-team
 audience: humans-and-agents
 ---
 
 # Apply waivers in Fee Collection end to end
 
-TL;DR: waiver is a direct Fee Collection action, not a Finance submodule or approval workflow.
-Each late-fee rule and each Charge Management charge has its own `Allow waiver` toggle.
-When the source toggle is ON, an authorized collector enters only the waiver amount and reason in Fee Collection, and the server applies the waiver immediately.
+## Late fees are collection-only system charges
 
-> Product decision: this document defines the approved target flow.
-> Implementation status: not yet shipped.
-> Current source still keeps broader waiver settings in Collection Policy and supports a late-fee request/approval lifecycle.
+When the collection policy calculates a positive late fee for a due-fee line, the collect-form
+API automatically projects that amount into the Fee Collection `charges` list with:
 
-## Final product decisions
+- `sourceType = LateFee`;
+- `sourceId` and `chargeId` equal to the originating `DueFeeId`;
+- `isSystemGenerated = true`;
+- a name containing the fee head and installment;
+- the calculated explanation, paid amount, waived amount, and remaining amount.
 
-| Question | Decision |
+This is a system-generated collection obligation, not a Charge Management request. It is never
+inserted into or listed from the Charge/ChargeRequest aggregates, so Charge Management continues
+to show only user-created charge requests. Collection and waiver commands route the row back to
+the existing late-fee allocation and waiver records by `DueFeeId`; they do not create a duplicate
+charge ledger entry.
+
+TL;DR: waiver is a direct Fee Collection operation.
+Collection Policy and Charge Management contain no waiver configuration.
+Every eligible system-generated late-fee charge and approved outstanding manual charge displays a waiver toggle in Fee Collection; enabling it requires only a reason and waives the full live remaining balance.
+
+> Product decision: this document defines the implemented flow.
+
+## Final decisions
+
+| Question | Target decision |
 |---|---|
-| Is there a Waiver tab under Finance > Fees? | No |
-| Is there a separate Waiver Management screen? | No |
-| Is there a global waiver setting? | No |
-| Where is late-fee eligibility configured? | `Allow waiver` on each effective late-fee rule |
-| Where is charge eligibility configured? | `Allow waiver` on each charge created in Charge Management |
-| Where is a waiver applied? | Fee Collection only |
-| What does the collector enter? | Amount and mandatory reason only |
-| Does it need approval or rejection? | No; it is applied immediately |
-| Can the original late fee or charge be overwritten? | No; the waiver is a separate non-cash reduction |
+| Does Collection Policy contain waiver fields? | No |
+| Does Charge Management contain an `Allow waiver` field? | No |
+| Is waiver availability configured globally or per source? | No |
+| Where is the waiver control? | On each eligible charge row in Fee Collection, including system-generated late-fee charges |
+| What does the collector enter? | Mandatory reason only |
+| Is partial waiver supported? | No; the full live remaining balance is waived |
+| Is approval or rejection required? | No |
+| Is there a Waiver tab or separate route? | No |
+| Is the original amount overwritten? | No; waiver is stored as a separate non-cash reduction |
 
-## Ownership boundaries
+## Module ownership
 
 | Module | Owns | Does not own |
 |---|---|---|
-| Collection Policy | Late-fee calculation and the `Allow waiver` flag on each effective late-fee rule | Waiver amount, reason, application, approval, or queue |
-| Charge Management | Charge creation and the charge-level `Allow waiver` flag | Applying a student's waiver |
-| Fee Collection | Showing eligible balances and immediately applying amount plus reason | Configuring late-fee formulas or creating charges |
-| Finance navigation | Existing Collection Policy, Charge Management, and Fee Collection screens | A Waiver tab or Waiver Management route |
+| Collection Policy | Due-date/grace rules, late-fee calculation, caps, rounding, and applicable fee heads | Waiver configuration or execution |
+| Charge Management | Charge creation, audience, approval, rejection, voiding, and original amount | Waiver configuration or execution |
+| Fee Collection | System late-fee charge projection, waiver toggle, reason, confirmation, immediate application, refreshed balance, and history | Late-fee formula or manual charge creation |
+| Finance navigation | Collection Policy, Charge Management, and Fee Collection screens | Waiver tab, settings page, or approval queue |
 
-## End-to-end user flow
+## User flow
 
 ```text
 Collection Policy
-  -> configure a late-fee rule
-  -> set Allow waiver = ON or OFF for that rule
+  -> calculates a late fee
+  -> no waiver field exists
 
 Charge Management
-  -> create a charge
-  -> set Allow waiver = ON or OFF for that charge
+  -> creates and approves a charge
+  -> no waiver field exists
 
 Fee Collection
-  -> open a student
-  -> choose an eligible late-fee or charge row
-  -> click Waive
-  -> enter amount and reason
-  -> confirm
-  -> server validates the live balance
-  -> waiver is applied immediately
-  -> payable/outstanding total refreshes
+  -> collector opens a student
+  -> calculated late fee appears automatically in Additional Charges as System generated
+  -> each eligible system/manual charge row shows Waiver toggle = OFF
+  -> collector turns the required row ON
+  -> enters mandatory reason
+  -> confirms Apply waiver
+  -> server rereads and waives the full live remaining balance
+  -> collection totals refresh immediately
 ```
 
-There is no `PendingApproval`, `Approved`, or `Rejected` state.
-There is no request list, approver action, or separate waiver workspace.
+There is no Draft, Pending, Approved, Rejected, or Applied approval state.
+There is no request list, checker action, global setting, or Waiver Management workspace.
 
-## Late-fee toggle
+## Eligible Fee Collection rows
 
-Every effective late-fee rule exposes one boolean field:
+### System-generated late-fee charge
 
-| Field | Default | Meaning |
-|---|---:|---|
-| `Allow waiver` | OFF | Whether a positive unpaid late fee produced by this rule may be waived in Fee Collection |
+Show the waiver toggle when:
 
-Rules:
+- the server-calculated remaining late fee is greater than zero;
+- the due row and fee assignment are active and collectible;
+- the user has the target Fee Collection waiver permission;
+- the student is inside the user's Finance scope.
 
-- a shared policy-level late-fee rule has one toggle applying to every late-fee line produced by that rule;
-- when a fee head has a custom late-fee rule, that effective rule has its own toggle;
-- `No late fee` produces no amount and therefore nothing to waive;
-- changing the toggle affects newly assessed late-fee eligibility only;
-- the eligibility value is captured with the assessed late-fee line so later policy edits do not reinterpret historical financial records;
-- no waiver fee-head selector, amount cap, percentage cap, approval threshold, expiry date, or approval role is configured.
+Collection Policy determines whether a late fee exists, not whether it may be waived.
+If a fee head is outside the policy's late-fee scope, no late fee is calculated and no waiver toggle appears.
+
+| Fee-head situation | Result in Fee Collection |
+|---|---|
+| Head exists in Fee Structure and the policy's late-fee scope | A positive calculated remaining late fee creates a collection-only system charge with the waiver toggle |
+| Head exists in Fee Structure but not the late-fee scope | No late fee exists, so no waiver toggle appears |
+| Head exists in the policy scope but not Fee Structure | No student due exists, so no waiver toggle appears |
 
 The payment term supplies the installment due date.
-Collection Policy uses that date, its grace/calculation rules, and its late-fee fee-head scope to calculate the late fee.
-The toggle does not create a late fee; it only says whether the resulting balance may be waived.
+Collection Policy applies its grace and calculation rules to that due date.
+Waiver acts only on the resulting remaining late-fee balance.
 
-### Fee-head matching
+### Charge
 
-| Situation | Late-fee result | Waiver result |
-|---|---|---|
-| Fee head is in both Fee Structure and the policy's late-fee scope | Late fee may be assessed after due/grace rules | `Waive` appears only when that effective rule's toggle was captured as ON |
-| Fee head is in Fee Structure but not the policy's late-fee scope | No late fee from that policy | Nothing to waive |
-| Fee head is in the policy scope but absent from Fee Structure | No student due exists for that head | Nothing to waive |
+Show the waiver toggle when:
 
-Example:
-
-```text
-Tuition late-fee rule:  Allow waiver = ON
-Transport late-fee rule: Allow waiver = OFF
-
-Student unpaid tuition late fee:   INR 300 -> Waive action available
-Student unpaid transport late fee: INR 150 -> Waive action unavailable
-```
-
-## Charge toggle
-
-Every charge created in Charge Management exposes:
-
-| Field | Default | Meaning |
-|---|---:|---|
-| `Allow waiver` | OFF | Whether the approved charge's positive remaining student balance may be waived in Fee Collection |
-
-Rules:
-
-- the toggle is part of charge create and permitted pre-approval edit flows;
-- approval copies the setting to every generated student charge line;
-- after approval or any collection/waiver activity, the captured setting is immutable;
-- a rejected, voided, pending, fully paid, or zero-balance charge cannot be waived;
-- the charge does not need to match a Fee Structure or Collection Policy fee head;
-- each new charge chooses its own value; Charge Category does not silently enable waiver.
-
-Example:
-
-```text
-Transport damage charge: Amount INR 1,000, Allow waiver = ON
-ID-card replacement charge: Amount INR 200, Allow waiver = OFF
-
-Fee Collection shows Waive for the transport damage balance only.
-```
-
-## Fee Collection experience
-
-Fee Collection is the only screen where waiver money is entered or changed.
-
-Show `Waive` on a late-fee or charge row only when all conditions are true:
-
-- the source row captured `Allow waiver = ON`;
-- the source is active and collectible;
-- remaining balance is greater than zero;
+- the student charge was created through Charge Management;
+- the charge line is `Approved` and collectible;
+- it is not pending, rejected, voided, or cancelled;
+- its remaining balance is greater than zero;
 - the user has the target Fee Collection waiver permission;
-- the student is within the user's Finance scope.
+- the student is inside the user's Finance scope.
 
-Do not show an approval status or route the user to another screen.
+The charge does not need to match a Collection Policy fee head.
+Charge Management creates the obligation; Fee Collection alone decides whether the authorized collector applies a waiver.
 
-### Waiver dialog
+## Fee Collection interaction
 
-Display source information as read-only context and allow only two editable fields.
+Each eligible row displays:
 
-| Field | Editable | Rule |
-|---|---:|---|
-| Student | No | Current student |
-| Type | No | Late fee or Charge |
-| Source | No | Fee head/due date or charge name/category |
-| Remaining amount | No | Current server-provided balance |
-| Waiver amount | Yes | Required, greater than zero, at most the live remaining balance |
-| Reason | Yes | Required and trimmed |
+| UI element | Behavior |
+|---|---|
+| Waiver toggle | OFF by default; turning ON selects the row for full waiver |
+| Reason | Appears and becomes required only while the toggle is ON |
+| Waiver amount | Read-only; equals the server-provided current remaining balance |
+| Remaining after waiver | Read-only zero for the selected row |
+
+The collector cannot type or edit the waiver amount.
+Turning the toggle OFF before confirmation removes the reason and makes no change.
+
+### Confirmation
+
+```text
+Waive the full remaining amount of INR {liveRemainingAmount}?
+Reason: {reason}
+
+This is a non-cash reduction and will immediately change the student's outstanding balance.
+```
 
 Primary action: `Apply waiver`.
 
-Confirmation text:
+After success, Fee Collection refreshes the student's late fees, charges, payable total, ledger, and row actions.
 
-```text
-Apply a waiver of INR {amount}?
-This will immediately reduce the student's outstanding balance and cannot be treated as a payment.
-```
+## Server transaction
 
-After success, close the dialog and refresh the student's late fees, charges, totals, ledger, and available actions.
+The server performs the operation in one transaction:
 
-## Server validation and transaction
-
-The server is authoritative and performs these steps in one transaction:
-
-1. Load the student and source late-fee or charge row inside the tenant boundary.
-2. Verify the user's Fee Collection permission and student scope.
-3. Verify the source captured `Allow waiver = ON`.
-4. Reject inactive, rejected, voided, pending, or otherwise non-collectible sources.
-5. Recalculate the live remaining balance.
-6. Validate `0 < waiver amount <= live remaining balance`.
-7. Require a non-empty reason.
+1. Load the student and source row inside the tenant boundary.
+2. Verify the dedicated Fee Collection waiver permission and student scope.
+3. Verify that the late fee or charge is currently eligible and collectible.
+4. Require a non-empty trimmed reason.
+5. Recalculate the source's live remaining balance.
+6. Reject the command if the live remaining balance is zero.
+7. Use the complete live remaining balance as the applied waiver amount.
 8. Create an immutable waiver application record.
-9. Reduce the collectible balance without changing the original assessment or charge.
-10. Write the audit/ledger entry and commit.
-11. Return refreshed balances.
+9. Reduce the collectible balance without changing the original late fee or charge amount.
+10. Write ledger and audit evidence.
+11. Commit and return refreshed balances.
 
-The command uses an idempotency key and concurrency protection so double-clicks and concurrent collections cannot apply more than the remaining balance.
+The command requires an idempotency key and concurrency protection.
+A double-click or retry returns the first successful result and never applies another waiver.
 
 ## Money rules
 
 ### Late fee
 
 ```text
-remainingLateFee =
-  max(0, assessedLateFee - paidLateFee - appliedLateFeeWaivers)
+remainingLateFeeBefore =
+  max(0, calculatedLateFee - paidLateFee - previousAppliedWaivers)
 
-newWaiver <= remainingLateFeeAtCommit
-
-newRemainingLateFee = remainingLateFee - newWaiver
+appliedWaiver = remainingLateFeeBefore
+remainingLateFeeAfter = 0
 ```
 
 ### Charge
 
 ```text
-remainingCharge =
-  max(0, originalChargeAmount - collectedChargeAmount - appliedChargeWaivers)
+remainingChargeBefore =
+  max(0, originalChargeAmount - collectedChargeAmount - previousAppliedWaivers)
 
-newWaiver <= remainingChargeAtCommit
-
-newRemainingCharge = remainingCharge - newWaiver
+appliedWaiver = remainingChargeBefore
+remainingChargeAfter = 0
 ```
 
-A waiver never becomes a payment, receipt, concession, adjustment, refund, or student credit.
+The server calculates the amount at commit time.
+The UI never submits a trusted monetary value.
 
-## Example from collection to completion
+## Example
 
 ```text
-Approved charge amount             INR 1,000
-Collected earlier                    INR 300
-Already waived                         INR 0
-Current outstanding                  INR 700
+Approved transport-damage charge     INR 1,000
+Already collected                      INR 300
+Current outstanding                    INR 700
 
-Collector clicks Waive
-Waiver amount                        INR 500
-Reason                    "Management approval"
+Collector turns Waiver ON
+Reason: "Charge waived by management"
 
-Server applies immediately           INR 500
-New outstanding                      INR 200
-Cash received                          INR 0
-Approval status                         None
+Server-applied waiver                  INR 700
+New outstanding                          INR 0
+Cash received                            INR 0
+Approval step                              None
 ```
 
-## Target contracts
+## Target contract
 
-These are approved target changes, not current shipped contracts.
+These are the active contracts for this flow.
 
 | Area | Target change |
 |---|---|
-| Effective late-fee rule/snapshot | Add `AllowWaiver` boolean |
-| Charge create/update/detail | Add `AllowWaiver` boolean |
-| Student charge line | Capture `AllowWaiver` at charge approval |
-| Fee Collection row | Return `canWaive`, remaining amount, and source type/id |
-| Apply command | Accept source type, source ID, amount, reason, and idempotency key |
-| Application record | Store source, student, amount, reason, actor, timestamp, and reversal link if supported |
+| Collection Policy contracts | Remove all waiver fields |
+| Charge Management contracts | Do not add or retain waiver settings |
+| Fee Collection system late-fee charge | Return `sourceType = LateFee`, `sourceId = DueFeeId`, server-derived `canWaive`, and current remaining amount |
+| Fee Collection charge row | Return server-derived `canWaive` and current remaining amount |
+| Apply command | Accept source type, source ID, reason, and idempotency key; do not accept amount |
+| Waiver record | Store source, student, server-calculated applied amount, reason, actor, timestamp, and reversal link if supported |
 
 Proposed Fee Collection endpoint:
 
@@ -252,94 +227,98 @@ POST /api/finance/fee-collections/waivers
 
 ```json
 {
-  "sourceType": "LateFee",
+  "sourceType": "Charge",
   "sourceId": "guid",
-  "amount": 200,
-  "reason": "Approved by management",
+  "reason": "Charge waived by management",
   "idempotencyKey": "client-generated-key"
 }
 ```
 
-The current `late-fee-waivers` list/approve/reject API is retired after migration.
-No list, approve, or reject endpoint replaces it.
+The response returns the applied waiver amount and refreshed source/student totals.
+The current late-fee waiver list, request, approve, and reject endpoints are retired after migration.
 
-## Permissions
+## Permission
 
-The target keeps waiver authorization inside Fee Collection, without creating a Waiver permission family or submodule.
+Waiver authorization remains inside Fee Collection without creating a Waiver submodule.
 
-| Target permission | Purpose |
+| Permission | Purpose |
 |---|---|
-| `Finance.Fees.FeeCollections.ApplyWaiver` | Apply an eligible late-fee or charge waiver from Fee Collection |
+| `Finance.Fees.FeeCollections.ApplyWaiver` | Immediately apply a full waiver to an eligible late-fee or charge row |
 
-This is a proposed permission and is not currently shipped.
-It should remain separate from ordinary payment collection because a waiver reduces receivables without receiving cash.
+The dedicated permission controls the server mutation. The collect-form balance controls visibility so stale frontend permission state cannot hide an eligible toggle.
 
 ## Ledger, receipt, reporting, and audit
 
-| Surface | Required result |
+| Surface | Required behavior |
 |---|---|
-| Fee Collection | Original, paid, waived, and remaining amounts refresh immediately |
-| Student ledger | Record a non-cash waiver with source reference, reason, actor, and timestamp |
-| Receipt | Do not generate a receipt for the waiver; receipts represent cash/payment only |
-| Late-fee report | Show assessed, paid, waived, and remaining late fee separately |
-| Charge report | Show original, collected, waived, and outstanding charge separately |
-| Audit Trail | Capture source toggle changes and each applied waiver with before/after balances |
+| Fee Collection | Refresh original, paid, waived, and remaining amounts immediately |
+| Student ledger | Record a non-cash waiver with source, amount, reason, actor, and timestamp |
+| Receipt | Do not generate a payment receipt for the waiver |
+| Late-fee report | Show calculated, paid, waived, and remaining amounts separately |
+| Charge report | Show original, collected, waived, and outstanding amounts separately |
+| Audit Trail | Record before/after balances, reason, actor, timestamp, idempotency key, and correlation ID |
+
+A waiver is not a payment, concession, adjustment, refund, or student credit.
 
 ## Correction and reversal
 
-A posted waiver is immutable and is not edited or deleted.
-If the school must correct it, use an authorized reversal linked to the original application, with a mandatory reason.
-The reversal restores only the amount originally reduced and must not create an invalid balance.
-No separate Waiver screen is needed; the action can be exposed from the student's Fee Collection history.
+An applied waiver is immutable and cannot be edited or deleted.
+If correction is required, use an authorized reversal linked to the original waiver, with a mandatory reason.
+The reversal restores only the amount reduced by the original waiver and must respect later financial activity.
+The reversal action can appear in Fee Collection history; it does not require a separate Waiver screen.
 
-## Migration and rollout
+## Migration
 
-1. Remove the proposed Waiver tab, route, queue, settings, and `Finance.Fees.Waivers.*` permissions from the target design.
-2. Replace broad Collection Policy waiver configuration with `AllowWaiver` on each effective late-fee rule.
-3. Remove fee-head waiver selectors, amount/percentage caps, thresholds, expiry, roles, and approval settings.
-4. Add `AllowWaiver` to Charge Management create/edit/detail and capture it on approved student charge lines.
-5. Add `ApplyWaiver` to the Fee Collection permission family.
-6. Add the common amount-and-reason dialog to eligible late-fee and charge rows.
-7. Replace request/approve/reject behavior with one transactional apply command.
-8. Preserve existing applied waiver history as immutable financial evidence.
-9. Resolve existing pending requests before cutover; do not silently apply them.
-10. Update collection, ledger, report, audit, and reversal calculations for both source types.
+1. Remove all waiver fields from active Collection Policy domain, DTOs, validation, snapshots, and frontend forms.
+2. Do not add waiver fields to Charge Management create/edit/detail.
+3. Remove the Waiver menu, route, settings, request list, and approval/rejection UI.
+4. Retire waiver settings and approval/threshold/role permission behavior.
+5. Authorize waiver application through the Fee Collection `ApplyWaiver` permission.
+6. Add server-derived `canWaive` to late-fee and approved-charge rows.
+7. Add the toggle and reason-only interaction to Fee Collection.
+8. Replace amount/request/approve/reject commands with one full-balance apply command.
+9. Preserve historical applied waivers as immutable evidence.
+10. Resolve existing pending requests explicitly before cutover; never auto-apply them.
+11. Update ledger, reports, audit, concurrency, idempotency, and reversal behavior for both source types.
 
-## Team acceptance scenarios
+## Acceptance scenarios
 
-1. Confirm Finance > Fees has no Waiver tab or Waiver Management route.
-2. Configure two late-fee rules with opposite toggle values and confirm only the ON rule produces a waivable balance.
-3. Create two charges with opposite toggle values and confirm only the ON charge is waivable after approval.
-4. Confirm Fee Collection asks only for amount and reason.
-5. Apply a waiver and confirm there is no pending, approve, or reject step.
-6. Confirm amount zero, negative, or above the live remaining balance is rejected.
-7. Confirm a concurrent payment causes the server to revalidate rather than over-waive.
-8. Confirm original late-fee and charge amounts remain unchanged.
-9. Confirm receipts do not count waiver as cash.
-10. Confirm ledger, reports, and audit show the waiver separately.
-11. Confirm rejected, voided, pending, and fully paid charges cannot be waived.
-12. Confirm policy/charge toggle changes do not reinterpret historical source rows.
-13. Confirm an unauthorized or out-of-scope collector cannot apply a waiver through the API.
+1. Confirm Collection Policy create/edit/detail contains no waiver field.
+2. Confirm Charge Management create/edit/detail contains no waiver field.
+3. Confirm Finance navigation has no Waiver tab or route.
+4. Confirm every positive collectible late fee appears as a system-generated charge with the Fee Collection waiver toggle.
+5. Confirm system-generated late-fee charges do not appear in Charge Management.
+6. Confirm every approved positive outstanding manual charge row shows the toggle.
+7. Confirm pending, rejected, voided, cancelled, fully paid, and zero-balance charge rows do not show it.
+8. Turn a toggle ON and confirm reason is the only editable waiver field.
+9. Confirm the frontend does not send a waiver amount.
+10. Apply the waiver and confirm the server uses the full live remaining balance.
+11. Confirm the outstanding balance becomes zero immediately without approval.
+12. Confirm concurrent collection/waiver activity cannot over-reduce the balance.
+13. Confirm the original late-fee or charge amount remains unchanged.
+14. Confirm no cash receipt is generated.
+15. Confirm ledger, reports, and audit identify the waiver separately.
+16. Confirm unauthorized and out-of-scope users cannot apply the operation through the API.
 
 ## Source impact map
 
 Current source paths expected to change during implementation:
 
-- Collection Policy late-fee rules and snapshots: `src/ShikshaMitra.Domain/Finance/Policies/CollectionPolicy.cs`, `src/ShikshaMitra.Domain/Finance/Policies/CollectionPolicySnapshot.cs`
+- Collection Policy domain/snapshots: `src/ShikshaMitra.Domain/Finance/Policies/CollectionPolicy.cs`, `src/ShikshaMitra.Domain/Finance/Policies/CollectionPolicySnapshot.cs`
 - Collection Policy contracts: `src/ShikshaMitra.Application.Contracts/Finance/Policies/CollectionPolicyDtos.cs`
-- Charge aggregate and contracts: `src/ShikshaMitra.Domain/Finance/Fees/Charges/Aggregates/Charge.cs`, `src/ShikshaMitra.Application.Contracts/Finance/Fees/Charges/Dtos/**`
-- Existing waiver application/service: `src/ShikshaMitra.Domain/Finance/Fees/Collections/Aggregates/LateFeeWaiverApplication.cs`, `src/ShikshaMitra.Application/Finance/Fees/Collections/LateFeeWaiverAppService.cs`
+- Current waiver aggregate/service: `src/ShikshaMitra.Domain/Finance/Fees/Collections/Aggregates/LateFeeWaiverApplication.cs`, `src/ShikshaMitra.Application/Finance/Fees/Collections/LateFeeWaiverAppService.cs`
 - Fee Collection contracts: `src/ShikshaMitra.Application.Contracts/Finance/Fees/Collections/**`
+- Charge balance contracts: `src/ShikshaMitra.Application.Contracts/Finance/Fees/Charges/Dtos/**`
 - Finance permissions: `src/ShikshaMitra.Domain.Shared/Constants/Permissions/SubmodulePermissions/Finance/ShikshaMitraSubmodulePermissions.Finance.Fees.cs`
-- Frontend Collection Policy: `../Shikshamitra-FE/src/screens/finance/policies/**`
-- Frontend Charge Management: `../Shikshamitra-FE/src/screens/finance/charges/**`
-- Frontend Fee Collection: `../Shikshamitra-FE/src/screens/finance/FeeCollection/**`
+- Frontend Collection Policy cleanup: `../Shikshamitra-FE/src/screens/finance/policies/**`
+- Frontend Fee Collection toggle: `../Shikshamitra-FE/src/screens/finance/FeeCollection/**`
+- Frontend Waiver route/menu removal: `../Shikshamitra-FE/src/app/(auth-route)/finance/waiver-management/**`, `../Shikshamitra-FE/src/constants/finance-menu.ts`
 
-## Verification plan
+## Verification
 
-Backend coverage must prove toggle capture, both source types, permission/scope enforcement, live-balance validation, idempotency, concurrency, immutable original amounts, ledger/report separation, and reversal integrity.
+Backend tests must prove no policy/charge waiver configuration, both eligible source types, server-derived full amount, reason validation, permission/scope enforcement, idempotency, concurrency, immutable original amounts, ledger/report separation, and reversal integrity.
 
-Frontend coverage must prove no Waiver route, correct action visibility, two-field dialog behavior, server error display, refreshed totals, and narrow-layout accessibility.
+Frontend tests must prove no Waiver route, correct row visibility, toggle behavior, reason-only input, no client amount, refreshed totals, server error display, and keyboard-accessible narrow layouts.
 
 ```powershell
 # Backend

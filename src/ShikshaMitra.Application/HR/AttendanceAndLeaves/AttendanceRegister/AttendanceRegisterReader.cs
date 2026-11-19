@@ -37,7 +37,6 @@ public class AttendanceRegisterReader(
 			.Take(maxResultCount)
 			.ToList();
 		var stageNames = await lookupReader.BuildStageNameLookupAsync(pageRows.Select(x => x.EducationMediumStageId).Where(x => x.HasValue).Select(x => x!.Value));
-		var dayLocks = await lookupReader.BuildDayLockLookupAsync(pageRows.Select(x => x.AttendanceDate));
 
 		return new AttendanceRegisterResponse
 		{
@@ -46,7 +45,7 @@ public class AttendanceRegisterReader(
 			PageSize = maxResultCount,
 			TotalPages = totalCount == 0 ? 0 : (int)Math.Ceiling((double)totalCount / maxResultCount),
 			Summary = BuildSummary(filteredRows, lockLookup, allDayLocks, filteredRows.Select(x => x.EmployeeId).Distinct().Count()),
-			Items = pageRows.Select(x => MapRow(x, lockLookup, stageNames, dayLocks)).ToList()
+			Items = pageRows.Select(x => MapRow(x, lockLookup, stageNames, allDayLocks)).ToList()
 		};
 	}
 
@@ -64,8 +63,10 @@ public class AttendanceRegisterReader(
 			.ThenByDescending(group => group.HalfDay)
 			.ThenByDescending(group => group.Locked)
 			.ThenBy(group => group.EmployeeName)
+			.ThenBy(group => group.EmployeeId)
 			.ToList();
 
+		groupedRows = AttendanceRegisterOrdering.Apply(groupedRows, input.Sorting);
 		var totalCount = groupedRows.Count;
 		var maxResultCount = NormalizeMaxResultCount(input.MaxResultCount);
 		var skipCount = Math.Max(input.SkipCount, 0);
@@ -118,6 +119,11 @@ public class AttendanceRegisterReader(
 		if (input.EducationMediumStageId.HasValue)
 		{
 			await EnsureStageInScopeAsync(scope, input.EducationMediumStageId);
+		}
+
+		foreach (var stageId in input.EducationMediumStageIds.Distinct())
+		{
+			await EnsureStageInScopeAsync(scope, stageId);
 		}
 
 		var allRowsForSummary = await rowReader.BuildRowsAsync(input, startDate, endDate, scope);

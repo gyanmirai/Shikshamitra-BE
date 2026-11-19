@@ -131,7 +131,7 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 					1,
 					new Dictionary<Guid, IReadOnlyDictionary<DateOnly, decimal>>()));
 
-			ex.Message.ShouldContain("Working units are required for employee");
+			ex.Message.ShouldBe($"Working units are required for staff {scenario.TargetEmployeeId}.");
 		}
 	}
 

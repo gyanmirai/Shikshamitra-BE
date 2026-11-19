@@ -16,16 +16,19 @@ public class AdmissionOfferingConfiguration : IEntityTypeConfiguration<Admission
 		builder.ConfigureByConvention();
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(AdmissionOfferingConsts.MaxNameLength);
 		builder.Property(x => x.Code).IsRequired().HasMaxLength(AdmissionOfferingConsts.MaxCodeLength);
+		builder.Property(x => x.Track).IsRequired().HasDefaultValue(AdmissionTrack.General);
+		builder.Property(x => x.EntryMode).IsRequired().HasDefaultValue(AdmissionEntryMode.Inquiry);
 		builder.Property(x => x.OpenDate).IsRequired(false);
 		builder.Property(x => x.CloseDate).IsRequired(false);
 		builder.Property(x => x.IsActive).IsRequired().HasDefaultValue(true);
+		builder.Property(x => x.IntakeConfigurationRequired).IsRequired().HasDefaultValue(false);
 		builder.Property(x => x.IsDeleted).IsRequired().ValueGeneratedNever().HasDefaultValue(false);
 
-		builder.HasIndex(x => new { x.TenantId, x.AdmissionCycleId, x.BoardId, x.MediumId, x.StageId, x.StandardId })
+		builder.HasIndex(x => new { x.TenantId, x.AdmissionCycleId, x.BoardId, x.MediumId, x.StageId, x.StandardId, x.Track })
 			.IsUnique()
 			.HasDatabaseName("UX_AdmissionOfferings_Identity_NoCampus")
 			.HasFilter("\"IsDeleted\" = false AND \"CampusId\" IS NULL");
-		builder.HasIndex(x => new { x.TenantId, x.AdmissionCycleId, x.CampusId, x.BoardId, x.MediumId, x.StageId, x.StandardId })
+		builder.HasIndex(x => new { x.TenantId, x.AdmissionCycleId, x.CampusId, x.BoardId, x.MediumId, x.StageId, x.StandardId, x.Track })
 			.IsUnique()
 			.HasDatabaseName("UX_AdmissionOfferings_Identity_Campus")
 			.HasFilter("\"IsDeleted\" = false AND \"CampusId\" IS NOT NULL");
@@ -41,5 +44,7 @@ public class AdmissionOfferingConfiguration : IEntityTypeConfiguration<Admission
 		builder.HasOne<AdmissionWorkflowDefinition>().WithMany().HasForeignKey(x => x.WorkflowDefinitionId).OnDelete(DeleteBehavior.Restrict);
 		builder.HasOne<AdmissionFormDefinition>().WithMany().HasForeignKey(x => x.InquiryFormDefinitionId).OnDelete(DeleteBehavior.Restrict);
 		builder.HasOne<AdmissionFormDefinition>().WithMany().HasForeignKey(x => x.ApplicationFormDefinitionId).OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne<AdmissionIntakeProfile>().WithMany().HasForeignKey(x => x.InquiryIntakeProfileId).OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne<AdmissionIntakeProfile>().WithMany().HasForeignKey(x => x.CounsellorAssignmentProfileId).OnDelete(DeleteBehavior.Restrict);
 	}
 }

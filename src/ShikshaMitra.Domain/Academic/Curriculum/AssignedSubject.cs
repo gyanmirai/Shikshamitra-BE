@@ -23,7 +23,7 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUs
 	/// <summary>
 	/// Navigation property to the associated Standard entity.
 	/// </summary>
-	public virtual Standard Standard { get; set; }
+	public virtual Standard Standard { get; set; } = null!; // Populated by EF relationship materialization.
 
 	/// <summary>
 	/// Gets or sets the ID of the subject (e.g., Math, Science) that is assigned.
@@ -33,7 +33,7 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUs
 	/// <summary>
 	/// Navigation property to the associated Subject entity.
 	/// </summary>
-	public virtual Subject Subject { get; set; }
+	public virtual Subject Subject { get; set; } = null!; // Populated by EF relationship materialization.
 
 	/// <summary>
 	/// Gets or sets the ID of the elective subject, if this assignment is for an elective.
@@ -135,6 +135,9 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUs
 	/// </summary>
 	private AssignedSubject()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		SubjectCode = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 

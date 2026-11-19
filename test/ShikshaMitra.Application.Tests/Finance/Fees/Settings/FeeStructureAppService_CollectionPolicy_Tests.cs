@@ -31,7 +31,7 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 /// existed on the domain aggregate (Phase 1) but no AppService/controller ever called it, so
 /// FeePoliciesTab.tsx's "Collection Policy" dropdown had nothing real to save to.
 /// </summary>
-public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplicationTestBase<FeeStructurePolicyTestModule>
 {
 	private static readonly Guid TestUserId = Guid.Parse("66666666-6666-6666-6666-666666666666");
 	private static readonly Guid TestTenantId = Guid.Parse("55555555-5555-5555-5555-555555555555");
@@ -92,16 +92,21 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 		var incomeCategoryId = await FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
 			GetRequiredService<IRepository<AccountHead, Guid>>(),
 			GetRequiredService<IRepository<TransactionCategory, Guid>>(),
-			yearId, TestTenantId, "Structure Tuition");
+			yearId, TestTenantId, "Structure Tuition", new DateTimeOffset(GetRequiredService<Volo.Abp.Timing.IClock>().Now));
 		var feeHead = new FeeHead(
 			Guid.NewGuid(), TestTenantId, yearId, category.Id, "Tuition Fee",
 			FeeHeadModule.Finance, true, null, incomeCategoryId);
 		await _feeHeadRepo.InsertAsync(feeHead, autoSave: true);
 
+        // Finance policy scope is resolved through students; seed a non-enrolled context
+        // before creating policies so these fixtures exercise the real scope guard.
+        await GetRequiredService<IRepository<ShikshaMitra.Students.Student, Guid>>().InsertAsync(
+            new ShikshaMitra.Students.Student(Guid.NewGuid(), TestTenantId, "Scope", null, "Context", yearId,
+                boardId, mediumId, stageId, standard.Id, status: ShikshaMitra.Students.StudentLifeCycleStatusEnum.Inquiry), autoSave: true);
 		return (yearId, standard.Id, metadata.Id, feeHead.Id);
 	}
 
-	private async Task<Guid> CreateCollectionPolicyAsync(Guid academicYearId, Guid feeHeadId, string name)
+	private async Task<Guid> CreateCollectionPolicyAsync(Guid academicYearId, Guid feeHeadId, string name, int graceDays = 7)
 	{
 		var policy = await _collectionPolicies.CreateAsync(new CreateUpdateCollectionPolicyDto
 		{
@@ -110,7 +115,8 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 			PolicyCode = $"CP-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
 			Status = "Active",
 			EnableLateFee = true,
-			GracePeriodDays = 7,
+            LateFeeIncomeCategoryId = (await _feeHeadRepo.GetAsync(feeHeadId)).IncomeCategoryId,
+			GracePeriodDays = graceDays,
 			LateFeeApplyOnFeeHeads = new() { feeHeadId },
 			LateFeeType = "PerDay",
 			AmountPerDay = 10,
@@ -141,6 +147,24 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 
 	private static List<FeeHeadAssignmentRequest> BuildFeeHeads(Guid feeHeadId) =>
 		[new FeeHeadAssignmentRequest { FeeHeadId = feeHeadId, Amount = 1_000 }];
+
+	[Fact]
+	public async Task Common_Policy_Workspace_Preview_Covers_All_Heads_With_An_Empty_Saved_Selection()
+	{
+		using var reviewer = Reviewer();
+		using var tenant = _currentTenant.Change(TestTenantId);
+		var (metadata, standard, candidate) = await ReadyCandidateAsync();
+		var policy = await _collectionPolicies.GetAsync(candidate.CollectionPolicyId!.Value);
+		policy.ApplyLateFeeToAllFeeHeads.ShouldBeTrue();
+		policy.LateFeeApplyOnFeeHeads.ShouldBeEmpty();
+		var review = await _feeStructures.PreviewAsync(new()
+		{
+			FeeStructureMetadataId = metadata, StandardId = standard, StandardFeeStructures = candidate
+		});
+		review.Errors.ShouldBeEmpty();
+		review.Coverage.ShouldAllBe(x => x.Collection == "Late fee applies");
+		review.Warnings.ShouldNotContain(x => x.Contains("No late-fee heads overlap"));
+	}
 
 	[Fact]
 	public async Task Create_Persists_The_Attached_Collection_Policy()
@@ -247,7 +271,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 	}
 
 	[Fact]
-	public async Task Policy_Heads_Outside_The_Structure_Are_Ignored_Without_Blocking_Attachment()
+	public async Task Common_Policy_Covers_Structure_Heads_Without_Selected_Head_Overlap()
 	{
 		using (GetRequiredService<ICurrentPrincipalAccessor>().Change(new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(AbpClaimTypes.UserId, TestUserId.ToString()) }, "Test"))))
 		using (_currentTenant.Change(TestTenantId))
@@ -259,7 +283,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 			var incomeCategoryId = await FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
 				GetRequiredService<IRepository<AccountHead, Guid>>(),
 				GetRequiredService<IRepository<TransactionCategory, Guid>>(),
-				academicYearId, TestTenantId, "Policy Only");
+				academicYearId, TestTenantId, "Policy Only", new DateTimeOffset(GetRequiredService<Volo.Abp.Timing.IClock>().Now));
 			var policyOnlyFeeHead = new FeeHead(
 				Guid.NewGuid(), TestTenantId, academicYearId, policyCategory.Id, "Policy-only Fee",
 				FeeHeadModule.Finance, true, null, incomeCategoryId);
@@ -278,10 +302,10 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 				});
 
 			impact.IsAttachable.ShouldBeTrue();
-			impact.CoveredLateFeeHeadIds.ShouldBeEmpty();
-			impact.StructureHeadsWithoutLateFee.ShouldContain(structureFeeHeadId);
-			impact.PolicyLateFeeHeadsNotInStructure.ShouldContain(policyOnlyFeeHead.Id);
-			impact.Warnings.ShouldContain(x => x.Contains("No late fee will be charged"));
+			impact.CoveredLateFeeHeadIds.ShouldBe([structureFeeHeadId]);
+			impact.StructureHeadsWithoutLateFee.ShouldBeEmpty();
+			impact.PolicyLateFeeHeadsNotInStructure.ShouldBeEmpty();
+			impact.Warnings.ShouldBeEmpty();
 
 			var created = await _feeStructures.CreateAsync(metadataId, new StandardFeeStructureSaveRequest
 			{

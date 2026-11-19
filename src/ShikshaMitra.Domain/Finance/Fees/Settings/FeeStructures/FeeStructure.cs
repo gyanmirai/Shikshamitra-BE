@@ -1,4 +1,5 @@
-﻿using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+﻿using System.Diagnostics.CodeAnalysis;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using System;
 using ShikshaMitra.Domain.Finance.Policies;
 using System.Collections.Generic;
@@ -39,6 +40,8 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? ConcessionPolicyVersionId { get; private set; }
 	public Guid? RefundPolicyId { get; private set; }
 	public Guid? RefundPolicyVersionId { get; private set; }
+	// Retired attachment storage: retained only for historical evidence and policy usage counts.
+	// New structures and revisions cannot attach or inherit proration.
 	public Guid? ProrationPolicyId { get; private set; }
 	public Guid? ProrationPolicyVersionId { get; private set; }
 	public ConcessionFeeHeadScope ConcessionFeeHeadScope { get; private set; } = ConcessionFeeHeadScope.EntireFeeStructure;
@@ -46,6 +49,8 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	protected FeeStructure()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Name = null!;
 	}
 
 	public FeeStructure(
@@ -64,6 +69,7 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RevisionRootId = id;
 	}
 
+	[MemberNotNull(nameof(Name))]
 	public void ChangeName(string name)
 	{
 		EnsureNotLocked();
@@ -148,16 +154,6 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("field", "RefundPolicyVersionId");
 		RefundPolicyId = refundPolicyId;
 		RefundPolicyVersionId = refundPolicyVersionId;
-	}
-
-	public void AttachProrationPolicy(Guid? prorationPolicyId, Guid? prorationPolicyVersionId)
-	{
-		EnsureNotLocked();
-		if (prorationPolicyId.HasValue != prorationPolicyVersionId.HasValue)
-			throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound)
-				.WithData("field", "ProrationPolicyVersionId");
-		ProrationPolicyId = prorationPolicyId;
-		ProrationPolicyVersionId = prorationPolicyVersionId;
 	}
 
 	public void AddDetail(FeeStructureDetail detail)

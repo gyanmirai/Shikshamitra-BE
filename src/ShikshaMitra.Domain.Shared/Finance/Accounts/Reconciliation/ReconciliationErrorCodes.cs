@@ -15,6 +15,7 @@ public static class ReconciliationErrorCodes
     public const string AlreadyVerified           = Prefix + "060003";
     public const string AlreadyRejected           = Prefix + "060004";
     public const string TerminalStatus            = Prefix + "060005";
+    public const string InstrumentAttributionRequired = Prefix + "060006";
 
     // ── Financial rollback ────────────────────────────────────────────────
 

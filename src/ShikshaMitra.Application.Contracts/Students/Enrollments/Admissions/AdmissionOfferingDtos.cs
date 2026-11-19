@@ -19,13 +19,18 @@ public class AdmissionOfferingListDto : EntityDto<Guid>
 	public string StageName { get; set; } = string.Empty;
 	public Guid StandardId { get; set; }
 	public string StandardName { get; set; } = string.Empty;
+	public AdmissionTrack Track { get; set; } = AdmissionTrack.General;
+	public AdmissionEntryMode EntryMode { get; set; } = AdmissionEntryMode.Inquiry;
 	public string Code { get; set; } = string.Empty;
 	public DateTimeOffset EffectiveOpenDate { get; set; }
 	public DateTimeOffset EffectiveCloseDate { get; set; }
 	public string? WorkflowName { get; set; }
 	public int? WorkflowVersion { get; set; }
+	/// <summary>The selected Registration definition's core policy; null preserves historical capture rules.</summary>
+	public int? CoreFieldPolicyVersion { get; set; }
 	public bool IsActive { get; set; }
 	public AdmissionOfferingAvailabilityStatus AvailabilityStatus { get; set; }
+	public string? UnavailableReason { get; set; }
 	public AdmissionOfferingConfigurationStatus ConfigurationStatus { get; set; }
 	public bool CanActivate => ConfigurationStatus == AdmissionOfferingConfigurationStatus.Ready;
 	public int ApplicationCount { get; set; }
@@ -35,12 +40,17 @@ public class AdmissionOfferingListDto : EntityDto<Guid>
 
 public class AdmissionOfferingDto : AdmissionOfferingListDto
 {
+	public int InquiryCount { get; set; }
+	public bool HasConfigurationUsage { get; set; }
+	public bool CanEditConfiguration => !IsActive && !HasConfigurationUsage;
 	public bool UseCycleDates { get; set; }
 	public DateTimeOffset? OpenDate { get; set; }
 	public DateTimeOffset? CloseDate { get; set; }
 	public Guid? WorkflowDefinitionId { get; set; }
 	public Guid? InquiryFormDefinitionId { get; set; }
 	public Guid? ApplicationFormDefinitionId { get; set; }
+	public Guid? InquiryIntakeProfileId { get; set; }
+	public Guid? CounsellorAssignmentProfileId { get; set; }
 	public string? InquiryFormName { get; set; }
 	public int? InquiryFormVersion { get; set; }
 	public string? ApplicationFormName { get; set; }
@@ -56,6 +66,8 @@ public class AdmissionOfferingDto : AdmissionOfferingListDto
 public abstract class AdmissionOfferingWriteDto
 {
 	public string? Name { get; set; }
+	public AdmissionTrack Track { get; set; } = AdmissionTrack.General;
+	public AdmissionEntryMode EntryMode { get; set; } = AdmissionEntryMode.Inquiry;
 	public Guid? CampusId { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid MediumId { get; set; }
@@ -68,6 +80,8 @@ public abstract class AdmissionOfferingWriteDto
 	public Guid? WorkflowDefinitionId { get; set; }
 	public Guid? InquiryFormDefinitionId { get; set; }
 	public Guid? ApplicationFormDefinitionId { get; set; }
+	public Guid? InquiryIntakeProfileId { get; set; }
+	public Guid? CounsellorAssignmentProfileId { get; set; }
 	public bool IsActive { get; set; } = true;
 }
 
@@ -87,6 +101,8 @@ public class ValidateAdmissionOfferingDto : AdmissionOfferingWriteDto
 public class CloneAdmissionOfferingDto
 {
 	public string? Name { get; set; }
+	public AdmissionTrack? Track { get; set; }
+	public AdmissionEntryMode? EntryMode { get; set; }
 	public Guid AdmissionCycleId { get; set; }
 	public Guid? CampusId { get; set; }
 	public Guid BoardId { get; set; }
@@ -101,6 +117,12 @@ public class AdmissionOfferingValidationErrorDto
 {
 	public string Code { get; set; } = string.Empty;
 	public string Message { get; set; } = string.Empty;
+	public Guid? FormDefinitionId { get; set; }
+	public string? FormName { get; set; }
+	public AdmissionFormPurpose? FormPurpose { get; set; }
+	public Guid? WorkflowDefinitionId { get; set; }
+	public Guid? WorkflowStageId { get; set; }
+	public string? WorkflowStageName { get; set; }
 }
 
 public class AdmissionOfferingConfigurationValidationDto
@@ -122,12 +144,17 @@ public class AdmissionOfferingAvailabilityDto
 
 public class AdmissionOfferingListInput : PagedAndSortedResultRequestDto
 {
+	public string? ColumnFilters { get; set; }
+	public bool ForSpecialRegistration { get; set; }
 	public Guid? AdmissionCycleId { get; set; }
+	public AdmissionTrack? Track { get; set; }
+	public AdmissionEntryMode? EntryMode { get; set; }
 	public Guid? CampusId { get; set; }
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
 	public Guid? StageId { get; set; }
 	public Guid? StandardId { get; set; }
+	public List<Guid> StandardIds { get; set; } = [];
 	public bool? IsActive { get; set; }
 	public AdmissionOfferingAvailabilityStatus? AvailabilityStatus { get; set; }
 	public AdmissionOfferingConfigurationStatus? ConfigurationStatus { get; set; }
@@ -143,16 +170,20 @@ public class BulkAdmissionOfferingItemDto
 
 public class BulkCreateAdmissionOfferingsDto
 {
+	public AdmissionTrack Track { get; set; } = AdmissionTrack.General;
+	public AdmissionEntryMode EntryMode { get; set; } = AdmissionEntryMode.Inquiry;
 	public Guid? CampusId { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid MediumId { get; set; }
-	public Guid StageId { get; set; }
+	public Guid? StageId { get; set; }
 	public bool UseCycleDates { get; set; }
 	public DateTimeOffset? OpenDate { get; set; }
 	public DateTimeOffset? CloseDate { get; set; }
 	public Guid? WorkflowDefinitionId { get; set; }
 	public Guid? InquiryFormDefinitionId { get; set; }
 	public Guid? ApplicationFormDefinitionId { get; set; }
+	public Guid? InquiryIntakeProfileId { get; set; }
+	public Guid? CounsellorAssignmentProfileId { get; set; }
 	public bool IsActive { get; set; } = true;
 	public bool PreviewOnly { get; set; } = true;
 	public List<BulkAdmissionOfferingItemDto> Items { get; set; } = [];

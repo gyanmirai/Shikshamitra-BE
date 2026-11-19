@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -24,13 +25,13 @@ internal static class PayrollLateArrivalDeductionCalculator
 		int month,
 		Employee employee,
 		IReadOnlyCollection<EmployeeAttendance> attendanceRecords,
-		ShiftManagement? shift,
+		EmployeeWorkSchedule? shift,
 		AttendancePolicy policy)
 	{
 		if (policy.PenaltyType != AttendancePenaltyType.SalaryDeduction ||
-		    !policy.PenaltyDeductionAmount.HasValue ||
-		    policy.PenaltyDeductionAmount.Value <= 0m ||
-		    shift == null)
+			!policy.PenaltyDeductionAmount.HasValue ||
+			policy.PenaltyDeductionAmount.Value <= 0m ||
+			shift == null)
 		{
 			return null;
 		}
@@ -43,7 +44,7 @@ internal static class PayrollLateArrivalDeductionCalculator
 				x.AttendanceDate.Year == year &&
 				x.AttendanceDate.Month == month &&
 				x.TimeIn.HasValue &&
-				IsLateArrival(x.TimeIn.Value, shift, policy.GraceTime))
+				IsLateArrival(x.TimeIn.Value, shift.Require(x.AttendanceDate), policy.GraceTime))
 			.OrderBy(x => x.AttendanceDate)
 			.Select(x => x.AttendanceDate)
 			.ToList();
@@ -80,7 +81,7 @@ internal static class PayrollLateArrivalDeductionCalculator
 			CreateSourceId(internalMonthYear, employee.Id));
 	}
 
-	internal static bool IsLateArrival(DateTimeOffset timeIn, ShiftManagement shift, int graceTime) =>
+	internal static bool IsLateArrival(DateTimeOffset timeIn, EmployeeShiftAssignment shift, int graceTime) =>
 		// Attendance's HH:mm contract stores clock values at offset zero. Npgsql's legacy reader
 		// can return the same instant in the server's local offset; that must not add a late penalty.
 		(timeIn.UtcDateTime.TimeOfDay - shift.StartTime.ToTimeSpan()).TotalMinutes > graceTime;

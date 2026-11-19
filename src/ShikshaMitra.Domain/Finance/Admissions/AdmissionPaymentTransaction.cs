@@ -176,7 +176,7 @@ public class AdmissionPaymentTransaction : FullAuditedAggregateRoot<Guid>, IMult
 		};
 	}
 
-	private static string NormalizeRequired(string value, int max) =>
+	private static string NormalizeRequired(string? value, int max) =>
 		Check.NotNullOrWhiteSpace(value, nameof(value), max).Trim();
 	private static string? NormalizeOptional(string? value, int max) =>
 		string.IsNullOrWhiteSpace(value) ? null : Check.Length(value.Trim(), nameof(value), max);

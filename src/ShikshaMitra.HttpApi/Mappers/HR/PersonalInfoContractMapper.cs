@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR;
 using Volo.Abp;
@@ -33,7 +33,7 @@ public static partial class PersonalInfoContractMapper
 			Qualification = request.Qualification,
 			IdentificationMark1 = request.IdentificationMark1,
 			RoleId = request.RoleId,
-			ShiftId = request.ShiftId,
+			InitialWorkShiftAssignment = request.InitialWorkShiftAssignment,
 			Address1 = request.Address1,
 			Address2 = request.Address2,
 			Address3 = request.Address3,
@@ -58,7 +58,7 @@ public static partial class PersonalInfoContractMapper
 
 	public static UpdateEmployeePersonalInfoDto ToUpdateDto(PersonalInfoRequest request)
 	{
-		return new UpdateEmployeePersonalInfoDto
+		var dto = new UpdateEmployeePersonalInfoDto
 		{
 			FirstName = request.FirstName,
 			MiddleName = request.MiddleName,
@@ -78,11 +78,8 @@ public static partial class PersonalInfoContractMapper
 			AdharNo = request.AdharNo,
 			DateOfJoining = DateOnly.FromDateTime(request.Doj),
 			Department = request.Department?.ToString(),
-			Designation = request.Designation,
-			Qualification = request.Qualification,
-			IdentificationMark1 = request.IdentificationMark1,
 			RoleId = request.RoleId,
-			ShiftId = request.ShiftId,
+
 			Address1 = request.Address1,
 			Address2 = request.Address2,
 			Address3 = request.Address3,
@@ -92,5 +89,12 @@ public static partial class PersonalInfoContractMapper
 			Pincode = request.PinCode,
 			EmployeeGroup = request.IsTeaching ? EmployeeGroupType.Teaching : EmployeeGroupType.NonTeaching
 		};
+
+		// Do not turn omitted properties from older clients into explicit clears.
+		if (request.DesignationSpecified) dto.Designation = request.Designation;
+		if (request.QualificationSpecified) dto.Qualification = request.Qualification;
+		if (request.IdentificationMark1Specified) dto.IdentificationMark1 = request.IdentificationMark1;
+
+		return dto;
 	}
 }

@@ -64,6 +64,7 @@ public class HRDashboardPreviewService(
 			// Scheduled refresh intentionally crosses the tenant filter; keep the explicit tenant boundary here.
 			var previews = await AsyncExecuter.ToListAsync((await previewRepository.GetQueryableAsync())
 				.Where(x => x.TenantId == CurrentTenant.Id &&
+					x.DashboardKey != HrDashboardKeys.Main &&
 					x.ScopeKey == HrDashboardScopeKeys.HrWide &&
 					(x.Status != HrDashboardPreviewStatus.Refreshing ||
 					!x.RefreshStartedAt.HasValue ||
@@ -86,6 +87,7 @@ public class HRDashboardPreviewService(
 
 	public async Task ExecutePreviewRefreshAsync(HrDashboardPreviewRefreshJobArgs args)
 	{
+		if (args.DashboardKey == HrDashboardKeys.Main) return;
 		var preview = await previewRepository.FindAsync(args.PreviewId);
 		if (preview == null)
 		{
@@ -119,7 +121,7 @@ public class HRDashboardPreviewService(
 
 	private async Task EnsureScheduledPreviewsAsync()
 	{
-		foreach (var dashboardKey in HrDashboardKeys.All)
+		foreach (var dashboardKey in HrDashboardKeys.All.Where(key => key != HrDashboardKeys.Main))
 		{
 			var preview = await FindPreviewAsync(dashboardKey, HrDashboardScopeKeys.HrWide);
 			if (preview != null)

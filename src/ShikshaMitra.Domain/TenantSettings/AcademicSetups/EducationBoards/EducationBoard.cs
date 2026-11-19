@@ -6,6 +6,8 @@ using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Data;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ShikshaMitra.TenantSettings.EducationBoards;
 
@@ -13,6 +15,8 @@ public class EducationBoard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; }
 	public EducationBoardType Type { get; private set; }
+	[NotMapped] public string? CustomName => this.GetProperty<string?>("CustomName");
+	[NotMapped] public string Name => EducationBoardNames.DisplayName(Type);
 	public DateTime StartDate { get; private set; }
 	public DateTime EndDate { get; private set; }
 
@@ -20,8 +24,8 @@ public class EducationBoard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid AcademicYearId { get; }
 
 	// Navigation properties
-	public AcademicYear AcademicYear { get; }
-	public ICollection<EducationMedium> EducationMediums { get; }
+	public AcademicYear AcademicYear { get; } = null!; // Populated by EF relationship materialization.
+	public ICollection<EducationMedium> EducationMediums { get; } = null!; // Populated by EF relationship materialization.
 
 	private EducationBoard()
 	{
@@ -61,7 +65,16 @@ public class EducationBoard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	internal EducationBoard SetEducationBoardType(EducationBoardType educationBoardType)
 	{
+		if (!Enum.IsDefined(educationBoardType)) throw new BusinessException(EducationBoardNames.InvalidType, "Select a valid education board.");
 		Type = educationBoardType;
+		return this;
+	}
+
+	internal EducationBoard SetCustomName(string? customName)
+	{
+		var normalized = EducationBoardNames.NormalizeCustomName(Type, customName);
+		if (normalized == null) this.RemoveProperty("CustomName");
+		else this.SetProperty("CustomName", normalized);
 		return this;
 	}
 

@@ -1,0 +1,98 @@
+---
+module: academic
+domain: product
+content_type: Reference
+status: canonical
+updated_on: 2026-11-04
+owner: backend-team
+audience: humans-and-agents
+---
+
+# Understand Academic guide state
+
+TL;DR: automatic presentation depends on whether any authorized account in the school has visited Academic configuration; guide progress belongs to the selected academic year and remains advisory.
+
+## State boundaries
+
+| State | Scope | Meaning |
+|---|---|---|
+| First configuration visit | Entire school | The first authorized guide or configuration entry was recorded |
+| Guide cursor and deferred settings | School academic year | A shared guide position and settings left for later |
+| Guide review | School academic year | Someone deliberately finished the guide's review stage |
+| Configuration state | Selected year, medium and applicable class | A matching record exists under the caller's permissions and scope |
+
+The first visit stores server-selected actor and time once.
+It is independent of user, browser, academic year, guide review and configuration completeness.
+General Academic module entry may read visit status, but only an actual guide or configuration entry records a visit.
+Changing year, clearing settings or deferring every setting does not remove the school-wide marker.
+Schools with existing settings receive no inferred historical visit.
+
+## Guide scope
+
+The stages are `welcome`, `curriculum`, `timetable`, `homework`, `examination` and `review`.
+The guide covers exactly nine settings: subjects, elective groups, weekly lectures, lecture slots, homework types, assignment types, reusable rubrics, grading scales and exam types.
+Calendar Settings and LMS are outside this guide's current contract.
+The exact setting keys and stage ownership are listed in [api.md](./api.md).
+
+The guide stores cursor, deferred setting keys and review metadata.
+Existing configuration endpoints save real form values and enforce their own domain validation.
+An unsubmitted configuration form has no persisted guide draft.
+Saving guide progress never creates or changes subjects, timetables, types, rubrics or exam settings.
+
+## Advisory status
+
+| State | Meaning |
+|---|---|
+| `configured` | At least one qualifying record exists in the selected configuration context |
+| `empty` | No qualifying record exists in that context |
+| `context-required` | An authorized setting still needs a medium or class selection |
+| `unavailable` | The caller lacks that setting's View action |
+
+`configured` is an existence check, not a readiness certificate.
+For example, a reusable rubric draft can exist without being published.
+The guide does not revalidate a record's full domain lifecycle or certify that every class is configured.
+`reviewedAt` records a guide review, not operational completion.
+Finishing review does not require every setting to be configured.
+Changing cursor or deferred settings clears a prior review; an unchanged save preserves it.
+Operational edits outside the guide do not invalidate this advisory review automatically.
+
+## Homework calendar validation
+
+Homework schedules remain UTC instants in storage. Calendar matching and conflict messages use the corresponding Asia/Kolkata school date, so `2026-10-30T00:00:00+05:30` matches 30 October even though its UTC clock is still 29 October. The same conversion is applied when creating, updating and publishing saved drafts. Error dates use `dd/MM/yyyy` independently of the server culture.
+
+Calendar selection follows the picker: non-archived calendars for the homework medium covering the selected school date; published calendars take priority, followed by a default draft and then other drafts, with newest creation and ID breaking ties. Only active markers from that selected calendar and the matching class/division scope can block homework. Holidays, vacations and emergency closures block due dates; another division's marker does not apply merely because its class matches. Publish timestamps retain instant ordering and are not blocked by the due-date calendar policy.
+
+## Room reservation calendar context
+
+Dated room availability, timelines and reservation checks use the requested academic medium; a class-bound request resolves its medium from the server hierarchy.
+The calendar must cover the exact requested date and be non-archived: published calendars take priority, followed by a default draft and then other drafts, with newest creation time and ID breaking ties.
+Only active, applicable blocking markers from that calendar can restrict the date; working-day markers cannot hide a simultaneous closure.
+Reservation creation retains the medium in `ExtraProperties.CalendarMediumId` for updates and approval, including recurring children, without a schema migration.
+Admission assessment bookings retain their server-owned medium and year checks and require a published calendar.
+Older callers without medium or class context retain tenant-wide calendar selection with the same deterministic ordering.
+
+## Data integrity
+
+Timetable teacher and room conflicts reserve resources only from non-deleted, published competing timetables in the current tenant. Draft and `NotCreated` timetables do not reserve resources across classes or divisions. Validation, save, direct resource assignment, management conflict counts and recurring room occupations use this publication boundary. Duplicate teacher or room assignments within the submitted timetable remain invalid. Publication revalidates competing published schedules before saving.
+
+Timetable setup readiness is separate from the saved timetable status. `Not Ready` means prerequisites are missing; it does not establish that no saved slots exist. A saved draft may remain after its class setup is removed and must not block another class's teacher assignment.
+
+Published timetables in another board or medium can reserve the same teacher or physical room. A class name and division are not a unique timetable context. Conflict messages identify the competing timetable's academic year, education board and medium, rather than implying that it belongs to the caller's selected context. Checking an empty CBSE/English Class 12 does not establish availability when the teacher is already teaching GSEB/Gujarati Class 12 at that time.
+
+Homework and assignment feedback rosters include every non-deleted student whose operational status is `Enrolled` in the selected medium, class and division.
+The legacy admission approval flag is not an eligibility requirement: current onboarding activates enrollment independently of that flag.
+Students admitted after a task was created appear on the next roster request even without a submission; existing submissions retain their feedback and status.
+Inactive and departed students remain excluded.
+Student identifiers use `GrNumber` when available, with `GrNo` as the legacy fallback.
+
+Elective locks belong to individual student selections. A student admitted after the existing selections are locked has no selection and remains editable. Saving new selections does not unlock existing ones. Locking requires saved selections for the full class/division roster and locks only selections that are still unlocked. The ordinary save endpoint rejects changes or deletions to locked selections.
+
+Current database members of the tenant's protected `admin` role can correct a locked subject or preference through a separate preview/confirmation workflow. Other roles cannot use this exception, even with the elective Add permission. The backend validates the student/class/division/medium/group context and active subject membership, lists related exam eligibility, marks, results, seating, timetable setup, learning tasks and portal effects, then rechecks the reviewed state during confirmation. Changed, expired, altered or replayed reviews cannot authorize another correction.
+
+Corrections keep the selection locked and preserve marks, generated/published/frozen results, seating allocations, submissions and evaluations. These records require separate operational review; corrections never transfer marks or regenerate results/seating automatically. A preference override is stored on the selection; the original `StudentElectivePreferenceSubmission` remains immutable. The portal reads the effective override. `StudentElectiveCorrection` stores the actor, time, before/after values, reviewed impacts and optional reason in the same transaction as the correction.
+
+Authorization, active tenant identity and hierarchical scope are enforced on the server.
+Hidden frontend controls do not authorize a request.
+Unauthorized setting states expose no record counts or details.
+Invalid stored metadata returns an error rather than silently resetting the first visit or progress.
+See [api.md](./api.md) for access rules and [architecture.md](./architecture.md) for concurrency and persistence.

@@ -8,12 +8,13 @@ using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Students;
+using ShikshaMitra.Finance.Common;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 
 namespace ShikshaMitra.EntityFrameworkCore.Finance.Fees.ConcessionRequests;
 
-public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
+public partial class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
 	: EfCoreRepository<ShikshaMitraDbContext, ConcessionRequest, Guid>(dbContextProvider),
 		IConcessionRequestRepository
 {
@@ -57,16 +58,26 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		int take,
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+        FinanceTableQuery? tableQuery = null, string? tab = null, bool includeReviewableDrafts = false,
+		IQueryable<Guid>? visibleRequestIdsQuery = null)
 	{
 		var query = await BuildApplicationsQueryAsync(
 			academicYearId, boardId, educationMediumId, status, standardId, divisionId,
-			scopedStudentIdsQuery, draftCreatorId, cancellationToken);
+			scopedStudentIdsQuery, draftCreatorId, cancellationToken, tableQuery, tab, includeReviewableDrafts,
+			visibleRequestIdsQuery);
 
+        query = tableQuery is null ? query.OrderByDescending(x => x.CreationTime).ThenBy(x => x.Id) :
+            ConcessionApplicationsTableQuery.Order(query, await GetDbContextAsync(), tableQuery);
 		return await query
-			.OrderByDescending(x => x.CreationTime)
 			.Skip(skip)
 			.Take(take)
+			.Include(x => x.ConcessionFeeHeadMappings)
+			.Include(x => x.ConcessionRequestDocuments)
+			.Include(x => x.ConcessionDueFeeAllocations)
+			.Include(x => x.ConcessionReversals)
+			.AsSplitQuery()
+			.AsNoTracking()
 			.ToListAsync(cancellationToken);
 	}
 
@@ -79,11 +90,14 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		Guid? divisionId,
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+        FinanceTableQuery? tableQuery = null, string? tab = null, bool includeReviewableDrafts = false,
+		IQueryable<Guid>? visibleRequestIdsQuery = null)
 	{
 		var query = await BuildApplicationsQueryAsync(
 			academicYearId, boardId, educationMediumId, status, standardId, divisionId,
-			scopedStudentIdsQuery, draftCreatorId, cancellationToken);
+			scopedStudentIdsQuery, draftCreatorId, cancellationToken, tableQuery, tab, includeReviewableDrafts,
+			visibleRequestIdsQuery);
 		return await query.CountAsync(cancellationToken);
 	}
 
@@ -95,11 +109,14 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		Guid? divisionId,
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+        FinanceTableQuery? tableQuery = null, bool includeReviewableDrafts = false,
+		IQueryable<Guid>? visibleRequestIdsQuery = null)
 	{
 		var query = await BuildApplicationsQueryAsync(
 			academicYearId, boardId, educationMediumId, status: null, standardId, divisionId,
-			scopedStudentIdsQuery, draftCreatorId, cancellationToken);
+			scopedStudentIdsQuery, draftCreatorId, cancellationToken, tableQuery,
+			includeReviewableDrafts: includeReviewableDrafts, visibleRequestIdsQuery: visibleRequestIdsQuery);
 
 		return await query
 			.GroupBy(x => x.Status)
@@ -116,9 +133,13 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		Guid? divisionId,
 		IQueryable<Guid>? scopedStudentIdsQuery,
 		Guid? draftCreatorId,
-		CancellationToken cancellationToken)
+		CancellationToken cancellationToken,
+        FinanceTableQuery? tableQuery = null, string? tab = null, bool includeReviewableDrafts = false,
+		IQueryable<Guid>? visibleRequestIdsQuery = null)
 	{
-		var queryable = await GetQueryableAsync();
+		// Counts and table filters must not load the request's four auto-included collections.
+		// The page read above explicitly loads only its selected request graphs.
+		var queryable = (await GetQueryableAsync()).IgnoreAutoIncludes().AsNoTracking();
 		var query = queryable.Where(c => c.AcademicYearId == academicYearId &&
 			c.BoardId == boardId && c.EducationMediumId == educationMediumId);
 		if (standardId.HasValue) query = query.Where(c => c.StandardId == standardId.Value);
@@ -127,15 +148,22 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		// User scope — restrict to students within the caller's access scope
 		if (scopedStudentIdsQuery != null)
 			query = query.Where(c => scopedStudentIdsQuery.Contains(c.StudentId));
-		query = draftCreatorId.HasValue
-			? query.Where(c => c.Status != ConcessionRequestStatus.Draft || c.CreatorId == draftCreatorId.Value)
-			: query.Where(c => c.Status != ConcessionRequestStatus.Draft);
+		if (visibleRequestIdsQuery != null)
+			query = query.Where(c => visibleRequestIdsQuery.Contains(c.Id));
+		if (!includeReviewableDrafts)
+			query = draftCreatorId.HasValue
+				? query.Where(c => c.Status != ConcessionRequestStatus.Draft || c.CreatorId == draftCreatorId.Value)
+				: query.Where(c => c.Status != ConcessionRequestStatus.Draft);
 
 		if (status.HasValue)
 		{
 			query = query.Where(c => c.Status == status.Value);
 		}
 
+        var statuses = ConcessionApplicationsTable.Statuses(tab);
+        if (statuses.Length > 0) query = query.Where(c => Enumerable.Contains(statuses, c.Status));
+        if (tableQuery is not null)
+            query = ConcessionApplicationsTableQuery.Filter(query, await GetDbContextAsync(), tableQuery);
 		return query;
 	}
 }

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
@@ -22,8 +22,7 @@ public class EmployeePersonalInfoAppService(
 	EmployeeManager employeeManager,
 	EmployeePersonalInfoCreationWorkflow creationWorkflow,
 	EmployeeIdentityUniquenessChecker identityUniquenessChecker,
-	EmployeePersonalInfoProjection personalInfoProjection,
-	ShiftReferenceValidator shiftReferenceValidator
+	EmployeePersonalInfoProjection personalInfoProjection
 )
 	: ApplicationService, IEmployeePersonalInfoAppService
 {
@@ -57,7 +56,7 @@ public class EmployeePersonalInfoAppService(
 		var panNo = ResolvePanNo(input.PanNo, existingEmployee.PanNo);
 		var adharNo = ResolveAdharNo(input.AdharNo, existingEmployee.AdharNo);
 		await identityUniquenessChecker.EnsurePanAndAdharAreUniqueAsync(panNo, adharNo, id);
-		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
+
 
 		var employee = await employeeManager.UpdateEmployeeAsync(
 			employeeId: id,
@@ -82,17 +81,17 @@ public class EmployeePersonalInfoAppService(
 			address2: input.Address2,
 			address3: input.Address3,
 			department: input.Department,
-			designation: input.Designation,
+			designation: input.DesignationSpecified ? input.Designation : existingEmployee.Designation,
 			dateOfJoining: input.DateOfJoining,
 			employeeGroup: input.EmployeeGroup,
-			qualification: input.Qualification,
+			qualification: input.QualificationSpecified ? input.Qualification : existingEmployee.Qualification,
 			roleId: input.RoleId,
-			identificationMark1: input.IdentificationMark1,
+			identificationMark1: input.IdentificationMark1Specified ? input.IdentificationMark1 : existingEmployee.IdentificationMark1,
 			city: input.City,
 			state: input.State,
 			country: input.Country,
 			pinCode: input.Pincode,
-			shiftId: input.ShiftId
+			shiftId: existingEmployee.ShiftId
 		);
 
 		employee = await employeeRepository.UpdateAsync(employee);

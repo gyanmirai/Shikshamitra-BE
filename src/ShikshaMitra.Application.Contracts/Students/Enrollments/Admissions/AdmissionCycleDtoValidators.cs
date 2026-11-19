@@ -7,7 +7,7 @@ public class CreateUpdateAdmissionCycleDtoValidator : AbstractValidator<CreateUp
 	public CreateUpdateAdmissionCycleDtoValidator()
 	{
 		RuleFor(x => x.Name).NotEmpty().MaximumLength(AdmissionCycleConsts.MaxNameLength);
-		RuleFor(x => x.Code).NotEmpty().MaximumLength(AdmissionCycleConsts.MaxCodeLength);
+		RuleFor(x => x.Code).MaximumLength(AdmissionCycleConsts.MaxCodeLength);
 		RuleFor(x => x.Description).MaximumLength(AdmissionCycleConsts.MaxDescriptionLength);
 		RuleFor(x => x.AcademicYearId).NotEmpty();
 		RuleFor(x => x.EndDate)

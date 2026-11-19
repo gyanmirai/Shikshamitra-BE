@@ -12,4 +12,7 @@ public class StudentLookupDto
 	public string StandardName { get; set; } = string.Empty;
 	public Guid? DivisionId { get; set; }
 	public string DivisionName { get; set; } = string.Empty;
+	public GenderEnum? Gender { get; set; }
+	public bool HasFeeStructureAssignment { get; set; }
+	public bool HasChargeInCategory { get; set; }
 }

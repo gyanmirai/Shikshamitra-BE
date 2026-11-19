@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using ShikshaMitra.Common.PDF;
 
 namespace ShikshaMitra.HR.ProfessionalManagement;
 
@@ -27,7 +28,7 @@ internal static class ProfessionalReviewPdfComposer
 			{
 				page.Size(PageSizes.A4);
 				page.Margin(28);
-				page.DefaultTextStyle(style => style.FontSize(9).FontColor(Colors.Grey.Darken4));
+				page.DefaultTextStyle(style => style.FontSize(9).FontColor(Colors.Grey.Darken4).WithPortableFonts());
 				page.Header().Column(column =>
 				{
 					column.Item().Text("Performance Management Appraisal").FontSize(18).Bold().FontColor("#0F172A");
@@ -37,7 +38,7 @@ internal static class ProfessionalReviewPdfComposer
 				page.Content().PaddingTop(12).Column(column =>
 				{
 					column.Spacing(12);
-					column.Item().Element(c => ComposeKeyValueBlock(c, "Employee And Cycle", new[] { ("Employee", review.EmployeeName), ("Employee Code", review.EmployeeIdentifier ?? "-"), ("Role", review.EmployeeRole ?? "-"), ("Cycle", review.CycleName), ("Template", review.TemplateName ?? "-"), ("Final Rating", review.FinalRating ?? "-"), ("Final Score", review.FinalScore?.ToString("0.##") ?? "-") }));
+					column.Item().Element(c => ComposeKeyValueBlock(c, "Staff And Cycle", new[] { ("Staff", review.EmployeeName), ("Staff Code", review.EmployeeIdentifier ?? "-"), ("Role", review.EmployeeRole ?? "-"), ("Cycle", review.CycleName), ("Template", review.TemplateName ?? "-"), ("Final Rating", review.FinalRating ?? "-"), ("Final Score", review.FinalScore?.ToString("0.##") ?? "-") }));
 					column.Item().Text("Reviewer Stages").Bold().FontSize(12).FontColor("#0F172A");
 					foreach (var stage in review.Stages.OrderBy(x => x.StageType))
 					{

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
@@ -73,7 +73,7 @@ public class DocumentSettingAppService
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
 
 		var items = await AsyncExecuter.ToListAsync(
-			queryable.OrderBy(x => x.DocumentName)
+			queryable.OrderBy(x => x.DocumentName).ThenBy(x => x.Id)
 				.Skip(skipCount)
 				.Take(pageSize)
 		);

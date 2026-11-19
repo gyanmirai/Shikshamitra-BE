@@ -5,25 +5,41 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
-public class StudentRegistrationQueryAppService(
-    IStudentRepository studentRepository,
-    IRepository<StudentNote, Guid> studentNoteRepository,
-    EntityValidationService validationService,
-    StudentScopeAccessService studentScopeAccessService
-) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
+public class StudentRegistrationQueryAppService : StudentRegistrationBaseAppService,
     IStudentRegistrationQueryAppService
 {
+	private readonly IStudentRepository studentRepository;
+	private readonly IRepository<StudentNote, Guid> studentNoteRepository;
+	private readonly EntityValidationService validationService;
+	private readonly StudentScopeAccessService studentScopeAccessService;
+
+	public StudentRegistrationQueryAppService(
+		IStudentRepository studentRepository,
+		IRepository<StudentNote, Guid> studentNoteRepository,
+		EntityValidationService validationService,
+		StudentScopeAccessService studentScopeAccessService
+	) : base(studentRepository, validationService, studentScopeAccessService)
+	{
+		this.studentRepository = studentRepository;
+		this.studentNoteRepository = studentNoteRepository;
+		this.validationService = validationService;
+		this.studentScopeAccessService = studentScopeAccessService;
+	}
+
     public async Task<PagedResultDto<StudentDto>> GetRegistrationFormsByMediumAsync(
         Guid academicMediumId,
         int skipCount = 0,
         int maxResultCount = 10,
         string? searchTerm = null)
     {
+        await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View);
         await validationService.ValidateAcademicMediumExistsAsync(academicMediumId);
 
         var queryable = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
@@ -61,6 +77,7 @@ public class StudentRegistrationQueryAppService(
         int maxResultCount = 10,
         string? searchTerm = null)
     {
+        await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View);
         await validationService.ValidateAcademicMediumExistsAsync(academicMediumId);
 
         var queryable = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
@@ -94,6 +111,10 @@ public class StudentRegistrationQueryAppService(
 
     public async Task<List<StudentSearchResultDto>> SearchStudentsByNameAsync(string searchTerm, int maxResultCount = 20)
     {
+        var canReadApplications = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View);
+        var canReadRecords = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
+        if (!canReadApplications && !canReadRecords)
+            await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View);
         var normalizedSearchTerm = (searchTerm ?? string.Empty).Trim().ToLower();
         if (normalizedSearchTerm.Length < 2)
         {
@@ -114,6 +135,7 @@ public class StudentRegistrationQueryAppService(
         var query = queryable
             .Where(s => s.TenantId == CurrentTenant.Id
                 && eligibleStatuses.Contains(s.Status)
+                && (s.Status == StudentLifeCycleStatusEnum.Enrolled ? canReadRecords : canReadApplications)
                 && (
                     (s.FirstName != null && s.FirstName.ToLower().Contains(normalizedSearchTerm)) ||
                     (s.MiddleName != null && s.MiddleName.ToLower().Contains(normalizedSearchTerm)) ||

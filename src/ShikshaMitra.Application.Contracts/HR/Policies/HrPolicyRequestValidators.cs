@@ -96,7 +96,7 @@ public class CreateUpdateHrPolicyAssignmentDtoValidator : AbstractValidator<Crea
 		RuleFor(x => x.TargetType)
 			.NotEmpty()
 			.Must(BeKnownTargetType)
-			.WithMessage("Target type must be employee or group.");
+			.WithMessage("Target type must be staff or group.");
 		RuleFor(x => x.TargetKey).NotEmpty().MaximumLength(100);
 		RuleFor(x => x.TargetDisplayName).MaximumLength(256);
 		RuleFor(x => x.AttendancePolicyId).NotEmpty();

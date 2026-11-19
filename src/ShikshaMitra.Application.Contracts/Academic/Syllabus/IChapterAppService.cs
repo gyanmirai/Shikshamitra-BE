@@ -8,6 +8,7 @@ namespace ShikshaMitra.Academic.Syllabus;
 
 public interface IChapterAppService
 {
+	Task<List<ChapterLookupDto>> GetLookupAsync(Guid standardId, Guid subjectId, Guid? divisionId = null);
 	Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, List<CreateChapterDto> input);
 	Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId, Guid? divisionId = null);
 	Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto input);

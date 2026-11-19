@@ -1,6 +1,47 @@
+using System;
+using System.Linq;
 using FluentValidation;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
+
+public class StartAdmissionDirectRegistrationDtoValidator : AbstractValidator<StartAdmissionDirectRegistrationDto>
+{
+	public StartAdmissionDirectRegistrationDtoValidator()
+	{
+		RuleFor(input => input.RequestId).NotEmpty();
+		RuleFor(input => input.AdmissionOfferingId).NotEmpty();
+		RuleFor(input => input.CounsellorId).NotEqual(Guid.Empty)
+			.When(input => input.CounsellorId.HasValue);
+		RuleFor(input => input.ApplicantFirstName).NotEmpty().MaximumLength(128);
+		RuleFor(input => input.ApplicantMiddleName).MaximumLength(128);
+		RuleFor(input => input.ApplicantLastName).MaximumLength(128);
+		RuleFor(input => input.ApplicantDateOfBirth).NotNull()
+			.Must(value => value.HasValue && value.Value.Date <= DateTime.UtcNow.Date)
+			.WithMessage("Enter a valid date of birth that is not in the future.");
+		RuleFor(input => input.ApplicantGender).NotEmpty()
+			.Must(value => Enum.TryParse<GenderEnum>(value, true, out var gender) && Enum.IsDefined(gender))
+			.WithMessage("Choose a supported gender.");
+		RuleFor(input => input.GuardianFirstName).NotEmpty().MaximumLength(128);
+		RuleFor(input => input.GuardianLastName).MaximumLength(128);
+		RuleFor(input => input.GuardianMobile).NotEmpty().MaximumLength(32);
+		RuleFor(input => input.GuardianEmail).EmailAddress().MaximumLength(256)
+			.When(input => !string.IsNullOrWhiteSpace(input.GuardianEmail));
+		RuleFor(input => input.GuardianRelationship).IsInEnum();
+		RuleFor(input => input.ExistingFamilyId).NotEqual(Guid.Empty)
+			.When(input => input.ExistingFamilyId.HasValue);
+		RuleFor(input => input.ParentRelationship).Must(value => value is null or "father" or "mother")
+			.WithMessage("Choose Father or Mother.");
+		RuleFor(input => input.ExistingParentApplicantId).NotEqual(Guid.Empty).When(input => input.ExistingParentApplicantId.HasValue);
+		RuleFor(input => input.ExistingParentApplicantId).NotNull().When(input => input.ExistingFamilyId.HasValue && input.ParentRelationship != null);
+		RuleFor(input => input.ExistingFamilyId).NotNull().When(input => input.ExistingParentApplicantId.HasValue);
+		RuleFor(input => input.ParentRelationship).NotEmpty().When(input => input.ExistingParentApplicantId.HasValue);
+		RuleFor(input => input.GuardianRelationship).Equal(AdmissionGuardianRelationship.Parent).When(input => input.ParentRelationship != null);
+		RuleFor(input => input.CreateSeparateFamily).Equal(false)
+			.When(input => input.ExistingFamilyId.HasValue)
+			.WithMessage("Choose an existing family or create a separate family, not both.");
+		RuleFor(input => input.SeparateFamilyReason).MaximumLength(512);
+	}
+}
 
 public class AdvanceAdmissionWorkflowDtoValidator : AbstractValidator<AdvanceAdmissionWorkflowDto>
 {
@@ -12,8 +53,11 @@ public class AdvanceAdmissionWorkflowDtoValidator : AbstractValidator<AdvanceAdm
 		RuleFor(input => input.Reason).MaximumLength(512);
 		RuleFor(input => input.Reason)
 			.NotEmpty()
+			.When(input => input.SkipCurrentStage || input.AdminOverride || input.DeferFeeCollection)
+			.WithMessage("A reason is required when deferring collection, skipping or overriding workflow routing.");
+		RuleFor(input => input.DeferFeeCollection).Equal(false)
 			.When(input => input.SkipCurrentStage || input.AdminOverride)
-			.WithMessage("A reason is required when skipping or overriding workflow routing.");
+			.WithMessage("Collection deferral cannot be combined with skipping or overriding workflow routing.");
 	}
 }
 
@@ -35,5 +79,34 @@ public class AdmissionApplicationDecisionDtoValidator : AbstractValidator<Admiss
 	{
 		RuleFor(input => input.ConcurrencyStamp).NotEmpty();
 		RuleFor(input => input.Reason).MaximumLength(512);
+		RuleFor(input => input.CounsellorId).NotEqual(Guid.Empty)
+			.When(input => input.CounsellorId.HasValue);
+	}
+}
+
+public class CorrectAdmissionApplicationFormDtoValidator : AbstractValidator<CorrectAdmissionApplicationFormDto>
+{
+	public CorrectAdmissionApplicationFormDtoValidator()
+	{
+		RuleFor(input => input.ConcurrencyStamp).NotEmpty();
+		RuleFor(input => input.Reason).NotEmpty().MaximumLength(512);
+		RuleFor(input => input.IdempotencyKey).NotEmpty().MaximumLength(80);
+		RuleFor(input => input.Values).NotEmpty();
+		RuleForEach(input => input.Values).ChildRules(value =>
+		{
+			value.RuleFor(item => item.FieldCode).NotEmpty().MaximumLength(128);
+		});
+		RuleForEach(input => input.Values).NotNull();
+		RuleFor(input => input.Values).Must(values => values == null || values.All(value => value != null) && values.Select(value => value.FieldCode).Distinct(StringComparer.OrdinalIgnoreCase).Count() == values.Count)
+			.WithMessage("Include each form field only once.");
+	}
+}
+
+public class EndAdmissionJourneyDtoValidator : AbstractValidator<EndAdmissionJourneyDto>
+{
+	public EndAdmissionJourneyDtoValidator()
+	{
+		RuleFor(input => input.ConcurrencyStamp).NotEmpty();
+		RuleFor(input => input.Reason).NotEmpty().MaximumLength(512);
 	}
 }

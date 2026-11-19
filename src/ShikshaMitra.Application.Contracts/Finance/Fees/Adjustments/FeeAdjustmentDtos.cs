@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using FluentValidation;
 using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 
 namespace ShikshaMitra.Finance.Fees.FeeAdjustment;
 
@@ -18,6 +19,10 @@ public class CreateFeeAdjustmentSourceLineDto
 
 public class CreateFeeAdjustmentDto
 {
+    [Required]
+    [StringLength(100, MinimumLength = 1)]
+    public string IdempotencyKey { get; set; } = string.Empty;
+
     [Required]
     public Guid StudentId { get; set; }
 
@@ -46,6 +51,7 @@ public class GetFeeAdjustmentApplicationsInput : IFinanceClassDivisionFilter
     public bool? CompletedOnly { get; set; }
 
     public string? Filter { get; set; }
+    public string? Filters { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }
@@ -89,6 +95,9 @@ public class PaidFeeSummaryDto
 
 public class FeeAdjustmentDetailDto
 {
+    public FeeAdjustmentKind Kind { get; set; }
+    public List<string> AvailableActions { get; set; } = [];
+    public string? UnavailableReason { get; set; }
     public Guid Id { get; set; }
     public string VoucherNumber { get; set; } = string.Empty;
     public Guid StudentId { get; set; }
@@ -123,7 +132,10 @@ public class FeeAdjustmentDetailDto
 
 public class FeeAdjustmentApplicationItemDto
 {
+    public List<string> AvailableActions { get; set; } = [];
+    public string? UnavailableReason { get; set; }
     public Guid Id { get; set; }
+    public Guid? RequestedByUserId { get; set; }
     public Guid StudentId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public string GrNumber { get; set; } = string.Empty;
@@ -156,6 +168,9 @@ public class FeeAdjustmentApplicationsDto
 public class AdjustmentEligibilityMonthDto
 {
     public Guid DueFeeId { get; set; }
+    public FeeAdjustmentKind Kind { get; set; }
+    public FeeCollectionStatus Status { get; set; }
+    public double OutstandingAmount { get; set; }
     public MonthEnum Month { get; set; }
     public int Year { get; set; }
     public double Total { get; set; }
@@ -176,6 +191,7 @@ public class AdjustmentEligibilityFeeHeadDto
 
 public class AdjustmentEligibilityDto
 {
+    public string? UnavailableReason { get; set; }
     public Guid StudentId { get; set; }
     public Guid AcademicYearId { get; set; }
     public double TotalPaid { get; set; }
@@ -201,6 +217,7 @@ public class FeeAdjustmentPendingFeeDto
 
 public class FeeAdjustmentApplyContextDto
 {
+    public FeeAdjustmentKind Kind { get; set; }
     public Guid AdjustmentId { get; set; }
     public Guid StudentId { get; set; }
     public double ApprovedAmount { get; set; }

@@ -1,3 +1,4 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,7 +27,7 @@ public class TakeAttendanceDayReader(
 	TakeAttendanceEmployeeStageResolver employeeStageResolver,
 	HrUserScopeAccessService hrScopeAccessService,
 	HrEmployeeScopeQueryService hrEmployeeScopeQueryService,
-	IRepository<ShiftManagement, Guid> shiftRepository,
+	EmployeeShiftResolver shiftResolver,
 	AttendanceCaptureModeLookupResolver captureModeLookupResolver,
 	IClock clock,
 	IAsyncQueryableExecuter asyncExecuter)
@@ -56,8 +57,8 @@ public class TakeAttendanceDayReader(
 
 		if (!string.IsNullOrWhiteSpace(input.Department))
 		{
-			var d = input.Department.Trim();
-			empQuery = empQuery.Where(e => e.Department != null && e.Department.Contains(d));
+			var d = input.Department.Trim().ToLowerInvariant();
+			empQuery = empQuery.Where(e => e.Department != null && e.Department.ToLower().Contains(d));
 		}
 
 		if (input.IsTeaching.HasValue)
@@ -81,7 +82,7 @@ public class TakeAttendanceDayReader(
 				(e.MobileNo ?? "").ToLower().Contains(s));
 		}
 
-		empQuery = empQuery.OrderBy(e => e.FirstName).ThenBy(e => e.LastName);
+		empQuery = empQuery.OrderBy(e => e.FirstName).ThenBy(e => e.LastName).ThenBy(e => e.Id);
 
 		var allEmployeeIds = await asyncExecuter.ToListAsync(empQuery.Select(e => e.Id));
 		var employeeStageMap = await employeeStageResolver.ResolveEmployeeStagesAsync(allEmployeeIds, scope);
@@ -107,8 +108,7 @@ public class TakeAttendanceDayReader(
 		var ids = employees.Select(e => e.Id).ToList();
 		var attRows = attForSummary.Where(a => ids.Contains(a.EmployeeId)).ToList();
 		var attByEmp = attRows.GroupBy(a => a.EmployeeId).ToDictionary(g => g.Key, g => g.First());
-		var shiftIds = employees.Where(e => e.ShiftId.HasValue).Select(e => e.ShiftId!.Value).Distinct().ToList();
-		var shifts = await LoadShiftLookupAsync(shiftIds);
+		var shifts = await shiftResolver.ForDateAsync(ids, dateOnly);
 		var captureModeByEmployee = await captureModeLookupResolver.ResolveForDateOrDefaultAsync(ids, dateOnly);
 
 		var items = TakeAttendanceDayProjection.BuildRows(employees, attByEmp, approvedLeaveByEmployee, shifts, captureModeByEmployee, date, holiday, holidayReason);
@@ -146,18 +146,6 @@ public class TakeAttendanceDayReader(
 			employeeStageMap,
 			scope,
 			includeUnknownStageEmployees: HrUserScopeAccess.HasSingleConcreteMediumStage(scope));
-	}
-
-	private async Task<Dictionary<Guid, ShiftManagement>> LoadShiftLookupAsync(List<Guid> shiftIds)
-	{
-		if (shiftIds.Count == 0)
-		{
-			return new Dictionary<Guid, ShiftManagement>();
-		}
-
-		var query = await shiftRepository.GetQueryableAsync();
-		var shifts = await asyncExecuter.ToListAsync(query.Where(x => shiftIds.Contains(x.Id)));
-		return shifts.ToDictionary(x => x.Id, x => x);
 	}
 
 }

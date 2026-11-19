@@ -344,7 +344,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             ComponentType = DeductionComponentType.Variable,
             CalculationType = CalculationType.Percentage,
             Percentage = 5m,
-            SelectedDeductionComponentId = Guid.NewGuid(),
+            SelectedDeductionComponentId = null,
             DependOn = ComponentDependency.Gross,
             VisibleInPayslip = false,
             DisplayOrder = 10

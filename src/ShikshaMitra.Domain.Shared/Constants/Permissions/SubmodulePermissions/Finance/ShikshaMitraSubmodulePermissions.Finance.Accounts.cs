@@ -6,6 +6,19 @@ public static partial class ShikshaMitraSubmodulePermissions
 {
 	public static partial class Finance
 	{
+		public static class Accounts_Activity
+		{
+			private const string SubmoduleName = $"{ModuleName}.Accounts.Activity";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Accounts.Activity";
+			public const string View = $"{SubmoduleName}.View";
+			public static readonly string[] All = { View };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" }
+			};
+		}
+
 		public static class Accounts_Reconciliation
 		{
 			private const string SubmoduleName = $"{ModuleName}.Accounts.Reconciliation";
@@ -190,6 +203,21 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Edit, $"{SubmoduleDisplayName}.Edit" },
 				{ ChangeStatus, $"{SubmoduleDisplayName}.ChangeStatus" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+			};
+		}
+
+		public static class Accounts_Settings_PostingSetup
+		{
+			private const string SubmoduleName = $"{ModuleName}.Accounts.Settings.PostingSetup";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Accounts.Settings.PostingSetup";
+			public const string View = $"{SubmoduleName}.View";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public static readonly string[] All = { View, Edit };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" }
 			};
 		}
 	}

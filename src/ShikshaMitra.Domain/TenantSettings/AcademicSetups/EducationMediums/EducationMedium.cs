@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Diagnostics.CodeAnalysis;
+using System;
 using System.Collections.Generic;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp;
@@ -17,11 +18,14 @@ public class EducationMedium : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid EducationBoardId { get; private set; }
 
 	// Navigation property
-	public EducationBoard EducationBoard { get; }
-	public ICollection<EducationMediumStage> EducationMediumStages { get; }
+	public EducationBoard EducationBoard { get; } = null!; // Populated by EF relationship materialization.
+	public ICollection<EducationMediumStage> EducationMediumStages { get; } = null!; // Populated by EF relationship materialization.
 
 	private EducationMedium()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		Name = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -33,6 +37,7 @@ public class EducationMedium : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetName(name);
 	}
 
+	[MemberNotNull(nameof(Name))]
 	internal EducationMedium SetName(string name)
 	{
 		Name = Check.NotNullOrWhiteSpace(

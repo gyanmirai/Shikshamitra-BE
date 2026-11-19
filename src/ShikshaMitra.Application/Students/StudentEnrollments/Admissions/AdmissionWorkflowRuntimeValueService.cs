@@ -39,6 +39,45 @@ public class AdmissionWorkflowRuntimeValueService(
 		await assessments.AddFactsAsync(application.Id, result, assessmentStageId);
 		return result;
 	}
+
+	/// <summary>Reads the same form and managed assessment facts for scoped workbench contexts in two bounded queries.</summary>
+	public async Task<Dictionary<Guid, Dictionary<string, string>>> ReadAssessmentBatchAsync(
+		IReadOnlyCollection<AdmissionAssessmentContext> contexts, IReadOnlyCollection<AdmissionAssessmentAttempt> attemptRows)
+		=> await ReadAssessmentBatchAsync(contexts.Select(context =>
+			new AssessmentFactsContext(context.Application.Id, context.Stage.Id, context.Application.Status)).ToList(), attemptRows);
+
+	internal sealed record AssessmentFactsContext(Guid ApplicationId, Guid StageId, AdmissionApplicationStatus Status);
+
+	internal async Task<Dictionary<Guid, Dictionary<string, string>>> ReadAssessmentBatchAsync(
+		IReadOnlyCollection<AssessmentFactsContext> contexts, IReadOnlyCollection<AdmissionAssessmentAttempt> attemptRows)
+	{
+		if (contexts.Count == 0) return [];
+		var ids = contexts.Select(context => context.ApplicationId).Distinct().ToArray();
+		var formRows = await forms.GetListAsync(form => Enumerable.Contains(ids, form.ApplicationId));
+		var formIds = formRows.Select(form => form.Id).ToArray();
+		var fieldRows = await values.GetListAsync(value => Enumerable.Contains(formIds, value.FormInstanceId));
+		var applicationByForm = formRows.ToDictionary(form => form.Id, form => form.ApplicationId);
+		var result = contexts.ToDictionary(context => context.StageId,
+			context => new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+		var fieldsByApplication = fieldRows.ToLookup(field => applicationByForm[field.FormInstanceId]);
+		var attemptsByStage = attemptRows.ToLookup(attempt => attempt.StageInstanceId);
+		foreach (var context in contexts)
+		{
+			var facts = result[context.StageId];
+			foreach (var field in fieldsByApplication[context.ApplicationId])
+			{
+				var value = AdmissionApplicationValueConverter.Unwrap(field.ValueJson);
+				facts[field.FieldCode] = value;
+				facts[$"application.{field.FieldCode}"] = value;
+			}
+			facts["application.status"] = context.Status.ToString();
+			foreach (var key in facts.Keys.Where(key => key.StartsWith("assessment.", StringComparison.OrdinalIgnoreCase)).ToArray()) facts.Remove(key);
+			var attempt = attemptsByStage[context.StageId].Where(attempt => attempt.Status != "cancelled")
+				.OrderByDescending(attempt => attempt.CreationTime).ThenByDescending(attempt => attempt.AttemptNumber).FirstOrDefault();
+			foreach (var pair in AdmissionAssessmentEvidence.GetFacts(attempt)) facts[pair.Key] = pair.Value;
+		}
+		return result;
+	}
 	private async Task AddInquiryFactsAsync(AdmissionApplication application, Dictionary<string, string> result)
 	{
 		if (!application.InquiryId.HasValue) return;

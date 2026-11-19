@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -25,7 +24,11 @@ public sealed record PayrollStatutoryRuleSet(
 	ProvidentFund? ProvidentFund,
 	IReadOnlyList<ProfessionalTax> ProfessionalTaxSlabs,
 	bool IsEmploymentCessationMonth = false,
-	PayrollEsiStatutoryContext? EmployeeStateInsurance = null);
+	PayrollEsiStatutoryContext? EmployeeStateInsurance = null,
+	Guid? EsiConfigurationId = null)
+{
+	public PayrollStatutoryProfile? StatutoryProfile { get; init; }
+}
 
 public sealed record PayrollEsiStatutoryContext(
 	DateTime PayrollMonth,
@@ -34,7 +37,12 @@ public sealed record PayrollEsiStatutoryContext(
 	EmployeeStatutoryEnrollment? Enrollment,
 	IReadOnlyDictionary<Guid, StatutoryWageTreatment> ComponentTreatments,
 	IReadOnlyList<StatutoryOverride> Overrides,
-	EmployeePayrollComponent DeductionSource);
+	EmployeePayrollComponent DeductionSource)
+{
+	// Set only by the attendance calculator for this calculation's generated overtime row.
+	public EsiCalculationSettings CalculationSettings { get; init; } = new();
+	public Guid? SystemOvertimeComponentId { get; init; }
+}
 
 public sealed record PayrollComputationResult(
 	int PresentDays,
@@ -65,13 +73,11 @@ public sealed record PayrollComputationResult(
 	List<string> StatutoryIssueCodes)
 {
 	public decimal TotalEarnings => NetPay + TotalDeduction;
+	public EsiStatutoryCalculationResult? EsiCalculation { get; init; }
+	public PayrollStatutoryApplication? StatutoryApplication { get; init; }
+	public Guid? EsiConfigurationId { get; init; }
 	public decimal AdditionalEarnings => TotalEarnings - GrossSalary;
-	public EsiStatutoryCalculationResult? EmployeeStateInsurance { get; init; }
 	public Templates.SalaryProtectionResult? Protection { get; init; }
-	public decimal StatutoryTakeHome => GrossSalary - Deductions.Where(x => x.Source.SemanticType is
-		Templates.PayrollComponentSemanticType.ProfessionalTax or
-		Templates.PayrollComponentSemanticType.EmployeeProvidentFund or
-		Templates.PayrollComponentSemanticType.EmployeeStateInsurance).Sum(x => x.Amount);
 }
 
 public sealed record PayrollAttendancePayableDays(
@@ -85,7 +91,10 @@ public sealed record PayrollPaidLeaveDay(
 
 public sealed record PayrollLeaveUnits(
 	decimal PaidUnits,
-	decimal UnpaidUnits);
+	decimal UnpaidUnits)
+{
+	public IReadOnlyDictionary<string, decimal> ByType { get; init; } = new Dictionary<string, decimal>();
+}
 
 public sealed record PayrollApprovedAttendanceDay(
 	DateOnly Date,

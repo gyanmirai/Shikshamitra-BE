@@ -11,6 +11,7 @@ public class TransactionCategoryConfiguration : IEntityTypeConfiguration<Transac
 	{
 		builder.ToTable("Finance_TransactionCategories", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.Ignore(x => x.IsSystemCategory);
 
 		builder.Property(x => x.Code).HasMaxLength(AccountSettingConsts.MaxCodeLength);
 		builder.Property(x => x.NormalizedCode).HasMaxLength(AccountSettingConsts.MaxCodeLength);

@@ -74,6 +74,10 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 
 	private StudentAdditionalDetail()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		FamilyCast = null!;
+		InquiryNo = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -167,26 +171,34 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	/// <summary>
 	/// Updates additional student details during registration process
 	/// </summary>
+	public void UpdateAdditionalDetails(bool isBPLStudent, string? bplCardNo, string? secondLanguage, bool haveDisability,
+		string? disabilityDetails, string? emergencyRelativeName, string? emergencyRelation, string? emergencyContactNo,
+		bool isSingleChild, bool isSingleParentChild, Category category, bool isLibraryMember, bool isTransportMember) =>
+		UpdateAdditionalDetails((bool?)isBPLStudent, bplCardNo, secondLanguage, haveDisability, disabilityDetails,
+			emergencyRelativeName, emergencyRelation, emergencyContactNo, isSingleChild, isSingleParentChild, category, isLibraryMember, isTransportMember);
+
+	/// <summary>Inline retained forms preserve unrepresented nullable answers and may retain conditionally hidden details.</summary>
 	public void UpdateAdditionalDetails(
-		bool isBPLStudent,
+		bool? isBPLStudent,
 		string? bplCardNo,
 		string? secondLanguage,
-		bool haveDisability,
+		bool? haveDisability,
 		string? disabilityDetails,
 		string? emergencyRelativeName,
 		string? emergencyRelation,
 		string? emergencyContactNo,
-		bool isSingleChild,
-		bool isSingleParentChild,
+		bool? isSingleChild,
+		bool? isSingleParentChild,
 		Category category,
-		bool isLibraryMember,
-		bool isTransportMember)
+		bool? isLibraryMember,
+		bool? isTransportMember,
+		bool retainDisabilityDetails = false)
 	{
 		IsBPLStudent = isBPLStudent;
 		BPLCardNo = bplCardNo;
 		SecondLanguage = secondLanguage;
 		HaveDisability = haveDisability;
-		DisabilityDetails = haveDisability ? disabilityDetails : null;
+		DisabilityDetails = retainDisabilityDetails || haveDisability == true ? disabilityDetails : null;
 		EmergencyRelationName = emergencyRelativeName;
 		EmergencyRelationType = emergencyRelation;
 		EmergencyContactNo = emergencyContactNo;
@@ -203,6 +215,27 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	{
 		HaveDisability = haveDisability;
 		DisabilityDetails = haveDisability ? disabilityDetails : null;
+	}
+
+	public void ApplyAdmissionIdentityAndFamilyConditions(string? panNumber, bool? isSingleChild,
+		bool? isSingleParentChild, bool? isBplStudent, string? bplCardNumber)
+	{
+		PanNo = panNumber ?? PanNo;
+		IsSingleChild = isSingleChild ?? IsSingleChild;
+		IsSingleParentChild = isSingleParentChild ?? IsSingleParentChild;
+		IsBPLStudent = isBplStudent ?? IsBPLStudent;
+		BPLCardNo = bplCardNumber ?? BPLCardNo;
+	}
+
+	public void ApplyAdmissionSupportDetails(string? secondLanguage, bool? haveDisability, string? disabilityDetails,
+		string? emergencyContactName, string? emergencyRelation, string? emergencyContactNo)
+	{
+		SecondLanguage = secondLanguage ?? SecondLanguage;
+		HaveDisability = haveDisability ?? HaveDisability;
+		DisabilityDetails = HaveDisability == false ? null : disabilityDetails ?? DisabilityDetails;
+		EmergencyRelationName = emergencyContactName ?? EmergencyRelationName;
+		EmergencyRelationType = emergencyRelation ?? EmergencyRelationType;
+		EmergencyContactNo = emergencyContactNo ?? EmergencyContactNo;
 	}
 
 	public void UpdatePreviousSchoolSummary(string? previousSchool, string? lastClassPassed)

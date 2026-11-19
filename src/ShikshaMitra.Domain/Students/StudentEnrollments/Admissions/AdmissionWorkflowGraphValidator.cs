@@ -95,15 +95,16 @@ public class AdmissionWorkflowGraphValidator : DomainService
 				issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidTransition, $"Stage '{stage.Name}' uses an unsupported stage type.", stage.Id));
 				continue;
 			}
+			if (!metadata.IsSelectable)
+			{
+				issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidTransition,
+					$"Stage '{stage.Name}' uses a retired or unavailable stage type. Choose Form, Assessment, Payment, Document verification, or Admission decision.", stage.Id));
+				continue;
+			}
 
 			if (stage.IsEntryStage && !metadata.CanBeEntryStage)
 			{
 				issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidInitialStage, $"{metadata.DisplayName} cannot be used as an entry stage.", stage.Id));
-			}
-
-			if (stage.IsTerminalStage && !metadata.CanBeTerminalStage)
-			{
-				issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidFinalStage, $"{metadata.DisplayName} cannot be used as a terminal stage.", stage.Id));
 			}
 
 			if (!metadata.IsRuntimeReady)
@@ -181,6 +182,7 @@ public class AdmissionWorkflowGraphValidator : DomainService
 			validTransitions.Add(transition);
 		}
 
+		foreach (var issue in AdmissionWorkflowRouteDiagnostics.Validate(stages, validTransitions)) issues.Add(issue);
 		return validTransitions;
 	}
 
@@ -283,7 +285,6 @@ public class AdmissionWorkflowGraphValidator : DomainService
 					AdmissionReviewPolicy.Read(stage.ConfigurationJson);
 					break;
 				case AdmissionWorkflowStageType.Payment:
-					AdmissionPaymentStagePolicy.Read(stage.ConfigurationJson);
 					break;
 				case AdmissionWorkflowStageType.Offer:
 					AdmissionOfferStagePolicy.Read(stage.ConfigurationJson);

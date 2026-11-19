@@ -1,0 +1,103 @@
+---
+module: common
+domain: development
+content_type: How-to
+status: canonical
+updated_on: 2026-11-17
+owner: backend-team
+audience: humans-and-agents
+---
+
+# Build the backend under local memory pressure
+
+## Windows VS Code builds and duplicate processes
+
+Windows cannot replace a DLL loaded by a running API host, DbMigrator, or its debugger.
+`MSB3027`/`MSB3021` therefore recur when a build targets the same output as an existing runtime.
+A separately launched API can also keep ports `44332`/`5000` occupied after a VS Code debug session ends.
+
+The wrapper workspace's `build-be` and `build-dbmigrator` commands perform target-specific cleanup before building and before replacing the runtime snapshot.
+Their existing `preLaunchTask` links also apply the cleanup when pressing F5 or starting Full Stack.
+The helpers can be run directly from the backend repository:
+
+```powershell
+powershell.exe -NoProfile -File scripts/local/Stop-BackendProcess.ps1 -Target Host
+powershell.exe -NoProfile -File scripts/local/Stop-BackendProcess.ps1 -Target DbMigrator
+```
+
+Cleanup intentionally stops the selected target's existing development instance before rebuilding it.
+It identifies direct `dotnet <absolute DLL>` processes and native apphosts in this checkout's Debug output or local `.artifacts` build output.
+Both standard `bin` layouts and flat runtime folders such as `.artifacts/relationship-validation-runtime/` are recognized;
+ownership depends on the exact application name and checkout path, not an intermediate folder name.
+It also releases an associated `vsdbg`/`vsdbg-ui` adapter when its children belong to that same target and its own Windows console host.
+It preserves the other target, test/build/compiler processes, other checkouts, and paths under `publish`, `published`, or `Release` output folders.
+The wrapper Host task additionally opts into `-IncludeRelatedWorktreePortOwners`:
+it can release a development API occupying `44332`/`5000` in another registered worktree of this same Git repository.
+Registration and the common Git directory are verified before selecting that worktree;
+its other runtimes, and all unregistered/unrelated checkouts, remain protected.
+If an unrecognized process still owns either API port, the Host task fails with its PID instead of terminating it.
+Use `-WhatIf` to inspect the selected processes without stopping them.
+The helper does not run migrations, seed data, or change application/connection configuration.
+
+The wrapper `.vscode/tasks.json` is workspace configuration outside the two Git repositories.
+Its build tasks invoke `scripts/local/Build-Backend.ps1 -Target Host` or `-Target DbMigrator`
+through Windows PowerShell. Cleanup is part of that command, so terminal-task reruns execute it again;
+do not replace it with a raw `dotnet build` command or rely only on a separate `dependsOn` task.
+The command returns cleanup/compiler failures to VS Code and refuses simultaneous Host/DbMigrator
+build commands for the same checkout before stopping any runtime.
+Build output lives under `.artifacts/vscode`. After success, the command stages the complete output,
+including configuration and native dependencies, and replaces a separate stopped runtime snapshot.
+VS Code must launch `.artifacts/vscode-runtime/ShikshaMitra.HttpApi.Host/ShikshaMitra.HttpApi.Host.dll`
+or `.artifacts/vscode-runtime/ShikshaMitra.DbMigrator/ShikshaMitra.DbMigrator.dll`, never compiler output.
+This keeps a session started during compilation from locking compiler outputs.
+Failed compilation or runtime cleanup preserves the previous snapshot; replaced snapshots are retained
+under `.artifacts/vscode-runtime-history` for recovery. These generated folders remain ignored.
+Set workspace `debug.onTaskErrors` to `abort` so a failed pre-launch build cannot start stale assemblies.
+The mutex protects these build commands; independent raw CLI builds or manual launches must not run
+concurrently against that same output folder.
+The helpers and regression checks live in the backend repository.
+
+```powershell
+pwsh -NoProfile -File scripts/local/tests/Stop-BackendProcess.Tests.ps1
+pwsh -NoProfile -File scripts/local/tests/Build-Backend.Tests.ps1
+```
+
+## Builds under memory pressure
+
+TL;DR: use the serialized local build helper when the large EF migration history exhausts compiler memory.
+It preserves all source files, migration designers, nullable analysis and analyzers.
+
+Run from the backend repository with PowerShell 7.2 or later and the SDK selected by `global.json`:
+
+```powershell
+pwsh -NoProfile -File scripts/local/Build-BackendLowMemory.ps1
+pwsh -NoProfile -File scripts/local/Build-BackendLowMemory.ps1 -Project test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj -ArtifactsPath .artifacts/verification
+```
+
+The default project is HttpApi.Host and the default output is `.artifacts/local-memory-build`.
+Use `-Configuration Release` when required; use `-NoRestore` only after restoring the same project graph into the same artifacts path.
+The helper builds project references normally, returns the child build exit code and does not stop existing hosts or compiler servers.
+Avoid building the same project/output concurrently, and wait for the complete graph before testing its reference assemblies.
+
+The child process uses one MSBuild worker, standalone serialized compilation (`backend-compiler.rsp`), one reported processor, workstation GC and increased memory conservation.
+Inherited `DOTNET`/`COMPlus` GC heap hard limits are removed only from the child environment; parent settings and application configuration are unchanged.
+Fixed 2/4/6 GiB caps were insufficient for this checkout's generated model.
+No source exclusions, disabled analyzers, prebuilt dependency substitutions or migration edits are part of this helper.
+
+The October 30 local full EF source build, before warning cleanup, completed with zero errors and 12 warnings in 25m08s.
+An observed compiler private-memory sample was approximately 10.4 GiB on a 24 GiB desktop; this is one local observation, not a guaranteed peak or production timing.
+Cold compilation can remain slow under paging; incremental builds are much cheaper.
+See [Student validation](../../modules/student/testing.md#student-records-permission-menu-alignment) for the associated permission-check evidence and its release boundaries.
+
+## Preserve behavior when correcting compiler diagnostics
+
+Keep nullable analysis and analyzers enabled, and verify each affected project with the normal compiler before declaring warnings resolved.
+Request fields retain their current validation, requiredness and runtime defaults; accurately nullable response metadata must be checked for reuse as an input.
+Framework-populated fields need a traced binding, mapping or ORM initialization boundary rather than invented default values.
+Optional navigation annotations must match the existing FK mapping; run `CashManagementDeploymentModel_Tests` in its own test process to check the complete model against the unchanged snapshot.
+`AdmissionProviderTimeMapping_Tests` covers the existing PostgreSQL and fallback time-conversion branches.
+
+Preserve constructor dependency signatures and base forwarding when replacing primary-constructor captures.
+Changes to EF string comparisons must retain provider translation, normalization and null semantics; a new `StringComparison` overload is not automatically SQL-compatible.
+Quote SQL identifiers with the provider's `ISqlGenerationHelper` and keep data values parameterized.
+Compare broad regression failures against a retained pre-change assembly before classifying them as new defects; record existing failures separately instead of changing business rules to make a cleanup gate pass.

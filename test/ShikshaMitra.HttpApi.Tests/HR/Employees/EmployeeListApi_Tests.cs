@@ -162,6 +162,7 @@ public class EmployeeListApi_Tests : ShikshaMitraApiTestBase
 		var marker = $"ActiveOnly{Guid.NewGuid():N}"[..18];
 		var activeEmployee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}Active");
 		var inactiveEmployee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}Inactive");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, activeEmployee.Id);
 
 		var inactiveRequest = new EmployeeStatusUpdateRequest
 		{

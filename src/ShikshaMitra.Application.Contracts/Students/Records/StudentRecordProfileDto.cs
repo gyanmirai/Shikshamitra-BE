@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments;
 using Volo.Abp.Application.Dtos;
@@ -8,6 +9,7 @@ namespace ShikshaMitra.Students.Records;
 public class StudentRecordProfileDto : EntityDto<Guid>
 {
 	public Guid StudentId { get; set; }
+	public Guid? AcademicYearId { get; set; }
 	public string? FirstName { get; set; }
 	public string? MiddleName { get; set; }
 	public string? LastName { get; set; }
@@ -23,4 +25,10 @@ public class StudentRecordProfileDto : EntityDto<Guid>
 	public StudentLifeCycleStatusEnum Status { get; set; }
 	public DateTimeOffset? DateOfBirth { get; set; }
 	public GenderEnum? Gender { get; set; }
+	public string RecordsAccess { get; set; } = "Full";
+	public string EntrySource { get; set; } = "CompletedOnboarding";
+	public bool PlacementEditable { get; set; }
+	public List<string> MaskedFields { get; set; } = [];
+	public List<StudentEnrollmentHistoryDto> EnrollmentHistory { get; set; } = [];
+	public List<StudentRecordAdmissionOnboardingDto> AdmissionOnboarding { get; set; } = [];
 }

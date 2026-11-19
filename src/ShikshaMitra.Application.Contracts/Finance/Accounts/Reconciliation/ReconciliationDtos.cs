@@ -13,6 +13,8 @@ namespace ShikshaMitra.Finance.Accounts.Reconciliation.Dtos;
 /// </summary>
 public class ReconciliationListItemDto
 {
+	public int PaymentReceiptCount { get; set; } = 1;
+	public string ReceiptScope { get; set; } = string.Empty;
     public Guid Id { get; set; }
 
 	/// <summary>Provisional receipt number (KFE-*).</summary>
@@ -20,7 +22,8 @@ public class ReconciliationListItemDto
 	public string ReceiptNumber { get; set; } = string.Empty;
 
     // ── Student ──────────────────────────────────────────────────────────
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public int? GrNumber { get; set; }
     public int? RollNumber { get; set; }
@@ -34,6 +37,9 @@ public class ReconciliationListItemDto
     public PaymentMethodEnum PaymentMethod { get; set; }
     public string PaymentMethodLabel { get; set; } = string.Empty;
     public double Amount { get; set; }
+    public Guid? BankAccountId { get; set; }
+    /// <summary>Receiving bank label captured at collection; account number is masked.</summary>
+    public string? BankLabel { get; set; }
 
     /// <summary>Instrument-specific details (cheque no., UPI ID, transaction ref, etc.).</summary>
     public Dictionary<string, string?> InstrumentDetails { get; set; } = [];
@@ -55,6 +61,9 @@ public class ReconciliationListItemDto
 
     // ── Dates ─────────────────────────────────────────────────────────────
     public DateOnly ReceiptDate { get; set; }
+
+    /// <summary>When collection was recorded. Instrument details retain any entered DD payment date.</summary>
+    public DateTimeOffset? PaymentDate { get; set; }
 
     // ── Acted-by (populated after approve / reject) ───────────────────────
     public Guid? ActedBy { get; set; }
@@ -84,6 +93,7 @@ public class ReconciliationListResponse
 /// </summary>
 public class ReconciliationTabCountsDto
 {
+    public int CashOfficial { get; set; }
     public int TotalPending { get; set; }
     public int ChequePending { get; set; }
     public int ChequeApproved { get; set; }
@@ -170,6 +180,9 @@ public class GetReconciliationListInput
 
     /// <summary>Free-text search across student name, GR number, receipt number.</summary>
     public string? Search { get; set; }
+
+	/// <summary>Optional Finance table criteria over the displayed reconciliation columns.</summary>
+	public string? Filters { get; set; }
 
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 50;

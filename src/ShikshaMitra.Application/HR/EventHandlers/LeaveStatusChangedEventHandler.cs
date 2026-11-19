@@ -16,7 +16,7 @@ public class LeaveStatusChangedEventHandler(
 	public Task HandleEventAsync(LeaveStatusChangedEto eventData)
 	{
 		logger.LogInformation(
-			"Leave status changed: LeaveId={LeaveId}, Employee={EmployeeId}, {Previous} -> {New}",
+			"Leave status changed: LeaveId={LeaveId}, Staff={EmployeeId}, {Previous} -> {New}",
 			eventData.LeaveId, eventData.EmployeeId, eventData.PreviousStatus, eventData.NewStatus);
 
 		return Task.CompletedTask;

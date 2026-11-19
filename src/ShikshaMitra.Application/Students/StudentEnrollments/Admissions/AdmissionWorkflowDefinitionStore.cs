@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Entities;
@@ -41,8 +43,23 @@ public class AdmissionWorkflowDefinitionStore(
 			await GetStagesAsync(workflow.Id),
 			await GetTransitionsAsync(workflow.Id));
 
+	internal async Task<List<AdmissionWorkflowDto>> GetDtosAsync(IReadOnlyList<AdmissionWorkflowDefinition> workflows)
+	{
+		if (workflows.Count == 0) return [];
+		var ids = workflows.Select(workflow => workflow.Id).ToArray();
+		var stages = await AsyncExecuter.ToListAsync((await stageRepository.GetQueryableAsync())
+			.Where(stage => Enumerable.Contains(ids, stage.WorkflowDefinitionId)).OrderBy(stage => stage.DisplayOrder));
+		var transitions = await AsyncExecuter.ToListAsync((await transitionRepository.GetQueryableAsync())
+			.Where(transition => Enumerable.Contains(ids, transition.WorkflowDefinitionId)).OrderBy(transition => transition.Priority));
+		var stagesByWorkflow = stages.ToLookup(stage => stage.WorkflowDefinitionId);
+		var transitionsByWorkflow = transitions.ToLookup(transition => transition.WorkflowDefinitionId);
+		return workflows.Select(workflow => AdmissionWorkflowMapper.ToDto(workflow,
+			stagesByWorkflow[workflow.Id], transitionsByWorkflow[workflow.Id])).ToList();
+	}
+
 	public async Task ReplaceChildrenAsync(Guid workflowId, CreateUpdateAdmissionWorkflowDto input)
 	{
+		EnsureSupportedStages(input);
 		var existingStages = await GetStagesAsync(workflowId);
 		var existingStagesById = existingStages.ToDictionary(stage => stage.Id);
 		var stageIdMap = new Dictionary<Guid, Guid>();
@@ -61,6 +78,12 @@ public class AdmissionWorkflowDefinitionStore(
 		}
 		foreach (var inputStage in input.Stages.OrderBy(stage => stage.DisplayOrder))
 		{
+			if (inputStage.StageType is AdmissionWorkflowStageType.Form or AdmissionWorkflowStageType.Assessment or
+				AdmissionWorkflowStageType.Payment or AdmissionWorkflowStageType.DocumentVerification)
+				inputStage.AllowManualSkip = false;
+			try { inputStage.ConfigurationJson = AdmissionStageConfiguration.Normalize(inputStage.StageType, inputStage.ConfigurationJson); }
+			catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
+			{ throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidTransition, exception.Message).WithData("Stage", inputStage.Name); }
 			var requestedId = inputStage.Id.GetValueOrDefault();
 			var stageId = requestedId != Guid.Empty && existingStagesById.ContainsKey(requestedId)
 				? requestedId : GuidGenerator.Create();
@@ -86,6 +109,7 @@ public class AdmissionWorkflowDefinitionStore(
 	public async Task CopyChildrenAsync(Guid sourceWorkflowId, Guid targetWorkflowId)
 	{
 		var sourceStages = await GetStagesAsync(sourceWorkflowId);
+		foreach (var stage in sourceStages) EnsureSupported(stage.StageType);
 		var sourceTransitions = await GetTransitionsAsync(sourceWorkflowId);
 		var stageIdMap = new Dictionary<Guid, Guid>();
 		foreach (var sourceStage in sourceStages)
@@ -94,8 +118,9 @@ public class AdmissionWorkflowDefinitionStore(
 			stageIdMap[sourceStage.Id] = stageId;
 			await stageRepository.InsertAsync(new AdmissionWorkflowStageDefinition(
 				stageId, targetWorkflowId, sourceStage.Code, sourceStage.Name, sourceStage.StageType,
-				sourceStage.DisplayOrder, sourceStage.IsRequired, sourceStage.AllowManualSkip,
-				sourceStage.Description, sourceStage.ConfigurationJson, sourceStage.IsEntryStage,
+				sourceStage.DisplayOrder, sourceStage.IsRequired, sourceStage.AllowManualSkip &&
+					sourceStage.StageType == AdmissionWorkflowStageType.Approval,
+				sourceStage.Description, AdmissionStageConfiguration.Normalize(sourceStage.StageType, sourceStage.ConfigurationJson), sourceStage.IsEntryStage,
 				sourceStage.IsTerminalStage), autoSave: false);
 		}
 		foreach (var sourceTransition in sourceTransitions)
@@ -106,6 +131,11 @@ public class AdmissionWorkflowDefinitionStore(
 				sourceTransition.ConditionRuleJson, sourceTransition.IsDefault), autoSave: false);
 		}
 		await CurrentUnitOfWork!.SaveChangesAsync();
+	}
+
+	public async Task EnsureSupportedStagesAsync(Guid workflowId)
+	{
+		foreach (var stage in await GetStagesAsync(workflowId)) EnsureSupported(stage.StageType);
 	}
 
 	public async Task DeleteChildrenAsync(Guid workflowId)
@@ -155,4 +185,16 @@ public class AdmissionWorkflowDefinitionStore(
 			id, workflowId, input.Code, input.Name, input.StageType, input.DisplayOrder,
 			input.IsRequired, input.AllowManualSkip, input.Description, input.ConfigurationJson,
 			input.IsEntryStage, input.IsTerminalStage);
+
+	public static void EnsureSupportedStages(CreateUpdateAdmissionWorkflowDto input)
+	{
+		foreach (var stage in input.Stages) EnsureSupported(stage.StageType);
+	}
+
+	private static void EnsureSupported(AdmissionWorkflowStageType type)
+	{
+		if (AdmissionWorkflowStageTypeRegistry.Find(type)?.IsSelectable != true)
+			throw new BusinessException(AdmissionWorkflowErrorCodes.RuntimeHandlerUnavailable,
+				"Choose Form, Assessment, Payment, Document verification, or Admission decision.");
+	}
 }

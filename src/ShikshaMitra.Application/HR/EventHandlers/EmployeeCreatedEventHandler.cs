@@ -17,7 +17,7 @@ public class EmployeeCreatedEventHandler(
 	public Task HandleEventAsync(EmployeeCreatedEto eventData)
 	{
 		logger.LogInformation(
-			"Employee created event received: EmployeeId={EmployeeId}, Code={Code}, Tenant={TenantId}",
+			"Staff created event received: EmployeeId={EmployeeId}, Code={Code}, Tenant={TenantId}",
 			eventData.EmployeeId, eventData.EmployeeCode, eventData.TenantId);
 
 		return Task.CompletedTask;

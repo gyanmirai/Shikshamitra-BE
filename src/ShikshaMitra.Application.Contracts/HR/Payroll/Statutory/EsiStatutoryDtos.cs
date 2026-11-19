@@ -19,6 +19,7 @@ public class StatutoryRuleVersionDto
 	public decimal StandardWageCeiling { get; set; }
 	public decimal DisabilityWageCeiling { get; set; }
 	public decimal EmployeePercentage { get; set; }
+	public decimal EmployeeShareDailyWageExemption { get; set; }
 	public decimal EmployerPercentage { get; set; }
 	public decimal ExclusionCapPercentage { get; set; }
 	public decimal InKindCapPercentage { get; set; }
@@ -89,7 +90,6 @@ public class UpdateEmployeeStatutoryEnrollmentDto
 {
 	public string Status { get; set; } = nameof(EmployeeStatutoryEnrollmentStatus.PendingReview);
 	public string WageCeilingCategory { get; set; } = nameof(StatutoryWageCeilingCategory.Standard);
-	public string? InsuranceNumber { get; set; }
 	public DateTime? CoveredFrom { get; set; }
 	public DateTime? CoveredTo { get; set; }
 	public DateTime? ContributionPeriodEnd { get; set; }
@@ -127,6 +127,7 @@ public class StatutoryOverrideDto
 
 public class StatutoryImpactPreviewRequestDto
 {
+	public EsiConfigurationDraftDto? ConfigurationDraft { get; set; }
 	private string? _search;
 	private int _pageSize = 25;
 
@@ -167,6 +168,10 @@ public class StatutoryIssueDto
 
 public class EmployeeStatutoryImpactDto
 {
+	public decimal EligibilityWages { get; set; }
+	public decimal EmployeePercentage { get; set; }
+	public decimal EmployerPercentage { get; set; }
+	public EsiCalculationSettings CalculationSettings { get; set; } = new();
 	public Guid EmployeeId { get; set; }
 	public string EmployeeIdentifier { get; set; } = string.Empty;
 	public string EmployeeName { get; set; } = string.Empty;
@@ -213,17 +218,16 @@ public class StatutoryImpactPreviewDto
 
 public interface IEsiStatutoryAppService : IApplicationService
 {
+	// Internal authorized table/export reader; the HTTP preview retains its page-size contract.
+	Task<StatutoryImpactPreviewDto> GetTablePopulationAsync(StatutoryImpactPreviewRequestDto input);
 	Task<StatutoryRuleVersionDto> GetCurrentRuleAsync(DateTime? effectiveOn = null);
 	Task<StatutoryEstablishmentDto> GetEstablishmentAsync();
-	Task<StatutoryEstablishmentDto> ConfigureEstablishmentAsync(ConfigureStatutoryEstablishmentDto input);
 	Task<List<PayrollComponentStatutoryTreatmentDto>> GetComponentTreatmentsAsync(DateTime? effectiveOn = null);
-	Task<List<PayrollComponentStatutoryTreatmentDto>> UpdateComponentTreatmentsAsync(UpdatePayrollComponentStatutoryTreatmentsDto input);
 	Task<EmployeeStatutoryEnrollmentDto> GetEnrollmentAsync(Guid employeeId);
 	Task<EmployeeStatutoryEnrollmentDto> UpdateEnrollmentAsync(Guid employeeId, UpdateEmployeeStatutoryEnrollmentDto input);
 	Task<List<StatutoryOverrideDto>> GetOverridesAsync(Guid employeeId);
 	Task CreateOverrideAsync(Guid employeeId, CreateStatutoryOverrideDto input);
 	Task<StatutoryImpactPreviewDto> PreviewAsync(StatutoryImpactPreviewRequestDto input);
-	Task<StatutoryEstablishmentDto> ActivateAsync(ActivateStatutorySchemeDto input);
 }
 
 public class ConfigureStatutoryEstablishmentDtoValidator : AbstractValidator<ConfigureStatutoryEstablishmentDto>
@@ -263,7 +267,6 @@ public class UpdateEmployeeStatutoryEnrollmentDtoValidator : AbstractValidator<U
 	{
 		RuleFor(x => x.Status).Must(value => Enum.TryParse<EmployeeStatutoryEnrollmentStatus>(value, true, out _));
 		RuleFor(x => x.WageCeilingCategory).Must(value => Enum.TryParse<StatutoryWageCeilingCategory>(value, true, out _));
-		RuleFor(x => x.InsuranceNumber).MaximumLength(100);
 		RuleFor(x => x.StatusReason).MaximumLength(500);
 		RuleFor(x => x.DisabilityEvidenceReference).MaximumLength(1000);
 		RuleFor(x => x.CoveredTo).GreaterThanOrEqualTo(x => x.CoveredFrom!.Value).When(x => x.CoveredFrom.HasValue && x.CoveredTo.HasValue);
@@ -283,6 +286,10 @@ public class CreateStatutoryOverrideDtoValidator : AbstractValidator<CreateStatu
 {
 	public CreateStatutoryOverrideDtoValidator()
 	{
+		RuleFor(x => x.EffectiveFrom).Must(value => value.Day == 1)
+			.WithMessage("Start month must begin on the first day of the month.");
+		RuleFor(x => x.EffectiveTo).Must(value => value.Day == DateTime.DaysInMonth(value.Year, value.Month))
+			.WithMessage("End month must end on the last day of the month.");
 		RuleFor(x => x.OverrideType).Must(value => Enum.TryParse<StatutoryOverrideType>(value, true, out _));
 		RuleFor(x => x.Reason).NotEmpty().MaximumLength(500);
 		RuleFor(x => x.EvidenceReference).MaximumLength(1000);

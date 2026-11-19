@@ -8,6 +8,13 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 
 internal static class CollectionPolicyMapping
 {
+	private static CollectionAllocationBasis ParseAllocationBasis(string? value) => value switch
+	{
+		null or "Legacy" => CollectionAllocationBasis.Legacy,
+		"Installment" => CollectionAllocationBasis.Installment,
+		"FeeHead" => CollectionAllocationBasis.FeeHead,
+		_ => throw new BusinessException(CollectionPolicyErrorCodes.InvalidAllocationBasis)
+	};
 	public static CollectionPolicyStatus ParseStatus(string value) => Normalize(value) switch
 	{
 		"draft" => CollectionPolicyStatus.Draft,
@@ -67,15 +74,6 @@ internal static class CollectionPolicyMapping
 	};
 
 	public static string MapRoundingMethod(RoundingMethodType value) => value.ToString();
-
-	public static GracePeriodType ParseGracePeriodType(string value) => Normalize(value) switch
-	{
-		"calendar" => GracePeriodType.Calendar,
-		"workingday" => GracePeriodType.WorkingDay,
-		_ => throw InvalidEnum("gracePeriodType")
-	};
-
-	public static string MapGracePeriodType(GracePeriodType value) => value.ToString();
 
 	public static EscalationCalculationType ParseEscalationCalculationType(string value) => Normalize(value) switch
 	{
@@ -172,8 +170,7 @@ internal static class CollectionPolicyMapping
 			effectiveTo,
 			input.EnableLateFee,
 			input.GracePeriodDays,
-			ParseGracePeriodType(input.GracePeriodType),
-			input.LateFeeApplyOnFeeHeads,
+			Array.Empty<Guid>(),
 			ParseLateFeeType(input.LateFeeType),
 			input.FlatAmount,
 			input.Percentage,
@@ -183,17 +180,22 @@ internal static class CollectionPolicyMapping
 			input.AmountPerMonth,
 			ParseCompoundFrequency(input.CompoundFrequency),
 			ToEscalationRules(input.EscalationRules),
-			ToFeeHeadOverrides(input.FeeHeadOverrides),
+			Array.Empty<CollectionPolicyFeeHeadOverride>(),
 			ParseRoundingMethod(input.RoundingMethod),
 			input.ConsiderAsIncome,
 			input.LateFeeIncomeHeadId,
 			input.MaximumLateFeeAmount,
 			input.MaximumChargingDays,
-			input.EnableWaiver,
-			input.EnableChargeWaiver,
-			input.RequiresApproval,
-			input.ApprovalRoleIds,
-			input.AllowOnlineCollection);
+			false,
+			false,
+			false,
+			Array.Empty<Guid>(),
+			input.AllowOnlineCollection, input.LateFeeIncomeCategoryId, ParseAllocationBasis(input.AllocationBasis), input.ReceiptGrouping switch
+			{
+				null or "Separate" => CollectionReceiptGrouping.Separate,
+				"Combined" => CollectionReceiptGrouping.Combined,
+				_ => throw new BusinessException(CollectionPolicyErrorCodes.InvalidReceiptGrouping)
+			});
 
 	public static CollectionPolicyDto ToDto(CollectionPolicy entity) => new()
 	{
@@ -205,8 +207,8 @@ internal static class CollectionPolicyMapping
 		Status = MapStatus(entity.Status),
 		IsDefault = entity.IsDefault,
 		EnableLateFee = entity.EnableLateFee,
+		ApplyLateFeeToAllFeeHeads = entity.ApplyLateFeeToAllFeeHeads,
 		GracePeriodDays = entity.GracePeriodDays,
-		GracePeriodType = MapGracePeriodType(entity.GracePeriodType),
 		LateFeeApplyOnFeeHeads = entity.GetLateFeeApplyOnFeeHeads().ToList(),
 		LateFeeType = MapLateFeeType(entity.LateFeeType),
 		FlatAmount = entity.FlatAmount,
@@ -221,13 +223,12 @@ internal static class CollectionPolicyMapping
 		RoundingMethod = MapRoundingMethod(entity.RoundingMethod),
 		ConsiderAsIncome = entity.ConsiderAsIncome,
 		LateFeeIncomeHeadId = entity.LateFeeIncomeHeadId,
+		LateFeeIncomeCategoryId = entity.LateFeeIncomeCategoryId,
 		MaximumLateFeeAmount = entity.MaximumLateFeeAmount,
 		MaximumChargingDays = entity.MaximumChargingDays,
-		EnableWaiver = entity.EnableWaiver,
-		EnableChargeWaiver = entity.EnableChargeWaiver,
-		RequiresApproval = entity.RequiresApproval,
-		ApprovalRoleIds = entity.GetApprovalRoleIds().ToList(),
 		AllowOnlineCollection = entity.AllowOnlineCollection,
+		AllocationBasis = entity.AllocationBasis.ToString(),
+		ReceiptGrouping = entity.ReceiptGrouping.ToString(),
 		Version = entity.Version,
 		CreationTime = entity.CreationTime,
 		CreatorId = entity.CreatorId,

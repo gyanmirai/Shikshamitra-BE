@@ -25,6 +25,10 @@ public class ProrationPolicyConfiguration : IEntityTypeConfiguration<ProrationPo
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsDefault })
 			.IsUnique().HasFilter("\"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true")
 			.HasDatabaseName("IX_Finance_ProrationPolicies_ActiveDefault");
+		// PostgreSQL composite uniqueness treats null TenantId values as distinct.
+		builder.HasIndex(x => x.AcademicYearId).IsUnique()
+			.HasFilter("\"TenantId\" IS NULL AND \"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true")
+			.HasDatabaseName("IX_Finance_ProrationPolicies_Host_ActiveDefault");
 		builder.HasMany(x => x.Rules).WithOne().HasForeignKey(x => x.ProrationPolicyId)
 			.OnDelete(DeleteBehavior.Cascade);
 		builder.Navigation(x => x.Rules).AutoInclude();
@@ -40,6 +44,10 @@ public class ProrationPolicyRuleConfiguration : IEntityTypeConfiguration<Prorati
 		builder.Property(x => x.RuleType).IsRequired().HasConversion<int>();
 		builder.Property(x => x.RoundingMode).IsRequired().HasConversion<int>();
 		builder.Property(x => x.AfterCutoffAction).HasConversion<int>();
+		builder.Property(x => x.ApplyOnAdmission).HasDefaultValue(true).ValueGeneratedNever();
+		builder.Property(x => x.ApplyOnEarlyWithdrawal).HasDefaultValue(true).ValueGeneratedNever();
+		builder.Property(x => x.EarlyWithdrawalRuleType).HasConversion<int>();
+		builder.Property(x => x.EarlyWithdrawalBeforeCutoffAction).HasConversion<int>();
 		builder.HasIndex(x => new { x.ProrationPolicyId, x.FeeHeadId }).IsUnique()
 			.HasDatabaseName("IX_Finance_ProrationPolicyRules_Policy_FeeHead");
 	}

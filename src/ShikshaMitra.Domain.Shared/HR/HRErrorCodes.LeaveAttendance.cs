@@ -89,4 +89,5 @@ public static partial class HRErrorCodes
 	public const string AttendanceImportBatchLocked = "HR:Leave:020214";
 	public const string AttendanceImportPayrollLocked = "HR:Leave:020215";
 	public const string AttendanceImportRowMismatch = "HR:Leave:020216";
+	public const string AttendanceImportDuplicateHeaders = "HR:Leave:020217";
 }

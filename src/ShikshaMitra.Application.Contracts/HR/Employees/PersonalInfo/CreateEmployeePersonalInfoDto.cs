@@ -1,4 +1,6 @@
-﻿using ShikshaMitra.Common;
+﻿using ShikshaMitra.HR.WorkShifts;
+using System.Text.Json.Serialization;
+using ShikshaMitra.Common;
 using System;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
@@ -70,7 +72,8 @@ public class CreateEmployeePersonalInfoDto
 
 	public string? Pincode { get; set; }
 
-	public Guid? ShiftId { get; set; }
+	[JsonIgnore] public Guid? ShiftId { get; set; }
+	public InitialWorkShiftInput? InitialWorkShiftAssignment { get; set; }
 
 	public CreateEmployeePolicyOverrideDto? PolicyOverride { get; set; }
 

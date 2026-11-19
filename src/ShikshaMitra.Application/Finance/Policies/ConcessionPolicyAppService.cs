@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -36,7 +37,7 @@ public class ConcessionPolicyAppService(
 			var status = ParseListStatus(input.Status);
 			query = query.Where(x => x.Status == status);
 		}
-		else
+		else if (!input.IncludeArchived)
 		{
 			query = query.Where(x => x.Status != ConcessionPolicyStatus.Archived);
 		}
@@ -45,12 +46,121 @@ public class ConcessionPolicyAppService(
 			var search = input.Search.Trim().ToLower();
 			query = query.Where(x => x.PolicyName.ToLower().Contains(search) || x.PolicyCode.ToLower().Contains(search));
 		}
+		if (!string.IsNullOrWhiteSpace(input.PolicyNameFilter))
+		{
+			var name = input.PolicyNameFilter.Trim().ToLower();
+			query = input.PolicyNameOperator?.ToLowerInvariant() switch
+			{
+				"equals" => query.Where(x => x.PolicyName.ToLower() == name),
+				"startswith" => query.Where(x => x.PolicyName.ToLower().StartsWith(name)),
+				"endswith" => query.Where(x => x.PolicyName.ToLower().EndsWith(name)),
+				_ => query.Where(x => x.PolicyName.ToLower().Contains(name))
+			};
+		}
+		if (!string.IsNullOrWhiteSpace(input.ValueSource))
+		{
+			var valueSource = ConcessionPolicyMapping.ParseValueSource(input.ValueSource);
+			query = query.Where(x => x.ValueSource == valueSource);
+		}
+		if (!string.IsNullOrWhiteSpace(input.CalculationMethod))
+		{
+			var method = ConcessionPolicyMapping.ParseCalculationMethod(input.CalculationMethod);
+			query = query.Where(x => x.CalculationMethod == method);
+		}
+		if (!string.IsNullOrWhiteSpace(input.ApplyOn))
+		{
+			var applyOn = ConcessionPolicyMapping.ParseApplyOn(input.ApplyOn);
+			query = query.Where(x => x.ApplyOn == applyOn);
+		}
+		if (input.LimitOperator is not null && input.LimitValue.HasValue)
+		{
+			var limit = input.LimitValue.Value;
+			var max = input.LimitMax ?? limit;
+			// Match the numeric value shown in the table. Calculation Method identifies its unit.
+			query = input.LimitOperator.ToLowerInvariant() switch
+			{
+				"equals" => query.Where(x => (x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+					x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount)) == limit),
+				"greaterthan" => query.Where(x => (x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+					x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount)) > limit),
+				"lessthan" => query.Where(x => (x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+					x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount)) < limit),
+				"between" => query.Where(x => (x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+					x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount)) >= limit &&
+					(x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+						x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+							(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+							(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount)) <= max),
+				_ => query
+			};
+		}
+		if (input.UpdatedAtOperator is not null && input.UpdatedAt.HasValue && input.UpdatedAtEnd.HasValue)
+		{
+			var start = input.UpdatedAt.Value;
+			var end = input.UpdatedAtEnd.Value;
+			query = input.UpdatedAtOperator.ToLowerInvariant() switch
+			{
+				"equals" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) >= start &&
+					(x.LastModificationTime ?? x.CreationTime) < end),
+				"after" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) >= start),
+				"before" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) < end),
+				_ => query
+			};
+		}
 
 		var total = await AsyncExecuter.CountAsync(query);
-		var rows = await AsyncExecuter.ToListAsync(query
-			.OrderByDescending(x => x.IsDefault)
-			.ThenByDescending(x => x.Status == ConcessionPolicyStatus.Active)
-			.ThenByDescending(x => x.CreationTime)
+		var sortParts = input.Sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+		var sortColumn = sortParts.Length > 0 ? sortParts[0].ToLowerInvariant() : string.Empty;
+		var descending = sortParts.Length > 1 && sortParts[1].Equals("desc", StringComparison.OrdinalIgnoreCase);
+		var sorted = sortColumn switch
+		{
+			"policyname" => descending ? query.OrderByDescending(x => x.PolicyName) : query.OrderBy(x => x.PolicyName),
+			"valuesource" => descending
+				? query.OrderByDescending(x => x.ValueSource == ConcessionValueSource.PolicyFixed)
+				: query.OrderBy(x => x.ValueSource == ConcessionValueSource.PolicyFixed),
+			"calculationmethod" => descending
+				? query.OrderByDescending(x => x.CalculationMethod == ConcessionCalculationMethod.FixedAmount ? 0 :
+					x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 1 : 2)
+				: query.OrderBy(x => x.CalculationMethod == ConcessionCalculationMethod.FixedAmount ? 0 :
+					x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 1 : 2),
+			"policylimit" => descending
+				? query.OrderByDescending(x => x.CalculationMethod == ConcessionCalculationMethod.FixedAmount)
+					.ThenByDescending(x => (double?)(x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+						x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+							(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+							(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount)))
+				: query.OrderBy(x => x.CalculationMethod == ConcessionCalculationMethod.FixedAmount)
+					.ThenBy(x => (double?)(x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+						x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+							(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+							(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount))),
+			"applyon" => descending
+				? query.OrderByDescending(x => x.ApplyOn == ConcessionApplyOn.AllFees ? 0 :
+					x.ApplyOn == ConcessionApplyOn.AllOutstanding ? 1 :
+						x.ApplyOn == ConcessionApplyOn.CurrentInstallment ? 2 : 3)
+				: query.OrderBy(x => x.ApplyOn == ConcessionApplyOn.AllFees ? 0 :
+					x.ApplyOn == ConcessionApplyOn.AllOutstanding ? 1 :
+						x.ApplyOn == ConcessionApplyOn.CurrentInstallment ? 2 : 3),
+			"updatedat" => descending ? query.OrderByDescending(x => x.LastModificationTime ?? x.CreationTime) : query.OrderBy(x => x.LastModificationTime ?? x.CreationTime),
+			"status" => descending
+				? query.OrderByDescending(x => x.Status == ConcessionPolicyStatus.Active ? 0 :
+					x.Status == ConcessionPolicyStatus.Archived ? 1 : 2)
+				: query.OrderBy(x => x.Status == ConcessionPolicyStatus.Active ? 0 :
+					x.Status == ConcessionPolicyStatus.Archived ? 1 : 2),
+			_ => query.OrderByDescending(x => x.IsDefault)
+				.ThenByDescending(x => x.Status == ConcessionPolicyStatus.Active)
+				.ThenByDescending(x => x.CreationTime)
+		};
+		var rows = await AsyncExecuter.ToListAsync(sorted
+			.ThenBy(x => x.Id)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
 		var usedIds = await GetUsedIdsAsync(rows.Select(x => x.Id).ToList());
@@ -60,7 +170,7 @@ public class ConcessionPolicyAppService(
 			dto.IsUsedInDownstream = usedIds.Contains(x.Id);
 			return dto;
 		}).ToList();
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "concession", items);
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "concession", items, AsyncExecuter);
 		return new PagedResultDto<ConcessionPolicyDto>(total, items);
 	}
 
@@ -70,7 +180,7 @@ public class ConcessionPolicyAppService(
 		var entity = await GetRequiredAsync(id);
 		var dto = ConcessionPolicyMapping.ToDto(entity);
 		dto.IsUsedInDownstream = (await GetUsedIdsAsync([id])).Contains(id);
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "concession", new[] { dto });
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "concession", new[] { dto }, AsyncExecuter);
 		return dto;
 	}
 
@@ -95,14 +205,18 @@ public class ConcessionPolicyAppService(
 	public async Task<ConcessionPolicyDto> CreateAsync(CreateUpdateConcessionPolicyDto input)
 	{
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode)
-			? $"CON-{GuidGenerator.Create():N}"[..16].ToUpperInvariant()
+			? $"CON-{Guid.NewGuid():N}"[..28].ToUpperInvariant()
 			: input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, null);
-		if (input.IsDefault)
-			await ReplaceExistingDefaultAsync(input.AcademicYearId, null, input.PolicyName, input.ChangeReason);
+		var model = ConcessionPolicyMapping.ToUpdateModel(input, code);
+		if (model.Status == ConcessionPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
 		var entity = new ConcessionPolicy(
 			GuidGenerator.Create(), CurrentTenant.Id, input.AcademicYearId,
-			ConcessionPolicyMapping.ToUpdateModel(input, code));
+			model);
+		if (model.IsDefault)
+			await ReplaceExistingDefaultAsync(input.AcademicYearId, null, input.PolicyName, input.ChangeReason);
 		await repository.InsertAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "created");
 		return ConcessionPolicyMapping.ToDto(entity);
@@ -126,9 +240,17 @@ public class ConcessionPolicyAppService(
 
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode) ? entity.PolicyCode : input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, id);
-		if (input.IsDefault)
+		if (entity.IsDefault && (!input.IsDefault || targetStatus != ConcessionPolicyStatus.Active))
+			throw new BusinessException(ConcessionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
+		var model = ConcessionPolicyMapping.ToUpdateModel(input, code);
+		if (model.Status == ConcessionPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
+		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, id, input.PolicyName, input.ChangeReason);
-		entity.Update(ConcessionPolicyMapping.ToUpdateModel(input, code));
+		// Save the demotion before modifying the tracked replacement: autoSave flushes
+		// all tracked changes, and the unique index must never see two active defaults.
+		entity.Update(model);
 		await repository.UpdateAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "edited", input.ChangeReason);
 		return ConcessionPolicyMapping.ToDto(entity);
@@ -142,7 +264,11 @@ public class ConcessionPolicyAppService(
 		var dto = new CreateUpdateConcessionPolicyDto
 		{
 			AcademicYearId = targetYear,
-			PolicyName = string.IsNullOrWhiteSpace(input.Name) ? $"{source.PolicyName} Copy" : input.Name,
+			PolicyName = string.IsNullOrWhiteSpace(input.Name)
+				? FinanceName.NextCopy(source.PolicyName, await AsyncExecuter.ToListAsync(
+					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == (input.TargetAcademicYearId ?? source.AcademicYearId))
+					.Select(x => x.PolicyName)))
+				: FinanceName.Normalize(input.Name),
 			Status = "Draft",
 			IsDefault = false,
 			Description = source.Description,
@@ -153,7 +279,11 @@ public class ConcessionPolicyAppService(
 			MaximumPercentage = source.MaximumPercentage,
 			MaximumFixedAmount = source.MaximumFixedAmount,
 			ApplyOn = source.ApplyOn.ToString(),
-			RoundingMethod = source.RoundingMethod.ToString()
+			AutoCreateRefund = source.AutoCreateRefund,
+			RoundingMethod = source.RoundingMethod.ToString(),
+			ApplicableConcessionTypeIds = [],
+			FeeHeadScope = ConcessionFeeHeadScope.EntireFeeStructure.ToString(),
+			ApplicableFeeHeadIds = []
 		};
 		return await CreateAsync(dto);
 	}
@@ -163,6 +293,8 @@ public class ConcessionPolicyAppService(
 	{
 		var entity = await GetRequiredAsync(id);
 		if (entity.Status == ConcessionPolicyStatus.Archived) return;
+		if (entity.IsDefault)
+			throw new BusinessException(ConcessionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if ((await GetUsedIdsAsync([id])).Contains(id))
 			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyInUse);
 		entity.Archive();
@@ -222,17 +354,22 @@ public class ConcessionPolicyAppService(
 	private async Task<ConcessionPolicy> GetRequiredAsync(Guid id) =>
 		await repository.FindAsync(id) ?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotFound).WithData("id", id);
 
+
 	private async Task EnsureUniqueAsync(Guid yearId, string name, string code, Guid? excludeId)
 	{
-		var normalizedName = name.Trim().ToLower();
-		var normalizedCode = code.Trim().ToLower();
+		var normalizedName = FinanceName.Normalize(name);
+		var normalizedCode = code.Trim().ToUpperInvariant();
 		var query = await repository.GetQueryableAsync();
+		var candidates = await AsyncExecuter.ToListAsync(query.Where(x => x.AcademicYearId == yearId &&
+			(!excludeId.HasValue || x.Id != excludeId.Value)).Select(x => new { x.PolicyName, x.Status }));
+		var existing = candidates.FirstOrDefault(x => FinanceName.Equals(x.PolicyName, normalizedName));
+		if (existing != null)
+			throw new BusinessException(ConcessionPolicyErrorCodes.DuplicateName)
+				.WithData("Name", normalizedName)
+				.WithData("Location", existing.Status == ConcessionPolicyStatus.Archived ? "Archived" : "Current");
 		if (await AsyncExecuter.AnyAsync(query.Where(x => x.AcademicYearId == yearId &&
-			x.PolicyName.ToLower() == normalizedName && (!excludeId.HasValue || x.Id != excludeId.Value))))
-			throw new BusinessException(ConcessionPolicyErrorCodes.DuplicateName);
-		if (await AsyncExecuter.AnyAsync(query.Where(x => x.AcademicYearId == yearId &&
-			x.PolicyCode.ToLower() == normalizedCode && (!excludeId.HasValue || x.Id != excludeId.Value))))
-			throw new BusinessException(ConcessionPolicyErrorCodes.DuplicateCode);
+			x.PolicyCode.ToUpper() == normalizedCode && (!excludeId.HasValue || x.Id != excludeId.Value))))
+			throw new BusinessException(ConcessionPolicyErrorCodes.DuplicateCode).WithData("Code", normalizedCode);
 	}
 
 	private async Task<HashSet<Guid>> GetUsedIdsAsync(List<Guid> ids)
@@ -260,6 +397,10 @@ public class ConcessionPolicyAppService(
 				reason ?? $"Default replaced by {replacementName}.");
 		}
 	}
+
+	private async Task<bool> HasActiveDefaultAsync(Guid academicYearId) =>
+		await repository.AnyAsync(x => x.AcademicYearId == academicYearId &&
+			x.Status == ConcessionPolicyStatus.Active && x.IsDefault);
 
 	private async Task WriteVersionAsync(ConcessionPolicy entity, string action, string? reason = null)
 	{

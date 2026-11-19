@@ -1,13 +1,17 @@
+using ShikshaMitra.HR.WorkShifts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Common;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
@@ -21,7 +25,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Academic.Timetable.Substitutions;
 
 [RemoteService(IsEnabled = false)]
-public class SubstitutionAppService(
+public partial class SubstitutionAppService(
     IRepository<SubstitutionRequest, Guid> substitutionRepository,
     IRepository<SubstitutionAuditLog, Guid> auditRepository,
     IRepository<TeacherAvailability, Guid> availabilityRepository,
@@ -33,11 +37,21 @@ public class SubstitutionAppService(
     IRepository<Subject, Guid> subjectRepository,
     IRepository<Room, Guid> roomRepository,
     IRepository<Employee, Guid> employeeRepository,
+    AttendanceAvailabilityWindowResolver attendanceWindowResolver,
     IRepository<AcademicYear, Guid> academicYearRepository,
     IUserScopeAccessService userScopeAccessService,
     IClassTeacherAccessService classTeacherAccessService
 ) : ApplicationService, ISubstitutionAppService
 {
+    private static readonly SubstitutionStatus[] ActiveAssignmentStatuses =
+    [
+        SubstitutionStatus.Pending,
+        SubstitutionStatus.Assigned,
+        SubstitutionStatus.WaitingAck,
+        SubstitutionStatus.Acknowledged,
+        SubstitutionStatus.Conflict
+    ];
+
     public async Task<PagedResultDto<SubstitutionDto>> GetListAsync(GetSubstitutionsInput input)
     {
         return await GetListAsync(input, null);
@@ -48,53 +62,31 @@ public class SubstitutionAppService(
         IReadOnlySet<Guid>? substituteTeacherReferenceIds,
         bool applyUserScope = true)
     {
-        var rows = await substitutionRepository.GetListAsync();
-        if (substituteTeacherReferenceIds is { Count: > 0 })
-        {
-            rows = rows.Where(x =>
-                x.SubstituteTeacherId.HasValue &&
-                substituteTeacherReferenceIds.Contains(x.SubstituteTeacherId.Value)).ToList();
-        }
-
-        if (applyUserScope)
-        {
-			var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
-			rows = rows.FilterByUserScope(scope).ToList();
-        }
-        await BackfillAcademicYearAsync(rows, input.AcademicYearId);
-        rows = await FilterByAcademicMediumAsync(rows, input.AcademicMediumId);
-
-        if (applyUserScope && !IsAdminUser() && !await HasClassTeacherAccessAsync())
-        {
-            var currentUserId = CurrentUser.Id;
-            if (currentUserId.HasValue)
-            {
-                var visibleTeacherIds = await GetVisibleTeacherReferenceIdsAsync(currentUserId.Value);
-                rows = rows.Where(x =>
-                    (x.OriginalTeacherId.HasValue && visibleTeacherIds.Contains(x.OriginalTeacherId.Value)) ||
-                    (x.SubstituteTeacherId.HasValue && visibleTeacherIds.Contains(x.SubstituteTeacherId.Value))).ToList();
-            }
-            else
-            {
-                rows = new List<SubstitutionRequest>();
-            }
-        }
-
-        var filtered = ApplyFilters(rows, input);
-
-        var ordered = filtered
-            .OrderBy(x => x.Date)
-            .ThenBy(x => x.StartTime)
-            .ToList();
-
-        var total = ordered.Count;
+        var filtered = await BuildHistoryQueryAsync(input, substituteTeacherReferenceIds, applyUserScope);
+        var total = await AsyncExecuter.CountAsync(filtered);
         var max = input.MaxResultCount <= 0 ? 50 : input.MaxResultCount;
-        var paged = ordered.Skip(input.SkipCount).Take(max).ToList();
+        var paged = await AsyncExecuter.ToListAsync(filtered.OrderBy(x => x.Date)
+            .ThenBy(x => x.StartTime).Skip(input.SkipCount).Take(max));
         var audits = await GetAuditLookupAsync(paged.Select(x => x.Id).ToList());
+        var missingNameIds = paged.Where(row => string.IsNullOrWhiteSpace(row.OriginalTeacherName) && row.OriginalTeacherId.HasValue)
+            .Select(row => row.OriginalTeacherId!.Value).Distinct().ToArray();
+        var missingNameEmployees = missingNameIds.Length == 0 ? [] : await employeeRepository.GetListAsync(employee =>
+            Enumerable.Contains(missingNameIds, employee.Id) ||
+            (employee.UserId.HasValue && Enumerable.Contains(missingNameIds, employee.UserId.Value)));
         var dtoRows = new List<SubstitutionDto>();
         foreach (var row in paged)
         {
-            dtoRows.Add(await MapAsync(row, audits.GetValueOrDefault(row.Id) ?? []));
+            var dto = Map(row, audits.GetValueOrDefault(row.Id) ?? []);
+            if (string.IsNullOrWhiteSpace(dto.OriginalTeacherName))
+            {
+                var employee = ResolveEmployeeByTeacherReference(missingNameEmployees, row.OriginalTeacherId, row.OriginalTeacherName);
+                if (employee != null)
+                {
+                    dto.OriginalTeacherId = employee.Id;
+                    dto.OriginalTeacherName = employee.EmployeeName;
+                }
+            }
+            dtoRows.Add(dto);
         }
 
         return new PagedResultDto<SubstitutionDto>(total, dtoRows);
@@ -104,31 +96,8 @@ public class SubstitutionAppService(
     {
         var target = NormalizeDate(date);
 
-        var substitutions = await substitutionRepository.GetListAsync(x => x.Date == target);
-		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
-		substitutions = substitutions.FilterByUserScope(scope).ToList();
-        await BackfillAcademicYearAsync(substitutions, academicYearId);
-        if (academicYearId.HasValue)
-        {
-            substitutions = substitutions.Where(x => x.AcademicYearId == academicYearId).ToList();
-        }
-        substitutions = await FilterByAcademicMediumAsync(substitutions, academicMediumId);
-
-        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
-        {
-            var currentUserId = CurrentUser.Id;
-            if (currentUserId.HasValue)
-            {
-                var visibleTeacherIds = await GetVisibleTeacherReferenceIdsAsync(currentUserId.Value);
-                substitutions = substitutions.Where(x =>
-                    (x.OriginalTeacherId.HasValue && visibleTeacherIds.Contains(x.OriginalTeacherId.Value)) ||
-                    (x.SubstituteTeacherId.HasValue && visibleTeacherIds.Contains(x.SubstituteTeacherId.Value))).ToList();
-            }
-            else
-            {
-                substitutions = new List<SubstitutionRequest>();
-            }
-        }
+        var substitutions = await AsyncExecuter.ToListAsync(await BuildHistoryQueryAsync(new GetSubstitutionsInput
+        { Date = date, AcademicYearId = academicYearId, AcademicMediumId = academicMediumId }, null, true));
 
         var availability = await availabilityRepository.GetListAsync(x =>
             x.AvailabilityDate == target &&
@@ -180,9 +149,9 @@ public class SubstitutionAppService(
         return await MapAsync(entity, await GetAuditLogsAsync(id));
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
     public async Task<SubstitutionDto> CreateAsync(CreateSubstitutionDto input)
     {
-        await EnsureAdminAsync("create substitutions");
         var date = NormalizeDate(input.Date);
         var start = ParseTime(input.StartTime, "startTime");
         var end = ParseTime(input.EndTime, "endTime");
@@ -221,9 +190,7 @@ public class SubstitutionAppService(
                 x.TimetableSlotSubjectId == input.TimetableSlotSubjectId &&
                 x.OriginalTeacherId.HasValue &&
                 teacherReferenceIds.Contains(x.OriginalTeacherId.Value) &&
-                x.Status != SubstitutionStatus.Cancelled &&
-                x.Status != SubstitutionStatus.Rejected &&
-                x.Status != SubstitutionStatus.Expired &&
+                Enumerable.Contains(ActiveAssignmentStatuses, x.Status) &&
                 x.StartTime < end &&
                 x.EndTime > start);
             if (duplicate != null)
@@ -260,7 +227,7 @@ public class SubstitutionAppService(
             input.SubjectName,
             input.Remarks);
 
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-create");
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-create");
         await substitutionRepository.InsertAsync(entity, autoSave: true);
         await WriteAuditAsync(entity.Id, "Created", "Substitution request created.");
 
@@ -286,7 +253,7 @@ public class SubstitutionAppService(
                 entity.Id);
 
         entity.Assign(
-                selected.TeacherId,
+                selected!.TeacherId,
                 selected.TeacherName,
                 input.AssignedRoomId,
                 input.AssignedRoomName,
@@ -295,7 +262,7 @@ public class SubstitutionAppService(
                 ParseConflict(selected.ConflictSeverity),
                 selected.ConflictReason,
                 input.SendNotification);
-            entity.MarkNotificationSent();
+        entity.MarkNotificationSent();
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(entity.Id, "Assigned", $"Assigned to {input.SubstituteTeacherName}.");
 
@@ -306,7 +273,7 @@ public class SubstitutionAppService(
     {
         await EnsureAdminAsync("update substitutions");
         var entity = await substitutionRepository.GetAsync(id);
-		await EnsureCanViewSubstitutionAsync(entity);
+        await EnsureCanViewSubstitutionAsync(entity);
         if (entity.Status is SubstitutionStatus.Completed or SubstitutionStatus.Cancelled)
         {
             throw new UserFriendlyException("Completed or cancelled substitutions cannot be edited.");
@@ -326,9 +293,7 @@ public class SubstitutionAppService(
             x.Date == date &&
             x.TimetableSlotSubjectId == input.TimetableSlotSubjectId &&
             x.OriginalTeacherId == input.OriginalTeacherId &&
-            x.Status != SubstitutionStatus.Cancelled &&
-            x.Status != SubstitutionStatus.Rejected &&
-            x.Status != SubstitutionStatus.Expired &&
+            Enumerable.Contains(ActiveAssignmentStatuses, x.Status) &&
             x.StartTime < end &&
             x.EndTime > start);
         if (duplicate != null)
@@ -385,7 +350,7 @@ public class SubstitutionAppService(
             input.OriginalRoomId,
             input.SubjectName,
             input.Remarks);
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-update");
+        await userScopeAccessService.EnsureCurrentUserCanAccessAsync(entity, operation: "substitution-update");
 
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(id, "Updated", "Substitution details updated.");
@@ -401,7 +366,7 @@ public class SubstitutionAppService(
         }
 
         var entity = await substitutionRepository.GetAsync(id);
-		await EnsureCanViewSubstitutionAsync(entity);
+        await EnsureCanViewSubstitutionAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot assign a substitute after the period has ended.");
         var employees = await employeeRepository.GetListAsync();
         var substituteTeacher = ResolveEmployeeByTeacherReference(
@@ -437,7 +402,7 @@ public class SubstitutionAppService(
         }
 
         entity.Assign(
-            selected.TeacherId,
+            selected!.TeacherId,
             selected.TeacherName,
             input.AssignedRoomId,
             input.AssignedRoomName,
@@ -458,7 +423,7 @@ public class SubstitutionAppService(
     {
         await EnsureAdminAsync("send reminders");
         var entity = await substitutionRepository.GetAsync(id);
-		await EnsureCanViewSubstitutionAsync(entity);
+        await EnsureCanViewSubstitutionAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot send a reminder after the period has ended.");
         if (string.IsNullOrWhiteSpace(entity.SubstituteTeacherName))
         {
@@ -497,7 +462,7 @@ public class SubstitutionAppService(
     {
         await EnsureAdminAsync("cancel substitutions");
         var entity = await substitutionRepository.GetAsync(id);
-		await EnsureCanViewSubstitutionAsync(entity);
+        await EnsureCanViewSubstitutionAsync(entity);
         entity.Cancel(input.Reason);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(id, "Cancelled", input.Reason);
@@ -695,18 +660,39 @@ public class SubstitutionAppService(
 
         var standard = await standardRepository.FindAsync(input.StandardId);
         var division = await divisionRepository.FindAsync(input.DivisionId);
-        var subjects = await subjectRepository.GetListAsync();
-        var rooms = await roomRepository.GetListAsync();
-        var employees = await employeeRepository.GetListAsync();
-
-        return timetable.Slots
+        var slots = timetable.Slots
             .Where(slot => slot.Day == timetableDay.Value && slot.SlotType == SlotType.Period)
+            .ToList();
+        var slotSubjects = slots.SelectMany(slot => slot.Subjects).ToList();
+        var subjectIds = slotSubjects.Select(subject => subject.SubjectId).Distinct().ToArray();
+        var roomIds = slotSubjects.Where(subject => subject.RoomId.HasValue)
+            .Select(subject => subject.RoomId!.Value).Distinct().ToArray();
+        var teacherIds = slotSubjects.Where(subject => subject.TeacherId.HasValue)
+            .Select(subject => subject.TeacherId!.Value).Distinct().ToArray();
+        var subjects = (await AsyncExecuter.ToListAsync((await subjectRepository.GetQueryableAsync())
+            .Where(subject => Enumerable.Contains(subjectIds, subject.Id))
+            .Select(subject => new { subject.Id, subject.Name }))).ToDictionary(subject => subject.Id);
+        var rooms = (await AsyncExecuter.ToListAsync((await roomRepository.GetQueryableAsync())
+            .Where(room => Enumerable.Contains(roomIds, room.Id))
+            .Select(room => new { room.Id, room.RoomName }))).ToDictionary(room => room.Id);
+        var employees = await AsyncExecuter.ToListAsync((await employeeRepository.GetQueryableAsync())
+            .Where(employee => Enumerable.Contains(teacherIds, employee.Id) ||
+                (employee.UserId.HasValue && Enumerable.Contains(teacherIds, employee.UserId.Value)))
+            .Select(employee => new { employee.Id, employee.UserId, employee.FirstName, employee.LastName }));
+        var employeesById = employees.ToDictionary(employee => employee.Id);
+        var employeesByUserId = employees.Where(employee => employee.UserId.HasValue)
+            .GroupBy(employee => employee.UserId!.Value).ToDictionary(group => group.Key, group => group.First());
+
+        return slots
             .SelectMany(slot => slot.Subjects.Select(slotSubject =>
             {
-                var subject = subjects.FirstOrDefault(x => x.Id == slotSubject.SubjectId);
-                var teacher = ResolveEmployeeByTeacherReference(employees, slotSubject.TeacherId, null);
+                var subject = subjects.GetValueOrDefault(slotSubject.SubjectId);
+                var teacher = slotSubject.TeacherId.HasValue
+                    ? employeesById.GetValueOrDefault(slotSubject.TeacherId.Value) ??
+                      employeesByUserId.GetValueOrDefault(slotSubject.TeacherId.Value)
+                    : null;
                 var room = slotSubject.RoomId.HasValue
-                    ? rooms.FirstOrDefault(x => x.Id == slotSubject.RoomId.Value)
+                    ? rooms.GetValueOrDefault(slotSubject.RoomId.Value)
                     : null;
 
                 return new SubstitutionLectureLookupDto
@@ -724,7 +710,8 @@ public class SubstitutionAppService(
                     SubjectId = slotSubject.SubjectId,
                     SubjectName = subject?.Name ?? string.Empty,
                     OriginalTeacherId = teacher?.Id ?? slotSubject.TeacherId,
-                    OriginalTeacherName = teacher?.EmployeeName ?? string.Empty,
+                    OriginalTeacherName = teacher == null ? string.Empty : string.Join(" ",
+                        new[] { teacher.FirstName, teacher.LastName }.Where(part => !string.IsNullOrWhiteSpace(part))),
                     OriginalRoomId = slotSubject.RoomId,
                     RoomName = room?.RoomName ?? string.Empty
                 };
@@ -818,19 +805,10 @@ public class SubstitutionAppService(
             return;
         }
 
-        var activeStatuses = new[]
-        {
-            SubstitutionStatus.Pending,
-            SubstitutionStatus.Assigned,
-            SubstitutionStatus.WaitingAck,
-            SubstitutionStatus.Acknowledged,
-            SubstitutionStatus.Conflict
-        };
-
         var duplicateSubstitution = await substitutionRepository.FirstOrDefaultAsync(x =>
             (!currentSubstitutionId.HasValue || x.Id != currentSubstitutionId.Value) &&
             x.Date == date &&
-            activeStatuses.Contains(x.Status) &&
+            Enumerable.Contains(ActiveAssignmentStatuses, x.Status) &&
             (x.AssignedRoomId == assignedRoomId.Value || x.OriginalRoomId == assignedRoomId.Value) &&
             x.StartTime < endTime &&
             x.EndTime > startTime);
@@ -845,16 +823,14 @@ public class SubstitutionAppService(
             return;
         }
 
-        var publishedTimetables = await timetableRepository.GetListAsync(x => x.Status == TimetableStatus.Published);
-        var roomConflict = publishedTimetables
-            .SelectMany(x => x.Slots)
-            .Where(slot =>
+        var timetables = await timetableRepository.GetQueryableAsync();
+        var roomConflict = await AsyncExecuter.AnyAsync(timetables.Where(timetable =>
+            timetable.Status == TimetableStatus.Published && timetable.Slots.Any(slot =>
                 (!currentTimetableSlotId.HasValue || slot.Id != currentTimetableSlotId.Value) &&
                 slot.Day == timetableDay.Value &&
                 slot.SlotType == SlotType.Period &&
-                HasOverlap(slot.StartTime, slot.EndTime, startTime, endTime))
-            .SelectMany(slot => slot.Subjects)
-            .Any(subject => subject.RoomId == assignedRoomId.Value);
+                slot.StartTime < endTime && slot.EndTime > startTime &&
+                slot.Subjects.Any(subject => subject.RoomId == assignedRoomId.Value))));
 
         if (roomConflict)
         {
@@ -876,68 +852,82 @@ public class SubstitutionAppService(
     {
         var effectiveAcademicMediumId = academicMediumId ?? await ResolveAcademicMediumIdAsync(subjectId);
         var contextTeacherUserIds = await GetTeacherUserIdsForAcademicMediumAsync(effectiveAcademicMediumId);
-        var employees = await employeeRepository.GetListAsync(x =>
+        var employeeQuery = (await employeeRepository.GetQueryableAsync()).Where(x =>
             !x.EmployeeStatusType.HasValue || x.EmployeeStatusType == EmployeeStatusType.Active);
         if (effectiveAcademicMediumId.HasValue && effectiveAcademicMediumId.Value != Guid.Empty)
         {
-            employees = employees
-                .Where(x =>
-                    contextTeacherUserIds.Contains(x.Id) ||
-                    (x.UserId.HasValue && contextTeacherUserIds.Contains(x.UserId.Value)))
-                .ToList();
+            var contextIds = contextTeacherUserIds.ToArray();
+            employeeQuery = employeeQuery.Where(x => Enumerable.Contains(contextIds, x.Id) ||
+                (x.UserId.HasValue && Enumerable.Contains(contextIds, x.UserId.Value)));
         }
-
-        var sameDay = await substitutionRepository.GetListAsync(x => x.Date == date);
-        var unavailable = await availabilityRepository.GetListAsync(x =>
+        var employees = await AsyncExecuter.ToListAsync(employeeQuery);
+        var sameDayQuery = (await substitutionRepository.GetQueryableAsync()).Where(x => x.Date == date);
+        var workloadRows = await AsyncExecuter.ToListAsync(sameDayQuery.Where(x => x.SubstituteTeacherId.HasValue)
+            .GroupBy(x => x.SubstituteTeacherId!.Value).Select(group => new { TeacherId = group.Key, Count = group.Count() }));
+        var workloadCounts = workloadRows.ToDictionary(item => item.TeacherId, item => item.Count);
+        var substitutionBlockRows = await AsyncExecuter.ToListAsync(sameDayQuery.Where(x =>
+            x.SubstituteTeacherId.HasValue && (!currentSubstitutionId.HasValue || x.Id != currentSubstitutionId.Value) &&
+            x.Status != SubstitutionStatus.Cancelled && x.Status != SubstitutionStatus.Rejected && x.Status != SubstitutionStatus.Expired &&
+            x.StartTime < endTime && x.EndTime > startTime)
+            .Select(x => new TeacherBlockingInterval(x.SubstituteTeacherId!.Value, x.StartTime, x.EndTime)));
+        var substitutionBlocks = substitutionBlockRows.ToLookup(item => item.TeacherId);
+        var availabilityRows = await availabilityRepository.GetListAsync(x =>
             x.AvailabilityDate == date &&
-            !x.IsCancelled &&
-            x.StartTime < endTime &&
-            x.EndTime > startTime);
+            !x.IsCancelled);
+        var unavailable = new List<TeacherAvailability>();
+        var attendanceShifts = await attendanceWindowResolver.LoadShiftsAsync(employees, DateOnly.FromDateTime(date), DateOnly.FromDateTime(date));
+        foreach (var row in availabilityRows)
+        {
+            var window = (Start: row.StartTime, End: row.EndTime);
+            var usesConfiguredShift = false;
+            if (row.SourceType == TeacherAvailabilitySource.Attendance)
+            {
+                var employee = ResolveEmployeeByTeacherReference(employees, row.TeacherId, row.TeacherName);
+                if (employee != null)
+                {
+                    var assignment = attendanceShifts.SingleOrDefault(x => x.EmployeeId == employee.Id && x.Covers(DateOnly.FromDateTime(date)));
+                    var shift = assignment == null ? null : EmployeeShiftResolver.Snapshot(assignment);
+                    usesConfiguredShift = shift != null && shift.EndTime > shift.StartTime;
+                    window = AttendanceAvailabilityWindowResolver.Resolve(
+                        shift, row.IsFullDay, row.StartTime, row.EndTime);
+                }
+            }
+
+            if ((row.IsFullDay && !usesConfiguredShift) ||
+                (window.Start < endTime && window.End > startTime))
+            {
+                unavailable.Add(row);
+            }
+        }
         var allocationTeacherUserIds = new HashSet<Guid>();
         if (subjectId.HasValue)
         {
-            var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync(x => x.Teachers);
+            var assignedSubjectQuery = await assignedSubjectRepository.GetQueryableAsync();
             allocationTeacherUserIds = (await AsyncExecuter.ToListAsync(assignedSubjectQuery.Where(x =>
                     x.SubjectId == subjectId.Value &&
-                    (!standardId.HasValue || x.StandardId == standardId.Value))))
-                .SelectMany(x => x.Teachers)
-                .Select(x => x.TeacherId)
-                .Distinct()
-                .ToHashSet();
+                    (!standardId.HasValue || x.StandardId == standardId.Value))
+                .SelectMany(x => x.Teachers).Select(x => x.TeacherId).Distinct())).ToHashSet();
         }
         var timetableDay = ToTimetableDay(date.DayOfWeek);
-        var timetables = timetableDay.HasValue ? await timetableRepository.GetListAsync() : [];
+        var candidateReferences = employees.SelectMany(employee => GetTeacherReferenceIds(employee, null)).Distinct().ToArray();
+        var slotBlocks = await LoadTeacherSlotBlocksAsync(timetableDay, startTime, endTime, candidateReferences);
 
         return employees
             .Where(x =>
-                (!originalTeacherId.HasValue || x.Id != originalTeacherId.Value) &&
-                !string.Equals(x.EmployeeName, originalTeacherName, StringComparison.OrdinalIgnoreCase))
+                (!originalTeacherId.HasValue || (x.Id != originalTeacherId.Value && x.UserId != originalTeacherId.Value)) &&
+                !string.Equals(x.EmployeeName, originalTeacherName, StringComparison.OrdinalIgnoreCase) &&
+                !unavailable.Any(row =>
+                    row.TeacherId.HasValue
+                        ? row.TeacherId == x.Id || row.TeacherId == x.UserId
+                        : string.Equals(row.TeacherName, x.EmployeeName, StringComparison.OrdinalIgnoreCase)))
             .Select(employee =>
             {
-                var todayCount = sameDay.Count(x => x.SubstituteTeacherId == employee.Id);
-                var weekCount = sameDay.Count(x => x.SubstituteTeacherId == employee.Id);
-                var blockingIntervals = unavailable
-                    .Where(x =>
-                        (x.TeacherId.HasValue && x.TeacherId == employee.Id) ||
-                        string.Equals(x.TeacherName, employee.EmployeeName, StringComparison.OrdinalIgnoreCase))
+                var todayCount = workloadCounts.GetValueOrDefault(employee.Id);
+                var weekCount = todayCount;
+                var blockingIntervals = substitutionBlocks[employee.Id]
                     .Select(x => (Start: x.StartTime, End: x.EndTime))
-                    .Concat(sameDay
-                        .Where(x =>
-                            (!currentSubstitutionId.HasValue || x.Id != currentSubstitutionId.Value) &&
-                            x.SubstituteTeacherId == employee.Id &&
-                            x.Status != SubstitutionStatus.Cancelled &&
-                            x.Status != SubstitutionStatus.Rejected &&
-                            x.Status != SubstitutionStatus.Expired &&
-                            HasOverlap(x.StartTime, x.EndTime, startTime, endTime))
-                        .Select(x => (Start: x.StartTime, End: x.EndTime)))
-                    .Concat(timetables
-                        .SelectMany(timetable => timetable.Slots)
-                        .Where(slot =>
-                            timetableDay.HasValue &&
-                            slot.Day == timetableDay.Value &&
-                            slot.SlotType == SlotType.Period &&
-                            HasOverlap(slot.StartTime, slot.EndTime, startTime, endTime) &&
-                            slot.Subjects.Any(subject => subject.TeacherId == employee.Id))
+                    .Concat(slotBlocks[employee.Id]
+                        .Concat(employee.UserId.HasValue ? slotBlocks[employee.UserId.Value] : [])
                         .Select(slot => (Start: slot.StartTime, End: slot.EndTime)))
                     .ToList();
                 var freeSegments = GetFreeSegments(startTime, endTime, blockingIntervals);
@@ -1242,19 +1232,15 @@ public class SubstitutionAppService(
 
     private async Task<HashSet<Guid>> GetTeacherUserIdsForAcademicMediumAsync(Guid? academicMediumId)
     {
-        var subjectIds = await GetSubjectIdsForAcademicMediumAsync(academicMediumId);
-        if (subjectIds.Count == 0)
+        if (!academicMediumId.HasValue || academicMediumId.Value == Guid.Empty)
         {
             return [];
         }
-
-        var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync(x => x.Teachers);
-        return (await AsyncExecuter.ToListAsync(assignedSubjectQuery
-                .Where(x => subjectIds.Contains(x.SubjectId))))
-            .SelectMany(x => x.Teachers)
-            .Select(x => x.TeacherId)
-            .Distinct()
-            .ToHashSet();
+        var subjectIds = (await subjectRepository.GetQueryableAsync())
+            .Where(subject => subject.EducationMediumId == academicMediumId.Value).Select(subject => subject.Id);
+        var assignedSubjectQuery = await assignedSubjectRepository.GetQueryableAsync();
+        return (await AsyncExecuter.ToListAsync(assignedSubjectQuery.Where(x => subjectIds.Contains(x.SubjectId))
+            .SelectMany(x => x.Teachers).Select(x => x.TeacherId).Distinct())).ToHashSet();
     }
 
     private async Task<Guid?> ResolveAcademicMediumIdAsync(Guid? subjectId)
@@ -1266,69 +1252,6 @@ public class SubstitutionAppService(
 
         var subject = await subjectRepository.FindAsync(subjectId.Value);
         return subject?.EducationMediumId;
-    }
-
-    private static IEnumerable<SubstitutionRequest> ApplyFilters(
-        IEnumerable<SubstitutionRequest> rows,
-        GetSubstitutionsInput input)
-    {
-        if (input.AcademicYearId.HasValue) rows = rows.Where(x => x.AcademicYearId == input.AcademicYearId);
-        if (input.Date.HasValue) rows = rows.Where(x => x.Date == NormalizeDate(input.Date.Value));
-        if (input.FromDate.HasValue) rows = rows.Where(x => x.Date >= NormalizeDate(input.FromDate.Value));
-        if (input.ToDate.HasValue) rows = rows.Where(x => x.Date <= NormalizeDate(input.ToDate.Value));
-        if (input.StandardId.HasValue) rows = rows.Where(x => x.StandardId == input.StandardId);
-        if (input.DivisionId.HasValue) rows = rows.Where(x => x.DivisionId == input.DivisionId);
-        if (input.SubjectId.HasValue) rows = rows.Where(x => x.SubjectId == input.SubjectId);
-        if (input.OriginalTeacherId.HasValue) rows = rows.Where(x => x.OriginalTeacherId == input.OriginalTeacherId);
-        if (input.SubstituteTeacherId.HasValue) rows = rows.Where(x => x.SubstituteTeacherId == input.SubstituteTeacherId);
-        if (input.RoomId.HasValue) rows = rows.Where(x => x.OriginalRoomId == input.RoomId || x.AssignedRoomId == input.RoomId);
-        if (input.Status.HasValue) rows = rows.Where(x => x.Status == input.Status);
-        if (!string.IsNullOrWhiteSpace(input.Reason)) rows = rows.Where(x => x.Reason == input.Reason);
-        if (input.Priority.HasValue) rows = rows.Where(x => x.Priority == input.Priority);
-        if (input.AcknowledgementStatus.HasValue) rows = rows.Where(x => x.AcknowledgementStatus == input.AcknowledgementStatus);
-        if (input.Source.HasValue) rows = rows.Where(x => x.Source == input.Source);
-        if (input.ConflictStatus.HasValue) rows = rows.Where(x => x.ConflictStatus == input.ConflictStatus);
-        if (!string.IsNullOrWhiteSpace(input.TeacherName))
-        {
-            rows = rows.Where(x =>
-                string.Equals(x.OriginalTeacherName, input.TeacherName, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x.SubstituteTeacherName, input.TeacherName, StringComparison.OrdinalIgnoreCase));
-        }
-        if (!string.IsNullOrWhiteSpace(input.ClassName)) rows = rows.Where(x => x.ClassName == input.ClassName);
-        if (!string.IsNullOrWhiteSpace(input.DivisionName)) rows = rows.Where(x => x.DivisionName == input.DivisionName);
-        if (!string.IsNullOrWhiteSpace(input.SubjectName)) rows = rows.Where(x => x.SubjectName == input.SubjectName);
-        return rows;
-    }
-
-    private async Task BackfillAcademicYearAsync(
-        List<SubstitutionRequest> rows,
-        Guid? academicYearId)
-    {
-        if (!academicYearId.HasValue)
-        {
-            return;
-        }
-
-        var academicYear = await academicYearRepository.FindAsync(academicYearId.Value);
-        if (academicYear == null)
-        {
-            return;
-        }
-
-        var changed = false;
-        foreach (var row in rows.Where(x => !x.AcademicYearId.HasValue &&
-                                            x.Date.Date >= academicYear.StartDate.Date &&
-                                            x.Date.Date <= academicYear.EndDate.Date))
-        {
-            row.SetAcademicYear(academicYear.Id);
-            await substitutionRepository.UpdateAsync(row, autoSave: false);
-            changed = true;
-        }
-
-        if (changed)
-        {
-            await CurrentUnitOfWork.SaveChangesAsync();
-        }
     }
 
     private async Task<SubstitutionDto> MapAsync(SubstitutionRequest row, List<SubstitutionAuditLogDto> auditLogs)
@@ -1691,7 +1614,7 @@ public class SubstitutionAppService(
 
     private async Task EnsureAdminAsync(string action)
     {
-		if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
+        if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
         {
             throw new UserFriendlyException($"Only administrators can {action}.");
         }
@@ -1764,10 +1687,10 @@ public class SubstitutionAppService(
         return visibleTeacherIds;
     }
 
-	private Task<bool> HasClassTeacherAccessAsync() =>
-		CurrentUser.Id.HasValue
-			? classTeacherAccessService.HasAssignmentAsync(CurrentUser.Id.Value)
-			: Task.FromResult(false);
+    private Task<bool> HasClassTeacherAccessAsync() =>
+        CurrentUser.Id.HasValue
+            ? classTeacherAccessService.HasAssignmentAsync(CurrentUser.Id.Value)
+            : Task.FromResult(false);
 
     private async Task EnsureCanActAsSubstituteAsync(SubstitutionRequest entity)
     {

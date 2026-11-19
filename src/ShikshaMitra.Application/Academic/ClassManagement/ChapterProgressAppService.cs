@@ -105,7 +105,7 @@ public class ChapterProgressAppService(
 			.GroupBy(p => p.ChapterId)
 			.ToDictionary(
 				g => g.Key,
-				g => g.OrderByDescending(p => p.CreationTime).First()
+				g => g.OrderByDescending(p => p.CreationTime).ThenByDescending(p => p.Id).First()
 			);
 
 		foreach (var assignment in assignments)
@@ -247,10 +247,12 @@ public class ChapterProgressAppService(
 			// Build pattern for case-insensitive LIKE search
 			var searchPattern = $"%{search}%";
 
-			chaptersQuery = chaptersQuery.Where(c =>
-				c.ChapterName.ToLower().Contains(search.ToLower()) ||
-				(isNumericSearch && c.ChapterNumber == searchNumber)
-			);
+			chaptersQuery = from chapter in chaptersQuery
+				let normalizedName = chapter.ChapterName.ToLower()
+				let normalizedSearch = search.ToLower()
+				where normalizedName.Contains(normalizedSearch) ||
+					(isNumericSearch && chapter.ChapterNumber == searchNumber)
+				select chapter;
 		}
 
 		var chapters = await AsyncExecuter.ToListAsync(chaptersQuery.OrderBy(c => c.ChapterNumber));
@@ -266,7 +268,7 @@ public class ChapterProgressAppService(
 			.GroupBy(p => p.ChapterId)
 			.ToDictionary(
 				g => g.Key,
-				g => g.OrderByDescending(p => p.CreationTime).First()
+				g => g.OrderByDescending(p => p.CreationTime).ThenByDescending(p => p.Id).First()
 			);
 
 		var result = new PaginatedChapterProgressResponseDto
@@ -362,10 +364,9 @@ public class ChapterProgressAppService(
 				try
 				{
 					// Find existing progress record for the chapter and division
-					var progress = await progressRepository.FirstOrDefaultAsync(p =>
-						p.ChapterId == chapterId &&
-						p.DivisionId == input.DivisionId
-					);
+					var progress = await AsyncExecuter.FirstOrDefaultAsync((await progressRepository.GetQueryableAsync())
+						.Where(p => p.ChapterId == chapterId && p.DivisionId == input.DivisionId)
+						.OrderByDescending(p => p.CreationTime).ThenByDescending(p => p.Id));
 
 					if (progress != null)
 					{
@@ -1183,7 +1184,7 @@ public class ChapterProgressAppService(
 			.GroupBy(p => p.ChapterId)
 			.ToDictionary(
 				g => g.Key,
-				g => g.OrderByDescending(p => p.CreationTime).First()
+				g => g.OrderByDescending(p => p.CreationTime).ThenByDescending(p => p.Id).First()
 			);
 
 		foreach (var assignment in assignments)

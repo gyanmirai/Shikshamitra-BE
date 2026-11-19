@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
@@ -14,7 +15,8 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Collections;
 [Area("finance")]
 [Route("api/fee-collections")]
 public class FeeCollectionController(
-    IFeeCollectionAppService feeCollectionAppService
+    IFeeCollectionAppService feeCollectionAppService,
+    IFeeWaiverAppService feeWaiverAppService
 ) : AbpControllerBase
 {
     [HttpGet]
@@ -73,4 +75,13 @@ public class FeeCollectionController(
         [FromQuery] Guid academicYearId,
         CancellationToken cancellationToken)
         => feeCollectionAppService.GetStudentFeeDetailsAsync(studentId, academicYearId, cancellationToken);
+
+    [HttpPost("waivers")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.ApplyWaiver)]
+    [ProducesResponseType(typeof(FeeWaiverResultDto), StatusCodes.Status201Created)]
+    public async Task<IActionResult> ApplyWaiverAsync([FromBody] ApplyFeeWaiverInput input)
+    {
+        var result = await feeWaiverAppService.ApplyAsync(input);
+        return StatusCode(StatusCodes.Status201Created, result);
+    }
 }

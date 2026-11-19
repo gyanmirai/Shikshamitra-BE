@@ -102,7 +102,7 @@ public class AttendanceImportDownloadService(
 	{
 		var result = new List<ExcelRow>
 		{
-			CreateRow("Row Number", "Attendance Date", "Employee Code", "Time In", "Time Out", "Status", "Remarks", "Employee Name", "Contact No", "Action", "Errors", "Warnings")
+			CreateRow("Row Number", "Attendance Date", "Staff Code", "Time In", "Time Out", "Status", "Remarks", "Staff Name", "Contact No", "Action", "Errors", "Warnings")
 		};
 
 		result.AddRange(rows.Select(row => CreateRow(
@@ -126,7 +126,7 @@ public class AttendanceImportDownloadService(
 	{
 		var result = new List<ExcelRow>
 		{
-			CreateRow("Row Number", "Attendance Date", "Employee Code", "Employee Name", "Contact No", "Time In", "Time Out", "Status", "Remarks", "Action", "Errors", "Warnings")
+			CreateRow("Row Number", "Attendance Date", "Staff Code", "Staff Name", "Contact No", "Time In", "Time Out", "Status", "Remarks", "Action", "Errors", "Warnings")
 		};
 
 		result.AddRange(rows.Select(row => CreateRow(

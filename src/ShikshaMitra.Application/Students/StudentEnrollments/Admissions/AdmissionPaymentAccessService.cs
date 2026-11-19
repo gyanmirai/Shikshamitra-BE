@@ -52,7 +52,7 @@ public class AdmissionPaymentAccessService(
 
 	public static AdmissionPaymentStagePolicy? ReadPolicy(AdmissionWorkflowStageDefinition definition)
 	{
-		try { return AdmissionPaymentStagePolicy.Read(definition.ConfigurationJson); }
+		try { return AdmissionPaymentStagePolicy.Read(AdmissionStageConfiguration.Normalize(AdmissionWorkflowStageType.Payment, definition.ConfigurationJson)); }
 		catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
 		{ throw new BusinessException(AdmissionPaymentStageErrorCodes.InvalidPolicy, exception.Message); }
 	}

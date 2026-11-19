@@ -1,8 +1,10 @@
+﻿using ShikshaMitra.HR.WorkShifts;
 using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Mail;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.Identity;
@@ -57,9 +59,12 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public virtual ICollection<EmployeeFamilyMember> FamilyMembers { get; private set; } = new List<EmployeeFamilyMember>();
 	public virtual ICollection<EmployeeOrganizationAssignment> OrganizationAssignments { get; private set; } = new List<EmployeeOrganizationAssignment>();
 	public Guid? ReportingManagerId { get; private set; }
+	// Tenant administrators can have a login without a staff profile.
+	public Guid? ReportingManagerUserId { get; private set; }
 	public virtual IdentityRole? Role { get; private set; }
-	public virtual ShiftManagement? Shift { get; private set; }
+	public virtual EmployeeWorkShift? Shift { get; private set; }
 	public virtual Employee? ReportingManager { get; private set; }
+	public virtual IdentityUser? ReportingManagerUser { get; private set; }
 	public virtual EmployeeAdditionalDetails? AdditionalDetails { get; private set; }
 
 	public string EmployeeNameWithFather => JoinNameParts(FirstName, MiddleName, LastName);
@@ -158,8 +163,28 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal void AddDocument(EmployeeDocument document) => Documents.Add(document);
 	internal void UpdateProfilePicture(string? profilePictureBlobName) => ProfilePictureBlobName = profilePictureBlobName;
 	internal void UpdateUserId(Guid id) => UserId = id;
-	public void AssignReportingManager(Guid reportingManagerId) => ReportingManagerId = reportingManagerId;
-	public void RemoveReportingManager() => ReportingManagerId = null;
+	public void ChangeAccountEmail(string email)
+	{
+		if (string.IsNullOrWhiteSpace(email) || email.Length > 256 ||
+			!MailAddress.TryCreate(email, out var address) || address.Address != email || email.Contains('\r') || email.Contains('\n'))
+			throw new BusinessException(HRErrorCodes.EmployeeAccountEmailRejected).WithData("field", "Email");
+		Email = email;
+	}
+	public void AssignReportingManager(Guid reportingManagerId)
+	{
+		ReportingManagerId = reportingManagerId;
+		ReportingManagerUserId = null;
+	}
+	public void AssignAdministratorReportingManager(Guid userId)
+	{
+		ReportingManagerUserId = userId;
+		ReportingManagerId = null;
+	}
+	public void RemoveReportingManager()
+	{
+		ReportingManagerId = null;
+		ReportingManagerUserId = null;
+	}
 
 	private static string JoinNameParts(params string?[] parts) =>
 		string.Join(" ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));

@@ -1,3 +1,6 @@
+﻿using ShikshaMitra.HR.WorkShifts;
+using System.Linq;
+using Volo.Abp.Domain.Repositories;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -15,6 +18,11 @@ public partial class HRSeederContributor
 		await SeedPayrollCatalogAsync();
 		await SeedEmployeeFoundationAsync();
 		var activeEmployeeIds = await SeedEmployeesAndPoliciesAsync();
+		var assignmentRepository = _shiftAssignmentRepository;
+		var shifts = (await _shiftRepository.GetListAsync()).ToDictionary(x => x.Id);
+		foreach (var employee in await _employeeRepository.GetListAsync())
+			if (activeEmployeeIds.Contains(employee.Id) && employee.ShiftId.HasValue && shifts.TryGetValue(employee.ShiftId.Value, out var shift) && !await assignmentRepository.AnyAsync(x => x.EmployeeId == employee.Id))
+				await assignmentRepository.InsertAsync(new EmployeeShiftAssignment(GuidGenerator.Create(), employee.Id, shift, employee.DateOfJoining ?? DateOnly.FromDateTime(employee.CreationTime), provenance: "DemoBaseline"));
 		await SeedPayrollAttendanceAndLeaveSamplesAsync(activeEmployeeIds);
 		await SeedPerformanceSamplesAsync(activeEmployeeIds);
 

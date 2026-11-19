@@ -6,9 +6,9 @@ public class ChargeListItemDto
 {
     public Guid Id { get; set; }
     public Guid MemberId { get; set; }
-    public string MemberName { get; set; }
+    public string? MemberName { get; set; }
     public int Role { get; set; }
-    public string ChargeType { get; set; }
+    public string ChargeType { get; set; } = null!;
     public decimal Amount { get; set; }
     public DateTime ChargeDate { get; set; }
     public DateTime DueDate { get; set; }

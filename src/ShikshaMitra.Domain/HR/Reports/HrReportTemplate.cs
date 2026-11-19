@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -22,6 +22,26 @@ public class HrReportTemplate : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Visibility { get; private set; } = PrivateVisibility;
 	public string Status { get; private set; } = DraftStatus;
 	public string DefinitionJson { get; private set; } = "{}";
+	public int DefinitionVersion { get; private set; }
+	public int Revision { get; private set; }
+	public int PublishedRevision { get; private set; }
+	public string? PublishedDefinitionJson { get; private set; }
+	public string? PublishedName { get; private set; }
+	public string? PublishedDescription { get; private set; }
+
+	public void SaveDesign(string name, string description, string category, string dataSource, string visibility, string definitionJson, bool publish)
+	{
+		if (DefinitionVersion == 2 && Visibility != visibility) throw new BusinessException(HRErrorCodes.ReportDesignInvalid).WithData("errors", "Copy the template to change its visibility.");
+		if (PublishedRevision > 0 && DataSource != dataSource) throw new BusinessException(HRErrorCodes.ReportDesignInvalid).WithData("errors", "Copy the template to change a published dataset.");
+		Update(name, description, category, dataSource, visibility, PublishedRevision > 0 ? PublishedStatus : DraftStatus, definitionJson);
+		DefinitionVersion = 2; Revision++;
+		if (publish || visibility == PrivateVisibility)
+		{
+			PublishedRevision = Revision; PublishedDefinitionJson = definitionJson; PublishedName = Name; PublishedDescription = Description;
+			Status = PublishedStatus;
+		}
+	}
+	public void ArchiveDesign() => Status = ArchivedStatus;
 
 	private HrReportTemplate()
 	{

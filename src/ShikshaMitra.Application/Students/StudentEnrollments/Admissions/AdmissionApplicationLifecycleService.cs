@@ -16,7 +16,7 @@ public class AdmissionApplicationLifecycleService(
 	IRepository<AdmissionApplicant, Guid> applicantRepository,
 	IRepository<AdmissionFamily, Guid> familyRepository,
 	IRepository<AdmissionGuardian, Guid> guardianRepository,
-	IRepository<AdmissionInquiry, Guid> inquiryRepository,
+	IAdmissionInquiryRepository inquiryRepository,
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionWorkflowStageDefinition, Guid> stageRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
@@ -27,32 +27,60 @@ public class AdmissionApplicationLifecycleService(
 	IRepository<AdmissionFormFieldValue, Guid> valueRepository,
 	IRepository<AdmissionFormChangeHistory, Guid> historyRepository,
 	IRepository<AdmissionActivity, Guid> activityRepository,
-	IAdmissionReferenceSequenceRepository referenceSequenceRepository,
+	AdmissionApplicationNumberingService applicationNumbering,
 	AdmissionOfferingRuntimeService offeringRuntimeService,
+	AdmissionInquiryAvailabilityService inquiryAvailability,
 	AdmissionInquiryRuntimeService inquiryRuntime,
 	AdmissionWorkflowStageHandlerRegistry stageHandlerRegistry)
 	: ApplicationService, ITransientDependency
 {
-	public async Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId)
+	public Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId) =>
+		StartCoreAsync(applicantId, offeringId, inquiryId, allowRecordsReturn: false, allowSpecialRegistration: false);
+
+	internal Task<AdmissionApplicationDto> StartForReturnAsync(Guid applicantId, Guid offeringId) =>
+		StartCoreAsync(applicantId, offeringId, null, allowRecordsReturn: true, allowSpecialRegistration: false);
+
+	internal Task<AdmissionApplicationDto> StartForSpecialRegistrationAsync(Guid applicantId, Guid offeringId) =>
+		StartCoreAsync(applicantId, offeringId, null, allowRecordsReturn: false, allowSpecialRegistration: true);
+
+	private async Task<AdmissionApplicationDto> StartCoreAsync(Guid applicantId, Guid offeringId, Guid? inquiryId, bool allowRecordsReturn, bool allowSpecialRegistration)
 	{
+		var requestedInquiryId = inquiryId;
 		var existing = await FindExistingAsync(applicantId, offeringId);
-		if (existing != null) return AdmissionApplicationMapper.ToDto(existing);
+		if (existing != null)
+			return await MapExistingAsync(existing, inquiryId);
 		var applicant = await applicantRepository.FindAsync(applicantId) ??
 			throw new EntityNotFoundException(typeof(AdmissionApplicant), applicantId);
 		var offering = (await offeringRuntimeService.GetAvailableAsync(offeringId)).Offering;
+		if (allowSpecialRegistration)
+			AdmissionDirectRegistrationEntryPolicy.EnsureAllowed(offering);
 		inquiryId = await ResolveInquiryAsync(applicantId, offeringId, inquiryId);
 		var inquiry = await EnsureInquiryMatchesAsync(inquiryId, applicantId, offering);
+		if (inquiry != null) AdmissionPrimaryContactSelection.EnsureReady(applicant);
+		if (inquiry != null)
+		{
+			// A concurrent handoff may have committed while this request waited for the inquiry lock.
+			existing = await FindExistingAsync(applicantId, offeringId);
+			if (existing != null) return await MapExistingAsync(existing, requestedInquiryId);
+		}
+		if (inquiry == null && !allowRecordsReturn && !allowSpecialRegistration)
+			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed,
+				"Start with an Inquiry, or use the Registration entry for a configured RTE, Management, or Staff Offering.");
+		if (offering.EntryMode == AdmissionEntryMode.Inquiry && inquiry == null)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.LinkedInquiryRequired,
+				"Start with an inquiry for this Admission Offering.");
+		if (offering.EntryMode == AdmissionEntryMode.DirectRegistration && inquiry != null)
+			throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable,
+				"This Admission Offering starts directly with Registration.");
 		await inquiryRuntime.EnsureCanStartApplicationAsync(offering.Id, inquiry);
+		if (inquiry != null) await inquiryAvailability.EnsureAvailableAsync(offering);
 		var workflow = await workflowRepository.FindAsync(offering.WorkflowDefinitionId!.Value);
 		var form = await formRepository.FindAsync(offering.ApplicationFormDefinitionId!.Value);
 		if (workflow == null || !workflow.Status.IsRuntimeVersion() || form?.Status != AdmissionFormStatus.Published)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);
 
-		var referenceYear = Clock.Now.ToUniversalTime().Year;
-		var applicationNumber = AdmissionReferenceNumber.Format(
-			AdmissionReferenceKind.Application,
-			referenceYear,
-			await referenceSequenceRepository.IncrementAndGetAsync(referenceYear, AdmissionReferenceKind.Application));
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionOfferingConfigurationUsageService>().RecordAsync(offering);
+		var applicationNumber = await applicationNumbering.AllocateAsync(offering.AdmissionCycleId);
 		var application = new AdmissionApplication(
 			GuidGenerator.Create(), CurrentTenant.Id, applicationNumber, applicantId, inquiryId,
 			offering.AdmissionCycleId, offeringId, workflow.Id, form.Id);
@@ -74,8 +102,10 @@ public class AdmissionApplicationLifecycleService(
 
 		var formInstance = new AdmissionFormInstance(
 			GuidGenerator.Create(), CurrentTenant.Id, application.Id, form.Id, form.Version);
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionEffectiveFormResolver>().FreezeAsync(application, formInstance, inquiry, form);
 		await PersistAsync(application, workflowInstance, stages, formInstance,
 			await CreateInitialValuesAsync(applicant, formInstance, inquiry), inquiryId, workflow, entryInstance);
+		await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().GetForApplicationAsync(application);
 		return AdmissionApplicationMapper.ToDto(application);
 	}
 
@@ -83,8 +113,15 @@ public class AdmissionApplicationLifecycleService(
 	{
 		var query = await applicationRepository.GetQueryableAsync();
 		return await AsyncExecuter.FirstOrDefaultAsync(query.Where(application =>
-			application.ApplicantId == applicantId && application.AdmissionOfferingId == offeringId &&
-			application.Status != AdmissionApplicationStatus.Withdrawn));
+			application.ApplicantId == applicantId && application.AdmissionOfferingId == offeringId));
+	}
+
+	private async Task<AdmissionApplicationDto> MapExistingAsync(AdmissionApplication existing, Guid? inquiryId)
+	{
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationScopeAccessService>().EnsureCanAccessAsync(existing);
+		if (inquiryId.HasValue && existing.InquiryId != inquiryId)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState, "An application already exists for this applicant and offering.");
+		return AdmissionApplicationMapper.ToDto(existing);
 	}
 
 	private async Task<Guid?> ResolveInquiryAsync(Guid applicantId, Guid offeringId, Guid? inquiryId)
@@ -99,7 +136,7 @@ public class AdmissionApplicationLifecycleService(
 	private async Task<AdmissionInquiry?> EnsureInquiryMatchesAsync(Guid? inquiryId, Guid applicantId, AdmissionOffering offering)
 	{
 		if (!inquiryId.HasValue) return null;
-		var inquiry = await inquiryRepository.FindAsync(inquiryId.Value) ??
+		var inquiry = await inquiryRepository.FindForApplicationStartAsync(inquiryId.Value) ??
 			throw new EntityNotFoundException(typeof(AdmissionInquiry), inquiryId.Value);
 		if (inquiry.ApplicantId != applicantId || inquiry.AdmissionCycleId != offering.AdmissionCycleId ||
 			inquiry.AdmissionOfferingId != offering.Id)
@@ -115,28 +152,96 @@ public class AdmissionApplicationLifecycleService(
 		var family = await familyRepository.FindAsync(applicant.FamilyId);
 		var guardian = family?.PrimaryGuardianId.HasValue == true
 			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
-		var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
+		if (AdmissionSiblingFamilyLink.HasOwnContact(applicant)) guardian = AdmissionSiblingFamilyLink.OwnGuardian(applicant);
 		var inquiryValues = ReadInquiryValues(inquiry?.FormResponseSnapshotJson);
-		return fields.Select(field => new AdmissionFormFieldValue(
-				GuidGenerator.Create(), CurrentTenant.Id, instance.Id, field.Code,
-				ResolveInitialValue(field, applicant, guardian, inquiryValues)))
-			.Where(value => value.ValueJson != "null" && !string.IsNullOrWhiteSpace(value.ValueJson)).ToArray();
+		var frozen = AdmissionEffectiveFormStore.Read(instance);
+		AdmissionFormFieldValue[] initialValues;
+		AdmissionFormDto definition;
+		if (frozen != null)
+		{
+			definition = frozen.Definition;
+			initialValues = frozen.Definition.Sections.SelectMany(section => section.Fields)
+				.Select(field => new AdmissionFormFieldValue(GuidGenerator.Create(), CurrentTenant.Id, instance.Id, field.Code,
+					ResolveFrozenInitialValue(field, applicant, guardian, inquiryValues)))
+				.Where(value => value.ValueJson != "null" && !string.IsNullOrWhiteSpace(value.ValueJson)).ToArray();
+		}
+		else
+		{
+			var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
+			var inquiryFields = inquiry?.FormResponseDefinitionId is Guid inquiryFormId
+				? await fieldRepository.GetListAsync(field => field.FormDefinitionId == inquiryFormId)
+				: [];
+			initialValues = fields.Select(field => new AdmissionFormFieldValue(
+					GuidGenerator.Create(), CurrentTenant.Id, instance.Id, field.Code,
+					ResolveInitialValue(field, applicant, guardian, inquiryFields, inquiryValues)))
+				.Where(value => value.ValueJson != "null" && !string.IsNullOrWhiteSpace(value.ValueJson)).ToArray();
+			if (AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null) return initialValues;
+			var sections = await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionFormSectionDefinition, Guid>>()
+				.GetListAsync(section => section.FormDefinitionId == instance.FormDefinitionId);
+			definition = AdmissionApplicationFormService.MapDefinition(await formRepository.GetAsync(instance.FormDefinitionId), sections, fields);
+		}
+		if (AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null) return initialValues;
+		var prefillService = LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingRegistrationPrefillService>();
+		var prefill = await prefillService.ProjectAsync(applicant, instance, definition,
+			initialValues.Select(value => new AdmissionFormValueDto { FieldCode = value.FieldCode, ValueJson = value.ValueJson }).ToList(), initial: true);
+		if (prefill.AutoFilledFieldCodes.Count == 0) return initialValues;
+		foreach (var field in definition.Sections.SelectMany(section => section.Fields).Where(field => prefill.AutoFilledFieldCodes.Contains(field.Code)))
+		{
+			if (field.BindingKey is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email") continue;
+			var key = field.BindingKey == "Guardian.Occupation" ? (prefill.FamilyPrefill!.Relationship == "father" ? "Father.Occupation" : "Mother.Occupation") : field.BindingKey!;
+			AdmissionFormBindingRegistry.ApplyValue(key, AdmissionApplicationValueConverter.Unwrap(prefill.Values.Single(value => value.FieldCode == field.Code).ValueJson), applicant, null);
+		}
+		await applicantRepository.UpdateAsync(applicant, false);
+		await prefillService.RecordAsync(instance, prefill.FamilyPrefill!, prefill.AutoFilledFieldCodes);
+		return prefill.Values.Select(value => new AdmissionFormFieldValue(GuidGenerator.Create(), CurrentTenant.Id, instance.Id, value.FieldCode, value.ValueJson)).ToArray();
+	}
+
+	internal static string? ResolveFrozenInitialValue(AdmissionFormFieldDto field, AdmissionApplicant applicant,
+		AdmissionGuardian? guardian, IReadOnlyDictionary<string, string> inquiryValues)
+	{
+		// A full Inquiry name shown beside structured Registration names is historical
+		// reference, not a live reconstruction of the applicant's corrected name parts.
+		if (field.ReadOnly && field.BindingType == AdmissionFormBindingType.System &&
+			string.Equals(field.BindingKey, "Applicant.Name", StringComparison.OrdinalIgnoreCase) &&
+			field.InheritedFrom is { SourceReadOnly: false })
+			return AdmissionEffectiveFormStore.ReadInquiryValue(field, inquiryValues);
+		var protectedContact = (applicant.ExistingStudentId.HasValue || AdmissionSiblingParentSelection.ReadConfirmation(applicant) != null) &&
+			(field.BindingKey?.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase) == true ||
+			 field.BindingKey?.StartsWith("Father.", StringComparison.OrdinalIgnoreCase) == true ||
+			 field.BindingKey?.StartsWith("Mother.", StringComparison.OrdinalIgnoreCase) == true);
+		if ((!field.ReadOnly || field.BindingType == AdmissionFormBindingType.Custom) && !protectedContact && field.InheritedFrom != null)
+		{
+			var source = AdmissionEffectiveFormStore.ReadInquiryValue(field, inquiryValues);
+			if (source != null) return source;
+		}
+		if (field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey))
+			return InitialSystemValue(field.BindingKey, applicant, guardian, inquiryValues, field);
+		return field.DefaultValue;
 	}
 
 	private static string? ResolveInitialValue(
 		AdmissionFormFieldDefinition field,
 		AdmissionApplicant applicant,
 		AdmissionGuardian? guardian,
+		IReadOnlyCollection<AdmissionFormFieldDefinition> inquiryFields,
 		IReadOnlyDictionary<string, string> inquiryValues)
 	{
-		var snapshotKey = string.IsNullOrWhiteSpace(field.BindingKey) ? field.Code : field.BindingKey;
-		if (field.BindingType != AdmissionFormBindingType.System &&
-			inquiryValues.TryGetValue(snapshotKey!, out var snapshotValue) &&
-			!string.IsNullOrWhiteSpace(snapshotValue) && snapshotValue != "null")
-			return snapshotValue;
 		if (field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey))
-			return JsonSerializer.Serialize(AdmissionApplicationMapper.GetBoundValue(field.BindingKey, applicant, guardian));
-		return field.DefaultValue;
+			return InitialSystemValue(field.BindingKey, applicant, guardian, inquiryValues, new AdmissionFormFieldDto
+			{ BindingType = field.BindingType, BindingKey = field.BindingKey, FieldType = field.FieldType, OptionsJson = field.OptionsJson, ReadOnly = field.ReadOnly });
+		return AdmissionInquiryFormPrefill.ResolveCustomValue(field, inquiryFields, inquiryValues)
+			?? field.DefaultValue;
+	}
+
+	private static string? InitialSystemValue(string key, AdmissionApplicant applicant, AdmissionGuardian? guardian,
+		IReadOnlyDictionary<string, string> inquiryValues, AdmissionFormFieldDto field)
+	{
+		if (!applicant.ExistingStudentId.HasValue && string.Equals(key, "Applicant.FirstName", StringComparison.OrdinalIgnoreCase))
+			return JsonSerializer.Serialize(AdmissionStructuredNamePrefill.FirstName(applicant.FirstName, inquiryValues));
+		var value = AdmissionApplicationMapper.GetBoundValue(key, applicant, guardian);
+		if (AdmissionRegistrationRelationshipPrefill.CanFill(field) && string.IsNullOrWhiteSpace(value?.ToString()))
+			value = AdmissionRegistrationRelationshipPrefill.Resolve(field, applicant);
+		return JsonSerializer.Serialize(value);
 	}
 
 	private static IReadOnlyDictionary<string, string> ReadInquiryValues(string? snapshotJson)
@@ -176,14 +281,11 @@ public class AdmissionApplicationLifecycleService(
 			inquiry.SetStatus(AdmissionInquiryStatus.ApplicationStarted);
 			await inquiryRepository.UpdateAsync(inquiry, false);
 		}
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"WorkflowStarted", $"Workflow {workflow.Name} v{workflow.Version} started", application.ApplicantId,
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("WorkflowStarted", $"Workflow {workflow.Name} v{workflow.Version} started", application.ApplicantId,
 			application.Id, inquiryId), false);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"WorkflowStageEntered", $"Stage entered: {entry.Name}", application.ApplicantId,
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("WorkflowStageEntered", $"Stage entered: {entry.Name}", application.ApplicantId,
 			application.Id, inquiryId), false);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"ApplicationStarted", "Application started", application.ApplicantId, application.Id, inquiryId), true);
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("ApplicationStarted", "Application started", application.ApplicantId, application.Id, inquiryId), true);
 	}
 
 }

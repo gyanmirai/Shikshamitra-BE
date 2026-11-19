@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -16,6 +17,8 @@ using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Onboarding;
+using ShikshaMitra.HR.Payroll.RunPayroll;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
@@ -50,8 +53,8 @@ internal sealed class FakeReceiptNumberSequenceRepository(
 }
 
 internal sealed class FakeEmployeeLeaveRepository(
-    IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
-    : EfCoreEmployeeLeaveRepository(dbContextProvider)
+    IDbContextProvider<ShikshaMitraDbContext> dbContextProvider, Volo.Abp.Data.IDataFilter historyFilter)
+    : EfCoreEmployeeLeaveRepository(dbContextProvider, historyFilter)
 {
     private static int _nextPublicId;
 
@@ -79,6 +82,20 @@ internal sealed class FakeEmployeeLeaveRepository(
     }
 }
 
+// This harness disables every UOW transaction. PostgreSQL API tests cover the real lock fence.
+internal sealed class NonTransactionalPayrollInputRevisionStore(
+    IDbContextProvider<ShikshaMitraDbContext> provider, ICurrentTenant tenant) : IPayrollInputRevisionStore
+{
+    public async Task<Guid> ReadAsync()
+    {
+        var db = await provider.GetDbContextAsync();
+        var tenantId = tenant.Id ?? Guid.Empty;
+        return await db.Set<PayrollInputRevision>().AsNoTracking().Where(x => x.Id == tenantId)
+            .Select(x => x.Revision).FirstOrDefaultAsync();
+    }
+    public Task<Guid> LockAsync() => ReadAsync();
+}
+
 public sealed record SentEmployeeOnboardingInvitation(Guid ApplicationId, string? Email, string PublicPath);
 
 public sealed record SentEmployeeWelcomeEmail(
@@ -93,12 +110,12 @@ public sealed class FakeEmployeeEmailService : IEmployeeEmailService
     public IReadOnlyCollection<SentEmployeeWelcomeEmail> Sent => _sent.ToList();
 
     public Task SendWelcomeEmailAsync(
-        string employeeEmail,
+        string? employeeEmail,
         string employeeName,
         string username,
         string password)
     {
-        _sent.Enqueue(new(employeeEmail, employeeName, username));
+        _sent.Enqueue(new(employeeEmail!, employeeName, username));
         return Task.CompletedTask;
     }
 
@@ -155,6 +172,9 @@ public class ShikshaMitraApplicationTestModule : AbpModule
 
     public override void ConfigureServices(ServiceConfigurationContext context)
     {
+        // Use real protected reset/verification tokens for portal owner-setup tests.
+        new Microsoft.AspNetCore.Identity.IdentityBuilder(typeof(Volo.Abp.Identity.IdentityUser),
+            typeof(Volo.Abp.Identity.IdentityRole), context.Services).AddDefaultTokenProviders();
         Configure<FeatureManagementOptions>(options =>
         {
             options.SaveStaticFeaturesToDatabase = false;
@@ -171,15 +191,23 @@ public class ShikshaMitraApplicationTestModule : AbpModule
             options.IsDynamicSettingStoreEnabled = false;
         });
 
-        context.Services.AddAlwaysDisableUnitOfWorkTransaction();
+        var familyPostgres = FamilyFinancePostgresHarness.IsEnabled;
+        if (!familyPostgres) context.Services.AddAlwaysDisableUnitOfWorkTransaction();
         context.Services.AddSingleton<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider());
         context.Services.AddHttpClient();
-        ConfigureInMemorySqlite(context.Services);
+        if (familyPostgres) FamilyFinancePostgresHarness.Configure(context.Services);
+        else ConfigureInMemorySqlite(context.Services);
 
         // Replace the PostgreSQL-specific sequence repository with an in-memory fake
         // so that application tests using SQLite don't fail on PostgreSQL-only SQL syntax.
-        context.Services.AddTransient<IReceiptNumberSequenceRepository, FakeReceiptNumberSequenceRepository>();
+        if (!familyPostgres) context.Services.AddTransient<IReceiptNumberSequenceRepository, FakeReceiptNumberSequenceRepository>();
         context.Services.AddTransient<IEmployeeLeaveRepository, FakeEmployeeLeaveRepository>();
+        context.Services.AddTransient<IPayrollInputRevisionStore, NonTransactionalPayrollInputRevisionStore>();
+        context.Services.AddSingleton<OnboardingAccountFailureProbe>();
+        context.Services.Replace(ServiceDescriptor.Transient<ShikshaMitra.Students.StudentEnrollments.Onboarding.IStudentCredentialEmailEligibilityResolver>(sp =>
+            new FaultingOnboardingCredentialEligibilityResolver(
+                sp.GetRequiredService<ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingCredentialEligibilityResolver>(),
+                sp.GetRequiredService<OnboardingAccountFailureProbe>(), sp.GetRequiredService<IUnitOfWorkManager>())));
         context.Services.AddSingleton<FakeEmployeeEmailService>();
         context.Services.Replace(ServiceDescriptor.Singleton<IEmployeeEmailService>(sp =>
             sp.GetRequiredService<FakeEmployeeEmailService>()));

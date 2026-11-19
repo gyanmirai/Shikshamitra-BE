@@ -55,6 +55,8 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
     }
 
     [Theory]
+    [InlineData("{\"policies\":{\"proration\":null}}")]
+    [InlineData("{\"policies\":{\"proration\":{\"policyId\":\"00000000-0000-0000-0000-000000000001\",\"policyVersionId\":\"00000000-0000-0000-0000-000000000002\"}}}")]
     [InlineData("{\"receiptBookId\":null}")]
     [InlineData("{\"feeHeads\":{\"update\":[{\"lineId\":\"00000000-0000-0000-0000-000000000001\",\"amount\":1}]}}")]
     [InlineData("{\"policies\":{\"collection\":{\"policyId\":null}}}")]
@@ -114,7 +116,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         var draft = await _feeStructures.CreateAsync(metadata, new() { StandardId = standard, StandardFeeStructures = candidate });
         await _collectionPolicies.UpdateAsync(policy.Id, new CreateUpdateCollectionPolicyDto {
             AcademicYearId = policy.AcademicYearId, PolicyName = policy.PolicyName, PolicyCode = policy.PolicyCode,
-            Status = "Active", ChangeReason = "Update test policy", AllowOnlineCollection = true
+            Status = "Active", IsDefault = policy.IsDefault, ChangeReason = "Update test policy", AllowOnlineCollection = true
         });
         var current = await _collectionPolicies.GetAsync(policy.Id);
         current.CurrentVersionId.ShouldNotBe(policy.CurrentVersionId);

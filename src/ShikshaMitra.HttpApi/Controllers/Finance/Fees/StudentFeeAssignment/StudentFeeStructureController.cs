@@ -4,6 +4,7 @@ using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.StudentFeeAssignment;
 
@@ -15,6 +16,15 @@ public class StudentFeeStructureController(
 	IStudentFeeStructureAppService studentFeeStructureAppService
 ) : AbpController
 {
+	[HttpPost("contexts")]
+	public Task<List<AssignmentContextDto>> GetContextsAsync([FromBody] AssignmentContextsInput input) =>
+		studentFeeStructureAppService.GetContextsAsync(input);
+
+	[HttpGet("policy-options")]
+	public Task<List<AssignmentPolicyDto>> GetPolicyOptionsAsync(Guid studentId, Guid academicYearId) => studentFeeStructureAppService.GetPolicyOptionsAsync(studentId, academicYearId);
+
+	[HttpPut("student/{studentId}/policies")]
+	public Task<StudentFeeStructureResponseDto> UpdatePoliciesAsync(Guid studentId, [FromBody] AssignmentPolicyUpdateDto input) => studentFeeStructureAppService.UpdatePoliciesAsync(studentId, input);
 	[HttpGet("transport-sources")]
 	public Task<List<AssignmentTransportSourceDto>> GetTransportSourcesAsync(Guid studentId, Guid academicYearId) => studentFeeStructureAppService.GetTransportSourcesAsync(studentId, academicYearId);
     [HttpGet("students")]
@@ -37,6 +47,7 @@ public class StudentFeeStructureController(
 		studentFeeStructureAppService.PreviewAsync(input);
 
 	[HttpPost("assign-bulk")]
+	[UnitOfWork(isTransactional: false)]
 	public async Task<BulkAssignStudentFeeStructureResultDto> BulkAssignAsync(
 		[FromBody] BulkAssignStudentFeeStructureDto input)
 	{

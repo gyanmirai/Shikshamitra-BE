@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Students;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,6 +13,14 @@ namespace ShikshaMitra.Finance.Fees.Charges;
 
 public partial class ChargeAppService
 {
+	private sealed class ChargeReviewPageCache(Dictionary<Guid, Student> studentsById, bool isAdmin)
+	{
+		public Dictionary<Guid, Student> StudentsById { get; } = studentsById;
+		public bool IsAdmin { get; } = isAdmin;
+		public Dictionary<(Guid RequestorId, Guid AcademicYearId, string Scope, string Permission), bool>
+			Decisions { get; } = new();
+	}
+
 	private async Task<ChargeAudienceDto> ResolveAudienceDtoAsync(CreateChargeRequest input)
 	{
 		if (input.Audience is not null)
@@ -33,6 +43,7 @@ public partial class ChargeAppService
 		var academicYear = await academicYearRepository.GetAsync(request.AcademicYearId);
 		var lines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == request.Id);
 		var status = DeriveRequestStatus(lines.Select(l => l.Status).ToList());
+		var workflowStatus = await GetWorkflowStatusAsync(lines);
 
 		return new ChargeResponse
 		{
@@ -41,10 +52,10 @@ public partial class ChargeAppService
 			{
 				ChargeId = request.Id, ChargeName = request.ChargeName,
 				ResolvedStudentCount = studentCount,
-				ChargeCategoryId = request.ChargeCategoryId, CategoryName = category.Name,
+			ChargeCategoryId = request.ChargeCategoryId, CategoryName = category.Name,
 				PurposeDescription = request.PurposeDescription, Amount = request.Amount,
 				DueDate = request.DueDate, AppliedOn = request.AppliedOn,
-				Priority = (int)request.Priority, Status = (int)status,
+				Priority = (int)request.Priority, Status = (int)status, WorkflowStatus = workflowStatus,
 				BoardId = request.BoardId, EducationMediumId = request.EducationMediumId,
 				AdditionalNotes = request.AdditionalNotes,
 				RequestorId = request.RequestorId,
@@ -53,10 +64,11 @@ public partial class ChargeAppService
 				AcademicYearId = request.AcademicYearId, AcademicYearName = academicYear.Name,
 				ConcurrencyStamp = request.ConcurrencyStamp,
 				AvailableActions = await GetAvailableActionsAsync(
-					request.RequestorId,
+					request.RequestorId, request.AcademicYearId,
+					lines.Where(l => l.Status == ChargeStatus.Pending).Select(l => l.StudentId).ToList(),
 					lines.Any(l => l.Status == ChargeStatus.Pending),
 					lines.Count == 0 || lines.All(l => l.Status == ChargeStatus.Pending),
-					lines.Any(l => l.Status == ChargeStatus.Approved))
+					await CanCancelAsync(lines))
 			},
 			Message = message
 		};
@@ -71,8 +83,10 @@ public partial class ChargeAppService
 			Amount = r.Request.Amount, PurposeDescription = r.Request.PurposeDescription,
 			DueDate = r.Request.DueDate, AppliedOn = r.Request.AppliedOn,
 			Priority = (int)r.Request.Priority,
-			DisplayStatus = r.PendingCount > 0 ? 0 : 1,
+			DisplayStatus = (int)r.WorkflowStatus, WorkflowStatus = r.WorkflowStatus,
 			StudentCount = r.StudentCount, ProcessedCount = r.ProcessedCount,
+			PaidStudentCount = r.PaidStudentCount, OutstandingStudentCount = r.OutstandingStudentCount,
+			WaivedStudentCount = r.WaivedStudentCount,
 			RequestorId = r.Requestor.Id,
 			RequestorName = r.Requestor.Name ?? r.Requestor.UserName ?? string.Empty,
 			RequestedOn = r.Request.AppliedOn, AdditionalNotes = r.Request.AdditionalNotes
@@ -156,13 +170,25 @@ public partial class ChargeAppService
 			throw new BusinessException(FinanceChargeErrorCodes.ConcurrencyConflict);
 	}
 
-	private async Task<List<Guid>> GetScopedStudentIdsAsync(Guid academicYearId)
+	private async Task<ChargeRequestReadScope> GetChargeReadScopeAsync(Guid academicYearId)
 	{
-		var query = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
-		var studentQuery = await studentRepository.GetQueryableAsync();
-		return await AsyncExecuter.ToListAsync(studentQuery
-			.Where(student => student.AcademicYearId == academicYearId && query.Contains(student.Id))
-			.Select(student => student.Id));
+		var own = await AsyncExecuter.ToListAsync(
+			await financeScopeAccessService.GetRequestScopedStudentIdsQueryAsync(
+				academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.View));
+		var decisionPermission = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve)
+			? ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve
+			: await AuthorizationService.IsGrantedAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Reject)
+				? ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Reject : null;
+		List<Guid> review = decisionPermission == null ? [] : await AsyncExecuter.ToListAsync(
+			await financeScopeAccessService.GetReviewerScopedStudentIdsQueryAsync(
+				academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.View,
+				decisionPermission));
+		IReadOnlyCollection<Guid> makers = decisionPermission == null || !CurrentUser.Id.HasValue
+			? [] : await financeReviewerAccessService.GetReportingMakerUserIdsAsync(CurrentUser.Id.Value);
+		return new ChargeRequestReadScope(own, review, makers,
+			await financeReviewerAccessService.GetNonEmployeeMakerIdsQueryAsync());
 	}
 
 	private async Task EnsureLinesAccessibleAsync(IEnumerable<Guid> studentIds)
@@ -177,30 +203,136 @@ public partial class ChargeAppService
 
 	private async Task EnsureRequestAccessibleAsync(Guid chargeRequestId)
 	{
+		var request = await chargeRequestRepository.GetAsync(chargeRequestId);
 		var lines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == chargeRequestId);
-		await EnsureLinesAccessibleAsync(lines.Select(line => line.StudentId));
+		var ids = lines.Select(line => line.StudentId).Distinct().ToList();
+		if (ids.Count == 0)
+			throw new Volo.Abp.Authorization.AbpAuthorizationException(
+				"Access denied: charge request has no accessible student lines.");
+		var readScope = await GetChargeReadScopeAsync(request.AcademicYearId);
+		var own = readScope.OwnStudentIds.ToHashSet();
+		var review = readScope.ReviewerStudentIds.ToHashSet();
+		var makerVisible = readScope.ReportingMakerIds.Contains(request.RequestorId) ||
+			await AsyncExecuter.AnyAsync(readScope.NonEmployeeMakerIds.Where(id => id == request.RequestorId));
+		if (ids.Any(id => !own.Contains(id) && !(makerVisible && review.Contains(id))))
+			throw new Volo.Abp.Authorization.AbpAuthorizationException(
+				"Access denied: one or more charge lines are outside your user scope.");
+	}
+
+	private async Task EnsureChargeReviewerAsync(ChargeRequest request,
+		IEnumerable<Guid> studentIds, string decisionPermission)
+	{
+		foreach (var studentId in await GetReviewerRepresentativeStudentIdsAsync(studentIds))
+		{
+			var reviewerId = await financeReviewerAccessService.FindEligibleReviewerAsync(
+				request.RequestorId, studentId, request.AcademicYearId,
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.View, decisionPermission);
+			await financeReviewerAccessService.EnsureReviewerCanDecideAsync(
+				request.RequestorId, reviewerId, studentId, request.AcademicYearId,
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.View, decisionPermission);
+		}
 	}
 
 	private async Task<List<string>> GetAvailableActionsAsync(
-		Guid requestorId, bool hasPending, bool allPending, bool hasApproved)
+		Guid requestorId, Guid academicYearId, IReadOnlyCollection<Guid> pendingStudentIds,
+		bool hasPending, bool allPending, bool canCancel,
+		IReadOnlyDictionary<string, bool>? permissionGrants = null, ChargeReviewPageCache? pageCache = null)
 	{
+		Task<bool> IsGrantedAsync(string permission) => permissionGrants is not null &&
+			permissionGrants.TryGetValue(permission, out var granted)
+				? Task.FromResult(granted) : AuthorizationService.IsGrantedAsync(permission);
 		var actions = new List<string> { "View" };
-		if (allPending && await AuthorizationService.IsGrantedAsync(
+		if (allPending && await IsGrantedAsync(
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Update))
 			actions.Add("Edit");
-		if (allPending && await AuthorizationService.IsGrantedAsync(
+		if (allPending && await IsGrantedAsync(
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Delete))
 			actions.Add("Delete");
-		if (hasPending && CurrentUser.Id != requestorId && await AuthorizationService.IsGrantedAsync(
-			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve))
+		if (hasPending && CurrentUser.Id != requestorId && await IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve) &&
+			await CanReviewChargeLinesAsync(requestorId, academicYearId, pendingStudentIds,
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve, pageCache))
 			actions.Add("Approve");
-		if (hasPending && CurrentUser.Id != requestorId && await AuthorizationService.IsGrantedAsync(
-			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Reject))
+		if (hasPending && CurrentUser.Id != requestorId && await IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Reject) &&
+			await CanReviewChargeLinesAsync(requestorId, academicYearId, pendingStudentIds,
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Reject, pageCache))
 			actions.Add("Reject");
-		if (hasApproved && await AuthorizationService.IsGrantedAsync(
+		if (canCancel && await IsGrantedAsync(
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Void))
 			actions.Add("Void");
 		return actions;
+	}
+
+	private async Task<bool> CanReviewChargeLinesAsync(Guid requestorId, Guid academicYearId,
+		IReadOnlyCollection<Guid> studentIds, string decisionPermission, ChargeReviewPageCache? pageCache = null)
+	{
+		if (!CurrentUser.Id.HasValue || studentIds.Count == 0) return false;
+		var isAdmin = pageCache?.IsAdmin ?? await userScopeService.IsAdminUserAsync(CurrentUser.Id.Value);
+		if (isAdmin) return true;
+		foreach (var studentId in await GetReviewerRepresentativeStudentIdsAsync(studentIds, pageCache?.StudentsById))
+		{
+			var student = pageCache?.StudentsById[studentId];
+			var scope = student is null ? string.Empty : string.Join("|", student.AcademicYearId,
+				student.AcademicBoardId, student.AcademicMediumId, student.StandardId, student.DivisionId);
+			var key = (requestorId, academicYearId, scope, decisionPermission);
+			if (pageCache is not null && pageCache.Decisions.TryGetValue(key, out var cached))
+			{
+				if (!cached) return false;
+				continue;
+			}
+			var reviewerId = await financeReviewerAccessService.FindEligibleReviewerAsync(
+				requestorId, studentId, academicYearId,
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.View,
+				decisionPermission);
+			var allowed = reviewerId == CurrentUser.Id || reviewerId == Guid.Empty;
+			if (pageCache is not null) pageCache.Decisions[key] = allowed;
+			if (!allowed) return false;
+		}
+		return true;
+	}
+
+	private async Task<IReadOnlyList<Guid>> GetReviewerRepresentativeStudentIdsAsync(
+		IEnumerable<Guid> studentIds, IReadOnlyDictionary<Guid, Student>? studentsById = null)
+	{
+		var ids = studentIds.Distinct().ToList();
+		if (ids.Count == 0) return [];
+		var students = studentsById is null
+			? await studentRepository.GetListAsync(student => ids.Contains(student.Id))
+			: ids.Where(studentsById.ContainsKey).Select(id => studentsById[id]).ToList();
+		if (students.Count != ids.Count)
+			throw new Volo.Abp.Authorization.AbpAuthorizationException(
+				"Charge review contains an unavailable student.");
+		return students.DistinctBy(student => (
+			student.AcademicYearId, student.AcademicBoardId, student.AcademicMediumId,
+			student.StandardId, student.DivisionId)).Select(student => student.Id).ToList();
+	}
+
+	private async Task<bool> CanCancelAsync(IReadOnlyList<Charge> lines)
+	{
+		var approvedIds = lines.Where(line => line.Status == ChargeStatus.Approved).Select(line => line.Id).ToList();
+		if (approvedIds.Count == 0) return false;
+		var allocations = await chargeCollectionRecordRepository.GetListAsync(x => approvedIds.Contains(x.ChargeId));
+		var transactionIds = allocations.Select(x => x.FeeRecordMetadataId).Distinct().ToList();
+		var reversedIds = (await feeRecordMetadataRepository.GetListAsync(x => transactionIds.Contains(x.Id) &&
+			x.Status == ShikshaMitra.Finance.Fees.Collections.FeeCollectionStatus.Reversed)).Select(x => x.Id).ToHashSet();
+		return allocations.All(x => reversedIds.Contains(x.FeeRecordMetadataId));
+	}
+
+	private async Task<ChargeWorkflowStatus> GetWorkflowStatusAsync(IReadOnlyList<Charge> lines)
+	{
+		var collected = await GetCollectedAmountsAsync(lines.Select(line => line.Id));
+		var waived = await GetWaivedAmountsAsync(lines.Select(line => line.Id));
+		return ChargeWorkflowStatusResolver.Resolve(lines.Select(line => new ChargeWorkflowLine(
+			line.Status, Math.Max(0m, line.Amount - collected.GetValueOrDefault(line.Id) - waived.GetValueOrDefault(line.Id)))));
+	}
+
+	private async Task<Dictionary<Guid, decimal>> GetWaivedAmountsAsync(IEnumerable<Guid> chargeLineIds)
+	{
+		var ids = chargeLineIds.Distinct().ToList();
+		if (ids.Count == 0) return [];
+		var waivers = await chargeWaiverRepository.GetListAsync(x => ids.Contains(x.ChargeId));
+		return waivers.GroupBy(x => x.ChargeId).ToDictionary(g => g.Key, g => g.Sum(x => x.EffectiveAmount));
 	}
 
 	private async Task<Dictionary<Guid, decimal>> GetCollectedAmountsAsync(IEnumerable<Guid> chargeLineIds)
@@ -209,11 +341,11 @@ public partial class ChargeAppService
 		if (ids.Count == 0) return [];
 		var allocations = await chargeCollectionRecordRepository.GetListAsync(x => ids.Contains(x.ChargeId));
 		var transactionIds = allocations.Select(x => x.FeeRecordMetadataId).Distinct().ToList();
-		var reversedIds = (await feeRecordMetadataRepository.GetListAsync(x =>
-			transactionIds.Contains(x.Id) && x.Status == ShikshaMitra.Finance.Fees.Collections.FeeCollectionStatus.Reversed))
+		var activeIds = (await feeRecordMetadataRepository.GetListAsync(x =>
+			transactionIds.Contains(x.Id) && x.Status != ShikshaMitra.Finance.Fees.Collections.FeeCollectionStatus.Reversed))
 			.Select(x => x.Id).ToHashSet();
 		return allocations
-			.Where(x => !reversedIds.Contains(x.FeeRecordMetadataId))
+			.Where(x => activeIds.Contains(x.FeeRecordMetadataId))
 			.GroupBy(x => x.ChargeId)
 			.ToDictionary(x => x.Key, x => x.Sum(row => Convert.ToDecimal(row.Amount)));
 	}

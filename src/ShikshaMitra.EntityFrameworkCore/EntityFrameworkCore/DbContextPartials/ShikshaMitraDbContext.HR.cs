@@ -59,6 +59,10 @@ public partial class ShikshaMitraDbContext
     public DbSet<DeductionComponent> DeductionComponents { get; set; }
     public DbSet<PayrollComponentVersion> PayrollComponentVersions { get; set; }
     public DbSet<SalarySlip> SalarySlips { get; set; }
+    public DbSet<PayslipDocument> PayslipDocuments { get; set; }
+    public DbSet<PayslipSettings> PayslipSettings { get; set; }
+    public DbSet<PayslipDelivery> PayslipDeliveries { get; set; }
+    public DbSet<PayslipCorrection> PayslipCorrections { get; set; }
     public DbSet<AttendanceImportBatch> AttendanceImportBatches { get; set; }
     public DbSet<AttendanceImportRow> AttendanceImportRows { get; set; }
     public DbSet<PayrollRunReview> PayrollRunReviews { get; set; }
@@ -69,7 +73,11 @@ public partial class ShikshaMitraDbContext
     public DbSet<SalaryStructureTemplateVersion> SalaryStructureTemplateVersions { get; set; }
     public DbSet<StatutoryRuleVersion> StatutoryRuleVersions { get; set; }
     public DbSet<StatutoryEstablishment> StatutoryEstablishments { get; set; }
+    public DbSet<EsiPayrollConfiguration> EsiPayrollConfigurations { get; set; }
+    public DbSet<EsiPolicy> EsiPolicies { get; set; }
+    public DbSet<PfCoverageConfiguration> PfCoverageConfigurations { get; set; }
     public DbSet<EmployeeStatutoryEnrollment> EmployeeStatutoryEnrollments { get; set; }
+    public DbSet<EmployeeStatutoryProfileVersion> EmployeeStatutoryProfileVersions { get; set; }
     public DbSet<PayrollComponentStatutoryTreatment> PayrollComponentStatutoryTreatments { get; set; }
     public DbSet<StatutoryOverride> StatutoryOverrides { get; set; }
 
@@ -96,8 +104,9 @@ public partial class ShikshaMitraDbContext
     public DbSet<DevelopmentPlan> DevelopmentPlans { get; set; }
     public DbSet<PerformanceAuditEvent> PerformanceAuditEvents { get; set; }
     public DbSet<HrReportExportJob> HrReportExportJobs { get; set; }
-    public DbSet<HrReportSchedule> HrReportSchedules { get; set; }
     public DbSet<HrReportTemplate> HrReportTemplates { get; set; }
+    public DbSet<HrReportRun> HrReportRuns { get; set; }
+    public DbSet<HrReportRunPage> HrReportRunPages { get; set; }
 
     public DbSet<HolidayType> HolidayTypes { get; set; }
     public DbSet<EventType> EventTypes { get; set; }

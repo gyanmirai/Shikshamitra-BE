@@ -9,6 +9,83 @@ namespace ShikshaMitra.Domain.Finance.Fees;
 public class FeeRefundRequestLifecycle_Tests
 {
     [Fact]
+    public void Pending_simple_workflow_request_can_be_edited_without_changing_its_identity_or_status()
+    {
+        var request = CreateSubmittedRequest();
+        request.UseSimpleWorkflow(Guid.NewGuid(), "pending-edit");
+        var studentId = request.StudentId;
+        var yearId = request.AcademicYearId;
+        var receiptId = request.OriginalReceiptId;
+        var policyVersion = request.RefundPolicyVersionId;
+        var original = request.Lines.Single();
+        var line = new FeeRefundLine(Guid.NewGuid(), request.Id, original.DueFeeId,
+            original.SourceAllocationId, original.SourceReceiptId, original.FeeHeadId,
+            original.FeeHeadName, original.InstallmentLabel, 1000m, 250m, 250m);
+
+        request.ReplaceLines([line]);
+        request.UpdatePaymentDetails("Cash", new CashRefundDetails(DateOnly.FromDateTime(DateTime.UtcNow), "Updated Parent"));
+        request.UpdateReason("Corrected requested amount");
+        request.UpdateEvidence("{\"amount\":250}", new string('b', 64));
+        var editorId = Guid.NewGuid();
+        request.RecordPendingEdit(editorId);
+        Assert.Equal(editorId, request.SubmittedByUserId);
+
+        Assert.Equal(studentId, request.StudentId);
+        Assert.Equal(yearId, request.AcademicYearId);
+        Assert.Equal(receiptId, request.OriginalReceiptId);
+        Assert.Equal(policyVersion, request.RefundPolicyVersionId);
+        Assert.Equal(FeeRefundStatus.Submitted, request.Status);
+        Assert.Equal(250m, request.CalculatedAmount);
+        Assert.Equal(0m, request.ApprovedAmount);
+        Assert.Empty(request.Reservations);
+        Assert.Empty(request.Settlements);
+        Assert.Equal("Corrected requested amount", request.Reason);
+        Assert.Equal(new string('b', 64), request.CalculationHash);
+    }
+
+    [Fact]
+    public void Approved_simple_workflow_request_cannot_be_edited()
+    {
+        var request = CreateApprovedRequest();
+        Assert.Throws<BusinessException>(() => request.UpdateReason("Changed after approval"));
+        Assert.Throws<BusinessException>(() => request.UpdatePaymentDetails("UPI", null));
+        Assert.Throws<BusinessException>(() => request.ReplaceLines([]));
+        Assert.Throws<BusinessException>(() => request.UpdateEvidence("{}", new string('c', 64)));
+        Assert.Equal(FeeRefundStatus.Approved, request.Status);
+        Assert.Equal(500m, request.ApprovedAmount);
+    }
+
+    [Fact]
+    public void Capped_refund_retains_zero_rounded_source_evidence_without_reserving_or_paying_it()
+    {
+        var request = new FeeRefundRequest(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            "REF-CAPPED", "Cash", null, "Capped whole receipt");
+        var receiptId = Guid.NewGuid();
+        request.PinPolicy(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), receiptId, "RCPT-CAPPED", "{}", "{}", new string('a', 64));
+        var principal = new FeeRefundLine(Guid.NewGuid(), request.Id, Guid.NewGuid(), Guid.NewGuid(), receiptId,
+            Guid.NewGuid(), "Tuition", "June", 1000m, 1000m, 100m);
+        var late = new FeeRefundLine(Guid.NewGuid(), request.Id, null, Guid.NewGuid(), receiptId,
+            null, "Paid late fees", "June", 1m, 1m, 0m, lateFeeDueFeeId: principal.DueFeeId);
+        request.AddLine(principal);
+        request.AddLine(late);
+        request.Submit(Guid.NewGuid());
+        request.Approve(Guid.NewGuid(), [new FeeRefundReservation(Guid.NewGuid(), request.Id, principal.Id,
+            principal.DueFeeId, principal.SourceAllocationId, 100m)]);
+        Assert.Single(request.Reservations);
+        Assert.Equal(100m, request.ApprovedAmount);
+        Assert.Equal(0m, late.ApprovedAmount);
+        var settlement = request.StartProcessing(Guid.NewGuid(), Guid.NewGuid(), "capped", "Cash", 100m,
+            DateTimeOffset.UtcNow, "CASH-CAPPED", null);
+        request.CompleteSettlement(settlement.Id, Guid.NewGuid());
+        Assert.Equal(100m, request.ProcessedAmount);
+        Assert.Equal(0m, late.ProcessedAmount);
+        request.Reverse(settlement.Id, Guid.NewGuid(), "Returned capped payout");
+        Assert.Equal(100m, request.ReversedAmount);
+        Assert.Equal(0m, late.ReversedAmount);
+        Assert.Equal(2, request.Lines.Count);
+    }
+
+    [Fact]
     public void Legacy_request_is_initialized_with_lines_before_entering_submitted_state()
     {
         var requestId = Guid.NewGuid();
@@ -107,6 +184,80 @@ public class FeeRefundRequestLifecycle_Tests
             DateTimeOffset.UtcNow, null, null));
     }
 
+    [Fact]
+    public void New_workflow_keeps_an_uncertain_payout_approved_until_verified()
+    {
+        var request = CreateSubmittedRequest();
+        request.UseSimpleWorkflow(Guid.NewGuid(), "create-once");
+        var line = request.Lines.Single();
+        request.Approve(Guid.NewGuid(),
+        [new FeeRefundReservation(Guid.NewGuid(), request.Id, line.Id, line.DueFeeId,
+            line.SourceAllocationId, line.RequestedAmount)]);
+
+        var payout = request.RecordPayout(Guid.NewGuid(), Guid.NewGuid(), "payout-once",
+            "Cash", 500m, DateTimeOffset.UtcNow, "HANDOVER-1", null, null, "signed-copy-1");
+
+        Assert.Equal(FeeRefundStatus.Approved, request.Status);
+        Assert.Equal(0m, request.ProcessedAmount);
+        Assert.Throws<BusinessException>(() => request.RecordPayout(Guid.NewGuid(), Guid.NewGuid(),
+            "another-attempt", "Cash", 500m, DateTimeOffset.UtcNow, "HANDOVER-2", null,
+            null, "signed-copy-2"));
+
+        request.ConfirmPayout(payout.Id, Guid.NewGuid(), "verify-once", "signed-copy-1");
+        Assert.Equal(FeeRefundStatus.Processed, request.Status);
+        Assert.Equal(500m, request.ProcessedAmount);
+        Assert.Equal(FeeRefundReservationStatus.Consumed, request.Reservations.Single().Status);
+    }
+
+    [Fact]
+    public void New_workflow_failure_is_terminal_and_releases_reservation()
+    {
+        var request = CreateSubmittedRequest();
+        request.UseSimpleWorkflow(Guid.NewGuid(), "create-once");
+        var line = request.Lines.Single();
+        request.Approve(Guid.NewGuid(),
+        [new FeeRefundReservation(Guid.NewGuid(), request.Id, line.Id, line.DueFeeId,
+            line.SourceAllocationId, line.RequestedAmount)]);
+        var payout = request.RecordPayout(Guid.NewGuid(), Guid.NewGuid(), "payout-once",
+            "Cash", 500m, DateTimeOffset.UtcNow, "HANDOVER-1", null, null, "signed-copy-1");
+
+        request.FailPayout(payout.Id, Guid.NewGuid(), "verify-failure",
+            "Recipient did not accept the cash", "signed-refusal-1");
+
+        Assert.Equal(FeeRefundStatus.Failed, request.Status);
+        Assert.Equal(0m, request.ProcessedAmount);
+        Assert.Equal(FeeRefundReservationStatus.Released, request.Reservations.Single().Status);
+        Assert.Throws<BusinessException>(() => request.RecordPayout(Guid.NewGuid(), Guid.NewGuid(),
+            "another-attempt", "Cash", 500m, DateTimeOffset.UtcNow, "HANDOVER-2", null,
+            null, "signed-copy-2"));
+    }
+
+    [Theory]
+    [InlineData("Cash")]
+    [InlineData("BankTransfer")]
+    [InlineData("UPI")]
+    [InlineData("Cheque")]
+    [InlineData("DemandDraft")]
+    public void New_workflow_uses_one_payout_lifecycle_for_every_method(string method)
+    {
+        var request = CreateSubmittedRequest(method);
+        request.UseSimpleWorkflow(Guid.NewGuid(), Guid.NewGuid().ToString("N"));
+        var line = request.Lines.Single();
+        request.Approve(Guid.NewGuid(),
+        [new FeeRefundReservation(Guid.NewGuid(), request.Id, line.Id, line.DueFeeId,
+            line.SourceAllocationId, line.RequestedAmount)]);
+        var payout = request.RecordPayout(Guid.NewGuid(), Guid.NewGuid(), "attempt-1", method,
+            500m, DateTimeOffset.UtcNow, "reference-1", null,
+            method == "Cash" ? null : Guid.NewGuid(), "payment evidence");
+        Assert.Equal(FeeRefundStatus.Approved, request.Status);
+        request.ConfirmPayout(payout.Id, Guid.NewGuid(), "verification-1", "verification evidence");
+        Assert.Equal(FeeRefundStatus.Processed, request.Status);
+        if (method == "Cash") return;
+        request.RecordReturnedPayout(payout.Id, Guid.NewGuid(), "Bank returned the payout");
+        Assert.Equal(FeeRefundStatus.Failed, request.Status);
+        Assert.Equal(request.ProcessedAmount, request.ReversedAmount);
+    }
+
     private static FeeRefundRequest CreateApprovedRequest()
     {
         var request = CreateSubmittedRequest();
@@ -119,11 +270,12 @@ public class FeeRefundRequestLifecycle_Tests
         return request;
     }
 
-    private static FeeRefundRequest CreateSubmittedRequest()
+    private static FeeRefundRequest CreateSubmittedRequest(string method = "Cash")
     {
         var request = new FeeRefundRequest(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
-            "REF-TEST-0001", "Cash", new CashRefundDetails(DateOnly.FromDateTime(DateTime.UtcNow), "Parent"),
+            "REF-TEST-0001", method,
+            method == "Cash" ? new CashRefundDetails(DateOnly.FromDateTime(DateTime.UtcNow), "Parent") : null,
             "Student transfer");
         var receiptId = Guid.NewGuid();
         request.PinPolicy(

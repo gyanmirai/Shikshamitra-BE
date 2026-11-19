@@ -3,26 +3,30 @@ module: finance
 domain: proration-policy
 content_type: Reference
 status: implemented
-updated_on: 2026-09-08
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Implement Proration Policy end to end
 
-TL;DR: Proration Policy is now an operational Finance workflow. The backend owns a typed, permission-protected policy lifecycle, immutable version snapshots, validated Fee Structure attachment, day-level assignment charge periods, decimal installment calculation, idempotent demand generation, and calculation evidence on every generated `DueFee`. Concession, collection, payment, refund, adjustment, reporting, and accounting continue to consume the stored prorated obligation; none independently recalculates it.
+TL;DR: Proration Policy is now an operational Finance workflow. The backend owns a typed, permission-protected policy lifecycle, immutable version snapshots, independent admission/withdrawal rule configuration, day-level assignment charge periods, decimal installment calculation, idempotent demand generation, and calculation evidence on every generated `DueFee`. Concession, collection, payment, refund, adjustment, reporting, and accounting continue to consume the stored prorated obligation; none independently recalculates it.
 
 The frontend-owned screen and client changes are documented in [Proration Policy frontend flow](../../../../../Shikshamitra-FE/docs/finance/references/proration-policy-frontend-flow.md).
 
 > This document began as the implementation review. It now records the implemented contract and the intentionally deferred operational extensions.
+
+## Current Fee Structure boundary
+
+As of 2026-10-05, Proration is removed from Fee Structure setup and its API contracts. Structure lookups, defaults, attachment validation, review coverage and publication warnings contain no proration. The attachment-impact endpoint is removed. New assignments do not inherit legacy template proration. Existing stored structure pins, publication JSON and assigned/charged calculations remain historical evidence; assigned-policy edits preserve them. Policy lifecycle and simulation remain available. The older attachment rollout/review notes below describe the previous integration and do not authorize recreating it. See [Fee Structure contracts](./fee-structure-workspace.md).
 
 ## Implementation status
 
 Implemented on 2026-09-08:
 
 - `ProrationPolicy` aggregate, normalized rules, lifecycle, optimistic concurrency, one-active-default enforcement, and immutable `FinancePolicyVersion` snapshots;
-- typed list/detail/create/update/activate/clone/archive/unarchive/version/simulate/attachment-impact APIs with exact permissions;
-- active, same-year Fee Head validation and one-time Fee Structure detail protection;
+- typed list/detail/create/update/activate/clone/archive/unarchive/version/simulate APIs with exact permissions;
+- active, same-year Fee Head validation;
 - Fee Structure, Student Fee Structure, and DueFee policy/version foreign keys and charge/calculation evidence;
 - inclusive Daily and MonthlyCutoff calculation with decimal arithmetic, currency/rupee rounding, no-overlap handling, minimum-day caps, and last-installment base residual reconciliation;
 - locked/same-standard assignment checks, same-year uniqueness, idempotent identical retries, and conflicting retry rejection;
@@ -71,9 +75,45 @@ It does not own:
 - admission, exit, hostel, or transport dates - their source modules own those facts;
 - concession approval, late fees, collection, refunds, adjustments, receipts, or accounting - those modules consume the final due and keep their own rules.
 
+## Independent admission and early-withdrawal contract
+
+Create and activate a policy without student dates. Fee Structure no longer accepts a Proration Policy attachment, and new student assignment never inherits one from legacy structure storage. The assignment policy options and update command accept only concession, refund and collection selections.
+Both Admission preparation and Finance structure assignment automatically resolve the active academic-year default and pin its immutable version for new obligations, including Finance assignments without an Admission link.
+Admission uses its confirmed joining date; Finance uses its existing verified or authorized manual service period. A selected full-year period remains full-year service when no actual joining date is available.
+No default policy retains the existing no-proration behavior; an ambiguous default or missing active version fails closed. Existing prepared/assigned financial evidence is reused before consulting today's default.
+Supplying a proration selection is rejected as invalid input, including for callers with policy override permission.
+Editing other assigned policies preserves the previously pinned proration version.
+Actual admission or service-start and exit or service-end dates are supplied when calculating the student assignment.
+Posted demands and receipts are never recalculated by editing a policy.
+
+| Field per fee head | Default and meaning |
+|---|---|
+| ApplyOnAdmission | True; false retains the coverage start boundary |
+| RuleType | Admission model: FullCharge (No Proration), Daily, MonthlyCutoff, or FullMonthCharge |
+| CutoffDay / AfterCutoffAction | Monthly admission cutoff 1-31; on/before bills full current month, after bills zero (Charge Next Month) or 50% (Half Month Rule) |
+| ApplyOnEarlyWithdrawal | True; false retains the coverage end boundary |
+| EarlyWithdrawalRuleType | Independently selected FullCharge, Daily, MonthlyCutoff, or FullMonthCharge |
+| EarlyWithdrawalCutoffDay / EarlyWithdrawalBeforeCutoffAction | Exit on/before cutoff bills zero or 50% of the exit month; after bills the full exit month; later months are excluded |
+| RoundingMode | One shared head-level Currency, NearestRupee, RoundUpRupee or RoundDownRupee mode, applied once after combining both events |
+
+Daily uses inclusive calendar days, including leap days.
+FullMonthCharge includes each touched service month in full, separately from FullCharge which leaves that event boundary unchanged.
+Policy validation requires at least one recurring fee head with an enabled Daily, MonthlyCutoff, or FullMonthCharge event. Disabled events and FullCharge do not satisfy this requirement.
+Monthly rules use equal calendar-month shares of the coverage amount before payment-term allocation.
+When mixed with daily, only the daily boundary month is reduced by its eligible-day fraction.
+When admission and withdrawal affect the same month, apply the smallest applicable fraction once rather than multiplying reductions.
+Daily rules use eligible calendar days without a minimum-day floor.
+No date overlap always produces zero, even when both event switches are disabled.
+Cutoffs exceeding a month's length clamp to its last day; cutoff equality is inclusive.
+One-time Fee Structure details remain unprorated for both events.
+
+Nullable withdrawal fields identify legacy rules and immutable snapshots, which retain their existing calculations.
+The additive migration defaults event switches to true and leaves withdrawal settings null; it does not rewrite version JSON or existing financial records.
+New form saves explicitly persist the independent withdrawal model.
+
 ## Implemented product decisions
 
-These decisions remove ambiguity in the current frontend model. Product and Finance owners must approve the three items called out under [Decisions required before coding](#decisions-required-before-coding).
+These decisions reflect the independent admission and early-withdrawal behavior requested for the current implementation.
 
 | Decision | Target behavior |
 |---|---|
@@ -147,13 +187,15 @@ Do not add editable policy effective dates in v1. Academic-year scope and immuta
 | Field | Rule |
 |---|---|
 | `FeeHeadId` | Active, tenant-owned Finance Fee Head; unique within policy |
-| `RuleType` | `FullCharge`, `Daily`, or `MonthlyCutoff` |
-| `MinimumChargeDays` | Daily only; integer 0 through coverage-day count |
+| `RuleType` | `FullCharge` (No Proration), `Daily`, `MonthlyCutoff`, or `FullMonthCharge` |
 | `RoundingMode` | `Currency`, `NearestRupee`, `RoundUpRupee`, or `RoundDownRupee` |
 | `CutoffDay` | MonthlyCutoff only; integer 1-31, clamped to the last calendar day of a shorter month |
-| `AfterCutoffAction` | MonthlyCutoff only; `NoCharge` or `HalfCharge` for the affected installment |
+| `AfterCutoffAction` | MonthlyCutoff admission only; `NoCharge` or `HalfCharge` for the admission month's share |
+| `ApplyOnAdmission` / `ApplyOnEarlyWithdrawal` | Independent switches per fee head |
+| `EarlyWithdrawalRuleType` | Independently selected model with its own minimum-day or monthly-cutoff settings |
+| `EarlyWithdrawalCutoffDay` / `EarlyWithdrawalBeforeCutoffAction` | On/before cutoff waive or halve the exit month; after cutoff charge full exit month |
 
-The current frontend's `prorationApplicable` plus `NoProration` is redundant. In the target contract, a fee head absent from the rule list receives its full scheduled charge; a listed head has exactly one explicit rule. The old `FullMonthCharge` maps to `FullCharge`. Since no backend proration data exists, this simplification requires no financial-data migration.
+A fee head absent from the rule list receives its full scheduled charge. A configured head has independent event rules and one shared rounding mode. FullMonthCharge is distinct from FullCharge: it bills touched months fully, while FullCharge leaves that event boundary unchanged. Existing snapshots retain their old behavior; the additive migration does not rewrite financial evidence.
 
 `IsOneTime` must not be copied from Fee Head as policy truth. It is a Fee Structure detail property. Attachment preview and runtime reject or ignore a non-full rule when the matching structure detail is one-time.
 
@@ -179,14 +221,12 @@ Bulk assignment is allowed only when all selected students share the same verifi
 
 For each selected Fee Structure detail:
 
-1. Resolve its annual/custom amount and immutable Payment Term schedule.
-2. Allocate the annual amount across installments using decimal arithmetic; the final installment absorbs only the currency-rounding residual.
-3. Resolve the student's charge interval for that detail.
-4. Intersect the charge interval with each installment's coverage dates.
-5. Resolve the rule from the captured Proration Policy version.
-6. Calculate a raw amount and factor.
-7. Apply the configured rounding once, clamp the result from zero through the scheduled installment amount, and persist it.
-8. Create one idempotent `DueFee` line with base and proration evidence.
+1. Resolve its annual/custom amount, coverage dates, and immutable Payment Term schedule.
+2. Resolve the student's charge interval for that detail and the captured Proration Policy version.
+3. Calculate the detail entitlement across its service coverage, using independent event boundaries and calendar-month shares when applicable.
+4. Apply shared rounding once and cap the entitlement at the scheduled detail amount.
+5. Allocate scheduled and prorated totals using the payment-term percentages; reconcile the final currency residual.
+6. Create idempotent `DueFee` lines with base amounts and proration evidence.
 
 Proration is applied **before** concession, late fee, payment, refund, or adjustment.
 
@@ -201,15 +241,15 @@ eligibleEnd = min(chargeEnd, coverageEnd)
 actualDays = max(0, (eligibleEnd - eligibleStart) + 1)
 chargeDays = actualDays == 0
   ? 0
-  : min(coverageDays, max(actualDays, minimumChargeDays))
+  : actualDays
 factor = chargeDays / coverageDays
 rawAmount = scheduledInstallmentAmount * factor
 proratedAmount = round(rawAmount, configuredRoundingMode)
 ```
 
-`MinimumChargeDays` has no effect when there is no overlap unless Finance explicitly approves charging outside the service interval. This prevents a student with zero eligible days from receiving a minimum charge unexpectedly.
+Daily proration charges only eligible calendar days. Retired minimum-day fields in old snapshot JSON are ignored when calculating new results; stored dues and audit snapshots are not rewritten.
 
-### Monthly-cutoff formula
+### Legacy monthly-cutoff formula
 
 The cutoff applies to the start date in the affected monthly coverage interval:
 
@@ -223,7 +263,7 @@ The cutoff applies to the start date in the affected monthly coverage interval:
 
 The cutoff equality is explicitly **on or before**. A day value larger than a short month's final date resolves to that month's final date. The server returns the resolved cutoff date in its explanation.
 
-An end-date/exit cutoff needs an independent rule direction; admission semantics must not be reversed silently. For v1, daily rules support both start and end boundaries. Monthly cutoff should be limited to start/admission proration until an exit rule is approved.
+This table describes immutable legacy snapshots. New event rules use equal calendar-month shares and independent admission and exit cutoffs, as specified under the current field contract above. In the same month, the smaller applicable fraction is used once. Neither rule defers waived money into a later month's charge.
 
 ### Rounding
 
@@ -296,7 +336,6 @@ All routes are implemented under `/api/finance/proration-policies` and require a
 | POST | `/{id}/unarchive` | Restore to Draft |
 | GET | `/{id}/versions` | Read immutable history |
 | POST | `/{id}/simulate` | Run the production calculator on explicit sample inputs |
-| POST | `/{id}/attachment-impact` | Validate a Fee Structure and return covered/ineligible heads/schedules |
 
 Fee Structure create/update accepts `ProrationPolicyId` plus an optional client version assertion. The server resolves and stores the current Active version. Assignment preview and commit should be two commands using the same domain calculation input; commit requires an idempotency key and rejects a stale preview/version.
 
@@ -362,6 +401,28 @@ Apply the same canonical actions in backend entry points and frontend controls; 
 
 ## Validation and error contract
 
+### Cloning an existing policy
+
+`POST /api/finance/proration-policies/{id}/clone` requires Proration Policy Add permission.
+The source is read through the current tenant filter.
+Cloning an Active default creates a separate nondefault Draft with new policy/code/rule identities and version 1; it does not modify the source, its default selection, or its version history.
+Admission and early-withdrawal rule configuration is preserved.
+Explicitly supplying the source academic year in `targetAcademicYearId` is equivalent to omitting it.
+The service resolves this optional target once into a nonnullable year ID before using it in database predicates or creating the Draft.
+With no explicit name, the server selects the next unused `Copy`, `Copy 2`, and subsequent suffix within the target academic year, including names occupied by archived policies and respecting the name length limit.
+An explicit name still follows normalized, case-insensitive uniqueness validation.
+
+Clone validates active Fee Heads in the target academic year, including when a different year is requested.
+It does not silently map source-year heads to similarly named target-year heads or discard unavailable rules.
+For a different academic year, create a policy using that year's active Fee Heads.
+`Finance:ProrationPolicy:010027` identifies inactive, missing, or wrong-year heads and provides current-tenant head names when available; review the source rules and reactivate or select valid heads before retrying.
+The API returns localized recovery instructions for name/code conflicts, invalid rules/status, and default restrictions in `application/problem+json` with the stable `errorCode` and safe business data.
+A rejected clone creates no Draft or version and does not change the source default.
+
+Regression coverage: `test/ShikshaMitra.Application.Tests/Finance/Policies/ProrationPolicyClone_Tests.cs` and the proration clone cases in `test/ShikshaMitra.HttpApi.Tests/Common/Middleware/ApiProblemDetailsPipeline_Tests.cs`.
+
+### Other validation failures
+
 Return stable error codes with structured fields for:
 
 - wrong tenant or academic year;
@@ -410,7 +471,7 @@ Do not backfill a policy as if it had governed historical dues. Existing due row
 ### Domain
 
 - every lifecycle transition and forbidden transition;
-- daily inclusive-day boundaries, no overlap, full overlap, minimum days, leap year;
+- daily inclusive-day boundaries, no overlap, full overlap, legacy minimum-field compatibility, leap year;
 - cutoff day equality, short months, no-charge and half-charge actions;
 - all rounding modes and residual reconciliation;
 - one-time exclusion and missing-rule full charge;
@@ -447,13 +508,13 @@ Do not backfill a policy as if it had governed historical dues. Existing due row
 - stale version, duplicate submit, dirty-close, and retry behavior;
 - responsive and keyboard-accessible policy, assignment, and explanation surfaces.
 
-## Decisions required before coding
+## Implemented boundary decisions
 
-1. **Scope of v1:** recommended: Daily supports both start and end dates; MonthlyCutoff supports admissions/start only. If monthly exit proration is required, define a separate end-cutoff action.
-2. **Minimum charge with zero overlap:** recommended: zero remains zero. Charging a minimum outside service dates needs an explicit, separately named rule.
-3. **Late enrollment after cutoff:** recommended: NoCharge removes only the affected installment; it does not move that amount to the next installment. If Finance wants an annual-fee-preserving deferral instead, that is schedule reassignment, not proration, and needs a separate rule and accounting treatment.
+1. Daily and MonthlyCutoff support independent admission and withdrawal settings. Withdrawal uses its own before-cutoff action.
+2. Zero overlap remains zero. Daily proration uses eligible calendar days without a minimum-day floor.
+3. Admission after cutoff with Charge Next Month waives the admission month's share and starts charging subsequent covered months. The waived share is not carried forward.
 
-These decisions are release blockers because different interpretations produce different student balances.
+Withdrawal recorded after demands have already been created requires an auditable adjustment workflow; this change does not automatically rewrite those demands or receipts.
 
 ## Definition of done
 

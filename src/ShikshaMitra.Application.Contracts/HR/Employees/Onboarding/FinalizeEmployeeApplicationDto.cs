@@ -7,6 +7,8 @@ namespace ShikshaMitra.HR.Employees.Onboarding;
 
 public class FinalizeEmployeeApplicationDto
 {
+	public EmployeeWorkAssignmentDto? WorkAssignment { get; set; }
+	public bool WorkAssignmentConfirmed { get; set; }
 	[Required]
 	public CreateEmployeePersonalInfoDto PersonalInfo { get; set; } = new();
 
@@ -16,5 +18,10 @@ public class FinalizeEmployeeApplicationDto
 	public EmployeeApplicationAdditionalInfoDto? AdditionalInfo { get; set; }
 	public List<EmployeeApplicationWorkExperienceDto> WorkExperiences { get; set; } = [];
 	public bool UseSubmittedPhoto { get; set; } = true;
+	[Volo.Abp.Auditing.DisableAuditing]
+	public ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryProfile? StatutoryProfile { get; set; }
 	public bool AttachResumeAsDocument { get; set; } = true;
+
+	[Required]
+	public ShikshaMitra.HR.Payroll.Compensation.SaveEmployeeCompensationDto Salary { get; set; } = null!;
 }

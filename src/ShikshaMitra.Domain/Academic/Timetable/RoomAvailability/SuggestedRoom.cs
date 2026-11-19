@@ -6,7 +6,7 @@ namespace ShikshaMitra.Academic.Timetable.RoomAvailability;
 public class SuggestedRoom
 {
     public Guid RoomId { get; set; }
-    public string RoomName { get; set; }
+    public string RoomName { get; set; } = null!; // Set from the required Room name by RoomRecommendationService.
     public Guid BuildingId { get; set; }
     public Guid FloorId { get; set; }
     public int Capacity { get; set; }

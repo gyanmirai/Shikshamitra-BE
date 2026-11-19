@@ -1,5 +1,6 @@
 ﻿using ShikshaMitra.Extensions;
 using ShikshaMitra.Onboarding.AcademicYears;
+using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
 using System.Threading.Tasks;
@@ -12,7 +13,10 @@ namespace ShikshaMitra.TenantSettings.AcademicSetups;
 /// <summary>
 /// This abstract class manages the creation and updating of academic years.
 /// </summary>
-public class AcademicYearManager(IAcademicYearRepository academicYearRepository, IGuidGenerator guidGenerator)
+public class AcademicYearManager(
+	IAcademicYearRepository academicYearRepository,
+	IGuidGenerator guidGenerator,
+	AcademicCalendarDateSynchronizer calendarDates)
 	: DomainService
 {
 	private string EntityName => this.GetType().ToEntityNameFromManager();
@@ -72,6 +76,7 @@ public class AcademicYearManager(IAcademicYearRepository academicYearRepository,
 		}
 
 		// Change the dates if they are different from the current ones.
+		await calendarDates.SynchronizeYearAsync(academicYear, startDate, endDate);
 		if (academicYear.StartDate != startDate || academicYear.EndDate != endDate)
 		{
 			academicYear.SetDates(startDate, endDate);
@@ -87,7 +92,7 @@ public class AcademicYearManager(IAcademicYearRepository academicYearRepository,
 	/// <param name="currentName">The current name of the academic year, if any (optional).</param>
 	/// <exception cref="AlreadyExistsException">Thrown if an academic year with the same name already exists.</exception>
 	/// <exception cref="InvalidAcademicYearDatesException">Thrown if the end date is before the start date.</exception>
-	private async Task ValidateAcademicYearAsync(string name, string currentName = null)
+	private async Task ValidateAcademicYearAsync(string name, string? currentName = null)
 	{
 		// Check if the name is unique (if it's different from the current name).
 		if (currentName != name && await academicYearRepository.FindByNameAsync(name) != null)

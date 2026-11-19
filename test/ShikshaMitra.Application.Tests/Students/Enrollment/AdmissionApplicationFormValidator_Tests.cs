@@ -8,6 +8,17 @@ namespace ShikshaMitra.Students;
 
 public class AdmissionApplicationFormValidator_Tests
 {
+	[Theory]
+	[InlineData("Applicant.LastName")]
+	[InlineData("Applicant.MiddleName")]
+	public void Single_name_students_do_not_require_optional_name_parts_in_legacy_forms(string binding)
+	{
+		var field = new AdmissionFormFieldDefinition(Guid.NewGuid(), Guid.NewGuid(), SectionId, "NAME_PART", "Name part",
+			AdmissionFormFieldType.Text, AdmissionFormBindingType.System, binding, true, false, 0, null, null, null, null, null);
+		var validator = new AdmissionApplicationFormValidator(new AdmissionWorkflowConditionEvaluator());
+		validator.Validate([field], [Section(SectionId)], new Dictionary<string, string>()).Errors.ShouldBeEmpty();
+	}
+
 	[Fact]
 	public void Optional_field_without_required_rule_does_not_become_required()
 	{

@@ -1,9 +1,11 @@
 using System.Linq;
 using System.Reflection;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Shouldly;
 using Xunit;
+using OfferingPermissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings;
 
 namespace ShikshaMitra.HttpApi.Tests.Students.Enrollment;
 
@@ -34,6 +36,15 @@ public class AdmissionOfferingApiContract_Tests
 				parameter.Name == "concurrencyStamp" || parameter.ParameterType == typeof(UpdateAdmissionOfferingDto));
 			hasStamp.ShouldBeTrue($"{methodName} must carry optimistic concurrency data.");
 		}
+	}
+
+	[Fact]
+	public void Retired_admission_room_capacity_routes_are_not_exposed()
+	{
+		typeof(AdmissionOfferingsController).Assembly.GetType(
+			"ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionClassCapacityController").ShouldBeNull();
+		typeof(AdmissionOfferingDto).GetProperty("ClassCapacity").ShouldBeNull();
+		typeof(AdmissionOfferingAvailabilityDto).GetProperty("ClassCapacity").ShouldBeNull();
 	}
 
 	private static string? PostTemplate(string methodName) =>

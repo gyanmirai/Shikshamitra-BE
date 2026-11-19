@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
 
@@ -14,6 +14,9 @@ public class HrPolicyAssignmentDto : EntityDto<Guid>
 	public Guid AttendancePolicyId { get; set; }
 	public Guid PayrollPolicyId { get; set; }
 	public Guid? LeavePolicyId { get; set; }
+	public string? PayrollPolicyName { get; set; }
+	public string? AttendancePolicyName { get; set; }
+	public string? LeavePolicyName { get; set; }
 	public DateTime EffectiveFrom { get; set; }
 	public DateTime? EffectiveTo { get; set; }
 	public bool IsActive { get; set; }
@@ -120,6 +123,7 @@ public class EffectiveLeavePolicyRuleDto
 	public int? LeaveCount { get; set; }
 	public bool IsUnlimited { get; set; }
 	public bool RequiresApproval { get; set; }
+	public int MinNoticeDays { get; set; }
 	public int MaxDaysPerRequest { get; set; }
 	public bool AllowHalfDay { get; set; }
 	public int? AttachmentRequiredAfterDays { get; set; }
@@ -132,4 +136,21 @@ public class PolicyAssignmentPreviewRequestDto
 	public DateTime Date { get; set; }
 	public Guid? EmployeeId { get; set; }
 	public Guid? GroupId { get; set; }
+}
+
+public class PolicyAssignmentResolutionPreviewRequestDto
+{
+	public Guid? AssignmentId { get; set; }
+	public CreateUpdateHrPolicyAssignmentDto Assignment { get; set; } = new();
+	public DateTime Date { get; set; }
+	public Guid? SampleEmployeeId { get; set; }
+}
+
+public class PolicyAssignmentResolutionPreviewDto
+{
+	public EffectiveEmployeePoliciesDto Current { get; set; } = new();
+	public EffectiveEmployeePoliciesDto? Proposed { get; set; }
+	public bool IsComplete { get; set; }
+	public string Scope { get; set; } = string.Empty;
+	public string? UnavailableReason { get; set; }
 }

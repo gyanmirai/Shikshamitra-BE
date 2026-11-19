@@ -25,6 +25,16 @@ public class HrEmployeeScopeQueryService(
 		return await hrScopeAccessService.ResolveAccessibleStageIdsAsync(scope);
 	}
 
+	public async Task<bool> HasOrganizationAssignmentHistoryAsync(Guid employeeId)
+	{
+		// Removing an assignment must not reopen completed onboarding as a creator-owned draft.
+		using (DataFilter.Disable<ISoftDelete>())
+		{
+			return await employeeOrganizationAssignmentRepository.AnyAsync(x =>
+				x.TenantId == CurrentTenant.Id && x.EmployeeId == employeeId);
+		}
+	}
+
 	public void EnsureHasConcreteHrAccess(UserScopeContext scope, string operation)
 	{
 		hrScopeAccessService.EnsureHasConcreteHrAccess(scope, operation);

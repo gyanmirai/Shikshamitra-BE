@@ -23,18 +23,20 @@ public class AdmissionApplicationWorkflowService(
 	AdmissionApplicationWorkflowReadService workflowReadService,
 	AdmissionWorkflowTransitionSelector transitionSelector,
 	AdmissionWorkflowStageHandlerRegistry stageHandlerRegistry,
-	AdmissionFormStageRuntimeService formRuntime,
-	AdmissionInquiryRuntimeService inquiryRuntime,
-	AdmissionAssessmentRuntimeService assessmentRuntime,
-	AdmissionDocumentRuntimeService documentRuntime,
-	AdmissionEligibilityRuntimeService eligibilityRuntime,
-	AdmissionReviewRuntimeService reviewRuntime,
-	AdmissionPaymentRuntimeService paymentRuntime,
-	AdmissionOfferRuntimeService offerRuntime,
-	AdmissionSeatRuntimeService seatRuntime,
-	AdmissionWorkflowRuntimeValueService runtimeValueService)
+	AdmissionFeeSelectionAccessService feeSelection)
 	: ApplicationService, ITransientDependency
 {
+	// Keep stage-specific graphs out of operations that do not use them.
+	private AdmissionFormStageRuntimeService FormRuntime => LazyServiceProvider.LazyGetRequiredService<AdmissionFormStageRuntimeService>();
+	private AdmissionInquiryRuntimeService InquiryRuntime => LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryRuntimeService>();
+	private AdmissionAssessmentRuntimeService AssessmentRuntime => LazyServiceProvider.LazyGetRequiredService<AdmissionAssessmentRuntimeService>();
+	private AdmissionDocumentRuntimeService DocumentRuntime => LazyServiceProvider.LazyGetRequiredService<AdmissionDocumentRuntimeService>();
+	private AdmissionEligibilityRuntimeService EligibilityRuntime => LazyServiceProvider.LazyGetRequiredService<AdmissionEligibilityRuntimeService>();
+	private AdmissionReviewRuntimeService ReviewRuntime => LazyServiceProvider.LazyGetRequiredService<AdmissionReviewRuntimeService>();
+	private AdmissionOfferRuntimeService OfferRuntime => LazyServiceProvider.LazyGetRequiredService<AdmissionOfferRuntimeService>();
+	private AdmissionSeatRuntimeService SeatRuntime => LazyServiceProvider.LazyGetRequiredService<AdmissionSeatRuntimeService>();
+	private AdmissionWorkflowRuntimeValueService RuntimeValues => LazyServiceProvider.LazyGetRequiredService<AdmissionWorkflowRuntimeValueService>();
+
 	public async Task<AdmissionApplicationWorkflowDto> AdvanceAsync(Guid id, AdvanceAdmissionWorkflowDto input)
 	{
 		var application = await applicationReadService.GetEntityAsync(id);
@@ -68,7 +70,7 @@ public class AdmissionApplicationWorkflowService(
 				return;
 			if (current.StageType == AdmissionWorkflowStageType.Form &&
 				AdmissionFormStageAccessService.ReadPolicy(await stageDefinitionRepository.GetAsync(current.DefinitionStageId)) != null &&
-				!await formRuntime.ShouldAdvanceAfterSubmitAsync(application.Id)) return;
+				!await FormRuntime.ShouldAdvanceAfterSubmitAsync(application.Id)) return;
 
 			await AdvanceInternalAsync(application, workflow, new AdvanceAdmissionWorkflowDto
 			{
@@ -94,31 +96,52 @@ public class AdmissionApplicationWorkflowService(
 			throw new BusinessException(AdmissionApplicationErrorCodes.InvalidCurrentStage);
 		var definition = await stageDefinitionRepository.FindAsync(current.DefinitionStageId) ??
 			throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), current.DefinitionStageId);
+		if (current.StageType is AdmissionWorkflowStageType.Eligibility or AdmissionWorkflowStageType.Review or AdmissionWorkflowStageType.Offer)
+			throw new BusinessException(AdmissionApplicationErrorCodes.StageCannotAdvance, "This stage type is retired. Configure a journey using the five supported stage types.");
+		if (input.DeferFeeCollection && (current.StageType != AdmissionWorkflowStageType.Payment || input.SkipCurrentStage || input.AdminOverride))
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState,
+				"Collect later is available only in the Payment stage and cannot override workflow routing.");
+		if (input.DeferFeeCollection && (string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Trim().Length > 512))
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.DeferralReasonRequired,
+				"Enter a reason of up to 512 characters for collecting fees later in Onboarding.");
 		if (input.SkipCurrentStage && definition.IsRequired && !input.AdminOverride)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed)
 				.WithData("Reason", "Required stages can only be bypassed through the emergency override.");
 		var managedForm = current.StageType == AdmissionWorkflowStageType.Form && AdmissionFormStageAccessService.ReadPolicy(definition) != null;
 		var managedInquiry = current.StageType == AdmissionWorkflowStageType.Inquiry && AdmissionInquiryPolicyResolver.Read(definition) != null;
 		if (managedInquiry && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
-		var inquiry = managedInquiry ? await inquiryRuntime.EnsureStageCompleteAsync(application, definition) : null;
+		var inquiry = managedInquiry ? await InquiryRuntime.EnsureStageCompleteAsync(application, definition) : null;
 		var managedAssessment = current.StageType == AdmissionWorkflowStageType.Assessment && AdmissionAssessmentAccessService.ReadPolicy(definition) != null;
-		if (managedAssessment) await assessmentRuntime.EnsureAccessAsync(application.Id, current.Id);
+		if (input.SkipCurrentStage && !input.AdminOverride && (managedForm || managedAssessment))
+			throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed,
+				"Complete the stage requirements before continuing.");
+		if (managedAssessment) await AssessmentRuntime.EnsureAccessAsync(application.Id, current.Id);
 		var managedDocuments = current.StageType == AdmissionWorkflowStageType.DocumentVerification && AdmissionDocumentAccessService.ReadPolicy(definition) != null;
-		AdmissionDocumentEvaluation? documents = managedDocuments ? await documentRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
+		AdmissionDocumentEvaluation? documents = managedDocuments ? await DocumentRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
 		var managedEligibility = current.StageType == AdmissionWorkflowStageType.Eligibility && AdmissionEligibilityAccessService.ReadPolicy(definition) != null;
-		var eligibility = managedEligibility ? await eligibilityRuntime.EnsureEvidenceAsync(application.Id, current.Id) : null;
+		var eligibility = managedEligibility ? await EligibilityRuntime.EnsureEvidenceAsync(application.Id, current.Id) : null;
 		var managedReview = current.StageType == AdmissionWorkflowStageType.Review && AdmissionReviewAccessService.ReadPolicy(definition) != null;
 		if (managedReview && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
-		var review = managedReview ? await reviewRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
-		var managedPayment = current.StageType == AdmissionWorkflowStageType.Payment && AdmissionPaymentAccessService.ReadPolicy(definition) != null;
+		var review = managedReview ? await ReviewRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
+		var managedPayment = current.StageType == AdmissionWorkflowStageType.Payment;
 		if (managedPayment && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
-		var payment = managedPayment ? await paymentRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
+		if (managedPayment && !input.DeferFeeCollection)
+		{
+			var selectionContext = await feeSelection.GetContextAsync(application);
+			var completion = await LazyServiceProvider.LazyGetRequiredService<AdmissionPaymentCompletionReader>()
+				.ReadAsync(application, current, true, selectionContext.Owner?.Id);
+			if (!completion.CanComplete)
+				throw new BusinessException(AdmissionFeeSelectionErrorCodes.CollectionOrDeferralRequired,
+					completion.Blocker ?? "Record a confirmed payment or collect later in Onboarding with a reason.");
+			await feeSelection.EnsureSelectionAsync(application);
+		}
+		AdmissionPaymentStageDto? payment = null;
 		var managedOffer = current.StageType == AdmissionWorkflowStageType.Offer && AdmissionOfferAccessService.ReadPolicy(definition) != null;
 		if (managedOffer && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
-		var offer = managedOffer ? await offerRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
+		var offer = managedOffer ? await OfferRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
 		var managedSeat = current.StageType == AdmissionWorkflowStageType.Seat && AdmissionSeatAccessService.ReadPolicy(definition) != null;
 		if (managedSeat && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
-		var seat = managedSeat ? await seatRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
+		var seat = managedSeat ? await SeatRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
 		if (input.SkipCurrentStage && !input.AdminOverride && !definition.AllowManualSkip)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
 		var context = new AdmissionWorkflowStageRuntimeContext(
@@ -127,19 +150,32 @@ public class AdmissionApplicationWorkflowService(
 			await stageHandlerRegistry.EnsureCanCompleteAsync(current.StageType, context);
 		AdmissionAssessmentAttempt? assessment = null;
 		if (!input.SkipCurrentStage && !input.AdminOverride && managedAssessment)
-			assessment = await assessmentRuntime.EnsureCompleteAsync(application.Id, current.Id);
+			assessment = await AssessmentRuntime.EnsureCompleteAsync(application.Id, current.Id);
 		if (!input.SkipCurrentStage && !input.AdminOverride && managedForm)
-			await formRuntime.EnsureCompleteAsync(application.Id, current.Id);
+			await FormRuntime.EnsureCompleteAsync(application.Id, current.Id);
+
+		// Approval has no assessed evidence or outgoing route when terminal. Preserve
+		// the completion guards, hooks and audit above/below without loading unused facts.
+		if (current.StageType == AdmissionWorkflowStageType.Approval && definition.IsTerminalStage)
+		{
+			await CompleteCurrentAsync(application, workflow, current, input, context);
+			await EnterNextAsync(application, workflow, current, null, null);
+			await RecordHistoryAsync(application, workflow, current, null, null, input);
+			return;
+		}
 
 		var transitions = await transitionRepository.GetListAsync(transition =>
 			transition.WorkflowDefinitionId == application.WorkflowDefinitionId &&
 			transition.FromStageId == current.DefinitionStageId);
-		var runtimeValues = await runtimeValueService.ReadAsync(application, managedAssessment ? current.Id : null, managedInquiry || managedDocuments || managedEligibility || managedReview);
-		runtimeValues = await inquiryRuntime.AddFactsAsync(application, runtimeValues, inquiry);
-		runtimeValues = await documentRuntime.AddFactsAsync(application, runtimeValues, documents);
-		runtimeValues = await eligibilityRuntime.AddFactsAsync(application, runtimeValues, eligibility);
-		runtimeValues = await reviewRuntime.AddFactsAsync(application, runtimeValues, review);
+		var runtimeValues = await RuntimeValues.ReadAsync(application, managedAssessment ? current.Id : null, managedInquiry || managedDocuments || managedEligibility || managedReview);
+		runtimeValues = await InquiryRuntime.AddFactsAsync(application, runtimeValues, inquiry);
+		runtimeValues = await DocumentRuntime.AddFactsAsync(application, runtimeValues, documents);
+		runtimeValues = await EligibilityRuntime.AddFactsAsync(application, runtimeValues, eligibility);
+		runtimeValues = await ReviewRuntime.AddFactsAsync(application, runtimeValues, review);
 		runtimeValues = AdmissionPaymentRuntimeService.AddFacts(runtimeValues, payment);
+		if (managedPayment)
+			runtimeValues = new Dictionary<string, string>(runtimeValues, StringComparer.OrdinalIgnoreCase)
+			{ ["payment.status"] = input.DeferFeeCollection ? "collectionDeferred" : "collectionRecorded" };
 		runtimeValues = AdmissionOfferRuntimeService.AddFacts(runtimeValues, offer);
 		runtimeValues = AdmissionSeatRuntimeService.AddFacts(runtimeValues, seat);
 		var selected = definition.IsTerminalStage ? null : transitionSelector.Select(
@@ -152,10 +188,16 @@ public class AdmissionApplicationWorkflowService(
 		var next = selected == null ? null : stages.SingleOrDefault(stage =>
 			stage.DefinitionStageId == selected.ToStageId && stage.Status == AdmissionRuntimeStageStatus.Pending) ??
 			throw new BusinessException(AdmissionApplicationErrorCodes.NoEligibleTransition);
+		if (input.DeferFeeCollection)
+		{
+			application.DeferFeeCollection(current.Id, input.Reason!, CurrentUser.Id ?? throw new Volo.Abp.Authorization.AbpAuthorizationException(),
+				new DateTimeOffset(Clock.Now.ToUniversalTime()));
+			input.Reason = application.GetFeeCollectionDeferral()!.Reason;
+		}
 		await CompleteCurrentAsync(application, workflow, current, input, context);
 		await EnterNextAsync(application, workflow, current, next, selected);
 		await RecordHistoryAsync(application, workflow, current, next, selected, input,
-			inquiry == null && assessment == null && documents == null && eligibility == null && review == null && payment == null && offer == null && seat == null ? null : runtimeValues);
+			!managedPayment && inquiry == null && assessment == null && documents == null && eligibility == null && review == null && payment == null && offer == null && seat == null ? null : runtimeValues);
 	}
 
 	private async Task CompleteCurrentAsync(
@@ -198,8 +240,8 @@ public class AdmissionApplicationWorkflowService(
 		await stageHandlerRegistry.OnEnterAsync(next.StageType,
 			new AdmissionWorkflowStageRuntimeContext(application.Id, workflow.Id, next.Id, application.Status));
 		application.SetCurrentStage(next.Id);
-		await reviewRuntime.EnterAsync(application, next);
-		await seatRuntime.EnterAsync(application, next);
+		await ReviewRuntime.EnterAsync(application, next);
+		await SeatRuntime.EnterAsync(application, next);
 		application.RecordTransitioned(workflow.Id, current.Id, next.Id, selected?.Id);
 		application.RecordStageEntered(workflow.Id, next.Id);
 		await stageRepository.UpdateAsync(next, false);
@@ -214,8 +256,7 @@ public class AdmissionApplicationWorkflowService(
 		AdvanceAdmissionWorkflowDto input,
 		IReadOnlyDictionary<string, string>? assessedValues = null)
 	{
-		await historyRepository.InsertAsync(new AdmissionWorkflowTransitionHistory(
-			GuidGenerator.Create(), CurrentTenant.Id, application.Id, workflow.Id, current.Id, next?.Id,
+		await historyRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateTransition(application.Id, workflow.Id, current.Id, next?.Id,
 			selected?.Id, GetAction(input), input.IdempotencyKey.Trim(), input.Reason,
 			JsonSerializer.Serialize(new { selected?.Id, selected?.IsDefault, selected?.ConditionRuleJson, AssessedValues = assessedValues })), false);
 		await applicationRepository.UpdateAsync(application, false);
@@ -228,18 +269,18 @@ public class AdmissionApplicationWorkflowService(
 		AdmissionApplicationStageInstance? next,
 		AdvanceAdmissionWorkflowDto input)
 	{
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			input.SkipCurrentStage ? "WorkflowStageSkipped" : "WorkflowStageCompleted",
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(input.SkipCurrentStage ? "WorkflowStageSkipped" : "WorkflowStageCompleted",
 			input.SkipCurrentStage ? $"Stage skipped: {current.Name}" : $"Stage completed: {current.Name}",
 			application.ApplicantId, application.Id,
 			metadataJson: JsonSerializer.Serialize(new { current.Id, NextStageInstanceId = next?.Id, input.Reason })), false);
+		if (input.DeferFeeCollection)
+			await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("FeeCollectionDeferred", "Fee collection deferred to Onboarding.", application.ApplicantId, application.Id,
+				metadataJson: JsonSerializer.Serialize(application.GetFeeCollectionDeferral())), false);
 		var eventType = next == null ? "WorkflowCompleted" : "WorkflowTransitioned";
 		var description = next == null ? $"Workflow completed at {current.Name}" : $"Workflow moved from {current.Name} to {next.Name}";
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			eventType, description, application.ApplicantId, application.Id), false);
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(eventType, description, application.ApplicantId, application.Id), false);
 		if (next != null)
-			await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-				"WorkflowStageEntered", $"Stage entered: {next.Name}", application.ApplicantId, application.Id), false);
+			await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("WorkflowStageEntered", $"Stage entered: {next.Name}", application.ApplicantId, application.Id), false);
 	}
 
 	private static AdmissionWorkflowTransitionAction GetAction(AdvanceAdmissionWorkflowDto input) =>

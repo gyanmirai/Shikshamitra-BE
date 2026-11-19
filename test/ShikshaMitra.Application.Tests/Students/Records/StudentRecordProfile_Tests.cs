@@ -5,9 +5,12 @@ using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Records;
+using ShikshaMitra.Students.Enrollments.Registrations;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.Identity;
 using Volo.Abp.Security.Claims;
 using Xunit;
 
@@ -16,10 +19,30 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
+	public Task Enrolled_profile_reads_details_and_direct_writes_require_governed_change_request() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
+		var student = await CreateExistingStudentAsync(offering, "Profile", "Reader");
+		await GrantCompletedRecordAsync(student);
+		var general = GetRequiredService<IStudentGeneralInfoAppService>();
+		(await general.GetRegistrationGeneralDetailsByIdAsync(student.Id)).FirstName.ShouldBe("Profile");
+		var update = new UpdateGeneralInfoDto { FormNumber = "X", FirstName = "Changed", LastName = "Reader",
+			PrimaryContactNo = "9876543210", FamilyCast = "", City = "Surat",
+			State = new State("Gujarat", "GJ"), Country = new Country("India", "IN") };
+		(await Should.ThrowAsync<BusinessException>(() => general.UpdateGeneralInfoAsync(student.Id, update)))
+			.Code.ShouldBe("Students:Records:UseChangeRequest");
+		(await general.GetRegistrationGeneralDetailsByIdAsync(student.Id)).FirstName.ShouldBe("Profile");
+		update.StandardId = Guid.NewGuid();
+		(await Should.ThrowAsync<BusinessException>(() => general.UpdateGeneralInfoAsync(student.Id, update)))
+			.Code.ShouldBe("Students:Records:UseChangeRequest");
+	});
+
+	[Fact]
 	public Task Student_record_profile_reads_current_canonical_identity_and_placement_without_mutation() => RunCertificationScenarioAsync(async () =>
 	{
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
 		var student = await CreateExistingStudentAsync(offering, "Original", "Student");
+		await GrantCompletedRecordAsync(student);
 		var applicant = await CreateCertificationApplicantAsync("Stale", true, true, student.Id);
 		var birth = new DateTimeOffset(2019, 6, 15, 0, 0, 0, TimeSpan.Zero);
 		var stamp = await WithUnitOfWorkAsync(async () =>
@@ -44,7 +67,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		result.StandardName.ShouldBe(await WithUnitOfWorkAsync(async () => (await _standardRepository.GetAsync(offering.StandardId)).Name));
 		result.AcademicMediumId.ShouldBe(offering.MediumId);
 		result.AcademicMediumName.ShouldBe(await WithUnitOfWorkAsync(async () => (await _mediumRepository.GetAsync(offering.MediumId)).Name));
-		result.Status.ShouldBe(student.Status); result.DivisionId.ShouldBeNull(); result.DivisionName.ShouldBeNull();
+		result.Status.ShouldBe(StudentLifeCycleStatusEnum.Enrolled); result.DivisionId.ShouldBeNull(); result.DivisionName.ShouldBeNull();
 		(await WithUnitOfWorkAsync(async () => (await _studentRepository.GetAsync(student.Id)).ConcurrencyStamp)).ShouldBe(stamp);
 	});
 
@@ -54,7 +77,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
 		var allowed = await CreateExistingStudentAsync(offering, "Allowed", "Student");
 		var denied = await CreateExistingStudentAsync(offering, "Other", "Student");
+		await GrantCompletedRecordAsync(allowed); await GrantCompletedRecordAsync(denied);
 		var staffId = Guid.NewGuid();
+		await EnsureTestIdentityUserAsync(staffId, $"profile-staff-{staffId:N}");
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var other = await _standardManager.CreateAsync(offering.StageId, $"Profile {Guid.NewGuid():N}"[..24], 11, null);
@@ -84,13 +109,16 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var service = GetRequiredService<IStudentRecordProfileAppService>();
 		await Should.ThrowAsync<EntityNotFoundException>(() => service.GetAsync(Guid.NewGuid()));
 		using (_currentTenant.Change(Guid.NewGuid()))
-			await Should.ThrowAsync<EntityNotFoundException>(() => service.GetAsync(student.Id));
+			await Should.ThrowAsync<AbpAuthorizationException>(() => service.GetAsync(student.Id));
 		using (_principalAccessor.Change(ProfilePrincipal(Guid.NewGuid())))
+			await Should.ThrowAsync<AbpAuthorizationException>(() => service.GetAsync(student.Id));
+		var noScopeId = Guid.NewGuid(); await EnsureTestIdentityUserAsync(noScopeId, $"profile-scope-{noScopeId:N}");
+		using (_principalAccessor.Change(ProfilePrincipal(noScopeId)))
 			(await Should.ThrowAsync<BusinessException>(() => service.GetAsync(student.Id))).Code.ShouldBe(UserScopeErrorCodes.AccessDenied);
 	});
 
 	[Fact]
-	public Task Student_record_profile_supports_unplaced_records_with_missing_optional_details() => RunCertificationScenarioAsync(async () =>
+	public Task Student_record_profile_denies_unplaced_admission_identity_before_onboarding() => RunCertificationScenarioAsync(async () =>
 	{
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
 		var student = await WithUnitOfWorkAsync(async () =>
@@ -99,23 +127,21 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			return await _studentRepository.InsertAsync(new Student(Guid.NewGuid(), TestTenantId, "Unplaced", null, null,
 				cycle.AcademicYearId, offering.BoardId, offering.MediumId, offering.StageId), autoSave: true);
 		});
-		var result = await GetRequiredService<IStudentRecordProfileAppService>().GetAsync(student.Id);
-		result.Id.ShouldBe(student.Id); result.FirstName.ShouldBe("Unplaced");
-		result.StandardId.ShouldBeNull(); result.StandardName.ShouldBeNull(); result.DivisionId.ShouldBeNull();
-		result.DateOfBirth.ShouldBeNull(); result.Gender.ShouldBeNull(); result.GrNumber.ShouldBeNull();
+		(await Should.ThrowAsync<BusinessException>(() => GetRequiredService<IStudentRecordProfileAppService>().GetAsync(student.Id)))
+			.Code.ShouldBe("Students:Records:OnboardingIncomplete");
 	});
 
 	[Fact]
-	public Task Student_record_profile_guid_loads_accepted_admission_evidence_after_finalization() => RunCertificationScenarioAsync(async () =>
+	public Task Student_record_profile_guid_denies_finalization_only_while_admission_evidence_remains_in_its_own_flow() => RunCertificationScenarioAsync(async () =>
 	{
 		var requirement = new AdmissionDocumentRequirement { Code = "BIRTH", Name = "Birth certificate" };
-		var fixture = await CreateDocumentHandoffFixtureAsync(HandoffPolicy(requirement));
+		var fixture = await CreateOnboardingDocumentFixtureAsync(HandoffPolicy(requirement));
 		var evidence = await AddHandoffEvidenceAsync(fixture, requirement);
-		var ready = await CompleteDocumentHandoffApplicationAsync(fixture);
+		var ready = await CompleteOnboardingDecisionAsync(fixture.Application.Id);
 		var finalized = await FinalizeAsync(ready, true, "profile-evidence-read");
-		var profile = await GetRequiredService<IStudentRecordProfileAppService>().GetAsync(finalized.StudentId);
-		var linked = await GetRequiredService<IStudentAdmissionEvidenceAppService>().GetListAsync(profile.Id);
-		profile.StudentId.ShouldBe(finalized.StudentId);
+		(await Should.ThrowAsync<BusinessException>(() => GetRequiredService<IStudentRecordProfileAppService>().GetAsync(finalized.StudentId)))
+			.Code.ShouldBe("Students:Records:OnboardingIncomplete");
+		var linked = await GetRequiredService<IStudentAdmissionEvidenceAppService>().GetListAsync(finalized.StudentId);
 		linked.Single().Id.ShouldBe(evidence.Id);
 		linked.Single().Status.ShouldBe("accepted");
 	});

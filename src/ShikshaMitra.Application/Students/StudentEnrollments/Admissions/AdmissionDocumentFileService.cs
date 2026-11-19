@@ -21,7 +21,14 @@ public class AdmissionDocumentFileService(IBlobContainer blobs, AdmissionDocumen
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionDocumentFile> SaveAsync(AdmissionDocumentContext context, AdmissionDocumentRequirement requirement,
-		Guid evidenceId, IRemoteStreamContent file)
+		Guid evidenceId, IRemoteStreamContent file) => await SaveCoreAsync(context, requirement, evidenceId, file,
+		CurrentUser.Id ?? throw Invalid("An authenticated staff member is required."));
+
+	internal Task<AdmissionDocumentFile> SaveForParentAsync(AdmissionDocumentContext context, AdmissionDocumentRequirement requirement,
+		Guid evidenceId, IRemoteStreamContent file) => SaveCoreAsync(context, requirement, evidenceId, file, null);
+
+	private async Task<AdmissionDocumentFile> SaveCoreAsync(AdmissionDocumentContext context, AdmissionDocumentRequirement requirement,
+		Guid evidenceId, IRemoteStreamContent file, Guid? actor)
 	{
 		if (file == null) throw Invalid("Choose a document to upload.");
 		var documentType = await access.ValidateMappingAsync(requirement);
@@ -46,12 +53,12 @@ public class AdmissionDocumentFileService(IBlobContainer blobs, AdmissionDocumen
 				requirement.Name, requirement.MaxFileSizeMb, formats);
 			if (documentType != null) DocumentFileValidator.Validate(file.FileName ?? string.Empty, file.ContentType, content.LongLength, content, documentType);
 		}
-		catch (BusinessException exception) { throw Invalid("The document does not match the allowed format, file content, or size.").WithData("ValidationCode", exception.Code); }
+		catch (BusinessException exception) { throw Invalid("The document does not match the allowed format, file content, or size.").WithData("ValidationCode", exception.Code!); }
 		if (validation.SafeFileName.Length > 255) throw Invalid("Use a document filename of at most 255 characters.");
 		var blobName = $"admission-evidence/{CurrentTenant.Id:N}/{context.Application.Id:N}/{evidenceId:N}";
 		await blobs.SaveAsync(blobName, content, overrideExisting: false);
 		return new(validation.SafeFileName, validation.ContentType, content.LongLength, validation.Sha256Hash, blobName,
-			CurrentUser.Id ?? throw Invalid("An authenticated staff member is required."));
+			actor);
 	}
 
 	public async Task<AdmissionDocumentDownloadDto> DownloadAsync(Guid id)
@@ -60,7 +67,7 @@ public class AdmissionDocumentFileService(IBlobContainer blobs, AdmissionDocumen
 		var context = await access.GetContextAsync(row.ApplicationId, row.StageInstanceId, false);
 		if (row.BlobName == null) throw Invalid("This evidence revision has no uploaded file.");
 		var content = await blobs.GetAllBytesOrNullAsync(row.BlobName) ?? throw Invalid("The private document file is unavailable.");
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "AdmissionDocumentDownloaded",
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("AdmissionDocumentDownloaded",
 			$"Downloaded {row.RequirementLabel}, revision {row.VersionNumber}.", context.Application.ApplicantId, row.ApplicationId,
 			metadataJson: JsonSerializer.Serialize(new { ActorUserId = CurrentUser.Id, EvidenceId = id, row.VersionNumber })), false);
 		return new() { Content = content, FileName = row.FileName!, ContentType = row.ContentType! };

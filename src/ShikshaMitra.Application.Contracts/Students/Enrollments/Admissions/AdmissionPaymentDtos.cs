@@ -30,6 +30,7 @@ public class AdmissionPaymentStageDto
 	public Guid StageId { get; set; }
 	public bool PaymentStageEnabled { get; set; }
 	public AdmissionPaymentStagePolicy? Policy { get; set; }
+	public AdmissionPaymentCompletionDto? Completion { get; set; }
 	public bool IsActive { get; set; }
 	public DateTime? DueAt { get; set; }
 	public bool IsOverdue { get; set; }

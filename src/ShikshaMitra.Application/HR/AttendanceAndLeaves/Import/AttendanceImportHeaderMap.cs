@@ -29,6 +29,10 @@ internal static class AttendanceImportHeaderMap
 		{
 			throw new BusinessException(HRErrorCodes.AttendanceImportUnknownHeaders);
 		}
+		if (normalizedHeaders.Distinct(StringComparer.OrdinalIgnoreCase).Count() != normalizedHeaders.Count)
+		{
+			throw new BusinessException(HRErrorCodes.AttendanceImportDuplicateHeaders);
+		}
 
 		if (!normalizedHeaders.Contains(NormalizeHeader(AttendanceImportFileParser.AttendanceDateHeader), StringComparer.OrdinalIgnoreCase) ||
 		    !normalizedHeaders.Contains(NormalizeHeader(AttendanceImportFileParser.EmployeeCodeHeader), StringComparer.OrdinalIgnoreCase))
@@ -85,6 +89,11 @@ internal static class AttendanceImportHeaderMap
 		return cell.GetFormattedString();
 	}
 
-	private static string NormalizeHeader(string value) =>
-		value.Trim().Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase);
+	internal static string NormalizeHeader(string value)
+	{
+		var normalized = value.Trim().Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase).ToUpperInvariant();
+		if (normalized.Equals("EmployeeCode", StringComparison.OrdinalIgnoreCase)) return "STAFFCODE";
+		if (normalized.Equals("EmployeeName", StringComparison.OrdinalIgnoreCase)) return "STAFFNAME";
+		return normalized;
+	}
 }

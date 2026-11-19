@@ -1,5 +1,6 @@
-﻿using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.Enrollments.Registrations;
 using System;
+using ShikshaMitra.Students.Records;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
 
@@ -13,14 +14,19 @@ public class StudentPreviousSchoolDetailsAppService(
 ) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
     IStudentPreviousSchoolDetailsAppService
 {
-    public async Task<StudentPreviousSchoolDetailsDto> GetPreviousSchoolDetailsAsync(Guid studentId)
+    public Task<StudentPreviousSchoolDetailsDto> GetPreviousSchoolDetailsAsync(Guid studentId) => ReadAsync(studentId, null);
+    internal Task<StudentPreviousSchoolDetailsDto> GetPreviousSchoolDetailsAsync(Guid studentId, StudentRecordSectionReadScope scope) => ReadAsync(studentId, scope);
+    private async Task<StudentPreviousSchoolDetailsDto> ReadAsync(Guid studentId, StudentRecordSectionReadScope? scope)
     {
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(GetPreviousSchoolDetailsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForPreviousSchool);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForPreviousSchool,
+            includeStudentRecords: true);
 
-        var previousSchoolDetail = await studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
+        scope?.RequireContext(studentId, CurrentTenant.Id, CurrentUser.Id, CurrentUnitOfWork);
+        var previousSchoolDetail = scope == null ? await studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId) :
+            await scope.ReadAsync("previous-school", () => studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId));
 
         return new StudentPreviousSchoolDetailsDto
         {
@@ -48,7 +54,8 @@ public class StudentPreviousSchoolDetailsAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(UpdatePreviousSchoolDetailsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForPreviousSchoolUpdate);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForPreviousSchoolUpdate,
+            forProfileWrite: true);
 
         var previousSchoolDetail = await studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 
@@ -73,7 +80,8 @@ public class StudentPreviousSchoolDetailsAppService(
             input.Remarks
         );
 
-        student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.PrevSchoolDetails);
+        if (Array.Exists(RegistrationStatuses, status => status == student.Status))
+            student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.PrevSchoolDetails);
         student.AdditionalDetail?.UpdatePreviousSchoolSummary(input.PreviousSchool, input.LastClassPassed);
 
         await UnitOfWorkManager.Current!.SaveChangesAsync();

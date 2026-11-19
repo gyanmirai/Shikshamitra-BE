@@ -47,7 +47,8 @@ public class ChargeController(IChargeAppService chargeAppService) : AbpControlle
 		[FromQuery] Guid? educationMediumId = null,
 		[FromQuery] Guid? boardId = null,
 		[FromQuery] Guid? standardId = null,
-		[FromQuery] Guid? divisionId = null)
+		[FromQuery] Guid? divisionId = null,
+		[FromQuery] string? filters = null)
 	{
 		var request = new GetChargesRequest
 		{
@@ -55,6 +56,7 @@ public class ChargeController(IChargeAppService chargeAppService) : AbpControlle
 			Page = page,
 			PageSize = Math.Min(pageSize, MaxChargePageSize),
 			Search = search,
+			Filters = filters,
 			Status = status,
 			SortBy = sortBy,
 			SortOrder = sortOrder,
@@ -66,6 +68,13 @@ public class ChargeController(IChargeAppService chargeAppService) : AbpControlle
 
 		return chargeAppService.GetAllAsync(request);
 	}
+
+	/// <summary>Read fee-assigned students in the actor's Finance charge scope.</summary>
+	[HttpGet("eligible-students")]
+	[ProducesResponseType(typeof(ChargeEligibleStudentsResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	public Task<ChargeEligibleStudentsResponse> GetEligibleStudentsAsync(
+		[FromQuery] GetChargeEligibleStudentsRequest input) => chargeAppService.GetEligibleStudentsAsync(input);
 
 	/// <summary>
 	/// Retrieve flat charge lines for student-grouped history views.

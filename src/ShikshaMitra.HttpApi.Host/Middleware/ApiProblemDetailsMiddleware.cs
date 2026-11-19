@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
@@ -51,7 +51,7 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 				throw;
 			}
 
-			_logger.LogError(exception, "Unhandled API exception for {Path}", context.Request.Path);
+			_logger.LogError(exception, "Unhandled API exception {ErrorReference} for {Path}", context.TraceIdentifier, context.Request.Path);
 			var problem = MapException(context, exception);
 			await WriteProblemDetailsAsync(context, problem);
 			return;
@@ -107,9 +107,9 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 				StatusCodes.Status403Forbidden,
 				"Forbidden",
 				string.IsNullOrWhiteSpace(authorizationException.Message)
-					? "You don't have permission to access this resource."
+					? ApiProblemDetailsMapper.GetDefaultDetail(StatusCodes.Status403Forbidden)
 					: authorizationException.Message,
-				errorCode: null,
+				errorCode: authorizationException.Code,
 				errors: null),
 			EntityNotFoundException entityNotFoundException => CreateProblemDetails(
 				context,
@@ -222,6 +222,7 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 			Detail = string.IsNullOrWhiteSpace(detail) ? title : detail,
 			Instance = context.Request.Path
 		};
+		problem.Extensions["traceId"] = context.TraceIdentifier;
 
 		if (!string.IsNullOrWhiteSpace(errorCode))
 		{
@@ -265,6 +266,7 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 
 	private static async Task WriteProblemDetailsAsync(HttpContext context, ProblemDetails problem)
 	{
+		ApiPermissionDeniedDetails.Apply(context, problem);
 		context.Response.StatusCode = problem.Status ?? StatusCodes.Status500InternalServerError;
 		context.Response.ContentType = "application/problem+json";
 		context.Response.ContentLength = null;

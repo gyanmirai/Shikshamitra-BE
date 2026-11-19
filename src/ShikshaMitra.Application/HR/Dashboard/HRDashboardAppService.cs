@@ -9,16 +9,16 @@ namespace ShikshaMitra.HR.Dashboard;
 [Authorize(ShikshaMitraSubmodulePermissions.HR.Dashboard.View)]
 [RemoteService(false)]
 public class HRDashboardAppService(
-	HRDashboardSummaryReader summaryReader,
-	HRDashboardScopeService scopeService,
+	HRDashboardOperationalReader operationalReader,
 	HRDashboardPreviewService previewService)
 	: ApplicationService, IHRDashboardAppService
 {
-	public async Task<HRDashboardSummaryDto> GetSummaryAsync(HRDashboardSummaryRequestDto input)
-	{
-		var scope = await scopeService.EnsureCanReadScopedEmployeesAsync();
-		return await summaryReader.GetSummaryAsync(input, scope);
-	}
+	public Task<HRDashboardOverviewDto> GetOverviewAsync(HRDashboardOverviewInput input) =>
+		operationalReader.GetOverviewAsync(input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View)]
+	public Task<HRDashboardStaffPageDto> GetStaffAsync(HRDashboardStaffInput input) =>
+		operationalReader.GetStaffAsync(input);
 
 	public Task<HRDashboardPreviewDto> GetPreviewAsync(string dashboardKey) =>
 		previewService.GetPreviewAsync(dashboardKey);

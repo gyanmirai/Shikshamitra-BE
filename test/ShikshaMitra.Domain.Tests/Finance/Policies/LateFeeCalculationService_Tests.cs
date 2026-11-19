@@ -15,6 +15,13 @@ public class LateFeeCalculationService_Tests
 		return new CollectionPolicy(Guid.NewGuid(), null, Guid.NewGuid(), builder.Build());
 	}
 
+	private static CollectionPolicy BuildLegacyPolicy(Action<CollectionPolicyUpdateModelBuilder> configure)
+	{
+		var builder = new CollectionPolicyUpdateModelBuilder();
+		configure(builder);
+		return builder.BuildLegacyPolicy();
+	}
+
 	private static LateFeeCalculationInput Input(
 		int daysLate,
 		decimal outstanding = 10000,
@@ -33,6 +40,33 @@ public class LateFeeCalculationService_Tests
 		new(daysLate, outstanding, originalFee, remainingBalance, feeHeadId);
 
 	// ── Grace period ──────────────────────────────────────────────────────────
+
+	[Theory]
+	[InlineData("\"Calendar\"")]
+	[InlineData("\"WorkingDay\"")]
+	[InlineData("0")]
+	[InlineData("1")]
+	public void Legacy_Snapshots_Use_Calendar_Days_Regardless_Of_Their_Removed_Day_Type(string legacyDayType)
+	{
+		var original = BuildPolicy(b =>
+		{
+			b.LateFeeType = LateFeeCalculationType.PerDay;
+			b.AmountPerDay = 20;
+			b.GracePeriodDays = 2;
+		});
+		var json = original.ToSnapshot().Serialize();
+		var legacyJson = json.Insert(1, $"\"GracePeriodType\":{legacyDayType},");
+		var snapshot = CollectionPolicySnapshot.Deserialize(legacyJson);
+		var restored = new CollectionPolicy(Guid.NewGuid(), null, Guid.NewGuid(), snapshot.ToUpdateModel());
+
+		// Friday's due date to Monday includes Saturday and Sunday as grace days.
+		Assert.Equal(0, _service.Calculate(restored, Input(daysLate: 2)).LateFee);
+		var result = _service.Calculate(restored, Input(daysLate: 3));
+		Assert.Equal(20, result.LateFee);
+		Assert.Equal(1, result.EffectiveDaysLate);
+		Assert.Equal(2, result.EffectiveGracePeriodDays);
+		Assert.DoesNotContain("GracePeriodType", snapshot.Serialize());
+	}
 
 	[Fact]
 	public void Within_Grace_Period_Produces_Zero_Late_Fee()
@@ -73,7 +107,7 @@ public class LateFeeCalculationService_Tests
 	[Fact]
 	public void Disabled_Late_Fee_Produces_Zero()
 	{
-		var policy = BuildPolicy(b => { b.EnableLateFee = false; b.LateFeeType = LateFeeCalculationType.Flat; b.FlatAmount = 500; });
+		var policy = BuildPolicy(b => { b.EnableLateFee = false; b.EnableWaiver = false; b.LateFeeType = LateFeeCalculationType.Flat; b.FlatAmount = 500; });
 		var result = _service.Calculate(policy, Input(daysLate: 30));
 		Assert.Equal(0, result.LateFee);
 	}
@@ -228,8 +262,8 @@ public class LateFeeCalculationService_Tests
 
 	[Theory]
 	[InlineData(RoundingMethodType.RoundUp, 34)]
-	[InlineData(RoundingMethodType.RoundDown, 33)]
-	[InlineData(RoundingMethodType.NearestRupee, 33)]
+	[InlineData(RoundingMethodType.RoundDown, 34)]
+	[InlineData(RoundingMethodType.NearestRupee, 34)]
 	public void Rounding_Method_Is_Applied_To_The_Final_Amount(RoundingMethodType method, decimal expected)
 	{
 		var result = CalculateWithRoundingFixture(method);
@@ -237,14 +271,12 @@ public class LateFeeCalculationService_Tests
 	}
 
 	[Fact]
-	public void No_Rounding_Method_Leaves_A_Fractional_Amount_Unrounded()
+	public void Legacy_rounding_options_use_the_system_whole_rupee_rule()
 	{
-		// Deliberately not comparing against a literal like 33.333... — chained decimal
-		// division doesn't reproduce identical trailing digits to arbitrary precision, and
-		// that's not what this test is checking. The point is "None" doesn't round at all.
+
 		var result = CalculateWithRoundingFixture(RoundingMethodType.None);
-		Assert.NotEqual(Math.Floor(result.LateFee), result.LateFee);
-		Assert.True(result.LateFee > 33.33m && result.LateFee < 33.34m);
+		Assert.Equal(34m, result.LateFee);
+		Assert.Equal("RoundUp", result.RoundingApplied);
 	}
 
 	private LateFeeCalculationResult CalculateWithRoundingFixture(RoundingMethodType method)
@@ -252,7 +284,7 @@ public class LateFeeCalculationService_Tests
 		var policy = BuildPolicy(b =>
 		{
 			b.LateFeeType = LateFeeCalculationType.Percentage;
-			b.Percentage = 100m / 3m; // produces a repeating-decimal amount to exercise rounding
+			b.Percentage = 33.33m; // valid two-decimal rate produces a fractional amount to exercise rounding
 			b.PercentageBase = PercentageBaseType.OutstandingAmount;
 			b.GracePeriodDays = 0;
 			b.RoundingMethod = method;
@@ -285,7 +317,7 @@ public class LateFeeCalculationService_Tests
 	{
 		var tuitionFeeHeadId = Guid.NewGuid();
 		var transportFeeHeadId = Guid.NewGuid();
-		var policy = BuildPolicy(b =>
+		var policy = BuildLegacyPolicy(b =>
 		{
 			b.LateFeeType = LateFeeCalculationType.PerDay;
 			b.AmountPerDay = 20;
@@ -310,7 +342,7 @@ public class LateFeeCalculationService_Tests
 	public void CustomRule_Override_Uses_The_Fee_Head_Level_Rule_Instead_Of_The_Policy_Level_One()
 	{
 		var libraryFeeHeadId = Guid.NewGuid();
-		var policy = BuildPolicy(b =>
+		var policy = BuildLegacyPolicy(b =>
 		{
 			b.LateFeeType = LateFeeCalculationType.PerDay;
 			b.AmountPerDay = 20; // policy-level rule — should NOT be used for libraryFeeHeadId
@@ -347,7 +379,7 @@ public class LateFeeCalculationService_Tests
 	public void CustomRule_Override_Respects_Its_Own_Maximum_Late_Fee_Cap()
 	{
 		var libraryFeeHeadId = Guid.NewGuid();
-		var policy = BuildPolicy(b =>
+		var policy = BuildLegacyPolicy(b =>
 		{
 			b.LateFeeType = LateFeeCalculationType.PerDay;
 			b.AmountPerDay = 20;

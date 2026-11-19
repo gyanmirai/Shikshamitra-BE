@@ -46,7 +46,7 @@ public partial class FeeStructureAppService
 
 	private sealed record StructureScope(Guid? AcademicYearId, Guid? EducationBoardId, Guid? EducationMediumId,
 
-		Guid? EducationMediumStageId, Guid? StandardId, Guid? DivisionId = null) : IUserScopedEntity;
+		Guid? EducationMediumStageId, Guid? StandardId, Guid? DivisionId = null, string? Name = null) : IUserScopedEntity;
 
 
 
@@ -64,7 +64,7 @@ public partial class FeeStructureAppService
 
 				x.EducationMediumStage.EducationMedium.EducationBoardId,
 
-				x.EducationMediumStage.EducationMediumId, x.EducationMediumStageId, x.Id, null)))
+				x.EducationMediumStage.EducationMediumId, x.EducationMediumStageId, x.Id, null, x.Name)))
 
 			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(ShikshaMitra.TenantSettings.Standards.Standard), id);
 
@@ -142,9 +142,6 @@ public partial class FeeStructureAppService
 
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add);
 
-		if (input.ProrationPolicyId != old?.ProrationPolicyId || input.ProrationPolicyVersionId != old?.ProrationPolicyVersionId)
-
-			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add);
 
 	}
 
@@ -165,7 +162,6 @@ public partial class FeeStructureAppService
 
 		entity.AttachRefundPolicy(input.RefundPolicyId, input.RefundPolicyVersionId);
 
-		entity.AttachProrationPolicy(input.ProrationPolicyId, input.ProrationPolicyVersionId);
 
 		foreach (var deleted in entity.FeeStructureDetails.Where(x => input.FeeHeads.All(y => y.FeeHeadId != x.FeeHeadId)).ToList())
 
@@ -183,13 +179,13 @@ public partial class FeeStructureAppService
 
 				detail = new FeeStructureDetail(GuidGenerator.Create(), CurrentTenant.Id, entity.Id, line.FeeHeadId,
 
-					line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear);
+					line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable);
 
 				entity.AddDetail(detail);
 
 			}
 
-			else detail.UpdateConfiguration(line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear);
+			else detail.UpdateConfiguration(line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable);
 
 			AttachSchedule(detail, line);
 
@@ -253,7 +249,6 @@ public partial class FeeStructureAppService
 
 		RefundPolicyId = entity.RefundPolicyId, RefundPolicyVersionId = entity.RefundPolicyVersionId,
 
-		ProrationPolicyId = entity.ProrationPolicyId, ProrationPolicyVersionId = entity.ProrationPolicyVersionId,
 
 		ConcessionFeeHeadScope = entity.ConcessionFeeHeadScope, ConcessionApplicableFeeHeadIds = entity.GetConcessionApplicableFeeHeadIds().ToList(),
 
@@ -261,7 +256,7 @@ public partial class FeeStructureAppService
 
 		{
 
-			Id = x.Id, FeeHeadId = x.FeeHeadId, Amount = x.Amount, IsOneTime = x.IsOneTime, IsOptional = x.IsOptional,
+			Id = x.Id, FeeHeadId = x.FeeHeadId, Amount = x.Amount, IsVariable = x.IsVariable, IsOneTime = x.IsOneTime, IsOptional = x.IsOptional,
 
 			PayableMonth = x.PayableMonth ?? 0, PayableYear = x.PayableYear ?? 0, PaymentTermId = x.PaymentTermId,
 
@@ -275,7 +270,7 @@ public partial class FeeStructureAppService
 
 
 
-	private async Task<FeeStructureCreateResponse> MapAsync(FeeStructure entity)
+	private async Task<FeeStructureCreateResponse> MapAsync(FeeStructure entity, StructureMappingContext? context = null)
 
 	{
 
@@ -283,6 +278,18 @@ public partial class FeeStructureAppService
 
 		var frozen = string.IsNullOrEmpty(snapshotJson) ? null : JsonSerializer.Deserialize<FeeStructurePreviewDto>(snapshotJson);
 
+		// The old exclusion review cannot describe today's collectible heads. Preserve
+		// the stored evidence, but require a new review instead of presenting it as current.
+		if (frozen?.Coverage.Any(x => x.Collection == "Admission only; excluded from Fee Collection") == true)
+			frozen = null;
+
+		// Project retired setup fields out of the response without rewriting stored publication evidence.
+		if (frozen != null)
+		{
+			var hadProration = frozen.PolicyLabels.Remove("proration");
+			frozen.Warnings.RemoveAll(x => x.Contains("proration", StringComparison.OrdinalIgnoreCase) ||
+				(hadProration && x.Contains("policy Fee Head(s) are absent", StringComparison.Ordinal)));
+		}
 		var result = new FeeStructureCreateResponse
 
 		{
@@ -301,25 +308,21 @@ public partial class FeeStructureAppService
 
 			RefundPolicyId = entity.RefundPolicyId, RefundPolicyVersionId = entity.RefundPolicyVersionId,
 
-			ProrationPolicyId = entity.ProrationPolicyId, ProrationPolicyVersionId = entity.ProrationPolicyVersionId,
 
 			ConcessionFeeHeadScope = entity.ConcessionFeeHeadScope, ConcessionApplicableFeeHeadIds = entity.GetConcessionApplicableFeeHeadIds().ToList(), FeeHeads = []
 
 		};
 
-		var policyIds = new[] { entity.CollectionPolicyVersionId, entity.ConcessionPolicyVersionId, entity.ProrationPolicyVersionId, entity.RefundPolicyVersionId }.Where(x => x.HasValue).Select(x => x!.Value).ToList();
+		var policyIds = new[] { entity.CollectionPolicyVersionId, entity.ConcessionPolicyVersionId, entity.RefundPolicyVersionId }.Where(x => x.HasValue).Select(x => x!.Value).ToList();
 
-		result.PolicyLabels = frozen?.PolicyLabels ?? (await financePolicyVersionRepository.GetListAsync(x => policyIds.Contains(x.Id)))
+		context ??= await LoadMappingContextAsync([entity]);
+		result.PolicyLabels = frozen?.PolicyLabels ?? context.Policies.Values.Where(x => policyIds.Contains(x.Id))
 
 			.ToDictionary(x => x.PolicyType, x => $"{x.PolicyName} · v{x.VersionNumber}");
 
-		var ids = entity.FeeStructureDetails.Select(x => x.FeeHeadId).ToList();
+		var heads = context.Heads;
 
-		var heads = (await feeHeadRepository.GetListAsync(x => ids.Contains(x.Id))).ToDictionary(x => x.Id);
-
-		var termIds = entity.FeeStructureDetails.Where(x => x.PaymentTermId.HasValue).Select(x => x.PaymentTermId!.Value).Distinct().ToList();
-
-		var terms = (await paymentTermRepository.GetListAsync(x => termIds.Contains(x.Id))).ToDictionary(x => x.Id);
+		var terms = context.Terms;
 
 		foreach (var line in entity.FeeStructureDetails)
 
@@ -335,13 +338,13 @@ public partial class FeeStructureAppService
 
 			{
 
-				Id = line.Id, FeeHeadId = line.FeeHeadId, FeeHeadName = frozen?.Coverage.SingleOrDefault(x => x.FeeHeadId == line.FeeHeadId)?.Name ?? head?.Name ?? "Unavailable fee head", CategoryName = head?.FeeCategory?.Name ?? "",
+				Id = line.Id, FeeHeadId = line.FeeHeadId, FeeHeadName = frozen?.Coverage.SingleOrDefault(x => x.FeeHeadId == line.FeeHeadId)?.Name ?? head?.Name ?? "Unavailable fee head", CategoryName = head?.CategoryName ?? "",
 
-				Amount = line.Amount, IsOneTime = line.IsOneTime, IsOptional = line.IsOptional, PayableMonth = line.PayableMonth, PayableYear = line.PayableYear,
+				Amount = line.Amount, IsVariable = line.IsVariable, IsOneTime = line.IsOneTime, IsOptional = line.IsOptional, PayableMonth = line.PayableMonth, PayableYear = line.PayableYear,
 
 				PaymentTermId = line.PaymentTermId, PaymentTermVersionId = line.PaymentTermVersionId, PaymentTermName = frozen?.Schedules.SingleOrDefault(x => x.FeeHeadId == line.FeeHeadId)?.PaymentTermName ?? term?.Name,
 
-				PaymentTermVersionNumber = version?.VersionNumber, HasNewVersionAvailable = term?.GetPublishedVersion() is { } latest && version != null && latest.VersionNumber > version.VersionNumber,
+				PaymentTermVersionNumber = version?.VersionNumber, HasNewVersionAvailable = term?.Versions.Where(x => x.Status == PaymentTermVersionStatus.Published).OrderByDescending(x => x.VersionNumber).FirstOrDefault() is { } latest && version != null && latest.VersionNumber > version.VersionNumber,
 
 				ScheduleMode = line.ScheduleMode, IsScheduleLocked = entity.IsLocked, InstallmentOverrides = line.ScheduleOverrides.Select(MapOverride).ToList()
 

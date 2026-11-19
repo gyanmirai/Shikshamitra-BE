@@ -21,9 +21,8 @@ public partial class FeeStructureAppService
 			throw new BusinessException(FeeStructureErrorCodes.ScopeMismatch);
 		var year = await academicYearRepository.GetAsync(scope.AcademicYearId!.Value);
 		var board = await GetBoardCalendarAsync(scope.EducationBoardId!.Value);
-		var className = await AsyncExecuter.SingleAsync((await standardRepository.GetQueryableAsync()).Where(x => x.Id == standardId).Select(x => x.Name));
 		var result = new FeeStructureContextDto { AcademicYearId = year.Id, AcademicYearName = year.Name, BoardId = board.Id,
-			ClassName = className, StartDate = board.StartDate, EndDate = board.EndDate };
+			ClassName = scope.Name!, StartDate = board.StartDate, EndDate = board.EndDate };
 		var permissions = new Dictionary<string, string>
 		{
 			["add"] = ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Add,
@@ -34,11 +33,9 @@ public partial class FeeStructureAppService
 			["termsRead"] = ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.View,
 			["collection"] = ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add,
 			["concession"] = ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Add,
-			["proration"] = ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add,
 			["refund"] = ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add,
 			["collectionRead"] = ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.View,
 			["concessionRead"] = ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.View,
-			["prorationRead"] = ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.View,
 			["refundRead"] = ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.View
 		};
 		foreach (var permission in permissions) result.Permissions[permission.Key] = await AuthorizationService.IsGrantedAsync(permission.Value);

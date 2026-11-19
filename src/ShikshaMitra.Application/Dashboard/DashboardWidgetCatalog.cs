@@ -15,6 +15,10 @@ internal static class DashboardWidgetCatalog
 	public static readonly IReadOnlyDictionary<string, DashboardWidgetDefinition> WidgetDefinitions =
 		new Dictionary<string, DashboardWidgetDefinition>(StringComparer.Ordinal)
 		{
+			["student-learning-tasks"] = new(Actions, string.Empty, [], "Student"),
+			["student-upcoming-exam"] = new(Calendar, string.Empty, [], "Student"),
+			["student-upcoming-exams"] = new(Kpis, string.Empty, [], "Student"),
+			["student-latest-result"] = new(Kpis, string.Empty, [], "Student"),
 			["announcement-board-practical"] = new(
 				Announcements,
 				"/academic/scheduleExam",
@@ -35,6 +39,10 @@ internal static class DashboardWidgetCatalog
 				Kpis,
 				"/student/profile",
 				[ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View]),
+			["leadership-admission-approvals"] = new(Actions, "/student/admissions/applications",
+				[ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View], "Admissions"),
+			["principal-pending-admissions"] = new(Kpis, "/student/admissions/applications",
+				[ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View], "Admissions"),
 			["leadership-fee-collection"] = new(
 				Kpis,
 				"/finance/fee-collection",
@@ -160,11 +168,14 @@ internal static class DashboardWidgetCatalog
 			["finance-dashboard"] = new(
 				Modules,
 				"/finance/dashboard",
-				[ShikshaMitraModulePermissions.Finance]),
+				[ShikshaMitraModulePermissions.Finance, ShikshaMitraSubModulePermissions.FinanceDashboard,
+				 ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View,
+				 ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View]),
 			["hr-dashboard"] = new(
 				Modules,
 				"/hr/dashboard",
-				[ShikshaMitraSubModulePermissions.HRDashboard]),
+				[ShikshaMitraSubModulePermissions.HRDashboard, ShikshaMitraSubmodulePermissions.HR.PayrollManagement_Dashboard.View,
+				 ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View]),
 			["student-attendance"] = new(
 				Kpis,
 				"/student/dashboard",

@@ -3,14 +3,159 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-09-11
+updated_on: 2026-11-18
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Locate Student Enrollment Admissions code
 
+## Attendance workspace reads and authority
+
+`Application/Students/Records/StudentDirectoryQueryService.cs` owns shared scoped Directory inclusion, hierarchy, paging and identity masking; Records keeps its public permissions while Attendance calls this internal read service under Attendance View. `Application/Students/Attendance/AttendanceWorkspaceQueryService.cs` builds context and paged daily rows, enriches only classes present on the page, and batches historical observation fallback for disabled rows. Existing dated roster, report calculations and command APIs retain attendance ownership.
+
+`AttendanceWorkspaceAccessService.cs` checks current database identity/admin roles and exact active ClassTeacher → active Employee.UserId mapping; manual academic scope does not create teaching authority. Mark/Submit checks this authority inside its Serializable command unit of work, alongside current roster/scope checks. No new database entities, grants, seed repair or migration are introduced.
+
 TL;DR: Admissions remains inside the Student modular-monolith boundary and separates aggregate invariants, authoritative validation, reads, commands, and runtime availability.
+
+Saved-definition preview delegates through `AdmissionFormAppService.GetSavedInheritancePreviewAsync` to the existing inheritance service. It checks the persisted exact-source approval before loading that source and keeps the draft-preview Manage boundary separate. The Domain composer orders editable sections and Inquiry context as one source sequence while returning them separately for immutable runtime ownership.
+
+## Staff scope gateways
+
+`StudentScopeAccessService` owns strict Student placement, division/attendance tuple checks, bulk existence checks, ancestor navigation and settings authority. `StudentRecordScope` matches exact division or explicit ancestor wildcard grants; the generic Academic ancestor-visibility matcher is not a Student record authorization check.
+
+`AdmissionApplicationScopeAccessService` and `AdmissionOfferingScopeQuery` authorize class-level offerings. Offering reads and source commands use that same query. `AdmissionInquiryScopeAccessService` handles offering-linked and unallocated inquiries. `AdmissionApplicantScopeAccessService` guards applicant identity, shared profile changes and activity references; application services and controllers retain exact action permissions.
+
+## Admissions sibling-parent provenance
+
+`AdmissionPrimaryContactSelection.cs` records the configured school-contact role and authenticated Guardian responsibility confirmation separately from `AdmissionSiblingParentSelection` account provenance. `AdmissionInquiryConfiguredFields` resolves only active primary-contact definitions, preserving saved/read-only ownership and legacy aliases. Create/edit, public intake and stage guards reuse that policy; Records family writes retain their separate reviewed transition acknowledgment.
+
+`AdmissionJourneyIdentityConfiguration.cs` validates combined reachable identity sources only for new/changed configuration and explicit activation. Direct entry's mandatory first name/DOB/gender capture is a trusted source; surname is not inferred. `AdmissionStructuredNamePrefill.cs` keeps a captured full Inquiry name from silently becoming an entire structured Registration first name. `ValidateStoredAsync` retains existing runtime semantics; activation uses `ValidateForActivationAsync`.
+
+Admissions parent matching is owned by `Application/Students/StudentEnrollments/Admissions/AdmissionDirectFamilyMatchService.cs`.
+It combines existing admission scope with exact saved contacts, current Student parent projections and a provider-backed pending JSON-parent contact predicate; it does not create accounts or send credentials.
+`Domain/Students/StudentEnrollments/Admissions/Repositories/IAdmissionApplicantRepository.cs` and `EntityFrameworkCore/Students/StudentEnrollments/Admissions/EfCoreAdmissionApplicantRepository.cs` own this composable PostgreSQL/SQLite query, with parameterized contact values and tenant/soft-delete boundaries retained.
+`AdmissionSiblingParentSelection.cs` records parent-only flow version, selected relationship and server-resolved source/family/email/actor/time confirmation in existing applicant extra properties.
+`AdmissionInquiryFamilyConfirmationService.cs` confirms only an already-saved pending target and delegates named target-only family mutation to the Inquiry/Applicant aggregates. Downstream-evidence checks refuse a merge after handoff. `IAdmissionApplicantRepository.LockForSiblingParentSelectionAsync` supplies ordered mutation-only Applicant locks and identity refresh; `FindForApplicationStartAsync` follows Applicant-before-Inquiry order so Start cannot use a pre-confirmation tracked identity. Central `ResolveParentAsync` shares the source lock for existing sibling-entry commands. Duplicate matching stays read-only; current Student role absence never revives an older applicant parent. Target audit/proof supports the confirmed detail/list state without per-row source profile reads.
+Inquiry and Direct Registration own explicit selection; inquiry/application form writers protect the shared primary contact after confirmation.
+Finalization maps new parent-only captures into Father/Mother profile storage without fabricating a Guardian profile.
+`AdmissionFirstParentContactMapping.cs` synchronizes generic form contact aliases only into the explicitly selected first parent's canonical fields, retaining per-field server provenance for structured answers and intentional clears.
+Registration and Inquiry edits recover older saved ownership before alias mutation; new-Student finalization catches up accepted unfinalized records from saved binding answers, excluding untouched Registration prefills.
+Confirmed siblings, existing Students, returns and legacy flows do not use this synchronization.
+Legacy records and mobile-only callers remain readable and do not gain trusted confirmation through inference.
+
+`AdmissionSiblingRegistrationPrefillService.cs` owns the Registration parent allowlist, source permission/scope and identity checks, compatible configured-field projection and target-only audit. Application lifecycle initialization and existing Form GET/Save reuse this service. Optional response metadata describes display projections; PATCH origin hints do not grant authority. Authored clears and equivalent parent aliases are resolved before profile mapping. Existing submitted/frozen records are not rewritten.
+Projection and Save share the selected-person alias policy: distinct generic/independent Guardian identity blocks parent aliasing, while canonical parent fields remain eligible. Independent Guardian edits retain the original profile binding; origin hints cannot change ownership or produce a parent-copy audit for that field. Legacy Guardian-only source occupation without safe parent identity association is not recovered through inference.
+
+`AdmissionPublicInquirySchema.cs` projects a clone of the public Inquiry schema and folds only omitted sibling-control rules. New public captures retain their exposed source snapshot for fresh Registration inheritance; original published definitions and previously frozen applications stay intact. `AdmissionPublicInquirySubmissionStore.cs` owns retry fingerprints and unconfirmed capture metadata, while provider-specific submission locking and replay queries belong to Domain repository contracts and EntityFrameworkCore implementations. No new schema migration is required.
+
+## Onboarding email and access ownership
+
+| Concern | Source |
+|---|---|
+| Manual one-click credentials | `StudentOnboardingAppService.Credentials.cs` owns the scoped workspace and transactional send; `StudentCredentialsRecipientReader.cs` reads legal current owners and Student email provenance; `StudentCredentialsDtos.cs` supplies bounded DTO validation. The existing portal preparation core and credential outbox remain owners of linking and transport. |
+| Confirmed sibling parent reuse | `Application/Students/StudentEnrollments/Onboarding/StudentSiblingParentService.cs` resolves confirmed-family provenance, current verified Father/Mother identities and the exact original setup request. `StudentOnboardingAppService.SiblingParents.cs` validates the activation selection, enforces identity-update authority and links/retries under scoped transactions. Parent-only automatic suppression is enforced in orchestration, low-level requests/queueing and dispatch, without changing Student or legacy guardian behavior. |
+| Automatic admission requirements | `Application/Students/StudentEnrollments/Onboarding/OnboardingRequirementSnapshotService.cs`, `Domain/Students/StudentEnrollments/Onboarding/Services/AutomaticOnboardingReadinessRules.cs`; finalization determines document requirements before Student profile writes and reuses the prepared JSON at case creation. Pending case extra properties capture common readiness, current account choices and published workflow document policy automatically. Actual snapshot changes receive an adoption audit event; unchanged activation previews do not rewrite step evidence. Activated and terminal snapshots remain fixed. Required document overrides are rejected. |
+| Canonical documents | `Application/Students/StudentEnrollments/Onboarding/OnboardingWorkflowDocumentsAppService.cs` delegates finalized-application upload/original/review to existing Admissions owners and permissions. |
+| Fee intent | `StudentOnboardingAppService.Fees.cs` owns selection and confirmation of an existing published fee structure. Fee assignment, dues, collection and refunds remain owned by the existing Finance services. |
+| Identifier group policy | `StudentOnboardingAppService.IdentifierLocks.cs`, `StudentOnboardingAppService.LockedGroupAssignments.cs`; Division extra properties persist independent year-specific GR/Roll policies, including empty groups. Student/domain and Records correction paths enforce locks. |
+| Readiness and automatic orchestration | `Application/Students/StudentEnrollments/Onboarding/StudentOnboardingCredentialEligibilityResolver.cs`, `StudentOnboardingAppService.CredentialEmails.cs`; uses current Enrollment, Student, Admissions document evidence and existing completion truth. |
+| Durable email | `Domain/Students/Portal/Entities/StudentCredentialEmailRequest.cs`, `Application/Students/StudentEnrollments/Onboarding/StudentCredentialEmailAppService.cs` and `StudentCredentialEmailDispatcher.cs`; durable preparation commits before SMTP, frozen link/mailbox and optimistic claim prevent duplicate intent. |
+| Persistence/worker | `EntityFrameworkCore/Students/Portal/StudentCredentialEmailRequestConfiguration.cs`, `HttpApi.Host/BackgroundWorkers/StudentCredentialEmailWorker.cs`; worker changes to each intent's tenant and delegates checks. |
+| Lifecycle and login | `Application/Students/Portal/StudentPortalLifecycleService.cs`, `StudentPortalLoginService.cs`, `StudentPortalAccessService.cs`, `HttpApi.Host/Controllers/StudentPortalTokenController.cs`; Records terminal application and correction own link revocation/restoration. |
+
+The source paths above use the corresponding backend layer's source folder.
+HR employee email and the queue-only generic communications gateway are unchanged.
+
+Offering activation commits the enrollment in a serializable transaction before account preparation. A separate preparation transaction may fail without rolling back enrollment; a fresh repair transaction records access pending for retry. Student Directory, Records access and dashboard eligibility recognize the persisted activated enrollment. Historical renewal Finance rules are separate.
+
+## Student Attendance ownership
+
+| Layer | Owner |
+|---|---|
+| Shared rules | `src/ShikshaMitra.Domain.Shared/Students/Attendance/`: typed policy, centralized operation errors and pure credit/completeness calculation. |
+| Domain | `src/ShikshaMitra.Domain/Students/Attendance/`: day/entry, correction and durable operation journal. New applicability consumes existing Academic Calendar and fixed attendance defaults. Legacy policy and schedule entities remain mapped only to preserve stored data. |
+| Enrollment | `src/ShikshaMitra.Domain/Students/StudentEnrollments/Aggregates/StudentEnrollment.Attendance.cs`: confirmed start and dated membership snapshots. Existing Records placement/transition/renewal commands supply their effective dates. |
+| Application | `src/ShikshaMitra.Application/Students/Attendance/`: focused roster/register/report reads, daily and correction commands, enrollment setup and leave-type management. Thin entry services retain action permissions and academic-scope checks. |
+| Persistence | `src/ShikshaMitra.EntityFrameworkCore/Students/Attendance/`: policy/version/schedule, correction and operation mappings plus enrollment/date uniqueness. Migration `20261001043143_AddUniversalStudentAttendance` preserves legacy identity and leaves unknown membership dates unknown. |
+| Integration | `StudentListAppService` and `DashboardStudentAttendanceSliceProvider` use canonical credit and provisional metrics. Student Leave approval remains explicit and never writes fabricated daily presence. |
+
+Daily/correction/leave-approval transactions use serializable units of work and map database concurrency conflicts to a reviewable business response.
+Daily entry persistence reads existing rows once per day and batches inserts/updates.
+Submitted snapshots pin historical policy and eligibility. Removed policy and schedule configuration no longer affects new attendance.
+Tenant filters remain enabled; historical paths are independently scoped rather than authorized through a student's current placement.
+
+## House Management ownership
+
+| Concern | Source under `src/` |
+| --- | --- |
+| Contracts | `ShikshaMitra.Application.Contracts/Students/Records/HouseManagement/` |
+| Scoped reads, assignment preview/commit and leadership commands | `ShikshaMitra.Application/Students/Records/HouseManagement/` |
+| Existing house catalogue and membership/leader invariants | `ShikshaMitra.Domain/Students/Records/Settings/`, `ShikshaMitra.Domain/Students/StudentEnrollments/` |
+| Independent division leader and EF mapping | `ShikshaMitra.Domain/TenantSettings/AcademicSetups/Divisions/Division.Leadership.cs`, `ShikshaMitra.EntityFrameworkCore/Students/Records/HouseManagementConfiguration.cs` |
+| Additive persistence migration | `ShikshaMitra.EntityFrameworkCore/Migrations/20261030111330_AddHouseManagement.cs`; nullable enrollment/leader references, revision counters, indexes and restrictive foreign keys |
+| HTTP boundary | `ShikshaMitra.HttpApi/Controllers/Student/Records/HouseManagementController.cs` |
+| Permission catalogue and visibility prerequisites | `ShikshaMitra.Domain.Shared/Constants/Permissions/SubmodulePermissions/Students/`, `ShikshaMitra.Domain.Shared/Security/Permissions/NavigationVisibilityPrerequisites.json` |
+
+The feature reuses the House Settings catalogue and scoped enrollment projection. It introduces no Groups dependency or automatic role-grant restoration. Frontend routes and cache wiring belong to [Student frontend docs](../../../../Shikshamitra-FE/docs/student/README.md).
+
+## Student Records ownership
+
+| Layer | Source and responsibility |
+|---|---|
+| Shared policy | `Domain.Shared/Students/StudentRecords/StudentRecordsPolicy.cs`: typed action/stage/condition, provisioning, masks, guardian access, document, and transition choices. Central permission partials remain the only permission catalogue. |
+| Published configuration | `Domain/Students/StudentRecords/`: draft configuration, immutable policy versions, structural validator, and effective resolver. Year-published policy precedes school-published policy; otherwise runtime uses the documented starter. |
+| API contract | `Application.Contracts/Students/Records/`: requests, paged results, state/capability DTOs; settings contracts remain under `Students/StudentRecords/`. |
+| Profile evidence and current custom data | `StudentRecordRegistrationReader` batches frozen Registration definitions/submissions for scoped activated journeys; `StudentRecordDetailsAppService` composes existing canonical section reads and visibility. `StudentRecordCustomDetailsService` resolves real form ancestry plus field code/type, validates definitions/rules server-side and joins the existing change pipeline. Returning cases join their committed enrollment by StudentEnrollmentId, preserving the enrollment's original provenance. |
+| Inline retained Registration form | `StudentRecordFormProjection` projects the full frozen schema with owning masks and field capabilities; `StudentRecordFormMapping` patches changed canonical bindings while preserving fields outside the form. `StudentRecordFormAppService` joins typed custom validation and canonical application into one serializable Applied `StudentRecordChange` audit. No new entity or migration; generic approval commands are unchanged. |
+| Access and governance | `Application/Students/Records/StudentRecordsActorService`, access service, enrollment scope, write guard, change application, and placement services preserve existing write APIs while governing enrolled/former records. Records checks the current tenant's active database identity even when a previously issued login remains valid; settings uses the same guard. |
+| Transitions | Focused Readiness, Options, Authority, Application, Correction, RenewalReadiness, RenewalCoordinator, ReturnCoordinator, AdmissionReturnService, and thin partial TransitionAppService separate source-owner evidence, authorization, lifecycle, and mapping. Internal coordinators disable remote exposure. |
+| History | Transition/batch/event/renewal/return-handoff entities retain policy and source snapshots. Target year/class/division projections are parsed once from immutable input for database scope filtering and paging. |
+| Owner boundary | Initial enrollment stays in Onboarding. Academic/Library/Transport source evidence is read only. `StudentTransitionFinanceClearanceReader` delegates to Finance's canonical collection ledger; renewal delegates to Onboarding's Finance readiness reader. `StudentRenewalPortalCoordinator` owns the account handoff for real annual renewals without fabricating an initial case. Returns call real Admissions commands. |
+| Persistence | `EntityFrameworkCore/Students/Records/` defines tenant-scoped unique request keys, policy version numbering, one active student/year renewal, correction uniqueness, indexes, restrictive relationships, and immutable snapshot payloads. Completed and cancelled renewal reviews remain separate history rows. |
+| Custom current values | Tenant/student-owned `StudentRecordCustomProfile` retains baseline submission, captured schema/source references and current typed JSON, with ABP audit/concurrency. `20261012120000_AddStudentRecordCustomProfiles` adds storage only; existing students derive a read-only baseline until an audited write. Rollback rejects dropping persisted corrections. |
+
+Transition application uses a serializable unit of work for each student and revalidates live approvals. The background scheduler invokes `StudentRecordTransitionApplication.ApplyAsRecordedActorAsync(id)` within the tenant; it processes Approved/Scheduled cases, while Exceptions require manual retry. A school may choose immediate roster removal on approved exits, even when the historical effective date is later.
+
+Scheduled change selection and change application share ABP `IClock`; the transition worker also uses that clock and the institution calendar. Workers poll every minute. Report generation checks the current Add permission, captured source authority and expiry again after workbook generation, before blob publication. Download requires current Reports.View and source View, so removing Add alone does not invalidate an already completed report.
+
+Both change and transition application classify raw or wrapped database SQLSTATE `40001` through the existing provider-neutral Onboarding conflict mapper. After rollback they persist `Students:Records:ConcurrencyConflict` in Change Conflict or Transition Exception. These states leave the automatic worker queue; transition recovery is an explicit staff retry, while a change uses a reviewed replacement request. Unrelated exceptions still propagate.
+
+Transition exception recording reloads the row after rollback and only marks Approved or Scheduled cases. If another worker has already committed Applied or AwaitingRenewal, the losing worker preserves that result and its history. Repeated automatic ticks select neither completed state.
+
+Renewal activation uses the same classifier after its serializable transaction is disposed. A concurrent activation conflict returns `Students:Records:ConcurrencyConflict` for an explicit refresh; it does not retry the command automatically or mark the winning renewal as failed. Unrelated failures retain their existing handling.
+
+`StudentRecordsEnrollmentScopeService.EnsureTargetPlacementAsync` validates the target tenant, academic year and complete class/division hierarchy using the existing precise division-scope query. Placement request/application and transition readiness share this check. Parent board/medium IDs populated from a narrow class assignment do not authorize sibling classes; explicit wildcard or exact division grants remain authoritative. The shared generic scope implementation is unchanged.
+
+Renewal activation creates an enrollment before Finance assignment, matching existing Onboarding ordering. Renewal then remains Provisioning until confirmed Finance/portal evidence exists. Governed permitted placement edits synchronize the active enrollment and renewal target. No records service creates arbitrary admission FKs or performs a fee reversal.
+
+`StudentOnboardingRollRuleReader` resolves the target academic path without fabricating an Admission or Onboarding case. A submitted annual transition freezes that owner rule in its extra properties. `StudentOnboardingRollNumberAllocator` serves both initial Onboarding and Records annual/return commands. Target roll validation observes school manual/automatic/both mode, starting number, class or division scope, and reason requirements, including outstanding onboarding/renewal/transition reservations. Both mode requires an explicit staff choice. Previewed automatic proposals are checked again during serializable submission; a changed proposal or competing serializable reservation requires a refreshed preview. Existing GR numbers stay permanent. Records promotion/return uses only the Records approval chain; initial Onboarding retains its own approval rules.
+
+Reviewed same-year ReuseProfile returns reactivate the existing inactive enrollment and preserve owner history. Cancelling an unactivated PendingChecklist renewal retains both case and transition audit. Provisioning permits school-authorized division/roll edits, but has no automated target-class recovery. Class changes with an immutable Finance assignment are blocked in ordinary Placement and same-year Return until a Finance-owned impact workflow exists; completion does not bypass this dependency. Migration `20261001021100_AddStudentRecordRenewalHistory` changes only the renewal index predicate and refuses a downgrade that cannot retain repeated reviews. Its target model derives from the previous generated Records migration and changes only this predicate, keeping separately developing Attendance models outside this migration.
+
+`StudentRecordAdmissionReturnService` orchestrates the frozen Records Status authorization through existing Admissions and Onboarding owners. Handoffs persist typed entry/application/inquiry/transition references, intake configuration/contact and source provenance; `ReturnHandoffId` remains in transition extra properties. Migration `20261001060643_AddStudentRecordAdmissionReturn` changes only the return-handoff table and transition source nullability. Its target model retains the preceding Attendance migration and changes only those two Records entities. Unique linked application/inquiry indexes apply only where TransitionId exists, preserving legacy duplicate handoffs. Legacy rows are not backfilled with invented approval authority. A used governed return or source-less historical return blocks downgrade; use a forward fix.
+
+Return provenance validation runs for ordinary Admissions finalization too. Return-specific access, policy, recorded authority, Offering setup, transition readiness and the repositories used only after a reviewed handoff use the existing ABP lazy provider. A new admission therefore avoids generating unrelated return-operation proxies. Their original calls remain on reviewed-return operations; tenant-scoped handoff lookup and rejection of a former Student without a valid handoff remain unconditional. This does not change authorization, transaction boundaries, service lifetimes or the admission flow.
+
+`StudentRecordAdmissionReturnClosureService` is an internal, non-remote coordinator called by the existing Admissions Decide and Onboarding Cancel owners. It joins their unit of work, validates tenant and exact handoff/transition/case identity, rejects activation, and appends one closure event. Replays cannot append duplicate closure events. Fresh Inquiry and DirectRegistration applicants reserve a unique unused future Student ID per journey; `ExistingStudentId` remains the permanent profile link, including after repeated rejected/cancelled returns. No new schema is required for closure.
+
+Onboarding activation maps optimistic database concurrency and wrapped SQLSTATE `40001` to its existing `Students.Onboarding.ConcurrencyConflict` response after disposing the serializable transaction. These conflicts bypass activation failure-state repair, preserving the committed competing activation/cancellation. Unrelated activation failures retain the existing repair flow. Cancellation remains in its owner transaction, including linked Records closure; an optimistic conflict rolls the entire command back.
+
+## Reserved Student identity and rollout
+
+`AdmissionApplicant.ReservedStudentId` is supplied by `AdmissionInquiryAppService` using the server GUID generator.
+`AdmissionIdentityConfiguration` requires the GUID, prohibits ordinary EF changes after save, and adds `UX_AdmissionApplicants_ReservedStudentId` plus a nonempty check constraint.
+There is no Student foreign key and no database-generated default.
+`AdmissionApplicationDecisionService` uses this ID only on its new-Student branch; existing-Student selection and actual application links keep their current meanings.
+The Domain `IAdmissionFinalizationConflictClassifier` contract keeps provider-specific exception handling inside EF's `AdmissionFinalizationConflictClassifier`.
+Only Student-primary-key collisions, relevant onboarding unique constraints and optimistic concurrency errors are translated; tenant filters remain enabled and unrelated failures propagate.
+
+Migration `src/ShikshaMitra.EntityFrameworkCore/Migrations/20260924103013_AddAdmissionApplicantReservedStudentId.cs` adds the column nullable, backfills every applicant (including deleted and already-linked records), then enforces required/nonempty/global uniqueness.
+Existing Student IDs, actual applicant/application links and historical data are not rewritten; backfilled reservations on already-linked applicants remain unused.
+Review generated SQL and rehearse against an isolated PostgreSQL database before rollout.
+Deployment requires admission writes to stop while the migration and matching backend binaries are installed: older binaries cannot insert applicants into the new required column without a default.
+Do not roll back to old binaries while writes continue; use a coordinated recovery window or a separately designed expand/contract release if zero-downtime deployment is required.
+Do not drop or regenerate reservations once they are in use, and never delete Students as a rollback shortcut.
 
 ## Offering implementation map
 
@@ -22,6 +167,7 @@ TL;DR: Admissions remains inside the Student modular-monolith boundary and separ
 | Hierarchy and readiness validation | `src/ShikshaMitra.Application/Students/StudentEnrollments/Admissions/AdmissionOfferingConfigurationValidator.cs` |
 | Scoped projections | `src/ShikshaMitra.Application/Students/StudentEnrollments/Admissions/AdmissionOfferingReadService.cs` |
 | Commands and concurrency | `src/ShikshaMitra.Application/Students/StudentEnrollments/Admissions/AdmissionOfferingCommandService.cs` |
+| Setup immutability and first-use serialization | `AdmissionOffering.EnsureConfigurationReferencesUnchanged`, Application `AdmissionOfferingConfigurationUsageService`, Domain `IAdmissionOfferingConfigurationLock`, and EF `EfCoreAdmissionOfferingConfigurationLock` |
 | Permission facade | `src/ShikshaMitra.Application/Students/StudentEnrollments/Admissions/AdmissionOfferingAppService.cs` |
 | Inquiry and application guard | `src/ShikshaMitra.Application/Students/StudentEnrollments/Admissions/AdmissionOfferingRuntimeService.cs` |
 | EF mapping and indexes | `src/ShikshaMitra.EntityFrameworkCore/Students/StudentEnrollments/Admissions/AdmissionOfferingConfiguration.cs` |
@@ -37,6 +183,12 @@ The frontend owns interaction state only and cannot replace backend authorizatio
 
 ## Workflow implementation map
 
+`AdmissionApplicationDecisionService.ApproveAndFinalizeAsync` composes the existing decision, workflow runtime and finalization owners inside `AdmissionApplicationAppService`'s transactional unit of work. It reuses the loaded finalization context and duplicate candidates, validates the current terminal Approval definition without changing preview state, then lets `AdmissionApplicationWorkflowService.AdvanceAsync` enforce stage completion and routing. The finalization core keeps document, seat and Finance integration contracts; it does not create operational enrollment. The combined command validates saved primary contact but records no guardian-contact verification timestamp. `AdmissionApplicationWorkflowReadService` projects `isTerminalStage` from its already-loaded pinned definitions so clients can distinguish final decisions from retained routed Approval stages without another query.
+
+Application/workflow opening resolves the core read services without constructing unrelated command graphs. `AdmissionApplicationAppService` resolves its optional Form, Inquiry-management and command helpers through ABP's existing lazy service provider when the owning action runs. `AdmissionApplicationFormService` resolves the workflow command service only at the existing submit handoff. This changes dependency activation timing, not API contracts, permission/scope checks, service lifetimes, unit-of-work boundaries or workflow execution.
+
+`AdmissionApplicationWorkflowService` also resolves stage-specific runtimes lazily. Terminal Approval still runs the original state, completion and skip/override guards, completion hooks, workflow completion and audit helpers; it omits unused transition/fact loading because that stage cannot select an outgoing route and records null assessed values. Nonterminal Approval and terminal stages carrying assessment/document/other evidence retain their existing routing and evidence path.
+
 | Concern | Source |
 |---|---|
 | Definition, stage, and transition aggregates | `src/ShikshaMitra.Domain/Students/StudentEnrollments/Admissions/AdmissionWorkflowDefinition.cs`, `src/ShikshaMitra.Domain/Students/StudentEnrollments/Admissions/AdmissionWorkflowStageDefinition.cs`, and `src/ShikshaMitra.Domain/Students/StudentEnrollments/Admissions/AdmissionWorkflowTransitionDefinition.cs` |
@@ -50,6 +202,15 @@ The frontend owns interaction state only and cannot replace backend authorizatio
 | HTTP routes | `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/Admissions/AdmissionWorkflowsController.cs` and `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/Admissions/AdmissionApplicationsController.cs` |
 
 Form runtime persistence is separated from configuration: `AdmissionFormInstance` pins a published definition/version, `AdmissionFormFieldValue` stores mutable values, `AdmissionFormSubmission` stores immutable submitted snapshots, and `AdmissionFormChangeHistory` records lifecycle changes. Form definition changes never mutate an existing instance.
+
+| Form policy concern | Owning source |
+|---|---|
+| Versioned core defaults, protected structure, guaranteed source identity and parent email | `Application/Students/StudentEnrollments/Admissions/AdmissionCoreFieldPolicy.cs`; `AdmissionFormAppService` owns create/update/clone/version/publication orchestration and `AdmissionFormExperienceMetadata` persists the marker. |
+| Source-owned Registration composition and preview | `AdmissionFormInheritanceService.cs` retains the persisted policy marker and checks guaranteed DOB/Gender; `Domain/Students/StudentEnrollments/Admissions/AdmissionFormInheritanceComposer.cs` deduplicates complete academic groups and rewrites source dependency codes without altering source definitions. |
+| Scoped academic choices and public bounds | `AdmissionFormDataSourceRegistry.cs` maps `StudentDirectoryOptionsService` hierarchy results; `AdmissionAcademicFormOptions.cs` owns compatibility/serialization; `AdmissionInquiryAcademicOptionsService.cs` bounds anonymous choices to the authorized offering. |
+| Readiness before activation | `AdmissionJourneyIdentityConfiguration.cs` owns reachable identity rules; `AdmissionOfferingConfigurationValidator.cs` applies them to activation/new configuration; `AdmissionOfferingReadService.cs` uses activation validation for inactive rows and existing runtime validation for active rows. |
+
+Application paths in this table are under `src/ShikshaMitra.Application/Students/StudentEnrollments/Admissions/` unless their layer is explicitly named.
 
 Draft graph updates synchronize existing child rows by identifier, insert new rows, and delete removed transitions before removed stages. This preserves required EF relationships and prevents conceptual-null failures while a draft is edited.
 
@@ -67,6 +228,12 @@ Draft graph updates synchronize existing child rows by identifier, insert new ro
 | Additive migration | `src/ShikshaMitra.EntityFrameworkCore/Migrations/20260910070250_AddAdmissionAssessments.cs` |
 
 Assessment sessions and attempts are tenant-owned audited aggregates with optimistic concurrency stamps.
+
+Subject-wise attempts retain a resolved class profile in `PolicySnapshotJson` and partial/final scores in nullable `SubjectScoresJson`.
+`AdmissionAssessmentConfigurationService` validates school/class/subject references before publication; `AdmissionAssessmentCatalogService` supplies Admissions-owned scoped choices.
+`AdmissionAssessmentSubjectUsageService` batches live workflow references so Academic Subject deletion and usage reporting include Admissions without changing historical snapshots.
+Migration `20261021100000_AddAdmissionAssessmentSubjectScores` adds the nullable scores column and expands workflow stage configuration storage to 64,000 characters; domain/DTO validation keeps other stage types at 8,000.
+No backfill or rewrite of existing attempts is required.
 Attempt numbers are unique within a stage instance and preserve cancelled attempts as history.
 Foreign keys to offerings, workflow stages, runtime stages, applications, and sessions use restrictive deletion.
 The managed runtime checks application-stage ownership and academic scope, including authorized skip/override paths.
@@ -114,6 +281,7 @@ Workflow advancement overlays backend-owned assessment facts over form values an
 
 Management is tenant scoped and linked restrictively to its Inquiry and pinned stage definition.
 The unique Inquiry index prevents two active management records for one Inquiry.
+Inquiry detail updates reuse the form, field/section definitions and related identities already loaded by `AdmissionInquiryFormEditService` to construct their response. This context belongs to that update only; it is not a shared cache. `AdmissionInquiryAppService` retains the original post-save scoped Inquiry read and live sibling visibility checks, and standalone detail reads keep their existing authorization path.
 Follow-up queue indexes cover inquiry/status/due and assigned counsellor/status/due access paths.
 Migration `20260911045603_AddAdmissionInquiryManagement` adds only the management and follow-up tables with supporting indexes and restrictive foreign keys.
 
@@ -188,7 +356,7 @@ The main application detail exposes Review decision capabilities so existing dec
 
 `AdmissionFormStagePolicy` defines the opt-in versioned behavior while the existing `AdmissionFormDefinition`, `AdmissionFormInstance`, immutable submissions, and change history remain the source of truth. `AdmissionFormStageAccessService` resolves a scope-safe pinned context and enforces that the stage form equals the frozen application form. Read, command, and runtime services separately compose summaries, audited verification/correction commands, submit gates, and workflow completion gates.
 
-Section verification is reconstructed from immutable form change history. A correction marker makes every earlier verification stale, so no mutable verification table or migration is required. Writes serialize through the parent application concurrency stamp and append both form history and admission activity. The Offering validator checks workflow/form compatibility before activation and again before new applications start.
+Separate section verification is retired. `AdmissionFormStageAccessService` normalizes the effective policy to disable verification and clear its section-code list, including for pinned legacy applications; stored JSON and immutable history remain unchanged. New stage configuration normalization also clears the retired flags. Historical verification can still be reconstructed from change history, without a migration. Correction writes retain parent-application concurrency, form history and admission activity. The Offering validator checks workflow/form compatibility before activation and again before new applications start.
 
 ## Managed Seat ownership
 
@@ -202,3 +370,74 @@ Section verification is reconstructed from immutable form change history. A corr
 | Tenant tables, unique ownership and operational indexes | EF `AdmissionSeatConfiguration.cs` |
 
 The pool concurrency stamp serializes changes to shared offering capacity, while the application and reservation stamps protect applicant state. Filtered unique indexes prevent duplicate live pools and duplicate application-stage allocations. The additive `20260911084131_AddManagedAdmissionSeats` migration creates only the pool and reservation tables, indexes, and restrictive ownership links.
+## App-login profile email ownership
+
+| Concern | Source |
+|---|---|
+| Staff command and saved-recipient evidence | `src/ShikshaMitra.Application/Students/StudentEnrollments/Onboarding/StudentOnboardingAppService.ProfileEmails.cs`, `StudentCredentialsRecipientReader.cs` in that directory |
+| Email-only domain mutation and explicit Student provenance | `src/ShikshaMitra.Domain/Students/Portal/Services/StudentPortalProfileEmail.cs` |
+| Existing-account owner verification and transactional shared-child update | `src/ShikshaMitra.Application/Students/Portal/StudentPortalEmailChangeService.cs`, `StudentPortalEmailChangeState.cs` and `StudentPortalEmailChangeJob.cs` in that directory |
+| Public token boundary | `src/ShikshaMitra.Application.Contracts/Students/Portal/IStudentPortalEmailChangeAppService.cs`, `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/Onboarding/StudentPortalEmailController.cs` |
+
+The expiring non-secret request lives in the existing identity's audited ExtraProperties; the existing ABP job store persists its exact tenant/user/request IDs.
+Credentials use `GetCredentialsProfileAsync` for minimal untracked contact/family reads; only an explicit email write requests tracking, preventing read-time graph changes from invalidating its own version checks.
+Protected owner tokens are generated at delivery, never returned to staff or persisted in job arguments.
+Verified-profile changes refresh existing parent-selection email guards without replacing account links or submitted Admission evidence.
+Fresh reserved Student IDs participate in scoped sibling-family profile matching, so current saved parent email wins over historical Admission answers.
+Existing-parent link insertion advances identity optimistic concurrency to fence simultaneous verification changes without altering password/security state.
+
+## Roll-number batch ownership
+
+| Layer | Source |
+|---|---|
+| Shared ordering and immutable batch | `src/ShikshaMitra.Domain/Students/StudentEnrollments/Onboarding/Services/StudentRollOrdering.cs`, `src/ShikshaMitra.Domain/Students/StudentEnrollments/Onboarding/Aggregates/StudentRollNumberBatch.cs` |
+| Cohort, authorization and commands | `src/ShikshaMitra.Application/Students/StudentEnrollments/Onboarding/StudentRollRosterReader.cs`, `StudentRollNumberBatchAppService.cs`, `StudentRollNumberBatchAppService.Commands.cs`, `StudentRollBatchAccessService.cs`, `StudentRollBatchApplication.cs` in that directory |
+| Contract and explicit HTTP boundary | `src/ShikshaMitra.Application.Contracts/Students/Enrollments/Onboarding/StudentRollNumberBatchDtos.cs`, `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/Onboarding/StudentRollNumberBatchesController.cs` |
+| Persistence | `src/ShikshaMitra.EntityFrameworkCore/Students/StudentEnrollments/Onboarding/StudentRollNumberBatchConfiguration.cs`, the Student-only batch table migration and existing Division ExtraProperties cursor |
+
+Batch commands use a new Serializable unit of work, frozen stamps/fingerprints, optimistic division-cursor concurrency and unique submission keys.
+Current-page Assign Missing persists validated case targets in existing batch ExtraProperties; no new schema is needed, and the complete division still supplies reservation and freshness fingerprints.
+Renumber stages only changed active slots to null inside that transaction, then installs the full mapping under the immediate unique active-division index.
+Dated placement history is captured before staging; enrollments, Student mirrors, unfinished linked cases, audit and cursor commit together.
+Finance mappings and commands are not modified.
+
+## Student dashboard ownership
+
+| Layer | Source |
+|---|---|
+| HTTP | `src/ShikshaMitra.HttpApi/Controllers/Student/StudentModuleDashboardController.cs` |
+| Context, role priorities, destination grants | `src/ShikshaMitra.Application/Students/Dashboard/StudentModuleDashboardAppService.cs`, `StudentModuleDashboardCatalog.cs` |
+| SQL summaries | `StudentModuleDashboardRecordsReader.cs`, `StudentModuleDashboardAdmissionsReader.cs`, `StudentModuleDashboardAttendanceReader.cs` in that directory |
+| Contract/errors | `src/ShikshaMitra.Application.Contracts/Students/Dashboard/`, `src/ShikshaMitra.Domain.Shared/Students/Dashboard/` |
+
+Readers reuse Records enrollment scope, Admission inquiry/application scope, exact division scope and Portal association services. Counts/grouping/projections execute in SQL; full populations are not materialized. Queries run sequentially on the request DbContext. The frontend independently loads authorized sections, so one failed section can be retried alone. There is no server aggregate cache that could cross identity/scope boundaries and no new persistence schema. Existing Reporting dashboard providers remain separate for compatible consumers.
+
+## Parent Registration capability ownership
+
+| Concern | Owner |
+|---|---|
+| Durable expiring grant, recipient snapshot, operations and proposals | `Domain/Students/StudentEnrollments/Admissions/Aggregates/AdmissionParentRegistration.cs` |
+| Saved sender/recipient/tenant/scope and snapshot validation | `Application/Students/StudentEnrollments/Admissions/AdmissionParentRegistrationAccess.cs` and `AdmissionParentRegistrationData.cs` |
+| Staff send/revoke/takeover/correction/apply | `AdmissionParentRegistrationAppService.cs` and its command partial |
+| Saved applicant-specific parent email and compatible draft-answer synchronization | `AdmissionParentRegistrationAppService.Email.cs` and `AdmissionFamilyContactCapture.cs`; shared Guardian and Identity owners remain separate |
+| Safe frozen schema, canonical form validation and known document requirements | `AdmissionParentRegistrationSchema.cs`, `AdmissionParentRegistrationForms.cs`, `AdmissionParentRegistrationDocuments.cs` |
+| Parent reads/saves/hand-in/private files | `AdmissionParentRegistrationPublicAppService.cs` and its document partial |
+| Canonical draft mapping and audited proposal application | Existing `AdmissionApplicationFormService` parent/correction adapters |
+| Delivery | `AdmissionParentRegistrationDeliveryJob.cs`, `CommunicationAppService.ParentRegistration.cs` and `SmtpCommunicationChannelGateway`; the onboarding ABP sender is reused only for the private transactional no-Email-configuration fallback |
+| HTTP and persistence | Parent Registration controllers and `AdmissionParentRegistrationConfiguration.cs` |
+
+Paths without a layer prefix in this table are under `Application/Students/StudentEnrollments/Admissions/`, except the explicitly named Communication partial. The public capability is separate from staff identity; evaluating current sender authority must not attribute parent writes to that sender. Existing document owners retain file validation, revisions, review and Student linkage. Safe frontend rendering remains owned by the [Student frontend](../../../../Shikshamitra-FE/docs/student/clients.md#parent-registration-clients).
+
+## Admission intake without capacity
+
+AdmissionInquiryAvailabilityService evaluates offering configuration, dates and entry mode without room allocations, occupancy totals or Seat pools. AdmissionOfferingReadService reuses the evaluated availability without capacity queries; Offering contracts omit classCapacity. The retired admission room-capacity controller, application/read services, calculator and DTOs are removed. AdmissionClassRoomAllocation, its EF mapping and existing migrations remain compatibility-only persistence; no runtime service reads or writes them. StudentOnboardingAppService remains the owner of division placement limits.
+
+## Student setup guide ownership
+
+The guide lives under `Students/Setup/` in Domain.Shared, Domain, Application.Contracts and Application, with the explicit `HttpApi/Controllers/Student/Setup/StudentSetupController.cs` boundary.
+`StudentSetupVisit` stores `StudentConfigurationFirstVisitV1` on Tenant ExtraProperties, and `StudentSetupProgress` stores `StudentSetupGuideProgressV1` on AcademicYear ExtraProperties.
+Both documents validate stored versions and shape; optimistic concurrency protects progress and first-visit retries reload a fresh unit of work.
+`StudentSetupAccess` evaluates distinct capability names through the existing batch permission checker. Visit status and welcome access check only the distinct View capabilities; the full guide batches View/Add and still requires View before exposing `canManage`. Identity validation, tenant filtering, explicit user denials and the saved visit marker remain authoritative; permission results are not cached across requests.
+The configuration reader reuses Student scope/access owners, scoped Admission Offering queries, the Records policy resolver, and the Onboarding rule resolver.
+Queries run sequentially under existing tenant filters and exact View checks; hidden configuration is never queried.
+There is no migration or configuration mutation through this API.

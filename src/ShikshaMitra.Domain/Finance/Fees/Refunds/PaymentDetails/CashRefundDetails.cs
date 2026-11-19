@@ -23,10 +23,11 @@ public sealed class CashRefundDetails : RefundPaymentDetails
         Remarks    = remarks;
     }
 
-    protected override IEnumerable<object?> GetAtomicValues()
+    // ABP equality atoms intentionally include null for absent optional values.
+    protected override IEnumerable<object> GetAtomicValues()
     {
         yield return RefundDate;
         yield return ReceivedBy;
-        yield return Remarks;
+        yield return Remarks!;
     }
 }

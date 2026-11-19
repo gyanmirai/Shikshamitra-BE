@@ -27,32 +27,87 @@ using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Claims;
+using Volo.Abp.Timing;
 using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.Finance.FeeStructureAssignment;
 
-[Collection(ApiTestCollection.Name)]
+[Collection(FinanceReceiptApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.Finance)]
-public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
+public partial class StudentFeeAssignmentApi_Tests(FinanceReceiptApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private const string BaseUrl = "/api/student-fee-structure";
 
+	[Theory]
+	[InlineData("Finance.Fees.StructureAssign.View")]
+	[InlineData("Finance.Fees.StructureAssign.Add")]
+	public async Task Should_Deny_Policy_Edit_And_Options_Without_Override_Permission(string permission)
+	{
+		using var restricted = Factory.CreateClient();
+		restricted.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "accountant");
+		restricted.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, permission);
+		var options = await restricted.GetAsync($"{BaseUrl}/policy-options?studentId={Guid.NewGuid()}&academicYearId={Factory.SeededAcademicYearId}");
+		options.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		var edit = await restricted.PutAsJsonAsync($"{BaseUrl}/student/{Guid.NewGuid()}/policies", new AssignmentPolicyUpdateDto {
+			AcademicYearId = Factory.SeededAcademicYearId, Reason = "Synthetic policy edit", ConcurrencyStamp = "synthetic" });
+		edit.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	public async Task Should_Edit_Assigned_Policies_With_Concurrency_And_Preserve_Obligations()
+	{
+		var (input, _) = await CreateFixtureAsync(useCurrentAcademicContext: true);
+		var committed = await PreviewAndAssignAsync(input);
+		var read = await GetAndReadAsync<StudentFeeStructureResponseDto>($"{BaseUrl}/student/{input.StudentId}?academicYearId={input.AcademicYearId}");
+		var options = await GetAndReadAsync<System.Collections.Generic.List<AssignmentPolicyDto>>($"{BaseUrl}/policy-options?studentId={input.StudentId}&academicYearId={input.AcademicYearId}");
+		options.ShouldContain(p => p.Family == "collection");
+		var update = new AssignmentPolicyUpdateDto { AcademicYearId = input.AcademicYearId, ConcurrencyStamp = read.ConcurrencyStamp, Reason = "Synthetic unchanged selection",
+			Policies = new[] { "concession", "refund", "collection" }.Select(family => new AssignmentPolicySelectionDto {
+				Family = family, VersionId = read.Assignment!.Policies.FirstOrDefault(p => p.Family == family)?.VersionId }).ToList() };
+		var unsupported = new AssignmentPolicyUpdateDto { AcademicYearId = input.AcademicYearId, ConcurrencyStamp = read.ConcurrencyStamp,
+			Reason = "Synthetic unsupported proration selection", Policies = update.Policies.Where(p => p.Family != "refund")
+				.Append(new AssignmentPolicySelectionDto { Family = "proration" }).ToList() };
+		unsupported.Policies.Count.ShouldBe(3, "The rejection must exercise the unsupported family, not the maximum count.");
+		var rejected = await Client.PutAsJsonAsync($"{BaseUrl}/student/{input.StudentId}/policies", unsupported, JsonOptions);
+		rejected.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await rejected.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("errorCode").GetString()
+			.ShouldBe(AssignmentErrorCodes.InvalidInput);
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/student/{input.StudentId}/policies", update, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var saved = await response.Content.ReadFromJsonAsync<StudentFeeStructureResponseDto>(JsonOptions);
+		saved!.StudentFeeStructureId.ShouldBe(committed.AssignmentId);
+		saved.Assignment!.ProratedTotal.ShouldBe(committed.Assignment.ProratedTotal);
+		saved.Assignment.Lines.Select(l => l.DueFeeId).ShouldBe(read.Assignment!.Lines.Select(l => l.DueFeeId));
+		update.ConcurrencyStamp = "stale";
+		var conflict = await Client.PutAsJsonAsync($"{BaseUrl}/student/{input.StudentId}/policies", update, JsonOptions);
+		conflict.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
 	// Enrollment is a synthetic prerequisite, not a call to the removed registration API.
 	// Publication, preview, assignment and collection reads use real HTTP endpoints.
-	private async Task<(AssignStudentFeeStructureDto Input, Guid[] Heads)> CreateFixtureAsync(bool optionalHeads = false)
+	private async Task<(AssignStudentFeeStructureDto Input, Guid[] Heads)> CreateFixtureAsync(bool optionalHeads = false,
+		bool useCurrentAcademicContext = false, bool withRefundPolicy = false, bool variableOptionalHead = false)
 	{
 		var heads = new Guid[optionalHeads ? 3 : 1];
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 		var userId = Guid.Parse(TestAuthHandler.TestUserId);
 		Guid studentId;
 		Guid metadataId;
-		var candidate = new StandardFeeStructureRequest { Name = $"Synthetic assignment {Guid.NewGuid():N}" };
+		var academicYearId = Factory.SeededAcademicYearId;
+		var boardId = Factory.SeededBoardId;
+		var mediumId = Factory.SeededMediumId;
+		var stageId = Factory.SeededMediumStageId;
+		var standardId = Factory.SeededStandardId;
+		var candidate = new StandardFeeStructureRequest { Name = $"Assign-{Guid.NewGuid():N}" };
 		using (var services = Factory.Services.CreateScope())
 		using (services.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
 		using (services.ServiceProvider.GetRequiredService<ICurrentPrincipalAccessor>().Change(
@@ -60,7 +115,24 @@ public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) :
 		using (var uow = services.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
 		{
 			var provider = services.ServiceProvider;
-			var year = await provider.GetRequiredService<IRepository<AcademicYear, Guid>>().GetAsync(Factory.SeededAcademicYearId);
+			if (useCurrentAcademicContext)
+			{
+				// Policy options require an effective version; the shared fixture can pick a past/future year.
+				var today = provider.GetRequiredService<IClock>().Now.Date;
+				var db = await provider.GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+				var context = await (from academicYear in db.Set<AcademicYear>().AsNoTracking()
+					join board in db.Set<EducationBoard>() on academicYear.Id equals board.AcademicYearId
+					join medium in db.Set<EducationMedium>() on board.Id equals medium.EducationBoardId
+					join stage in db.Set<EducationMediumStage>() on medium.Id equals stage.EducationMediumId
+					join standard in db.Set<Standard>() on stage.Id equals standard.EducationMediumStageId
+					where academicYear.StartDate <= today && academicYear.EndDate >= today
+					orderby standard.Id
+					select new { YearId = academicYear.Id, BoardId = board.Id, MediumId = medium.Id, StageId = stage.Id, StandardId = standard.Id })
+					.FirstAsync();
+				academicYearId = context.YearId; boardId = context.BoardId; mediumId = context.MediumId;
+				stageId = context.StageId; standardId = context.StandardId;
+			}
+			var year = await provider.GetRequiredService<IRepository<AcademicYear, Guid>>().GetAsync(academicYearId);
 			var account = new AccountHead(Guid.NewGuid(), tenantId, year.Id, candidate.Name, AccountHeadType.Income, null, null);
 			await provider.GetRequiredService<IRepository<AccountHead, Guid>>().InsertAsync(account, autoSave: true);
 			var income = new TransactionCategory(Guid.NewGuid(), tenantId, year.Id, TransactionType.Income,
@@ -75,15 +147,15 @@ public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) :
 				heads[i] = head.Id;
 			}
 			var student = new Student(Guid.NewGuid(), tenantId, "Synthetic", null, "Assignment", year.Id,
-				Factory.SeededBoardId, Factory.SeededMediumId, Factory.SeededMediumStageId, Factory.SeededStandardId,
+				boardId, mediumId, stageId, standardId,
 				status: StudentLifeCycleStatusEnum.Enrolled);
 			await provider.GetRequiredService<IRepository<Student, Guid>>().InsertAsync(student, autoSave: true);
 			studentId = student.Id;
-			var metadata = new FeeStructureMetadata(Guid.NewGuid(), tenantId, year.Id, Factory.SeededBoardId,
-				Factory.SeededMediumId, null, candidate.Name);
+			var metadata = new FeeStructureMetadata(Guid.NewGuid(), tenantId, year.Id, boardId,
+				mediumId, null, candidate.Name);
 			await provider.GetRequiredService<IRepository<FeeStructureMetadata, Guid>>().InsertAsync(metadata, autoSave: true);
 			metadataId = metadata.Id;
-			var term = new PaymentTerm(Guid.NewGuid(), tenantId, year.Id, Factory.SeededBoardId, candidate.Name,
+			var term = new PaymentTerm(Guid.NewGuid(), tenantId, year.Id, boardId, candidate.Name,
 				$"T-{Guid.NewGuid():N}"[..16], null, false, HolidayShiftingMethod.None, DemandGenerationRule.OnDueDate, null, InitialDemandStatus.Draft);
 			var version = new PaymentTermVersion(Guid.NewGuid(), tenantId, term.Id, 1, PaymentTermVersionStatus.Draft,
 				HolidayShiftingMethod.None, DemandGenerationRule.OnDueDate, null, null, null);
@@ -92,8 +164,8 @@ public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) :
 			version.Publish(year.StartDate, userId);
 			term.AddVersion(version);
 			await provider.GetRequiredService<IRepository<PaymentTerm, Guid>>().InsertAsync(term, autoSave: true);
-			var book = new ReceiptBook(Guid.NewGuid(), tenantId, year.Id, Factory.SeededBoardId, Factory.SeededMediumId,
-				Factory.SeededMediumStageId, candidate.Name, $"B-{Guid.NewGuid():N}"[..16], "", 1, 99999, "");
+			var book = new ReceiptBook(Guid.NewGuid(), tenantId, year.Id, boardId, mediumId,
+				stageId, candidate.Name, $"B-{Guid.NewGuid():N}"[..16], "", 1, 99999, "");
 			await provider.GetRequiredService<IRepository<ReceiptBook, Guid>>().InsertAsync(book, autoSave: true);
 			candidate.ReceiptBookId = book.Id;
 			var policy = await provider.GetRequiredService<ICollectionPolicyAppService>().CreateAsync(new CreateUpdateCollectionPolicyDto
@@ -103,21 +175,34 @@ public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) :
 				LateFeeType = "PerDay", PercentageBase = "OutstandingAmount", CompoundFrequency = "Daily", RoundingMethod = "None"
 			});
 			candidate.CollectionPolicyId = policy.Id;
+			if (withRefundPolicy)
+			{
+				var expenseHead = new AccountHead(Guid.NewGuid(), tenantId, year.Id, candidate.Name + " Refund", AccountHeadType.Expense, null, null);
+				await provider.GetRequiredService<IRepository<AccountHead, Guid>>().InsertAsync(expenseHead, true);
+				var expense = new TransactionCategory(Guid.NewGuid(), tenantId, year.Id, TransactionType.Expense,
+					candidate.Name + " Refund", null, [], true, $"E-{Guid.NewGuid():N}"[..16], expenseHead.Id, DateTimeOffset.UtcNow.AddDays(-1), null);
+				await provider.GetRequiredService<IRepository<TransactionCategory, Guid>>().InsertAsync(expense, true);
+				var refund = await provider.GetRequiredService<IRefundPolicyAppService>().CreateAsync(new CreateUpdateRefundPolicyDto {
+					AcademicYearId = year.Id, PolicyName = candidate.Name + " Refund", PolicyCode = $"R-{Guid.NewGuid():N}"[..16],
+					Status = "Active", FeeHeadScope = "AllFeeHeads", ExpenseCategoryId = expense.Id,
+					AllowedPayoutMethods = ["Cash"], RoundingMethod = "None" });
+				candidate.RefundPolicyId = refund.Id;
+			}
 			for (var i = 0; i < heads.Length; i++)
 				candidate.FeeHeads.Add(new FeeHeadAssignmentRequest
 				{
-					FeeHeadId = heads[i], Amount = i == 0 ? 12_000m : i == 1 ? 6_000m : 2_000m,
-					IsOptional = i > 0, IsOneTime = i == 2,
+					FeeHeadId = heads[i], Amount = i == 2 && variableOptionalHead ? (decimal?)null : i == 0 ? 12_000m : i == 1 ? 6_000m : 2_000m,
+					IsOptional = i > 0, IsOneTime = i == 2 && !variableOptionalHead, IsVariable = i == 2 && variableOptionalHead,
 					PayableMonth = (MonthEnum)year.StartDate.Month, PayableYear = year.StartDate.Year,
 					PaymentTermId = term.Id, PaymentTermVersionId = version.Id
 				});
 			await uow.CompleteAsync();
 		}
 		var draft = await PostAndReadAsync<FeeStructureCreateResponse>($"/api/fee-structures?feeStructureMetadataId={metadataId}",
-			new StandardFeeStructureSaveRequest { StandardId = Factory.SeededStandardId, StandardFeeStructures = candidate });
+			new StandardFeeStructureSaveRequest { StandardId = standardId, StandardFeeStructures = candidate });
 		var published = await PostAndReadAsync<FeeStructureCreateResponse>($"/api/fee-structures/{draft.Id}/publish",
 			new FeeStructurePublishRequest { ConcurrencyStamp = draft.ConcurrencyStamp });
-		return (new AssignStudentFeeStructureDto { StudentId = studentId, AcademicYearId = Factory.SeededAcademicYearId,
+		return (new AssignStudentFeeStructureDto { StudentId = studentId, AcademicYearId = academicYearId,
 			StandardFeeStructureId = published.Id }, heads);
 	}
 
@@ -221,21 +306,23 @@ public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) :
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Assign_Custom_Optional_Annual_And_OneTime_Amounts()
+	public async Task Should_Reject_Fixed_Fee_Changes_And_Assign_Configured_Amounts()
 	{
 		var (input, heads) = await CreateFixtureAsync(optionalHeads: true);
 		input.SelectedOptionalFeeHeadIds = [heads[1], heads[2]];
-		input.OverrideReason = "Synthetic approved total amount overrides";
 		input.FeeHeadDetails = [new() { FeeHeadId = heads[1], Amount = 1500m }, new() { FeeHeadId = heads[2], Amount = 2500m }];
+		var changed = await Client.PostAsJsonAsync($"{BaseUrl}/preview", input, JsonOptions);
+		changed.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		input.FeeHeadDetails = [new() { FeeHeadId = heads[1], Amount = 6000m }, new() { FeeHeadId = heads[2], Amount = 2000m }];
 		await PreviewAndAssignAsync(input);
 		var result = await GetAndReadAsync<StudentFeeStructureResponseDto>($"{BaseUrl}/student/{input.StudentId}?academicYearId={input.AcademicYearId}");
-		result.FeeHeads.Single(x => x.FeeHeadId == heads[1]).SelectedAmount.ShouldBe(1500m);
-		result.FeeHeads.Single(x => x.FeeHeadId == heads[2]).SelectedAmount.ShouldBe(2500m);
+		result.FeeHeads.Single(x => x.FeeHeadId == heads[1]).SelectedAmount.ShouldBe(6000m);
+		result.FeeHeads.Single(x => x.FeeHeadId == heads[2]).SelectedAmount.ShouldBe(2000m);
 		result.Assignment.ShouldNotBeNull();
-		result.Assignment.Lines.Where(x => x.FeeHeadId == heads[1]).Sum(x => x.ProratedAmount).ShouldBe(1500m);
-		result.Assignment.Lines.Where(x => x.FeeHeadId == heads[2]).Sum(x => x.ProratedAmount).ShouldBe(2500m);
+		result.Assignment.Lines.Where(x => x.FeeHeadId == heads[1]).Sum(x => x.ProratedAmount).ShouldBe(6000m);
+		result.Assignment.Lines.Where(x => x.FeeHeadId == heads[2]).Sum(x => x.ProratedAmount).ShouldBe(2000m);
 		var form = await GetAndReadAsync<FeeCollectFormDto>($"/api/fee-collections/{input.StudentId}/collect-form?academicYearId={input.AcademicYearId}");
-		form.Summary.TotalFee.ShouldBe(16_000d, "Recurring overrides are annual totals, not unapproved per-month replacements.");
+		form.Summary.TotalFee.ShouldBe(20_000d);
 	}
 
 	[Fact]

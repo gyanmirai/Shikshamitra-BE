@@ -20,10 +20,10 @@ public class FeeStructureMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? Name { get; private set; }
 
 	// Navigation Properties
-	public AcademicYear AcademicYear { get; private set; }
-	public EducationBoard AcademicBoard { get; private set; }
-	public EducationMedium AcademicMedium { get; private set; }
-	public ReceiptBook ReceiptBook { get; private set; }
+	public AcademicYear? AcademicYear { get; private set; }
+	public EducationBoard? AcademicBoard { get; private set; }
+	public EducationMedium? AcademicMedium { get; private set; }
+	public ReceiptBook? ReceiptBook { get; private set; }
 
 	protected FeeStructureMetadata()
 	{

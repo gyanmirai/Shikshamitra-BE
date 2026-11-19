@@ -72,8 +72,11 @@ public class CollectFeeInput
     public string IdempotencyKey { get; set; } = string.Empty;
 
     /// <summary>Unique identifier of the student paying fees.</summary>
-    [Required]
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+
+	/// <summary>Resolved by the admission collection service, never accepted from JSON callers.</summary>
+	[JsonIgnore]
+	public Guid? FinanceFeeAccountId { get; set; }
 
     /// <summary>Academic year for which payment is being made.</summary>
     [Required]
@@ -108,6 +111,18 @@ public class CollectFeeInput
     [Required]
     [MinLength(1)]
     public List<FeePaymentDto> Payments { get; set; } = [];
+
+	/// <summary>Selected rows, including unfunded rows, from the authoritative collect form.</summary>
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public AutomaticCollectionSelectionDto? AutomaticAllocation { get; set; }
+}
+
+public class AutomaticCollectionSelectionDto
+{
+	[Required, MaxLength(64)]
+	public string Revision { get; set; } = string.Empty;
+	public List<Guid> DueFeeIds { get; set; } = [];
+	public List<Guid> ChargeIds { get; set; } = [];
 }
 
 /// <summary>Allocates part of a payment to a specific monthly due fee row.</summary>
@@ -146,6 +161,7 @@ public class ChargePaymentDto
 /// <summary>A single payment instrument used in this transaction.</summary>
 public class FeePaymentDto
 {
+    public Guid? BankAccountId { get; set; }
     [Required]
     public PaymentMethodEnum PaymentMethod { get; set; }
 

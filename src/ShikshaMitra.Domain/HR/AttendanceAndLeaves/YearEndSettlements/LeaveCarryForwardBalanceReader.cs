@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -13,6 +13,13 @@ public class LeaveCarryForwardBalanceReader(
 	IRepository<LeaveYearEndSettlementItem, Guid> settlementItemRepository,
 	IAsyncQueryableExecuter asyncExecuter) : ITransientDependency
 {
+	private List<LeaveYearEndSettlementItem>? batchRows;
+	public async Task<IDisposable> BeginReadBatchAsync(IReadOnlyCollection<Guid> employeeIds, Guid academicYearId)
+	{
+		var ids = employeeIds.ToArray(); var previous = batchRows;
+		batchRows = await asyncExecuter.ToListAsync((await settlementItemRepository.GetQueryableAsync()).Where(x => Enumerable.Contains(ids, x.EmployeeId) && x.TargetAcademicYearId == academicYearId && x.Status == LeaveYearEndSettlementItemStatus.Finalized && x.CarriedDays > 0m));
+		return new Volo.Abp.DisposeAction(() => batchRows = previous);
+	}
 	public async Task<IReadOnlyDictionary<Guid, decimal>> GetCarryInByRuleAsync(
 		Guid employeeId,
 		Guid academicYearId,
@@ -26,7 +33,7 @@ public class LeaveCarryForwardBalanceReader(
 
 		var ruleIds = leavePolicyRuleIds.ToList();
 		var query = await settlementItemRepository.GetQueryableAsync();
-		var rows = await asyncExecuter.ToListAsync(query.Where(x =>
+		var rows = batchRows?.Where(x => x.EmployeeId == employeeId && x.TargetAcademicYearId == academicYearId && x.TargetLeavePolicyRuleId.HasValue && ruleIds.Contains(x.TargetLeavePolicyRuleId.Value)).ToList() ?? await asyncExecuter.ToListAsync(query.Where(x =>
 			x.EmployeeId == employeeId &&
 			x.TargetAcademicYearId == academicYearId &&
 			x.TargetLeavePolicyRuleId.HasValue &&

@@ -17,7 +17,8 @@ public class AdmissionPaymentCommandService(
 	IRepository<AdmissionApplication, Guid> applications,
 	IRepository<AdmissionActivity, Guid> activities,
 	AdmissionPaymentAccessService access,
-	AdmissionPaymentReadService reader) : ApplicationService, ITransientDependency
+	AdmissionPaymentReadService reader,
+	AdmissionFeeSelectionAccessService feeSelection) : ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionPaymentStageDto> RecordAsync(Guid applicationId, Guid stageId, RecordAdmissionPaymentDto input)
 	{
@@ -33,6 +34,7 @@ public class AdmissionPaymentCommandService(
 		}
 		EnsureManagedActive(context);
 		AdmissionPaymentAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
+		await feeSelection.EnsureSelectionAsync(context.Application);
 		var state = await reader.GetAsync(applicationId, stageId);
 		var policy = context.Policy!;
 		var method = Required(input.Method, 32, "Choose a payment method.");
@@ -111,7 +113,7 @@ public class AdmissionPaymentCommandService(
 	private async Task<AdmissionPaymentStageDto> SaveAsync(AdmissionPaymentContext context, AdmissionPaymentTransaction payment, string action)
 	{
 		await applications.UpdateAsync(context.Application, false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, action,
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(action,
 			$"{context.Stage.Name}: {payment.Currency} {payment.Amount:0.00}, {payment.Status}.",
 			context.Application.ApplicantId, context.Application.Id, metadataJson: JsonSerializer.Serialize(new
 			{ PaymentId = payment.Id, payment.StageInstanceId, payment.AttemptNumber, payment.Method, payment.Status })), false);

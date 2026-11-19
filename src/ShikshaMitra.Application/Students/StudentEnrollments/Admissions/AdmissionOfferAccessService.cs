@@ -31,6 +31,8 @@ public class AdmissionOfferAccessService(
 	public async Task<AdmissionOfferContext> GetContextAsync(Guid applicationId, Guid stageId)
 	{
 		var application = await applications.GetEntityAsync(applicationId);
+		if (AdmissionWorkflowStageTypeRegistry.Find(AdmissionWorkflowStageType.Offer)?.IsSelectable != true)
+			throw new BusinessException(AdmissionOfferStageErrorCodes.InvalidState, "Offer stages are retired. Finalize the approved admission after completing its journey.");
 		var stage = await stages.FindAsync(stageId) ??
 			throw new EntityNotFoundException(typeof(AdmissionApplicationStageInstance), stageId);
 		var workflow = await workflows.FindAsync(stage.WorkflowInstanceId) ??

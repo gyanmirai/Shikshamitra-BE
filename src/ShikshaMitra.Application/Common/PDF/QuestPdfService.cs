@@ -1,4 +1,4 @@
-﻿using QuestPDF.Fluent;
+using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
 using ShikshaMitra.Common.Extensions;
 using ShikshaMitra.Common.PDF;
@@ -108,7 +108,7 @@ public class QuestPdfService(IFontService fontService, IImageService imageServic
 			return ((DateTime) value).ToString("dd-MM-yyyy");
 
 
-		return value.ToString();
+		return value.ToString()!;
 	}
 
 

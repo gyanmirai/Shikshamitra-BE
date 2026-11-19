@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -17,7 +17,11 @@ public class FeeCollectFormDto
     /// <summary>Month-wise breakdown of outstanding obligations, ordered chronologically.</summary>
     public List<FeeLedgerMonthDto> Ledger { get; set; } = [];
 
-    /// <summary>Approved charges that have not yet been fully paid.</summary>
+    /// <summary>
+    /// Collectible charges. Includes approved Charge Management charges and system-generated
+    /// late-fee charges. System-generated late-fee charges exist only in Fee Collection and
+    /// use their DueFee id as both ChargeId and SourceId.
+    /// </summary>
     public List<ChargeDetailDto> Charges { get; set; } = [];
 
     /// <summary>
@@ -27,6 +31,16 @@ public class FeeCollectFormDto
     /// Attached"). The staff collect form and the payment-method selector both read this.
     /// </summary>
     public bool AllowOnlineCollection { get; set; } = true;
+
+	public string AllocationBasis { get; set; } = "Legacy";
+	public string ReceiptGrouping { get; set; } = "Separate";
+	public Guid? CollectionPolicyId { get; set; }
+	public string? CollectionPolicyName { get; set; }
+	public int? CollectionPolicyVersion { get; set; }
+	/// <summary>Complete ledger sequence used by the screen and automatic allocation, before filtering.</summary>
+	public List<Guid> AllocationDueFeeOrder { get; set; } = [];
+	/// <summary>Opaque balance/order/policy revision; collect must revalidate it.</summary>
+	public string? AllocationRevision { get; set; }
 }
 
 /// <summary>All fee obligations grouped under one calendar month.</summary>
@@ -58,6 +72,7 @@ public class FeeLedgerLineDto
 
     /// <summary>Payment Term installment label when available, otherwise month/year.</summary>
     public string InstallmentLabel { get; set; } = string.Empty;
+	public Guid? InstallmentId { get; set; }
 
     /// <summary>Authoritative due date from the Payment Term schedule, when available.</summary>
     public DateTime? DueDate { get; set; }
@@ -79,6 +94,9 @@ public class FeeLedgerLineDto
 
     public Guid? ProrationPolicyId { get; set; }
     public Guid? ProrationPolicyVersionId { get; set; }
+    /// <summary>Name captured by the immutable policy version used for this obligation.</summary>
+    public string? ProrationPolicyName { get; set; }
+    public int? ProrationPolicyVersionNumber { get; set; }
     public decimal? ProrationFactor { get; set; }
     public string? ProrationRuleType { get; set; }
     public string? ProrationRoundingMode { get; set; }
@@ -88,12 +106,23 @@ public class FeeLedgerLineDto
     public int? ProrationEligibleDays { get; set; }
     public int? ProrationChargedDays { get; set; }
     public string? ProrationExplanation { get; set; }
+    public decimal WithdrawalProrationCredit { get; set; }
+    public string? WithdrawalProrationExplanation { get; set; }
 
     /// <summary>Amount already paid (cleared) against this obligation.</summary>
     public double Paid { get; set; }
 
+    /// <summary>Adjustment credits already applied to this obligation.</summary>
+    public double AdjustmentCreditAmount { get; set; }
+
     /// <summary>Outstanding amount (Total − Paid, clamped to zero).</summary>
     public double Due { get; set; }
+
+    /// <summary>Whole rupee collection amount using the whole rupee round-up rule (Ceiling).</summary>
+    public double CollectionAmount { get; set; }
+
+    /// <summary>Identifiable Rounding Adjustment / Round Off difference (CollectionAmount - Due).</summary>
+    public double RoundingAmount { get; set; }
 
     /// <summary>
     /// Amount of <see cref="Paid"/> that is currently held in reconciliation
@@ -107,13 +136,15 @@ public class FeeLedgerLineDto
     public double RefundAmount { get; set; }
     public string? RefundDescription { get; set; }
 
+	/// <summary>Approved principal refunds awaiting payout; separate from cumulative paid refunds.</summary>
+	public decimal PendingRefundAmount { get; set; }
+	public string PendingRefundDescription { get; set; } = string.Empty;
+
 	public FeeCollectionStatus Status { get; set; }
 
 	/// <summary>
-	/// Computed via LateFeeCalculationService (Finance/Policies), net of any Applied
-	/// LateFeeWaiverApplication rows for this due line — this is what's actually collectible,
-	/// not the raw formula output. Zero when no Collection Policy resolves, the student is
-	/// exempt, or the line isn't yet overdue.
+	/// Legacy ledger field retained for contract compatibility. Late fees are now returned as
+	/// system-generated entries in <see cref="FeeCollectFormDto.Charges"/>, so this value is zero.
 	/// </summary>
 	public double LateFeeAmount { get; set; }
 
@@ -122,6 +153,9 @@ public class FeeLedgerLineDto
 
 	/// <summary>Sum of Applied waivers against this due line's late fee — shown so the cashier can see a waiver was already granted, not just a smaller number.</summary>
 	public double LateFeeWaivedAmount { get; set; }
+
+	/// <summary>Legacy ledger action flag. Waiver actions are exposed on the generated charge.</summary>
+	public bool CanWaive { get; set; }
 }
 
 /// <summary>Query parameters for the collect-form endpoint.</summary>

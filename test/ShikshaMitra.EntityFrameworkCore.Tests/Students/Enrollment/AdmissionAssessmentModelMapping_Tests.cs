@@ -19,11 +19,23 @@ public class AdmissionAssessmentModelMapping_Tests : ShikshaMitraEntityFramework
 		session.FindProperty("ConcurrencyStamp")!.IsConcurrencyToken.ShouldBeTrue();
 		attempt.FindProperty("ConcurrencyStamp")!.IsConcurrencyToken.ShouldBeTrue();
 		attempt.FindProperty("PolicySnapshotJson")!.IsNullable.ShouldBeFalse();
+		attempt.FindProperty("SubjectScoresJson")!.IsNullable.ShouldBeTrue();
+		attempt.FindProperty("SubjectScoresJson")!.GetColumnType().ShouldBe("text");
+		model.FindEntityType(typeof(AdmissionWorkflowStageDefinition))!.FindProperty("ConfigurationJson")!.GetMaxLength()
+			.ShouldBe(AdmissionWorkflowConsts.MaxAssessmentConfigurationLength);
 		attempt.FindProperty("Marks")!.GetColumnType().ShouldBe("numeric");
 		attempt.FindProperty("Marks")!.GetPrecision().ShouldBeNull();
 		attempt.GetIndexes().ShouldContain(index => index.IsUnique &&
 			index.Properties.Select(property => property.Name).SequenceEqual(new[] { "StageInstanceId", "AttemptNumber" }));
 		attempt.GetForeignKeys().ShouldAllBe(key => key.DeleteBehavior == DeleteBehavior.Restrict);
 		session.GetForeignKeys().ShouldAllBe(key => key.DeleteBehavior == DeleteBehavior.Restrict);
+		var scope = model.FindEntityType(typeof(AdmissionAssessmentSessionScope)).ShouldNotBeNull();
+		scope.FindProperty("TenantId").ShouldNotBeNull();
+		scope.GetIndexes().ShouldContain(index => index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(new[] { "SessionId", "AdmissionOfferingId", "WorkflowStageDefinitionId" }));
+		attempt.GetIndexes().ShouldContain(index => index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(new[] { "SessionId", "SlotStartsAt" }));
+		attempt.GetIndexes().ShouldContain(index => !index.IsUnique && index.GetFilter() == null &&
+			index.Properties.Select(property => property.Name).SequenceEqual(new[] { "SessionId" }));
+		model.FindEntityType(typeof(AdmissionAssessmentBookingBatch)).ShouldNotBeNull().FindProperty("Fingerprint").ShouldNotBeNull();
+		session.FindProperty("RoomReservationStatus").ShouldBeNull();
 	}
 }

@@ -36,7 +36,7 @@ internal static class EmployeeICardTemplateRules
 		ValidateTemplateAssetReferences(tenantId, input.LogoBlobName, input.BackgroundImageBlobName);
 		ValidateColor(input.ThemeColor);
 		ValidateColor(input.BackgroundColor);
-		EmployeeICardLayoutSchema.Validate(input.LayoutJson, input.PrintSettingsJson);
+		EmployeeICardLayoutSchema.Validate(input.LayoutJson, input.PrintSettingsJson, input.SchemaVersion, input.BackSideEnabled);
 	}
 
 	public static void ValidateTemplateAssetReferences(Guid? tenantId, params string?[] blobNames)
@@ -108,7 +108,7 @@ internal static class EmployeeICardTemplateRules
 
 	public static void ValidateAssetBlobName(string blobName, Guid? tenantId)
 	{
-		var expectedPrefix = $"employee-icards/assets/{tenantId ?? Guid.Empty}/";
+		var expectedPrefix = $"staff-icards/assets/{tenantId ?? Guid.Empty}/";
 		var extension = Path.GetExtension(blobName);
 		if (string.IsNullOrWhiteSpace(blobName) ||
 			!blobName.StartsWith(expectedPrefix, StringComparison.Ordinal) ||

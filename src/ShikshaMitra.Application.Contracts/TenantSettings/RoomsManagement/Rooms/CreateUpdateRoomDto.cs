@@ -8,10 +8,10 @@ public class CreateUpdateRoomDto
 {
 	[Required]
 	[StringLength(RoomConsts.MaxRoomNameLength)]
-	public string RoomName { get; set; }
+	public string RoomName { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
 	[Required]
-	[Range(1, int.MaxValue)]
+	[Range(0, int.MaxValue)]
 	public int Capacity { get; set; }
 
 	[Required]
@@ -38,8 +38,11 @@ public class CreateUpdateRoomDto
 	[Required]
 	[Range(0, int.MaxValue)]
 	public int BenchesPerColumn { get; set; }
+	public int[]? ColumnRows { get; set; }
 
 	public List<string>? Features { get; set; }
+	public RoomImageInput? Image { get; set; }
+	public bool RemoveImage { get; set; }
 
 	public string? BoardPosition { get; set; }
 	public string? EntrancePosition { get; set; }

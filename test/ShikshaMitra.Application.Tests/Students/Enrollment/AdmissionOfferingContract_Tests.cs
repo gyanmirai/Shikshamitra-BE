@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Shouldly;
+using Volo.Abp;
 using Xunit;
 
 namespace ShikshaMitra.Students.Enrollment;
@@ -22,6 +23,91 @@ public class AdmissionOfferingContract_Tests
 
 		result.IsValid.ShouldBeFalse();
 		result.Errors.ShouldContain(error => error.ErrorMessage.Contains("only once"));
+	}
+
+	[Fact]
+	public void Bulk_contract_rejects_a_null_item_list_without_throwing()
+	{
+		var input = ValidBulkInput();
+		input.Items = null!;
+
+		var result = new BulkCreateAdmissionOfferingsDtoValidator().Validate(input);
+
+		result.IsValid.ShouldBeFalse();
+		result.Errors.ShouldContain(error => error.PropertyName == nameof(input.Items));
+	}
+
+	[Fact]
+	public void Offering_contract_rejects_unsupported_track_and_entry_mode()
+	{
+		var input = new CreateAdmissionOfferingDto
+		{
+			BoardId = Guid.NewGuid(), MediumId = Guid.NewGuid(), StageId = Guid.NewGuid(),
+			StandardId = Guid.NewGuid(), Code = "GRADE-5-RTE", UseCycleDates = true,
+			Track = (AdmissionTrack)99, EntryMode = (AdmissionEntryMode)99
+		};
+
+		var result = new CreateAdmissionOfferingDtoValidator().Validate(input);
+
+		result.IsValid.ShouldBeFalse();
+		result.Errors.ShouldContain(error => error.PropertyName == nameof(input.Track));
+		result.Errors.ShouldContain(error => error.PropertyName == nameof(input.EntryMode));
+	}
+
+	[Fact]
+	public void Direct_registration_requires_system_owned_identity_and_valid_family_choice()
+	{
+		var input = new StartAdmissionDirectRegistrationDto
+		{
+			RequestId = Guid.NewGuid(), AdmissionOfferingId = Guid.NewGuid(),
+			ApplicantFirstName = "Asha", ApplicantDateOfBirth = new DateTime(2018, 5, 15),
+			ApplicantGender = "Female", GuardianFirstName = "Ravi", GuardianMobile = "9876543210",
+			ExistingFamilyId = Guid.NewGuid(), CreateSeparateFamily = true
+		};
+
+		var result = new StartAdmissionDirectRegistrationDtoValidator().Validate(input);
+		result.IsValid.ShouldBeFalse();
+		result.Errors.ShouldContain(error => error.PropertyName == nameof(input.CreateSeparateFamily));
+		input.CreateSeparateFamily = false;
+		new StartAdmissionDirectRegistrationDtoValidator().Validate(input).IsValid.ShouldBeTrue();
+	}
+
+	[Fact]
+	public void Application_counsellor_assignment_requires_identity_and_concurrency()
+	{
+		var validator = new AssignAdmissionApplicationCounsellorDtoValidator();
+		var input = new AssignAdmissionApplicationCounsellorDto
+		{
+			CounsellorId = Guid.Empty, ConcurrencyStamp = null
+		};
+		validator.Validate(input).IsValid.ShouldBeFalse();
+		input.CounsellorId = Guid.NewGuid();
+		input.ConcurrencyStamp = "current";
+		validator.Validate(input).IsValid.ShouldBeTrue();
+	}
+
+	[Theory]
+	[InlineData(nameof(AdmissionApplicationAppService.GetAssignableCounsellorsAsync),
+		ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[InlineData(nameof(AdmissionApplicationAppService.AssignCounsellorAsync),
+		ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit)]
+	public void Application_counsellor_operations_have_exact_permissions(string methodName, string permission)
+	{
+		var method = typeof(AdmissionApplicationAppService).GetMethods().Single(value => value.Name == methodName);
+		method.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+			.Cast<AuthorizeAttribute>().ShouldContain(attribute => attribute.Policy == permission);
+	}
+
+	[Theory]
+	[InlineData(nameof(AdmissionApplicationAppService.StartDirectRegistrationAsync))]
+	[InlineData(nameof(AdmissionApplicationAppService.FindDirectRegistrationFamiliesAsync))]
+	public void Direct_registration_operations_require_application_start_permission(string methodName)
+	{
+		var method = typeof(AdmissionApplicationAppService).GetMethods().Single(value => value.Name == methodName);
+		method.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+			.Cast<AuthorizeAttribute>()
+			.ShouldContain(attribute => attribute.Policy ==
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start);
 	}
 
 	[Fact]
@@ -45,6 +131,32 @@ public class AdmissionOfferingContract_Tests
 
 		AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: false).ShouldBeTrue();
 		AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: true).ShouldBeFalse();
+	}
+
+	[Fact]
+	public void Inactive_offering_can_save_an_out_of_scope_assignment_without_allowing_activation()
+	{
+		var validation = new AdmissionOfferingValidationResult(
+			[
+				new(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
+					"No counsellor has access to this class.", ActivationOnly: true),
+				new(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
+					"The fallback manager has no access to this class.", ActivationOnly: true)
+			]);
+
+		validation.Status.ShouldBe(AdmissionOfferingConfigurationStatus.Incomplete);
+		AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: false).ShouldBeTrue();
+		AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: true).ShouldBeFalse();
+		var activationError = Should.Throw<BusinessException>(() =>
+			AdmissionOfferingConfigurationValidator.EnsureCanSave(validation, isActive: true));
+		((string[])activationError.Data["ValidationErrors"]!).ShouldBe(
+			[AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid]);
+		((string[])activationError.Data["ValidationMessages"]!).Length.ShouldBe(2);
+
+		var unavailableProfile = new AdmissionOfferingValidationResult(
+			[new AdmissionOfferingValidationError(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
+				"The selected assignment profile is unavailable.")]);
+		AdmissionOfferingConfigurationValidator.CanSave(unavailableProfile, isActive: false).ShouldBeFalse();
 	}
 
 	[Theory]
@@ -79,7 +191,7 @@ public class AdmissionOfferingContract_Tests
 		ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Clone
 			.ShouldBe(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
 		ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Deactivate
-			.ShouldBe(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Delete);
+			.ShouldBe(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
 	}
 
 	[Theory]

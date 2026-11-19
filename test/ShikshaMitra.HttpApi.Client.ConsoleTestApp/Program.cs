@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace ShikshaMitra.HttpApi.Client.ConsoleTestApp;
 
-class Program
+static class Program
 {
     static async Task Main(string[] args)
     {

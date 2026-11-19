@@ -15,23 +15,16 @@ namespace ShikshaMitra.Controllers.HR.Dashboard;
 [Authorize]
 public class HRDashboardController(IHRDashboardAppService dashboardAppService) : AbpControllerBase
 {
-	[HttpGet("summary")]
+	[HttpGet("overview")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Dashboard.View)]
-	[ProducesResponseType(typeof(HRDashboardSummaryDto), StatusCodes.Status200OK)]
-	[ProducesResponseType(StatusCodes.Status400BadRequest)]
-	[ProducesResponseType(StatusCodes.Status403Forbidden)]
-	public virtual async Task<HRDashboardSummaryDto> GetSummaryAsync(
-		[FromQuery] string? date = null,
-		[FromQuery] string? month = null,
-		[FromQuery] int? range = null)
-	{
-		return await dashboardAppService.GetSummaryAsync(new HRDashboardSummaryRequestDto
-		{
-			Date = date,
-			Month = month,
-			Range = range
-		});
-	}
+	public virtual Task<HRDashboardOverviewDto> GetOverviewAsync([FromQuery] HRDashboardOverviewInput input) =>
+		dashboardAppService.GetOverviewAsync(input);
+
+	[HttpGet("staff")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Dashboard.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View)]
+	public virtual Task<HRDashboardStaffPageDto> GetStaffAsync([FromQuery] HRDashboardStaffInput input) =>
+		dashboardAppService.GetStaffAsync(input);
 
 	[HttpGet("previews/{dashboardKey}")]
 	[ProducesResponseType(typeof(HRDashboardPreviewDto), StatusCodes.Status200OK)]

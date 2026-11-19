@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
 namespace ShikshaMitra.HR.Policies;
 
@@ -12,11 +13,13 @@ public class HrPolicyAssignmentWorkflow(
 	IRepository<HrPolicyAssignment, Guid> repository,
 	HrPolicyAssignmentAuditWriter auditWriter,
 	HrPolicyAssignmentImpactService assignmentImpactService,
+	ILeavePolicyReferenceLock leaveReferenceLock,
 	HrPolicyEmployeeOverrideWorkflow employeeOverrideWorkflow)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<HrPolicyAssignmentDto> CreateAsync(CreateUpdateHrPolicyAssignmentDto input)
 	{
+		await leaveReferenceLock.AcquireAsync(input.LeavePolicyId, CurrentTenant.Id);
 		var targetType = HrPolicyMapping.ParseAssignmentTargetType(input.TargetType);
 		var targetKey = HrPolicyAssignment.NormalizeTargetKey(targetType, input.TargetKey);
 		await ValidateAssignmentAsync(input, targetType, targetKey, existingAssignmentId: null);
@@ -45,6 +48,7 @@ public class HrPolicyAssignmentWorkflow(
 
 	public async Task<HrPolicyAssignmentDto> UpdateAsync(Guid id, CreateUpdateHrPolicyAssignmentDto input)
 	{
+		await leaveReferenceLock.AcquireAsync(input.LeavePolicyId, CurrentTenant.Id);
 		var entity = await repository.GetAsync(id);
 		EnsureAcademicYearUnchanged(entity.AcademicYearId, input.AcademicYearId);
 		var targetType = HrPolicyMapping.ParseAssignmentTargetType(input.TargetType);

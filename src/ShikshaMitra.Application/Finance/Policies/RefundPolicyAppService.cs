@@ -1,6 +1,10 @@
+using ShikshaMitra.Finance;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Transactions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
@@ -23,8 +27,12 @@ public class RefundPolicyAppService(
 	IRepository<FeeStructure, Guid> feeStructureRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
+	IRepository<TransactionCategory, Guid> expenseCategoryRepository,
+	IRepository<BankAccount, Guid> bankAccountRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<IdentityUser, Guid> userRepository,
+	FinanceRoutingManager routingManager,
+	FinanceScopeAccessService scopeAccess,
 	RefundPolicyCalculationService calculationService)
 	: ApplicationService, IRefundPolicyAppService
 {
@@ -37,27 +45,105 @@ public class RefundPolicyAppService(
 			var status = ParseListStatus(input.Status);
 			query = query.Where(x => x.Status == status);
 		}
+		else if (!input.IncludeArchived)
+		{
+			query = query.Where(x => x.Status != RefundPolicyStatus.Archived);
+		}
 		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
 			var search = input.Search.Trim().ToLower();
 			query = query.Where(x => x.PolicyName.ToLower().Contains(search) || x.PolicyCode.ToLower().Contains(search));
 		}
+		if (!string.IsNullOrWhiteSpace(input.PolicyNameFilter))
+		{
+			var name = input.PolicyNameFilter.Trim().ToLower();
+			query = input.PolicyNameOperator?.ToLowerInvariant() switch
+			{
+				"equals" => query.Where(x => x.PolicyName.ToLower() == name),
+				"startswith" => query.Where(x => x.PolicyName.ToLower().StartsWith(name)),
+				"endswith" => query.Where(x => x.PolicyName.ToLower().EndsWith(name)),
+				_ => query.Where(x => x.PolicyName.ToLower().Contains(name))
+			};
+		}
+		if (Enum.TryParse<RefundAmountMode>(input.AmountMode, true, out var amountMode) && Enum.IsDefined(amountMode))
+			query = query.Where(x => x.AmountMode == amountMode);
+		if (Enum.TryParse<RefundFeeHeadScope>(input.FeeHeadScope, true, out var feeHeadScope) && Enum.IsDefined(feeHeadScope))
+			query = query.Where(x => x.FeeHeadScope == feeHeadScope);
+		if (Enum.TryParse<RefundPayoutMethod>(input.AllowedPayoutMethod, true, out var payoutMethod) && Enum.IsDefined(payoutMethod))
+		{
+			// RefundPolicy persists payout enums as JSON numbers.
+			var method = ((int)payoutMethod).ToString();
+			var only = $"[{method}]";
+			var first = $"[{method},";
+			var middle = $",{method},";
+			var last = $",{method}]";
+			query = query.Where(x => x.AllowedPayoutMethodsJson == only ||
+				x.AllowedPayoutMethodsJson.StartsWith(first) ||
+				x.AllowedPayoutMethodsJson.Contains(middle) ||
+				x.AllowedPayoutMethodsJson.EndsWith(last));
+		}
+		if (input.AllowPartialRefund.HasValue)
+			query = query.Where(x => x.AllowPartialRefund == input.AllowPartialRefund.Value);
+		if (input.UpdatedAt.HasValue && input.UpdatedAtEnd.HasValue)
+		{
+			var start = input.UpdatedAt.Value;
+			var end = input.UpdatedAtEnd.Value;
+			query = input.UpdatedAtOperator?.ToLowerInvariant() switch
+			{
+				"after" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) >= start),
+				"before" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) < end),
+				_ => query.Where(x => (x.LastModificationTime ?? x.CreationTime) >= start &&
+					(x.LastModificationTime ?? x.CreationTime) < end)
+			};
+		}
 
 		var total = await AsyncExecuter.CountAsync(query);
-		var rows = await AsyncExecuter.ToListAsync(query
-			.OrderByDescending(x => x.IsDefault)
-			.ThenByDescending(x => x.Status == RefundPolicyStatus.Active)
-			.ThenByDescending(x => x.CreationTime)
-			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
-		var usedIds = await GetUsedIdsAsync(rows.Select(x => x.Id).ToList());
-		var items = rows.Select(x =>
+		// These arrays contain only GUIDs or numeric enums, never nested values or
+		// strings containing commas. Counting separators translates on both providers
+		// and keeps JSON-backed sorts in SQL without hydrating the entire catalogue.
+		var candidates = query.Select(policy => new
 		{
-			var dto = RefundPolicyMapping.ToDto(x);
-			dto.IsUsedInDownstream = usedIds.Contains(x.Id);
-			return dto;
-		}).ToList();
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "refund", items);
+			Policy = policy,
+			FeeHeadCount = policy.ApplicableFeeHeadIdsJson.Replace(" ", "").Replace("\r", "").Replace("\n", "").Replace("\t", "") == "[]"
+				? 0 : policy.ApplicableFeeHeadIdsJson.Length - policy.ApplicableFeeHeadIdsJson.Replace(",", "").Length + 1,
+			PayoutCount = policy.AllowedPayoutMethodsJson.Replace(" ", "").Replace("\r", "").Replace("\n", "").Replace("\t", "") == "[]"
+				? 0 : policy.AllowedPayoutMethodsJson.Length - policy.AllowedPayoutMethodsJson.Replace(",", "").Length + 1
+		});
+		var sortParts = input.Sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+		var sortColumn = sortParts.Length > 0 ? sortParts[0].ToLowerInvariant() : string.Empty;
+		var descending = sortParts.Length > 1 && sortParts[1].Equals("desc", StringComparison.OrdinalIgnoreCase);
+		var sorted = sortColumn switch
+		{
+			"policyname" => descending ? candidates.OrderByDescending(x => x.Policy.PolicyName) : candidates.OrderBy(x => x.Policy.PolicyName),
+			"amountmode" => descending
+				? candidates.OrderByDescending(x => x.Policy.AmountMode == RefundAmountMode.FixedAmount ? 0 :
+					x.Policy.AmountMode == RefundAmountMode.RemainingPaidAmount ? 1 : x.Policy.AmountMode == RefundAmountMode.Percentage ? 2 : 3)
+				: candidates.OrderBy(x => x.Policy.AmountMode == RefundAmountMode.FixedAmount ? 0 :
+					x.Policy.AmountMode == RefundAmountMode.RemainingPaidAmount ? 1 : x.Policy.AmountMode == RefundAmountMode.Percentage ? 2 : 3),
+			"feeheadscope" => descending
+				? candidates.OrderByDescending(x => x.Policy.FeeHeadScope).ThenByDescending(x => x.FeeHeadCount)
+				: candidates.OrderBy(x => x.Policy.FeeHeadScope).ThenBy(x => x.FeeHeadCount),
+			"allowedpayoutmethods" => descending
+				? candidates.OrderByDescending(x => x.PayoutCount)
+				: candidates.OrderBy(x => x.PayoutCount),
+			"allowpartialrefund" => descending ? candidates.OrderBy(x => x.Policy.AllowPartialRefund) : candidates.OrderByDescending(x => x.Policy.AllowPartialRefund),
+			"updatedat" => descending ? candidates.OrderByDescending(x => x.Policy.LastModificationTime ?? x.Policy.CreationTime) : candidates.OrderBy(x => x.Policy.LastModificationTime ?? x.Policy.CreationTime),
+			"status" => descending
+				? candidates.OrderByDescending(x => x.Policy.Status == RefundPolicyStatus.Active ? 0 : x.Policy.Status == RefundPolicyStatus.Archived ? 1 : 2)
+				: candidates.OrderBy(x => x.Policy.Status == RefundPolicyStatus.Active ? 0 : x.Policy.Status == RefundPolicyStatus.Archived ? 1 : 2),
+			_ => candidates.OrderByDescending(x => x.Policy.IsDefault)
+				.ThenByDescending(x => x.Policy.Status == RefundPolicyStatus.Active)
+				.ThenByDescending(x => x.Policy.CreationTime)
+		};
+		var rows = await AsyncExecuter.ToListAsync(sorted.ThenBy(x => x.Policy.Id)
+			.Skip(input.SkipCount)
+			.Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount)
+			.Select(x => x.Policy));
+		var items = rows.Select(RefundPolicyMapping.ToDto).ToList();
+		var usedIds = await GetUsedIdsAsync(items.Select(x => x.Id).ToList());
+		foreach (var item in items)
+			item.IsUsedInDownstream = usedIds.Contains(item.Id);
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "refund", items, AsyncExecuter);
 		return new PagedResultDto<RefundPolicyDto>(total, items);
 	}
 
@@ -66,8 +152,9 @@ public class RefundPolicyAppService(
 	{
 		var entity = await GetRequiredAsync(id);
 		var dto = RefundPolicyMapping.ToDto(entity);
+		await PopulateDisplayNamesAsync(dto);
 		dto.IsUsedInDownstream = (await GetUsedIdsAsync([id])).Contains(id);
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "refund", new[] { dto });
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "refund", new[] { dto }, AsyncExecuter);
 		return dto;
 	}
 
@@ -92,14 +179,18 @@ public class RefundPolicyAppService(
 	{
 		await EnsureReferencesAsync(input);
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode)
-			? $"REF-{GuidGenerator.Create():N}"[..16].ToUpperInvariant()
+			? $"REF-{Guid.NewGuid():N}"[..28].ToUpperInvariant()
 			: input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, null);
-		if (input.IsDefault)
+		var model = RefundPolicyMapping.ToUpdateModel(input, code);
+		if (model.Status == RefundPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
+		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, null, input.PolicyName, input.ChangeReason);
 		var entity = new RefundPolicy(
 			GuidGenerator.Create(), CurrentTenant.Id, input.AcademicYearId,
-			RefundPolicyMapping.ToUpdateModel(input, code));
+			model);
 		await repository.InsertAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "created");
 		return RefundPolicyMapping.ToDto(entity);
@@ -124,9 +215,15 @@ public class RefundPolicyAppService(
 		await EnsureReferencesAsync(input);
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode) ? entity.PolicyCode : input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, id);
-		if (input.IsDefault)
+		if (entity.IsDefault && (!input.IsDefault || targetStatus != RefundPolicyStatus.Active))
+			throw new BusinessException(RefundPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
+		var model = RefundPolicyMapping.ToUpdateModel(input, code);
+		if (model.Status == RefundPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
+		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, id, input.PolicyName, input.ChangeReason);
-		entity.Update(RefundPolicyMapping.ToUpdateModel(input, code));
+		entity.Update(model);
 		await repository.UpdateAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "edited", input.ChangeReason);
 		return RefundPolicyMapping.ToDto(entity);
@@ -141,7 +238,11 @@ public class RefundPolicyAppService(
 		return await CreateAsync(new CreateUpdateRefundPolicyDto
 		{
 			AcademicYearId = targetYear,
-			PolicyName = string.IsNullOrWhiteSpace(input.Name) ? $"{source.PolicyName} Copy" : input.Name,
+			PolicyName = string.IsNullOrWhiteSpace(input.Name)
+				? FinanceName.NextCopy(source.PolicyName, await AsyncExecuter.ToListAsync(
+					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == (input.TargetAcademicYearId ?? source.AcademicYearId))
+					.Select(x => x.PolicyName)))
+				: FinanceName.Normalize(input.Name),
 			Status = "Draft",
 			IsDefault = false,
 			Description = source.Description,
@@ -161,7 +262,9 @@ public class RefundPolicyAppService(
 			MaximumDeduction = source.MaximumDeduction,
 			DeductionExplanation = source.DeductionExplanation,
 			AllowedPayoutMethods = source.GetAllowedPayoutMethods().Select(x => x.ToString()).ToList(),
-			ProcessingTargetDays = source.ProcessingTargetDays
+			ExpenseCategoryId = sameYear ? source.ExpenseCategoryId : null,
+            DefaultPayingBankAccountId = sameYear ? source.DefaultPayingBankAccountId : null,
+            ProcessingTargetDays = source.ProcessingTargetDays
 		});
 	}
 
@@ -170,6 +273,8 @@ public class RefundPolicyAppService(
 	{
 		var entity = await GetRequiredAsync(id);
 		if (entity.Status == RefundPolicyStatus.Archived) return;
+		if (entity.IsDefault)
+			throw new BusinessException(RefundPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if ((await GetUsedIdsAsync([id])).Contains(id))
 			throw new BusinessException(RefundPolicyErrorCodes.PolicyInUse);
 		entity.Archive();
@@ -236,6 +341,12 @@ public class RefundPolicyAppService(
 
 	private async Task EnsureReferencesAsync(CreateUpdateRefundPolicyDto input)
 	{
+		await scopeAccess.EnsureAcademicContextAccessibleAsync(input.AcademicYearId, null, null, null, null);
+		var active = input.Status == "Active";
+		if (active || input.ExpenseCategoryId.HasValue)
+			await routingManager.RequireCategoryAsync(input.AcademicYearId, input.ExpenseCategoryId, TransactionType.Expense);
+		if (input.DefaultPayingBankAccountId.HasValue || (active && input.AllowedPayoutMethods.Any(x => x != "Cash")))
+			await routingManager.RequireBankAsync(input.AcademicYearId, input.DefaultPayingBankAccountId);
 		if (await academicYearRepository.FindAsync(input.AcademicYearId) == null)
 			throw new BusinessException(RefundPolicyErrorCodes.AcademicYearRequired);
 		if (!string.Equals(input.FeeHeadScope, RefundFeeHeadScope.SelectedFeeHeads.ToString(), StringComparison.OrdinalIgnoreCase))
@@ -252,15 +363,19 @@ public class RefundPolicyAppService(
 
 	private async Task EnsureUniqueAsync(Guid yearId, string name, string code, Guid? excludeId)
 	{
-		var normalizedName = name.Trim().ToLower();
-		var normalizedCode = code.Trim().ToLower();
+		var normalizedName = FinanceName.Normalize(name);
+		var normalizedCode = code.Trim().ToUpperInvariant();
 		var query = await repository.GetQueryableAsync();
+		var candidates = await AsyncExecuter.ToListAsync(query.Where(x => x.AcademicYearId == yearId &&
+			(!excludeId.HasValue || x.Id != excludeId.Value)).Select(x => new { x.PolicyName, x.Status }));
+		var existing = candidates.FirstOrDefault(x => FinanceName.Equals(x.PolicyName, normalizedName));
+		if (existing != null)
+			throw new BusinessException(RefundPolicyErrorCodes.DuplicateName)
+				.WithData("Name", normalizedName)
+				.WithData("Location", existing.Status == RefundPolicyStatus.Archived ? "Archived" : "Current");
 		if (await AsyncExecuter.AnyAsync(query.Where(x => x.AcademicYearId == yearId &&
-			x.PolicyName.ToLower() == normalizedName && (!excludeId.HasValue || x.Id != excludeId.Value))))
-			throw new BusinessException(RefundPolicyErrorCodes.DuplicateName);
-		if (await AsyncExecuter.AnyAsync(query.Where(x => x.AcademicYearId == yearId &&
-			x.PolicyCode.ToLower() == normalizedCode && (!excludeId.HasValue || x.Id != excludeId.Value))))
-			throw new BusinessException(RefundPolicyErrorCodes.DuplicateCode);
+			x.PolicyCode.ToUpper() == normalizedCode && (!excludeId.HasValue || x.Id != excludeId.Value))))
+			throw new BusinessException(RefundPolicyErrorCodes.DuplicateCode).WithData("Code", normalizedCode);
 	}
 
 	private async Task<HashSet<Guid>> GetUsedIdsAsync(List<Guid> ids)
@@ -294,12 +409,78 @@ public class RefundPolicyAppService(
 		}
 	}
 
+	private async Task<bool> HasActiveDefaultAsync(Guid academicYearId) =>
+		await repository.AnyAsync(x => x.AcademicYearId == academicYearId &&
+			x.Status == RefundPolicyStatus.Active && x.IsDefault);
+
 	private async Task WriteVersionAsync(RefundPolicy entity, string action, string? reason = null)
 	{
+		var snapshot = entity.ToSnapshot();
+		var previousVersion = (await versionRepository.GetListAsync(x => x.PolicyType == "refund" && x.PolicyId == entity.Id))
+			.OrderByDescending(x => x.VersionNumber).FirstOrDefault();
+		RefundPolicySnapshot? previous = null;
+		if (previousVersion != null)
+		{
+			try { previous = JsonSerializer.Deserialize<RefundPolicySnapshot>(previousVersion.SnapshotJson); }
+			catch (JsonException) { /* Legacy audit data must not prevent a policy write. */ }
+		}
+		var ids = snapshot.ApplicableFeeHeadIds.Distinct().ToList();
+		var heads = ids.Count == 0 ? [] : await feeHeadRepository.GetListAsync(x => ids.Contains(x.Id));
+		var names = heads.ToDictionary(x => x.Id, x => x.Name);
+		foreach (var id in ids)
+			if (!names.ContainsKey(id) && previous?.FeeHeadNames?.TryGetValue(id, out var oldName) == true)
+				names[id] = oldName;
+		var category = entity.ExpenseCategoryId.HasValue
+			? await expenseCategoryRepository.FindAsync(entity.ExpenseCategoryId.Value) : null;
+		var bank = entity.DefaultPayingBankAccountId.HasValue
+			? await bankAccountRepository.FindAsync(entity.DefaultPayingBankAccountId.Value) : null;
+		snapshot = snapshot with {
+			FeeHeadNames = names,
+			ExpenseCategoryName = category?.Name ?? (entity.ExpenseCategoryId == previous?.ExpenseCategoryId ? previous?.ExpenseCategoryName : null),
+			DefaultPayingBankAccountName = bank == null
+				? (entity.DefaultPayingBankAccountId == previous?.DefaultPayingBankAccountId ? previous?.DefaultPayingBankAccountName : null)
+				: $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}"
+		};
 		await versionRepository.InsertAsync(new FinancePolicyVersion(
 			GuidGenerator.Create(), CurrentTenant.Id, "refund", entity.Id,
 			entity.AcademicYearId, entity.Version, entity.PolicyName, entity.Status.ToString(),
-			RefundPolicyMapping.ToSnapshotJson(entity), action, reason), autoSave: true);
+			JsonSerializer.Serialize(snapshot), action, reason), autoSave: true);
+	}
+
+	private async Task PopulateDisplayNamesAsync(RefundPolicyDto dto)
+	{
+		var ids = dto.ApplicableFeeHeadIds.Distinct().ToList();
+		var heads = ids.Count == 0 ? [] : await feeHeadRepository.GetListAsync(x => ids.Contains(x.Id));
+		foreach (var head in heads)
+		{
+			dto.FeeHeadNames[head.Id] = head.Name;
+			dto.FeeHeadStatuses[head.Id] = head.IsActive ? "Active" : "Inactive";
+		}
+		var latest = (await versionRepository.GetListAsync(x => x.PolicyType == "refund" && x.PolicyId == dto.Id))
+			.OrderByDescending(x => x.VersionNumber).FirstOrDefault();
+		RefundPolicySnapshot? recorded = null;
+		if (latest != null)
+		{
+			try
+			{
+				recorded = JsonSerializer.Deserialize<RefundPolicySnapshot>(latest.SnapshotJson);
+				foreach (var id in ids.Where(id => !dto.FeeHeadNames.ContainsKey(id)))
+					if (recorded?.FeeHeadNames?.TryGetValue(id, out var name) == true)
+					{
+						dto.FeeHeadNames[id] = name;
+						dto.FeeHeadStatuses[id] = "Deleted";
+					}
+			}
+			catch (JsonException) { /* Preserve the policy response for legacy snapshots. */ }
+		}
+		var category = dto.ExpenseCategoryId.HasValue
+			? await expenseCategoryRepository.FindAsync(dto.ExpenseCategoryId.Value) : null;
+		var bank = dto.DefaultPayingBankAccountId.HasValue
+			? await bankAccountRepository.FindAsync(dto.DefaultPayingBankAccountId.Value) : null;
+		dto.ExpenseCategoryName = category?.Name ?? (dto.ExpenseCategoryId == recorded?.ExpenseCategoryId ? recorded?.ExpenseCategoryName : null);
+		dto.DefaultPayingBankAccountName = bank == null
+			? (dto.DefaultPayingBankAccountId == recorded?.DefaultPayingBankAccountId ? recorded?.DefaultPayingBankAccountName : null)
+			: $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}";
 	}
 
 	private static void EnsureConcurrency(RefundPolicy entity, string? concurrencyStamp)

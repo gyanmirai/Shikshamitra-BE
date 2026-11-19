@@ -8,7 +8,7 @@ public class CreateUpdateEducationMediumDto
 {
     [Required]
     [StringLength(EducationMediumConsts.MaxNameLength)]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
     public Guid EducationBoardId { get; set; }
 }

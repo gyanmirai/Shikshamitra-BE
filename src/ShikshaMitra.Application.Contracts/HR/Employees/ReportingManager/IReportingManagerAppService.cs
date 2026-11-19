@@ -6,6 +6,7 @@ namespace ShikshaMitra.HR.Employees.ReportingManager;
 
 public interface IReportingManagerAppService : IApplicationService
 {
+	Task<System.Collections.Generic.List<EmployeeBasicDto>> GetManagerOptionsAsync(string? search = null);
 	/// <summary>
 	/// Assigns or updates the reporting manager for an employee.
 	/// </summary>

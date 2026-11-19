@@ -36,7 +36,7 @@ public class AttendanceImportSaveEntryNormalizer(
 		{
 			throw new BusinessException(HRErrorCodes.AttendanceImportRowMismatch)
 				.WithData("rowId", entry.RowId)
-				.WithData("reason", "Employee does not match the import row.");
+				.WithData("reason", "Staff does not match the import row.");
 		}
 
 		var rowDate = ParseImportRowDate(row.AttendanceDate);
@@ -98,7 +98,7 @@ public class AttendanceImportSaveEntryNormalizer(
 			{
 				throw new BusinessException(HRErrorCodes.AttendanceImportRowMismatch)
 					.WithData("rowId", entry.RowId)
-					.WithData("reason", "Employee does not match the import row.");
+					.WithData("reason", "Staff does not match the import row.");
 			}
 
 			if (captureModeLookup.GetValueOrDefault((entry.EmployeeId, entry.AttendanceDate)) == AttendanceCaptureMode.ManualStatus)

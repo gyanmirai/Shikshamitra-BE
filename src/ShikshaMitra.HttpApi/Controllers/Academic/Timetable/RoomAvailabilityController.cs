@@ -14,6 +14,9 @@ public class RoomAvailabilityController(IRoomAvailabilityAppService service) : S
 {
     private readonly IRoomAvailabilityAppService _service = service;
 
+    [HttpGet("room-availability/buildings/lookup")]
+    public Task<List<RoomBuildingLookupDto>> GetBuildingLookupAsync() => _service.GetBuildingLookupAsync();
+
     [HttpGet]
     [Route("room-availability")]
     public async Task<List<RoomAvailabilityDto>> GetAvailabilityAsync([FromQuery] RoomAvailabilityFilterDto input)
@@ -29,6 +32,15 @@ public class RoomAvailabilityController(IRoomAvailabilityAppService service) : S
     {
         return await _service.GetReservationsAsync(input);
     }
+
+    [HttpGet("room-reservations/page")]
+    public Task<RoomReservationPageResultDto> GetReservationsPageAsync([FromQuery] GetRoomReservationsPageInputDto input) => _service.GetReservationsPageAsync(input);
+
+    [HttpGet("room-reservations/summary")]
+    public Task<RoomReservationSummaryDto> GetReservationSummaryAsync([FromQuery] GetReservationsInputDto input) => _service.GetReservationSummaryAsync(input);
+
+    [HttpGet("room-availability/audit-logs/page")]
+    public Task<Volo.Abp.Application.Dtos.PagedResultDto<RoomAuditLogDto>> GetAuditLogsPageAsync([FromQuery] GetRoomAuditLogsInputDto input) => _service.GetAuditLogsPageAsync(input);
 
     [HttpPost]
     [Route("room-reservations/check-conflicts")]
@@ -110,9 +122,10 @@ public class RoomAvailabilityController(IRoomAvailabilityAppService service) : S
 
     [HttpGet]
     [Route("room-availability/schedule")]
-    public async Task<RoomScheduleDto> GetRoomScheduleAsync([FromQuery] Guid roomId, [FromQuery] DateTime date)
+    public async Task<RoomScheduleDto> GetRoomScheduleAsync([FromQuery] Guid roomId, [FromQuery] DateTime date,
+        [FromQuery] Guid? academicMediumId = null)
     {
-        return await _service.GetRoomScheduleAsync(roomId, date);
+        return await _service.GetRoomScheduleAsync(roomId, date, academicMediumId);
     }
 
     private static string ExtractReason(JsonElement input)

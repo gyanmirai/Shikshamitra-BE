@@ -181,6 +181,30 @@ public class AssignmentV2Alignment_Tests
 				AssignmentTypeName = "Project",
 				EvaluationRequired = true,
 				DefaultEvaluationMethod = EvaluationMethod.Marks,
+				DefaultMarks = null,
+			},
+			true
+		];
+		yield return
+		[
+			new UpdateAssignmentTypeDtoValidator(),
+			new UpdateAssignmentTypeDto
+			{
+				AssignmentTypeName = "Project",
+				EvaluationRequired = true,
+				DefaultEvaluationMethod = EvaluationMethod.Marks,
+				DefaultMarks = null,
+			},
+			true
+		];
+		yield return
+		[
+			new CreateAssignmentTypeDtoValidator(),
+			new CreateAssignmentTypeDto
+			{
+				AssignmentTypeName = "Project",
+				EvaluationRequired = true,
+				DefaultEvaluationMethod = EvaluationMethod.Marks,
 				DefaultMarks = 25,
 			},
 			true

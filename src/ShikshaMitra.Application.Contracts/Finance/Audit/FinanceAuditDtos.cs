@@ -69,7 +69,7 @@ public class FinanceAuditCorrelationDto
 
 public class FinanceAuditStudentContext
 {
-	public Guid StudentId { get; set; }
+	public Guid? StudentId { get; set; }
 	public string? StudentName { get; set; }
 	public string? GrNo { get; set; }
 	public string? RollNo { get; set; }

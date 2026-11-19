@@ -8,6 +8,8 @@ namespace ShikshaMitra.Academic.HomeworkAssignment;
 /// </summary>
 public class GetAssignmentSubmissionsFilterDto
 {
+	public bool Lightweight { get; set; }
+
 	[Required]
 	public Guid ClassId { get; set; }
 

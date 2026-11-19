@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using System;
 
 namespace ShikshaMitra.Students.Attendance;
 
@@ -9,6 +10,8 @@ namespace ShikshaMitra.Students.Attendance;
 /// </summary>
 public interface IStudentAttendanceAppService : IApplicationService
 {
+	Task<AttendanceWorkspaceContextDto> GetWorkspaceContextAsync(Guid academicYearId);
+	Task<PagedResultDto<StudentAttendanceDto>> GetWorkspaceAsync(AttendanceWorkspaceInput input);
 	/// <summary>
 	/// Gets the list of enrolled students for a specific date and division with their attendance status
 	/// Permission: Students.Attendance.MarkAttendance.View

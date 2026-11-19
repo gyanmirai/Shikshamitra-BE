@@ -17,6 +17,7 @@ using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -25,7 +26,7 @@ namespace ShikshaMitra.TenantSettings;
 
 [Collection(ApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.TenantSettings)]
-public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
+public partial class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string OptionsUrl = "/api/app/academic-organization-options";
 
@@ -156,12 +157,12 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 	}
 
-	private async Task<SeededAcademicOrganizations> SeedAcademicOrganizationsAsync()
+	private async Task<SeededAcademicOrganizations> SeedAcademicOrganizationsAsync(Guid? tenantOverride = null)
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
 		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var tenantId = tenantOverride ?? Guid.Parse(TestAuthHandler.TestTenantId);
 
 		using (currentTenant.Change(tenantId))
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
@@ -252,6 +253,7 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 		using (currentTenant.Change(tenantId))
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
+			await EnsureScopedIdentityAsync(scope.ServiceProvider, userId, tenantId);
 			await scopeRepository.InsertAsync(
 				new UserScopeAssignment(
 					Guid.NewGuid(),
@@ -277,6 +279,7 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 		using (currentTenant.Change(tenantId))
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
+			await EnsureScopedIdentityAsync(scope.ServiceProvider, userId, tenantId);
 			await scopeRepository.InsertAsync(
 				new UserScopeAssignment(
 					Guid.NewGuid(),
@@ -289,6 +292,13 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 			await userScopeService.InvalidateUserScopeCacheAsync(userId);
 			await uow.CompleteAsync();
 		}
+	}
+
+	private static async Task EnsureScopedIdentityAsync(IServiceProvider services, Guid userId, Guid tenantId)
+	{
+		var users = services.GetRequiredService<IIdentityUserRepository>();
+		if (await users.FindAsync(userId) == null)
+			await users.InsertAsync(new IdentityUser(userId, $"orgopt-{userId:N}", $"orgopt-{userId:N}@example.test", tenantId));
 	}
 
 	private sealed record SeededAcademicOrganizations(

@@ -31,6 +31,8 @@ public partial class ShikshaMitraDbContext
     public DbSet<AssignedSubject> StandardSubjectAssignments { get; set; }
     public DbSet<TeacherSubjectAllocation> TeacherSubjectAllocations { get; set; }
     public DbSet<StudentElectiveSelection> StudentElectiveSelections { get; set; }
+    public DbSet<StudentElectivePreferenceSubmission> StudentElectivePreferenceSubmissions { get; set; }
+    public DbSet<StudentElectiveCorrection> StudentElectiveCorrections { get; set; }
     public DbSet<LessonPlan> LessonPlans { get; set; }
     public DbSet<TeacherDiary> TeacherDiaries { get; set; }
 
@@ -53,6 +55,8 @@ public partial class ShikshaMitraDbContext
     public DbSet<HomeworkAssignmentType> HomeworkAssignmentTypes { get; set; }
     public DbSet<HomeworkAssignmentEntity> HomeworkAssignments { get; set; }
     public DbSet<StudentSubmissionEntity> StudentSubmissions { get; set; }
+    public DbSet<ShikshaMitra.Academic.Mobile.MobileSubmissionOperation> MobileSubmissionOperations { get; set; }
+    public DbSet<ShikshaMitra.Academic.Mobile.MobileSubmissionSnapshot> MobileSubmissionSnapshots { get; set; }
     public DbSet<HomeworkType> HomeworkTypes { get; set; }
     public DbSet<AssignmentType> AssignmentTypes { get; set; }
     public DbSet<HomeworkDivisionSchedule> HomeworkDivisionSchedules { get; set; }

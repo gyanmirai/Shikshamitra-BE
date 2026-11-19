@@ -1,20 +1,26 @@
 ﻿using System;
 using Volo.Abp.Domain.Entities.Auditing;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
-public class StudentSubmissionEntity : FullAuditedEntity<Guid>, IMultiTenant
+public class StudentSubmissionEntity : FullAuditedEntity<Guid>, IMultiTenant, IHasConcurrencyStamp
 {
+	public string ConcurrencyStamp { get; set; } = Guid.NewGuid().ToString("N");
+	public string? SubmittedContentHtml { get; private set; }
+	public bool Acknowledged { get; private set; }
+	public DateTimeOffset? MobileSavedAt { get; private set; }
+	public DateTimeOffset? MobileUpdatedAt { get; private set; }
 	public Guid? TenantId { get; set; }
 
 	// For Homework submissions (null when this is an assignment submission)
 	public Guid? HomeworkAssignmentId { get; set; }
-	public HomeworkAssignmentEntity HomeworkAssignment { get; set; }
+	public HomeworkAssignmentEntity? HomeworkAssignment { get; set; }
 
 	// For Assignment submissions (nullable for backward compatibility)
 	public Guid? AssignmentId { get; set; }
-	public AssignmentEntity Assignment { get; set; }
+	public AssignmentEntity? Assignment { get; set; }
 
 	public Guid StudentId { get; set; }
 	public Guid DivisionId { get; set; }
@@ -44,6 +50,25 @@ public class StudentSubmissionEntity : FullAuditedEntity<Guid>, IMultiTenant
 	public string? SubmittedDocumentUrl { get; set; }
 	public string? OriginalFileName { get; set; }
 	public string? SubmittedContent { get; set; }
+	public string? MobileAttachmentsJson { get; private set; }
+
+	public void SaveMobileResponse(string? text, string? attachmentsJson, string? firstBlob, string? firstName, bool draft, DateTimeOffset now, string? html = null, bool acknowledged = false)
+	{
+		if (draft && SubmissionDate.HasValue) throw new Volo.Abp.BusinessException(ShikshaMitra.Academic.Mobile.MobileSubmissionErrorCodes.DraftAfterSubmission);
+		// Keep the API value identical before and after the database's microsecond precision round trip.
+		var utc = now.ToUniversalTime();
+		now = new DateTimeOffset(utc.Ticks - utc.Ticks % 10, TimeSpan.Zero);
+		SubmittedContent = text;
+		SubmittedContentHtml = html;
+		Acknowledged = acknowledged;
+		MobileUpdatedAt = now;
+		if (draft) MobileSavedAt = now;
+		MobileAttachmentsJson = attachmentsJson;
+		SubmittedDocumentUrl = firstBlob;
+		OriginalFileName = firstName;
+		Status = draft ? SubmissionStatus.Draft : now.UtcDateTime > DueDate ? SubmissionStatus.Late : SubmissionStatus.Submitted;
+		if (!draft) SubmissionDate ??= now;
+	}
 
 	public Guid? ReviewedBy { get; set; }
 	public DateTimeOffset? ReviewedAt { get; set; }
@@ -149,6 +174,7 @@ public class StudentSubmissionEntity : FullAuditedEntity<Guid>, IMultiTenant
 	public void RecordSubmission(string? submittedContent, string? documentUrl = null)
 	{
 		SubmittedContent = submittedContent;
+		SubmittedContentHtml = null;
 		SubmittedDocumentUrl = documentUrl;
 		SubmissionDate = DateTimeOffset.UtcNow;
 

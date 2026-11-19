@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using ShikshaMitra.Students.StudentRecords;
 
 namespace ShikshaMitra.Students.Records;
@@ -7,13 +8,23 @@ namespace ShikshaMitra.Students.Records;
 public class StudentCertificatePreviewRequestDto
 {
 	public Guid StudentId { get; set; }
+	public Guid? ExpectedAcademicYearId { get; set; }
+	public bool IncludeBranding { get; set; }
 	public StudentCertificateType CertificateType { get; set; }
 	public DateTimeOffset? IssueDate { get; set; }
 	public Dictionary<string, string?> CertificateFields { get; set; } = new();
+	public Guid? TransitionId { get; set; }
 }
 
 public class CreateStudentCertificateDto : StudentCertificatePreviewRequestDto
 {
+	[Required, StringLength(100)] public string IdempotencyKey { get; set; } = "";
+}
+
+public class StudentDocumentActionDto
+{
+	[Required, StringLength(2000, MinimumLength = 5)] public string Reason { get; set; } = "";
+	[StringLength(100)] public string? IdempotencyKey { get; set; }
 }
 
 public class StudentCertificateResponseDto
@@ -23,11 +34,19 @@ public class StudentCertificateResponseDto
 	public string CertificateType { get; set; } = string.Empty;
 	public DateTimeOffset IssueDate { get; set; }
 	public string Status { get; set; } = string.Empty;
+	public Guid? TransitionId { get; set; }
 	public StudentCertificateStudentDto Student { get; set; } = new();
 	public StudentCertificateOrganizationDto Organization { get; set; } = new();
 	public Dictionary<string, string?> CertificateData { get; set; } = new();
 	public Dictionary<string, string?> PlaceholderValues { get; set; } = new();
 	public StudentCertificateTemplateRenderDto Template { get; set; } = new();
+	public StudentCertificateBrandingDto? Branding { get; set; }
+}
+
+public sealed class StudentCertificateBrandingDto
+{
+	public string? LogoDataUrl { get; set; }
+	public string? BannerDataUrl { get; set; }
 }
 
 public class StudentCertificateStudentDto
@@ -54,6 +73,9 @@ public class StudentCertificateOrganizationDto
 
 public class StudentCertificateTemplateRenderDto
 {
+	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityTemplateChoicesDto? IdentityChoices { get; set; }
+	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityDocumentSnapshotDto? SchoolIdentity { get; set; }
+	public StudentCertificateDocumentDto? Document { get; set; }
 	public string HeaderContent { get; set; } = string.Empty;
 	public string FooterContent { get; set; } = string.Empty;
 	public string RenderedHeaderContent { get; set; } = string.Empty;
@@ -64,8 +86,22 @@ public class StudentCertificateTemplateRenderDto
 	public string? SchoolAddress { get; set; }
 }
 
+public class StudentCertificateDocumentDto
+{
+	public string Title { get; set; } = string.Empty;
+	public string Body { get; set; } = string.Empty;
+	public List<StudentCertificateParticularDto> Particulars { get; set; } = new();
+}
+
+public class StudentCertificateParticularDto
+{
+	public string Label { get; set; } = string.Empty;
+	public string Value { get; set; } = string.Empty;
+}
+
 public class StudentCertificateTemplateDto
 {
+	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityTemplateChoicesDto? IdentityChoices { get; set; }
 	public Guid? Id { get; set; }
 	public StudentCertificateType CertificateType { get; set; }
 	public string HeaderContent { get; set; } = string.Empty;
@@ -86,6 +122,8 @@ public class StudentCertificateHistoryDto
 	public Guid? GeneratedBy { get; set; }
 	public string Status { get; set; } = string.Empty;
 	public DateTime CreatedDate { get; set; }
+	public Guid? TransitionId { get; set; }
+	public Guid? SourceCertificateId { get; set; }
 	public List<string> SupportedActions { get; set; } = new() { "View", "Download", "Print", "Duplicate" };
 }
 

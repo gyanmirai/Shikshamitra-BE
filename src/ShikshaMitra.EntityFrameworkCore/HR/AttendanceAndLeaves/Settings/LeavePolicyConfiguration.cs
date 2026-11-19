@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
@@ -11,6 +11,7 @@ public class LeavePolicyConfiguration : IEntityTypeConfiguration<LeavePolicy>
 		builder.ToTable("AppEmployeeLeavePolicies");
 
 		builder.ConfigureByConvention();
+		builder.Property(x => x.Version).IsRequired().HasDefaultValue(1).IsConcurrencyToken();
 
 		builder.Property(x => x.AcademicYearId)
 			.IsRequired();

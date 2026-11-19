@@ -1,0 +1,51 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Volo.Abp;
+using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Repositories;
+
+namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
+
+[RemoteService(false)]
+public class AdmissionOfferingWorkflowConfigurationResolver(
+	IRepository<AdmissionWorkflowDefinition, Guid> workflows,
+	IRepository<AdmissionWorkflowStageDefinition, Guid> stages) : ITransientDependency
+{
+	public async Task ResolveAsync(AdmissionOfferingWriteDto input, AdmissionOffering? existing = null, bool preserveRouting = true,
+		bool preserveReferences = false)
+	{
+		if (!Enum.IsDefined(input.Track) || !Enum.IsDefined(input.EntryMode))
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
+				"Choose a supported admission type and entry mode.");
+		if (preserveRouting && existing != null)
+		{
+			input.Track = existing.Track;
+			input.EntryMode = existing.EntryMode;
+		}
+		if (preserveReferences && existing != null)
+		{
+			// Operational saves must not silently derive a replacement for a locked historical form.
+			input.WorkflowDefinitionId = existing.WorkflowDefinitionId;
+			input.InquiryFormDefinitionId = existing.InquiryFormDefinitionId;
+			input.ApplicationFormDefinitionId = existing.ApplicationFormDefinitionId;
+			return;
+		}
+		var workflow = input.WorkflowDefinitionId.HasValue
+			? await workflows.FindAsync(input.WorkflowDefinitionId.Value) : null;
+		var configuredForms = workflow == null ? [] : (await stages.GetListAsync(stage =>
+			stage.WorkflowDefinitionId == workflow.Id && stage.StageType == AdmissionWorkflowStageType.Form))
+			.Select(stage => AdmissionFormStageAccessService.ReadFormDefinitionId(stage.ConfigurationJson))
+			.Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToArray();
+		// Published workflow choices are authoritative. Legacy stored references remain
+		// usable only when editing the same workflow without an explicit form choice.
+		var retainLegacy = existing?.WorkflowDefinitionId == input.WorkflowDefinitionId;
+		input.InquiryFormDefinitionId = input.EntryMode == AdmissionEntryMode.DirectRegistration ? null :
+			input.InquiryFormDefinitionId ?? workflow?.DefaultInquiryFormDefinitionId ??
+			(retainLegacy ? existing?.InquiryFormDefinitionId : null);
+		if (input.EntryMode == AdmissionEntryMode.DirectRegistration)
+			input.InquiryIntakeProfileId = null;
+		input.ApplicationFormDefinitionId = configuredForms.Length == 1 ? configuredForms[0] :
+			configuredForms.Length == 0 && retainLegacy ? existing?.ApplicationFormDefinitionId : null;
+	}
+}

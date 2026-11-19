@@ -44,6 +44,7 @@ public class HrReportExportService(
 		Guid? parentJobId = null)
 	{
 		requestValidationService.Validate(input);
+		if (PayrollIssuedReportBoundary.IsSalaryDocument(input.DataSource)) input.Filters.IncludeDrafts = false;
 		input.SourceAction = string.IsNullOrWhiteSpace(sourceAction) ? "manualExport" : sourceAction;
 		input.ParentJobId = parentJobId;
 		var scopeSnapshot = await scopeAuthorizationService.CaptureAsync(userId, tenantId);
@@ -131,6 +132,7 @@ public class HrReportExportService(
 		EnsureExportStatus(job, "retry", HrReportExportStatus.Failed, HrReportExportStatus.Cancelled);
 		var request = DeserializeRequest(job);
 		request.SourceAction = "retry";
+		if (PayrollIssuedReportBoundary.IsSalaryDocument(request.DataSource)) request.Filters.IncludeDrafts = false;
 		request.ParentJobId = job.Id;
 		var scopeSnapshot = await scopeAuthorizationService.CaptureAsync(
 			job.RequestedByUserId,
@@ -192,6 +194,7 @@ public class HrReportExportService(
 	public async Task<HrReportDownloadDto> DownloadExportAsync(Guid jobId)
 	{
 		var job = await jobAccessService.GetAuthorizedJobAsync(jobId, GetRequiredUserId());
+		PayrollIssuedReportBoundary.EnsureLegacyExport(DeserializeRequest(job));
 		if (job.Status != HrReportExportStatus.Completed || string.IsNullOrWhiteSpace(job.BlobName))
 		{
 			throw new BusinessException(HRErrorCodes.ReportExportNotReady)

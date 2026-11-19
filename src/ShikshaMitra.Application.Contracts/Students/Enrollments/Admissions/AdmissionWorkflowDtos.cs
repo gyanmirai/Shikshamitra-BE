@@ -36,6 +36,7 @@ public class AdmissionWorkflowDto : FullAuditedEntityDto<Guid>
 	public string Name { get; set; } = string.Empty;
 	public string Code { get; set; } = string.Empty;
 	public string? Description { get; set; }
+	public Guid? DefaultInquiryFormDefinitionId { get; set; }
 	public int Version { get; set; }
 	public AdmissionWorkflowStatus Status { get; set; }
 	public Guid? ParentVersionId { get; set; }
@@ -88,8 +89,9 @@ public class CreateUpdateAdmissionWorkflowTransitionDto
 public class CreateUpdateAdmissionWorkflowDto
 {
 	public string Name { get; set; } = string.Empty;
-	public string Code { get; set; } = string.Empty;
+	public string? Code { get; set; }
 	public string? Description { get; set; }
+	public Guid? DefaultInquiryFormDefinitionId { get; set; }
 	public string? ConcurrencyStamp { get; set; }
 	public List<CreateUpdateAdmissionWorkflowStageDto> Stages { get; set; } = [];
 	public List<CreateUpdateAdmissionWorkflowTransitionDto> Transitions { get; set; } = [];
@@ -98,6 +100,7 @@ public class CreateUpdateAdmissionWorkflowDto
 public class AdmissionWorkflowListInput : PagedAndSortedResultRequestDto
 {
 	public string? Search { get; set; }
+	public string? ColumnFilters { get; set; }
 	public AdmissionWorkflowStatus? Status { get; set; }
 	public int? Version { get; set; }
 	public bool? IsUsed { get; set; }
@@ -129,7 +132,7 @@ public class AdmissionWorkflowValidationIssueDto
 public class CloneAdmissionWorkflowDto
 {
 	public string Name { get; set; } = string.Empty;
-	public string Code { get; set; } = string.Empty;
+	public string? Code { get; set; }
 	public string? Description { get; set; }
 }
 

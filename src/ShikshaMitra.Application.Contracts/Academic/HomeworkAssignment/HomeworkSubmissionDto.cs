@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
@@ -29,4 +30,5 @@ public class HomeworkSubmissionDto
 	public string? SubmittedContent { get; set; }
 	public string? SubmittedDocumentUrl { get; set; }
 	public string? OriginalFileName { get; set; }
+	public List<SubmissionAttachmentDto> SubmissionAttachments { get; set; } = [];
 }

@@ -5,6 +5,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
+using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
@@ -18,11 +20,18 @@ using Volo.Abp.EntityFrameworkCore;
 
 namespace ShikshaMitra.EntityFrameworkCore.Finance.Fees.Receipts;
 
-public class EfCoreFeePaymentReceiptRepository(
+public partial class EfCoreFeePaymentReceiptRepository(
     IDbContextProvider<ShikshaMitraDbContext> dbContextProvider
 ) : EfCoreRepository<ShikshaMitraDbContext, FeePaymentReceipt, Guid>(dbContextProvider),
     IFeePaymentReceiptRepository
 {
+    private static readonly IReadOnlyDictionary<string, LambdaExpression> ReceiptFilterFields =
+        new Dictionary<string, LambdaExpression>
+        {
+            ["receiptNumber"] = (Expression<Func<FeePaymentReceipt, string>>)(r => r.ReceiptNumber),
+            ["totalPaidAmount"] = (Expression<Func<FeePaymentReceipt, double>>)(r => r.TotalPaidAmount),
+            ["receiptDate"] = (Expression<Func<FeePaymentReceipt, DateOnly>>)(r => r.ReceiptDate)
+        };
     private static readonly JsonSerializerOptions PaymentDetailsJsonOptions =
         new(JsonSerializerDefaults.Web);
 
@@ -43,7 +52,8 @@ public class EfCoreFeePaymentReceiptRepository(
         var ids = await query
             .OrderByDescending(r => r.CreationTime)
             .ThenByDescending(r => r.ReceiptNumber)
-            .Skip((filter.Page - 1) * filter.PageSize)
+            .ThenByDescending(r => r.Id)
+            .Skip((int)Math.Min((long)(filter.Page - 1) * filter.PageSize, int.MaxValue))
             .Take(filter.PageSize)
             .Select(r => r.Id)
             .ToListAsync(cancellationToken);
@@ -51,9 +61,13 @@ public class EfCoreFeePaymentReceiptRepository(
         return (totalCount, ids);
     }
 
-    public async Task<List<ReconciliationRow>> GetReconciliationRowsByIdsAsync(
+    public Task<List<ReconciliationRow>> GetReconciliationRowsByIdsAsync(
         List<Guid> receiptIds,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        ReadReconciliationRowsAsync(receiptIds, true, cancellationToken);
+
+    private async Task<List<ReconciliationRow>> ReadReconciliationRowsAsync(
+        List<Guid> receiptIds, bool includeDetails, CancellationToken cancellationToken)
     {
         if (receiptIds.Count == 0)
             return [];
@@ -67,15 +81,17 @@ public class EfCoreFeePaymentReceiptRepository(
             where receiptIds.Contains(r.Id)
             join s in db.Set<Student>() on r.StudentId equals s.Id into sj
             from s in sj.DefaultIfEmpty()
-            join b in db.Set<EducationBoard>() on s.AcademicBoardId equals (Guid?)b.Id into bj
+            join a in db.Set<FinanceFeeAccount>() on r.FinanceFeeAccountId equals (Guid?)a.Id into aj
+            from a in aj.DefaultIfEmpty()
+            join b in db.Set<EducationBoard>() on (a != null ? (Guid?)a.BoardId : s.AcademicBoardId) equals (Guid?)b.Id into bj
             from b in bj.DefaultIfEmpty()
-            join m in db.Set<EducationMedium>() on s.AcademicMediumId equals m.Id into mj
+            join m in db.Set<EducationMedium>() on (a != null ? a.EducationMediumId : s.AcademicMediumId) equals m.Id into mj
             from m in mj.DefaultIfEmpty()
-            join st in db.Set<Standard>() on s.StandardId equals (Guid?)st.Id into stj
+            join st in db.Set<Standard>() on (a != null ? (Guid?)a.StandardId : s.StandardId) equals (Guid?)st.Id into stj
             from st in stj.DefaultIfEmpty()
-            join d in db.Set<Division>() on s.DivisionId equals (Guid?)d.Id into dj
+            join d in db.Set<Division>() on (a != null ? a.DivisionId : s.DivisionId) equals (Guid?)d.Id into dj
             from d in dj.DefaultIfEmpty()
-            let finalReceipt = r.LinkedFinalReceiptId.HasValue
+            let finalReceipt = includeDetails && r.LinkedFinalReceiptId.HasValue
                 ? db.Set<FeePaymentReceipt>()
                       .Where(f => f.Id == r.LinkedFinalReceiptId)
                       .Select(f => f.ReceiptNumber)
@@ -83,6 +99,8 @@ public class EfCoreFeePaymentReceiptRepository(
                 : null
             select new
             {
+                ReceiptScope = r.ReceiptScope,
+                PaymentReceiptCount = includeDetails ? db.Set<FeePaymentReceipt>().Count(sibling => sibling.FeeCollectionTransactionId == r.FeeCollectionTransactionId && sibling.LinkedProvisionalReceiptId == null) : 1,
                 ReceiptId                  = r.Id,
                 ReceiptNumber              = r.ReceiptNumber,
                 VerificationStatus         = r.VerificationStatus,
@@ -93,7 +111,8 @@ public class EfCoreFeePaymentReceiptRepository(
                 LinkedFinalReceiptNumber   = finalReceipt,
                 FeeCollectionTransactionId = r.FeeCollectionTransactionId,
                 StudentId                  = r.StudentId,
-                StudentName                = s != null
+                FinanceFeeAccountId        = r.FinanceFeeAccountId,
+                StudentName                = a != null ? a.ApplicantName : s != null
                     ? (s.FirstName + " " + (s.MiddleName ?? "") + " " + s.LastName).Trim().Replace("  ", " ")
                     : string.Empty,
                 GrNumber                   = s != null ? s.GrNo : null,
@@ -110,9 +129,11 @@ public class EfCoreFeePaymentReceiptRepository(
         var txIds = rawRows.Select(x => x.FeeCollectionTransactionId).Distinct().ToList();
 
         var paymentRecords = await db.Set<PaymentMethodRecord>()
-            .Where(p => txIds.Contains(p.FeeRecordMetadataId)
-                     && p.PaymentMethod != PaymentMethodEnum.Cash)
-            .OrderBy(p => p.CreationTime)
+            .Where(p => txIds.Contains(p.FeeRecordMetadataId))
+            .OrderBy(p => p.PaymentMethod == PaymentMethodEnum.Cash)
+            .ThenBy(p => p.CreationTime)
+            .ThenBy(p => p.Id)
+            .Select(p => new { p.FeeRecordMetadataId, p.PaymentMethod, p.PaymentDate, p.BankAccountId, p.BankLabelSnapshot, p.PaymentDetails })
             .ToListAsync(cancellationToken);
 
         var paymentByTx = paymentRecords
@@ -126,6 +147,7 @@ public class EfCoreFeePaymentReceiptRepository(
                 paymentByTx.TryGetValue(x.FeeCollectionTransactionId, out var pmr);
                 return new ReconciliationRow
                 {
+                    ReceiptScope = x.ReceiptScope, PaymentReceiptCount = x.PaymentReceiptCount,
                     ReceiptId                  = x.ReceiptId,
                     ReceiptNumber              = x.ReceiptNumber,
                     VerificationStatus         = x.VerificationStatus,
@@ -136,10 +158,14 @@ public class EfCoreFeePaymentReceiptRepository(
                     LinkedFinalReceiptNumber   = x.LinkedFinalReceiptNumber,
                     FeeCollectionTransactionId = x.FeeCollectionTransactionId,
                     PaymentMethod              = pmr?.PaymentMethod ?? PaymentMethodEnum.Cash,
+                    PaymentDate                = pmr?.PaymentDate,
+                    BankAccountId              = pmr?.BankAccountId,
+                    BankLabel                  = pmr?.BankLabelSnapshot,
                     PaymentDetailsJson         = pmr?.PaymentDetails is null
                         ? null
                         : JsonSerializer.Serialize(pmr.PaymentDetails, PaymentDetailsJsonOptions),
                     StudentId                  = x.StudentId,
+                    FinanceFeeAccountId        = x.FinanceFeeAccountId,
                     StudentName                = x.StudentName,
                     GrNumber                   = x.GrNumber,
                     RollNumber                 = x.RollNumber,
@@ -162,7 +188,8 @@ public class EfCoreFeePaymentReceiptRepository(
         int? month,
         int? year,
         IQueryable<Guid>? scopedStudentIdsQuery = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IQueryable<Guid>? scopedAccountIdsQuery = null)
     {
         var db = await GetDbContextAsync();
 
@@ -170,17 +197,22 @@ public class EfCoreFeePaymentReceiptRepository(
         var receiptQ = db.Set<FeePaymentReceipt>()
             .Where(r => r.AcademicYearId == academicYearId
                      && (r.ReceiptKind == FeeReceiptKind.ProvisionalFee
-                         || r.ReceiptKind == FeeReceiptKind.ProvisionalCharge));
+                         || r.ReceiptKind == FeeReceiptKind.ProvisionalCharge
+                         || ((r.ReceiptKind == FeeReceiptKind.FinalFee || r.ReceiptKind == FeeReceiptKind.FinalCharge)
+                             && db.Set<PaymentMethodRecord>().Any(p => p.FeeRecordMetadataId == r.FeeCollectionTransactionId)
+                             && !db.Set<PaymentMethodRecord>().Any(p => p.FeeRecordMetadataId == r.FeeCollectionTransactionId && p.PaymentMethod != PaymentMethodEnum.Cash))));
 
         // User scope — only count receipts for students accessible to the caller
-        if (scopedStudentIdsQuery != null)
-            receiptQ = receiptQ.Where(r => scopedStudentIdsQuery.Contains(r.StudentId));
+        receiptQ = ApplyPayerScope(receiptQ, scopedStudentIdsQuery, scopedAccountIdsQuery);
 
         var q = from r in receiptQ
                 join pmr in db.Set<PaymentMethodRecord>()
                     on r.FeeCollectionTransactionId equals pmr.FeeRecordMetadataId
-                where pmr.PaymentMethod != PaymentMethodEnum.Cash
-                select new { r.VerificationStatus, pmr.PaymentMethod, r.ReceiptDate };
+                where (pmr.PaymentMethod != PaymentMethodEnum.Cash &&
+                    (r.ReceiptKind == FeeReceiptKind.ProvisionalFee || r.ReceiptKind == FeeReceiptKind.ProvisionalCharge)) ||
+                    (pmr.PaymentMethod == PaymentMethodEnum.Cash &&
+                    (r.ReceiptKind == FeeReceiptKind.FinalFee || r.ReceiptKind == FeeReceiptKind.FinalCharge))
+                select new { r.Id, r.VerificationStatus, pmr.PaymentMethod, r.ReceiptDate };
 
         if (month.HasValue)
             q = q.Where(x => x.ReceiptDate.Month == month.Value);
@@ -188,7 +220,7 @@ public class EfCoreFeePaymentReceiptRepository(
         if (year.HasValue)
             q = q.Where(x => x.ReceiptDate.Year == year.Value);
 
-        var grouped = await q
+        var grouped = await q.Distinct()
             .GroupBy(x => new { x.PaymentMethod, x.VerificationStatus })
             .Select(g => new ReconciliationStatusCount
             {
@@ -207,8 +239,10 @@ public class EfCoreFeePaymentReceiptRepository(
     {
         var query = db.Set<FeePaymentReceipt>()
             .Where(r => r.AcademicYearId == filter.AcademicYearId
-                     && (r.ReceiptKind == FeeReceiptKind.ProvisionalFee
-                         || r.ReceiptKind == FeeReceiptKind.ProvisionalCharge));
+                     && (filter.PaymentMethod == PaymentMethodEnum.Cash
+                         ? (r.ReceiptKind == FeeReceiptKind.FinalFee || r.ReceiptKind == FeeReceiptKind.FinalCharge) &&
+                           !db.Set<PaymentMethodRecord>().Any(p => p.FeeRecordMetadataId == r.FeeCollectionTransactionId && p.PaymentMethod != PaymentMethodEnum.Cash)
+                         : (r.ReceiptKind == FeeReceiptKind.ProvisionalFee || r.ReceiptKind == FeeReceiptKind.ProvisionalCharge)));
 
         if (filter.Month.HasValue)
             query = query.Where(r => r.ReceiptDate.Month == filter.Month.Value);
@@ -229,47 +263,110 @@ public class EfCoreFeePaymentReceiptRepository(
             query = query.Where(r => txIds.Contains(r.FeeCollectionTransactionId));
         }
 
-        // Free-text search
-        if (!string.IsNullOrWhiteSpace(filter.Search))
+        if (filter.TableQuery != null)
         {
-            var term = filter.Search.Trim().ToLower();
-            if (int.TryParse(term, out var grNo))
-            {
-                var studentIds = db.Set<Student>()
-                    .Where(s => s.GrNo == grNo)
-                    .Select(s => s.Id);
-                query = query.Where(r =>
-                    r.ReceiptNumber.ToLower().Contains(term) ||
-                    studentIds.Contains(r.StudentId));
-            }
-            else
-            {
-                var studentIds = db.Set<Student>()
-                    .Where(s => (s.FirstName + " " + s.LastName).ToLower().Contains(term)
-                             || (s.FirstName + " " + s.MiddleName + " " + s.LastName).ToLower().Contains(term))
-                    .Select(s => s.Id);
-                query = query.Where(r =>
-                    r.ReceiptNumber.ToLower().Contains(term) ||
-                    studentIds.Contains(r.StudentId));
-            }
+            query = ApplyReconciliationScalarHeaders(query, filter.TableQuery, filter.PaymentMethod);
+            query = ApplyReconciliationContextHeaders(query, db, filter.TableQuery);
         }
-
-        // User scope — only receipts whose student is within the caller's access scope
-        if (filter.ScopedStudentIdsQuery != null)
-            query = query.Where(r => filter.ScopedStudentIdsQuery.Contains(r.StudentId));
-
-        return query;
+        query = ApplySearch(query, db, filter.Search);
+        return ApplyPayerScope(query, filter.ScopedStudentIdsQuery, filter.ScopedAccountIdsQuery);
     }
 
 
     public async Task<(int TotalCount, List<FeePaymentReceipt> Items)> GetPagedListAsync(
         FeeReceiptListFilter filter,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool includeTotalCount = true)
     {
         var dbContext = await GetDbContextAsync();
 
+        var query = BuildReceiptListQuery(dbContext, filter);
+
+        var totalCount = includeTotalCount ? await query.CountAsync(cancellationToken) : -1;
+        if (includeTotalCount && totalCount == 0)
+            return (0, []);
+
+        var items = await query
+            .OrderByDescending(r => r.CreationTime)
+            .ThenByDescending(r => r.ReceiptNumber)
+            .Skip(filter.SkipCount)
+            .Take(filter.MaxResultCount)
+            .ToListAsync(cancellationToken);
+
+        return (totalCount, items);
+    }
+
+    public async Task<List<FeeReceiptListFilterRow>> GetListFilterRowsAsync(
+        FeeReceiptListFilter filter,
+        bool includePaymentMethods,
+        CancellationToken cancellationToken = default)
+    {
+        var db = await GetDbContextAsync();
+        var query = BuildReceiptListQuery(db, filter);
+        var rawRows = await (
+            from receipt in query
+            join student in db.Set<Student>().AsNoTracking() on receipt.StudentId equals (Guid?)student.Id into students
+            from student in students.DefaultIfEmpty()
+            join account in db.Set<FinanceFeeAccount>().AsNoTracking() on receipt.FinanceFeeAccountId equals (Guid?)account.Id into accounts
+            from account in accounts.DefaultIfEmpty()
+            join linked in db.Set<FeePaymentReceipt>().AsNoTracking() on receipt.LinkedFinalReceiptId equals (Guid?)linked.Id into linkedReceipts
+            from linked in linkedReceipts.DefaultIfEmpty()
+            orderby receipt.CreationTime descending, receipt.ReceiptNumber descending
+            select new
+            {
+                receipt.Id,
+                receipt.ReceiptNumber,
+                receipt.ReceiptKind,
+                receipt.ReceiptScope,
+                receipt.VerificationStatus,
+                LinkedFinalReceiptNumber = linked != null ? linked.ReceiptNumber : null,
+                receipt.TotalPaidAmount,
+                receipt.ReceiptDate,
+                StudentName = student != null
+                    ? (student.FirstName + " " + (student.MiddleName ?? "") + " " + student.LastName).Trim().Replace("  ", " ")
+                    : account != null ? account.ApplicantName : string.Empty,
+                GrNo = student != null ? student.GrNo : null,
+                RollNo = student != null ? student.RollNo : null,
+            }).ToListAsync(cancellationToken);
+
+        var rows = rawRows.Select(row => new FeeReceiptListFilterRow
+        {
+            Id = row.Id,
+            ReceiptNumber = row.ReceiptNumber,
+            ReceiptKind = row.ReceiptKind,
+            ReceiptScope = row.ReceiptScope,
+            VerificationStatus = row.VerificationStatus,
+            LinkedFinalReceiptNumber = row.LinkedFinalReceiptNumber,
+            TotalPaidAmount = row.TotalPaidAmount,
+            ReceiptDate = row.ReceiptDate,
+            StudentName = row.StudentName,
+            GrNo = row.GrNo,
+            RollNo = row.RollNo?.ToString(),
+        }).ToList();
+
+        if (includePaymentMethods && rows.Count > 0)
+        {
+            var payments = await (
+                from payment in db.Set<PaymentMethodRecord>().AsNoTracking()
+                join receipt in query on payment.FeeRecordMetadataId equals receipt.FeeCollectionTransactionId
+                select new { receipt.Id, payment.PaymentMethod }).ToListAsync(cancellationToken);
+            var labels = payments.GroupBy(payment => payment.Id).ToDictionary(
+                group => group.Key,
+                group => string.Join(", ", group.Select(payment => payment.PaymentMethod).Distinct()
+                    .OrderBy(method => method).Select(FeeReceiptPresentation.GetPaymentMethodLabel)));
+            foreach (var row in rows)
+                if (labels.TryGetValue(row.Id, out var label)) row.PaymentMethodLabel = label;
+        }
+
+        return rows;
+    }
+
+    private static IQueryable<FeePaymentReceipt> BuildReceiptListQuery(
+        ShikshaMitraDbContext dbContext, FeeReceiptListFilter filter)
+    {
+
         // ── Build student sub-query for denormalized board/medium match ────────
-        var query = dbContext.Set<FeePaymentReceipt>()
+        var query = dbContext.Set<FeePaymentReceipt>().AsNoTracking()
             .Where(r => r.AcademicYearId == filter.AcademicYearId
                      && r.BoardId == filter.BoardId
                      && r.EducationMediumId == filter.EducationMediumId);
@@ -286,62 +383,70 @@ public class EfCoreFeePaymentReceiptRepository(
         if (filter.StandardId.HasValue || filter.DivisionId.HasValue)
         {
             var studentQ = dbContext.Set<Student>().AsQueryable();
+            var accountQ = dbContext.Set<FinanceFeeAccount>().AsQueryable();
 
             if (filter.StandardId.HasValue)
+            {
                 studentQ = studentQ.Where(s => s.StandardId == filter.StandardId.Value);
+                accountQ = accountQ.Where(a => a.StandardId == filter.StandardId.Value);
+            }
 
             if (filter.DivisionId.HasValue)
+            {
                 studentQ = studentQ.Where(s => s.DivisionId == filter.DivisionId.Value);
+                accountQ = accountQ.Where(a => a.DivisionId == filter.DivisionId.Value);
+            }
 
             var studentIds = studentQ.Select(s => s.Id);
-            query = query.Where(r => studentIds.Contains(r.StudentId));
+            var accountIds = accountQ.Select(a => a.Id);
+            query = query.Where(r => (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && studentIds.Contains(r.StudentId.Value)) ||
+                (r.FinanceFeeAccountId.HasValue && accountIds.Contains(r.FinanceFeeAccountId.Value)));
         }
 
         // ── User scope filter ─────────────────────────────────────────────────
-        if (filter.ScopedStudentIdsQuery != null)
-            query = query.Where(r => filter.ScopedStudentIdsQuery.Contains(r.StudentId));
+        query = ApplyPayerScope(query, filter.ScopedStudentIdsQuery, filter.ScopedAccountIdsQuery);
 
         // ── Free-text search ──────────────────────────────────────────────────
-        if (!string.IsNullOrWhiteSpace(filter.Search))
-        {
-            var term = filter.Search.Trim().ToLower();
-            var numericGr = int.TryParse(term, out var grNo);
+        query = ApplySearch(query, dbContext, filter.Search);
 
-            // Join to students for name/GR search
-            var studentQ = dbContext.Set<Student>().AsQueryable();
-            if (numericGr)
-            {
-                var studentIds = studentQ
-                    .Where(s => s.GrNo == grNo)
-                    .Select(s => s.Id);
-                query = query.Where(r =>
-                    r.ReceiptNumber.ToLower().Contains(term) ||
-                    studentIds.Contains(r.StudentId));
-            }
-            else
-            {
-                var studentIds = studentQ
-                    .Where(s => (s.FirstName + " " + s.LastName).ToLower().Contains(term)
-                             || (s.FirstName + " " + s.MiddleName + " " + s.LastName).ToLower().Contains(term))
-                    .Select(s => s.Id);
-                query = query.Where(r =>
-                    r.ReceiptNumber.ToLower().Contains(term) ||
-                    studentIds.Contains(r.StudentId));
-            }
-        }
+        if (filter.TableQuery is not null)
+            query = filter.TableQuery.Apply(query, ReceiptFilterFields, ReceiptFilterFields.ContainsKey);
 
-        var totalCount = await query.CountAsync(cancellationToken);
-        if (totalCount == 0)
-            return (0, []);
+        return query;
+    }
 
-        var items = await query
-            .OrderByDescending(r => r.CreationTime)
-            .ThenByDescending(r => r.ReceiptNumber)
-            .Skip(filter.SkipCount)
-            .Take(filter.MaxResultCount)
-            .ToListAsync(cancellationToken);
+    private static IQueryable<FeePaymentReceipt> ApplyPayerScope(IQueryable<FeePaymentReceipt> query,
+        IQueryable<Guid>? studentIds, IQueryable<Guid>? accountIds)
+    {
+        if (studentIds != null && accountIds != null)
+            return query.Where(r => (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && studentIds.Contains(r.StudentId.Value)) ||
+                (r.FinanceFeeAccountId.HasValue && accountIds.Contains(r.FinanceFeeAccountId.Value)));
+        if (studentIds != null)
+            return query.Where(r => !r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && studentIds.Contains(r.StudentId.Value));
+        if (accountIds != null)
+            return query.Where(r => r.FinanceFeeAccountId.HasValue && accountIds.Contains(r.FinanceFeeAccountId.Value));
+        return query;
+    }
 
-        return (totalCount, items);
+    private static IQueryable<FeePaymentReceipt> ApplySearch(IQueryable<FeePaymentReceipt> query,
+        ShikshaMitraDbContext db, string? search)
+    {
+        if (string.IsNullOrWhiteSpace(search)) return query;
+        var term = search.Trim().ToLowerInvariant();
+        var pattern = "%" + term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
+        var numericGr = int.TryParse(term, out var grNo);
+        var students = db.Set<Student>().AsQueryable();
+        var studentIds = numericGr
+            ? students.Where(s => s.GrNo == grNo).Select(s => s.Id)
+            : students.Where(s => EF.Functions.Like((s.FirstName + " " + s.LastName).ToLower(), pattern, "\\") ||
+                EF.Functions.Like((s.FirstName + " " + s.MiddleName + " " + s.LastName).ToLower(), pattern, "\\")).Select(s => s.Id);
+        var accountIds = db.Set<FinanceFeeAccount>()
+            .Where(a => EF.Functions.Like(a.ApplicantName.ToLower(), pattern, "\\") ||
+                (a.StudentId.HasValue && studentIds.Contains(a.StudentId.Value)))
+            .Select(a => a.Id);
+        return query.Where(r => EF.Functions.Like(r.ReceiptNumber.ToLower(), pattern, "\\") ||
+            (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && studentIds.Contains(r.StudentId.Value)) ||
+            (r.FinanceFeeAccountId.HasValue && accountIds.Contains(r.FinanceFeeAccountId.Value)));
     }
 
     public async Task<FeePaymentReceipt?> FindByReceiptNumberAsync(

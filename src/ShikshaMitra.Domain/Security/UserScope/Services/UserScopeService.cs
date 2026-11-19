@@ -51,6 +51,62 @@ public class UserScopeService(
         return result;
     }
 
+    public async Task<IReadOnlyDictionary<Guid, UserScopeContext>> GetUserScopesAsync(
+        IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var ids = userIds.Where(id => id != Guid.Empty).Distinct().ToArray();
+        var results = new Dictionary<Guid, UserScopeContext>(ids.Length);
+        var local = GetLocalCache();
+        var unresolved = new List<Guid>();
+        foreach (var id in ids)
+        {
+            if (local?.TryGetValue((CurrentTenant.Id, id), out var cached) == true)
+                results[id] = cached;
+            else
+                unresolved.Add(id);
+        }
+        if (unresolved.Count == 0) return results;
+
+        // Resolve the reporting tree and roles once for the entire candidate page.
+        var hierarchy = await repository.GetReportingHierarchyAsync(cancellationToken);
+        var populations = unresolved.ToDictionary(id => id, id => ResolveReportingUsers(id, hierarchy));
+        var populationIds = populations.Values.SelectMany(population => population).Distinct().ToArray();
+        var rolesByUser = await repository.GetRoleNamesByUserIdsAsync(populationIds, cancellationToken);
+        var nonAdminIds = unresolved.Where(id =>
+            rolesByUser.TryGetValue(id, out var roles) && !IsAdministrator(roles)).ToArray();
+        var assignmentIds = nonAdminIds.SelectMany(id => populations[id]).Distinct().ToArray();
+        var assignments = assignmentIds.Length == 0
+            ? new List<UserScopeAssignment>()
+            : await repository.GetAssignmentsAsync(assignmentIds, cancellationToken);
+
+        foreach (var id in unresolved)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var scope = new UserScopeContext { UserId = id, TenantId = CurrentTenant.Id };
+            if (rolesByUser.TryGetValue(id, out var roles))
+            {
+                if (IsAdministrator(roles))
+                    scope.IsAdmin = true;
+                else
+                {
+                    var population = populations[id];
+                    var roleNames = population.Where(rolesByUser.ContainsKey)
+                        .SelectMany(userId => rolesByUser[userId]).ToHashSet(StringComparer.Ordinal);
+                    scope = UserScopeContext.CreateEffective(id, CurrentTenant.Id, assignments.Where(assignment =>
+                        (assignment.UserId.HasValue && population.Contains(assignment.UserId.Value)) ||
+                        (assignment.RoleName != null && roleNames.Contains(assignment.RoleName))));
+                }
+            }
+            results[id] = scope;
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        if (local != null)
+            foreach (var id in unresolved)
+                local[(CurrentTenant.Id, id)] = results[id];
+        return results;
+    }
+
     public async Task<bool> IsAdminUserAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var roles = await repository.GetRoleNamesAsync(userId, cancellationToken);

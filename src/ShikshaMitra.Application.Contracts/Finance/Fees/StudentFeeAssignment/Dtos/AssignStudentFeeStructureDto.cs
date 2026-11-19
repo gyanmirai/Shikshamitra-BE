@@ -6,6 +6,12 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 
 public class AssignStudentFeeStructureDto
 {
+	/// <summary>Explicitly correct this never-paid assignment; ordinary assignment never overwrites.</summary>
+	public Guid? EditAssignmentId { get; set; }
+	public string? AssignmentConcurrencyStamp { get; set; }
+	public string? EditReason { get; set; }
+    public List<AssignmentPolicySelectionDto> Policies { get; set; } = [];
+    public string? PolicyOverrideReason { get; set; }
     public Guid AcademicYearId { get; set; }
     public string? PreviewToken { get; set; }
     public string? OverrideReason { get; set; }
@@ -21,6 +27,9 @@ public class AssignStudentFeeStructureDto
 
 	public List<StudentFeeHeadDetailDto> FeeHeadDetails { get; set; } = new();
 
+    /// <summary>Initial student amounts for included variable heads; independent from fixed overrides.</summary>
+    public List<VariableFeeHeadAmountDto> VariableFeeHeads { get; set; } = [];
+
 	public DateTime? ChargeStartDate { get; set; }
 	public DateTime? ChargeEndDate { get; set; }
 	public string ChargePeriodSource { get; set; } = "AcademicYear";
@@ -28,3 +37,10 @@ public class AssignStudentFeeStructureDto
 	public string? ChargePeriodOverrideReason { get; set; }
 }
 
+
+public class VariableFeeHeadAmountDto
+{
+    public Guid FeeHeadId { get; set; }
+    public decimal? Amount { get; set; }
+    public string? ZeroAmountReason { get; set; }
+}

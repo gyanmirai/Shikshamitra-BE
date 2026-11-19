@@ -2,8 +2,8 @@
 
 /// <summary>
 /// Indicates whether a receipt covers fee-head payments or charge payments.
-/// A single collect event that contains both fee and charge lines will produce
-/// two separate <c>FeePaymentReceipt</c> rows — one per scope.
+/// Collection policy determines whether mixed collections produce a combined document
+/// or separate <c>FeePaymentReceipt</c> rows.
 /// </summary>
 public enum FeeReceiptScope
 {
@@ -12,4 +12,7 @@ public enum FeeReceiptScope
 
     /// <summary>Receipt covers one or more charge payments.</summary>
     Charge = 2,
+
+    /// <summary>One document covers fees (including late fees) and charges.</summary>
+    Combined = 3,
 }

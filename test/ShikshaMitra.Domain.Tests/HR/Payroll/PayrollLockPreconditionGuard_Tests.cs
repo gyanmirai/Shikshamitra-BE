@@ -12,6 +12,28 @@ namespace ShikshaMitra.HR.Payroll;
 public class PayrollLockPreconditionGuard_Tests
 {
 	[Fact]
+	public void Pending_registration_does_not_block_lock_or_finalization_and_keeps_immutable_history()
+	{
+		var employee = Guid.NewGuid();
+		var rule = Guid.NewGuid();
+		var snapshot = new PayrollRunItemSnapshot(Guid.NewGuid(), Guid.NewGuid(), "2026-10", employee)
+		{
+			EmployeeStateInsuranceRuleId = rule,
+			EmployeeStateInsuranceCoverageDecision = "WITHIN_WAGE_CEILING",
+			EmployeeStateInsuranceNumber = null,
+			IssueCodesJson = "[\"ESI_NUMBER_MISSING\"]"
+		};
+		PayrollLockPreconditionGuard.EnsureNoBlockingSetupIssues([employee], new Dictionary<Guid, PayrollRunItemSnapshot> { [employee] = snapshot }, "2026-10");
+		snapshot.MarkLocked();
+		snapshot.IsLocked.ShouldBeTrue();
+		var slip = new SalarySlip(Guid.NewGuid(), snapshot.TenantId, employee, "2026-10", [], [], DateTime.UtcNow);
+		slip.SetStatutorySnapshot([], null, null, null, null, rule, 1, 10000m, 0m, "WITHIN_WAGE_CEILING", null, new(2026, 10, 1), new(2027, 3, 31));
+		slip.FinalizeSlip();
+		slip.Status.ShouldBe(SalarySlipStatus.Finalized);
+		Should.Throw<InvalidOperationException>(() => slip.SetStatutorySnapshot([], null, null, null, null, rule, 1, 10000m, 0m, "WITHIN_WAGE_CEILING", "LATER", new(2026, 10, 1), new(2027, 3, 31)));
+	}
+
+	[Fact]
 	public void Esi_readiness_issues_should_block_payroll_lock()
 	{
 		PayrollLockPreconditionGuard.HasBlockingLockIssue("[\"ESI_WAGE_CLASSIFICATION_REQUIRED\"]")

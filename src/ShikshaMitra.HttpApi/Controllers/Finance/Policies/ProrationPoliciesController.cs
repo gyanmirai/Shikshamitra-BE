@@ -48,6 +48,4 @@ public class ProrationPoliciesController(IProrationPolicyAppService appService) 
 	[HttpPost("{id:guid}/simulate")]
 	public Task<ProrationCalculationResultDto> SimulateAsync(Guid id, [FromBody] ProrationPolicySimulateRequestDto input) => appService.SimulateAsync(id, input);
 
-	[HttpPost("{id:guid}/attachment-impact")]
-	public Task<ProrationPolicyAttachmentImpactDto> GetAttachmentImpactAsync(Guid id, [FromBody] ProrationPolicyAttachmentImpactRequestDto input) => appService.GetAttachmentImpactAsync(id, input);
 }

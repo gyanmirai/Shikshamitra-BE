@@ -3,7 +3,7 @@ module: finance
 domain: concession-policy
 content_type: Reference
 status: active
-updated_on: 2026-09-01
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -27,7 +27,7 @@ A staff member selects a concession type on a request, while the server calculat
 | Fee structure | Every new fee structure assignment requires an attached Active concession policy from the same academic year |
 | Student assignment | Stores the exact policy ID and immutable policy-version ID |
 | Grant point | No concession is granted during fee-structure assignment; only an approved request changes due amounts |
-| Paid fees | Policy application is limited to unpaid due rows; it does not create refunds, wallets, or credits against paid fees |
+| Paid fees | `AllFees` includes paid installments. The resulting paid concession is refundable, with automatic or manual linked refund creation controlled by the pinned policy version |
 
 ## End-to-end flow
 
@@ -41,7 +41,7 @@ Academic year
   -> Staff selects concession type and eligible fee heads
   -> Server resolves the assignment snapshot and calculates/validates amount
   -> Different authorized staff member approves or rejects
-  -> Approval allocates the approved amount to live unpaid DueFee rows
+  -> Approval allocates the approved amount to eligible DueFee rows and records the refundable paid portion
   -> Due balances and request audit history are updated transactionally
 ```
 
@@ -65,16 +65,17 @@ Staff normally selects the student, concession type, fee heads, and evidence; co
 | Field | Options | Server rule |
 |---|---|---|
 | Value source | `PolicyFixed`, `RequestEnteredWithinLimits` | Fixed policies calculate the value automatically; request-entered policies let staff propose a value up to the eligible unpaid amount |
-| Calculation method | `Percentage`, `FixedAmount`, `FullWaiver` | Always calculated on the eligible unpaid base |
+| Calculation method | `Percentage`, `FixedAmount`, `FullWaiver` | Calculated on the eligible scope base; only `AllFees` includes paid amounts |
 | Percentage/fixed value | Conditional | Required only for the matching PolicyFixed method |
-| Maximum percentage | Optional | Caps request-entered percentages and the resulting concession |
+| Maximum percentage | Optional | Caps the sum of entered percentages across all installments and fee heads in one request; defaults to 100% when omitted |
 | Fee-head scope | Entire structure or selected fee heads | The request cannot include a fee head outside the snapshot |
-| Apply on | All outstanding, current installment, future installments | Filters eligible unpaid due rows before calculation and approval |
+| Apply on | All outstanding, current installment, future installments, all installments including paid | The first three scopes filter unpaid due rows; `AllFees` also includes paid amounts |
+| Auto create refund | Boolean; default on for `AllFees`, off for unpaid scopes | Policy-owned, snapshotted and audited. Explicit on is rejected for unpaid scopes (`Finance:ConcessionPolicy:010026`). Controls request creation, with review and payout remaining separate |
 | Rounding | None or configured policy rounding | Applied by the shared server calculator |
 
 ## Calculation rules
 
-Let `eligibleBase` be the sum of the currently eligible unpaid due amounts after fee-head and installment filters.
+Let `eligibleBase` be the sum of currently eligible due amounts after fee-head and installment filters. Unpaid scopes use outstanding balances; `AllFees` includes the eligible paid portion.
 
 | Method | Initial result |
 |---|---|
@@ -85,7 +86,11 @@ Let `eligibleBase` be the sum of the currently eligible unpaid due amounts after
 The server then applies rounding and these boundaries:
 
 - the eligible outstanding amount;
-- maximum percentage for a request-entered percentage, when configured.
+- the request-wide maximum percentage: entered percentages are summed across all selected installments and fee heads, rather than given a separate allowance per row.
+
+For a 50% request maximum, 30% + 20% is valid and 30% + 30% is rejected with `Finance:ConcessionPolicy:010015`.
+Each accepted percentage still calculates its reduction against its own installment's eligible amount.
+The request editor shows the entered and remaining percentage allowance; preview, create, draft update and approval validate the same shared cap.
 
 The frontend preview is advisory.
 Create and approve commands calculate against live server data, so changing balances or duplicate allocations cannot bypass limits.
@@ -174,12 +179,29 @@ They are audit evidence of the rules assigned at that time.
 - Current-installment and future-installment policies exclude other due rows.
 - PolicyFixed values are read-only in the request UI and recalculated on the server.
 - Request-entered percentages above the configured maximum percentage are rejected.
-- Every concession amount is limited to the live eligible unpaid amount.
+- Every concession amount is limited to the live eligible scope amount.
 - Creator cannot approve or reject the same request.
-- Approved allocation cannot exceed current outstanding.
+- Approved allocation cannot exceed current scope capacity; amounts above outstanding are recorded as refundable paid concessions.
 - Editing a policy does not mutate existing assignment snapshots.
 - Attached policy cannot be archived.
 - Unarchive returns the policy to Draft.
+
+## Paid concession refund creation
+
+When a request explicitly selects a policy version, context loading uses that version's application scope for both due selection and eligible amounts.
+Selecting `AllFees` includes settled paid installments even when the assignment has an older unpaid-only policy or no legacy policy snapshot.
+Selecting an unpaid-only policy excludes paid installments; an unselected request retains its assignment-based context.
+These reads do not replace the assignment's historical policy snapshot.
+
+Approval stores immutable paid amounts by due row in the request's audited extra properties. When automatic creation is enabled, approval creates linked refunds atomically, grouped by settled fee receipt. When disabled, approval retains the overpayment and creates no refund request.
+
+Administrator Create and Submit flush approved changes inside the existing transaction before reading the response detail, so the immediate response includes the linked refund requests.
+
+Only the approved concession's paid portion creates a refund; an allocation against unpaid outstanding reduces the due without returning cash.
+
+`POST /api/concession-request/{id}/refund-requests` creates the manual linked requests using server-recorded paid amounts, reduced by any concession reversal. It requires Refund Add and Concession View, student scope, an approved/partially reversed request, a manual pinned policy, a current request stamp and an idempotency key. The same key replays the result; another creation is rejected. Receipt/allocation balance checks and transactional request concurrency protect against duplicate or excessive refunds. Once linked refunds exist, replacement/cancellation and concession reversal use the existing refund workflow.
+
+Migration `ConfigureConcessionRefundCreation` enables automatic creation for existing `AllFees` policies and disables it for unpaid scopes. Historical version JSON is unchanged; missing `AutoCreateRefund` retains its former automatic behavior for `AllFees`.
 
 ## Source map
 

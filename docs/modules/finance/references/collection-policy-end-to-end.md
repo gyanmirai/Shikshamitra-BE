@@ -3,30 +3,65 @@ module: finance
 domain: collection-policy
 content_type: Reference
 status: active
-updated_on: 2026-09-23
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Operate collection policies end to end
 
-TL;DR: a collection policy is an academic-year financial rule set that controls late-fee calculation, per-rule waiver eligibility, online collection, temporary exceptions, and approved student late-fee exceptions.
+TL;DR: a collection policy is an academic-year financial rule set that controls late-fee calculation, online collection, temporary exceptions, and approved student late-fee exceptions.
 The target lifecycle follows Concession Policy: `Draft -> Active -> Archived`, an archived policy restores to `Draft`, only an Active policy can be attached, and every student assignment stores an immutable policy version.
 School staff configure the policy once, verify it with an impact preview, activate it, and attach it to fee structures; routine collection staff see only the server-calculated result and explanation.
 
 > This page is the implementation-ready target contract.
 > It intentionally records behavior that is not fully shipped in the current Collection Policy implementation.
 > The final section lists those gaps so current behavior is never mistaken for the target behavior.
-> Collection Policy stores only `Allow waiver` on each effective late-fee rule. Waiver amount and reason are applied immediately in Fee Collection; there is no separate Waiver module or approval flow. See [Fee Collection waiver end to end](./fee-collection-waiver-end-to-end.md).
+> Collection Policy contains no waiver configuration. Eligible late-fee balances receive a reason-only full-waiver toggle directly in Fee Collection; there is no separate Waiver module or approval flow. See [Fee Collection waiver end to end](./fee-collection-waiver-end-to-end.md).
+
+## Receipt grouping for fees and charges
+
+`receiptGrouping` belongs to the academic-year Collection Policy and its immutable version. For new collections, `Separate` issues a principal-fee receipt and a receipt for all additional charges, including late fees, when both components are paid. `Combined` issues one document containing both components. A principal-only or charges-only collection produces one document in either mode; late-fee-only collection produces a Charge receipt. Older policy rows and version JSON without this field retain `Separate`; omitted update fields preserve the saved value. Cloning copies the choice. Existing issued receipts retain their original amounts, scope and late-fee attribution. No database schema migration or historical receipt rewrite is required because the policy and amount breakdown use existing extension JSON.
+
+New receipts store nullable decimal `LateFeePaidAmount`: zero on principal-only documents,
+the included late-fee amount on Charge/Combined documents, and null on historical documents.
+It is immutable, nonnegative and cannot exceed the document's charge component. Reconciliation
+copies it to linked final receipts. Refund lookup uses it to select the correct document,
+while null preserves historical attribution. Principal of INR 20,000 plus late fees of INR 60,600
+produces INR 20,000 Fee and INR 60,600 Charge receipts in Separate mode, or one INR 80,600 receipt in Combined mode.
+
+| Contract | Implemented behavior |
+|---|---|
+| Owner and actor | Finance policy editors use existing Collection Policy create/update permissions; existing collection, receipt-view and reconciliation permissions remain authoritative. |
+| Scope and resolution | Current tenant and payer academic year; `CollectionPolicyResolver` selects the assignment/account's pinned version before creating receipts. A cashier cannot override grouping in a collection request. |
+| Preconditions | Existing payer scope, due/charge eligibility, payment validation and active assignment checks still apply. |
+| Combined | One `Combined` scope receipt, one number and one PDF; stored decimal fee/charge components sum to its total. The collection response uses the primary `feeReceiptId` for this document. |
+| Separate | A `Fee` receipt and a `Charge` receipt with distinct numbers/PDFs when both components are paid. Their amounts sum to the same collection total. |
+| Verification queue | One row per original provisional document: one combined row or two separate rows. Finalization documents are linked successors and do not create extra queue entries. Cash follows the existing immediate settlement path. |
+| Decision boundary | One instrument is approved/rejected atomically across all its original documents. Acting on either separate row updates both. Mixed provisional instruments remain blocked until instrument allocation shares exist. |
+| States and correction | Pending documents become Verified with individually linked final documents, or Rejected with the existing allocation reversal. A second terminal decision conflicts. History uses the original policy and receipt evidence. |
+| Money and downstream use | Receipt grouping changes document count only. Allocation amounts, income routing and fee-only dashboard totals remain invariant; refunds against combined receipts still use canonical fee allocations, excluding charge money. |
+| Failure, retry and audit | Collection keeps its existing serializable/idempotent transaction. Verification uses a serializable unit of work for all siblings. Metadata records policy ID/version/grouping, and each document retains existing receipt/audit/event links. |
+| Evidence | `CollectionReceiptGrouping_Tests`, `ReceiptGroupingReconciliationApi_Tests`, and the collect-input validator tests cover grouping, historical defaults, exact totals, queue rows, terminal decisions and reversals. |
+
+The frontend owns the configuration and receipt-preview workflow in [Finance workflows](../../../../../Shikshamitra-FE/docs/finance/workflows.md).
+
 
 ## Goals and boundaries
+
+### Common late-fee scope (implemented)
+
+New policies, updates, revisions and clones persist `applyLateFeeToAllFeeHeads = true` in the existing extension JSON and immutable version snapshot. When enabled, the single policy rule applies to every Fee Head in the attached assignment/account context. New writes discard legacy selected-head lists and per-head overrides before validation; the legacy waiver-head column is also cleared. Formula, numeric bounds, academic-year access, accounting routing and lifecycle validation still apply.
+
+Rows and pinned version JSON without the marker default to `false` and retain selected-head scope, `NoLateFee` exclusions and `CustomRule` groups. Reading a historical snapshot never upgrades it. Saving or cloning it creates a common version for future use. The historical selected-head attachment rules below apply only to versions whose marker is false; enabled common policies cover every validated structure head and have no selected-head overlap/unused-head warning.
+
+Common accrual uses one group across all eligible heads and installments in the context. Assessed/paid/waived amounts remain on their existing due references, and only growth above their combined assessment floor is added. Charge displays use **Late Fee**. The persisted explanation prefix `Common late fee across selected fee heads and overdue installments. ` remains recognized for historical evidence. No schema migration or historical data rewrite is needed.
 
 The policy must make these questions deterministic:
 
 - Which fee heads can attract a late fee?
 - When does a late fee start?
 - How is it calculated and capped?
-- May a balance produced by this late-fee rule be waived in Fee Collection?
 - Is online payment allowed?
 - Which policy version governed a student and a transaction?
 
@@ -48,9 +83,9 @@ Those modules consume the policy result but remain their own source of truth.
 | Versioning | Every create, edit, status change, and clone writes an immutable version/audit snapshot |
 | Historical use | Fee structure and student assignment store policy ID plus exact policy-version ID |
 | Runtime math | Server is authoritative; frontend calculators are previews only |
-| Fee-head mismatch | Use the intersection of policy heads and fee-structure heads; zero overlap is allowed and makes that feature inactive for the structure |
-| Policy-only heads | Allowed because one policy may serve multiple structures; show a warning for the current structure |
-| Structure-only heads | Collect normally but do not receive that policy's late fee |
+| Fee-head coverage | Common enabled policies cover all validated structure heads; historical selected-head versions use intersection |
+| Policy-only heads | Relevant only to historical selected-head versions; warn for heads absent from the structure |
+| Structure-only heads | Covered by common policies; excluded only by historical selected-head versions |
 | No-policy case | New fee structures and new student assignments are blocked; legacy data needs a controlled migration path |
 | Policy edit | Existing assignments and posted transactions keep their captured version; only future assignments use the new version |
 | Policy deletion | Financial policies are archived, not hard-deleted after creation |
@@ -61,7 +96,7 @@ Use progressive disclosure in the UI.
 
 | Staff need | Default experience | Advanced controls |
 |---|---|---|
-| Create a normal policy | Name, eligible heads, grace days, one calculation method | Caps, accounting, per-head overrides |
+| Create a normal policy | Name, grace days, one common calculation method | Caps and accounting |
 | Attach to a structure | Default policy is preselected and an impact summary appears | Change policy or inspect version |
 | Collect a payment | Due, calculated late fee, applied waiver, and payable total are already calculated | Open calculation explanation or apply an eligible waiver |
 | Handle a closure/disaster | Create one exception window | Student-specific override only for genuine individual exceptions |
@@ -70,7 +105,7 @@ Recommended setup order for a school:
 
 1. Configure the academic year, fee heads, payment terms, and accounting income head.
 2. Create a Collection Policy as Draft.
-3. Configure late-fee rules, each rule's `Allow waiver` toggle, and online-payment rules.
+3. Configure late-fee and online-payment rules.
 4. Run simulation and fee-structure impact preview.
 5. Resolve every blocking validation and review warnings.
 6. Activate the policy.
@@ -78,7 +113,7 @@ Recommended setup order for a school:
 8. Attach it to relevant fee structures; the default policy may be preselected.
 9. Assign fee structures to students; capture the immutable policy version.
 10. Collect fees using server-calculated amounts.
-11. When an eligible late-fee balance needs reduction, apply amount plus reason directly from Fee Collection.
+11. When an eligible late-fee balance must be waived, toggle that row and enter the reason directly in Fee Collection.
 
 ## Status lifecycle based on Concession Policy
 
@@ -154,46 +189,45 @@ The backend derives and stores the academic-year start and end dates for version
 | Field | Required when | Target rule |
 |---|---|---|
 | Enable late fee | Always | When false, clear/ignore late-fee formula fields and return zero |
-| Grace-period type | Late fee enabled | `Calendar`; expose `WorkingDay` only after a holiday-calendar source is integrated |
-| Grace-period days | Late fee enabled | Integer 0-365 |
-| Late-fee fee heads | Late fee enabled | At least one valid, active fee head from the same tenant/year |
+| Grace-period days | Late fee enabled | Integer 0-365 calendar days, including weekends and holidays; no configurable day-count type |
+| Late-fee fee heads | Historical versions only | New writes clear the list and apply one common rule to all heads |
 | Calculation type | Late fee enabled | `Flat`, `Percentage`, `PerDay`, `PerWeek`, `PerMonth`, `Compound`, `Slab` |
-| Flat amount | Type = Flat | Greater than zero, currency precision |
-| Percentage | Type = Percentage/Compound | Greater than zero and at most 100 |
+| Flat amount | Type = Flat | 0.01-999999, at most two decimal places |
+| Percentage | Type = Percentage/Compound | 0.01-100, at most two decimal places |
 | Percentage base | Percentage/Compound | `OutstandingAmount`, `OriginalFee`, or approved meaning of `RemainingBalance` |
-| Amount per day/week/month | Matching type | Greater than zero, currency precision |
+| Amount per day/week/month | Matching type | 0.01-999999, at most two decimal places |
 | Compound frequency | Compound | `Daily`, `Weekly`, `Monthly` |
-| Slabs | Slab | At least one; start at day 1 after grace; ordered; no gap/overlap; last slab may be open-ended |
+| Slabs | Slab | At least one; start at day 1 after grace; finite endpoints 1-365; ordered; no gap/overlap; last slab may be open-ended; when a charging cutoff is supplied, cover through it without finite endpoints beyond it; values use the corresponding amount/percentage limits |
 | Rounding | Late fee enabled | `None`, `RoundUp`, `RoundDown`, `NearestRupee` |
-| Maximum late-fee amount | No | Positive; final fee cannot exceed it |
-| Maximum charging days | No | Integer greater than zero; accrual freezes after this many effective late days |
-| Allow waiver | Late fee enabled | Boolean, default OFF; captured on each assessed late-fee line and used only to expose the direct Fee Collection action |
+| Maximum late-fee amount | No | Empty means no limit; otherwise 0.01-999999 with at most two decimal places; final fee cannot exceed it |
+| Maximum charging days | No | Integer 1-365; accrual freezes after this many effective late days |
 | Consider as income | Always | When true, an active tenant-owned income head is required |
 | Late-fee income head | Consider as income = true | Must be active and valid for posting |
 
 `RemainingBalance` does not currently have a distinct runtime meaning because the server supplies the current outstanding amount for both fields.
+
+The same numeric bounds apply to supplied draft values and custom fee-head overrides. Simulation accepts 0-365 overdue days, 0-365 optional custom grace days, and 0-999999 for monetary inputs with at most two decimal places. These are configuration/input bounds; calculated outputs remain governed by the selected formula, cutoff, ceiling, and rounding, rather than being silently clamped to the input maximum. Immutable historical version snapshots retain their original numeric configuration when restored for calculation; new writes, including revisions and clones, must satisfy current bounds.
 Keep it hidden or label it experimental until Finance approves a precise definition; do not let staff select an ambiguous calculation base.
 
-### Per-fee-head override section
+### Historical per-fee-head overrides
 
-Each policy fee head can use one mode:
+Pinned historical selected-head versions retain these modes. New writes ignore and clear override inputs:
 
 | Mode | Meaning | Validation |
 |---|---|---|
-| Inherit | Use policy-level rule, including its `Allow waiver` value | No nested custom rule |
+| Inherit | Use policy-level rule | No nested custom rule |
 | No late fee | Explicitly exempt this head | No nested custom rule |
-| Custom rule | Use a different formula/cap and its own `Allow waiver` value for this head | Same formula validations as policy-level rule |
+| Custom rule | Use a different formula/cap for this head | Same formula validations as policy-level rule |
 
 Override fee heads must be unique, active, same-year, and included in the policy's late-fee fee-head list.
 The Fee Structure screen may display the resolved overrides but must not silently edit the shared policy.
 Policy changes happen only in Collection Policy setup with the appropriate permission and audit trail.
 
-### Waiver eligibility boundary
+### Waiver boundary
 
-Collection Policy owns only the per-effective-rule `Allow waiver` boolean.
-It does not own waiver amount, reason, request state, approval, rejection, thresholds, roles, caps, expiry, or a separate fee-head waiver selector.
-The resolved boolean is captured with each assessed late-fee line so later policy edits do not reinterpret historical eligibility.
-Fee Collection owns immediate application as defined in [Fee Collection waiver end to end](./fee-collection-waiver-end-to-end.md).
+Collection Policy owns no waiver field or eligibility setting.
+It does not own waiver amount, reason, request state, approval, rejection, thresholds, roles, caps, expiry, or a fee-head waiver selector.
+Fee Collection derives row eligibility from a positive collectible late-fee balance and owns the reason-only full-balance operation defined in [Fee Collection waiver end to end](./fee-collection-waiver-end-to-end.md).
 
 ### Online-collection section
 
@@ -312,6 +346,8 @@ Default-policy fallback is allowed only as a temporary, logged migration bridge 
 
 Let `D` be the due date and `C` the collection/calculation date, both normalized to the school's local date.
 
+Exclude terms whose due date is before the student's captured joining date or fee-applicability start. Same-day dues remain eligible. The immutable assignment snapshot owns captured dates; legacy assignments fall back to the canonical Admission joining-date reader. Never substitute record creation time for admission. Missing legacy admission evidence retains existing eligibility; conflicting admission evidence blocks calculation for review.
+
 ```text
 daysLate = max(0, C - D in whole calendar days)
 effectiveGrace = student custom grace if present, otherwise policy grace
@@ -342,7 +378,7 @@ chargeableDays = max(0, daysLate - effectiveGrace)
 
 | Type | Calculation |
 |---|---|
-| Flat | One amount per due row after grace, not once per payment attempt |
+| Flat | One amount across all overdue selected heads and months within the pinned assignment/rule group; never multiplied per row or payment attempt |
 | Percentage | `rate x selected base` |
 | Per day | `amount x chargeableDays` |
 | Per week | `amount x ceiling(chargeableDays / 7)` |
@@ -352,12 +388,16 @@ chargeableDays = max(0, daysLate - effectiveGrace)
 
 Every response exposes gross late fee, previously paid, waived, remaining, chargeable days, cap/rounding result, policy/version, and explanation.
 
+Common versions apply the rule to all context heads. Historical selected-head versions retain their saved applicability scope; inherited heads share one calculation, custom-rule overrides retain separate groups and `NoLateFee` overrides remain excluded. Daily, weekly and monthly rates count the union of eligible overdue calendar-day intervals, including evidenced principal settlement dates, so simultaneous heads do not multiply days. Grace applies before interval union; weekly/monthly periods remain started 7/30-day periods. Fully settled principal stops new accrual.
+
+`LateFeeBalanceService` loads the full same-academic-year payer scope even for single-row payment/waiver validation, then returns the requested rows. New common charges use a stable due reference and the label **Late Fee**. Existing assessed, paid and waived amounts stay on their original references; only growth above their combined floor is added to the common charge. Historical assessments are not automatically deleted or rewritten by this fix. Collection, summaries and bulk waivers use these canonical balances.
+
 ## Collection scenarios
 
 | Scenario | Required behavior |
 |---|---|
 | Before/on due date | Principal is collectable; late fee is zero |
-| After due date | Server returns late fee per eligible due row |
+| After due date | Server returns one common late fee across eligible selected heads and months per pinned assignment/rule group |
 | Partial principal payment | Post allocation; future percentage-based calculations use the policy's defined base |
 | Multiple partial payments | Never recollect already paid principal or late fee |
 | Full payment | Principal plus remaining late fee closes the due row |
@@ -372,9 +412,9 @@ Every response exposes gross late fee, previously paid, waived, remaining, charg
 
 ## Fee Collection waiver integration
 
-Collection Policy calculates the late fee and captures whether its effective rule allows waiver.
-Fee Collection shows `Waive` only when that captured value is ON and a positive balance remains.
-An authorized collector enters amount and reason, and the server applies the non-cash reduction immediately after live-balance validation.
+Collection Policy calculates the late fee but has no waiver setting.
+Fee Collection shows the waiver toggle when a positive collectible late-fee balance remains and the user has permission.
+An authorized collector enters only a reason, and the server immediately waives the full live remaining balance after validation.
 There is no request, approval, rejection, or Waiver Management queue.
 The complete flow is defined in [Fee Collection waiver end to end](./fee-collection-waiver-end-to-end.md).
 
@@ -450,7 +490,7 @@ Closing a dirty drawer asks for confirmation.
 ### Frontend security and client rules
 
 - Menu and route use `Finance.Policies.CollectionPolicy.View`, not Fee Collections permission.
-- Configuration buttons use View, Add and Delete. Direct waiver application uses the proposed `Finance.Fees.FeeCollections.ApplyWaiver`; override, exception, and report grants remain separate.
+- Configuration buttons use View, Add and Delete. Direct waiver application uses `Finance.Fees.FeeCollections.ApplyWaiver`; override, exception, and report grants remain separate.
 - Backend repeats every permission and ownership check.
 - RTK Query uses typed request/response contracts, precise cache tags by year/policy, and invalidates list/detail/version/impact after mutation.
 - Prevent duplicate submit while saving and send an idempotency key for financial commands.
@@ -492,8 +532,8 @@ All routes require authentication and matching permissions.
 | GET/POST/DELETE | `/api/finance/collection-policies/exception-windows...` | Manage scoped temporary windows |
 | GET/PUT | `/api/finance/collection-policies/student-overrides...` | Read/set student effective exceptions |
 
-Collection Policy create/update/detail includes only the `AllowWaiver` value on each effective late-fee rule.
-The monetary command is deliberately excluded from the Collection Policy API and is defined under Fee Collection in [Fee Collection waiver end to end](./fee-collection-waiver-end-to-end.md#target-contracts).
+Collection Policy create/update/detail contains no waiver field.
+The monetary command is deliberately excluded from the Collection Policy API and is defined under Fee Collection in [Fee Collection waiver end to end](./fee-collection-waiver-end-to-end.md#target-contract).
 
 Mutation responses return current version/concurrency token.
 Conflicts return a stable business error rather than overwriting another administrator's changes.
@@ -608,7 +648,7 @@ Business errors use stable error codes with structured data so the frontend can 
 - contiguous/gapped/overlapping slabs;
 - all fee-head match combinations;
 - per-head override precedence;
-- per-rule waiver-toggle capture and applied-waiver subtraction without changing the original late-fee assessment;
+- reason-only full-balance waiver application without changing the original late-fee assessment;
 - exception and student-override precedence.
 
 ### Application/API tests
@@ -636,7 +676,7 @@ Business errors use stable error codes with structured data so the frontend can 
 - dirty-close confirmation and duplicate-submit prevention;
 - archive/restore/default replacement guidance;
 - responsive keyboard-accessible drawer;
-- collection explanation, online-disabled, and retry flows; Fee Collection tests cover immediate amount-plus-reason waiver application.
+- collection explanation, online-disabled, and retry flows; Fee Collection tests cover reason-only full-balance waiver application.
 
 ## Deployment and school rollout
 
@@ -685,7 +725,7 @@ The following gaps must be closed before treating this page as shipped behavior:
 3. Fee Structure stores only Collection Policy ID; it needs the exact version ID and authoritative attachment validation.
 4. Student assignment snapshots Concession Policy but not Collection Policy.
 5. The resolver returns a directly attached policy without status, academic-year, date, or version validation and falls back to the mutable default.
-6. The runtime calculator does not enforce `LateFeeApplyOnFeeHeads`; obsolete `WaiverApplyOnFeeHeads` and the broader policy-owned waiver settings must be replaced by one captured `AllowWaiver` boolean per effective late-fee rule.
+6. The runtime calculator does not enforce `LateFeeApplyOnFeeHeads`; `EnableWaiver`, `EnableChargeWaiver`, `WaiverApplyOnFeeHeads`, and every other policy-owned waiver setting must be removed from the active contract.
 7. Fee-head attachment impact is implemented with intersection semantics and warnings; student-assignment snapshot coverage remains incomplete.
 8. Several enum parsers silently choose defaults for invalid strings.
 9. Full numeric/date/reference validation and foreign-key integrity are incomplete.
@@ -695,7 +735,7 @@ The following gaps must be closed before treating this page as shipped behavior:
 13. The Fee Structure screen can edit shared Collection Policy overrides, which should be read-only there.
 14. Frontend policy routing uses Fee Collections permission instead of Collection Policy permissions.
 15. The frontend locally reimplements calculation and can drift from server caps/rules.
-16. WorkingDay grace, overlapping exception windows, and `DisableOnlineCollection` are not fully enforced.
+16. Overlapping exception windows and `DisableOnlineCollection` are not fully enforced. Collection grace periods always use calendar days.
 17. Remaining previously paid late fee, idempotency, reversal, accounting, receipts, reports, and notification consistency need end-to-end completion.
 
 ## Source map

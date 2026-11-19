@@ -29,9 +29,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				return await _offeringRepository.InsertAsync(offering, autoSave: true);
 			});
 			var applicant = await CreateCertificationApplicantAsync("OutsideScope", true, true, null);
-			var denied = await _applicationAppService.StartAsync(applicant.Id, otherOffering.Id);
+			var denied = await StartFixtureApplicationAsync(applicant.Id, otherOffering.Id);
 			var year = (await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(allowed.Offering.AdmissionCycleId))).AcademicYearId;
 			var staffId = Guid.NewGuid();
+			await EnsureTestIdentityUserAsync(staffId, $"admission-staff-{staffId:N}");
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: staffId,
 				academicYearId: year, educationBoardId: allowed.Offering.BoardId, educationMediumId: allowed.Offering.MediumId,
 				educationMediumStageId: allowed.Offering.StageId, standardId: allowed.Offering.StandardId,
@@ -50,8 +51,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Decision(denied, "Unauthorized decision")));
 			await Should.ThrowAsync<EntityNotFoundException>(() => FinalizeAsync(denied, true, "denied-standard-finalization"));
 			(await _applicationAppService.FindAsync(allowed.Application.Id)).ShouldNotBeNull();
-			var accepted = await _applicationAppService.AcceptOfferAsync(allowed.Application.Id,
-				Decision(allowed.Application, "Authorized guardian acceptance"));
+			var accepted = await _applicationAppService.GetAsync(allowed.Application.Id);
 			(await _applicationAppService.GetFinalizationPreviewAsync(accepted.Id)).IsReady.ShouldBeTrue();
 			var finalized = await FinalizeAsync(accepted, true, "allowed-standard-finalization");
 			finalized.Application.Status.ShouldBe(AdmissionApplicationStatus.AdmissionFinalized);

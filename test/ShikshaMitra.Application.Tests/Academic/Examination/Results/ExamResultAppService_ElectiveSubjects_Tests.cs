@@ -23,7 +23,7 @@ using Xunit;
 
 namespace ShikshaMitra.Academic.Examination.Results;
 
-public class ExamResultAppService_ElectiveSubjects_Tests
+public partial class ExamResultAppService_ElectiveSubjects_Tests
     : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private static readonly Guid TestTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -239,6 +239,7 @@ public class ExamResultAppService_ElectiveSubjects_Tests
         double englishTotalMarks = 100,
         double computerScienceTotalMarks = 100)
     {
+        await EnsureReadQueryActorAsync();
         var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
         var stage = await _stageRepository.GetAsync(stageId);
         var medium = await _mediumRepository.GetAsync(stage.EducationMediumId);

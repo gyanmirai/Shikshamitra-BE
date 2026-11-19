@@ -56,6 +56,24 @@ public class AdmissionApplication_Tests
 	}
 
 	[Fact]
+	public void Direct_finalization_requires_approval_and_does_not_change_offer_finalization_rule()
+	{
+		var application = CreateSubmittedApplication();
+		var studentId = Guid.NewGuid();
+		var caseId = Guid.NewGuid();
+		Should.Throw<Volo.Abp.BusinessException>(() =>
+			application.FinalizeApprovedDirectAdmission(studentId, caseId, DateTime.UtcNow));
+		application.Approve(Guid.NewGuid(), "Direct admission approved");
+		Should.Throw<Volo.Abp.BusinessException>(() =>
+			application.FinalizeAdmission(studentId, caseId, DateTime.UtcNow));
+
+		application.FinalizeApprovedDirectAdmission(studentId, caseId, DateTime.UtcNow);
+		application.Status.ShouldBe(AdmissionApplicationStatus.AdmissionFinalized);
+		application.StudentId.ShouldBe(studentId);
+		application.OnboardingCaseId.ShouldBe(caseId);
+	}
+
+	[Fact]
 	public void Historical_onboarding_link_preserves_legacy_enrolled_status_and_enrollment()
 	{
 		var application = CreateSubmittedApplication();

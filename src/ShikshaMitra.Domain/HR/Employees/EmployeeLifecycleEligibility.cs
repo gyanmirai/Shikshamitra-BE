@@ -6,6 +6,13 @@ namespace ShikshaMitra.HR.Employees;
 
 public static class EmployeeLifecycleEligibility
 {
+	public static bool IsEmploymentCessationMonth(Employee employee, int year, int month)
+	{
+		if (employee.EmployeeStatusType is null or EmployeeStatusType.Active || !employee.StatusEffectiveDate.HasValue) return false;
+		var start = new DateOnly(year, month, 1);
+		return employee.StatusEffectiveDate.Value >= start && employee.StatusEffectiveDate.Value <= start.AddMonths(1).AddDays(-1);
+	}
+
 	public static IQueryable<Employee> ApplyPayrollMonthEligibility(
 		this IQueryable<Employee> query,
 		DateOnly monthStart,

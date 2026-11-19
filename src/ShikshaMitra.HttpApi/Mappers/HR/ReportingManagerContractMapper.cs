@@ -16,7 +16,8 @@ public static class ReportingManagerContractMapper
 	{
 		return new AssignReportingManagerDto
 		{
-			ReportingManagerId = Guid.Parse(request.ReportingManagerId!)
+			ReportingManagerId = Guid.Parse(request.ReportingManagerId!),
+			ReportingManagerKind = request.ReportingManagerKind
 		};
 	}
 
@@ -50,6 +51,9 @@ public static class ReportingManagerContractMapper
 	{
 		return new ManagerInfo
 		{
+			Kind = dto.Kind,
+			Email = dto.Email,
+			Status = dto.Status,
 			Id = dto.Id,
 			EmployeeIdentifier = dto.EmployeeCode ?? string.Empty,
 			FullName = dto.FullName ?? string.Empty,

@@ -5,6 +5,8 @@ using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp;
+using Volo.Abp.Data;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
 
 namespace ShikshaMitra.HR.Employees.ICards;
 
@@ -43,6 +45,7 @@ public class EmployeeICardTemplateMutationService(
 			input.FieldsJson,
 			input.IsActive);
 
+		SetLogoMode(template, input);
 		await repository.InsertAsync(template, autoSave: true);
 		return EmployeeICardTemplateProjection.ToDto(template);
 	}
@@ -76,10 +79,20 @@ public class EmployeeICardTemplateMutationService(
 			input.FieldsJson,
 			input.IsActive);
 
+		SetLogoMode(template, input);
 		await repository.UpdateAsync(template, autoSave: true);
 		return EmployeeICardTemplateProjection.ToDto(template);
 	}
 
 	public Task DeleteAsync(Guid id) =>
 		repository.DeleteAsync(id, autoSave: true);
+
+	private static void SetLogoMode(EmployeeICardTemplate template, EmployeeICardTemplateRequest input)
+	{
+		if (input.LogoMode == null) return;
+		if (!Enum.IsDefined(input.LogoMode.Value) ||
+			(input.LogoMode == SchoolIdentityAssetMode.Custom && string.IsNullOrWhiteSpace(input.LogoBlobName)))
+			throw new BusinessException(SchoolIdentityErrorCodes.InvalidSelection);
+		template.SetProperty("SchoolIdentityLogoMode", (int)input.LogoMode.Value);
+	}
 }

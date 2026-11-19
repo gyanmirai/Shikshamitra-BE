@@ -4,6 +4,7 @@ using System.Linq;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Entities;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -30,6 +31,11 @@ public class FeeAdjustmentRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public DateTime? ProcessedAt { get; private set; }
     public int ApplyVersion { get; private set; }
     public string? LastIdempotencyKey { get; private set; }
+    public bool HasPaidCreditReservation => this.GetProperty<bool>("HasPaidCreditReservation", false);
+    public FeeAdjustmentKind Kind => (FeeAdjustmentKind)this.GetProperty<int>("AdjustmentKind", 0);
+
+    internal void MarkUnpaidTransfer() => this.SetProperty("AdjustmentKind", (int)FeeAdjustmentKind.UnpaidTransfer);
+    internal void MarkPaidCreditReserved() => this.SetProperty("HasPaidCreditReservation", true);
 
     public virtual ICollection<FeeAdjustmentSourceLine> SourceLines { get; private set; } = [];
     public virtual ICollection<FeeAdjustmentTargetAllocation> TargetAllocations { get; private set; } = [];
@@ -124,6 +130,15 @@ public class FeeAdjustmentRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         IEnumerable<(Guid DueFeeId, Guid FeeHeadId, MonthEnum Month, int Year, double Amount)> allocations)
     {
         EnsureCanApply();
+        EnsureApproverNotCreator(approverId);
+        return RecordApplyBatchCore(approverId, approvalNotes, allocations);
+    }
+
+    private int RecordApplyBatchCore(
+        Guid approverId,
+        string? approvalNotes,
+        IEnumerable<(Guid DueFeeId, Guid FeeHeadId, MonthEnum Month, int Year, double Amount)> allocations)
+    {
 
         var allocationList = allocations.ToList();
         if (allocationList.Count == 0)

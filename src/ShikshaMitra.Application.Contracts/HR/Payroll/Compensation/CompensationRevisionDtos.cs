@@ -1,4 +1,5 @@
 using System;
+using ShikshaMitra.HR.Payroll.Statutory;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FluentValidation;
@@ -11,13 +12,25 @@ namespace ShikshaMitra.HR.Payroll.Compensation;
 
 public class SaveEmployeeCompensationDto
 {
+	[Volo.Abp.Auditing.DisableAuditing]
+	public PayrollStatutoryProfile? StatutoryProfileOverride { get; set; }
+	public string? StatutoryProfileConcurrencyStamp { get; set; }
+	public bool StatutoryProfileUpdatePf { get; set; } = true;
+	public bool StatutoryProfileUpdateEsic { get; set; } = true;
+	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public Guid TemplateVersionId { get; set; }
 	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
-	public string ProtectionPolicy { get; set; } = "PROTECT_EMPLOYER_COST";
+	[System.Text.Json.Serialization.JsonIgnore]
+	public string ProtectionPolicy { get => SalaryBasis == "EMPLOYER_COST" ? "PROTECT_EMPLOYER_COST" : "PROTECT_GROSS"; set { } }
 	public decimal MonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; }
+	[System.Text.Json.Serialization.JsonRequired]
 	public bool PfApplicable { get; set; }
 	public Guid? PfRuleId { get; set; }
+	public string EsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? EsiPolicyId { get; set; }
+	public Guid? ExpectedEsiPolicyVersionId { get; set; }
+	public string? EsiExternalReason { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";
 	public List<SalaryRuleOverrideDto> Overrides { get; set; } = [];
 	public string? CustomizationReason { get; set; }
@@ -39,7 +52,9 @@ public class CompensationRevisionLineDto : EntityDto<Guid>
 
 public class CompensationRevisionDto : EntityDto<Guid>
 {
-	public int ProtectionCalculationVersion { get; set; }
+	public EmployeeStatutoryProfileDto? SavedStatutoryProfile { get; set; }
+	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
+	public PfEligibilityDecision? PfEligibility { get; set; }
 	public Guid EmployeeId { get; set; }
 	public int RevisionNumber { get; set; }
 	public DateTime EffectiveMonth { get; set; }
@@ -57,6 +72,9 @@ public class CompensationRevisionDto : EntityDto<Guid>
 	public Guid? SourceSalaryTemplateVersionId { get; set; }
 	public int? SourceSalaryTemplateVersion { get; set; }
 	public Guid? PfRuleId { get; set; }
+	public string EsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? EsiPolicyId { get; set; }
+	public string? EsiExternalReason { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";
 	public bool IsCustomized { get; set; }
 	public List<SalaryRuleOverrideDto> Overrides { get; set; } = [];
@@ -68,6 +86,8 @@ public class CompensationRevisionDto : EntityDto<Guid>
 	public Guid? SavedByUserId { get; set; }
 	public DateTime? SavedAt { get; set; }
 	public List<CompensationRevisionLineDto> Lines { get; set; } = [];
+	// Saved calculation amounts for display only; never persisted as manual salary components.
+	public List<CalculatedSalaryLineDto> EstimatedStatutoryDeductions { get; set; } = [];
 }
 
 public class CompensationRevisionListDto
@@ -89,11 +109,12 @@ public class SaveEmployeeCompensationDtoValidator : AbstractValidator<SaveEmploy
 	public SaveEmployeeCompensationDtoValidator()
 	{
 		RuleFor(x => x.TemplateVersionId).NotEmpty();
-		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "TAKE_HOME" or "EMPLOYER_COST");
-		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
+		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "EMPLOYER_COST");
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
 		RuleFor(x => x.EffectiveMonth).Must(x => x.Day == 1);
 		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);
+		RuleFor(x => x.ExpectedEsiPolicyVersionId).NotEmpty().When(x => x.EsiManagementMode == EsiManagement.InPlatform)
+			.WithMessage("Preview salary before saving to confirm the effective ESIC policy version.");
 		RuleFor(x => x.StatutoryProfile).Equal("IN-GJ");
 		RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(100);
 		RuleFor(x => x.CustomizationReason).NotEmpty().MaximumLength(500).When(x => x.Overrides.Count > 0);

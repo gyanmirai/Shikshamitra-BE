@@ -13,6 +13,8 @@ public class AdmissionDocumentConfiguration : IEntityTypeConfiguration<Admission
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionDocumentEvidence", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.ConfigureUtcInstants(nameof(AdmissionDocumentEvidence.SubmittedAt),
+			nameof(AdmissionDocumentEvidence.OriginalSeenAt), nameof(AdmissionDocumentEvidence.StudentLinkedAt));
 		builder.Property(item => item.IsDeleted).ValueGeneratedNever().HasDefaultValue(false);
 		builder.Property(item => item.RequirementCode).HasMaxLength(64).IsRequired();
 		builder.Property(item => item.RequirementLabel).HasMaxLength(128).IsRequired();
@@ -24,6 +26,8 @@ public class AdmissionDocumentConfiguration : IEntityTypeConfiguration<Admission
 		builder.Property(item => item.Sha256Hash).HasMaxLength(64);
 		builder.Property(item => item.BlobName).HasMaxLength(512);
 		builder.Property(item => item.Notes).HasMaxLength(1024);
+		builder.Property(item => item.ParentContactJson).HasMaxLength(2048);
+		builder.HasOne<AdmissionParentRegistration>().WithMany().HasForeignKey(item => item.ParentRegistrationId).OnDelete(DeleteBehavior.Restrict);
 		builder.Property(item => item.PolicySnapshotJson).HasColumnType("text").IsRequired();
 		builder.Ignore(item => item.OriginalSeen);
 		builder.HasIndex(item => new { item.StageInstanceId, item.RequirementCode, item.VersionNumber }).IsUnique().HasDatabaseName("UX_AdmissionDocuments_Stage_Requirement_Version");
@@ -38,6 +42,7 @@ public class AdmissionDocumentConfiguration : IEntityTypeConfiguration<Admission
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionDocumentReviews", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.ConfigureUtcInstants(nameof(AdmissionDocumentReview.ReviewedAt));
 		builder.Property(item => item.IsDeleted).ValueGeneratedNever().HasDefaultValue(false);
 		builder.Property(item => item.Decision).HasMaxLength(16).IsRequired();
 		builder.Property(item => item.Reason).HasMaxLength(1024);

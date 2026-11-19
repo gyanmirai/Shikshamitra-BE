@@ -40,7 +40,7 @@ internal static class ProfessionalManagementProjection
 			CycleId = assignment.CycleId,
 			CycleName = cycle?.Name ?? "Unknown cycle",
 			EmployeeId = assignment.EmployeeId,
-			EmployeeName = employee?.EmployeeName ?? "Unknown employee",
+			EmployeeName = employee?.EmployeeName ?? "Unknown staff",
 			EmployeeIdentifier = employee?.EmployeeCode,
 			EmployeeRole = employee?.Role?.Name,
 			TemplateId = assignment.TemplateId,

@@ -1,7 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Hosting;
 using System.Linq;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp.DependencyInjection;
@@ -15,7 +15,7 @@ namespace ShikshaMitra.Security.Permissions;
 
 [Dependency(ReplaceServices = true)]
 [ExposeServices(typeof(IPermissionChecker))]
-public class ShikshaMitraPermissionChecker : PermissionChecker
+public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionChecker
 {
 	private static readonly string[] ClassTeacherOperationalPermissionPrefixes =
 	[
@@ -38,9 +38,10 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 	];
 
 	private readonly ICurrentUser _currentUser;
+	private readonly IUserPermissionDenyStore _denies;
+	private readonly AdminPermissionAccess _admins;
 	private readonly IClassTeacherAccessService _classTeacherAccessService;
 	private readonly IReportingManagerAccessService _reportingManagerAccessService;
-	private readonly IHostEnvironment _hostEnvironment;
 
 	public ShikshaMitraPermissionChecker(
 		ICurrentPrincipalAccessor currentPrincipalAccessor,
@@ -51,22 +52,22 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 		ICurrentUser currentUser,
 		IClassTeacherAccessService classTeacherAccessService,
 		IReportingManagerAccessService reportingManagerAccessService,
-		IHostEnvironment hostEnvironment)
+		IUserPermissionDenyStore denies,
+		AdminPermissionAccess admins)
 		: base(currentPrincipalAccessor, permissionDefinitionManager, currentTenant, permissionValueProviderManager, stateCheckerManager)
 	{
 		_currentUser = currentUser;
+		_denies = denies;
+		_admins = admins;
 		_classTeacherAccessService = classTeacherAccessService;
 		_reportingManagerAccessService = reportingManagerAccessService;
-		_hostEnvironment = hostEnvironment;
 	}
 
 	public override async Task<bool> IsGrantedAsync(string name)
 	{
-		// TODO: Remove this development-only bypass after Admissions permissions are seeded for dev roles.
-		if (_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name))
-		{
-			return true;
-		}
+		if (_currentUser.Id.HasValue && !await _admins.IsAdminAsync(_currentUser.Id.Value) && (await _denies.GetDeniedAsync(_currentUser.Id.Value)).Contains(name)) return false;
+		// Student actions require their exact role/user grant. Teacher assignments only scope data.
+		if (IsStudentPermission(name)) return await base.IsGrantedAsync(name);
 
 		if (await base.IsGrantedAsync(name))
 		{
@@ -130,11 +131,8 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 
 	public override async Task<bool> IsGrantedAsync(ClaimsPrincipal? claimsPrincipal, string name)
 	{
-		// TODO: Remove this development-only bypass after Admissions permissions are seeded for dev roles.
-		if (_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name))
-		{
-			return true;
-		}
+		if (TryGetUserId(claimsPrincipal, out var deniedUser) && !await _admins.IsAdminAsync(deniedUser) && (await _denies.GetDeniedAsync(deniedUser)).Contains(name)) return false;
+		if (IsStudentPermission(name)) return await base.IsGrantedAsync(claimsPrincipal, name);
 
 		if (await base.IsGrantedAsync(claimsPrincipal, name))
 		{
@@ -195,6 +193,95 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 			(await IsDerivedClassTeacherPermissionAsync(userId, name) ||
 			 await IsDerivedReportingManagerPermissionAsync(userId, name));
 	}
+
+	public Task<MultiplePermissionGrantResult> GetEffectiveGrantsAsync(string[] names) =>
+		IsGrantedInBatchAsync(names, permissionNames => base.IsGrantedAsync(permissionNames), _currentUser.Id);
+
+	Task<MultiplePermissionGrantResult> IPermissionChecker.IsGrantedAsync(string[] names) =>
+		GetEffectiveGrantsAsync(names);
+
+	Task<MultiplePermissionGrantResult> IPermissionChecker.IsGrantedAsync(ClaimsPrincipal? claimsPrincipal, string[] names) =>
+		IsGrantedInBatchAsync(names, permissionNames => base.IsGrantedAsync(claimsPrincipal, permissionNames),
+			TryGetUserId(claimsPrincipal, out var userId) ? userId : null);
+
+	private async Task<MultiplePermissionGrantResult> IsGrantedInBatchAsync(
+		string[] names,
+		Func<string[], Task<MultiplePermissionGrantResult>> checkBasePermissions,
+		Guid? userId)
+	{
+		var denied = userId.HasValue && !await _admins.IsAdminAsync(userId.Value)
+			? await _denies.GetDeniedAsync(userId.Value) : new HashSet<string>();
+		var distinctNames = names.Distinct(StringComparer.Ordinal).ToArray();
+		var aliases = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+		var aliasNames = new HashSet<string>(StringComparer.Ordinal);
+		foreach (var name in distinctNames)
+		{
+			var candidates = new List<string>();
+			if (IsStudentPermission(name))
+			{
+				aliases[name] = candidates;
+				continue;
+			}
+			if (name.EndsWith(".Create", StringComparison.Ordinal)) candidates.Add(name[..^7] + ".Add");
+			if (name.EndsWith(".Add", StringComparison.Ordinal)) candidates.Add(name[..^4] + ".Create");
+			if (TryGetAcademicOperationAddPermission(name, out var academicAdd)) candidates.Add(academicAdd);
+			if (name.EndsWith(".View", StringComparison.Ordinal))
+			{
+				var parent = name[..^5];
+				if (IsViewAliasRoot(parent)) candidates.Add(parent);
+			}
+			if (IsViewAliasRoot(name))
+			{
+				candidates.Add(name + ".View");
+				candidates.Add(name + ".Add");
+				candidates.Add(name + ".Delete");
+			}
+			aliases[name] = candidates;
+			foreach (var candidate in candidates) aliasNames.Add(candidate);
+		}
+
+		var baseGrants = (await checkBasePermissions(
+			distinctNames.Concat(aliasNames).Distinct(StringComparer.Ordinal).ToArray())).Result;
+		var result = new MultiplePermissionGrantResult();
+		var needsClassTeacher = false;
+		var needsReportingManager = false;
+		foreach (var name in distinctNames)
+		{
+			if (denied.Contains(name))
+			{
+				result.Result[name] = PermissionGrantResult.Prohibited;
+				continue;
+			}
+			var granted = baseGrants[name] == PermissionGrantResult.Granted ||
+				aliases[name].Any(alias => baseGrants[alias] == PermissionGrantResult.Granted);
+			result.Result[name] = granted ? PermissionGrantResult.Granted : PermissionGrantResult.Prohibited;
+			if (!granted && userId.HasValue && IsClassTeacherOperationalAcademicPermission(name))
+			{
+				needsClassTeacher = true;
+				needsReportingManager |= name.EndsWith(".View", StringComparison.Ordinal);
+			}
+		}
+
+		if (!userId.HasValue || !needsClassTeacher) return result;
+		var hasAssignment = await _classTeacherAccessService.HasAssignmentAsync(userId.Value);
+		if (hasAssignment)
+		{
+			foreach (var name in distinctNames.Where(name => !denied.Contains(name) && IsClassTeacherOperationalAcademicPermission(name)))
+				result.Result[name] = PermissionGrantResult.Granted;
+			return result;
+		}
+		if (needsReportingManager && await _reportingManagerAccessService.HasReporteesAsync(userId.Value))
+		{
+			foreach (var name in distinctNames.Where(name =>
+				!denied.Contains(name) && name.EndsWith(".View", StringComparison.Ordinal) && IsClassTeacherOperationalAcademicPermission(name)))
+				result.Result[name] = PermissionGrantResult.Granted;
+		}
+		return result;
+	}
+
+	private static bool IsViewAliasRoot(string name) =>
+		name is "AbpIdentity.Users" or "AbpIdentity.Roles" or
+			"HR.PerformanceManagement.ReviewEmployees" or "HR.PerformanceManagement.ManageCycles";
 
 	private async Task<bool> IsDerivedClassTeacherPermissionAsync(Guid userId, string permissionName)
 	{
@@ -258,6 +345,7 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 		return Guid.TryParse(value, out userId);
 	}
 
-	private static bool IsAdmissionsPermission(string name) =>
-		name.StartsWith("Students.Admission", StringComparison.Ordinal);
+	private static bool IsStudentPermission(string name) =>
+		name == "Students" || name.StartsWith("Students.", StringComparison.Ordinal) ||
+		name.StartsWith("Finance.SelfService.", StringComparison.Ordinal);
 }

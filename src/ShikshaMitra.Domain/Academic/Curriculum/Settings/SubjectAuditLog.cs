@@ -40,6 +40,11 @@ public class SubjectAuditLog : FullAuditedEntity<Guid>, IMultiTenant
 
     private SubjectAuditLog()
     {
+        // EF materializes these required columns after this ORM constructor.
+        Action = null!;
+        NewValueJson = null!;
+        OldValueJson = null!;
+
         /* ORM */
     }
 

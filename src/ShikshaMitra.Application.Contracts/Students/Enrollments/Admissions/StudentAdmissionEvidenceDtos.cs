@@ -24,7 +24,7 @@ public class StudentAdmissionEvidenceDto
 	public bool OriginalSeen { get; set; }
 	public Guid? OriginalSeenBy { get; set; }
 	public DateTime? OriginalSeenAt { get; set; }
-	public Guid SubmittedBy { get; set; }
+	public Guid? SubmittedBy { get; set; }
 	public DateTime SubmittedAt { get; set; }
 	public string? Notes { get; set; }
 	public DateTime? StudentLinkedAt { get; set; }

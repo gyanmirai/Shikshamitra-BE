@@ -13,8 +13,10 @@ public class EmployeeICardTemplateAppService(
 	EmployeeICardTemplateReadService readService,
 	EmployeeICardTemplateMutationService mutationService,
 	EmployeeICardAssetService assetService,
-	EmployeeICardPdfWorkflow pdfWorkflow) : ApplicationService, IEmployeeICardTemplateAppService
+	EmployeeICardPdfWorkflow pdfWorkflow,
+	EmployeeICardSchoolLogoService schoolLogo) : ApplicationService, IEmployeeICardTemplateAppService
 {
+	public Task<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto> GetPhotoAsync(Guid employeeId) => pdfWorkflow.GetPhotoAsync(employeeId);
 	public Task<EmployeeICardTemplateListResponse> GetListAsync(
 		Guid? academicYearId = null,
 		Guid? mediumStageId = null,
@@ -40,6 +42,8 @@ public class EmployeeICardTemplateAppService(
 
 	public Task<EmployeeICardAssetDownloadResult> DownloadAssetAsync(string blobName) =>
 		assetService.DownloadAssetAsync(blobName);
+
+	public Task<EmployeeICardAssetDownloadResult?> GetSchoolLogoAsync(Guid? mediumStageId = null) => schoolLogo.GetAsync(mediumStageId);
 
 	public Task<byte[]> GenerateEmployeeICardsPdfAsync(Guid templateId, EmployeeICardPdfRequest input) =>
 		pdfWorkflow.GenerateEmployeeICardsPdfAsync(templateId, input);

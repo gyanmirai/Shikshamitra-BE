@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Employees.Payroll;
@@ -17,6 +17,121 @@ namespace ShikshaMitra.HR.Payroll;
 
 public class SalaryTemplateCalculator_Tests
 {
+	[Theory]
+	[InlineData(false, false)]
+	[InlineData(true, false)]
+	[InlineData(false, true)]
+	[InlineData(true, true)]
+	public void Bug6475_fixed_earnings_exceed_employer_cost_and_corrected_target_reconciles(bool applyPf, bool applyEsi)
+	{
+		var fixture = BuildFixture(12m, 12m, 15000m);
+		var rules = fixture.Rules.Where(x => x.LineKind == SalaryTemplateLineKind.Earning ||
+			(applyPf && x.SemanticType == PayrollComponentSemanticType.EmployeeProvidentFund)).ToList();
+		rules[0] = rules[0] with { FormulaType = SalaryTemplateFormulaType.FixedAmount, Value = 2000m };
+		rules[1] = rules[1] with { FormulaType = SalaryTemplateFormulaType.FixedAmount, SemanticType = PayrollComponentSemanticType.Ordinary, Value = 50000m };
+		var deduction = Guid.NewGuid();
+		fixture.Components[deduction] = new(deduction, "Ordinary deduction");
+		rules.Add(new("ORDINARY_DEDUCTION", deduction, SalaryTemplateLineKind.Deduction,
+			SalaryTemplateFormulaType.FixedAmount, PayrollComponentSemanticType.Ordinary, 200m, null, 4));
+		var esi = applyEsi ? BuildEsiContext(fixture.Components.Keys) with { EffectiveMonth = new(2026, 10, 1), Enrollment = null } : null;
+		var pf = applyPf ? fixture.PfRule : null;
+		var error = Should.Throw<BusinessException>(() => SalaryTemplateCalculator.Calculate(
+			SalaryInputBasis.EmployerCost, 50000m, rules, fixture.Components, pf, [], esi));
+		error.Code.ShouldBe(HRErrorCodes.CompensationTargetNotSolvable);
+		error.Data["reason"].ShouldBe("FIXED_EARNINGS_EXCEED_EMPLOYER_COST");
+		error.Data["fixedEarnings"].ShouldBe(52000m);
+		error.Data["target"].ShouldBe(50000m);
+		error.Data["field"].ShouldBe("monthlyAmount");
+		error.Data["relatedField"].ShouldBe("rules");
+		error.Data["message"].ShouldNotBeNull().ToString()!.ShouldContain("INR 2000.00");
+		// A synthetic 12% PF on Basic adds 240; this is not the live DM PF rule.
+		var correctedCost = applyPf ? 52240m : 52000m;
+		var result = SalaryTemplateCalculator.Calculate(SalaryInputBasis.EmployerCost, correctedCost,
+			rules, fixture.Components, pf, [], esi);
+		result.Gross.ShouldBe(52000m);
+		result.EmployerCost.ShouldBe(correctedCost);
+		result.Net.ShouldBe(applyPf ? 51560m : 51800m);
+		result.Earnings.Sum(x => x.Amount).ShouldBe(result.Gross);
+		if (applyEsi) result.EmployeeStateInsurance!.IsCovered.ShouldBeFalse();
+		// Raising a fixed template to an arbitrary target still must not silently scale its earnings.
+		Should.Throw<BusinessException>(() => SalaryTemplateCalculator.Calculate(SalaryInputBasis.EmployerCost,
+			correctedCost + 1000m, rules, fixture.Components, pf, [], esi)).Code.ShouldBe(HRErrorCodes.CompensationTargetNotSolvable);
+	}
+
+	[Theory]
+	[InlineData(false, "CLASSIFIED_EARNINGS", "CLASSIFIED_EARNINGS")]
+	[InlineData(true, "CLASSIFIED_EARNINGS", "CLASSIFIED_EARNINGS")]
+	[InlineData(false, "GROSS", "COMPONENT")]
+	[InlineData(true, "GROSS", "COMPONENT")]
+	[InlineData(false, "COMPONENT", "GROSS")]
+	[InlineData(true, "COMPONENT", "GROSS")]
+	public void Ctc_boundaries_reconcile_with_payroll_and_never_exceed_monthly_budget(
+		bool includePf, string eligibilityBasis, string calculationBasis)
+	{
+		var fixture = BuildFixture(12m, 12m, 15000m);
+		var rules = fixture.Rules.Where(x => x.LineKind == SalaryTemplateLineKind.Earning ||
+			(includePf && x.SemanticType == PayrollComponentSemanticType.EmployeeProvidentFund)).ToList();
+		var esi = BuildEsiContext(fixture.Components.Keys);
+		var basic = rules.Single(x => x.SemanticType == PayrollComponentSemanticType.Basic).ComponentId;
+		if (eligibilityBasis != "CLASSIFIED_EARNINGS" || calculationBasis != "CLASSIFIED_EARNINGS")
+			esi = esi with
+			{
+				ComponentTreatments = fixture.Components.Keys.ToDictionary(x => x,
+					x => x == basic ? StatutoryWageTreatment.Included : StatutoryWageTreatment.SpecifiedExclusion),
+				CalculationSettings = new() { EligibilityBasis = eligibilityBasis, CalculationBasis = calculationBasis, EligibilityComponentId = eligibilityBasis == "COMPONENT" ? basic : null, CalculationComponentId = calculationBasis == "COMPONENT" ? basic : null }
+			};
+		foreach (var budget in new[] { 1.01m, 4576m, 4725m, 10000m, 10000.01m, 10325.01m, 20999.99m, 21000m, 21000.01m, 21683m, 25000m, 100000m })
+		{
+			var quote = SalaryTemplateCalculator.Calculate(SalaryInputBasis.EmployerCost, budget,
+				rules, fixture.Components, includePf ? fixture.PfRule : null, [], esi);
+			quote.EmployerCost.ShouldBeLessThanOrEqualTo(budget);
+			quote.Earnings.Sum(x => x.Amount).ShouldBe(quote.Gross);
+			quote.Net.ShouldBe(quote.Gross - quote.Deductions.Sum(x => x.Amount));
+			var id = Guid.NewGuid();
+			var components = quote.Earnings.Concat(quote.Deductions).Select(line =>
+			{
+				PayrollComponentSemanticTypeCodes.TryParse(line.SemanticType, out var semantic);
+				return new EmployeePayrollComponent(Guid.NewGuid(), id, line.Name, line.ComponentId, null,
+					line.Amount, true, false, null, SalaryComponentType.Fixed, SalaryComponentDependency.None,
+					quote.Earnings.Contains(line), false, semantic);
+			}).ToList();
+			var deduction = BuildComponent(id, "System ESI", 0m, false, PayrollComponentSemanticType.EmployeeStateInsurance);
+			var payrollEsi = new PayrollEsiStatutoryContext(esi.EffectiveMonth, esi.Rule, esi.Establishment,
+				esi.Enrollment, esi.ComponentTreatments, [], deduction)
+			{ CalculationSettings = esi.CalculationSettings };
+			foreach (var days in new[] { 0m, 1m, 15.5m, 31m })
+			{
+				var payroll = PayrollComputation.Calculate(0, 0, days, 31m, components,
+					new(includePf ? fixture.PfRule : null, [], EmployeeStateInsurance: payrollEsi));
+				payroll.GrossSalary.ShouldBe(Math.Round(quote.Gross * days / 31m, 2, MidpointRounding.AwayFromZero));
+				(payroll.TotalEarnings + payroll.EmployerContributionTotal).ShouldBeLessThanOrEqualTo(budget);
+				payroll.NetPay.ShouldBe(payroll.TotalEarnings - payroll.TotalDeduction);
+				if (days == 31m)
+				{
+					payroll.NetPay.ShouldBe(quote.Net);
+					payroll.EmployerContributionTotal.ShouldBe(quote.EmployerContributionTotal);
+				}
+			}
+		}
+	}
+
+	[Theory]
+	[InlineData(SalaryInputBasis.Gross, 10000, 75, 325, 9925, 10325)]
+	[InlineData(SalaryInputBasis.EmployerCost, 9685, 73, 315, 9612, 10000)]
+	public void Ten_thousand_examples_reconcile_without_an_employer_deduction(
+		SalaryInputBasis basis, decimal gross, decimal employee, decimal employer, decimal net, decimal cost)
+	{
+		var fixture = BuildFixture(0m, 0m, null);
+		var rules = fixture.Rules.Where(x => x.LineKind == SalaryTemplateLineKind.Earning).ToList();
+		var result = SalaryTemplateCalculator.Calculate(basis, 10000m, rules, fixture.Components, null, [],
+			BuildEsiContext(fixture.Components.Keys));
+		result.Gross.ShouldBe(gross);
+		result.Net.ShouldBe(net);
+		result.EmployerCost.ShouldBe(cost);
+		result.Deductions.Single().Amount.ShouldBe(employee);
+		result.EmployerContributions.Single().Amount.ShouldBe(employer);
+		result.Deductions.ShouldNotContain(x => x.Code == "EMPLOYER_ESI");
+	}
 	[Theory]
 	[InlineData(SalaryInputBasis.Gross)]
 	[InlineData(SalaryInputBasis.TakeHome)]
@@ -55,7 +170,8 @@ public class SalaryTemplateCalculator_Tests
 		var result = SalaryTemplateCalculator.Calculate(SalaryInputBasis.Gross, 20000m, rules,
 			new Dictionary<Guid, SalaryTemplateComponent>
 			{
-				[basicId] = new(basicId, "Basic"), [remainderId] = new(remainderId, "Remainder"),
+				[basicId] = new(basicId, "Basic"),
+				[remainderId] = new(remainderId, "Remainder"),
 				[dependentId] = new(dependentId, "Deduction")
 			}, null, []);
 		result.Deductions.Single().Amount.ShouldBe(800m);
@@ -426,7 +542,7 @@ public class SalaryTemplateCalculator_Tests
 
 	[Theory]
 	[InlineData(SalaryInputBasis.Gross, 20000, 30, 20000, 12000, 19500)]
-	[InlineData(SalaryInputBasis.TakeHome, 20000, 15, 10000, 6000, 10000)]
+	[InlineData(SalaryInputBasis.TakeHome, 19000, 15, 10000, 6000, 10000)]
 	[InlineData(SalaryInputBasis.EmployerCost, 20000, 0, 0, 0, 500)]
 	public void Should_rehydrate_gross_formulas_from_saved_compensation_and_copy_payslip_inputs(
 		SalaryInputBasis basis, decimal input, decimal days, decimal gross, decimal basic, decimal net)

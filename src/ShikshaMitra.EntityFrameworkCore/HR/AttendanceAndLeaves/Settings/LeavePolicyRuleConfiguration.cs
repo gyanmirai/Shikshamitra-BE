@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
@@ -19,7 +19,9 @@ public class LeavePolicyRuleConfiguration : IEntityTypeConfiguration<LeavePolicy
 		builder.Property(x => x.CarryForward).IsRequired().HasDefaultValue(false);
 		builder.Property(x => x.Encashable).IsRequired().HasDefaultValue(false);
 		builder.Property(x => x.RequiresApproval).IsRequired().HasDefaultValue(true);
-		builder.Property(x => x.MinNoticeDays).IsRequired().HasDefaultValue(2);
+		// Zero is an explicit supported configuration, including immutable restores.
+		// Do not let EF's numeric sentinel replace it with the database default.
+		builder.Property(x => x.MinNoticeDays).IsRequired().HasDefaultValue(2).ValueGeneratedNever();
 		builder.Property(x => x.MaxDaysPerRequest).IsRequired().HasDefaultValue(30);
 		builder.Property(x => x.AllowHalfDay).IsRequired().HasDefaultValue(true);
 		builder.Property(x => x.AllowNegativeBalance).IsRequired().HasDefaultValue(false);

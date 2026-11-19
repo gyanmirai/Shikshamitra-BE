@@ -9,9 +9,11 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 /// </summary>
 public interface ISalarySlipAppService : IApplicationService
 {
+	Task<SalarySlipAvailabilityDto> GetAvailabilityAsync(Guid employeeId, string monthYear, Guid? academicYearId = null);
+
 	/// <summary>
 	/// Fetches salary slip details for a given employee and month-year
-	/// Generates the slip if it doesn't exist
+	/// Payroll must already be finalized with an issued document. This read never generates payroll.
 	/// </summary>
 	/// <param name="employeeId">Employee identifier</param>
 	/// <param name="monthYear">Month and year in YYYY-MM format</param>
@@ -24,13 +26,12 @@ public interface ISalarySlipAppService : IApplicationService
 	Task<byte[]> GenerateSalarySlipPdfAsync(Guid employeeId, string monthYear);
 
 	/// <summary>
-	/// Generates a preview salary slip PDF for a given employee and month-year.
-	/// Draft slips are clearly marked as preview/non-official.
+	/// Compatibility PDF route returning only the immutable issued document.
 	/// </summary>
 	Task<byte[]> GenerateSalarySlipPreviewPdfAsync(Guid employeeId, string monthYear);
 
 	/// <summary>
-	/// Generates a new salary slip or regenerates an existing draft
+	/// Compatibility command returning an existing issued salary slip; creation belongs to payroll locking.
 	/// </summary>
 	/// <param name="input">Generate salary slip input parameters</param>
 	/// <returns>Generated salary slip details</returns>

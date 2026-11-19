@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Identity;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -12,6 +13,7 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 
@@ -35,12 +37,16 @@ internal sealed class NoOpStudentSeeder : StudentSeederContributor
 		IEducationMediumStageRepository educationMediumStageRepository,
 		IStandardRepository standardRepository,
 		IDivisionRepository divisionRepository,
+		IdentityUserManager userManager,
+		IIdentityRoleRepository roleRepository,
+		ILookupNormalizer lookupNormalizer,
 		IConfiguration configuration,
 		ILogger<StudentSeederContributor> logger)
 		: base(currentTenant, guidGenerator, unitOfWork,
 			studentRepository, academicYearRepository,
 			educationBoardRepository, educationMediumRepository, educationMediumStageRepository,
-			standardRepository, divisionRepository, configuration, logger)
+			standardRepository, divisionRepository, userManager, roleRepository, lookupNormalizer,
+			configuration, logger)
 	{
 	}
 

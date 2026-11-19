@@ -3,89 +3,100 @@ using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.Compensation;
-using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.HR.Payroll.RunPayroll;
+using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
-using Volo.Abp.Application.Dtos;
+using ShikshaMitra.HR.Payroll.Templates;
+using ShikshaMitra.HR.Payroll.Statutory;
+using ShikshaMitra.Infrastructure.Auth;
 using Shouldly;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Payroll;
 
 public partial class RunPayrollApi_Tests
 {
 	[PayrollWorkflowPostgresFact]
-	public async Task Take_home_protection_should_restore_the_prorated_target_in_payroll()
+	public async Task Ctc_protection_rebalances_partial_month_after_pf_change_and_requires_fresh_review()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		await PayrollTestHelper.EnsureActiveEsiTestSetupAsync(Factory);
-		await EnsureActiveDefaultLeavePolicyAsync(new DateTime(2026, 6, 1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ProtectedTakeHome",
-			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
-		await AssignSalaryStructureAsync(employee.Id, "ProtectedTakeHome");
-		var catalog = await Client.GetFromJsonAsync<SalaryTemplateComponentCatalogDto>(
-			"/api/payroll/salary-templates/component-catalog", JsonOptions);
-		var basic = catalog!.Items.First(x => x.LineKind == "EARNING" && x.Name.Contains("Basic"));
-		var pt = catalog.Items.First(x => x.LineKind == "DEDUCTION" && x.Name.Contains("Professional"));
-		var request = new SaveSalaryTemplateDto
+		var effectiveMonth = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+		await EnsureActiveDefaultLeavePolicyAsync(effectiveMonth);
+		// Seed historical coverage in the disposable test database because the coverage API rejects backdating.
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
 		{
-			Name = $"Protected take home {Guid.NewGuid():N}",
-			DefaultSalaryBasis = "TAKE_HOME", DefaultProtectionPolicy = "PROTECT_TAKE_HOME",
-			SampleMonthlyAmount = 50000m, SampleEffectiveMonth = new DateTime(2026, 6, 1),
-			IdempotencyKey = Guid.NewGuid().ToString("N"),
-			Rules =
-			[
-				new() { ComponentId = basic.ComponentId, LineKind = "EARNING", SemanticType = "BASIC",
-					FormulaType = "PERCENTAGE_OF_GROSS", Value = 100m },
-				new() { ComponentId = pt.ComponentId, LineKind = "DEDUCTION", SemanticType = "PROFESSIONAL_TAX",
-					FormulaType = "PROFESSIONAL_TAX", DisplayOrder = 1 }
-			]
-		};
-		var sample = await Client.PostAsJsonAsync("/api/payroll/salary-templates/preview", new PreviewSalaryTemplateRequestDto
+			var repo = scope.ServiceProvider.GetRequiredService<IRepository<PfCoverageConfiguration, Guid>>();
+			await repo.InsertAsync(new PfCoverageConfiguration(Guid.NewGuid(), Guid.Parse(TestAuthHandler.TestTenantId),
+				effectiveMonth, true, "Disposable CTC protection test", Guid.NewGuid().ToString("N")));
+			await uow.CompleteAsync();
+		}
+		var pf = await PayrollTestHelper.CreatePfRuleAsync(Client, "ProtectionPf");
+		var pfRule = (await Client.GetFromJsonAsync<PfRuleResponseDto>($"/api/payroll/pf-rules/{pf.Id}", JsonOptions))!;
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "ProtectedCtc", dateOfJoining: effectiveMonth);
+		await AssignSalaryStructureAsync(employee.Id, "ProtectedCtc");
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
 		{
-			Rules = request.Rules, SalaryBasis = request.DefaultSalaryBasis, ProtectionPolicy = request.DefaultProtectionPolicy,
-			MonthlyAmount = request.SampleMonthlyAmount, EffectiveMonth = request.SampleEffectiveMonth
-		}, JsonOptions);
-		sample.StatusCode.ShouldBe(HttpStatusCode.OK, await sample.Content.ReadAsStringAsync());
-		request.PreviewToken = (await sample.Content.ReadFromJsonAsync<SalaryTemplatePreviewDto>(JsonOptions))!.PreviewToken;
-		var created = await Client.PostAsJsonAsync("/api/payroll/salary-templates", request, JsonOptions);
-		created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
-		var template = (await created.Content.ReadFromJsonAsync<SalaryTemplateDto>(JsonOptions))!;
-		var saved = await Client.PutAsJsonAsync($"/api/payroll/employees/{employee.Id}/compensation", new SaveEmployeeCompensationDto
+			var profiles = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeStatutoryProfileVersion, Guid>>();
+			await profiles.InsertAsync(new EmployeeStatutoryProfileVersion(Guid.NewGuid(), Guid.Parse(TestAuthHandler.TestTenantId),
+				employee.Id, effectiveMonth, new PayrollStatutoryProfile { ApplyPf = true, PfNumber = "GJ/CTC/123" },
+				Guid.NewGuid(), "Synthetic CTC PF profile"));
+			await uow.CompleteAsync();
+		}
+		var templates = (await Client.GetFromJsonAsync<SalaryTemplateListDto>("/api/payroll/salary-templates/active", JsonOptions))!;
+		var template = templates.Items.First(x => x.EditableVersion.Rules.Any(rule => rule.FormulaType == "EMPLOYEE_PROVIDENT_FUND"));
+		var compensationRequest = await PayrollTestHelper.BindEsiPolicyVersionAsync(Client, new SaveEmployeeCompensationDto
 		{
-			TemplateVersionId = template.EditableVersion.Id, SalaryBasis = "TAKE_HOME", ProtectionPolicy = "PROTECT_TAKE_HOME",
-			MonthlyAmount = 50000m, EffectiveMonth = new DateTime(2026, 6, 1), IdempotencyKey = Guid.NewGuid().ToString("N")
-		}, JsonOptions);
+			TemplateVersionId = template.EditableVersion.Id, SalaryBasis = "EMPLOYER_COST", MonthlyAmount = 50000m,
+			EffectiveMonth = effectiveMonth, PfApplicable = true, PfRuleId = pf.Id,
+			PfEnrollment = new() { Membership = "EXISTING_MEMBER" },
+			EsiPolicyId = template.EditableVersion.DefaultEsiPolicyId, IdempotencyKey = Guid.NewGuid().ToString("N")
+		});
+		var saved = await Client.PutAsJsonAsync($"/api/payroll/employees/{employee.Id}/compensation", compensationRequest, JsonOptions);
 		saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
-		await SetEmployeeStatusAsync(employee.Id, 0, new DateOnly(2026, 6, 1));
-		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 6, 4));
+		var approved = (await saved.Content.ReadFromJsonAsync<CompensationRevisionDto>(JsonOptions))!;
+		approved.GrossSalary.ShouldBeLessThan(approved.EmployerCost, "The approved quote must include employer PF.");
+		await ActivateCalculationFixtureAsync(employee.Id);
+		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 6, 10));
+
 		var preview = await GetPreviewFromQueryAsync($"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
 		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
-		item.ProrationFactor.ShouldBeGreaterThan(0);
-		item.ProrationFactor.ShouldBeLessThan(1);
-		((decimal)item.NetPay).ShouldBe(Math.Round(50000m * (decimal)item.ProrationFactor, 2, MidpointRounding.AwayFromZero));
-		item.SalaryProtection!.PeriodTarget.ShouldBe((decimal)item.NetPay);
-		item.SalaryProtection.Status.ShouldBe("ADJUSTED");
-		var review = await Client.PostAsJsonAsync(ReviewUrl, new PayrollRunReviewRequest
+		item.ProrationFactor.ShouldBeGreaterThan(0d);
+		item.ProrationFactor.ShouldBeLessThan(1d);
+		var target = GrossEarningAllocation.Money(50000m * (decimal) item.PayableDays / (decimal) item.BasisDays);
+		item.SalaryProtection.ShouldNotBeNull(string.Join(", ", item.IssueCodes));
+		item.SalaryProtection.PeriodTarget.ShouldBe(target);
+		Math.Abs(item.SalaryProtection.Achieved - target).ShouldBeLessThanOrEqualTo(0.01m);
+		var firstPreviewId = LastPreviewId("2026-06");
+		var review = new PayrollRunReviewRequest { Month = "2026-06", PreviewRunId = firstPreviewId, EmployeeIds = [employee.Id] };
+		(await Client.PostAsJsonAsync(ReviewUrl, review, JsonOptions)).EnsureSuccessStatusCode();
+
+		var changed = await Client.PutAsJsonAsync($"/api/payroll/pf-rules/{pf.Id}", new CreateUpdateProvidentFundDto
 		{
-			Month = "2026-06", PreviewRunId = LastPreviewId("2026-06"), EmployeeIds = [employee.Id]
-		}, JsonOptions);
-		review.StatusCode.ShouldBe(HttpStatusCode.OK, await review.Content.ReadAsStringAsync());
-		var taxes = await Client.GetFromJsonAsync<PagedResultDto<ProfessionalTaxDto>>("/api/payroll/professional-taxes?page=1&pageSize=100", JsonOptions);
-		var slab = taxes!.Items.First(x => x.IsActive && x.FromSalary == 0m);
-		var changed = await Client.PutAsJsonAsync($"/api/payroll/professional-taxes/{slab.Id}", new CreateUpdateProfessionalTaxDto
-		{
-			JurisdictionCode = slab.JurisdictionCode, EffectiveFrom = slab.EffectiveFrom, EffectiveTo = slab.EffectiveTo,
-			FromSalary = slab.FromSalary, ToSalary = slab.ToSalary, TaxAmount = 100m, IsActive = true,
-			DeductInCessationMonth = slab.DeductInCessationMonth
+			Name = pfRule.Name, Code = pfRule.Code, EmployeePercentage = 12m, EmployerPercentage = 15m
 		}, JsonOptions);
 		changed.StatusCode.ShouldBe(HttpStatusCode.OK, await changed.Content.ReadAsStringAsync());
+		var staleReview = await Client.PostAsJsonAsync(ReviewUrl, review, JsonOptions);
+		staleReview.IsSuccessStatusCode.ShouldBeFalse();
+
 		var refreshed = await GetPreviewFromQueryAsync($"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=false");
-		var updated = refreshed.Items.Single(x => x.EmployeeId == employee.Id);
-		updated.ReviewStatus.ShouldBe("PENDING");
-		updated.NetPay.ShouldBe(item.NetPay);
-		updated.ProfessionalTaxRuleVersion.ShouldBe(slab.Version + 1);
-		updated.SalaryProtection!.Difference.ShouldBe(0m);
+		var revised = refreshed.Items.Single(x => x.EmployeeId == employee.Id);
+		revised.ReviewStatus.ShouldBe("PENDING");
+		revised.GrossSalary.ShouldBeLessThan(item.GrossSalary);
+		revised.CompensationRevisionId.ShouldBe(approved.Id);
+		revised.SalaryProtection!.PeriodTarget.ShouldBe(target);
+		Math.Abs(revised.SalaryProtection.Achieved - target).ShouldBeLessThanOrEqualTo(0.01m);
+		revised.IssueCodes.ShouldNotContain(IssueCodes.CompensationTargetVariance);
+		var draft = await EnsureCalculationDraftAsync(employee.Id, "2026-06");
+		SalaryProtectionSnapshot.Read(draft).ShouldBe(revised.SalaryProtection);
 	}
 }

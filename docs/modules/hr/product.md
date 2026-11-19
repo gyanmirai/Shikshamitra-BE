@@ -3,7 +3,7 @@ module: hr
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-09-16
+updated_on: 2026-11-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -13,20 +13,36 @@ audience: humans-and-agents
 TL;DR: HR manages employee records, attendance, leave, payroll, HR policies, professional management, reports, notifications, and calendar-backed HR scenarios.
 Use this page for business behavior and shipped-surface status before reading API or code details.
 
+## New-school starter policies
+
+New schools created through the host tenant API or the legacy tenant API opt into editable HR starter settings. Policies need a real academic year, so they are created when that school's academic year is first saved, including through initial setup. The legacy creation path also initializes any empty years its existing seed pipeline has just created. The production host flow does not invent academic years, employees, holidays, salary amounts, statutory rates, or demo records. Existing tenants are not backfilled.
+
+| Setting | Starter value and rationale |
+|---|---|
+| Work calendar | Active for the selected academic year's dates; Monday-Friday work week, Saturday/Sunday off; linked central holidays with overrides, initially empty. Uses existing standard school calendar and API conventions. Schools can change the weekly pattern and add local holidays. |
+| Attendance | Active default, manual status capture (no device setup required), manual corrections allowed, missing punches require review. Existing thresholds 75%/50%/0%, five-minute grace and three late arrivals remain editable; penalties, early-exit rules, overtime and payroll preview are disabled. Holiday work creates no automatic benefit. |
+| Shift | One tenant-wide editable morning shift, 07:00-12:30, grounded in the existing demo catalogue's morning timing. Employee validation requires a shift reference even for manual status capture. Existing shifts are preserved; no employees/classes are automatically assigned. Later academic years neither duplicate the shift nor restore a deleted starter shift. |
+| Payroll | Active default using working days and full working Saturdays when the calendar makes Saturday a workday. Matches the existing standard payroll basis; no manual month overrides, holiday pay overrides, locks, salary values or statutory deductions are configured. Review before payroll. |
+| Leave | Active default with the two required paid/unpaid rules. Both have **zero unconfigured days**, yearly accrual, approval required, no negative balance, carry-forward or encashment. This supplies valid employee policy references without choosing contractual leave entitlements or automatically generating unpaid leave. Administrators must configure leave before requests can be accepted. Request controls start at zero notice days, 30 days per request, half-days allowed, no attachment requirement. |
+
+These are onboarding settings, not a claim of legal compliance or recommended leave entitlements. Policy names identify starter/review settings; the leave description explicitly explains the unconfigured allocations. They are ordinary records visible and editable through existing HR Policies and Rules APIs/UI, with the usual permission and impact-confirmation checks; the shift appears in HR Work Shifts and the employee selector. Employee finalization can resolve attendance, payroll, leave and calendar references. Salaries, academic scope and reporting-manager requirements retain their existing workflows.
+
+Initialization is transactional, tenant-scoped and repeat-safe. A completed academic year is never reseeded after customization or deletion. Any existing policy setup (including drafts or archived records) is preserved as a whole. See [policy architecture](./references/policy-architecture.md) for lifecycle details. No startup/migrator backfill or public backfill endpoint is added.
+
 ## Product areas
 
 HR behavior is split by operational area:
 
 | Area | Status | Behavior owned by backend HR |
 |---|---|---|
-| Dashboard | Implemented | HR summary, attendance trend, payroll status, leaves, alerts, quick actions, birthdays, anniversaries, and recent activity |
+| Dashboard | Implemented | English module overview for workforce, leave approvals, onboarding, appraisals, seven-day attendance, and saved payroll progress |
 | Employees | Implemented | Employee lifecycle, profile data, documents, I-card data, status transitions, payroll details, reporting manager, and academic scope |
 | Attendance | Implemented | Manual attendance, attendance tracking, grouped register, imports, automated runs, locks, and payroll tags |
 | Leave | Implemented | Paid and unpaid leave policies, leave requests, approvals, balances, leave center, and payroll impact |
-| Payroll | Implemented | Component settings, versioned compensation revisions, Gross, Take-home, and Employer Cost quotes, ESI statutory setup and calculation, readiness, preview, reviews, adjustments, lock, salary slips, and PDF output |
+| Payroll | Implemented | Component settings, versioned compensation revisions, Monthly salary and Monthly cost to school (CTC) quotes, ESI statutory setup and calculation, readiness, preview, reviews, adjustments, lock, salary slips, and PDF output |
 | HR policies | Implemented | Work calendar policies, attendance policies, payroll policies, assignments, effective preview, versions, audit, and holiday impact |
 | Professional management | Implemented | Templates, cycles, reviews, observations, evidence, feedback, outcomes, reports, audit, and PDFs |
-| Reports | Implemented | HR report catalog, options, templates, preview, export, and export history |
+| Reports | Implemented | Reusable private/school templates, guided generation, captured results, and Excel/PDF downloads |
 | Notifications | Implemented | HR notification settings and notification history surfaces |
 | Events and holidays | Partial | Calendar contracts exist, but frontend HR navigation must be verified before treating HR menu access as shipped |
 | TDS | Partial | Payroll settings and statutory behavior require separate verification before use. |
@@ -45,12 +61,24 @@ Treat these rules as critical because HR feeds payroll and staff records:
 | Effective compensation revisions are the recurring salary source of truth | Superseded and legacy non-effective records cannot silently drive payroll |
 | One-time salary components remain separate | Temporary earnings and deductions cannot change the effective recurring compensation revision |
 | Saving recurring compensation is direct and immutable | Every save is recalculated on the server and creates a new effective revision without an approval queue |
-| Employee activation requires payroll readiness | New employees remain Inactive until an effective salary covers the later of joining month or current payroll month |
-| Protected compensation drift is visible but non-mutating | Payroll warns without rewriting saved salary or blocking lock |
+| Employee activation requires payroll readiness | New employees remain Inactive until an effective salary covers the later of joining month or current payroll month and valid calculation rules exist; pending PF/ESIC registration is a follow-up warning and eligible contributions still apply |
+| CTC protection applies to unlocked payroll | The recurring period cost is reconciled to the prorated approved CTC using the effective employer contributions. Explained scheme-application differences still warn without changing gross. Unsolvable differences block locking. |
 | Earning component dependencies are tenant-scoped and acyclic | A percentage component cannot reference itself, another tenant, an inactive target, or a dependency chain that returns to itself |
 | Payroll preview and lock use the same policy basis | Salary slips must match the locked payroll snapshot |
 | Policy assignments resolve by specificity and date | Employee overrides beat group assignments, and defaults are fallback only |
-| Reports must be reproducible and scope-safe | Exports must use the same filters and source data as previews, and recipients must cover the complete tenant UserScope captured at generation |
+| Reports must be reproducible and scope-safe | Captured rows and downloads stay fixed, remain private, and require current source permissions and record scope |
+
+## Salary package protection
+
+Monthly salary fixes recurring gross, while Monthly cost to school (CTC) protects recurring gross plus applicable employer contributions.
+Payroll prorates the approved CTC once using payable days, then evaluates the existing earning formulas and effective PF and ESIC rules at the resulting gross.
+One-time amounts and their statutory effects stay outside the recurring target.
+The period result and any gross adjustment are recorded with the payroll snapshot and copied to the salary slip.
+Locked payroll and issued slips retain their recorded values.
+
+A compensation manager can preview and apply a new CTC revision using the approved employer cost in a Monthly salary revision.
+The signed preview binds the employee, source revision, effective month, and current calculation.
+Applying it creates an effective revision through the existing save workflow while retaining the source in history.
 
 ## Product behavior by area
 
@@ -73,7 +101,7 @@ Do not treat these as fully shipped without checking frontend navigation and bac
 |---|---|
 | HR events and holidays | Pages and contracts exist, but active navigation may belong to Calendar instead of HR |
 | TDS | Payroll setting pages exist, but active product status depends on menu and backend route verification |
-| Professional tax | Effective slabs are exposed by the professional-taxes controller and enabled by the template PT rule |
+| Professional tax | Domain and data transfer objects exist, but no canonical HTTP controller is documented |
 | Training | Pages exist outside the main HR menu model, so confirm ownership before extending |
 | Older performance routes | Prefer professional-management routes and verify `/hr/performance` before reuse |
 
@@ -83,34 +111,21 @@ Use [api.md](./api.md) for current endpoint behavior.
 Use current source files for behavior that is not covered here.
 Do not restore old generated exports or old planning docs under `docs/`.
 
-## Salary package protection
+## Employee work shifts
 
-A package has one protection policy: school cost (CTC), the default, or employee take-home.
-Gross, Employer Cost and Take-home remain input bases; the protected amount is saved separately from the entered quote.
-Take-home protection covers PT and employee PF/ESI only.
-TDS, loans, penalties and other ordinary deductions reduce payout.
-Recurring CTC includes regular earnings and modeled employer contributions.
-One-time earnings and their additional statutory effects are recorded outside the recurring target.
-For partial months, prorate the protected target once by payable days; calculate statutory deductions using actual period wages and applicable rules.
+Work shifts are tenant-owned HR records assignable to any employee, independently of job roles and access roles.
+School sessions and employee working hours have separate catalogues and lifecycles.
+This release supports daytime working hours only, one assignment per employee per date, and inclusive start/exclusive end dates.
+Overnight shifts, split shifts, rosters and historical corrections are not supported.
 
-| Example, PT INR 200 and no PF/ESI | Regular gross | Net before other deductions |
-|---|---:|---:|
-| Monthly CTC target INR 20,000 | 20,000 | 19,800 |
-| Monthly take-home target INR 20,000 | 20,200 | 20,000 |
-| CTC target INR 20,000, payable fraction 13/26 | 10,000 | 9,800 |
-| Take-home target INR 20,000, payable fraction 13/26 | 10,200 | 10,000 |
+Assignments capture immutable shift-name and time snapshots.
+Unreferenced definitions are editable; assigned definitions require a new work shift to change hours.
+Renaming or deactivating a definition preserves existing assignments.
+Deactivated definitions cannot receive new assignments, and referenced definitions cannot be deleted.
 
-PT is selected through a PROFESSIONAL_TAX template rule, without a separate applicability flag or duplicated deduction.
-PF uses the selected effective rule; ESI remains system-managed.
-Unlocked payroll recalculates against the approved target and effective statutory configuration.
-An unreachable target or incomplete statutory configuration blocks locking through COMPENSATION_TARGET_VARIANCE.
-Fixed earning rules are never silently replaced with an invented balancing allowance.
-Saved period evidence includes target, achieved amount, gross adjustment and additional statutory effects.
-Locked or paid history retains its snapshot.
-
-Legacy PROTECT_GROSS is readable but rejected for new template, preview and compensation writes.
-The explicit protection migration preview converts a legacy gross package to CTC using its approved employer-cost snapshot.
-It creates an effective-dated revision only after applying the reviewed preview.
-Missing or inconsistent approved snapshots require an explicit reviewed salary revision.
-The preview is bound to employee, tenant, user, source revision, selected month and calculated result; stale inputs require another preview.
-Migration never runs from a startup seeder.
+Changes start today or later, no earlier than joining, and cannot affect saved attendance or locked payroll.
+Future changes preserve subsequent scheduled assignments.
+Cancelling a future assignment extends its predecessor until the next change.
+Historical evaluation uses the assignment for each attendance date, including monthly late-arrival counts, payroll overtime and teacher availability.
+Missing required assignments fail explicitly rather than using school shifts.
+Imported baselines identify the last-known configuration; they do not reconstruct historical schedule changes.

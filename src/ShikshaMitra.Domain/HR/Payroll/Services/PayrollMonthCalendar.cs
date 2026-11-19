@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.Calendar.Holidays;
@@ -130,7 +130,7 @@ public static partial class PayrollMonthCalendar
 		};
 	}
 
-	private static bool IsWeeklyOff(
+	public static bool IsWeeklyOff(
 		DayOfWeek dayOfWeek,
 		AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern weeklyOffPattern,
 		IReadOnlyList<int> customWeeklyOffs)
@@ -139,7 +139,7 @@ public static partial class PayrollMonthCalendar
 		{
 			AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.Sunday => dayOfWeek == DayOfWeek.Sunday,
 			AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.SaturdaySunday => dayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday,
-			AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.Custom => customWeeklyOffs.Contains((int)dayOfWeek),
+			AttendanceAndLeaves.Settings.AttendanceWeeklyOffPattern.Custom => customWeeklyOffs.Contains((int) dayOfWeek),
 			_ => dayOfWeek == DayOfWeek.Sunday
 		};
 	}

@@ -16,6 +16,8 @@ internal sealed class AcademicQueryCounter : IObserver<DiagnosticListener>, IObs
 	private readonly IDisposable _listenerSubscription;
 	private readonly ConcurrentBag<IDisposable> _subscriptions = new();
 	private int _count;
+	private int _readCount;
+	private readonly ConcurrentBag<string> _readCommands = [];
 
 	public AcademicQueryCounter(DbConnection connection)
 	{
@@ -24,6 +26,8 @@ internal sealed class AcademicQueryCounter : IObserver<DiagnosticListener>, IObs
 	}
 
 	public int Count => Volatile.Read(ref _count);
+	public int ReadCount => Volatile.Read(ref _readCount);
+	public IReadOnlyCollection<string> ReadCommands => _readCommands.ToArray();
 
 	public void OnNext(DiagnosticListener listener)
 	{
@@ -39,6 +43,11 @@ internal sealed class AcademicQueryCounter : IObserver<DiagnosticListener>, IObs
 			ReferenceEquals(data.Context.Database.GetDbConnection(), _connection))
 		{
 			Interlocked.Increment(ref _count);
+			if (data.Command.CommandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+			{
+				Interlocked.Increment(ref _readCount);
+				_readCommands.Add(data.Command.CommandText);
+			}
 		}
 	}
 

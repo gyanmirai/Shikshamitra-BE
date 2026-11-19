@@ -16,6 +16,7 @@ internal static class AdmissionWorkflowMapper
 			Name = workflow.Name,
 			Code = workflow.Code,
 			Description = workflow.Description,
+			DefaultInquiryFormDefinitionId = workflow.DefaultInquiryFormDefinitionId,
 			Version = workflow.Version,
 			Status = workflow.Status,
 			ParentVersionId = workflow.ParentVersionId,

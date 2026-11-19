@@ -12,6 +12,9 @@ namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 /// </summary>
 public class GetFeeCollectionSummaryInput : PagedAndSortedResultRequestDto, IFinanceClassDivisionFilter
 {
+    public string? Filters { get; set; }
+    public string? SortBy { get; set; }
+    public string? SortOrder { get; set; }
 	/// <summary>Maximum page size cap.</summary>
 	public const int MaxPageSize = 100;
 
@@ -42,8 +45,9 @@ public class GetFeeCollectionSummaryInput : PagedAndSortedResultRequestDto, IFin
 	public Guid? DivisionId { get; set; }
 
 	/// <summary>
-	/// Optional free-text search. Matches student first/middle/last name or
-	/// roll number. Minimum 2 characters when provided.
+	/// Optional free-text search. Each whitespace-separated word must match a
+	/// student first, middle, or last name in any order. A single term also
+	/// matches roll number. Minimum 2 characters when provided.
 	/// </summary>
 	[MinLength(2)]
 	[MaxLength(100)]

@@ -26,6 +26,7 @@ public class AcademicReportExportBackgroundJob(
     AcademicExcelService excelService,
     AcademicCsvService csvService,
     AcademicReportExportStateService exportState,
+    AcademicReportIdentityService schoolIdentity,
     IBlobContainer blobContainer,
     ICurrentTenant currentTenant,
     IUnitOfWorkManager unitOfWorkManager,
@@ -72,6 +73,7 @@ public class AcademicReportExportBackgroundJob(
                     format = args.DynamicSpec.Format;
                     if (format == AcademicReportFormat.Pdf)
                     {
+                        await schoolIdentity.PrepareAsync(report, args.EducationBoardId, args.EducationMediumId);
                         dynamicReportPdfService.WriteReportPdf(args.DynamicSpec, report, file);
                     }
                 }
@@ -88,6 +90,7 @@ public class AcademicReportExportBackgroundJob(
                         await using var spool = await AcademicReportRowSpool.CreateAsync(
                             WithCheckpoints(export.Rows, args.JobId, runId.Value, cancellationToken), cancellationToken);
                         export.Metadata.TotalCount = spool.Count;
+                        await schoolIdentity.PrepareAsync(export.Metadata);
                         // Preserve the existing layout. QuestPDF 2024 still buffers its layout/native
                         // document; the row spool bounds database/source materialization only.
                         if (TimetableReportsPdfService.IsTimetableReport(export.Metadata.ReportType))

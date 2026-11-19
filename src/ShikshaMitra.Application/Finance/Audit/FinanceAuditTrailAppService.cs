@@ -5,6 +5,8 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
@@ -17,24 +19,23 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Finance.Audit;
 
 [RemoteService(false)]
-[Authorize]
+[Authorize(ShikshaMitraSubmodulePermissions.Finance.Auditing.View)]
 public partial class FinanceAuditTrailAppService(
 	IRepository<FinanceAuditEvent, Guid> repository,
 	IRepository<Student, Guid> studentRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
-	FinanceScopeAccessService financeScopeAccessService)
+	FinanceScopeAccessService financeScopeAccessService,
+	IRepository<PaymentTerm, Guid> paymentTermRepository,
+	IUserScopeAccessService scopeAccess)
 	: ApplicationService, IFinanceAuditTrailAppService
 {
 	public async Task<PagedResultDto<FinanceAuditEventDto>> GetListAsync(FinanceAuditEventListRequestDto input)
 	{
 		await EnsureCanViewFinanceAuditAsync();
 
-		var query = await repository.GetQueryableAsync();
+		var query = await ApplyPayerScopeAsync(await ApplyPaymentTermScopeAsync(await repository.GetQueryableAsync()));
 		query = ApplyFilters(query, input);
-
-		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
-		query = query.Where(x => x.StudentId == null || scopedStudentIds.Contains(x.StudentId.Value));
 
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(ApplySorting(query, input.Sorting)
@@ -64,19 +65,13 @@ public partial class FinanceAuditTrailAppService(
 		if (string.IsNullOrWhiteSpace(correlationId))
 			throw new BusinessException("FinanceAudit:CorrelationIdRequired");
 
-		var query = await repository.GetQueryableAsync();
+		var query = await ApplyPayerScopeAsync(await ApplyPaymentTermScopeAsync(await repository.GetQueryableAsync()));
 		var normalized = correlationId.Trim();
 		query = query.Where(x => x.CorrelationId == normalized);
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(
 			query.OrderBy(x => x.OccurredAt).ThenBy(x => x.Id)
 				.Skip(input.SkipCount).Take(NormalizeMaxResultCount(input.MaxResultCount)));
-
-		var sampleEvent = rows.FirstOrDefault();
-		if (sampleEvent?.StudentId.HasValue == true)
-			await financeScopeAccessService.EnsureStudentAccessibleAsync(sampleEvent.StudentId.Value);
-		else if (sampleEvent != null)
-			await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(sampleEvent.AcademicYearId, null, null, null, null);
 
 		return new FinanceAuditCorrelationDto
 		{
@@ -93,14 +88,35 @@ public partial class FinanceAuditTrailAppService(
 	public async Task<FinanceAuditEventDto> GetAsync(Guid id)
 	{
 		await EnsureCanViewFinanceAuditAsync();
-		var entity = await repository.GetAsync(id);
-
-		if (entity.StudentId.HasValue)
-			await financeScopeAccessService.EnsureStudentAccessibleAsync(entity.StudentId.Value);
-		else
-			await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(entity.AcademicYearId, null, null, null, null);
+		var entity = await AsyncExecuter.SingleOrDefaultAsync((await ApplyPayerScopeAsync(await ApplyPaymentTermScopeAsync(await repository.GetQueryableAsync()))).Where(x => x.Id == id))
+			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(FinanceAuditEvent), id);
 
 		return FinanceAuditTrailProjection.ToDto(entity);
+	}
+
+	private sealed class AuditClassScope : IUserScopedEntity
+	{
+		public Guid? AcademicYearId { get; set; }
+		public Guid? EducationBoardId { get; set; }
+		public Guid? EducationMediumId { get; set; }
+		public Guid? EducationMediumStageId { get; set; }
+		public Guid? StandardId { get; set; }
+		public Guid? DivisionId { get; set; }
+	}
+
+	private async Task<IQueryable<FinanceAuditEvent>> ApplyPaymentTermScopeAsync(IQueryable<FinanceAuditEvent> query)
+	{
+		var scope = await scopeAccess.GetCurrentUserScopeAsync();
+		if (scope.IsAdmin) return query;
+		var classes = scopeAccess.ApplyScope((await standardRepository.GetQueryableAsync()).Select(c => new AuditClassScope {
+			AcademicYearId = c.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
+			EducationBoardId = c.EducationMediumStage.EducationMedium.EducationBoardId,
+			EducationMediumId = c.EducationMediumStage.EducationMediumId,
+			EducationMediumStageId = c.EducationMediumStageId, StandardId = c.Id
+		}), scope);
+		var boardIds = classes.Select(c => c.EducationBoardId);
+		var terms = (await paymentTermRepository.GetQueryableAsync()).Where(t => boardIds.Contains(t.BoardId)).Select(t => t.Id);
+		return query.Where(e => e.EntityType != FinanceAuditEntityTypes.PaymentTerm || terms.Contains(e.EntityId));
 	}
 
 	public async Task<ListResultDto<FinanceAuditStudentLookupDto>> LookupStudentsForAuditAsync(

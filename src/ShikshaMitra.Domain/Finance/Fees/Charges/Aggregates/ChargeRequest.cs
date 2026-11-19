@@ -16,6 +16,8 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid AcademicYearId { get; private set; }
 	public string ChargeName { get; private set; } = string.Empty;
 	public Guid ChargeCategoryId { get; private set; }
+	public Guid? IncomeCategoryId { get; private set; }
+	public string? IncomeCategoryName { get; private set; }
 	public string PurposeDescription { get; private set; } = string.Empty;
 	public decimal Amount { get; private set; }
 	public DateTimeOffset DueDate { get; private set; }
@@ -73,6 +75,14 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		ValidateAmount();
 		ValidateDueDate();
+	}
+
+	public void SetIncomeCategory(Guid categoryId, string categoryName)
+	{
+		if (categoryId == Guid.Empty)
+			throw new BusinessException("Finance:Routing:InvalidCategory");
+		IncomeCategoryId = categoryId;
+		IncomeCategoryName = categoryName;
 	}
 
 	public void Update(

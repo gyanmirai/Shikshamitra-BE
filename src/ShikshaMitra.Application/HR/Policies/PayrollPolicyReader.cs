@@ -32,7 +32,7 @@ public class PayrollPolicyReader(
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query
 			.OrderByDescending(x => x.IsDefault)
-			.ThenBy(x => x.Name)
+			.ThenBy(x => x.Name).ThenBy(x => x.Id)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
 

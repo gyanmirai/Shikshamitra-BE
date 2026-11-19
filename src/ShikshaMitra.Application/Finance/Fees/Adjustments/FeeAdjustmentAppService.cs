@@ -17,7 +17,9 @@ using Volo.Abp.Uow;
 using Volo.Abp.Users;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Repositories;
+using ShikshaMitra.Finance.Fees.FeeRefund.Repositories;
 using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.Finance.Fees.FeeAdjustment;
 
@@ -25,6 +27,8 @@ namespace ShikshaMitra.Finance.Fees.FeeAdjustment;
 [RemoteService(false)]
 public partial class FeeAdjustmentAppService(
     IFeeAdjustmentRepository feeAdjustmentRepository,
+    FeeAdjustmentCommandStore feeAdjustmentCommandStore,
+    IFeeRefundRepository feeRefundRepository,
     FeeAdjustmentManager feeAdjustmentManager,
     IDueFeeRepository dueFeeRepository,
     IRepository<Student, Guid> studentRepository,
@@ -34,7 +38,9 @@ public partial class FeeAdjustmentAppService(
     IRepository<IdentityUser, Guid> identityUserRepository,
     FinanceAuditWriter financeAuditWriter,
     FinanceScopeAccessService financeScopeAccessService,
+    FinanceReviewerAccessService financeReviewerAccessService,
     ICurrentUser currentUser,
+    IUserScopeService userScopeService,
     IUnitOfWorkManager unitOfWorkManager,
     IDistributedEventBus eventBus) : ApplicationService, IFeeAdjustmentAppService
 {

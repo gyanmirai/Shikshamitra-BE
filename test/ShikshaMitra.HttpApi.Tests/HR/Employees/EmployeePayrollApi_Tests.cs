@@ -12,6 +12,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Policies;
@@ -32,7 +33,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	public EmployeePayrollApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
-	#region Tier 0 — Critical
+	#region Tier 0 ï¿½ Critical
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
@@ -102,7 +103,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	#endregion
 
-	#region Tier 1 — Important
+	#region Tier 1 ï¿½ Important
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
@@ -664,7 +665,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	#endregion
 
-	#region Tier 1.5 — Validation Edge Cases
+	#region Tier 1.5 ï¿½ Validation Edge Cases
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
@@ -1201,7 +1202,7 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 
 	#endregion
 
-	#region Tier 2 — Extended
+	#region Tier 2 ï¿½ Extended
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Extended)]
@@ -1242,6 +1243,118 @@ public class EmployeePayrollApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	#endregion
+
+
+	[Fact]
+	public async Task ProfileDetailsPatch_Preserves_Components_And_Omitted_Groups()
+	{
+		var id = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "ProfilePatch");
+		var initial = BuildPayrollContract();
+		initial.EarningComponents = [new SalaryComponentContract { Name = "One-time award", Amount = 500m, IsFixed = true, IsTemp = true, ApplicableMonth = new DateTime(2026, 10, 1) }];
+		(await Client.PutAsJsonAsync($"{BaseUrl}/{id}/payroll", initial, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.OK);
+		var before = await Client.GetFromJsonAsync<EmployeePayrollResponse>($"{BaseUrl}/{id}/payroll", JsonOptions);
+		var response = await Client.PatchAsJsonAsync($"{BaseUrl}/{id}/payroll/profile-details", new EmployeePayrollProfileDetailsPatch {
+			BankDetails = new BankDetailsContract { BankName = "Updated Bank", BranchName = "New Branch", AccountHolderName = "Test Employee", AccountNumber = "9876543210", IfscCode = "SBIN0001234" }
+		}, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync());
+		var after = await Client.GetFromJsonAsync<EmployeePayrollResponse>($"{BaseUrl}/{id}/payroll", JsonOptions);
+		after!.BankDetails!.BankName.ShouldBe("Updated Bank");
+		System.Text.Json.JsonSerializer.Serialize(after.SalaryDetails).ShouldBe(System.Text.Json.JsonSerializer.Serialize(before!.SalaryDetails));
+		System.Text.Json.JsonSerializer.Serialize(after.EarningComponents).ShouldBe(System.Text.Json.JsonSerializer.Serialize(before.EarningComponents));
+		System.Text.Json.JsonSerializer.Serialize(after.DeductionComponents).ShouldBe(System.Text.Json.JsonSerializer.Serialize(before.DeductionComponents));
+	}
+
+	[Fact]
+	public async Task ProfileDetailsPatch_Preserves_Locked_Payroll_And_Monthly_Adjustments()
+	{
+		var id = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PatchHistory");
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var snapshotId = Guid.NewGuid();
+		var adjustmentId = Guid.NewGuid();
+		string beforeSnapshot;
+		string beforeAdjustment;
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+		{
+			var snapshots = scope.ServiceProvider.GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
+			var adjustments = scope.ServiceProvider.GetRequiredService<IRepository<PayrollAdjustment, Guid>>();
+			var snapshot = new PayrollRunItemSnapshot(snapshotId, tenantId, "2026-09", id) { GrossSalary = 40000m, NetPay = 38000m, EarningComponentsJson = "[{\"name\":\"Basic\",\"amount\":40000}]" };
+			snapshot.MarkLocked();
+			await snapshots.InsertAsync(snapshot, autoSave: true);
+			await adjustments.InsertAsync(new PayrollAdjustment(adjustmentId, tenantId, "2026-10", id, "Monthly award", 500m, true, "Test monthly reason"), autoSave: true);
+			beforeSnapshot = System.Text.Json.JsonSerializer.Serialize(await snapshots.GetAsync(snapshotId));
+			beforeAdjustment = System.Text.Json.JsonSerializer.Serialize(await adjustments.GetAsync(adjustmentId));
+		}
+		var response = await Client.PatchAsJsonAsync($"{BaseUrl}/{id}/payroll/profile-details", new EmployeePayrollProfileDetailsPatch { AttendanceIntegration = new EmployeeAttendanceIntegration { PunchId = "NEWPUNCH", TotalWorkingHourPerMonth = 168m } }, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync());
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+		{
+			var snapshots = scope.ServiceProvider.GetRequiredService<IRepository<PayrollRunItemSnapshot, Guid>>();
+			var adjustments = scope.ServiceProvider.GetRequiredService<IRepository<PayrollAdjustment, Guid>>();
+			System.Text.Json.JsonSerializer.Serialize(await snapshots.GetAsync(snapshotId)).ShouldBe(beforeSnapshot);
+			System.Text.Json.JsonSerializer.Serialize(await adjustments.GetAsync(adjustmentId)).ShouldBe(beforeAdjustment);
+		}
+	}
+
+	[Fact]
+	public async Task ProfileDetailsPatch_Rejects_Invalid_Group_Atomically()
+	{
+		var id = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PatchInvalid");
+		(await Client.PutAsJsonAsync($"{BaseUrl}/{id}/payroll", BuildPayrollContract(), JsonOptions)).EnsureSuccessStatusCode();
+		var response = await Client.PatchAsJsonAsync($"{BaseUrl}/{id}/payroll/profile-details", new EmployeePayrollProfileDetailsPatch {
+			BankDetails = new BankDetailsContract { BankName = "Should not save", AccountHolderName = "Test", AccountNumber = "1234567890", IfscCode = "SBIN0001234" },
+			AttendanceIntegration = new EmployeeAttendanceIntegration { TotalWorkingHourPerMonth = -1 }
+		}, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var after = await Client.GetFromJsonAsync<EmployeePayrollResponse>($"{BaseUrl}/{id}/payroll", JsonOptions);
+		after!.BankDetails!.BankName.ShouldBe("State Bank of India");
+	}
+
+	[Theory]
+	[InlineData("{\"earningComponents\":[]}")]
+	[InlineData("{\"salaryDetails\":{\"quotedMonthlyAmount\":1}}")]
+	[InlineData("{\"policyOverrideAction\":\"disable\"}")]
+	[InlineData("{}")]
+	public async Task ProfileDetailsPatch_Rejects_NonProfile_Fields(string json)
+	{
+		var id = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PatchShape");
+		var response = await Client.PatchAsync($"{BaseUrl}/{id}/payroll/profile-details", new StringContent(json, Encoding.UTF8, "application/json"));
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
+	[Theory]
+	[InlineData(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
+	[InlineData(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add)]
+	public async Task ProfileDetailsPatch_Requires_Both_Permissions(string onlyPermission)
+	{
+		var id = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PatchPermission");
+		using var client = CreatePermissionClient(onlyPermission);
+		var response = await client.PatchAsJsonAsync($"{BaseUrl}/{id}/payroll/profile-details", new EmployeePayrollProfileDetailsPatch { AttendanceIntegration = new EmployeeAttendanceIntegration { PunchId = "TEST" } }, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
+
+	[Fact]
+	public async Task ProfileDetailsPatch_Rejects_CrossTenant_Employee()
+	{
+		var id = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PatchTenant");
+		using var client = CreatePermissionClient(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit, ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add);
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestTenantIdHeader, Guid.NewGuid().ToString());
+		var response = await client.PatchAsJsonAsync($"{BaseUrl}/{id}/payroll/profile-details", new EmployeePayrollProfileDetailsPatch { AttendanceIntegration = new EmployeeAttendanceIntegration { PunchId = "TEST" } }, JsonOptions);
+		response.StatusCode.ShouldBeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
+	}
+
+	[Fact]
+	public async Task ProfileDetailsPatch_Rejects_User_Without_Employee_Scope()
+	{
+		var id = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PatchScope");
+		using var client = CreatePermissionClient(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit, ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add);
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "teacher");
+		var response = await client.PatchAsJsonAsync($"{BaseUrl}/{id}/payroll/profile-details", new EmployeePayrollProfileDetailsPatch { AttendanceIntegration = new EmployeeAttendanceIntegration { PunchId = "TEST" } }, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+	}
 
 	private HttpClient CreatePermissionClient(params string[] permissions)
 	{

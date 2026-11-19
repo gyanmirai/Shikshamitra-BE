@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
@@ -22,10 +23,15 @@ internal static class SalarySlipProjection
 			? Math.Max(0m, payrollBasisDays.Value - payableDays.Value)
 			: (decimal?) null;
 
+		var application = ReadApplication(snapshot?.StatutoryApplicationJson ?? salarySlip.StatutoryApplicationJson);
 		return new SalarySlipDto
 		{
 			Id = salarySlip.Id,
 			EmployeeId = salarySlip.EmployeeId,
+			BasicSalary = snapshot?.BasicSalary,
+			StatutoryDeductionAmounts = snapshot?.StatutoryApplicationJson == null ? null : ReadStatutoryDeductions(snapshot.DeductionComponentsJson),
+			LeaveUnitsByType = snapshot?.LeaveUnitsByTypeJson == null ? null : System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, decimal>>(snapshot.LeaveUnitsByTypeJson),
+			StatutoryApplication = ReadApplication(snapshot?.StatutoryApplicationJson ?? salarySlip.StatutoryApplicationJson),
 			EmployeeName = employee.EmployeeName,
 			EmployeeCode = employee.EmployeeCode,
 			Department = employee.Department,
@@ -55,8 +61,8 @@ internal static class SalarySlipProjection
 			BankName = payrollDetails?.BankName,
 			MaskedAccountNumber = SalarySlipProjectionFormatting.MaskAccountNumber(payrollDetails?.AccountNumber),
 			IfscCode = payrollDetails?.IfscCode,
-			UanNumber = payrollDetails?.UanNumber,
-			EpfNumber = payrollDetails?.EpfNumber,
+			UanNumber = application == null ? salarySlip.Status == SalarySlipStatus.Draft ? payrollDetails?.UanNumber : null : application.Profile.UanNumber,
+			EpfNumber = application == null ? salarySlip.Status == SalarySlipStatus.Draft ? payrollDetails?.EpfNumber : null : application.Profile.PfNumber,
 			NetPayInWords = IndianCurrencyWords.Format(salarySlip.NetSalary),
 			Earnings = salarySlip.Earnings.Select(ToLineItemDto).ToList(),
 			Deductions = salarySlip.Deductions.Select(ToLineItemDto).ToList(),
@@ -67,6 +73,7 @@ internal static class SalarySlipProjection
 			ProfessionalTaxRuleId = salarySlip.ProfessionalTaxRuleId,
 			ProfessionalTaxRuleVersion = salarySlip.ProfessionalTaxRuleVersion,
 			EmployeeStateInsuranceRuleId = salarySlip.EmployeeStateInsuranceRuleId,
+			EsiConfigurationId = salarySlip.EsiConfigurationId,
 			EmployeeStateInsuranceRuleVersion = salarySlip.EmployeeStateInsuranceRuleVersion,
 			EmployeeStateInsuranceWages = salarySlip.EmployeeStateInsuranceWages,
 			EmployeeStateInsuranceGovernmentContribution = salarySlip.EmployeeStateInsuranceGovernmentContribution,
@@ -103,7 +110,9 @@ internal static class SalarySlipProjection
 			Status: statusLabel,
 			IsPreview: isPreview,
 			DocumentLabel: isPreview ? $"Preview - {statusLabel}" : statusLabel,
-			GeneratedAt: dto.ProcessedDate,
+			GeneratedAt: TimeZoneInfo.ConvertTimeFromUtc(dto.ProcessedDate.Kind == DateTimeKind.Local
+				? dto.ProcessedDate.ToUniversalTime() : DateTime.SpecifyKind(dto.ProcessedDate, DateTimeKind.Utc),
+				TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata")),
 			PayrollBasisDays: dto.PayrollBasisDays,
 			PayableDays: dto.PayableDays,
 			PresentDays: dto.PresentDays,
@@ -116,25 +125,47 @@ internal static class SalarySlipProjection
 			IfscCode: dto.IfscCode,
 			UanNumber: dto.UanNumber,
 			EpfNumber: dto.EpfNumber,
-			Earnings: dto.Earnings.Select(x => new PayslipPdfLineItem(x.Name, x.Amount)).ToList(),
-			Deductions: dto.Deductions.Select(x => new PayslipPdfLineItem(x.Name, x.Amount)).ToList(),
+			Earnings: dto.Earnings.Select(x => new PayslipPdfLineItem(
+				PayslipPdfFormatting.FormatEmployeeComponentName(x.Name), x.Amount, x.FullMonthAmount)).ToList(),
+			Deductions: dto.Deductions.Select(x => new PayslipPdfLineItem(
+				PayslipPdfFormatting.FormatEmployeeComponentName(x.Name), x.Amount)).ToList(),
 			TotalEarnings: dto.TotalEarning,
 			TotalDeductions: dto.TotalDeduction,
 			NetPay: dto.NetSalary,
-			NetPayInWords: dto.NetPayInWords ?? IndianCurrencyWords.Format(dto.NetSalary),
+			NetPayInWords: IndianCurrencyWords.Format(dto.NetSalary),
 			Remarks: dto.Remarks)
 		{
+			Presentation = dto.Presentation?.Options ?? new(),
+			CasualLeaveDays = dto.LeaveUnitsByType?.GetValueOrDefault("CL"),
+			UnpaidLeaveDays = dto.LeaveUnitsByType?.GetValueOrDefault("UNPAID"),
 			FullGrossSalary = dto.FullGrossSalary,
 			GrossSalary = dto.GrossSalary,
-			AdditionalEarnings = dto.AdditionalEarnings
+			AdditionalEarnings = dto.AdditionalEarnings,
+			InsuranceNumber = dto.EmployeeStateInsuranceRuleId.HasValue ? dto.EmployeeStateInsuranceNumber : null
 		};
 	}
+
+	internal static Dictionary<string, decimal> ReadStatutoryDeductions(string json)
+	{
+		var lines = System.Text.Json.JsonSerializer.Deserialize<List<RunPayrollComponentItem>>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+		return new()
+		{
+			["pt"] = lines.Where(x => string.Equals(x.SemanticType?.Replace("_", ""), "ProfessionalTax", StringComparison.OrdinalIgnoreCase)).Sum(x => (decimal) x.Amount),
+			["tds"] = lines.Where(x => new[] { "TDS", "T.D.S.", "TAXDEDUCTEDATSOURCE" }.Contains(x.Name.Replace(" ", "").ToUpperInvariant())).Sum(x => (decimal) x.Amount)
+		};
+	}
+	private static ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryApplication? ReadApplication(string? json) =>
+		json == null ? null : System.Text.Json.JsonSerializer.Deserialize<ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryApplication>(json);
 
 	private static SalarySlipLineItemDto ToLineItemDto(SalarySlipLineItem lineItem)
 	{
 		return new SalarySlipLineItemDto
 		{
 			Name = lineItem.Name,
+			ComponentId = lineItem.ComponentId,
+			SourceLineId = lineItem.SourceLineId,
+			SemanticType = lineItem.SemanticType,
+			FullMonthAmount = lineItem.FullMonthAmount,
 			Amount = lineItem.Amount,
 			Description = lineItem.Description,
 			IsFixed = lineItem.IsFixed,

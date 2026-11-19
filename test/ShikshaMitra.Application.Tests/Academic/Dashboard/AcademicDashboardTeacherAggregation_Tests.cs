@@ -57,7 +57,22 @@ public class AcademicDashboardTeacherAggregation_Tests : LessonPlanProgressTestB
 				}
 				await InsertSubmissionAsync(homework.Id, Guid.NewGuid(), SubmissionStatus.Reviewed);
 
-				var dashboard = await GetRequiredService<IAcademicDashboardAppService>().GetTeacherDashboardAsync();
+				var service = GetRequiredService<IAcademicDashboardAppService>();
+				var assignments = await service.GetTeacherAssignmentsAsync();
+				var assessment = await service.GetTeacherAssessmentAsync();
+				var attention = await service.GetTeacherAttentionAsync();
+				var overview = await service.GetTeacherOverviewAsync();
+				var analytics = await service.GetTeacherAnalyticsAsync();
+				var dashboard = await service.GetTeacherDashboardAsync();
+				overview.AssignedClassesCount.ShouldBe(dashboard.AssignedClassesCount);
+				assignments.AssignedClassesCount.ShouldBe(overview.AssignedClassesCount);
+				assignments.PendingHomework.ShouldBe(overview.PendingHomework);
+				assessment.PendingEvaluations.ShouldBe(overview.PendingEvaluations);
+				attention.StudentsAttentionCount.ShouldBe(overview.StudentsAttentionCount);
+				overview.PendingEvaluations.ShouldBe(dashboard.PendingEvaluations);
+				overview.ChapterProgressChart.StandardNames.ShouldBeEmpty();
+				analytics.ChapterProgressChart.StandardNames.Count.ShouldBe(hasAssignment ? 1 : 0);
+				analytics.ChapterProgressChart.StandardNames.ShouldBe(dashboard.ChapterProgressChart.StandardNames);
 				dashboard.AssignedClassesCount.ShouldBe(hasAssignment ? 1 : 0);
 				dashboard.AssignedSubjectsCount.ShouldBe(hasAssignment ? 1 : 0);
 				dashboard.PendingHomework.ShouldBe(hasAssignment ? 1 : 0);

@@ -89,7 +89,7 @@ internal static class AttendanceImportLogProjection
 		var warnings = row.Warnings.ToList();
 		if (!resolvedEmployeeId.HasValue && !string.IsNullOrWhiteSpace(row.EmployeeCode))
 		{
-			warnings.Add($"Unable to resolve employeeId for employee code '{row.EmployeeCode}'.");
+			warnings.Add($"Unable to resolve employeeId for staff code '{row.EmployeeCode}'.");
 		}
 
 		if (!string.IsNullOrWhiteSpace(normalizedWarning))

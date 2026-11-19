@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Localization\ShikshaMitra\*.json" />
+    <EmbeddedResource Include="Security\Permissions\NavigationVisibilityPrerequisites.json" LogicalName="ShikshaMitra.Security.Permissions.NavigationVisibilityPrerequisites.json" />
     <Compile Remove="Students\FollowUps\**" />
     <Content Remove="Localization\ShikshaMitra\*.json" />
     <EmbeddedResource Remove="Students\FollowUps\**" />

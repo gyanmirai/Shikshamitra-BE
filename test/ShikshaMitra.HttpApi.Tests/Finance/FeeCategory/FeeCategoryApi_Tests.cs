@@ -24,7 +24,7 @@ public class FeeCategoryApi_Tests : ShikshaMitraApiTestBase
         _academicYearId = factory.SeededAcademicYearId;
     }
 
-    private FeeCategoryCreateRequest BuildCreateRequest(string name = null) => new()
+    private FeeCategoryCreateRequest BuildCreateRequest(string? name = null) => new()
     {
         Name = name ?? $"Category-{Guid.NewGuid():N}",
         Description = "Created by test",
@@ -293,7 +293,7 @@ public class FeeCategoryApi_Tests : ShikshaMitraApiTestBase
         body.ShouldContain(m => m.Value == (int)FeeHeadModule.Academics);
     }
 
-    private async Task<FeeCategoryResponse> CreateCategoryAsync(string name = null)
+    private async Task<FeeCategoryResponse> CreateCategoryAsync(string? name = null)
     {
         var input = BuildCreateRequest(name);
         var response = await Client.PostAsJsonAsync($"{BaseUrl}?academicYearId={_academicYearId}", input, JsonOptions);

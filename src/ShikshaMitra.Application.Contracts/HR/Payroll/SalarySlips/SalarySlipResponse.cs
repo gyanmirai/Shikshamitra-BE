@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -9,6 +9,8 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 /// </summary>
 public class SalarySlipResponse
 {
+	public Guid? DocumentId { get; set; }
+	public int? DocumentRevision { get; set; }
 	public decimal? FullGrossSalary { get; set; }
 	public decimal GrossSalary { get; set; }
 	public decimal AdditionalEarnings { get; set; }
@@ -123,23 +125,14 @@ public class SalarySlipResponse
     public string? EpfNumber { get; set; }
 
     // Values captured when payroll was finalized, not current enrollment or compensation.
-    public Guid? EmployeeStateInsuranceRuleId { get; set; }
+    public Guid? EsiConfigurationId { get; set; }
+	public Guid? EmployeeStateInsuranceRuleId { get; set; }
     public int? EmployeeStateInsuranceRuleVersion { get; set; }
     public decimal EmployeeStateInsuranceWages { get; set; }
-    public decimal EmployeeStateInsuranceGovernmentContribution { get; set; }
     public string? EmployeeStateInsuranceCoverageDecision { get; set; }
     public string? EmployeeStateInsuranceNumber { get; set; }
     public DateTime? EmployeeStateInsuranceContributionPeriodStart { get; set; }
     public DateTime? EmployeeStateInsuranceContributionPeriodEnd { get; set; }
-    public ShikshaMitra.HR.Payroll.Templates.SalaryProtectionResult? SalaryProtection { get; set; }
-	public Guid? CompensationRevisionId { get; set; }
-    public int? CompensationRevisionNumber { get; set; }
-    public string? CompensationSalaryBasis { get; set; }
-    public string? CompensationProtectionPolicy { get; set; }
-    public decimal? CompensationQuotedAmount { get; set; }
-    public decimal? CompensationProtectedAmount { get; set; }
-    public decimal? CompensationNormalizedProtectedAmount { get; set; }
-    public decimal? CompensationTargetDifference { get; set; }
 
     public string? Remarks { get; set; }
 }

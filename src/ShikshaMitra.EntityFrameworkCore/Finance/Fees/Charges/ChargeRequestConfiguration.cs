@@ -9,6 +9,8 @@ public class ChargeRequestConfiguration : IEntityTypeConfiguration<ChargeRequest
 	public void Configure(EntityTypeBuilder<ChargeRequest> builder)
 	{
 		builder.ToTable("Finance_ChargeRequests", ShikshaMitraConsts.DbSchema);
+        builder.Property(x=>x.IncomeCategoryName).HasMaxLength(500);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory>().WithMany().HasForeignKey(x=>x.IncomeCategoryId).OnDelete(DeleteBehavior.Restrict);
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.ChargeName)

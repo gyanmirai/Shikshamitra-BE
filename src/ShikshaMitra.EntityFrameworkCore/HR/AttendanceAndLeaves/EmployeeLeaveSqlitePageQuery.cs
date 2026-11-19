@@ -133,7 +133,7 @@ internal static class EmployeeLeaveSqlitePageQuery
 		int skip,
 		int take)
 	{
-		var ordered = rows.OrderByDescending(r => r.CreationTime).ToList();
+		var ordered = rows.OrderByDescending(r => r.CreationTime).ThenBy(r => r.Id).ToList();
 		return (ordered.Count, ordered.Skip(skip).Take(take).Select(r => r.Id).ToList());
 	}
 }

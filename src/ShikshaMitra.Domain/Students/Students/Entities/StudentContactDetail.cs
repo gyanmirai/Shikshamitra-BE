@@ -20,7 +20,11 @@ public class StudentContactDetail : FullAuditedEntity<Guid>, IMultiTenant
 	public string? Pincode { get; private set; }
 	public Student? Student { get; private set; }
 
-	protected StudentContactDetail() { }
+	protected StudentContactDetail()
+	{
+		// EF materializes these required columns after this ORM constructor.
+		PrimaryContactNo = null!;
+	}
 
 	public StudentContactDetail(
 		Guid id,

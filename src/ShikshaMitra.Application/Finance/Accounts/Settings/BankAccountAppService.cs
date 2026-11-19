@@ -17,10 +17,17 @@ namespace ShikshaMitra.Finance.Accounts.Settings;
 
 [Authorize]
 [RemoteService(false)]
-public class BankAccountAppService(
+public partial class BankAccountAppService(
 	IRepository<BankAccount, Guid> bankAccountRepository,
 	IRepository<AccountHead, Guid> accountHeadRepository,
-	FinanceScopeAccessService financeScopeAccessService,
+	IRepository<ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundRequest, Guid> refundRequestRepository,
+	IRepository<ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundAccountingEntry, Guid> refundAccountingRepository,
+	IRepository<ShikshaMitra.Finance.Accounts.Posting.PaymentDestinationRule, Guid> destinationRuleRepository,
+ IRepository<ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion, Guid> policyVersions,
+ IRepository<ShikshaMitra.Domain.Finance.Policies.RefundPolicy, Guid> refundPolicies,
+ IRepository<ShikshaMitra.Finance.Fees.FeeCollection.PaymentMethodRecord, Guid> payments,
+ IRepository<ShikshaMitra.Finance.Accounts.Incomes.Transaction, Guid> transactions,
+ FinanceScopeAccessService financeScopeAccessService,
 	AccountSettingVersionHistoryReader historyReader) : ApplicationService, IBankAccountAppService
 {
 	private static readonly IReadOnlySet<string> HistoryFields = new HashSet<string>
@@ -36,20 +43,22 @@ public class BankAccountAppService(
 	public async Task<BankAccountResponse> CreateAsync(Guid academicYearId, CreateBankAccountRequest input)
 	{
 		await EnsureScopeAsync(academicYearId);
-		await ValidateAccountHeadAsync(academicYearId, input.AccountHeadId);
-		await EnsureUniqueAsync(academicYearId, input.Code, input.AccountHeadId, input.AccountNumber);
-		var entity = new BankAccount(GuidGenerator.Create(), academicYearId, input.BankName,
+		var id = GuidGenerator.Create();
+		var code = string.IsNullOrWhiteSpace(input.Code) ? id.ToString("N") : input.Code.Trim();
+		await EnsureUniqueAsync(academicYearId, code, null, input.AccountNumber);
+		var entity = new BankAccount(id, academicYearId, input.BankName,
 			input.BranchName, input.BranchAddress, input.AccountHolderName, input.AccountType,
 			input.AccountNumber, input.Purpose, input.IfscCode, input.UpiId, true, CurrentTenant.Id,
-			input.Code, input.AccountHeadId, input.EffectiveFrom, input.EffectiveTo);
+			code, null, input.EffectiveFrom, input.EffectiveTo);
 		await bankAccountRepository.InsertAsync(entity, autoSave: true);
 		return await MapAsync(entity, includeSensitive: true);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Accounts_Settings_BankAccount.View)]
 	public async Task<PaginatedBankAccountResponse> GetListAsync(Guid academicYearId, int page = 1,
-		int pageSize = 10, string? search = null, bool includeInactive = true)
+		int pageSize = 10, string? search = null, bool includeInactive = true, string? filters = null)
 	{
+		var tableQuery = ListFilter.Parse(filters);
 		if (page < 1 || pageSize is < 1 or > 100) throw new BusinessException("Finance:Accounts:Settings:InvalidPaging");
 		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(academicYearId, null, null, null, null))
 			return new PaginatedBankAccountResponse { TotalCount = 0, CurrentPage = page, PageSize = pageSize, TotalPages = 0, Items = [] };
@@ -63,11 +72,11 @@ public class BankAccountAppService(
 				x.BankName.ToUpper().Contains(term) || x.BranchName.ToUpper().Contains(term) ||
 				x.AccountHolderName.ToUpper().Contains(term));
 		}
+		query = await ApplyListFiltersAsync(query, tableQuery);
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.BankName)
 			.Skip((page - 1) * pageSize).Take(pageSize));
-		var items = new List<BankAccountResponse>();
-		foreach (var row in rows) items.Add(await MapAsync(row, includeSensitive: false));
+		var items = await MapPageAsync(rows);
 		return new PaginatedBankAccountResponse
 		{
 			TotalCount = total, CurrentPage = page, PageSize = pageSize,
@@ -90,7 +99,7 @@ public class BankAccountAppService(
 		var entity = await bankAccountRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		return await historyReader.ReadAsync<BankAccount>(id, entity.CreationTime, entity.CreatorId,
-			HistoryFields, skipCount, maxResultCount);
+			HistoryFields, skipCount, maxResultCount, entity.Version);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Accounts_Settings_BankAccount.Edit)]
@@ -99,9 +108,14 @@ public class BankAccountAppService(
 		var entity = await bankAccountRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureConcurrency(entity, input.ConcurrencyStamp);
-		await ValidateAccountHeadAsync(entity.AcademicYearId, input.AccountHeadId);
-		await EnsureUniqueAsync(entity.AcademicYearId, input.Code, input.AccountHeadId, input.AccountNumber, id);
-		entity.Update(input.Code, input.AccountHeadId, input.BankName, input.BranchName,
+		if (await IsUsedAsync(id) &&
+			(!string.Equals(entity.AccountNumber, input.AccountNumber, StringComparison.Ordinal) ||
+             !string.Equals(entity.IfscCode, input.IfscCode, StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(entity.UpiId, input.UpiId, StringComparison.Ordinal)))
+			throw new BusinessException(AccountSettingErrorCodes.BankAccountInUse);
+		var code = string.IsNullOrWhiteSpace(input.Code) ? entity.Code ?? entity.Id.ToString("N") : input.Code.Trim();
+		await EnsureUniqueAsync(entity.AcademicYearId, code, entity.AccountHeadId, input.AccountNumber, id);
+		entity.Update(code, entity.AccountHeadId, input.BankName, input.BranchName,
 			input.BranchAddress, input.AccountHolderName, input.AccountType, input.AccountNumber,
 			input.Purpose, input.IfscCode, input.UpiId, input.EffectiveFrom, input.EffectiveTo);
 		await bankAccountRepository.UpdateAsync(entity, autoSave: true);
@@ -114,6 +128,8 @@ public class BankAccountAppService(
 		var entity = await bankAccountRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureConcurrency(entity, input.ConcurrencyStamp);
+		if (!input.IsActive && await IsConfiguredForFuturePaymentsAsync(id))
+			throw new BusinessException(AccountSettingErrorCodes.BankAccountInUse);
 		if (input.IsActive) entity.Activate(); else entity.Deactivate(input.DeactivationReason ?? string.Empty);
 		await bankAccountRepository.UpdateAsync(entity, autoSave: true);
 		return await MapAsync(entity, includeSensitive: false);
@@ -126,21 +142,26 @@ public class BankAccountAppService(
 		var entity = await bankAccountRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		if (entity.IsActive) throw new BusinessException(AccountSettingErrorCodes.ActiveRecordCannotBeDeleted);
+		if (await IsUsedAsync(id)) throw new BusinessException(AccountSettingErrorCodes.BankAccountInUse);
 		await bankAccountRepository.DeleteAsync(entity, autoSave: true);
 	}
 
 	private Task EnsureScopeAsync(Guid academicYearId) =>
 		financeScopeAccessService.EnsureAcademicContextAccessibleAsync(academicYearId, null, null, null, null);
 
-	private async Task ValidateAccountHeadAsync(Guid academicYearId, Guid? accountHeadId)
-	{
-		if (!accountHeadId.HasValue)
-			throw new BusinessException(AccountSettingErrorCodes.InvalidAccountHeadType);
-		var head = await accountHeadRepository.FindAsync(accountHeadId.Value);
-		if (head is null || head.AcademicYearId != academicYearId || head.HeadType != AccountHeadType.Asset)
-			throw new BusinessException(AccountSettingErrorCodes.InvalidAccountHeadType).WithData("Expected", AccountHeadType.Asset);
-		if (!head.IsActive) throw new BusinessException(AccountSettingErrorCodes.AccountHeadMustBeActive);
-	}
+ private async Task<bool> IsConfiguredForFuturePaymentsAsync(Guid id) =>
+   await destinationRuleRepository.AnyAsync(x=>x.BankAccountId == id && x.IsActive) ||
+       await refundPolicies.AnyAsync(x=>x.DefaultPayingBankAccountId == id && x.Status == ShikshaMitra.Domain.Finance.Policies.RefundPolicyStatus.Active) ||
+       await refundRequestRepository.AnyAsync(x=>x.PayingBankAccountId == id && x.Status == ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundStatus.Approved && !x.Settlements.Any());
+	private async Task<bool> IsUsedAsync(Guid id) =>
+		await refundRequestRepository.AnyAsync(x => x.Settlements.Any(s => s.BankAccountId == id)) ||
+		await refundAccountingRepository.AnyAsync(x => x.BankAccountId == id) ||
+		await destinationRuleRepository.AnyAsync(x => x.BankAccountId == id) ||
+        await refundPolicies.AnyAsync(x => x.DefaultPayingBankAccountId == id) ||
+        await refundRequestRepository.AnyAsync(x => x.PayingBankAccountId == id) ||
+        await payments.AnyAsync(x => x.BankAccountId == id) ||
+        await transactions.AnyAsync(x => x.BankAccountId == id) ||
+        await policyVersions.AnyAsync(x=>x.SnapshotJson.Contains(id.ToString()));
 
 	private async Task EnsureUniqueAsync(Guid academicYearId, string code, Guid? accountHeadId,
 		string accountNumber, Guid? excludingId = null)
@@ -160,25 +181,55 @@ public class BankAccountAppService(
 	private async Task<BankAccountResponse> MapAsync(BankAccount entity, bool includeSensitive)
 	{
 		var head = entity.AccountHeadId.HasValue ? await accountHeadRepository.FindAsync(entity.AccountHeadId.Value) : null;
-		return new BankAccountResponse
+		return Map(entity, includeSensitive, head?.Name, await IsUsedAsync(entity.Id));
+	}
+
+	private static BankAccountResponse Map(BankAccount entity, bool includeSensitive, string? headName, bool used) => new BankAccountResponse
 		{
 			Id = entity.Id, AcademicYearId = entity.AcademicYearId, Code = entity.Code,
-			AccountHeadId = entity.AccountHeadId, AccountHeadName = head?.Name,
+			AccountHeadId = entity.AccountHeadId, AccountHeadName = headName,
 			BankName = entity.BankName, BranchName = entity.BranchName, BranchAddress = entity.BranchAddress,
 			AccountHolderName = entity.AccountHolderName, AccountType = entity.AccountType,
 			AccountNumber = includeSensitive ? entity.AccountNumber : null,
 			MaskedAccountNumber = Mask(entity.AccountNumber), Purpose = entity.Purpose,
 			IfscCode = includeSensitive ? entity.IfscCode : MaskIfsc(entity.IfscCode),
 			UpiId = includeSensitive ? entity.UpiId : null,
+			MaskedUpiId = MaskUpi(entity.UpiId),
 			EffectiveFrom = entity.EffectiveFrom, EffectiveTo = entity.EffectiveTo,
 			IsActive = entity.IsActive, DeactivationReason = entity.DeactivationReason,
 			Version = entity.Version, ConcurrencyStamp = entity.ConcurrencyStamp,
-			IsUsedInDownstream = false
+			IsUsedInDownstream = used
 		};
-	}
+
+
+    private async Task<List<BankAccountResponse>> MapPageAsync(List<BankAccount> rows)
+    {
+        if (rows.Count == 0) return [];
+        var ids = rows.Select(x => x.Id).ToArray();
+        var used = new HashSet<Guid>();
+        var requests = await refundRequestRepository.GetQueryableAsync();
+        used.UnionWith(await SettingsUsageBatch.ReadAsync(requests.SelectMany(x => x.Settlements).Select(x => (Guid?)x.BankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync(requests.Select(x => (Guid?)x.PayingBankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync((await refundAccountingRepository.GetQueryableAsync()).Select(x => (Guid?)x.BankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync((await destinationRuleRepository.GetQueryableAsync()).Select(x => (Guid?)x.BankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync((await refundPolicies.GetQueryableAsync()).Select(x => (Guid?)x.DefaultPayingBankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync((await payments.GetQueryableAsync()).Select(x => (Guid?)x.BankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync((await transactions.GetQueryableAsync()).Select(x => (Guid?)x.BankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadPolicyUsageAsync(await policyVersions.GetQueryableAsync(), ids, AsyncExecuter));
+        var headIds = rows.Where(x => x.AccountHeadId.HasValue).Select(x => x.AccountHeadId!.Value).Distinct().ToArray();
+        var heads = await AsyncExecuter.ToListAsync((await accountHeadRepository.GetQueryableAsync()).Where(x => Enumerable.Contains(headIds, x.Id)).Select(x => new { x.Id, x.Name }));
+        var names = heads.ToDictionary(x => x.Id, x => x.Name);
+        return rows.Select(row => Map(row, false, row.AccountHeadId.HasValue ? names.GetValueOrDefault(row.AccountHeadId.Value) : null, used.Contains(row.Id))).ToList();
+    }
 
 	private static string Mask(string value) => value.Length <= 4 ? value : new string('*', value.Length - 4) + value[^4..];
 	private static string MaskIfsc(string value) => value.Length <= 4 ? value : value[..4] + new string('*', value.Length - 4);
+	private static string? MaskUpi(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value)) return null;
+		var separator = value.IndexOf('@');
+		return separator < 0 ? "***" : $"***{value[separator..]}";
+	}
 
 	private static void EnsureConcurrency(BankAccount entity, string? stamp)
 	{

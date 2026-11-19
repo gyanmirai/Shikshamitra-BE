@@ -25,6 +25,13 @@ public class EfCoreStudentRepository(
             .FirstOrDefaultAsync(student => student.Id == id, cancellationToken);
     }
 
+    public async Task<Student?> GetForFinanceContextAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+        return await dbSet.IgnoreAutoIncludes().AsNoTracking()
+            .FirstOrDefaultAsync(student => student.Id == id, cancellationToken);
+    }
+
     /// <inheritdoc/>
     public async Task<IQueryable<Student>> GetQueryableWithoutAutoIncludesAsync()
     {
@@ -81,6 +88,16 @@ public class EfCoreStudentRepository(
             .Include(s => s.Notes)
             .Include(s => s.StatusHistories)
             .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+    }
+
+    /// <inheritdoc/>
+    public async Task<Student?> GetCredentialsProfileAsync(Guid id, bool trackChanges = false, CancellationToken cancellationToken = default)
+    {
+        var query = (await GetDbSetAsync()).IgnoreAutoIncludes()
+            .Include(s => s.ContactDetail).Include(s => s.FamilyDetail);
+        return trackChanges
+            ? await query.AsTracking().FirstOrDefaultAsync(s => s.Id == id, cancellationToken)
+            : await query.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
     }
 
     /// <inheritdoc/>

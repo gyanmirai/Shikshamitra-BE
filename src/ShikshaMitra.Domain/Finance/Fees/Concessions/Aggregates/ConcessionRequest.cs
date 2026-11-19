@@ -101,6 +101,46 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 	}
 
+	public void RecordPaidConcessionAmounts(IReadOnlyDictionary<Guid, decimal> amounts, bool autoCreateRefund)
+	{
+		if (Status != ConcessionRequestStatus.Approved || ExtraProperties.ContainsKey("PaidConcessionAmounts"))
+			throw new BusinessException(FinanceConcessionErrorCodes.InvalidTransition);
+		foreach (var amount in amounts)
+		{
+			var allocation = ConcessionDueFeeAllocations.SingleOrDefault(x => x.DueFeeId == amount.Key);
+			if (allocation is null || amount.Value < 0m || amount.Value > allocation.ConcessionAmount)
+				throw new BusinessException(FinanceConcessionErrorCodes.RefundSourceUnavailable);
+		}
+		this.SetProperty("PaidConcessionAmounts", JsonSerializer.Serialize(amounts));
+		this.SetProperty("AutoCreateRefund", autoCreateRefund);
+	}
+
+	public IReadOnlyDictionary<Guid, decimal> GetRemainingPaidConcessionAmounts()
+	{
+		var json = this.GetProperty<string>("PaidConcessionAmounts");
+		if (string.IsNullOrWhiteSpace(json)) return new Dictionary<Guid, decimal>();
+		try
+		{
+			var amounts = JsonSerializer.Deserialize<Dictionary<Guid, decimal>>(json) ?? [];
+			return amounts.ToDictionary(x => x.Key, x => Math.Max(0m, x.Value -
+				ConcessionReversals.Where(r => r.DueFeeId == x.Key).Sum(r => r.Amount)));
+		}
+		catch (JsonException)
+		{
+			throw new BusinessException(FinanceConcessionErrorCodes.ConfigurationSnapshotInvalid);
+		}
+	}
+
+	public bool HaveRefundRequestsBeenCreated() => this.GetProperty<bool>("RefundRequestsCreated");
+	public bool ShouldAutoCreateRefund() => this.GetProperty<bool>("AutoCreateRefund", true);
+
+	public void MarkRefundRequestsCreated()
+	{
+		if (Status is not (ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed))
+			throw new BusinessException(FinanceConcessionErrorCodes.InvalidTransition);
+		this.SetProperty("RefundRequestsCreated", true);
+	}
+
 	public void PrepareSubmissionEvidence(
 		IEnumerable<Guid> selectedDueFeeIds,
 		string requestInputSnapshotJson,
@@ -237,10 +277,27 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Remarks = remarks;
 	}
 
-	public void Approve(Guid approverId, string? message, IEnumerable<ConcessionDueFeeAllocation> allocations, DateTime approvedOn)
+	public void Approve(Guid approverId, string? message, IEnumerable<ConcessionDueFeeAllocation> allocations, DateTime approvedOn,
+		bool allowCreatorDecision = false)
 	{
 		EnsurePending();
+		EnsureIndependentApprover(approverId, allowCreatorDecision);
+		ApplyApproval(approverId, message, allocations, approvedOn);
+	}
 
+	public void ApproveOnAdministratorCreation(Guid administratorId, string? message,
+		IEnumerable<ConcessionDueFeeAllocation> allocations, DateTime approvedOn)
+	{
+		EnsurePending();
+		// CreatorId may be assigned by the audit pipeline only when this new request is flushed.
+		if (CreatorId.HasValue && CreatorId != administratorId)
+			throw new BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
+		ApplyApproval(administratorId, message, allocations, approvedOn);
+	}
+
+	private void ApplyApproval(Guid approverId, string? message,
+		IEnumerable<ConcessionDueFeeAllocation> allocations, DateTime approvedOn)
+	{
 		Status = ConcessionRequestStatus.Approved;
 		ApproverMessage = message;
 		this.SetProperty(ApprovedByProperty, approverId);
@@ -253,9 +310,12 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 	}
 
-	public void Reject(Guid rejectorId, string reason, DateTime rejectedOn)
+	public void Reject(Guid rejectorId, string reason, DateTime rejectedOn, bool allowCreatorDecision = false)
 	{
-		EnsurePending();
+		if (Status is not (ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending))
+			throw new BusinessException(FinanceConcessionErrorCodes.NotPending)
+				.WithData("Status", Status.ToString());
+		EnsureIndependentApprover(rejectorId, allowCreatorDecision);
 
 		if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length < 10)
 		{
@@ -266,6 +326,14 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RejectionReason = reason.Trim();
 		this.SetProperty(ApprovedByProperty, rejectorId);
 		this.SetProperty(ApprovedOnProperty, rejectedOn);
+	}
+
+	// The application service supplies this exception only after checking current
+	// configured administrator membership and the exact decision permission.
+	private void EnsureIndependentApprover(Guid actorId, bool allowCreatorDecision)
+	{
+		if (!allowCreatorDecision && CreatorId.HasValue && CreatorId.Value == actorId)
+			throw new BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
 	}
 
 	public void RecordReversals(IEnumerable<ConcessionReversal> reversals)
@@ -287,7 +355,7 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			: ConcessionRequestStatus.PartiallyReversed;
 	}
 
-	public void Cancel(Guid actorId, string reason, DateTime cancelledOn)
+	public void Cancel(Guid actorId, string? reason, DateTime cancelledOn)
 	{
 		if (Status is not (ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending))
 		{
@@ -307,7 +375,7 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void EnsureDraft()
 	{
 		if (Status != ConcessionRequestStatus.Draft)
-			throw new BusinessException(FinanceConcessionErrorCodes.InvalidTransition)
+			throw new BusinessException(FinanceConcessionErrorCodes.RequestNotEditable)
 				.WithData("Status", Status.ToString());
 	}
 

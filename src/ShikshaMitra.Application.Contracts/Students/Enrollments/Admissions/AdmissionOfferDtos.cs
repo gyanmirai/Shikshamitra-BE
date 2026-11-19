@@ -17,6 +17,7 @@ public class AdmissionOfferEventDto
 public class AdmissionOfferStageDto
 {
 	public Guid ApplicationId { get; set; }
+	public Guid AdmissionOfferingId { get; set; }
 	public Guid StageId { get; set; }
 	public bool OfferStageEnabled { get; set; }
 	public AdmissionOfferStagePolicy? Policy { get; set; }
@@ -28,6 +29,8 @@ public class AdmissionOfferStageDto
 	public DateTime? IssuedAt { get; set; }
 	public DateTime? ExpiresAt { get; set; }
 	public DateTime? RespondedAt { get; set; }
+	public Guid? AssignedCounsellorId { get; set; }
+	public string? AssignedCounsellorName { get; set; }
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public List<AdmissionOfferEventDto> Events { get; set; } = [];
 	public List<string> Blockers { get; set; } = [];
@@ -43,6 +46,7 @@ public class AdmissionOfferStageDto
 public class IssueAdmissionOfferDto
 {
 	public DateTime? ExpiresAt { get; set; }
+	public Guid? CounsellorId { get; set; }
 	public string? Reason { get; set; }
 	public string IdempotencyKey { get; set; } = string.Empty;
 	public string? ConcurrencyStamp { get; set; }

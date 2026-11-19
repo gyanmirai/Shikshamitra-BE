@@ -8,5 +8,5 @@ public class FeeCategoryListResponse
     public int CurrentPage { get; set; }
     public int PageSize { get; set; }
     public int TotalPages { get; set; }
-    public List<FeeCategoryResponse> Items { get; set; }
+    public List<FeeCategoryResponse> Items { get; set; } = null!; // The response mapper populates these members after construction.
 }

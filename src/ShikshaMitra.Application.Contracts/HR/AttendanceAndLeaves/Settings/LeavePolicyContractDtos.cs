@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using FluentValidation;
@@ -18,6 +18,7 @@ public class LeavePolicyRuleItem
 {
 	public Guid Id { get; set; }
 	public string PaidType { get; set; } = "Paid";
+	public string PayrollCategory { get; set; } = "PAID";
 	public string EntitlementMode { get; set; } = "Limited";
 	public string AccrualPolicyType { get; set; } = "Monthly";
 	public int? LeaveCount { get; set; }
@@ -37,6 +38,14 @@ public class LeavePolicyRuleItem
 
 public class LeavePolicyItem
 {
+	public Guid? SourceVersionId { get; set; }
+	public Guid? SourcePolicyId { get; set; }
+	public int? SourceVersionNumber { get; set; }
+	public Guid AcademicYearId { get; set; }
+	public int Version { get; set; }
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public DateTime CreationTime { get; set; }
+	public DateTime? LastModificationTime { get; set; }
 	public Guid Id { get; set; }
 	public string PolicyTitle { get; set; } = string.Empty;
 	public string Status { get; set; } = "Draft";
@@ -51,6 +60,7 @@ public class LeavePolicyItem
 public class LeavePolicyRuleRequest
 {
 	public string PaidType { get; set; } = "Paid";
+	public string PayrollCategory { get; set; } = "PAID";
 	public string EntitlementMode { get; set; } = "Limited";
 	public string AccrualPolicyType { get; set; } = "Monthly";
 	public int? LeaveCount { get; set; }
@@ -69,6 +79,8 @@ public class LeavePolicyRuleRequest
 
 public class LeavePolicyCreateRequest
 {
+	public LeavePolicyReviewScope? ImpactScope { get; set; }
+	public string? ChangeReason { get; set; }
 	public string PolicyTitle { get; set; } = string.Empty;
 	public string Status { get; set; } = "Active";
 	public DateTime EffectiveFrom { get; set; }
@@ -80,6 +92,7 @@ public class LeavePolicyCreateRequest
 
 public class LeavePolicyUpdateRequest : LeavePolicyCreateRequest
 {
+	public int? ExpectedVersion { get; set; }
 }
 
 public class LeavePolicyCreateRequestValidator : AbstractValidator<LeavePolicyCreateRequest>

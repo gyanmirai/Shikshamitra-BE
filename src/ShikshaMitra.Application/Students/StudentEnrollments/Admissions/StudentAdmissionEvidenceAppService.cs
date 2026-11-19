@@ -44,8 +44,7 @@ public class StudentAdmissionEvidenceAppService(
 		await using var stream = await blobs.GetAsync(evidence.BlobName);
 		using var content = new MemoryStream();
 		await stream.CopyToAsync(content);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"StudentAdmissionEvidenceDownloaded", $"Admission evidence {evidence.Id:N} downloaded from the Student record.",
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("StudentAdmissionEvidenceDownloaded", $"Admission evidence {evidence.Id:N} downloaded from the Student record.",
 			applicationId: evidence.ApplicationId), autoSave: true);
 		return new StudentDocumentDownloadDto
 		{

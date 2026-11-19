@@ -52,6 +52,34 @@ public class CollectFeeInputValidator_Tests
     }
 
     [Fact]
+    public void Should_Reject_Missing_Student_Without_Verified_Account()
+    {
+        var input = ValidInput();
+        input.StudentId = null;
+        _validator.Validate(input).Errors.ShouldContain(e => e.PropertyName == "StudentId");
+    }
+
+    [Fact]
+    public void Should_Allow_Unlinked_Verified_Account_Without_Fabricated_Student()
+    {
+        var input = ValidInput();
+        input.StudentId = null;
+        input.FinanceFeeAccountId = Guid.NewGuid();
+        _validator.Validate(input).IsValid.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Should_Reject_Empty_Account_Identity_Even_With_Real_Student(bool hasStudent)
+    {
+        var input = ValidInput();
+        if (!hasStudent) input.StudentId = null;
+        input.FinanceFeeAccountId = Guid.Empty;
+        _validator.Validate(input).Errors.ShouldContain(e => e.PropertyName == "FinanceFeeAccountId");
+    }
+
+    [Fact]
     public void Should_Reject_Zero_Amount_In_DueFeePayments()
     {
         var input = ValidInput();
@@ -112,6 +140,51 @@ public class CollectFeeInputValidator_Tests
         var result = _validator.Validate(input);
 
         result.IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Should_Reject_Mixed_Cash_And_Uncleared_Cheque()
+    {
+        var input = ValidInput();
+        input.Payments =
+        [
+            new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 400d },
+            new() { PaymentMethod = PaymentMethodEnum.Cheque, Amount = 600d,
+                Details = MinimalDetails(PaymentMethodEnum.Cheque) }
+        ];
+
+        var result = _validator.Validate(input);
+        result.Errors.ShouldContain(e => e.ErrorMessage.Contains("one payment method"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Should_Reject_Mixed_Cash_And_Electronic_Even_When_Cashier_Confirms(bool? confirmed)
+    {
+        var input = ValidInput();
+        input.PaymentConfirmed = confirmed;
+        input.Payments =
+        [
+            new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 400d },
+            new() { PaymentMethod = PaymentMethodEnum.UPI, Amount = 600d,
+                Details = MinimalDetails(PaymentMethodEnum.UPI) }
+        ];
+
+        _validator.Validate(input).Errors.ShouldContain(e => e.ErrorMessage.Contains("one payment method"));
+    }
+
+    [Fact]
+    public void Should_Accept_Fee_And_Charge_For_One_Provisional_Instrument()
+    {
+        var input = ValidInput();
+        input.ChargePayments = [new() { ChargeId = Guid.NewGuid(), Amount = 500d }];
+        input.Payments = [new() { PaymentMethod = PaymentMethodEnum.Cheque, Amount = 1500d,
+            Details = MinimalDetails(PaymentMethodEnum.Cheque) }];
+
+        var result = _validator.Validate(input);
+        result.IsValid.ShouldBeTrue(string.Join("; ", result.Errors.Select(e => e.ErrorMessage)));
     }
 
     [Fact]
@@ -193,7 +266,7 @@ public class CollectFeeInputValidator_Tests
     [InlineData(PaymentMethodEnum.CreditCard)]
     [InlineData(PaymentMethodEnum.DebitCard)]
     [InlineData(PaymentMethodEnum.BankTransfer)]
-    public void Should_Reject_CashierDecided_Method_Without_BankReceiptConfirmed(PaymentMethodEnum method)
+    public void Should_Accept_Electronic_Method_Without_Legacy_Confirmation(PaymentMethodEnum method)
     {
         var input = ValidInput();
         input.Payments = new List<FeePaymentDto>
@@ -203,8 +276,7 @@ public class CollectFeeInputValidator_Tests
 
         var result = _validator.Validate(input);
 
-        result.IsValid.ShouldBeFalse();
-        result.Errors.ShouldContain(e => e.PropertyName == "PaymentConfirmed");
+        result.IsValid.ShouldBeTrue();
     }
 
     [Theory]

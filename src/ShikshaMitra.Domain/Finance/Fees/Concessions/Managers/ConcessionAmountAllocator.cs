@@ -10,13 +10,11 @@ public sealed record ConcessionAmountCapacity(Guid Key, decimal Capacity);
 public sealed record ConcessionAmountShare(Guid Key, decimal Amount);
 
 /// <summary>
-/// Allocates a request-level amount in currency minor units. Results are stable for
+/// Allocates a request-level amount in whole rupees. Results are stable for
 /// the same keys and capacities, independent of caller ordering.
 /// </summary>
 public static class ConcessionAmountAllocator
 {
-	private const decimal MinorUnitFactor = 100m;
-
 	public static IReadOnlyList<ConcessionAmountShare> AllocateProportionally(
 		IReadOnlyCollection<ConcessionAmountCapacity> inputs,
 		decimal requestedTotal)
@@ -27,12 +25,17 @@ public static class ConcessionAmountAllocator
 			throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
 
 		var ordered = inputs.OrderBy(x => x.Key).ToList();
-		var capacities = ordered.ToDictionary(x => x.Key, x => ToMinorUnits(x.Capacity));
+		// Exact full waivers and already-approved historical fractional requests retain
+		// their original balances; new calculated concessions allocate whole rupees.
+		var preserveHistoricalFractions = requestedTotal != decimal.Truncate(requestedTotal) ||
+			requestedTotal == ordered.Sum(x => x.Capacity) && ordered.Any(x => x.Capacity != decimal.Truncate(x.Capacity));
+		var factor = preserveHistoricalFractions ? 100m : 1m;
+		var capacities = ordered.ToDictionary(x => x.Key, x => decimal.ToInt64(decimal.Floor(x.Capacity * factor)));
 		var capacityTotal = capacities.Values.Sum();
 		if (capacityTotal <= 0)
 			throw new BusinessException(ConcessionPolicyErrorCodes.InvalidCalculationRule);
 
-		var target = Math.Min(Math.Max(0L, ToMinorUnits(requestedTotal)), capacityTotal);
+		var target = Math.Min(Math.Max(0L, decimal.ToInt64(decimal.Ceiling(requestedTotal * factor))), capacityTotal);
 		if (target <= 0)
 			throw new BusinessException(ConcessionPolicyErrorCodes.InvalidCalculationRule);
 
@@ -65,12 +68,9 @@ public static class ConcessionAmountAllocator
 
 		return candidates
 			.OrderBy(x => x.Key)
-			.Select(x => new ConcessionAmountShare(x.Key, x.Allocated / MinorUnitFactor))
+			.Select(x => new ConcessionAmountShare(x.Key, x.Allocated / factor))
 			.ToList();
 	}
-
-	private static long ToMinorUnits(decimal amount) =>
-		decimal.ToInt64(decimal.Round(amount * MinorUnitFactor, 0, MidpointRounding.AwayFromZero));
 
 	private sealed class AllocationCandidate(Guid key, long capacity, long allocated, decimal remainder)
 	{

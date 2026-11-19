@@ -2,8 +2,11 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 
 public static class ConcessionPolicyErrorCodes
 {
+	public const string RefundRequiresPaidScope = "Finance:ConcessionPolicy:010026";
+	public const string DefaultPolicyCannotBeRemoved = "Finance:ConcessionPolicy:010026";
 	private const string Prefix = "Finance:ConcessionPolicy:";
 
+	public const string PercentagePrecision = Prefix + "010027";
 	public const string PolicyNotFound = Prefix + "010001";
 	public const string NameRequired = Prefix + "010002";
 	public const string CodeRequired = Prefix + "010003";
@@ -26,4 +29,7 @@ public static class ConcessionPolicyErrorCodes
 	public const string ConcurrencyConflict = Prefix + "010020";
 	public const string ChangeReasonRequired = Prefix + "010021";
 	public const string DefaultPolicyMustBeActive = Prefix + "010022";
+	public const string ApplicabilityRequired = Prefix + "010023";
+	public const string InvalidApplicability = Prefix + "010024";
+	public const string PolicyNotApplicable = Prefix + "010025";
 }

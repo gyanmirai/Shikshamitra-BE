@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Documents;
 using ShikshaMitra.HR.Employees.Settings;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -32,6 +33,27 @@ public class EmployeeDocumentApi_Tests : ShikshaMitraApiTestBase
 	];
 
 	private static string Url(Guid empId) => $"/api/employees/{empId}/documents";
+	[Fact, TestTier(TestTraits.Tiers.Critical)]
+	public async Task Checklist_Should_Page_All_Definitions_And_Include_Missing_Uploads()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var employee = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "ChecklistStaff");
+		var prefix = "Export checklist " + new string(Guid.NewGuid().ToByteArray().Select(x => (char)('A' + x % 26)).ToArray());
+		for (var index = 0; index < 23; index++)
+		{
+			var created = await Client.PostAsJsonAsync("/api/employees/documents", new DocumentRequest {
+				Title = prefix + (char)('A' + index), DocumentSize = 5, DocumentTypes = [4]
+			}, JsonOptions);
+			created.EnsureSuccessStatusCode();
+		}
+		var first = await Client.GetFromJsonAsync<Volo.Abp.Application.Dtos.PagedResultDto<EmployeeDocumentChecklistItemDto>>(
+			Url(employee) + "/checklist?page=1&pageSize=10&search=" + Uri.EscapeDataString(prefix), JsonOptions);
+		var last = await Client.GetFromJsonAsync<Volo.Abp.Application.Dtos.PagedResultDto<EmployeeDocumentChecklistItemDto>>(
+			Url(employee) + "/checklist?page=3&pageSize=10&search=" + Uri.EscapeDataString(prefix), JsonOptions);
+		first!.TotalCount.ShouldBe(23); first.Items.Count.ShouldBe(10); last!.Items.Count.ShouldBe(3);
+		first.Items.ShouldAllBe(x => x.EmployeeId == employee && x.StatusVal == "Not Uploaded" && x.UploadedDoc == null);
+		first.Items.Select(x => x.Id).Intersect(last.Items.Select(x => x.Id)).ShouldBeEmpty();
+	}
 
 	#region Tier 0 — Critical
 
@@ -136,7 +158,54 @@ public class EmployeeDocumentApi_Tests : ShikshaMitraApiTestBase
 		var docId = list.Items[0].DocumentId;
 		var downloadResponse = await Client.GetAsync($"{Url(empId)}/{docId}");
 		downloadResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-		downloadResponse.Content.Headers.ContentType.ShouldNotBeNull();
+		downloadResponse.Content.Headers.ContentType!.MediaType.ShouldBe("application/pdf");
+		(await downloadResponse.Content.ReadAsByteArrayAsync()).ShouldBe(MinimalPdfBytes);
+	}
+
+	[Fact, TestTier(TestTraits.Tiers.Important)]
+	public async Task Selected_download_should_not_resolve_a_document_from_another_employee()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var first = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "DocSelectedFirst");
+		var second = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "DocSelectedSecond");
+		var definition = await EmployeeTestHelper.CreateDocumentConfigAsync(Client);
+		using var upload = BuildDocumentUpload(definition.Id, "selected-only.pdf");
+		(await Client.PostAsync(Url(first), upload)).EnsureSuccessStatusCode();
+		var list = await Client.GetFromJsonAsync<EmployeeDocumentListResponse>(Url(first) + "?page=1&pageSize=10", JsonOptions);
+		var documentId = list!.Items.Single().DocumentId;
+		var rejected = await Client.GetAsync($"{Url(second)}/{documentId}");
+		rejected.IsSuccessStatusCode.ShouldBeFalse();
+		(await rejected.Content.ReadAsStringAsync()).ShouldContain(HRErrorCodes.EmployeeDocumentNotFound);
+		var selected = await Client.GetAsync($"{Url(first)}/{documentId}");
+		selected.EnsureSuccessStatusCode();
+		(await selected.Content.ReadAsByteArrayAsync()).ShouldBe(MinimalPdfBytes);
+		using var foreignTenant = new HttpRequestMessage(HttpMethod.Get, $"{Url(first)}/{documentId}");
+		foreignTenant.Headers.Add(TestAuthHandler.TestTenantIdHeader, Guid.NewGuid().ToString());
+		var tenantDenied = await Client.SendAsync(foreignTenant);
+		tenantDenied.StatusCode.ShouldBeOneOf(HttpStatusCode.Forbidden, HttpStatusCode.NotFound);
+		(await tenantDenied.Content.ReadAsByteArrayAsync()).ShouldNotBe(MinimalPdfBytes);
+	}
+
+	[Fact, TestTier(TestTraits.Tiers.Important)]
+	public async Task Checklist_should_keep_latest_upload_and_definition_page_counts()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var employee = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "DocLatest");
+		var definition = await EmployeeTestHelper.CreateDocumentConfigAsync(Client);
+		using (var first = BuildDocumentUpload(definition.Id, "older.pdf"))
+			(await Client.PostAsync(Url(employee), first)).EnsureSuccessStatusCode();
+		using (var latest = BuildDocumentUpload(definition.Id, "latest.pdf"))
+			(await Client.PostAsync(Url(employee), latest)).EnsureSuccessStatusCode();
+		var checklist = await Client.GetFromJsonAsync<Volo.Abp.Application.Dtos.PagedResultDto<EmployeeDocumentChecklistItemDto>>(
+			Url(employee) + "/checklist?page=1&pageSize=100", JsonOptions);
+		var row = checklist!.Items.Single(item => item.Id == definition.Id);
+		row.StatusVal.ShouldBe("Uploaded");
+		row.UploadedDoc!.FileName.ShouldBe("latest.pdf");
+		row.UploadedDoc.Size.ShouldBe(MinimalPdfBytes.Length);
+		var page = await Client.GetFromJsonAsync<Volo.Abp.Application.Dtos.PagedResultDto<EmployeeDocumentChecklistItemDto>>(
+			Url(employee) + "/checklist?page=1&pageSize=1", JsonOptions);
+		page!.TotalCount.ShouldBe(checklist.TotalCount);
+		page.Items.Count.ShouldBe(1);
 	}
 
 	[Fact]

@@ -3,12 +3,20 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-09-17
+updated_on: 2026-11-06
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Trace HR backend workflows
+
+## Staff welcome email login
+
+`EmployeeEmailService` resolves the current tenant's school code through `ITenantStore` and builds an absolute application login link from `App:ClientUrl`. The HTML email includes a visible Login to ShikshaMitra button, a copyable URL and the HTML-encoded school code next to the synthetic-tested credentials layout. The frontend accepts the editable `organization` query parameter as the school-code prefill; authentication still validates credentials and tenant access normally.
+
+Deferred staff-creation effects restore the tenant captured when the callback was registered before uploading the optional profile picture, publishing the creation event and rendering the welcome email after unit-of-work completion. The callback then restores its caller's tenant context. A fake-sender regression exercises a different ambient tenant at completion and verifies the creating school's login link.
+
+`App:ClientUrl` must be an HTTP(S) application root without user information, query or fragment. Missing or invalid configuration, or an unresolved tenant school code, uses the existing logged email-failure path instead of sending a guessed destination. No password or login credential is placed in the URL. This change does not send emails during validation, activate staff, alter account creation or guarantee SMTP delivery.
 
 TL;DR: use this page to understand how HR actions move through employees, attendance, leave, policies, payroll, and reports.
 Each workflow points to the API and testing pages that validate it.
@@ -19,7 +27,7 @@ Employee workflows create and maintain staff records:
 
 | Workflow | Main steps | Validation focus |
 |---|---|---|
-| Employee onboarding | Validate the submitted application, create the identity user and employee aggregate, assign an explicitly onboarding-approved Employee-audience role compatible with the employee group, apply policy defaults and teaching scope, finalize in one unit of work, and run profile, event, and welcome-email effects after commit | Terminal application status, Category and Family Caste, duplicate contact data, role approval and employee-group audiences, BulkAssign permission for teaching scope, tenant scope, academic hierarchy, rollback, generated employee code, and deferred effects |
+| Employee onboarding | Validate the submitted application, create the identity user and employee aggregate, assign an explicitly onboarding-approved Employee-audience role compatible with the employee group, apply policy defaults and teaching scope, save the initial salary and statutory settings, finalize in one unit of work, and run profile, event, and welcome-email effects after commit | Terminal application status, Category and Family Caste, duplicate contact data, role approval and employee-group audiences, BulkAssign permission for teaching scope, tenant scope, academic hierarchy, rollback, generated employee code, and deferred effects |
 | Employee profile update | Update personal, family, additional, work experience, payroll, reporting, and academic data | Round-trip persistence, date validation, bank validation, manager validity, and role compatibility when the role or employee group changes |
 | Employee status change | Submit target status and remarks, then persist transition and audit metadata | Required remarks, blocked transitions, idempotent same-status behavior, and payroll or attendance eligibility impact |
 | Employee documents | Upload, list, download, replace, and delete configured document types | File size, file type, magic bytes, blob storage, and tenant scope |
@@ -35,6 +43,9 @@ Attendance workflows create payroll-relevant facts:
 | Attendance import | Preview file, classify rows, confirm rows, and create batch audit records | Header parsing, employee matching, single payroll month, warnings, and batch status |
 | Automated attendance run | Read automated run rows, update row state, and lock or unlock batch | Device-run audit, row replacement, batch lock, and payroll log mirror |
 
+Manual attendance saves synchronize attendance-owned teacher unavailability inside the authorized, employee-scoped save workflow. The synchronization service uses a unit of work and preserves overlapping records from other sources. An authorized HR operator does not need the administrator role to persist this derived fact. Present cancels only attendance-owned unavailability; it does not cancel substitution duties.
+The HR quick-substitution workflow uses the existing Academic APIs: affected periods require Timetable Management View and are filtered by UserScope; creation requires Timetable Management Add at the application-service boundary and validates the target scope and current substitute/room conflicts. Attendance permission alone does not grant assignment authority. Teacher conflicts recognize both employee IDs and linked user IDs in published timetable slots.
+
 ## Leave workflows
 
 Leave workflows use policy rules and affect payroll:
@@ -48,13 +59,52 @@ Leave workflows use policy rules and affect payroll:
 
 ## Payroll workflows
 
+### Payroll review activity
+
+Review and unreview update the active payroll review marker and append an activity event for actual transitions in the same transaction.
+Events retain their preview reference and remain visible after a replacement preview supersedes the active review.
+The school-wide activity feed requires Run Payroll ViewAudit and school-wide HR scope.
+The monthly list filters by exact payroll month and academic year, and review events contain no staff identifiers or payroll amounts.
+The previous successful preview stays current during a same-input refresh until its replacement completes.
+At that point only the latest successful preview for the same scope and input revision can authorize review or locking.
+
+### Calculation release and PF remediation
+
+Worked attendance and approved paid leave add together, capped at the scheduled day capacity remaining after approved unpaid leave.
+Calendar and employment-date eligibility still apply.
+PF uses recurring eligible Basic, or recurring eligible Basic plus DA when the assigned rule requires it.
+Basic semantic classification and recognized Basic names remain supported.
+Temporary payments and monthly adjustments never provide the PF wage basis.
+The former gross/total-earnings fallback is intentionally removed.
+Missing eligible components produce the blocking `PF_WAGE_BASIS_REQUIRED` issue while preview remains available.
+Eligible components with zero earned wages produce zero employee and employer PF and retain the rule metadata.
+Update the affected salary structure to match its assigned PF rule, then run a fresh preview and review before locking or finalizing.
+The same blocker applies to correction approval.
+
+New preview runs store calculation version `1` in `ExtraProperties`; an absent version is `0`.
+Obsolete queued/running previews are superseded, and old completed previews cannot be reused, reviewed, or locked as current payroll.
+A replacement preview requires review of the new generation.
+This uses existing storage and does not require a schema migration.
+
+Internal draft freshness checks and direct finalization refresh changed employer contribution lines/totals, statutory evidence, and compensation evidence through the existing snapshot writer.
+Public payslip reads retain their issued-document requirement; an unlocked preview does not expose a draft payslip.
+The slip identity and document invalidation behavior are preserved.
+Finalized and paid slips remain immutable.
+Historical underpayments or already issued slips require the existing correction workflow and are not rewritten automatically.
+
 Payroll workflows depend on employee, attendance, leave, and policy data:
 
 | Workflow | Main steps | Validation focus |
 |---|---|---|
 | Payroll setup | Create earning, deduction, provident fund, professional-tax, ESI establishment, salary-template, pay element, and payroll policy records | Tenant scope, effective dates, active status, statutory wage classification, same-tenant active dependency targets, acyclic earning dependencies, template gross reconciliation, and destructive-change impact |
+| Compensation revision | Quote recurring salary, calculate, save directly, and resolve by effective month | Template version, effective statutory rules, controlled overrides, idempotency, concurrency, locked payroll, and immutable effective snapshots |
+| One-time components | Assign temporary earning or deduction lines to employees | Active components, amount ranges, applicable month, and reload consistency |
+| Payroll preview | Resolve the effective revision, append one-time lines, read attendance and leave facts, compute basis days, and calculate gross, deductions, net pay, and employer cost | Month format, effective compensation readiness, policy basis, proration, statutory provenance, blocking protected-target drift, and cached preview freshness |
+| Payroll review | Mark rows reviewed and add adjustments before lock | Permission checks, row state, audit, and adjustment totals |
+| Payroll lock | Finalize selected rows and create salary slip snapshots | Idempotency, already locked rows, snapshot basis, and error reporting |
+| Salary slip | Read slip data or PDF for employee and month | Locked snapshot existence, totals, policy basis, and PDF access |
 
-The salary builder resolves full-month Gross directly, solves the lowest Gross that reaches a Take-home quote, or solves the highest Gross that stays within an Employer Cost quote.
+The salary builder preserves full-month earnings for Monthly salary or solves earnings plus employer contributions within Monthly cost to school (CTC).
 The solver partitions professional-tax slabs and ESI coverage boundaries and evaluates the same statutory calculators used by payroll.
 It calculates Basic and other earnings, assigns the balancing earning, calculates employee deductions, and returns employer-funded contributions separately.
 Salary Template settings opens one table of Active, Needs setup, and Archived templates.
@@ -62,33 +112,41 @@ Selecting an editable row opens its URL-backed editor directly in edit mode.
 Create and Save changes require a complete valid template and atomically create the active immutable version.
 Saving an existing template creates version N+1 and marks version N as Replaced for future assignments only.
 Existing employee compensation stays pinned to the version used when salary was saved.
-New employees are created Inactive and may complete onboarding before salary is configured.
+New employees are created Inactive.
+Application finalization requires a validated salary and saves its approved compensation revision, statutory profile, employee, identity, and application status in one transaction.
+A failed salary save rolls back finalization; retries after a lost response return the existing finalized employee without creating another revision.
+The tenant payroll fence serializes finalization with compensation saves.
+Direct employee creation retains its separate salary setup flow.
 Salary setup preselects the school default template, its quote defaults and PF defaults, and the employee joining month.
 The administrator calculates the salary and saves it directly as an effective immutable compensation revision.
 Saving another salary for the same month supersedes the older effective revision, while a future-effective revision remains scheduled.
 The revision records effective month, template, quote, permitted overrides, and statutory provenance.
 Employee activation is a separate action and uses the server activation-readiness check.
 The readiness check requires a valid effective revision covering the later of the joining month or current payroll month.
-Later template or statutory changes do not silently change saved compensation.
+Pending registration is a warning and does not block activation when the salary and calculation rules are otherwise valid.
+HR can save registration details while the employee is inactive using the existing scoped enrollment endpoint.
+Readiness recalculates eligibility from saved earnings and applicable ESIC configuration, so off mode and employees outside coverage do not require a number.
+Later template changes do not replace saved compensation or its selected ESIC policy.
+Monthly payroll resolves the policy version for its month; protected employer cost is recalculated using the saved source template and overrides.
 One-time earnings and deductions remain separate employee salary components and do not become revision lines.
-ESI activation follows establishment details, earning-component wage mapping, employee enrollment review, tenant-wide impact preview, and explicit approval.
-HR can complete establishment details, earning classifications, and employee review in any order before approval.
-The monthly impact preview loads as a paged employee projection, but readiness and contribution totals always use the complete scoped population.
-Activation must submit the fingerprint HR reviewed and recalculates all activation-relevant inputs in the same month before making changes.
-A changed rule, establishment, treatment, enrollment, override, compensation revision, or calculated contribution makes the reviewed fingerprint stale and requires a fresh review.
-An active ESI scheme is evaluated for every payroll employee even when the selected salary template has no ESI row.
+ESIC uses the school-level default-on configuration without an activation journey.
+Save applies directly to current and future unlocked payroll with a concurrency stamp and idempotency key.
+School registration facts may be completed independently of salary calculation.
+The optional employee table projects the complete scoped population with server paging and attention filters.
+Internally managed ESIC resolves the employee effective salary revision and its selected policy, even when the template has no ESIC row.
+Externally managed assignments omit both contributions.
 ESI coverage above the entry ceiling continues only through the recorded contribution-period end or an audited override.
+Derive continuity from prior finalized or paid payslips in the same contribution period, including when their payroll snapshots remain unlocked.
+Use locked snapshot evidence only where that employee-month has no finalized or paid payslip; drafts do not establish continuity.
 PwD employer-share relief applies only to the PwD wage-ceiling category with a recorded start date and disability evidence.
 The employee contribution remains a deduction, while an eligible employer share is recorded as government funded and excluded from employer cost.
 Users with override approval permission can review immutable exception history and add a dated exception with a mandatory reason and optional evidence reference.
-| Compensation revision | Quote recurring salary, calculate, save directly, and resolve by effective month | Template version, effective statutory rules, controlled overrides, idempotency, concurrency, locked payroll, and immutable effective snapshots |
-| One-time components | Assign temporary earning or deduction lines to employees | Active components, amount ranges, applicable month, and reload consistency |
-| Payroll preview | Resolve the effective revision, append one-time lines, read attendance and leave facts, compute basis days, and calculate gross, deductions, net pay, and employer cost | Month format, effective compensation readiness, policy basis, proration, statutory provenance, warning-only protected-target drift, and cached preview freshness |
-| Payroll review | Mark rows reviewed and add adjustments before lock | Permission checks, row state, audit, and adjustment totals |
-| Payroll lock | Finalize selected rows and create salary slip snapshots | Idempotency, already locked rows, snapshot basis, and error reporting |
 
 Finalized and Paid salary slips are both immutable payroll facts and both block attendance, policy, component, preview-refresh, and month-lock changes that would invalidate their snapshots.
-| Salary slip | Read slip data or PDF for employee and month | Locked snapshot existence, totals, policy basis, and PDF access |
+An exiting employee remains eligible for the final employment month and is excluded from following months.
+Payroll and correction preparation filter attendance and approved leave using the existing inclusive employment lifecycle boundary.
+This prevents retained post-exit punches, overtime and paid leave from increasing earned pay after a retroactive exit.
+Source attendance and leave records remain intact, and locked or issued payroll stays immutable.
 
 ## Policy workflows
 
@@ -106,6 +164,10 @@ Archived work-calendar, attendance, payroll, and leave policies release their na
 Current and archived policy workspaces use independent server-side search, count, and pagination so accumulated history cannot hide live policies.
 Leave policies are restored as drafts, and restoration stops with the standard duplicate-name error if a current policy has reused the archived name.
 Normal leave-policy create and update calls reject Archived status, and only the separately authorized archive workflow may archive a current policy.
+Leave archive rejects active same-tenant, same-year assignment references whose end date is today or later, including future-start assignments and open-ended ranges.
+The existing default-policy requirement remains independent; historical ended or inactive assignments and referenced rule identities are retained without reassignment.
+Archive and assignment-reference creation/update acquire the existing tenant payroll-input fence before the tenant-scoped PostgreSQL policy-row lock, then recheck references or policy usability before writing. This order matches onboarding and ordinary HR saves; a failed fence cannot fall through to a row lock.
+The archive business error is `ShikshaMitra:LeavePolicyHasActiveAssignments` and reports the reference count; it does not disclose another tenant's assignments or replace the policy automatically.
 
 ## Reports and notifications
 
@@ -113,21 +175,13 @@ Reports and notifications expose HR data outside operational screens:
 
 | Workflow | Main steps | Validation focus |
 |---|---|---|
-| HR report preview | Select source, options, template, and filters | Filter correctness and tenant isolation |
-| HR report export | Generate PDF or Excel export, filter history by requested date, and remove an owned failed job | Export parity with preview, wide-PDF layout, owner and tenant scope, soft deletion, and audit metadata |
+| Report templates | Create a private definition or publish a school revision | Build/ManageTemplates permissions, fixed rules, optimistic concurrency, and source access |
+| Generate report | Choose declared dates/staff and queue a captured run | Canonical domain calculations, complete-population filtering, snapshot consistency, cancellation, and tenant isolation |
+| View/download result | Read captured rows or prepare Excel/PDF | Private ownership, current source/record access, seven-day expiry, and unchanged historical bytes |
 | HR notifications | Configure employee, attendance, leave, and event notification rules | Channel settings, permission checks, and history visibility |
 
-When an export is queued, retried, regenerated, or run from a schedule, the Reports Center clears the history date filter before highlighting the new job.
-An inverted custom history range does not issue an unfiltered export-history request.
-PDF history metadata reports the capped row count and the document tells the user to choose Excel for the complete result.
-Direct sharing and schedules reject a recipient unless the recipient has report-view permission and a current tenant UserScope that covers the export owner's complete generation scope.
-Schedule execution rechecks the owner's report-view permission and every recipient's permission and scope before generating or distributing an export.
-The schedule worker processes each due schedule in an independent transaction, pauses permanent authorization or validation failures, defers transient failures with bounded retry delay, and continues with later schedules.
-Email delivery begins only after the export and schedule transaction commits, then uses a fresh tenant-scoped read unit of work and contains delivery failures as best-effort notifications.
-Every owner or shared-recipient export read, share, or download repeats the scope check so later permission or scope changes cannot expose a previously generated artifact.
-Export workers load the current persisted request and generation-scope snapshot instead of trusting queued argument copies, so a stale cancelled invocation cannot bypass a narrower retry scope.
-Each retry receives a new generation identity and generation-specific blob name, and only the still-active generation may publish bytes or change the job outcome.
-The worker persists a current owner-scope snapshot before generating any legacy queued job that predates snapshot storage.
+See [HR reporting workspace](./references/reporting-workspace.md) for actors, states, exceptions, interfaces, and the controlled cleanup procedure.
+Generation never changes a template and downloads never reread HR source records.
 
 ## Partial workflow rule
 
@@ -143,3 +197,143 @@ Gross-based earning and deduction formulas run against this value and receive no
 One-time bonuses and incentives are additional earnings, excluded from this base and included in total earnings and net pay.
 Statutory calculators retain their existing wage treatment and effective rules.
 Payroll snapshots and payslip lines retain monthly amounts, formula types, formula values, and component dependencies.
+
+ESIC school settings use direct save with no month picker, preview confirmation, or activation journey.
+Changes apply to current/future unlocked payroll; prior and locked figures are preserved.
+New templates default to CTC, with Monthly salary as the alternative and authorized employee overrides.
+The chosen basis determines the compensation target; there is no independent protection selector.
+
+## ESIC continuity invalidation
+
+The payroll lock and payslip finalization workflows invoke EsiContinuityInvalidator within their evidence transaction.
+Only later months in the same contribution period are affected.
+The service removes affected unlocked snapshots and review markers and supersedes dependent preview runs.
+Immutable payslips protect their employee-month even when the snapshot remains unlocked.
+Payroll preview publication rechecks persisted run state under the tenant fence before writing snapshots.
+Regeneration is required before reviewing or locking superseded results.
+Registration pending permits salary preparation, payroll locking and payslip finalization.
+Eligible employee and employer contributions apply before identifiers are available; adding identifiers later does not change amounts.
+
+## Issued payslip documents and delivery
+
+The [payslip acceptance specification](references/payslip-design.md) owns the completion requirements and remaining work.
+Payroll locking and direct finalization persist frozen document facts, PDF bytes and a SHA-256 checksum in the same transaction as finalization.
+Configured school name and address are required for draft PDFs and official issuance.
+Draft PDFs use the saved school facts rather than the tenant display name or employee name.
+Missing school facts block document rendering with the existing actionable error while payroll preparation remains available.
+Direct finalization repeats current-preview, review, setup and insurance checks under the tenant payroll fence.
+After persistence starts, an issuance exception aborts the lock transaction instead of committing a partial slip or delivery intent.
+Issued downloads read stored bytes; changes to employee, bank, school or renderer facts cannot silently alter them.
+The preview endpoint also returns those stored bytes once a revision is issued.
+Payslip request diagnostics retain employee/period/status/timing fields without earnings, deduction or net-pay totals.
+The document labels the recorded payroll-basis-minus-payable aggregate as Non-payable days because it includes employment-boundary days as well as unpaid attendance.
+This label applies to newly issued documents without rewriting earlier stored PDFs or changing their payroll facts.
+Payment status, date/reference and actor are recorded separately and never regenerate the issued artifact.
+Payment timestamps use PostgreSQL microsecond precision so identical retries remain idempotent after a reload.
+Reasoned document-detail replacement retains monetary/attendance/statutory evidence and creates another immutable revision.
+Older revisions remain readable, but manual sending and mutating actions target only the current revision.
+
+School automatic email is off by default and applies to subsequent successful issuance events.
+Issuance stores a delivery intent and background job within its transaction.
+The worker revalidates actor permission, employee scope, tenant, current revision and recipient before attaching the exact stored PDF.
+Automatic delivery from payroll locking records and rechecks RunPayroll.Lock, independently of the RunPayroll.Add permission used to calculate and review payroll.
+Direct payslip issuance and manual Send/Resend retain GenerateSalarySlip.Add as their delivery action.
+Concurrent workers serialize under the tenant fence.
+Provider acceptance is recorded separately from inbox delivery.
+Processing attempts receive a delayed recovery job; an ambiguous crash or SMTP failure becomes UNCERTAIN without an automatic resend.
+Delivery failure does not roll back finalized payroll.
+Only successfully issued employees in a partially successful lock receive automatic delivery intents.
+Changing automatic email does not cancel previously committed intents; subsequent issuance uses the saved setting.
+The user approved Identity-managed account email changes on 2026-10-06.
+HR uses the dedicated employee account-email operation, requiring both EmployeeList.Edit and AbpIdentity.Users.Update, a reason, explicit address verification and a current concurrency token.
+The transaction serializes with recipient selection and delivery, changes the employee and linked Identity email together, records the old/new values and revokes persisted credentials.
+If the username matched the old email, the new email becomes the sign-in name; a distinct existing username is retained.
+An acknowledged request can be retried without undoing subsequent changes, and a changed payload or stale account token is rejected.
+The generic personal-info immutability check remains in force, and generic Identity/profile email edits cannot disconnect a linked employee's address.
+Audit or Identity failure rolls back the account, employee, security stamp and credential revocation; mutable credential caches are evicted immediately and after commit.
+Recipient repair leaves finalized payroll and issued PDF bytes unchanged.
+The employee write participates in the existing conservative payroll input-revision tracking, so unlocked previews and reviews may require ordinary recalculation before locking.
+Retrying a previously failed delivery requires an explicit new delivery attempt after correction, while replaying its old key returns the original failure without sending.
+The account workflow sends no address-verification message and does not relax the host's existing bearer-token validation policy.
+
+Unpaid monetary correction starts a reasoned draft with recorded attendance and an immutable copy of the source calculation evidence.
+Draft calculation reuses PayrollSnapshotRefresher without overwriting the issued snapshot or derived system adjustments.
+HR can correct clock-in and clock-out alongside attendance status to recalculate overtime and lateness through the same payroll services.
+The correction calculation rejects supplied punches from another attendance date and reversed or equal time ranges, while preserving status-only records, missing punches and the explicit absent-day midnight pair.
+The existing same-day attendance clock contract applies; multi-day and overnight punches are not inferred or silently normalized.
+Review and reissue recalculate under the tenant transaction fence and reject changed statutory or ordinary input evidence.
+Reissue applies the existing component, total and missing-insurance guards, replaces unpaid payroll and stores the next PDF revision atomically.
+The original PDF and correction evidence remain readable.
+Subsequent corrections start from the latest applied correction attendance, including after a non-monetary document replacement, so recalculation cannot silently restore older raw attendance.
+The resulting payroll evidence identifies its attendance source as payslip_correction.
+Cancellation retains the draft and allows payment to proceed; repeated cancellation returns the same cancelled record.
+Pending corrections block payment and non-monetary replacement with an actionable error.
+Corrected ESIC evidence invalidates later unlocked contribution-period calculations, including when coverage is removed from the source.
+Executed correction continuity, fault-injection and authenticated browser cases are recorded separately in the specification ledger and implementation handoff.
+On 2026-10-07 the user deferred DOC-15 current Gujarat legal-format verification for both private unaided and government-aided schools and asked engineering to proceed with the existing document.
+This deferral does not change statutory calculations, signature fields, immutable issued records or authorization guards, and does not establish legal certification.
+Paid corrections retain the paid original and stage signed source-component differences in a selected later unlocked payroll.
+Settlement validates source review freshness, target membership, current preview evidence, reconciliation and recovery constraints under the tenant fence.
+It supersedes target previews and removes the affected employee's snapshot and reviews, requiring ordinary recalculation, review and locking.
+The ordinary payroll calculation applies each committed correction once after attendance and statutory calculation, so source-period differences are neither prorated nor assessed as new target-period ESIC wages.
+Subsequent corrections start from the previous applied correction's logical source evidence and attendance without changing the paid snapshot.
+Corrected source coverage is used when resolving contribution-period continuity.
+Employee contribution increases require corresponding positive source-period earnings; employer contribution differences never become employee deductions.
+Recovery validates the aggregate deduction limit against supported statutory wage classifications and rejects unknown custom earning classifications.
+The current recovery classifier supports canonical Basic, DA, retaining, special and medical allowance names, with HRA and transport exclusions and the statutory inclusion floor.
+Unknown custom recovery classifications return an actionable error rather than an invented statutory treatment.
+Executed statutory, security and concurrency cases do not establish browser or jurisdiction-specific legal acceptance.
+The document-detail replacement operation is not a monetary correction mechanism.
+
+## Review a full-month salary estimate
+
+HR selects a staff member and preview month to see saved gross, effective salary date and current statutory decisions.
+The summary retains the saved template version and agreed gross for gross-protected assignments.
+For employer-cost assignments, a changed ESIC policy version rebalances the transient earning distribution with the existing salary calculator while preserving the saved monthly target.
+Salary-template previews and saved summaries use the same professional-tax rule ordering and configured cessation-month exemption as monthly payroll.
+Missing rules or wage classifications remain actionable blockers; missing registration numbers remain follow-up warnings.
+Actual attendance, loss of pay and one-time adjustments belong to Run Payroll.
+Existing unlocked payroll receives corrected contributions on refresh and changed rows require renewed review.
+Locked payroll and finalized or paid payslips remain immutable.
+
+## Read-only table export
+
+View an authorized table, apply filters and choose Excel or PDF from its shared Export menu.
+The server captures the complete matching population and publishes a private download after successful materialization.
+See [states, access and exceptions](./references/hr-table-exports.md).
+
+## Migrate ESIC policy assignments
+
+`NamedEsiPolicies` groups unambiguous tenant statutory versions into Standard ESIC and fills policy references on existing template versions and salary revisions.
+Duplicate legacy effective starts remain unassigned and surface setup blockers rather than choosing an arbitrary version.
+Staff Review resolves each effective compensation revision's selected in-platform policy; an unrelated missing default does not block named assignments, externally managed staff or an empty staff population.
+An unassigned in-platform revision or a selected policy without an effective version remains a setup error, consistent with monthly payroll.
+The school rule endpoint continues to require the actual default policy and never substitutes a named policy.
+The v3 statutory-settings backfill creates a default baseline only when that default has no rule history and legacy effective starts are unambiguous.
+Another named policy's version 1 does not suppress this baseline; existing default history, including future, inactive, expired and deleted versions, is retained without filling deliberate gaps.
+Unambiguous orphan legacy versions are adopted only when the default has no history; existing named history is never merged with orphan rows by the backfill.
+The backfill runs only through an explicitly enabled seeding workflow; a schema-only deployment does not repair an existing tenant's missing default.
+School Settings uses the staff-impact preview for its review status and the default-rule request only for help text, so valid named assignments can be reviewed and school settings saved without substituting a default.
+An existing tenant with missing staff assignments, ineffective selected versions or ambiguous legacy history still requires inspection and an explicit administrator decision; deploying this code does not change those records.
+Existing legacy versions retain school-level calculation settings until a named policy version supplies its own settings.
+Migration does not rewrite payroll snapshots, calculation JSON or issued payslips.
+Policy writes share the payroll input fence and invalidate affected unlocked employee months; locked payroll and issued documents remain protected.
+
+## Employee work shift cutover
+
+1. Pause employee/shift writes, attendance processing and payroll jobs during a coordinated maintenance window.
+2. Back up the database and rehearse migration against a disposable PostgreSQL copy.
+3. Verify the database target and run scripts/hr/work-shifts-preflight.sql. `RepairKnownOwnerlessShifts` copies only the two reviewed Afternoon Shift and Full Day Shift definitions used by DDVS/QADEMO02 into tenant-owned school shifts, then moves those tenants' employee and standard references. It leaves the originals untouched and fails if the reviewed names, hours or tenant references have changed. Resolve any other missing, foreign-tenant, ownerless references or invalid tenant-owned definitions (including unassigned definitions) through an approved audited repair. The script uses a read-only transaction and returns category counts followed by sensitive row-level diagnostics. Share counts only in deployment logs; categories may overlap. Migration failures report the same count categories without identifiers. Do not bypass the preflight or rerun deployment until the repair and cutover are approved.
+4. Apply RepairKnownOwnerlessShifts and then SeparateEmployeeWorkShifts before deploying the matching backend/frontend pair.
+5. Reconcile copied definitions and baseline assignments with original references, preserving attendance, school-class references and locked payroll snapshots.
+6. Smoke-test both catalogues and dated employee assignments, then resume processing.
+
+The migration copies all tenant-owned definitions, including unassigned records.
+Ownerless unreferenced school records remain untouched and are not inferred into HR ownership.
+Employees with null references remain unassigned and require HR scheduling before shift-dependent operation.
+ImportedLastKnown baselines cover the known employment/attendance boundary and explicitly identify incomplete historical provenance.
+No historical attendance or payroll is recalculated.
+
+Before reopening writes, rollback uses the verified pre-cutover backup and previous application versions.
+After reopening writes, use a reviewed forward repair; the migration intentionally refuses destructive Down execution.
+The migrator needs permission to install the `btree_gist` extension if it is absent. On Azure Database for PostgreSQL Flexible Server, add `btree_gist` to the server's `azure.extensions` allowlist before running the cutover migration; keep any extensions already allowed. This is a server parameter, not a database migration setting. After the parameter change takes effect, rerun DbMigrator so it can install the extension and create the non-overlap constraint.

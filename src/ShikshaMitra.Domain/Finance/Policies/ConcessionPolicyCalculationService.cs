@@ -45,6 +45,12 @@ public class ConcessionPolicyCalculationService : DomainService
 			};
 			if (requestedBasis != expectedBasis)
 				throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
+			if (requestedBasis == DiscountBasis.FlatAmount &&
+				decimal.Truncate(requestedValue.Value) != requestedValue.Value)
+				throw new BusinessException(FinanceConcessionErrorCodes.WholeRupeeAmountRequired);
+			if (requestedBasis == DiscountBasis.Percentage &&
+				decimal.Round(requestedValue.Value, 2) != requestedValue.Value)
+				throw new BusinessException(ConcessionPolicyErrorCodes.PercentagePrecision);
 			if (requestedBasis == DiscountBasis.Percentage && requestedValue > 100)
 				throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
 			if (requestedBasis == DiscountBasis.Percentage &&
@@ -60,13 +66,10 @@ public class ConcessionPolicyCalculationService : DomainService
 		}
 
 		var capped = Math.Min(raw, eligibleBase);
-		var rounded = policy.RoundingMethod switch
-		{
-			RoundingMethodType.RoundUp => Math.Ceiling(capped),
-			RoundingMethodType.RoundDown => Math.Floor(capped),
-			RoundingMethodType.NearestRupee => Math.Round(capped, 0, MidpointRounding.AwayFromZero),
-			_ => Math.Round(capped, 2, MidpointRounding.AwayFromZero)
-		};
+		var maximum = policy.ValueSource == ConcessionValueSource.RequestEnteredWithinLimits &&
+			policy.CalculationMethod == ConcessionCalculationMethod.FixedAmount
+			? Math.Min(eligibleBase, policy.MaximumFixedAmount ?? eligibleBase) : eligibleBase;
+		var rounded = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUpWithin(capped, maximum);
 
 		// Rounding is presentation policy, not authority to exceed an obligation.
 		return Math.Min(eligibleBase, Math.Max(0m, rounded));

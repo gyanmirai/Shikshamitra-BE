@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -17,6 +17,16 @@ public class LeaveWorkCalendarUnitService(
 	PayrollCalendarResolver payrollCalendarResolver,
 	IRepository<WorkCalendarHoliday, Guid> workCalendarHolidayRepository) : DomainService
 {
+	private Dictionary<string, object>? batch;
+	public IDisposable BeginReadBatch()
+	{
+		var previous = batch; batch = new(); return new Volo.Abp.DisposeAction(() => batch = previous);
+	}
+	private async Task<T> ReadAsync<T>(string key, Func<Task<T>> read)
+	{
+		if (batch?.TryGetValue(key, out var value) == true) return (T) value;
+		var result = await read(); if (batch != null) batch[key] = result!; return result;
+	}
 	public async Task<decimal> CalculateUnitsAsync(
 		Guid employeeId,
 		DateTime startDate,
@@ -42,18 +52,18 @@ public class LeaveWorkCalendarUnitService(
 		{
 			var year = cursor.Year;
 			var month = cursor.Month;
-			var calendar = await payrollCalendarResolver.ResolveAsync(year, month, academicYearId, cancellationToken);
+			var calendar = await ReadAsync($"calendar:{year}:{month}:{academicYearId}", () => payrollCalendarResolver.ResolveAsync(year, month, academicYearId, cancellationToken));
 			var resolvedPolicies = await hrPolicyResolver.ResolveAsync(
 				employeeId,
 				PayrollRunRules.GetPayrollPolicyResolutionDate(year, month),
 				calendar.AcademicYearId,
 				cancellationToken);
 
-			var workCalendarHolidays = await GetIncludedWorkCalendarHolidaysAsync(
+			var workCalendarHolidays = await ReadAsync($"holidays:{resolvedPolicies.PayrollWorkCalendarPolicy.Id}:{year}:{month}", () => GetIncludedWorkCalendarHolidaysAsync(
 				resolvedPolicies.PayrollWorkCalendarPolicy.Id,
 				year,
 				month,
-				cancellationToken);
+				cancellationToken));
 			var workingUnits = PayrollMonthCalendar.BuildWorkingUnitsByDate(
 				year,
 				month,

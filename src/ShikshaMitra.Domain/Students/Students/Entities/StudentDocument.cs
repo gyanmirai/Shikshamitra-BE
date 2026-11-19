@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System;
 using ShikshaMitra.Students.Documents;
 using Volo.Abp;
@@ -28,6 +29,11 @@ public class StudentDocument : FullAuditedEntity<Guid>, IMultiTenant
 
 	private StudentDocument()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		BlobName = null!;
+		ContentType = null!;
+		FileName = null!;
+
 		/* This constructor is for deserialization / ORM purpose */
 	}
 
@@ -76,6 +82,7 @@ public class StudentDocument : FullAuditedEntity<Guid>, IMultiTenant
 		StorageStatus = StudentDocumentStorageStatus.Deleted;
 	}
 
+	[MemberNotNull(nameof(BlobName), nameof(ContentType), nameof(FileName))]
 	private void SetDocumentMetadata(
 		string blobName,
 		string fileName,
@@ -98,7 +105,7 @@ public class StudentDocument : FullAuditedEntity<Guid>, IMultiTenant
 		Size = size;
 		Sha256Hash = string.IsNullOrWhiteSpace(sha256Hash)
 			? Sha256Hash
-			: Check.Length(sha256Hash, nameof(sha256Hash), 128);
+			: Check.Length(sha256Hash, nameof(sha256Hash), 128)!;
 		UploadedByUserId = uploadedByUserId ?? UploadedByUserId;
 		ValidatedAt = validatedAt ?? ValidatedAt;
 		IsSensitive = isSensitive;

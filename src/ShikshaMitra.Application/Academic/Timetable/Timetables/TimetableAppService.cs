@@ -14,6 +14,7 @@ using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Data;
@@ -24,7 +25,7 @@ namespace ShikshaMitra.Academic.Timetable.Timetables;
 
 [RemoteService(IsEnabled = false)]
 [Authorize]
-public class TimetableAppService(
+public partial class TimetableAppService(
     ITimetableRepository timetableRepository,
     TimetableManager timetableManager,
     ILectureSlotConfigRepository lectureSlotConfigRepository,
@@ -40,7 +41,8 @@ public class TimetableAppService(
     TimetableReportPdfService timetableReportPdfService,
     ITenantRepository tenantRepository,
     IRepository<Employee, Guid> employeeRepository,
-    IUserScopeAccessService userScopeAccessService
+    IUserScopeAccessService userScopeAccessService,
+    SchoolIdentityDocumentService schoolIdentity
 ) : ApplicationService, ITimetableAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
@@ -68,11 +70,32 @@ public class TimetableAppService(
             .GroupBy(a => a.SubjectId)
             .ToDictionary(g => g.Key, g => g.First().Id);
         var selectedElectiveSubjectIdsByGroup = await GetSelectedElectiveSubjectIdsByGroupAsync(standardId, divisionId);
-        var needsSubjectData = hasSavedData || assignedSubjects.Count > 0;
+        var savedSubjects = timetable?.Slots.SelectMany(slot => slot.Subjects).ToList() ?? [];
+        var savedElectiveGroupIds = timetable?.Slots
+            .Where(slot => slot.ElectiveGroupId.HasValue)
+            .Select(slot => slot.ElectiveGroupId!.Value)
+            .Distinct().ToArray() ?? [];
+        // Division selections can synthesize an unsaved subject with no allocation.
+        // Retain raw saved references too, including allocations being revised as Draft.
+        var subjectIds = savedSubjects.Select(subject => subject.SubjectId)
+            .Concat(assignedSubjects.Select(assignment => assignment.SubjectId))
+            .Concat(selectedElectiveSubjectIdsByGroup
+                .Where(selection => Enumerable.Contains(savedElectiveGroupIds, selection.Key))
+                .SelectMany(selection => selection.Value))
+            .Distinct().ToArray();
+        var electiveGroupIds = savedElectiveGroupIds
+            .Concat(assignedSubjects.Where(assignment => assignment.ElectiveGroupId.HasValue)
+                .Select(assignment => assignment.ElectiveGroupId!.Value))
+            .Distinct().ToArray();
+        var roomIds = savedSubjects.Where(subject => subject.RoomId.HasValue)
+            .Select(subject => subject.RoomId!.Value).Distinct().ToArray();
 
-        var subjects = needsSubjectData ? await subjectRepository.GetListAsync() : [];
-        var electiveGroups = needsSubjectData ? await electiveGroupRepository.GetListAsync() : [];
-        var rooms = hasSavedData ? await roomRepository.GetListAsync() : [];
+        var subjects = subjectIds.Length > 0
+            ? await subjectRepository.GetListAsync(subject => Enumerable.Contains(subjectIds, subject.Id)) : [];
+        var electiveGroups = electiveGroupIds.Length > 0
+            ? await electiveGroupRepository.GetListAsync(group => Enumerable.Contains(electiveGroupIds, group.Id)) : [];
+        var rooms = roomIds.Length > 0
+            ? await roomRepository.GetListAsync(room => Enumerable.Contains(roomIds, room.Id)) : [];
 
         var teacherIds = hasSavedData
             ? timetable!.Slots.SelectMany(s => s.Subjects).Select(sub => sub.TeacherId).Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList()
@@ -578,7 +601,7 @@ public class TimetableAppService(
         var standard = await standardRepository.GetAsync(standardId);
         var divisionQueryable = await divisionRepository.GetQueryableAsync();
         var divisions = await AsyncExecuter.ToListAsync(
-            divisionQueryable.Where(d => d.StandardId == standardId).OrderBy(d => d.Name));
+            divisionQueryable.Where(d => d.StandardId == standardId).OrderBy(d => d.Name).Select(d => new { d.Id, d.Name }));
 
         if (!scope.IsAdmin && !scope.HasTenantWideScope())
         {
@@ -601,8 +624,10 @@ public class TimetableAppService(
             .Take(input.MaxResultCount)
             .ToList();
 
-        var timetables = await timetableRepository.GetByStandardIdAsync(standardId);
-        var allTimetables = await timetableRepository.GetAllWithSlotsAsync();
+        var pageDivisionIds = pagedDivisions.Select(division => division.Id).ToArray();
+        var timetables = await AsyncExecuter.ToListAsync((await timetableRepository.WithDetailsAsync())
+            .Where(timetable => timetable.StandardId == standardId && Enumerable.Contains(pageDivisionIds, timetable.DivisionId)));
+        var conflictCandidates = await LoadManagementConflictCandidatesAsync(timetables);
         var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(standardId);
         var assignedSubjectsQueryable = await assignedSubjectRepository.WithDetailsAsync(a => a.Teachers);
         var assignedSubjects = await AsyncExecuter.ToListAsync(
@@ -711,13 +736,6 @@ public class TimetableAppService(
                     }
                 }
 
-                // 2. Cross-class/division conflicts with any active timetable.
-                var otherTimetables = allTimetables
-                    .Where(t =>
-                        (t.StandardId != tt.StandardId || t.DivisionId != tt.DivisionId) &&
-                        t.Status != TimetableStatus.NotCreated)
-                    .ToList();
-
                 foreach (var slot in tt.Slots.Where(s => s.SlotType == SlotType.Period))
                 {
                     var teacherIds = slot.Subjects.Where(sub => sub.TeacherId.HasValue).Select(sub => sub.TeacherId!.Value).ToList();
@@ -725,17 +743,15 @@ public class TimetableAppService(
 
                     if (teacherIds.Count > 0 || roomIds.Count > 0)
                     {
-                        foreach (var otherTt in otherTimetables)
+                        var otherTimetables = conflictCandidates[(slot.Day, slot.StartTime, slot.EndTime)]
+                            .Where(candidate => candidate.StandardId != tt.StandardId || candidate.DivisionId != tt.DivisionId)
+                            .GroupBy(candidate => candidate.TimetableId);
+                        foreach (var otherSlots in otherTimetables)
                         {
-                            var otherSlot = otherTt.Slots.FirstOrDefault(s => s.Day == slot.Day && s.StartTime == slot.StartTime && s.EndTime == slot.EndTime);
-                            if (otherSlot != null)
-                            {
-                                var otherTeacherIds = otherSlot.Subjects.Where(sub => sub.TeacherId.HasValue).Select(sub => sub.TeacherId!.Value);
-                                var otherRoomIds = otherSlot.Subjects.Where(sub => sub.RoomId.HasValue).Select(sub => sub.RoomId!.Value);
-
-                                conflictCount += teacherIds.Intersect(otherTeacherIds).Count();
-                                conflictCount += roomIds.Intersect(otherRoomIds).Count();
-                            }
+                            conflictCount += teacherIds.Intersect(otherSlots.Where(candidate => candidate.TeacherId.HasValue)
+                                .Select(candidate => candidate.TeacherId!.Value)).Count();
+                            conflictCount += roomIds.Intersect(otherSlots.Where(candidate => candidate.RoomId.HasValue)
+                                .Select(candidate => candidate.RoomId!.Value)).Count();
                         }
                     }
                 }
@@ -1103,7 +1119,7 @@ public class TimetableAppService(
                 throw new BusinessException("Academic:Timetable:WeeklyLectureMismatch")
                     .WithData("StandardId", timetable.StandardId)
                     .WithData("DivisionId", timetable.DivisionId)
-                    .WithData("SubjectOrElectiveGroupId", referenceId)
+                    .WithData("SubjectOrElectiveGroupId", referenceId!)
                     .WithData("RequiredWeeklyLectures", requirement.WeeklyLectures)
                     .WithData("AssignedWeeklyLectures", assigned);
             }
@@ -1246,16 +1262,13 @@ public class TimetableAppService(
             return savedSubjects;
         }
 
-        var fallback = savedSubjects.FirstOrDefault();
         return selectedSubjectIds
             .Select(subjectId =>
                 savedSubjects.FirstOrDefault(subject => subject.SubjectId == subjectId) ??
                 new TimetableSlotSubject(
                     Guid.Empty,
                     slot.Id,
-                    subjectId,
-                    fallback?.TeacherId,
-                    fallback?.RoomId))
+                    subjectId))
             .ToList();
     }
 
@@ -1289,7 +1302,9 @@ public class TimetableAppService(
         }.Where(p => !string.IsNullOrWhiteSpace(p));
         var address = string.Join(", ", addressParts);
         var contactNumber = tenant?.GetProperty<string>("ContactNumber");
-        var logoBytes = tenant?.GetProperty<byte[]>("Logo");
+        var identitySnapshot = await schoolIdentity.CaptureForStageAsync(standard.EducationMediumStageId);
+        var identityAssets = await schoolIdentity.LoadAsync(identitySnapshot);
+        var logoBytes = identityAssets.Logo;
 
         // Fetch timetable data
         var timetableDto = await GetByStandardAndDivisionAsync(standardId, divisionId);
@@ -1331,6 +1346,7 @@ public class TimetableAppService(
             Address = string.IsNullOrWhiteSpace(address) ? null : address,
             ContactNumber = contactNumber,
             LogoBytes = logoBytes,
+            BannerBytes = identityAssets.Banner,
             StandardName = standard.Name,
             DivisionName = division.Name,
             GeneratedAt = DateTime.Now,

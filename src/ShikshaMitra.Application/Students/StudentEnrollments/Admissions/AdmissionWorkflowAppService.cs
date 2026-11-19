@@ -12,9 +12,13 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionWorkflowAppService(
 	AdmissionWorkflowReadService readService,
 	AdmissionWorkflowCommandService commandService,
-	AdmissionWorkflowGovernanceService governanceService)
+	AdmissionWorkflowGovernanceService governanceService,
+	AdmissionAssessmentCatalogService assessmentCatalog)
 	: ApplicationService, IAdmissionWorkflowAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
+	public Task<AdmissionAssessmentCatalogDto> GetAssessmentCatalogAsync() => assessmentCatalog.GetAsync();
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
 	public Task<PagedResultDto<AdmissionWorkflowDto>> GetListAsync(AdmissionWorkflowListInput input) =>
 		readService.GetListAsync(input);
@@ -71,6 +75,9 @@ public class AdmissionWorkflowAppService(
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Archive)]
 	public Task<AdmissionWorkflowDto> ArchiveAsync(Guid id, string? concurrencyStamp = null) => commandService.ArchiveAsync(id, concurrencyStamp);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Publish)]
+	public Task<AdmissionWorkflowDto> ReopenAsync(Guid id, string? concurrencyStamp = null) => commandService.ReopenAsync(id, concurrencyStamp);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
 	public Task<List<AdmissionWorkflowDto>> GetVersionHistoryAsync(Guid id) =>

@@ -15,7 +15,7 @@ public DateTime CoverageEndDate { get; set; }
 public DateTime DemandDate { get; set; }
 public DateTime DueDate { get; set; }
 public decimal AllocationPercentage { get; set; }
-public decimal CalculatedAmount { get; set; }
+public decimal? CalculatedAmount { get; set; }
 public bool? AllowPartialOverride { get; set; }
 public int? GracePeriodDaysOverride { get; set; }
 }
@@ -25,7 +25,7 @@ public class ResolvedFeeHeadScheduleDto
 public Guid FeeStructureDetailId { get; set; }
 public Guid FeeHeadId { get; set; }
 public string FeeHeadName { get; set; } = string.Empty;
-public decimal AnnualAmount { get; set; }
+public decimal? AnnualAmount { get; set; }
 public Guid? PaymentTermId { get; set; }
 public string? PaymentTermName { get; set; }
 public Guid? PaymentTermVersionId { get; set; }

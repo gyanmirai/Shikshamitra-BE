@@ -98,7 +98,7 @@ public class HRDashboardLeaveReader(
 				Id = leave.Id,
 				PublicId = leave.PublicId,
 				EmployeeId = leave.EmployeeId,
-				EmployeeName = employee?.EmployeeName ?? "Employee",
+				EmployeeName = employee?.EmployeeName ?? "Staff",
 				EmployeeIdentifier = employee?.EmployeeCode ?? string.Empty,
 				LeaveType = ToPaidType(leave.PaidType),
 				StartDate = leave.StartDate.DateTime,

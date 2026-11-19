@@ -15,7 +15,9 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public sealed record AdmissionAssessmentContext(AdmissionApplication Application,
 	AdmissionApplicationStageInstance Stage, AdmissionWorkflowStageDefinition Definition, AdmissionAssessmentPolicy? Policy)
 {
-	public bool IsActive => Application.CurrentStageInstanceId == Stage.Id && Stage.Status == AdmissionRuntimeStageStatus.Active &&
+	public AdmissionWorkflowInstanceStatus WorkflowStatus { get; init; } = AdmissionWorkflowInstanceStatus.Active;
+	public bool CanPrepare => AdmissionStagePreparationRules.CanPrepare(Application, WorkflowStatus, Stage.Status);
+	public bool IsActive => WorkflowStatus == AdmissionWorkflowInstanceStatus.Active && Application.CurrentStageInstanceId == Stage.Id && Stage.Status == AdmissionRuntimeStageStatus.Active &&
 		Application.Status is AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted or
 		AdmissionApplicationStatus.InReview or AdmissionApplicationStatus.Approved or AdmissionApplicationStatus.Waitlisted or
 		AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted;
@@ -47,10 +49,11 @@ public class AdmissionAssessmentAccessService(
 		await AsyncExecuter.FirstOrDefaultAsync((await GetScopedOfferingsAsync()).Where(item => item.Id == id)) ??
 		throw new EntityNotFoundException(typeof(AdmissionOffering), id);
 
-	public async Task<AdmissionAssessmentContext> GetContextAsync(Guid applicationId, Guid stageId, bool requireActive = true)
+	public async Task<AdmissionAssessmentContext> GetContextAsync(Guid applicationId, Guid stageId, bool requireActive = true, bool requirePreparation = false)
 	{
 		var application = await applications.FindAsync(applicationId) ?? throw new EntityNotFoundException(typeof(AdmissionApplication), applicationId);
-		await GetOfferingAsync(application.AdmissionOfferingId);
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationScopeAccessService>().EnsureCanAccessAsync(application);
+		var offering = await GetOfferingAsync(application.AdmissionOfferingId);
 		var stage = await stages.FindAsync(stageId) ?? throw new EntityNotFoundException(typeof(AdmissionApplicationStageInstance), stageId);
 		var workflow = await instances.FindAsync(stage.WorkflowInstanceId);
 		if (workflow?.ApplicationId != applicationId || workflow.WorkflowDefinitionId != application.WorkflowDefinitionId ||
@@ -59,13 +62,23 @@ public class AdmissionAssessmentAccessService(
 		var definition = await definitions.GetAsync(stage.DefinitionStageId);
 		if (definition.WorkflowDefinitionId != application.WorkflowDefinitionId)
 			throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), definition.Id);
-		var context = new AdmissionAssessmentContext(application, stage, definition, ReadPolicy(definition));
+		var context = new AdmissionAssessmentContext(application, stage, definition, ResolvePolicy(ReadPolicy(definition), offering)) { WorkflowStatus = workflow.Status };
 		if (requireActive && (!context.IsActive || context.Policy == null || workflow.Status != AdmissionWorkflowInstanceStatus.Active))
 			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "The managed assessment stage must be active.");
+		if (requirePreparation && (!context.CanPrepare || context.Policy == null))
+			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Assessment changes require an open admission journey and an unfinished assessment stage.");
 		return context;
 	}
 
 	public async Task<AdmissionWorkflowStageDefinition> GetSessionDefinitionAsync(Guid offeringId, Guid definitionId)
+	{
+		var definition = await GetManagedDefinitionAsync(offeringId, definitionId);
+		if (ReadPolicy(definition)?.SchedulingEnabled != true)
+			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Choose a scheduled assessment stage belonging to this offering.");
+		return definition;
+	}
+
+	public async Task<AdmissionWorkflowStageDefinition> GetManagedDefinitionAsync(Guid offeringId, Guid definitionId)
 	{
 		var offering = await GetOfferingAsync(offeringId);
 		var definition = await definitions.FindAsync(definitionId) ?? throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), definitionId);
@@ -75,16 +88,34 @@ public class AdmissionAssessmentAccessService(
 		if (workflow.Status == AdmissionWorkflowStatus.Archived && !await applications.AnyAsync(application =>
 			application.AdmissionOfferingId == offeringId && application.WorkflowDefinitionId == workflow.Id))
 			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Archived workflows only support their existing applications.");
-		if (definition.StageType != AdmissionWorkflowStageType.Assessment || ReadPolicy(definition)?.SchedulingEnabled != true ||
+		if (definition.StageType != AdmissionWorkflowStageType.Assessment || ReadPolicy(definition) == null ||
 			(offering.WorkflowDefinitionId != definition.WorkflowDefinitionId && !await applications.AnyAsync(application =>
 				application.AdmissionOfferingId == offeringId && application.WorkflowDefinitionId == definition.WorkflowDefinitionId)))
-			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Choose a scheduled assessment stage belonging to this offering.");
+			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Choose a managed assessment stage belonging to this offering.");
+		_ = ResolvePolicy(ReadPolicy(definition), offering);
 		return definition;
+	}
+
+	public static AdmissionAssessmentPolicy? ResolvePolicy(AdmissionAssessmentPolicy? policy, AdmissionOffering offering)
+		=> ResolvePolicy(policy, offering.BoardId, offering.MediumId, offering.StandardId);
+
+	internal static AdmissionAssessmentPolicy? ResolvePolicy(AdmissionAssessmentPolicy? policy, Guid boardId, Guid mediumId, Guid standardId)
+	{
+		try { return policy?.Resolve(boardId, mediumId, standardId); }
+		catch (ArgumentException exception) { throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidPolicy, exception.Message); }
+	}
+
+	public static AdmissionAssessmentPolicy? ReadAttemptPolicy(AdmissionAssessmentAttempt? attempt, AdmissionAssessmentPolicy? fallback)
+	{
+		if (attempt == null) return fallback;
+		try { return AdmissionAssessmentPolicy.Read(attempt.PolicySnapshotJson) is { } policy ? policy with { ReviewRequired = false } : fallback; }
+		catch (Exception exception) when (exception is ArgumentException or System.Text.Json.JsonException or InvalidOperationException)
+		{ throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidPolicy, exception.Message); }
 	}
 
 	public static AdmissionAssessmentPolicy? ReadPolicy(AdmissionWorkflowStageDefinition definition)
 	{
-		try { return AdmissionAssessmentPolicy.Read(definition.ConfigurationJson); }
+		try { return AdmissionAssessmentPolicy.Read(definition.ConfigurationJson) is { } policy ? policy with { ReviewRequired = false } : null; }
 		catch (Exception exception) when (exception is ArgumentException or System.Text.Json.JsonException or InvalidOperationException)
 		{ throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidPolicy, exception.Message); }
 	}

@@ -68,7 +68,7 @@ public class TransportFeeConfiguration : FullAuditedAggregateRoot<Guid>, IMultiT
 		if (ModelType == TransportFeeModelType.DistanceBased && (!RatePerKm.HasValue || RatePerKm.Value <= 0))
 		{
 			throw new BusinessException(TransportErrorCodes.FeeConfigurationInvalid)
-				.WithData("RatePerKm", RatePerKm);
+				.WithData("RatePerKm", RatePerKm!);
 		}
 
 		if (ModelType == TransportFeeModelType.StopBased)

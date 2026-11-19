@@ -185,7 +185,7 @@ public class RolePermissionSeederContributor_Tests
 
 		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add);
 		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Add);
-		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Delete);
+		approver.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Delete);
 	}
 
 	[Fact]

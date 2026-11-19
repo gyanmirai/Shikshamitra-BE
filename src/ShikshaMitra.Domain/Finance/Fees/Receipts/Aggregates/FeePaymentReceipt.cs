@@ -1,4 +1,6 @@
 ﻿using System;
+using System.ComponentModel.DataAnnotations.Schema;
+using Volo.Abp.Data;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -8,10 +10,8 @@ namespace ShikshaMitra.Finance.Fees.Receipts;
 /// <summary>
 /// A printable fee or charge receipt document.
 /// <para>
-/// One receipt is created per <see cref="FeeReceiptScope"/> per collection event.
-/// A single <c>CollectFee</c> that includes both fee lines and charge lines
-/// produces two separate receipt rows — one with <see cref="FeeReceiptScope.Fee"/>
-/// and one with <see cref="FeeReceiptScope.Charge"/>.
+/// Collection policy chooses separate fee/charge documents or one combined document.
+/// Combined documents retain an immutable fee/charge amount breakdown.
 /// </para>
 /// <para>
 /// The parent transaction is <c>FeeRecordMetadata</c> (acting as <c>FeeCollectionTransaction</c>
@@ -54,7 +54,7 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public FeeReceiptScope ReceiptScope { get; set; }
 
-    /// <summary>Verification lifecycle, meaningful only for <see cref="FeeReceiptKind.ProvisionalFee"/>.</summary>
+    /// <summary>Verification lifecycle for provisional fee and charge receipts.</summary>
     public FeeReceiptVerificationStatus VerificationStatus { get; set; }
 
     // ── Amounts ───────────────────────────────────────────────────────────────
@@ -64,9 +64,54 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public double TotalPaidAmount { get; set; }
 
+    [NotMapped]
+    public decimal FeePaidAmount => this.GetProperty<decimal>(nameof(FeePaidAmount), ReceiptScope == FeeReceiptScope.Fee ? (decimal)TotalPaidAmount : 0m);
+
+    [NotMapped]
+    public decimal ChargePaidAmount => this.GetProperty<decimal>(nameof(ChargePaidAmount), ReceiptScope == FeeReceiptScope.Charge ? (decimal)TotalPaidAmount : 0m);
+
+    /// <summary>
+    /// Immutable late-fee portion of the charge component. Null identifies historical
+    /// receipts issued before late fees were grouped with charges.
+    /// </summary>
+    [NotMapped]
+    public decimal? LateFeePaidAmount => ExtraProperties.ContainsKey(nameof(LateFeePaidAmount))
+        ? this.GetProperty<decimal>(nameof(LateFeePaidAmount)) : null;
+
+    public void SetLateFeePaidAmount(decimal amount)
+    {
+        if (amount < 0m || amount > ChargePaidAmount ||
+            (LateFeePaidAmount.HasValue && LateFeePaidAmount.Value != amount))
+            throw new BusinessException(ShikshaMitra.Finance.Fees.Collections.FeeCollectionErrorCodes.PaymentDetailsMismatch);
+        this.SetProperty(nameof(LateFeePaidAmount), amount);
+    }
+
+    public void SetAmountBreakdown(decimal feeAmount, decimal chargeAmount)
+    {
+        if (feeAmount < 0m || chargeAmount < 0m || feeAmount + chargeAmount != (decimal)TotalPaidAmount)
+            throw new BusinessException(ShikshaMitra.Finance.Fees.Collections.FeeCollectionErrorCodes.PaymentDetailsMismatch);
+        if (ExtraProperties.ContainsKey(nameof(FeePaidAmount)) &&
+            (FeePaidAmount != feeAmount || ChargePaidAmount != chargeAmount))
+            throw new BusinessException(ShikshaMitra.Finance.Fees.Collections.FeeCollectionErrorCodes.PaymentDetailsMismatch);
+        this.SetProperty(nameof(FeePaidAmount), feeAmount);
+        this.SetProperty(nameof(ChargePaidAmount), chargeAmount);
+    }
+
     // ── Student / context ─────────────────────────────────────────────────────
 
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; private set; }
+
+    public void SetFinanceFeeAccount(Guid accountId)
+    {
+        ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.Validate(StudentId, accountId);
+        if (FinanceFeeAccountId.HasValue && FinanceFeeAccountId != accountId)
+            throw new BusinessException(ShikshaMitra.Finance.Fees.Collections.FinanceFeeAccountErrorCodes.AssignmentConflict);
+        FinanceFeeAccountId = accountId;
+    }
+
+    public void LinkStudent(Guid studentId) => StudentId =
+        ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
     public Guid AcademicYearId { get; set; }
 
     /// <summary>Denormalized from student at creation for fast list filtering.</summary>
@@ -140,8 +185,8 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public void MarkVerified(Guid finalReceiptId, string? remarks = null)
     {
-        if (ReceiptKind != FeeReceiptKind.ProvisionalFee)
-            throw new AbpException("Only ProvisionalFee receipts can be marked verified.");
+        if (ReceiptKind is not (FeeReceiptKind.ProvisionalFee or FeeReceiptKind.ProvisionalCharge))
+            throw new AbpException("Only provisional receipts can be marked verified.");
 
         VerificationStatus = FeeReceiptVerificationStatus.Verified;
         LinkedFinalReceiptId = finalReceiptId;
@@ -154,8 +199,8 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public void MarkRejected(string? remarks = null)
     {
-        if (ReceiptKind != FeeReceiptKind.ProvisionalFee)
-            throw new AbpException("Only ProvisionalFee receipts can be marked rejected.");
+        if (ReceiptKind is not (FeeReceiptKind.ProvisionalFee or FeeReceiptKind.ProvisionalCharge))
+            throw new AbpException("Only provisional receipts can be marked rejected.");
 
         VerificationStatus = FeeReceiptVerificationStatus.Rejected;
         if (!string.IsNullOrWhiteSpace(remarks))

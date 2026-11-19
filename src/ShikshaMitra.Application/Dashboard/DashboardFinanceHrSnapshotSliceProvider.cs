@@ -4,6 +4,8 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using ShikshaMitra.Finance;
+using ShikshaMitra.Finance.Reports;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
@@ -30,11 +32,12 @@ namespace ShikshaMitra.Dashboard;
 public class DashboardFinanceHrSnapshotSliceProvider(
 	IRepository<Student, Guid> studentRepository,
 	StudentScopeAccessService studentScopeAccessService,
+	FinanceScopeAccessService financeScopeAccessService,
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
 	HRDashboardEmployeeScopeReader hrEmployeeScopeReader,
-	HRDashboardPayrollReader hrDashboardPayrollReader,
+	DashboardSavedPayrollReader savedPayrollReader,
 	IUserScopeAccessService userScopeAccessService,
-	IFeePaymentReceiptRepository feePaymentReceiptRepository,
+	DashboardCollectionsFocusReader collectionReader,
 	IDueFeeRepository dueFeeRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IConcessionRequestRepository concessionRequestRepository,
@@ -56,28 +59,28 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 		}
 
 		var needsCollection = summary.DashboardTemplate == Leadership
-			? await HasAnyPermissionAsync(WidgetDefinitions["leadership-fee-collection"].RequiredPermissions)
-			: await HasAnyPermissionAsync(WidgetDefinitions["finance-collection"].RequiredPermissions);
+			? await HasAllPermissionsAsync(WidgetDefinitions["leadership-fee-collection"].RequiredPermissions)
+			: await HasAllPermissionsAsync(WidgetDefinitions["finance-collection"].RequiredPermissions);
 		var needsDues = summary.DashboardTemplate == FinanceHr &&
-			await HasAnyPermissionAsync(WidgetDefinitions["finance-dues"].RequiredPermissions);
+			await HasAllPermissionsAsync(WidgetDefinitions["finance-dues"].RequiredPermissions);
 		var needsConcession = summary.DashboardTemplate == FinanceHr &&
-			await HasAnyPermissionAsync(WidgetDefinitions["finance-concession-impact"].RequiredPermissions);
+			await HasAllPermissionsAsync(WidgetDefinitions["finance-concession-impact"].RequiredPermissions);
 		var needsFinanceModule = summary.DashboardTemplate == FinanceHr &&
-			await HasAnyPermissionAsync(WidgetDefinitions["finance-dashboard"].RequiredPermissions);
+			await HasAllPermissionsAsync(WidgetDefinitions["finance-dashboard"].RequiredPermissions);
 
 		if (!needsCollection && !needsDues && !needsConcession && !needsFinanceModule)
 		{
 			return;
 		}
+		if (!Guid.TryParse(summary.AcademicYearId, out var selectedYear) || selectedYear == Guid.Empty) return;
 
 		try
 		{
 			var scopedStudentIdsQuery = await GetScopedStudentIdsQueryAsync();
+			var scopedAccountIdsQuery = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
 			var fromDate = DateOnly.FromDateTime(ParseNormalizedDate(range.From));
 			var toDate = DateOnly.FromDateTime(ParseNormalizedDate(range.To));
-			var academicYearId = Guid.TryParse(summary.AcademicYearId, out var parsedAcademicYearId)
-				? parsedAcademicYearId
-				: (Guid?)null;
+			Guid? academicYearId = selectedYear;
 
 			IReadOnlyList<FinanceAmountRow>? todayRows = null;
 			IReadOnlyList<FinanceAmountRow>? dueRows = null;
@@ -85,17 +88,9 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 
 			if (needsCollection && summary.DashboardTemplate == Leadership && academicYearId.HasValue)
 			{
-				var receiptQuery = await feePaymentReceiptRepository.GetQueryableAsync();
-				var scopedFeeReceipts = receiptQuery.Where(r =>
-					r.AcademicYearId == academicYearId.Value &&
-					r.ReceiptScope == FeeReceiptScope.Fee &&
-					r.VerificationStatus != FeeReceiptVerificationStatus.Rejected &&
-					r.LinkedFinalReceiptId == null &&
-					scopedStudentIdsQuery.Contains(r.StudentId));
-
-				var periodRows = await asyncExecuter.ToListAsync(scopedFeeReceipts
-					.Where(r => r.ReceiptDate >= fromDate && r.ReceiptDate <= toDate)
-					.Select(r => new FinanceAmountRow(r.TotalPaidAmount, r.StudentId)));
+				var evidence = await collectionReader.ReadConfirmedAsync(academicYearId.Value, fromDate, toDate);
+				if (evidence.UnavailableReason != null) throw new InvalidOperationException(evidence.UnavailableReason);
+				var periodRows = evidence.Receipts.Select(r => new FinanceAmountRow(r.FeePaidAmount, r.StudentId, r.FinanceFeeAccountId)).ToList();
 				var periodTotal = periodRows.Sum(x => x.Amount);
 				var subtitle = periodRows.Count == 0
 					? "No scoped fee receipts in selected range"
@@ -104,34 +99,26 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 					summary.KpiCards,
 					"leadership-fee-collection",
 					null,
-					FormatIndianAmount(periodTotal),
+					FormatIndianAmount((double)periodTotal),
 					subtitle,
 					periodRows.Count == 0 ? "info" : "success");
 			}
 
 			if (summary.DashboardTemplate == FinanceHr && (needsCollection || needsFinanceModule) && academicYearId.HasValue)
 			{
-				var receiptQuery = await feePaymentReceiptRepository.GetQueryableAsync();
-				var scopedFeeReceipts = receiptQuery.Where(r =>
-					r.AcademicYearId == academicYearId.Value &&
-					r.ReceiptScope == FeeReceiptScope.Fee &&
-					r.VerificationStatus != FeeReceiptVerificationStatus.Rejected &&
-					r.LinkedFinalReceiptId == null &&
-					scopedStudentIdsQuery.Contains(r.StudentId));
-
-				todayRows = await asyncExecuter.ToListAsync(scopedFeeReceipts
-					.Where(r => r.ReceiptDate == toDate)
-					.Select(r => new FinanceAmountRow(r.TotalPaidAmount, r.StudentId)));
+				var evidence = await collectionReader.ReadConfirmedAsync(academicYearId.Value, toDate, toDate);
+				if (evidence.UnavailableReason != null) throw new InvalidOperationException(evidence.UnavailableReason);
+				todayRows = evidence.Receipts.Select(r => new FinanceAmountRow(r.FeePaidAmount, r.StudentId, r.FinanceFeeAccountId)).ToList();
 
 				if (needsCollection)
 				{
 					var todayTotal = todayRows.Sum(x => x.Amount);
-					var subtitle = BuildCountSubtitle(todayRows.Count, "receipt posted today", "receipts posted today");
+					var subtitle = $"{todayRows.Count} confirmed fee receipts for {toDate:dd MMM yyyy}";
 					UpdateWidget(
 						summary.KpiCards,
 						"finance-collection",
 						null,
-						FormatIndianAmount(todayTotal),
+						FormatIndianAmount((double)todayTotal),
 						subtitle,
 						todayRows.Count == 0 ? "info" : "success");
 				}
@@ -148,19 +135,20 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 					.Where(d =>
 						academicYearFeeHeadIds.Contains(d.FeeHeadId) &&
 						d.OutstandingAmount > 0 &&
-						scopedStudentIdsQuery.Contains(d.StudentId))
-					.Select(d => new FinanceAmountRow((double)d.OutstandingAmount, d.StudentId)));
+						((!d.FinanceFeeAccountId.HasValue && d.StudentId.HasValue && scopedStudentIdsQuery.Contains(d.StudentId.Value)) ||
+						 (d.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(d.FinanceFeeAccountId.Value))))
+					.Select(d => new FinanceAmountRow(d.OutstandingAmount, d.StudentId, d.FinanceFeeAccountId)));
 
 				if (needsDues)
 				{
 					var outstanding = dueRows.Sum(x => x.Amount);
-					var studentCount = dueRows.Select(x => x.StudentId).Distinct().Count();
-					var subtitle = BuildCountSubtitle(studentCount, "student pending dues", "students pending dues");
+					var studentCount = dueRows.Select(x => FinanceReportPayerKey.From(x.StudentId, x.FinanceFeeAccountId)).Distinct().Count();
+					var subtitle = BuildCountSubtitle(studentCount, "payer pending dues", "payers pending dues");
 					UpdateWidget(
 						summary.KpiCards,
 						"finance-dues",
 						null,
-						FormatIndianAmount(outstanding),
+						FormatIndianAmount((double)outstanding),
 						subtitle,
 						studentCount == 0 ? "success" : "warning");
 				}
@@ -189,16 +177,16 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 
 			if (needsFinanceModule)
 			{
-				var todayTotal = todayRows?.Sum(x => x.Amount) ?? 0d;
-				var dueStudentCount = dueRows?.Select(x => x.StudentId).Distinct().Count() ?? 0;
+				var todayTotal = todayRows?.Sum(x => x.Amount) ?? 0m;
+				var dueStudentCount = dueRows?.Select(x => FinanceReportPayerKey.From(x.StudentId, x.FinanceFeeAccountId)).Distinct().Count() ?? 0;
 				var concessionCount = pendingConcessions ?? 0;
 				var followUpCount = dueStudentCount + concessionCount;
-				var subtitle = $"{dueStudentCount} due students, {concessionCount} concession reviews";
+				var subtitle = $"{dueStudentCount} due payers, {concessionCount} concession reviews";
 				UpdateWidget(
 					summary.ModuleSnapshots,
 					"finance-dashboard",
 					followUpCount,
-					FormatIndianAmount(todayTotal),
+					FormatIndianAmount((double)todayTotal),
 					subtitle,
 					followUpCount == 0 ? "success" : "warning",
 					health: followUpCount == 0 ? "good" : "attention");
@@ -218,13 +206,13 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 		}
 
 		var needsPrincipalTeacherAttendance = summary.DashboardTemplate == PrincipalAdmin &&
-			await HasAnyPermissionAsync(WidgetDefinitions["principal-teacher-attendance"].RequiredPermissions);
+			await HasAllPermissionsAsync(WidgetDefinitions["principal-teacher-attendance"].RequiredPermissions);
 		var needsPayroll = summary.DashboardTemplate == FinanceHr &&
-			await HasAnyPermissionAsync(WidgetDefinitions["hr-payroll-readiness"].RequiredPermissions);
+			await HasAllPermissionsAsync(WidgetDefinitions["hr-payroll-readiness"].RequiredPermissions);
 		var needsAttendance = summary.DashboardTemplate == FinanceHr &&
-			await HasAnyPermissionAsync(WidgetDefinitions["hr-staff-attendance"].RequiredPermissions);
+			await HasAllPermissionsAsync(WidgetDefinitions["hr-staff-attendance"].RequiredPermissions);
 		var needsHrModule = summary.DashboardTemplate == FinanceHr &&
-			await HasAnyPermissionAsync(WidgetDefinitions["hr-dashboard"].RequiredPermissions);
+			await HasAllPermissionsAsync(WidgetDefinitions["hr-dashboard"].RequiredPermissions);
 
 		if (!needsPrincipalTeacherAttendance && !needsPayroll && !needsAttendance && !needsHrModule)
 		{
@@ -264,24 +252,22 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 
 			if (needsPayroll || needsHrModule)
 			{
-				var payroll = await hrDashboardPayrollReader.BuildPayrollAsync(month);
-				payrollReadiness = payroll.EmployeeCount == 0
-					? 0
-					: Math.Round((decimal)(payroll.ReviewedCount + payroll.LockedCount) / payroll.EmployeeCount * 100m, 1);
-				payrollPending = payroll.PendingCount + payroll.MissingAttendanceCount + payroll.MissingSalaryStructureCount + payroll.PolicyConfigurationIssueCount;
+				var payroll = await savedPayrollReader.ReadAsync(month, Guid.TryParse(summary.AcademicYearId, out var payrollYear) ? payrollYear : null);
+				payrollReadiness = payroll.Snapshots == 0 || payroll.Employees == 0 ? null
+					: Math.Round((decimal)(payroll.Reviewed + payroll.Locked) / payroll.Employees * 100m, 1);
+				payrollPending = Math.Max(0, payroll.Employees - payroll.Reviewed - payroll.Locked) + payroll.Blocked;
 
 				if (needsPayroll)
 				{
-					var subtitle = payrollPending == 0
-						? "Payroll is ready for scoped employees"
-						: BuildCountSubtitle(payrollPending, "payroll blocker in scope", "payroll blockers in scope");
+					var subtitle = !payrollReadiness.HasValue ? "No saved payroll preview. Open Payroll to calculate readiness."
+						: $"Saved preview for {month}; {payrollPending} review items. Recheck readiness in Payroll.";
 					UpdateWidget(
 						summary.KpiCards,
 						"hr-payroll-readiness",
 						null,
-						$"{payrollReadiness:0.#}%",
+						payrollReadiness.HasValue ? $"{payrollReadiness:0.#}%" : "Unavailable",
 						subtitle,
-						payrollPending == 0 ? "success" : "warning");
+						"info");
 				}
 			}
 
@@ -308,16 +294,16 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 				var missingAttendance = attendanceSnapshot?.MissingAttendance ?? 0;
 				var issueCount = payrollPending + missingAttendance;
 				var attendanceRate = attendanceSnapshot?.AttendanceRate ?? 0m;
-				var readiness = payrollReadiness ?? 0m;
-				var subtitle = $"Payroll {readiness:0.#}%, staff attendance {attendanceRate:0.#}%";
+				var readinessLabel = payrollReadiness.HasValue ? $"{payrollReadiness:0.#}% saved preview" : "unavailable";
+				var subtitle = $"Payroll {readinessLabel}, staff attendance {attendanceRate:0.#}%";
 				UpdateWidget(
 					summary.ModuleSnapshots,
 					"hr-dashboard",
 					issueCount,
-					$"{readiness:0.#}%",
+					payrollReadiness.HasValue ? $"{payrollReadiness:0.#}%" : "Unavailable",
 					subtitle,
-					issueCount == 0 ? "success" : "warning",
-					health: issueCount == 0 ? "good" : "attention");
+					"info",
+					health: "attention");
 			}
 		}
 		catch
@@ -371,20 +357,16 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 		return new StaffAttendanceSnapshot(present, absent, halfDay, missing, attendanceRate);
 	}
 
-	private async Task<bool> HasAnyPermissionAsync(string[] permissionNames)
+	private async Task<bool> HasAllPermissionsAsync(string[] permissionNames)
 	{
 		foreach (var permissionName in permissionNames)
 		{
-			if (await permissionChecker.IsGrantedAsync(permissionName))
-			{
-				return true;
-			}
+			if (!await permissionChecker.IsGrantedAsync(permissionName)) return false;
 		}
-
-		return false;
+		return permissionNames.Length > 0;
 	}
 
-	private sealed record FinanceAmountRow(double Amount, Guid StudentId);
+	private sealed record FinanceAmountRow(decimal Amount, Guid? StudentId, Guid? FinanceFeeAccountId);
 
 	private sealed record AttendanceStatusCountRow(EmployeeAttendanceStatusType StatusType, int Count);
 

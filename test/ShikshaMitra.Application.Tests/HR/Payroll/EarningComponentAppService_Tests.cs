@@ -353,7 +353,6 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     {
         // Arrange
         var created = await CreateTestEarningComponentAsync("Original Name");
-        var baseComponent = await CreateTestEarningComponentAsync("Base For Percentage Update");
 
         var updateInput = new UpdateEarningComponentDto
         {
@@ -364,7 +363,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             DependOn = ComponentDependency.Gross,
             Amount = null,
             Percentage = 15m,
-            SelectedEarningComponentId = baseComponent.Id,
+            SelectedEarningComponentId = null,
             VisibleInPayslip = false,
             DisplayOrder = 10
         };
@@ -1755,7 +1754,6 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
     public async Task Should_Create_With_Gross_Dependency()
     {
         // Arrange
-        var baseComponent = await CreateTestEarningComponentAsync("Base For Gross Dep");
 
         var input = new CreateEarningComponentDto
         {
@@ -1764,7 +1762,7 @@ public class EarningComponentAppService_Tests : ShikshaMitraApplicationTestBase<
             CalculationType = CalculationType.Percentage,
             DependOn = ComponentDependency.Gross,
             Percentage = 5m,
-            SelectedEarningComponentId = baseComponent.Id
+            SelectedEarningComponentId = null
         };
 
         // Act

@@ -35,11 +35,13 @@ public class EfCoreStandardRepository(IDbContextProvider<ShikshaMitraDbContext> 
 					.ThenInclude((EducationMedium m) => m.EducationBoard);
 	}
 
-	public async Task<Standard?> FindByNameAndEducationMediumStageIdAsync(string name, Guid educationMediumStageId)
+	public async Task<Standard?> FindByNameAndEducationMediumStageIdAsync(string name, Guid educationMediumStageId, Guid? excludedId = null)
 	{
 		DbSet<Standard> dbSet = await GetDbSetAsync();
+		var normalizedName = name.Trim().ToLower();
 		return await dbSet.FirstOrDefaultAsync(standard =>
-			EF.Functions.Like(standard.Name.ToLower(), name.ToLower()) &&
+			standard.Id != excludedId &&
+			standard.Name.Trim().ToLower() == normalizedName &&
 			standard.EducationMediumStageId == educationMediumStageId
 		);
 	}
@@ -50,7 +52,7 @@ public class EfCoreStandardRepository(IDbContextProvider<ShikshaMitraDbContext> 
 
 		return await dbSet
 			.Where(standard => standard.EducationMediumStageId == educationMediumStageId)
-			.OrderBy(standard => standard.CreationTime)
+			.OrderBy(standard => standard.SortOrder).ThenBy(standard => standard.Name).ThenBy(standard => standard.Id)
 			.ToListAsync();
 	}
 
@@ -59,6 +61,7 @@ public class EfCoreStandardRepository(IDbContextProvider<ShikshaMitraDbContext> 
 	{
 		DbSet<Standard> dbSet = await GetDbSetAsync();
 		return await dbSet.Where(standard => standard.EducationMediumStageId == educationMediumStageId)
+			.OrderBy(standard => standard.SortOrder).ThenBy(standard => standard.Name).ThenBy(standard => standard.Id)
 			.Skip(skipCount)
 			.Take(maxResultCount)
 			.ToListAsync();

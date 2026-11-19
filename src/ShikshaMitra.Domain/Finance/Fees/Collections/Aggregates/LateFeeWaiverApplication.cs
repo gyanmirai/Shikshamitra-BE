@@ -44,6 +44,8 @@ public class LateFeeWaiverApplication : FullAuditedAggregateRoot<Guid>, IMultiTe
 	/// lets every individual waiver produced by one bulk action be queried/rolled up together,
 	/// reusing this per-due-line audit mechanism rather than inventing a parallel one.</summary>
 	public Guid? BulkWaiverRequestId { get; private set; }
+	/// <summary>Client command key used to make an immediate Fee Collection waiver retry-safe.</summary>
+	public string? IdempotencyKey { get; private set; }
 
 	protected LateFeeWaiverApplication()
 	{
@@ -62,7 +64,8 @@ public class LateFeeWaiverApplication : FullAuditedAggregateRoot<Guid>, IMultiTe
 		string reason,
 		bool requiresApproval,
 		Guid appliedByUserId,
-		Guid? bulkWaiverRequestId = null) : base(id)
+		Guid? bulkWaiverRequestId = null,
+		string? idempotencyKey = null) : base(id)
 	{
 		if (string.IsNullOrWhiteSpace(reason))
 		{
@@ -81,6 +84,7 @@ public class LateFeeWaiverApplication : FullAuditedAggregateRoot<Guid>, IMultiTe
 		Status = requiresApproval ? LateFeeWaiverStatus.PendingApproval : LateFeeWaiverStatus.Applied;
 		AppliedByUserId = appliedByUserId;
 		BulkWaiverRequestId = bulkWaiverRequestId;
+		IdempotencyKey = string.IsNullOrWhiteSpace(idempotencyKey) ? null : idempotencyKey.Trim();
 	}
 
 	public void Approve(Guid approvedByUserId, DateTime approvedAt)

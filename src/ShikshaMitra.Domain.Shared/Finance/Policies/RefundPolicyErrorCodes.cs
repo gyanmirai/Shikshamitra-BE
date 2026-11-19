@@ -2,6 +2,7 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 
 public static class RefundPolicyErrorCodes
 {
+	public const string DefaultPolicyCannotBeRemoved = "Finance:RefundPolicy:010029";
 	private const string Prefix = "Finance:RefundPolicy:";
 
 	public const string PolicyNotFound = Prefix + "010001";

@@ -13,6 +13,7 @@ public class CommunicationSendRequest
 	public string Destination { get; set; } = string.Empty;
 	public string? Subject { get; set; }
 	public string Body { get; set; } = string.Empty;
+	public string? HtmlBody { get; set; }
 	public string? LinkUrl { get; set; }
 	public string LanguageCode { get; set; } = "en";
 	public int AttemptNumber { get; set; } = 1;

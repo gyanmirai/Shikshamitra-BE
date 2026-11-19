@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.HR.Policies;
@@ -64,6 +64,7 @@ public class HrPolicyAssignmentImpactPreviewRequestDto
 
 public class HrPolicyImpactPreviewDto
 {
+	public ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicyImpactDto? LeaveImpact { get; set; }
 	public string PolicyType { get; set; } = string.Empty;
 	public Guid? PolicyId { get; set; }
 	public Guid AcademicYearId { get; set; }
@@ -86,6 +87,8 @@ public class HrPolicyImpactPreviewDto
 	public string? ResolutionSummary { get; set; }
 	public string? RiskSummary { get; set; }
 	public string? RecommendedAction { get; set; }
+	public string RuleDifferencesStatus { get; set; } = "not_calculated";
+	public List<HrPolicyVersionDifferenceDto> RuleDifferences { get; set; } = [];
 }
 
 public class HrPolicyImpactWarningDto

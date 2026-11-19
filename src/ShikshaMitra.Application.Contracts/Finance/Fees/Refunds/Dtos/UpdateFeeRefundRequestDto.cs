@@ -17,8 +17,15 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 /// </summary>
 public class UpdateFeeRefundRequestDto
 {
+    /// <summary>Required for current-workflow edits; prevents overwriting a stale form.</summary>
+    [MaxLength(128)]
+    public string? ConcurrencyStamp { get; set; }
+
     /// <summary>Accepted for payload symmetry with create; the route id is authoritative.</summary>
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+
+    /// <summary>Accepted for payload symmetry; ownership is derived from the stored request.</summary>
+    public Guid? FinanceFeeAccountId { get; set; }
 
     /// <summary>Accepted for payload symmetry with create; the route id is authoritative.</summary>
     public Guid AcademicYearId { get; set; }
@@ -68,7 +75,11 @@ public class UpdateFeeRefundRequestDtoValidator : AbstractValidator<UpdateFeeRef
 
         RuleForEach(x => x.Lines).ChildRules(line =>
         {
-            line.RuleFor(l => l.DueFeeId).NotEmpty();
+            line.RuleFor(l => l).Must(l => (l.DueFeeId.HasValue ? 1 : 0) + (l.ChargeId.HasValue ? 1 : 0) + (l.LateFeeDueFeeId.HasValue ? 1 : 0) == 1)
+                .WithMessage("Specify exactly one fee due, charge, or paid late fee.");
+            line.RuleFor(l => l.DueFeeId).NotEqual(Guid.Empty).When(l => l.DueFeeId.HasValue);
+            line.RuleFor(l => l.ChargeId).NotEqual(Guid.Empty).When(l => l.ChargeId.HasValue);
+            line.RuleFor(l => l.LateFeeDueFeeId).NotEqual(Guid.Empty).When(l => l.LateFeeDueFeeId.HasValue);
             line.RuleFor(l => l.SourceAllocationId).NotEmpty();
             line.RuleFor(l => l.Amount).GreaterThan(0);
         });

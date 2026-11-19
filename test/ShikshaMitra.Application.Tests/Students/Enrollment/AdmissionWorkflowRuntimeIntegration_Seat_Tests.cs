@@ -139,7 +139,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	private async Task<(AdmissionApplicationDto Application, AdmissionApplicationStageDto Stage)> EnterSeatAsync(
 		Guid offeringId, string name, string key)
 	{
-		var application = await _applicationAppService.StartAsync((await CreateApplicantAsync(name)).Id, offeringId);
+		var application = await StartFixtureApplicationAsync((await CreateApplicantAsync(name)).Id, offeringId);
 		var runtime = await _applicationAppService.GetWorkflowAsync(application.Id);
 		runtime = await _applicationAppService.AdvanceWorkflowAsync(application.Id, new()
 		{
@@ -158,7 +158,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			MinimumDurationHours = 72, MaximumDurationHours = 72, AllowRenewal = true,
 			MaximumRenewals = 1, AllowWaitlist = true, AllowCapacityOverride = true,
 			AllowedCompletionOutcomes = ["confirmed", "waitlisted"] };
-		var workflow = await _workflowAppService.CreateAsync(new()
+		var workflow = await SeedPublishedHistoricalWorkflowAsync(new()
 		{
 			Name = "Managed seat", Code = $"SEAT_{Guid.NewGuid():N}"[..24],
 			Stages =
@@ -176,6 +176,6 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				new() { FromStageId = seatId, ToStageId = doneId, Priority = 1, IsDefault = true }
 			]
 		});
-		return await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
+		return workflow;
 	}
 }

@@ -16,6 +16,15 @@ public class StudentElectiveAssignmentController(
 	IStudentElectiveAssignmentAppService appService
 ) : AbpController
 {
+	[HttpPost("selection-counts")]
+	[Authorize(ShikshaMitraSubmodulePermissions.ClassManagement.StudentElectiveAssignment.View)]
+	public async Task<IActionResult> GetSelectionCountsAsync([FromBody] ElectiveSelectionCountsRequestDto input)
+	{
+		if (input.AcademicMediumId == Guid.Empty) return BadRequest(new { error = "academicMediumId is required" });
+		if (input.ClassId == Guid.Empty) return BadRequest(new { error = "classId is required" });
+		return Ok(await appService.GetSelectionCountsAsync(input));
+	}
+
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.ClassManagement.StudentElectiveAssignment.View)]
 	[ProducesResponseType(typeof(PaginatedStudentElectiveResponseDto), 200)]
@@ -28,7 +37,8 @@ public class StudentElectiveAssignmentController(
 		[FromQuery] Guid classId,
 		[FromQuery] Guid divisionId,
 		[FromQuery] Guid electiveGroupId,
-		[FromQuery] string? search = null
+		[FromQuery] string? search = null,
+		[FromQuery] bool includeSelectableSubjects = true
 	)
 	{
 		if (academicMediumId == Guid.Empty)
@@ -56,7 +66,8 @@ public class StudentElectiveAssignmentController(
 			classId,
 			divisionId,
 			electiveGroupId,
-			search
+			search,
+			includeSelectableSubjects
 		);
 
 		return Ok(result);

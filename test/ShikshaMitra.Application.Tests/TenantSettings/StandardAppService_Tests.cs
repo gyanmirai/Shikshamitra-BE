@@ -30,6 +30,32 @@ public class StandardAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	}
 
 	[Fact]
+	public async Task Create_and_update_should_reject_another_tenants_shift_without_changing_the_standard()
+	{
+		ShiftManagementDto foreign;
+		using (_currentTenant.Change(Guid.NewGuid()))
+		{
+			foreign = await _shiftManagementAppService.CreateAsync(new CreateUpdateShiftManagementDto {
+				ShiftName = "Foreign shift", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(16, 0) });
+		}
+		var own = await CreateShiftAsync("Own");
+		var standard = await CreateStandardAsync(own.Id);
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var input = new CreateUpdateStandardDto {
+				Name = "Attempted foreign assignment", AgeLowerLimit = 6,
+				EducationMediumStageId = standard.EducationMediumStageId, ShiftId = foreign.Id };
+			(await Should.ThrowAsync<BusinessException>(() => _standardAppService.CreateAsync(input)))
+				.Code.ShouldBe(HRErrorCodes.AttendancePolicyEvaluationShiftRequired);
+			(await Should.ThrowAsync<BusinessException>(() => _standardAppService.UpdateAsync(standard.Id, input)))
+				.Code.ShouldBe(HRErrorCodes.AttendancePolicyEvaluationShiftRequired);
+			var reloaded = await _standardRepository.GetAsync(standard.Id);
+			reloaded.ShiftId.ShouldBe(own.Id);
+			reloaded.Name.ShouldBe(standard.Name);
+		}
+	}
+
+	[Fact]
 	public async Task CreateAsync_Should_Reject_Nonexistent_ShiftId()
 	{
 		var stageId = await EnsureStageExistsAsync();
@@ -100,13 +126,18 @@ public class StandardAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		}
 	}
 
-	private Task<ShiftManagementDto> CreateShiftAsync(string prefix) =>
-		_shiftManagementAppService.CreateAsync(new CreateUpdateShiftManagementDto
+	private async Task<ShiftManagementDto> CreateShiftAsync(string prefix)
+	{
+		using (_currentTenant.Change(TestTenantId))
 		{
-			ShiftName = $"{prefix} Shift {Guid.NewGuid():N}",
-			StartTime = new TimeOnly(8, 0),
-			EndTime = new TimeOnly(16, 0)
-		});
+			return await _shiftManagementAppService.CreateAsync(new CreateUpdateShiftManagementDto
+			{
+				ShiftName = $"{prefix} Shift {Guid.NewGuid():N}",
+				StartTime = new TimeOnly(8, 0),
+				EndTime = new TimeOnly(16, 0)
+			});
+		}
+	}
 
 	private Task<Guid> EnsureStageExistsAsync() =>
 		EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);

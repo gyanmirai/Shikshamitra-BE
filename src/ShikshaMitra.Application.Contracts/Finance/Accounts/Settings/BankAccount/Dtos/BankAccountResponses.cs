@@ -20,6 +20,7 @@ public class BankAccountResponse
 	public string? Purpose { get; set; }
 	public string IfscCode { get; set; } = string.Empty;
 	public string? UpiId { get; set; }
+	public string? MaskedUpiId { get; set; }
 	public DateTimeOffset? EffectiveFrom { get; set; }
 	public DateTimeOffset? EffectiveTo { get; set; }
 	public bool IsActive { get; set; }

@@ -38,6 +38,8 @@ public class AssignedSubjectDocument : FullAuditedEntity<Guid>, IMultiTenant
 	/// </summary>
 	private AssignedSubjectDocument()
 	{
+		// EF materializes these required columns after this ORM constructor.
+		BlobName = null!;
 	}
 
 	/// <summary>

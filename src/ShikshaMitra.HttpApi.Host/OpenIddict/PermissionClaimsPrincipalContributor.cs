@@ -1,7 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Constants.Permissions;
-using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -21,44 +19,20 @@ public class PermissionClaimsPrincipalContributor
 
 	public async Task ContributeAsync(AbpClaimsPrincipalContributorContext context)
 	{
-		var identity = context.ClaimsPrincipal.Identities.FirstOrDefault();
-		if (identity is not ClaimsIdentity claimsIdentity || !claimsIdentity.IsAuthenticated)
+		var claimsIdentity = context.ClaimsPrincipal.Identities.FirstOrDefault(identity => identity.IsAuthenticated);
+		if (claimsIdentity == null)
 			return;
 
 		var permissionChecker = context.ServiceProvider.GetRequiredService<IPermissionChecker>();
 
-		// Get granted module permissions and add to claims
-		var grantedModulePermissions = await GetGrantedPermissionsAsync(permissionChecker, ModulePermissions);
-		var moduleMask = BuildPermissionBitmask(ModulePermissions, grantedModulePermissions);
+		// During sign-in the request principal may still be anonymous or belong to a different user.
+		var grants = await permissionChecker.IsGrantedAsync(context.ClaimsPrincipal, ModulePermissions);
+		var moduleMask = new string(ModulePermissions.Select(permission =>
+			grants.Result[permission] == PermissionGrantResult.Granted ? PermissionGrantedBit : PermissionDeniedBit).ToArray());
+
+		foreach (var identity in context.ClaimsPrincipal.Identities)
+			foreach (var claim in identity.FindAll(ModuleMaskClaimType).ToArray())
+				identity.RemoveClaim(claim);
 		claimsIdentity.AddClaim(new Claim(ModuleMaskClaimType, moduleMask));
-	}
-
-	private static async Task<HashSet<string>> GetGrantedPermissionsAsync(
-		IPermissionChecker permissionChecker,
-		string[] permissions)
-	{
-		var granted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-		foreach (var permission in permissions)
-		{
-			if (await permissionChecker.IsGrantedAsync(permission))
-			{
-				granted.Add(permission);
-			}
-		}
-		return granted;
-	}
-
-	private static string BuildPermissionBitmask(string[] permissions, HashSet<string> grantedPermissions)
-	{
-		var bits = new System.Collections.BitArray(permissions.Length);
-		for (int i = 0; i < permissions.Length; i++)
-		{
-			if (grantedPermissions.Contains(permissions[i]))
-			{
-				bits[i] = true;
-			}
-		}
-
-		return string.Join(string.Empty, bits.Cast<bool>().Select(b => b ? PermissionGrantedBit : PermissionDeniedBit));
 	}
 }

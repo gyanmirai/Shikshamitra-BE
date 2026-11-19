@@ -11,6 +11,8 @@ public sealed record ScopeReportingEmployee(Guid Id, Guid? UserId, Guid? Reporti
 public interface IUserScopeResolutionRepository
 {
     Task<List<string>?> GetRoleNamesAsync(Guid userId, CancellationToken cancellationToken = default);
+    Task<Dictionary<Guid, List<string>>> GetRoleNamesByUserIdsAsync(
+        IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken = default);
     Task<List<ScopeReportingEmployee>> GetReportingHierarchyAsync(CancellationToken cancellationToken = default);
     Task<List<UserScopeAssignment>> GetAssignmentsAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken = default);
 }

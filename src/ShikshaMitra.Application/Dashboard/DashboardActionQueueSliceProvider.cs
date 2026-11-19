@@ -22,11 +22,10 @@ using static ShikshaMitra.Dashboard.DashboardZones;
 namespace ShikshaMitra.Dashboard;
 
 public class DashboardActionQueueSliceProvider(
-	IRepository<Student, Guid> studentRepository,
-	StudentScopeAccessService studentScopeAccessService,
+	DashboardOperationalFocusReader operationalReader,
 	IEmployeeLeaveRepository employeeLeaveRepository,
 	HRDashboardEmployeeScopeReader hrEmployeeScopeReader,
-	HRDashboardPayrollReader hrDashboardPayrollReader,
+	DashboardSavedPayrollReader savedPayrollReader,
 	IUserScopeAccessService userScopeAccessService,
 	IReconciliationAppService reconciliationAppService,
 	IAsyncQueryableExecuter asyncExecuter,
@@ -48,18 +47,16 @@ public class DashboardActionQueueSliceProvider(
 		}
 
 		var permission = WidgetDefinitions["leadership-admission-approvals"].RequiredPermissions;
-		if (!await HasAnyPermissionAsync(permission))
+		if (!await HasAnyPermissionAsync(permission) || !Guid.TryParse(summary.AcademicYearId, out var year))
 		{
 			return;
 		}
 
 		try
 		{
-			var students = await studentRepository.GetQueryableAsync();
-			var scopedStudents = await studentScopeAccessService.ApplyCurrentUserScopeAsync(students);
-			var pendingAdmissions = await asyncExecuter.CountAsync(scopedStudents
-				.Where(s => s.Status == StudentLifeCycleStatusEnum.Admission));
-			var subtitle = BuildCountSubtitle(pendingAdmissions, "admission waiting for action", "admissions waiting for action");
+			var pendingAdmissions = await operationalReader.CountPendingDecisionsAsync(year);
+			var subtitle = pendingAdmissions == 0 ? "No scoped applications awaiting a decision"
+				: $"{pendingAdmissions} scoped applications awaiting a decision";
 
 			UpdateWidget(summary.ActionItems, "leadership-admission-approvals", pendingAdmissions, null, subtitle, CountStatus(pendingAdmissions));
 			UpdateWidget(summary.KpiCards, "principal-pending-admissions", null, pendingAdmissions.ToString(CultureInfo.InvariantCulture), subtitle, CountStatus(pendingAdmissions));
@@ -105,12 +102,17 @@ public class DashboardActionQueueSliceProvider(
 
 			if (needsPayroll)
 			{
-				var payroll = await hrDashboardPayrollReader.BuildPayrollAsync(toDate.ToString("yyyy-MM", CultureInfo.InvariantCulture));
-				var pendingPayroll = payroll.PendingCount + payroll.BlockingIssues.Count;
-				var subtitle = pendingPayroll == 0
-					? "Payroll readiness has no pending review items"
-					: BuildCountSubtitle(pendingPayroll, "payroll review item needs action", "payroll review items need action");
-				UpdateWidget(summary.ActionItems, "leadership-payroll-review", pendingPayroll, null, subtitle, CountStatus(pendingPayroll));
+				var payroll = await savedPayrollReader.ReadAsync(toDate.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+					Guid.TryParse(summary.AcademicYearId, out var payrollYear) ? payrollYear : null);
+				var pendingPayroll = Math.Max(0, payroll.Employees - payroll.Reviewed - payroll.Locked) + payroll.Blocked;
+				var subtitle = payroll.Snapshots == 0 ? "No saved payroll preview. Open Payroll to calculate readiness."
+					: $"Saved preview: {pendingPayroll} review items. Recheck readiness in Payroll.";
+				UpdateWidget(summary.ActionItems, "leadership-payroll-review", payroll.Snapshots == 0 ? null : pendingPayroll, null, subtitle, "info");
+				if (payroll.Snapshots == 0)
+				{
+					var widget = summary.ActionItems.FirstOrDefault(x => x.Id == "leadership-payroll-review");
+					if (widget != null) widget.Count = null;
+				}
 			}
 		}
 		catch

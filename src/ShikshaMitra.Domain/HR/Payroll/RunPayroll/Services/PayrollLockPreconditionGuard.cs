@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using ShikshaMitra.HR.Payroll.SalarySlips;
+using ShikshaMitra.HR.Payroll.Statutory;
 using Volo.Abp;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
@@ -36,8 +37,8 @@ public static class PayrollLockPreconditionGuard
 	{
 		var unreviewedEmployeeIds = employeeIds
 			.Where(employeeId => !snapshotByEmployee.TryGetValue(employeeId, out var snapshot) ||
-			                     snapshot.IsLocked ||
-			                     snapshot.ReviewStatus != ReviewStatuses.Reviewed)
+								 snapshot.IsLocked ||
+								 snapshot.ReviewStatus != ReviewStatuses.Reviewed)
 			.ToList();
 		if (unreviewedEmployeeIds.Count > 0)
 		{
@@ -53,7 +54,8 @@ public static class PayrollLockPreconditionGuard
 		string month)
 	{
 		var blockedBySetupIds = employeeIds
-			.Where(employeeId => snapshotByEmployee.TryGetValue(employeeId, out var snapshot) && HasBlockingLockIssue(snapshot.IssueCodesJson))
+			.Where(employeeId => snapshotByEmployee.TryGetValue(employeeId, out var snapshot) &&
+				HasBlockingLockIssue(snapshot.IssueCodesJson))
 			.ToList();
 		if (blockedBySetupIds.Count > 0)
 		{
@@ -66,17 +68,13 @@ public static class PayrollLockPreconditionGuard
 	public static bool HasBlockingLockIssue(string issuesJson)
 	{
 		var issues = JsonSerializer.Deserialize<List<string>>(issuesJson) ?? new List<string>();
-		return issues.Contains(IssueCodes.NoAttendance)
-		       || issues.Contains(IssueCodes.MissingSalaryStructure)
-		       || issues.Contains(IssueCodes.NegativeNetPay)
-		       || issues.Contains(IssueCodes.AttendanceSalaryDeductionConfiguration)
-		       || issues.Contains(IssueCodes.PayrollPolicyConfiguration)
-		       || issues.Contains(IssueCodes.NoWorkingDays)
-		       || issues.Contains(IssueCodes.EsiEstablishmentInactive)
-		       || issues.Contains(IssueCodes.EsiWageClassificationRequired)
-		       || issues.Contains(IssueCodes.EsiEnrollmentReviewRequired)
-		       || issues.Contains(IssueCodes.EsiInsuranceNumberRequired)
-		       || issues.Contains(IssueCodes.CompensationRevisionRequired)
-		       || issues.Contains(IssueCodes.CompensationTargetVariance);
+		return issues.Any(IsBlockingLockIssue);
 	}
+
+	public static bool IsBlockingLockIssue(string issue) => issue is
+		IssueCodes.NoAttendance or IssueCodes.MissingSalaryStructure or IssueCodes.NegativeNetPay or
+		IssueCodes.AttendanceSalaryDeductionConfiguration or IssueCodes.PayrollPolicyConfiguration or
+		"PF_WAGE_BASIS_REQUIRED" or "PF_MEMBERSHIP_REVIEW_REQUIRED" or "PF_ENROLLMENT_REQUIRED" or "PF_CONSENT_REQUIRED" or "PF_ESTABLISHMENT_NOT_COVERED" or "ESI_BASIC_COMPONENT_REQUIRED" or "ESI_COMPONENT_REQUIRED" or IssueCodes.NoWorkingDays or IssueCodes.EsiEstablishmentInactive or IssueCodes.EsiWageClassificationRequired or
+		IssueCodes.EsiEnrollmentReviewRequired or
+		IssueCodes.CompensationRevisionRequired or IssueCodes.CompensationTargetVariance;
 }

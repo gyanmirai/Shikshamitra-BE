@@ -37,6 +37,8 @@ public sealed record AdmissionPaymentStagePolicy
 	public bool RequireIndependentVerification { get; init; }
 	public bool AllowWaiver { get; init; }
 	public bool AutoAdvanceOnSettlement { get; init; } = true;
+	/// <summary>Explicit opt-in. Historical workflows retain their existing payment behavior.</summary>
+	public bool RequiresFeeStructureSelection { get; init; }
 
 	public static AdmissionPaymentStagePolicy? Read(string? json)
 	{

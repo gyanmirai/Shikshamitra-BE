@@ -1,5 +1,6 @@
-﻿using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.Enrollments.Registrations;
 using System;
+using ShikshaMitra.Students.Records;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
 
@@ -13,14 +14,19 @@ public class StudentMedicalRecordsAppService(
 ) : StudentRegistrationBaseAppService(studentRepository, validationService, studentScopeAccessService),
     IStudentMedicalRecordsAppService
 {
-    public async Task<StudentMedicalRecordsDto> GetMedicalRecordsAsync(Guid studentId)
+    public Task<StudentMedicalRecordsDto> GetMedicalRecordsAsync(Guid studentId) => ReadAsync(studentId, null);
+    internal Task<StudentMedicalRecordsDto> GetMedicalRecordsAsync(Guid studentId, StudentRecordSectionReadScope scope) => ReadAsync(studentId, scope);
+    private async Task<StudentMedicalRecordsDto> ReadAsync(Guid studentId, StudentRecordSectionReadScope? scope)
     {
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(GetMedicalRecordsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForMedicalRecords);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForMedicalRecords,
+            includeStudentRecords: true);
 
-        var medicalRecord = await studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId);
+        scope?.RequireContext(studentId, CurrentTenant.Id, CurrentUser.Id, CurrentUnitOfWork);
+        var medicalRecord = scope == null ? await studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId) :
+            await scope.ReadAsync("medical", () => studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId));
 
         return new StudentMedicalRecordsDto
         {
@@ -48,7 +54,8 @@ public class StudentMedicalRecordsAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(UpdateMedicalRecordsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForMedicalRecordsUpdate);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForMedicalRecordsUpdate,
+            forProfileWrite: true);
 
         var medicalRecord = await studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 
@@ -73,7 +80,8 @@ public class StudentMedicalRecordsAppService(
             input.CurrentMedications
         );
 
-        student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.MedicalRecords);
+        if (Array.Exists(RegistrationStatuses, status => status == student.Status))
+            student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.MedicalRecords);
         student.AdditionalDetail?.UpdateDisabilityInfo(input.HaveDisability, input.DisabilityDetails);
 
         await UnitOfWorkManager.Current!.SaveChangesAsync();

@@ -7,6 +7,11 @@ namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 public class StudentOnboardingEvent : CreationAuditedEntity<Guid>, IMultiTenant
 {
+	public void RecordHandler(Guid? actorId, string? actorName)
+	{
+		CreatorId = actorId;
+		MetadataJson = ShikshaMitra.Students.StudentEnrollments.Admissions.StudentJourneyActorMetadata.Capture(MetadataJson, actorId, actorName);
+	}
 	public Guid? TenantId { get; private set; }
 	public Guid OnboardingCaseId { get; private set; }
 	public string EventType { get; private set; } = string.Empty;

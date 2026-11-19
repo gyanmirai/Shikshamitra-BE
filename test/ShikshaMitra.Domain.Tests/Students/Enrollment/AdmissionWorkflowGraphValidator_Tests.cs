@@ -23,9 +23,8 @@ public class AdmissionWorkflowGraphValidator_Tests
 		selectable.ShouldNotContain(AdmissionWorkflowStageType.Enrollment);
 		selectable.ShouldNotContain(AdmissionWorkflowStageType.Custom);
 		selectable.ShouldNotContain(AdmissionWorkflowStageType.Appointment);
-		selectable.ShouldContain(AdmissionWorkflowStageType.Form);
-		selectable.ShouldContain(AdmissionWorkflowStageType.Review);
-		selectable.ShouldContain(AdmissionWorkflowStageType.Approval);
+		selectable.ShouldBe([AdmissionWorkflowStageType.Form, AdmissionWorkflowStageType.Assessment,
+			AdmissionWorkflowStageType.Payment, AdmissionWorkflowStageType.DocumentVerification, AdmissionWorkflowStageType.Approval]);
 		AdmissionWorkflowStageTypeRegistry.Find(AdmissionWorkflowStageType.Approval)!
 			.DisplayName.ShouldBe("Admission decision");
 	}
@@ -34,10 +33,11 @@ public class AdmissionWorkflowGraphValidator_Tests
 	public void ValidLinearWorkflowPassesWithoutUsingDisplayOrderAsBusinessLogic()
 	{
 		var workflowId = Guid.NewGuid();
-		var entry = Stage(workflowId, "INQUIRY", 100, isEntry: true);
-		var form = Stage(workflowId, "FORM", 0);
-		var terminal = Stage(workflowId, "ENROLLED", 50, isTerminal: true,
-			type: AdmissionWorkflowStageType.Enrollment);
+		var entry = Stage(workflowId, "ASSESSMENT", 100, isEntry: true);
+		var form = Stage(workflowId, "FORM", 0, type: AdmissionWorkflowStageType.Form,
+			configurationJson: """{"formDefinitionId":"00000000-0000-0000-0000-000000000001","form":{"enabled":true,"version":1}}""");
+		var terminal = Stage(workflowId, "DECISION", 50, isTerminal: true,
+			type: AdmissionWorkflowStageType.Approval);
 		var transitions = new[]
 		{
 			Transition(workflowId, entry.Id, form.Id, 1),
@@ -66,6 +66,26 @@ public class AdmissionWorkflowGraphValidator_Tests
 	}
 
 	[Fact]
+	public void Any_stage_type_can_be_selected_as_the_single_entry()
+	{
+		AdmissionWorkflowStageTypeRegistry.All.ShouldAllBe(metadata => metadata.CanBeEntryStage);
+		var workflowId = Guid.NewGuid();
+		var assessment = Stage(workflowId, "ASSESSMENT", 0, isEntry: true,
+			type: AdmissionWorkflowStageType.Assessment);
+		var form = Stage(workflowId, "FORM", 1, type: AdmissionWorkflowStageType.Form,
+			configurationJson: """{"formDefinitionId":"00000000-0000-0000-0000-000000000001","form":{"enabled":true,"version":1}}""");
+		var decision = Stage(workflowId, "DECISION", 2, isTerminal: true,
+			type: AdmissionWorkflowStageType.Approval);
+
+		var issues = _validator.Validate([assessment, form, decision],
+			[Transition(workflowId, assessment.Id, form.Id, 0),
+			 Transition(workflowId, form.Id, decision.Id, 0)]);
+
+		issues.ShouldNotContain(issue => issue.Code == AdmissionWorkflowErrorCodes.InvalidInitialStage);
+		issues.ShouldNotContain(issue => issue.Severity == AdmissionWorkflowValidationSeverity.Error);
+	}
+
+	[Fact]
 	public void DetectsOrphansDeadEndsAndUnreachableStages()
 	{
 		var workflowId = Guid.NewGuid();
@@ -80,6 +100,42 @@ public class AdmissionWorkflowGraphValidator_Tests
 		issues.ShouldContain(issue => issue.Code == AdmissionWorkflowErrorCodes.OrphanStage && issue.StageId == orphan.Id);
 		issues.ShouldContain(issue => issue.Code == AdmissionWorkflowErrorCodes.DeadEndStage && issue.StageId == orphan.Id);
 		issues.ShouldContain(issue => issue.Code == AdmissionWorkflowErrorCodes.UnreachableStage && issue.StageId == orphan.Id);
+	}
+
+	[Fact]
+	public void All_stage_types_allow_user_selected_endings()
+	{
+		AdmissionWorkflowStageTypeRegistry.All.ShouldAllBe(metadata => metadata.CanBeTerminalStage);
+	}
+
+	[Theory]
+	[InlineData(AdmissionWorkflowStageType.Form)]
+	[InlineData(AdmissionWorkflowStageType.Assessment)]
+	[InlineData(AdmissionWorkflowStageType.Payment)]
+	[InlineData(AdmissionWorkflowStageType.DocumentVerification)]
+	public void Assessment_can_lead_directly_to_any_user_selected_ending(AdmissionWorkflowStageType terminalType)
+	{
+		var workflowId = Guid.NewGuid();
+		var entry = Stage(workflowId, "ENTRANCE_EXAM", 0, isEntry: true,
+			type: AdmissionWorkflowStageType.Assessment);
+		var terminal = Stage(workflowId, "REGISTRATION", 1, isTerminal: true, type: terminalType,
+			configurationJson: terminalType == AdmissionWorkflowStageType.Form
+				? """{"formDefinitionId":"00000000-0000-0000-0000-000000000001","form":{"enabled":true,"version":1}}""" : null);
+
+		var issues = _validator.Validate([entry, terminal], [Transition(workflowId, entry.Id, terminal.Id, 0)]);
+
+		issues.ShouldNotContain(issue => issue.Severity == AdmissionWorkflowValidationSeverity.Error);
+	}
+
+	[Fact]
+	public void Single_form_can_be_both_entry_and_ending()
+	{
+		var form = Stage(Guid.NewGuid(), "REGISTRATION", 0, isEntry: true, isTerminal: true,
+			type: AdmissionWorkflowStageType.Form,
+			configurationJson: """{"formDefinitionId":"00000000-0000-0000-0000-000000000001","form":{"enabled":true,"version":1}}""");
+
+		_validator.Validate([form], []).ShouldNotContain(issue =>
+			issue.Severity == AdmissionWorkflowValidationSeverity.Error);
 	}
 
 	[Fact]
@@ -129,7 +185,7 @@ public class AdmissionWorkflowGraphValidator_Tests
 		var entry = Stage(workflowId, "ENTRY", 0, isEntry: true);
 		var approved = Stage(workflowId, "APPROVED", 1, isTerminal: true);
 		var rejected = Stage(workflowId, "REJECTED", 2, isTerminal: true);
-		var condition = """{ "field": "review.decision", "operator": "Equals", "value": "approve" }""";
+		var condition = """{ "field": "application.status", "operator": "Equals", "value": "Draft" }""";
 		var conditional = Transition(workflowId, entry.Id, approved.Id, 0, condition);
 		var duplicatePriority = Transition(workflowId, entry.Id, rejected.Id, 0, condition);
 		var unconditional = new AdmissionWorkflowTransitionDefinition(
@@ -202,9 +258,7 @@ public class AdmissionWorkflowGraphValidator_Tests
 
 	[Theory]
 	[InlineData(AdmissionWorkflowStageType.Payment)]
-	[InlineData(AdmissionWorkflowStageType.Offer)]
-	[InlineData(AdmissionWorkflowStageType.Seat)]
-	public void Optional_managed_configuration_preserves_basic_stage_behavior(AdmissionWorkflowStageType type)
+	public void Payment_can_omit_retired_manual_collection_configuration(AdmissionWorkflowStageType type)
 	{
 		var workflowId = Guid.NewGuid();
 		var entry = Stage(workflowId, "ENTRY", 0, isEntry: true);
@@ -221,19 +275,19 @@ public class AdmissionWorkflowGraphValidator_Tests
 	[InlineData(AdmissionWorkflowStageType.Form,
 		"{\"form\":{\"enabled\":true,\"version\":1,\"responsibility\":\"nobody\"}}",
 		AdmissionFormStageErrorCodes.InvalidPolicy)]
+	[InlineData(AdmissionWorkflowStageType.Form,
+		"{\"form\":{\"enabled\":false}}",
+		AdmissionWorkflowErrorCodes.InvalidTransition)]
 	[InlineData(AdmissionWorkflowStageType.Review,
 		"{\"review\":{\"enabled\":true,\"version\":2}}",
-		AdmissionReviewErrorCodes.InvalidPolicy)]
-	[InlineData(AdmissionWorkflowStageType.Payment,
-		"{\"payment\":{\"enabled\":true,\"version\":1}}",
-		AdmissionPaymentStageErrorCodes.InvalidPolicy)]
+		AdmissionWorkflowErrorCodes.InvalidTransition)]
 	[InlineData(AdmissionWorkflowStageType.Offer,
 		"{\"offer\":{\"enabled\":true,\"version\":1,\"validityDays\":0}}",
-		AdmissionOfferStageErrorCodes.InvalidPolicy)]
+		AdmissionWorkflowErrorCodes.InvalidTransition)]
 	[InlineData(AdmissionWorkflowStageType.Seat,
 		"{\"seat\":{\"enabled\":true,\"version\":1,\"defaultCapacity\":0}}",
-		AdmissionSeatStageErrorCodes.InvalidPolicy)]
-	public void Rejects_managed_configuration_that_runtime_would_reject(
+		AdmissionWorkflowErrorCodes.InvalidTransition)]
+	public void Publication_rejects_invalid_current_configuration_and_retired_stage_types(
 		AdmissionWorkflowStageType type,
 		string configurationJson,
 		string expectedCode)
@@ -270,20 +324,27 @@ public class AdmissionWorkflowGraphValidator_Tests
 			issue.Severity == AdmissionWorkflowValidationSeverity.Error);
 	}
 
-	[Fact]
-	public void Runtime_unavailable_stage_blocks_publication()
+	[Theory]
+	[InlineData(AdmissionWorkflowStageType.Inquiry)]
+	[InlineData(AdmissionWorkflowStageType.Eligibility)]
+	[InlineData(AdmissionWorkflowStageType.Review)]
+	[InlineData(AdmissionWorkflowStageType.Offer)]
+	[InlineData(AdmissionWorkflowStageType.Seat)]
+	[InlineData(AdmissionWorkflowStageType.Enrollment)]
+	[InlineData(AdmissionWorkflowStageType.Custom)]
+	[InlineData(AdmissionWorkflowStageType.Appointment)]
+	public void Retired_stage_types_block_publication_before_policy_validation(AdmissionWorkflowStageType type)
 	{
 		var workflowId = Guid.NewGuid();
 		var entry = Stage(workflowId, "ENTRY", 0, isEntry: true);
-		var appointment = Stage(workflowId, "APPOINTMENT", 1,
-			isTerminal: true, type: AdmissionWorkflowStageType.Appointment);
+		var appointment = Stage(workflowId, "RETIRED", 1, isTerminal: true, type: type);
 
 		var issues = _validator.Validate(
 			[entry, appointment],
 			[Transition(workflowId, entry.Id, appointment.Id, 1)]);
 
 		issues.ShouldContain(issue =>
-			issue.Code == AdmissionWorkflowErrorCodes.RuntimeHandlerUnavailable &&
+			issue.Code == AdmissionWorkflowErrorCodes.InvalidTransition &&
 			issue.StageId == appointment.Id &&
 			issue.Severity == AdmissionWorkflowValidationSeverity.Error);
 	}
@@ -294,7 +355,7 @@ public class AdmissionWorkflowGraphValidator_Tests
 		int displayOrder,
 		bool isEntry = false,
 		bool isTerminal = false,
-		AdmissionWorkflowStageType type = AdmissionWorkflowStageType.Custom,
+		AdmissionWorkflowStageType type = AdmissionWorkflowStageType.Assessment,
 		bool isRequired = true,
 		bool allowManualSkip = false,
 		string? configurationJson = null) =>

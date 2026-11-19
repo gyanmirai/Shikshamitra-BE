@@ -14,6 +14,7 @@ public sealed record TimetableReportPdfModel
     public string? Address { get; init; }
     public string? ContactNumber { get; init; }
     public byte[]? LogoBytes { get; init; }
+    public byte[]? BannerBytes { get; init; }
     public string StandardName { get; init; } = string.Empty;
     public string DivisionName { get; init; } = string.Empty;
     public DateTime GeneratedAt { get; init; } = DateTime.Now;
@@ -71,6 +72,11 @@ public class TimetableReportPdfService : ITransientDependency
 
     private static void ComposeHeader(IContainer container, TimetableReportPdfModel model)
     {
+        if (model.BannerBytes is { Length: > 0 })
+        {
+            container.MaxHeight(85).Image(model.BannerBytes).FitArea();
+            return;
+        }
         container.Column(col =>
         {
             col.Item().Row(row =>
@@ -81,12 +87,6 @@ public class TimetableReportPdfService : ITransientDependency
                     if (model.LogoBytes is { Length: > 0 })
                     {
                         logoContainer.Image(model.LogoBytes).FitArea();
-                    }
-                    else
-                    {
-                        logoContainer.Border(2).BorderColor(AccentColor).Background(HeaderBg)
-                            .AlignMiddle().AlignCenter()
-                            .Text("LOGO").FontSize(9).Bold().FontColor(AccentColor);
                     }
                 });
 

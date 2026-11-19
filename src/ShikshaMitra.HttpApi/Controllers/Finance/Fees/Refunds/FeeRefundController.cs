@@ -6,6 +6,7 @@ using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HttpApi.Controllers.Finance.FeeRefund;
 
@@ -19,8 +20,8 @@ public class FeeRefundController(
 {
     [HttpGet]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
-    [ProducesResponseType(typeof(PagedResultDto<FeeRefundRequestDto>), StatusCodes.Status200OK)]
-    public Task<PagedResultDto<FeeRefundRequestDto>> GetListAsync([FromQuery] GetFeeRefundsInput input)
+    [ProducesResponseType(typeof(FeeRefundListResultDto), StatusCodes.Status200OK)]
+    public Task<FeeRefundListResultDto> GetListAsync([FromQuery] GetFeeRefundsInput input)
         => feeRefundAppService.GetListAsync(input);
 
     [HttpGet("{id:guid}")]
@@ -29,13 +30,24 @@ public class FeeRefundController(
     public Task<FeeRefundRequestDto> GetAsync([FromRoute] Guid id)
         => feeRefundAppService.GetAsync(id);
 
+    [HttpGet("{id:guid}/receipt/pdf")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
+    [Produces("application/pdf")]
+    public async Task<IActionResult> GetReceiptPdfAsync([FromRoute] Guid id)
+    {
+        var receipt = await feeRefundAppService.GetReceiptPdfAsync(id);
+        return File(receipt.Content, "application/pdf", receipt.FileName);
+    }
+
     [HttpGet("eligibility")]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
     [ProducesResponseType(typeof(RefundEligibilityDto), StatusCodes.Status200OK)]
     public Task<RefundEligibilityDto> GetEligibilityAsync(
-        [FromQuery] Guid studentId,
-        [FromQuery] Guid academicYearId)
-        => feeRefundAppService.GetEligibilityAsync(studentId, academicYearId);
+        [FromQuery] Guid? studentId,
+        [FromQuery] Guid academicYearId,
+        [FromQuery] Guid? financeFeeAccountId = null,
+        [FromQuery] Guid? originalReceiptId = null)
+        => feeRefundAppService.GetEligibilityAsync(studentId, academicYearId, financeFeeAccountId, originalReceiptId);
 
     [HttpPost("preview")]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
@@ -43,6 +55,7 @@ public class FeeRefundController(
         => feeRefundAppService.PreviewAsync(input);
 
     [HttpPost]
+    [UnitOfWork(IsDisabled = true)]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Add)]
     [ProducesResponseType(typeof(FeeRefundRequestDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateAsync([FromBody] CreateFeeRefundRequestDto input)
@@ -85,10 +98,12 @@ public class FeeRefundController(
     public Task<FeeRefundRequestDto> StartReviewAsync(Guid id) => feeRefundAppService.StartReviewAsync(id);
 
     [HttpPost("{id:guid}/approve")]
+    [UnitOfWork(IsDisabled = true)]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve)]
     public Task<FeeRefundRequestDto> ApproveAsync(Guid id, [FromBody] FeeRefundActionDto input) => feeRefundAppService.ApproveAsync(id, input);
 
     [HttpPost("{id:guid}/reject")]
+    [UnitOfWork(IsDisabled = true)]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reject)]
     public Task<FeeRefundRequestDto> RejectAsync(Guid id, [FromBody] RejectFeeRefundDto input) => feeRefundAppService.RejectAsync(id, input);
 
@@ -99,6 +114,30 @@ public class FeeRefundController(
     [HttpPost("{id:guid}/process")]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
     public Task<FeeRefundRequestDto> ProcessAsync(Guid id, [FromBody] ProcessFeeRefundDto input) => feeRefundAppService.ProcessAsync(id, input);
+
+    [HttpPost("{id:guid}/payout")]
+    [UnitOfWork(IsDisabled = true)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Process)]
+    public Task<FeeRefundRequestDto> RecordPayoutAsync(Guid id, [FromBody] RecordRefundPayoutDto input)
+        => feeRefundAppService.RecordPayoutAsync(id, input);
+
+    [HttpPost("{id:guid}/payout/{payoutId:guid}/confirm")]
+    [UnitOfWork(IsDisabled = true)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.VerifyPayout)]
+    public Task<FeeRefundRequestDto> ConfirmPayoutAsync(Guid id, Guid payoutId, [FromBody] ResolveRefundPayoutDto input)
+        => feeRefundAppService.ConfirmPayoutAsync(id, payoutId, input);
+
+    [HttpPost("{id:guid}/payout/{payoutId:guid}/fail")]
+    [UnitOfWork(IsDisabled = true)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.FailPayout)]
+    public Task<FeeRefundRequestDto> FailPayoutAsync(Guid id, Guid payoutId, [FromBody] ResolveRefundPayoutDto input)
+        => feeRefundAppService.FailPayoutAsync(id, payoutId, input);
+
+    [HttpPost("{id:guid}/payout/return")]
+    [UnitOfWork(IsDisabled = true)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reverse)]
+    public Task<FeeRefundRequestDto> ReturnPayoutAsync(Guid id, [FromBody] ReturnRefundPayoutDto input)
+        => feeRefundAppService.ReturnPayoutAsync(id, input);
 
     [HttpPost("{id:guid}/reverse")]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reverse)]

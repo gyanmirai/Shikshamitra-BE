@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -74,66 +75,51 @@ public class AttendanceManager : DomainService
 	/// </summary>
 	public async Task MarkAttendanceAsync(
 		Guid attendanceDayId,
-		List<AttendanceEntryInput> entries)
+		List<AttendanceEntryInput> entries, bool approvedCorrection = false)
 	{
 		var attendanceDay = await _attendanceDayRepository.GetAsync(attendanceDayId);
 
 		// Ensure the day is not locked
-		attendanceDay.EnsureNotLocked();
+		if (!approvedCorrection) attendanceDay.EnsureNotLocked();
 
 		var userId = _currentUser.Id ?? throw new BusinessException("SM:UserNotAuthenticated");
 
 		// Update the marked by user
 		attendanceDay.UpdateMarkedByUser(userId);
 
-		foreach (var entry in entries)
+		// Read the day's entries once instead of querying once per student.
+		var existing = (await _attendanceEntryRepository.GetListAsync(e => e.AttendanceDayId == attendanceDayId))
+			.ToDictionary(e => e.StudentId);
+		var inserts = new List<AttendanceEntry>();
+		var updates = new List<AttendanceEntry>();
+		foreach (var input in entries)
 		{
-			await UpsertAttendanceEntryAsync(
-				attendanceDayId,
-				entry.StudentId,
-				entry.Status,
-				userId,
-				entry.Remarks);
+			if (existing.TryGetValue(input.StudentId, out var entry))
+			{
+				entry.UpdateStatus(input.Status, userId);
+				entry.SetRemarks(input.Remarks);
+				ApplyDetails(entry, input);
+				updates.Add(entry);
+			}
+			else
+			{
+				entry = new AttendanceEntry(_guidGenerator.Create(), CurrentTenant.Id, attendanceDayId,
+					input.StudentId, input.Status, userId, input.Remarks);
+				ApplyDetails(entry, input);
+				inserts.Add(entry);
+			}
 		}
+		if (inserts.Count > 0) await _attendanceEntryRepository.InsertManyAsync(inserts);
+		if (updates.Count > 0) await _attendanceEntryRepository.UpdateManyAsync(updates);
 
 		await _attendanceDayRepository.UpdateAsync(attendanceDay, autoSave: true);
 	}
 
-	/// <summary>
-	/// Upserts a single attendance entry
-	/// </summary>
-	private async Task UpsertAttendanceEntryAsync(
-		Guid attendanceDayId,
-		Guid studentId,
-		AttendanceStatus status,
-		Guid markedByUserId,
-		string? remarks)
+	private static void ApplyDetails(AttendanceEntry entry, AttendanceEntryInput input)
 	{
-		var existingEntry = await _attendanceEntryRepository.FindByAttendanceDayAndStudentAsync(
-			attendanceDayId,
-			studentId);
-
-		if (existingEntry != null)
-		{
-			// Update existing entry
-			existingEntry.UpdateStatus(status, markedByUserId);
-			existingEntry.SetRemarks(remarks);
-			await _attendanceEntryRepository.UpdateAsync(existingEntry);
-		}
-		else
-		{
-			// Create new entry
-			var newEntry = new AttendanceEntry(
-				_guidGenerator.Create(),
-				CurrentTenant.Id,
-				attendanceDayId,
-				studentId,
-				status,
-				markedByUserId,
-				remarks);
-
-			await _attendanceEntryRepository.InsertAsync(newEntry);
-		}
+		if (input.EnrollmentId.HasValue)
+			entry.SetDailyDetails(input.EnrollmentId.Value, input.Date, input.Late, input.HalfDay,
+				input.PresentCredit, input.ExcludedFromPercentage, input.ApprovedLeaveId, input.PolicyJson, input.HistoricalRollNo, input.DenominatorCredit);
 	}
 
 	/// <summary>
@@ -179,5 +165,15 @@ public class AttendanceManager : DomainService
 		public Guid StudentId { get; set; }
 		public AttendanceStatus Status { get; set; }
 		public string? Remarks { get; set; }
+		public Guid? EnrollmentId { get; set; }
+		public DateTime Date { get; set; }
+		public bool Late { get; set; }
+		public bool HalfDay { get; set; }
+		public double? PresentCredit { get; set; }
+		public bool ExcludedFromPercentage { get; set; }
+		public Guid? ApprovedLeaveId { get; set; }
+		public string PolicyJson { get; set; } = "{}";
+		public int? HistoricalRollNo { get; set; }
+		public double DenominatorCredit { get; set; } = 1;
 	}
 }

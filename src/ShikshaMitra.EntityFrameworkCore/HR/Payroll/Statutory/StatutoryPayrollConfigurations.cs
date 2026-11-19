@@ -8,6 +8,7 @@ public class StatutoryRuleVersionConfiguration : IEntityTypeConfiguration<Statut
 {
 	public void Configure(EntityTypeBuilder<StatutoryRuleVersion> builder)
 	{
+		builder.Property(x => x.EmployeeShareDailyWageExemption).HasPrecision(18, 2).HasDefaultValue(176m);
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StatutoryRuleVersions", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 		builder.Property(x => x.SchemeCode).IsRequired().HasMaxLength(20);
@@ -22,7 +23,11 @@ public class StatutoryRuleVersionConfiguration : IEntityTypeConfiguration<Statut
 		builder.Property(x => x.EffectiveTo).HasColumnType("date");
 		builder.Property(x => x.SourceUrl).IsRequired().HasMaxLength(1000);
 		builder.Property(x => x.SourceVerifiedOn).HasColumnType("date");
-		builder.HasIndex(x => new { x.TenantId, x.SchemeCode, x.JurisdictionCode, x.Version }).IsUnique();
+		builder.HasIndex(x => new { x.TenantId, x.SchemeCode, x.JurisdictionCode, x.Version }).IsUnique().HasFilter("\"EsiPolicyId\" IS NULL");
+		builder.Property(x => x.CalculationSettingsJson).HasColumnType("jsonb");
+		builder.HasOne<EsiPolicy>().WithMany().HasForeignKey(x => x.EsiPolicyId).OnDelete(DeleteBehavior.Restrict);
+		builder.HasIndex(x => new { x.TenantId, x.EsiPolicyId, x.EffectiveFrom }).IsUnique().HasFilter("\"EsiPolicyId\" IS NOT NULL AND \"IsDeleted\" = false");
+		builder.HasIndex(x => new { x.TenantId, x.EsiPolicyId, x.Version }).IsUnique().HasFilter("\"EsiPolicyId\" IS NOT NULL");
 		builder.HasIndex(x => new { x.TenantId, x.SchemeCode, x.EffectiveFrom, x.IsActive });
 	}
 }

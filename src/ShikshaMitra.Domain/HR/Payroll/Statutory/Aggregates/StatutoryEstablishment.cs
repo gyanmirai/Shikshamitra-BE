@@ -64,6 +64,8 @@ public class StatutoryEstablishment : FullAuditedAggregateRoot<Guid>, IMultiTena
 		ConfirmedAt = confirmedAt;
 	}
 
+	internal void EnablePlatformCalculation() => Status = StatutoryEstablishmentStatus.Active;
+
 	public void Suspend()
 	{
 		Status = StatutoryEstablishmentStatus.Suspended;

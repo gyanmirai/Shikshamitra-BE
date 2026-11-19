@@ -34,7 +34,7 @@ public class WorkCalendarPolicyReader(
 
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query
-			.OrderBy(x => x.Name)
+			.OrderBy(x => x.Name).ThenBy(x => x.Id)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
 

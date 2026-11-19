@@ -60,7 +60,7 @@ public class AdmissionReviewCommandService(AdmissionReviewAccessService access, 
 		await decisionGuard.RecordDecisionAsync(state, "requestCorrection", input.Reason);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		await forms.ReopenAsync(applicationId);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "AdmissionReviewCorrectionRequested",
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("AdmissionReviewCorrectionRequested",
 			input.Reason, context.Application.ApplicantId, applicationId), false);
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}
@@ -75,7 +75,7 @@ public class AdmissionReviewCommandService(AdmissionReviewAccessService access, 
 		work.Record(status == "assignment" ? "draft" : status);
 		await workItems.UpdateAsync(work, false);
 		await applications.UpdateAsync(state.Context.Application, false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "AdmissionReviewRecorded",
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("AdmissionReviewRecorded",
 			$"Review {status} recorded for {state.Context.Stage.Name}.", state.Context.Application.ApplicantId, state.Context.Application.Id), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 	}

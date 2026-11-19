@@ -13,7 +13,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Application.Communication;
 
-public class CommunicationAppService : ApplicationService, ICommunicationAppService
+public partial class CommunicationAppService : ApplicationService, ICommunicationAppService
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
 	{
@@ -166,6 +166,11 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Add,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.Add);
 
+		return await CreateCampaignCoreAsync(input);
+	}
+
+	private async Task<CommunicationCampaignDto> CreateCampaignCoreAsync(CreateUpdateCommunicationCampaignDto input)
+	{
 		var campaign = new CommunicationCampaign(GuidGenerator.Create(), CurrentTenant.Id);
 		ApplyCampaignInput(campaign, input);
 
@@ -186,6 +191,7 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 	public async Task<CommunicationCampaignDto> UpdateCampaignAsync(Guid id, CreateUpdateCommunicationCampaignDto input)
 	{
 		var campaign = await _campaignRepository.GetAsync(id);
+		if (campaign.SourceEntityType == ParentRegistrationSource) throw new BusinessException("Communication:IntegrationCampaignReadOnly");
 		await CheckCampaignPolicyAsync(
 			campaign.CampaignType,
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Add,
@@ -302,6 +308,13 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Send,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.Send);
 
+		return await PublishCampaignCoreAsync(campaign);
+	}
+
+	private async Task<CommunicationCampaignDto> PublishCampaignCoreAsync(CommunicationCampaign campaign, string? privateLink = null)
+	{
+		if (campaign.SourceEntityType == ParentRegistrationSource && privateLink == null)
+			throw new BusinessException("Communication:UseParentRegistrationDelivery");
 		if (campaign.PublishedAt.HasValue || await HasCampaignHistoryAsync(campaign.Id))
 		{
 			throw new BusinessException("Communication:CampaignAlreadyPublished");
@@ -321,6 +334,8 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 				.WithData("Issues", string.Join("; ", resolution.BlockingIssues));
 		}
 
+		if (campaign.SourceEntityType == ParentRegistrationSource && (resolution.Recipients.Count != 1 || resolution.Recipients[0].Email != audience.ExplicitRecipients.Single().Email ||
+			resolution.Recipients[0].RecipientId != audience.ExplicitRecipients.Single().RecipientId)) throw new BusinessException("Communication:RecipientChanged");
 		if (resolution.Recipients.Count == 0)
 		{
 			throw new BusinessException("Communication:AudienceEmpty");
@@ -333,6 +348,11 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 		}
 
 		var providers = await GetEnabledProvidersAsync(channels);
+		if (campaign.SourceEntityType == ParentRegistrationSource && !providers.ContainsKey(CommunicationChannelType.Email))
+		{
+			var schoolEmail = await ParentRegistrationEmailProviderAsync();
+			if (schoolEmail != null) providers[CommunicationChannelType.Email] = schoolEmail;
+		}
 		var missingProviderChannels = channels.Where(channel => !providers.ContainsKey(channel)).ToList();
 		if (missingProviderChannels.Count > 0)
 		{
@@ -369,6 +389,11 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 				{
 					MarkAttemptSkipped(attempt, "DESTINATION_MISSING", "Recipient does not have a usable destination for this channel.");
 				}
+				else if (campaign.SourceEntityType is InquiryQualificationSource or ParentRegistrationSource &&
+					await HasWithdrawnInquiryConsentAsync(recipient, channel, attempt.Destination))
+				{
+					MarkAttemptSkipped(attempt, "CONSENT_WITHDRAWN", "Recipient withdrew consent for inquiry notifications.");
+				}
 				else if (provider.ConsentRequired && !await HasOptedInConsentAsync(recipient, channel, attempt.Destination))
 				{
 					MarkAttemptSkipped(attempt, "CONSENT_REQUIRED", "Recipient has no opt-in consent for this channel destination.");
@@ -384,7 +409,10 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 						Destination = attempt.Destination,
 						Subject = campaign.Subject,
 						Body = campaign.Body,
-						LinkUrl = campaign.LinkUrl,
+						HtmlBody = campaign.SourceEntityType == ParentRegistrationSource && privateLink != null &&
+							string.Equals(provider.ProviderName.Trim(), "SMTP", StringComparison.OrdinalIgnoreCase)
+							? ParentRegistrationEmailContent.Html(recipient.DisplayName, campaign.SourceReference, privateLink) : null,
+						LinkUrl = privateLink ?? campaign.LinkUrl,
 						LanguageCode = recipient.PreferredLanguageCode.IsNullOrWhiteSpace() ? campaign.LanguageCode : recipient.PreferredLanguageCode,
 						AttemptNumber = attempt.AttemptNumber
 					});
@@ -427,12 +455,7 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 		campaign.QueuedCount = attempts.Count(x => x.Status == CommunicationDeliveryStatus.Queued);
 		campaign.DeliveredCount = attempts.Count(x => x.Status == CommunicationDeliveryStatus.Delivered);
 		campaign.FailedCount = attempts.Count(x => x.Status is CommunicationDeliveryStatus.Failed or CommunicationDeliveryStatus.Bounced or CommunicationDeliveryStatus.Skipped);
-		campaign.Status = campaign.QueuedCount switch
-		{
-			> 0 when campaign.FailedCount > 0 => CommunicationCampaignStatus.PartiallyFailed,
-			> 0 => CommunicationCampaignStatus.Queued,
-			_ => CommunicationCampaignStatus.Failed
-		};
+		campaign.Status = CommunicationCampaignDeliveryStatusResolver.Resolve(attempts.Select(attempt => attempt.Status));
 
 		await _campaignRepository.UpdateAsync(campaign, autoSave: true);
 		return MapCampaign(campaign);
@@ -1349,7 +1372,8 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 
 	private ICommunicationChannelGateway GetGateway(CommunicationChannelType channel, string providerName)
 	{
-		return _channelGateways.FirstOrDefault(x => x.CanHandle(channel, providerName))
+		return _channelGateways.FirstOrDefault(x => x is not QueueOnlyCommunicationChannelGateway && x.CanHandle(channel, providerName))
+			?? _channelGateways.FirstOrDefault(x => x.CanHandle(channel, providerName))
 			?? throw new BusinessException("Communication:GatewayMissing")
 				.WithData("Channel", channel.ToString())
 				.WithData("ProviderName", providerName);

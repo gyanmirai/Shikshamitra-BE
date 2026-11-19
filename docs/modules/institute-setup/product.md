@@ -3,15 +3,92 @@ module: institute-setup
 domain: product
 content_type: Conceptual
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-11-03
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Understand Institute Setup product behavior
 
-TL;DR: the active Institute Setup docs describe Rooms Management.
+TL;DR: Institute Setup owns durable first-login configuration and Rooms Management.
 Rooms Management stores buildings, floors, room types, and rooms used by academic scheduling and operations.
+
+## Academic dates and calendars
+
+Saving board dates synchronizes the start and end dates of its non-archived medium calendars in the same unit of work, including published calendars and legacy calendars without a year ID. Saving unchanged board dates also repairs stale calendar ranges. Other boards, years and tenants are excluded; archived calendars retain their historical dates.
+
+An extension generates configured weekend holidays only for newly included dates. Existing calendar entries and deliberately removed weekends within the old range are preserved.
+
+When an academic year's dates change, boards whose full range matched the previous year inherit the new range. Custom board ranges remain unchanged and must fit the new year. Active calendar entries must fit the resulting calendar range; shortening dates is rejected before any date changes when it would exclude an entry. Entries are never deleted or moved automatically. Calendar date changes produce a structured CalendarUpdated audit entry and preserve the calendar's status, identity and publication details.
+
+## Academic field formatting
+
+Each school can choose Default, Capitalize each word, camelCase, PascalCase, or Uppercase independently for new medium, stage, standard, and division names.
+Default preserves the current name-entry behavior; existing trimming and validation still apply.
+Uppercase converts letters with .NET invariant casing without changing internal whitespace; existing entity trimming and validation still apply.
+The server formats the raw name once during creation, before duplicate and entity-length checks.
+Changing a rule never rewrites saved records, and update/read paths do not apply the current rule to historical names.
+CBSE and GSEB keep their canonical spelling; the board rule is fixed to Default.
+Rules belong to the current tenant, are independent of academic year, and persist through ABP setting management without a schema migration.
+The [API guide](api.md#academic-field-formatting) owns payloads, permissions, and validation.
+Initial setup retries reuse an exact raw-name match first, then the current formatted name, then the remaining supported case representations within the same parent.
+This deterministic lookup preserves legacy names and retries after rule changes without renaming reused records.
+
+## Academic hierarchy order
+
+Schools can save a display order for stages within a medium, classes within a stage and divisions within a class.
+Saved order controls default hierarchy and selection-list reads independently of creation time; newly created records append.
+Reordering changes positions only and requires Academic Setup Edit plus access to the complete sibling group in the active tenant.
+An incomplete, duplicated or unrelated sequence is rejected atomically.
+The [API guide](api.md#academic-hierarchy-order) owns endpoint contracts and rollout requirements.
+
+## Reports
+
+The report catalogue contains academic hierarchy, class division summary, division configured capacity/room mapping, rooms/buildings inventory, shifts, School Documents metadata/counts and School Identity configuration/counts. Hierarchy reports require an academic year and intersect effective UserScope before preview pagination. Class summaries group by class ID and count distinct permitted divisions, including zero when the class is visible; labels and scope summaries explicitly identify permitted counts. Filtering a specific division before counting is rejected. Rooms, shifts and documents are tenant-wide catalogues accessed through their source read permissions; they do not require academic selection. Capacity is configuration, not enrolment or occupancy. Room references resolve only against rooms in the active tenant; unresolved legacy references remain labelled. Student and staff datasets are excluded.
+
+Reports require `InstituteSetup.Reports.View`; generation and AI operations additionally require `.Add`. Catalogue options and data queries also check source-area View grants. Signature configuration additionally requires `InstituteSetup.SchoolIdentity.AccessSignature`. There are no report Edit/Delete operations or automatic permission grants. Host context is rejected. History, status and downloads are private to the requesting tenant/user, with current source grants rechecked. Academic and identity downloads require an unchanged effective scope stamp; changed scope requires regeneration.
+
+Jobs preserve the approved request and move from Queued through Processing to Completed or Failed. Files expire after seven days, and the hourly retention worker removes expired blobs and marks jobs stalled for an hour as failed. Retrying creates a new job. AI supplies only a validated catalogue plan, never executable SQL. Approval tokens bind user, tenant and exact plan for 30 minutes. Manual reports remain available when AI is unavailable.
+
+Shift reports include the server-calculated `totalHours` column. It is elapsed decimal hours rounded to two places without break deductions. An end time earlier than the start belongs to the next day; equal times mean zero hours. Preview, numeric conditions/sorting and generated PDF/Excel/CSV all use the same calculation. Calculated fields must be explicitly supported in the catalogue; user or AI expressions are never executed.
+
+School document counts distinguish active library entries from their active attachments, include zero-count categories and an All categories total, and can filter category before aggregation. Deleted entries/files and other tenants are excluded. Registers expose names, categories, file metadata, uploader, notes and dates; no attachment bytes or blob keys are read.
+
+Identity reports list saved profiles and count them by school/board/medium/organization scope, with custom logo/letterhead selection counts. They reuse the canonical School Identity read-scope policy, include readable school defaults, and permit optional year/board/medium/organization filters. A year filter excludes year-independent school defaults. Counts describe saved configuration, not effective inherited assets. Ordinary identity reports omit signature fields; the separately protected signature report exposes saved selection/principal/designation metadata only. No images or signature bytes are included.
+
+## School Documents
+
+Each tenant has a whole-school document library. Records are independent of academic year, board and medium; an explicitly assigned View grant permits reading this tenant-wide collection. Academic hierarchy scope is not an additional filter for these school-level records. Host context and cross-tenant references are rejected.
+
+Each record requires a name (200 characters maximum), category and 1-5 attachments; notes are optional (2000 characters maximum). Categories are Government Approval, Permission / NOC, Board Affiliation, Registration and Other. Accept PDF/JPG/JPEG/PNG only, up to 5 MiB per file, with matching extension, MIME and file signature. Names and storage keys are sanitized/generated by the server.
+
+View permits list/detail, preview and download. Add requires View and permits create/update. Delete requires View and permits record deletion; removing saved files during an edit additionally requires Delete. Existing roles are never silently granted access. Navigation visibility is independent of all actions.
+
+Creation and updates store metadata and private database blobs in the same transactional unit of work. Every save, including attachment-only changes, advances the parent concurrency stamp. Stale writes cannot change metadata or attachments. Deleting records or removing attachments uses audited soft deletion, retaining bytes while blocking ordinary file access. There is no restore or permanent purge UI in this version.
+
+Expiry/reminder tracking, renewals, verification and academic hierarchy links are outside this feature. Categories are organizational labels, not a claim that a particular authority requires them.
+
+## School Identity
+
+Initial setup includes optional School Identity after Users and Access and before Review. Continuing without assets requires only the existing setup permissions. Asset reads, uploads and saves retain the School Identity permissions and scope rules; setup access grants no extra identity access. Identity is saved in the existing school-default profile, independently of the setup draft. Missing assets are not a completion requirement. Existing completed schools remain completed; unfinished schools at the former review step can continue through the optional step without re-entering earlier data. No schema migration is required.
+
+School Identity has no Delete permission or profile deletion endpoint. Its action catalogue contains View, ManageDefaults, ManageOverrides and AccessSignature. The shared permission editor keeps Delete disabled by design; this is working as intended. Use configuration updates to hide an asset or reset an override to Inherit. These changes preserve revision history and retained files referenced by issued documents.
+
+School defaults supply logos, letterheads and principal signatures across one tenant. Board, board/medium and organization (academic stage) profiles override individual assets. Resolution is organization override, medium override, board override, then school default. Hidden stops inheritance; resetting to Inherit restores it. Signature image, principal name and designation resolve as one selection.
+
+Defaults are independent of academic year. Scoped profiles follow year-specific boards. Explicit cross-year copying maps one source to one target of the same level, preserves custom/hidden/inherited choices and reuses immutable files. Default changes do not replace custom overrides.
+
+Management scope must cover the whole selected board, medium or organization. A user assigned one complete stage can manage that organization's images and read inherited parent identity, but cannot manage its parent medium or access sibling organization overrides. Read responses expose that restriction as a capability.
+
+PNG/JPEG content is decoded and validated. Limits are 2 MB logo, 5 MB banner and 1 MB signature, with bounded dimensions/pixel count. Files remain drafts until saved configuration or templates reference them. Hourly cleanup reserves unretained drafts older than seven days atomically. Retained assets are never cleanup candidates; concurrent retention of a reserved draft is rejected.
+
+Certificates and issued student ID cards capture asset IDs and signer details in their existing snapshots. Reprints use those snapshots. Timetables, staff cards and academic PDF exports resolve their context; multi-context exports use common board or school defaults. Ordinary reports do not receive principal signatures. A banner replaces the generated school letterhead.
+
+Templates can inherit, use custom assets or omit supported assets. Existing custom certificate values and staff-logo references stay intact until replaced. Certificate options merge per asset; redacted signatures survive unrelated edits. Historical documents without identity snapshots retain their original behavior.
+
+Legacy tenant Logo, Banner and PrincipleSign images are imported idempotently by the data migrator when no school-default profile exists. Original properties are preserved. Invalid assets remain for administrator review; imported principal details require review. Migration does not grant or restore permissions.
+
+Legacy organization banners are imported by `OrganizationIdentityLegacyMigrationContributor` only when the organization has no identity profile. Original stage bytes are preserved; unsupported or invalid images are logged for review. Rerunning the importer never overwrites configured choices.
 
 ## Active product areas
 
@@ -19,6 +96,7 @@ This table names the curated Institute Setup surface.
 
 | Area | Owns | Primary source |
 |---|---|---|
+| Initial setup | Profile, academic foundation, optional staff and audited completion | `TenantSettings/InitialSetup/**` |
 | Buildings | Building records and floors | `TenantSettings/RoomsManagement/Buildings/**` |
 | Room types | Room type labels and limits | `TenantSettings/RoomsManagement/RoomTypes/**` |
 | Rooms | Room identity, capacity, benches, building, floor, type, and features | `TenantSettings/RoomsManagement/Rooms/**` |
@@ -32,7 +110,14 @@ Rooms Management changes must preserve these rules.
 | A room must reference valid building and room type records | Timetable and exam assignments depend on those links |
 | Capacity and benches must remain valid numeric values | Scheduling and room allocation use them |
 | Building floor data must stay consistent with room floor data | Staff need a reliable physical location map |
+| Creating or moving a room must fit the selected floor's configured room limit | A full floor needs a building configuration update before another room can be added |
+| A floor's room limit cannot fall below its saved room count | Building edits cannot invalidate existing room assignments |
 | Delete behavior must respect downstream references | Timetable and examination flows may reference rooms |
+
+An existing room can be edited on a full floor because its own place is excluded from the capacity check.
+Saved room counts belong to the active tenant and are returned with building floor details.
+PostgreSQL room placements, building updates and building deletions lock the same tenant-owned building row until their transaction commits, serializing limit checks with the writes they protect and keeping the parent-before-floor lock order consistent.
+Room limits count room records; they are separate from a room's student seating capacity.
 
 ## Known partial surfaces
 
@@ -43,5 +128,44 @@ Use source inspection for Academic Setup, shift management, organization options
 |---|---|
 | Rooms Management | Curated in this module doc set |
 | Academic Setup | Source-backed only in this compact pass |
-| Shift Management | Source-backed only in this compact pass |
-| Tenant setup state | Source-backed only in this compact pass |
+| Shift Management | Tenant isolation rules documented below |
+| Initial setup progress | Curated in this module doc set |
+
+## Shift ownership
+
+Shifts belong to the active server tenant. Schools cannot list, read, change, delete or assign another school's shift. Standard writes validate ownership before accepting a shift reference. Null shift references remain optional.
+
+Migration `20261014063540_AddShiftTenantIsolation` adds nullable ownership and its index. The old aggregate had neither tenant ownership nor creator audit fields. Existing employee and class references could have been created through the leak, so the migration does not infer an owner from them. Legacy rows and references are preserved with null ownership and are hidden from schools until an operator verifies ownership and performs an approved audited repair. Do not reseed or assign all rows to DDVS as a repair.
+
+Apply the migration before deploying the updated backend. Review unresolved legacy references before resuming shift-dependent attendance and payroll operations.
+
+## Initial setup rules
+
+Each institute has one tenant-scoped progress aggregate.
+Its current step, furthest step, draft, selected year/division, concurrency stamp and completion audit persist on the backend.
+Steps are Welcome (0), Profile (1), Academic year (2), Structure (3), Users (4), Review (5) and Complete (6).
+
+| Rule | Behavior |
+| --- | --- |
+| Draft versus confirmation | Draft saves may be incomplete; profile, year and structure saves validate real records before confirming a step |
+| Revisiting earlier steps | Preserve later work; mark changed confirmed sections as pending until saved again |
+| Changing year | Clear the selected division and require a structure for the new year |
+| Academic foundation | Require an ordered year and a tenant-coherent board / medium / stage / class / positive-capacity division |
+| Initial administrator | Reuse the administrator provisioned with the tenant; completion requires an active current administrator |
+| Additional staff | Optional, requires the exact Identity User Create permission; limited to 32 setup-created summaries |
+| Credentials | Passwords are validated by Identity and excluded from drafts, responses and setup-user input auditing |
+| Retry | User request IDs prevent duplicate creation; reuse with a different username/email is rejected |
+| Concurrent editing | A stale stamp returns a conflict and cannot overwrite another administrator's work |
+| Completion | Require review, confirmed changes and valid real configuration; record completion time and user; repeated completion is idempotent |
+
+New host tenant provisioning creates blank setup progress without demo academic data.
+The migration preserves explicit legacy completion and operational institutes without a legacy marker when a complete tenant-owned academic branch exists.
+Incomplete legacy markers remain incomplete.
+Setup does not restore grants, seed removed permissions or overwrite credentials.
+
+## School shifts and HR
+
+School shifts continue to describe academic sessions and class scheduling.
+Editing or deleting a school shift cannot change employee work schedules.
+Only class dependencies prevent school-shift deletion.
+Employee assignment and attendance behavior belongs to [HR](../hr/product.md#employee-work-shifts).

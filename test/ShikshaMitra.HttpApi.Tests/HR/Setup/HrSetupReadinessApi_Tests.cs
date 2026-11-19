@@ -98,11 +98,18 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 		var school = await SeedAsync(complete: true, coverage: false);
 		using var client = As(school);
 		var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata"));
-		var response = await client.PutAsJsonAsync("/api/payroll/pf-rules/coverage", new SavePfCoverageDto {
-			EffectiveMonth = new(now.Year, now.Month, 1), IsCovered = covered,
-			EvidenceReference = "Synthetic setup coverage decision", IdempotencyKey = Guid.NewGuid()
-		});
+		const string coverageUrl = "/api/payroll/pf-rules/coverage";
+		var month = new DateTime(now.Year, now.Month, 1);
+		var key = Guid.NewGuid();
+		var input = new { EffectiveMonth = month, IsCovered = covered, IdempotencyKey = key };
+		var response = covered
+			? await client.PutAsJsonAsync(coverageUrl, new { input.EffectiveMonth, input.IsCovered, input.IdempotencyKey, EvidenceReference = " PF-123/ABC " })
+			: await client.PutAsJsonAsync(coverageUrl, input);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var saved = await response.Content.ReadFromJsonAsync<PfCoverageSettingsDto>();
+		saved!.History.Single().EvidenceReference.ShouldBe(covered ? "PF-123/ABC" : string.Empty);
+		if (!covered)
+			(await client.PutAsJsonAsync(coverageUrl, input)).StatusCode.ShouldBe(HttpStatusCode.OK);
 		(await GetAsync(client, school.Year)).IsReady.ShouldBeTrue();
 	}
 

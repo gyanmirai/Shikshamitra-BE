@@ -14,15 +14,17 @@ public class PfCoverageConfiguration : FullAuditedAggregateRoot<Guid>, IMultiTen
 	public string RequestKey { get; private set; } = string.Empty;
 	public string EvidenceReference { get; private set; } = string.Empty;
 	protected PfCoverageConfiguration() { }
-	public PfCoverageConfiguration(Guid id, Guid? tenantId, DateTime effectiveMonth, bool covered, string evidence, string requestKey) : base(id)
+	public PfCoverageConfiguration(Guid id, Guid? tenantId, DateTime effectiveMonth, bool covered, string? evidence, string requestKey) : base(id)
 	{
-		if (effectiveMonth.Day != 1 || effectiveMonth.Year < 2000)
+		var evidenceReference = evidence?.Trim() ?? string.Empty;
+		if (effectiveMonth.Day != 1 || effectiveMonth.Year < 2000 ||
+			evidenceReference.Length > 1000 || (covered && evidenceReference.Length == 0))
 			throw new BusinessException("HR:Payroll:PfCoverageConfigurationInvalid");
 		TenantId = tenantId;
 		EffectiveMonth = effectiveMonth.Date;
 		IsCovered = covered;
 		RequestKey = Check.NotNullOrWhiteSpace(requestKey, nameof(requestKey), 32);
-		EvidenceReference = Check.NotNullOrWhiteSpace(evidence, nameof(evidence), 1000).Trim();
+		EvidenceReference = evidenceReference;
 	}
 	public void Cancel() => IsCancelled = true;
 }

@@ -37,11 +37,12 @@ public class PfCoverageAppService(IRepository<PfCoverageConfiguration, Guid> con
 			throw new BusinessException("HR:Payroll:PfCoveragePastMonth");
 		await inputRevisions.LockAsync();
 		var key = input.IdempotencyKey.ToString("N");
+		var evidenceReference = input.EvidenceReference?.Trim() ?? string.Empty;
 		var replay = await configurations.FindAsync(x => x.RequestKey == key);
 		if (replay != null)
 		{
 			if (replay.IsCovered != input.IsCovered || replay.EffectiveMonth != input.EffectiveMonth.Date ||
-				replay.EvidenceReference != input.EvidenceReference.Trim())
+				replay.EvidenceReference != evidenceReference)
 				throw new BusinessException("HR:Payroll:PfCoverageSaveConflict");
 			return await ReadAsync();
 		}
@@ -54,7 +55,7 @@ public class PfCoverageAppService(IRepository<PfCoverageConfiguration, Guid> con
 			await configurations.UpdateAsync(current, autoSave: true);
 		}
 		await configurations.InsertAsync(new PfCoverageConfiguration(GuidGenerator.Create(), CurrentTenant.Id,
-			input.EffectiveMonth, input.IsCovered, input.EvidenceReference, key));
+			input.EffectiveMonth, input.IsCovered, evidenceReference, key));
 		await periods.InvalidateAsync(input.EffectiveMonth, null);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		return await ReadAsync();

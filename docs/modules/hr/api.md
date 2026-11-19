@@ -599,6 +599,8 @@ Employee and employer PF amounts round independently to the nearest whole rupee,
 `GET /api/payroll/pf-rules/coverage` requires `HR.PayrollManagement.Settings.PfRule.View` and returns immutable configuration history and `hasSchoolWideScope`.
 `PUT` requires `HR.PayrollManagement.Settings.PfRule.Add` and school-wide UserScope.
 Its payload contains `effectiveMonth` (first day of the current or a future month), `isCovered`, `evidenceReference`, `expectedConfigurationId`, and `idempotencyKey`.
+`evidenceReference` carries the PF establishment number for a covered school as nonblank text of up to 1000 characters.
+For `isCovered: false`, callers may omit the reference and history returns an empty string when none was provided.
 Identical retries reuse the saved outcome; stale version IDs and changed retry payloads return 409.
 
 ESIC configuration save accepts `effectiveMonth` (`yyyy-MM`) and `calculationSettings` in addition to the existing configuration fields.

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Constants.Permissions;
@@ -20,6 +21,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.TenantManagement;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.Timetable.Timetables;
 
@@ -42,7 +44,8 @@ public partial class TimetableAppService(
     ITenantRepository tenantRepository,
     IRepository<Employee, Guid> employeeRepository,
     IUserScopeAccessService userScopeAccessService,
-    SchoolIdentityDocumentService schoolIdentity
+    SchoolIdentityDocumentService schoolIdentity,
+    TimetableNotificationDelivery notificationDelivery
 ) : ApplicationService, ITimetableAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
@@ -539,10 +542,12 @@ public partial class TimetableAppService(
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
-    public async Task SaveAsync(Guid standardId, Guid divisionId, SaveTimetableDto input)
+    [UnitOfWork(true)]
+    public virtual async Task SaveAsync(Guid standardId, Guid divisionId, SaveTimetableDto input)
     {
         await EnsureCurrentUserCanAccessAsync(standardId, divisionId, "timetable-save");
         var timetable = await timetableRepository.FindByStandardAndDivisionAsync(standardId, divisionId);
+        var isNew = timetable == null;
 
         if (timetable is null)
         {
@@ -553,6 +558,8 @@ public partial class TimetableAppService(
                 divisionId);
         }
 
+        var previousStatus = timetable.Status;
+        var previousSchedule = previousStatus == TimetableStatus.Published ? TimetableNotificationTransition.Schedule(timetable) : [];
         ReplaceSlotsFromInput(timetable, input);
 
         await EnsureNoTeacherOrRoomConflictsAsync(timetable);
@@ -567,14 +574,16 @@ public partial class TimetableAppService(
             timetable.SaveAsDraft();
         }
 
-        if (timetable.Id == Guid.Empty || await timetableRepository.FindAsync(timetable.Id) is null)
+        var transition = TimetableNotificationTransition.Record(timetable, previousStatus, previousSchedule);
+        if (isNew)
         {
-            await timetableRepository.InsertAsync(timetable);
+            await timetableRepository.InsertAsync(timetable, autoSave: transition != null);
         }
         else
         {
-            await timetableRepository.UpdateAsync(timetable);
+            await timetableRepository.UpdateAsync(timetable, autoSave: transition != null);
         }
+        await notificationDelivery.CaptureAsync(timetable.Id, transition, CurrentUser.Id);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]

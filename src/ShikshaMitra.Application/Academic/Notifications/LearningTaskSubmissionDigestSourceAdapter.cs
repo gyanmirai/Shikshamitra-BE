@@ -74,7 +74,7 @@ public sealed class LearningTaskSubmissionDigestSourceAdapter(LearningTaskNotifi
 	}
 
 	private async Task<Dictionary<Guid, int>> CountAsync(NotificationIntentContext context, IReadOnlyList<ScopedWindow> windows,
-		IReadOnlyList<LearningTaskNotificationLearner> students, bool isAssignment, CancellationToken cancellationToken)
+		IReadOnlyList<AcademicNotificationLearner> students, bool isAssignment, CancellationToken cancellationToken)
 	{
 		var counts = new Dictionary<Guid, int>();
 		var byDivision = students.ToLookup(x => x.DivisionId, x => x.StudentId);

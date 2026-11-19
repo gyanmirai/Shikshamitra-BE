@@ -13,6 +13,8 @@ using SchoolTimetable = ShikshaMitra.Academic.Timetable.Timetables.Timetable;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
+public sealed record TimetableTeacherReassignment(SchoolTimetable Timetable, IReadOnlyDictionary<Guid, Guid?> PreviousTeachers);
+
 /// <summary>Propagates current teaching responsibility in the allocation update's unit of work.</summary>
 public class SubjectTeacherReassignmentManager(
 	ITimetableRepository timetableRepository,
@@ -21,16 +23,18 @@ public class SubjectTeacherReassignmentManager(
 	IAsyncQueryableExecuter asyncExecuter,
 	IClock clock) : DomainService
 {
-	public async Task SynchronizeAsync(IReadOnlyCollection<SubjectTeacherChange> changes)
+	public async Task<IReadOnlyList<TimetableTeacherReassignment>> SynchronizeAsync(IReadOnlyCollection<SubjectTeacherChange> changes)
 	{
 		var activeChanges = changes.Where(change => change.PrimaryTeacherId.HasValue).ToList();
 		var changedSlots = new List<(SchoolTimetable Timetable, TimetableSlot Slot)>();
+		var timetableChanges = new List<TimetableTeacherReassignment>();
 		foreach (var classChanges in activeChanges.GroupBy(change => change.Assignment.StandardId))
 		{
 			var bySubject = classChanges.ToDictionary(change => change.Assignment.SubjectId);
 			var timetables = await timetableRepository.GetByStandardIdAsync(classChanges.Key);
 			foreach (var timetable in timetables)
 			{
+				var previousTeachers = new Dictionary<Guid, Guid?>();
 				foreach (var slot in timetable.Slots)
 				{
 					var changed = false;
@@ -38,12 +42,14 @@ public class SubjectTeacherReassignmentManager(
 					{
 						if (bySubject.TryGetValue(subject.SubjectId, out var change) && change.Replaces(subject.TeacherId))
 						{
+							previousTeachers.Add(subject.Id, subject.TeacherId);
 							subject.AssignTeacher(change.PrimaryTeacherId);
 							changed = true;
 						}
 					}
 					if (changed) changedSlots.Add((timetable, slot));
 				}
+				if (previousTeachers.Count != 0) timetableChanges.Add(new(timetable, previousTeachers));
 			}
 		}
 
@@ -66,10 +72,11 @@ public class SubjectTeacherReassignmentManager(
 		{
 			await TransferUnrecordedPlansAsync(change);
 		}
-		foreach (var timetable in changedSlots.Select(item => item.Timetable).DistinctBy(item => item.Id))
+		foreach (var change in timetableChanges)
 		{
-			await timetableRepository.UpdateAsync(timetable);
+			await timetableRepository.UpdateAsync(change.Timetable);
 		}
+		return timetableChanges;
 	}
 
 	private async Task TransferUnrecordedPlansAsync(SubjectTeacherChange change)

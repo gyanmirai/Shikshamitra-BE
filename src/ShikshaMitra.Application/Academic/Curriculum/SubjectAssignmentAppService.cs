@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Security.UserScope;
@@ -19,6 +20,7 @@ using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings.Divisions;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -50,7 +52,8 @@ public partial class SubjectAssignmentAppService(
 	SubjectTeacherReassignmentManager teacherReassignmentManager,
 	SubjectScheduleBreakdownQueryService scheduleBreakdownQueryService,
 	SubjectAssignmentTeacherEligibilityManager teacherEligibilityManager,
-	SubjectAssignmentScopeAccess assignmentScope
+	SubjectAssignmentScopeAccess assignmentScope,
+	TimetableNotificationDelivery timetableNotifications
 ) : ApplicationService, ISubjectAssignmentAppService
 {
 	public async Task CreateAsync(
@@ -735,7 +738,8 @@ public partial class SubjectAssignmentAppService(
 		return Math.Max(months, 0);
 	}
 
-	public async Task<SubjectAssignmentDto?> UpdateAsync(
+	[UnitOfWork(true)]
+	public virtual async Task<SubjectAssignmentDto?> UpdateAsync(
 		Guid assignmentId,
 		Guid academicMediumId,
 		CreateUpdateSubjectAssignmentDto input
@@ -877,7 +881,7 @@ public partial class SubjectAssignmentAppService(
 			}
 		}
 
-		await teacherReassignmentManager.SynchronizeAsync(teacherChanges);
+		var affectedTimetables = await teacherReassignmentManager.SynchronizeAsync(teacherChanges);
 
 		// 3. Delete removed subjects
 		foreach (var subject in existingGroup)
@@ -888,6 +892,7 @@ public partial class SubjectAssignmentAppService(
 				await assignmentRepository.DeleteAsync(subject);
 			}
 		}
+		await timetableNotifications.CaptureReassignmentsAsync(affectedTimetables, CurrentUser.Id);
 
 		// Re-fetch or use modified list.
 		// Since we modified existingGroup in memory (for updates) and adding new ones,

@@ -24,6 +24,15 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 				"Submissions recorded for {{task_title}} during this digest window: {{submitted_count}}.",
 			(_, AcademicNotificationEventKeys.HomeworkRevisionRequested or AcademicNotificationEventKeys.AssignmentRevisionRequested) =>
 				"A revision was requested for {{task_title}}.",
+			("Guardian" or "StudentAccount", AcademicNotificationEventKeys.TimetablePublished) =>
+				"The timetable for {{class_name}} has been published.",
+			("Guardian" or "StudentAccount", AcademicNotificationEventKeys.TimetableChanged) =>
+				"A timetable period for {{class_name}} has changed.",
+			("Guardian" or "StudentAccount", AcademicNotificationEventKeys.TimetableWithdrawn) =>
+				"The timetable for {{class_name}} has been withdrawn.",
+			(_, AcademicNotificationEventKeys.TimetablePublished) => "Your teaching timetable has been published.",
+			(_, AcademicNotificationEventKeys.TimetableChanged) => "A period you were assigned has changed.",
+			(_, AcademicNotificationEventKeys.TimetableWithdrawn) => "A timetable containing your assigned periods has been withdrawn.",
 			("SubstituteTeacher", AcademicNotificationEventKeys.SubstitutionAssigned) =>
 				"You have a substitute duty for {{period_name}} on {{session_date}}.",
 			("PreviousSubstitute", AcademicNotificationEventKeys.SubstitutionChanged) =>

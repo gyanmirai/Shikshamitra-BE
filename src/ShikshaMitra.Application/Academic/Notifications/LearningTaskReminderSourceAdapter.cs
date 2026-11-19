@@ -79,7 +79,7 @@ public sealed class LearningTaskReminderSourceAdapter(LearningTaskNotificationRe
 	}
 
 	private static NotificationSourceSnapshot BuildSnapshot(LearningTaskNotificationRecord record, LearningTaskNotificationSchedule[] schedules,
-		IReadOnlyList<LearningTaskNotificationLearner> eligible, IReadOnlyList<HomeworkNotificationTeacher> staff,
+		IReadOnlyList<AcademicNotificationLearner> eligible, IReadOnlyList<HomeworkNotificationTeacher> staff,
 		HashSet<NotificationRecipientRefDto>? captured, string schoolName, string revision, DateTimeOffset expiry,
 		bool isOverdue, bool singleOccurrence)
 	{

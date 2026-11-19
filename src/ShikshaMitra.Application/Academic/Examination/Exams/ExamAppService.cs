@@ -2331,7 +2331,7 @@ public partial class ExamAppService(
 		return state;
 	}
 
-	private async Task<Exam> EnsureMarksWorkflowTargetAsync(Guid examId, Guid subjectId, Guid divisionId)
+	internal async Task<Exam> EnsureMarksWorkflowTargetAsync(Guid examId, Guid subjectId, Guid divisionId)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 		await EnsureCanAccessExamAsync(exam);
@@ -2380,8 +2380,11 @@ public partial class ExamAppService(
 	// ─── 2. Submit Marks ───────────────────────────────────────────────────────
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	[UnitOfWork(true)]
 	public async Task<MarksWorkflowActionResponseDto> SubmitMarksAsync(Guid examId, MarksWorkflowActionInput input)
 	{
+		var notification = LazyServiceProvider.LazyGetRequiredService<MarksWorkflowNotification>();
+		await notification.LockAsync(examId, input.SubjectId, input.DivisionId);
 		await EnsureMarksWorkflowTargetAsync(examId, input.SubjectId, input.DivisionId);
 		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
 
@@ -2407,6 +2410,7 @@ public partial class ExamAppService(
 
 		state.TransitionTo(ExamMarksWorkflowStatus.Submitted);
 		await examMarksWorkflowStateRepository.UpdateAsync(state, autoSave: true);
+		await notification.CaptureAsync(state);
 
 		return BuildWorkflowResponse("Marks submitted for verification.", examId, input, ExamMarksWorkflowStatus.Submitted);
 	}
@@ -2414,8 +2418,11 @@ public partial class ExamAppService(
 	// ─── 3. Verify Marks ───────────────────────────────────────────────────────
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	[UnitOfWork(true)]
 	public async Task<MarksWorkflowActionResponseDto> VerifyMarksAsync(Guid examId, MarksWorkflowActionInput input)
 	{
+		var notification = LazyServiceProvider.LazyGetRequiredService<MarksWorkflowNotification>();
+		await notification.LockAsync(examId, input.SubjectId, input.DivisionId);
 		await EnsureMarksWorkflowTargetAsync(examId, input.SubjectId, input.DivisionId);
 		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
 
@@ -2820,8 +2827,11 @@ public partial class ExamAppService(
 	// ─── 10. Request Changes ───────────────────────────────────────────────────
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	[UnitOfWork(true)]
 	public async Task<MarksWorkflowActionResponseDto> RequestChangesAsync(Guid examId, RequestChangesInputDto input)
 	{
+		var notification = LazyServiceProvider.LazyGetRequiredService<MarksWorkflowNotification>();
+		await notification.LockAsync(examId, input.SubjectId, input.DivisionId);
 		await EnsureMarksWorkflowTargetAsync(examId, input.SubjectId, input.DivisionId);
 		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
 
@@ -2834,6 +2844,7 @@ public partial class ExamAppService(
 		state.TransitionTo(ExamMarksWorkflowStatus.ChangesRequested);
 		state.SetReviewerNote(input.ReviewerNote.Trim());
 		await examMarksWorkflowStateRepository.UpdateAsync(state, autoSave: true);
+		await notification.CaptureAsync(state);
 
 		return BuildWorkflowResponse("Correction requested and note recorded.", examId, new MarksWorkflowActionInput { SubjectId = input.SubjectId, DivisionId = input.DivisionId }, ExamMarksWorkflowStatus.ChangesRequested);
 	}

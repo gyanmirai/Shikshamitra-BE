@@ -113,6 +113,14 @@ Publish options narrow the enabled rule. Parents permits the configured primary 
 
 An eligible learner needs a current enrolled placement, a visible published subject and an actual seat in a published plan for that subject. Later calendar closures and eligibility changes suppress pending delivery. Templates use an authenticated inbox link. The optional `seat_number` belongs to the one learner and is available only when their applicable sessions all have the same room and seat. Staff and starter templates use generic content. History requires Academic Notification View, Seat Allocation View and existing source exam access. Seating Changed remains unavailable while published seating is immutable.
 
+### Marks review notifications
+
+An enabled rule can queue `Academic.Marks.Submitted` after `POST /api/academics/exams/{examId}/marks/submit` moves the saved subject and division workflow to Submitted. The recipient is the school's active reviewer configured through `Notifications:Academic:Tenants:<tenantIdN>:MarksReviewerUserId`. The correction action at `POST /api/academics/exams/{examId}/marks/request-changes` can queue `Academic.Marks.ChangesRequested` for the subject's current class and division teaching assignments. Recipients need Record Marks View and Add and access to the source workflow. The actor's own notice is suppressed.
+
+The transition and capture commit together. The saved workflow revision and status invalidate earlier pending notices after a correction, resubmission or verification. The queue rechecks the current reviewer, staff assignments, account status and record access. Draft and bulk saves, verification and publication of marks do not queue either review event. Marks entry opening and reminders require a saved entry window.
+
+Templates carry the exam and subject names with an authenticated Record Marks link. Scores, notes and individual feedback stay in Record Marks. Delivery history requires Academic Notification View, Record Marks View and source access.
+
 ### Result publication notifications
 
 The first successful `POST /api/academics/results/publish` can queue `Academic.Result.Published` in the publication transaction. The exam must be visible to learners and the result must have a published revision for the saved exam and division. The source uses released result rows and current enrollment. Withheld rows and students outside the division are excluded. The school's family rule and the shared guardian and student-account checks determine delivery.

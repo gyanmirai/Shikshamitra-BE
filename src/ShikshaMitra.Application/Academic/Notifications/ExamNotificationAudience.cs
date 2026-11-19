@@ -25,17 +25,7 @@ public sealed class ExamNotificationAudience(IRepository<Student, Guid> students
 		Guid[] subjectsInWindow, CancellationToken token)
 	{
 		var recipients = new Dictionary<NotificationRecipientRefDto, Guid[]>();
-		var groupQuery = await groups.GetQueryableAsync();
-		var assignments = from assignment in await curriculum.GetQueryableAsync()
-			join subject in await subjects.GetQueryableAsync() on assignment.SubjectId equals subject.Id
-			where assignment.TenantId == tenantId && !assignment.IsDeleted && assignment.StandardId == section.ClassId &&
-				assignment.Status == SubjectStatus.Published && subject.TenantId == tenantId && !subject.IsDeleted &&
-				subject.EducationMediumId == section.MediumId && subject.Status == SubjectMasterStatus.Active &&
-				Enumerable.Contains(subjectsInWindow, assignment.SubjectId) &&
-				(!assignment.ElectiveGroupId.HasValue || groupQuery.Any(elective => elective.Id == assignment.ElectiveGroupId &&
-					elective.TenantId == tenantId && !elective.IsDeleted && elective.AcademicMediumId == section.MediumId &&
-					elective.Status == SubjectMasterStatus.Active && elective.Subjects.Any(member => member.SubjectId == assignment.SubjectId)))
-			select assignment;
+		var assignments = await ReadPublishedAssignmentsAsync(tenantId, section, subjectsInWindow);
 		var published = await queries.ToListAsync(assignments.Select(x => new { x.SubjectId, x.ElectiveGroupId }), token);
 		if (published.Count == 0) return recipients;
 		var active = (await students.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
@@ -63,6 +53,39 @@ public sealed class ExamNotificationAudience(IRepository<Student, Guid> students
 		}
 
 		var subjectIds = published.Select(x => x.SubjectId).Distinct().ToArray();
+		var teachers = await ReadAssignedTeachersAsync(tenantId, section, assignments, subjectIds, token);
+		if (teachers == null) return new Dictionary<NotificationRecipientRefDto, Guid[]>();
+		foreach (var (teacher, taughtSubjects) in teachers) recipients.Add(teacher, taughtSubjects);
+		return recipients;
+	}
+
+	internal async Task<NotificationRecipientRefDto[]> ReadAssignedTeachersAsync(Guid tenantId, ExamNotificationDivision section,
+		Guid subjectId, CancellationToken token)
+	{
+		var assignments = await ReadPublishedAssignmentsAsync(tenantId, section, [subjectId]);
+		if (!await queries.AnyAsync(assignments, token)) return [];
+		var teachers = await ReadAssignedTeachersAsync(tenantId, section, assignments, [subjectId], token);
+		return teachers?.Keys.ToArray() ?? [];
+	}
+
+	private async Task<IQueryable<AssignedSubject>> ReadPublishedAssignmentsAsync(Guid tenantId, ExamNotificationDivision section, Guid[] subjectsInWindow)
+	{
+		var groupQuery = await groups.GetQueryableAsync();
+		return from assignment in await curriculum.GetQueryableAsync()
+			join subject in await subjects.GetQueryableAsync() on assignment.SubjectId equals subject.Id
+			where assignment.TenantId == tenantId && !assignment.IsDeleted && assignment.StandardId == section.ClassId &&
+				assignment.Status == SubjectStatus.Published && subject.TenantId == tenantId && !subject.IsDeleted &&
+				subject.EducationMediumId == section.MediumId && subject.Status == SubjectMasterStatus.Active &&
+				Enumerable.Contains(subjectsInWindow, assignment.SubjectId) &&
+				(!assignment.ElectiveGroupId.HasValue || groupQuery.Any(elective => elective.Id == assignment.ElectiveGroupId &&
+					elective.TenantId == tenantId && !elective.IsDeleted && elective.AcademicMediumId == section.MediumId &&
+					elective.Status == SubjectMasterStatus.Active && elective.Subjects.Any(member => member.SubjectId == assignment.SubjectId)))
+			select assignment;
+	}
+
+	private async Task<IReadOnlyDictionary<NotificationRecipientRefDto, Guid[]>?> ReadAssignedTeachersAsync(Guid tenantId,
+		ExamNotificationDivision section, IQueryable<AssignedSubject> assignments, Guid[] subjectIds, CancellationToken token)
+	{
 		var classTeachers = from assignment in assignments
 			from teacher in assignment.Teachers
 			where teacher.TenantId == tenantId
@@ -73,11 +96,10 @@ public sealed class ExamNotificationAudience(IRepository<Student, Guid> students
 				allocation.DivisionId == section.DivisionId && Enumerable.Contains(subjectIds, allocation.SubjectId)
 			select new { allocation.SubjectId, teacher.TeacherId };
 		var teaching = await queries.ToListAsync(classTeachers.Union(sectionTeachers).Take(10001), token);
-		if (teaching.Count > 10000) return new Dictionary<NotificationRecipientRefDto, Guid[]>();
+		if (teaching.Count > 10000) return null;
 		var teachers = await staff.FindTeachersAsync(tenantId, teaching.Select(x => x.TeacherId).Distinct().ToArray(), token);
 		var taughtBy = teaching.ToLookup(x => x.TeacherId, x => x.SubjectId);
-		foreach (var teacher in teachers)
-			recipients.Add(teacher, taughtBy[teacher.EmployeeId!.Value].Concat(taughtBy[teacher.UserId!.Value]).Distinct().ToArray());
-		return recipients;
+		return teachers.ToDictionary(teacher => teacher, teacher =>
+			taughtBy[teacher.EmployeeId!.Value].Concat(taughtBy[teacher.UserId!.Value]).Distinct().ToArray());
 	}
 }

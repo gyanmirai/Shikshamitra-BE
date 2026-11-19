@@ -165,6 +165,8 @@ The hosted timetable workflow also verifies the automatic day reminder, includin
 
 `SeatingNotificationEvents_Tests` uses the existing exam and seating publication actions in both orders. It verifies repeat publication, one-learner seat projection, saved timing, student-only template selection, email exclusion and unavailable exam-staff delivery. The hosted exam tests verify the seating history permission. Run `SeatingNotificationPostgresProbe_Tests` against a fresh disposable PostgreSQL fixture to verify concurrent exam and seating publication queues one operation.
 
+`MarksNotificationEvents_Tests` exercises draft saves, submission, correction, resubmission and verification through Record Marks. `MarksNotificationDelivery_Tests` verifies the persisted reviewer and teacher audiences, source permission for history and deactivated account suppression. `MarksNotificationPostgres_Tests` runs the hosted workflow against a disposable PostgreSQL database and checks that saved audit revisions still match when read in a new unit of work.
+
 Substitution notification tests cover silent and repeated assignments, exact staff targeting, queued and provider-accepted status, shared scheduled and explicit reminder identity, and suppression after acknowledgement. The hosted workflow also exercises material rescheduling, no-op edits, recipient-specific removal content, cancellation for exactly the previously informed staff, and the exclusion of unconfirmed acceptance.
 
 Reviewer escalation cases verify backward-compatible rule decoding, required teacher and reviewer selectors, a positive delay, no early or duplicate reviewer intent, separate role targeting, and suppression after the substitute responds.

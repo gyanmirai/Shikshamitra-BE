@@ -59,6 +59,8 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 				"Your booking is now for {{room_name}} on {{session_date}} from {{start_time}} to {{end_time}}.",
 			(_, AcademicNotificationEventKeys.RoomChanged) => "A room booking involving you changed.",
 			(_, AcademicNotificationEventKeys.RoomCancelled) => "Your room booking for {{room_name}} on {{session_date}} was cancelled.",
+			(_, AcademicNotificationEventKeys.MarksSubmitted) => "Marks for {{subject_name}} in {{exam_name}} are ready for review.",
+			(_, AcademicNotificationEventKeys.MarksChangesRequested) => "A correction was requested for {{subject_name}} in {{exam_name}}.",
 			(_, AcademicNotificationEventKeys.ResultPublished) => "A result is available. Sign in to ShikshaMitra to view it.",
 			(_, AcademicNotificationEventKeys.ExamTimetablePublished) => "The timetable for {{exam_name}} is available. Sign in to view your exam dates.",
 			(_, AcademicNotificationEventKeys.ExamReminder) => "Your scheduled sitting for {{exam_name}} starts at {{exam_date}}.",

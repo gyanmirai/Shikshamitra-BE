@@ -21,22 +21,22 @@ public sealed class HomeworkReminderDueSource(IRepository<HomeworkAssignmentEnti
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (request.TenantId == Guid.Empty || request.TenantId != tenant.Id) return new([], null);
-		var now = request.Now.UtcDateTime;
 		var startedAt = request.CycleStartedAt.UtcDateTime;
 		var tasks = (await homeworks.GetQueryableAsync()).Where(x => x.TenantId == request.TenantId && !x.IsDeleted &&
 			x.Status != HomeworkStatus.Closed && x.SubmissionType != SubmissionType.NoSubmissionRequired);
 		var scheduled = from task in tasks
 			from schedule in task.DivisionSchedules
-			where schedule.TenantId == request.TenantId && schedule.IsPublished && schedule.DueDate > now &&
+			where schedule.TenantId == request.TenantId && schedule.IsPublished &&
 				(!schedule.PublishedAt.HasValue || schedule.PublishedAt <= startedAt)
-			select new { SourceId = task.Id, ClassId = task.StandardId, schedule.DivisionId, schedule.DueDate };
+			select new { SourceId = task.Id, ClassId = task.StandardId, schedule.DivisionId, schedule.DueDate, schedule.PublishedAt };
 		var legacy = from task in tasks
-			where task.IsPublished && task.DivisionId.HasValue && task.DueDate > now && !task.DivisionSchedules.Any()
-			select new { SourceId = task.Id, ClassId = task.StandardId, DivisionId = task.DivisionId!.Value, DueDate = task.DueDate!.Value };
+			where task.IsPublished && task.DivisionId.HasValue && task.DueDate.HasValue && !task.DivisionSchedules.Any()
+			select new { SourceId = task.Id, ClassId = task.StandardId, DivisionId = task.DivisionId!.Value, DueDate = task.DueDate!.Value, PublishedAt = (DateTime?)null };
 		var occurrences = scheduled.Concat(legacy).Select(x => new LearningTaskDueRow
 		{
-			SourceId = x.SourceId, ClassId = x.ClassId, DivisionId = x.DivisionId, DueDate = x.DueDate,
+			SourceId = x.SourceId, ClassId = x.ClassId, DivisionId = x.DivisionId, DueDate = x.DueDate, PublishedAt = x.PublishedAt,
 		});
-		return await pager.ReadPageAsync(LearningTaskReminderSourceAdapter.HomeworkEventKey, occurrences, request, cancellationToken);
+		return await pager.ReadPageAsync(AcademicNotificationEventKeys.HomeworkDue, AcademicNotificationEventKeys.HomeworkOverdue,
+			occurrences, request, cancellationToken);
 	}
 }

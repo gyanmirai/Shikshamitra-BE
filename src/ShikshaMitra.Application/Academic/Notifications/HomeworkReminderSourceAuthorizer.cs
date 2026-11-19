@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Authorization;
@@ -23,7 +24,8 @@ public sealed class HomeworkReminderSourceAuthorizer(HomeworkAppService access, 
 {
 	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[]
 	{
-		LearningTaskReminderSourceAdapter.HomeworkEventKey, HomeworkPublicationSourceAdapter.EventKey, LearningTaskFeedbackReleaseSourceAdapter.HomeworkEventKey,
+		LearningTaskReminderSourceAdapter.HomeworkEventKey, AcademicNotificationEventKeys.HomeworkOverdue,
+		HomeworkPublicationSourceAdapter.EventKey, LearningTaskFeedbackReleaseSourceAdapter.HomeworkEventKey,
 	});
 
 	public async Task EnsureCanViewAsync(string eventKey, Guid sourceId, CancellationToken cancellationToken)

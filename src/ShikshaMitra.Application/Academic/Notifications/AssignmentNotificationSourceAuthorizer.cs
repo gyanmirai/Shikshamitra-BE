@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
@@ -25,7 +26,8 @@ public sealed class AssignmentNotificationSourceAuthorizer(IRepository<Assignmen
 {
 	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[]
 	{
-		LearningTaskReminderSourceAdapter.AssignmentEventKey, AssignmentPublicationSourceAdapter.EventKey,
+		LearningTaskReminderSourceAdapter.AssignmentEventKey, AcademicNotificationEventKeys.AssignmentOverdue,
+		AssignmentPublicationSourceAdapter.EventKey,
 		LearningTaskFeedbackReleaseSourceAdapter.AssignmentEventKey
 	});
 

@@ -21,18 +21,19 @@ public sealed class AssignmentReminderDueSource(IRepository<AssignmentEntity, Gu
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (request.TenantId == Guid.Empty || request.TenantId != tenant.Id) return new([], null);
-		var now = request.Now.UtcDateTime;
 		var startedAt = request.CycleStartedAt.UtcDateTime;
 		var occurrences = from assignment in await assignments.GetQueryableAsync()
 			where assignment.TenantId == request.TenantId && !assignment.IsDeleted &&
 				assignment.Status != AssignmentStatus.Closed && assignment.SubmissionType != SubmissionType.NoSubmissionRequired
 			from schedule in assignment.DivisionSchedules
-			where schedule.TenantId == request.TenantId && schedule.IsPublished && schedule.DueDate > now &&
+			where schedule.TenantId == request.TenantId && schedule.IsPublished &&
 				(!schedule.PublishedAt.HasValue || schedule.PublishedAt <= startedAt)
 			select new LearningTaskDueRow
 			{
-				SourceId = assignment.Id, ClassId = assignment.StandardId, DivisionId = schedule.DivisionId, DueDate = schedule.DueDate,
+				SourceId = assignment.Id, ClassId = assignment.StandardId, DivisionId = schedule.DivisionId,
+				DueDate = schedule.DueDate, PublishedAt = schedule.PublishedAt,
 			};
-		return await pager.ReadPageAsync(LearningTaskReminderSourceAdapter.AssignmentEventKey, occurrences, request, cancellationToken);
+		return await pager.ReadPageAsync(AcademicNotificationEventKeys.AssignmentDue, AcademicNotificationEventKeys.AssignmentOverdue,
+			occurrences, request, cancellationToken);
 	}
 }

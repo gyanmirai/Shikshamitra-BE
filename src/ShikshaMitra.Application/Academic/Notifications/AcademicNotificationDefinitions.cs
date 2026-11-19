@@ -22,9 +22,13 @@ internal static partial class AcademicNotificationDefinitions
 		var channels = profile is NotificationDeliveryProfile.Internal or NotificationDeliveryProfile.Digest
 			? new[] { CommunicationChannelType.InApp, CommunicationChannelType.WebPush, CommunicationChannelType.Email }
 			: new[] { CommunicationChannelType.InApp, CommunicationChannelType.WebPush, CommunicationChannelType.Email, CommunicationChannelType.WhatsApp };
+		var variables = Variables(family);
+		if (key is AcademicNotificationEventKeys.HomeworkOverdue or AcademicNotificationEventKeys.AssignmentOverdue)
+			variables = Array.AsReadOnly(variables.Append(new NotificationVariableDefinition("missing_submission_count",
+				NotificationVariableType.Number, false, NotificationVariableSensitivity.Personal)).ToArray());
 		return new(key, family, source, source, 1, trigger, profile,
 			Array.AsReadOnly(selectors.Split(',').Distinct(StringComparer.Ordinal).ToArray()),
-			Array.AsReadOnly(channels), Variables(family), Array.AsReadOnly(materialFields),
+			Array.AsReadOnly(channels), variables, Array.AsReadOnly(materialFields),
 			key is "Academic.Calendar.EmergencyClosureDeclared" or "Academic.Calendar.EmergencyClosureChanged");
 	}
 

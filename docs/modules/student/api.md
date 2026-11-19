@@ -1189,7 +1189,13 @@ Canonical evidence now permits a null staff `submittedBy` for a parent upload an
 
 The existing Student I-Card template DTO adds `schemaVersion` (default 1), nullable `layoutJson` and `printSettingsJson`, and `backSideEnabled` (default false). Schema 2 accepts `classic-identity` alongside existing presets. New configuration stays in existing template JSON and immutable issued snapshots, without a database migration. Old saved/issued templates remain readable and use their existing renderer. Schema 1 does not accept new layout/back configuration.
 
-Schema-2 layouts retain canvas `width`/`height`, orientation, colours and positioned `front.elements`/`back.elements`, and require physical `widthMm`/`heightMm` of 30–200 mm. Existing student data bindings remain `StudentName`, `GRNumber`, `Class`, `Division`, `AcademicYear` and `DateOfBirth`; `CardNumber`, school name/address, header/footer and static text are also supported. Existing `fields`, photo and QR flags remain effective on either side. Barcode elements use the existing card number and introduce no verification or access service.
+Schema-2 layouts retain canvas `width`/`height`, orientation, colours and positioned `front.elements`/`back.elements`, and require physical `widthMm`/`heightMm` of 30–200 mm.
+Student data bindings are `StudentName`, `GRNumber`, `Class`, `Division`, `AcademicYear`, `DateOfBirth` and `RollNo`.
+`RollNo` is a schema-2 binding captured from the student's current placement under the existing scope and Identity masking checks.
+`CardNumber`, school name/address, header/footer and static text are also supported.
+A dynamic text element may include an optional `prefix` of up to 150 characters, applied before its resolved value in PDF output.
+Layouts without `prefix` continue to use their saved label and separator settings.
+The `fields`, photo and QR settings apply to both sides. Barcode elements use the existing card number.
 
 The [employee identity-card print contract](../hr/api.md#configurable-employee-identity-cards) defines the shared millimetre settings, element/font limits, fixed-size A4 capacity, duplex reflection, back rotation/calibration and side selection. Student export uses those settings with the existing request's cards-per-page selection. Issued download/reprint uses card-sized output from the frozen configuration, preserving the existing school-identity snapshot and authorized photo/logo loaders. Disabled backs produce no empty pages; oversized schema-2 text produces an actionable configuration error rather than truncating identity text. Existing scope, masking, cohort transfers, permissions, idempotency and document events remain authoritative.
 

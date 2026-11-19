@@ -33,6 +33,8 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 			(_, AcademicNotificationEventKeys.TimetablePublished) => "Your teaching timetable has been published.",
 			(_, AcademicNotificationEventKeys.TimetableChanged) => "A period you were assigned has changed.",
 			(_, AcademicNotificationEventKeys.TimetableWithdrawn) => "A timetable containing your assigned periods has been withdrawn.",
+			(_, AcademicNotificationEventKeys.TimetableDayReminder) =>
+				"Your timetable for {{session_date}} has {{period_count}} scheduled periods. Period times: {{period_times}}.",
 			("SubstituteTeacher", AcademicNotificationEventKeys.SubstitutionAssigned) =>
 				"You have a substitute duty for {{period_name}} on {{session_date}}.",
 			("PreviousSubstitute", AcademicNotificationEventKeys.SubstitutionChanged) =>

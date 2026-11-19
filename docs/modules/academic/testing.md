@@ -155,6 +155,8 @@ Delivery action tests cover Add and source access, retry scheduling after a defi
 
 Timetable notification tests exercise draft, publish, reordered re-save, a teacher change, an elective option removal and withdrawal through the save API. The workflow checks exact teacher and learner targets, safe former-teacher content, enrollment revocation, superseded publications and the history permission. A separate application test exercises a published teacher change from Curriculum allocation.
 
+The hosted timetable workflow also verifies the automatic day reminder, including school-local timing, elective-aware recipients, per-recipient period fields, duplicate scans and suppression after a scoped closure. `NotificationReminderTimingPolicy_Tests` covers the reminder cutoff, weekends, closure days and zero or multiple preceding school days.
+
 Substitution notification tests cover silent and repeated assignments, exact staff targeting, queued and provider-accepted status, shared scheduled and explicit reminder identity, and suppression after acknowledgement. The hosted workflow also exercises material rescheduling, no-op edits, recipient-specific removal content, cancellation for exactly the previously informed staff, and the exclusion of unconfirmed acceptance.
 
 Reviewer escalation cases verify backward-compatible rule decoding, required teacher and reviewer selectors, a positive delay, no early or duplicate reviewer intent, separate role targeting, and suppression after the substitute responds.

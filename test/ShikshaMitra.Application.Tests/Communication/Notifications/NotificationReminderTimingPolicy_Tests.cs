@@ -1,5 +1,6 @@
 using System;
 using ShikshaMitra.Academic.Calendar;
+using ShikshaMitra.Academic.Notifications;
 using Shouldly;
 using Xunit;
 
@@ -52,6 +53,24 @@ public class NotificationReminderTimingPolicy_Tests
 		var occurrence = new DateTimeOffset(2026, 11, 22, 16, 30, 0, TimeSpan.FromHours(5.5));
 		_policy.ResolveFixed(occurrence, occurrence.AddHours(1)).ShouldBe(Utc(2026, 11, 22, 11, 0));
 		_policy.ResolveFixed(occurrence, occurrence).ShouldBeNull();
+	}
+
+	[Theory]
+	[InlineData(20, 11, 29, 1, 20)]
+	[InlineData(20, 11, 30, 1, 24)]
+	[InlineData(23, 10, 0, 1, 24)]
+	[InlineData(20, 11, 30, 2, 25)]
+	[InlineData(24, 11, 30, 0, 24)]
+	public void Daily_timetable_selects_the_due_working_date_at_the_local_cutoff(int today, int hour, int minute,
+		int schoolDaysBefore, int expected)
+	{
+		var days = new NotificationWorkingDays(new(2026, 11, 1), new(2026, 11, 30),
+			[DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday],
+			[], [new(new(2026, 11, 23), DayType.EmergencyClosure)]);
+		var config = DefaultTiming with { ReminderSchoolDaysBefore = schoolDaysBefore };
+		var due = TimetableDayReminder.FindDueSchoolDate(new(2026, 11, today), Utc(2026, 11, today, hour, minute),
+			config, SchoolZone, days);
+		due.ShouldBe(new DateOnly(2026, 11, expected));
 	}
 
 	[Fact]

@@ -28,17 +28,24 @@ public sealed class NotificationReminderTimingPolicy : ITransientDependency
 		var remaining = timing.ReminderSchoolDaysBefore;
 		if (remaining > 0 && index == occurrenceDate.DayNumber) index--;
 		var firstDay = Math.Max(days.StartDate.DayNumber, occurrenceDate.DayNumber - MaximumLookbackDays);
-		var blocked = days.CalendarDays.Where(x => CalendarDayBlockingRules.BlocksTimetable(x.DayType)).Select(x => x.Date).ToHashSet();
-		var explicitDays = days.CalendarDays.Where(x => x.DayType is DayType.WorkingDay or DayType.HalfDay).Select(x => x.Date).ToHashSet();
+		var isWorkingDay = WorkingDayMatcher(days);
 		for (; index >= firstDay; index--)
 		{
 			var date = DateOnly.FromDayNumber(index);
-			if (blocked.Contains(date) || (!explicitDays.Contains(date) && !IsRegularDay(date, days))) continue;
+			if (!isWorkingDay(date)) continue;
 			if (remaining > 1) { remaining--; continue; }
 			var reminderAt = NotificationDeliveryTimingPolicy.Boundary(date.ToDateTime(timing.ReminderLocalTime), schoolZone, later: false);
 			return reminderAt >= occurrenceAt || reminderAt >= expiresAt ? null : reminderAt;
 		}
 		return null;
+	}
+
+	internal static Func<DateOnly, bool> WorkingDayMatcher(NotificationWorkingDays days)
+	{
+		var blocked = days.CalendarDays.Where(x => CalendarDayBlockingRules.BlocksTimetable(x.DayType)).Select(x => x.Date).ToHashSet();
+		var explicitDays = days.CalendarDays.Where(x => x.DayType is DayType.WorkingDay or DayType.HalfDay).Select(x => x.Date).ToHashSet();
+		return date => date >= days.StartDate && date <= days.EndDate && !blocked.Contains(date) &&
+			(explicitDays.Contains(date) || IsRegularDay(date, days));
 	}
 
 	private static bool IsRegularDay(DateOnly date, NotificationWorkingDays days) => days.Weekdays.Count > 0

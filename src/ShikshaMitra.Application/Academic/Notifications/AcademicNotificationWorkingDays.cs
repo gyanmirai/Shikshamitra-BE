@@ -26,16 +26,22 @@ public sealed class AcademicNotificationWorkingDays(ICurrentTenant tenant, IAsyn
 	public async Task<NotificationWorkingDays?> ReadAsync(NotificationRuleScope scope, DateOnly occurrenceDate,
 		CancellationToken cancellationToken)
 	{
+		var first = DateOnly.FromDayNumber(Math.Max(0, occurrenceDate.DayNumber - NotificationReminderTimingPolicy.MaximumLookbackDays));
+		return await ReadWindowAsync(scope, first, occurrenceDate, cancellationToken);
+	}
+
+	internal async Task<NotificationWorkingDays?> ReadWindowAsync(NotificationRuleScope scope, DateOnly windowStart, DateOnly windowEnd,
+		CancellationToken cancellationToken)
+	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
-		if (scope.AcademicYearId is not Guid yearId || scope.MediumId is not Guid mediumId || occurrenceDate == DateOnly.MaxValue)
+		if (scope.AcademicYearId is not Guid yearId || scope.MediumId is not Guid mediumId || windowEnd == DateOnly.MaxValue)
 			return null;
 		var year = await executer.FirstOrDefaultAsync((await years.GetQueryableAsync()).Where(x => x.TenantId == tenantId && x.Id == yearId)
 			.Select(x => new { x.StartDate, x.EndDate }), cancellationToken);
 		if (year == null) return null;
-		var first = DateOnly.FromDayNumber(Math.Max(DateOnly.FromDateTime(year.StartDate).DayNumber,
-			occurrenceDate.DayNumber - NotificationReminderTimingPolicy.MaximumLookbackDays));
-		var last = DateOnly.FromDayNumber(Math.Min(DateOnly.FromDateTime(year.EndDate).DayNumber, occurrenceDate.DayNumber));
+		var first = DateOnly.FromDayNumber(Math.Max(DateOnly.FromDateTime(year.StartDate).DayNumber, windowStart.DayNumber));
+		var last = DateOnly.FromDayNumber(Math.Min(DateOnly.FromDateTime(year.EndDate).DayNumber, windowEnd.DayNumber));
 		if (last < first) return null;
 
 		var start = first.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);

@@ -57,7 +57,7 @@ internal sealed record TimetableNotificationTransition(string EventKey, string R
 		return result;
 	}
 
-	private static TimetableNotificationElectives Electives(IEnumerable<TimetableNotificationEntry> schedule)
+	internal static TimetableNotificationElectives Electives(IEnumerable<TimetableNotificationEntry> schedule)
 	{
 		var groups = schedule.Where(x => x.GroupId.HasValue).GroupBy(x => x.GroupId!.Value).ToArray();
 		var allowed = groups.SelectMany(group =>

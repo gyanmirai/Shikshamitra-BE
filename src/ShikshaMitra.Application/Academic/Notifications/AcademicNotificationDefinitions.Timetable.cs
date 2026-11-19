@@ -13,7 +13,7 @@ internal static partial class AcademicNotificationDefinitions
 		Event(TimetablePublished, $"{Teacher},{Family}"),
 		Event(TimetableChanged, $"{Teacher},{Family}", Important, Change, "periods", "room", "teacher", "effectiveDate"),
 		Event(TimetableWithdrawn, $"{Teacher},{Family}", Important),
-		Event(TimetableDayReminder, $"{Teacher},StudentAccount", Digest, Due),
+		Event(AcademicNotificationEventKeys.TimetableDayReminder, $"{Teacher},StudentAccount", Digest, Due),
 		Event(SubstitutionAssigned, $"SubstituteTeacher,OriginalTeacher,{Reviewer}", Important),
 		Event(SubstitutionChanged, $"PreviousSubstitute,SubstituteTeacher,OriginalTeacher,{Reviewer}", Important,
 			Change, "substitute", "date", "period", "startTime", "endTime", "room"),

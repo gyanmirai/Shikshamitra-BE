@@ -16,6 +16,8 @@ using Volo.Abp.Linq;
 
 namespace ShikshaMitra.Academic.Notifications;
 
+internal sealed record TimetableNotificationLearner(NotificationRecipientRefDto Recipient, TimetableNotificationChoice[] Choices);
+
 [RemoteService(false)]
 public sealed class TimetableNotificationAudience(IRepository<Student, Guid> studentRepository,
 	AcademicNotificationEnrollmentRoster enrollmentRoster, IRepository<StudentElectiveSelection, Guid> electives,
@@ -27,21 +29,43 @@ public sealed class TimetableNotificationAudience(IRepository<Student, Guid> stu
 	{
 		var affected = transition.AffectedChoices.ToHashSet();
 		if (!transition.ClassWide && affected.Count == 0) return [];
-		var eligible = (await studentRepository.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
-			x.Status == StudentLifeCycleStatusEnum.Enrolled);
-		var enrolled = await enrollmentRoster.FindAsync(tenantId, scope.YearId, scope.MediumId, scope.StandardId, [scope.DivisionId], eligible, token);
-		if (enrolled == null) return null;
-
 		var requiredGroups = transition.VisibleElectives.Groups;
 		var previous = transition.PreviousElectives;
 		var groupsToCheck = requiredGroups.Concat(previous?.Groups ?? []).Concat(affected.Select(x => x.GroupId)).Distinct().ToArray();
-		if (enrolled.Count == 0 || groupsToCheck.Length == 0)
-			return enrolled.Select(x => new NotificationRecipientRefDto("Student", StudentId: x.StudentId)).ToArray();
+		var learners = await ReadLearnersAsync(tenantId, scope, groupsToCheck, token);
+		if (learners == null) return null;
+		if (learners.Count == 0 || groupsToCheck.Length == 0) return learners.Select(x => x.Recipient).ToArray();
 
 		var scheduled = transition.VisibleElectives.Choices.ToHashSet();
 		if (requiredGroups.Length != 0 && transition.EventKey != AcademicNotificationEventKeys.TimetableWithdrawn)
 			scheduled.IntersectWith(await PublishedOptionsAsync(tenantId, scope, requiredGroups, token));
 		var former = previous?.Choices.ToHashSet();
+		return learners.Where(x =>
+			(CanView(x.Choices, requiredGroups, scheduled) || (previous != null && CanView(x.Choices, previous.Groups, former!))) &&
+			(transition.ClassWide || x.Choices.Any(affected.Contains))).Select(x => x.Recipient).ToArray();
+	}
+
+	internal async Task<IReadOnlyList<TimetableNotificationLearner>?> FindDailyLearnersAsync(Guid tenantId, TimetableNotificationScope scope,
+		TimetableNotificationElectives visible, CancellationToken token)
+	{
+		var learners = await ReadLearnersAsync(tenantId, scope, visible.Groups, token);
+		if (learners == null || learners.Count == 0 || visible.Groups.Length == 0) return learners;
+
+		var options = visible.Choices.ToHashSet();
+		options.IntersectWith(await PublishedOptionsAsync(tenantId, scope, visible.Groups, token));
+		return learners.Where(x => CanView(x.Choices, visible.Groups, options)).ToArray();
+	}
+
+	private async Task<IReadOnlyList<TimetableNotificationLearner>?> ReadLearnersAsync(Guid tenantId, TimetableNotificationScope scope,
+		Guid[] groupsToCheck, CancellationToken token)
+	{
+		var eligible = (await studentRepository.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
+			x.Status == StudentLifeCycleStatusEnum.Enrolled);
+		var enrolled = await enrollmentRoster.FindAsync(tenantId, scope.YearId, scope.MediumId, scope.StandardId, [scope.DivisionId], eligible, token);
+		if (enrolled == null) return null;
+		if (enrolled.Count == 0 || groupsToCheck.Length == 0)
+			return enrolled.Select(x => new TimetableNotificationLearner(new("Student", StudentId: x.StudentId), [])).ToArray();
+
 		var studentIds = enrolled.Select(x => x.StudentId).ToArray();
 		var currentSelections = await queries.ToListAsync((await electives.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
 			!x.IsDeleted && x.AcademicMediumId == scope.MediumId && Enumerable.Contains(groupsToCheck, x.ElectiveGroupId) &&
@@ -50,12 +74,7 @@ public sealed class TimetableNotificationAudience(IRepository<Student, Guid> stu
 		var approved = currentSelections.GroupBy(x => (x.StudentId, x.ElectiveGroupId))
 			.Where(group => group.Count() == 1 && group.First().IsLocked)
 			.ToLookup(group => group.Key.StudentId, group => new TimetableNotificationChoice(group.Key.ElectiveGroupId, group.First().SelectedSubjectId));
-		return enrolled.Where(x =>
-		{
-			var choices = approved[x.StudentId];
-			return (CanView(choices, requiredGroups, scheduled) || (previous != null && CanView(choices, previous.Groups, former!))) &&
-				(transition.ClassWide || choices.Any(affected.Contains));
-		}).Select(x => new NotificationRecipientRefDto("Student", StudentId: x.StudentId)).ToArray();
+		return enrolled.Select(x => new TimetableNotificationLearner(new("Student", StudentId: x.StudentId), approved[x.StudentId].ToArray())).ToArray();
 	}
 
 	private static bool CanView(IEnumerable<TimetableNotificationChoice> selections, Guid[] required,

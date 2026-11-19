@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Notifications;
@@ -40,6 +41,7 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 	private const string Published = AcademicNotificationEventKeys.TimetablePublished;
 	private const string Changed = AcademicNotificationEventKeys.TimetableChanged;
 	private const string Withdrawn = AcademicNotificationEventKeys.TimetableWithdrawn;
+	private const string DayReminder = AcademicNotificationEventKeys.TimetableDayReminder;
 
 	[Fact]
 	public async Task Timetable_transitions_notify_only_affected_locked_elective_cohorts_and_teachers()
@@ -84,7 +86,7 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 				await InsertAsync(services, new AssignedSubject(Guid.NewGuid(), TenantId, classId, subject,
 					$"TT{subject:N}"[..10], SubjectStatus.Published, subjectType: SubjectType.Elective, electiveGroupId: groupId));
 			var config = new LectureSlotConfig(Guid.NewGuid(), TenantId, classId, "08:00 - 17:00");
-			config.AddSlotGroup(new(Guid.NewGuid(), config.Id, 1, 1, 5));
+			config.AddSlotGroup(new(Guid.NewGuid(), config.Id, 1, 0, 5));
 			await InsertAsync(services, config);
 			var weekly = new WeeklyLectureSlot(Guid.NewGuid(), TenantId, classId);
 			weekly.AddSubject(Guid.NewGuid(), null, groupId, 1);
@@ -102,10 +104,11 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 			}
 
 			var scope = NotificationRuleScope.Create(year, board, medium, classId, divisionId);
-			foreach (var key in new[] { Published, Changed, Withdrawn })
+			foreach (var key in new[] { Published, Changed, Withdrawn, DayReminder })
 			{
 				var templateIds = new List<Guid>();
-				foreach (var audience in new[] { "AssignedTeacher", "Guardian" })
+				var audiences = key == DayReminder ? new[] { "AssignedTeacher", "StudentAccount" } : ["AssignedTeacher", "Guardian"];
+				foreach (var audience in audiences)
 				{
 					var templateId = Guid.NewGuid();
 					await InsertAsync(services, new CommunicationTemplate(templateId, TenantId) { TemplateName = key + "." + audience });
@@ -116,7 +119,8 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 					templateIds.Add(templateId);
 				}
 				var rule = new NotificationRule(Guid.NewGuid(), TenantId, key, scope);
-				var ruleConfig = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, ["AssignedTeacher"],
+				var ruleConfig = new NotificationRuleRuntimeConfiguration(1,
+					NotificationGuardianMode.PrimaryOnly, [], key == DayReminder, ["AssignedTeacher"],
 					[CommunicationChannelType.InApp], templateIds, NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");
 				rule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(ruleConfig,
 					services.GetRequiredService<AcademicNotificationCatalogue>().Get(key)), rule.ConcurrencyStamp);
@@ -144,6 +148,49 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 		slot.Subjects.Reverse();
 		await SaveAsync();
 		var initial = await AssertAudienceAsync(Published, [new("Student", learnerA), new("Student", learnerB), Teacher(0), Teacher(1)]);
+		var today = DateTime.UtcNow.Date;
+		var monday = today.AddDays((8 - (int)today.DayOfWeek) % 7 + 7);
+		var reminderAt = new DateTimeOffset(monday.AddHours(11).AddMinutes(30), TimeSpan.Zero);
+		var firstPeriod = new DateTimeOffset(monday.AddDays(1).AddHours(9).AddMinutes(41), TimeSpan.Zero);
+		await InSchoolAsync(async services =>
+		{
+			services.GetRequiredService<AcademicNotificationCatalogue>().GetAvailability(DayReminder).IsAvailable.ShouldBeTrue();
+			services.GetRequiredService<AcademicNotificationCatalogue>().GetManualAvailability(DayReminder).IsAvailable.ShouldBeFalse();
+			var scanner = services.GetServices<INotificationDueSource>().Single(x => x.ScheduledEventKeys.Contains(DayReminder));
+			var page = await scanner.ReadPageAsync(new(TenantId, reminderAt, reminderAt, null, 100), CancellationToken.None);
+			var candidate = page.Candidates.Single(x => x.SourceId == timetableId);
+			candidate.OccurrenceAt.ShouldBe(firstPeriod);
+			candidate.ExpiresAt.ShouldBe(firstPeriod);
+			var source = await services.GetRequiredService<TimetableNotificationSource>().LoadAsync(new(Guid.Empty, TenantId,
+				candidate.EventKey, scanner.SourceType, candidate.SourceId, candidate.SourceRevision, reminderAt, [], candidate.Scope,
+				candidate.OccurrenceAt), CancellationToken.None);
+			source.IsEligible.ShouldBeTrue();
+			source.RecipientContent!.Select(x => x.Recipient).ToHashSet().SetEquals(
+				[new("Student", learnerA), new("Student", learnerB), Teacher(0), Teacher(1)]).ShouldBeTrue();
+			source.RecipientContent!.All(x => x.Variables["period_count"].Value == "1").ShouldBeTrue();
+			source.RecipientContent!.All(x => x.Variables["period_times"].Value == "15:11–15:31").ShouldBeTrue();
+		});
+		await ScanAtAsync(reminderAt);
+		await ScanAtAsync(reminderAt.AddMinutes(2));
+		var reminder = await AssertAudienceAsync(DayReminder, [new("Student", learnerA), new("Student", learnerB), Teacher(0), Teacher(1)]);
+		reminder.DueAt.ShouldBe(reminderAt);
+		reminder.ExpiresAt.ShouldBe(firstPeriod);
+		await InSchoolAsync(async services =>
+		{
+			var timetableSource = services.GetRequiredService<TimetableNotificationSource>();
+			var scope = (await timetableSource.FindScopeAsync(TenantId, timetableId, CancellationToken.None))!;
+			var calendar = new AcademicCalendar(Guid.NewGuid(), TenantId, scope.MediumId, scope.YearId, "Reminder holiday",
+				monday, monday.AddDays(5));
+			calendar.Publish(Guid.Parse(TestAuthHandler.TestUserId));
+			await InsertAsync(services, calendar);
+			await InsertAsync(services, new AcademicCalendarDay(Guid.NewGuid(), TenantId, calendar.Id, monday.AddDays(1),
+				DayType.Holiday, "Scope closure", appliesToAll: false, standardId: classId, divisionId: divisionId));
+			var reader = services.GetRequiredService<NotificationIntentSourceReader>();
+			(await reader.LoadAsync(reminder, reminderAt, CancellationToken.None)).CurrentRecipients.ShouldBeEmpty();
+			var scanner = services.GetServices<INotificationDueSource>().Single(x => x.ScheduledEventKeys.Contains(DayReminder));
+			var page = await scanner.ReadPageAsync(new(TenantId, reminderAt, reminderAt, null, 100), CancellationToken.None);
+			page.Candidates.ShouldNotContain(x => x.SourceId == timetableId);
+		});
 		using (var deniedClient = Factory.CreateClient())
 		{
 			deniedClient.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
@@ -189,6 +236,16 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 		await AssertAudienceAsync(Withdrawn, [new("Student", learnerB), Teacher(1)]);
 
 		NotificationRecipientRefDto Teacher(int index) => new("AssignedTeacher", UserId: teachers[index].UserId, EmployeeId: teachers[index].Id);
+		async Task ScanAtAsync(DateTimeOffset now)
+		{
+			using var workers = Factory.Services.CreateScope();
+			var services = workers.ServiceProvider;
+			using var school = services.GetRequiredService<ICurrentTenant>().Change(TenantId, "Synthetic school");
+			var scheduler = services.GetRequiredService<INotificationDueScheduler>();
+			for (var page = 0; page < 24; page++)
+				if (!(await scheduler.ScanAsync(now, 100, CancellationToken.None)).HasMore) break;
+		}
+
 		async Task SaveAsync()
 		{
 			using var result = await Client.PostAsJsonAsync($"/api/academics/timetable/by-standard/{classId}/division/{divisionId}", input, JsonOptions);

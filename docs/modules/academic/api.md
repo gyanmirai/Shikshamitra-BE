@@ -121,6 +121,14 @@ The rule can select the current or outgoing teacher where applicable. Each recip
 
 History requires Academic Notification View, Class Teacher Assignment View and the division scope. Teachers open the authenticated school inbox. The older assignment endpoint remains outside this notification workflow.
 
+### Subject allocation notifications
+
+An enabled `Academic.Subject.Allocated` rule can run when the existing Curriculum actions first publish a class subject. An enabled `Academic.Subject.TeacherChanged` rule can run when editing a published allocation changes an effective teacher binding. A repeated publication, unchanged binding or draft edit preserves notification history. The class-level audience uses the saved assigned teachers. A configured class-teacher copy uses each actual active division assignment. The outgoing teacher receives generic content.
+
+An enabled `Academic.Subject.Withdrawn` rule can run when a published class subject becomes unpublished through its status, archive or removal workflow. Family audiences use active enrollment in the affected class and division. For an elective, a family qualifies only through the learner's locked choice for the removed subject. The source revision suppresses pending work after restoration or republication. Publication and withdrawal capture use the existing Subject Assignment permissions and source scope. The history additionally requires Academic Notification View and Subject Assignment View.
+
+The notification source ID is the class subject allocation. Direct edits made through the separate division-teacher workspace have their own mutation source.
+
 ### Marks review notifications
 
 An enabled rule can queue `Academic.Marks.Submitted` after `POST /api/academics/exams/{examId}/marks/submit` moves the saved subject and division workflow to Submitted. The recipient is the school's active reviewer configured through `Notifications:Academic:Tenants:<tenantIdN>:MarksReviewerUserId`. The correction action at `POST /api/academics/exams/{examId}/marks/request-changes` can queue `Academic.Marks.ChangesRequested` for the subject's current class and division teaching assignments. Recipients need Record Marks View and Add and access to the source workflow. The actor's own notice is suppressed.

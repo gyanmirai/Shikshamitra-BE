@@ -65,6 +65,10 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 				"You have been assigned as class teacher for {{class_name}}.",
 			(_, AcademicNotificationEventKeys.ClassTeacherAssigned or AcademicNotificationEventKeys.ClassTeacherReplaced or AcademicNotificationEventKeys.ClassTeacherRemoved) =>
 				"The class teacher assignment for {{class_name}} has changed.",
+			(_, AcademicNotificationEventKeys.SubjectAllocated) => "{{subject_name}} has been allocated for {{class_name}}.",
+			("PreviousTeacher", AcademicNotificationEventKeys.SubjectTeacherChanged) => "A subject is no longer assigned to you.",
+			(_, AcademicNotificationEventKeys.SubjectTeacherChanged) => "The teaching assignment for {{subject_name}} in {{class_name}} has changed.",
+			(_, AcademicNotificationEventKeys.SubjectWithdrawn) => "{{subject_name}} has been withdrawn for {{class_name}}.",
 			(_, AcademicNotificationEventKeys.MarksSubmitted) => "Marks for {{subject_name}} in {{exam_name}} are ready for review.",
 			(_, AcademicNotificationEventKeys.MarksChangesRequested) => "A correction was requested for {{subject_name}} in {{exam_name}}.",
 			(_, AcademicNotificationEventKeys.ResultPublished) => "A result is available. Sign in to ShikshaMitra to view it.",

@@ -14,10 +14,13 @@ public sealed class AcademicNotificationCatalogue : INotificationEventDefinition
 	private static readonly IReadOnlyDictionary<string, NotificationEventDefinition> ByKey =
 		Definitions.ToDictionary(x => x.EventKey, StringComparer.Ordinal);
 	private readonly HashSet<string> _supportedEvents;
+	private readonly HashSet<string> _dueSources;
 
-	public AcademicNotificationCatalogue(IEnumerable<INotificationSourceAdapter> adapters)
+	public AcademicNotificationCatalogue(IEnumerable<INotificationSourceAdapter> adapters,
+		IEnumerable<INotificationDueSource>? dueSources = null)
 	{
 		_supportedEvents = adapters.SelectMany(x => x.EventKeys).ToHashSet(StringComparer.Ordinal);
+		_dueSources = (dueSources ?? []).Select(x => x.SourceType).ToHashSet(StringComparer.Ordinal);
 	}
 
 	public IReadOnlyList<NotificationEventDefinition> GetAll() => Definitions;
@@ -28,8 +31,9 @@ public sealed class AcademicNotificationCatalogue : INotificationEventDefinition
 
 	public NotificationSourceAvailability GetAvailability(string eventKey)
 	{
-		Get(eventKey);
-		return _supportedEvents.Contains(eventKey)
+		var definition = Get(eventKey);
+		return _supportedEvents.Contains(eventKey) &&
+			(definition.TriggerType != NotificationTriggerType.Due || _dueSources.Contains(definition.SourceType))
 			? new(true, null)
 			: new(false, NotificationErrorCodes.SourceUnavailable);
 	}
@@ -37,6 +41,20 @@ public sealed class AcademicNotificationCatalogue : INotificationEventDefinition
 	public void EnsureAvailable(string eventKey)
 	{
 		if (!GetAvailability(eventKey).IsAvailable)
+			throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
+	}
+
+	public NotificationSourceAvailability GetManualAvailability(string eventKey)
+	{
+		Get(eventKey);
+		return _supportedEvents.Contains(eventKey)
+			? new(true, null)
+			: new(false, NotificationErrorCodes.SourceUnavailable);
+	}
+
+	public void EnsureSourceAvailable(string eventKey)
+	{
+		if (!GetManualAvailability(eventKey).IsAvailable)
 			throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
 	}
 }

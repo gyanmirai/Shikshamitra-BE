@@ -7,7 +7,8 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Academic.Notifications;
 
-public sealed record AcademicNotificationCatalogueEventDto(NotificationEventDefinition Definition, NotificationSourceAvailability Availability);
+public sealed record AcademicNotificationCatalogueEventDto(NotificationEventDefinition Definition,
+	NotificationSourceAvailability Availability, NotificationSourceAvailability ManualAvailability);
 public sealed record AcademicNotificationChannelDto(CommunicationChannelType Channel, bool IsConfigured);
 public sealed record AcademicNotificationCatalogueDto(IReadOnlyList<AcademicNotificationCatalogueEventDto> Events,
 	IReadOnlyList<AcademicNotificationChannelDto> Channels);

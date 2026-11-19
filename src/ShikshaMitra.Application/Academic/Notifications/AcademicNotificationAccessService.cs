@@ -82,7 +82,7 @@ public sealed class AcademicNotificationAccessService(ICurrentTenant tenant, ICu
 		var definition = catalogue.Get(eventKey);
 		if (sourceType != definition.SourceType || sourceId == Guid.Empty)
 			throw new BusinessException(NotificationErrorCodes.RecipientIneligible);
-		catalogue.EnsureAvailable(eventKey);
+		catalogue.EnsureSourceAvailable(eventKey);
 		var sources = adapters.Where(x => x.EventKeys.Contains(eventKey)).Take(2).ToArray();
 		var guards = authorizers.Where(x => x.EventKeys.Contains(eventKey)).Take(2).ToArray();
 		if (sources.Length != 1 || guards.Length != 1) throw new BusinessException(NotificationErrorCodes.SourceUnavailable);

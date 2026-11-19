@@ -69,6 +69,21 @@ public class AcademicNotificationCatalogue_Tests
 	}
 
 	[Fact]
+	public void Manual_due_source_remains_available_before_the_scheduled_scan_is_wired()
+	{
+		const string due = AcademicNotificationEventKeys.HomeworkDue;
+		var adapter = new HomeworkSourceAdapter();
+		var manual = new AcademicNotificationCatalogue([adapter]);
+		manual.EnsureSourceAvailable(due);
+		manual.GetAvailability(due).IsAvailable.ShouldBeFalse();
+		Should.Throw<BusinessException>(() => manual.EnsureAvailable(due)).Code.ShouldBe(NotificationErrorCodes.SourceUnavailable);
+
+		var automatic = new AcademicNotificationCatalogue([adapter], [new HomeworkDueSource()]);
+		automatic.GetAvailability(due).IsAvailable.ShouldBeTrue();
+		automatic.GetAvailability(AcademicNotificationEventKeys.HomeworkOverdue).IsAvailable.ShouldBeFalse();
+	}
+
+	[Fact]
 	public void Unsupported_event_names_and_unknown_variables_cannot_create_triggers()
 	{
 		Should.Throw<BusinessException>(() => _catalogue.Get("Academic.Quiz.Published"))
@@ -89,9 +104,17 @@ public class AcademicNotificationCatalogue_Tests
 
 	private sealed class HomeworkSourceAdapter : INotificationSourceAdapter
 	{
-		public IReadOnlyCollection<string> EventKeys => ["Academic.Homework.Published"];
+		public IReadOnlyCollection<string> EventKeys => [AcademicNotificationEventKeys.HomeworkPublished, AcademicNotificationEventKeys.HomeworkDue];
 
 		public Task<NotificationSourceSnapshot> LoadAsync(NotificationIntentContext context,
+			CancellationToken cancellationToken) => throw new NotSupportedException();
+	}
+
+	private sealed class HomeworkDueSource : INotificationDueSource
+	{
+		public string SourceType => "Academic.Homework";
+
+		public Task<NotificationDueSourcePage> ReadPageAsync(NotificationDueScanRequest request,
 			CancellationToken cancellationToken) => throw new NotSupportedException();
 	}
 }

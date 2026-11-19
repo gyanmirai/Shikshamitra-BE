@@ -34,7 +34,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	private readonly IAsyncQueryableExecuter _asyncExecuter;
 	private readonly StudentSubmissionManager _submissionManager;
 	private readonly HomeworkAppService _homeworkAppService;
-	private readonly HomeworkFeedbackReleaseEventCapture _feedbackEvents;
+	private readonly LearningTaskFeedbackReleaseEventCapture _feedbackEvents;
 
 	public HomeworkFeedbackAppService(
 		IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
@@ -46,7 +46,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		IAsyncQueryableExecuter asyncExecuter,
 		StudentSubmissionManager submissionManager,
 		HomeworkAppService homeworkAppService,
-		HomeworkFeedbackReleaseEventCapture feedbackEvents
+		LearningTaskFeedbackReleaseEventCapture feedbackEvents
 	)
 	{
 		_homeworkRepository = homeworkRepository;

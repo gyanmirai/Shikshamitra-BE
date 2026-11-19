@@ -25,7 +25,7 @@ public class RubricAssessmentAppService(
 		IRepository<AssignmentEntity, Guid> assignmentRepository,
 		IStudentSubmissionRepository submissionRepository,
 		IUserScopeService userScopeService,
-		HomeworkFeedbackReleaseEventCapture feedbackEvents
+		LearningTaskFeedbackReleaseEventCapture feedbackEvents
 
 ) : ApplicationService, IRubricAssessmentAppService
 {

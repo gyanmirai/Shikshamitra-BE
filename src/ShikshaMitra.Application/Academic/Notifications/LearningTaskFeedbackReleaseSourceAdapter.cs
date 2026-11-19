@@ -16,28 +16,33 @@ using static ShikshaMitra.Academic.Notifications.LearningTaskNotificationContent
 namespace ShikshaMitra.Academic.Notifications;
 
 [RemoteService(false), ExposeServices(typeof(INotificationSourceAdapter))]
-public sealed class HomeworkFeedbackReleaseSourceAdapter(IRepository<StudentSubmissionEntity, Guid> submissions,
+public sealed class LearningTaskFeedbackReleaseSourceAdapter(IRepository<StudentSubmissionEntity, Guid> submissions,
 	LearningTaskNotificationRecordReader records, LearningTaskNotificationRoster roster, IAsyncQueryableExecuter queries,
 	ICurrentTenant tenant, ITenantStore tenants, IClock clock) : INotificationSourceAdapter, ITransientDependency
 {
-	internal const string EventKey = AcademicNotificationEventKeys.HomeworkFeedbackReleased;
+	internal const string HomeworkEventKey = AcademicNotificationEventKeys.HomeworkFeedbackReleased;
+	internal const string AssignmentEventKey = AcademicNotificationEventKeys.AssignmentFeedbackReleased;
 	internal const string ReleaseRevision = "first-feedback-release";
-	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[] { EventKey });
+	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[] { HomeworkEventKey, AssignmentEventKey });
 
 	public async Task<NotificationSourceSnapshot> LoadAsync(NotificationIntentContext context, CancellationToken cancellationToken)
 	{
-		if (context.TenantId == Guid.Empty || context.TenantId != tenant.Id || context.SourceId == Guid.Empty ||
-			context.EventKey != EventKey || context.SourceType != LearningTaskReminderSourceAdapter.HomeworkSourceType)
+		var isAssignment = context.EventKey == AssignmentEventKey && context.SourceType == LearningTaskReminderSourceAdapter.AssignmentSourceType;
+		var isHomework = context.EventKey == HomeworkEventKey && context.SourceType == LearningTaskReminderSourceAdapter.HomeworkSourceType;
+		if (context.TenantId == Guid.Empty || context.TenantId != tenant.Id || context.SourceId == Guid.Empty || (!isAssignment && !isHomework))
 			return Unavailable();
 
 		var submission = await queries.SingleOrDefaultAsync((await submissions.GetQueryableAsync()).Where(x =>
-			x.TenantId == context.TenantId && x.Id == context.SourceId && !x.IsDeleted && x.AssignmentId == null &&
+			x.TenantId == context.TenantId && x.Id == context.SourceId && !x.IsDeleted &&
+			(isAssignment ? x.AssignmentId.HasValue && !x.HomeworkAssignmentId.HasValue : x.HomeworkAssignmentId.HasValue && !x.AssignmentId.HasValue) &&
 			x.Status == SubmissionStatus.Reviewed && (x.ReviewedAt.HasValue || x.GradedDate.HasValue))
-			.Select(x => new { x.HomeworkAssignmentId, x.StudentId, x.DivisionId }), cancellationToken);
-		if (submission?.HomeworkAssignmentId is not Guid homeworkId) return Unavailable();
+			.Select(x => new { TaskId = x.AssignmentId ?? x.HomeworkAssignmentId, x.StudentId, x.DivisionId }), cancellationToken);
+		if (submission?.TaskId is not Guid taskId) return Unavailable();
 
 		var now = new DateTimeOffset(clock.Now.ToUniversalTime());
-		var record = await records.FindHomeworkAsync(context.TenantId, homeworkId, now, cancellationToken, includeClosed: true);
+		var record = isAssignment
+			? await records.FindAssignmentAsync(context.TenantId, taskId, now, cancellationToken, includeClosed: true)
+			: await records.FindHomeworkAsync(context.TenantId, taskId, now, cancellationToken, includeClosed: true);
 		var schedule = record?.Schedules.SingleOrDefault(x => x.DivisionId == submission.DivisionId);
 		if (record == null || schedule == null) return Unavailable();
 		var eligible = await roster.FindAsync(context.TenantId, record, [submission.DivisionId], [submission.StudentId],

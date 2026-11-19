@@ -23,7 +23,7 @@ public sealed class HomeworkReminderSourceAuthorizer(HomeworkAppService access, 
 {
 	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[]
 	{
-		LearningTaskReminderSourceAdapter.HomeworkEventKey, HomeworkPublicationSourceAdapter.EventKey, HomeworkFeedbackReleaseSourceAdapter.EventKey,
+		LearningTaskReminderSourceAdapter.HomeworkEventKey, HomeworkPublicationSourceAdapter.EventKey, LearningTaskFeedbackReleaseSourceAdapter.HomeworkEventKey,
 	});
 
 	public async Task EnsureCanViewAsync(string eventKey, Guid sourceId, CancellationToken cancellationToken)
@@ -33,7 +33,7 @@ public sealed class HomeworkReminderSourceAuthorizer(HomeworkAppService access, 
 			throw new AbpAuthorizationException();
 
 		var homeworkId = sourceId;
-		if (eventKey == HomeworkFeedbackReleaseSourceAdapter.EventKey)
+		if (eventKey == LearningTaskFeedbackReleaseSourceAdapter.HomeworkEventKey)
 		{
 			var owner = await queries.SingleOrDefaultAsync((await submissions.GetQueryableAsync()).Where(x =>
 				x.TenantId == tenantId && x.Id == sourceId && !x.IsDeleted && x.AssignmentId == null)

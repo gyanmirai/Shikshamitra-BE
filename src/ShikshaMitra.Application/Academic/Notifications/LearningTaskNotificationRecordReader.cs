@@ -39,11 +39,11 @@ public sealed class LearningTaskNotificationRecordReader(IRepository<HomeworkAss
 	}
 
 	internal async Task<LearningTaskNotificationRecord?> FindAssignmentAsync(Guid tenantId, Guid sourceId, DateTimeOffset now,
-		CancellationToken cancellationToken)
+		CancellationToken cancellationToken, bool includeClosed = false)
 	{
 		var task = await queries.SingleOrDefaultAsync((await assignments.WithDetailsAsync(x => x.DivisionSchedules))
-			.Where(x => x.TenantId == tenantId && !x.IsDeleted && x.Id == sourceId && x.Status != AssignmentStatus.Closed), cancellationToken);
-		if (task == null) return null;
+			.Where(x => x.TenantId == tenantId && !x.IsDeleted && x.Id == sourceId), cancellationToken);
+		if (task == null || !includeClosed && task.Status == AssignmentStatus.Closed) return null;
 
 		var schedules = task.DivisionSchedules.Where(x => x.TenantId == tenantId && x.IsPublished &&
 			(!x.PublishedAt.HasValue || AsUtc(x.PublishedAt.Value) <= now)).OrderBy(x => x.DivisionId)

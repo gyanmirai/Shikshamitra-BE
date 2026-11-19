@@ -22,17 +22,27 @@ public sealed class AssignmentNotificationSourceAuthorizer(IRepository<Assignmen
 	IUserScopeService scopes, IPermissionChecker permissions, IAsyncQueryableExecuter queries, ICurrentTenant tenant, ICurrentUser user)
 	: IAcademicNotificationSourceAuthorizer, ITransientDependency
 {
-	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[] { LearningTaskReminderSourceAdapter.AssignmentEventKey });
+	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[] {
+		LearningTaskReminderSourceAdapter.AssignmentEventKey, AssignmentPublicationSourceAdapter.EventKey
+	});
 
 	public async Task EnsureCanViewAsync(string eventKey, Guid sourceId, CancellationToken cancellationToken)
 	{
-		if (eventKey != LearningTaskReminderSourceAdapter.AssignmentEventKey || sourceId == Guid.Empty ||
-			tenant.Id is not Guid tenantId || user.Id is not Guid userId ||
-			!await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View))
+		if (!EventKeys.Contains(eventKey) || sourceId == Guid.Empty || tenant.Id is not Guid tenantId || user.Id is not Guid userId)
+			throw new AbpAuthorizationException();
+
+		var publication = eventKey == AssignmentPublicationSourceAdapter.EventKey;
+		var viewPermission = publication
+			? ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View
+			: ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View;
+		if (!await permissions.IsGrantedAsync(viewPermission))
 			throw new AbpAuthorizationException();
 
 		var scope = await scopes.GetUserScopeAsync(userId);
-		var sources = (await assignments.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted && x.Id == sourceId);
+		var sources = (await assignments.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted);
+		sources = publication
+			? sources.Where(x => x.DivisionSchedules.Any(s => s.Id == sourceId && s.TenantId == tenantId && s.IsPublished && s.PublishedAt.HasValue))
+			: sources.Where(x => x.Id == sourceId);
 		if (!await queries.AnyAsync(AssignmentV2AppService.ApplyAssignmentScope(sources, scope), cancellationToken))
 			throw new AbpAuthorizationException();
 	}

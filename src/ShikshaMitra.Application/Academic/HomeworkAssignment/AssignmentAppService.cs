@@ -16,6 +16,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 using Volo.Abp.Linq;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
@@ -389,6 +390,7 @@ public class AssignmentAppService : ApplicationService, IAssignmentAppService
 	[Authorize(
 		ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.Add
 	)]
+	[UnitOfWork(true)]
 	public async Task<AssignmentPublishResponseDto> PublishAsync(
 		Guid id,
 		Guid academicMediumId

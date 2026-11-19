@@ -210,7 +210,7 @@ public class PayrollSettingsActionAuthorization_Tests
 
 	private static CompensationRevisionAppService CompensationService(IRepository<EmployeeCompensationRevision, Guid> repository,
 		IEmployeeAuthorizationService access, AbpLazyServiceProvider provider) =>
-		new(repository, null!, null!, null!, null!, null!, null!, null!, null!, null!, access, null!, null!) { LazyServiceProvider = provider };
+		new(repository, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, access, null!, null!) { LazyServiceProvider = provider };
 
 	private static Task ReadCompensation(CompensationRevisionAppService service, Guid employee, bool effective) =>
 		effective ? service.GetEffectiveAsync(employee, new DateTime(2026, 10, 1)) : service.GetListAsync(employee);

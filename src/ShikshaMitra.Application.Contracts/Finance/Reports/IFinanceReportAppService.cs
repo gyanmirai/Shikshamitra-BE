@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 
@@ -10,5 +11,6 @@ public interface IFinanceReportAppService : IApplicationService
     Task<FinanceAiReportPlanResponseDto> CreateAiPlanAsync(FinanceAiReportPlanRequestDto input);
     Task<FinanceReportPreviewDto> PreviewAsync(FinanceReportRequestDto input);
     Task<FinanceReportExportCreateResponseDto> CreateExportAsync(FinanceReportRequestDto input);
+    Task<List<FinanceReportExportDto>> GetExportsAsync();
     Task<FinanceReportDownloadDto> DownloadExportAsync(Guid jobId);
 }

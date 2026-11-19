@@ -15,8 +15,9 @@ public class FinanceReportRequestGuard : ITransientDependency
     public const string ExportExpired = "FinanceReports:ExportExpired";
     public const string ExportNotFound = "FinanceReports:ExportNotFound";
 
-    private static readonly HashSet<string> SupportedReportTypes = new(StringComparer.Ordinal)
-    {
+    public static IReadOnlyList<string> SupportedReportTypes { get; } =
+    [
+        ..FinanceReportTypes.PhaseOne,
         FinanceReportTypes.FeeCollectionBatchAndMonthwise,
         FinanceReportTypes.FeeCollectionBatchwise,
         FinanceReportTypes.FeeCollectionMonthAndFeeHeadwise,
@@ -27,7 +28,7 @@ public class FinanceReportRequestGuard : ITransientDependency
         FinanceReportTypes.ClasswiseFeeSetup,
         FinanceReportTypes.CustomGroupReceiptList,
         FinanceReportTypes.FeeRegisterAllStudent
-    };
+    ];
 
     public void ValidateAndNormalize(FinanceReportRequestDto request)
     {
@@ -78,6 +79,32 @@ public class FinanceReportRequestGuard : ITransientDependency
         ValidateOptionalId(filters.BatchId, "BatchId");
         ValidateOptionalId(filters.BoardId, "BoardId");
         ValidateOptionalId(filters.MediumId, "MediumId");
+        ValidateOptionalId(filters.StudentId, "StudentId");
+
+        if (FinanceReportTypes.PhaseOne.Contains(request.ReportType))
+        {
+            if (filters.AcademicYearIds?.Count != 1 || filters.BatchId.HasValue)
+                throw Invalid("AcademicYearIds", "Select one academic year.");
+            if (filters.Months?.Count > 0 || filters.FromDate.HasValue != filters.ToDate.HasValue)
+                throw Invalid("DateRange", "Provide both dates or leave the range empty.");
+            if (filters.FromDate?.Year < 1900 || filters.ToDate?.Year > 2200)
+                throw Invalid("DateRange", "Select a date between 1900 and 2200.");
+            if (filters.GroupBy is not (null or "classDivision" or "feeHead"))
+                throw Invalid("GroupBy", "Select class and division or fee head.");
+            if (filters.DateBasis is not (null or "payment" or "decision") ||
+                (filters.DateBasis == "decision" && request.ReportType != FinanceReportTypes.PaymentVerification))
+                throw Invalid("DateBasis", "Choose a date basis supported by the report.");
+            if (request.ReportType == FinanceReportTypes.StudentStatement &&
+                !filters.StudentId.HasValue && string.IsNullOrWhiteSpace(filters.PayerSearch))
+                throw Invalid("PayerSearch", "Enter a student name, admission number, or applicant account.");
+
+            foreach (var value in new[] { filters.PayerSearch, filters.Installment, filters.Collector,
+                filters.Bank, filters.ReceiptNumber, filters.PaymentMethod, filters.Status })
+            {
+                if (value?.Length > 120)
+                    throw Invalid("Filters", "Filter text must be 120 characters or fewer.");
+            }
+        }
     }
 
     public static bool RequiresAcademicYearWideScope(string reportType) =>

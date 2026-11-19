@@ -21,13 +21,14 @@ using Volo.Abp.Authorization;
 namespace ShikshaMitra.HR.Payroll.Compensation;
 
 [RemoteService(false)]
-public class CompensationRevisionAppService(
+public partial class CompensationRevisionAppService(
 	IRepository<EmployeeCompensationRevision, Guid> revisionRepository,
 	IRepository<EmployeeCompensationRevisionLine, Guid> lineRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollSnapshotRepository,
 	ISalaryTemplateAppService salaryTemplateAppService,
 	EmployeeActivationReadinessService activationReadinessService,
 	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator,
+	SalaryTemplatePreviewProofService previewProofService,
 	IPayrollInputRevisionStore inputRevisionStore,
 	EsiPolicyResolver esiPolicies,
 	IAsyncQueryableExecuter asyncExecuter,

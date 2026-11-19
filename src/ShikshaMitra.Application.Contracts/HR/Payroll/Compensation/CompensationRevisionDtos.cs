@@ -100,6 +100,8 @@ public interface ICompensationRevisionAppService : IApplicationService
 	Task<CompensationRevisionListDto> GetListAsync(Guid employeeId);
 	Task<CompensationRevisionDto?> GetEffectiveAsync(Guid employeeId, DateTime month);
 	Task<CompensationRevisionDto> SaveAsync(Guid employeeId, SaveEmployeeCompensationDto input);
+	Task<ProtectionMigrationPreviewDto> PreviewProtectionMigrationAsync(Guid employeeId, PreviewProtectionMigrationDto input);
+	Task<CompensationRevisionDto> ApplyProtectionMigrationAsync(Guid employeeId, ApplyProtectionMigrationDto input);
 }
 
 public class SaveEmployeeCompensationDtoValidator : AbstractValidator<SaveEmployeeCompensationDto>

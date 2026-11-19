@@ -29,6 +29,7 @@ internal sealed class IdentityCardLayoutElement
 	public string? FieldKey { get; set; }
 	public string? Label { get; set; }
 	public string? Value { get; set; }
+	public string? Prefix { get; set; }
 	public float X { get; set; }
 	public float Y { get; set; }
 	public float W { get; set; }

@@ -217,6 +217,7 @@ Payroll APIs manage setup, preview, review, lock, and salary slips:
 | Payroll policies | `/api/hr/payroll/policies` | `HR.PayrollManagement.Settings.PayrollPolicies.*` | Implemented |
 | One-time salary components | `/api/payroll/employees/{employeeId}/salary-structure` | GET: `HR.Employee.EmployeeList.View`; PUT: `HR.PayrollManagement.PayrollStructure.Add` plus existing employee-modification authority | Implemented |
 | Compensation revisions | `/api/payroll/employees/{employeeId}/compensation` | `HR.PayrollManagement.CompensationRevisions.View`, `Manage`, or `ViewAudit` | Implemented |
+| Reviewed CTC migration | `POST /api/payroll/employees/{employeeId}/compensation/protection-migration/preview` and `/apply` | `HR.PayrollManagement.CompensationRevisions.Manage` and employee scope | Implemented |
 | Run payroll | `/api/payroll/run` | `HR.PayrollManagement.RunPayroll.*` | Generation-bound review and lock; rollout pending |
 | Durable payroll previews | `/api/payroll/run/previews*` | `HR.PayrollManagement.RunPayroll.View` | Additive migration and integration verification pending |
 | Salary slips | `/api/payroll/salary-slips` | `HR.PayrollManagement.GenerateSalarySlip.*` | Implemented |
@@ -227,6 +228,14 @@ Salary-structure application calls retain the same employee ownership/scope and 
 Salary-template reads require Salary Templates View, except the active assignment catalogue, which requires Compensation Revisions Manage.
 Template create, update, default and archive calls retain their independent Add, Edit, SetDefault and Archive actions, including idempotent responses without an extra View prerequisite.
 Compensation-history and effective-revision application reads require Compensation Revisions View or Manage plus the existing employee-scope check before querying salary data.
+
+Migration preview accepts `sourceRevisionId` and the first day of the target `effectiveMonth`.
+Apply also requires the signed `previewToken` returned by preview.
+The source must be the effective approved Monthly salary revision with a complete calculation snapshot.
+Stale sources, changed calculation inputs, and locked payroll prevent applying the preview.
+An authorized retry using the original proof returns the revision created by the first successful apply.
+Payroll preview rows include optional `salaryProtection` evidence for the recurring CTC target, achieved cost, difference, gross adjustment, and result status.
+The calculated CTC evidence does not extend the public payslip response.
 
 Payroll month parameters use `MMMM-YYYY`, such as `JANUARY-2025`.
 Payroll lock is idempotent for an already locked month and returns the documented payroll lock error.

@@ -62,11 +62,23 @@ Treat these rules as critical because HR feeds payroll and staff records:
 | One-time salary components remain separate | Temporary earnings and deductions cannot change the effective recurring compensation revision |
 | Saving recurring compensation is direct and immutable | Every save is recalculated on the server and creates a new effective revision without an approval queue |
 | Employee activation requires payroll readiness | New employees remain Inactive until an effective salary covers the later of joining month or current payroll month and valid calculation rules exist; pending PF/ESIC registration is a follow-up warning and eligible contributions still apply |
-| Protected compensation drift is visible but non-mutating | An explained scheme-application CTC variance warns without rewriting saved gross; unrelated target differences remain blockers |
+| CTC protection applies to unlocked payroll | The recurring period cost is reconciled to the prorated approved CTC using the effective employer contributions. Explained scheme-application differences still warn without changing gross. Unsolvable differences block locking. |
 | Earning component dependencies are tenant-scoped and acyclic | A percentage component cannot reference itself, another tenant, an inactive target, or a dependency chain that returns to itself |
 | Payroll preview and lock use the same policy basis | Salary slips must match the locked payroll snapshot |
 | Policy assignments resolve by specificity and date | Employee overrides beat group assignments, and defaults are fallback only |
 | Reports must be reproducible and scope-safe | Captured rows and downloads stay fixed, remain private, and require current source permissions and record scope |
+
+## Salary package protection
+
+Monthly salary fixes recurring gross, while Monthly cost to school (CTC) protects recurring gross plus applicable employer contributions.
+Payroll prorates the approved CTC once using payable days, then evaluates the existing earning formulas and effective PF and ESIC rules at the resulting gross.
+One-time amounts and their statutory effects stay outside the recurring target.
+The period result and any gross adjustment are recorded with the payroll snapshot and copied to the salary slip.
+Locked payroll and issued slips retain their recorded values.
+
+A compensation manager can preview and apply a new CTC revision using the approved employer cost in a Monthly salary revision.
+The signed preview binds the employee, source revision, effective month, and current calculation.
+Applying it creates an effective revision through the existing save workflow while retaining the source in history.
 
 ## Product behavior by area
 

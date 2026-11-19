@@ -27,9 +27,11 @@ public class FeeAdjustmentManager(
     IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
     IRepository<FeeRecordMetadata, Guid> collectionRepository,
     IRepository<FeePaymentReceipt, Guid> receiptRepository,
-    IRepository<Student, Guid> studentRepository,
+    IStudentRepository studentRepository,
     ICurrentTenant currentTenant) : DomainService
 {
+    private const decimal MaximumTransferLineAmount = 1_000_000_000_000m;
+
     public async Task<FeeAdjustmentRequest> CreateAsync(
         Guid academicYearId,
         Guid studentId,
@@ -39,13 +41,13 @@ public class FeeAdjustmentManager(
         if (sourceLines == null || sourceLines.Count == 0 ||
             sourceLines.Select(line => line.DueFeeId).Distinct().Count() != sourceLines.Count ||
             sourceLines.Any(line => !double.IsFinite(line.Amount) || line.Amount <= 0d ||
-                line.Amount > 1_000_000_000_000d ||
+                line.Amount > (double)MaximumTransferLineAmount ||
                 decimal.Round((decimal)line.Amount, 2) != (decimal)line.Amount))
         {
             throw new BusinessException(FeeAdjustmentErrorCodes.SourceLineInvalid);
         }
 
-        var student = await studentRepository.FindAsync(studentId)
+        var student = await studentRepository.GetForFinanceContextAsync(studentId)
             ?? throw new BusinessException(FeeAdjustmentErrorCodes.StudentNotFound)
                 .WithData("StudentId", studentId);
 
@@ -152,6 +154,43 @@ public class FeeAdjustmentManager(
         return request;
     }
 
+    public async Task<FeeAdjustmentRequest> CreateAndApplyForAdministratorAsync(
+        Guid academicYearId,
+        Guid studentId,
+        string reason,
+        IReadOnlyList<(Guid DueFeeId, double Amount)> sourceLines,
+        Guid administratorId)
+    {
+        var request = await CreateAsync(academicYearId, studentId, reason, sourceLines);
+        var sourceIds = request.SourceLines.Select(line => line.DueFeeId).ToList();
+        var headIds = (await feeHeadRepository.GetListAsync(head => head.AcademicYearId == academicYearId))
+            .Select(head => head.Id).ToList();
+        var destinations = await dueFeeRepository.GetListAsync(due =>
+            due.StudentId == studentId && headIds.Contains(due.FeeHeadId) &&
+            !sourceIds.Contains(due.Id) && due.OutstandingAmount > 0m);
+
+        var remaining = request.SourceLines.Sum(line => (decimal)line.Amount);
+        var targets = new List<(Guid DueFeeId, double Amount)>();
+        foreach (var due in destinations.OrderBy(due => due.Year).ThenBy(due => due.Month).ThenBy(due => due.Id))
+        {
+            if (remaining == 0m) break;
+            var capacity = request.Kind == FeeAdjustmentKind.UnpaidTransfer
+                ? MaximumTransferLineAmount
+                : decimal.Floor(due.OutstandingAmount * 100m) / 100m;
+            var amount = Math.Min(remaining, capacity);
+            if (amount <= 0m) continue;
+            targets.Add((due.Id, (double)amount));
+            remaining -= amount;
+        }
+
+        if (targets.Count == 0)
+            throw new BusinessException(FeeAdjustmentErrorCodes.NoEligibleDestination);
+
+        // This creation-only path applies the new aggregate before persistence assigns its creator.
+        await ApplyAsync(request, administratorId, "Automatically approved on administrator creation.", targets);
+        return request;
+    }
+
     public async Task ApplyAsync(
         FeeAdjustmentRequest request,
         Guid approverId,
@@ -175,7 +214,7 @@ public class FeeAdjustmentManager(
         if (targetLines == null || targetLines.Count == 0 ||
             targetLines.Select(line => line.DueFeeId).Distinct().Count() != targetLines.Count ||
             targetLines.Any(line => !double.IsFinite(line.Amount) || line.Amount <= 0d ||
-                line.Amount > 1_000_000_000_000d ||
+                line.Amount > (double)MaximumTransferLineAmount ||
                 decimal.Round((decimal)line.Amount, 2) != (decimal)line.Amount))
             throw new BusinessException(FeeAdjustmentErrorCodes.NoAllocationLines);
 

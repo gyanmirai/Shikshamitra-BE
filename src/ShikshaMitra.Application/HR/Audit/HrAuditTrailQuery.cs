@@ -5,8 +5,11 @@ namespace ShikshaMitra.HR.Audit;
 
 public static class HrAuditTrailQuery
 {
+	internal const string PayrollReviewReceiptAction = "review_unchanged";
+
 	public static IQueryable<HrAuditEvent> ApplyFilters(IQueryable<HrAuditEvent> query, HrAuditEventListRequestDto input)
 	{
+		query = query.Where(x => x.EntityType != "payroll_run" || x.Action != PayrollReviewReceiptAction);
 		if (input.AcademicYearId.HasValue)
 		{
 			query = query.Where(x => x.AcademicYearId == input.AcademicYearId.Value);
@@ -15,6 +18,10 @@ public static class HrAuditTrailQuery
 		{
 			var entityType = Normalize(input.EntityType);
 			query = query.Where(x => x.EntityType == entityType);
+		}
+		if (!string.IsNullOrWhiteSpace(input.PayrollMonth))
+		{
+			query = query.Where(x => x.EntityType == "payroll_run" && x.EntityName == input.PayrollMonth);
 		}
 		if (input.EntityId.HasValue)
 		{

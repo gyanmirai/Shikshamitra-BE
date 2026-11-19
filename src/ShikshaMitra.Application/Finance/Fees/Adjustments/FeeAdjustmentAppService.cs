@@ -31,7 +31,7 @@ public partial class FeeAdjustmentAppService(
     IFeeRefundRepository feeRefundRepository,
     FeeAdjustmentManager feeAdjustmentManager,
     IDueFeeRepository dueFeeRepository,
-    IRepository<Student, Guid> studentRepository,
+    IStudentRepository studentRepository,
     IRepository<FeeHead, Guid> feeHeadRepository,
     IRepository<Standard, Guid> standardRepository,
     IRepository<Division, Guid> divisionRepository,

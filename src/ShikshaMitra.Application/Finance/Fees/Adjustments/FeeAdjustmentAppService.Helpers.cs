@@ -8,6 +8,7 @@ using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students;
 using Volo.Abp.Authorization;
+using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.Finance.Fees.FeeAdjustment;
 
@@ -79,9 +80,16 @@ public partial class FeeAdjustmentAppService
 
     private async Task<FeeAdjustmentDetailDto> MapDetailAsync(FeeAdjustmentRequest request)
     {
-        var student = await studentRepository.GetAsync(request.StudentId);
-        var standard = student.StandardId.HasValue ? await standardRepository.FindAsync(student.StandardId.Value) : null;
-        var division = student.DivisionId.HasValue ? await divisionRepository.FindAsync(student.DivisionId.Value) : null;
+        var student = await studentRepository.GetRegistrationAggregateAsync(request.StudentId)
+            ?? throw new EntityNotFoundException(typeof(Student), request.StudentId);
+        var className = student.StandardId.HasValue
+            ? await AsyncExecuter.FirstOrDefaultAsync((await standardRepository.GetQueryableAsync())
+                .Where(standard => standard.Id == student.StandardId.Value).Select(standard => standard.Name))
+            : null;
+        var divisionName = student.DivisionId.HasValue
+            ? await AsyncExecuter.FirstOrDefaultAsync((await divisionRepository.GetQueryableAsync())
+                .Where(division => division.Id == student.DivisionId.Value).Select(division => division.Name))
+            : null;
 
         var dueFeeIds = request.SourceLines.Select(l => l.DueFeeId)
             .Concat(request.TargetAllocations.Select(a => a.DueFeeId)).Distinct().ToList();
@@ -107,7 +115,7 @@ public partial class FeeAdjustmentAppService
             Kind = request.Kind,
             Id = request.Id, VoucherNumber = request.VoucherNumber, StudentId = request.StudentId,
             StudentName = FormatStudentName(student), StudentGrNo = student.GrNo,
-            RollNo = student.RollNo?.ToString(), ClassName = standard?.Name, DivisionName = division?.Name,
+            RollNo = student.RollNo?.ToString(), ClassName = className, DivisionName = divisionName,
             ContactNo = student.ContactDetail?.PrimaryContactNo, AcademicYearId = request.AcademicYearId,
             BoardId = request.BoardId, EducationMediumId = request.EducationMediumId,
             Reason = request.Reason, Status = request.Status,

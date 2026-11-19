@@ -1,7 +1,10 @@
 using System;
 using System.Security.Claims;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Academic.Curriculum;
@@ -9,8 +12,12 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.Examination.Results;
 using ShikshaMitra.Academic.Examination.SeatAllocation;
+using ShikshaMitra.Academic.Notifications;
+using ShikshaMitra.Communication;
+using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students;
+using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -21,13 +28,15 @@ using Volo.Abp;
 using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using Volo.Abp.Modularity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Claims;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.Academic.ClassManagement.StudentElectiveAssignment;
 
-public class StudentElectiveCorrectionAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public class StudentElectiveCorrectionAppService_Tests : ShikshaMitraApplicationTestBase<ElectiveCorrectionTransactionTestModule>
 {
 	private IStudentElectiveCorrectionAppService Service => GetRequiredService<IStudentElectiveCorrectionAppService>();
 	private IRepository<T, Guid> Repo<T>() where T : class, Volo.Abp.Domain.Entities.IEntity<Guid> => GetRequiredService<IRepository<T, Guid>>();
@@ -46,7 +55,7 @@ public class StudentElectiveCorrectionAppService_Tests : ShikshaMitraApplication
 	public Task Admin_review_is_required_and_correction_preserves_lock_and_original_receipt() => WithUnitOfWorkAsync(async () =>
 	{
 		var tenantId = Guid.NewGuid();
-		using var tenant = GetRequiredService<ICurrentTenant>().Change(tenantId);
+		using var tenant = GetRequiredService<ICurrentTenant>().Change(tenantId, "Synthetic school");
 		var role = await Repo<IdentityRole>().InsertAsync(new IdentityRole(Guid.NewGuid(), "admin", tenantId), true);
 		var user = new IdentityUser(Guid.NewGuid(), "corrector", "corrector@test.local", tenantId);
 		user.AddRole(role.Id);
@@ -59,7 +68,9 @@ public class StudentElectiveCorrectionAppService_Tests : ShikshaMitraApplication
 		var division = await Repo<Division>().InsertAsync(new Division(Guid.NewGuid(), tenantId, "A", standard.Id, 30, "COR-A"), true);
 		var classId = standard.Id; var divisionId = division.Id;
 		var student = await Repo<Student>().InsertAsync(new Student(Guid.NewGuid(), tenantId, "Elective", null, "Student",
-			board.AcademicYearId, board.Id, medium.Id, stage.Id, classId, divisionId), true);
+			board.AcademicYearId, board.Id, medium.Id, stage.Id, classId, divisionId, status: StudentLifeCycleStatusEnum.Enrolled), true);
+		await Repo<StudentEnrollment>().InsertAsync(
+			StudentEnrollment.Create(Guid.NewGuid(), tenantId, student.Id, board.AcademicYearId, classId, divisionId), true);
 		var first = await Repo<Subject>().InsertAsync(new Subject(Guid.NewGuid(), tenantId, "Music", "#00A76F", medium.Id), true);
 		var second = await Repo<Subject>().InsertAsync(new Subject(Guid.NewGuid(), tenantId, "Art", "#00A76F", medium.Id), true);
 		var group = new ElectiveGroup(Guid.NewGuid(), tenantId, "Arts", "#00A76F", medium.Id);
@@ -69,6 +80,19 @@ public class StudentElectiveCorrectionAppService_Tests : ShikshaMitraApplication
 		selection.LockSelection(); await Repo<StudentElectiveSelection>().InsertAsync(selection, true);
 		var receipt = await Repo<StudentElectivePreferenceSubmission>().InsertAsync(new StudentElectivePreferenceSubmission(Guid.NewGuid(), tenantId,
 			student.Id, board.AcademicYearId, group.Id, first.Id, first.Name, user.Id, DateTime.UtcNow, Guid.NewGuid()), true);
+		const string corrected = AcademicNotificationEventKeys.ElectiveLockedSelectionCorrected;
+		var header = await Repo<CommunicationTemplate>().InsertAsync(new CommunicationTemplate(Guid.NewGuid(), tenantId)
+			{ TemplateName = "Elective correction notice" }, true);
+		var template = new CommunicationTemplateRevision(Guid.NewGuid(), tenantId, header.Id, 1, corrected, "Guardian",
+			CommunicationChannelType.InApp, "en", "Elective update", "Open the school inbox.", 1);
+		template.Publish(user.Id, DateTimeOffset.UtcNow);
+		await Repo<CommunicationTemplateRevision>().InsertAsync(template, true);
+		var rule = new NotificationRule(Guid.NewGuid(), tenantId, corrected, NotificationRuleScope.Create());
+		var config = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, [],
+			[CommunicationChannelType.InApp], [header.Id], NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");
+		rule.Configure(true, GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(
+			config, GetRequiredService<AcademicNotificationCatalogue>().Get(corrected)), rule.ConcurrencyStamp);
+		await Repo<NotificationRule>().InsertAsync(rule, true);
 		var input = new ConfirmStudentElectiveCorrectionInput { AcademicMediumId = medium.Id, ClassId = classId, DivisionId = divisionId,
 			ElectiveGroupId = group.Id, StudentId = student.Id, SelectedSubjectId = second.Id, PreferredSubjectId = second.Id, ReviewToken = "not-reviewed" };
 		await Should.ThrowAsync<BusinessException>(() => Service.ConfirmAsync(input));
@@ -117,6 +141,7 @@ public class StudentElectiveCorrectionAppService_Tests : ShikshaMitraApplication
 		review = await Service.PreviewAsync(input);
 		review.Impacts.ShouldNotContain(x => x.Area == "Subject allocation" && x.Description.Contains("not published"));
 		input.ReviewToken = review.ReviewToken;
+		(await Repo<NotificationIntent>().GetListAsync(x => x.EventKey == corrected)).ShouldBeEmpty();
 		await Service.ConfirmAsync(input);
 		var saved = (await Repo<StudentElectiveSelection>().GetQueryableAsync()).Where(x => x.Id == selection.Id)
 			.Select(x => new { x.SelectedSubjectId, x.IsLocked, x.StudentPreference, x.PreferenceOverrideSubjectId }).Single();
@@ -126,10 +151,27 @@ public class StudentElectiveCorrectionAppService_Tests : ShikshaMitraApplication
 		(await Repo<ExamMark>().GetAsync(mark.Id)).MarksObtained.ShouldBe(78);
 		(await Repo<ExamResultHeader>().GetAsync(resultHeader.Id)).Status.ShouldBe(ExamResultStatus.Frozen);
 		(await Repo<ExamSeatAllocation>().GetAsync(seat.Id)).SeatNumber.ShouldBe(7);
-		(await Repo<StudentElectiveCorrection>().GetListAsync(x => x.StudentId == student.Id)).Single().ChangedByUserId.ShouldBe(user.Id);
+		var audit = (await Repo<StudentElectiveCorrection>().GetListAsync(x => x.StudentId == student.Id)).ShouldHaveSingleItem();
+		audit.ChangedByUserId.ShouldBe(user.Id);
 		await Should.ThrowAsync<BusinessException>(() => Service.ConfirmAsync(input));
+		var intent = (await Repo<NotificationIntent>().GetListAsync(x => x.EventKey == corrected)).ShouldHaveSingleItem();
+		intent.SourceId.ShouldBe(audit.Id);
+		var source = await GetRequiredService<NotificationIntentSourceReader>()
+			.LoadAsync(intent, DateTimeOffset.UtcNow, CancellationToken.None);
+		source.Runtime.SourceScope.DivisionId.ShouldBe(divisionId);
+		source.CurrentRecipients.ShouldBe([new("Student", StudentId: student.Id)]);
 	});
 
 	private IDisposable SignIn(Guid userId) => GetRequiredService<ICurrentPrincipalAccessor>().Change(new ClaimsPrincipal(new ClaimsIdentity(
 		[new Claim(AbpClaimTypes.UserId, userId.ToString()), new Claim(AbpClaimTypes.Role, "admin")], "test")));
+}
+
+[DependsOn(typeof(ShikshaMitraApplicationTestModule))]
+public sealed class ElectiveCorrectionTransactionTestModule : AbpModule
+{
+	public override void PostConfigureServices(ServiceConfigurationContext context)
+	{
+		// Confirm opens its own serializable unit, which must participate in intent capture.
+		context.Services.Replace(ServiceDescriptor.Transient<IUnitOfWorkManager, UnitOfWorkManager>());
+	}
 }

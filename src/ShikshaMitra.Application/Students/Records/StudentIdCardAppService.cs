@@ -25,7 +25,6 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 	: ApplicationService, IStudentIdCardAppService
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-	private static readonly string[] AllowedFields = ["StudentName", "GRNumber", "Class", "Division", "AcademicYear", "DateOfBirth"];
 	public async Task<List<StudentIdCardDto>> PreviewAsync(StudentIdCardPreviewRequestDto input)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View); EnsureTenant(); ValidateStudents(input);

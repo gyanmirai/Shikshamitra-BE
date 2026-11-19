@@ -1,16 +1,60 @@
+using System;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Shouldly;
-using Xunit;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.TenantSettings.SchoolIdentity;
+using Shouldly;
+using Volo.Abp;
+using Volo.Abp.Domain.Repositories;
+using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Fact]
+	public Task Configurable_card_roll_number_and_prefix_round_trip_to_issued_artwork() => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await IcardLibraryFixtureAsync(1);
+		var studentId = fixture.Students.Single().Id;
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var students = GetRequiredService<IRepository<Student, Guid>>();
+			var student = await students.GetAsync(studentId);
+			student.AssignRollNo(23);
+			await students.UpdateAsync(student);
+		});
+		var design = IcardDesign("Student roll number", fixture.Year, studentId);
+		design.SchemaVersion = 2;
+		design.Fields = ["RollNo"];
+		design.LayoutJson = """{"width":428,"height":270,"widthMm":85.6,"heightMm":53.98,"front":{"elements":[{"id":"roll","type":"text","fieldKey":"RollNo","label":"Roll layer","value":"Enter text","prefix":"Roll #: ","x":20,"y":20,"w":388,"h":60,"style":{"fontSize":14,"showLabel":true}}]}}""";
+		var saved = await fixture.Service.CreateTemplateAsync(design);
+		var request = new StudentIdCardPreviewRequestDto { TemplateId = saved.Id, StudentIds = [studentId] };
+		var preview = (await fixture.Service.PreviewAsync(request)).Single();
+		preview.StudentSnapshot["RollNo"].ShouldBe("23");
+		var issued = (await fixture.Service.IssueAsync(new() { TemplateId = saved.Id, StudentIds = [studentId], IdempotencyKey = "studio-roll-prefix" })).Single();
+		issued.TemplateSnapshot.LayoutJson.ShouldBe(design.LayoutJson);
+		var svg = StudentIdCardDesign.Artwork(issued, null, null).FrontSvg;
+		svg.ShouldContain("Roll #: 23");
+		svg.ShouldNotContain("Roll layer");
+		svg.ShouldNotContain("Enter text");
+	});
+
+	[Fact]
+	public void Configurable_card_rejects_an_overlong_prefix()
+	{
+		var template = new StudentIdCardTemplateDto
+		{
+			SchemaVersion = 2,
+			LayoutJson = """{"width":428,"height":270,"widthMm":85.6,"heightMm":53.98,"front":{"elements":[{"id":"name","type":"text","fieldKey":"StudentName","prefix":"PREFIX","x":20,"y":20,"w":388,"h":60}]}}"""
+				.Replace("PREFIX", new string('x', 151))
+		};
+		var exception = Should.Throw<BusinessException>(() => StudentIdCardDesign.Resolve(template));
+		exception.Data["detail"].ShouldBeOfType<string>().ShouldContain("prefix");
+	}
+
 	[Fact]
 	public void Configurable_student_hidden_logo_suppresses_the_logo_element()
 	{

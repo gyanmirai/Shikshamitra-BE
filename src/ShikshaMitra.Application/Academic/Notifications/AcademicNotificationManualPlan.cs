@@ -37,6 +37,9 @@ public sealed class AcademicNotificationManualPlanner(AcademicNotificationCatalo
 			return new([], AcademicNotificationRulePreview.Summarize(channels, [], [], [],
 				[snapshot.ExclusionCode ?? NotificationErrorCodes.SourceUnavailable]), false);
 		var partitions = await ReadAuthorizedPartitionsAsync(input, context, definition, now, cancellationToken);
+		var effectiveDefinition = NotificationSourceDeliveryPolicy.Restrict(definition, snapshot);
+		if (channels.Any(x => !effectiveDefinition.SupportedChannels.Contains(x)))
+			return new([], AcademicNotificationRulePreview.Summarize(channels, [], [], [], ["ChannelsExcludedBySource"]), false);
 		var email = await evaluator.FindEmailProviderAsync(channels, cancellationToken);
 
 		var results = new List<AcademicNotificationManualPartition>();
@@ -56,21 +59,25 @@ public sealed class AcademicNotificationManualPlanner(AcademicNotificationCatalo
 				configured?.AdditionalGuardianRelationships ?? [], configured?.IncludeStudentAccount == true,
 				staff, channels, configured?.TemplateIds ?? [], (configured?.Timing ?? NotificationRuleTimingConfiguration.Default) with
 				{ DelayMinutes = 0, BypassQuietHours = false }, configured?.FallbackLanguage ?? "en");
+			configuration = NotificationSourceDeliveryPolicy.Restrict(configuration, effectiveDefinition, snapshot);
 			var family = group.SelectMany(x => x.Recipients).Any(x => x.Kind == "Student");
-			var kinds = NotificationTemplateSnapshotSelector.RecipientKinds(configuration, definition)
+			var kinds = NotificationTemplateSnapshotSelector.RecipientKinds(configuration, effectiveDefinition)
 				.Where(x => family || x is not ("Guardian" or "StudentAccount")).ToArray();
-			var selected = await templates.SelectAsync(context.TenantId, scope.MediumId, definition, configuration, kinds,
+			if (snapshot.DeliveryLimits != null && kinds.Length == 0) continue;
+			var selected = await templates.SelectAsync(context.TenantId, scope.MediumId, effectiveDefinition, configuration, kinds,
 				input.TemplateId, cancellationToken);
 			samples.AddRange(selected.Samples);
 			if (selected.Revisions.Count == 0) issues.Add(NotificationErrorCodes.TemplateInvalid);
 			configuration = configuration with { TemplateIds = selected.Headers };
 			foreach (var partition in group)
 			{
-				var recipients = partition.Recipients.Where(x => x.Kind == "Student" || staff.Contains(x.Kind)).ToArray();
+				var recipients = partition.Recipients.Where(x => snapshot.DeliveryLimits == null
+					? x.Kind == "Student" || staff.Contains(x.Kind)
+					: NotificationSourceDeliveryPolicy.Includes(x, configuration, effectiveDefinition)).ToArray();
 				if (recipients.Length == 0) continue;
 				var runtime = new NotificationIntentRuntimeSnapshot(1, new(scope.AcademicYearId, scope.BoardId, scope.MediumId,
 					scope.ClassId, scope.DivisionId), configuration);
-				var current = new NotificationCurrentSource(context.TenantId, definition, runtime, recipients, recipients,
+				var current = new NotificationCurrentSource(context.TenantId, effectiveDefinition, runtime, recipients, recipients,
 					snapshot, snapshot.ExpiresAt, null);
 				var evaluated = await evaluator.EvaluateAsync(current, selected.Revisions, email, now, cancellationToken);
 				if (evaluated.BlockingIssue != null) issues.Add(evaluated.BlockingIssue);

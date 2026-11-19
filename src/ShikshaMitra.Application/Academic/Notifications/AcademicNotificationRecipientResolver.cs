@@ -24,8 +24,18 @@ public sealed class AcademicNotificationRecipientResolver(IAcademicNotificationA
 		Validate(input, definition);
 		if (!context.Source.IsEligible)
 			return new(0, 0, [], [context.Source.ExclusionCode ?? NotificationErrorCodes.RecipientIneligible]);
+		definition = NotificationSourceDeliveryPolicy.Restrict(definition, context.Source);
+		var policy = input.Policy;
+		if (context.Source.DeliveryLimits != null)
+		{
+			if (!definition.RecipientSelectors.Contains("AdditionalGuardians"))
+				policy = policy with { GuardianMode = NotificationGuardianMode.PrimaryOnly, AdditionalGuardianRelationships = [] };
+			policy = policy with { IncludeStudentAccount = policy.IncludeStudentAccount && definition.RecipientSelectors.Contains("StudentAccount") };
+		}
 		var sourceRecipients = context.Source.EligibleRecipients.Distinct().ToArray();
 		if (input.AffectedRecipients.Any(x => !sourceRecipients.Contains(x))) throw new AbpAuthorizationException();
+		if (input.Channels.Any(x => !definition.SupportedChannels.Contains(x)))
+			return new(0, 0, [], ["ChannelsExcludedBySource"]);
 		var selected = input.AffectedRecipients.Count == 0 ? sourceRecipients : input.AffectedRecipients.Distinct().ToArray();
 		var data = await projection.LoadAsync(context.TenantId, selected, cancellationToken);
 		var results = new List<NotificationRecipientEligibilityDto>();
@@ -47,7 +57,7 @@ public sealed class AcademicNotificationRecipientResolver(IAcademicNotificationA
 					continue;
 				}
 				results.AddRange(AcademicNotificationFamilyRecipients.Resolve(row, context.TenantId,
-					input.Policy, input.Channels, definition.RecipientSelectors));
+					policy, input.Channels, definition.RecipientSelectors));
 			}
 			else if (definition.RecipientSelectors.Contains(recipient.Kind) && recipient.UserId.HasValue)
 			{

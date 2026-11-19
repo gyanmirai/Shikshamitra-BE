@@ -52,7 +52,11 @@ public sealed class NotificationIntentSourceReader(ICurrentTenant tenant, IEnume
 		// The current roster can lose captured references. Validate it before intersecting the two rosters.
 		var current = partitions.Partition(context with { AffectedRecipients = [] }, definition, source)
 			.Where(x => x.Scope.Key == scopeKey).SelectMany(x => x.Recipients).ToHashSet();
-		return new(tenantId, definition, runtime, captured, captured.Where(current.Contains).ToArray(), source, expiry, null);
+		var effectiveDefinition = NotificationSourceDeliveryPolicy.Restrict(definition, source);
+		var configuration = NotificationSourceDeliveryPolicy.Restrict(runtime.Configuration, effectiveDefinition, source);
+		return new(tenantId, effectiveDefinition, runtime with { Configuration = configuration }, captured,
+			captured.Where(x => current.Contains(x) && (source.DeliveryLimits == null ||
+				NotificationSourceDeliveryPolicy.Includes(x, configuration, effectiveDefinition))).ToArray(), source, expiry, null);
 
 		NotificationCurrentSource Exclude(string code) => new(tenantId, definition, runtime, captured, [], null, expiry, code);
 	}

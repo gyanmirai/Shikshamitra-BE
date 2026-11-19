@@ -583,6 +583,8 @@ public partial class ExamAppService(
 	[UnitOfWork(true)]
 	public async Task ChangeStatusAsync(Guid examId, ExamStatus status)
 	{
+		var seating = status == ExamStatus.Published ? LazyServiceProvider.LazyGetRequiredService<SeatingNotificationPublication>() : null;
+		if (seating != null) await seating.LockPublicationAsync(examId);
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 		await EnsureCanAccessExamAsync(exam);
 		await EnsureValidExamStatusTransitionAsync(exam, status);
@@ -591,7 +593,10 @@ public partial class ExamAppService(
 		if (publish) ExamTimetablePublication.MarkReleased(exam);
 		await examRepository.UpdateAsync(exam, autoSave: publish);
 		if (publish)
+		{
 			await LazyServiceProvider.LazyGetRequiredService<ExamTimetablePublication>().CaptureAsync(exam, CurrentUser.Id);
+			await seating!.CaptureAsync(exam.Id, CurrentUser.Id);
+		}
 	}
 
 	public async Task<ExamListResultDto> GetListAsync(GetExamsInput input)

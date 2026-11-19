@@ -17,7 +17,7 @@ internal static partial class AcademicNotificationDefinitions
 		Event(ExamRescheduled, $"{Family},{Teacher},{Invigilator}", Important, Change, "date", "start", "end", "venue"),
 		Event(ExamCancelled, $"{Family},{Teacher},{Invigilator}", Important),
 		Event(ExamReminder, $"{Family},{Teacher}", Routine, Due),
-		Event(SeatingPublished, $"{Family},{Invigilator}", Important),
+		Event(SeatingPublished, $"{Family},{Teacher}", Important),
 		Event(SeatingChanged, $"{Family},{Invigilator}", Important, Change, "room", "seat", "invigilator"),
 		Event(ExamDutyAssigned, Invigilator, Important),
 		Event(ExamDutyChanged, $"PreviousInvigilator,{Invigilator}", Important, Change, "date", "period", "room", "status"),

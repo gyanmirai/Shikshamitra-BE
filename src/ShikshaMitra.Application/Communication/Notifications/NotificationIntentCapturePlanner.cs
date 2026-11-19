@@ -57,6 +57,7 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 			input.SourceRevision, input.OccurredAt, input.AffectedRecipients, occurrence?.Scope, occurrence?.OccurrenceAt) { DuePhase = occurrence?.Phase };
 		var source = await sources.Single(x => x.EventKeys.Contains(input.EventKey)).LoadAsync(context, cancellationToken);
 		var scoped = partitions.Partition(context, definition, source);
+		var effectiveDefinition = NotificationSourceDeliveryPolicy.Restrict(definition, source);
 		var expiry = input.ExpiresAt.HasValue && source.ExpiresAt.HasValue
 			? (input.ExpiresAt.Value < source.ExpiresAt.Value ? input.ExpiresAt : source.ExpiresAt) : input.ExpiresAt ?? source.ExpiresAt;
 		var resolved = new Dictionary<string, NotificationRule?>(StringComparer.Ordinal);
@@ -83,7 +84,8 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 			var key = (rule.Id, rule.Revision);
 			if (!configured.TryGetValue(key, out var config))
 			{
-				try { config = new(configuration.Deserialize(rule.ConfigurationJson, definition), null); }
+				try { config = new(NotificationSourceDeliveryPolicy.Restrict(configuration.Deserialize(rule.ConfigurationJson, definition),
+					effectiveDefinition, source), null); }
 				catch (BusinessException error) when (error.Code == NotificationErrorCodes.RuleConfigurationInvalid) { config = new(null, error.Code); }
 				configured[key] = config;
 			}
@@ -92,9 +94,7 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 				results.Add(new(rule.Id, rule.Revision, partition.Scope, recipients, "{}", [], input.DueAt ?? input.OccurredAt,
 					expiry, NotificationIntentState.NeedsReview, config.ErrorCode ?? NotificationErrorCodes.RuleConfigurationInvalid)); continue;
 			}
-			var selected = recipients.Where(x => x.Kind == "Student"
-				? definition.RecipientSelectors.Contains("PrimaryGuardian") || config.Value.IncludeStudentAccount
-				: config.Value.StaffAudienceSelectors.Contains(x.Kind)).ToArray();
+			var selected = recipients.Where(x => NotificationSourceDeliveryPolicy.Includes(x, config.Value, effectiveDefinition)).ToArray();
 			if (selected.Length == 0) continue;
 			var snapshot = "{}"; var due = input.DueAt ?? input.OccurredAt;
 			try
@@ -114,7 +114,7 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 				if (pinErrors.TryGetValue(key, out var pinError)) throw new BusinessException(pinError);
 				if (!pinned.TryGetValue(key, out var versions))
 				{
-					try { versions = await templates.PinAsync(config.Value, definition, cancellationToken); pinned[key] = versions; }
+					try { versions = await templates.PinAsync(config.Value, effectiveDefinition, cancellationToken); pinned[key] = versions; }
 					catch (BusinessException error) when (error.Code == NotificationErrorCodes.TemplateInvalid) { pinErrors[key] = error.Code; throw; }
 				}
 				results.Add(new(rule.Id, rule.Revision, partition.Scope, selected, snapshot, versions, due, expiry));

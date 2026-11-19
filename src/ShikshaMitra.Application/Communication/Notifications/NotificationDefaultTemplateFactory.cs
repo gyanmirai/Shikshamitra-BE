@@ -62,6 +62,8 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 			(_, AcademicNotificationEventKeys.ResultPublished) => "A result is available. Sign in to ShikshaMitra to view it.",
 			(_, AcademicNotificationEventKeys.ExamTimetablePublished) => "The timetable for {{exam_name}} is available. Sign in to view your exam dates.",
 			(_, AcademicNotificationEventKeys.ExamReminder) => "Your scheduled sitting for {{exam_name}} starts at {{exam_date}}.",
+			("AssignedTeacher", AcademicNotificationEventKeys.SeatingPublished) => "Seating is available for an exam you teach. Sign in to view it.",
+			(_, AcademicNotificationEventKeys.SeatingPublished) => "Your seating plan is available. Sign in to view your seat.",
 			_ => subject + "."
 		};
 		var body = channel == CommunicationChannelType.WebPush ? "An academic update is available. Open the school website for details." :

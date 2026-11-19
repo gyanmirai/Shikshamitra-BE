@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using ShikshaMitra.Communication;
 
 namespace ShikshaMitra.Communication.Notifications;
 
@@ -52,4 +53,10 @@ public sealed record NotificationSourceSnapshot(
 	IReadOnlyList<NotificationRecipientRefDto> EligibleRecipients,
 	DateTimeOffset? ExpiresAt = null,
 	IReadOnlyList<NotificationSourceAudienceSliceDto>? AudienceSlices = null,
-	IReadOnlyList<NotificationSourceRecipientContentDto>? RecipientContent = null);
+	IReadOnlyList<NotificationSourceRecipientContentDto>? RecipientContent = null)
+{
+	public NotificationSourceDeliveryLimits? DeliveryLimits { get; init; }
+}
+
+public sealed record NotificationSourceDeliveryLimits(
+	IReadOnlyList<string> RecipientSelectors, IReadOnlyList<CommunicationChannelType> Channels);

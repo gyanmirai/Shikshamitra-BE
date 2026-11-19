@@ -73,7 +73,7 @@ public partial class ExamSeatAllocationAppService(
         await seatingPlanRepository.UpdateAsync(plan, autoSave: true);
     }
 
-    private async Task<Exam> GetScopedExamAsync(Guid examId)
+    internal async Task<Exam> GetScopedExamAsync(Guid examId)
     {
         var exam = await examRepository.GetAsync(examId, includeDetails: true);
         if (!CurrentUser.Id.HasValue)
@@ -1513,12 +1513,18 @@ public partial class ExamSeatAllocationAppService(
         return await GetSeatingPlanWorkspaceAsync(examId);
     }
 
-    [UnitOfWork]
+    [UnitOfWork(true)]
     public async Task<SeatingPlanWorkspaceDto> PublishExaminationSeatingAsync(
         Guid examId,
         PublishSeatingPlanInputDto input)
     {
-        var exam = await GetScopedExamAsync(examId);
+        await seatingPlanNotifier.LockPublicationAsync(examId);
+        return await PublishExaminationSeatingCoreAsync(await GetScopedExamAsync(examId), input);
+    }
+
+    private async Task<SeatingPlanWorkspaceDto> PublishExaminationSeatingCoreAsync(Exam exam, PublishSeatingPlanInputDto input)
+    {
+        var examId = exam.Id;
         if (await FindSeatingPublicationAsync(examId) != null)
             return await GetSeatingPlanWorkspaceAsync(examId);
 
@@ -1826,11 +1832,13 @@ public partial class ExamSeatAllocationAppService(
         return await GetSeatingPlanDraftAsync(examId, plan.Id);
     }
 
+    [UnitOfWork(true)]
     public async Task<SeatingPlanDraftResponseDto> PublishSeatingPlanAsync(Guid examId, PublishSeatingPlanInputDto input, Guid? seatingPlanId = null)
     {
+        await seatingPlanNotifier.LockPublicationAsync(examId);
         var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, seatingPlanId);
-        await PublishExaminationSeatingAsync(examId, input);
+        await PublishExaminationSeatingCoreAsync(exam, input);
         return await GetSeatingPlanDraftAsync(examId, plan.Id);
     }
 

@@ -30,11 +30,14 @@ public sealed class AcademicNotificationRulePreview(NotificationSourcePartitione
 
 		var sourceContext = new NotificationIntentContext(Guid.Empty, context.TenantId, definition.EventKey,
 			definition.SourceType, sourceId, source.SourceRevision, now, []);
-		var selections = partitioner.Partition(sourceContext, definition, source)
-			.Where(x => requestedScope.Contains(x.Scope))
-			.Select(x => x with { Recipients = x.Recipients.Where(r => AppliesTo(r, configuration, definition)).ToArray() })
-			.Where(x => x.Recipients.Count != 0).ToArray();
+		var partitions = partitioner.Partition(sourceContext, definition, source);
 		await templates.EnsureAsync(context.TenantId, requestedScope, definition, configuration, enabled: false, cancellationToken);
+		definition = NotificationSourceDeliveryPolicy.Restrict(definition, source);
+		configuration = NotificationSourceDeliveryPolicy.Restrict(configuration, definition, source);
+		var selections = partitions
+			.Where(x => requestedScope.Contains(x.Scope))
+			.Select(x => x with { Recipients = x.Recipients.Where(r => NotificationSourceDeliveryPolicy.Includes(r, configuration, definition)).ToArray() })
+			.Where(x => x.Recipients.Count != 0).ToArray();
 		var sampleRevisions = await templates.LoadSampleRevisionsAsync(context.TenantId, requestedScope, definition, configuration, cancellationToken);
 		var samples = sampleRevisions.GroupBy(x => (x.RecipientKind, x.Channel))
 			.Select(group => group.FirstOrDefault(x => x.LanguageCode == configuration.FallbackLanguage) ?? group.First())
@@ -74,11 +77,6 @@ public sealed class AcademicNotificationRulePreview(NotificationSourcePartitione
 		try { return await snapshots.PinAsync(configuration, definition, cancellationToken); }
 		catch (BusinessException error) when (error.Code == NotificationErrorCodes.TemplateInvalid) { return []; }
 	}
-
-	private static bool AppliesTo(NotificationRecipientRefDto recipient, NotificationRuleRuntimeConfiguration configuration,
-		NotificationEventDefinition definition) => recipient.Kind == "Student"
-			? definition.RecipientSelectors.Contains("PrimaryGuardian") || configuration.IncludeStudentAccount
-			: configuration.StaffAudienceSelectors.Contains(recipient.Kind);
 
 	internal static AcademicNotificationRulePreviewDto Summarize(IReadOnlyList<CommunicationChannelType> channels,
 		IReadOnlyList<NotificationRecipientDispatchDecision> decisions, IReadOnlyList<NotificationPreparedDispatch> prepared,

@@ -105,6 +105,14 @@ The successful Pending-to-Published transition in `PUT /api/academics/exams/{exa
 
 History requires Academic Notification View, Schedule Exam View and the source exam's existing access check. The current exam lifecycle locks published schedules. Reschedule, cancel, approval and invigilation events require their own saved workflows.
 
+### Exam seating notifications
+
+Either seating publish endpoint can queue `Academic.Seating.Published` once for the examination seating publication. Both the exam and the seating must be published. If seating is published first, the exam status action captures the notice from the saved options when the exam becomes visible. Both release paths coordinate in their publication transaction. Earlier seating records without saved notification options remain historical.
+
+Publish options narrow the enabled rule. Parents permits the configured primary and additional guardians, Students permits a configured student account, and Teachers permits assigned teachers of the affected subjects. Email requires the saved Send Email choice. A future Schedule At value defers automatic delivery and the normal timing and quiet hours still apply. There is no invigilator relationship for the Exam Staff choice.
+
+An eligible learner needs a current enrolled placement, a visible published subject and an actual seat in a published plan for that subject. Later calendar closures and eligibility changes suppress pending delivery. Templates use an authenticated inbox link. The optional `seat_number` belongs to the one learner and is available only when their applicable sessions all have the same room and seat. Staff and starter templates use generic content. History requires Academic Notification View, Seat Allocation View and existing source exam access. Seating Changed remains unavailable while published seating is immutable.
+
 ### Result publication notifications
 
 The first successful `POST /api/academics/results/publish` can queue `Academic.Result.Published` in the publication transaction. The exam must be visible to learners and the result must have a published revision for the saved exam and division. The source uses released result rows and current enrollment. Withheld rows and students outside the division are excluded. The school's family rule and the shared guardian and student-account checks determine delivery.

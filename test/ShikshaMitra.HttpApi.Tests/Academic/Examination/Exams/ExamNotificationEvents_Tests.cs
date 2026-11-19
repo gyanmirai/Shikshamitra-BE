@@ -10,6 +10,7 @@ using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
+using ShikshaMitra.Academic.Examination.SeatAllocation;
 using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 using ShikshaMitra.Communication;
@@ -24,6 +25,10 @@ using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
+using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
+using ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes;
 using Shouldly;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
@@ -207,6 +212,126 @@ public sealed class ExamNotificationEvents_Tests(ShikshaMitraApiTestFactory fact
 			});
 			return captured;
 		}
+	}
+
+	[Fact]
+	public Task Seating_release_history_requires_access_to_seating() => PublishSeatingAsync(concurrent: false);
+
+	internal async Task PublishSeatingAsync(bool concurrent)
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		const string key = AcademicNotificationEventKeys.SeatingPublished;
+		var examId = Guid.NewGuid();
+		var planId = Guid.NewGuid();
+		var studentId = Guid.NewGuid();
+		await InSchoolAsync(async services =>
+		{
+			var standard = await InsertAsync(services, await services.GetRequiredService<StandardManager>()
+				.CreateAsync(Factory.SeededMediumStageId, "Seating notice class", 13, null));
+			var division = await InsertAsync(services, await services.GetRequiredService<DivisionManager>().CreateAsync(standard.Id, "A", 25));
+			var medium = await services.GetRequiredService<IRepository<EducationMedium, Guid>>().GetAsync(Factory.SeededMediumId);
+			var board = await services.GetRequiredService<IRepository<EducationBoard, Guid>>().GetAsync(medium.EducationBoardId);
+			var examType = await InsertAsync(services, new ExamType(Guid.NewGuid(), TenantId, "Seat notice exam", null, medium.Id));
+			var scale = await InsertAsync(services, new GradingScale(Guid.NewGuid(), TenantId, "Seat notice scale", "100", medium.Id));
+			var subject = await InsertAsync(services, new Subject(Guid.NewGuid(), TenantId, "Seat notice subject", "#24597a", medium.Id));
+			var teacher = (await services.GetRequiredService<IEmployeeRepository>().GetEmployeeByUserIdAsync(Actor))!;
+			var curriculum = new AssignedSubject(Guid.NewGuid(), TenantId, standard.Id, subject.Id, "SEAT", SubjectStatus.Published);
+			curriculum.SetPrimaryTeacher(teacher.Id);
+			await InsertAsync(services, curriculum);
+			var building = await InsertAsync(services, new Building { TenantId = TenantId, BuildingName = "Seat notice building", TotalFloors = 1 });
+			var floor = await InsertAsync(services, new Floor { BuildingId = building.Id, FloorName = "First", FloorNo = 1 });
+			var roomType = await InsertAsync(services, new RoomType { TenantId = TenantId, RoomTypeName = "Seat notice room", ShortName = "SN" });
+			var room = await InsertAsync(services, new Room
+			{
+				TenantId = TenantId, BuildingId = building.Id, FloorId = floor.Id, RoomTypeId = roomType.Id, RoomName = "Seat notice room",
+				Capacity = 5, TotalBenches = 5, BenchCapacity = 1, BenchesPerColumn = 5, BenchesPerRow = 1
+			});
+			var student = new Student(studentId, TenantId, "Synthetic", null, "Learner", board.AcademicYearId, board.Id,
+				medium.Id, Factory.SeededMediumStageId, standard.Id, division.Id, status: StudentLifeCycleStatusEnum.Enrolled);
+			await InsertAsync(services, student);
+			await InsertAsync(services, StudentEnrollment.Create(Guid.NewGuid(), TenantId, studentId, board.AcademicYearId, standard.Id, division.Id));
+
+			var exam = new Exam(examId, examType.Id, "Seat notice exam", standard.Id, TenantId, scale.Id);
+			exam.AddDivision(Guid.NewGuid(), division.Id);
+			var now = DateTime.UtcNow.Date;
+			var date = DateTime.SpecifyKind(now.AddDays((8 - (int)now.DayOfWeek) % 7 + 7), DateTimeKind.Unspecified);
+			var paper = new ExamSubject(Guid.NewGuid(), examId, subject.Id, date, date.AddHours(10), date.AddHours(11), 100, 35,
+				gradeScalingId: scale.Id);
+			paper.AddRoomAssignment(new(Guid.NewGuid(), paper.Id, division.Id, room.Capacity, [room.Id]));
+			exam.AddSubject(paper);
+			await InsertAsync(services, exam);
+			var plan = new ExamSeatingPlan(planId, TenantId, exam.Id, "Seat notice plan", SeatingPlanScopeType.SingleSubject);
+			plan.SaveDraft(room.Id.ToString(), "{}", string.Empty, string.Empty, SeatingPlanStatus.Completed);
+			await InsertAsync(services, plan);
+			await InsertAsync(services, new ExamSeatingPlanSubject(Guid.NewGuid(), TenantId, plan.Id, exam.Id, paper.Id, subject.Id));
+			await InsertAsync(services, new ExamSeatAllocation(Guid.NewGuid(), TenantId, plan.Id, exam.Id, studentId, room.Id, 2, null, true));
+
+			var headers = new List<Guid>();
+			foreach (var recipient in new[] { "Guardian", "AssignedTeacher" })
+			{
+				var template = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), TenantId)
+					{ TemplateName = "Seat notice " + recipient });
+				headers.Add(template.Id);
+				var variant = new CommunicationTemplateRevision(Guid.NewGuid(), TenantId, template.Id, 1, key, recipient,
+					CommunicationChannelType.InApp, "en", "Exam seating", "Exam seating is available.", 1);
+				variant.Publish(Actor, DateTimeOffset.UtcNow);
+				await InsertAsync(services, variant);
+			}
+			var rule = new NotificationRule(Guid.NewGuid(), TenantId, key,
+				NotificationRuleScope.Create(board.AcademicYearId, board.Id, medium.Id, standard.Id, division.Id));
+			var settings = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, ["AssignedTeacher"],
+				[CommunicationChannelType.InApp], headers, NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");
+			rule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>()
+				.Serialize(settings, services.GetRequiredService<AcademicNotificationCatalogue>().Get(key)), rule.ConcurrencyStamp);
+			await InsertAsync(services, rule);
+		});
+
+		async Task SeatAsync()
+		{
+			using var response = await Client.PostAsJsonAsync($"/api/academics/exams/{examId}/seating-plan/v2/publish",
+				new { notifyParents = true, notifyTeachers = true }, JsonOptions);
+			response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		}
+
+		async Task ExamAsync()
+		{
+			using var response = await Client.PutAsJsonAsync($"/api/academics/exams/{examId}/status",
+				new { status = (int)ExamStatus.Published }, JsonOptions);
+			response.StatusCode.ShouldBe(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync());
+		}
+
+		if (concurrent) await Task.WhenAll(SeatAsync(), ExamAsync());
+		else
+		{
+			await SeatAsync();
+			await InSchoolAsync(async services =>
+				(await services.GetRequiredService<IRepository<NotificationIntent, Guid>>().GetListAsync(x => x.SourceId == examId))
+					.ShouldBeEmpty());
+			await ExamAsync();
+		}
+		await SeatAsync();
+
+		var campaign = Guid.Empty;
+		await InSchoolAsync(async services =>
+		{
+			var intent = (await services.GetRequiredService<IRepository<NotificationIntent, Guid>>()
+				.GetListAsync(x => x.TenantId == TenantId && x.SourceId == examId && x.EventKey == key)).ShouldHaveSingleItem();
+			campaign = intent.CampaignId!.Value;
+			var outcome = await services.GetRequiredService<NotificationIntentSourceReader>().LoadAsync(intent, DateTimeOffset.UtcNow, CancellationToken.None);
+			outcome.CurrentRecipients.Count.ShouldBe(2);
+			outcome.CurrentRecipients.ShouldContain(x => x.Kind == "AssignedTeacher" && x.UserId == Actor);
+			var ownSeat = outcome.Snapshot!.RecipientContent!.ShouldHaveSingleItem();
+			ownSeat.Recipient.StudentId.ShouldBe(studentId);
+			ownSeat.Variables["seat_number"].Value.ShouldBe("2");
+			outcome.Snapshot.Variables.ContainsKey("seat_number").ShouldBeFalse();
+		});
+
+		using var viewer = Factory.CreateClient();
+		viewer.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, ShikshaMitraSubmodulePermissions.Academics.Notification.View);
+		using var denied = await viewer.GetAsync($"/api/academic/notifications/operations/{campaign}");
+		denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		using var allowed = await Client.GetAsync($"/api/academic/notifications/operations/{campaign}");
+		allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
 	}
 
 	private static Task<TEntity> InsertAsync<TEntity>(IServiceProvider services, TEntity entity)

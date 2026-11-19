@@ -9,9 +9,7 @@ public class UnlockSeatingPlanInputDto
 }
 
 /// <summary>
-/// Publish-time notification options (spec §19.2). Only <see cref="ISeatingPlanNotifier"/>'s
-/// no-op default implementation exists today — these flags are recorded/logged, not acted on,
-/// until a real email/SMS/in-app provider is wired into this codebase.
+/// Publish-time options that limit the audience, email delivery, and delivery time of the enabled school rule.
 /// </summary>
 public class PublishSeatingPlanInputDto
 {

@@ -25,7 +25,7 @@ public class HouseManagementPlacementService(IRepository<HouseSettings, Guid> ho
 			{
 				if (house != null)
 				{
-					house.TouchMembership();
+					house.MemberDeparted(enrollment.Id);
 					await houses.UpdateAsync(house);
 				}
 
@@ -40,6 +40,12 @@ public class HouseManagementPlacementService(IRepository<HouseSettings, Guid> ho
 	public async Task DeactivateAsync(StudentEnrollment enrollment, DateTime? effectiveDate)
 	{
 		EnsureTenant(enrollment);
+		if (enrollment.HouseId.HasValue &&
+			await houses.FindAsync(h => h.Id == enrollment.HouseId && h.TenantId == CurrentTenant.Id) is { } house)
+		{
+			house.MemberDeparted(enrollment.Id);
+			await houses.UpdateAsync(house);
+		}
 		await ReleaseLeadershipAsync(enrollment);
 		enrollment.Deactivate(effectiveDate);
 	}

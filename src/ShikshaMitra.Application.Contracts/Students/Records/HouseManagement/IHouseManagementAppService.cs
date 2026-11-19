@@ -15,6 +15,6 @@ public interface IHouseManagementAppService : IApplicationService
 	Task DeleteHouseAsync(Guid id, Guid academicMediumId, string concurrencyStamp);
 	Task<HouseAssignmentPreviewDto> PreviewAssignmentAsync(HouseAssignmentRequest input);
 	Task CommitAssignmentAsync(HouseAssignmentRequest input);
-	Task ReplaceDivisionHouseLeaderAsync(Guid id, ReplaceStudentLeaderRequest input);
+	Task ReplaceHouseLeaderAsync(Guid id, ReplaceStudentLeaderRequest input);
 	Task ReplaceDivisionLeaderAsync(Guid id, ReplaceStudentLeaderRequest input);
 }

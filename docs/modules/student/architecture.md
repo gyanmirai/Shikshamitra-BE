@@ -98,8 +98,8 @@ Tenant filters remain enabled; historical paths are independently scoped rather 
 | Contracts | `ShikshaMitra.Application.Contracts/Students/Records/HouseManagement/` |
 | Scoped reads, assignment preview/commit and leadership commands | `ShikshaMitra.Application/Students/Records/HouseManagement/` |
 | Existing house catalogue and membership invariants | `ShikshaMitra.Domain/Students/Records/Settings/`, `ShikshaMitra.Domain/Students/StudentEnrollments/` |
-| Two independent division leadership slots and EF mapping | `ShikshaMitra.Domain/TenantSettings/AcademicSetups/Divisions/Division.Leadership.cs`, `ShikshaMitra.EntityFrameworkCore/Students/Records/HouseManagementConfiguration.cs` |
-| Leadership carryover and conflict gate | `ShikshaMitra.EntityFrameworkCore/Migrations/20261119180000_MoveHouseLeadershipToDivisions.cs`, `scripts/students/house-leaders-preflight.sql` |
+| Independent House and Division leadership mapping | `ShikshaMitra.Domain/Students/Records/Settings/HouseSettings.Management.cs`, `ShikshaMitra.Domain/TenantSettings/AcademicSetups/Divisions/Division.Leadership.cs`, `ShikshaMitra.EntityFrameworkCore/Students/Records/HouseManagementConfiguration.cs` |
+| Leadership carryover and conflict gate | `ShikshaMitra.EntityFrameworkCore/Migrations/20261119190000_RestoreHouseScopedLeadership.cs` |
 | HTTP boundary | `ShikshaMitra.HttpApi/Controllers/Student/Records/HouseManagementController.cs` |
 | Permission catalogue and visibility prerequisites | `ShikshaMitra.Domain.Shared/Constants/Permissions/SubmodulePermissions/Students/`, `ShikshaMitra.Domain.Shared/Security/Permissions/NavigationVisibilityPrerequisites.json` |
 

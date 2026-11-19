@@ -31,7 +31,7 @@ public class HouseManagementAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_HouseManagement.Add)]
 	public Task CommitAssignmentAsync(HouseAssignmentRequest input) => commands.CommitAsync(input);
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_HouseManagement.Add)]
-	public Task ReplaceDivisionHouseLeaderAsync(Guid id, ReplaceStudentLeaderRequest input) => commands.ReplaceDivisionHouseLeaderAsync(id, input);
+	public Task ReplaceHouseLeaderAsync(Guid id, ReplaceStudentLeaderRequest input) => commands.ReplaceHouseLeaderAsync(id, input);
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_HouseManagement.Add)]
 	public Task ReplaceDivisionLeaderAsync(Guid id, ReplaceStudentLeaderRequest input) => commands.ReplaceDivisionLeaderAsync(id, input);
 }

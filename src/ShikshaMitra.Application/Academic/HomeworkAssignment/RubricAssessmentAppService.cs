@@ -4,12 +4,14 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
@@ -22,7 +24,8 @@ public class RubricAssessmentAppService(
 	IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
 		IRepository<AssignmentEntity, Guid> assignmentRepository,
 		IStudentSubmissionRepository submissionRepository,
-		IUserScopeService userScopeService
+		IUserScopeService userScopeService,
+		HomeworkFeedbackReleaseEventCapture feedbackEvents
 
 ) : ApplicationService, IRubricAssessmentAppService
 {
@@ -388,7 +391,8 @@ public class RubricAssessmentAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.Add)]
-	public async Task ApproveEvaluationAsync(Guid evaluationId)
+	[UnitOfWork(true)]
+	public virtual async Task ApproveEvaluationAsync(Guid evaluationId)
 	{
 		var evaluation = await evaluationRepository.GetAsync(evaluationId);
 		await EnsureCurrentUserCanAccessEvaluationAsync(evaluation, nameof(ApproveEvaluationAsync));
@@ -398,6 +402,7 @@ public class RubricAssessmentAppService(
 		var submission = await submissionRepository.GetAsync(evaluation.StudentSubmissionId);
 
 		evaluation.Approve();
+		var previousStatus = submission.Status;
 		submission.UpdateFeedback(
 			evaluation.TotalMarks,
 			rubric.TotalMarks,
@@ -408,6 +413,7 @@ public class RubricAssessmentAppService(
 
 		await evaluationRepository.UpdateAsync(evaluation, autoSave: false);
 		await submissionRepository.UpdateAsync(submission, autoSave: true);
+		await feedbackEvents.CaptureAsync(submission, previousStatus, CurrentUser.Id);
 	}
 
 	private async Task EnsureTaskLinkIsValidAsync(CreateUpdateRubricDto input)

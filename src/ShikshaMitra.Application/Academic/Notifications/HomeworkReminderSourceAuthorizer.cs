@@ -17,12 +17,13 @@ namespace ShikshaMitra.Academic.Notifications;
 
 [RemoteService(false), ExposeServices(typeof(IAcademicNotificationSourceAuthorizer))]
 public sealed class HomeworkReminderSourceAuthorizer(HomeworkAppService access, IPermissionChecker permissions,
-	IRepository<HomeworkAssignmentEntity, Guid> tasks, IAsyncQueryableExecuter queries, ICurrentTenant tenant)
+	IRepository<HomeworkAssignmentEntity, Guid> tasks, IRepository<StudentSubmissionEntity, Guid> submissions,
+	IAsyncQueryableExecuter queries, ICurrentTenant tenant)
 	: IAcademicNotificationSourceAuthorizer, ITransientDependency
 {
 	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[]
 	{
-		HomeworkReminderSourceAdapter.EventKey, HomeworkPublicationSourceAdapter.EventKey,
+		HomeworkReminderSourceAdapter.EventKey, HomeworkPublicationSourceAdapter.EventKey, HomeworkFeedbackReleaseSourceAdapter.EventKey,
 	});
 
 	public async Task EnsureCanViewAsync(string eventKey, Guid sourceId, CancellationToken cancellationToken)
@@ -31,8 +32,16 @@ public sealed class HomeworkReminderSourceAuthorizer(HomeworkAppService access, 
 			!await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View))
 			throw new AbpAuthorizationException();
 
+		var homeworkId = sourceId;
+		if (eventKey == HomeworkFeedbackReleaseSourceAdapter.EventKey)
+		{
+			var owner = await queries.SingleOrDefaultAsync((await submissions.GetQueryableAsync()).Where(x =>
+				x.TenantId == tenantId && x.Id == sourceId && !x.IsDeleted && x.AssignmentId == null)
+				.Select(x => x.HomeworkAssignmentId), cancellationToken);
+			homeworkId = owner ?? throw new AbpAuthorizationException();
+		}
 		var scoped = await access.ApplyCurrentUserScopeAsync((await tasks.GetQueryableAsync()).Where(x =>
-			x.TenantId == tenantId && !x.IsDeleted && x.Id == sourceId));
+			x.TenantId == tenantId && !x.IsDeleted && x.Id == homeworkId));
 		if (!await queries.AnyAsync(scoped, cancellationToken)) throw new AbpAuthorizationException();
 	}
 

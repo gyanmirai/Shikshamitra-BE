@@ -25,11 +25,11 @@ public sealed class HomeworkReminderRecordReader(IRepository<HomeworkAssignmentE
 	IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions,
 	IRepository<AssignedSubject, Guid> subjects, IAsyncQueryableExecuter queries) : ITransientDependency
 {
-	internal async Task<HomeworkReminderRecord?> FindAsync(Guid tenantId, Guid sourceId, DateTimeOffset now, CancellationToken cancellationToken)
+	internal async Task<HomeworkReminderRecord?> FindAsync(Guid tenantId, Guid sourceId, DateTimeOffset now, CancellationToken cancellationToken, bool includeClosed = false)
 	{
 		var task = await queries.SingleOrDefaultAsync((await tasks.WithDetailsAsync(x => x.DivisionSchedules))
 			.Where(x => x.TenantId == tenantId && !x.IsDeleted && x.Id == sourceId), cancellationToken);
-		if (task == null || task.Status == HomeworkStatus.Closed)
+		if (task == null || !includeClosed && task.Status == HomeworkStatus.Closed)
 			return null;
 
 		var placement = await queries.SingleOrDefaultAsync((await standards.GetQueryableAsync())

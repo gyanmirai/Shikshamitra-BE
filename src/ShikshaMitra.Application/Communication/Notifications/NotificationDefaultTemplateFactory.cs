@@ -59,6 +59,12 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 				"Your booking is now for {{room_name}} on {{session_date}} from {{start_time}} to {{end_time}}.",
 			(_, AcademicNotificationEventKeys.RoomChanged) => "A room booking involving you changed.",
 			(_, AcademicNotificationEventKeys.RoomCancelled) => "Your room booking for {{room_name}} on {{session_date}} was cancelled.",
+			("PreviousTeacher", AcademicNotificationEventKeys.ClassTeacherReplaced or AcademicNotificationEventKeys.ClassTeacherRemoved) =>
+				"Your class teacher assignment has ended.",
+			("AssignedTeacher", AcademicNotificationEventKeys.ClassTeacherAssigned or AcademicNotificationEventKeys.ClassTeacherReplaced) =>
+				"You have been assigned as class teacher for {{class_name}}.",
+			(_, AcademicNotificationEventKeys.ClassTeacherAssigned or AcademicNotificationEventKeys.ClassTeacherReplaced or AcademicNotificationEventKeys.ClassTeacherRemoved) =>
+				"The class teacher assignment for {{class_name}} has changed.",
 			(_, AcademicNotificationEventKeys.MarksSubmitted) => "Marks for {{subject_name}} in {{exam_name}} are ready for review.",
 			(_, AcademicNotificationEventKeys.MarksChangesRequested) => "A correction was requested for {{subject_name}} in {{exam_name}}.",
 			(_, AcademicNotificationEventKeys.ResultPublished) => "A result is available. Sign in to ShikshaMitra to view it.",

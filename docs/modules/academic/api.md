@@ -113,6 +113,14 @@ Publish options narrow the enabled rule. Parents permits the configured primary 
 
 An eligible learner needs a current enrolled placement, a visible published subject and an actual seat in a published plan for that subject. Later calendar closures and eligibility changes suppress pending delivery. Templates use an authenticated inbox link. The optional `seat_number` belongs to the one learner and is available only when their applicable sessions all have the same room and seat. Staff and starter templates use generic content. History requires Academic Notification View, Seat Allocation View and existing source exam access. Seating Changed remains unavailable while published seating is immutable.
 
+### Class teacher assignment notifications
+
+Confirmed saves through `PUT /api/class-management/class-teacher-assignments` can queue `Academic.ClassTeacher.Assigned`, `Academic.ClassTeacher.Replaced` or `Academic.ClassTeacher.Removed`. The source ID is the affected division. The save transaction records the confirmed teacher and its notification revision on that division. Draft saves preserve the last confirmed identity and queue no notices. Reconfirming the same teacher preserves the revision even when the assignment row is recreated.
+
+The rule can select the current or outgoing teacher where applicable. Each recipient must still have the saved active school account linked to an active teaching employee. The outgoing teacher receives generic content. The configured reviewer under `Notifications:Academic:Tenants:<tenantIdN>:ClassTeacherReviewerUserId` must have Class Teacher Assignment View and Add and scope for the division. A newer confirmed change or a conflicting live assignment suppresses pending work.
+
+History requires Academic Notification View, Class Teacher Assignment View and the division scope. Teachers open the authenticated school inbox. The older assignment endpoint remains outside this notification workflow.
+
 ### Marks review notifications
 
 An enabled rule can queue `Academic.Marks.Submitted` after `POST /api/academics/exams/{examId}/marks/submit` moves the saved subject and division workflow to Submitted. The recipient is the school's active reviewer configured through `Notifications:Academic:Tenants:<tenantIdN>:MarksReviewerUserId`. The correction action at `POST /api/academics/exams/{examId}/marks/request-changes` can queue `Academic.Marks.ChangesRequested` for the subject's current class and division teaching assignments. Recipients need Record Marks View and Add and access to the source workflow. The actor's own notice is suppressed.

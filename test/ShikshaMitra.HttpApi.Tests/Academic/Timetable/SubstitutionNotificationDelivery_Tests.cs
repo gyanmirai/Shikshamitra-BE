@@ -280,7 +280,9 @@ public class SubstitutionNotificationDelivery_Tests(ShikshaMitraApiTestFactory f
 			using var workers = Factory.Services.CreateScope();
 			var services = workers.ServiceProvider;
 			using var school = services.GetRequiredService<ICurrentTenant>().Change(TenantId, "Synthetic school");
-			var scheduler = services.GetRequiredService<INotificationDueScheduler>();
+			var sources = services.GetServices<INotificationDueSource>()
+				.Where(x => x.SourceType == SubstitutionNotificationSource.Type).ToList();
+			var scheduler = ActivatorUtilities.CreateInstance<NotificationDueScheduler>(services, sources);
 			for (var page = 0; page < 24; page++)
 				if (!(await scheduler.ScanAsync(simulationTime, 100, CancellationToken.None)).HasMore) break;
 		}

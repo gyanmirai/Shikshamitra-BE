@@ -157,6 +157,8 @@ Timetable notification tests exercise draft, publish, reordered re-save, a teach
 
 The hosted timetable workflow also verifies the automatic day reminder, including school-local timing, elective-aware recipients, per-recipient period fields, duplicate scans and suppression after a scoped closure. `NotificationReminderTimingPolicy_Tests` covers the reminder cutoff, weekends, closure days and zero or multiple preceding school days.
 
+`RoomReservationNotificationDelivery_Tests` uses the actual reservation routes and a calendar closure. It checks requester decisions, rejection of self-review routing, configured reviewer changes, material versus cosmetic edits, removal-safe teacher content, cancellation, series deduplication and the history permission.
+
 Substitution notification tests cover silent and repeated assignments, exact staff targeting, queued and provider-accepted status, shared scheduled and explicit reminder identity, and suppression after acknowledgement. The hosted workflow also exercises material rescheduling, no-op edits, recipient-specific removal content, cancellation for exactly the previously informed staff, and the exclusion of unconfirmed acceptance.
 
 Reviewer escalation cases verify backward-compatible rule decoding, required teacher and reviewer selectors, a positive delay, no early or duplicate reviewer intent, separate role targeting, and suppression after the substitute responds.

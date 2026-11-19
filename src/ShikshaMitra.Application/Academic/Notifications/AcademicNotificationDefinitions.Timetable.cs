@@ -22,7 +22,7 @@ internal static partial class AcademicNotificationDefinitions
 		Event(RoomApprovalRequested, Reviewer, StaffOnly),
 		Event(RoomApproved, "Requester"),
 		Event(RoomRejected, "Requester"),
-		Event(RoomChanged, $"Requester,{Teacher}", Important, Change, "date", "start", "end", "room"),
+		Event(RoomChanged, $"Requester,{Teacher}", Important, Change, "date", "start", "end", "room", "teacher", "class", "division"),
 		Event(RoomCancelled, $"Requester,{Teacher}", Important)
 	];
 }

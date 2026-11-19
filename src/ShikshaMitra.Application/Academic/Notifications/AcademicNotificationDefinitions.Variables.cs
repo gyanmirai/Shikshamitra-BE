@@ -26,7 +26,9 @@ internal static partial class AcademicNotificationDefinitions
 			"LessonPlan" or "Diary" or "Progress" => Fields("subject_name", "lesson_plan_title", "review_comment"),
 			"Substitution" => Fields("subject_name", "period_name", "room_name", "teacher_name", "start_time", "end_time")
 				.Append(new("session_date", Date, false, Public)),
-			"Timetable" or "Room" => Fields("subject_name", "period_name", "room_name", "teacher_name")
+			"Room" => Fields("subject_name", "period_name", "room_name", "teacher_name", "start_time", "end_time")
+				.Append(new("session_date", Date, false, Public)),
+			"Timetable" => Fields("subject_name", "period_name", "room_name", "teacher_name")
 				.Append(new("session_date", Date, false, Public)),
 			"Calendar" => Fields("event_title", "location", "change_summary")
 				.Append(new("event_date", Date, false, Public)),

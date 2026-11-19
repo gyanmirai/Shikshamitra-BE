@@ -49,6 +49,16 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 				"Please acknowledge your substitute duty for {{period_name}} on {{session_date}}.",
 			("ConfiguredReviewer", AcademicNotificationEventKeys.SubstitutionAcknowledgementDue) =>
 				"The substitute duty for {{period_name}} on {{session_date}} still needs acknowledgement.",
+			(_, AcademicNotificationEventKeys.RoomApprovalRequested) =>
+				"A booking for {{room_name}} on {{session_date}} from {{start_time}} to {{end_time}} needs your decision.",
+			(_, AcademicNotificationEventKeys.RoomApproved) =>
+				"Your booking for {{room_name}} on {{session_date}} from {{start_time}} to {{end_time}} was approved.",
+			(_, AcademicNotificationEventKeys.RoomRejected) =>
+				"Your room booking for {{session_date}} was declined. Open Room Availability to see the decision.",
+			("Requester", AcademicNotificationEventKeys.RoomChanged) =>
+				"Your booking is now for {{room_name}} on {{session_date}} from {{start_time}} to {{end_time}}.",
+			(_, AcademicNotificationEventKeys.RoomChanged) => "A room booking involving you changed.",
+			(_, AcademicNotificationEventKeys.RoomCancelled) => "Your room booking for {{room_name}} on {{session_date}} was cancelled.",
 			_ => subject + "."
 		};
 		var body = channel == CommunicationChannelType.WebPush ? "An academic update is available. Open the school website for details." :

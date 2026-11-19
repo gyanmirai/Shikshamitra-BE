@@ -241,7 +241,8 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 			using var workers = Factory.Services.CreateScope();
 			var services = workers.ServiceProvider;
 			using var school = services.GetRequiredService<ICurrentTenant>().Change(TenantId, "Synthetic school");
-			var scheduler = services.GetRequiredService<INotificationDueScheduler>();
+			var sources = services.GetServices<INotificationDueSource>().Where(x => x.ScheduledEventKeys.Contains(DayReminder)).ToList();
+			var scheduler = ActivatorUtilities.CreateInstance<NotificationDueScheduler>(services, sources);
 			for (var page = 0; page < 24; page++)
 				if (!(await scheduler.ScanAsync(now, 100, CancellationToken.None)).HasMore) break;
 		}

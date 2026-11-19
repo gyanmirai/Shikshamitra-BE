@@ -125,6 +125,8 @@ public partial class LearningTaskNotificationEligibility_Tests
 			changed.CurrentRecipients.Select(x => x.StudentId!.Value).ShouldBe([seed.Active, seed.AwaitingReview], ignoreOrder: true);
 		});
 
+		await AssertLateAdmissionCatchUpAsync(AssignmentDue, assignmentId, seed.TaskId, division, scanAt, settleBeforeCancellation: true);
+
 		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, StaffActions);
 		using var denied = await PreviewAssignmentAsync(seed.Active);
 		denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);

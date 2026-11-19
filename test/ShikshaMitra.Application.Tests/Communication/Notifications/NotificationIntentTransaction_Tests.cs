@@ -63,7 +63,11 @@ public class NotificationIntentTransaction_Tests
 		var planner = new NotificationIntentCapturePlanner(_tenant, [_catalogue], _sources, new(), new(_tenant, rules, executer),
 			_configuration, new(_configuration), new(_tenant, versions, executer, _configuration), new(_tenant, _settings), new());
 		var guids = Substitute.For<IGuidGenerator>(); guids.Create().Returns(_ => Guid.NewGuid());
-		_writer = new(_tenant, _units, _writeLock, planner, operations, _intentsRepository, executer, guids, Substitute.For<IDataFilter>());
+		var dispatches = Repository(new List<NotificationDispatch>());
+		var outcomeLock = new NotificationOutcomeLock(Substitute.For<INotificationPersonalWriteLock>());
+		var outcomes = new NotificationOutcomeProjector(_tenant, _units, outcomeLock, _intentsRepository, dispatches, operations, executer);
+		_writer = new(_tenant, _units, _writeLock, planner, operations, _intentsRepository, dispatches, outcomeLock, outcomes,
+			executer, guids, Substitute.For<IDataFilter>());
 	}
 	[Fact]
 	public async Task Capture_flushes_source_state_and_creates_one_operation_with_a_frozen_intent()

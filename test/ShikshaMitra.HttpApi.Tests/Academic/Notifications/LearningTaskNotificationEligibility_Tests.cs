@@ -162,6 +162,7 @@ public partial class LearningTaskNotificationEligibility_Tests(ShikshaMitraApiTe
 	[Fact]
 	public async Task Scheduler_queues_one_real_homework_intent_and_rechecks_submissions_before_dispatch()
 	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		var divisionId = Guid.Empty;
 		await InSchoolAsync(async services =>
 		{
@@ -228,6 +229,7 @@ public partial class LearningTaskNotificationEligibility_Tests(ShikshaMitraApiTe
 			remaining.CurrentRecipients.ShouldHaveSingleItem().StudentId.ShouldBe(seed.Legacy);
 			(await reader.LoadAsync(intent, dueAt, CancellationToken.None)).ExclusionCode.ShouldBe("SourceExpired");
 		});
+		await AssertLateAdmissionCatchUpAsync(EventKey, seed.TaskId, seed.TaskId, divisionId, scanAt);
 	}
 
 	private Task<HttpResponseMessage> PreviewAsync(Guid taskId, Guid studentId) =>

@@ -44,7 +44,7 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 		return definition;
 	}
 	public async Task<IReadOnlyList<NotificationIntentCaptureItem>> PlanAsync(NotificationEventInput input, NotificationEventDefinition definition,
-		CancellationToken cancellationToken)
+		CancellationToken cancellationToken, IReadOnlySet<Guid>? capturedStudents = null)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
@@ -67,6 +67,9 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 			var scope = new NotificationSourceScopeDto(partition.Scope.AcademicYearId, partition.Scope.BoardId, partition.Scope.MediumId,
 				partition.Scope.ClassId, partition.Scope.DivisionId);
 			if (occurrence != null && occurrence.Scope != scope) continue;
+			var recipients = capturedStudents == null ? partition.Recipients : partition.Recipients
+				.Where(x => x.Kind == "Student" && x.StudentId is Guid studentId && !capturedStudents.Contains(studentId)).ToArray();
+			if (recipients.Count == 0) continue;
 			if (!resolved.TryGetValue(partition.Scope.Key, out var rule))
 			{
 				rule = await rules.ResolveAsync(input.EventKey, partition.Scope, cancellationToken); resolved[partition.Scope.Key] = rule;
@@ -82,10 +85,10 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 			}
 			if (config.Value == null)
 			{
-				results.Add(new(rule.Id, rule.Revision, partition.Scope, partition.Recipients, "{}", [], input.DueAt ?? input.OccurredAt,
+				results.Add(new(rule.Id, rule.Revision, partition.Scope, recipients, "{}", [], input.DueAt ?? input.OccurredAt,
 					expiry, NotificationIntentState.NeedsReview, config.ErrorCode ?? NotificationErrorCodes.RuleConfigurationInvalid)); continue;
 			}
-			var selected = partition.Recipients.Where(x => x.Kind == "Student"
+			var selected = recipients.Where(x => x.Kind == "Student"
 				? definition.RecipientSelectors.Contains("PrimaryGuardian") || config.Value.IncludeStudentAccount
 				: config.Value.StaffAudienceSelectors.Contains(x.Kind)).ToArray();
 			if (selected.Length == 0) continue;
@@ -94,6 +97,7 @@ public sealed class NotificationIntentCapturePlanner(ICurrentTenant tenant, IEnu
 			{
 				snapshot = snapshots.Serialize(new(1, scope, config.Value, occurrence?.OccurrenceAt.ToUniversalTime()), definition);
 				due = due.AddMinutes(config.Value.Timing.DelayMinutes);
+				if (capturedStudents != null && due < input.OccurredAt) due = input.OccurredAt;
 				zone ??= schoolZone.GetAsync(cancellationToken);
 				var decision = timing.Evaluate(due, await zone, config.Value.Timing.QuietHoursEnabled, config.Value.Timing.QuietStart,
 					config.Value.Timing.QuietEnd, expiry, config.Value.Timing.BypassQuietHours);

@@ -11,7 +11,10 @@ public interface INotificationIntentWriter
 	Task<NotificationIntentWriteResult> WriteWithOutcomeAsync(NotificationEventInput input, CancellationToken cancellationToken);
 }
 
-public sealed record NotificationIntentWriteResult(Guid? OperationId, bool Created);
+public sealed record NotificationIntentWriteResult(Guid? OperationId, bool Created)
+{
+	public bool AddedRecipients { get; init; }
+}
 
 public interface INotificationSourceAdapter
 {

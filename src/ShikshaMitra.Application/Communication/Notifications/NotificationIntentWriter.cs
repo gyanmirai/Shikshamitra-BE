@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -20,6 +21,7 @@ namespace ShikshaMitra.Communication.Notifications;
 [RemoteService(false), DisableAuditing, ExposeServices(typeof(INotificationIntentWriter))]
 public sealed class NotificationIntentWriter(ICurrentTenant tenant, IUnitOfWorkManager units, INotificationEventCaptureLock writeLock,
 	NotificationIntentCapturePlanner planner, IRepository<CommunicationCampaign, Guid> campaigns, IRepository<NotificationIntent, Guid> intents,
+	IRepository<NotificationDispatch, Guid> dispatches, NotificationOutcomeLock outcomeLock, NotificationOutcomeProjector outcomes,
 	IAsyncQueryableExecuter executer, IGuidGenerator guids, IDataFilter filters) : INotificationIntentWriter, ITransientDependency
 {
 	private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -45,12 +47,21 @@ public sealed class NotificationIntentWriter(ICurrentTenant tenant, IUnitOfWorkM
 		var reference = "notification-event:" + eventHash;
 		await unit.SaveChangesAsync(cancellationToken);
 		await writeLock.AcquireAsync(eventHash, cancellationToken);
+		List<Guid> previous;
 		using (filters.Disable<ISoftDelete>())
 		{
-			var previous = await executer.ToListAsync((await campaigns.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
+			previous = await executer.ToListAsync((await campaigns.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
 				x.CampaignType == NotificationCampaignTypes.Academic && x.SourceReference == reference).Select(x => x.Id).Take(2), cancellationToken);
-			if (previous.Count > 1) throw new BusinessException(NotificationErrorCodes.StateConflict);
-			if (previous.Count == 1) return new(previous[0], false);
+		}
+		if (previous.Count > 1) throw new BusinessException(NotificationErrorCodes.StateConflict);
+		if (previous.Count == 1)
+		{
+			var operationId = previous[0];
+			var added = AcademicNotificationEventKeys.IsLearningTaskDueReminder(input.EventKey) && input.ActorUserId == null &&
+				input.DueOccurrence is { Scope.DivisionId: not null } due && due.OccurrenceAt > input.OccurredAt &&
+				(!input.ExpiresAt.HasValue || input.ExpiresAt > input.OccurredAt) &&
+				await TryCatchUpAsync(tenantId, operationId, input, definition, eventHash, unit, cancellationToken);
+			return new(operationId, false) { AddedRecipients = added };
 		}
 		var plan = await planner.PlanAsync(input, definition, cancellationToken);
 		if (plan.Count == 0) return new(null, false);
@@ -63,6 +74,64 @@ public sealed class NotificationIntentWriter(ICurrentTenant tenant, IUnitOfWorkM
 				: sendable.Any(x => x.DueAt <= input.OccurredAt) ? CommunicationCampaignStatus.Queued : CommunicationCampaignStatus.Scheduled
 		};
 		await campaigns.InsertAsync(operation, cancellationToken: cancellationToken);
+		await InsertIntentsAsync(tenantId, operation.Id, input, eventHash, plan, cancellationToken);
+		await unit.SaveChangesAsync(cancellationToken);
+		return new(operation.Id, true);
+	}
+
+	private async Task<bool> TryCatchUpAsync(Guid tenantId, Guid operationId, NotificationEventInput input,
+		NotificationEventDefinition definition, string eventHash, IUnitOfWork unit, CancellationToken cancellationToken)
+	{
+		await outcomeLock.AcquireAsync(operationId, cancellationToken);
+		var operation = await executer.FirstOrDefaultAsync((await campaigns.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
+			x.Id == operationId && !x.IsDeleted && x.CampaignType == NotificationCampaignTypes.Academic &&
+			x.SourceModule == CommunicationSourceModule.Academic && x.SourceEntityId == input.SourceId &&
+			x.SourceEntityType == input.SourceType), cancellationToken);
+		if (operation == null || operation.RejectionReason != null) return false;
+
+		var captured = new HashSet<Guid>();
+		using (filters.Disable<ISoftDelete>())
+		{
+			var owned = (await intents.GetQueryableAsync()).Where(x => x.TenantId == tenantId && x.CampaignId == operationId &&
+				x.EventKey == input.EventKey && x.SourceType == input.SourceType && x.SourceId == input.SourceId &&
+				x.SourceRevision == input.SourceRevision && x.Origin == NotificationIntentOrigin.Automatic);
+			var history = await executer.ToListAsync(owned.Select(x => new { x.AffectedRecipientsJson, x.ErrorCode }), cancellationToken);
+			if (history.Count == 0 || history.Any(x => x.ErrorCode == NotificationErrorCodes.CancelledBeforeDelivery) ||
+				await executer.AnyAsync((await dispatches.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
+					x.CampaignId == operationId && x.ErrorCode == NotificationErrorCodes.CancelledBeforeDelivery &&
+					owned.Any(i => i.Id == x.IntentId)), cancellationToken)) return false;
+			foreach (var prior in history)
+			{
+				cancellationToken.ThrowIfCancellationRequested();
+				NotificationRecipientRefDto[] recipients;
+				try
+				{
+					recipients = NotificationRuntimeJson.Deserialize<NotificationRecipientRefDto[]>(prior.AffectedRecipientsJson,
+						NotificationErrorCodes.RuntimeSnapshotInvalid);
+				}
+				catch (BusinessException error) when (error.Code == NotificationErrorCodes.RuntimeSnapshotInvalid) { return false; }
+				if (recipients.Length is 0 or > 100 || recipients.Any(x =>
+					!NotificationSourcePartitioner.ValidReference(x, definition) || x.Kind != "Student")) return false;
+				foreach (var recipient in recipients) captured.Add(recipient.StudentId!.Value);
+			}
+		}
+
+		var plan = await planner.PlanAsync(input, definition, cancellationToken, captured);
+		if (plan.Count == 0) return false;
+		await InsertIntentsAsync(tenantId, operationId, input, eventHash, plan, cancellationToken);
+		if (operation.ScheduledAt == null)
+		{
+			operation.ScheduledAt = plan.Where(x => !x.CaptureOutcome.HasValue).Select(x => (DateTimeOffset?)x.DueAt).Min();
+			if (operation.ScheduledAt != null) await campaigns.UpdateAsync(operation, cancellationToken: cancellationToken);
+		}
+		await unit.SaveChangesAsync(cancellationToken);
+		await outcomes.RefreshLockedAsync(tenantId, operationId, cancellationToken, includeNaturallyCancelled: true);
+		return true;
+	}
+
+	private async Task InsertIntentsAsync(Guid tenantId, Guid operationId, NotificationEventInput input, string eventHash,
+		IReadOnlyList<NotificationIntentCaptureItem> plan, CancellationToken cancellationToken)
+	{
 		foreach (var item in plan)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
@@ -71,12 +140,10 @@ public sealed class NotificationIntentWriter(ICurrentTenant tenant, IUnitOfWorkM
 			var intent = new NotificationIntent(guids.Create(), tenantId, item.RuleId, item.RuleRevision, input.EventKey, input.SourceType,
 				input.SourceId, input.SourceRevision, key, input.OccurredAt, item.DueAt, recipients, JsonSerializer.Serialize(item.TemplateRevisionIds, Json), item.ExpiresAt, input.ActorUserId);
 			if (item.SnapshotJson != "{}") intent.BindRuntimeSnapshot(item.SnapshotJson, NotificationIntentOrigin.Automatic);
-			intent.BindAutomaticOperation(operation.Id);
+			intent.BindAutomaticOperation(operationId);
 			if (item.CaptureOutcome.HasValue) intent.StopBeforePlanning(item.CaptureOutcome.Value, item.ErrorCode ?? NotificationErrorCodes.RuntimeSnapshotInvalid);
 			await intents.InsertAsync(intent, cancellationToken: cancellationToken);
 		}
-		await unit.SaveChangesAsync(cancellationToken);
-		return new(operation.Id, true);
 	}
 	private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 }

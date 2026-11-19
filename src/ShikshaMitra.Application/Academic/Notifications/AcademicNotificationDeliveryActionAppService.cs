@@ -92,13 +92,15 @@ public class AcademicNotificationDeliveryActionAppService(AcademicNotificationAc
 		if (cancelledIntents.Length > 0) await intents.UpdateManyAsync(cancelledIntents, cancellationToken: cancellationToken);
 		if (cancelledDispatches.Length > 0) await dispatches.UpdateManyAsync(cancelledDispatches, cancellationToken: cancellationToken);
 		var pendingApproval = op.Status == CommunicationCampaignStatus.PendingApproval;
-		if (pendingApproval)
+		var stopFutureReminders = op.RejectionReason == null && AcademicNotificationEventKeys.IsLearningTaskDueReminder(authorized.Definition.EventKey) &&
+			await AsyncExecuter.AnyAsync(ownedIntents.Where(x => x.Origin == NotificationIntentOrigin.Automatic), cancellationToken);
+		if (pendingApproval) op.Status = CommunicationCampaignStatus.Cancelled;
+		if (pendingApproval || stopFutureReminders)
 		{
-			op.Status = CommunicationCampaignStatus.Cancelled;
 			op.RejectionReason = NotificationErrorCodes.CancelledBeforeDelivery;
 			await campaigns.UpdateAsync(op, cancellationToken: cancellationToken);
 		}
-		if (pendingApproval || cancelledIntents.Length != 0 || cancelledDispatches.Length != 0)
+		if (pendingApproval || stopFutureReminders || cancelledIntents.Length != 0 || cancelledDispatches.Length != 0)
 		{
 			await CurrentUnitOfWork!.SaveChangesAsync(cancellationToken);
 			if (!pendingApproval) await outcomes.RefreshLockedAsync(tenantId, operationId, cancellationToken);

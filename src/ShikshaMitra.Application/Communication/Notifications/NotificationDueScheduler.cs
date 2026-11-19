@@ -134,7 +134,7 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 				var result = await writer.WriteWithOutcomeAsync(new(candidate.EventKey, source.SourceType, candidate.SourceId,
 					candidate.SourceRevision, now, [], DueAt: dueAt, ExpiresAt: candidate.ExpiresAt,
 					DueOccurrence: new(inputScope, candidate.OccurrenceAt, rule.Id, rule.Revision)), cancellationToken);
-				if (result.Created) created++;
+				if (result.Created || result.AddedRecipients) created++;
 			}
 			catch (BusinessException error) when (error.Code == NotificationErrorCodes.SourceUnavailable)
 			{

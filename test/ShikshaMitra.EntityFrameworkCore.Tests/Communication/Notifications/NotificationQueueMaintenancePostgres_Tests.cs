@@ -163,6 +163,8 @@ public class NotificationQueueMaintenancePostgres_Tests(NotificationPostgresFixt
 	private static IUnitOfWorkManager Units(NotificationPersistenceTestDbContext db)
 	{
 		var manager = Substitute.For<IUnitOfWorkManager>();
+		IUnitOfWork? current = null;
+		manager.Current.Returns(_ => current);
 		manager.Begin(Arg.Any<AbpUnitOfWorkOptions>(), true).Returns(call => {
 			db.ChangeTracker.Clear();
 			var transaction = call.Arg<AbpUnitOfWorkOptions>().IsTransactional ? db.Database.BeginTransaction() : null;
@@ -174,7 +176,11 @@ public class NotificationQueueMaintenancePostgres_Tests(NotificationPostgresFixt
 				await db.SaveChangesAsync(token);
 				await transaction.CommitAsync(token);
 			});
-			unit.When(x => x.Dispose()).Do(_ => transaction?.Dispose());
+			unit.When(x => x.Dispose()).Do(_ => {
+				transaction?.Dispose();
+				current = null;
+			});
+			current = unit;
 			return unit;
 		});
 		return manager;

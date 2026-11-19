@@ -83,10 +83,11 @@ public sealed class NotificationOutcomeProjector(ICurrentTenant tenant, IUnitOfW
 		return changed;
 	}
 
-	internal async Task<bool> RefreshLockedAsync(Guid tenantId, Guid operationId, CancellationToken cancellationToken)
+	internal async Task<bool> RefreshLockedAsync(Guid tenantId, Guid operationId, CancellationToken cancellationToken,
+		bool includeNaturallyCancelled = false)
 	{
 		var unit = units.Current ?? throw new BusinessException(NotificationErrorCodes.StateConflict);
-		var operation = await queries.FirstOrDefaultAsync((await OperationsAsync(tenantId)).Where(x => x.Id == operationId), cancellationToken);
+		var operation = await queries.FirstOrDefaultAsync((await OperationsAsync(tenantId, includeNaturallyCancelled)).Where(x => x.Id == operationId), cancellationToken);
 		if (operation == null) return false;
 		var owned = (await TenantIntentsAsync(tenantId)).Where(x => x.CampaignId == operationId &&
 			x.SourceId == operation.SourceEntityId && x.SourceType == operation.SourceEntityType);
@@ -132,9 +133,10 @@ public sealed class NotificationOutcomeProjector(ICurrentTenant tenant, IUnitOfW
 	private async Task<IQueryable<NotificationDispatch>> TenantDispatchesAsync(Guid tenantId) =>
 		(await dispatches.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted);
 
-	private async Task<IQueryable<CommunicationCampaign>> OperationsAsync(Guid tenantId) =>
+	private async Task<IQueryable<CommunicationCampaign>> OperationsAsync(Guid tenantId, bool includeNaturallyCancelled = false) =>
 		(await campaigns.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
-			x.CampaignType == NotificationCampaignTypes.Academic && Enumerable.Contains(ProjectableOperations, x.Status));
+			x.CampaignType == NotificationCampaignTypes.Academic && (Enumerable.Contains(ProjectableOperations, x.Status) ||
+				includeNaturallyCancelled && x.Status == CommunicationCampaignStatus.Cancelled && x.RejectionReason == null));
 
 	private static (NotificationIntentState State, string? Reason) SummarizeIntent(IEnumerable<DispatchTally> rows)
 	{
@@ -154,7 +156,8 @@ public sealed class NotificationOutcomeProjector(ICurrentTenant tenant, IUnitOfW
 		IReadOnlyList<DispatchTally> tallies)
 	{
 		if (states.Any(x => Enumerable.Contains(ActiveIntents, x)))
-			return states.All(x => x == NotificationIntentState.Scheduled) ? CommunicationCampaignStatus.Scheduled : CommunicationCampaignStatus.Queued;
+			return states.Any(x => x != NotificationIntentState.Scheduled && Enumerable.Contains(ActiveIntents, x))
+				? CommunicationCampaignStatus.Queued : CommunicationCampaignStatus.Scheduled;
 		var accepted = tallies.Any(x => IsAccepted(x.State));
 		var review = states.Any(x => x is NotificationIntentState.NeedsReview or NotificationIntentState.PartiallyFailed);
 		return (accepted, review) switch {

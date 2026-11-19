@@ -134,6 +134,8 @@ The Homework feedback fixture covers the first Reviewed status, repeated feedbac
 
 Assignment publication coverage exercises the staff status route and scheduled publisher with staggered divisions. It verifies that the first release targets its own learners and class teacher, that the later release targets its own division, and that repeated scheduler runs create no duplicate intents.
 
+The Homework Due and Assignment Due fixtures enroll an eligible learner after the first reminder settles. They verify that the scheduler queues just the new learner under the original operation, a repeat scan adds no records, and an authorized staff cancellation stops future additions even after delivery work has settled.
+
 Feedback release coverage exercises plain feedback and rubric approval for both Homework and Assignment. It checks draft and submit-for-approval steps, repeated edits, recipient isolation, and omission of grades and feedback text from notification data. Assignment checks also cover notification eligibility after closing, the exact history permission, and allowed and denied division viewers.
 
 Overdue coverage runs the scheduler over real Homework and Assignment schedules. It verifies fixed deadline timing, publication and division boundaries, duplicate-scan protection, a single assigned-teacher summary with a scoped count, and a fresh roster after late submission or excuse. A family template can receive only its own learner's missing count. An overdue intent expires 24 hours after the saved deadline.

@@ -85,4 +85,6 @@ public static class AcademicNotificationEventKeys
 	public const string ReportExportFailed = "Academic.Report.ExportFailed";
 	public const string SummaryWeekly = "Academic.Summary.Weekly";
 	public const string SettingsOperationalImpact = "Academic.Settings.OperationalImpact";
+
+	public static bool IsLearningTaskDueReminder(string eventKey) => eventKey is HomeworkDue or AssignmentDue;
 }

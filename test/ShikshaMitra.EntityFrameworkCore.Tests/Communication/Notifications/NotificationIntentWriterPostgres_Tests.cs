@@ -211,8 +211,12 @@ public class NotificationIntentWriterPostgres_Tests(NotificationPostgresFixture 
 			var intent = call.Arg<NotificationIntent>(); db.Add(intent); db.Entry(intent).Property(x => x.TenantId).CurrentValue = Guid.NewGuid(); return intent;
 		});
 		var guids = Substitute.For<IGuidGenerator>(); guids.Create().Returns(_ => Guid.NewGuid());
+		var campaigns = Repository<CommunicationCampaign>(db);
+		var dispatches = Repository<NotificationDispatch>(db);
+		var outcomeLock = new NotificationOutcomeLock(transactions);
+		var outcomes = new NotificationOutcomeProjector(tenant, units, outcomeLock, intents, dispatches, campaigns, executer);
 		return (new NotificationIntentWriter(tenant, units, new NotificationEventCaptureLock(transactions), planner,
-			Repository<CommunicationCampaign>(db), intents, executer, guids, Substitute.For<IDataFilter>()), acquired);
+			campaigns, intents, dispatches, outcomeLock, outcomes, executer, guids, Substitute.For<IDataFilter>()), acquired);
 	}
 	private static IRepository<T, Guid> Repository<T>(DbContext db) where T : class, Volo.Abp.Domain.Entities.IEntity<Guid>
 	{

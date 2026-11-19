@@ -1,5 +1,9 @@
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.Students.StudentEnrollments;
@@ -7,15 +11,76 @@ using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using PaymentTerm = ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.PaymentTerm;
 
 namespace ShikshaMitra.Finance.Fees.Collections;
 
 public partial class StudentFeeDetailsQueryService
 {
+	internal async Task<IReadOnlyList<Guid>> GetLedgerFeeHeadOrderAsync(
+		Guid structureId, CancellationToken cancellationToken = default)
+	{
+		var structures = LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FeeStructure, Guid>>();
+		var structure = await structures.FindAsync(structureId, includeDetails: false, cancellationToken);
+		if (structure is null) return [];
+		var savedOrder = FeeStructureHeadOrder.Read(structure);
+		if (savedOrder.Count > 0) return savedOrder;
+
+		var details = LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FeeStructureDetail, Guid>>();
+		var lines = await details.GetQueryableAsync();
+		return await AsyncExecuter.ToListAsync(lines.Where(line => line.FeeStructureId == structureId)
+			.OrderBy(line => line.CreationTime).ThenBy(line => line.Id).Select(line => line.FeeHeadId),
+			cancellationToken);
+	}
+
+	private static IReadOnlyList<AssignmentHeadDto> ReadLedgerAssignmentHeads(string? snapshotJson)
+	{
+		if (string.IsNullOrEmpty(snapshotJson)) return [];
+		try
+		{
+			return JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(snapshotJson)?.Heads ?? [];
+		}
+		catch (JsonException)
+		{
+			return [];
+		}
+	}
+
+	internal async Task<Dictionary<Guid, string>> GetLedgerPaymentTermNamesAsync(
+		IReadOnlyCollection<DueFee> dues, Guid academicYearId, IReadOnlyList<AssignmentHeadDto> assignmentHeads,
+		CancellationToken cancellationToken = default)
+	{
+		var pinnedNames = assignmentHeads
+			.Where(head => !string.IsNullOrWhiteSpace(head.PaymentTermName))
+			.ToLookup(head => (head.FeeHeadId, head.PaymentTermId, head.PaymentTermVersionId));
+		var names = new Dictionary<Guid, string>();
+		var unresolved = new List<DueFee>();
+		foreach (var due in dues.Where(due => due.PaymentTermId.HasValue))
+		{
+			var head = pinnedNames[(due.FeeHeadId, due.PaymentTermId, due.PaymentTermVersionId)].FirstOrDefault();
+			if (head?.PaymentTermName is { } name)
+				names.Add(due.Id, name);
+			else
+				unresolved.Add(due);
+		}
+		if (unresolved.Count == 0) return names;
+
+		var termIds = unresolved.Select(due => due.PaymentTermId!.Value).Distinct().ToArray();
+		var repository = LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<PaymentTerm, Guid>>();
+		var terms = (await repository.GetListAsync(term => term.AcademicYearId == academicYearId
+			&& Enumerable.Contains(termIds, term.Id), cancellationToken: cancellationToken))
+			.ToDictionary(term => term.Id, term => term.Name);
+		foreach (var due in unresolved)
+			if (terms.TryGetValue(due.PaymentTermId!.Value, out var name))
+				names.Add(due.Id, name);
+		return names;
+	}
+
 	private async Task<StudentSnapshot> GetStudentSnapshotAsync(Guid studentId, Guid academicYearId,
 		CancellationToken cancellationToken)
 	{

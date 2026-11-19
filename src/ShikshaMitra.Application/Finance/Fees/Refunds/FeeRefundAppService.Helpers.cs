@@ -328,7 +328,7 @@ public partial class FeeRefundAppService
 				"Refund request is outside your Finance scope.");
 	}
 
-	private async Task<IQueryable<Guid>> GetVisibleRefundRequestIdsAsync(Guid academicYearId)
+	internal async Task<IQueryable<Guid>> GetVisibleRefundRequestIdsAsync(Guid academicYearId)
 	{
 		var own = await financeScopeAccessService.GetRefundScopedStudentIdsQueryAsync(
 			CurrentUser.Id ?? Guid.Empty, academicYearId, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
@@ -358,9 +358,9 @@ public partial class FeeRefundAppService
 		var reviewable = requests.Where(r => r.AcademicYearId == academicYearId &&
 			r.StudentId.HasValue && review.Contains(r.StudentId.Value) &&
 			((r.SubmittedByUserId.HasValue &&
-				(reportees.Contains(r.SubmittedByUserId.Value) || familyMakers.Contains(r.SubmittedByUserId.Value))) ||
+				(Enumerable.Contains(reportees, r.SubmittedByUserId.Value) || familyMakers.Contains(r.SubmittedByUserId.Value))) ||
 			 (!r.SubmittedByUserId.HasValue && r.CreatorId.HasValue &&
-				(reportees.Contains(r.CreatorId.Value) || familyMakers.Contains(r.CreatorId.Value)))));
+				(Enumerable.Contains(reportees, r.CreatorId.Value) || familyMakers.Contains(r.CreatorId.Value)))));
 		return ownRequests.Select(r => r.Id).Union(reviewable.Select(r => r.Id));
 	}
 

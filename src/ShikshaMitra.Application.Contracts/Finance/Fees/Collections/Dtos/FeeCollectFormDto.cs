@@ -70,6 +70,9 @@ public class FeeLedgerLineDto
     public Guid FeeHeadId { get; set; }
     public string FeeHeadName { get; set; } = string.Empty;
 
+    /// <summary>Name of the payment term attached to the obligation, when available.</summary>
+    public string? PaymentTermName { get; set; }
+
     /// <summary>Payment Term installment label when available, otherwise month/year.</summary>
     public string InstallmentLabel { get; set; } = string.Empty;
 	public Guid? InstallmentId { get; set; }

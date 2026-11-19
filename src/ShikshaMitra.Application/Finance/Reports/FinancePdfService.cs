@@ -19,10 +19,10 @@ public class FinancePdfService : ITransientDependency
 		{
 			container.Page(page =>
 			{
-				page.Size(PageSizes.A4.Landscape());
+				page.Size((data.Columns.Count > 11 ? PageSizes.A3 : PageSizes.A4).Landscape());
 				page.Margin(1, Unit.Centimetre);
 				page.PageColor(Colors.White);
-				page.DefaultTextStyle(x => x.FontSize(10)
+				page.DefaultTextStyle(x => x.FontSize(data.Columns.Count > 11 ? 8 : 10)
 					.FontFamily(PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily));
 
 				page.Header().Element(header =>
@@ -40,6 +40,11 @@ public class FinancePdfService : ITransientDependency
 
 				page.Content().PaddingVertical(1, Unit.Centimetre).Element(content =>
 				{
+					if (data.Rows.Count == 0 || data.Columns.Count == 0)
+					{
+						content.Text("No data found for the selected filters.");
+						return;
+					}
 					content.Table(table =>
 					{
 						// Define columns
@@ -66,7 +71,10 @@ public class FinancePdfService : ITransientDependency
 							foreach (var col in data.Columns)
 							{
 								var value = row.TryGetValue(col.Id, out var val) ? val : "";
-								table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).PaddingVertical(5).Text(value?.ToString() ?? "");
+								var cell = table.Cell().BorderBottom(1).BorderColor(Colors.Grey.Lighten2).PaddingVertical(5);
+								if (col.Kind is "money" or "number")
+									cell = cell.AlignRight();
+								cell.Text(value ?? "");
 							}
 						}
 					});

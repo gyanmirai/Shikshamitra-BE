@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
@@ -48,7 +49,12 @@ public partial class AdmissionFeeCollectionAppService
         var reconciliation = pending.GroupBy(a => a.DueFeeId).ToDictionary(g => g.Key, g => g.Sum(a => (double)a.Amount));
         var balances = await LateFees.GetBalancesAsync(rows, account.AcademicYearId, Clock.Now.Date);
         var rules = await Policies.ResolveEffectiveRulesForAccountAsync(account.Id);
+        var feeHeadOrder = rules.Policy?.AllocationBasis == CollectionAllocationBasis.FeeHead
+            ? await StudentDetails.GetLedgerFeeHeadOrderAsync(preview.StructureId)
+            : [];
         var names = preview.Heads.ToDictionary(h => h.FeeHeadId, h => h.FeeHeadName);
+        var paymentTermNames = await StudentDetails.GetLedgerPaymentTermNamesAsync(
+            rows, account.AcademicYearId, preview.Heads);
         var proration = preview.Policies.FirstOrDefault(p => p.Family == "proration");
         var ledger = rows.GroupBy(d => (d.Year, d.Month)).OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month)
             .Select(g => new FeeLedgerMonthDto
@@ -56,6 +62,7 @@ public partial class AdmissionFeeCollectionAppService
                 Month = g.Key.Month.ToString(), Year = g.Key.Year,
                 Items = g.OrderBy(d => d.ScheduleDueDate ?? d.DueDate).ThenBy(d => d.InstallmentSequence)
                     .Select(d => AccountLedgerLine(d, names.GetValueOrDefault(d.FeeHeadId, string.Empty),
+                        paymentTermNames.GetValueOrDefault(d.Id),
                         reconciliation.GetValueOrDefault(d.Id), Clock.Now.Date, proration)).ToList()
             }).ToList();
         foreach (var month in ledger) month.TotalDue = month.Items.Sum(i => i.CollectionAmount > 0 ? i.CollectionAmount : i.Due);
@@ -84,14 +91,15 @@ public partial class AdmissionFeeCollectionAppService
                 TotalRoundingAdjustment = (double)rows.Sum(d => Math.Ceiling(d.OutstandingAmount) - d.OutstandingAmount),
             },
             Ledger = ledger, Charges = lateCharges, AllowOnlineCollection = rules.Policy?.AllowOnlineCollection ?? true,
-        }, rules.Policy);
+        }, rules.Policy, feeHeadOrder);
     }
 
     // Read projection only: amounts/status come from canonical dues and the shared balance services.
-    private static FeeLedgerLineDto AccountLedgerLine(DueFee due, string name, double reconciliation,
+    private static FeeLedgerLineDto AccountLedgerLine(DueFee due, string name, string? paymentTermName, double reconciliation,
         DateTime asOf, AssignmentPolicyDto? proration) => new()
     {
         DueFeeId = due.Id, FeeHeadId = due.FeeHeadId, FeeHeadName = name,
+        PaymentTermName = paymentTermName,
         InstallmentLabel = due.GetDisplayInstallmentLabel(), DueDate = due.ScheduleDueDate ?? due.DueDate,
         InstallmentId = due.PaymentTermInstallmentId,
         CoverageStartDate = due.CoverageStartDate, CoverageEndDate = due.CoverageEndDate,

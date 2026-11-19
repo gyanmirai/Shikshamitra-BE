@@ -10,6 +10,25 @@ audience: humans-and-agents
 
 # Use Finance backend APIs
 
+## Finance Dashboard
+
+Both reads require `ShikshaMitra.Module.Finance.Dashboard`, an active school identity, and access to
+`academicYearId`. Source view grants govern which sections are returned. Student and fee-account
+rows follow the caller's academic scope, including eligible historical enrollments.
+
+| Endpoint | Additional access | Result |
+| --- | --- | --- |
+| `GET /api/finance/dashboard/overview` | Fee Collection View for balances. Charges View for separate charges. Refund and Concession View for their respective worklists. | Current unpaid fee principal, overdue principal, balances by class, and open requests. Optional inclusive `from` and `to` dates filter by due date for balances and submission date for requests. Supply both dates together. |
+| `GET /api/finance/dashboard/activity` | Fee Collection View for receipts. Income and Expense View for their respective totals. | Confirmed fee-only amounts by receipt date, recorded payment-method amounts, and recognized accounts entries for inclusive `from` and `to` dates. Unassigned accounts entries require year-wide scope. |
+
+Use ISO calendar dates (`YYYY-MM-DD`) within the academic year. Timestamp filters use India
+calendar boundaries. Payment method totals reflect recorded payments tied to confirmed fee
+receipts, including charges paid in those transactions. The
+confirmed receipt totals exclude provisional and reversed collections and the charge component
+of combined receipts. Older combined receipts without a stored fee breakdown make the receipt
+total unavailable for that period. Amounts are INR decimals. Net movement is confirmed income
+less confirmed expenses and is available when both registers are visible.
+
 ## Finance setup guide
 
 | Endpoint | Contract |
@@ -201,7 +220,11 @@ Student and Admission collect-form responses add `allocationBasis`, `collectionP
 `collectionPolicyName`, `collectionPolicyVersion`, `allocationDueFeeOrder` and `allocationRevision`.
 Configured modes use the same ordered ledger in the screen and command validation. Installment
 groups use schedule installment IDs (date/label fallback for legacy dues), not month labels alone.
-Fee-head groups retain the collection head-name order. Both retain the displayed line sequence.
+Fee-head allocation follows the assigned fee structure's saved fee head sequence, then due date
+within each head. Older structures use the publication review sequence when available and then
+the original line creation order. Saved fee head order uses the structure's existing extra
+properties. Student and Admission ledger lines expose the configured `paymentTermName` when a
+term is recorded, alongside the recorded `dueDate` and any installment coverage dates.
 
 Configured collection commands require `automaticAllocation: { revision, dueFeeIds, chargeIds }`.
 Selection includes unfunded rows. The server reloads the scope-checked, assignment/account-pinned
@@ -351,6 +374,19 @@ Original manual Income creation retries retain their gross request amount after 
 
 ## Reports and audit API families
 
+The report workspace uses `GET /api/app/finance-report/options` for available report types and filter choices, `POST /preview` for paginated rows, `POST /exports` to queue a PDF or Excel workbook, `GET /exports` for the requester's recent jobs, and `GET /exports/{jobId}/download` for a ready file. These paths share the `/api/app/finance-report` prefix. Exports use the same report and normalized filters as preview. Downloads reauthorize against the requester's current permissions and data scope.
+
+| Phase 1 report | Additional access | Row and date basis |
+| --- | --- | --- |
+| Fee demand and collection summary | Academic year-wide scope, or scoped `Finance.Fees.FeeCollections.View` | Class/division or fee head. Current amounts across installments selected by demand date. |
+| Outstanding fees and ageing | `Finance.Fees.FeeCollections.View` | Unpaid installment. Age uses the current school date and the canonical bill and due dates. |
+| Student fee statement | `Finance.Fees.FeeCollections.View` | Installment for one scoped student or applicant account, using current balances. |
+| Daily collection register | `Finance.Fees.FeeCollections.View` | Payment instrument, using its payment date in India Standard Time. |
+| Receipt register and corrections | `Finance.Fees.InvoiceReceipt.View` | Receipt document, using its issue date. Linked provisional and official documents have separate rows. |
+| Payment verification and clearing ageing | `Finance.Accounts.Reconciliation.View` | Non-cash instrument, using its payment date or recorded verification decision date. |
+
+Each Phase 1 request selects one academic year. The Reports permission is required throughout. Legacy reports remain available with the source feature's View permission and their existing scope rules. Payment references are masked in report rows and exports. Dates on balance reports filter the installment population, and the balance date identifies the current snapshot.
+
 | Family              | Controller path                                            |
 | ------------------- | ---------------------------------------------------------- |
 | Finance reports     | `Controllers/Finance/Reports/FinanceReportController.cs`   |
@@ -367,9 +403,9 @@ Known Finance families include `Finance.Fees.Charges.*`, `Finance.Fees.Concessio
 
 Fee adjustments define `Finance.Fees.Adjustment.{View|Add|Approve|Reject|Delete}`.
 Add does not confer a decision grant; Apply and its context require Approve, while
-Reject requires Reject. The reviewer must have View, the exact decision grant,
-current student scope, and a current reporting-manager route. The creator cannot
-review their own request. No existing Add grant is promoted or reseeded.
+Reject requires Reject. Explicit decisions require an independent reviewer with View,
+the exact decision grant, and current student scope. Ordinary reviewers also require a
+current reporting-manager route.
 
 Paid-credit transfer sources are capped by retained overpayment from settled
 principal receipt allocations. Outstanding debt and provisional unverified
@@ -384,8 +420,12 @@ replay the original result and changed payloads fail. List/detail include
 `availableActions` (`Approve` and `Reject`) computed from current reviewer
 authority. Historical requests without source reservations remain readable and
 may be rejected, but application returns
-`Finance:FeeAdjustment:PaidCreditTransferUnavailable`. Existing applied history
-is unchanged. There is no adjustment administrator auto-approval.
+`Finance:FeeAdjustment:PaidCreditTransferUnavailable`.
+
+For a configured administrator with View, Add, and Approve, `POST /api/fee-adjustments`
+creates and applies the request in one transaction. The response returns `Applied` or
+`PartiallyApplied`. Staff submissions outside the administrator creation path enter
+`Pending`. See the [administrator approval contract](./references/admin-request-auto-approval-contract.md).
 
 Accounts settings use `Finance.Accounts.Settings.{IncomeCategory|ExpenseCategory|BankAccount}.{View|Add|Edit|ChangeStatus|Delete}`.
 Each action is independent; module visibility and Add do not authorize Edit or ChangeStatus.

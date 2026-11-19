@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Repositories;
@@ -90,8 +91,16 @@ public partial class StudentFeeStructureAppService
 	public async Task<List<AssignmentCandidateDto>> GetCandidatesAsync(Guid studentId, Guid academicYearId)
 	{
 		var enrollment = await RequireEnrollmentAsync(studentId, academicYearId, true);
-		var metadataIds = (await feeStructureMetadataRepository.GetListAsync(x => x.AcademicYearId == academicYearId)).Select(x => x.Id).ToList();
+		var metadata = (await feeStructureMetadataRepository.GetListAsync(x => x.AcademicYearId == academicYearId))
+			.ToDictionary(x => x.Id);
+		var metadataIds = metadata.Keys.ToList();
 		var structures = await feeStructureRepository.GetListAsync(x => x.IsLocked && x.StandardId == enrollment.StandardId && metadataIds.Contains(x.FeeStructureMetadataId));
+		if (structures.Count == 0) return [];
+		var boardIds = structures.Select(s => metadata[s.FeeStructureMetadataId].AcademicBoardId)
+			.OfType<Guid>().Distinct().ToArray();
+		var boards = (await LazyServiceProvider.LazyGetRequiredService<IRepository<EducationBoard, Guid>>()
+			.GetListAsync(x => x.AcademicYearId == academicYearId && Enumerable.Contains(boardIds, x.Id))).ToDictionary(x => x.Id);
+		var year = await academicYearRepository.GetAsync(academicYearId);
 		var ids = structures.Select(x => x.Id).ToList();
 		var details = await feeStructureDetailRepository.GetListAsync(x => ids.Contains(x.FeeStructureId));
 		var headIds = details.Select(x => x.FeeHeadId).Distinct().ToList();
@@ -107,7 +116,16 @@ public partial class StudentFeeStructureAppService
 		var versionIds = structures.SelectMany(s => StructurePolicyVersions(s).Values).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
 		var versions = await financePolicyVersionRepository.GetListAsync(x => versionIds.Contains(x.Id));
 		foreach (var candidate in candidates)
-			candidate.Policies = versions.Where(v => StructurePolicyVersions(structures.Single(s => s.Id == candidate.Id)).Values.Contains(v.Id)).Select(ToAssignmentPolicy).ToList();
+		{
+			var structure = structures.Single(s => s.Id == candidate.Id);
+			candidate.Policies = versions.Where(v => StructurePolicyVersions(structure).Values.Contains(v.Id)).Select(ToAssignmentPolicy).ToList();
+			if (metadata[structure.FeeStructureMetadataId].AcademicBoardId is Guid boardId &&
+				boards.TryGetValue(boardId, out var board) && HasAssignmentBoardDates(board, year))
+			{
+				candidate.BoardStartDate = DateTime.SpecifyKind(board.StartDate.Date, DateTimeKind.Utc);
+				candidate.BoardEndDate = DateTime.SpecifyKind(board.EndDate.Date, DateTimeKind.Utc);
+			}
+		}
 		return candidates;
 	}
 
@@ -172,6 +190,7 @@ public partial class StudentFeeStructureAppService
 			if (due == null) { result.Warnings.Add("An obligation referenced by the assignment is unavailable; reconciliation is required."); continue; }
 			line.PaidAmount = due.PaidAmount;
 			line.OutstandingAmount = due.OutstandingAmount;
+			if (due.GetOptionalServiceCancellationId().HasValue) line.OptionalServiceCancellationAmount = due.AdjustmentCreditAmount;
 		}
 		snapshot.OriginalPolicies = snapshot.Policies.ToList();
 		if (assignment.FinanceFeeAccountId.HasValue) snapshot.AssignmentSource = "Admission";

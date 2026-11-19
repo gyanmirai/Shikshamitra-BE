@@ -48,6 +48,7 @@ public class StudentFeeAssignmentPreviewLineDto
     public Guid? PaymentTermVersionId { get; set; }
     public decimal PaidAmount { get; set; }
     public decimal OutstandingAmount { get; set; }
+	public decimal OptionalServiceCancellationAmount { get; set; }
 
 	public Guid FeeHeadId { get; set; }
 	public string FeeHeadName { get; set; } = string.Empty;

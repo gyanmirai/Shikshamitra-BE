@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp.Domain.Entities;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using Volo.Abp.Domain.Repositories;
@@ -25,6 +26,7 @@ public partial class StudentFeeStructureAppService
         public Dictionary<Guid, FeeStructure> Structures { get; } = new();
         public Dictionary<Guid, FeeStructureMetadata> Metadata { get; } = new();
         public Dictionary<Guid, AcademicYear> Years { get; } = new();
+        public Dictionary<Guid, EducationBoard?> Boards { get; } = new();
         public Dictionary<Guid, List<FeeStructureDetail>> Details { get; } = new();
         public Dictionary<Guid, FeeHead> Heads { get; } = new();
     }
@@ -48,6 +50,17 @@ public partial class StudentFeeStructureAppService
         var entity = await repository.GetAsync(id);
         if (cache != null) cache[id] = entity;
         return entity;
+    }
+
+    private async Task<EducationBoard?> LoadAssignmentBoardAsync(Guid boardId)
+    {
+        var cache = previewReadBatch.Value?.Boards;
+        if (cache != null && cache.TryGetValue(boardId, out var saved)) return saved;
+        var repository = LazyServiceProvider.LazyGetRequiredService<IRepository<EducationBoard, Guid>>();
+        using var tracking = repository.DisableTracking();
+        var board = await repository.FindAsync(boardId);
+        if (cache != null) cache[boardId] = board;
+        return board;
     }
 
     private async Task<List<FeeStructureDetail>> LoadAssignmentDetailsAsync(Guid structureId)

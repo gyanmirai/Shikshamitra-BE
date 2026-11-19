@@ -7,6 +7,7 @@ using Volo.Abp.BlobStoring;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Timing;
 using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Finance.Reports;
@@ -18,6 +19,7 @@ public class FinanceReportExportBackgroundJob(
     IHrReportExportJobRepository jobRepository,
     IBlobContainer blobContainer,
     ICurrentTenant currentTenant,
+    IClock clock,
     ILogger<FinanceReportExportBackgroundJob> logger)
     : AsyncBackgroundJob<FinanceReportExportJobArgs>, ITransientDependency
 {
@@ -27,7 +29,9 @@ public class FinanceReportExportBackgroundJob(
         using (currentTenant.Change(args.TenantId))
         {
             var job = await jobRepository.GetAsync(args.JobId);
-            job.MarkRunning(DateTime.UtcNow);
+            DateTime JobTime() => job.ExtraProperties.ContainsKey(FinanceReportAppService.UsesApplicationClock)
+                ? clock.Now : DateTime.UtcNow;
+            job.MarkRunning(JobTime());
             await jobRepository.UpdateAsync(job);
 
         try
@@ -50,13 +54,13 @@ public class FinanceReportExportBackgroundJob(
             var blobName = BuildBlobName(args, args.Request.Format.ToLowerInvariant());
             await blobContainer.SaveAsync(blobName, fileBytes, overrideExisting: true);
 
-            job.MarkCompleted(blobName, DateTime.UtcNow, data.Rows.Count, fileBytes.Length);
+            job.MarkCompleted(blobName, JobTime(), data.Rows.Count, fileBytes.Length);
             await jobRepository.UpdateAsync(job);
         }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to export finance report {JobId}", args.JobId);
-                job.MarkFailed(ex.Message, DateTime.UtcNow);
+                job.MarkFailed(ex.Message, JobTime());
                 await jobRepository.UpdateAsync(job);
             }
         }

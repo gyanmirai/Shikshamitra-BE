@@ -491,6 +491,23 @@ public DueFee(
 		RecalculateBalancesAndStatus();
 	}
 
+	public Guid? GetOptionalServiceCancellationId() => this.GetProperty<Guid?>("OptionalServiceCancellationId");
+
+	public bool CanCancelOptionalServiceInstallment(Guid assignmentId, DateOnly lastServiceDate, DateOnly today) =>
+		assignmentId != Guid.Empty && StudentFeeStructureId == assignmentId && !IsDeleted && !IsOneTime &&
+		CoverageStartDate is DateTime coverageStart && DateOnly.FromDateTime(coverageStart) > lastServiceDate &&
+		DateOnly.FromDateTime(coverageStart) > today && DueDate.Date >= today.ToDateTime(TimeOnly.MinValue) &&
+		!HasPaymentEvidence() && !HasProtectedAssignmentUse() && OutstandingAmount > 0m &&
+		OutstandingAmount == OriginalAmount && EffectiveObligationAmount == OriginalAmount;
+
+	public void CancelOptionalServiceInstallment(Guid assignmentId, Guid requestId, DateOnly lastServiceDate, DateOnly today)
+	{
+		if (requestId == Guid.Empty || !CanCancelOptionalServiceInstallment(assignmentId, lastServiceDate, today))
+			throw new BusinessException(AssignmentErrorCodes.NoFutureOptionalInstallments);
+		ApplyAdjustmentCredit(OutstandingAmount);
+		this.SetProperty("OptionalServiceCancellationId", requestId);
+	}
+
 	// Kept in the existing extension column, alongside other owner calculation evidence.
 	// This is a non-cash reduction. Original obligation, receipts and paid amounts stay immutable.
 	public decimal GetWithdrawalProrationCredit() => this.GetProperty<decimal>("WithdrawalProrationCredit", 0m);

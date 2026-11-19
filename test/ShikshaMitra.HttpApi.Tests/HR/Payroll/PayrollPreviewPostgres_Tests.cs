@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -341,6 +342,44 @@ public partial class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory fac
 		(await unauthenticated.GetAsync(activity)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 		(await unauthenticated.GetAsync($"/api/hr/payroll_run/{original.Id}/audit-events"))
 			.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+	}
+
+	[PayrollPostgresFact]
+	public async Task Payroll_activity_includes_legacy_locks_in_the_selected_year_and_month()
+	{
+		var academicYearId = Guid.NewGuid();
+		var occurredAt = DateTime.UtcNow;
+		HrAuditEvent CreateEvent(string name, string action, int month, Guid? yearId = null, string entityType = "payroll_run") => new(
+			Guid.NewGuid(), TenantId, yearId ?? academicYearId, entityType, Guid.NewGuid(), name, action,
+			Guid.Parse(TestAuthHandler.TestUserId), "Synthetic payroll reviewer", occurredAt, "Synthetic audit fixture",
+			contextJson: JsonSerializer.Serialize(new { requestedMonth = name, year = 2026, monthNumber = month, employeeCount = 1 }));
+
+		var expected = new[]
+		{
+			CreateEvent("2026-10-01", "locked", 10),
+			CreateEvent("OCTOBER-2026", "locked", 10),
+			CreateEvent("2026-10", "locked", 10),
+			CreateEvent("2026-10", "reviewed", 10)
+		};
+		await WithDatabaseAsync(async db =>
+		{
+			db.HrAuditEvents.AddRange(expected);
+			db.HrAuditEvents.AddRange(
+				CreateEvent("JANUARY-2026", "locked", 1),
+				CreateEvent("NOVEMBER-2026", "locked", 11),
+				CreateEvent("2026-10-01", "locked", 10, Guid.NewGuid()),
+				CreateEvent("2026-10", "review_unchanged", 10),
+				CreateEvent("2026-10", "locked", 10, entityType: "payroll_policy"));
+			await db.SaveChangesAsync();
+		});
+
+		const string audit = "/api/hr/audit-events?entityType=payroll_run";
+		var history = await GetAndReadAsync<PagedResultDto<HrAuditEventDto>>($"{audit}&academicYearId={academicYearId}&payrollMonth=2026-10");
+		history.TotalCount.ShouldBe(expected.Length);
+		history.Items.Select(x => x.Id).Order().ShouldBe(expected.Select(x => x.Id).Order());
+		var january = await GetAndReadAsync<PagedResultDto<HrAuditEventDto>>($"{audit}&academicYearId={academicYearId}&payrollMonth=2026-01");
+		january.TotalCount.ShouldBe(1);
+		january.Items.Single().EntityName.ShouldBe("JANUARY-2026");
 	}
 
 	private async Task<PayrollPreviewStatusDto> StartAsync(string month, bool refresh = false)

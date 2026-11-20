@@ -38,6 +38,9 @@ internal static partial class AcademicNotificationDefinitions
 		if (key == AcademicNotificationEventKeys.CalendarHolidayChanged)
 			variables = Array.AsReadOnly(variables.Append(new NotificationVariableDefinition("holiday_end_date",
 				NotificationVariableType.Date, false, NotificationVariableSensitivity.Public)).ToArray());
+		if (key == AcademicNotificationEventKeys.CalendarEventReminder)
+			variables = Array.AsReadOnly(variables.Append(new NotificationVariableDefinition("event_start",
+				NotificationVariableType.DateTime, false, NotificationVariableSensitivity.Public)).ToArray());
 		if (key == AcademicNotificationEventKeys.TimetableDayReminder)
 			variables = Array.AsReadOnly(variables.Concat(new[]
 			{

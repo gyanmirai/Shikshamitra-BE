@@ -153,6 +153,8 @@ The saved rule selects eligible staff and families within those scopes. Recipien
 
 Material edits to a published holiday or vacation through `PUT /api/academic/calendar-days/{id}` can queue `Academic.Calendar.HolidayChanged`. A vacation range edit uses the date and class rows saved together. The previous audience receives its original dates and the revised audience receives the new dates. Templates can use `event_date` for the first date and `holiday_end_date` for the last date. Draft and description-only edits stay silent.
 
+An enabled `Academic.Calendar.EventReminder` rule schedules reminders for active events on published calendars. The selected division's school days determine the configured reminder date and time. The reminder expires when the event starts, or when its school-local date begins for an all-day event. Cancellation, publication changes and material event edits invalidate earlier pending reminders. Templates can use `event_date` and `event_start`. The reminder runs through the scheduler.
+
 ### Emergency closure notifications
 
 `POST /api/academic/calendar-days/emergency-closure` can queue `Academic.Calendar.EmergencyClosureDeclared` for each saved class or medium and date. `PUT /api/academic/calendar-days/{id}/emergency-closure` can queue `Academic.Calendar.EmergencyClosureChanged` for a date, time or scope change. `POST /api/academic/calendar-days/{id}/cancel-emergency-closure` can queue a reopening notice with the same change event. Capture requires the existing Emergency Closure Add, Edit or Delete permission for the corresponding action and access to the saved scope.

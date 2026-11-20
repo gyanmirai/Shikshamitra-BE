@@ -29,6 +29,6 @@ internal static partial class AcademicNotificationDefinitions
 		Event(LessonPlanSubmissionDue, Teacher, StaffOnly, Due),
 		Event(DiaryFollowUpRequested, $"{Teacher},{Reviewer}", NotificationDeliveryProfile.Manual, NotificationTriggerType.Manual),
 		Event(ProgressBehindSchedule, $"{Teacher},{ClassTeacher},{Reviewer}", Digest, Due),
-		Event(ProgressMilestoneReached, $"{Teacher},{ClassTeacher}", Digest)
+		Event(ProgressMilestoneReached, $"{Teacher},{ClassTeacher}", Digest, Due)
 	];
 }

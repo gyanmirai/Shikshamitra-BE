@@ -29,6 +29,7 @@ public sealed record AcademicNotificationRuleTimingDto(int DelayMinutes = 0, int
 	TimeOnly? ReminderLocalTime = null)
 {
 	public int? ReviewerEscalationMinutes { get; init; }
+	public int? ProgressMilestonePercentage { get; init; }
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

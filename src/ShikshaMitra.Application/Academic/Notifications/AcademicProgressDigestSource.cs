@@ -35,18 +35,20 @@ public sealed class AcademicProgressDigestSource(AcademicProgressDigestTargets t
 	IRepository<TeacherSubjectAllocation, Guid> allocations, IRepository<ClassTeacherRecord, Guid> classTeachers,
 	TimetableNotificationAudience staff, IRepository<IdentityUser, Guid> users, AdminPermissionAccess identities,
 	IUserScopeService scopes, IPermissionChecker permissions, IConfiguration configuration, IAsyncQueryableExecuter queries,
-	LearningTaskSubmissionDigestTiming timing, NotificationSchoolTimeZone schoolZone, ICurrentTenant tenant, ITenantStore tenants,
+	AcademicProgressDigestTiming timing, NotificationSchoolTimeZone schoolZone, ICurrentTenant tenant, ITenantStore tenants,
 	ICurrentUser current) : INotificationSourceAdapter, IAcademicNotificationSourceAuthorizer, ITransientDependency
 {
-	private const string EventKey = AcademicProgressDigestDueSource.EventKey;
 	private const string Type = AcademicProgressDigestDueSource.Type;
 	private const string ProgressWorkspace = "/academic/courseSubjects";
-	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[] { EventKey });
+	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[]
+	{
+		AcademicNotificationEventKeys.ProgressBehindSchedule, AcademicNotificationEventKeys.ProgressMilestoneReached
+	});
 
 	public async Task<NotificationSourceSnapshot> LoadAsync(NotificationIntentContext context, CancellationToken token)
 	{
 		var school = context.TenantId;
-		if (school == Guid.Empty || tenant.Id != school || context.EventKey != EventKey || context.SourceType != Type ||
+		if (school == Guid.Empty || tenant.Id != school || !EventKeys.Contains(context.EventKey) || context.SourceType != Type ||
 			context.SourceScope is not { DivisionId: Guid divisionId } scope || context.DueOccurrenceAt is not { } cutoff ||
 			await divisions.FindAsync(school, divisionId, token) is not { } division || division.Scope != scope ||
 			await subjects.FindAsync(school, context.SourceId, includeDeleted: false, token) is not { } subject ||
@@ -54,16 +56,17 @@ public sealed class AcademicProgressDigestSource(AcademicProgressDigestTargets t
 			return Unavailable();
 
 		var zone = await schoolZone.GetAsync(token);
-		var window = await timing.ResolveAsync(EventKey, scope, context.OccurredAt, zone, requireEnabled: true, token);
-		if (window == null || cutoff != window.End ||
-			context.SourceRevision != LearningTaskSubmissionDigestTiming.Revision(scope, window)) return Unavailable();
+		var window = await timing.ResolveAsync(context.EventKey, scope, context.OccurredAt, zone, token);
+		if (window == null || cutoff != window.Period.End || context.SourceRevision != window.Revision(scope))
+			return Unavailable();
 
-		var count = await targets.CountIncompleteAsync(school, subject.Assignment.Id, divisionId, window, token);
+		var count = await targets.CountAsync(school, subject.Assignment.Id, divisionId, window, token);
 		if (count == 0) return Unavailable();
 		var schoolName = tenant.Name ?? (await tenants.FindAsync(school))?.Name;
 		if (string.IsNullOrWhiteSpace(schoolName)) return Unavailable();
 
-		var recipients = await ReadRecipientsAsync(school, subject.Assignment, scope, divisionId, token);
+		var recipients = await ReadRecipientsAsync(school, subject.Assignment, scope, divisionId,
+			includeReviewer: !window.MilestonePercentage.HasValue, token);
 		if (recipients.Count == 0) return Unavailable();
 		var variables = new Dictionary<string, NotificationVariableValueDto>(StringComparer.Ordinal)
 		{
@@ -72,13 +75,15 @@ public sealed class AcademicProgressDigestSource(AcademicProgressDigestTargets t
 			["subject_name"] = new(NotificationVariableType.Text, subject.SubjectName),
 			["chapter_count"] = new(NotificationVariableType.Number, count.ToString(CultureInfo.InvariantCulture))
 		};
-		return new(true, null, context.SourceRevision, ProgressWorkspace, variables, recipients, window.ExpiresAt,
+		if (window.MilestonePercentage is int percentage)
+			variables["milestone_percentage"] = new(NotificationVariableType.Number, percentage.ToString(CultureInfo.InvariantCulture));
+		return new(true, null, context.SourceRevision, ProgressWorkspace, variables, recipients, window.Period.ExpiresAt,
 			AudienceSlices: [new(scope, recipients)]);
 	}
 
 	public async Task EnsureCanViewAsync(string eventKey, Guid sourceId, CancellationToken token)
 	{
-		if (eventKey != EventKey || tenant.Id is not Guid school || current.Id is not Guid user ||
+		if (!EventKeys.Contains(eventKey) || tenant.Id is not Guid school || current.Id is not Guid user ||
 			!await permissions.IsGrantedAsync(ChapterPermissions.View) ||
 			await subjects.FindAsync(school, sourceId, includeDeleted: false, token) is not { } subject)
 			throw new AbpAuthorizationException();
@@ -94,7 +99,7 @@ public sealed class AcademicProgressDigestSource(AcademicProgressDigestTargets t
 		throw new AbpAuthorizationException();
 
 	private async Task<IReadOnlyList<NotificationRecipientRefDto>> ReadRecipientsAsync(Guid school, AssignedSubject assignment,
-		NotificationSourceScopeDto scope, Guid divisionId, CancellationToken token)
+		NotificationSourceScopeDto scope, Guid divisionId, bool includeReviewer, CancellationToken token)
 	{
 		var sectionTeachers = await queries.ToListAsync((await allocations.GetQueryableAsync()).Where(x =>
 			x.StandardId == assignment.StandardId && x.SubjectId == assignment.SubjectId && x.DivisionId == divisionId && !x.IsDeleted)
@@ -109,8 +114,8 @@ public sealed class AcademicProgressDigestSource(AcademicProgressDigestTargets t
 		recipients.AddRange((await staff.FindTeachersAsync(school, classTeacherIds.Distinct().ToArray(), token))
 			.Select(x => x with { Kind = "ClassTeacher" }));
 
-		var reviewer = await FindReviewerAsync(school, assignment.StandardId, divisionId, token);
-		if (reviewer != null) recipients.Add(reviewer);
+		if (includeReviewer && await FindReviewerAsync(school, assignment.StandardId, divisionId, token) is { } reviewer)
+			recipients.Add(reviewer);
 		var recipientsIds = recipients.Select(x => x.UserId!.Value).Distinct().ToArray();
 		var active = await queries.ToListAsync((await users.GetQueryableAsync()).Where(x =>
 			x.TenantId == school && x.IsActive && !x.IsDeleted && Enumerable.Contains(recipientsIds, x.Id))

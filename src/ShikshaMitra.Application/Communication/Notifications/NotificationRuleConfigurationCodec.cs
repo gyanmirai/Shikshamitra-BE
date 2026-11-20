@@ -51,6 +51,11 @@ public sealed class NotificationRuleConfigurationCodec : ITransientDependency
 		if (timing.ReviewerEscalationMinutes.HasValue)
 			Require(isSubstitutionReminder && hasReviewer && config.StaffAudienceSelectors.Contains("SubstituteTeacher") &&
 				timing.ReviewerEscalationMinutes is >= 1 and <= 10080);
+		var isProgressMilestone = definition.EventKey == AcademicNotificationEventKeys.ProgressMilestoneReached;
+		if (timing.ProgressMilestonePercentage is int percentage)
+			Require(isProgressMilestone && percentage is >= 1 and <= 100);
+		else
+			Require(!isProgressMilestone || allowNoTemplates);
 		Require(!timing.QuietHoursEnabled || timing.QuietStart != timing.QuietEnd);
 		Require(!timing.BypassQuietHours || definition.AllowsQuietHoursBypass);
 	}

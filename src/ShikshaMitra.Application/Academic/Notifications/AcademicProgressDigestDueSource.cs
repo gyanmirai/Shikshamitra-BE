@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Syllabus;
 using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
@@ -17,10 +18,18 @@ using ProgressRecord = ShikshaMitra.Academic.Syllabus.ChapterProgress;
 namespace ShikshaMitra.Academic.Notifications;
 
 [RemoteService(false), ExposeServices(typeof(INotificationDueSource))]
-public sealed class AcademicProgressDigestDueSource(ICurrentTenant tenant, IRepository<AssignedSubject, Guid> assignments,
-	IRepository<AssignedSubjectChapter, Guid> chapters, IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions,
-	IRepository<NotificationRule, Guid> rules, IAsyncQueryableExecuter queries, NotificationSchoolTimeZone schoolZone,
-	LearningTaskSubmissionDigestTiming timing, AcademicProgressDigestTargets targets) : INotificationDueSource, ITransientDependency
+public sealed class AcademicProgressMilestoneDueSource(AcademicProgressDigestScanner scanner) : INotificationDueSource, ITransientDependency
+{
+	public string SourceType => AcademicProgressDigestDueSource.Type;
+	public string ScanKey => AcademicNotificationEventKeys.ProgressMilestoneReached;
+	public IReadOnlyCollection<string> ScheduledEventKeys { get; } = Array.AsReadOnly(new[] { AcademicNotificationEventKeys.ProgressMilestoneReached });
+
+	public Task<NotificationDueSourcePage> ReadPageAsync(NotificationDueScanRequest request, CancellationToken token) =>
+		scanner.ReadPageAsync(ScanKey, request, token);
+}
+
+[RemoteService(false), ExposeServices(typeof(INotificationDueSource))]
+public sealed class AcademicProgressDigestDueSource(AcademicProgressDigestScanner scanner) : INotificationDueSource, ITransientDependency
 {
 	internal const string Type = "Academic.Progress";
 	internal const string EventKey = AcademicNotificationEventKeys.ProgressBehindSchedule;
@@ -28,7 +37,17 @@ public sealed class AcademicProgressDigestDueSource(ICurrentTenant tenant, IRepo
 	public string ScanKey => EventKey;
 	public IReadOnlyCollection<string> ScheduledEventKeys { get; } = Array.AsReadOnly(new[] { EventKey });
 
-	public async Task<NotificationDueSourcePage> ReadPageAsync(NotificationDueScanRequest request, CancellationToken token)
+	public Task<NotificationDueSourcePage> ReadPageAsync(NotificationDueScanRequest request, CancellationToken token) =>
+		scanner.ReadPageAsync(ScanKey, request, token);
+}
+
+[RemoteService(false)]
+public sealed class AcademicProgressDigestScanner(ICurrentTenant tenant, IRepository<AssignedSubject, Guid> assignments,
+	IRepository<AssignedSubjectChapter, Guid> chapters, IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions,
+	IRepository<NotificationRule, Guid> rules, IAsyncQueryableExecuter queries, NotificationSchoolTimeZone schoolZone,
+	IRepository<ChapterProgressLog, Guid> logs, AcademicProgressDigestTiming timing, AcademicProgressDigestTargets targets) : ITransientDependency
+{
+	internal async Task<NotificationDueSourcePage> ReadPageAsync(string eventKey, NotificationDueScanRequest request, CancellationToken token)
 	{
 		token.ThrowIfCancellationRequested();
 		var school = request.TenantId;
@@ -36,12 +55,17 @@ public sealed class AcademicProgressDigestDueSource(ICurrentTenant tenant, IRepo
 		if (request.PageSize is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(request));
 
 		var enabled = (await rules.GetQueryableAsync()).Where(x => x.TenantId == school && !x.IsDeleted &&
-			x.EventKey == EventKey && x.IsEnabled);
+			x.EventKey == eventKey && x.IsEnabled);
 		if (!await queries.AnyAsync(enabled, token)) return new([], null);
 
 		var assigned = (await assignments.GetQueryableAsync()).Where(x =>
 			x.TenantId == school && !x.IsDeleted && x.Status == SubjectStatus.Published);
-		var published = AcademicProgressDigestTargets.PublishedTargets(await chapters.GetQueryableAsync(), school);
+		var milestone = eventKey == AcademicNotificationEventKeys.ProgressMilestoneReached;
+		var published = AcademicProgressDigestTargets.PublishedChapters(await chapters.GetQueryableAsync(), school);
+		if (!milestone) published = AcademicProgressDigestTargets.WithSavedDates(published);
+		var from = request.Now.UtcDateTime.AddDays(-3);
+		var through = request.Now.UtcDateTime;
+		var recent = (await logs.GetQueryableAsync()).Where(x => x.CreationTime > from && x.CreationTime <= through);
 		var scoped = from assignment in assigned
 			join standard in await standards.GetQueryableAsync() on assignment.StandardId equals standard.Id
 			join division in await divisions.GetQueryableAsync() on standard.Id equals division.StandardId
@@ -51,7 +75,8 @@ public sealed class AcademicProgressDigestDueSource(ICurrentTenant tenant, IRepo
 			where standard.TenantId == school && !standard.IsDeleted && division.TenantId == school && !division.IsDeleted &&
 				stage.TenantId == school && !stage.IsDeleted && medium.TenantId == school && !medium.IsDeleted &&
 				board.TenantId == school && !board.IsDeleted && board.AcademicYear.TenantId == school && !board.AcademicYear.IsDeleted &&
-				published.Any(chapter => chapter.AssignedSubjectId == assignment.Id) &&
+				published.Any(chapter => chapter.AssignedSubjectId == assignment.Id &&
+					(!milestone || recent.Any(log => log.ChapterId == chapter.Id && log.DivisionId == division.Id))) &&
 				enabled.Any(rule => (!rule.AcademicYearId.HasValue || rule.AcademicYearId == board.AcademicYearId) &&
 					(!rule.BoardId.HasValue || rule.BoardId == board.Id) && (!rule.MediumId.HasValue || rule.MediumId == medium.Id) &&
 					(!rule.ClassId.HasValue || rule.ClassId == standard.Id) && (!rule.DivisionId.HasValue || rule.DivisionId == division.Id))
@@ -68,17 +93,17 @@ public sealed class AcademicProgressDigestDueSource(ICurrentTenant tenant, IRepo
 		if (page.Count == 0) return new([], null);
 
 		var zone = await schoolZone.GetAsync(token);
-		var windows = new Dictionary<NotificationSourceScopeDto, LearningTaskDigestWindow?>();
+		var windows = new Dictionary<NotificationSourceScopeDto, AcademicProgressDigestWindow?>();
 		var candidates = new List<NotificationDueSourceCandidate>();
 		foreach (var row in page.Take(request.PageSize))
 		{
 			var scope = new NotificationSourceScopeDto(row.AcademicYearId, row.EducationBoardId, row.EducationMediumId, row.ClassId, row.DivisionId);
 			if (!windows.TryGetValue(scope, out var window))
-				windows[scope] = window = await timing.ResolveAsync(EventKey, scope, request.Now, zone, requireEnabled: true, token);
-			if (window == null || await targets.CountIncompleteAsync(school, row.AssignmentId, row.DivisionId, window, token) == 0)
+				windows[scope] = window = await timing.ResolveAsync(eventKey, scope, request.Now, zone, token);
+			if (window == null || await targets.CountAsync(school, row.AssignmentId, row.DivisionId, window, token) == 0)
 				continue;
-			candidates.Add(new(EventKey, row.AssignmentId, LearningTaskSubmissionDigestTiming.Revision(scope, window),
-				scope, window.End, window.ExpiresAt, NotificationDueTimeMode.FixedOccurrence));
+			candidates.Add(new(eventKey, row.AssignmentId, window.Revision(scope),
+				scope, window.Period.End, window.Period.ExpiresAt, NotificationDueTimeMode.FixedOccurrence));
 		}
 
 		var last = page[Math.Min(page.Count, request.PageSize) - 1];
@@ -88,19 +113,33 @@ public sealed class AcademicProgressDigestDueSource(ICurrentTenant tenant, IRepo
 
 [RemoteService(false)]
 public sealed class AcademicProgressDigestTargets(IRepository<AssignedSubjectChapter, Guid> chapters,
-	IRepository<ProgressRecord, Guid> progress, IAsyncQueryableExecuter queries) : ITransientDependency
+	IRepository<ProgressRecord, Guid> progress, IRepository<ChapterProgressLog, Guid> logs, IAsyncQueryableExecuter queries) : ITransientDependency
 {
-	internal static IQueryable<AssignedSubjectChapter> PublishedTargets(IQueryable<AssignedSubjectChapter> chapters, Guid school) =>
+	internal static IQueryable<AssignedSubjectChapter> PublishedChapters(IQueryable<AssignedSubjectChapter> chapters, Guid school) =>
 		chapters.Where(x => x.TenantId == school && !x.IsDeleted &&
-			(x.PublishStatus == "Published" || x.PublishStatus == "published") &&
-			x.ChapterStartTime != default && x.ChapterEndTime != default);
+			(x.PublishStatus == "Published" || x.PublishStatus == "published"));
 
-	internal async Task<int> CountIncompleteAsync(Guid school, Guid assignmentId, Guid divisionId, LearningTaskDigestWindow window,
+	internal static IQueryable<AssignedSubjectChapter> WithSavedDates(IQueryable<AssignedSubjectChapter> chapters) =>
+		chapters.Where(x => x.ChapterStartTime != default && x.ChapterEndTime != default);
+
+	internal async Task<int> CountAsync(Guid school, Guid assignmentId, Guid divisionId, AcademicProgressDigestWindow window,
 		CancellationToken token)
 	{
-		var published = PublishedTargets(await chapters.GetQueryableAsync(), school).Where(x => x.AssignedSubjectId == assignmentId);
+		var published = PublishedChapters(await chapters.GetQueryableAsync(), school).Where(x => x.AssignedSubjectId == assignmentId);
 		var progressForDivision = (await progress.GetQueryableAsync()).Where(x => x.DivisionId == divisionId && !x.IsDeleted);
-		var dates = await queries.ToListAsync(published.Select(chapter => new
+		if (window.MilestonePercentage is int percentage)
+		{
+			var firstCrossing = (await logs.GetQueryableAsync()).Where(x => x.DivisionId == divisionId && x.Progress >= percentage);
+			var start = window.Period.Start.UtcDateTime;
+			var end = window.Period.End.UtcDateTime;
+			return await queries.CountAsync(published.Where(chapter =>
+				firstCrossing.Any(x => x.ChapterId == chapter.Id && x.CreationTime > start && x.CreationTime <= end) &&
+				!firstCrossing.Any(x => x.ChapterId == chapter.Id && x.CreationTime <= start) &&
+				progressForDivision.Where(x => x.ChapterId == chapter.Id).OrderByDescending(x => x.CreationTime)
+					.ThenByDescending(x => x.Id).Select(x => (int?)x.Progress).FirstOrDefault() >= percentage), token);
+		}
+
+		var dates = await queries.ToListAsync(WithSavedDates(published).Select(chapter => new
 		{
 			chapter.ChapterStartTime,
 			chapter.ChapterEndTime,
@@ -108,6 +147,6 @@ public sealed class AcademicProgressDigestTargets(IRepository<AssignedSubjectCha
 				.ThenByDescending(x => x.Id).Select(x => (int?)x.Progress).FirstOrDefault() ?? 0
 		}), token);
 		return dates.Count(x => x.Progress < 100 && x.ChapterStartTime <= x.ChapterEndTime &&
-			x.ChapterEndTime > window.Start && x.ChapterEndTime <= window.End);
+			x.ChapterEndTime > window.Period.Start && x.ChapterEndTime <= window.Period.End);
 	}
 }

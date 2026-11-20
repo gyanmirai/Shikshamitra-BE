@@ -141,6 +141,8 @@ An enabled `Academic.Progress.BehindSchedule` rule can queue one digest per publ
 
 The rule can select assigned subject teachers, the active class teacher, and an eligible reviewer configured at `Notifications:Academic:Tenants:<tenantIdN>:ProgressReviewerUserId`. The reviewer needs Chapter Management View and access to the division. The published template can use `chapter_count` with the class and subject and link to Chapter Management. Delivery History requires Academic Notification View, Chapter Management View and the stored division scope.
 
+`Academic.Progress.MilestoneReached` uses the same cutoff and requires a saved whole percentage from 1 to 100. Each published chapter qualifies when its first recorded progress at or above that percentage falls in the window and its latest saved division progress still meets the percentage. The digest can select assigned subject teachers and the active class teacher. Templates can also use `milestone_percentage`. The worker rechecks current progress and the configured percentage. Audit remarks stay in Chapter Management.
+
 ### Teacher diary follow-up
 
 An operator can manually send `Academic.Diary.FollowUpRequested` for a submitted diary attached to an approved lesson plan. Diary saves and submissions queue no notice. `GET /api/academic/notifications/manual/diary-follow-up-recipients/{diaryId}` returns the diary teacher's active staff reference and the configured lesson plan reviewer when eligible. It requires Academic Notification View and Send, Lesson Plan View, the saved division scope and existing diary read access. The configured reviewer must have the existing lesson plan review access.

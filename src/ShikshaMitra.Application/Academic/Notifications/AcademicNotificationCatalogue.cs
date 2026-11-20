@@ -55,7 +55,7 @@ public sealed class AcademicNotificationCatalogue : INotificationEventDefinition
 	{
 		Get(eventKey);
 		return eventKey is not (AcademicNotificationEventKeys.TimetableDayReminder or AcademicNotificationEventKeys.ExamReminder or
-			AcademicNotificationEventKeys.ProgressBehindSchedule) &&
+			AcademicNotificationEventKeys.ProgressBehindSchedule or AcademicNotificationEventKeys.ProgressMilestoneReached) &&
 			_supportedEvents.Contains(eventKey)
 			? new(true, null)
 			: new(false, NotificationErrorCodes.SourceUnavailable);

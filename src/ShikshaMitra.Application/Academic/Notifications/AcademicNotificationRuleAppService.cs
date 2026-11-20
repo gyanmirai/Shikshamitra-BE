@@ -111,7 +111,8 @@ public class AcademicNotificationRuleAppService(IRepository<IdentityUser, Guid> 
 			new(timing.DelayMinutes, timing.ReminderSchoolDaysBefore, timing.ReminderLocalTime ?? defaults.ReminderLocalTime,
 				quiet.Enabled, quiet.Start ?? defaults.QuietStart, quiet.End ?? defaults.QuietEnd, quiet.Bypass)
 			{
-				ReviewerEscalationMinutes = timing.ReviewerEscalationMinutes
+				ReviewerEscalationMinutes = timing.ReviewerEscalationMinutes,
+				ProgressMilestonePercentage = timing.ProgressMilestonePercentage
 			}, input.FallbackLanguage);
 	}
 }

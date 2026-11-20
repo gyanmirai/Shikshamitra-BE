@@ -87,8 +87,8 @@ public class AcademicNotificationController(IAcademicNotificationCatalogueAppSer
 
 	[HttpPost("dispatches/{id:guid}/retry")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Add)]
-	public Task<AcademicNotificationRetryDto> RetryDispatchAsync(Guid id, CancellationToken cancellationToken) =>
-		deliveryActions.RetryAsync(id, cancellationToken);
+	public Task<AcademicNotificationRetryDto> RetryDispatchAsync(Guid id, [FromQuery] Guid? expectedAttemptId,
+		CancellationToken cancellationToken) => deliveryActions.RetryAsync(id, expectedAttemptId, cancellationToken);
 
 	[HttpPost("operations/{id:guid}/cancel")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Add)]

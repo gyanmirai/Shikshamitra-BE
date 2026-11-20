@@ -23,7 +23,8 @@ public class AcademicNotificationDeliveryActionAppService(AcademicNotificationAc
 	: ApplicationService, IAcademicNotificationDeliveryActionAppService
 {
 	[UnitOfWork(true)]
-	public virtual async Task<AcademicNotificationRetryDto> RetryAsync(Guid dispatchId, CancellationToken cancellationToken = default)
+	public virtual async Task<AcademicNotificationRetryDto> RetryAsync(Guid dispatchId, Guid? expectedAttemptId = null,
+		CancellationToken cancellationToken = default)
 	{
 		var (tenantId, actorId, callerScope) = await access.RequireStaffActionAsync(cancellationToken);
 		var dispatchQuery = (await dispatches.GetQueryableAsync()).Where(x => x.TenantId == tenantId && x.Id == dispatchId &&
@@ -36,7 +37,8 @@ public class AcademicNotificationDeliveryActionAppService(AcademicNotificationAc
 		var dispatch = await AsyncExecuter.SingleOrDefaultAsync(dispatchQuery.Where(x =>
 			x.IntentId == reference.IntentId && x.CampaignId == operationId), cancellationToken)
 			?? throw new EntityNotFoundException(typeof(NotificationDispatch), dispatchId);
-		if (authorized.Record.Status is CommunicationCampaignStatus.Cancelled or CommunicationCampaignStatus.PendingApproval)
+		if (!NotificationDispatchRetryPolicy.AllowsStaffRetry(authorized.Record.Status) ||
+			expectedAttemptId.HasValue && expectedAttemptId != dispatch.DeliveryAttemptId)
 			throw RequiresReview();
 		if (dispatch.Status == NotificationDispatchState.Pending && dispatch.ErrorCode == NotificationErrorCodes.StaffRetryRequested)
 			return Map(dispatch, operationId);
@@ -49,8 +51,7 @@ public class AcademicNotificationDeliveryActionAppService(AcademicNotificationAc
 		if (last == null || !NotificationDispatchRetryPolicy.CanRequestStaffRetry(dispatch, last)) throw RequiresReview();
 		var intent = await AsyncExecuter.SingleAsync((await intents.GetQueryableAsync()).Where(x =>
 			x.Id == reference.IntentId && x.TenantId == tenantId && !x.IsDeleted && x.CampaignId == operationId), cancellationToken);
-		if (!intent.PlanningCompletedAt.HasValue || intent.Status is not (NotificationIntentState.AwaitingDelivery or NotificationIntentState.Completed or
-			NotificationIntentState.PartiallyFailed or NotificationIntentState.NeedsReview)) throw RequiresReview();
+		if (!NotificationDispatchRetryPolicy.AllowsStaffRetry(intent.Status, intent.PlanningCompletedAt)) throw RequiresReview();
 
 		var now = Now();
 		var proposed = dispatch.NextAttemptAt > now ? dispatch.NextAttemptAt : now;

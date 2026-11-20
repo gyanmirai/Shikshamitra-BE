@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Communication;
@@ -41,14 +42,31 @@ public partial class AcademicNotificationManualApi_Tests
 				await db.SaveChangesAsync();
 			});
 
-			Permissions(Client, Add);
 			factory.DenySourceSend = true;
 			var route = $"{BasePath}/dispatches/{retried}/retry";
-			var queued = await PostAndReadAsync<AcademicNotificationRetryDto>(route, new { });
+			var history = $"{BasePath}/history?eventKey={Event}&sourceType={SourceType}&sourceId={factory.ActiveSourceId}&operationId={operation.OperationId}";
+			Permissions(Client, View);
+			var readOnly = await GetAndReadAsync<JsonElement>(history);
+			readOnly.GetProperty("items").EnumerateArray().All(x => !x.GetProperty("canRequestRetry").GetBoolean()).ShouldBeTrue();
+			using var denied = await Client.PostAsync(route, null);
+			denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+			Permissions(Client, $"{View},{Add}");
+			var result = await GetAndReadAsync<JsonElement>(history);
+			var candidate = result.GetProperty("items").EnumerateArray()
+				.Where(x => x.GetProperty("canRequestRetry").GetBoolean()).ShouldHaveSingleItem();
+			candidate.GetProperty("dispatchId").GetGuid().ShouldBe(retried);
+			var attemptId = candidate.GetProperty("attemptId").GetGuid();
+			using var stale = await Client.PostAsync($"{route}?expectedAttemptId={Guid.NewGuid()}", null);
+			await AssertConflictAsync(stale, NotificationErrorCodes.RetryRequiresReview);
+			var command = $"{route}?expectedAttemptId={attemptId}";
+			var queued = await PostAndReadAsync<AcademicNotificationRetryDto>(command, new { });
 			queued.Status.ShouldBe(NotificationDispatchState.Pending);
 			queued.NextAttemptAt.ShouldBeGreaterThanOrEqualTo(heldUntil);
-			var replay = await PostAndReadAsync<AcademicNotificationRetryDto>(route, new { });
+			var replay = await PostAndReadAsync<AcademicNotificationRetryDto>(command, new { });
 			replay.ShouldBe(queued);
+			var refreshed = await GetAndReadAsync<JsonElement>(history);
+			refreshed.GetProperty("items").EnumerateArray().All(x => !x.GetProperty("canRequestRetry").GetBoolean()).ShouldBeTrue();
 
 			await WithDatabaseAsync(async (db, _) =>
 			{

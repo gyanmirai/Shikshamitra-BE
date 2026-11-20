@@ -13,6 +13,7 @@ public sealed record AcademicNotificationCancellationDto(Guid OperationId, Commu
 
 public interface IAcademicNotificationDeliveryActionAppService : IApplicationService
 {
-	Task<AcademicNotificationRetryDto> RetryAsync(Guid dispatchId, CancellationToken cancellationToken = default);
+	Task<AcademicNotificationRetryDto> RetryAsync(Guid dispatchId, Guid? expectedAttemptId = null,
+		CancellationToken cancellationToken = default);
 	Task<AcademicNotificationCancellationDto> CancelAsync(Guid operationId, CancellationToken cancellationToken = default);
 }

@@ -17,7 +17,8 @@ namespace ShikshaMitra.Academic.Notifications;
 [RemoteService(false), DisableAuditing]
 public sealed class AcademicNotificationHistoryRows(IRepository<NotificationDispatch, Guid> dispatches,
 	IRepository<DeliveryAttempt, Guid> attempts, IRepository<CommunicationRecipientSnapshot, Guid> recipients,
-	IRepository<NotificationIntent, Guid> intents, IAsyncQueryableExecuter queries) : ITransientDependency
+	IRepository<NotificationIntent, Guid> intents, IRepository<CommunicationCampaign, Guid> campaigns,
+	IAsyncQueryableExecuter queries) : ITransientDependency
 {
 	private sealed class HistoryRow
 	{
@@ -63,7 +64,7 @@ public sealed class AcademicNotificationHistoryRows(IRepository<NotificationDisp
 
 	internal async Task<PagedResultDto<AcademicNotificationHistoryItemDto>> GetPageAsync(Guid tenantId, Guid[] intentIds,
 		Guid[] completeOperations, NotificationEventDefinition definition, GetAcademicNotificationHistoryDto input,
-		CancellationToken cancellationToken)
+		CancellationToken cancellationToken, bool includeRetryActions = false)
 	{
 		var allDispatches = await TenantDispatchesAsync(tenantId);
 		var owned = await OwnedDispatchesAsync(tenantId, intentIds, allDispatches);
@@ -116,7 +117,40 @@ public sealed class AcademicNotificationHistoryRows(IRepository<NotificationDisp
 			.Skip(input.SkipCount).Take(input.MaxResultCount), cancellationToken);
 		var snapshotIds = page.Select(x => x.RecipientSnapshotId).OfType<Guid>().Distinct().ToArray();
 		var labels = await ReadLabelsAsync(tenantId, snapshotIds, cancellationToken);
-		return new(count, page.Select(row => Map(row, labels, definition)).ToArray());
+		var retryable = includeRetryActions
+			? await GetRetryableAttemptsAsync(tenantId, page, owned, linkedAttempts, cancellationToken)
+			: [];
+		return new(count, page.Select(row => Map(row, labels, definition) with
+		{
+			CanRequestRetry = row.AttemptId.HasValue && retryable.Contains(row.AttemptId.Value)
+		}).ToArray());
+	}
+
+	private async Task<HashSet<Guid>> GetRetryableAttemptsAsync(Guid tenantId, IReadOnlyList<HistoryRow> page,
+		IQueryable<NotificationDispatch> owned, IQueryable<DeliveryAttempt> linkedAttempts, CancellationToken cancellationToken)
+	{
+		var ids = page.Where(x => x.Status == NotificationDispatchState.Failed).Select(x => x.AttemptId).OfType<Guid>().ToArray();
+		if (ids.Length == 0) return [];
+
+		var candidates = from dispatch in owned
+			join attempt in linkedAttempts on dispatch.DeliveryAttemptId equals (Guid?)attempt.Id
+			join intent in await intents.GetQueryableAsync() on dispatch.IntentId equals intent.Id
+			join campaign in await campaigns.GetQueryableAsync() on dispatch.CampaignId equals (Guid?)campaign.Id
+			where dispatch.Status == NotificationDispatchState.Failed && Enumerable.Contains(ids, attempt.Id) &&
+				attempt.NotificationDispatchId == dispatch.Id && attempt.CampaignId == campaign.Id &&
+				attempt.Channel == dispatch.Channel && attempt.RecipientSnapshotId == dispatch.RecipientSnapshotId &&
+				attempt.AttemptNumber == dispatch.AttemptNumber && intent.TenantId == tenantId && !intent.IsDeleted &&
+				campaign.TenantId == tenantId && !campaign.IsDeleted && campaign.CampaignType == NotificationCampaignTypes.Academic &&
+				campaign.SourceModule == CommunicationSourceModule.Academic
+			select new { Dispatch = dispatch, Attempt = attempt, IntentStatus = intent.Status,
+				intent.PlanningCompletedAt, CampaignStatus = campaign.Status };
+		var now = DateTimeOffset.UtcNow;
+		var rows = await queries.ToListAsync(candidates, cancellationToken);
+		return rows.Where(x => NotificationDispatchRetryPolicy.AllowsStaffRetry(x.CampaignStatus) &&
+			NotificationDispatchRetryPolicy.AllowsStaffRetry(x.IntentStatus, x.PlanningCompletedAt) &&
+			NotificationDispatchRetryPolicy.CanRequestStaffRetry(x.Dispatch, x.Attempt) &&
+			(!x.Dispatch.ExpiresAt.HasValue || x.Dispatch.ExpiresAt > now && x.Dispatch.ExpiresAt > x.Dispatch.NextAttemptAt))
+			.Select(x => x.Attempt.Id).ToHashSet();
 	}
 
 	internal async Task<IReadOnlyList<AcademicNotificationDeliveryCountDto>> GetCountsAsync(Guid tenantId, Guid[] intentIds,

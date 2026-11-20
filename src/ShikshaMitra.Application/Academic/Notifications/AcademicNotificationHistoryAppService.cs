@@ -43,6 +43,8 @@ public class AcademicNotificationHistoryAppService(AcademicNotificationAccessSer
 		var authorized = await operations.AuthorizeIntentsAsync(owned, definition, tenantId, callerScope, cancellationToken);
 		var completeOperations = owned.GroupBy(x => x.OperationId).Where(x => x.All(i => authorized.Contains(i.Id)))
 			.Select(x => x.Key).ToArray();
-		return await history.GetPageAsync(tenantId, authorized.ToArray(), completeOperations, definition, input, cancellationToken);
+		var includeRetryActions = await access.CanUseStaffActionsAsync();
+		return await history.GetPageAsync(tenantId, authorized.ToArray(), completeOperations, definition, input, cancellationToken,
+			includeRetryActions);
 	}
 }

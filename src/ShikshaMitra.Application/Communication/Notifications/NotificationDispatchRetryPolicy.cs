@@ -7,6 +7,13 @@ internal static class NotificationDispatchRetryPolicy
 {
 	private static readonly int[] RetryMinutes = [1, 5, 15, 60];
 
+	internal static bool AllowsStaffRetry(CommunicationCampaignStatus status) =>
+		status is not (CommunicationCampaignStatus.Cancelled or CommunicationCampaignStatus.PendingApproval);
+
+	internal static bool AllowsStaffRetry(NotificationIntentState status, DateTimeOffset? planningCompletedAt) =>
+		planningCompletedAt.HasValue && status is (NotificationIntentState.AwaitingDelivery or NotificationIntentState.Completed or
+			NotificationIntentState.PartiallyFailed or NotificationIntentState.NeedsReview);
+
 	internal static bool CanRequestStaffRetry(NotificationDispatch dispatch, DeliveryAttempt attempt) =>
 		dispatch.CanRetryDefiniteRejection && attempt.Id == dispatch.DeliveryAttemptId &&
 		attempt.Status == CommunicationDeliveryStatus.Failed && attempt.SentAt == null && attempt.DeliveredAt == null &&

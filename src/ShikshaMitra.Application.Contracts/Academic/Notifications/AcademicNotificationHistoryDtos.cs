@@ -22,7 +22,10 @@ public sealed record AcademicNotificationHistoryItemDto(Guid OperationId, Guid? 
 	Guid? RecipientSnapshotId, string? RecipientKind, Guid? RecipientId, Guid? RecipientUserId,
 	CommunicationChannelType? Channel, NotificationDispatchState Status, int? AttemptNumber,
 	DateTimeOffset RecordedAt, DateTimeOffset? AcceptedAt, DateTimeOffset? DeliveredAt,
-	DateTimeOffset? ReadAt, string? ReasonCode);
+	DateTimeOffset? ReadAt, string? ReasonCode)
+{
+	public bool CanRequestRetry { get; init; }
+}
 
 public sealed record AcademicNotificationDeliveryCountDto(CommunicationChannelType Channel, NotificationDispatchState Status, int Count);
 public sealed record AcademicNotificationIntentCountDto(NotificationIntentState Status, string? ReasonCode, int Count);

@@ -211,6 +211,10 @@ Staff API tests check stored audit fields for rule saves, template publication a
 
 Template test-send tests use synthetic draft content and the authenticated account. They verify the local inbox item, exact Add permission, rejected destinations and stale revisions, the per-channel limit and required WhatsApp test-account setup.
 
+## Delivery retry
+
+The hosted `Retry_preserves_attempt_history_limits_the_retry_to_the_failed_channel_and_records_metadata` case verifies the history action flag for read-only and Add access, attempt mismatch, queue replay, prior attempts and other channels. Run `AcademicNotificationHistoryPostgres_Tests` against the disposable notification test cluster to verify paged retry evidence on PostgreSQL.
+
 ## Personal notification preferences
 
 Run the hosted `NotificationSelfApi_Tests` to check preference categories, current linked student options, revoked and pending guardian reviews, save concurrency and account isolation.

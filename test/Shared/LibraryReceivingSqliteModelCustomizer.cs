@@ -1,6 +1,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.Library.Books;
 using ShikshaMitra.Library.Receiving;
 
@@ -23,5 +24,10 @@ internal sealed class LibraryReceivingSqliteModelCustomizer(ModelCustomizerDepen
 		if (modelBuilder.Model.FindEntityType(typeof(Book)) != null)
 			modelBuilder.Entity<Book>().Property(book => book.Price)
 				.HasConversion<string>().HasColumnType("TEXT");
+		// PostgreSQL's array default is only needed for its additive register migration.
+		if (modelBuilder.Model.FindEntityType(typeof(PayrollPreviewEmployee)) != null)
+			modelBuilder.Entity<PayrollPreviewEmployee>().Property(row => row.RegisterIssueCodes).HasDefaultValueSql(null);
+		if (modelBuilder.Model.FindEntityType(typeof(PayrollRunItemSnapshot)) != null)
+			modelBuilder.Entity<PayrollRunItemSnapshot>().Property(row => row.RegisterIssueCodes).HasDefaultValueSql(null);
 	}
 }

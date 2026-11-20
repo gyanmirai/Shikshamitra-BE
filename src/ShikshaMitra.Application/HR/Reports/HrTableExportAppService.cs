@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization;
@@ -15,12 +16,17 @@ namespace ShikshaMitra.HR.Reports;
 [Authorize, RemoteService(false)]
 public class HrTableExportAppService(IRepository<HrReportRun, Guid> runs, HrTableExportSources sources,
 	HrTableExportAccess access, HrReportExportScopeAuthorizationService scope, IBackgroundJobManager jobs,
-	IBlobContainer blobs, HrReportingTimeZone timezone) : ApplicationService, IHrTableExportAppService
+	IBlobContainer blobs, HrReportingTimeZone timezone, PayrollReviewSheetSource reviewSheets) : ApplicationService, IHrTableExportAppService
 {
 	public async Task<HrTableExportStatus> CreateAsync(HrTableExportRequest request)
 	{
 		if (!CurrentUser.Id.HasValue || !CurrentTenant.Id.HasValue) throw new AbpAuthorizationException();
 		HrTableExportSources.ValidateForExport(request);
+		if (request.Table == PayrollReviewSheetSource.Table)
+		{
+			request.Query = await reviewSheets.BindAsync(request.Query);
+			request.Columns = PayrollReviewSheetSource.DisplayColumns();
+		}
 		await sources.EnsureAccessAsync(request);
 		var snapshot = await scope.ResolveCurrentScopeAsync(CurrentUser.Id.Value) ?? throw new AbpAuthorizationException();
 		var definition = new HrReportDesignDto { DataSource = "employee", Columns = request.Columns.Select(x => new HrReportDisplayColumnDto { Field = x.Id, Label = x.Label }).ToList() };
@@ -47,7 +53,7 @@ public class HrTableExportAppService(IRepository<HrReportRun, Guid> runs, HrTabl
 		if (run.Status != "Completed" || !(request.Format == "excel" ? run.ExcelReady : run.PdfReady)) throw new BusinessException(HRErrorCodes.ReportExportNotReady);
 		return new() { Bytes = await blobs.GetAllBytesAsync(HrReportingWorkspaceAppService.BlobName(run, request.Format)),
 			ContentType = request.Format == "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-			FileName = $"{request.Table}-{run.CapturedAt:yyyyMMdd-HHmm}.{(request.Format == "pdf" ? "pdf" : "xlsx")}" };
+			FileName = $"{(request.Table == PayrollReviewSheetSource.Table ? "payroll-review-sheet-pending-finalization" : request.Table)}-{run.CapturedAt:yyyyMMdd-HHmm}.{(request.Format == "pdf" ? "pdf" : "xlsx")}" };
 	}
 	private async Task<HrReportRun> AuthorizedAsync(Guid id)
 	{

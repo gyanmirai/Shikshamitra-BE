@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
@@ -112,6 +113,7 @@ internal static class PayrollRunProjection
 		snapshot.NetPayDelta = item.NetPayDelta.HasValue ? (decimal) item.NetPayDelta.Value : null;
 		snapshot.NetPayDeltaPercent = item.NetPayDeltaPercent.HasValue ? (decimal) item.NetPayDeltaPercent.Value : null;
 		snapshot.IssueCodesJson = issuesJson;
+		snapshot.RegisterIssueCodes = item.IssueCodes?.ToArray() ?? [];
 		snapshot.PresentDays = (decimal) item.PresentDays;
 		snapshot.HalfWorkingDays = (decimal) item.HalfWorkingDays;
 		snapshot.TotalWorkingDays = (decimal) item.TotalWorkingDays;

@@ -23,6 +23,8 @@ public class RunPayrollItem
 	/// Indicates whether payroll is already finalized/locked for this employee in the selected month.
 	/// </summary>
 	public bool IsLocked { get; set; }
+	public bool IsSubmitted { get; set; }
+	public bool IsIssuedWithoutRegisterDetails { get; set; }
 
 	/// <summary>
 	/// Review state for lock gating: PENDING, REVIEWED, or LOCKED.

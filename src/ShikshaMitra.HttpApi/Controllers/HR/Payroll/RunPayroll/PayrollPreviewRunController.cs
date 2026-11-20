@@ -21,6 +21,14 @@ public class PayrollPreviewRunController(IPayrollPreviewRunAppService service) :
 		var run = await service.StartAsync(request);
 		return Accepted($"/api/payroll/run/previews/{run.Id}", run);
 	}
+	[HttpGet("current")]
+	public Task<PayrollPreviewLookupDto> GetCurrentAsync([FromQuery] PayrollPreviewMonthInput input) =>
+		service.GetCurrentAsync(input);
+
+	[HttpGet("/api/payroll/run/register")]
+	public Task<RunPayrollResponse> GetRegisterAsync([FromQuery] PayrollRegisterInput input) =>
+		service.GetRegisterAsync(input);
+
 	[HttpGet("{id:guid}")]
 	public Task<PayrollPreviewStatusDto> GetAsync(Guid id) => service.GetAsync(id);
 	[HttpGet("{id:guid}/employees")]

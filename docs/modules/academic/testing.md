@@ -183,6 +183,8 @@ The hosted timetable workflow also verifies the automatic day reminder, includin
 
 `AcademicCalendarDayNotificationEvents_Tests` covers a material published event change, draft and description-only edits, and the saved division and institution date. The hosted calendar workflow also moves an event between divisions and checks each audience's notification content.
 
+`AcademicEmergencyClosureNotificationEvents_Tests` covers class-scoped declarations, rescheduling and reopening through the calendar app service. The hosted SQLite and PostgreSQL calendar workflows verify the parent-only choice, protected history, repeat reopening, isolation of a second day in the same closure range and original versus revised content after a class change.
+
 `SyllabusNotificationEvents_Tests` covers publication, suppressed repeats and progress edits, assigned staff and material revisions. `SyllabusNotificationDelivery_Tests` and `SyllabusNotificationPostgres_Tests` exercise the hosted chapter create and update workflow, exact locked elective eligibility, parent-only delivery limits, history authorization and suppression after returning to draft.
 
 `DivisionSubjectNotificationEvents_Tests` covers replacement and removal through the application service. `SubjectAllocationNotificationDelivery_Tests` also exercises the hosted division-teacher API, including unchanged teacher sets and HTTP validation of a null list, a sibling division, generic outgoing content, superseded pending work and history permissions. `DivisionSubjectNotificationPostgres_Tests` covers concurrent replacements on a fresh disposable PostgreSQL database.

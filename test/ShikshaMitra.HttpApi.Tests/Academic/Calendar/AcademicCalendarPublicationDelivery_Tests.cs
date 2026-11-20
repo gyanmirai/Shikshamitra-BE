@@ -33,6 +33,8 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 {
 	private const string EventKey = AcademicNotificationEventKeys.CalendarPublished;
 	private const string EventChanged = AcademicNotificationEventKeys.CalendarEventChanged;
+	private const string ClosureDeclared = AcademicNotificationEventKeys.CalendarEmergencyClosureDeclared;
+	private const string ClosureChanged = AcademicNotificationEventKeys.CalendarEmergencyClosureChanged;
 	private const string Path = "/api/academic/calendars";
 	private const string PrivateDescription = "Internal bell scheduling notes";
 	private static readonly Guid School = Guid.Parse(TestAuthHandler.TestTenantId);
@@ -46,7 +48,9 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		var learner = Guid.NewGuid();
 		var sibling = Guid.NewGuid();
+		var otherClassLearner = Guid.NewGuid();
 		Guid schoolYear = default, classId = default, divisionId = default, siblingDivision = default, teacherId = default;
+		Guid otherClassId = default, otherClassDivision = default;
 		await InSchoolAsync(async services =>
 		{
 			var medium = await services.GetRequiredService<IRepository<EducationMedium, Guid>>().GetAsync(Factory.SeededMediumId);
@@ -59,16 +63,22 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 			classId = standard.Id;
 			divisionId = division.Id;
 			siblingDivision = other.Id;
+			var otherClass = await InsertAsync(services, await services.GetRequiredService<StandardManager>()
+				.CreateAsync(Factory.SeededMediumStageId, "Second calendar notice class", 13, null));
+			var otherSection = await InsertAsync(services, await services.GetRequiredService<DivisionManager>().CreateAsync(otherClass.Id, "A", 25));
+			otherClassId = otherClass.Id;
+			otherClassDivision = otherSection.Id;
 			var subject = await InsertAsync(services, new Subject(Guid.NewGuid(), School, "Calendar notice subject", "#24597a", medium.Id));
 			teacherId = (await services.GetRequiredService<IEmployeeRepository>().GetEmployeeByUserIdAsync(Teacher))!.Id;
 			var allocation = new AssignedSubject(Guid.NewGuid(), School, standard.Id, subject.Id, "CAL", SubjectStatus.Published);
 			allocation.SetPrimaryTeacher(teacherId);
 			await InsertAsync(services, allocation);
-			foreach (var (id, section) in new[] { (learner, division.Id), (sibling, other.Id) })
+			foreach (var (id, standardId, section) in new[]
+				{ (learner, standard.Id, division.Id), (sibling, standard.Id, other.Id), (otherClassLearner, otherClassId, otherClassDivision) })
 			{
 				await InsertAsync(services, new Student(id, School, "Synthetic", null, "Learner", board.AcademicYearId,
-					board.Id, medium.Id, Factory.SeededMediumStageId, standard.Id, section, status: StudentLifeCycleStatusEnum.Enrolled));
-				await InsertAsync(services, StudentEnrollment.Create(Guid.NewGuid(), School, id, schoolYear, standard.Id, section));
+					board.Id, medium.Id, Factory.SeededMediumStageId, standardId, section, status: StudentLifeCycleStatusEnum.Enrolled));
+				await InsertAsync(services, StudentEnrollment.Create(Guid.NewGuid(), School, id, schoolYear, standardId, section));
 			}
 
 			var kinds = new[] { "AssignedTeacher", "Guardian" };
@@ -104,6 +114,30 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 				config with { StaffAudienceSelectors = [], TemplateIds = [eventHeader.Id] },
 				services.GetRequiredService<AcademicNotificationCatalogue>().Get(EventChanged)), eventRule.ConcurrencyStamp);
 			await InsertAsync(services, eventRule);
+
+			foreach (var key in new[] { ClosureDeclared, ClosureChanged })
+			{
+				var closureTemplates = new System.Collections.Generic.List<Guid>();
+				foreach (var kind in new[] { "AssignedTeacher", "Guardian", "StudentAccount" })
+				{
+					var header = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), School)
+						{ TemplateName = key + " " + kind });
+					var version = new CommunicationTemplateRevision(Guid.NewGuid(), School, header.Id, 1, key,
+						kind, CommunicationChannelType.InApp, "en", "School closure", "{{change_summary}}", 1);
+					version.Publish(Teacher, DateTimeOffset.UtcNow);
+					await InsertAsync(services, version);
+					closureTemplates.Add(header.Id);
+				}
+				foreach (var (classScope, sectionScope) in new[] { (classId, divisionId), (otherClassId, otherClassDivision) })
+				{
+					var closureRule = new NotificationRule(Guid.NewGuid(), School, key,
+						NotificationRuleScope.Create(board.AcademicYearId, board.Id, medium.Id, classScope, sectionScope));
+					closureRule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(
+						config with { IncludeStudentAccount = true, TemplateIds = closureTemplates },
+						services.GetRequiredService<AcademicNotificationCatalogue>().Get(key)), closureRule.ConcurrencyStamp);
+					await InsertAsync(services, closureRule);
+				}
+			}
 		});
 
 		var start = new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero);
@@ -180,6 +214,88 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 					current.Runtime.SourceScope.DivisionId.ShouldBe(siblingDivision);
 					current.CurrentRecipients.ShouldBe([new("Student", StudentId: sibling)]);
 					current.Snapshot!.Variables["location"].Value.ShouldBe("New hall");
+				}
+			}
+		});
+
+		var closurePath = "/api/academic/calendar-days";
+		using var declared = await Client.PostAsJsonAsync($"{closurePath}/emergency-closure", new CreateEmergencyClosureDto
+		{
+			AcademicMediumId = Factory.SeededMediumId, Date = start.AddDays(9), EndDate = start.AddDays(10),
+			Title = "Severe weather", Description = PrivateDescription, StandardIds = [classId],
+			NotifyParents = true, AutoScanImpacts = false
+		}, JsonOptions);
+		declared.StatusCode.ShouldBe(HttpStatusCode.OK, await declared.Content.ReadAsStringAsync());
+		var closures = (await declared.Content.ReadFromJsonAsync<AcademicCalendarDayDto[]>(JsonOptions))!;
+		closures.Length.ShouldBe(2);
+		NotificationIntent closureNotice = null!;
+		NotificationIntent nextDayNotice = null!;
+		await InSchoolAsync(async services =>
+		{
+			var repository = services.GetRequiredService<IRepository<NotificationIntent, Guid>>();
+			closureNotice = (await repository.GetListAsync(x => x.SourceId == closures[0].Id && x.EventKey == ClosureDeclared)).ShouldHaveSingleItem();
+			nextDayNotice = (await repository.GetListAsync(x => x.SourceId == closures[1].Id && x.EventKey == ClosureDeclared)).ShouldHaveSingleItem();
+			var source = await services.GetRequiredService<NotificationIntentSourceReader>()
+				.LoadAsync(closureNotice, DateTimeOffset.UtcNow, CancellationToken.None);
+			source.CurrentRecipients.ShouldBe([new("Student", StudentId: learner)]);
+			source.Runtime.Configuration.GuardianMode.ShouldBe(NotificationGuardianMode.PrimaryOnly);
+			source.Runtime.Configuration.IncludeStudentAccount.ShouldBeFalse();
+			source.Runtime.Configuration.StaffAudienceSelectors.ShouldBeEmpty();
+			source.Snapshot!.Variables.Values.ShouldNotContain(x => x.Value == PrivateDescription);
+		});
+		using var deniedClosure = await withoutCalendarView.GetAsync($"/api/academic/notifications/operations/{closureNotice.CampaignId}");
+		deniedClosure.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await deniedClosure.Content.ReadAsStringAsync());
+		using var allowedClosure = await Client.GetAsync($"/api/academic/notifications/operations/{closureNotice.CampaignId}");
+		allowedClosure.StatusCode.ShouldBe(HttpStatusCode.OK, await allowedClosure.Content.ReadAsStringAsync());
+
+		for (var i = 0; i < 2; i++)
+		{
+			using var reopened = await Client.PostAsync($"{closurePath}/{closures[0].Id}/cancel-emergency-closure", null);
+			reopened.EnsureSuccessStatusCode();
+		}
+		await InSchoolAsync(async services =>
+		{
+			var repository = services.GetRequiredService<IRepository<NotificationIntent, Guid>>();
+			var reader = services.GetRequiredService<NotificationIntentSourceReader>();
+			(await reader.LoadAsync(closureNotice, DateTimeOffset.UtcNow, CancellationToken.None)).CurrentRecipients.ShouldBeEmpty();
+			(await reader.LoadAsync(nextDayNotice, DateTimeOffset.UtcNow, CancellationToken.None)).CurrentRecipients
+				.ShouldBe([new("Student", StudentId: learner)]);
+			var changed = (await repository.GetListAsync(x => x.SourceId == closures[0].Id && x.EventKey == ClosureChanged)).ShouldHaveSingleItem();
+			var source = await reader.LoadAsync(changed, DateTimeOffset.UtcNow, CancellationToken.None);
+			source.CurrentRecipients.ShouldBe([new("Student", StudentId: learner)]);
+			source.Snapshot!.Variables["change_summary"].Value.ShouldBe("The emergency closure has been lifted.");
+		});
+
+		using var movedClosure = await Client.PutAsJsonAsync($"{closurePath}/{closures[1].Id}/emergency-closure", new UpdateEmergencyClosureDto
+		{
+			StartDate = start.AddDays(11), Title = "Revised severe weather closure", StandardIds = [otherClassId],
+			NotifyParents = true, AutoScanImpacts = false
+		}, JsonOptions);
+		movedClosure.StatusCode.ShouldBe(HttpStatusCode.OK, await movedClosure.Content.ReadAsStringAsync());
+		await InSchoolAsync(async services =>
+		{
+			var repository = services.GetRequiredService<IRepository<NotificationIntent, Guid>>();
+			var reader = services.GetRequiredService<NotificationIntentSourceReader>();
+			(await reader.LoadAsync(nextDayNotice, DateTimeOffset.UtcNow, CancellationToken.None)).CurrentRecipients.ShouldBeEmpty();
+			var changes = await repository.GetListAsync(x => x.SourceId == closures[1].Id && x.EventKey == ClosureChanged);
+			changes.Count.ShouldBe(2);
+			changes.Select(x => x.CampaignId).Distinct().ShouldHaveSingleItem();
+			foreach (var changed in changes)
+			{
+				var source = await reader.LoadAsync(changed, DateTimeOffset.UtcNow, CancellationToken.None);
+				if (source.Runtime.SourceScope.DivisionId == divisionId)
+				{
+					source.CurrentRecipients.ShouldBe([new("Student", StudentId: learner)]);
+					var previous = source.Snapshot!.RecipientContent!.Single(x => x.Recipient.StudentId == learner);
+					previous.Variables["event_title"].Value.ShouldBe("Severe weather");
+					previous.Variables["event_date"].Value.ShouldBe(start.AddDays(10).ToString("yyyy-MM-dd"));
+				}
+				else
+				{
+					source.Runtime.SourceScope.DivisionId.ShouldBe(otherClassDivision);
+					source.CurrentRecipients.ShouldBe([new("Student", StudentId: otherClassLearner)]);
+					source.Snapshot!.Variables["event_title"].Value.ShouldBe("Revised severe weather closure");
+					source.Snapshot.Variables["event_date"].Value.ShouldBe(start.AddDays(11).ToString("yyyy-MM-dd"));
 				}
 			}
 		});

@@ -1344,6 +1344,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     }
 
     [AllowAnonymous]
+    [UnitOfWork(isTransactional: true)]
     public async Task<List<AcademicCalendarDayDto>> CreateEmergencyClosureAsync(CreateEmergencyClosureDto input)
     {
         var startDate = (input.StartDate ?? input.Date).DateTime.Date;
@@ -1374,6 +1375,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         return results;
     }
 
+    [UnitOfWork(isTransactional: true)]
     public async Task<AcademicCalendarDayDto> UpdateEmergencyClosureAsync(Guid dayId, UpdateEmergencyClosureDto input)
     {
         var day = await _calendarDayRepository.GetAsync(dayId);
@@ -1448,6 +1450,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             }
         }
 
+        var previousPlacement = AcademicEmergencyClosurePlacement.From(day);
         var beforeJson = System.Text.Json.JsonSerializer.Serialize(day);
 
         day.Update(
@@ -1478,6 +1481,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             academicCalendarDayId: day.Id,
             module: "EmergencyClosure");
 
+        await LazyServiceProvider.LazyGetRequiredService<AcademicEmergencyClosureNotification>().ChangeAsync(calendar, day, previousPlacement,
+            new AcademicEmergencyClosureAudience(input.NotifyTeachers, input.NotifyParents, input.NotifyStudents));
+
         return ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(day);
     }
 
@@ -1487,6 +1493,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         AcademicCalendar calendar,
         List<AcademicCalendarDayDto> results)
     {
+        var notifications = LazyServiceProvider.LazyGetRequiredService<AcademicEmergencyClosureNotification>();
+        var selection = new AcademicEmergencyClosureAudience(input.NotifyTeachers, input.NotifyParents, input.NotifyStudents);
         // Create Day records for each standard/division if specific standards are requested
         if (!input.AppliesToAll && input.StandardIds != null && input.StandardIds.Count > 0)
         {
@@ -1531,6 +1539,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                     reason: "Emergency Closure Declared for class: " + input.Title,
                     academicCalendarDayId: day.Id,
                     module: "EmergencyClosure");
+
+                await notifications.DeclareAsync(calendar, day, selection);
             }
         }
         else
@@ -1576,6 +1586,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 reason: "Emergency Closure Declared globally: " + input.Title,
                 academicCalendarDayId: day.Id,
                 module: "EmergencyClosure");
+
+            await notifications.DeclareAsync(calendar, day, selection);
         }
     }
 
@@ -1662,6 +1674,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     }
 
     [AllowAnonymous]
+    [UnitOfWork(isTransactional: true)]
     public async Task CancelEmergencyClosureAsync(Guid dayId)
     {
         var day = await _calendarDayRepository.GetAsync(dayId);
@@ -1670,6 +1683,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             throw new UserFriendlyException("Selected day is not an emergency closure.");
         }
 
+        var wasActive = day.Status == CalendarDayStatus.Active;
         var beforeJson = System.Text.Json.JsonSerializer.Serialize(day);
         day.Cancel("Emergency closure cancelled by administrator");
         await _calendarDayRepository.UpdateAsync(day);
@@ -1691,6 +1705,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             imp.Resolve(CurrentUser.Id ?? Guid.Empty, "Closure cancelled");
             await _impactLogRepository.UpdateAsync(imp);
         }
+
+        if (wasActive)
+            await LazyServiceProvider.LazyGetRequiredService<AcademicEmergencyClosureNotification>().ReopenAsync(day);
     }
 
     // ─── Impact Logs ────────────────────────────────────────────────────────

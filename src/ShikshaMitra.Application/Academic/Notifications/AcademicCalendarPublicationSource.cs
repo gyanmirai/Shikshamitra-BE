@@ -96,6 +96,11 @@ public sealed class AcademicCalendarPublicationSource(IRepository<AcademicCalend
 
 	public Task EnsureCanSendAsync(string eventKey, Guid sourceId, CancellationToken token) => EnsureCanViewAsync(eventKey, sourceId, token);
 
+	internal static string? CurrentRevision(AcademicCalendar calendar) =>
+		calendar.GetProperty<string>(Property) is { } json
+			? NotificationRuntimeJson.Deserialize<Publication>(json, NotificationErrorCodes.SourceUnavailable).Revision
+			: null;
+
 	internal async Task EnsureMediumScopeAsync(Guid school, Guid user, NotificationSourceScopeDto scope, CancellationToken token)
 	{
 		var caller = await scopes.GetUserScopeAsync(user);

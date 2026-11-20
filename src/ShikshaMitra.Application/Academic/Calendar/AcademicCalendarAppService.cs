@@ -727,6 +727,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         return result;
     }
 
+    [UnitOfWork(true)]
     public async Task<AcademicCalendarDayDto> UpdateCalendarDayAsync(Guid id, CreateCalendarDayDto input)
     {
         var day = await _calendarDayRepository.GetAsync(id);
@@ -774,6 +775,10 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         var group = new List<AcademicCalendarDay> { day };
         group.AddRange(siblings);
         var groupIds = group.Select(x => x.Id).ToHashSet();
+        var eventBefore = calendar.Status == CalendarStatus.Published && day.DayType == DayType.Event && input.DayType == DayType.Event
+            ? group.Select(AcademicCalendarEventMaterial.From).ToArray() : [];
+        var savedRows = new List<AcademicCalendarDay>();
+        var previousEventTitle = day.Title;
 
         if (input.AppliesToAll)
         {
@@ -837,6 +842,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 meetingLink: details.MeetingLink
             );
             await _calendarDayRepository.UpdateAsync(day);
+            savedRows.Add(day);
             resultDay = day;
         }
         else
@@ -871,6 +877,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                         meetingLink: details.MeetingLink
                     );
                     await _calendarDayRepository.UpdateAsync(row);
+                    savedRows.Add(row);
                     resultDay ??= row;
                 }
                 else
@@ -907,6 +914,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                         meetingLink: details.MeetingLink
                     );
                     await _calendarDayRepository.UpdateAsync(row);
+                    savedRows.Add(row);
                     resultDay ??= row;
                 }
                 else
@@ -941,6 +949,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                     meetingLink: details.MeetingLink
                 );
                 await _calendarDayRepository.InsertAsync(newDay);
+                savedRows.Add(newDay);
                 resultDay ??= newDay;
             }
         }
@@ -956,6 +965,10 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             entityName: resultDay.Title,
             reason: input.ChangeReason,
             academicCalendarDayId: resultDay.Id);
+
+        if (eventBefore.Length != 0)
+            await LazyServiceProvider.LazyGetRequiredService<AcademicCalendarEventChangedNotification>()
+                .RecordAsync(calendar, resultDay.Id, eventBefore, savedRows, previousEventTitle);
 
         return ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(resultDay);
     }

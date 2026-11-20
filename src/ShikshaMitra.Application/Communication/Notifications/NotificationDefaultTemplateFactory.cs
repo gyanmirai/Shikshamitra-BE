@@ -80,6 +80,7 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 			(_, AcademicNotificationEventKeys.LessonPlanRejected) => "Your lesson plan was reviewed and rejected.",
 			(_, AcademicNotificationEventKeys.DiaryFollowUpRequested) => "A follow-up was requested for a submitted teacher diary.",
 			(_, AcademicNotificationEventKeys.CalendarPublished) => "{{event_title}} is now available. Open your school notifications for details.",
+			(_, AcademicNotificationEventKeys.CalendarEventChanged) => "{{event_title}} has changed. Check your school notifications for details.",
 			(_, AcademicNotificationEventKeys.ProgressBehindSchedule) => "Review the incomplete chapters for {{subject_name}} in {{class_name}} ({{chapter_count}}).",
 			(_, AcademicNotificationEventKeys.ProgressMilestoneReached) => "Review chapters that reached {{milestone_percentage}}% for {{subject_name}} in {{class_name}} ({{chapter_count}}).",
 			(_, AcademicNotificationEventKeys.MarksSubmitted) => "Marks for {{subject_name}} in {{exam_name}} are ready for review.",

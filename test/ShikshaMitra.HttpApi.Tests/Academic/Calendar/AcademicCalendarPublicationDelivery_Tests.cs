@@ -32,6 +32,7 @@ namespace ShikshaMitra.Academic.Calendar;
 public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private const string EventKey = AcademicNotificationEventKeys.CalendarPublished;
+	private const string EventChanged = AcademicNotificationEventKeys.CalendarEventChanged;
 	private const string Path = "/api/academic/calendars";
 	private const string PrivateDescription = "Internal bell scheduling notes";
 	private static readonly Guid School = Guid.Parse(TestAuthHandler.TestTenantId);
@@ -45,7 +46,7 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		var learner = Guid.NewGuid();
 		var sibling = Guid.NewGuid();
-		Guid schoolYear = default, divisionId = default, teacherId = default;
+		Guid schoolYear = default, classId = default, divisionId = default, siblingDivision = default, teacherId = default;
 		await InSchoolAsync(async services =>
 		{
 			var medium = await services.GetRequiredService<IRepository<EducationMedium, Guid>>().GetAsync(Factory.SeededMediumId);
@@ -55,7 +56,9 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 				.CreateAsync(Factory.SeededMediumStageId, "Calendar notice class", 12, null));
 			var division = await InsertAsync(services, await services.GetRequiredService<DivisionManager>().CreateAsync(standard.Id, "A", 25));
 			var other = await InsertAsync(services, await services.GetRequiredService<DivisionManager>().CreateAsync(standard.Id, "B", 25));
+			classId = standard.Id;
 			divisionId = division.Id;
+			siblingDivision = other.Id;
 			var subject = await InsertAsync(services, new Subject(Guid.NewGuid(), School, "Calendar notice subject", "#24597a", medium.Id));
 			teacherId = (await services.GetRequiredService<IEmployeeRepository>().GetEmployeeByUserIdAsync(Teacher))!.Id;
 			var allocation = new AssignedSubject(Guid.NewGuid(), School, standard.Id, subject.Id, "CAL", SubjectStatus.Published);
@@ -88,6 +91,19 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 			rule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(
 				config, services.GetRequiredService<AcademicNotificationCatalogue>().Get(EventKey)), rule.ConcurrencyStamp);
 			await InsertAsync(services, rule);
+
+			var eventHeader = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), School)
+				{ TemplateName = "Calendar event moved" });
+			var eventVersion = new CommunicationTemplateRevision(Guid.NewGuid(), School, eventHeader.Id, 1, EventChanged,
+				"Guardian", CommunicationChannelType.InApp, "en", "Event changed", "{{event_title}} changed.", 1);
+			eventVersion.Publish(Teacher, DateTimeOffset.UtcNow);
+			await InsertAsync(services, eventVersion);
+			var eventRule = new NotificationRule(Guid.NewGuid(), School, EventChanged,
+				NotificationRuleScope.Create(board.AcademicYearId, board.Id, medium.Id, standard.Id));
+			eventRule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(
+				config with { StaffAudienceSelectors = [], TemplateIds = [eventHeader.Id] },
+				services.GetRequiredService<AcademicNotificationCatalogue>().Get(EventChanged)), eventRule.ConcurrencyStamp);
+			await InsertAsync(services, eventRule);
 		});
 
 		var start = new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero);
@@ -129,6 +145,44 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 		denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await denied.Content.ReadAsStringAsync());
 		using var allowed = await Client.GetAsync(operation);
 		allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
+
+		var marker = new CreateCalendarDayDto
+		{
+			Date = start.AddDays(5), DayType = DayType.Event, Title = "Science exhibition", Venue = "Original hall",
+			StandardId = classId, DivisionId = divisionId, StartTime = TimeSpan.FromHours(10), EndTime = TimeSpan.FromHours(11)
+		};
+		using var added = await Client.PostAsJsonAsync($"{Path}/{calendarId}/days", marker, JsonOptions);
+		added.StatusCode.ShouldBe(HttpStatusCode.OK, await added.Content.ReadAsStringAsync());
+		var day = (await added.Content.ReadFromJsonAsync<AcademicCalendarDayDto>(JsonOptions))!;
+		marker.DivisionId = siblingDivision;
+		marker.Date = start.AddDays(6);
+		marker.Venue = "New hall";
+		using var moved = await Client.PutAsJsonAsync($"/api/academic/calendar-days/{day.Id}", marker, JsonOptions);
+		moved.StatusCode.ShouldBe(HttpStatusCode.OK, await moved.Content.ReadAsStringAsync());
+		await InSchoolAsync(async services =>
+		{
+			var intents = await services.GetRequiredService<IRepository<NotificationIntent, Guid>>()
+				.GetListAsync(x => x.TenantId == School && x.SourceId == day.Id && x.EventKey == EventChanged);
+			intents.Count.ShouldBe(2);
+			intents.Select(x => x.CampaignId).Distinct().ShouldHaveSingleItem();
+			var reader = services.GetRequiredService<NotificationIntentSourceReader>();
+			foreach (var intent in intents)
+			{
+				var current = await reader.LoadAsync(intent, DateTimeOffset.UtcNow, CancellationToken.None);
+				if (current.Runtime.SourceScope.DivisionId == divisionId)
+				{
+					current.CurrentRecipients.ShouldBe([new("Student", StudentId: learner)]);
+					current.Snapshot!.RecipientContent!.Single(x => x.Recipient.StudentId == learner)
+						.Variables["location"].Value.ShouldBe("Original hall");
+				}
+				else
+				{
+					current.Runtime.SourceScope.DivisionId.ShouldBe(siblingDivision);
+					current.CurrentRecipients.ShouldBe([new("Student", StudentId: sibling)]);
+					current.Snapshot!.Variables["location"].Value.ShouldBe("New hall");
+				}
+			}
+		});
 
 		using var archived = await Client.PostAsync($"{Path}/{calendarId}/archive", null);
 		archived.StatusCode.ShouldBe(HttpStatusCode.OK, await archived.Content.ReadAsStringAsync());

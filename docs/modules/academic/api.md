@@ -143,6 +143,12 @@ The rule uses the calendar's saved academic medium and year. A missing year uses
 
 An archived calendar, a different publication revision or a changed title or date range makes a pending notice ineligible. It also expires after the last calendar date in the school's time zone. Delivery History requires Academic Notification View, Calendar Management View and access to the calendar's medium and saved operation scope.
 
+### Academic calendar event changes
+
+`PUT /api/academic/calendar-days/{id}` can queue `Academic.Calendar.EventChanged` when an event on a published calendar changes its date, time, venue or audience. One edit can update multiple class rows. The notification retains the previous and revised scopes from that edit. Capture requires Calendar Management Edit and access to the affected scopes. Description-only changes and draft edits leave the queue unchanged.
+
+The saved rule selects eligible staff and families within those scopes. Recipients who only belong to the previous scope can see the original event details and a notice that they no longer apply. The revised audience can see the new details. Pending delivery checks the calendar's publication revision and the current event rows. History requires Academic Notification View, Calendar Management View and access to the relevant operation scope.
+
 ### Chapter progress digest
 
 An enabled `Academic.Progress.BehindSchedule` rule can queue one digest per published subject and division for the completed school-local window. **Daily digest time** sets the cutoff. A chapter is eligible when its published start and end dates form a valid target, its end falls within the window and its latest division progress is below 100 percent. The scheduler reuses the occurrence on repeat scans, and the worker rechecks dates, progress, publication and staff before delivery.

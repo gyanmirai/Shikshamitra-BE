@@ -181,6 +181,8 @@ The hosted timetable workflow also verifies the automatic day reminder, includin
 
 `AcademicCalendarNotificationEvents_Tests` verifies that a saved draft stays silent, repeated publication queues one notice for the saved scope, and archiving suppresses it. `AcademicCalendarPublicationDelivery_Tests` and `AcademicCalendarPublicationPostgres_Tests` exercise the HTTP publication and archive actions, exact staff and enrolled learner references, the primary guardian default and protected history.
 
+`AcademicCalendarDayNotificationEvents_Tests` covers a material published event change, draft and description-only edits, and the saved division and institution date. The hosted calendar workflow also moves an event between divisions and checks each audience's notification content.
+
 `SyllabusNotificationEvents_Tests` covers publication, suppressed repeats and progress edits, assigned staff and material revisions. `SyllabusNotificationDelivery_Tests` and `SyllabusNotificationPostgres_Tests` exercise the hosted chapter create and update workflow, exact locked elective eligibility, parent-only delivery limits, history authorization and suppression after returning to draft.
 
 `DivisionSubjectNotificationEvents_Tests` covers replacement and removal through the application service. `SubjectAllocationNotificationDelivery_Tests` also exercises the hosted division-teacher API, including unchanged teacher sets and HTTP validation of a null list, a sibling division, generic outgoing content, superseded pending work and history permissions. `DivisionSubjectNotificationPostgres_Tests` covers concurrent replacements on a fresh disposable PostgreSQL database.

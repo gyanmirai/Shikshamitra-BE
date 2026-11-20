@@ -211,6 +211,12 @@ Staff API tests check stored audit fields for rule saves, template publication a
 
 Template test-send tests use synthetic draft content and the authenticated account. They verify the local inbox item, exact Add permission, rejected destinations and stale revisions, the per-channel limit and required WhatsApp test-account setup.
 
+## Personal notification preferences
+
+Run the hosted `NotificationSelfApi_Tests` to check preference categories, current linked student options, revoked and pending guardian reviews, save concurrency and account isolation.
+
+`NotificationPreferenceOptionsPostgresProbe_Tests` runs the shared options case with a new empty loopback `academic_tests_*` database using `ACADEMIC_PERF_TEST_POSTGRES`.
+
 ## Notification catalogue coverage
 
 Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AcademicNotificationSourceCoverage_Tests|FullyQualifiedName~AcademicNotificationCatalogue_Tests"`. It checks the registered source, history policy and required due scanner for each available event. The expected unavailable entries have an explicit source dependency and cannot be selected for manual sending.

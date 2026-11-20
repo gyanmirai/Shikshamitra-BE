@@ -84,6 +84,18 @@ Approval-required operations write no sendable intents until approval. Configure
 
 Rule changes, template publication, test sends, confirmation, approval, rejection, retry and cancellation write an action audit in the same transaction as the change. Audit data is limited to the actor, tenant, action, relevant identifiers, revisions, status and counts. Replays of completed actions reuse the original audit history.
 
+### Personal notification preferences
+
+The authenticated school account owns its preferences. The endpoints below are relative to `/api/communication/notifications/me` and use the same current identity and student link checks as the inbox. Preference responses use `Cache-Control: no-store`.
+
+| Endpoint | Result |
+|---|---|
+| `GET /preferences/options` | Registered category keys and their supported channels, plus ID and display name for each currently eligible linked student |
+| `GET /preferences` | Existing account and accessible student preferences |
+| `PUT /preferences` | Save the selected category, optional student context, enabled channels, preferred language, and optional school-time quiet hours. An existing row requires its current concurrency stamp. |
+
+Account channel restrictions apply to linked student deliveries as well. A student setting can narrow those channels further. Rule eligibility, channel consent and device registration govern actual delivery.
+
 ### Catalogue availability
 
 Available events have a registered source and a policy for viewing delivery history. Scheduled events also require a registered scanner. Unavailable entries cannot be enabled or sent manually.

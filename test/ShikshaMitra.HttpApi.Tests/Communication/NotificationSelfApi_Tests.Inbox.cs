@@ -39,6 +39,8 @@ public partial class NotificationSelfApi_Tests
 				Guid.NewGuid(), "[]", "SuspendUntilReview")); await uow.CompleteAsync();
 		}
 		(await client.GetFromJsonAsync<JsonElement>($"{Route}/inbox")).GetProperty("items").GetArrayLength().ShouldBe(0);
+		(await client.GetFromJsonAsync<JsonElement>($"{Route}/preferences/options"))
+			.GetProperty("students").GetArrayLength().ShouldBe(0);
 		using var denied = await client.PutAsJsonAsync($"{Route}/preferences", PreferenceInput(studentId: studentId));
 		denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await denied.Content.ReadAsStringAsync());
 	}

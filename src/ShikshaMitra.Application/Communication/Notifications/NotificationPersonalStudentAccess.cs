@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,5 +37,21 @@ public sealed class NotificationPersonalStudentAccess(IRepository<StudentPortalA
 	{
 		if (studentId == Guid.Empty || !await executer.AnyAsync((await GetStudentIdsQueryAsync(owner)).Where(x => x == studentId), cancellationToken))
 			throw new AbpAuthorizationException();
+	}
+
+	internal async Task<IReadOnlyList<NotificationPreferenceStudentDto>> GetPreferenceOptionsAsync(
+		NotificationSelfContext owner, CancellationToken cancellationToken)
+	{
+		var linked = await GetStudentIdsQueryAsync(owner);
+		var records = await executer.ToListAsync((await students.GetQueryableWithoutAutoIncludesAsync())
+			.Where(x => linked.Contains(x.Id))
+			.OrderBy(x => x.FirstName).ThenBy(x => x.LastName).ThenBy(x => x.Id)
+			.Select(x => new { x.Id, x.FirstName, x.MiddleName, x.LastName }), cancellationToken);
+		return records.Select(x =>
+		{
+			var name = string.Join(" ", new[] { x.FirstName, x.MiddleName, x.LastName }
+				.OfType<string>().Where(part => !string.IsNullOrWhiteSpace(part)).Select(part => part.Trim()));
+			return new NotificationPreferenceStudentDto(x.Id, name.Length == 0 ? "Student" : name);
+		}).ToArray();
 	}
 }

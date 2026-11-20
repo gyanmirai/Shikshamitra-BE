@@ -34,6 +34,17 @@ public class NotificationPreferenceAppService(NotificationSelfIdentity identity,
 		return rows.Select(Map).ToArray();
 	}
 
+	public virtual async Task<NotificationPreferenceOptionsDto> GetOptionsAsync(CancellationToken cancellationToken = default)
+	{
+		var owner = await identity.RequireAsync(cancellationToken);
+		var categories = schemas.SelectMany(x => x.GetAll()).GroupBy(CategoryKey, StringComparer.Ordinal)
+			.OrderBy(x => x.Key, StringComparer.Ordinal)
+			.Select(group => new NotificationPreferenceCategoryDto(group.Key, group.SelectMany(x => x.SupportedChannels)
+				.Where(x => x != CommunicationChannelType.Sms).Distinct().OrderBy(x => x).ToArray()))
+			.ToArray();
+		return new(categories, await students.GetPreferenceOptionsAsync(owner, cancellationToken));
+	}
+
 	[UnitOfWork(true)]
 	public virtual async Task<NotificationPreferenceDto> SaveAsync(SaveNotificationPreferenceDto input, CancellationToken cancellationToken = default)
 	{
@@ -41,7 +52,7 @@ public class NotificationPreferenceAppService(NotificationSelfIdentity identity,
 		var validation = await new NotificationPreferenceValidator().ValidateAsync(input, cancellationToken);
 		if (!validation.IsValid) throw new AbpValidationException("Invalid notification preferences.",
 			validation.Errors.Select(x => new ValidationResult(x.ErrorMessage, [x.PropertyName])).ToList());
-		if (!schemas.SelectMany(x => x.GetAll()).Any(x => x.EventKey.Split('.')[0] + "." + x.Category == input.Category))
+		if (!schemas.SelectMany(x => x.GetAll()).Any(x => CategoryKey(x) == input.Category))
 			throw new BusinessException(NotificationErrorCodes.EventUnknown);
 		if (input.StudentId is Guid studentId) await students.RequireAsync(owner, studentId, cancellationToken);
 		var context = input.StudentId.HasValue ? $"student:{input.StudentId.Value:N}" : "user";
@@ -66,4 +77,7 @@ public class NotificationPreferenceAppService(NotificationSelfIdentity identity,
 		return new(row.Category, row.StudentId, configuration?.EnabledChannels ?? [], row.LanguageCode,
 			configuration?.QuietHoursEnabled ?? false, configuration?.QuietHoursStart, configuration?.QuietHoursEnd, row.ConcurrencyStamp);
 	}
+
+	private static string CategoryKey(NotificationEventDefinition definition) =>
+		definition.EventKey.Split('.')[0] + "." + definition.Category;
 }

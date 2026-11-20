@@ -34,6 +34,10 @@ public class NotificationSelfController(INotificationInboxAppService inbox, INot
 	[HttpGet("preferences")]
 	public Task<IReadOnlyList<NotificationPreferenceDto>> GetPreferencesAsync(CancellationToken cancellationToken) => preferences.GetListAsync(cancellationToken);
 
+	[HttpGet("preferences/options")]
+	public Task<NotificationPreferenceOptionsDto> GetPreferenceOptionsAsync(CancellationToken cancellationToken) =>
+		preferences.GetOptionsAsync(cancellationToken);
+
 	[HttpPut("preferences")]
 	public Task<NotificationPreferenceDto> SavePreferencesAsync([FromBody] SaveNotificationPreferenceDto input, CancellationToken cancellationToken) =>
 		preferences.SaveAsync(input, cancellationToken);

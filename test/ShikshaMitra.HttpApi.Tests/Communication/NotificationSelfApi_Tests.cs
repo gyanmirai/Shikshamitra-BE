@@ -84,6 +84,34 @@ public partial class NotificationSelfApi_Tests(ShikshaMitraApiTestFactory factor
 	}
 
 	[Fact]
+	public async Task Preference_options_return_registered_categories_and_current_linked_students_without_staff_access()
+	{
+		var owner = await CreatePersonalUserAsync();
+		var child = await SeedLinkedStudentAsync(owner, "guardian", "mother");
+		var revoked = await SeedLinkedStudentAsync(owner, "guardian", "father");
+		var unrelated = await SeedLinkedStudentAsync(await CreatePersonalUserAsync(), "student", "self");
+		await RevokeLinkAsync(owner, revoked);
+		using var client = CreateClientAs(owner);
+		client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, "none");
+		using var response = await client.GetAsync($"{Route}/preferences/options");
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		response.Headers.CacheControl?.NoStore.ShouldBe(true);
+		var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+		var categories = body.GetProperty("categories").EnumerateArray().ToArray();
+		categories.Single(x => x.GetProperty("category").GetString() == "Academic.Homework")
+			.GetProperty("channels").EnumerateArray().Select(x => x.GetInt32()).ShouldBe([0, 2, 3, 4], ignoreOrder: true);
+		categories.Single(x => x.GetProperty("category").GetString() == "Academic.Settings")
+			.GetProperty("channels").EnumerateArray().Select(x => x.GetInt32()).ShouldBe([3, 4], ignoreOrder: true);
+		var students = body.GetProperty("students").EnumerateArray().ToArray();
+		students.ShouldHaveSingleItem().GetProperty("studentId").GetGuid().ShouldBe(child);
+		students[0].GetProperty("displayName").GetString().ShouldBe("Notification Fixture");
+		(await response.Content.ReadAsStringAsync()).ShouldNotContain(unrelated.ToString());
+		using var anonymous = CreateAnonymousClient();
+		using var denied = await anonymous.GetAsync($"{Route}/preferences/options");
+		denied.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+	}
+
+	[Fact]
 	public async Task Personal_inbox_and_unread_count_need_active_identity_but_no_staff_permissions_and_are_not_cacheable()
 	{
 		var userId = await CreatePersonalUserAsync();

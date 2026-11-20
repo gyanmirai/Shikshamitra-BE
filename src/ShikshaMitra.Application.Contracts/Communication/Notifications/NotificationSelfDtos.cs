@@ -20,6 +20,10 @@ public sealed record SaveNotificationPreferenceDto(string Category, Guid? Studen
 public sealed record NotificationPreferenceDto(string Category, Guid? StudentId,
 	IReadOnlyList<CommunicationChannelType> EnabledChannels, string LanguageCode, bool QuietHoursEnabled,
 	string? QuietHoursStart, string? QuietHoursEnd, string ConcurrencyStamp);
+public sealed record NotificationPreferenceCategoryDto(string Category, IReadOnlyList<CommunicationChannelType> Channels);
+public sealed record NotificationPreferenceStudentDto(Guid StudentId, string DisplayName);
+public sealed record NotificationPreferenceOptionsDto(IReadOnlyList<NotificationPreferenceCategoryDto> Categories,
+	IReadOnlyList<NotificationPreferenceStudentDto> Students);
 
 public interface INotificationInboxAppService : IApplicationService
 {
@@ -31,5 +35,6 @@ public interface INotificationInboxAppService : IApplicationService
 public interface INotificationPreferenceAppService : IApplicationService
 {
 	Task<IReadOnlyList<NotificationPreferenceDto>> GetListAsync(CancellationToken cancellationToken = default);
+	Task<NotificationPreferenceOptionsDto> GetOptionsAsync(CancellationToken cancellationToken = default);
 	Task<NotificationPreferenceDto> SaveAsync(SaveNotificationPreferenceDto input, CancellationToken cancellationToken = default);
 }

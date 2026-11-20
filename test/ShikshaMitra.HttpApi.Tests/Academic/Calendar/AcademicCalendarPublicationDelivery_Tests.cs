@@ -20,6 +20,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using Shouldly;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
@@ -301,6 +302,26 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 			var source = await reader.LoadAsync(changed, DateTimeOffset.UtcNow, CancellationToken.None);
 			source.CurrentRecipients.ShouldBe([new("Student", StudentId: learner)]);
 			source.Snapshot!.Variables["change_summary"].Value.ShouldBe("The emergency closure has been lifted.");
+		});
+
+		using var audienceEdit = await Client.PutAsJsonAsync($"{closurePath}/{closures[1].Id}/emergency-closure", new UpdateEmergencyClosureDto
+		{
+			StartDate = start.AddDays(10), Title = "Severe weather", StandardIds = [classId],
+			NotifyStudents = true, AutoScanImpacts = false
+		}, JsonOptions);
+		audienceEdit.StatusCode.ShouldBe(HttpStatusCode.OK, await audienceEdit.Content.ReadAsStringAsync());
+		var closureRows = await Client.GetFromJsonAsync<PagedResultDto<EmergencyClosureListItemDto>>(
+			$"/api/academic/calendar-emergency-closures?academicMediumId={Factory.SeededMediumId}", JsonOptions);
+		var savedSelection = closureRows!.Items.Single(x => x.Id == closures[1].Id);
+		savedSelection.NotifyTeachers.ShouldBeFalse();
+		savedSelection.NotifyParents.ShouldBeFalse();
+		savedSelection.NotifyStudents.ShouldBeTrue();
+		await InSchoolAsync(async services =>
+		{
+			var repository = services.GetRequiredService<IRepository<NotificationIntent, Guid>>();
+			var reader = services.GetRequiredService<NotificationIntentSourceReader>();
+			(await reader.LoadAsync(nextDayNotice, DateTimeOffset.UtcNow, CancellationToken.None)).CurrentRecipients.ShouldBeEmpty();
+			(await repository.GetListAsync(x => x.SourceId == closures[1].Id && x.EventKey == ClosureChanged)).ShouldBeEmpty();
 		});
 
 		using var movedClosure = await Client.PutAsJsonAsync($"{closurePath}/{closures[1].Id}/emergency-closure", new UpdateEmergencyClosureDto

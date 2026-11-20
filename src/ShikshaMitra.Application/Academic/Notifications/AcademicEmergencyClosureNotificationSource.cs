@@ -25,6 +25,9 @@ namespace ShikshaMitra.Academic.Notifications;
 
 internal sealed record AcademicEmergencyClosureAudience(bool Teachers, bool Guardians, bool Students)
 {
+	internal AcademicEmergencyClosureAudience Restrict(AcademicEmergencyClosureAudience selected) =>
+		new(Teachers && selected.Teachers, Guardians && selected.Guardians, Students && selected.Students);
+
 	internal IReadOnlyList<string> Selectors()
 	{
 		var selectors = new List<string>();
@@ -57,13 +60,26 @@ public sealed class AcademicEmergencyClosureNotificationSource(AcademicCalendarP
 		CalendarDayStatus Status, AcademicEmergencyClosureAudience Audience, AcademicEmergencyClosurePlacement? Previous);
 
 	internal static AcademicEmergencyClosureAudience? ReadAudience(AcademicCalendar calendar, Guid dayId) =>
-		ReadNotice(calendar, dayId)?.Audience;
+		calendar.GetProperty<string>(SelectionProperty(dayId)) is { } json
+			? NotificationRuntimeJson.Deserialize<AcademicEmergencyClosureAudience>(json, NotificationErrorCodes.SourceUnavailable)
+			: ReadNotice(calendar, dayId)?.Audience;
+
+	internal static void SaveAudience(AcademicCalendar calendar, Guid dayId, AcademicEmergencyClosureAudience selection)
+	{
+		calendar.SetProperty(SelectionProperty(dayId), NotificationRuntimeJson.Serialize(selection, NotificationErrorCodes.SourceUnavailable));
+		if (ReadNotice(calendar, dayId) is not { } notice) return;
+		var remaining = notice.Audience.Restrict(selection);
+		if (remaining == notice.Audience) return;
+		calendar.SetProperty(Property(dayId),
+			NotificationRuntimeJson.Serialize(notice with { Audience = remaining }, NotificationErrorCodes.SourceUnavailable));
+	}
 
 	internal static string Save(AcademicCalendar calendar, AcademicCalendarDay day, string eventKey,
 		AcademicEmergencyClosureAudience selection, AcademicEmergencyClosurePlacement? previous)
 	{
 		var notice = new ClosureNotice(Guid.NewGuid().ToString("N"), eventKey, AcademicEmergencyClosurePlacement.From(day),
 			day.Status, selection, previous);
+		calendar.RemoveProperty(SelectionProperty(day.Id));
 		calendar.SetProperty(Property(day.Id), NotificationRuntimeJson.Serialize(notice, NotificationErrorCodes.SourceUnavailable));
 		return notice.Revision;
 	}
@@ -175,6 +191,7 @@ public sealed class AcademicEmergencyClosureNotificationSource(AcademicCalendarP
 			: null;
 
 	private static string Property(Guid id) => $"AcademicEmergencyClosureNotice:{id:N}";
+	private static string SelectionProperty(Guid id) => $"AcademicEmergencyClosureAudience:{id:N}";
 }
 
 [RemoteService(false)]
@@ -189,8 +206,7 @@ public sealed class AcademicEmergencyClosureNotification(AcademicCalendarPublica
 
 	internal Task ChangeAsync(AcademicCalendar calendar, AcademicCalendarDay day, AcademicEmergencyClosurePlacement previous,
 		AcademicEmergencyClosureAudience selection) =>
-		previous.Material == AcademicCalendarEventMaterial.From(day) ? Task.CompletedTask :
-			RecordAsync(calendar, day, selection, AcademicEmergencyClosureNotificationSource.Changed, ClosurePermissions.Edit, previous);
+		RecordAsync(calendar, day, selection, AcademicEmergencyClosureNotificationSource.Changed, ClosurePermissions.Edit, previous);
 
 	internal async Task ReopenAsync(AcademicCalendarDay day)
 	{
@@ -219,6 +235,12 @@ public sealed class AcademicEmergencyClosureNotification(AcademicCalendarPublica
 		}
 		catch (AbpAuthorizationException) { return; }
 
+		if (previous?.Material == AcademicCalendarEventMaterial.From(day))
+		{
+			if (selection != AcademicEmergencyClosureNotificationSource.ReadAudience(calendar, day.Id))
+				AcademicEmergencyClosureNotificationSource.SaveAudience(calendar, day.Id, selection);
+			return;
+		}
 		var revision = AcademicEmergencyClosureNotificationSource.Save(calendar, day, eventKey, selection, previous);
 		var allClasses = !placement.ClassId.HasValue || priorPlacement is { ClassId: null };
 		var priorClass = priorPlacement?.ClassId;

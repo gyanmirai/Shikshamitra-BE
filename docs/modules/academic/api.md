@@ -157,7 +157,7 @@ The saved rule selects eligible staff and families within those scopes. Recipien
 
 On declaration and material edits, the form's teacher, parent and student choices limit the enabled rule. Teachers come from current subject assignments. Family delivery uses active enrollment, the primary guardian default and the configured options for additional guardians and student accounts. A reopening uses the last saved notification choices. General staff delivery requires a scoped audience that this workflow does not currently provide.
 
-The closure list supplies `notifyTeachers`, `notifyParents` and `notifyStudents` from the saved notification choices so the edit form restores them. Older closures without saved choices return all three as false.
+The closure list supplies `notifyTeachers`, `notifyParents` and `notifyStudents` from the saved notification choices so the edit form restores them. Older closures without saved choices return all three as false. An audience-only edit saves the selections for future changes and can suppress pending delivery to people who were deselected. Newly selected groups become eligible on the next material change or reopening.
 
 Recipients who belong only to the previous scope see the prior title and date and a notice that the closure no longer applies. The revised audience sees the current date and school-local time. Internal descriptions stay in the closure record. The queue rechecks the latest revision and saved closure status. Reopening suppresses the pending closure notice, and an archived calendar suppresses its notices. Quiet hours remain in effect unless the enabled rule explicitly allows bypass. History requires Academic Notification View, Emergency Closure View and the stored operation scope.
 

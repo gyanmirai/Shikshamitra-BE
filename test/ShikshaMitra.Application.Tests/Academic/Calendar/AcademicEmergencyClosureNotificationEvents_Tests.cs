@@ -102,6 +102,24 @@ public sealed class AcademicEmergencyClosureNotificationEvents_Tests : SubjectTe
 		{
 			await WithTransactionalUnitOfWorkAsync(async () =>
 			{
+				await service.UpdateEmergencyClosureAsync(closure, new UpdateEmergencyClosureDto
+				{
+					StartDate = date, Title = "Campus closed", StandardIds = [StandardId],
+					NotifyStudents = true, AutoScanImpacts = false
+				});
+			});
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var rows = await service.GetEmergencyClosuresAsync(AcademicMediumId, CalendarDayStatus.Active);
+				var choice = rows.Items.Single(x => x.Id == closure);
+				choice.NotifyTeachers.ShouldBeFalse();
+				choice.NotifyParents.ShouldBeFalse();
+				choice.NotifyStudents.ShouldBeTrue();
+				(await notices.GetListAsync(x => x.SourceId == closure && x.EventKey == Changed)).ShouldBeEmpty();
+				(await reader.LoadAsync(original, DateTimeOffset.UtcNow, CancellationToken.None)).CurrentRecipients.ShouldBeEmpty();
+			});
+			await WithTransactionalUnitOfWorkAsync(async () =>
+			{
 				var updated = await service.UpdateEmergencyClosureAsync(closure, new UpdateEmergencyClosureDto
 				{
 					StartDate = date.AddDays(1), Title = "Campus closed", StandardIds = [StandardId],

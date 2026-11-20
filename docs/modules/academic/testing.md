@@ -209,7 +209,9 @@ Reviewer escalation cases verify backward-compatible rule decoding, required tea
 
 Staff API tests check stored audit fields for rule saves, template publication and manual approval decisions. They check audit counts after stale or repeated requests and verify that the serialized fields contain only approved metadata.
 
-Template test-send tests use synthetic draft content and the authenticated account. They verify the local inbox item, exact Add permission, rejected destinations and stale revisions, the per-channel limit and required WhatsApp test-account setup.
+Template test-send tests use synthetic draft content and the authenticated account. They verify the local inbox item, exact Add permission, rejected destinations and stale revisions, the per-channel limit and required WhatsApp test-account setup. Operation reads and attempt history verify that the sender can follow their own test from queued to delivered or skipped. A colleague with the same permissions cannot read it.
+
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AcademicNotificationEndToEndApi_Tests"` against a fresh loopback `academic_tests_*` database set through `ACADEMIC_PERF_TEST_POSTGRES`. The hosted test uses a saved Homework record, official PostgreSQL queue claims, and capture transports for the three external channels. It covers preview without sending, primary guardian routing, WhatsApp consent, the published template binding and signed receipt, email and encrypted web-push acceptance, and the delivered inbox item. A second reviewed send verifies an additional saved guardian's email and a linked student's inbox, along with the exclusion of an unlinked guardian from inbox. Real providers and physical devices require separate acceptance.
 
 ## Delivery retry
 

@@ -38,6 +38,29 @@ public partial class AcademicNotificationManualApi_Tests
 		var responseBody = await response.Content.ReadAsStringAsync();
 		responseBody.ShouldNotContain("Example recipient");
 		responseBody.ShouldNotContain(TestAuthHandler.TestUserId);
+		var operationRoute = $"{BasePath}/operations/{operationId}";
+		var historyRoute = $"{BasePath}/history?sourceType={NotificationCampaignTypes.AcademicTemplateTestSource}" +
+			$"&eventKey={draft.EventKey}&sourceId={draft.TemplateId}";
+		Permissions(Client, View);
+		var initialStatus = await GetAndReadAsync<JsonElement>(operationRoute);
+		initialStatus.GetProperty("isSynthetic").GetBoolean().ShouldBeTrue();
+		var initialHistory = await GetAndReadAsync<PagedResultDto<AcademicNotificationHistoryItemDto>>($"{historyRoute}&operationId={operationId}");
+		initialHistory.Items.ShouldHaveSingleItem().Status.ShouldBe(NotificationDispatchState.Pending);
+		using var missingOperation = await Client.GetAsync(historyRoute);
+		missingOperation.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		if (!changeBeforeDelivery)
+		{
+			await SeedApproverAsync();
+			using var colleague = CreateClientAs(AcademicNotificationPreviewApiFactory.ApproverId);
+			Permissions(colleague, $"{View},{Add}");
+			using var otherOperation = await colleague.GetAsync(operationRoute);
+			otherOperation.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+			using var otherHistory = await colleague.GetAsync($"{historyRoute}&operationId={operationId}");
+			otherHistory.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+			Permissions(Client, $"{View},{Add}");
+			using var cancel = await Client.PostAsync($"{operationRoute}/cancel", null);
+			cancel.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		}
 		var lease = Guid.NewGuid();
 		Guid dispatchId = Guid.Empty;
 		await WithDatabaseAsync(async (db, services) =>
@@ -96,6 +119,10 @@ public partial class AcademicNotificationManualApi_Tests
 			row.Status.ShouldBe(changeBeforeDelivery ? NotificationDispatchState.Skipped : NotificationDispatchState.Delivered, row.ErrorCode);
 			if (changeBeforeDelivery) row.ErrorCode.ShouldBe("SourceRevisionChanged");
 		});
+		var finalHistory = await GetAndReadAsync<PagedResultDto<AcademicNotificationHistoryItemDto>>($"{historyRoute}&operationId={operationId}");
+		finalHistory.Items.ShouldHaveSingleItem().Status.ShouldBe(changeBeforeDelivery
+			? NotificationDispatchState.Skipped : NotificationDispatchState.Delivered);
+		finalHistory.Items.Single().CanRequestRetry.ShouldBeFalse();
 		if (changeBeforeDelivery) return;
 		var inbox = await GetAndReadAsync<PagedResultDto<NotificationInboxItemDto>>("/api/communication/notifications/me/inbox");
 		inbox.Items.ShouldContain(x => x.Title == "[Test] Homework reminder" && x.Body.Contains("Example recipient", StringComparison.Ordinal));

@@ -21,7 +21,8 @@ public class AcademicNotificationHistoryAppService(AcademicNotificationAccessSer
 		CancellationToken cancellationToken = default)
 	{
 		var (tenantId, actorId, callerScope) = await access.RequireHistoryViewerAsync(cancellationToken);
-		var authorized = await operations.RequireAsync(operationId, null, tenantId, callerScope, cancellationToken);
+		var authorized = await operations.RequireAsync(operationId, null, tenantId, callerScope, cancellationToken,
+			templateTestViewerId: actorId);
 		var operation = authorized.Record;
 		var deliveries = await history.GetCountsAsync(tenantId, authorized.Intents.Select(x => x.Id).ToArray(), cancellationToken);
 		var excluded = await history.CountExcludedAsync(tenantId, [operationId], cancellationToken);
@@ -35,7 +36,8 @@ public class AcademicNotificationHistoryAppService(AcademicNotificationAccessSer
 			operation.Status, operation.ApprovalRequired, AcademicNotificationHistoryRows.Utc(operation.CreatedAt),
 			operation.PublishedAt, operation.ScheduledAt, operation.ApprovedAt, deliveries, outcomes, excluded)
 		{
-			CanReviewApproval = canReviewApproval, ApprovalRejected = operation.ApprovalRejected
+			CanReviewApproval = canReviewApproval, ApprovalRejected = operation.ApprovalRejected,
+			IsSynthetic = operation.SourceType == NotificationCampaignTypes.AcademicTemplateTestSource
 		};
 	}
 
@@ -52,10 +54,18 @@ public class AcademicNotificationHistoryAppService(AcademicNotificationAccessSer
 	public virtual async Task<PagedResultDto<AcademicNotificationHistoryItemDto>> GetHistoryAsync(GetAcademicNotificationHistoryDto input,
 		CancellationToken cancellationToken = default)
 	{
-		var (tenantId, _, callerScope) = await access.RequireHistoryViewerAsync(cancellationToken);
+		var (tenantId, actorId, callerScope) = await access.RequireHistoryViewerAsync(cancellationToken);
 		if (input.SkipCount < 0 || input.MaxResultCount is < 1 or > 100 || input.OperationId == Guid.Empty ||
 			input.State.HasValue && !Enum.IsDefined(input.State.Value))
 			throw new BusinessException(NotificationErrorCodes.HistoryInvalid);
+		if (input.SourceType == NotificationCampaignTypes.AcademicTemplateTestSource)
+		{
+			if (input.OperationId is not Guid id) throw new BusinessException(NotificationErrorCodes.HistoryInvalid);
+			var test = await operations.RequireAsync(id, null, tenantId, callerScope, cancellationToken, templateTestViewerId: actorId);
+			if (test.Record.SourceType != input.SourceType || test.Record.SourceId != input.SourceId ||
+				test.Definition.EventKey != input.EventKey) throw new AbpAuthorizationException();
+			return await history.GetPageAsync(tenantId, test.Intents.Select(x => x.Id).ToArray(), [id], test.Definition, input, cancellationToken);
+		}
 		var definition = await access.RequireSourceViewAsync(input.EventKey, input.SourceType, input.SourceId, cancellationToken);
 		var owned = await operations.ReadIntentsAsync(tenantId, input.SourceType, input.SourceId, input.OperationId, input.EventKey,
 			intentId: null, includeRuntime: !callerScope.HasTenantWideScope(), cancellationToken);

@@ -111,7 +111,7 @@ public class AcademicNotificationHistoryPostgres_Tests(NotificationPostgresFixtu
 		var receipts = Repository<NotificationSendReview>(db);
 		var sut = new AcademicNotificationOperationAccess(access, null!, null!,
 			new AcademicNotificationReviewService(receipts, queries, protection, null!, null!),
-			Repository<CommunicationCampaign>(db), Repository<NotificationIntent>(db), receipts, queries);
+			Repository<CommunicationCampaign>(db), Repository<NotificationIntent>(db), receipts, queries, null!, null!);
 		var scope = new UserScopeContext { TenantId = tenant, UserId = approver, IsAdmin = true };
 		var first = await sut.ReadPendingApprovalsAsync(tenant, approver, scope, null, default);
 		first.Items.Select(x => x.OperationId).ShouldBe(Enumerable.Range(2, 10).Select(i => new Guid(i, 0, 0, new byte[8])));

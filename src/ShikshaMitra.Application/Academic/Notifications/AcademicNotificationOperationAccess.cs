@@ -20,18 +20,19 @@ namespace ShikshaMitra.Academic.Notifications;
 public sealed class AcademicNotificationOperationAccess(AcademicNotificationAccessService access,
 	AcademicNotificationRuleScopeAccess scopes, NotificationIntentSnapshotCodec snapshots, AcademicNotificationReviewService reviews,
 	IRepository<CommunicationCampaign, Guid> campaigns, IRepository<NotificationIntent, Guid> intents,
-	IRepository<NotificationSendReview, Guid> receipts, IAsyncQueryableExecuter queries) : ITransientDependency
+	IRepository<NotificationSendReview, Guid> receipts, IAsyncQueryableExecuter queries,
+	NotificationTemplateRevisionService templates, AcademicNotificationCatalogue catalogue) : ITransientDependency
 {
 	internal sealed record Operation(Guid Id, string? SourceType, Guid? SourceId, CommunicationCampaignStatus Status,
 		bool ApprovalRequired, DateTime CreatedAt, DateTimeOffset? PublishedAt, DateTimeOffset? ScheduledAt,
 		DateTimeOffset? ApprovedAt, bool ApprovalRejected);
 	internal sealed record HistoricalIntent(Guid Id, Guid OperationId, string EventKey, string RuntimeJson,
-		NotificationIntentState State, string? ReasonCode);
+		NotificationIntentState State, string? ReasonCode, Guid? ActorUserId);
 
 	internal sealed record AuthorizedOperation(Operation Record, NotificationEventDefinition Definition, IReadOnlyList<HistoricalIntent> Intents);
 
 	internal async Task<AuthorizedOperation> RequireAsync(Guid operationId, Guid? targetIntentId, Guid tenantId,
-		UserScopeContext callerScope, CancellationToken cancellationToken)
+		UserScopeContext callerScope, CancellationToken cancellationToken, Guid? templateTestViewerId = null)
 	{
 		var operation = await queries.SingleOrDefaultAsync((await OwnedOperationsAsync(tenantId)).Where(x => x.Id == operationId)
 			.Select(x => new Operation(x.Id, x.SourceEntityType, x.SourceEntityId, x.Status, x.ApprovalRequired, x.CreationTime,
@@ -44,6 +45,14 @@ public sealed class AcademicNotificationOperationAccess(AcademicNotificationAcce
 			intentId: targetIntentId, includeRuntime: !callerScope.HasTenantWideScope(), cancellationToken);
 		if (targetIntentId.HasValue && ownedIntents.Count == 0)
 			throw new EntityNotFoundException(typeof(NotificationIntent), targetIntentId.Value);
+		if (operation.SourceType == NotificationCampaignTypes.AcademicTemplateTestSource)
+		{
+			if (targetIntentId.HasValue || !templateTestViewerId.HasValue || ownedIntents.Count != 1 ||
+				ownedIntents[0].ActorUserId != templateTestViewerId) throw new AbpAuthorizationException();
+			var template = await templates.GetAsync(sourceId, cancellationToken);
+			if (template.EventKey != ownedIntents[0].EventKey) throw new AbpAuthorizationException();
+			return new(operation, catalogue.Get(template.EventKey), ownedIntents);
+		}
 		var eventKeys = ownedIntents.Select(x => x.EventKey).Distinct(StringComparer.Ordinal).Take(2).ToArray();
 		if (eventKeys.Length > 1) throw new AbpAuthorizationException();
 		var pending = ownedIntents.Count == 0 ? await ReadProtectedReviewAsync(tenantId, operation, cancellationToken) : null;
@@ -121,7 +130,7 @@ public sealed class AcademicNotificationOperationAccess(AcademicNotificationAcce
 				!allIntents.Any(other => other.CampaignId == campaign.Id &&
 					(other.SourceId != sourceId || other.SourceType != sourceType || other.EventKey != intent.EventKey))
 			select new HistoricalIntent(intent.Id, campaign.Id, intent.EventKey,
-				includeRuntime ? intent.RuleConfigurationJson : string.Empty, intent.Status, intent.ErrorCode);
+				includeRuntime ? intent.RuleConfigurationJson : string.Empty, intent.Status, intent.ErrorCode, intent.ActorUserId);
 		return await queries.ToListAsync(query, cancellationToken);
 	}
 

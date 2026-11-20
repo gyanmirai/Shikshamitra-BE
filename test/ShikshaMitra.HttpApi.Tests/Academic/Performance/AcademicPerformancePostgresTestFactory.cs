@@ -20,7 +20,7 @@ public sealed class AcademicPerformancePostgresFactAttribute : FactAttribute
 	}
 }
 
-public sealed class AcademicPerformancePostgresTestFactory : ShikshaMitraApiTestFactory
+public class AcademicPerformancePostgresTestFactory : ShikshaMitraApiTestFactory
 {
 	private bool _preparingFixture = true;
 	public AcademicCommandMetrics Metrics { get; } = new();

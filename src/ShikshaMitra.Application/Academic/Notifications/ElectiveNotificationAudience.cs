@@ -7,8 +7,6 @@ using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Students;
-using ShikshaMitra.TenantSettings.Divisions;
-using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
@@ -16,29 +14,14 @@ using Volo.Abp.Linq;
 
 namespace ShikshaMitra.Academic.Notifications;
 
-internal sealed record ElectiveNoticeDivision(NotificationSourceScopeDto Scope, string Name);
-
 [RemoteService(false)]
-public sealed class ElectiveNotificationAudience(IRepository<Division, Guid> divisions, IRepository<Standard, Guid> standards,
+public sealed class ElectiveNotificationAudience(AcademicNotificationDivisionReader divisions,
 	IRepository<AssignedSubject, Guid> assignments, IRepository<Subject, Guid> subjects, IRepository<ElectiveGroup, Guid> groups,
 	IRepository<TeacherSubjectAllocation, Guid> divisionAssignments, IRepository<Student, Guid> students,
 	AcademicNotificationEnrollmentRoster roster, TimetableNotificationAudience staff, IAsyncQueryableExecuter queries) : ITransientDependency
 {
-	internal async Task<ElectiveNoticeDivision?> FindDivisionAsync(Guid school, Guid divisionId, CancellationToken token)
-	{
-		var placement = from division in await divisions.GetQueryableAsync()
-			join standard in await standards.GetQueryableAsync() on division.StandardId equals standard.Id
-			let stage = standard.EducationMediumStage
-			let medium = stage.EducationMedium
-			let board = medium.EducationBoard
-			where division.Id == divisionId && division.TenantId == school && !division.IsDeleted &&
-				standard.TenantId == school && !standard.IsDeleted && stage.TenantId == school && !stage.IsDeleted &&
-				medium.TenantId == school && !medium.IsDeleted && board.TenantId == school && !board.IsDeleted &&
-				board.AcademicYear.TenantId == school && !board.AcademicYear.IsDeleted
-			select new ElectiveNoticeDivision(new(board.AcademicYearId, board.Id, medium.Id, standard.Id, division.Id),
-				standard.Name + " - " + division.Name);
-		return await queries.SingleOrDefaultAsync(placement, token);
-	}
+	internal Task<AcademicNotificationDivision?> FindDivisionAsync(Guid school, Guid divisionId, CancellationToken token) =>
+		divisions.FindAsync(school, divisionId, token);
 
 	internal async Task<ElectiveGroup?> FindGroupAsync(Guid school, Guid groupId, Guid? mediumId, CancellationToken token) =>
 		await queries.SingleOrDefaultAsync((await groups.WithDetailsAsync(x => x.Subjects)).Where(x =>

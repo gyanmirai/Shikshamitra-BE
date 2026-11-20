@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Academic.Timetable;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Constants.Permissions;
@@ -21,6 +22,7 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using Volo.Abp.Uow;
 using Volo.Abp.Users;
 
 namespace ShikshaMitra.Academic.Curriculum;
@@ -531,6 +533,7 @@ public partial class LessonPlanAppService(
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
+    [UnitOfWork(true)]
     public async Task<LessonPlanDto> ApproveAsync(Guid id, ReviewRemarksDto input)
     {
         await EnsureCanReviewLessonPlansAsync();
@@ -551,11 +554,12 @@ public partial class LessonPlanAppService(
         EnsurePlanIsAwaitingReview(lessonPlan);
 
         lessonPlan.Approve(CurrentUser.GetId(), input.Comment);
-        await lessonPlanRepository.UpdateAsync(lessonPlan);
+        await SaveReviewAsync(lessonPlan);
         return await GetAsync(id);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
+    [UnitOfWork(true)]
     public async Task<LessonPlanDto> RejectAsync(Guid id, ReviewRemarksDto input)
     {
         await EnsureCanReviewLessonPlansAsync();
@@ -577,11 +581,12 @@ public partial class LessonPlanAppService(
         EnsurePlanIsAwaitingReview(lessonPlan);
 
         lessonPlan.Reject(CurrentUser.GetId(), input.Comment);
-        await lessonPlanRepository.UpdateAsync(lessonPlan);
+        await SaveReviewAsync(lessonPlan);
         return await GetAsync(id);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
+    [UnitOfWork(true)]
     public async Task<LessonPlanDto> RequestChangesAsync(Guid id, ReviewRemarksDto input)
     {
         await EnsureCanReviewLessonPlansAsync();
@@ -603,8 +608,18 @@ public partial class LessonPlanAppService(
         EnsurePlanIsAwaitingReview(lessonPlan);
 
         lessonPlan.RequestChanges(CurrentUser.GetId(), input.Comment);
-        await lessonPlanRepository.UpdateAsync(lessonPlan);
+        await SaveReviewAsync(lessonPlan);
         return await GetAsync(id);
+    }
+
+    private async Task SaveReviewAsync(LessonPlan plan)
+    {
+        var notice = CurrentTenant.Id is Guid school && plan.TenantId == school
+            ? LessonPlanNotificationSource.Record(plan, CurrentUser.GetId()) : null;
+        await lessonPlanRepository.UpdateAsync(plan, autoSave: notice != null);
+        if (notice != null)
+            await LazyServiceProvider.LazyGetRequiredService<SubjectAllocationNotification>()
+                .CaptureAsync([notice], CurrentUser.Id, LessonPlanNotificationSource.Type);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]

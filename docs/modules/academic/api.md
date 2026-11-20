@@ -135,6 +135,12 @@ An enabled `Academic.Syllabus.Published` rule can queue work when `POST /api/aca
 
 Capture requires Chapter Management Add and access to the source class. The rule chooses assigned subject teachers and the family audience. Family delivery uses active enrollment in the affected division and a matching locked choice for electives. Parent visibility excludes student accounts even when the rule enables them. Templates can use the chapter and subject names with the authenticated inbox link. Teacher notes and attachment contents stay in the syllabus. History requires Academic Notification View, Chapter Management View and access to the source scope.
 
+### Lesson plan review notifications
+
+The existing lesson plan `approve`, `request-changes` and `reject` commands can queue the corresponding Academic notification in the same transaction as the saved review. The rule targets the assigned plan owner through their active staff account. Repeated reviews in the same status preserve the original notice. The worker checks the saved review revision, current owner and class and division before delivery. A later revision makes the earlier notice ineligible.
+
+Templates can use the lesson plan title, subject and class and include an authenticated school inbox link. Review remarks stay in the lesson plan. History requires Academic Notification View, Lesson Plan View and access to the source division.
+
 ### Marks review notifications
 
 An enabled rule can queue `Academic.Marks.Submitted` after `POST /api/academics/exams/{examId}/marks/submit` moves the saved subject and division workflow to Submitted. The recipient is the school's active reviewer configured through `Notifications:Academic:Tenants:<tenantIdN>:MarksReviewerUserId`. The correction action at `POST /api/academics/exams/{examId}/marks/request-changes` can queue `Academic.Marks.ChangesRequested` for the subject's current class and division teaching assignments. Recipients need Record Marks View and Add and access to the source workflow. The actor's own notice is suppressed.

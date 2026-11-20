@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Curriculum;
@@ -86,6 +87,16 @@ public sealed class AcademicEmergencyClosureNotificationEvents_Tests : SubjectTe
 			var source = await reader.LoadAsync(original, DateTimeOffset.UtcNow, CancellationToken.None);
 			source.Runtime.SourceScope.DivisionId.ShouldBe(DivisionId);
 			source.CurrentRecipients.Select(x => x.EmployeeId!.Value).ShouldBe([OldTeacher, OtherTeacher], ignoreOrder: true);
+		});
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var result = await service.GetEmergencyClosuresAsync(AcademicMediumId, CalendarDayStatus.Active);
+			var closureRow = result.Items.Single(x => x.Id == closure);
+			var payload = JsonSerializer.SerializeToElement(closureRow, JsonSerializerOptions.Web);
+			payload.TryGetProperty("notifyTeachers", out var teachers).ShouldBeTrue("The edit form needs the saved audiences.");
+			teachers.GetBoolean().ShouldBeTrue();
+			payload.GetProperty("notifyParents").GetBoolean().ShouldBeFalse();
+			payload.GetProperty("notifyStudents").GetBoolean().ShouldBeFalse();
 		});
 		if (reschedule)
 		{

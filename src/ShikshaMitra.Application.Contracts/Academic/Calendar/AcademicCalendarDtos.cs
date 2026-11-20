@@ -82,6 +82,9 @@ public class EmergencyClosureListItemDto : EntityDto<Guid>
     public CalendarDayStatus Status { get; set; }
     public string? ChangeReason { get; set; }
     public bool AutoScanImpacts { get; set; }
+    public bool NotifyTeachers { get; set; }
+    public bool NotifyParents { get; set; }
+    public bool NotifyStudents { get; set; }
     public int ImpactCount { get; set; }
     public int PendingImpactCount { get; set; }
 }

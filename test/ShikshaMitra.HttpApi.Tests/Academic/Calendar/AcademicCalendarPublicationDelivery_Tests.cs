@@ -33,6 +33,7 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 {
 	private const string EventKey = AcademicNotificationEventKeys.CalendarPublished;
 	private const string EventChanged = AcademicNotificationEventKeys.CalendarEventChanged;
+	private const string EventCancelled = AcademicNotificationEventKeys.CalendarEventCancelled;
 	private const string ClosureDeclared = AcademicNotificationEventKeys.CalendarEmergencyClosureDeclared;
 	private const string ClosureChanged = AcademicNotificationEventKeys.CalendarEmergencyClosureChanged;
 	private const string Path = "/api/academic/calendars";
@@ -114,6 +115,19 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 				config with { StaffAudienceSelectors = [], TemplateIds = [eventHeader.Id] },
 				services.GetRequiredService<AcademicNotificationCatalogue>().Get(EventChanged)), eventRule.ConcurrencyStamp);
 			await InsertAsync(services, eventRule);
+
+			var cancellationHeader = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), School)
+				{ TemplateName = "Calendar event cancelled" });
+			var cancellationVersion = new CommunicationTemplateRevision(Guid.NewGuid(), School, cancellationHeader.Id, 1,
+				EventCancelled, "Guardian", CommunicationChannelType.InApp, "en", "Event cancelled", "{{event_title}} was cancelled.", 1);
+			cancellationVersion.Publish(Teacher, DateTimeOffset.UtcNow);
+			await InsertAsync(services, cancellationVersion);
+			var cancellationRule = new NotificationRule(Guid.NewGuid(), School, EventCancelled,
+				NotificationRuleScope.Create(board.AcademicYearId, board.Id, medium.Id, standard.Id));
+			cancellationRule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(
+				config with { StaffAudienceSelectors = [], TemplateIds = [cancellationHeader.Id] },
+				services.GetRequiredService<AcademicNotificationCatalogue>().Get(EventCancelled)), cancellationRule.ConcurrencyStamp);
+			await InsertAsync(services, cancellationRule);
 
 			foreach (var key in new[] { ClosureDeclared, ClosureChanged })
 			{
@@ -217,6 +231,29 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 				}
 			}
 		});
+
+		using var deleted = await Client.DeleteAsync($"/api/academic/calendar-days/{day.Id}");
+		deleted.StatusCode.ShouldBe(HttpStatusCode.NoContent, await deleted.Content.ReadAsStringAsync());
+		Guid? cancellationOperation = null;
+		await InSchoolAsync(async services =>
+		{
+			var repository = services.GetRequiredService<IRepository<NotificationIntent, Guid>>();
+			var reader = services.GetRequiredService<NotificationIntentSourceReader>();
+			var priorChanges = await repository.GetListAsync(x => x.SourceId == day.Id && x.EventKey == EventChanged);
+			priorChanges.Count.ShouldBe(2);
+			foreach (var prior in priorChanges)
+				(await reader.LoadAsync(prior, DateTimeOffset.UtcNow, CancellationToken.None)).CurrentRecipients.ShouldBeEmpty();
+			var cancellation = (await repository.GetListAsync(x => x.SourceId == day.Id && x.EventKey == EventCancelled)).ShouldHaveSingleItem();
+			var source = await reader.LoadAsync(cancellation, DateTimeOffset.UtcNow, CancellationToken.None);
+			source.CurrentRecipients.ShouldBe([new("Student", StudentId: sibling)]);
+			source.Runtime.SourceScope.DivisionId.ShouldBe(siblingDivision);
+			source.Snapshot!.Variables["event_title"].Value.ShouldBe("Science exhibition");
+			cancellationOperation = cancellation.CampaignId;
+		});
+		using var deniedCancellation = await withoutCalendarView.GetAsync($"/api/academic/notifications/operations/{cancellationOperation}");
+		deniedCancellation.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await deniedCancellation.Content.ReadAsStringAsync());
+		using var allowedCancellation = await Client.GetAsync($"/api/academic/notifications/operations/{cancellationOperation}");
+		allowedCancellation.StatusCode.ShouldBe(HttpStatusCode.OK, await allowedCancellation.Content.ReadAsStringAsync());
 
 		var closurePath = "/api/academic/calendar-days";
 		using var declared = await Client.PostAsJsonAsync($"{closurePath}/emergency-closure", new CreateEmergencyClosureDto

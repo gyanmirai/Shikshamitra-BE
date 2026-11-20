@@ -149,11 +149,15 @@ An archived calendar, a different publication revision or a changed title or dat
 
 The saved rule selects eligible staff and families within those scopes. Recipients who only belong to the previous scope can see the original event details and a notice that they no longer apply. The revised audience can see the new details. Pending delivery checks the calendar's publication revision and the current event rows. History requires Academic Notification View, Calendar Management View and access to the relevant operation scope.
 
+`DELETE /api/academic/calendar-days/{id}` can queue `Academic.Calendar.EventCancelled` for an active event on a published calendar. Capture requires Calendar Management Delete and access to the deleted event's scope. A draft deletion stays silent. Deletion supersedes pending reschedules. The cancellation rechecks the saved deleted row, current recipients, calendar publication and the scheduled date in the school's time zone.
+
 ### Emergency closure notifications
 
 `POST /api/academic/calendar-days/emergency-closure` can queue `Academic.Calendar.EmergencyClosureDeclared` for each saved class or medium and date. `PUT /api/academic/calendar-days/{id}/emergency-closure` can queue `Academic.Calendar.EmergencyClosureChanged` for a date, time or scope change. `POST /api/academic/calendar-days/{id}/cancel-emergency-closure` can queue a reopening notice with the same change event. Capture requires the existing Emergency Closure Add, Edit or Delete permission for the corresponding action and access to the saved scope.
 
 On declaration and material edits, the form's teacher, parent and student choices limit the enabled rule. Teachers come from current subject assignments. Family delivery uses active enrollment, the primary guardian default and the configured options for additional guardians and student accounts. A reopening uses the last saved notification choices. General staff delivery requires a scoped audience that this workflow does not currently provide.
+
+The closure list supplies `notifyTeachers`, `notifyParents` and `notifyStudents` from the saved notification choices so the edit form restores them. Older closures without saved choices return all three as false.
 
 Recipients who belong only to the previous scope see the prior title and date and a notice that the closure no longer applies. The revised audience sees the current date and school-local time. Internal descriptions stay in the closure record. The queue rechecks the latest revision and saved closure status. Reopening suppresses the pending closure notice, and an archived calendar suppresses its notices. Quiet hours remain in effect unless the enabled rule explicitly allows bypass. History requires Academic Notification View, Emergency Closure View and the stored operation scope.
 

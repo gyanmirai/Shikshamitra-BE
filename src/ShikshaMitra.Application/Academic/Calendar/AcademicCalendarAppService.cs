@@ -1087,6 +1087,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         return result;
     }
 
+    [UnitOfWork(isTransactional: true)]
     public async Task DeleteCalendarDayAsync(Guid id)
     {
         var day = await _calendarDayRepository.GetAsync(id);
@@ -1103,6 +1104,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             entityName: day.Title,
             reason: "Day configuration deleted",
             academicCalendarDayId: day.Id);
+
+        if (day.DayType == DayType.Event && day.Status == CalendarDayStatus.Active)
+            await LazyServiceProvider.LazyGetRequiredService<AcademicCalendarEventCancelledNotification>().RecordAsync(day);
     }
 
     // ─── Working Hours ──────────────────────────────────────────────────────
@@ -1317,6 +1321,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         var items = rows.Select(x =>
         {
             var dayImpacts = impacts.Where(i => i.AcademicCalendarDayId == x.day.Id).ToList();
+            var audience = AcademicEmergencyClosureNotificationSource.ReadAudience(x.calendar, x.day.Id);
             return new EmergencyClosureListItemDto
             {
                 Id = x.day.Id,
@@ -1333,6 +1338,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 Status = x.day.Status,
                 ChangeReason = x.day.ChangeReason,
                 AutoScanImpacts = x.day.AutoScanImpacts,
+                NotifyTeachers = audience?.Teachers == true,
+                NotifyParents = audience?.Guardians == true,
+                NotifyStudents = audience?.Students == true,
                 ImpactCount = dayImpacts.Count,
                 PendingImpactCount = dayImpacts.Count(i =>
                     i.Status == CalendarImpactStatus.Pending ||

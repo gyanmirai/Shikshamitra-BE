@@ -81,6 +81,7 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 			(_, AcademicNotificationEventKeys.DiaryFollowUpRequested) => "A follow-up was requested for a submitted teacher diary.",
 			(_, AcademicNotificationEventKeys.CalendarPublished) => "{{event_title}} is now available. Open your school notifications for details.",
 			(_, AcademicNotificationEventKeys.CalendarEventChanged) => "{{event_title}} has changed. Check your school notifications for details.",
+			(_, AcademicNotificationEventKeys.CalendarEventCancelled) => "{{event_title}} on {{event_date}} has been cancelled.",
 			(_, AcademicNotificationEventKeys.CalendarEmergencyClosureDeclared or AcademicNotificationEventKeys.CalendarEmergencyClosureChanged) =>
 				"{{event_title}} on {{event_date}}. {{change_summary}}",
 			(_, AcademicNotificationEventKeys.ProgressBehindSchedule) => "Review the incomplete chapters for {{subject_name}} in {{class_name}} ({{chapter_count}}).",

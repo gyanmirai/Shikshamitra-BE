@@ -8,6 +8,7 @@ using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.Linq;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
@@ -32,12 +33,14 @@ public class PayrollScopedEmployeeResolver(
 	public async Task<List<Employee>> GetScopedPayrollEmployeesAsync(
 		int year,
 		int month,
-		bool includeUnknownStageEmployees)
+		bool includeUnknownStageEmployees) =>
+		await ReadEligibleAsync(await GetScopedEmployeeQueryAsync(includeUnknownStageEmployees), year, month, AsyncExecuter);
+
+	internal static async Task<List<Employee>> ReadEligibleAsync(IQueryable<Employee> employeeQuery, int year, int month, IAsyncQueryableExecuter queries)
 	{
 		var monthStart = DateOnly.FromDateTime(new DateTime(year, month, 1));
 		var monthEnd = PayrollRunRules.GetPayrollMonthEndDate(year, month);
 		var joinedEndExclusive = monthEnd.ToDateTime(TimeOnly.MinValue).AddDays(1);
-		var employeeQuery = await GetScopedEmployeeQueryAsync(includeUnknownStageEmployees);
 		employeeQuery = employeeQuery.Where(employee =>
 			((employee.DateOfJoining.HasValue && employee.DateOfJoining.Value <= monthEnd) ||
 			 (!employee.DateOfJoining.HasValue && employee.CreationTime < joinedEndExclusive)) &&
@@ -48,7 +51,7 @@ public class PayrollScopedEmployeeResolver(
 			    employee.StatusEffectiveDate.Value >= monthStart) ||
 			   (!employee.StatusEffectiveDate.HasValue &&
 			    employee.StatusLastChangedAt.HasValue)))));
-		var candidates = await AsyncExecuter.ToListAsync(
+		var candidates = await queries.ToListAsync(
 			employeeQuery
 				.OrderBy(e => e.FirstName)
 				.ThenBy(e => e.LastName));
@@ -90,6 +93,19 @@ public class PayrollScopedEmployeeResolver(
 	internal async Task<IQueryable<Employee>> GetScopedEmployeeQueryAsync(bool includeUnknownStageEmployees)
 	{
 		var scope = await EnsureCanOperatePayrollAsync();
+		return await BuildEmployeeQueryAsync(scope, includeUnknownStageEmployees);
+	}
+
+	internal async Task<IQueryable<Employee>> GetEmployeeQueryForUserAsync(Guid userId)
+	{
+		var scope = await userScopeService.GetUserScopeAsync(userId);
+		if (scope.TenantId != CurrentTenant.Id || !HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
+			throw new Volo.Abp.Authorization.AbpAuthorizationException();
+		return await BuildEmployeeQueryAsync(scope, false);
+	}
+
+	private async Task<IQueryable<Employee>> BuildEmployeeQueryAsync(UserScopeContext scope, bool includeUnknownStageEmployees)
+	{
 		var employeeQuery = await hrEmployeeScopeQueryService.BuildScopedEmployeeQueryAsync(scope);
 		if (includeUnknownStageEmployees || HrUserScopeAccess.HasHrWideAccess(scope))
 		{

@@ -131,7 +131,8 @@ public class PayrollPreviewBackgroundJob(
 				var items = (await snapshots.GetByMonthAsync(internalMonth)).Where(x => ids.Contains(x.EmployeeId)).Select(PayrollRunProjection.ToItem).ToList();
 				if (items.Count != ids.Count) throw new BusinessException(HRErrorCodes.PayrollPreviewFailed);
 				await results.InsertManyAsync(items.Select(item => new PayrollPreviewEmployee(Guid.NewGuid(), tenant.Id,
-					run.Id, item.EmployeeId, item.EmployeeName, item.EmployeeIdentifier, JsonSerializer.Serialize(item))), autoSave: true);
+					run.Id, item.EmployeeId, item.EmployeeName, item.EmployeeIdentifier, JsonSerializer.Serialize(item),
+					(decimal) item.PayableDays, (decimal) item.NetPay, (decimal?) item.NetPayDelta, item.IssueCodes.ToArray())), autoSave: true);
 				if (await revisions.LockAsync() != run.InputRevision) throw new BusinessException(HRErrorCodes.PayrollPreviewStale);
 				await checkLease();
 				var current = await runs.GetAsync(run.Id);

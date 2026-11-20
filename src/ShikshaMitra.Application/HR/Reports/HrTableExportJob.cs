@@ -62,6 +62,9 @@ public class HrTableExportJob(IRepository<HrReportRun, Guid> runs, IRepository<H
 				await cancellation.EnsureActiveAsync(current);
 				var page = await sources.ReadAsync(request, offset, 100);
 				if (page.Total > HrReportingEngine.MaximumPopulation) throw new BusinessException(HRErrorCodes.ReportPopulationTooLarge);
+				if (offset == 0 && request.Table == "hr-salary-documents" &&
+					page.Envelope.TryGetProperty("queryWarnings", out var notices))
+					result.Warnings.AddRange(notices.Deserialize<List<string>>()?.Take(1) ?? []);
 				foreach (var item in page.Rows)
 				{
 					result.Rows.Add(request.Columns.ToDictionary(x => x.Id, x => {
@@ -77,6 +80,8 @@ public class HrTableExportJob(IRepository<HrReportRun, Guid> runs, IRepository<H
 				if ((page.Rows.Count == 0 && !page.NextOffset.HasValue) || offset > HrReportingEngine.MaximumPopulation) throw HrReportingEngine.Invalid("The table source returned an incomplete population. Retry the export.");
 			}
 			result.EmployeeIds = staff.ToList();
+			if (request.Table == "hr-salary-documents")
+				result.Warnings.Add($"{result.Rows.Count} issued rows included in this report.");
 			result.Totals = await sources.TotalsAsync(request, result);
 			result.EmployeeCodes = codes.ToList();
 			var identity = await executor.FirstOrDefaultAsync(await settings.GetQueryableAsync());
@@ -90,7 +95,8 @@ public class HrTableExportJob(IRepository<HrReportRun, Guid> runs, IRepository<H
 			}
 			await cancellation.EnsureActiveAsync(current);
 			current.Complete(args.AttemptId, result.Rows.Count, JsonSerializer.Serialize(new HrReportingResult {
-				Columns = result.Columns, Totals = result.Totals, EmployeeIds = result.EmployeeIds, EmployeeCodes = result.EmployeeCodes, SchoolName = result.SchoolName, SchoolAddress = result.SchoolAddress
+				Columns = result.Columns, Totals = result.Totals, EmployeeIds = result.EmployeeIds, EmployeeCodes = result.EmployeeCodes,
+				SchoolName = result.SchoolName, SchoolAddress = result.SchoolAddress, Warnings = result.Warnings
 			}, HrReportingEngine.Json));
 			var bytes = request.Format == "pdf" ? HrReportingDocumentWriter.Pdf(current, result) : HrReportingDocumentWriter.Excel(current, result);
 			foreach (var (chunk, index) in result.Rows.Chunk(200).Select((chunk, index) => (chunk, index)))

@@ -16,7 +16,8 @@ namespace ShikshaMitra.HR.Reports;
 
 public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> documents,
 	IRepository<SalarySlip, Guid> slips,
-	HrReportEmployeeQueryService employees, IAsyncQueryableExecuter executer) : ITransientDependency
+	HrReportEmployeeQueryService employees, PayrollScopedEmployeeResolver payrollScope, PayrollMonthCoverageReader coverage,
+	IAsyncQueryableExecuter executer) : ITransientDependency
 {
 	public async Task<HrReportRowsResult> BuildAsync(HrReportRequestDto input, UserScopeContext scope, bool exportAllRows)
 	{
@@ -67,8 +68,9 @@ public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> d
 		var warnings = new List<string>();
 		if (!statement)
 		{
-			var matching = await executer.CountAsync(staff);
-			if (matching > total) warnings.Add($"{matching - total} matching staff have no saved payroll for this month and are unavailable. They are excluded from totals.");
+			var monthCoverage = await coverage.ReadAsync(firstMonth, await payrollScope.GetEmployeeQueryForUserAsync(scope.UserId));
+			warnings.Add($"{monthCoverage.Issued} of {monthCoverage.EligibleOrIssued} staff finalized.");
+			warnings.Add($"{total} issued staff included in this report.");
 		}
 		var take = exportAllRows ? HrReportRequestProcessor.MaxExportRows : input.PageSize;
 		var skip = exportAllRows ? 0 : (input.Page - 1) * input.PageSize;

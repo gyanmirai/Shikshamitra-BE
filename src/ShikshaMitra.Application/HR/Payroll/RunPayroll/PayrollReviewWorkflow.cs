@@ -17,6 +17,7 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 [RemoteService(false)]
 public class PayrollReviewWorkflow(
 	PayrollPreviewReviewGuard previewGuard,
+	IRepository<PayrollEmployeeClaim, Guid> claims,
 	ISalarySlipRepository salarySlipRepository,
 	IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
@@ -38,6 +39,7 @@ public class PayrollReviewWorkflow(
 		var operationKey = GetOperationKey(request, action);
 
 		var targetEmployees = await scopedEmployeeResolver.ResolveScopedTargetEmployeesAsync(year, month, employeeIds);
+		await EnsureUnclaimedAsync(internalMonthYear, employeeIds);
 		if (await FindRecordedOperationAsync(request.PreviewRunId, operationKey) is { } recorded)
 			return BuildResponse(request.Month, action, recorded);
 		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
@@ -99,6 +101,7 @@ public class PayrollReviewWorkflow(
 		const string action = "review_removed";
 		var operationKey = GetOperationKey(request, action);
 		var targetEmployees = await scopedEmployeeResolver.ResolveScopedTargetEmployeesAsync(year, month, employeeIds);
+		await EnsureUnclaimedAsync(internalMonthYear, employeeIds);
 		if (await FindRecordedOperationAsync(request.PreviewRunId, operationKey) is { } recorded)
 			return BuildResponse(request.Month, action, recorded);
 		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
@@ -137,6 +140,12 @@ public class PayrollReviewWorkflow(
 		}
 
 		return await SaveReviewAsync(request, academicYearId, $"{year:0000}-{month:00}", action, removed, operationKey);
+	}
+
+	private async Task EnsureUnclaimedAsync(string month, List<Guid> ids)
+	{
+		if (await claims.AnyAsync(x => x.Month == month && x.SubmissionId.HasValue && ids.Contains(x.EmployeeId)))
+			throw new BusinessException("PAYROLL_EMPLOYEE_ALREADY_SUBMITTED");
 	}
 
 	private string? GetOperationKey(PayrollRunReviewRequest request, string action)

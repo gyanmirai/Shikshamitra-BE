@@ -26,8 +26,15 @@ public class PayrollPreviewEmployeeConfiguration : IEntityTypeConfiguration<Payr
 		b.Property(x => x.EmployeeName).HasMaxLength(256).IsRequired();
 		b.Property(x => x.EmployeeCode).HasMaxLength(64).IsRequired();
 		b.Property(x => x.ItemJson).IsRequired();
+		b.Property(x => x.PayableDays).HasPrecision(18, 2);
+		b.Property(x => x.NetPay).HasPrecision(18, 2);
+		b.Property(x => x.NetPayDelta).HasPrecision(18, 2);
+		b.Property(x => x.RegisterIssueCodes).IsRequired().HasDefaultValueSql("ARRAY[]::text[]");
 		b.HasIndex(x => new { x.RunId, x.EmployeeId }).IsUnique();
 		b.HasIndex(x => new { x.RunId, x.EmployeeName, x.EmployeeId });
+		b.HasIndex(x => new { x.RunId, x.PayableDays, x.EmployeeId });
+		b.HasIndex(x => new { x.RunId, x.NetPay, x.EmployeeId });
+		b.HasIndex(x => new { x.RunId, x.NetPayDelta, x.EmployeeId });
 		b.HasOne<PayrollPreviewRun>().WithMany().HasForeignKey(x => x.RunId).OnDelete(DeleteBehavior.Cascade);
 	}
 }

@@ -17768,6 +17768,122 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("HR_PayrollAdjustments", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.RunPayroll.PayrollApprovalSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("AllowSelfFinalization")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("ApproverId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique();
+
+                    b.ToTable("HR_PayrollApprovalSettings", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.RunPayroll.PayrollCommandReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Command")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("Key")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ResultId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "ActorId", "Command", "Key")
+                        .IsUnique();
+
+                    b.ToTable("HR_PayrollCommandReceipts", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.RunPayroll.PayrollEmployeeClaim", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Generation")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Month")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<Guid?>("SubmissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmissionId");
+
+                    b.HasIndex("TenantId", "Month", "EmployeeId")
+                        .IsUnique();
+
+                    b.ToTable("HR_PayrollEmployeeClaims", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.RunPayroll.PayrollInputRevision", b =>
                 {
                     b.Property<Guid>("Id")
@@ -17859,6 +17975,24 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<decimal?>("NetPay")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("NetPayDelta")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal?>("PayableDays")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.PrimitiveCollection<string[]>("RegisterIssueCodes")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasDefaultValueSql("ARRAY[]::text[]");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("uuid");
 
@@ -17872,6 +18006,12 @@ namespace ShikshaMitra.Migrations
                         .IsUnique();
 
                     b.HasIndex("RunId", "EmployeeName", "EmployeeId");
+
+                    b.HasIndex("RunId", "NetPay", "EmployeeId");
+
+                    b.HasIndex("RunId", "NetPayDelta", "EmployeeId");
+
+                    b.HasIndex("RunId", "PayableDays", "EmployeeId");
 
                     b.ToTable("HR_PayrollPreviewEmployees", (string)null);
                 });
@@ -18216,6 +18356,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<int?>("ProvidentFundRuleVersion")
                         .HasColumnType("integer");
 
+                    b.PrimitiveCollection<string[]>("RegisterIssueCodes")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text[]")
+                        .HasDefaultValueSql("ARRAY[]::text[]");
+
                     b.Property<string>("ReviewStatus")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -18346,6 +18492,127 @@ namespace ShikshaMitra.Migrations
                         .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("HR_PayrollRunReviews", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.RunPayroll.PayrollSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApproverId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<Guid>("InputRevision")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Month")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<decimal>("NetPay")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("PreviousSubmissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReasonCode")
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("SelfFinalization")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("SettingsVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SourceRunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("StaffCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SubmitterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Month", "ApproverId", "SubmittedAt");
+
+                    b.HasIndex("TenantId", "Month", "SubmitterId", "SubmittedAt");
+
+                    b.ToTable("HR_PayrollSubmissions", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.RunPayroll.PayrollSubmissionEmployee", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EvidenceDigest")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<decimal>("NetPay")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("PreviewEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PreviewEmployeeId");
+
+                    b.HasIndex("SubmissionId", "EmployeeId")
+                        .IsUnique();
+
+                    b.ToTable("HR_PayrollSubmissionEmployees", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.SalarySlips.PayslipCorrection", b =>
@@ -44331,12 +44598,35 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.RunPayroll.PayrollEmployeeClaim", b =>
+                {
+                    b.HasOne("ShikshaMitra.HR.Payroll.RunPayroll.PayrollSubmission", null)
+                        .WithMany()
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.RunPayroll.PayrollPreviewEmployee", b =>
                 {
                     b.HasOne("ShikshaMitra.HR.Payroll.RunPayroll.PayrollPreviewRun", null)
                         .WithMany()
                         .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.RunPayroll.PayrollSubmissionEmployee", b =>
+                {
+                    b.HasOne("ShikshaMitra.HR.Payroll.RunPayroll.PayrollPreviewEmployee", null)
+                        .WithMany()
+                        .HasForeignKey("PreviewEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.HR.Payroll.RunPayroll.PayrollSubmission", null)
+                        .WithMany()
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

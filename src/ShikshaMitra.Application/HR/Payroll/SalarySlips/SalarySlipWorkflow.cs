@@ -24,6 +24,7 @@ public class SalarySlipWorkflow(
 	EsiContinuityInvalidator continuityInvalidator,
 	PayslipIssuanceService issuance,
 	PayslipFinalizationGuard finalizationGuard,
+	PayrollApprovalAccess approvalAccess,
 	ILogger<SalarySlipAppService> logger)
 	: ApplicationService
 {
@@ -123,6 +124,7 @@ public class SalarySlipWorkflow(
 	{
 		logger.LogInformation("FinalizeSalarySlip request - Id: {Id}", id);
 		await revisions.LockAsync();
+		await approvalAccess.EnsureLegacyIssuanceAsync();
 
 		var salarySlip = await salarySlipRepository.GetAsync(id);
 		await accessService.EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);

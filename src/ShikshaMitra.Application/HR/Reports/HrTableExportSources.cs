@@ -84,6 +84,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		["hr-attendance-register"] = ["employeeName", "present", "exceptions", "employeeGroup", "department", "editability"],
 		["hr-manual-attendance"] = ["employeeCode", "employeeName", "fullName", "attendanceDate", "attendanceStatus", "status", "inTime", "outTime", "timeIn", "timeOut", "remarks", "errors", "warnings"],
 		["payroll-monthly-workbench-table"] = ["employeeName", "payableDays", "fullGrossSalary", "grossSalary", "additionalEarnings", "totalEarnings", "totalDeduction", "netSalary", "previousMonthNetPay", "netPayDelta", "issueFilter", "status"],
+		[PayrollReviewSheetSource.Table] = PayrollReviewSheetSource.Fields,
 		["hr-payroll-registration-readiness"] = ["employeeCode", "employeeName", "applyPf", "applyEsic", "effectiveMonth"],
 		["esi-employee-impact"] = ["employeeName", "coverageDecisionLabel", "enrollmentStatus", "statutoryWages", "employeeContribution", "employerContribution", "readiness"],
 		["hr-policy-calendar"] = ["name", "effective", "weeklyRule", "holidayCount", "version", "updatedAt", "status"],
@@ -106,6 +107,8 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		// Selection query access must not admit a generic captured export or an old artifact.
 		if (request.Table == "employee-icard-selection-table")
 			throw HrReportingEngine.Invalid("Export selected staff through the I-card document workflow.");
+		if (request.Table == PayrollReviewSheetSource.Table && ReportingCriteria(request).HasCriteria)
+			throw HrReportingEngine.Invalid("A payroll review sheet must contain the exact staff selection.");
 	}
 	public async Task EnsureAccessAsync(HrTableExportRequest request)
 	{
@@ -243,6 +246,11 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			return new(history.Items.Select(x => JsonSerializer.SerializeToElement(x, Json)).ToList(), offset + size + (history.HasMore ? 1 : 0), offset + size);
 		}
 		var q = JsonNode.Parse(request.Query.GetRawText())!.AsObject();
+		if (request.Table == PayrollReviewSheetSource.Table)
+		{
+			var review = await Service<PayrollReviewSheetSource>().VerifyAsync(request.Query);
+			return new(review.Items.Skip(offset).Take(size).Select(item => JsonSerializer.SerializeToElement(item, Json)).ToList(), review.Items.Count);
+		}
 		foreach (var entry in q.ToList())
 			if (entry.Value is JsonValue value && value.TryGetValue<string>(out var text) && string.IsNullOrWhiteSpace(text)) q.Remove(entry.Key);
 		if (request.Table is "hr-shifts" or "hr-professional-tax") q.Remove("sorting");
@@ -278,6 +286,14 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			"employee-onboarding-table" => await Service<IEmployeeApplicationAppService>().GetListAsync(Input<GetEmployeeApplicationListInput>()),
 			"hr-attendance-register" => await Service<IAttendanceRegisterAppService>().GetGroupedAsync(Input<GetGroupedAttendanceRegisterInput>()),
 			"hr-manual-attendance" => await Service<ITakeAttendanceAppService>().GetDayAsync(Input<GetTakeAttendanceDayInput>()),
+			"payroll-monthly-workbench-table" when q["month"] != null => await Service<IPayrollPreviewRunAppService>()
+				.GetRegisterAsync(new PayrollRegisterInput
+				{
+					Month = q["month"]!.ToString(), AcademicYearId = OptionalId("academicYearId"),
+					Page = offset / size, PageSize = size, Search = q["search"]?.ToString(),
+					Sort = q["sort"]?.ToString(), Descending = q["descending"]?.GetValue<bool>() == true,
+					ReviewState = q["reviewState"]?.ToString(), IssueClass = q["issueClass"]?.ToString(), IssueCode = q["issueCode"]?.ToString()
+				}),
 			"payroll-monthly-workbench-table" => await Service<IPayrollPreviewRunAppService>().GetEmployeesAsync(RequiredId("runId"), new PayrollPreviewPageInput { Page = offset / size, PageSize = size, Search = q["search"]?.ToString() }),
 			"hr-payroll-registration-readiness" => await Service<IEmployeeStatutoryProfileAppService>().GetReadinessAsync(q["month"]?.ToString(), offset / size + 1, size, q["search"]?.ToString()),
 			"esi-employee-impact" => await ReadEsiAsync(q, offset, size),
@@ -372,8 +388,8 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			return original.Totals.Where(x => result.Columns.Any(c => c.Id == x.Key)).ToDictionary(x => x.Key, x => x.Value);
 		}
 		var sumAllNumbers = request.Table is "payroll-monthly-workbench-table" or "esi-employee-impact" or "hr-salary-documents" or "hr-attendance-register" or "hr-attendance-imports";
-		if (!sumAllNumbers) return [];
-		return result.Columns.Where(x => x.Type is "number" or "money").ToDictionary(x => x.Id, x =>
+		if (!sumAllNumbers && request.Table != PayrollReviewSheetSource.Table) return [];
+		return result.Columns.Where(x => x.Type == "money" || (sumAllNumbers && x.Type == "number")).ToDictionary(x => x.Id, x =>
 		{
 			var available = result.Rows.Select(row => row.GetValueOrDefault(x.Id)).Where(value => value != null).Select(value => decimal.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Number, CultureInfo.InvariantCulture, out var number) ? (decimal?) number : null).Where(value => value.HasValue).ToList();
 			return available.Count > 0 ? available.Sum() : null;
@@ -389,6 +405,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			"hr-attendance-register" => "Staff attendance register",
 			"hr-manual-attendance" => "Daily attendance",
 			"payroll-monthly-workbench-table" => "Payroll register",
+			PayrollReviewSheetSource.Table => PayrollReviewSheetSource.Title,
 			"hr-payroll-registration-readiness" => "Payroll registration readiness",
 			"esi-employee-impact" => "ESIC staff register",
 			"hr-policy-calendar" => "Work calendars",
@@ -416,11 +433,20 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			_ => "HR table"
 		};
 		var p = new HrReportParametersDto { TimeZone = timezone };
+		if (request.Table == PayrollReviewSheetSource.Table)
+		{
+			var sheet = await Service<PayrollReviewSheetSource>().VerifyAsync(query);
+			var start = DateOnly.ParseExact(sheet.Month + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture);
+			p.FromDate = start;
+			p.ToDate = start.AddMonths(1).AddDays(-1);
+			p.EmployeeIds = sheet.Items.Select(x => x.EmployeeId).ToList();
+			return (name, p, "Pending finalization. For payroll review only.");
+		}
 		if (query.TryGetProperty("academicYearId", out var year) && year.ValueKind == JsonValueKind.String && Guid.TryParse(year.GetString(), out var yearId)) p.AcademicYearId = yearId;
 		if (request.Table == "hr-generated-report") { var original = await Service<IHrReportingWorkspaceAppService>().GetAsync(query.GetProperty("runId").GetGuid()); return (original.Name, original.Parameters, "Captured report rows matching table search and filters; visible ordered data columns. Original report totals are omitted for filtered exports."); }
-		if (request.Table == "payroll-monthly-workbench-table")
+		if (request.Table == "payroll-monthly-workbench-table" && query.TryGetProperty("runId", out var payrollRun))
 		{
-			var run = await Service<IPayrollPreviewRunAppService>().GetAsync(query.GetProperty("runId").GetGuid());
+			var run = await Service<IPayrollPreviewRunAppService>().GetAsync(payrollRun.GetGuid());
 			if (DateOnly.TryParse(run.Month + "-01", out var month)) { p.FromDate = month; p.ToDate = month.AddMonths(1).AddDays(-1); }
 		}
 		if (request.Table == "hr-salary-documents" && query.TryGetProperty("filters", out var filters)) query = filters;

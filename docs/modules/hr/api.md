@@ -256,7 +256,8 @@ Do not deploy this contract until the additive migration, PostgreSQL concurrency
 
 | Operation | Contract |
 |---|---|
-| `POST /api/payroll/run/previews` | Accepts `month`, optional `academicYearId`, and `refresh`; returns HTTP 202 and the authorized run status |
+| `POST /api/payroll/run/previews` | Accepts `month`, optional `academicYearId`, `refresh`, and `commandKey`. Returns HTTP 202 and the authorized run status. A matching command key returns its original run. |
+| `GET /api/payroll/run/previews/current` | Accepts `month` and optional `academicYearId`. Returns `currentRun` with the latest status for the exact authorized preview scope, or `null` when no matching run exists. An active or failed run may include `lastCompletedRunId`. The lookup does not change runs, calculation inputs, or jobs. |
 | `GET /api/payroll/run/previews/{id}` | Returns status, completed employee count, timestamps, freshness, and safe failure information |
 | `GET /api/payroll/run/previews/{id}/employees` | Accepts zero-based `page`, `pageSize` from 1 to 100, and trimmed `search`; returns one page plus unfiltered authorized-population readiness |
 | Review and lock | Require `previewRunId` and explicit selected `employeeIds`; stale inputs return HTTP 409 with `PAYROLL_PREVIEW_STALE` |
@@ -269,6 +270,31 @@ Attendance, HR policy/calendar, compensation, employment, enrollment, and manual
 Calculator-generated adjustments are outputs and do not invalidate their own calculation.
 Review markers identify the exact generation, and locking retains the revision fence and owner-checked month lease until commit.
 Finalized employees are excluded before recalculation.
+
+### Payroll register and approval
+
+| Operation | Contract |
+|---|---|
+| `GET /api/payroll/run/register` | Uses Run Payroll View and current staff scope. Accepts month, academic year, zero-based paging, staff name or code search, review state, issue class or code, and one sort. Counts eligible staff plus issued staff before filtering. |
+| `GET /api/payroll/run/approval-settings` | Returns the school's Legacy, Active or Paused mode and its settings version. |
+| `GET /api/payroll/run/approval-settings/approvers` | Requires ManageWorkflow and school-wide HR scope. Searches active users with payroll view and lock permissions. |
+| `PUT /api/payroll/run/approval-settings` and `POST /api/payroll/run/approval-settings/{activate,pause,resume}` | Require ManageWorkflow, school-wide scope, a reason and the expected settings version. |
+| `GET /api/payroll/run/submissions` and `GET /api/payroll/run/submissions/{id}` | Show batches to currently authorized participants who cover every employee in the batch. The read may mark evidence stale in the response while preserving the saved state. |
+| `POST /api/payroll/run/submissions` | Requires Submit, exact reviewed staff IDs, current preview evidence and a command key. The server checks that the designated approver covers every selected employee. |
+| `POST /api/payroll/run/submissions/{id}/{finalize,return,withdraw,return-stale}` | Requires the expected batch version, command key and the relevant current permission and scope. All financial writes for one batch share a transaction. |
+| `POST /api/hr/table-exports` with `table=payroll-review-sheet` | Requires Run Payroll ExportReview and View. Exports an exact reviewed preview selection or the exact pending submission version in Excel or PDF. |
+
+Active and Paused schools use the approval boundary for payroll issuance.
+Self-finalization requires the school setting and current Add, Submit and Lock permissions.
+If evidence changes, the assigned approver's finalization attempt returns the whole batch for fresh review and releases its claims.
+An earlier finalized batch keeps its original payslips.
+Review sheets display Pending finalization, and a new staff claim permanently revokes earlier selection exports.
+Submitted review sheets remain valid while the exact version is pending, current and accessible to the requester.
+The official salary register uses issued records and records capture-time month coverage separately from included rows.
+
+Apply both payroll workflow and register criteria migrations before starting the updated APIs and preview workers.
+Drain the older preview workers before the migration so every new result writes the typed register fields.
+For a multi-instance deployment, the payroll API and export workers need the same retained ASP.NET Core Data Protection key ring.
 
 Salary structure templates are tenant-scoped, versioned calculation definitions.
 Exactly one Basic earning is required, while an explicitly designated balancing earning is optional.

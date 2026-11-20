@@ -49,6 +49,7 @@ public class PayrollRunItemSnapshotConfiguration : IEntityTypeConfiguration<Payr
 		builder.Property(x => x.EmployeeStateInsuranceNumber).HasMaxLength(100);
 
 		builder.Property(x => x.IssueCodesJson).HasColumnType("jsonb");
+		builder.Property(x => x.RegisterIssueCodes).IsRequired().HasDefaultValueSql("ARRAY[]::text[]");
 		builder.Property(x => x.HolidayImpactJson).HasColumnType("jsonb");
 		builder.Property(x => x.AttendancePolicyWarningsJson).HasColumnType("jsonb");
 		builder.Property(x => x.EarningComponentsJson).HasColumnType("jsonb");

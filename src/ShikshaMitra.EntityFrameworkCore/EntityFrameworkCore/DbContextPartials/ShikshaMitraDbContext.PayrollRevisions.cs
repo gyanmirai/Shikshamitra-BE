@@ -14,6 +14,11 @@ public partial class ShikshaMitraDbContext
 	public DbSet<PayrollPreviewRun> PayrollPreviewRuns { get; set; }
 	public DbSet<PayrollPreviewEmployee> PayrollPreviewEmployees { get; set; }
 	public DbSet<PayrollInputRevision> PayrollInputRevisions { get; set; }
+	public DbSet<PayrollApprovalSettings> PayrollApprovalSettings { get; set; }
+	public DbSet<PayrollSubmission> PayrollSubmissions { get; set; }
+	public DbSet<PayrollSubmissionEmployee> PayrollSubmissionEmployees { get; set; }
+	public DbSet<PayrollEmployeeClaim> PayrollEmployeeClaims { get; set; }
+	public DbSet<PayrollCommandReceipt> PayrollCommandReceipts { get; set; }
 
 	public override int SaveChanges(bool acceptAllChangesOnSuccess)
 	{
@@ -70,6 +75,7 @@ public partial class ShikshaMitraDbContext
 			&& !ns.StartsWith("ShikshaMitra.HR.Payroll.RunPayroll", StringComparison.Ordinal)
 			&& !ns.StartsWith("ShikshaMitra.HR.Payroll.SalarySlips", StringComparison.Ordinal)
 			&& !ns.StartsWith("ShikshaMitra.HR.Audit", StringComparison.Ordinal)
+			&& !ns.StartsWith("ShikshaMitra.HR.Reports", StringComparison.Ordinal)
 			&& !ns.StartsWith("ShikshaMitra.HR.Dashboard", StringComparison.Ordinal))
 			|| ns.StartsWith("ShikshaMitra.TenantSettings.AcademicYears", StringComparison.Ordinal)
 			|| ns.StartsWith("ShikshaMitra.Security.UserScope", StringComparison.Ordinal)

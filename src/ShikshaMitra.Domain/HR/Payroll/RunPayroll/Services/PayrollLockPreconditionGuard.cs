@@ -71,10 +71,15 @@ public static class PayrollLockPreconditionGuard
 		return issues.Any(IsBlockingLockIssue);
 	}
 
-	public static bool IsBlockingLockIssue(string issue) => issue is
-		IssueCodes.NoAttendance or IssueCodes.MissingSalaryStructure or IssueCodes.NegativeNetPay or
-		IssueCodes.AttendanceSalaryDeductionConfiguration or IssueCodes.PayrollPolicyConfiguration or
-		"PF_WAGE_BASIS_REQUIRED" or "PF_MEMBERSHIP_REVIEW_REQUIRED" or "PF_ENROLLMENT_REQUIRED" or "PF_CONSENT_REQUIRED" or "PF_ESTABLISHMENT_NOT_COVERED" or "ESI_BASIC_COMPONENT_REQUIRED" or "ESI_COMPONENT_REQUIRED" or IssueCodes.NoWorkingDays or IssueCodes.EsiEstablishmentInactive or IssueCodes.EsiWageClassificationRequired or
-		IssueCodes.EsiEnrollmentReviewRequired or
-		IssueCodes.CompensationRevisionRequired or IssueCodes.CompensationTargetVariance;
+	public static IReadOnlyList<string> BlockingIssueCodes { get; } = Array.AsReadOnly(new[]
+	{
+		IssueCodes.NoAttendance, IssueCodes.MissingSalaryStructure, IssueCodes.NegativeNetPay,
+		IssueCodes.AttendanceSalaryDeductionConfiguration, IssueCodes.PayrollPolicyConfiguration,
+		"PF_WAGE_BASIS_REQUIRED", "PF_MEMBERSHIP_REVIEW_REQUIRED", "PF_ENROLLMENT_REQUIRED", "PF_CONSENT_REQUIRED",
+		"PF_ESTABLISHMENT_NOT_COVERED", "ESI_BASIC_COMPONENT_REQUIRED", "ESI_COMPONENT_REQUIRED",
+		IssueCodes.NoWorkingDays, IssueCodes.EsiEstablishmentInactive, IssueCodes.EsiWageClassificationRequired,
+		IssueCodes.EsiEnrollmentReviewRequired, IssueCodes.CompensationRevisionRequired, IssueCodes.CompensationTargetVariance
+	});
+
+	public static bool IsBlockingLockIssue(string issue) => BlockingIssueCodes.Contains(issue);
 }

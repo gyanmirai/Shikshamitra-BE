@@ -1,15 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Communication.Notifications;
 using Shouldly;
 using Xunit;
+using Xunit.Abstractions;
 using static ShikshaMitra.Communication.Notifications.AcademicNotificationEventKeys;
 
 namespace ShikshaMitra.Academic.Notifications;
 
-public sealed class AcademicNotificationSourceCoverage_Tests
+public sealed class AcademicNotificationSourceCoverage_Tests(ITestOutputHelper output)
 	: ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private static readonly (string Reason, string[] Events)[] PendingSources =
@@ -35,7 +37,8 @@ public sealed class AcademicNotificationSourceCoverage_Tests
 		var catalogue = GetRequiredService<AcademicNotificationCatalogue>();
 		var events = catalogue.GetAll();
 		var sources = ServiceProvider.GetServices<INotificationSourceAdapter>()
-			.SelectMany(source => source.EventKeys).ToLookup(key => key, StringComparer.Ordinal);
+			.SelectMany(source => source.EventKeys.Select(key => (Key: key, Adapter: source.GetType().Name)))
+			.ToLookup(row => row.Key, row => row.Adapter, StringComparer.Ordinal);
 		var historyPolicies = ServiceProvider.GetServices<IAcademicNotificationSourceAuthorizer>()
 			.SelectMany(policy => policy.EventKeys).ToLookup(key => key, StringComparer.Ordinal);
 		var schedulers = ServiceProvider.GetServices<INotificationDueSource>().ToArray();
@@ -44,6 +47,13 @@ public sealed class AcademicNotificationSourceCoverage_Tests
 
 		var unavailable = events.Where(x => !catalogue.GetAvailability(x.EventKey).IsAvailable).Select(x => x.EventKey);
 		unavailable.Order(StringComparer.Ordinal).ShouldBe(gaps.Keys.Order(StringComparer.Ordinal));
+		using var manifest = typeof(AcademicNotificationSourceCoverage_Tests).Assembly.GetManifestResourceStream("AcademicNotificationCoverage.md");
+		using var reader = new StreamReader(manifest.ShouldNotBeNull());
+		var documented = reader.ReadToEnd().Split('\n')
+			.Where(line => line.StartsWith("| `Academic.", StringComparison.Ordinal))
+			.SelectMany(line => line.Split('|')[1].Split('`').Where(value => value.StartsWith("Academic.", StringComparison.Ordinal)));
+		documented.Order(StringComparer.Ordinal).ShouldBe(events
+			.Where(row => catalogue.GetAvailability(row.EventKey).IsAvailable).Select(row => row.EventKey).Order(StringComparer.Ordinal));
 		foreach (var definition in events)
 		{
 			var key = definition.EventKey;
@@ -59,6 +69,7 @@ public sealed class AcademicNotificationSourceCoverage_Tests
 			historyPolicies[key].Count().ShouldBe(1, key);
 			if (definition.TriggerType == NotificationTriggerType.Due)
 				schedulers.Any(x => x.SourceType == definition.SourceType && x.ScheduledEventKeys.Contains(key)).ShouldBeTrue(key);
+			output.WriteLine($"{key} | {definition.TriggerType} | {sources[key].Single()} | schema {definition.SchemaVersion}");
 		}
 	}
 }

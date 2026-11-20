@@ -8,6 +8,7 @@ using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.Portal;
@@ -22,13 +23,14 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 using Volo.Abp.Security.Claims;
 using Xunit;
+using ClassTeacherRecord = ShikshaMitra.Academic.ClassTeacher.ClassTeacher;
 
 namespace ShikshaMitra.Academic.StudentAcademic360;
 
 public sealed class Student360NotificationAccess_Tests : SubjectTeacherReassignmentTestBase
 {
 	[Fact]
-	public async Task Student_360_read_is_silent_and_only_the_reviewed_family_receives_the_send()
+	public async Task Student_360_messages_and_meeting_requests_queue_only_the_reviewed_family_and_selected_teacher()
 	{
 		GetRequiredService<IConfiguration>()["App:ClientUrl"] = "https://school.example.invalid";
 		using var school = Tenant.Change(TenantId, "Synthetic school");
@@ -38,6 +40,8 @@ public sealed class Student360NotificationAccess_Tests : SubjectTeacherReassignm
 		var studentId = Guid.NewGuid();
 		var father = Guid.NewGuid();
 		var self = Guid.NewGuid();
+		var studentReference = new NotificationRecipientRefDto("Student", StudentId: studentId);
+		NotificationRecipientRefDto classTeacher = null!;
 		await WithUnitOfWorkAsync(async () =>
 		{
 			await SeedAllocationAsync();
@@ -56,6 +60,10 @@ public sealed class Student360NotificationAccess_Tests : SubjectTeacherReassignm
 			StudentFamilyContactSelection.Select(student, "mother", family);
 			await GetRequiredService<IRepository<Student, Guid>>().InsertAsync(student, autoSave: true);
 			await GetRequiredService<IRepository<StudentFamilyDetail, Guid>>().InsertAsync(family, autoSave: true);
+			var teacher = await GetRequiredService<IRepository<Employee, Guid>>().GetAsync(OldTeacher);
+			classTeacher = new("ClassTeacher", UserId: teacher.UserId, EmployeeId: teacher.Id);
+			await GetRequiredService<IRepository<ClassTeacherRecord, Guid>>().InsertAsync(
+				new(Guid.NewGuid(), TenantId, StandardId, DivisionId, teacher.Id, medium.Id), autoSave: true);
 			foreach (var (userId, accountType, relationship) in new[]
 			{
 				(father, "guardian", "father"), (self, "student", "self")
@@ -66,15 +74,9 @@ public sealed class Student360NotificationAccess_Tests : SubjectTeacherReassignm
 				await GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().InsertAsync(
 					new StudentPortalAccountLink(Guid.NewGuid(), TenantId, studentId, userId, accountType, relationship, ActorId), autoSave: true);
 			}
-			var template = new CommunicationTemplate(Guid.NewGuid(), TenantId) { TemplateName = "Academic message" };
-			var revision = new CommunicationTemplateRevision(Guid.NewGuid(), TenantId, template.Id, 1,
-				AcademicNotificationEventKeys.Student360GuardianMessage, "Guardian", CommunicationChannelType.InApp, "en",
-				"Academic update from {{school_name}}", "Hello {{recipient_name}}. Please contact the school. {{source_link}}", 1);
-			revision.Publish(ActorId, DateTimeOffset.UtcNow);
-			await GetRequiredService<IRepository<CommunicationTemplate, Guid>>().InsertAsync(template, autoSave: true);
-			await GetRequiredService<IRepository<CommunicationTemplateRevision, Guid>>().InsertAsync(revision, autoSave: true);
-			template.SetNotificationRevision(revision.Id);
-			await GetRequiredService<IRepository<CommunicationTemplate, Guid>>().UpdateAsync(template, autoSave: true);
+			await PublishTemplateAsync(AcademicNotificationEventKeys.Student360GuardianMessage, "Guardian");
+			await PublishTemplateAsync(AcademicNotificationEventKeys.Student360MeetingRequested, "Guardian");
+			await PublishTemplateAsync(AcademicNotificationEventKeys.Student360MeetingRequested, "ClassTeacher");
 		});
 
 		await WithUnitOfWorkAsync(async () =>
@@ -89,7 +91,10 @@ public sealed class Student360NotificationAccess_Tests : SubjectTeacherReassignm
 			{
 				var context = await access.RequireSendAsync(new(key, "Academic.Student360", studentId,
 					new(NotificationGuardianMode.PrimaryOnly, []), [CommunicationChannelType.InApp], []), CancellationToken.None);
-				context.Source.EligibleRecipients.ShouldBe([new("Student", StudentId: studentId)]);
+				var expected = key == AcademicNotificationEventKeys.Student360MeetingRequested
+					? new[] { studentReference, classTeacher }
+					: [studentReference];
+				context.Source.EligibleRecipients.ShouldBe(expected);
 				context.Source.AudienceSlices!.ShouldHaveSingleItem().Scope.DivisionId.ShouldBe(DivisionId);
 			}
 			(await notices.GetListAsync(x => x.SourceId == studentId)).ShouldBeEmpty();
@@ -97,7 +102,7 @@ public sealed class Student360NotificationAccess_Tests : SubjectTeacherReassignm
 
 		var app = GetRequiredService<IAcademicNotificationManualAppService>();
 		var request = new PreviewAcademicNotificationManualDto(AcademicNotificationEventKeys.Student360GuardianMessage,
-			"Academic.Student360", studentId, [new("Student", StudentId: studentId)], [CommunicationChannelType.InApp]);
+			"Academic.Student360", studentId, [studentReference], [CommunicationChannelType.InApp]);
 		var reviewToken = Guid.Empty;
 		await WithUnitOfWorkAsync(async () =>
 		{
@@ -126,7 +131,7 @@ public sealed class Student360NotificationAccess_Tests : SubjectTeacherReassignm
 			var operation = await app.SendAsync(send);
 			operation.Status.ShouldBe(CommunicationCampaignStatus.Queued);
 			(await app.SendAsync(send)).OperationId.ShouldBe(operation.OperationId);
-			var intent = (await GetRequiredService<IRepository<NotificationIntent, Guid>>().GetListAsync(x => x.SourceId == studentId))
+			var intent = (await GetRequiredService<IRepository<NotificationIntent, Guid>>().GetListAsync(x => x.CampaignId == operation.OperationId))
 				.ShouldHaveSingleItem();
 			var source = await GetRequiredService<NotificationIntentSourceReader>().LoadAsync(intent, DateTimeOffset.UtcNow, default);
 			source.Runtime.SelectedFamilyRelationships.ShouldBe(["father"]);
@@ -136,6 +141,62 @@ public sealed class Student360NotificationAccess_Tests : SubjectTeacherReassignm
 			recipient.IsEligible.ShouldBeTrue();
 			recipient.Recipient.UserId.ShouldBe(father);
 		});
+
+		var meeting = request with
+		{
+			EventKey = AcademicNotificationEventKeys.Student360MeetingRequested,
+			SelectedRecipients = [studentReference, classTeacher],
+			SelectedFamilyRelationships = ["father"]
+		};
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var audience = await app.GetStudent360AudienceAsync(studentId, meeting.EventKey);
+			audience.Staff.ShouldBe([classTeacher]);
+			await Should.ThrowAsync<AbpAuthorizationException>(() => app.PreviewAsync(meeting with
+			{
+				SelectedRecipients = [studentReference, classTeacher with { EmployeeId = OtherTeacher }]
+			}));
+			var familyOnly = await app.PreviewAsync(meeting with { SelectedRecipients = [studentReference] });
+			familyOnly.EligibleRecipientCount.ShouldBe(1);
+			var reviewed = await app.PreviewAsync(meeting);
+			reviewed.EligibleRecipientCount.ShouldBe(2);
+			reviewed.Channels.ShouldHaveSingleItem().ReadyDeliveryCount.ShouldBe(2);
+			reviewToken = reviewed.ReviewToken.ShouldNotBeNull();
+			(await GetRequiredService<IRepository<NotificationIntent, Guid>>().GetListAsync(x => x.EventKey == meeting.EventKey)).ShouldBeEmpty();
+		});
+
+		await WithTransactionalUnitOfWorkAsync(async () =>
+		{
+			var send = new ConfirmAcademicNotificationManualDto(reviewToken, "student360-meeting");
+			var operation = await app.SendAsync(send);
+			operation.Status.ShouldBe(CommunicationCampaignStatus.Queued);
+			(await app.SendAsync(send)).OperationId.ShouldBe(operation.OperationId);
+			var intent = (await GetRequiredService<IRepository<NotificationIntent, Guid>>().GetListAsync(x => x.CampaignId == operation.OperationId))
+				.ShouldHaveSingleItem();
+			var source = await GetRequiredService<NotificationIntentSourceReader>().LoadAsync(intent, DateTimeOffset.UtcNow, default);
+			source.CurrentRecipients.ShouldBe([studentReference, classTeacher], ignoreOrder: true);
+			var resolver = GetRequiredService<System.Collections.Generic.IEnumerable<INotificationRuntimeRecipientResolver>>()
+				.Single(x => x.Supports(meeting.EventKey));
+			var targets = await resolver.ResolveAsync(source, default);
+			targets.Count.ShouldBe(2);
+			targets.ShouldAllBe(x => x.IsEligible);
+			targets.Single(x => x.Recipient.Kind == "Guardian").Recipient.UserId.ShouldBe(father);
+			targets.Single(x => x.Recipient.Kind == "ClassTeacher").Recipient.ShouldBe(classTeacher);
+		});
+	}
+
+	private async Task PublishTemplateAsync(string eventKey, string recipientKind)
+	{
+		var template = new CommunicationTemplate(Guid.NewGuid(), TenantId) { TemplateName = $"{eventKey} {recipientKind}" };
+		var definition = GetRequiredService<AcademicNotificationCatalogue>().Get(eventKey);
+		var content = GetRequiredService<NotificationDefaultTemplateFactory>().Create(definition, recipientKind, CommunicationChannelType.InApp, "en");
+		var revision = new CommunicationTemplateRevision(Guid.NewGuid(), TenantId, template.Id, 1, eventKey, recipientKind,
+			CommunicationChannelType.InApp, "en", content.Subject, content.Body, definition.SchemaVersion);
+		revision.Publish(ActorId, DateTimeOffset.UtcNow);
+		await GetRequiredService<IRepository<CommunicationTemplate, Guid>>().InsertAsync(template, autoSave: true);
+		await GetRequiredService<IRepository<CommunicationTemplateRevision, Guid>>().InsertAsync(revision, autoSave: true);
+		template.SetNotificationRevision(revision.Id);
+		await GetRequiredService<IRepository<CommunicationTemplate, Guid>>().UpdateAsync(template, autoSave: true);
 	}
 
 	private static ParentGuardianDetails Contact(string name, string? email = null) => new(name, null, null, email, null, null,

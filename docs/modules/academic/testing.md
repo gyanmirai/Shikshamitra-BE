@@ -225,7 +225,9 @@ Run the hosted `NotificationSelfApi_Tests` to check preference categories, curre
 
 ## Notification catalogue coverage
 
-Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AcademicNotificationSourceCoverage_Tests|FullyQualifiedName~AcademicNotificationCatalogue_Tests"`. It checks the registered source, history policy and required due scanner for each available event. The expected unavailable entries have an explicit source dependency and cannot be selected for manual sending.
+Run `powershell -ExecutionPolicy Bypass -File scripts/testing/verify-academic-notification-coverage.ps1` from the backend repository. It reads the [event evidence table](references/notification-coverage.md), validates the workflow anchors, and runs the named recipient and transition tests. The application test checks the exact available event set, source adapter, history policy and any required due scanner. It also verifies that catalogue-only events have a documented source dependency and are unavailable for manual sending.
+
+The command saves the application and hosted API test reports in an ignored coverage directory. These reports record local source and recipient behavior. Provider and device acceptance follow the separate delivery checks.
 
 ## Weekly lecture requirements impact
 

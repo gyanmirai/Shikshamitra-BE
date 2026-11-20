@@ -47,7 +47,7 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 	private static readonly Guid Teacher = Guid.Parse(TestAuthHandler.TestUserId);
 
 	[Fact]
-	public Task Published_calendars_target_the_saved_division_and_archive_invalidates_the_notice() => RunAsync();
+	public Task Published_calendars_target_the_saved_division_and_archiving_invalidates_the_notice() => RunAsync();
 
 	internal async Task RunAsync()
 	{

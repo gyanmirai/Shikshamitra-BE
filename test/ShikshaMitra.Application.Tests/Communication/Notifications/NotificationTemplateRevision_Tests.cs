@@ -63,15 +63,19 @@ public class NotificationTemplateRevision_Tests
 	public async Task Defaults_cover_every_catalogue_variant_as_unpublished_english_drafts_and_reinitialization_preserves_school_edits()
 	{
 		var definitions = new AcademicNotificationCatalogue([]).GetAll();
-		var expected = definitions.Sum(x => x.RecipientSelectors.Select(RecipientKind).Distinct().Count() * x.SupportedChannels.Count);
+		var expected = definitions.SelectMany(definition => definition.RecipientSelectors.Select(RecipientKind).Distinct()
+			.SelectMany(kind => definition.SupportedChannels.Select(channel => (definition.EventKey, kind, channel, definition.SchemaVersion))))
+			.ToHashSet();
 		foreach (var definition in definitions) await _service.InitializeDefaultsAsync(definition.EventKey);
-		_headerRows.Count.ShouldBe(expected); _revisionRows.Count.ShouldBe(expected);
+		_headerRows.Count.ShouldBe(expected.Count); _revisionRows.Count.ShouldBe(expected.Count);
+		expected.SetEquals(_revisionRows.Select(row => (row.EventKey, row.RecipientKind, row.Channel, row.SchemaVersion)))
+			.ShouldBeTrue("Every event, recipient and channel should have the default for its schema.");
 		_revisionRows.ShouldAllBe(x => !x.IsPublished && !x.IsRetired && x.LanguageCode == "en" && x.Revision == 1);
 		_headerRows.ShouldAllBe(x => x.TenantId == _tenantId && x.CurrentNotificationRevisionId.HasValue);
 		var first = _revisionRows[0];
 		var edited = await _service.UpdateDraftAsync(first.TemplateId, new(first.Id, "School wording", "Our own message", first.ConcurrencyStamp));
 		foreach (var definition in definitions) (await _service.InitializeDefaultsAsync(definition.EventKey)).ShouldBe(0);
-		_headerRows.Count.ShouldBe(expected); _revisionRows.Count.ShouldBe(expected);
+		_headerRows.Count.ShouldBe(expected.Count); _revisionRows.Count.ShouldBe(expected.Count);
 		first.Body.ShouldBe(edited.Body); first.Subject.ShouldBe("School wording");
 		new AcademicNotificationCatalogue([]).GetAvailability(definitions[0].EventKey).IsAvailable.ShouldBeFalse();
 	}

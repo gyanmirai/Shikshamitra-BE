@@ -131,6 +131,9 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 		result.EffectiveRule!.Id.ShouldBe(disabled.Id);
 		result.EffectiveRule.Enabled.ShouldBeFalse();
 		result.EffectiveRule.Configuration!.GuardianMode.ShouldBe(NotificationGuardianMode.PrimaryOnly);
+		result.EffectiveRule.Configuration.AdditionalGuardianRelationships.ShouldBeEmpty();
+		result.EffectiveRule.Configuration.IncludeStudentAccount.ShouldBeFalse();
+		result.EffectiveRule.Configuration.Channels.ShouldBe([CommunicationChannelType.InApp]);
 
 		var update = new SaveAcademicNotificationRuleDto { EventKey = RuleEvent, Scope = scoped,
 			ConcurrencyStamp = disabled.ConcurrencyStamp, GuardianMode = NotificationGuardianMode.PrimaryAndSelected,

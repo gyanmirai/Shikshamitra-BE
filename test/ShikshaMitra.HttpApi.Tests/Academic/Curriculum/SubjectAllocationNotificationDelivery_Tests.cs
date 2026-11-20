@@ -37,7 +37,7 @@ public sealed class SubjectAllocationNotificationDelivery_Tests(ShikshaMitraApiT
 	private const string Withdrawn = AcademicNotificationEventKeys.SubjectWithdrawn;
 
 	[Fact]
-	public Task Subject_status_and_archive_routes_queue_scoped_notices() => RunWorkflowAsync();
+	public Task Subject_publication_and_withdrawal_routes_queue_scoped_notices() => RunWorkflowAsync();
 
 	internal async Task RunWorkflowAsync()
 	{

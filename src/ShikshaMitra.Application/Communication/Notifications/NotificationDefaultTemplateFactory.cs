@@ -78,6 +78,7 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 			(_, AcademicNotificationEventKeys.LessonPlanApproved) => "Your lesson plan has been approved.",
 			(_, AcademicNotificationEventKeys.LessonPlanChangesRequested) => "Changes have been requested for your lesson plan.",
 			(_, AcademicNotificationEventKeys.LessonPlanRejected) => "Your lesson plan was reviewed and rejected.",
+			(_, AcademicNotificationEventKeys.DiaryFollowUpRequested) => "A follow-up was requested for a submitted teacher diary.",
 			(_, AcademicNotificationEventKeys.MarksSubmitted) => "Marks for {{subject_name}} in {{exam_name}} are ready for review.",
 			(_, AcademicNotificationEventKeys.MarksChangesRequested) => "A correction was requested for {{subject_name}} in {{exam_name}}.",
 			(_, AcademicNotificationEventKeys.ResultPublished) => "A result is available. Sign in to ShikshaMitra to view it.",

@@ -762,6 +762,12 @@ public partial class LessonPlanAppService(
     {
         var diary = await teacherDiaryRepository.GetAsync(id);
         var diaryPlan = await lessonPlanRepository.GetAsync(diary.LessonPlanId);
+        await EnsureDiaryReadAccessAsync(diary, diaryPlan);
+        return (await MapTeacherDiariesAsync(new[] { diary })).Single();
+    }
+
+    internal async Task EnsureDiaryReadAccessAsync(TeacherDiary diary, LessonPlan diaryPlan)
+    {
         await EnsureLessonPlanAccessAsync(diaryPlan, "teacher-diary-read");
 
         if (!IsAdminUser() && !await HasClassTeacherAccessAsync())
@@ -772,8 +778,6 @@ public partial class LessonPlanAppService(
                 throw new AbpAuthorizationException("You are not authorized to view this diary entry.");
             }
         }
-
-        return (await MapTeacherDiariesAsync(new[] { diary })).Single();
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]

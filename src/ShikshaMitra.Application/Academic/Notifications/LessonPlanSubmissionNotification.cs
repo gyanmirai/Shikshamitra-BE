@@ -103,6 +103,16 @@ public sealed class LessonPlanSubmissionNotification(IRepository<LessonPlan, Gui
 		return new(true, null, revision, Link, variables, recipients, AudienceSlices: [new(scope, recipients)]);
 	}
 
+	internal async Task<NotificationRecipientRefDto?> FindReviewerForPlanAsync(Guid school, LessonPlan plan,
+		NotificationSourceScopeDto scope, CancellationToken token)
+	{
+		var reviewer = await ResolveReviewerAsync(school, scope, token);
+		if (reviewer == null) return null;
+		using var principal = principals.Change(reviewer.Value.Principal);
+		return await services.LazyGetRequiredService<LessonPlanAppService>().CanReviewNotificationAsync(plan)
+			? new("ConfiguredReviewer", UserId: reviewer.Value.Id) : null;
+	}
+
 	private async Task<(Guid Id, ClaimsPrincipal Principal)?> ResolveReviewerAsync(Guid school, NotificationSourceScopeDto scope,
 		CancellationToken token)
 	{

@@ -175,6 +175,8 @@ The hosted timetable workflow also verifies the automatic day reminder, includin
 
 `LessonPlanNotificationEvents_Tests` covers the three review outcomes, unchanged repeats and the exact plan owner. `LessonPlanReviewNotificationDelivery_Tests` and `LessonPlanReviewNotificationPostgres_Tests` exercise scoped review and history through the hosted API, private review remarks and suppression after a revision.
 
+`TeacherDiaryFollowUpNotification_Tests` verifies that submission makes the diary eligible for an explicit follow-up, creates no intent and keeps the diary's private content out of templates. `TeacherDiaryFollowUpNotificationDelivery_Tests` and `TeacherDiaryFollowUpNotificationPostgres_Tests` exercise the hosted staff roster, permission and recipient checks, template preview and confirmation.
+
 `SyllabusNotificationEvents_Tests` covers publication, suppressed repeats and progress edits, assigned staff and material revisions. `SyllabusNotificationDelivery_Tests` and `SyllabusNotificationPostgres_Tests` exercise the hosted chapter create and update workflow, exact locked elective eligibility, parent-only delivery limits, history authorization and suppression after returning to draft.
 
 `DivisionSubjectNotificationEvents_Tests` covers replacement and removal through the application service. `SubjectAllocationNotificationDelivery_Tests` also exercises the hosted division-teacher API, including unchanged teacher sets and HTTP validation of a null list, a sibling division, generic outgoing content, superseded pending work and history permissions. `DivisionSubjectNotificationPostgres_Tests` covers concurrent replacements on a fresh disposable PostgreSQL database.

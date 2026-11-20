@@ -20,7 +20,7 @@ internal static class AcademicNotificationIdentityAccess
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || !current.IsAuthenticated || current.Id is not Guid actorId ||
 			current.TenantId != tenantId || !await permissions.IsGrantedAsync(permission)) throw new AbpAuthorizationException();
-		var actor = await users.FindAsync(actorId, cancellationToken: cancellationToken);
+		var actor = await users.FindAsync(actorId, includeDetails: false, cancellationToken: cancellationToken);
 		if (actor?.TenantId != tenantId || !actor.IsActive || actor.IsDeleted ||
 			actor.LockoutEnabled && actor.LockoutEnd > DateTimeOffset.UtcNow) throw new AbpAuthorizationException();
 		var scope = await scopes.GetCurrentUserScopeAsync();

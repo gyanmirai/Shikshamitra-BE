@@ -25,6 +25,8 @@ public sealed record AcademicNotificationOperationDto(Guid OperationId, Communic
 
 public interface IAcademicNotificationManualAppService : IApplicationService
 {
+	Task<IReadOnlyList<NotificationRecipientRefDto>> GetDiaryFollowUpRecipientsAsync(Guid diaryId,
+		CancellationToken cancellationToken = default);
 	Task<AcademicNotificationManualPreviewDto> PreviewAsync(PreviewAcademicNotificationManualDto input,
 		CancellationToken cancellationToken = default);
 	Task<AcademicNotificationOperationDto> SendAsync(ConfirmAcademicNotificationManualDto input,

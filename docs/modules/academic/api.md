@@ -135,6 +135,12 @@ An enabled `Academic.Syllabus.Published` rule can queue work when `POST /api/aca
 
 Capture requires Chapter Management Add and access to the source class. The rule chooses assigned subject teachers and the family audience. Family delivery uses active enrollment in the affected division and a matching locked choice for electives. Parent visibility excludes student accounts even when the rule enables them. Templates can use the chapter and subject names with the authenticated inbox link. Teacher notes and attachment contents stay in the syllabus. History requires Academic Notification View, Chapter Management View and access to the source scope.
 
+### Teacher diary follow-up
+
+An operator can manually send `Academic.Diary.FollowUpRequested` for a submitted diary attached to an approved lesson plan. Diary saves and submissions queue no notice. `GET /api/academic/notifications/manual/diary-follow-up-recipients/{diaryId}` returns the diary teacher's active staff reference and the configured lesson plan reviewer when eligible. It requires Academic Notification View and Send, Lesson Plan View, the saved division scope and existing diary read access. The configured reviewer must have the existing lesson plan review access.
+
+Use the returned staff reference with the shared manual preview and confirmation endpoints. The diary revision and current staff eligibility are checked against the reviewed send. Templates can use the school, class, subject and lesson plan title and link to the authenticated inbox. Diary notes and learner observations stay in the diary.
+
 ### Lesson plan submission notifications
 
 A submitted lesson plan can queue `Academic.LessonPlan.Submitted` from the existing create, submit, or bulk-submit action. The enabled rule sends to the active account configured at `Notifications:Academic:Tenants:<tenantIdN>:LessonPlanReviewerUserId`. The reviewer needs Lesson Plan View and Add, the source division scope, and eligibility under the existing review workflow. Drafts and submissions without an eligible configured reviewer queue no notice.

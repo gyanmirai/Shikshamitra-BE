@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Notifications;
+using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -38,6 +40,12 @@ public class AcademicNotificationController(IAcademicNotificationCatalogueAppSer
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Add)]
 	public Task<AcademicNotificationRulePreviewDto> PreviewRuleAsync(string eventKey, [FromBody] PreviewAcademicNotificationRuleDto input,
 		CancellationToken cancellationToken) => rules.PreviewAsync(eventKey, input, cancellationToken);
+
+	[HttpGet("manual/diary-follow-up-recipients/{diaryId:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Send)]
+	public Task<IReadOnlyList<NotificationRecipientRefDto>> GetDiaryFollowUpRecipientsAsync(Guid diaryId,
+		CancellationToken cancellationToken) => manual.GetDiaryFollowUpRecipientsAsync(diaryId, cancellationToken);
 
 	[HttpPost("manual/preview")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]

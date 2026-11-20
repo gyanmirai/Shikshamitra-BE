@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Communication;
@@ -19,6 +20,15 @@ public class AcademicNotificationManualAppService(AcademicNotificationAccessServ
 	AcademicNotificationManualOperations operations, AcademicNotificationStaffAudit audit, IClock clock)
 	: ApplicationService, IAcademicNotificationManualAppService
 {
+	public virtual async Task<IReadOnlyList<NotificationRecipientRefDto>> GetDiaryFollowUpRecipientsAsync(Guid diaryId,
+		CancellationToken cancellationToken = default)
+	{
+		var input = new PreviewAcademicNotificationManualDto(TeacherDiaryNotificationSource.EventKey,
+			TeacherDiaryNotificationSource.Type, diaryId, [], [CommunicationChannelType.InApp]);
+		var context = await sourceAccess.RequireManualPreviewAsync(input, cancellationToken);
+		return context.Source.IsEligible ? context.Source.EligibleRecipients : [];
+	}
+
 	[UnitOfWork(true)]
 	public virtual async Task<AcademicNotificationManualPreviewDto> PreviewAsync(PreviewAcademicNotificationManualDto input,
 		CancellationToken cancellationToken = default)

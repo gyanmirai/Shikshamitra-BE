@@ -34,7 +34,8 @@ internal sealed record PayrollRunItemPreview(
 		DateOnly? employmentStartDate,
 		EmployeeWorkSchedule? shift = null,
 		AttendancePolicy? attendancePolicy = null,
-		PayrollStatutoryRuleSet? statutoryRules = null)
+		PayrollStatutoryRuleSet? statutoryRules = null,
+		decimal? protectedMonthlyCost = null)
 	{
 		var attendanceSummary = PayrollAttendanceCalculator.CalculatePayableDays(
 			attendanceRecords,
@@ -66,13 +67,15 @@ internal sealed record PayrollRunItemPreview(
 				};
 		}
 
-		var computation = PayrollComputation.Calculate(
+		var computation = !protectedMonthlyCost.HasValue ? PayrollComputation.Calculate(
 			attendanceSummary.PresentDays,
 			attendanceSummary.HalfWorkingDays,
 			attendanceSummary.PayableDays,
 			basis.BasisDays,
 			allComponents,
-			statutoryRules);
+			statutoryRules) : PayrollSalaryProtection.Calculate(
+			attendanceSummary.PresentDays, attendanceSummary.HalfWorkingDays, attendanceSummary.PayableDays,
+			basis.BasisDays, allComponents, statutoryRules, protectedMonthlyCost.Value);
 		var netPayDelta = previousMonthNetPay.HasValue
 			? computation.NetPay - previousMonthNetPay.Value
 			: (decimal?) null;

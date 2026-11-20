@@ -113,6 +113,9 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
 
         builder.HasIndex(x => new { x.StudentId, x.AcademicYearId, x.Status })
             .HasDatabaseName("IX_FeeRefundRequests_Student_Year_Status");
+        builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.WorkflowVersion, x.Status, x.CreationTime })
+            .HasFilter("\"IsDeleted\" = false")
+            .HasDatabaseName("IX_FeeRefundRequests_Worklist");
         builder.HasIndex(x => x.OriginalReceiptId);
         builder.HasIndex(x => new { x.TenantId, x.RequestIdempotencyKey }).IsUnique()
             .HasFilter("\"RequestIdempotencyKey\" IS NOT NULL");

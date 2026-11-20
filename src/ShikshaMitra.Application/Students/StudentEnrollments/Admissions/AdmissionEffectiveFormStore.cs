@@ -58,6 +58,7 @@ public static class AdmissionEffectiveFormStore
 				throw InvalidSnapshot();
 			var snapshot = JsonSerializer.Deserialize<AdmissionEffectiveFormRuntimeSnapshot>(json, JsonOptions) ?? throw InvalidSnapshot();
 			Validate(instance, snapshot);
+			snapshot.Definition.PrintSettings = AdmissionFormMetadataStore.NormalizePrintSettings(snapshot.Definition.PrintSettings);
 			return snapshot;
 		}
 		catch (Exception exception) when (exception is JsonException or InvalidCastException or ArgumentException or NullReferenceException or InvalidOperationException or FormatException)

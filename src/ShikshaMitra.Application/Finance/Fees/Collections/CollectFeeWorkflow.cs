@@ -143,7 +143,7 @@ public partial class CollectFeeWorkflow : ApplicationService, ITransientDependen
 			? await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().GetAsync(input.FinanceFeeAccountId.Value) : null;
 		if (account != null)
 		{
-			await financeScopeAccessService.EnsureFeeAccountAccessibleAsync(account);
+			await financeScopeAccessService.EnsureFeeCollectionAccountAccessibleAsync(account);
 		}
 		var idempotencyKey = input.IdempotencyKey.Trim();
 		var replay = await feeRecordMetadataRepository.FirstOrDefaultAsync(x =>
@@ -152,8 +152,9 @@ public partial class CollectFeeWorkflow : ApplicationService, ITransientDependen
 		{
 			if ((admissionEntry || replay.FinanceFeeAccountId.HasValue) && replay.FinanceFeeAccountId != input.FinanceFeeAccountId)
 				throw new BusinessException(AdmissionFeeCollectionErrorCodes.RetryConflict);
-			if (replay.FinanceFeeAccountId.HasValue) await financeScopeAccessService.EnsureFeeAccountAccessibleAsync(account!);
-			else await financeScopeAccessService.EnsureStudentAccessibleAsync(replay.StudentId!.Value);
+			if (replay.FinanceFeeAccountId.HasValue) await financeScopeAccessService.EnsureFeeCollectionAccountAccessibleAsync(account!);
+			else await financeScopeAccessService.EnsureFeeCollectionStudentAccessibleAsync(
+				replay.StudentId!.Value, replay.AcademicYearId);
 			if (!string.Equals(replay.CommandFingerprint, commandFingerprint, StringComparison.Ordinal))
 				throw new UserFriendlyException("This retry key was already used for a different fee collection request.",
 					code: FeeCollectionErrorCodes.IdempotencyConflict);

@@ -43,6 +43,7 @@ internal sealed class LibraryMigrationPostgresFixture : IAsyncDisposable
 	public const string CataloguePrice = "20261118165933_AllowUnknownLibraryCataloguePrice";
 	public const string PositionEvidence = "20261118195300_AddFinanceExternalPositionEvidenceFunctions";
 	public const string SourceFingerprintEvidence = "20261118223401_AddFinanceExternalSourceFingerprintFunctions";
+    internal const string LibraryTip = "20261119120836_PersistLibraryReservationPickup";
     public const string TenantA = "a0000000-0000-0000-0000-000000000001";
     public const string TenantB = "b0000000-0000-0000-0000-000000000002";
     private readonly string administratorConnection;
@@ -116,6 +117,10 @@ internal sealed class LibraryMigrationPostgresFixture : IAsyncDisposable
         context.Database.SetCommandTimeout(180);
         await context.GetService<IMigrator>().MigrateAsync();
     }
+
+    // Exercise Library rollback SQL without traversing later migrations owned by other modules.
+    internal Task RollbackLibrarySchemaAsync(string targetMigration) =>
+        ExecuteAsync(Script(LibraryTip, targetMigration), timeoutSeconds: 180);
 
     public async Task ExecuteAsync(string statement, int timeoutSeconds = 30)
     {

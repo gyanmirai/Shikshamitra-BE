@@ -100,7 +100,7 @@ public sealed partial class LibraryPostgresWorkflow_Tests
 		mismatchedCopy.SqlState.ShouldBe("23514");
 		var immutable = await Should.ThrowAsync<PostgresException>(() => database.ExecuteAsync("UPDATE \"AppLibraryCustodyItems\" SET \"Title\"='Changed';"));
 		immutable.SqlState.ShouldBe("23514");
-		(await Should.ThrowAsync<PostgresException>(() => MigrateStockVerificationAsync(database, previous))).SqlState.ShouldBe("23514");
+		(await Should.ThrowAsync<PostgresException>(() => database.RollbackLibrarySchemaAsync(previous))).SqlState.ShouldBe("23514");
 	}
 
 	private static async Task<Guid> SeedCustodyEmployeeAsync(LibraryPostgresApiTestFactory factory)

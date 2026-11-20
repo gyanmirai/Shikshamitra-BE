@@ -25,6 +25,47 @@ namespace ShikshaMitra.Common.Tests.Middleware;
 public class ApiProblemDetailsPipeline_Tests
 {
 	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Inactive_offering_error_explains_recovery_in_both_problem_pipelines(bool useResultFilter)
+	{
+		const string code = AdmissionErrorCodes.OfferingInactive;
+		var assembly = typeof(ShikshaMitraDomainSharedModule).Assembly;
+		using var resource = assembly.GetManifestResourceStream(assembly.GetManifestResourceNames()
+			.Single(name => name.EndsWith("Localization.ShikshaMitra.en.json")))!;
+		using var messages = await JsonDocument.ParseAsync(resource);
+		messages.RootElement.GetProperty("Texts").TryGetProperty(code, out var template).ShouldBeTrue();
+		var resolver = CreateResolver(new Dictionary<string, string> { [code] = template.GetString()! });
+		var http = new DefaultHttpContext { TraceIdentifier = "inactive-offering-reference" };
+		http.Request.Path = "/api/student/enrollment/admissions/applicants/applicant/applications/start";
+		if (useResultFilter)
+		{
+			var context = new ResultExecutingContext(new ActionContext(http, new RouteData(), new ActionDescriptor()),
+				new List<IFilterMetadata>(), new ObjectResult(new { Error = new { Code = code, Message = ApiProblemDetailsMapper.GetDefaultDetail(400) } }) { StatusCode = 400 }, new object());
+			await new ApiProblemDetailsResultFilter(resolver).OnResultExecutionAsync(context,
+				() => Task.FromResult(new ResultExecutedContext(context, new List<IFilterMetadata>(), context.Result, new object())));
+			var result = ((ObjectResult)context.Result).Value.ShouldBeOfType<ProblemDetails>();
+			result.Status.ShouldBe(400);
+			result.Detail!.ShouldContain("inactive");
+			result.Detail!.ShouldContain("activate");
+			result.Extensions["errorCode"].ShouldBe(code);
+			result.Extensions["traceId"].ShouldBe(http.TraceIdentifier);
+		}
+		else
+		{
+			http.Response.Body = new MemoryStream();
+			await new ApiProblemDetailsMiddleware(_ => throw new BusinessException(code),
+				NullLogger<ApiProblemDetailsMiddleware>.Instance, resolver).InvokeAsync(http);
+			http.Response.StatusCode.ShouldBe(400);
+			http.Response.Body.Position = 0;
+			using var result = await JsonDocument.ParseAsync(http.Response.Body);
+			result.RootElement.GetProperty("detail").GetString()!.ShouldContain("inactive");
+			result.RootElement.GetProperty("detail").GetString()!.ShouldContain("activate");
+			result.RootElement.GetProperty("errorCode").GetString().ShouldBe(code);
+		}
+	}
+
+	[Theory]
 	[InlineData(false, "Finance:Concession:010033", "Approved")]
 	[InlineData(true, "Finance:Concession:010033", "Approved")]
 	[InlineData(false, "Finance:Concession:010034", "approved benefit")]

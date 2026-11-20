@@ -13767,6 +13767,10 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "EmployeeId", "AcademicYearId")
                         .HasFilter("\"EmployeeId\" IS NOT NULL");
 
+                    b.HasIndex("TenantId", "AcademicYearId", "WorkflowVersion", "Status", "CreationTime")
+                        .HasDatabaseName("IX_FeeRefundRequests_Worklist")
+                        .HasFilter("\"IsDeleted\" = false");
+
                     b.ToTable("Finance_FeeRefundRequests", null, t =>
                         {
                             t.HasCheckConstraint("CK_FeeRefundRequests_Payer", "((\"EmployeeId\" IS NULL AND (\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL)) OR (\"EmployeeId\" IS NOT NULL AND \"StudentId\" IS NULL AND \"FinanceFeeAccountId\" IS NULL))");
@@ -13907,6 +13911,10 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "AcademicYearId", "ReceiptKind", "VerificationStatus", "ReceiptDate")
                         .HasDatabaseName("IX_FeePaymentReceipts_ReconciliationFilter");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "BoardId", "EducationMediumId", "CreationTime", "ReceiptNumber")
+                        .IsDescending(false, false, false, false, true, true)
+                        .HasDatabaseName("IX_FeePaymentReceipts_ListOrder");
 
                     b.ToTable("Finance_FeePaymentReceipts", null, t =>
                         {
@@ -14265,6 +14273,15 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AcademicDivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("AcademicRollNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("AcademicStandardId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
@@ -14344,6 +14361,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("FinanceFeeAccountId")
                         .HasColumnType("uuid");
 
+                    b.PrimitiveCollection<Guid[]>("IncludedFeeHeadIds")
+                        .HasColumnType("uuid[]");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -14392,6 +14412,11 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_StudentFeeStructures_FinanceFeeAccountId")
                         .HasFilter("\"IsDeleted\" = false AND \"FinanceFeeAccountId\" IS NOT NULL");
+
+                    b.HasIndex("IncludedFeeHeadIds")
+                        .HasDatabaseName("IX_StudentFeeStructures_IncludedFeeHeadIds");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("IncludedFeeHeadIds"), "gin");
 
                     b.HasIndex("ProrationPolicyId")
                         .HasDatabaseName("IX_StudentFeeStructures_ProrationPolicyId");
@@ -20006,6 +20031,11 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
+
+                    b.Property<bool>("IsHandledExternally")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")

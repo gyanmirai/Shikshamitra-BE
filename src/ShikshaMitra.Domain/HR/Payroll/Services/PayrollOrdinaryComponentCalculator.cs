@@ -16,7 +16,8 @@ public sealed record PayrollComponentFormula(
 internal sealed class PayrollOrdinaryComponentCalculator(
 	IReadOnlyList<EmployeePayrollComponent> components,
 	decimal gross,
-	decimal factor)
+	decimal factor,
+	bool allowUnallocatedProbe = false)
 {
 	private readonly Dictionary<Guid, decimal> _amounts = new();
 	private readonly HashSet<Guid> _visiting = [];
@@ -53,11 +54,10 @@ internal sealed class PayrollOrdinaryComponentCalculator(
 	public List<PayrollComputedLineItem> CalculateEarnings()
 	{
 		var regular = components.Where(x => x.IsEarning && !x.IsTemp).ToList();
-		var rawGross = regular.Sum(x => x.Amount) * factor;
-		var finalized = GrossEarningAllocation.Calculate(rawGross, regular.Select(x => new GrossEarningRule(
+		var finalized = GrossEarningAllocation.Calculate(gross, regular.Select(x => new GrossEarningRule(
 			x.ComponentId ?? x.Id, x.SemanticType == PayrollComponentSemanticType.Basic,
 			x.Formula?.Type ?? SalaryTemplateFormulaType.FixedAmount,
-			x.Formula?.Value ?? x.Amount, x.Formula?.BasisComponentId)).ToList(), factor);
+			x.Formula?.Value ?? x.Amount, x.Formula?.BasisComponentId)).ToList(), factor, allowUnallocatedProbe);
 		foreach (var component in regular) _amounts[component.Id] = finalized[component.ComponentId ?? component.Id];
 		return components.Where(x => x.IsEarning).Select(x => new PayrollComputedLineItem(x, Calculate(x))).ToList();
 	}

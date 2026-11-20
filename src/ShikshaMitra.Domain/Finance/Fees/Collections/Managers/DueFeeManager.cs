@@ -1,5 +1,6 @@
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.Services;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.Collections;
@@ -37,7 +38,8 @@ public class DueFeeManager(
 		Guid? prorationPolicyVersionId = null,
 		DateTime? chargeStartDate = null,
 		DateTime? chargeEndDate = null,
-		Guid? financeFeeAccountId = null)
+		Guid? financeFeeAccountId = null,
+		IReadOnlyDictionary<Guid, PaymentTerm>? paymentTerms = null)
 	{
 		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
 		var alreadyExists = financeFeeAccountId.HasValue
@@ -48,7 +50,7 @@ public class DueFeeManager(
 			throw new BusinessException(DueFeeErrorCodes.DueFeesAlreadyGenerated)
 				.WithData("StudentId", studentId!);
 		return await CalculateForStudentAsync(studentId, feeStructure, academicYear, selectedOptionalFeeHeadIds,
-			optionalFeeHeadDetails, prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate, financeFeeAccountId);
+			optionalFeeHeadDetails, prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate, financeFeeAccountId, paymentTerms);
 	}
 
 	/// <summary>Constructs a transient schedule without checking or changing persisted obligations.
@@ -63,7 +65,8 @@ public class DueFeeManager(
 		Guid? prorationPolicyVersionId = null,
 		DateTime? chargeStartDate = null,
 		DateTime? chargeEndDate = null,
-		Guid? financeFeeAccountId = null)
+		Guid? financeFeeAccountId = null,
+		IReadOnlyDictionary<Guid, PaymentTerm>? paymentTerms = null)
 	{
 		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
 		var assignmentChargeStart = (chargeStartDate ?? academicYear.StartDate).Date;
@@ -74,7 +77,10 @@ public class DueFeeManager(
 
 		var monthRange = ComputeMonthRange(academicYear);
 		var dueFees = new List<DueFee>();
-		foreach (var detail in feeStructure.FeeStructureDetails)
+		var includedDetails = feeStructure.FeeStructureDetails
+			.Where(detail => !detail.IsOptional || selectedOptionalFeeHeadIds.Contains(detail.FeeHeadId)).ToList();
+		paymentTerms ??= await scheduleResolver.LoadTermsAsync(includedDetails);
+		foreach (var detail in includedDetails)
 		{
 			if (detail.IsOptional && !selectedOptionalFeeHeadIds.Contains(detail.FeeHeadId))
 				continue;
@@ -90,7 +96,7 @@ public class DueFeeManager(
 			{
 				dueFees.AddRange(await GenerateFromPaymentTermAsync(
 					studentId, detail, customDetail, prorationPolicy, prorationPolicyVersionId,
-					detailChargeStart, detailChargeEnd, academicYear, financeFeeAccountId));
+					detailChargeStart, detailChargeEnd, academicYear, financeFeeAccountId, paymentTerms));
 				continue;
 			}
 
@@ -102,16 +108,17 @@ public class DueFeeManager(
 		return dueFees;
 	}
 
-	private async Task<List<DueFee>> GenerateFromPaymentTermAsync(
+	private Task<List<DueFee>> GenerateFromPaymentTermAsync(
 		Guid? studentId,
 		FeeStructureDetail detail,
 		CustomOptionalFeeHeadDetail? customDetail,
 		ProrationPolicySnapshot? prorationPolicy,
 		Guid? prorationPolicyVersionId,
 		DateTime chargeStartDate,
-		DateTime chargeEndDate, AcademicYear academicYear, Guid? financeFeeAccountId)
+		DateTime chargeEndDate, AcademicYear academicYear, Guid? financeFeeAccountId,
+		IReadOnlyDictionary<Guid, PaymentTerm> paymentTerms)
 	{
-		var schedule = await scheduleResolver.ResolveAsync(detail);
+		var schedule = scheduleResolver.ResolveFromTerms(detail, paymentTerms);
 		if (!schedule.IsValid || schedule.Installments.Count == 0)
 			throw new BusinessException(PaymentTermErrorCodes.VersionNotPublished)
 				.WithData("FeeStructureDetailId", detail.Id)
@@ -169,7 +176,7 @@ public class DueFeeManager(
 			rows[^1].PreserveAllocation(weights[i]);
 		}
 
-		return rows;
+		return Task.FromResult(rows);
 	}
 
 	private List<DueFee> GenerateLegacy(
@@ -243,7 +250,8 @@ public class DueFeeManager(
 		Guid? prorationPolicyVersionId = null,
 		DateTime? chargeStartDate = null,
 		DateTime? chargeEndDate = null,
-		Guid? financeFeeAccountId = null)
+		Guid? financeFeeAccountId = null,
+		IReadOnlyDictionary<Guid, PaymentTerm>? paymentTerms = null)
 	{
 		var coverageStart = new DateTime(year, (int)month + 1, 1);
 		var coverageEnd = coverageStart.AddMonths(1).AddDays(-1);

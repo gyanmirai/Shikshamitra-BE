@@ -33,13 +33,13 @@ public sealed partial class LibraryPostgresWorkflow_Tests
 		await using var database = await LibraryMigrationPostgresFixture.CreateFullHistoryAsync(LibraryMigrationPostgresFixture.StockReceiving);
 		await using var factory = new LibraryPostgresApiTestFactory(database);
 		var (copyId, _) = await SeedLoanContextAsync(factory);
-		await MigrateStockVerificationAsync(database, LibraryMigrationPostgresFixture.StockReceiving);
+		await database.RollbackLibrarySchemaAsync(LibraryMigrationPostgresFixture.StockReceiving);
 		await database.ExecuteAsync(ReceivingSql(copyId, cost: cost));
 		(await database.ScalarAsync("SELECT COALESCE(\"UnitCost\"::text,'unknown') FROM \"AppLibraryStockReceiptLines\";")).ShouldBe(expected);
 		(await database.ScalarAsync("SELECT count(*) FROM \"AppLibraryReceivedCopies\";")).ShouldBe("1");
 		(await database.ScalarAsync($"SELECT count(*) FROM \"AppLibraryReceivedCopies\" WHERE \"CopyId\"='{copyId:D}';")).ShouldBe("0");
 		(await database.ScalarAsync("SELECT \"ReceivedOn\"::text FROM \"AppLibraryStockReceipts\";")).ShouldBe("2026-11-18");
-		(await database.ScalarAsync("SELECT max(\"MigrationId\") FROM \"__EFMigrationsHistory\";")).ShouldBe(LibraryMigrationPostgresFixture.StockReceiving);
+		(await database.ScalarAsync($"""SELECT max("MigrationId") FROM "__EFMigrationsHistory" WHERE "MigrationId" <= '{LibraryMigrationPostgresFixture.LibraryTip}';""")).ShouldBe(LibraryMigrationPostgresFixture.StockReceiving);
 	}
 
 	[LibraryPostgresTheory]

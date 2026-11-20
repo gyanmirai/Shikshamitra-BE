@@ -25,6 +25,9 @@ public sealed record PayrollSchemeApplication(
 	string? WarningCode, string? Reason)
 {
 	public decimal? ContributionWages { get; init; }
+	public const string PfExternalReason = "PF handled outside ShikshaMitra.";
+	public static PayrollSchemeApplication ExternalPf(string? number) =>
+		new("PF", false, HasNumber(number), false, 0m, 0m, 0m, 0m, null, PfExternalReason);
 	public static bool HasNumber(string? number) => !string.IsNullOrWhiteSpace(number) && number.Trim() != "0";
 	public static PayrollSchemeApplication Decide(string scheme, bool apply, string? number, bool eligible,
 		decimal employeeAmount, decimal employerAmount, string? reason = null)

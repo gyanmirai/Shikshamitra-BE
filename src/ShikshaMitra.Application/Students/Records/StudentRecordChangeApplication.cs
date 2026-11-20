@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -32,6 +33,7 @@ public class StudentRecordChangeApplication(IRepository<StudentRecordChange, Gui
 {
 	public async Task ApplyOrScheduleAsync(Guid id)
 	{
+		var grAssignment = false;
 		try
 		{
 			Guid? photoStudentId;
@@ -45,6 +47,7 @@ public class StudentRecordChangeApplication(IRepository<StudentRecordChange, Gui
 				IsolationLevel = photoStudentId.HasValue ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable }, requiresNew: true);
 			if (photoStudentId.HasValue) await LazyServiceProvider.LazyGetRequiredService<IStudentPhotoChangeLock>().AcquireAsync(CurrentTenant.Id, photoStudentId.Value);
 			var item = await changes.GetAsync(x => x.Id == id && x.TenantId == CurrentTenant.Id);
+			grAssignment = item.Section == StudentRecordGrNumberService.Section;
 			if (item.Status is not ("Approved" or "Scheduled")) return;
 			var now = new DateTimeOffset(Clock.Now.ToUniversalTime());
 			await EnsureApplicationActorAsync(item);
@@ -85,6 +88,8 @@ public class StudentRecordChangeApplication(IRepository<StudentRecordChange, Gui
 		catch (AbpAuthorizationException) { await MarkConflictAsync(id, "Students:Records:AuthorityChanged"); }
 		catch (AbpDbConcurrencyException) { await MarkConflictAsync(id, "Students:Records:ConcurrencyConflict"); }
 		catch (Exception exception) when (StudentOnboardingRollConflictMapper.IsSerializationConflict(exception))
+		{ await MarkConflictAsync(id, "Students:Records:ConcurrencyConflict"); }
+		catch (Exception exception) when (grAssignment && IsUniqueConflict(exception))
 		{ await MarkConflictAsync(id, "Students:Records:ConcurrencyConflict"); }
 	}
 	public async Task ApplyScheduledAsync(Guid id)
@@ -140,5 +145,12 @@ public class StudentRecordChangeApplication(IRepository<StudentRecordChange, Gui
 			await changes.UpdateAsync(item);
 		}
 		await work.CompleteAsync();
+	}
+
+	internal static bool IsUniqueConflict(Exception exception)
+	{
+		for (Exception? cause = exception; cause != null; cause = cause.InnerException)
+			if (cause is DbException { SqlState: "23505" }) return true;
+		return false;
 	}
 }

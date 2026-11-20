@@ -81,6 +81,63 @@ public class CashActivitySummaryApi_Tests(FinanceReceiptApiTestFactory factory) 
 		noMatch.GetProperty("availableCash").GetDecimal().ShouldBe(available);
 	}
 
+	[Fact]
+	public async Task Cash_page_is_slim_and_preserves_latest_historical_bank_snapshot_and_complete_options()
+	{
+		var reference = $"READS-{Guid.NewGuid():N}";
+		var latestBank = Guid.NewGuid();
+		var expectedRemaining = 0m;
+		using (var serviceScope = Factory.Services.CreateScope())
+		{
+			var services = serviceScope.ServiceProvider;
+			using var tenant = services.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId));
+			using var uow = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+			var year = await services.GetRequiredService<IRepository<AcademicYear, Guid>>().GetAsync(Factory.SeededAcademicYearId);
+			var collected = new DateTimeOffset(year.StartDate.Year, year.StartDate.Month, 2, 12, 0, 0, TimeSpan.FromMinutes(330));
+			var repository = services.GetRequiredService<IRepository<CashCollection, Guid>>();
+			for (var index = 0; index < 105; index++)
+			{
+				var cash = new CashCollection(Guid.NewGuid(), Guid.Parse(TestAuthHandler.TestTenantId), year.Id,
+					Guid.NewGuid(), reference + index, null, reference + index, "Read projection payer", 100.03m,
+					collected, Guid.NewGuid(), null, null);
+				cash.SpendAvailable(Guid.NewGuid(), "Exact paise expense", 0.01m, collected.AddDays(1));
+				if (index == 0)
+				{
+					typeof(CashCollection).GetProperty(nameof(CashCollection.Status))!.SetValue(cash, 1);
+					var older = cash.Dispatch(Guid.NewGuid(), Guid.NewGuid(), 0.01m, collected.AddDays(2), "Older", null);
+					var latest = cash.Dispatch(Guid.NewGuid(), Guid.NewGuid(), 0.01m, collected.AddDays(3), "Latest", null);
+					cash.ExtraProperties["DepositBank:" + older.Id.ToString("N")] = JsonSerializer.Serialize(new CashBankOption(Guid.NewGuid(), "Earlier snapshot"));
+					cash.ExtraProperties["DepositBank:" + latest.Id.ToString("N")] = JsonSerializer.Serialize(new CashBankOption(latestBank, "Latest snapshot"));
+					cash.SaveCommand(Guid.NewGuid(), "read-projection", new string('x', 50000));
+				}
+				expectedRemaining += cash.RemainingAmount;
+				await repository.InsertAsync(cash);
+			}
+			await uow.CompleteAsync();
+		}
+		var page = await Client.GetFromJsonAsync<JsonElement>(
+			$"/api/finance/cash-management?academicYearId={Factory.SeededAcademicYearId}&search={reference}&pageSize=1&status=1", JsonOptions);
+		page.GetProperty("totalCount").GetInt32().ShouldBe(1);
+		page.GetProperty("statusCounts").GetProperty("all").GetInt32().ShouldBe(105);
+		page.GetProperty("statusCounts").GetProperty("pending").GetInt32().ShouldBe(104);
+		page.GetProperty("summary").GetProperty("remaining").GetDecimal().ShouldBe(100.00m);
+		var row = page.GetProperty("items")[0];
+		row.GetProperty("bankAccountId").GetGuid().ShouldBe(latestBank);
+		row.GetProperty("bankLabel").GetString().ShouldBe("Latest snapshot");
+		row.TryGetProperty("deposits", out _).ShouldBeFalse("The register must expose only CashRow fields.");
+		row.TryGetProperty("expenses", out _).ShouldBeFalse();
+		var all = await Client.GetFromJsonAsync<JsonElement>(
+			$"/api/finance/cash-management?academicYearId={Factory.SeededAcademicYearId}&search={reference}&pageSize=1", JsonOptions);
+		all.GetProperty("summary").GetProperty("remaining").GetDecimal().ShouldBe(expectedRemaining);
+		all.GetProperty("summary").GetProperty("collected").GetDecimal().ShouldBe(10503.15m);
+		var options = await Client.GetFromJsonAsync<JsonElement>(
+			$"/api/finance/cash-management/options?academicYearId={Factory.SeededAcademicYearId}&operation=expense", JsonOptions);
+		var matching = 0;
+		foreach (var option in options.GetProperty("cashSources").EnumerateArray())
+			if (option.GetProperty("label").GetString()!.StartsWith(reference, StringComparison.Ordinal)) matching++;
+		matching.ShouldBe(105, "The complete source selector must include candidates beyond the first page.");
+	}
+
 	private static void AssertActivity(JsonElement page, decimal collected, decimal spent, decimal deposited)
 	{
 		page.TryGetProperty("activitySummary", out var activity).ShouldBeTrue("The cash page must expose event-month activity separately from source-row balances.");

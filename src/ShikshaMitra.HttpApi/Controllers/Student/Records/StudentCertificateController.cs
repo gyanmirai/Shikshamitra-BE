@@ -63,9 +63,9 @@ public class StudentCertificateController(
 
 	[HttpGet("{certificateId}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View)]
-	public async Task<Result<StudentCertificateResponseDto>> Get(Guid certificateId)
+	public async Task<Result<StudentCertificateResponseDto>> Get(Guid certificateId, [FromQuery] bool includeBranding = false)
 	{
-		return Result.Success(await certificateAppService.GetAsync(certificateId));
+		return Result.Success(await certificateAppService.GetAsync(certificateId, includeBranding));
 	}
 
 	[HttpGet("students/{studentId}/history")]

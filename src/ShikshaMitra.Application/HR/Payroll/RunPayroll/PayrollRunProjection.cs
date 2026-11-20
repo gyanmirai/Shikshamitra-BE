@@ -19,6 +19,7 @@ internal static class PayrollRunProjection
 		string deductionsJson,
 		string employerContributionsJson,
 		string adjustmentsJson) =>
+		SalaryProtectionSnapshot.Read(snapshot) != item.SalaryProtection ||
 		snapshot.BasicSalary != (decimal) item.BasicSalary ||
 		snapshot.GrossSalary != (decimal) item.GrossSalary ||
 		snapshot.FullGrossSalary != (decimal) item.FullGrossSalary ||
@@ -91,6 +92,7 @@ internal static class PayrollRunProjection
 		snapshot.EmployeeName = item.EmployeeName;
 		snapshot.EmployeeIdentifier = item.EmployeeIdentifier;
 		snapshot.IsTeaching = item.IsTeaching;
+		SalaryProtectionSnapshot.Write(snapshot, item.SalaryProtection);
 		snapshot.BasicSalary = (decimal) item.BasicSalary;
 		snapshot.GrossSalary = (decimal) item.GrossSalary;
 		snapshot.FullGrossSalary = (decimal) item.FullGrossSalary;
@@ -163,6 +165,7 @@ internal static class PayrollRunProjection
 			EmployeeIdentifier = row.EmployeeIdentifier,
 			IsTeaching = row.IsTeaching,
 			BasicSalary = (double) row.BasicSalary,
+			SalaryProtection = SalaryProtectionSnapshot.Read(row),
 			GrossSalary = (double) row.GrossSalary,
 			FullGrossSalary = (double) row.FullGrossSalary,
 			TotalDeduction = (double) row.TotalDeduction,
@@ -235,7 +238,7 @@ internal static class PayrollRunProjection
 			SourceLineId = item.Source.Id,
 			Name = item.Source.Name,
 			Amount = (double) item.Amount,
-			FullMonthAmount = item.Source.IsTemp ? null : item.Source.Amount,
+			FullMonthAmount = item.Source.IsTemp ? null : item.FullMonthAmount ?? item.Source.Amount,
 			FormulaType = item.Source.Formula?.Type.ToString(),
 			FormulaValue = item.Source.Formula?.Value,
 			BasisComponentId = item.Source.Formula?.BasisComponentId,

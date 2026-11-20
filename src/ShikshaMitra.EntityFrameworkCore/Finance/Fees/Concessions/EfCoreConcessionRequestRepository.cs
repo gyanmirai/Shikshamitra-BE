@@ -72,6 +72,12 @@ public partial class EfCoreConcessionRequestRepository(IDbContextProvider<Shiksh
 		return await query
 			.Skip(skip)
 			.Take(take)
+			.Include(x => x.ConcessionFeeHeadMappings)
+			.Include(x => x.ConcessionRequestDocuments)
+			.Include(x => x.ConcessionDueFeeAllocations)
+			.Include(x => x.ConcessionReversals)
+			.AsSplitQuery()
+			.AsNoTracking()
 			.ToListAsync(cancellationToken);
 	}
 
@@ -131,7 +137,9 @@ public partial class EfCoreConcessionRequestRepository(IDbContextProvider<Shiksh
         FinanceTableQuery? tableQuery = null, string? tab = null, bool includeReviewableDrafts = false,
 		IQueryable<Guid>? visibleRequestIdsQuery = null)
 	{
-		var queryable = await GetQueryableAsync();
+		// Counts and table filters must not load the request's four auto-included collections.
+		// The page read above explicitly loads only its selected request graphs.
+		var queryable = (await GetQueryableAsync()).IgnoreAutoIncludes().AsNoTracking();
 		var query = queryable.Where(c => c.AcademicYearId == academicYearId &&
 			c.BoardId == boardId && c.EducationMediumId == educationMediumId);
 		if (standardId.HasValue) query = query.Where(c => c.StandardId == standardId.Value);

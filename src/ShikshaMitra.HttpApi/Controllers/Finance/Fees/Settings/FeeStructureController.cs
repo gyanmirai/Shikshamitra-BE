@@ -17,6 +17,23 @@ public class FeeStructureController(
 	IFeeStructureAppService feeStructureAppService
 ) : AbpController
 {
+ [HttpGet("summaries")]
+ [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.View)]
+ public Task<List<FeeStructureSummaryDto>> GetSummariesAsync([FromQuery] Guid standardId) => feeStructureAppService.GetSummariesAsync(standardId);
+
+ [HttpGet("{id:guid}")]
+ [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.View)]
+ public Task<FeeStructureCreateResponse> GetDetailAsync(Guid id) => feeStructureAppService.GetDetailAsync(id);
+
+ [HttpGet("catalogue")]
+ [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.View)]
+ public Task<FeeStructureCatalogueDto> GetCatalogueAsync([FromQuery] Guid feeStructureMetadataId, [FromQuery] Guid standardId) => feeStructureAppService.GetCatalogueAsync(feeStructureMetadataId, standardId);
+
+ [HttpGet("term-schedule")]
+ [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.View)]
+ [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.View)]
+ public Task<FeeStructureTermOptionDto> GetTermScheduleAsync([FromQuery] Guid feeStructureMetadataId, [FromQuery] Guid standardId, [FromQuery] Guid paymentTermId, [FromQuery] Guid versionId) => feeStructureAppService.GetTermScheduleAsync(feeStructureMetadataId, standardId, paymentTermId, versionId);
+
     [HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Add)]
 	public Task<FeeStructureCreateResponse> CreateAsync(

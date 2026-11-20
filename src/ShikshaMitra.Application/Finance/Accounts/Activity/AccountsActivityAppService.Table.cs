@@ -72,7 +72,7 @@ public partial class AccountsActivityAppService
         select new WorkspaceRecord
         {
             Id = row.Id, SourceId = row.SourceId, StudentId = row.StudentId, FinanceFeeAccountId = row.FinanceFeeAccountId,
-            StudentName = row.StudentName, CategoryId = row.CategoryId, CategoryName = row.CategoryName,
+            StudentName = row.StudentName, Counterparty = row.Counterparty, CategoryId = row.CategoryId, CategoryName = row.CategoryName,
             BankAccountId = row.BankAccountId, BankLabel = row.BankLabel, Reference = row.Reference,
             Source = row.Source, Status = row.Status, Amount = row.Amount, Date = row.Date,
             // Coalesce columns from the outer join; DTO-to-null comparisons cannot translate to SQL.

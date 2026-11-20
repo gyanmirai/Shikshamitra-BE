@@ -98,41 +98,52 @@ public class RefundPolicyAppService(
 		}
 
 		var total = await AsyncExecuter.CountAsync(query);
-		// Payout methods and selected fee-head counts are stored as JSON. Sort the
-		// year-scoped result before paging so these displayed values sort globally.
-		var candidates = (await AsyncExecuter.ToListAsync(query)).Select(RefundPolicyMapping.ToDto).ToList();
+		// These arrays contain only GUIDs or numeric enums, never nested values or
+		// strings containing commas. Counting separators translates on both providers
+		// and keeps JSON-backed sorts in SQL without hydrating the entire catalogue.
+		var candidates = query.Select(policy => new
+		{
+			Policy = policy,
+			FeeHeadCount = policy.ApplicableFeeHeadIdsJson.Replace(" ", "").Replace("\r", "").Replace("\n", "").Replace("\t", "") == "[]"
+				? 0 : policy.ApplicableFeeHeadIdsJson.Length - policy.ApplicableFeeHeadIdsJson.Replace(",", "").Length + 1,
+			PayoutCount = policy.AllowedPayoutMethodsJson.Replace(" ", "").Replace("\r", "").Replace("\n", "").Replace("\t", "") == "[]"
+				? 0 : policy.AllowedPayoutMethodsJson.Length - policy.AllowedPayoutMethodsJson.Replace(",", "").Length + 1
+		});
 		var sortParts = input.Sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
 		var sortColumn = sortParts.Length > 0 ? sortParts[0].ToLowerInvariant() : string.Empty;
 		var descending = sortParts.Length > 1 && sortParts[1].Equals("desc", StringComparison.OrdinalIgnoreCase);
-		IOrderedEnumerable<RefundPolicyDto> sorted = sortColumn switch
+		var sorted = sortColumn switch
 		{
-			"policyname" => descending ? candidates.OrderByDescending(x => x.PolicyName) : candidates.OrderBy(x => x.PolicyName),
+			"policyname" => descending ? candidates.OrderByDescending(x => x.Policy.PolicyName) : candidates.OrderBy(x => x.Policy.PolicyName),
 			"amountmode" => descending
-				? candidates.OrderByDescending(x => x.AmountMode == "FixedAmount" ? 0 :
-					x.AmountMode == "RemainingPaidAmount" ? 1 : x.AmountMode == "Percentage" ? 2 : 3)
-				: candidates.OrderBy(x => x.AmountMode == "FixedAmount" ? 0 :
-					x.AmountMode == "RemainingPaidAmount" ? 1 : x.AmountMode == "Percentage" ? 2 : 3),
+				? candidates.OrderByDescending(x => x.Policy.AmountMode == RefundAmountMode.FixedAmount ? 0 :
+					x.Policy.AmountMode == RefundAmountMode.RemainingPaidAmount ? 1 : x.Policy.AmountMode == RefundAmountMode.Percentage ? 2 : 3)
+				: candidates.OrderBy(x => x.Policy.AmountMode == RefundAmountMode.FixedAmount ? 0 :
+					x.Policy.AmountMode == RefundAmountMode.RemainingPaidAmount ? 1 : x.Policy.AmountMode == RefundAmountMode.Percentage ? 2 : 3),
 			"feeheadscope" => descending
-				? candidates.OrderByDescending(x => x.FeeHeadScope).ThenByDescending(x => x.ApplicableFeeHeadIds.Count)
-				: candidates.OrderBy(x => x.FeeHeadScope).ThenBy(x => x.ApplicableFeeHeadIds.Count),
+				? candidates.OrderByDescending(x => x.Policy.FeeHeadScope).ThenByDescending(x => x.FeeHeadCount)
+				: candidates.OrderBy(x => x.Policy.FeeHeadScope).ThenBy(x => x.FeeHeadCount),
 			"allowedpayoutmethods" => descending
-				? candidates.OrderByDescending(x => x.AllowedPayoutMethods.Count)
-				: candidates.OrderBy(x => x.AllowedPayoutMethods.Count),
-			"allowpartialrefund" => descending ? candidates.OrderBy(x => x.AllowPartialRefund) : candidates.OrderByDescending(x => x.AllowPartialRefund),
-			"updatedat" => descending ? candidates.OrderByDescending(x => x.LastModificationTime ?? x.CreationTime) : candidates.OrderBy(x => x.LastModificationTime ?? x.CreationTime),
-			"status" => descending ? candidates.OrderByDescending(x => x.Status) : candidates.OrderBy(x => x.Status),
-			_ => candidates.OrderByDescending(x => x.IsDefault)
-				.ThenByDescending(x => x.Status == "Active")
-				.ThenByDescending(x => x.CreationTime)
+				? candidates.OrderByDescending(x => x.PayoutCount)
+				: candidates.OrderBy(x => x.PayoutCount),
+			"allowpartialrefund" => descending ? candidates.OrderBy(x => x.Policy.AllowPartialRefund) : candidates.OrderByDescending(x => x.Policy.AllowPartialRefund),
+			"updatedat" => descending ? candidates.OrderByDescending(x => x.Policy.LastModificationTime ?? x.Policy.CreationTime) : candidates.OrderBy(x => x.Policy.LastModificationTime ?? x.Policy.CreationTime),
+			"status" => descending
+				? candidates.OrderByDescending(x => x.Policy.Status == RefundPolicyStatus.Active ? 0 : x.Policy.Status == RefundPolicyStatus.Archived ? 1 : 2)
+				: candidates.OrderBy(x => x.Policy.Status == RefundPolicyStatus.Active ? 0 : x.Policy.Status == RefundPolicyStatus.Archived ? 1 : 2),
+			_ => candidates.OrderByDescending(x => x.Policy.IsDefault)
+				.ThenByDescending(x => x.Policy.Status == RefundPolicyStatus.Active)
+				.ThenByDescending(x => x.Policy.CreationTime)
 		};
-		var items = sorted.ThenBy(x => x.Id)
+		var rows = await AsyncExecuter.ToListAsync(sorted.ThenBy(x => x.Policy.Id)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount)
-			.ToList();
+			.Select(x => x.Policy));
+		var items = rows.Select(RefundPolicyMapping.ToDto).ToList();
 		var usedIds = await GetUsedIdsAsync(items.Select(x => x.Id).ToList());
 		foreach (var item in items)
 			item.IsUsedInDownstream = usedIds.Contains(item.Id);
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "refund", items);
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "refund", items, AsyncExecuter);
 		return new PagedResultDto<RefundPolicyDto>(total, items);
 	}
 
@@ -143,7 +154,7 @@ public class RefundPolicyAppService(
 		var dto = RefundPolicyMapping.ToDto(entity);
 		await PopulateDisplayNamesAsync(dto);
 		dto.IsUsedInDownstream = (await GetUsedIdsAsync([id])).Contains(id);
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "refund", new[] { dto });
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "refund", new[] { dto }, AsyncExecuter);
 		return dto;
 	}
 

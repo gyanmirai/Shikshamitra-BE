@@ -73,10 +73,11 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
         ValidateListInput(input);
         FinanceClassDivisionFilterValidator.Validate(input);
 		var tableQuery = ParseListFilters(input.Filters);
-		var hasHeaderFilters = tableQuery.Filters.Count > 0;
+		var hasDisplayFilters = tableQuery.Filters.Any(f => !SqlListFilterColumns.Contains(f.Column));
 
         var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
-        var filter = new FeeReceiptListFilter
+        var scopedAccountIds = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
+        FeeReceiptListFilter CreateFilter(int skip, int take) => new()
         {
             AcademicYearId        = input.AcademicYearId,
             BoardId               = input.BoardId,
@@ -86,16 +87,61 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
             Search                = input.Search,
             StandardId            = input.StandardId,
             DivisionId            = input.DivisionId,
-            // Display filters must see every already-authorized candidate before count/page.
-            SkipCount             = hasHeaderFilters ? 0 : input.SkipCount,
-            MaxResultCount        = hasHeaderFilters ? int.MaxValue : input.MaxResultCount,
+            SkipCount             = skip,
+            MaxResultCount        = take,
             ScopedStudentIdsQuery = scopedStudentIds,
-            ScopedAccountIdsQuery = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync(),
+            ScopedAccountIdsQuery = scopedAccountIds,
+            TableQuery            = tableQuery,
         };
 
-        var (totalCount, receipts) = await receiptRepository.GetPagedListAsync(filter, cancellationToken);
+        if (hasDisplayFilters)
+        {
+            var filterRows = await receiptRepository.GetListFilterRowsAsync(
+                CreateFilter(0, 0),
+                tableQuery.Filters.Any(f => f.Column == "paymentMethodLabel"),
+                cancellationToken);
+            var filterItems = filterRows.Select(row => new FeeReceiptListItemDto
+            {
+                Id = row.Id,
+                ReceiptNumber = row.ReceiptNumber,
+                ReceiptKind = row.ReceiptKind,
+                ReceiptKindLabel = FeeReceiptPresentation.GetLabel(row.ReceiptKind, row.ReceiptScope),
+                PaymentMethodLabel = row.PaymentMethodLabel,
+                VerificationStatus = row.VerificationStatus,
+                LinkedFinalReceiptNumber = row.LinkedFinalReceiptNumber,
+                TotalPaidAmount = row.TotalPaidAmount,
+                ReceiptDate = row.ReceiptDate,
+                StudentName = row.StudentName,
+                GrNo = row.GrNo,
+                RollNo = row.RollNo,
+            }).ToList();
+            var matching = tableQuery.Apply(filterItems.AsQueryable(), ListFilterFields).ToList();
+            var pageIds = matching.Skip(input.SkipCount).Take(input.MaxResultCount)
+                .Select(item => item.Id).ToList();
+            if (pageIds.Count == 0)
+                return new PagedResultDto<FeeReceiptListItemDto>(matching.Count, []);
+
+            var pageReceipts = await receiptRepository.GetListAsync(
+                receipt => pageIds.Contains(receipt.Id), cancellationToken: cancellationToken);
+            var positions = pageIds.Select((id, index) => (id, index))
+                .ToDictionary(pair => pair.id, pair => pair.index);
+            pageReceipts = pageReceipts.OrderBy(receipt => positions[receipt.Id]).ToList();
+            return new PagedResultDto<FeeReceiptListItemDto>(matching.Count,
+                await LoadReceiptItemsAsync(pageReceipts, cancellationToken));
+        }
+
+        var (totalCount, receipts) = await receiptRepository.GetPagedListAsync(
+            CreateFilter(input.SkipCount, input.MaxResultCount), cancellationToken);
         if (totalCount == 0)
             return new PagedResultDto<FeeReceiptListItemDto>(0, []);
+
+		return new PagedResultDto<FeeReceiptListItemDto>(totalCount,
+			await LoadReceiptItemsAsync(receipts, cancellationToken));
+    }
+
+	private async Task<List<FeeReceiptListItemDto>> LoadReceiptItemsAsync(
+		List<FeePaymentReceipt> receipts, CancellationToken cancellationToken)
+	{
 
         var studentIds = receipts.Where(r => r.StudentId.HasValue).Select(r => r.StudentId!.Value).Distinct().ToList();
         var students   = await AsyncExecuter.ToListAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => Enumerable.Contains(studentIds, s.Id)), cancellationToken);
@@ -150,14 +196,7 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
             };
         }).ToList();
 
-		if (hasHeaderFilters)
-		{
-			var matching = tableQuery.Apply(items.AsQueryable(), ListFilterFields).ToList();
-			return new PagedResultDto<FeeReceiptListItemDto>(matching.Count,
-				matching.Skip(input.SkipCount).Take(input.MaxResultCount).ToList());
-		}
-
-        return new PagedResultDto<FeeReceiptListItemDto>(totalCount, items);
+		return items;
     }
 
     public async Task<FeeReceiptDetailDto> GetAsync(

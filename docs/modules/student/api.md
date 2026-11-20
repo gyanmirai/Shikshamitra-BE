@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-05
+updated_on: 2026-11-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -19,6 +19,10 @@ Finalization may report `Students:Family:MainContactInvalid` when the selected m
 ## Saved Registration composition preview
 
 `GET /api/student/enrollment/admissions/forms/{id}/inheritance-preview?inquiryFormDefinitionId={sourceId}` requires Admission Forms View at both HTTP and application boundaries. It composes only the persisted Registration definition and an exact, previously approved Inquiry source. Approval is checked before reading the tenant-filtered source; the request cannot supply a draft, approve a source, save a form or change its concurrency stamp. The existing `AdmissionFormInheritancePreviewDto` returns the effective definition and separate read-only Inquiry context. Draft `POST /forms/inheritance/preview` retains its existing Manage permission.
+
+## Workflow archive refusals
+
+Workflow `POST /api/student/enrollment/admissions/workflows/{id}/archive` retains its current concurrency and active-Offering guard. A blocked archive returns `Admissions.WorkflowInUse` with `data.ActiveOfferingCount` and `data.Reason`, explaining how many active offerings must be deactivated or moved to another workflow. Inactive offerings do not block archiving. Refusal leaves workflow status, concurrency stamp and governance history unchanged; the same error code on Delete retains its existing semantics.
 
 ## Admission form archive and restore
 
@@ -77,19 +81,19 @@ Changing from the default format to a school prefix carries the existing sequenc
 
 For `GET students`, `filter` matches the visible student name or GR number using a trimmed, case-insensitive substring. Search runs on the same tenant-, enrollment-, academic- and user-scoped projection as the returned rows; masked GR numbers cannot match hidden identities.
 
-Apply `20261030111330_AddHouseManagement` before starting an API that uses these endpoints. The migration adds persistence only; it does not allocate students, copy houses between years or grant permissions.
+Apply `20261119190000_RestoreHouseScopedLeadership` before starting this API version. Databases that still store appointments on houses keep their existing House and Division leaders. Databases that already applied the division-based migration transfer each eligible House leader back to their house. The migration stops if an appointment has no eligible house or multiple appointments map to one house. Authorized staff must review those appointments before retrying. A downgrade requires a reviewed database restore.
 
 All endpoints below use the authenticated `/api/students/records/house-management` root and existing Result envelope. Controller and application boundaries use exact `Students.Records.HouseManagement.View`, `.Add` and `.Delete` permissions. Positive permission assignments require the existing Student and Student Records visibility flags; adding the feature does not grant roles/users access. This is the only supported house catalogue API; legacy House Settings routes are retired. The separate Student Records policy settings API and permissions remain unchanged.
 
 | Method and suffix | Authority | Contract |
 | --- | --- | --- |
-| GET `houses`, `students`, `divisions` | View | Required `academicMediumId`; paging uses `skipCount` and `maxResultCount` (1–100), with optional `filter` and supported `sorting`. Student reads accept `standardId`, `divisionId`, `houseId`, `unassignedOnly`; division reads accept `standardId`. Results contain scoped counts and visible leaders only. |
+| GET `houses`, `students`, `divisions` | View | Require `academicMediumId`. Paging uses `skipCount` and `maxResultCount` (1–100), with optional `filter` and supported `sorting`. Student reads accept `standardId`, `divisionId`, `houseId`, and one of `unassignedOnly` or `assignedOnly`. Houses return the visible House `leader` and `houseLeaderCount` (0 or 1). Division reads accept `standardId`, `divisionId` and `houseId`. A house filter selects divisions with visible members of that house. Each division returns its visible Division `leader`. |
 | POST `houses`; PUT `houses/{id}` | Add | Medium, required name/color and optional description/logo URL. Update requires current `concurrencyStamp`. Shared configuration requires medium-wide or broader scope. |
 | DELETE `houses/{id}` | Delete | Query contains medium and current stamp; populated houses are rejected. |
-| POST `assignments/preview`; POST `assignments/commit` | Add | Medium, nullable target `houseId` (null removes membership), 1–500 distinct enrollment IDs. Preview returns affected students, departing house leaders and `previewToken`; commit supplies the reviewed token and revalidates the whole atomic batch. The request bound does not limit house membership. |
-| PUT `houses/{id}/leader`; PUT `divisions/{id}/leader` | Add | Medium, nullable `enrollmentId` (null clears the role), current owner `concurrencyStamp`. House leaders must be eligible members; division leaders remain independent. |
+| POST `assignments/preview`; POST `assignments/commit` | Add | Require `academicMediumId`, a specific `divisionId`, and 1–500 distinct enrollment IDs in that division. A null `houseId` removes membership. Preview returns affected students, departing house leaders and a division-bound `previewToken`. Commit supplies that token and revalidates the atomic batch. |
+| PUT `houses/{id}/leader` and `divisions/{id}/leader` | Add | Require the medium, nullable `enrollmentId` (null clears the role) and the current `concurrencyStamp` of the house or division. Candidates must be active enrolled members of the selected house or division, respectively. |
 
-The server enforces active actor, tenant, medium/year, operational enrollment and affected-record scope independently of action permission. Leaving a house clears its house-leader role while preserving independent division leadership. Missing/changed preview state rejects stale writes. Feature business codes use `Students:HouseManagement:` with `InvalidInput`, `StalePreview`, `HousePopulated` and `IneligibleLeader`. See [product rules](./product.md#house-management) and [frontend integration](../../../../Shikshamitra-FE/docs/student/clients.md#house-management-client).
+The server enforces active actor, tenant, medium/year, operational enrollment and affected-record scope independently of action permission. Leaving a house clears its house-leader role while preserving independent division leadership. Missing/changed preview state rejects stale writes. Feature business codes use `Students:HouseManagement:` with `InvalidInput`, `AssignmentDivisionMismatch`, `StalePreview`, `HousePopulated` and `IneligibleLeader`. See [product rules](./product.md#house-management) and [frontend integration](../../../../Shikshamitra-FE/docs/student/clients.md#house-management-client).
 
 ## Student action permissions
 
@@ -103,6 +107,10 @@ Permissions come from effective role/user grants; teacher assignments restrict s
 Tenant isolation, active identity, configured approval stages, separate approvers, reasons, concurrency and owning Finance/Identity permissions still apply.
 Attendance lock/unlock requires MarkAttendance.Add and the same assigned-class scope as marking, with the existing database-administrator scope exception.
 Onboarding settings, policy, identifier-series, offering and historical-preview reads use View.
+
+On the onboarding list, `pendingTask=gr-number` (or `gr`) counts missing GR numbers only for cases without completed onboarding or a linked enrollment. The unfiltered worklist can still show those historical or enrolled cases.
+
+`GET /api/student/onboarding/settings/gr-number-previews?academicYearId={id}` uses Onboarding View and the same academic-year scope check as configuration reads. It returns published-rule `ruleId`, `nextSequence`, nullable `maximumNumber`, `limitReached`, `isEffective` and nullable `nextPreview`. Previews share the allocation rule identity, version lineage, format and year/school counter scope; continuous counters are read even when created in an earlier year. This read neither creates a series nor reserves a number. Exhausted or future-effective rules have no available preview. Allocation remains authoritative at save time. Exhaustion keeps `Students.Onboarding.IdentifierSeriesUnavailable` and adds `data.ReasonCode=SeriesLimitReached`, `MaximumNumber` and `NextSequence`; no numbering, permission or Finance invariant changes.
 Selected-year reads require academic scope; class-specific configuration is limited to readable classes, while inherited school/year defaults remain visible.
 Configuration writes require the whole affected year or class; division-only scope cannot change shared class settings. School-default writes require tenant-wide scope.
 Historical reconciliation and placement options use scoped application/division queries; applying a backfill still requires Add.
@@ -226,6 +234,10 @@ Activity and timeline DTOs return `actorName`; completed workflow and Onboarding
 | Finalization preview and possible Student matches | `canApplyProfileFieldsDirectly` identifies pending Admission/Registration profiles. `canReviewProfileFields` accounts for Records View/Create authority. `capturedStudentFields` contains `{key,label,value}` rows with a safe photo summary; `profileReviewDescription` explains the handoff and separate Compliance review. |
 | Finalization input | `applyStudentProfileFields` defaults to false for existing profiles. New profiles receive supported answers automatically. Protected existing profiles use the Records review service and its current section guards. |
 
+`GET /api/student/enrollment/admissions/applications/{id}/finalization-preview?forApproval=true` evaluates the existing readiness shape before the final Approval is recorded. It accepts only the current active terminal Approval stage, or an already approved completed workflow; preceding stages and nonterminal conditional decisions remain blockers. The preview adds `primaryContact: {name,mobile,email,relationship}` from the saved school-contact selection (with the retained legacy primary adult as fallback), plus the captured `joiningDate` when present. Reads do not approve, complete stages, verify ownership or change application stamps.
+
+`POST /api/student/enrollment/admissions/applications/{id}/approve-and-finalize` accepts `{concurrencyStamp,idempotencyKey,existingStudentId?,confirmCreateNew,applyStudentProfileFields}` and returns the existing `AdmissionFinalizationResultDto`. Decide, Advance and Finalize permission aliases all remain required, with the existing tenant and offering scope. The command records approval, completes only the final Approval through the authoritative workflow runtime, creates/links the Student and Onboarding case, and performs document/Finance handoffs in one transaction. Failure rolls back all writes. It retains duplicate resolution, core identity, actual saved contact, guardian-responsibility, document, fee-selection, seat and concurrency guards. It has no manual contact-verification field and leaves `GuardianContactVerifiedAt` null. An already finalized retry returns the recorded Student/case without replaying handoffs or audit events. The legacy `/finalize` input and attestation behavior remain compatible.
+
 Student captured summaries exclude Aadhaar, APAAR, PEN, UDISE, PAN and raw photo payloads. Their existing canonical storage and read permissions remain authoritative. The original admission evidence stays on the applicant.
 
 ## App Login settings
@@ -342,12 +354,15 @@ Stale roster/revision, incomplete submission, invalid status/detail, conflicting
 
 Records preserve each controller's response contract: Directory/Profile, Settings, Transitions, Guardian Access and certificate/ID metadata use the shared `Result<T>` envelope. Changes, Duplicates, Reports and photo-upload metadata return their DTO or paged DTO directly. PDF, photo and Excel downloads return file responses. Permission names use the central `Students.Records.*` catalogue. Profile requires `Students.Records.StudentList.View`; directory search and academic options accept Student List, Student I-Card or Certificates View. Scope and policy masking still apply.
 
+GR requests require independent approval through the existing Records change workflow. They use the school's configured Correction review stages, with the standard admin stage as a fallback when no stages are configured. Only one open GR request per student is allowed. Both modes check the tenant's permanent and reserved numbers, including equivalent legacy numeric values. Auto uses the shared published GR series and advances its counter only when the approved proposal still matches the next available number at application. Application rechecks scope, the enrollment snapshot and the empty permanent GR fields, and writes the approved value and audit record in one transaction.
+
 | API family | Commands and permissions |
 |---|---|
 | `/api/students/records/settings` | GET effective/draft context and `/roles` under Settings.View; PUT `/draft` and POST `/preview` under Settings.Add; POST `/publish` under Settings.Add. Nullable `academicYearId` selects school defaults. |
 | `/api/students/records/{studentId}/profile` and `/details` | Records.StudentList.View plus tenant/student and historical enrollment scope. Optional `academicYearId` contextualizes placement and visible journey evidence. Profile adds admission/onboarding milestones and actual credential readiness; Details returns structured availability/current section data and frozen submitted Registration sources, original/current typed values, captured/editable field codes and returning differences. Reads never create custom storage. |
 | GET `/api/students/records/{studentId}/details/options` | Record-bound dynamic options query: `submissionId`, `fieldCode`, optional `parentId`, `searchTerm`, `skipCount`, `maxResultCount` (1–21), `selectedIds` (up to 20) and `selectedOnly`. The frozen source determines source kind and academic year. Available choices require Changes.View/Add and an editable field; selected-only labels require Records read and reject search/pagination. All reads enforce source masks, school hierarchy and target sibling Records eligibility/scope/Identity visibility. No Admission.Forms.View grant is required. |
 | `/api/students/records/changes/students/{studentId}/snapshot/custom-details` | Existing Changes.View snapshot contract. A `custom-details` request submits `{sources:[{applicationId,formInstanceId,submissionId,values:{FIELD_CODE:typedValue}}]}` with the existing reason, client key and expected snapshot; Changes.Add and the school's Correction approval policy govern application. Unknown/mismatched sources, fields, types, changed hidden fields, stale snapshots and conflicting compatible values fail closed. |
+| `/api/students/records/changes/students/{studentId}/snapshot/gr-number` | Active, writable, scoped Records student with a current active enrollment and neither permanent GR field assigned. Requires Changes.View and Changes.Add. Returns `autoGrNumber` or an `autoUnavailableReason` without allocating. A `gr-number` change submits `{mode,grNumber,registerReference?}` with the standard reason, client key and expected snapshot. Mode is `auto` or `manual`; manual requires a verified school-register reference. |
 | GET `/api/students/records/{studentId}/details/form-snapshot` | Records.StudentList.View, Changes.View and Changes.Add; full writable scoped profile required. Returns the existing unwrapped snapshot DTO with `section: registration-form`, hash and safe typed `{sources:[{applicationId,formInstanceId,submissionId,values}...]}` for the retained full Registration forms. |
 | PUT `/api/students/records/{studentId}/details/form` | Same existing read/create permissions; body `{clientKey,reason,expectedSnapshot,payload}` using the full form snapshot. Immediately applies one atomic `registration-form` Correction audit, returning the unwrapped `StudentRecordChangeDto` with Applied status. This explicit inline profile command does not run school approval stages; generic section/custom correction requests retain their published approval policy. Immutable submitted answers are never rewritten. |
 | Canonical Student document actions | The conventional `StudentDocumentAppService` list, required-status and download actions require Records.StudentList.View; upload requires StudentList.Add and delete requires StudentList.Delete, before scoped storage access. Ordinary uploads keep the existing RegistrationFormIssued/Registration lifecycle restriction. Admissions evidence and Onboarding workflow-document commands retain their separate source owners and action grants. |
@@ -357,6 +372,10 @@ Records preserve each controller's response contract: Directory/Profile, Setting
 | Other Records surfaces | Directory, profile, changes, historical overrides, duplicate review, documents/IDs, guardian reviews, and reports use their source-owned controllers in `HttpApi/Controllers/Student/Records/`. Existing certificate/ID permission compatibility is preserved. |
 | Certificates | Directory requests with `includeActiveStudentList=true` require Certificates.View and include enrolled Student List students without records onboarding; former students retain records eligibility. `academicMediumStageId` filters the academic stage. Directory options expose `stages` under Medium and `stageId` on Classes. Certificate preview, generation, history and downloads accept active scoped students while retaining identity masking and Leaving exit rules. GET `/api/students/records/certificates/batches` accepts `certificateType`, `generatedFrom`, `generatedTo` (offset-bearing timestamps spanning at most 32 days), `skipCount` and `maxResultCount` (1–100). It returns paged generation groups. GET `/batches/{batchId}?certificateType=...` returns the saved certificate snapshots for visible students. Both require Certificates.View. A multi-student generation uses one stable UUID followed by each student UUID as its idempotency key; older independent requests appear as individual groups. |
 | Student I-Card | GET `/api/students/records/ids/templates/list` lists saved designs; POST `/templates` creates one, and GET/PUT/DELETE `/templates/{id}` views, edits, or deletes it. The existing GET/PUT `/templates` remains for older clients and addresses the oldest design. List and read require StudentICard.View, create and update require StudentICard.Add, and delete requires StudentICard.Delete. A student can belong to only one saved template in an academic year; creating or updating a template moves selected students from any other template in that year to the saved template. The same student may use a different template in another year. POST `/preview`, `/issue`, and `/export` accept an optional `templateId` to select a saved design; omitted ID uses the oldest design for compatibility. Preview validates up to 100 student IDs; issue creates numbered snapshot cards with an idempotency key; export returns an A4 bulk PDF for up to 100 IDs and requires StudentICard.Add. Deleting a design leaves issued card snapshots intact. Individual PDF requires View; reprint and void require Add. Directory accepts repeated `boardIds`, `mediumIds`, `standardIds` and `divisionIds` query parameters for the multi-select student step; scope and identity masking still apply. |
+
+GET `/api/students/records/ids/history` requires `StudentICard.View` and returns `Result<PagedResultDto<StudentIdCardListItemDto>>`. Required query values are `academicYearId`, `boardId` and `mediumId`; optional `standardId` and `divisionId` refine the current saved Student placement, and a division requires its class. Every selected hierarchy value must belong to its supplied parent and the actor's current scoped options. Historical enrollment membership does not qualify a student. `search` (maximum 150 characters) matches current full student name, current GR number or issued card number. `skipCount` is nonnegative and `maxResultCount` is 1–100. `sorting` accepts `studentName`, `grNumber`, `standardName`, `divisionName`, `cardNumber`, `issuedAt` or `status`, with `asc`/`desc`; a field alone means ascending. Default ordering is `issuedAt desc`; every order uses ascending card ID as its stable tie-breaker. Invalid queries/sorts return `Students:Records:InvalidIdHistoryQuery`/`Students:Records:InvalidIdHistorySort` (HTTP model validation can reject annotated bounds first).
+
+Rows contain only `id`, `studentId`, `studentName`, `grNumber`, `standardName`, `divisionName`, `cardNumber`, `status` and `issuedAt`. The names, GR, class and division describe the current saved Student. Issued, Printed and Voided cards, including cards from older issuance years, remain included when both the current Student year and card year allow Identity visibility. Tenant ownership, active database actor, current Student scope and Full Records eligibility are enforced before count and pagination. Masked or ineligible cards do not contribute to search/count results. This metadata projection never loads frozen student/template JSON or full Student aggregates. Existing per-student history and card-ID PDF/reprint/void endpoints retain their frozen snapshot behavior; no issuance snapshot, permission or migration changes.
 
 I-card designs return `id`, `concurrencyStamp`, and a saved `selection` containing `academicYearId`, `boardIds`, `mediumIds`, `standardIds`, `divisionIds` and `studentIds`. Each array accepts at most 100 distinct, nonempty IDs; selected students require an academic year. Preview does not create or transfer assignments. A missing selection on a legacy design is an empty cohort; omitting or sending null `selection` on an update preserves its stored cohort. An explicit empty selection clears membership only after the same current authority checks as replacement.
 
@@ -466,6 +485,8 @@ Uniqueness includes admission Track, so General and RTE may coexist for the same
 Offering clone always uses the target cycle window (`useCycleDates=true`, null `openDate`/`closeDate` overrides), without copying or changing the source's custom dates.
 Generic create/update/bulk date contracts retain validated custom-date compatibility.
 
+Scoped Offering list/detail and staff Inquiry `capture-catalogue` rows include nullable `unavailableReason`, derived from the existing batched readiness and availability evaluation without additional per-row reads. Archived Inquiry/Registration forms are named with their restore/replacement guidance. Inactive availability takes precedence over configuration blockers; open rows have no unavailable reason. This display field does not change availability or write guards. Anonymous public capture retains its existing sanitized configuration messages.
+
 Fresh special Registration and family matching accept only RTE, Management, or Staff offerings configured for DirectRegistration or retained Both entry.
 RTE configuration still requires DirectRegistration, Form entry, no Inquiry stage and no Assessment stage.
 General and Inquiry-first offerings reject these special-entry commands with `Admissions.DirectRegistration.EntryNotAllowed`.
@@ -484,6 +505,7 @@ The same-request/same-payload retry returns the existing scoped application with
 ### Parent-only sibling selection
 
 Inquiry creation and Direct Registration accept additive `parentRelationship` (`father` or `mother`) and `existingParentApplicantId` alongside `existingFamilyId`.
+Staff Inquiry creation additionally accepts `familyLinkOnly: true` with `existingFamilyId` and a visible source child's `existingParentApplicantId`. In this mode `parentRelationship` remains the new child's own captured relationship; no source parent or relationship is selected or copied. The server rechecks matching authored parent contacts, active family/source, source feature View, tenant and record scope. The witness child need not own the matching contact; another visible child in the selected family can supply it. The child's own parent profiles, school-contact selection and authored form values remain authoritative. Its generic contact is stored on that applicant, so later Inquiry, Registration, Applicant profile and Student finalization operations neither read nor modify another child's shared guardian contact. Valid edits to the currently selected structured parent contact update this applicant-only contact, retaining structured-answer precedence over generic aliases; optional structured name/mobile clears do not erase an independently required generic contact. This membership proof grants no parent-account access or sibling Registration prefill; Onboarding retains its separate explicit existing-parent confirmation. No shared guardian is created when the selected family's primary guardian is missing. Omitting `familyLinkOnly` retains the existing saved-parent flow below; Direct Registration is unchanged.
 An existing family in this new flow requires the source applicant and explicit parent relationship; a family ID or matching email alone never grants portal access.
 Family match responses add `parents: [{sourceApplicantId,relationship,name,firstName,lastName,email,mobile}]`, `matchByEmail` and `matchByMobile`.
 A legacy generic Parent contact has nullable `relationship`; staff must explicitly identify Father or Mother rather than the server guessing.
@@ -494,6 +516,8 @@ Selection rechecks the active family, source applicant visibility, current saved
 The selected saved parent profile wins over typed child-form values; shared family contact rows are not overwritten.
 Public Inquiry rejects trusted existing-parent selection.
 Existing duplicate previews, cycle rules, request replay and finalization identity checks remain authoritative; name/date-of-birth similarity alone introduces no new hard identity block.
+
+The staff Inquiry duplicate preview includes visible same-cycle inquiries with an exact normalized student-name match and either the same recorded inquiry mobile or the same applicant date of birth. The additive `existingInquiryMatchesMobile` flag describes the selected inquiry's own mobile, separately from family-level contact matching. Missing dates supply no date match. The preview uses the existing inquiry scope and does not change write validation.
 Direct Registration retries compare the recorded submitted email/mobile and selected relationship/source to reject changed payloads.
 Pending authored parent profiles use a parameterized provider-backed JSON contact predicate intersected with current admission scope before projecting family IDs.
 Current Student Father/Mother contacts and ordinary saved primary contacts also use targeted queries; there is no arbitrary pending-applicant ceiling, unrelated JSON-profile materialization, Student aggregate graph or per-child query.
@@ -512,15 +536,12 @@ These additive fields use existing audited extra-property storage and require no
 | POST | `/api/student/enrollment/admissions/offerings/validate` | `Students.Admissions.Offerings.Add` |
 | GET | `/api/student/enrollment/admissions/offerings/{id}/availability` | `Students.Admissions.Offerings.View` |
 | POST | `/api/student/enrollment/admissions/offerings/cycles/{admissionCycleId}/bulk` | `Students.Admissions.Offerings.Add` |
-| GET | `/api/student/enrollment/admissions/offerings/{offeringId}/class-capacity` | `Students.Admissions.Offerings.View` |
-| GET | `/api/student/enrollment/admissions/offerings/{offeringId}/class-capacity/rooms` | `Students.Admissions.Offerings.View` |
-| PUT | `/api/student/enrollment/admissions/offerings/{offeringId}/class-capacity` | `Students.Admissions.Offerings.Add` |
 
 The compatibility create route accepts `POST /api/student/enrollment/admissions/offerings?admissionCycleId=...`.
 
 Offering list accepts optional `forSpecialRegistration=true`, default false. It filters RTE/Direct and Management-or-Staff/Direct-or-Both before counting, sorting and paging; cycle, type, academic scope, tenant, active/configuration/availability and search filters still apply. This prevents an inquiry-only first page from hiding eligible later rows. Availability filtering and returned status use the institution calendar date (`Asia/Kolkata`), including UTC/IST date boundaries. No permissions or stored routing change.
 The read model projects academic identity/name/parent columns as scalars. It does not materialize Board/Medium/Stage/Standard entities and their recursive academic AutoIncludes; returned identities, readiness checks and sort fields are preserved.
-Class capacity is shared by all tracks for the same academic year and Standard. PUT accepts distinct `roomIds`; it assigns existing positive-capacity rooms to that class, not a manually entered seat number. The GET summary returns `capacity`, `occupiedCount`, `remainingSeats`, `isFull`, `isOverCapacity`, and a non-blocking warning. With no assigned rooms, capacity is unknown rather than zero. The room-choice response flags rooms allocated to a different class.
+The former Offering class-capacity GET/PUT and room-choice endpoints are retired, and Offering detail/availability DTOs no longer include classCapacity. Staff/public Inquiry capture and Registration start do not check room or Seat-pool occupancy. Their existing availability, entry-route, authorization, identity, concurrency and duplicate rules remain authoritative.
 
 ## Workflow endpoints
 
@@ -562,6 +583,41 @@ The body includes `expectedCurrentStageInstanceId`, a unique `idempotencyKey`, r
 `deferFeeCollection: true` is accepted only in the active Payment stage with a nonblank reason of at most 512 characters, without skip or override. Retired saved allowCollectionLater settings no longer prohibit it. Deferral uses existing routing/audit and creates no Finance account, assignment, dues or receipt. Ordinary continuation requires a matching saved selection and any confirmed Finance payment or Finance-verified zero payable; historical flags alone are insufficient. Retired Full settings do not enforce a balance threshold.
 Admin overrides additionally require `Students.Admissions.Applications.Add`.
 The response returns current workflow status, stage timestamps, immutable transition history, and `nextRequiredAction`. The next action is derived from the server stage-type registry and is `null` after the workflow completes.
+
+## Registration print contract
+
+Form read DTOs expose `printSettings`; create/update input accepts it optionally.
+The settings object contains nullable `template` (`simple`, `boxed-grid` or `structured-classic`), `layout` (`compact` or `spacious`), `paperSize` (`A4`, `A5`, `LETTER` or `LEGAL`), boolean `showSchoolHeader`, `showPhoto` and `showSignature` flags, and optional typed `advanced` settings.
+Legacy templates normalize to Simple with Compact A4 and all three flags enabled; new-client starters explicitly choose Boxed Grid. Template and density remain independent.
+Unsupported template/layout/paper values raise the existing `Admissions.FormInvalidDefinition` error before aggregate or metadata changes.
+Omitting the settings on an older-client update retains the saved settings; legacy definitions without settings receive defaults.
+Omitting only `template` while updating other print settings retains the current saved template.
+Omitting `advanced` or sending it as null preserves the saved advanced configuration; sending `{}` explicitly resets it. Nullable child members are omitted from JSON. Advanced groups are `paper`, `border`, `style`, `branding`, `header`, `photo`, `footer`, `flow`, `sections`, `fields`, `content` and `copies`; no executable content or arbitrary style declarations are accepted.
+
+| Advanced setting | Server bounds |
+|---|---|
+| Page margins / border inset | 5–30 mm / 2–25 mm |
+| Body / title font size | 8–14 / 12–24 points |
+| Photo width / height | 20–55 mm / 25–70 mm |
+| Logo and banner geometry | Position 0–100%; size 5–100%; contained inside the header band |
+| Per-section / per-field maps | Up to 128 / 512 distinct authored codes; codes up to 128 characters |
+| Section columns / blank rows / field writing lines | 1–4 / 1–30 / 1–8 |
+| Instructions and declaration | Up to 2000 characters per translated value |
+| Titles, captions, signature labels and checklist items | Up to 128 characters; at most 20 checklist items per language |
+| Translations / colours | Up to 8 valid language codes / `#RRGGBB` |
+
+All placement, alignment, orientation, palette, font, border, spacing, width, answer-style and copy-mode strings are allowlisted. Invalid nested values reject the command before aggregate mutation. Section/field options address authored question codes and do not alter question bindings, values, required rules or Inquiry locks.
+Clone/new-version drafts copy the experience metadata, version comparisons report print-setting changes, and Inquiry composition retains the Registration definition's settings.
+Frozen application definitions retain the settings captured with that schema.
+
+`GET /api/student/enrollment/admissions/applications/{id}/form` additionally returns `persistedValues: [{ fieldCode, valueJson }]`, copied from stored form-instance answers before editor-prefill projection.
+An empty array means no Registration answers have been saved; it must not fall back to suggested editor answers.
+The existing `values`, `autoFilledFieldCodes` and family-prefill behavior remain available to editors.
+The response still carries the pinned definition/version and separate frozen Inquiry context.
+It also exposes the existing application's `applicationNumber` for the printed Registration No. line, without another lookup.
+When the pinned print header enables academic details, `printAcademicDetails` returns the requested optional `board`, `medium`, `class` and `academicYear` display names from that authorized application's offering/cycle. One tenant-filtered scalar join supplies them per form read; there is no catalogue endpoint, permission expansion or query on each preview render. With all academic header flags off, the property is omitted and the join is skipped. Missing linked setup data is not replaced with guessed labels.
+Application View, tenant and application-scope checks remain unchanged; printing introduces no separate server PDF endpoint or write permission.
+An explicit save before printing uses the existing draft-save command and its Add permission/concurrency checks; a print read does not submit or advance the application.
 
 ## Application form runtime
 
@@ -700,7 +756,7 @@ New session input adds `scopes: [{ admissionOfferingId, workflowStageDefinitionI
 | `POST sessions/preview` | ManageSessions; `{ session, sessionId?, sessionConcurrencyStamp?, skipCount, maxResultCount, search?, stageInstanceIds? }`; paged candidates plus independent proposed bookings (up to 200), availability and fingerprint. Optional `stageInstanceIds` accepts 1–200 distinct non-empty IDs and intersects the authorized eligible stages before pupil deduplication and interview proposals; omission retains the existing combined preview. It never expands authorization or books additional applicants. |
 | `POST sessions/confirm` | ManageSessions plus Book when candidates are selected; `{ session, sessionId?, sessionConcurrencyStamp?, idempotencyKey, previewFingerprint, bookings }`; atomic creation/reservation/booking or additional booking of an existing session |
 
-Confirmation rechecks eligibility, application versions, room/calendar/interviewer conflicts, shared seats and exact free interview slots. Durable receipts bind retries to actor and payload; later arrivals are never implicitly booked. Preview excludes conflicting appointments and proposes one application per pupil. Reservation dates/times use the existing India school-day timezone; cross-school-day sessions are rejected. Pending room approval holds bookings but blocks attendance/results. Direct generic room edits/cancellation of a live assessment reservation are rejected with guidance to Assessments; rescheduling replaces the reservation through the existing approval path. Session cancellation with `cancelPendingBookings: true` requires ManageSessions and Book and atomically cancels only unstarted pending attempts before releasing the room. Booked individual interviews cannot silently change slot layout. Partial-scope readers receive only authorized links and `canManage: false`; whole-session management requires every linked Offering. Missing attendance remains pending.
+Confirmation rechecks eligibility, application versions, room/interviewer conflicts, shared seats and exact free interview slots. Admissions assessment preview, creation, booking, rescheduling and linked room approval are independent of Academic Calendar holidays, vacations and emergency-closure dates. Physical maintenance blocks, existing room reservations, timetable occupations, interviewer conflicts and room approval still apply. Ordinary Academic room bookings retain their calendar checks; clients cannot disable those checks through the public booking DTO. Durable receipts bind retries to actor and payload; later arrivals are never implicitly booked. Preview excludes conflicting appointments and proposes one application per pupil. Reservation dates/times use the existing India school-day timezone; cross-school-day sessions are rejected. Pending room approval holds bookings but blocks attendance/results. Direct generic room edits/cancellation of a live assessment reservation are rejected with guidance to Assessments; rescheduling replaces the reservation through the existing approval path. Session cancellation with `cancelPendingBookings: true` requires ManageSessions and Book and atomically cancels only unstarted pending attempts before releasing the room. Booked individual interviews cannot silently change slot layout. Partial-scope readers receive only authorized links and `canManage: false`; whole-session management requires every linked Offering. Missing attendance remains pending.
 
 Available condition facts are `assessment.outcome`, `assessment.marks`, `assessment.attemptNumber`, `assessment.attendance`, and `assessment.reviewed`.
 Current configured results become authoritative without a separate result-review step.
@@ -711,9 +767,19 @@ Unknown policy versions, stale stamps, unavailable capacity, missing evidence, a
 
 `POST /api/student/enrollment/admissions/inquiries/{id}/confirm-family` uses the existing Inquiries Add/Manage action at HTTP, app-service and command boundaries. Input contains `existingFamilyId`, `existingParentApplicantId`, explicit `parentRelationship` (`father`/`mother`) and target `concurrencyStamp`; the response is the current Inquiry with `siblingFamilyConfirmed`. Source reads additionally require source feature View and current scope. New confirmation is limited to a pending target with its own active, untouched admission identity and exclusive original family. Existing Application, Student, Onboarding, account or Finance evidence blocks reassignment; a matching source parent's existing account does not. Exact persisted same-family/source/role retries do not recopy data or add audit; stale or conflicting new intent is rejected. Captured Inquiry schema/answers, reserved identity and shared source/guardian/accounts remain unchanged. Source/target Applicant locks precede the Inquiry lock, and source mutation matching shares that fence with existing Add sibling and Direct Registration.
 
+For sibling membership without replacing the pending child's parent details, send `familyLinkOnly: true`, the selected `existingFamilyId`, a visible child witness as `existingParentApplicantId`, and the target `concurrencyStamp`; omit `parentRelationship`. The same pending-identity and downstream-evidence fences apply to a new family assignment. Existing same-family requests revalidate target/source scope and active membership and then return without mutation or another audit, including retries with the original browser stamp. Parent roles, both parent profiles, school-contact responsibility and captured Inquiry answers remain unchanged. Applicant-only contact snapshots protect subsequent reads/edits and Registration/Student handoff from the shared family guardian. Family-only confirmation is stored separately from `SiblingParentConfirmation` and cannot authorize portal-account reuse, account changes or sibling-parent autofill. Old saved-parent requests and their exact retry behavior remain compatible.
+
+Inquiry detail/list adds `hasLinkedSiblings`, computed from other active applicants in the same family visible in the caller's current admission scope. Both children can therefore display linked membership. This informational flag is independent of the legacy `siblingFamilyConfirmed` parent-account proof and grants no authority. No historical parent/profile repair or data migration is performed.
+
 The existing inquiry capture-context response includes nullable `academicYearStartDate` (a calendar date) and `minimumAgeYears`. After the offering scope check, these are read from its cycle's Academic Year and its Standard's existing `AgeLowerLimit`; non-positive minima return null. Clients use them for advisory DOB age feedback in inquiry create/edit. This does not add inquiry validation, change workflow eligibility policies, require Institute Setup permissions, or introduce persisted settings/migrations.
 
 The inquiry collection route prefix is `/api/student/enrollment/admissions/inquiries`.
+
+Inquiry list and CSV export accept optional `creationTimeFrom` (`CreationTimeFrom`, inclusive) and `creationTimeBefore` (`CreationTimeBefore`, exclusive) ISO 8601 UTC timestamps against the saved Inquiry `CreationTime`.
+Each omitted bound leaves that side open; omitting both retains existing list behavior.
+When both bounds are supplied, an equal or earlier upper bound is rejected with `Admissions:Inquiry:InvalidInput`.
+The shared tenant- and scope-constrained query applies these bounds before counting and paging; CSV export uses the same filtered population without page truncation.
+Existing permissions and other filters remain authoritative, and no schema migration is required.
 
 Inquiry publication requires explicit, required, editable, reachable Student name and coherent primary adult name/mobile mappings. New builder defaults add the configured **Primary contact** question (`Inquiry.ParentRelationship`) with Father/Mother/Guardian choices; Guardian requires the generic primary name/mobile slots. Draft saves remain available while incomplete. Writable full-name and split-name identity mappings cannot be mixed; read-only Registration full-name context remains allowed. Legacy single bound Father/Mother paths and safe code aliases remain readable without runtime question injection. Existing captured roles/read-only contacts protect edits; shared phone/name values never establish role or sibling-account provenance.
 
@@ -814,6 +880,7 @@ Bulk creation previews every row and commits all rows in one unit of work only w
 | `Admissions.Offering.HierarchyOutOfScope` | UserScope does not allow the hierarchy |
 | `Admissions.OfferingDateRangeInvalid` | Override dates are missing, reversed, or outside the cycle |
 | `Admissions.Offering.ConfigurationIncomplete` | Published runtime configuration is incomplete |
+| `Admissions.Offering.Inactive` | New intake/start is blocked until an administrator activates the offering; normalized errors explain this recovery without changing the code or status |
 | `Admissions.Offering.IdentityLocked` | Runtime applications lock identity |
 | `Admissions.Offering.HasApplications` | Delete is blocked by runtime history |
 | `Admissions.Offering.ConcurrencyConflict` | The supplied stamp is stale |
@@ -888,11 +955,11 @@ The nullable `requiredCredentialDeliveryConfirmed` reports the existing activati
 
 ## Eligibility APIs
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Review APIs
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Managed Form stage APIs
 
@@ -939,11 +1006,11 @@ Base: `/api/student/enrollment/admissions/applications/{applicationId}/joining-d
 | `POST preview` | Candidate `joiningDate` as `yyyy-MM-dd`, optional `prorationPolicyVersionId`, and existing variable-fee amounts. Returns Finance-calculated totals, optional proration result, optional `prorationPolicy` identity (`policyId`, `policyVersionId`, `policyName`, `policyVersion`, `source`) when a policy is applied, and warnings. Does not save the date, create an account, or persist dues. |
 | `PUT` | Confirms `joiningDate` with `concurrencyStamp`; requires Finance Fee Collections Add plus Admission Applications Edit, or Student Onboarding Edit after finalization. Returns refreshed date state. |
 
-Confirmation is available in an open current Payment stage or open Onboarding case after a fee structure is selected. The date is stored on the application and synchronized to its current Registration bound/explicit legacy date answers, captured applicant data, and already-created Student captured admission data. Submitted form snapshots remain immutable and explicit form/application audit records confirmation. Any prepared assignment or payment evidence locks date changes; ordinary Registration saves enforce the same guard. Invalid dates and dates after the academic-year end are rejected. Dates before the year start remain valid actual facts; existing Finance policy determines their treatment. `POST /api/fee-collections/admission-applications/{applicationId}/prepare` accepts optional `prorationPolicyVersionId` and `policyOverrideReason`; Finance verifies the active current version and requires `Finance.Fees.StructureAssign.OverridePolicies` plus a reason for a non-default policy before pinning it. Collection preparation and payment still use the existing Finance authority.
+Confirmation is available in an open current Payment stage or open Onboarding case after a fee structure is selected. The date is stored on the application and synchronized to its current Registration bound/explicit legacy date answers, captured applicant data, and already-created Student captured admission data. Submitted form snapshots remain immutable and explicit form/application audit records confirmation. Any prepared assignment or payment evidence locks date changes; ordinary Registration saves enforce the same guard. Invalid dates and dates after the academic-year end are rejected. Dates before the year start remain valid actual facts. The academic-year Start Date configured in Institute Setup is each school's proration eligibility cutoff: before it, Payment previews and new fee preparations use full scheduled charges with no proration policy attached; on or after it, the existing academic-year default and authorized override behavior applies. A policy version submitted before the cutoff is rejected. Existing prepared snapshots and payment evidence remain unchanged. `POST /api/fee-collections/admission-applications/{applicationId}/prepare` accepts optional `prorationPolicyVersionId` and `policyOverrideReason`; Finance verifies the active current version and requires `Finance.Fees.StructureAssign.OverridePolicies` plus a reason for a non-default policy before pinning it. Collection preparation and payment still use the existing Finance authority.
 
 ## Managed Offer stage APIs
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 Application counsellor list/assignment endpoints remain under `/api/student/enrollment/admissions/applications`, with current tenant, Offering hierarchy and concurrency enforcement. Retired Offer operations do not change application ownership.
 
@@ -1113,12 +1180,15 @@ Staff routes use `/api/student/enrollment/admissions/applications/{applicationId
 | GET root | Saved recipient choices, request/delivery/progress, concurrency stamp, correction choices and server capabilities; never the stored token |
 | GET `/email-history` | Registration-link snapshots and recorded Communication attempts for this application; requires Applications View and returns safe provider guidance without protected links or raw provider diagnostics |
 | POST `/send` | `{recipientRelationship, concurrencyStamp, idempotencyKey}`; create or replace a seven-day initial link |
+| POST `/copy-link` | Requires Applications Edit and scoped View. Send `{requestId, concurrencyStamp, idempotencyKey}` to copy the current writable initial link or `{recipientRelationship, concurrencyStamp, idempotencyKey}` to issue a link without email when no live link exists. Returns the private URL in a no-store response. |
 | POST `/email` | Send-command fields plus `{email,expectedEmail,reason?}`; compare the saved adult email and application stamp, save an eligible draft contact, synchronize compatible draft answers, revoke prior links and return refreshed context without sending |
 | POST `/corrections` | Send input plus `{notes,fieldCodes,documents:[{stageInstanceId,requirementCode}]}`; grant only requested eligible changes |
 | POST `/revoke`, `/takeover`, `/retry-delivery` | `{concurrencyStamp,idempotencyKey}`; retries retain the existing eligibility and uncertain-delivery safeguards |
 | POST `/apply` | Command plus `{reason}`; apply a ready post-submission proposal through the audited form-correction owner |
 
 Recipients expose `canChangeEmail` and `emailChangeBlockedReason`; submitted or linked/shared contact edits retain their governed owner. `canRequestDocumentCorrections` identifies the current eligible Documents stage; a document-only correction has empty `fieldCodes` and nonempty current-stage `documents`. `emailDeliveryBlockedReason` explains an explicitly unavailable Email setup without blocking staff form editing. Application-wide profile scope is revalidated for email changes, and exact command retries never restore an older email after a later edit.
+
+Copy-only links use the existing expiry, recipient and application scope rules and start with delivery status `NotSent`. Newly sent initial links retain the encrypted token for authorized copying while the link is writable. Older sent links whose token was cleared remain usable by the recipient until expiry, and their URL is unavailable to Copy link. Status and history return only safe metadata.
 
 Public routes use `/api/public/admission-registration` and require exactly one `X-Admission-Registration-Token` header. They return raw context rather than the staff Result envelope. Responses are private/no-store. The frontend receives its token in a URL fragment, keeping it out of route/query logging.
 
@@ -1140,9 +1210,21 @@ Canonical evidence now permits a null staff `submittedBy` for a parent upload an
 
 The existing Student I-Card template DTO adds `schemaVersion` (default 1), nullable `layoutJson` and `printSettingsJson`, and `backSideEnabled` (default false). Schema 2 accepts `classic-identity` alongside existing presets. New configuration stays in existing template JSON and immutable issued snapshots, without a database migration. Old saved/issued templates remain readable and use their existing renderer. Schema 1 does not accept new layout/back configuration.
 
-Schema-2 layouts retain canvas `width`/`height`, orientation, colours and positioned `front.elements`/`back.elements`, and require physical `widthMm`/`heightMm` of 30–200 mm. Existing student data bindings remain `StudentName`, `GRNumber`, `Class`, `Division`, `AcademicYear` and `DateOfBirth`; `CardNumber`, school name/address, header/footer and static text are also supported. Existing `fields`, photo and QR flags remain effective on either side. Barcode elements use the existing card number and introduce no verification or access service.
+Schema-2 layouts retain canvas `width`/`height`, orientation, colours and positioned `front.elements`/`back.elements`, and require physical `widthMm`/`heightMm` of 30–200 mm.
+Student data bindings are `StudentName`, `GRNumber`, `Class`, `Division`, `AcademicYear`, `DateOfBirth` and `RollNo`.
+`RollNo` is a schema-2 binding captured from the student's current placement under the existing scope and Identity masking checks.
+`CardNumber`, school name/address, header/footer and static text are also supported.
+A dynamic text element may include an optional `prefix` of up to 150 characters, applied before its resolved value in PDF output.
+Layouts without `prefix` continue to use their saved label and separator settings.
+The `fields`, photo and QR settings apply to both sides. Barcode elements use the existing card number.
 
 The [employee identity-card print contract](../hr/api.md#configurable-employee-identity-cards) defines the shared millimetre settings, element/font limits, fixed-size A4 capacity, duplex reflection, back rotation/calibration and side selection. Student export uses those settings with the existing request's cards-per-page selection. Issued download/reprint uses card-sized output from the frozen configuration, preserving the existing school-identity snapshot and authorized photo/logo loaders. Disabled backs produce no empty pages; oversized schema-2 text produces an actionable configuration error rather than truncating identity text. Existing scope, masking, cohort transfers, permissions, idempotency and document events remain authoritative.
+
+The [visual studio contract](../hr/api.md#visual-studio-assets-and-personal-photo-edits) also defines static raster images, rotation/opacity, ellipse and typography styles, strict decoding and payload limits. `GET /api/students/records/ids/photos/{studentId}` returns the normal Result envelope with `{recordId,imageData,sourceHash}` in `data`; the hash covers the current original photo bytes. I-Card View, active tenant/actor, Student Records eligibility, current student UserScope and Identity masking are checked before the photo blob is read.
+
+Student `POST /api/students/records/ids/export` and `POST /api/students/records/ids/issue` accept optional `photoEdits: [{recordId,sourceHash,imageData}]` under their existing Add action. All selected students are authorized before validating edits; IDs must belong to that cohort and hashes must match their own current original photos. The shared 512 KB per processed raster, 2048 × 2048 dimensions and 8 MB batch limits apply. Any invalid or stale edit rejects the request before issuance writes. Each issued card freezes only its own processed photo in private `_ProcessedPhotoData` inside its existing `StudentSnapshotJson`. Download/reprint use that frozen raster even if the original blob later changes or is removed. The original profile photo, reusable template and other students' snapshots are untouched; public card/history DTOs omit private snapshot keys and template reads contain no personal photo overrides. No database migration is required.
+
+The shared original-reader compatibility and safe decode/normalization rules apply to student photos as well. Photo responses disable browser/proxy caching. `photoEdits` and nested `imageData` are excluded from action audit parameters, and `StudentSnapshotJson` is excluded from entity property-change audit payloads. Selected students, document identifiers/status, operator metadata and explicit issuance/download/reprint events retain their existing auditing.
 
 
 ## Compliance report projections
@@ -1168,3 +1250,38 @@ Identity Exceptions fails with `Students:Records:RestrictedFields` when the gene
 Visible identifiers expose at most their final four characters; Aadhaar uses only the stored last-four value, never the encrypted value or hash.
 Missing compliance uses canonical not-provided/not-asked states and unavailable fields; no eligibility, state certification or official submission result is inferred.
 Preview and export are reads and never update UDISE/verification statuses.
+
+## Student setup guide
+
+`/api/student/setup` exposes authenticated school configuration guidance using existing exact Student View/Add grants.
+No new permission, schema, migration, or configuration-write endpoint is introduced.
+
+| Endpoint | Contract |
+|---|---|
+| `GET visit-status` | Returns `canAccessSetup`, `hasVisitedConfiguration`, and `firstVisitedAt`; reading never records a visit. |
+| `POST visit` | Optional `settingKey`; verifies that setting's exact View grant and records the first school-wide entry atomically. |
+| `GET {academicYearId}` | Optional `academicMediumId` and `standardId`; returns shared year progress and permission-filtered configuration states. |
+| `PUT {academicYearId}/progress` | Saves guide metadata with required `concurrencyStamp`, `currentStageKey`, optional `currentSettingKey`, `deferredSettingKeys`, and `finishReview`; stale writes return 409. |
+
+Stages are `welcome`, `admissions`, `numbering`, `records`, `workflows`, and `review`.
+Settings are `admission-periods`, `admission-forms`, `admission-stages`, `admission-offerings`, `public-inquiry-links`, `gr-number`, `roll-number`, `houses`, and `records-policy`.
+`canManage` requires both View and Add plus the owning configuration's data scope.
+Periods use Admissions; Forms use Admission Forms; Stages use Admission Workflows; Offerings and Public Inquiry Links use Admission Offerings; numbering uses Onboarding; Houses and Records Policy use their corresponding Records actions.
+Hidden settings remain `unavailable`, are not queried for configuration, and cannot be submitted as current/deferred settings.
+Hidden saved deferrals are preserved and omitted from the caller's response.
+States are `configured`, `empty`, `context-required`, or `unavailable`; presence is advisory and never certifies complete class coverage.
+Numbering requires medium and class context and an applicable effective published rule; `configurationSource` identifies `school` or `academic-year` inheritance.
+Records policy always resolves the effective published policy or safe starter (`school-default`); an unpublished draft does not replace that effective policy.
+Invalid input returns `ShikshaMitra:StudentSetup:Invalid`; malformed persisted guide metadata returns `ShikshaMitra:StudentSetup:InvalidStoredState` without resetting data.
+
+## Certificate selection context
+
+With `includeActiveStudentList=true` and an academic year, directory rows report `isCurrentAcademicYear` from the permanent Student record. A historical enrollment can still supply the displayed class and division for history. This flag lets clients withhold generation for a past placement while the server retains its issuance year guard.
+
+Directory requests with `includeActiveStudentList=true` additionally match the full student name and admission/registration form number case-insensitively. Matches remain inside the existing tenant, user scope, year and Identity-visibility predicate; the flag still requires Certificates.View.
+
+Certificate preview and creation accept optional `expectedAcademicYearId`. When supplied, it must match the permanent Student current academic year; a mismatch, including an unset current year, returns `Students:Records:CertificateYearMismatch` before preview or issuance. Creation rechecks this within the issuance transaction and before recovering an existing request. The selected-student client supplies its retained source year; omitted values preserve existing client compatibility. The guard does not create historical-placement certificates or limit all-date per-student history. GET `/api/students/records/certificates/students/{studentId}/history` returns metadata for all certificate types; GET `/api/students/records/certificates/{certificateId}` returns its saved snapshot. Reprint, duplicate and void retain their existing permissions, reasons, numbering and snapshot rules.
+
+Focused certificate previews may request `includeBranding: true`; saved reads may use `GET /api/students/records/certificates/{certificateId}?includeBranding=true`. Under the existing Certificates.View and student scope checks, the optional `branding` response contains PNG/JPEG `logoDataUrl` and `bannerDataUrl` resolved from the template's captured SchoolIdentity asset IDs. It never returns signature bytes. Plain reads/previews, generation, batch/history and PDF reads remain image-free in their JSON responses. Missing configured assets leave branding absent; saved and duplicate reads retain their original assets after Institute Setup defaults change. Existing explicit template overrides and Hidden choices retain precedence, and the PDF renderer remains unchanged.
+
+Preview and generation also accept optional `omitSchoolBranding`. With `true`, the certificate omits logo and banner after resolving its effective school assets and template overrides. School name, address and the PDF signature retain their existing behavior. The issued snapshot stores the choice for saved View, Download, Reprint and Duplicate. Omission defaults to `false` for existing callers and snapshots. A retry with the same choice recovers the existing issuance; reusing that key with the opposite choice returns `Students:Records:DocumentIdempotencyConflict`. `includeBranding` continues to control only whether the response carries image bytes.

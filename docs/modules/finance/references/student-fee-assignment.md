@@ -42,8 +42,11 @@ All routes below are under `/api/student-fee-structure`; the client base URL alr
 | GET `policy-options?studentId=<student>&academicYearId=<year>` | `.View` + `.OverridePolicies` | Latest active, effective versions for each policy in the accessible student's academic year |
 | PUT `student/{studentId}/policies` | `.View` + `.OverridePolicies` | Concurrency-protected update of concession, refund and collection selections; historical assignment proration stays pinned; no obligation regeneration |
 
+| POST `student/{studentId}/optional-service-stop/preview` | `.View` + `.StopOptionalService` | Count and total of eligible future installments and a protected confirmation token |
+| POST `student/{studentId}/optional-service-stop` | `.View` + `.StopOptionalService` | Apply audited non-cash cancellation credits to the previewed installments |
+
 The abbreviated permission suffixes refer to `Finance.Fees.StructureAssign`.
-Fixed published amounts remain read-only; included variable heads accept student amounts under the existing assignment rules.
+On first assignment, fixed published amounts are read-only. An explicit unused assignment correction also allows an included optional fixed fee amount to change with `.OverrideAmount`. Included variable heads accept a single amount for the service range before configured proration.
 Manual dates require the existing `Finance.Policies.ProrationPolicy.OverrideChargePeriod` permission.
 Neither operation checks concession permissions.
 
@@ -70,7 +73,7 @@ Eligibility checks historical principal/late-fee allocations, year/student/accou
 Historical evidence checks disable only the soft-delete filter; tenant scope remains enabled.
 Concession, adjustment, refund, waiver, withdrawal and persisted late-fee use also block replacement with an actionable explanation.
 Legacy or inconsistent assignment/due evidence requires reconciliation.
-After payment, the existing policy editor remains the supported assignment edit surface.
+After payment, policy changes and optional-service cancellation use their own commands. Neither command rebuilds the original schedule.
 
 Correction retains the canonical assignment ID and appends original structure/revision, snapshot, current policy pins, complete prior due evidence, actor, timestamp and reason to `AssignmentCorrectionHistory` in existing ABP ExtraProperties.
 It archives only unused tracked dues through `SupersedeUnusedAssignment` and normal checked updates, flushes those updates to release filtered schedule uniqueness keys, and inserts the recalculated schedule in the same new Serializable transaction.
@@ -84,6 +87,14 @@ Successful retries recover the original group identity from correction history a
 A first correction returns `Assigned`; an identical successful replay returns `AlreadyAssigned` without new dues, including after later payment.
 `Finance:Assignment:StructureEditBlocked` explains payment/downstream restrictions; `Finance:Assignment:MixedOriginalStructures` rejects incompatible bulk groups.
 Stale identity, stamp, token, reason or source facts use the existing `StalePreview` error.
+
+## Stop an optional service
+
+An authorized staff member can stop an included recurring optional fee by selecting the last service day and entering a reason. The server considers installments whose coverage starts after both that day and the current date and whose due date has not passed. It leaves periods already started or overlapping the service end in place. An installment must be wholly unpaid and free of payment and downstream financial evidence. The cutoff never expands the saved service dates.
+
+Confirmation revalidates a short-lived, user- and tenant-bound preview of the exact due rows, stamps and cancelled amount. It applies a non-cash adjustment credit equal to each eligible row's outstanding amount in one serializable transaction. Existing principal, terms, paid amounts, receipts, and the original assignment snapshot are retained. The signed input contains the academic year, optional fee head, ISO calendar date, reason and unique request ID. The audit records the actor, reason, cutoff and due amounts. An identical request ID and input can replay the committed result without applying another credit. No schema migration is needed.
+
+`Finance.Fees.StructureAssign.StopOptionalService` is a separate exact grant. Existing non-admin roles receive it through the permission editor. Student and year scope and active enrollment apply to preview and confirmation.
 
 ## Student policy selection and edits
 
@@ -118,7 +129,7 @@ The new exact permission is registered in the backend catalogue. It is included 
 }
 ```
 
-`feeHeadDetails` accepts `{feeHeadId, amount}` only when the fixed amount matches the published structure.
+`feeHeadDetails` accepts `{feeHeadId, amount}`. A price different from the published structure is allowed for an included optional fixed fee during an authorized unused assignment correction.
 Included variable heads use `variableFeeHeads: [{feeHeadId, amount, zeroAmountReason}]`; a zero amount requires its reason.
 Per-month installment replacements are not accepted.
 All mandatory heads remain included.
@@ -130,6 +141,7 @@ Each `servicePeriods` item contains `feeHeadId`, `source`, and source-specific f
 | Source | Verification |
 |---|---|
 | `AcademicYear` (default) | Configured year boundaries; explicitly not a verified joining date |
+| `BoardAcademicYear` | The published structure board in the same year supplies the verified default dates when they fall within the academic year. Provided endpoints must match the board configuration. |
 | `TransportService` | `sourceReferenceId` must resolve to that student's route assignment and the fee head must belong to Transport; server reads and intersects the dates with the academic year |
 | `ManualOverride` | ISO dates within the academic year, required reason, explicit date-override permission; no source-reference ID |
 | Admission, Hostel, Exit or unknown | Rejected as unavailable until an authoritative source adapter is implemented |
@@ -231,3 +243,16 @@ Focused coverage lives in `StudentFeeAssignmentWorkspace_Tests` and `AssignmentA
 `StudentFeeAssignmentPostgres_Correction_Tests` passes three cases on a private PostgreSQL18 database: collection wins after correction read and prevents stale archival; correction wins after collection read and rejects the obsolete payment; and an injected replacement insert failure after old-dues flush restores the original schedule, canonical snapshot/fingerprint/history. It uses the production receipt-sequence repository and checks sequence persistence/rollback. The guarded fixture requires a new empty high-port loopback `assignment_correction_test_*` database via `FEE_ASSIGNMENT_TEST_POSTGRES`, never resets populated databases, and creates the schema from the current EF model. These cases prove correction transaction behavior; they do not execute migrations or production OAuth.
 
 Frontend route, components and browser checks: [frontend assignment reference](../../../../../Shikshamitra-FE/docs/finance/references/student-fee-assignment.md).
+
+## Bounded assignment reads and captured placement
+
+Bulk contexts authorize the selected enrollments first, then batch canonical assignments, blockers, admission links and joining-date facts.
+`includeEditDetails=false` omits candidate/policy editing data for a read-only single-assignment view; the default remains true for existing editing clients.
+Bulk preview shares structure, metadata, year, head, term and current-policy inputs within that preview only.
+Each confirmation retains fresh authoritative reads and its own student transaction; cached preview inputs never authorize a write.
+
+New assignments capture academic class, division and roll at commit.
+Historical scope and labels use that placement after promotion; legacy history uses only verified recorded enrollment/account evidence and leaves unknown division or roll unknown.
+`20261117143000_IndexAssignmentHeadEvidence` adds nullable placement and selected-head evidence with a GIN index.
+Its tolerant backfill distinguishes unknown/corrupt selections from an explicitly empty set, includes selected zero-value heads, and preserves original snapshots and amounts.
+Apply the additive migration before deploying the matching backend; no deployed database was changed by this work.

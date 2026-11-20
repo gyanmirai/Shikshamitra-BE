@@ -22,7 +22,7 @@ public class StudentDocumentSnapshotService(StudentRecordsAccessService access, 
 		var query = await students.GetQueryableWithoutAutoIncludesAsync();
 		var row = await AsyncExecuter.FirstAsync(query.Where(s => s.Id == studentId && s.TenantId == CurrentTenant.Id).Select(s => new
 		{
-			s.FirstName, s.MiddleName, s.LastName, s.GrNumber, s.GrNo, s.AcademicYearId, s.PhotoBlobName, s.AcademicBoardId, s.AcademicMediumId, s.AcademicMediumStageId,
+			s.FirstName, s.MiddleName, s.LastName, s.GrNumber, s.GrNo, s.RollNo, s.AcademicYearId, s.PhotoBlobName, s.AcademicBoardId, s.AcademicMediumId, s.AcademicMediumStageId,
 			AcademicYear = s.AcademicYear != null ? s.AcademicYear.Name : null,
 			Class = s.Standard != null ? s.Standard.Name : null, Division = s.Division != null ? s.Division.Name : null,
 			Birth = s.AdditionalDetail != null ? s.AdditionalDetail.DateOfBirth : null
@@ -31,7 +31,7 @@ public class StudentDocumentSnapshotService(StudentRecordsAccessService access, 
 		{
 			["StudentName"] = string.Join(" ", new[] { row.FirstName, row.MiddleName, row.LastName }.Where(x => !string.IsNullOrWhiteSpace(x))),
 			["GRNumber"] = row.GrNumber ?? row.GrNo?.ToString(), ["AcademicYear"] = row.AcademicYear, ["Class"] = row.Class,
-			["Division"] = row.Division, ["DateOfBirth"] = row.Birth?.ToString("yyyy-MM-dd"), ["_PhotoBlobName"] = row.PhotoBlobName
+			["Division"] = row.Division, ["RollNo"] = row.RollNo?.ToString(), ["DateOfBirth"] = row.Birth?.ToString("yyyy-MM-dd"), ["_PhotoBlobName"] = row.PhotoBlobName
 		}, row.AcademicBoardId, row.AcademicMediumId == Guid.Empty ? null : row.AcademicMediumId, row.AcademicMediumStageId);
 	}
 }

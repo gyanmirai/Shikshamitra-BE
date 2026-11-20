@@ -184,7 +184,7 @@ The active frontend no longer calls the combined `/api/fee-structures/settings` 
 
 Each owning policy list/detail now exposes `currentVersionId`, `currentVersionNumber` and `isAttachable`. A current ID must match the active master's exact version number, academic year and active immutable snapshot. Missing snapshots are not replaced with arbitrary history. GET lists continue to return one row per master. Payment Term lists expose `publishedVersionId` and `publishedVersionNumber`; `currentVersionNumber` alone may describe an unpublished working draft and is unsuitable for attachment.
 
-New draft policy defaults are a frontend initialization choice: select a single eligible current default once per family, after all lookup pages finish. Never initialize saved records or overwrite a clear/manual selection. No default means no attachment; ambiguous defaults require explicit selection. Backend commands still validate the supplied IDs and versions. Defaults do not create any server row until Save.
+New draft policy defaults are a frontend initialization choice: select a single eligible current default once per family, after the scoped catalogue finishes. Never initialize saved records or overwrite a clear/manual selection. No default means no attachment; ambiguous defaults require explicit selection. Backend commands still validate the supplied IDs and versions. Defaults do not create any server row until Save.
 
 Receipt Book no longer participates in candidate application, catalogs or publication validation. Legacy request/response fields and the stored column remain for compatibility; old request values are ignored. Existing historical values/publication snapshots are retained. This refactor adds no destructive migration and changes no receipt numbering or collection behavior.
 
@@ -227,3 +227,12 @@ Configuration actions use the [three-permission contract](../api.md#fee-configur
 
 
 Variable rows store no configured amount and retain Payment Terms; see [variable fee assignment](./variable-fee-assignment.md) for the active conditions and nullable preview contract.
+
+## Lightweight structure reads
+
+The class navigator uses `GET /api/fee-structures/summaries?standardId` and fetches full configuration through `GET /api/fee-structures/{id}` only when needed.
+`GET /api/fee-structures/catalogue?feeStructureMetadataId&standardId` returns scoped head, eligible term and current policy choices without register usage payloads or full version histories.
+`GET /api/fee-structures/term-schedule?scope&paymentTermId&versionId` resolves only the selected immutable schedule.
+These reads retain the existing structure permissions and class scope; save, publication and assignment commands still validate authoritative configuration.
+Fee-head dependency counts aggregate normalized selected-head evidence and legacy due references in SQL rather than retrieving every assignment snapshot.
+Simple settings header filters run before count/page; display-derived filters scan bounded scalar batches.

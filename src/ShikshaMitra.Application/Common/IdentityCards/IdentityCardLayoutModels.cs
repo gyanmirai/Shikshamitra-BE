@@ -29,6 +29,7 @@ internal sealed class IdentityCardLayoutElement
 	public string? FieldKey { get; set; }
 	public string? Label { get; set; }
 	public string? Value { get; set; }
+	public string? Prefix { get; set; }
 	public float X { get; set; }
 	public float Y { get; set; }
 	public float W { get; set; }
@@ -36,6 +37,10 @@ internal sealed class IdentityCardLayoutElement
 	public int Z { get; set; }
 	public bool Visible { get; set; } = true;
 	public bool Locked { get; set; }
+	public float? Rotation { get; set; }
+	public float? Opacity { get; set; }
+	public string? GroupId { get; set; }
+	public string? ImageData { get; set; }
 	public System.Text.Json.JsonElement? PaletteBindings { get; set; }
 	public IdentityCardElementStyle Style { get; set; } = new();
 }
@@ -54,6 +59,9 @@ internal sealed class IdentityCardElementStyle
 	public string? Separator { get; set; }
 	public string? PhotoShape { get; set; }
 	public string? FontFamily { get; set; }
+	public string? Shape { get; set; }
+	public string? FontStyle { get; set; }
+	public string? TextDecoration { get; set; }
 	public System.Text.Json.JsonElement? PaletteBindings { get; set; }
 }
 

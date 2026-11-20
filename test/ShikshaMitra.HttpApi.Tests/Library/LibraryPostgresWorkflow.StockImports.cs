@@ -97,7 +97,7 @@ public sealed partial class LibraryPostgresWorkflow_Tests
 		immutable.SqlState.ShouldBe("23514");
 		var truncate = await Should.ThrowAsync<PostgresException>(() => database.ExecuteAsync("TRUNCATE \"AppLibraryStockImportRows\";"));
 		truncate.SqlState.ShouldBe("23514");
-		var down = await Should.ThrowAsync<PostgresException>(() => MigrateStockVerificationAsync(database, previous));
+		var down = await Should.ThrowAsync<PostgresException>(() => database.RollbackLibrarySchemaAsync(previous));
 		down.SqlState.ShouldBe("23514");
 	}
 }

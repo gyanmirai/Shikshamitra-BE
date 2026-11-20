@@ -53,6 +53,21 @@ public partial class FeeRefundApi_Tests : ShikshaMitraApiTestBase
     }
 
     [Fact]
+    public async Task Refund_list_returns_scoped_tab_counts_with_the_page()
+    {
+        var source = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 100d);
+        var request = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, source.StudentId, source.DueFeeId, 30d);
+        var url = $"{BaseUrl}?studentId={source.StudentId}&academicYearId={FeeRefundTestHelper.DefaultAcademicYearId}";
+        var all = (await Client.GetFromJsonAsync<FeeRefundListResultDto>(url, JsonOptions))!;
+        all.TotalCount.ShouldBe(1);
+        all.Items.Single().Id.ShouldBe(request.Id);
+        all.StatusCounts.GetValueOrDefault((int)request.Status).ShouldBe(1);
+        var otherTab = (await Client.GetFromJsonAsync<FeeRefundListResultDto>(url + $"&status={(int)FeeRefundStatus.Rejected}", JsonOptions))!;
+        otherTab.TotalCount.ShouldBe(0);
+        otherTab.StatusCounts.GetValueOrDefault((int)request.Status).ShouldBe(1);
+    }
+
+    [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Partial_Refund_After_A_Prior_Processed_Refund_Subtracts_The_Source_Commitment_Once()
     {

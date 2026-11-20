@@ -59,6 +59,16 @@ Leave workflows use policy rules and affect payroll:
 
 ## Payroll workflows
 
+### Payroll review activity
+
+Review and unreview update the active payroll review marker and append an activity event for actual transitions in the same transaction.
+Events retain their preview reference and remain visible after a replacement preview supersedes the active review.
+The school-wide activity feed requires Run Payroll ViewAudit and school-wide HR scope.
+The monthly list filters by exact payroll month and academic year, and review events contain no staff identifiers or payroll amounts.
+New lock events use the canonical payroll month, and the activity feed uses the recorded year and month to recover lock events written with other date formats.
+The previous successful preview stays current during a same-input refresh until its replacement completes.
+At that point only the latest successful preview for the same scope and input revision can authorize review or locking.
+
 ### Calculation release and PF remediation
 
 Worked attendance and approved paid leave add together, capped at the scheduled day capacity remaining after approved unpaid leave.
@@ -327,4 +337,4 @@ No historical attendance or payroll is recalculated.
 
 Before reopening writes, rollback uses the verified pre-cutover backup and previous application versions.
 After reopening writes, use a reviewed forward repair; the migration intentionally refuses destructive Down execution.
-The migrator needs permission to install the btree_gist extension if it is absent.
+The migrator needs permission to install the `btree_gist` extension if it is absent. On Azure Database for PostgreSQL Flexible Server, add `btree_gist` to the server's `azure.extensions` allowlist before running the cutover migration; keep any extensions already allowed. This is a server parameter, not a database migration setting. After the parameter change takes effect, rerun DbMigrator so it can install the extension and create the non-overlap constraint.

@@ -202,9 +202,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string OverrideAmount = $"{SubmoduleName}.OverrideAmount";
 			public const string OverridePolicies = $"{SubmoduleName}.OverridePolicies";
+			public const string StopOptionalService = $"{SubmoduleName}.StopOptionalService";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { View, Add, Delete, OverrideAmount, OverridePolicies };
+			public static readonly string[] All = { View, Add, Delete, OverrideAmount, OverridePolicies, StopOptionalService };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
@@ -212,6 +213,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ OverrideAmount, $"{SubmoduleDisplayName}.OverrideAmount" },
 				{ OverridePolicies, $"{SubmoduleDisplayName}.OverridePolicies" },
+				{ StopOptionalService, $"{SubmoduleDisplayName}.StopOptionalService" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}

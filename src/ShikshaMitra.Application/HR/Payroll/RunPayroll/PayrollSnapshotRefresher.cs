@@ -156,6 +156,9 @@ public class PayrollSnapshotRefresher(
 		var immutableCount = originalCount - scopedEmployees.Count;
 		if (scopedEmployees.Count == 0) return [];
 		var calendar = await payrollCalendarResolver.ResolveAsync(year, month, academicYearId);
+		var payrollMonth = new DateTime(year, month, 1);
+		var pfCoverage = await pfEligibilityResolver.GetCoverageAsync(payrollMonth);
+		var pfHandledExternally = pfCoverage?.IsHandledExternally == true;
 		var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
 		var applicationProfiles = (await statutoryProfiles.ResolveAsync(new DateTime(year, month, 1), employeeIds)).ToDictionary(x => x.Key, x => x.Value);
 		var previousMonthNetPayByEmployee = (await salarySlipRepository.GetByMonthAsync(PayrollRunRules.GetPreviousMonth(internalMonthYear)))
@@ -206,7 +209,7 @@ public class PayrollSnapshotRefresher(
 			month,
 			employeeIds,
 			compensationComponentsByEmployee, compensationByEmployee);
-		await esiCompensation.RecalculateAsync(compensationByEmployee, esiContexts, applicationProfiles, new DateTime(year, month, 1));
+		await esiCompensation.RecalculateAsync(compensationByEmployee, esiContexts, applicationProfiles, payrollMonth, pfHandledExternally);
 
 		var computedItems = new List<RunPayrollItem>();
 		using var policyReadBatch = hrPolicyResolver.BeginReadBatch(scopedEmployees);
@@ -261,10 +264,10 @@ public class PayrollSnapshotRefresher(
 					ex.Code);
 				var payrollDetails = payrollDetailsByEmployee.GetValueOrDefault(employee.Id);
 				var payrollComponents = await GetPayrollComponentsAsync(
-					compensationByEmployee, employee.Id, year, month);
+					compensationByEmployee, employee.Id, year, month, pfHandledExternally);
 				var revision = compensationByEmployee.GetValueOrDefault(employee.Id)?.Revision;
 				var pfRule = await providentFundComponentBuilder.ResolveRuleAsync(
-					revision?.PfRuleId,
+					pfHandledExternally ? null : revision?.PfRuleId,
 					employee.Id,
 					year,
 					month);
@@ -289,7 +292,7 @@ public class PayrollSnapshotRefresher(
 						professionalTaxSlabs,
 						EmployeeLifecycleEligibility.IsEmploymentCessationMonth(employee, year, month),
 						esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id)
-					{ StatutoryProfile = applicationProfiles.GetValueOrDefault(employee.Id) },
+					{ StatutoryProfile = applicationProfiles.GetValueOrDefault(employee.Id), PfHandledExternally = pfHandledExternally },
 					revision));
 			}
 		}
@@ -349,10 +352,10 @@ public class PayrollSnapshotRefresher(
 
 			var payrollDetails = payrollDetailsByEmployee.GetValueOrDefault(employee.Id);
 			var payrollComponents = await GetPayrollComponentsAsync(
-				compensationByEmployee, employee.Id, year, month);
+				compensationByEmployee, employee.Id, year, month, pfHandledExternally);
 			var revision = compensationByEmployee.GetValueOrDefault(employee.Id)?.Revision;
 			var pfRule = await providentFundComponentBuilder.ResolveRuleAsync(
-				revision?.PfRuleId,
+				pfHandledExternally ? null : revision?.PfRuleId,
 				employee.Id,
 				year,
 				month);
@@ -385,7 +388,7 @@ public class PayrollSnapshotRefresher(
 					professionalTaxSlabs,
 					EmployeeLifecycleEligibility.IsEmploymentCessationMonth(employee, year, month),
 					esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id)
-				{ StatutoryProfile = applicationProfiles.GetValueOrDefault(employee.Id) },
+				{ StatutoryProfile = applicationProfiles.GetValueOrDefault(employee.Id), PfHandledExternally = pfHandledExternally },
 				revision
 			));
 			if (reportProgress != null && (computedItems.Count % 25 == 0 || computedItems.Count == scopedEmployees.Count))
@@ -393,16 +396,16 @@ public class PayrollSnapshotRefresher(
 		}
 
 		var pfMonth = new DateTime(year, month, DateTime.DaysInMonth(year, month));
-		var pfCoverage = await pfEligibilityResolver.GetCoverageAsync(pfMonth);
-		var pfMemberHistory = await pfEligibilityResolver.GetMemberHistoryAsync(computedItems.Select(x => x.EmployeeId).ToList(), pfMonth);
+		var pfMemberHistory = pfHandledExternally ? new Dictionary<Guid, bool>() :
+			await pfEligibilityResolver.GetMemberHistoryAsync(computedItems.Select(x => x.EmployeeId).ToList(), pfMonth);
 		foreach (var item in computedItems.Where(x => !x.IsLocked))
 		{
 			var resolution = compensationByEmployee.GetValueOrDefault(item.EmployeeId);
 			var wages = resolution?.Components.Where(x => x.IsEarning && !x.IsTemp &&
 				x.SemanticType is Templates.PayrollComponentSemanticType.Basic or Templates.PayrollComponentSemanticType.DearnessAllowance).Sum(x => x.Amount) ?? 0m;
 			var declaration = PfEligibilityResolver.Declaration(resolution?.Revision);
-			var decision = PfEligibilityCalculator.Calculate(resolution?.Revision.GrossSalary ?? (decimal) item.FullGrossSalary, wages, pfCoverage, declaration,
-				pfMemberHistory.GetValueOrDefault(item.EmployeeId), item.ProvidentFundRuleId.HasValue);
+			var decision = PfEligibilityCalculator.Calculate(resolution?.Revision.GrossSalary ?? (decimal) item.FullGrossSalary, wages,
+				pfCoverage?.IsCovered, declaration, pfMemberHistory.GetValueOrDefault(item.EmployeeId), item.ProvidentFundRuleId.HasValue, pfHandledExternally);
 			item.PfEligibilityDetailsJson = System.Text.Json.JsonSerializer.Serialize(decision);
 			if (item.StatutoryApplicationJson != null)
 			{
@@ -446,13 +449,14 @@ public class PayrollSnapshotRefresher(
 		IReadOnlyDictionary<Guid, PayrollCompensationRevisionResolution> compensationByEmployee,
 		Guid employeeId,
 		int year,
-		int month)
+		int month,
+		bool pfHandledExternally)
 	{
 		var resolution = compensationByEmployee.GetValueOrDefault(employeeId);
 		var components = resolution?.Components.ToList() ?? [];
 		return await providentFundComponentBuilder.AddProvidentFundDeductionAsync(
 			employeeId,
-			resolution?.Revision.PfRuleId,
+			pfHandledExternally ? null : resolution?.Revision.PfRuleId,
 			components,
 			year,
 			month);

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Common;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Fees.Receipts;
@@ -32,6 +33,11 @@ public interface IFeePaymentReceiptRepository : IRepository<FeePaymentReceipt, G
         List<Guid> receiptIds,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Bounded scalar candidates for rendered legacy instrument filters; excludes detail-only enrichment.</summary>
+    Task<List<ReconciliationRow>> GetReconciliationFilterCandidatesAsync(
+        ReconciliationListFilter filter, int skipCount, int maxResultCount,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Returns per-method, per-status counts for tab badge rendering.
     /// One grouped DB query — not 7 round-trips.
@@ -51,6 +57,13 @@ public interface IFeePaymentReceiptRepository : IRepository<FeePaymentReceipt, G
     /// </summary>
     Task<(int TotalCount, List<FeePaymentReceipt> Items)> GetPagedListAsync(
         FeeReceiptListFilter filter,
+        CancellationToken cancellationToken = default,
+        bool includeTotalCount = true);
+
+    /// <summary>Reads only the fields needed to evaluate displayed-column filters.</summary>
+    Task<List<FeeReceiptListFilterRow>> GetListFilterRowsAsync(
+        FeeReceiptListFilter filter,
+        bool includePaymentMethods,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -71,6 +84,7 @@ public interface IFeePaymentReceiptRepository : IRepository<FeePaymentReceipt, G
 /// <summary>Filter parameters for the paginated receipt list query.</summary>
 public sealed class FeeReceiptListFilter
 {
+    public FinanceTableQuery? TableQuery { get; init; }
     public Guid AcademicYearId { get; init; }
     public Guid BoardId { get; init; }
     public Guid EducationMediumId { get; init; }
@@ -96,10 +110,27 @@ public sealed class FeeReceiptListFilter
     public int MaxResultCount { get; init; } = 20;
 }
 
+public sealed class FeeReceiptListFilterRow
+{
+    public Guid Id { get; init; }
+    public string ReceiptNumber { get; init; } = string.Empty;
+    public FeeReceiptKind ReceiptKind { get; init; }
+    public FeeReceiptScope ReceiptScope { get; init; }
+    public FeeReceiptVerificationStatus VerificationStatus { get; init; }
+    public string? LinkedFinalReceiptNumber { get; init; }
+    public double TotalPaidAmount { get; init; }
+    public DateOnly ReceiptDate { get; init; }
+    public string StudentName { get; init; } = string.Empty;
+    public int? GrNo { get; init; }
+    public string? RollNo { get; init; }
+    public string PaymentMethodLabel { get; set; } = "Not recorded";
+}
+
 /// <summary>Filter for the reconciliation inbox query.</summary>
 public sealed class ReconciliationListFilter
 {
-	public IQueryable<Guid>? ScopedEmployeeIdsQuery { get; init; }
+    public IQueryable<Guid>? ScopedEmployeeIdsQuery { get; init; }
+    public FinanceTableQuery? TableQuery { get; init; }
     public Guid AcademicYearId { get; init; }
     public int? Month { get; init; }
     public int? Year { get; init; }
@@ -119,6 +150,16 @@ public sealed class ReconciliationListFilter
     /// <summary>When set, restricts results to students accessible by the current user scope.</summary>
     public IQueryable<Guid>? ScopedStudentIdsQuery { get; init; }
     public IQueryable<Guid>? ScopedAccountIdsQuery { get; init; }
+}
+
+public static class ReconciliationHeaderColumns
+{
+    // Rendered instrument dates and labels retain their historical .NET formatting
+    // semantics. Common scalar headers can count and page entirely in SQL.
+    public static bool IsReceipt(string column) =>
+        column is "amount" or "status" or "receiptNumber" or "receiptDate";
+    public static bool IsContext(string column) => column is "studentName" or "board" or "standardName" or "class";
+    public static bool IsScalar(string column, PaymentMethodEnum? method) => IsReceipt(column) || IsContext(column);
 }
 
 /// <summary>

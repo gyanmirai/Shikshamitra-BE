@@ -22,7 +22,7 @@ public partial class HouseManagementCommandService
 
 	public Task ReplaceDivisionLeaderAsync(Guid id, ReplaceStudentLeaderRequest input) => TransactionAsync(async () =>
 	{
-		var context = await access.GetAsync(input.AcademicMediumId);
+		await access.GetAsync(input.AcademicMediumId);
 		await scope.EnsureCanAccessDivisionAsync(id, "HouseManagement.DivisionLeader");
 		var dq =
 			from d in await divisions.GetQueryableAsync()

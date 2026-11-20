@@ -6,6 +6,10 @@ using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Students;
+using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
@@ -28,7 +32,12 @@ public sealed record FinanceReportPayer(
 public class FinanceReportPayerQueryService(
     IRepository<Student, Guid> studentRepository,
     IRepository<FinanceFeeAccount, Guid> accountRepository,
-    IAsyncQueryableExecuter asyncExecuter) : ITransientDependency
+    IAsyncQueryableExecuter asyncExecuter,
+    IRepository<StudentEnrollment, Guid>? enrollmentRepository = null,
+    IRepository<Standard, Guid>? standardRepository = null,
+    IRepository<EducationMediumStage, Guid>? stageRepository = null,
+    IRepository<EducationMedium, Guid>? mediumRepository = null,
+    IRepository<EducationBoard, Guid>? boardRepository = null) : ITransientDependency
 {
     public static IQueryable<FeePaymentReceipt> FilterReceipts(IQueryable<FeePaymentReceipt> query,
         IReadOnlyCollection<FinanceReportPayer> payers)
@@ -55,7 +64,7 @@ public class FinanceReportPayerQueryService(
     }
 
     public async Task<List<FinanceReportPayer>> GetPayersAsync(FinanceReportFilterDto filters,
-        FinanceReportExecutionScope scope)
+        FinanceReportExecutionScope scope, bool useHistoricalPlacement = false)
     {
         var years = filters.AcademicYearIds ?? [];
         var organizations = filters.OrganizationIds ?? [];
@@ -92,6 +101,8 @@ public class FinanceReportPayerQueryService(
         var result = students.Select(s => new FinanceReportPayer(s.Id, null,
             string.Join(" ", new[] { s.FirstName, s.MiddleName, s.LastName }.Where(p => !string.IsNullOrWhiteSpace(p))),
             s.GrNo, s.RollNo, s.StandardId, s.DivisionId)).ToList();
+        if (useHistoricalPlacement)
+            result.AddRange(await GetHistoricalPayersAsync(filters, scope, years.Single()));
         result.AddRange(accounts.Select(a =>
         {
             var student = a.StudentId.HasValue ? studentMap.GetValueOrDefault(a.StudentId.Value) : null;
@@ -99,5 +110,37 @@ public class FinanceReportPayerQueryService(
                 student?.GrNo, student?.RollNo, a.StandardId, a.DivisionId);
         }));
         return result;
+    }
+
+    private async Task<List<FinanceReportPayer>> GetHistoricalPayersAsync(FinanceReportFilterDto filters,
+        FinanceReportExecutionScope scope, Guid yearId)
+    {
+        var fullClasses = scope.AllowedWholeStandardIds.ToArray();
+        var scopedDivisions = scope.AllowedDivisionIds.ToArray();
+        var classIds = filters.ClassIds?.ToArray() ?? [];
+        var divisionIds = filters.DivisionIds?.ToArray() ?? [];
+        var stageIds = filters.OrganizationIds?.ToArray() ?? [];
+        var records = await asyncExecuter.ToListAsync(
+            from enrollment in await enrollmentRepository!.GetQueryableAsync()
+            join student in await studentRepository.GetQueryableAsync() on enrollment.StudentId equals student.Id
+            join standard in await standardRepository!.GetQueryableAsync() on enrollment.StandardId equals (Guid?)standard.Id
+            join stage in await stageRepository!.GetQueryableAsync() on standard.EducationMediumStageId equals stage.Id
+            join medium in await mediumRepository!.GetQueryableAsync() on stage.EducationMediumId equals medium.Id
+            join board in await boardRepository!.GetQueryableAsync() on medium.EducationBoardId equals board.Id
+            where enrollment.TenantId == scope.TenantId && student.TenantId == scope.TenantId &&
+                enrollment.AcademicYearId == yearId && board.AcademicYearId == yearId && student.AcademicYearId != yearId &&
+                (Enumerable.Contains(fullClasses, standard.Id) ||
+                    (enrollment.DivisionId.HasValue && Enumerable.Contains(scopedDivisions, enrollment.DivisionId.Value))) &&
+                (!filters.BoardId.HasValue || board.Id == filters.BoardId) &&
+                (!filters.MediumId.HasValue || medium.Id == filters.MediumId) &&
+                (stageIds.Length == 0 || Enumerable.Contains(stageIds, stage.Id)) &&
+                (classIds.Length == 0 || Enumerable.Contains(classIds, standard.Id)) &&
+                (divisionIds.Length == 0 || (enrollment.DivisionId.HasValue && Enumerable.Contains(divisionIds, enrollment.DivisionId.Value)))
+            orderby enrollment.IsActive descending, enrollment.CreationTime descending, enrollment.Id
+            select new { student.Id, student.FirstName, student.MiddleName, student.LastName, student.GrNo,
+                enrollment.RollNumber, enrollment.StandardId, enrollment.DivisionId });
+        return records.DistinctBy(s => s.Id).Select(s => new FinanceReportPayer(s.Id, null,
+            string.Join(" ", new[] { s.FirstName, s.MiddleName, s.LastName }.Where(p => !string.IsNullOrWhiteSpace(p))),
+            s.GrNo, s.RollNumber, s.StandardId, s.DivisionId)).ToList();
     }
 }

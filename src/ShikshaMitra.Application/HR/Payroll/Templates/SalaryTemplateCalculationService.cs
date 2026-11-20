@@ -29,21 +29,24 @@ public class SalaryTemplateCalculationService(
 		if (input.PfEnrollment == null || input.PfEnrollment.Membership is not ("UNKNOWN" or "EXISTING_MEMBER" or "NOT_MEMBER") || input.PfEnrollment.ConsentReference?.Length > 1000)
 			throw new BusinessException("HR:Payroll:PfDeclarationInvalid");
 		SalaryTemplateCalculator.ValidateRules(rules);
-		if (input.PfApplicable && !rules.Any(x => x.FormulaType == SalaryTemplateFormulaType.EmployeeProvidentFund))
-			throw new BusinessException("HR:Payroll:SalaryTemplatePfFormulaRequired");
-		var components = await LoadComponentsAsync(rules);
 		var effectiveMonth = new DateTime(input.EffectiveMonth.Year, input.EffectiveMonth.Month, 1);
 		var effectiveMonthEnd = effectiveMonth.AddMonths(1).AddDays(-1);
+		var pfCoverage = await pfEligibilityResolver.GetCoverageAsync(effectiveMonth);
+		var pfHandledExternally = pfCoverage?.IsHandledExternally == true;
+		var pfApplicable = input.PfApplicable && !pfHandledExternally;
+		if (pfApplicable && !rules.Any(x => x.FormulaType == SalaryTemplateFormulaType.EmployeeProvidentFund))
+			throw new BusinessException("HR:Payroll:SalaryTemplatePfFormulaRequired");
+		var components = await LoadComponentsAsync(rules);
 		var savedRevision = input.EmployeeId.HasValue ? (await revisions.GetListAsync(x => x.EmployeeId == input.EmployeeId && x.EffectiveMonth <= effectiveMonth && x.Status == ShikshaMitra.HR.Payroll.Compensation.CompensationRevisionStatus.Approved))
 			.OrderByDescending(x => x.EffectiveMonth).ThenByDescending(x => x.RevisionNumber).FirstOrDefault() : null;
 		var preserveGross = savedRevision != null && savedRevision.SalaryBasis == ParseSalaryBasis(input.SalaryBasis) &&
 			savedRevision.QuotedMonthlyAmount == input.MonthlyAmount && savedRevision.EsiManagementMode == input.EsiManagementMode && savedRevision.EsiPolicyId == input.EsiPolicyId && savedRevision.SourceSalaryTemplateVersionId == versionId &&
 			System.Text.Json.Nodes.JsonNode.DeepEquals(System.Text.Json.Nodes.JsonNode.Parse(savedRevision.OverridesJson), System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(input.Overrides)));
 		var effectivePfRuleId = input.PfRuleId ?? (preserveGross ? savedRevision?.PfRuleId : null);
-		var pfRule = (input.PfApplicable || preserveGross) && effectivePfRuleId.HasValue
+		var pfRule = !pfHandledExternally && (pfApplicable || preserveGross) && effectivePfRuleId.HasValue
 			? await providentFundRepository.FindAsync(effectivePfRuleId.Value)
 			: null;
-		if (input.PfApplicable && pfRule == null)
+		if (pfApplicable && pfRule == null)
 		{
 			throw new BusinessException("HR:Payroll:PfRuleNotFound")
 				.WithData("pfRuleId", input.PfRuleId?.ToString() ?? "missing");
@@ -101,16 +104,17 @@ public class SalaryTemplateCalculationService(
 				applicableTaxSlabs,
 				applicationProfile == null || applicationProfile.ApplyEsic ? esiResolution.Context : null).Gross;
 		var evaluation = SalaryTemplateCalculator.Calculate(SalaryInputBasis.Gross, resolvedGross, rules, components, pfRule, applicableTaxSlabs, esiResolution.Context);
-		if (applicationProfile != null) evaluation = SalaryTemplateStatutoryApplication.Apply(evaluation, applicationProfile, pfRule != null);
+		if (applicationProfile != null)
+			evaluation = SalaryTemplateStatutoryApplication.Apply(evaluation, applicationProfile, pfRule != null, pfHandledExternally);
 		var pfWages = evaluation.Earnings.Where(x => x.SemanticType is "BASIC" or "DEARNESS_ALLOWANCE").Sum(x => x.Amount);
 		var pfEligibility = await pfEligibilityResolver.ResolveAsync(input.EmployeeId, effectiveMonthEnd, evaluation.Gross, pfWages,
-			input.PfEnrollment, input.PfApplicable);
+			input.PfEnrollment, pfApplicable, pfCoverage);
 		if (applicationProfile is { ApplyPf: false } && pfEligibility.IssueCode is "PF_ENROLLMENT_REQUIRED" or "PF_MEMBERSHIP_REVIEW_REQUIRED")
 			pfEligibility = pfEligibility with { CanSave = true };
 		if (evaluation.StatutoryApplication is { } application)
 			evaluation = evaluation with { StatutoryApplication = application with { ProvidentFund = application.ProvidentFund with
 				{ Eligible = pfEligibility.Status is "MANDATORY" or "CONTINUING_MEMBER" || application.ProvidentFund.Eligible, ContributionWages = pfRule == null ? 0m : Math.Min(pfRule.ContributionBasis == PfContributionBasis.BasicAndDearnessAllowance ? pfWages : evaluation.Basic, pfRule.WageCeiling ?? decimal.MaxValue) } } };
-		if (applicationProfile is { ApplyPf: true } && pfEligibility.Status != "NOT_APPLICABLE")
+		if (!pfHandledExternally && applicationProfile is { ApplyPf: true } && pfEligibility.Status != "NOT_APPLICABLE")
 		{
 			if (pfRule == null) throw new BusinessException("HR:Payroll:PfRuleNotFound");
 			if (!rules.Any(x => x.FormulaType == SalaryTemplateFormulaType.EmployeeProvidentFund))

@@ -116,7 +116,7 @@ public sealed partial class LibraryPostgresWorkflow_Tests
 		var changed = await Should.ThrowAsync<PostgresException>(() =>
 			database.ExecuteAsync("UPDATE \"AppLibraryStockVerificationResults\" SET \"AccessionNumber\"='changed';"));
 		changed.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
-		var refused = await Should.ThrowAsync<PostgresException>(() => MigrateStockVerificationAsync(database, previous));
+		var refused = await Should.ThrowAsync<PostgresException>(() => database.RollbackLibrarySchemaAsync(previous));
 		refused.SqlState.ShouldBe("P0001");
 		refused.MessageText.ShouldContain("published receipt evidence");
 	}

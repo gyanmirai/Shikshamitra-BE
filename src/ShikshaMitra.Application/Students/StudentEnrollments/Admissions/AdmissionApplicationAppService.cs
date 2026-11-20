@@ -13,18 +13,21 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionApplicationAppService(
 	AdmissionApplicationReadService readService,
 	AdmissionPipelineReadService pipelineService,
-	AdmissionInquiryManagementAppService inquiryManagement,
-	AdmissionApplicationLifecycleService lifecycleService,
-	AdmissionDirectRegistrationService directRegistrationService,
-	AdmissionApplicationCounsellorService counsellorService,
-	AdmissionApplicationWorkflowReadService workflowReadService,
-	AdmissionApplicationWorkflowService workflowService,
-	AdmissionApplicationFormService formService,
-	AdmissionJourneyClosureService journeyClosure,
-	AdmissionJourneyResumeService journeyResume,
-	AdmissionApplicationDecisionService decisionService)
+	AdmissionApplicationWorkflowReadService workflowReadService)
 	: ApplicationService, IAdmissionApplicationAppService
 {
+	// Opening an application/workflow must not construct unrelated write graphs.
+	// ABP's request-local lazy provider retains the existing service lifetimes and interceptors.
+	private AdmissionInquiryManagementAppService InquiryManagement => LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryManagementAppService>();
+	private AdmissionApplicationLifecycleService LifecycleService => LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationLifecycleService>();
+	private AdmissionDirectRegistrationService DirectRegistrationService => LazyServiceProvider.LazyGetRequiredService<AdmissionDirectRegistrationService>();
+	private AdmissionApplicationCounsellorService CounsellorService => LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationCounsellorService>();
+	private AdmissionApplicationWorkflowService WorkflowService => LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationWorkflowService>();
+	private AdmissionApplicationFormService FormService => LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationFormService>();
+	private AdmissionJourneyClosureService JourneyClosure => LazyServiceProvider.LazyGetRequiredService<AdmissionJourneyClosureService>();
+	private AdmissionJourneyResumeService JourneyResume => LazyServiceProvider.LazyGetRequiredService<AdmissionJourneyResumeService>();
+	private AdmissionApplicationDecisionService DecisionService => LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationDecisionService>();
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public Task<PagedResultDto<AdmissionApplicationDto>> GetListAsync(AdmissionApplicationListInput input) =>
 		readService.GetListAsync(input);
@@ -36,19 +39,19 @@ public class AdmissionApplicationAppService(
 	public Task<AdmissionPipelineOptionsDto> GetPipelineOptionsAsync(AdmissionPipelineListInput input) => pipelineService.GetOptionsAsync(input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
-	public Task<AdmissionInquiryManagementDto> GetFollowUpsAsync(Guid id) => inquiryManagement.GetApplicationFollowUpsAsync(id);
+	public Task<AdmissionInquiryManagementDto> GetFollowUpsAsync(Guid id) => InquiryManagement.GetApplicationFollowUpsAsync(id);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
-	public Task<AdmissionInquiryManagementDto> ScheduleFollowUpAsync(Guid id, ScheduleAdmissionInquiryFollowUpDto input) => inquiryManagement.ScheduleApplicationFollowUpAsync(id, input);
+	public Task<AdmissionInquiryManagementDto> ScheduleFollowUpAsync(Guid id, ScheduleAdmissionInquiryFollowUpDto input) => InquiryManagement.ScheduleApplicationFollowUpAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
-	public Task<AdmissionInquiryManagementDto> CompleteFollowUpAsync(Guid id, Guid followUpId, CompleteAdmissionInquiryFollowUpDto input) => inquiryManagement.CompleteApplicationFollowUpAsync(id, followUpId, input);
+	public Task<AdmissionInquiryManagementDto> CompleteFollowUpAsync(Guid id, Guid followUpId, CompleteAdmissionInquiryFollowUpDto input) => InquiryManagement.CompleteApplicationFollowUpAsync(id, followUpId, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
-	public Task<AdmissionInquiryManagementDto> CancelFollowUpAsync(Guid id, Guid followUpId, CancelAdmissionInquiryFollowUpDto input) => inquiryManagement.CancelApplicationFollowUpAsync(id, followUpId, input);
+	public Task<AdmissionInquiryManagementDto> CancelFollowUpAsync(Guid id, Guid followUpId, CancelAdmissionInquiryFollowUpDto input) => InquiryManagement.CancelApplicationFollowUpAsync(id, followUpId, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public Task<AdmissionApplicationDto> GetAsync(Guid id) => readService.GetAsync(id);
@@ -59,14 +62,14 @@ public class AdmissionApplicationAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
 	[UnitOfWork(true)]
 	public Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId = null) =>
-		lifecycleService.StartAsync(applicantId, offeringId, inquiryId);
+		LifecycleService.StartAsync(applicantId, offeringId, inquiryId);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
 	[UnitOfWork(true)]
 	public async Task<AdmissionApplicationDto> StartDirectRegistrationAsync(StartAdmissionDirectRegistrationDto input)
 	{
 		using var unitOfWork = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true });
-		var application = await directRegistrationService.StartAsync(input);
+		var application = await DirectRegistrationService.StartAsync(input);
 		await unitOfWork.CompleteAsync();
 		return application;
 	}
@@ -74,15 +77,15 @@ public class AdmissionApplicationAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
 	public Task<List<AdmissionDirectFamilyMatchDto>> FindDirectRegistrationFamiliesAsync(
 		Guid offeringId, string guardianMobile, string? guardianEmail = null) =>
-		directRegistrationService.FindFamiliesAsync(offeringId, guardianMobile, guardianEmail);
+		DirectRegistrationService.FindFamiliesAsync(offeringId, guardianMobile, guardianEmail);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public Task<List<AdmissionInquiryCounsellorDto>> GetAssignableCounsellorsAsync(Guid? offeringId = null, string? filter = null) =>
-		counsellorService.GetAssignableAsync(offeringId, filter);
+		CounsellorService.GetAssignableAsync(offeringId, filter);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit)]
 	public Task<AdmissionApplicationDto> AssignCounsellorAsync(Guid id, AssignAdmissionApplicationCounsellorDto input) =>
-		counsellorService.AssignAsync(id, input);
+		CounsellorService.AssignAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public Task<AdmissionApplicationWorkflowDto> GetWorkflowAsync(Guid id) =>
@@ -99,78 +102,85 @@ public class AdmissionApplicationAppService(
 		else if (input.SkipCurrentStage)
 			await AuthorizationService.CheckAsync(
 				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.SkipStage);
-		return await workflowService.AdvanceAsync(id, input);
+		return await WorkflowService.AdvanceAsync(id, input);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
-	public Task<AdmissionApplicationFormDto> GetFormAsync(Guid id) => formService.GetAsync(id);
+	public Task<AdmissionApplicationFormDto> GetFormAsync(Guid id) => FormService.GetAsync(id);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit)]
 	public Task<AdmissionApplicationFormDto> UpdateFormValuesAsync(
 		Guid id,
-		UpdateAdmissionApplicationFormValuesDto input) => formService.UpdateAsync(id, input);
+		UpdateAdmissionApplicationFormValuesDto input) => FormService.UpdateAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit)]
 	public Task<AdmissionApplicationFormDto> CorrectFormAsync(Guid id, CorrectAdmissionApplicationFormDto input) =>
-		formService.CorrectAsync(id, input);
+		FormService.CorrectAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Submit)]
-	public Task<AdmissionApplicationSubmitResultDto> SubmitAsync(Guid id) => formService.SubmitAsync(id);
+	public Task<AdmissionApplicationSubmitResultDto> SubmitAsync(Guid id) => FormService.SubmitAsync(id);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Reopen)]
-	public Task<AdmissionApplicationFormDto> ReopenFormAsync(Guid id) => formService.ReopenAsync(id);
+	public Task<AdmissionApplicationFormDto> ReopenFormAsync(Guid id) => FormService.ReopenAsync(id);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
-	public Task<List<AdmissionFormChangeHistoryDto>> GetFormHistoryAsync(Guid id) => formService.GetHistoryAsync(id);
+	public Task<List<AdmissionFormChangeHistoryDto>> GetFormHistoryAsync(Guid id) => FormService.GetHistoryAsync(id);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
-	public Task<AdmissionApplicationDto> MarkInReviewAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.MarkInReviewAsync(id, input);
+	public Task<AdmissionApplicationDto> MarkInReviewAsync(Guid id, AdmissionApplicationDecisionDto input) => DecisionService.MarkInReviewAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
-	public Task<AdmissionApplicationDto> ApproveAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.ApproveAsync(id, input);
+	public Task<AdmissionApplicationDto> ApproveAsync(Guid id, AdmissionApplicationDecisionDto input) => DecisionService.ApproveAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
-	public Task<AdmissionApplicationDto> RejectAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.RejectAsync(id, input);
+	public Task<AdmissionApplicationDto> RejectAsync(Guid id, AdmissionApplicationDecisionDto input) => DecisionService.RejectAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
-	public Task<AdmissionApplicationDto> WaitlistAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.WaitlistAsync(id, input);
+	public Task<AdmissionApplicationDto> WaitlistAsync(Guid id, AdmissionApplicationDecisionDto input) => DecisionService.WaitlistAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
 	[UnitOfWork(true)]
-	public Task<AdmissionApplicationDto> EndJourneyAsync(Guid id, EndAdmissionJourneyDto input) => journeyClosure.EndAsync(id, input);
+	public Task<AdmissionApplicationDto> EndJourneyAsync(Guid id, EndAdmissionJourneyDto input) => JourneyClosure.EndAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
-	public Task<AdmissionJourneyResumePreviewDto> GetResumePreviewAsync(Guid id) => journeyResume.PreviewAsync(id);
+	public Task<AdmissionJourneyResumePreviewDto> GetResumePreviewAsync(Guid id) => JourneyResume.PreviewAsync(id);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
-	public Task<AdmissionApplicationDto> ResumeJourneyAsync(Guid id, ResumeAdmissionJourneyDto input) => journeyResume.ResumeAsync(id, input);
+	public Task<AdmissionApplicationDto> ResumeJourneyAsync(Guid id, ResumeAdmissionJourneyDto input) => JourneyResume.ResumeAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
-	public Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.IssueOfferAsync(id, input);
+	public Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => DecisionService.IssueOfferAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
-	public Task<AdmissionApplicationDto> AcceptOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.AcceptOfferAsync(id, input);
+	public Task<AdmissionApplicationDto> AcceptOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => DecisionService.AcceptOfferAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
-	public Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.DeclineOfferAsync(id, input);
+	public Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => DecisionService.DeclineOfferAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
-	public Task<AdmissionFinalizationPreviewDto> GetFinalizationPreviewAsync(Guid id) =>
-		decisionService.GetFinalizationPreviewAsync(id);
+	public Task<AdmissionFinalizationPreviewDto> GetFinalizationPreviewAsync(Guid id, bool forApproval = false) =>
+		DecisionService.GetFinalizationPreviewAsync(id, forApproval);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Advance)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
+	[UnitOfWork(true)]
+	public Task<AdmissionFinalizationResultDto> ApproveAndFinalizeAsync(Guid id, ApproveAndFinalizeAdmissionApplicationDto input) =>
+		DecisionService.ApproveAndFinalizeAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
 	[UnitOfWork(true)]
 	public Task<AdmissionFinalizationResultDto> FinalizeAsync(Guid id, FinalizeAdmissionApplicationDto input) =>
-		decisionService.FinalizeAsync(id, input);
+		DecisionService.FinalizeAsync(id, input);
 
 	[Obsolete("Admissions no longer creates operational enrollment. Use FinalizeAsync.")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
-	public Task<AdmissionEnrollmentResultDto> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input) => decisionService.EnrollAsync(id, input);
+	public Task<AdmissionEnrollmentResultDto> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input) => DecisionService.EnrollAsync(id, input);
 
 	[Obsolete("Placement is owned by Student Onboarding.")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
-	public Task<AdmissionEnrollmentOptionsDto> GetEnrollmentOptionsAsync(Guid id) => decisionService.GetEnrollmentOptionsAsync(id);
+	public Task<AdmissionEnrollmentOptionsDto> GetEnrollmentOptionsAsync(Guid id) => DecisionService.GetEnrollmentOptionsAsync(id);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
-	public Task<List<AdmissionApplicationDecisionHistoryDto>> GetDecisionHistoryAsync(Guid id) => decisionService.GetDecisionHistoryAsync(id);
+	public Task<List<AdmissionApplicationDecisionHistoryDto>> GetDecisionHistoryAsync(Guid id) => DecisionService.GetDecisionHistoryAsync(id);
 }

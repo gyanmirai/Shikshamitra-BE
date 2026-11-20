@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Students.Records;
 
@@ -51,10 +52,12 @@ public class StudentIdCardPreviewRequestDto
 }
 public class IssueStudentIdCardsDto : StudentIdCardPreviewRequestDto
 {
+	[Volo.Abp.Auditing.DisableAuditing] public List<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto>? PhotoEdits { get; set; }
 	[Required, StringLength(60)] public string IdempotencyKey { get; set; } = "";
 }
 public class StudentIdCardsPdfRequestDto : StudentIdCardPreviewRequestDto
 {
+	[Volo.Abp.Auditing.DisableAuditing] public List<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto>? PhotoEdits { get; set; }
 	public int CardsPerPage { get; set; } = 8;
 }
 public class StudentIdCardDto
@@ -70,8 +73,33 @@ public class StudentIdCardDto
 	public StudentIdCardTemplateDto TemplateSnapshot { get; set; } = new();
 }
 
+public class StudentIdCardHistoryQueryDto : PagedResultRequestDto
+{
+	public Guid AcademicYearId { get; set; }
+	public Guid BoardId { get; set; }
+	public Guid MediumId { get; set; }
+	public Guid? StandardId { get; set; }
+	public Guid? DivisionId { get; set; }
+	[StringLength(150)] public string? Search { get; set; }
+	public string? Sorting { get; set; }
+}
+
+public class StudentIdCardListItemDto
+{
+	public Guid Id { get; set; }
+	public Guid StudentId { get; set; }
+	public string StudentName { get; set; } = "";
+	public string? GrNumber { get; set; }
+	public string? StandardName { get; set; }
+	public string? DivisionName { get; set; }
+	public string CardNumber { get; set; } = "";
+	public string Status { get; set; } = "";
+	public DateTime IssuedAt { get; set; }
+}
+
 public interface IStudentIdCardAppService : IApplicationService
 {
+	Task<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto> GetPhotoAsync(Guid studentId);
 	Task<List<StudentIdCardTemplateDto>> GetTemplatesAsync();
 	Task<StudentIdCardTemplateDto> GetTemplateByIdAsync(Guid id);
 	Task<StudentIdCardTemplateDto> CreateTemplateAsync(StudentIdCardTemplateDto input);
@@ -82,6 +110,7 @@ public interface IStudentIdCardAppService : IApplicationService
 	Task<List<StudentIdCardDto>> PreviewAsync(StudentIdCardPreviewRequestDto input);
 	Task<List<StudentIdCardDto>> IssueAsync(IssueStudentIdCardsDto input);
 	Task<List<StudentIdCardDto>> GetHistoryAsync(Guid studentId);
+	Task<PagedResultDto<StudentIdCardListItemDto>> GetIssuedHistoryAsync(StudentIdCardHistoryQueryDto input);
 	Task<StudentCertificatePdfDto> ExportPdfAsync(StudentIdCardsPdfRequestDto input);
 	Task<StudentCertificatePdfDto> GetPdfAsync(Guid id);
 	Task<StudentCertificatePdfDto> ReprintAsync(Guid id, StudentDocumentActionDto input);

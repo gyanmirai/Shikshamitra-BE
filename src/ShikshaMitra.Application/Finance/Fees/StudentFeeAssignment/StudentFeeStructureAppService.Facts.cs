@@ -6,6 +6,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp;
 using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
@@ -32,14 +33,21 @@ public partial class StudentFeeStructureAppService
 		var students = await studentRepository.GetQueryableAsync();
 		var assignments = await studentFeeStructureRepository.GetQueryableAsync();
 		var structures = await feeStructureRepository.GetQueryableAsync();
+		var accounts = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount, Guid>>().GetQueryableAsync();
 		// StudentEnrollment is an unmapped draft aggregate. The live student academic context is authoritative.
 		var current = students.Where(s => s.AcademicYearId == year).Select(s => new EnrollmentFact {
 			Id = s.Id, StudentId = s.Id, StandardId = s.StandardId, DivisionId = s.DivisionId, RollNumber = s.RollNo,
 			IsActive = s.Status == ShikshaMitra.Students.StudentLifeCycleStatusEnum.Enrolled, ConcurrencyStamp = s.ConcurrencyStamp });
 		var historical = from a in assignments join s in students on a.StudentId equals s.Id
 			join f in structures on a.FeeStructureStandardId equals f.Id
+			join account in accounts on a.FinanceFeeAccountId equals account.Id into accountGroup
+			from account in accountGroup.DefaultIfEmpty()
 			where a.AcademicYearId == year && s.AcademicYearId != year
-			select new EnrollmentFact { Id = a.Id, StudentId = s.Id, StandardId = f.StandardId, DivisionId = null, RollNumber = null,
+			select new EnrollmentFact { Id = a.Id, StudentId = s.Id, StandardId = a.AcademicStandardId ?? f.StandardId,
+				DivisionId = a.AcademicStandardId.HasValue ? a.AcademicDivisionId :
+					account != null && account.StudentFeeStructureId == a.Id && account.StudentId == a.StudentId &&
+					account.AcademicYearId == year && account.StandardId == f.StandardId ? account.DivisionId : null,
+				RollNumber = a.AcademicRollNumber,
 				IsActive = false, ConcurrencyStamp = a.ConcurrencyStamp };
 		var enrollments = current.Concat(historical);
 		if (scope.IsAdmin || scope.HasWildcardAcademicYear) return enrollments;
@@ -68,8 +76,12 @@ public partial class StudentFeeStructureAppService
 		return active[0];
 	}
 
+	private static bool HasAssignmentBoardDates(EducationBoard board, AcademicYear year) =>
+		board.AcademicYearId == year.Id && board.StartDate.Date <= board.EndDate.Date &&
+		board.StartDate.Date >= year.StartDate.Date && board.EndDate.Date <= year.EndDate.Date;
+
 	private async Task<(AssignmentServicePeriodDto Period, string Verification, string? Revision)> ResolveServiceAsync(
-		Guid studentId, AssignmentServicePeriodDto input, AcademicYear year)
+		Guid studentId, AssignmentServicePeriodDto input, AcademicYear year, EducationBoard? board = null)
 	{
 		var start = year.StartDate.Date;
 		var end = year.EndDate.Date;
@@ -81,6 +93,17 @@ public partial class StudentFeeStructureAppService
 				if ((input.StartDate.HasValue && input.StartDate.Value.Date != start) ||
 					(input.EndDate.HasValue && input.EndDate.Value.Date != end) || input.SourceReferenceId.HasValue)
 					throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+				break;
+			case "BoardAcademicYear":
+				if (board == null || !HasAssignmentBoardDates(board, year) ||
+					(input.SourceReferenceId.HasValue && input.SourceReferenceId != board.Id) ||
+					(input.StartDate.HasValue && input.StartDate.Value.Date != board.StartDate.Date) ||
+					(input.EndDate.HasValue && input.EndDate.Value.Date != board.EndDate.Date))
+					throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+				start = board.StartDate.Date;
+				end = board.EndDate.Date;
+				verification = "Configured board dates";
+				revision = board.ConcurrencyStamp;
 				break;
 			case "TransportService":
 				if (!input.SourceReferenceId.HasValue) throw new BusinessException(AssignmentErrorCodes.SourceUnavailable);
@@ -110,6 +133,6 @@ public partial class StudentFeeStructureAppService
 		if (start > end || start < year.StartDate.Date || end > year.EndDate.Date)
 			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 		return (new AssignmentServicePeriodDto { FeeHeadId = input.FeeHeadId, Source = input.Source,
-			StartDate = DateTime.SpecifyKind(start, DateTimeKind.Utc), EndDate = DateTime.SpecifyKind(end, DateTimeKind.Utc), SourceReferenceId = input.SourceReferenceId, Reason = input.Reason?.Trim() }, verification, revision);
+			StartDate = DateTime.SpecifyKind(start, DateTimeKind.Utc), EndDate = DateTime.SpecifyKind(end, DateTimeKind.Utc), SourceReferenceId = input.Source == "BoardAcademicYear" ? board!.Id : input.SourceReferenceId, Reason = input.Reason?.Trim() }, verification, revision);
 	}
 }

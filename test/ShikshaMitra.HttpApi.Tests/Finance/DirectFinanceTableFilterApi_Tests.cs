@@ -134,6 +134,29 @@ public class DirectFinanceTableFilterApi_Tests(FinanceRoutingApiTestFactory fact
 	}
 
 	[Fact]
+	public async Task Adjustment_class_label_uses_the_request_academic_context_after_student_moves()
+	{
+		var context = await SeedAdjustmentsAsync(TenantId);
+		using (var scope = Factory.Services.CreateScope())
+		{
+			var services = scope.ServiceProvider;
+			using var tenant = services.GetRequiredService<ICurrentTenant>().Change(TenantId);
+			using var uow = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+			var request = await services.GetRequiredService<IRepository<FeeAdjustmentRequest, Guid>>().GetAsync(context.TargetId);
+			var studentRepository = services.GetRequiredService<IRepository<Student, Guid>>();
+			var student = await studentRepository.GetAsync(request.StudentId);
+			var hidden = (await services.GetRequiredService<IRepository<Standard, Guid>>()
+				.GetListAsync(item => item.Name == "Hidden")).Single();
+			typeof(Student).GetProperty(nameof(Student.StandardId))!.SetValue(student, hidden.Id);
+			await studentRepository.UpdateAsync(student);
+			await uow.CompleteAsync();
+		}
+		var url = $"/api/fee-adjustments/applications?academicYearId={context.YearId}&boardId={context.BoardId}&educationMediumId={context.MediumId}&pageSize=1";
+		await AssertAsync(Client, url, 1, context.TargetId, Criterion("className", "equals", "Visible / A"),
+			Criterion("studentName", "contains", "Target"));
+	}
+
+	[Fact]
 	public async Task Direct_list_headers_reject_malformed_and_unsupported_criteria_before_empty_results()
 	{
 		// Board/medium access requires an existing scoped student; minimal foundation seeds do not create one.

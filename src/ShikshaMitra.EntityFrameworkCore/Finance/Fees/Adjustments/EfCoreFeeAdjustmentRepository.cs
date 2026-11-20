@@ -23,6 +23,17 @@ public class EfCoreFeeAdjustmentRepository(
     // Dedicated kind sentinel for adjustment voucher sequences in the shared sequence table.
     // Must not collide with FeeReceiptKind values (0=FinalFee, 1=ProvisionalFee, 2=ProvisionalCharge).
     private const int AdjustmentVoucherKind = 100;
+
+    public async Task<List<FeeAdjustmentRequest>> GetListForActionAvailabilityAsync(
+        IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default)
+    {
+        if (ids.Count == 0) return [];
+        var idArray = ids.ToArray();
+        var queryable = await GetQueryableAsync();
+        return await queryable.IgnoreAutoIncludes().AsNoTracking()
+            .Where(request => request.TenantId == currentTenant.Id && Enumerable.Contains(idArray, request.Id))
+            .ToListAsync(cancellationToken);
+    }
     public async Task<FeeAdjustmentRequest> GetWithDetailsAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var queryable = await GetQueryableAsync();

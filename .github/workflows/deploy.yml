@@ -9,7 +9,7 @@ concurrency:
     cancel-in-progress: false
 
 env:
-    AZURE_WEBAPP_NAME: dev-gyanmirai-be
+    AZURE_WEBAPP_NAME: shikshamitra-dev
     DOTNET_VERSION: '9.0.x'
     ASPNETCORE_ENVIRONMENT: Staging
     DOTNET_ENVIRONMENT: Staging

@@ -12,6 +12,7 @@ public class PfCoverageConfigurationMapping : IEntityTypeConfiguration<PfCoverag
 		builder.ConfigureByConvention();
 		builder.Property(x => x.EffectiveMonth).HasColumnType("date");
 		builder.Property(x => x.EvidenceReference).HasMaxLength(1000).IsRequired();
+		builder.Property(x => x.IsHandledExternally).HasDefaultValue(false);
 		builder.Property(x => x.RequestKey).HasMaxLength(32).IsRequired();
 		builder.HasIndex(x => new { x.TenantId, x.EffectiveMonth }).IsUnique().HasFilter("\"IsDeleted\" = false AND \"IsCancelled\" = false");
 		builder.HasIndex(x => new { x.TenantId, x.RequestKey }).IsUnique();

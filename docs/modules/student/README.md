@@ -3,7 +3,7 @@ module: student
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-10-08
+updated_on: 2026-11-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,9 @@ audience: humans-and-agents
 # Understand the Student backend module
 
 TL;DR: use this page for Admissions, Onboarding, Student Records, and daily Student Attendance behavior, APIs, ownership, and validation.
+
+The Student setup guide shares school-first-visit and academic-year progress metadata while reusing existing configuration owners.
+See its [product rules](./product.md#student-setup-guide), [API](./api.md#student-setup-guide), [ownership](./architecture.md#student-setup-guide-ownership), and [validation](./testing.md#student-setup-guide-validation).
 
 ## Student Attendance
 
@@ -28,7 +31,7 @@ Use [frontend Student documentation](../../../../Shikshamitra-FE/docs/student/RE
 
 ## Student Records
 
-House Management adds medium-wise houses, cross-class enrolled membership, one optional house leader and an independent optional division leader. See [product rules](./product.md#house-management), [API](./api.md#house-management) and [frontend integration](../../../../Shikshamitra-FE/docs/student/routes.md#house-management).
+House Management provides medium-wise houses, cross-class enrolled membership, one optional leader per house, and one optional Division leader per division. See [product rules](./product.md#house-management), [API](./api.md#house-management) and [frontend integration](../../../../Shikshamitra-FE/docs/student/routes.md#house-management).
 
 The Records implementation connects completed onboarding to a permanent profile, governed changes, documents and IDs, year-end transitions, reports, and published school policy. Initial enrollment activation remains owned by Onboarding. Use the six canonical pages below for backend behavior; frontend routes and presentation remain owned by [frontend Student documentation](../../../../Shikshamitra-FE/docs/student/README.md).
 

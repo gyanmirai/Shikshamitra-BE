@@ -3,7 +3,7 @@ module: common
 domain: development
 content_type: How-to
 status: canonical
-updated_on: 2026-11-04
+updated_on: 2026-11-17
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -16,7 +16,7 @@ Windows cannot replace a DLL loaded by a running API host, DbMigrator, or its de
 `MSB3027`/`MSB3021` therefore recur when a build targets the same output as an existing runtime.
 A separately launched API can also keep ports `44332`/`5000` occupied after a VS Code debug session ends.
 
-The wrapper workspace's `build-be` and `build-dbmigrator` tasks run a target-specific cleanup dependency before building.
+The wrapper workspace's `build-be` and `build-dbmigrator` commands perform target-specific cleanup before building and before replacing the runtime snapshot.
 Their existing `preLaunchTask` links also apply the cleanup when pressing F5 or starting Full Stack.
 The helpers can be run directly from the backend repository:
 
@@ -40,11 +40,26 @@ Use `-WhatIf` to inspect the selected processes without stopping them.
 The helper does not run migrations, seed data, or change application/connection configuration.
 
 The wrapper `.vscode/tasks.json` is workspace configuration outside the two Git repositories.
-When recreating that workspace, keep the cleanup task as a `dependsOn` dependency of the corresponding build task;
-the helper and its regression checks live in the backend repository.
+Its build tasks invoke `scripts/local/Build-Backend.ps1 -Target Host` or `-Target DbMigrator`
+through Windows PowerShell. Cleanup is part of that command, so terminal-task reruns execute it again;
+do not replace it with a raw `dotnet build` command or rely only on a separate `dependsOn` task.
+The command returns cleanup/compiler failures to VS Code and refuses simultaneous Host/DbMigrator
+build commands for the same checkout before stopping any runtime.
+Build output lives under `.artifacts/vscode`. After success, the command stages the complete output,
+including configuration and native dependencies, and replaces a separate stopped runtime snapshot.
+VS Code must launch `.artifacts/vscode-runtime/ShikshaMitra.HttpApi.Host/ShikshaMitra.HttpApi.Host.dll`
+or `.artifacts/vscode-runtime/ShikshaMitra.DbMigrator/ShikshaMitra.DbMigrator.dll`, never compiler output.
+This keeps a session started during compilation from locking compiler outputs.
+Failed compilation or runtime cleanup preserves the previous snapshot; replaced snapshots are retained
+under `.artifacts/vscode-runtime-history` for recovery. These generated folders remain ignored.
+Set workspace `debug.onTaskErrors` to `abort` so a failed pre-launch build cannot start stale assemblies.
+The mutex protects these build commands; independent raw CLI builds or manual launches must not run
+concurrently against that same output folder.
+The helpers and regression checks live in the backend repository.
 
 ```powershell
 pwsh -NoProfile -File scripts/local/tests/Stop-BackendProcess.Tests.ps1
+pwsh -NoProfile -File scripts/local/tests/Build-Backend.Tests.ps1
 ```
 
 ## Builds under memory pressure

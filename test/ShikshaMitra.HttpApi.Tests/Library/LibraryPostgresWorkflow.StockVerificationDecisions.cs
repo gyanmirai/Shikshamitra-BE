@@ -69,7 +69,7 @@ public sealed partial class LibraryPostgresWorkflow_Tests
 			FROM "AppLibraryStockVerificationSessions" WHERE "Id"='{{opened.Id:D}}';
 			"""));
 		missing.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
-		var refusal = await Should.ThrowAsync<PostgresException>(() => MigrateStockVerificationAsync(database, previous));
+		var refusal = await Should.ThrowAsync<PostgresException>(() => database.RollbackLibrarySchemaAsync(previous));
 		refusal.SqlState.ShouldBe("P0001");
 	}
 }

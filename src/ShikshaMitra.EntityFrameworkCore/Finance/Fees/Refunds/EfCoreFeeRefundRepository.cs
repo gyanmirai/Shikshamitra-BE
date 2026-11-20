@@ -9,6 +9,8 @@ using ShikshaMitra.Finance.Fees.FeeRefund.Repositories;
 using ShikshaMitra.Students;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 
@@ -19,7 +21,7 @@ public class EfCoreFeeRefundRepository(
 ) : EfCoreRepository<ShikshaMitraDbContext, FeeRefundRequest, Guid>(dbContextProvider),
     IFeeRefundRepository
 {
-    public async Task<(List<FeeRefundRequest> Items, int TotalCount)> GetListWithDetailsAsync(
+    public async Task<(List<FeeRefundRequest> Items, int TotalCount, Dictionary<FeeRefundStatus, int> StatusCounts)> GetListWithDetailsAsync(
         Guid? studentId = null,
         Guid? academicYearId = null,
         Guid? academicMediumId = null,
@@ -39,7 +41,8 @@ public class EfCoreFeeRefundRepository(
         Guid? financeFeeAccountId = null,
         IQueryable<Guid>? visibleRequestIdsQuery = null,
         IQueryable<Guid>? authorizedExternalRequestIdsQuery = null,
-        Guid? financeExternalSourceLinkId = null)
+        Guid? financeExternalSourceLinkId = null,
+        Guid? boardId = null)
     {
         var dbContext = await GetDbContextAsync();
         var dbSet = dbContext.Set<FeeRefundRequest>();
@@ -55,7 +58,7 @@ public class EfCoreFeeRefundRepository(
             legacyScope = legacyScope.Where(r => r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value));
         var legacyIds = legacyScope.Select(r => r.Id);
         var externalIds = authorizedExternalRequestIdsQuery ?? dbSet.Where(_ => false).Select(r => r.Id);
-        var query = dbSet.Include(r => r.Lines).Include(r => r.Reservations).Include(r => r.Settlements)
+        var query = dbSet.AsNoTracking()
             .Where(r => !r.FinanceExternalSourceLinkId.HasValue && legacyIds.Contains(r.Id) ||
                 r.FinanceExternalSourceLinkId.HasValue && externalIds.Contains(r.Id));
 
@@ -69,21 +72,33 @@ public class EfCoreFeeRefundRepository(
         if (financeFeeAccountId.HasValue)
             query = query.Where(r => r.FinanceFeeAccountId == financeFeeAccountId.Value);
 
-        if (academicMediumId.HasValue || standardId.HasValue || divisionId.HasValue)
+        if (boardId.HasValue || academicMediumId.HasValue || standardId.HasValue || divisionId.HasValue)
         {
             var studentQuery = dbContext.Set<Student>().AsQueryable();
             var accountQuery = dbContext.Set<FinanceFeeAccount>().AsQueryable();
+            var standardQuery = dbContext.Set<Standard>().AsQueryable();
+
+            if (boardId.HasValue)
+            {
+                studentQuery = studentQuery.Where(s => s.AcademicBoardId == boardId.Value);
+                accountQuery = accountQuery.Where(a => a.BoardId == boardId.Value);
+                standardQuery = standardQuery.Where(s =>
+                    s.EducationMediumStage.EducationMedium.EducationBoardId == boardId.Value);
+            }
 
             if (academicMediumId.HasValue)
             {
                 studentQuery = studentQuery.Where(s => s.AcademicMediumId == academicMediumId.Value);
                 accountQuery = accountQuery.Where(a => a.EducationMediumId == academicMediumId.Value);
+                standardQuery = standardQuery.Where(s =>
+                    s.EducationMediumStage.EducationMediumId == academicMediumId.Value);
             }
 
             if (standardId.HasValue)
             {
                 studentQuery = studentQuery.Where(s => s.StandardId == standardId.Value);
                 accountQuery = accountQuery.Where(a => a.StandardId == standardId.Value);
+                standardQuery = standardQuery.Where(s => s.Id == standardId.Value);
             }
 
             if (divisionId.HasValue)
@@ -94,12 +109,18 @@ public class EfCoreFeeRefundRepository(
 
             var filteredStudentIds = studentQuery.Select(s => s.Id);
             var filteredAccountIds = accountQuery.Select(a => a.Id);
-            query = query.Where(r => (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && filteredStudentIds.Contains(r.StudentId.Value)) ||
+            var filteredStandardIds = standardQuery.Select(s => s.Id);
+            var currentStudentYears = dbContext.Set<Student>().Select(s => new { s.Id, s.AcademicYearId });
+            var historicPlacements = dbContext.Set<StudentEnrollment>().Where(e =>
+                e.StandardId.HasValue && filteredStandardIds.Contains(e.StandardId.Value) &&
+                (!divisionId.HasValue || e.DivisionId == divisionId.Value));
+            query = query.Where(r => (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue &&
+                ((filteredStudentIds.Contains(r.StudentId.Value) && currentStudentYears.Any(s =>
+                    s.Id == r.StudentId.Value && s.AcademicYearId == r.AcademicYearId)) ||
+                 historicPlacements.Any(e => e.StudentId == r.StudentId.Value && e.AcademicYearId == r.AcademicYearId))) ||
                 (r.FinanceFeeAccountId.HasValue && filteredAccountIds.Contains(r.FinanceFeeAccountId.Value)));
         }
 
-        if (status.HasValue)
-            query = query.Where(r => r.Status == status.Value);
         if (legacyHistory)
             query = query.Where(r => r.WorkflowVersion == 0);
         else if (workflowVersion.HasValue)
@@ -126,17 +147,30 @@ public class EfCoreFeeRefundRepository(
                 (r.FinanceFeeAccountId.HasValue && matchingAccounts.Contains(r.FinanceFeeAccountId.Value)));
         }
 
-        query = FeeRefundColumnFilterQuery.Apply(query, dbContext.Set<Student>(), columnFilters ?? [], dbContext.Set<FeePaymentReceipt>());
-        var totalCount = await query.CountAsync(cancellationToken);
+        query = FeeRefundColumnFilterQuery.Apply(query, dbContext.Set<Student>(), columnFilters ?? [],
+            dbContext.Set<FeePaymentReceipt>(), dbContext.Set<StudentEnrollment>(), dbContext.Set<Standard>(),
+            dbContext.Set<ShikshaMitra.TenantSettings.Divisions.Division>());
+        var statusCounts = await query.GroupBy(r => r.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Count, cancellationToken);
+        var totalCount = status.HasValue ? statusCounts.GetValueOrDefault(status.Value) : statusCounts.Values.Sum();
+        if (totalCount == 0)
+            return ([], 0, statusCounts);
+        if (status.HasValue)
+            query = query.Where(r => r.Status == status.Value);
 
         query = ApplySorting(query, sorting);
 
         var items = await query
+            .Include(r => r.Lines)
+            .Include(r => r.Reservations)
+            .Include(r => r.Settlements)
+            .AsSplitQuery()
             .Skip(skipCount)
             .Take(maxResultCount)
             .ToListAsync(cancellationToken);
 
-        return (items, totalCount);
+        return (items, totalCount, statusCounts);
     }
 
     public async Task<FeeRefundRequest?> FindWithLinesAsync(Guid id, CancellationToken cancellationToken = default)
@@ -256,17 +290,17 @@ public class EfCoreFeeRefundRepository(
         string? sorting)
     {
         if (string.IsNullOrWhiteSpace(sorting))
-            return query.OrderByDescending(r => r.CreationTime);
+            return query.OrderByDescending(r => r.CreationTime).ThenByDescending(r => r.Id);
 
         return sorting.ToLower().Trim() switch
         {
-            "createdat asc"  or "creationtime asc"  => query.OrderBy(r => r.CreationTime),
-            "createdat desc" or "creationtime desc" => query.OrderByDescending(r => r.CreationTime),
-            "totalamount asc"  => query.OrderBy(r => r.TotalAmount),
-            "totalamount desc" => query.OrderByDescending(r => r.TotalAmount),
-            "status asc"  => query.OrderBy(r => r.Status),
-            "status desc" => query.OrderByDescending(r => r.Status),
-            _ => query.OrderByDescending(r => r.CreationTime),
+            "createdat asc"  or "creationtime asc"  => query.OrderBy(r => r.CreationTime).ThenBy(r => r.Id),
+            "createdat desc" or "creationtime desc" => query.OrderByDescending(r => r.CreationTime).ThenByDescending(r => r.Id),
+            "totalamount asc"  => query.OrderBy(r => r.TotalAmount).ThenBy(r => r.Id),
+            "totalamount desc" => query.OrderByDescending(r => r.TotalAmount).ThenByDescending(r => r.Id),
+            "status asc"  => query.OrderBy(r => r.Status).ThenBy(r => r.Id),
+            "status desc" => query.OrderByDescending(r => r.Status).ThenByDescending(r => r.Id),
+            _ => query.OrderByDescending(r => r.CreationTime).ThenByDescending(r => r.Id),
         };
     }
 }

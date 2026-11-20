@@ -1,6 +1,4 @@
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -35,10 +33,9 @@ public sealed partial class LibraryPostgresWorkflow_Tests
 		await using var database = await LibraryMigrationPostgresFixture.CreateFullHistoryAsync(LibraryMigrationPostgresFixture.StockReceiving);
 		await using var factory = new LibraryPostgresApiTestFactory(database);
 		var (copyId, _) = await SeedLoanContextAsync(factory);
-		await using var context = database.CreateContext();
-		await context.GetService<IMigrator>().MigrateAsync(LibraryMigrationPostgresFixture.TypedSettlement);
+		await database.RollbackLibrarySchemaAsync(LibraryMigrationPostgresFixture.TypedSettlement);
 		(await database.ScalarAsync($"SELECT count(*) FROM \"AppBookCopies\" WHERE \"Id\"='{copyId:D}';")).ShouldBe("1");
-		await context.GetService<IMigrator>().MigrateAsync(LibraryMigrationPostgresFixture.StockReceiving);
+		await database.ExecuteAsync(database.Script(LibraryMigrationPostgresFixture.TypedSettlement, LibraryMigrationPostgresFixture.StockReceiving));
 		(await database.ScalarAsync("SELECT count(*) FROM \"AppLibraryStockReceipts\";")).ShouldBe("0");
 		(await database.ScalarAsync($"SELECT count(*) FROM \"AppBookCopies\" WHERE \"Id\"='{copyId:D}';")).ShouldBe("1");
 	}
@@ -74,8 +71,7 @@ public sealed partial class LibraryPostgresWorkflow_Tests
 		await using var factory = new LibraryPostgresApiTestFactory(database);
 		var (copyId, _) = await SeedLoanContextAsync(factory);
 		await database.ExecuteAsync(ReceivingSql(copyId));
-		await using var context = database.CreateContext();
-		await Should.ThrowAsync<PostgresException>(() => context.GetService<IMigrator>().MigrateAsync(LibraryMigrationPostgresFixture.TypedSettlement));
+		await Should.ThrowAsync<PostgresException>(() => database.RollbackLibrarySchemaAsync(LibraryMigrationPostgresFixture.TypedSettlement));
 		(await database.ScalarAsync("SELECT count(*) FROM \"AppLibraryStockReceipts\";")).ShouldBe("1");
 	}
 }

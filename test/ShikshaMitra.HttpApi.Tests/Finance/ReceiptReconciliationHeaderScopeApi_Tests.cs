@@ -52,15 +52,17 @@ public class ReceiptReconciliationHeaderScopeApi_Tests(FinanceRoutingApiTestFact
 			await AssertAsync(restricted, url, "studentName", "equals", "Header Applicant", 1);
 			await AssertAsync(restricted, url + "&search=Header%20Applicant", "studentName", "contains", "Student", 0);
 			await AssertAsync(restricted, url + "&search=456789", "studentName", "contains", "Student", 1);
-			await AssertAsync(Client, Url(foreign, receipts), column, "greaterThan", 900, 0);
 			if (receipts)
 			{
+				await AssertAsync(Client, Url(foreign, receipts), column, "greaterThan", 900, 0);
 				await AssertAsync(restricted, url, "paymentMethodLabel", "equals", "Not recorded", 1);
 				await AssertAsync(restricted, url, "verificationStatus", "equals", "Receipt: LINKED-FINAL", 1);
 				await AssertAsync(restricted, url + $"&standardId={current.HiddenClassId}", column, "greaterThan", 900, 0);
 			}
 			else
 			{
+				using var foreignResponse = await Client.GetAsync(WithFilter(Url(foreign, receipts), column, "greaterThan", 900));
+				foreignResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 				await AssertAsync(restricted, url, "standardName", "equals", "Visible", 2);
 				await AssertAsync(restricted, url, "bankName", "equals", "Hidden payer bank", 0);
 			}
@@ -73,12 +75,17 @@ public class ReceiptReconciliationHeaderScopeApi_Tests(FinanceRoutingApiTestFact
 
 	private static async Task AssertAsync(HttpClient client, string url, string column, string type, object value, int count)
 	{
-		var filters = Uri.EscapeDataString(JsonSerializer.Serialize(new[] { new { column, type, value } }));
-		var response = await client.GetAsync(url + "&filters=" + filters);
+		using var response = await client.GetAsync(WithFilter(url, column, type, value));
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var result = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
 		result.GetProperty("totalCount").GetInt32().ShouldBe(count, column + "=" + value);
 		result.GetProperty("items").GetArrayLength().ShouldBe(count);
+	}
+
+	private static string WithFilter(string url, string column, string type, object value)
+	{
+		var filters = Uri.EscapeDataString(JsonSerializer.Serialize(new[] { new { column, type, value } }));
+		return url + "&filters=" + filters;
 	}
 
 	private async Task<Context> SeedAsync(Guid tenantId)

@@ -222,6 +222,7 @@ Payroll APIs manage setup, preview, review, lock, and salary slips:
 | Payroll policies | `/api/hr/payroll/policies` | `HR.PayrollManagement.Settings.PayrollPolicies.*` | Implemented |
 | One-time salary components | `/api/payroll/employees/{employeeId}/salary-structure` | GET: `HR.Employee.EmployeeList.View`; PUT: `HR.PayrollManagement.PayrollStructure.Add` plus existing employee-modification authority | Implemented |
 | Compensation revisions | `/api/payroll/employees/{employeeId}/compensation` | `HR.PayrollManagement.CompensationRevisions.View`, `Manage`, or `ViewAudit` | Implemented |
+| Reviewed CTC migration | `POST /api/payroll/employees/{employeeId}/compensation/protection-migration/preview` and `/apply` | `HR.PayrollManagement.CompensationRevisions.Manage` and employee scope | Implemented |
 | Run payroll | `/api/payroll/run` | `HR.PayrollManagement.RunPayroll.*` | Generation-bound review and lock; rollout pending |
 | Durable payroll previews | `/api/payroll/run/previews*` | `HR.PayrollManagement.RunPayroll.View` | Additive migration and integration verification pending |
 | Salary slips | `/api/payroll/salary-slips` | `HR.PayrollManagement.GenerateSalarySlip.*` | Implemented |
@@ -232,6 +233,14 @@ Salary-structure application calls retain the same employee ownership/scope and 
 Salary-template reads require Salary Templates View, except the active assignment catalogue, which requires Compensation Revisions Manage.
 Template create, update, default and archive calls retain their independent Add, Edit, SetDefault and Archive actions, including idempotent responses without an extra View prerequisite.
 Compensation-history and effective-revision application reads require Compensation Revisions View or Manage plus the existing employee-scope check before querying salary data.
+
+Migration preview accepts `sourceRevisionId` and the first day of the target `effectiveMonth`.
+Apply also requires the signed `previewToken` returned by preview.
+The source must be the effective approved Monthly salary revision with a complete calculation snapshot.
+Stale sources, changed calculation inputs, and locked payroll prevent applying the preview.
+An authorized retry using the original proof returns the revision created by the first successful apply.
+Payroll preview rows include optional `salaryProtection` evidence for the recurring CTC target, achieved cost, difference, gross adjustment, and result status.
+The calculated CTC evidence does not extend the public payslip response.
 
 Payroll month parameters use `MMMM-YYYY`, such as `JANUARY-2025`.
 Payroll lock is idempotent for an already locked month and returns the documented payroll lock error.
@@ -595,7 +604,17 @@ Employee and employer PF amounts round independently to the nearest whole rupee,
 `GET /api/payroll/pf-rules/coverage` requires `HR.PayrollManagement.Settings.PfRule.View` and returns immutable configuration history and `hasSchoolWideScope`.
 `PUT` requires `HR.PayrollManagement.Settings.PfRule.Add` and school-wide UserScope.
 Its payload contains `effectiveMonth` (first day of the current or a future month), `isCovered`, `evidenceReference`, `expectedConfigurationId`, and `idempotencyKey`.
+`evidenceReference` carries the PF establishment number for a covered school as nonblank text of up to 1000 characters.
+For `isCovered: false`, callers may omit the reference and history returns an empty string when none was provided.
+Set `isHandledExternally: true` together with `isCovered: false` to manage PF outside ShikshaMitra starting in the effective month.
+This option needs no establishment number and completes the PF setup check.
+An effective external setting returns `HANDLED_EXTERNALLY` for PF eligibility, suppresses PF rules, registration warnings and both contribution shares, and leaves staff registration records and finalized payroll intact.
+Apply the additive `AddExternalSchoolPfManagement` migration before deploying the API.
+Existing coverage versions start with external management disabled.
 Identical retries reuse the saved outcome; stale version IDs and changed retry payloads return 409.
+
+`GET /api/payroll/pf-rules/coverage/management?effectiveMonth=yyyy-MM-01` requires Compensation Revisions Manage and returns only the tenant's effective external-management flag.
+Salary saves can send `expectedPfHandledExternally` from their preview and receive 409 `HR:Payroll:PfManagementChanged` if the school's PF setting changed.
 
 ESIC configuration save accepts `effectiveMonth` (`yyyy-MM`) and `calculationSettings` in addition to the existing configuration fields.
 `eligibilityBasis` and `calculationBasis` independently select `CLASSIFIED_EARNINGS`, `GROSS`, or `COMPONENT`.
@@ -765,7 +784,7 @@ Protected or referenced changes return HTTP 409, invalid dates/times return HTTP
 All operations derive tenant ownership from the server context.
 ## Configurable employee identity cards
 
-Existing `/api/employee-icard-templates` operations keep their action permissions, tenant and employee scope, school-identity selection and authorized asset loading. Schema versions 1 and 2 are supported. Version 2 accepts the `staff-professional` preset and explicit `widthMm`/`heightMm` in `layoutJson`; `width`/`height` and element coordinates remain canvas units. Physical dimensions must be 30–200 mm. Legacy layouts without physical dimensions use 85.60 × 53.98 mm, reversed for Vertical.
+Existing `/api/employees/i-card/templates` operations keep their action permissions, tenant and employee scope, school-identity selection and authorized asset loading. Schema versions 1 and 2 are supported. Version 2 accepts the `staff-professional` preset and explicit `widthMm`/`heightMm` in `layoutJson`; `width`/`height` and element coordinates remain canvas units. Physical dimensions must be 30–200 mm. Legacy layouts without physical dimensions use 85.60 × 53.98 mm, reversed for Vertical.
 
 `front.elements` and optional `back.elements` share text, photo, logo, QR, barcode, shape and line support, with at most 100 elements per side. IDs must be unique within each side and finite element rectangles must remain inside the canvas. Existing field bindings and `fieldsJson`, QR, barcode and back-side flags still govern rendering. School text and static content do not widen employee field access. Fonts support Arial, sans-serif, Inter, Roboto, Noto Sans and Lato at 4–100 canvas units; invalid properties, colours, enums and unsupported bindings fail validation.
 
@@ -774,3 +793,13 @@ Existing `/api/employee-icard-templates` operations keep their action permission
 A4 capacity includes margins, gaps and bleed; the renderer lowers the batch capacity without shrinking credentials and rejects sheets with no usable slot. A centred full-capacity grid retains empty slots on partial sheets. Long-edge backs reflect columns and short-edge backs reflect rows. The matching back follows each front sheet. Card output emits per-card front/back pages at trim dimensions plus twice the bleed, and omits cut marks. Back offsets require A4 and must keep artwork on the paper. Selecting back-only requires an enabled, configured back. Text wraps within its element; schema-2 overflow reports the affected element instead of truncating identity data. Barcode values must use Code39 characters.
 
 Saving configuration and generating a PDF do not establish physical printing or distribution. This rendering change adds no migration, issuance entity, verification service or permission grants.
+
+### Visual studio assets and personal photo edits
+
+Schema 2 additionally supports `type: "image"` with `imageData` containing an embedded PNG/JPEG data URI. Other element types cannot contain `imageData`. Each raster must fully decode, be at most 512 KB and have dimensions at most 2048 × 2048. SVG, external URLs and malformed rasters are rejected. Layout JSON is limited to 2 MB in UTF-8. Optional element properties are `rotation` (-180 to 180), `opacity` (0 to 1) and `groupId` (at most 100 characters); numbers must be finite. Styles add `shape` (`rectangle`/`ellipse`), `fontStyle` (`normal`/`italic`) and `textDecoration` (`none`/`underline`/`line-through`). PDF rotation is around the element centre and opacity applies to the complete element. Existing geometry and defaults remain unchanged.
+
+The exact resolved font variant used for measuring/wrapping is registered with the PDF renderer, including its actual fallback family when the requested family is unavailable. Underline and strike-through use explicit vector strokes for each wrapped line, positioned from the same font metrics and aligned to its measured advance. They inherit the element's rotation and opacity; native SVG text-decoration is omitted because the PDF importer does not reliably render it.
+
+`GET /api/employees/i-card/templates/photos/{employeeId}` returns `{recordId,imageData,sourceHash}` for the authorized employee's full, uncropped raster photo. `sourceHash` is lowercase SHA-256 over the original blob bytes. The read requires the existing I-Card View action, current employee UserScope and tenant match before loading pixels. Missing/invalid photos return a structured configuration error. Existing PNG, JPEG, GIF and WebP originals are safely bounded to 5 MB, 8192 pixels per dimension and 32 million pixels before allocation. Rasters larger than 2048 in either dimension are proportionally resized with camera orientation preserved; GIF/WebP normalize to PNG using their first decoded frame. Returned pixels are PNG/JPEG and the hash always identifies the unchanged original blob. Photo responses disable browser/proxy caching.
+
+The existing `POST /api/employees/i-card/templates/{id}/pdf` request accepts optional `photoEdits: [{recordId,sourceHash,imageData}]`. IDs must be distinct members of the requested, authorized employee cohort, and each hash must match that employee's current original photo. Edited rasters use the same 512 KB/2048 limits and an 8 MB decoded aggregate limit. An unknown ID, duplicate, malformed raster or stale source rejects the request before rendering. `ShikshaMitra:IdentityCard:PhotoSourceChanged` asks the caller to reload and reapply the edit. Every requested employee retains the exact I-Card View and canonical employee scope checks. These transient overrides neither update profile-photo blobs nor enter reusable template JSON. `photoEdits` and nested `imageData` are excluded from ABP audit parameters; selected record IDs and other request metadata remain auditable.

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
@@ -24,14 +23,35 @@ public partial class FeeAdjustmentAppService
 	private static readonly IReadOnlyDictionary<string, LambdaExpression> ListFilterFields =
 		new Dictionary<string, LambdaExpression>
 		{
-			["studentName"] = (Expression<Func<FeeAdjustmentApplicationItemDto, string>>)(row => StudentDisplay(row)),
-			["className"] = (Expression<Func<FeeAdjustmentApplicationItemDto, string>>)(row => ClassDisplay(row)),
-			["rollNumber"] = (Expression<Func<FeeAdjustmentApplicationItemDto, string>>)(row => row.RollNo),
-			["requestedBy"] = (Expression<Func<FeeAdjustmentApplicationItemDto, string?>>)(row => row.RequestedByName),
-			["status"] = (Expression<Func<FeeAdjustmentApplicationItemDto, string>>)(row => StatusDisplay(row)),
-			["adjustmentAmount"] = (Expression<Func<FeeAdjustmentApplicationItemDto, double>>)(row => row.RequestedAmount),
-			["createdAt"] = (Expression<Func<FeeAdjustmentApplicationItemDto, DateTime>>)(row => row.CreatedAt)
+			["studentName"] = (Expression<Func<AdjustmentListRow, string>>)(row => row.StudentName + (row.GrNumber == "" ? "" : " (" + row.GrNumber + ")")),
+			["className"] = (Expression<Func<AdjustmentListRow, string>>)(row => row.StandardName + (row.DivisionName == "" ? "" : " / " + row.DivisionName)),
+			["rollNumber"] = (Expression<Func<AdjustmentListRow, string>>)(row => row.RollNo),
+			["requestedBy"] = (Expression<Func<AdjustmentListRow, string>>)(row => row.RequestedByName),
+			["status"] = (Expression<Func<AdjustmentListRow, string>>)(row => row.StatusName),
+			["adjustmentAmount"] = (Expression<Func<AdjustmentListRow, double>>)(row => row.RequestedAmount),
+			["createdAt"] = (Expression<Func<AdjustmentListRow, DateTime>>)(row => row.CreatedAt)
 		};
+
+	private sealed class AdjustmentListRow
+	{
+		public Guid Id { get; init; }
+		public Guid StudentId { get; init; }
+		public Guid? CreatorId { get; init; }
+		public string StudentName { get; init; } = "";
+		public string GrNumber { get; init; } = "";
+		public string RollNo { get; init; } = "";
+		public string StandardName { get; init; } = "";
+		public string DivisionName { get; init; } = "";
+		public string RequestedByName { get; init; } = "";
+		public string StatusName { get; init; } = "";
+		public string Reason { get; init; } = "";
+		public string VoucherNumber { get; init; } = "";
+		public double RequestedAmount { get; init; }
+		public double AppliedAmount { get; init; }
+		public double RemainingAmount { get; init; }
+		public FeeAdjustmentStatus Status { get; init; }
+		public DateTime CreatedAt { get; init; }
+	}
 
 	private static FinanceTableQuery ParseListFilters(string? filters, string? search)
 	{
@@ -55,25 +75,4 @@ public partial class FeeAdjustmentAppService
 		return query;
 	}
 
-	private static string StudentDisplay(FeeAdjustmentApplicationItemDto row) =>
-		(string.IsNullOrEmpty(row.StudentName) ? "-" : row.StudentName) +
-		(string.IsNullOrEmpty(row.GrNumber) ? "" : " (" + row.GrNumber + ")");
-	private static string ClassDisplay(FeeAdjustmentApplicationItemDto row) =>
-		!string.IsNullOrEmpty(row.StandardName) && !string.IsNullOrEmpty(row.DivisionName)
-			? row.StandardName + " / " + row.DivisionName : string.IsNullOrEmpty(row.StandardName) ? "-" : row.StandardName;
-	// Match the displayed worklist states without collapsing partially applied requests.
-	private static string StatusDisplay(FeeAdjustmentApplicationItemDto row) => row.Status switch
-	{
-		FeeAdjustmentStatus.Pending => "Pending",
-		FeeAdjustmentStatus.Rejected => "Rejected",
-		FeeAdjustmentStatus.PartiallyApplied => "Partially applied",
-		FeeAdjustmentStatus.Applied => "Approved",
-		FeeAdjustmentStatus.Cancelled => "Cancelled",
-		_ => row.Status.ToString()
-	};
-	private static bool MatchesListSearch(FeeAdjustmentApplicationItemDto row, FeeAdjustmentRequest request, string search) =>
-		string.Join(" ", StudentDisplay(row), ClassDisplay(row), row.RollNo, row.RequestedByName, StatusDisplay(row),
-			row.RequestedAmount.ToString(CultureInfo.InvariantCulture), row.CreatedAt.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture),
-			row.CreatedAt.ToString("O", CultureInfo.InvariantCulture), request.VoucherNumber, request.Reason)
-		.Contains(search, StringComparison.OrdinalIgnoreCase);
 }

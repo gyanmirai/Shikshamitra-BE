@@ -25,6 +25,14 @@ public class StudentFeeStructureController(
 
 	[HttpPut("student/{studentId}/policies")]
 	public Task<StudentFeeStructureResponseDto> UpdatePoliciesAsync(Guid studentId, [FromBody] AssignmentPolicyUpdateDto input) => studentFeeStructureAppService.UpdatePoliciesAsync(studentId, input);
+	[HttpPost("student/{studentId}/optional-service-stop/preview")]
+	public Task<OptionalServiceStopResult> PreviewOptionalServiceStopAsync(Guid studentId, [FromBody] OptionalServiceStopInput input) =>
+		studentFeeStructureAppService.PreviewOptionalServiceStopAsync(studentId, input);
+
+	[HttpPost("student/{studentId}/optional-service-stop")]
+	public Task<OptionalServiceStopResult> StopOptionalServiceAsync(Guid studentId, [FromBody] OptionalServiceStopInput input) =>
+		studentFeeStructureAppService.StopOptionalServiceAsync(studentId, input);
+
 	[HttpGet("transport-sources")]
 	public Task<List<AssignmentTransportSourceDto>> GetTransportSourcesAsync(Guid studentId, Guid academicYearId) => studentFeeStructureAppService.GetTransportSourcesAsync(studentId, academicYearId);
     [HttpGet("students")]

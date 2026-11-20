@@ -75,6 +75,6 @@ public sealed partial class LibraryPostgresWorkflow_Tests
 		ready.Hold.ShouldNotBeNull();
 		ready.Hold.CopyId.ShouldBe(stock.Lines.Single().Copies.Single().CopyId);
 		ready.PickupLabel.ShouldBe(saved.PickupLabel);
-		(await Should.ThrowAsync<PostgresException>(() => MigrateStockVerificationAsync(database, prior))).SqlState.ShouldBe("23514");
+		(await Should.ThrowAsync<PostgresException>(() => database.RollbackLibrarySchemaAsync(prior))).SqlState.ShouldBe("23514");
 	}
 }

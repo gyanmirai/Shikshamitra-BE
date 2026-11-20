@@ -8,6 +8,7 @@ public class GetFeeRefundsInput : PagedAndSortedResultRequestDto, IFinanceClassD
 {
     public Guid? AcademicYearId { get; set; }
     public Guid? StudentId { get; set; }
+    public Guid? BoardId { get; set; }
     public Guid? FinanceFeeAccountId { get; set; }
     /// <summary>Intersects the authorized result before counting and pagination; never grants source access.</summary>
     public Guid? FinanceExternalSourceLinkId { get; set; }

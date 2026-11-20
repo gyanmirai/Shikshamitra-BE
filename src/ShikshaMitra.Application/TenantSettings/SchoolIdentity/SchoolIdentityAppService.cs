@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.TenantSettings.InitialSetup;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization;
@@ -13,6 +14,7 @@ using Volo.Abp.BlobStoring;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using Volo.Abp.TenantManagement;
 
 namespace ShikshaMitra.TenantSettings.SchoolIdentity;
 
@@ -27,7 +29,8 @@ public partial class SchoolIdentityAppService(
 	SchoolIdentityScopeAccess access,
 	SchoolIdentityReadService reader,
 	SchoolIdentityDocumentService documents,
-	IRepository<IdentityUser, Guid> identityUsers) : ApplicationService, ISchoolIdentityAppService
+	IRepository<IdentityUser, Guid> identityUsers,
+	ITenantRepository tenants) : ApplicationService, ISchoolIdentityAppService
 {
 	public async Task<SchoolIdentityProfileDto> GetAsync(SchoolIdentityContextDto input)
 	{
@@ -155,7 +158,19 @@ public partial class SchoolIdentityAppService(
 		if (!CurrentUser.IsAuthenticated) throw new AbpAuthorizationException();
 		await access.EnsureAsync(null, null);
 		var profile = await reader.ReadAsync(null, null, null, signature: false);
-		return new() { Logo = BrandingAsset(profile.Effective["logo"]), Banner = BrandingAsset(profile.Effective["banner"]) };
+		var tenant = await tenants.GetAsync(CurrentTenant.Id!.Value);
+		string Text(string key, string fallback = "") => InitialSetupStatusReader.ReadTenantText(tenant, key, fallback).Trim();
+		var locality = string.Join(", ", new[] { Text("City"), Text("State") }.Where(value => value.Length > 0));
+		var localityWithPostalCode = string.Join(" ", new[] { locality, Text("PostalCode") }.Where(value => value.Length > 0));
+		var schoolName = Text("InstituteName");
+		return new()
+		{
+			SchoolName = schoolName.Length > 0 ? schoolName : tenant.Name,
+			SchoolPhone = Text("ContactNumber"), SchoolEmail = Text("Email"), SchoolWebsite = Text("Website"),
+			AddressLines = new[] { Text("Address1"), Text("Address2"), Text("Address3"), localityWithPostalCode, Text("Country") }
+				.Where(value => value.Length > 0).ToArray(),
+			Logo = BrandingAsset(profile.Effective["logo"]), Banner = BrandingAsset(profile.Effective["banner"])
+		};
 	}
 
 	private static SchoolBrandingAssetDto? BrandingAsset(SchoolIdentityEffectiveAssetDto effective)

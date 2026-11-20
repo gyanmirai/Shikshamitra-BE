@@ -40,7 +40,7 @@ public class AdmissionDocumentReadService(AdmissionDocumentAccessService access,
 			if (!onboarding && policyContexts.Any(context => context.IsActive && context.Application.Status != AdmissionApplicationStatus.Draft))
 				canDefer = await onboardingRequirements.CanDeferAsync(policyContexts[0].Application);
 			var definitionIds = policyContexts.Where((context, index) => !onboarding && context.IsActive &&
-				context.Application.Status != AdmissionApplicationStatus.Draft && (evaluations[index].Blockers.Count == 0 || canDefer))
+				(evaluations[index].Blockers.Count == 0 || canDefer))
 				.Select(context => context.Definition.Id).Distinct().ToArray();
 			if (definitionIds.Length > 0)
 				routes = (await transitions.GetListAsync(route => Enumerable.Contains(definitionIds, route.FromStageId))).ToLookup(route => route.FromStageId);
@@ -69,7 +69,6 @@ public class AdmissionDocumentReadService(AdmissionDocumentAccessService access,
 		if (!context.IsActive) result.Blockers.Add(context.CanPrepare
 			? "Documents can be prepared now. Continue admission from the current journey stage."
 			: "This document verification stage is read-only.");
-		else if (context.Application.Status == AdmissionApplicationStatus.Draft) result.Blockers.Add("Submit the application before completing document verification.");
 		var canDefer = !onboarding && context.IsActive && context.Application.Status != AdmissionApplicationStatus.Draft && sharedCanDefer;
         var routeReady = false;
 		if (!onboarding && (result.Blockers.Count == 0 || canDefer))

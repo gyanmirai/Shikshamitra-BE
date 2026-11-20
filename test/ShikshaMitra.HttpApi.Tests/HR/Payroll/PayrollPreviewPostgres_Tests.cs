@@ -3,19 +3,23 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Audit;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.Infrastructure.Auth;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
@@ -275,6 +279,107 @@ public partial class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory fac
 			(await rejected.Content.ReadAsStringAsync()).ShouldContain("PAYROLL_PREVIEW_STALE");
 		}
 		(await GetAndReadAsync<PayrollPreviewStatusDto>($"{Previews}/{run.Id}")).IsCurrent.ShouldBeFalse();
+	}
+
+	[PayrollPostgresFact]
+	public async Task Review_activity_is_durable_and_new_completed_preview_rejects_old_commands()
+	{
+		const string month = "2026-05";
+		const string reviews = "/api/payroll/run/reviews";
+		const string activity = $"/api/hr/audit-events?entityType=payroll_run&payrollMonth={month}";
+		var original = await StartAsync(month);
+		await ExecuteAsync(original.Id);
+		var page = await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{original.Id}/employees?pageSize=10");
+		var staff = page.Items.First();
+		var command = new PayrollRunReviewRequest
+		{
+			Month = month, PreviewRunId = original.Id, AcademicYearId = original.AcademicYearId,
+			EmployeeIds = [staff.EmployeeId], OperationId = Guid.NewGuid()
+		};
+
+		factory.Barrier.FailNextCommand("INSERT INTO \"HR_AuditEvents\"");
+		(await Client.PostAsJsonAsync(reviews, command)).IsSuccessStatusCode.ShouldBeFalse();
+		(await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{original.Id}/employees"))
+			.Items.Single(x => x.EmployeeId == staff.EmployeeId).ReviewStatus.ShouldBe(ReviewStatuses.Pending);
+		(await GetAndReadAsync<PagedResultDto<HrAuditEventDto>>(activity)).TotalCount.ShouldBe(0);
+
+		(await Client.PostAsJsonAsync(reviews, command)).EnsureSuccessStatusCode();
+		(await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{original.Id}/employees"))
+			.Items.Single(x => x.EmployeeId == staff.EmployeeId).ReviewStatus.ShouldBe(ReviewStatuses.Reviewed);
+		using var remove = new HttpRequestMessage(HttpMethod.Delete, reviews)
+		{
+			Content = JsonContent.Create(new PayrollRunReviewRequest
+			{
+				Month = month, PreviewRunId = original.Id, AcademicYearId = original.AcademicYearId,
+				EmployeeIds = [staff.EmployeeId], OperationId = Guid.NewGuid()
+			})
+		};
+		(await Client.SendAsync(remove)).EnsureSuccessStatusCode();
+		(await Client.PostAsJsonAsync(reviews, command)).EnsureSuccessStatusCode();
+		(await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{original.Id}/employees"))
+			.Items.Single(x => x.EmployeeId == staff.EmployeeId).ReviewStatus.ShouldBe(ReviewStatuses.Pending);
+
+		var replacement = await StartAsync(month, refresh: true);
+		replacement.Id.ShouldNotBe(original.Id);
+		(await GetAndReadAsync<PayrollPreviewStatusDto>($"{Previews}/{original.Id}")).IsCurrent.ShouldBeTrue();
+		await ExecuteAsync(replacement.Id);
+		(await GetAndReadAsync<PayrollPreviewStatusDto>($"{Previews}/{replacement.Id}")).IsCurrent.ShouldBeTrue();
+		(await GetAndReadAsync<PayrollPreviewStatusDto>($"{Previews}/{original.Id}")).IsCurrent.ShouldBeFalse();
+		(await Client.PostAsJsonAsync(reviews, command)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+		(await Client.PostAsJsonAsync("/api/payroll/run", command)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+		var history = await GetAndReadAsync<PagedResultDto<HrAuditEventDto>>(activity);
+		history.TotalCount.ShouldBe(2);
+		history.Items.Select(x => x.Action).ShouldBe(["review_removed", "reviewed"]);
+		history.Items.ShouldAllBe(x => x.EntityId == original.Id && x.ActorUserId.HasValue);
+		history.Items.ShouldAllBe(x => x.ContextJson != null && !x.ContextJson.Contains(staff.EmployeeId.ToString()));
+		(await GetAndReadAsync<PagedResultDto<HrAuditEventDto>>($"{activity}&academicYearId={Guid.NewGuid()}"))
+			.TotalCount.ShouldBe(0);
+		(await GetAndReadAsync<PagedResultDto<HrAuditEventDto>>(activity.Replace(month, "2026-04")))
+			.Items.ShouldAllBe(x => x.EntityName == "2026-04");
+		using var unauthenticated = Factory.CreateClient();
+		unauthenticated.DefaultRequestHeaders.Add("X-Skip-Auth", "true");
+		(await unauthenticated.GetAsync(activity)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+		(await unauthenticated.GetAsync($"/api/hr/payroll_run/{original.Id}/audit-events"))
+			.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+	}
+
+	[PayrollPostgresFact]
+	public async Task Payroll_activity_includes_legacy_locks_in_the_selected_year_and_month()
+	{
+		var academicYearId = Guid.NewGuid();
+		var occurredAt = DateTime.UtcNow;
+		HrAuditEvent CreateEvent(string name, string action, int month, Guid? yearId = null, string entityType = "payroll_run") => new(
+			Guid.NewGuid(), TenantId, yearId ?? academicYearId, entityType, Guid.NewGuid(), name, action,
+			Guid.Parse(TestAuthHandler.TestUserId), "Synthetic payroll reviewer", occurredAt, "Synthetic audit fixture",
+			contextJson: JsonSerializer.Serialize(new { requestedMonth = name, year = 2026, monthNumber = month, employeeCount = 1 }));
+
+		var expected = new[]
+		{
+			CreateEvent("2026-10-01", "locked", 10),
+			CreateEvent("OCTOBER-2026", "locked", 10),
+			CreateEvent("2026-10", "locked", 10),
+			CreateEvent("2026-10", "reviewed", 10)
+		};
+		await WithDatabaseAsync(async db =>
+		{
+			db.HrAuditEvents.AddRange(expected);
+			db.HrAuditEvents.AddRange(
+				CreateEvent("JANUARY-2026", "locked", 1),
+				CreateEvent("NOVEMBER-2026", "locked", 11),
+				CreateEvent("2026-10-01", "locked", 10, Guid.NewGuid()),
+				CreateEvent("2026-10", "review_unchanged", 10),
+				CreateEvent("2026-10", "locked", 10, entityType: "payroll_policy"));
+			await db.SaveChangesAsync();
+		});
+
+		const string audit = "/api/hr/audit-events?entityType=payroll_run";
+		var history = await GetAndReadAsync<PagedResultDto<HrAuditEventDto>>($"{audit}&academicYearId={academicYearId}&payrollMonth=2026-10");
+		history.TotalCount.ShouldBe(expected.Length);
+		history.Items.Select(x => x.Id).Order().ShouldBe(expected.Select(x => x.Id).Order());
+		var january = await GetAndReadAsync<PagedResultDto<HrAuditEventDto>>($"{audit}&academicYearId={academicYearId}&payrollMonth=2026-01");
+		january.TotalCount.ShouldBe(1);
+		january.Items.Single().EntityName.ShouldBe("JANUARY-2026");
 	}
 
 	private async Task<PayrollPreviewStatusDto> StartAsync(string month, bool refresh = false)

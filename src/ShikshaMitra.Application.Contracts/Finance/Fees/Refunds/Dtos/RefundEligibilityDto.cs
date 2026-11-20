@@ -86,6 +86,8 @@ public class RefundEligibilityMonthDto
 public class RefundEligibleReceiptDto
 {
     public Guid ReceiptId { get; set; }
+    /// <summary>Original payment payer; null identifies a legacy student payment.</summary>
+    public Guid? FinanceFeeAccountId { get; set; }
     public string? ChargeName { get; set; }
     public string ReceiptNumber { get; set; } = string.Empty;
     public DateOnly ReceiptDate { get; set; }

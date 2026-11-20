@@ -380,11 +380,13 @@ public partial class FeeRefundAppService
     private async Task<FeeRefundRequestDto> MapAsync(FeeRefundRequest request)
     {
         var map = await BuildStudentMapAsync([request.StudentId]);
+        var placements = await BuildRefundYearPlacementsAsync([request], map);
         var accounts = await BuildAccountMapAsync([request.FinanceFeeAccountId]);
         var years = await BuildYearMapAsync([request.AcademicYearId]);
         var receipts = await BuildSourceReceiptMapAsync([request]);
         var dto = MapToDto(request, map, accounts, years, receipts);
         await PopulateEmployeeRefundNamesAsync([dto]);
+        ApplyRefundYearPlacement(dto, request, placements);
         await FilterAvailableActionsAsync(request, dto);
         return dto;
     }

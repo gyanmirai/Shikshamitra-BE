@@ -17,7 +17,7 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
     /// <summary>
     /// Fetches a page of refund requests with their lines, applying optional filters.
     /// </summary>
-    Task<(List<FeeRefundRequest> Items, int TotalCount)> GetListWithDetailsAsync(
+    Task<(List<FeeRefundRequest> Items, int TotalCount, Dictionary<FeeRefundStatus, int> StatusCounts)> GetListWithDetailsAsync(
         Guid? studentId = null,
         Guid? academicYearId = null,
         Guid? academicMediumId = null,
@@ -37,7 +37,8 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
         Guid? financeFeeAccountId = null,
         IQueryable<Guid>? visibleRequestIdsQuery = null,
         IQueryable<Guid>? authorizedExternalRequestIdsQuery = null,
-        Guid? financeExternalSourceLinkId = null);
+        Guid? financeExternalSourceLinkId = null,
+        Guid? boardId = null);
 
     /// <summary>Loads a single request with its <see cref="FeeRefundRequest.Lines"/> collection.</summary>
     Task<FeeRefundRequest?> FindWithLinesAsync(Guid id, CancellationToken cancellationToken = default);

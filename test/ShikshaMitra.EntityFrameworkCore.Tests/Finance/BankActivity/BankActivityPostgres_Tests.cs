@@ -58,6 +58,10 @@ INSERT INTO "Finance_CashDepositCredits" ("Id","CashDepositId","Amount","CreditD
 		(await activity.CountAsync(x => x.Reference.Contains("BANK-CREDIT-SECRET") || x.PaymentReference!.Contains("BANK-CREDIT-SECRET"))).ShouldBe(0);
 		rows.Where(x => x.BankConfirmationStatus == 1).Min(x => x.OccurredAt).ShouldBe(new DateTimeOffset(2025, 3, 2, 0, 0, 0, TimeSpan.Zero));
 		var summary = await BankActivityQueryRules.Aggregates(activity).SingleAsync(); summary.Net.ShouldBe(7020.04m); summary.PendingIncoming.ShouldBe(500.02m);
+		var grouped = await BankActivityQueryRules.MethodTotals(activity).ToListAsync();
+		grouped.Sum(x => x.Count).ShouldBe(rows.Count);
+		var consolidated = BankActivityQueryRules.Summarize(grouped);
+		consolidated.Net.ShouldBe(summary.Net); consolidated.PendingIncoming.ShouldBe(summary.PendingIncoming); consolidated.InTransit.ShouldBe(summary.InTransit);
 		var onlyAfterCredit = await activity.Where(x => x.OccurredAt >= new DateTimeOffset(2025, 3, 3, 0, 0, 0, TimeSpan.Zero) && x.OccurredAt < new DateTimeOffset(2025, 3, 4, 0, 0, 0, TimeSpan.Zero)).ToListAsync(); onlyAfterCredit.ShouldHaveSingleItem().Incoming.ShouldBe(1000m);
 		var offsetQuery = new BankActivityQuery { AcademicYearId = year, From = new DateTimeOffset(2025, 3, 3, 5, 30, 0, TimeSpan.FromMinutes(330)), ToExclusive = new DateTimeOffset(2025, 3, 4, 5, 30, 0, TimeSpan.FromMinutes(330)) };
 		(await BankActivityQueryRules.Filter(facts, offsetQuery, BankActivityQueryRules.Validate(offsetQuery)).SingleAsync()).Incoming.ShouldBe(1000m);

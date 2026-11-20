@@ -67,6 +67,7 @@ public class AdmissionFormInheritanceService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
 	public async Task<AdmissionFormInheritancePreviewDto> PreviewAsync(AdmissionFormInheritancePreviewInput input)
 	{
+		AdmissionFormMetadataStore.ValidatePrintSettings(input.Draft?.PrintSettings);
 		if (input.Draft?.Inheritance != null) AdmissionFormInheritanceMetadataStore.Validate(input.Draft.Inheritance);
 		if (input.Draft != null && (input.Draft.Sections == null || input.Draft.Sections.Any(section => section == null || section.Fields == null || section.Fields.Any(field => field == null))))
 			throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition, "Review the Registration sections and fields before previewing inheritance.");
@@ -82,6 +83,7 @@ public class AdmissionFormInheritanceService(
 					throw new BusinessException("Admissions.FormConcurrencyConflict", "Reload the current draft before previewing inheritance.");
 				registration = DraftDefinition(input.Draft, registration.Id);
 				registration.CoreFieldPolicyVersion = persistedRegistration.CoreFieldPolicyVersion;
+				registration.PrintSettings = AdmissionFormMetadataStore.NormalizePrintSettings(input.Draft.PrintSettings, persistedRegistration.PrintSettings);
 			}
 		}
 		else if (input.Draft != null) registration = DraftDefinition(input.Draft, Guid.NewGuid());
@@ -231,6 +233,7 @@ public class AdmissionFormInheritanceService(
 			registration.CoreFieldPolicyVersion);
 		var definition = Convert<AdmissionFormDto>(composition.Definition);
 		definition.CoreFieldPolicyVersion = registration.CoreFieldPolicyVersion;
+		definition.PrintSettings = AdmissionFormMetadataStore.NormalizePrintSettings(registration.PrintSettings);
 		definition.Status = registration.Status;
 		definition.ConcurrencyStamp = registration.ConcurrencyStamp;
 		definition.Inheritance = registration.Inheritance;
@@ -328,7 +331,9 @@ public class AdmissionFormInheritanceService(
 				fieldObject["formDefinitionId"] = id;
 			}
 		}
-		return node.Deserialize<AdmissionFormDto>(JsonOptions)!;
+		var definition = node.Deserialize<AdmissionFormDto>(JsonOptions)!;
+		definition.PrintSettings = AdmissionFormMetadataStore.NormalizePrintSettings(definition.PrintSettings);
+		return definition;
 	}
 
 	private static T Convert<T>(object value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value, JsonOptions), JsonOptions)!;

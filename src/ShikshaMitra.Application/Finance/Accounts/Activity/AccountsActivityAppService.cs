@@ -44,7 +44,8 @@ public partial class AccountsActivityAppService(
     IRepository<ShikshaMitra.Finance.Fees.Charges.Charge, Guid> charges,
     IRepository<ShikshaMitra.Students.StudentEnrollments.StudentEnrollment, Guid> enrollments,
     IRepository<ShikshaMitra.TenantSettings.Standards.Standard, Guid> standards,
-    IRepository<ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisions) : ApplicationService, IAccountsActivityAppService
+    IRepository<ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisions,
+    IAccountsRegisterEvidenceQuery evidenceQuery) : ApplicationService, IAccountsActivityAppService
 {
     public async Task<AccountsActivityPageDto> GetListAsync(AccountsActivityInput input)
     {

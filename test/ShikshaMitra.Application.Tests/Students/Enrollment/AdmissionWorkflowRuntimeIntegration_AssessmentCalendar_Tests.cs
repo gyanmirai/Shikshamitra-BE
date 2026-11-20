@@ -61,7 +61,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	[InlineData(DayType.Holiday, false)]
 	[InlineData(DayType.EmergencyClosure, false)]
 	[InlineData(DayType.Vacation, true)]
-	public async Task Assessment_calendar_scope_preserves_genuine_published_closure_blocking(DayType dayType, bool legacyCalendar)
+	public async Task Assessment_scheduling_ignores_academic_closures_while_generic_room_checks_still_block(DayType dayType, bool legacyCalendar)
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
@@ -71,14 +71,29 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var calendar = await SeedAssessmentCalendarAsync(fixture.Offering.MediumId, legacyCalendar ? null : yearId, input.StartsAt.UtcDateTime.Date);
 		await SeedAssessmentCalendarDayAsync(calendar, input.StartsAt.UtcDateTime.Date, dayType);
 
-		var error = await Should.ThrowAsync<BusinessException>(() => GetRequiredService<IAdmissionAssessmentAppService>()
-			.PreviewSessionAsync(new() { Session = input }));
-		error.Code.ShouldBe(AdmissionAssessmentErrorCodes.InvalidState);
-		error.Data["Reason"].ShouldBeOfType<string>().ShouldContain("Date blocked:");
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var scope = (await GetRequiredService<AdmissionAssessmentCalendarScopeService>().GetAsync([fixture.Offering])).Single();
+			var window = AdmissionAssessmentSchedulingService.SchoolWindow(input.StartsAt.UtcDateTime, input.EndsAt.UtcDateTime);
+			var ordinary = await GetRequiredService<RoomConflictService>().CheckScopedConflictsAsync(scope,
+				input.RoomId!.Value, window.Date, window.Start, window.End);
+			ordinary.HolidayCalendar.Passed.ShouldBeFalse();
+		});
+		var service = GetRequiredService<IAdmissionAssessmentAppService>();
+		var preview = await service.PreviewSessionAsync(new() { Session = input });
+		var saved = await service.ConfirmSessionAsync(CalendarConfirmation(input, preview));
+		saved.BookedCount.ShouldBe(1);
+		(await service.GetAsync(fixture.Application.Id, fixture.StageId)).Attempts.Count.ShouldBe(1);
+		await SeedAssessmentCalendarDayAsync(calendar, input.StartsAt.UtcDateTime.Date.AddDays(1), dayType);
+		input.StartsAt = input.StartsAt.AddDays(1);
+		input.EndsAt = input.EndsAt.AddDays(1);
+		input.ConcurrencyStamp = saved.Session.ConcurrencyStamp;
+		var moved = await service.UpdateSessionAsync(saved.Session.Id, input);
+		moved.RoomReservationId.ShouldNotBe(saved.Session.RoomReservationId);
 	}
 
 	[Fact]
-	public async Task Assessment_calendar_scope_rechecks_closures_after_preview_without_creating_a_booking()
+	public async Task Assessment_confirmation_is_not_blocked_by_a_closure_added_after_preview()
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
@@ -90,16 +105,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var preview = await service.PreviewSessionAsync(new() { Session = input });
 		await SeedAssessmentCalendarDayAsync(calendar, input.StartsAt.UtcDateTime.Date, DayType.Vacation);
 
-		var error = await Should.ThrowAsync<BusinessException>(() => service.ConfirmSessionAsync(CalendarConfirmation(input, preview)));
-		error.Code.ShouldBe(AdmissionAssessmentErrorCodes.InvalidState);
-		(await service.GetAsync(fixture.Application.Id, fixture.StageId)).Attempts.ShouldBeEmpty();
-		(await GetRequiredService<IRepository<RoomReservation, Guid>>().GetListAsync(row => row.RoomId == input.RoomId)).ShouldBeEmpty();
+		var saved = await service.ConfirmSessionAsync(CalendarConfirmation(input, preview));
+		saved.BookedCount.ShouldBe(1);
+		(await service.GetAsync(fixture.Application.Id, fixture.StageId)).Attempts.Count.ShouldBe(1);
+		(await GetRequiredService<IRepository<RoomReservation, Guid>>().GetAsync(saved.Session.RoomReservationId!.Value))
+			.Status.ShouldBe(RoomReservationStatus.Approved);
 	}
 
 	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
-	public async Task Assessment_calendar_scope_checks_every_selected_class_and_medium_in_a_shared_session(bool otherMedium)
+	public async Task Shared_assessment_session_is_not_blocked_by_any_linked_class_academic_vacation(bool otherMedium)
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
@@ -135,13 +151,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var scope = (await service.GetScopesAsync()).Single(row => row.AdmissionOfferingId == second.Id);
 		input.Scopes.Add(new() { AdmissionOfferingId = second.Id, WorkflowStageDefinitionId = scope.WorkflowStageDefinitionId });
 
-		await Should.ThrowAsync<BusinessException>(() => service.PreviewSessionAsync(new() { Session = input }));
+		var preview = await service.PreviewSessionAsync(new() { Session = input });
+		var saved = await service.ConfirmSessionAsync(CalendarConfirmation(input, preview));
+		saved.BookedCount.ShouldBe(1);
 	}
 
 	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
-	public async Task Assessment_calendar_scope_is_used_when_approving_the_linked_room_booking(bool genuineVacation)
+	public async Task Linked_assessment_room_approval_ignores_academic_vacation(bool genuineVacation)
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
@@ -175,17 +193,39 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		using var approver = _principalAccessor.Change(new ClaimsPrincipal(new ClaimsIdentity([
 			new Claim(AbpClaimTypes.UserId, approverId.ToString()), new Claim(AbpClaimTypes.Role, "admin")], "Test")));
 		var service = GetRequiredService<IRoomAvailabilityAppService>();
-		if (genuineVacation)
+		await service.ApproveReservationAsync(reservationId);
+		(await GetRequiredService<IRepository<RoomReservation, Guid>>().GetAsync(reservationId)).Status.ShouldBe(RoomReservationStatus.Approved);
+	}
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Assessment_confirmation_still_rejects_physical_room_conflicts_on_vacation(bool maintenance)
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var fixture = await CreateManagedAssessmentApplicationAsync(scheduling: true);
+		var input = await CalendarAssessmentInputAsync(fixture.Offering);
+		var yearId = (await _cycleRepository.GetAsync(fixture.Offering.AdmissionCycleId)).AcademicYearId;
+		var calendar = await SeedAssessmentCalendarAsync(fixture.Offering.MediumId, yearId, input.StartsAt.UtcDateTime.Date);
+		await SeedAssessmentCalendarDayAsync(calendar, input.StartsAt.UtcDateTime.Date, DayType.Vacation);
+		var service = GetRequiredService<IAdmissionAssessmentAppService>();
+		var preview = await service.PreviewSessionAsync(new() { Session = input });
+		var window = AdmissionAssessmentSchedulingService.SchoolWindow(input.StartsAt.UtcDateTime, input.EndsAt.UtcDateTime);
+		await WithUnitOfWorkAsync(async () =>
 		{
-			var error = await Should.ThrowAsync<UserFriendlyException>(() => service.ApproveReservationAsync(reservationId));
-			error.Message.ShouldContain("Date blocked:");
-			(await GetRequiredService<IRepository<RoomReservation, Guid>>().GetAsync(reservationId)).Status.ShouldBe(RoomReservationStatus.PendingApproval);
-		}
-		else
-		{
-			await service.ApproveReservationAsync(reservationId);
-			(await GetRequiredService<IRepository<RoomReservation, Guid>>().GetAsync(reservationId)).Status.ShouldBe(RoomReservationStatus.Approved);
-		}
+			if (maintenance)
+				await GetRequiredService<IRepository<RoomMaintenanceBlock, Guid>>().InsertAsync(new RoomMaintenanceBlock(
+					Guid.NewGuid(), TestTenantId, input.RoomId!.Value, "Room repairs", "QA conflict", MaintenanceSeverity.Low,
+					window.Date.Add(window.Start), window.Date.Add(window.End)), true);
+			else
+				await GetRequiredService<IRepository<RoomReservation, Guid>>().InsertAsync(new RoomReservation(
+					Guid.NewGuid(), TestTenantId, input.RoomId!.Value, window.Date, window.Start, window.End,
+					"Another booking", RoomReservationType.Exam, standardId: fixture.Offering.StandardId), true);
+		});
+		var error = await Should.ThrowAsync<BusinessException>(() => service.ConfirmSessionAsync(CalendarConfirmation(input, preview)));
+		error.Data["Reason"].ShouldBeOfType<string>().ShouldContain(maintenance ? "maintenance" : "Room is reserved");
+		(await service.GetAsync(fixture.Application.Id, fixture.StageId)).Attempts.ShouldBeEmpty();
 	}
 
 	private async Task<AdmissionAssessmentSessionInput> CalendarAssessmentInputAsync(AdmissionOffering offering)

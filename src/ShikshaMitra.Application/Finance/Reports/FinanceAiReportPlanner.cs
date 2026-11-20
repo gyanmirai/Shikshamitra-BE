@@ -67,6 +67,8 @@ public class FinanceAiReportPlanner(
         }
 
         var catalog = await BuildCatalogAsync();
+        if (catalog.AllowedReportTypes.Count == 0)
+            throw new Volo.Abp.Authorization.AbpAuthorizationException();
         var output = await RequestPlanAsync(prompt, input.ClarificationAnswers, catalog, userId);
         var questions = NormalizeQuestions(output.ClarificationQuestions);
         var assumptions = (output.Assumptions ?? [])
@@ -109,6 +111,7 @@ public class FinanceAiReportPlanner(
         var hierarchy = await scopeService.GetAccessibleHierarchyAsync();
         var accessibleYearIds = await scopeService.GetAccessibleAcademicYearIdsAsync();
         var aggregateYearIds = (await scopeService.GetAggregateAcademicYearIdsAsync()).ToHashSet();
+        var permitted = await scopeService.GetAllowedReportTypesAsync();
         var years = await academicYearRepository.GetListAsync();
         if (accessibleYearIds != null)
         {
@@ -146,6 +149,7 @@ public class FinanceAiReportPlanner(
             .Where(book => allowedYears.Contains(book.AcademicYearId) && allowedStages.Contains(book.MediumStageId));
 
         return new PlannerCatalog(
+            Capabilities.Keys.Where(permitted.Contains).ToHashSet(StringComparer.Ordinal),
             tokenMap,
             yearTokens,
             boardTokens,
@@ -345,7 +349,7 @@ public class FinanceAiReportPlanner(
 
         var modelCatalog = new
         {
-            reports = Capabilities.Select(item => new
+            reports = Capabilities.Where(item => catalog.AllowedReportTypes.Contains(item.Key)).Select(item => new
             {
                 reportType = item.Key,
                 item.Value.Description,
@@ -408,7 +412,7 @@ public class FinanceAiReportPlanner(
                 confidence = new { type = "number", minimum = 0, maximum = 1 },
                 interpretedRequest = new { type = "string", minLength = 3, maxLength = 500 },
                 summary = new { type = "string", maxLength = 400 },
-                reportType = new { type = "string", @enum = Capabilities.Keys.ToArray() },
+                reportType = new { type = "string", @enum = catalog.AllowedReportTypes.ToArray() },
                 format = new { type = "string", @enum = new[] { "pdf", "excel" } },
                 academicYearTokens = TokenArray(catalog.AcademicYears),
                 monthNumbers = new { type = "array", items = new { type = "integer", minimum = 1, maximum = 12 }, maxItems = 12 },
@@ -436,7 +440,7 @@ public class FinanceAiReportPlanner(
 
     private static FinanceReportRequestDto BuildRequest(PlannerOutput output, PlannerCatalog catalog)
     {
-        if (!Capabilities.TryGetValue(output.ReportType, out var capability))
+        if (!catalog.AllowedReportTypes.Contains(output.ReportType) || !Capabilities.TryGetValue(output.ReportType, out var capability))
         {
             throw new BusinessException("Academic:Reports:AiInvalidResponse");
         }
@@ -565,6 +569,7 @@ public class FinanceAiReportPlanner(
     private sealed record TokenOption(string Token, string Label, bool AggregateAllowed = false);
     private sealed record TokenValue(string Kind, Guid Id);
     private sealed record PlannerCatalog(
+        IReadOnlySet<string> AllowedReportTypes,
         IReadOnlyDictionary<string, TokenValue> TokenMap,
         IReadOnlyList<TokenOption> AcademicYears,
         IReadOnlyList<TokenOption> Boards,

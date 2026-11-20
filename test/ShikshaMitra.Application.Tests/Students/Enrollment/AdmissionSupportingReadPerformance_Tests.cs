@@ -19,7 +19,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
-	public Task Inquiry_capture_context_shares_one_fresh_capacity_and_configuration_result() =>
+	public Task Inquiry_capture_context_does_not_read_retired_capacity() =>
 		RunCertificationScenarioAsync(async () =>
 		{
 			var offering = await CreateOptionalIntakeOfferingAsync();
@@ -32,11 +32,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				result.Offering.Id.ShouldBe(offering.Id);
 				result.Availability.CanCreateInquiry.ShouldBeTrue();
 				result.Form!.Id.ShouldBe(offering.InquiryFormDefinitionId!.Value);
-				result.Offering.ClassCapacity.ShouldNotBeNull();
-				JsonSerializer.Serialize(result.Availability.ClassCapacity).ShouldBe(JsonSerializer.Serialize(result.Offering.ClassCapacity));
 				var reads = DirectReadCount(capture, "AppAdmissionClassRoomAllocations");
 				Console.WriteLine($"SQLite capture context capacity reads={reads}; all reads={capture.ReadCount}.");
-				reads.ShouldBe(1, "One scoped capture request must share its fresh offering validation/capacity instead of rebuilding it three times.");
+				reads.ShouldBe(0, "Inquiry capture must not query retired room-capacity assignments.");
 			});
 		});
 
@@ -64,7 +62,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				result.Form!.Id.ShouldBe(offering.InquiryFormDefinitionId!.Value);
 				var reads = DirectReadCount(capture, "AppAdmissionClassRoomAllocations");
 				Console.WriteLine($"SQLite public selected choice capacity reads={reads}; all reads={capture.ReadCount}.");
-				reads.ShouldBe(1, "Selecting the one already evaluated public choice must not validate/count its live availability twice.");
+				reads.ShouldBe(0, "Public inquiry must not query retired room-capacity assignments.");
 			});
 		});
 

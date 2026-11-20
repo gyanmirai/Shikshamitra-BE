@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp;
@@ -41,6 +42,9 @@ public class FinanceReportController(IFinanceReportAppService appService) : AbpC
         var result = await appService.DownloadExportAsync(jobId);
         return File(result.Bytes, result.ContentType, result.FileName);
     }
+
+    [HttpGet("exports")]
+    public Task<List<FinanceReportExportDto>> GetExportsAsync() => appService.GetExportsAsync();
 
     [ApiExplorerSettings(IgnoreApi = true)]
     public Task<FinanceReportDownloadDto> DownloadExportAsync(Guid jobId)

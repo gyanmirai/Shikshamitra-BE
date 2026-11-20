@@ -63,7 +63,7 @@ public class EfCoreChargeRequestRepository(
 			lines);
 	}
 
-	public async Task<(List<ChargeRequestJoinResult> Items, int TotalCount)> GetChargeRequestsPagedAsync(
+	public async Task<(List<ChargeRequestJoinResult> Items, int TotalCount, ChargeRequestStatusCounts StatusCounts)> GetChargeRequestsPagedAsync(
 		Guid academicYearId,
 		int status,
 		int page,
@@ -98,7 +98,7 @@ public class EfCoreChargeRequestRepository(
 		if (scopedStudentIds is not null)
 		{
 			if (scopedStudentIds.Count == 0)
-				return ([], 0);
+				return ([], 0, new ChargeRequestStatusCounts(0, 0));
 			chargeLineQuery = chargeLineQuery.Where(c => c.StudentId.HasValue && scopedStudentIds.Contains(c.StudentId.Value));
 			chargeQuery = chargeQuery.Where(r => chargeLineQuery.Any(c => c.ChargeRequestId == r.Id));
 		}
@@ -127,6 +127,13 @@ public class EfCoreChargeRequestRepository(
 		// Class/division and user scope select requests, but their lifecycle uses the entire batch.
 		var candidateIds = await chargeQuery.Select(r => r.Id).ToListAsync(cancellationToken);
 		var progress = await GetPaymentProgressAsync(candidateIds, cancellationToken, chargeLineQuery);
+		var countable = progress.Values.Where(value =>
+			ChargeColumnFilter.MatchesStatus(columnFilters, value.WorkflowStatus)).ToList();
+		var statusCounts = new ChargeRequestStatusCounts(
+			countable.Count(value => value.WorkflowStatus == ChargeWorkflowStatus.Pending),
+			countable.Count(value => value.WorkflowStatus == ChargeWorkflowStatus.InProcess),
+			countable.Count(value => value.WorkflowStatus == ChargeWorkflowStatus.Completed),
+			countable.Count(value => value.WorkflowStatus == ChargeWorkflowStatus.Rejected));
 		var matchingIds = progress.Where(x => (int)x.Value.WorkflowStatus == status && ChargeColumnFilter.MatchesStatus(columnFilters, x.Value.WorkflowStatus))
 			.Select(x => x.Key).ToList();
 		chargeQuery = chargeQuery.Where(r => matchingIds.Contains(r.Id));
@@ -168,7 +175,10 @@ public class EfCoreChargeRequestRepository(
 				.Take(pageSize).ToListAsync(cancellationToken);
 		}
 
-		var chargeLines = await chargeLineQuery.OrderByDescending(r => r.CreationTime).ToListAsync(cancellationToken);
+		var pageRequestIds = charges.Select(charge => charge.Id).ToList();
+		var chargeLines = pageRequestIds.Count == 0 ? [] : await chargeLineQuery
+			.Where(line => pageRequestIds.Contains(line.ChargeRequestId))
+			.OrderByDescending(line => line.CreationTime).ToListAsync(cancellationToken);
 
 		var chargeCategoryIds = charges.Select(c => c.ChargeCategoryId).Distinct().ToList();
 		var chargeCategories = await chargeCategoryRepository.GetListAsync(c => chargeCategoryIds.Contains(c.Id));
@@ -206,7 +216,7 @@ public class EfCoreChargeRequestRepository(
 						 progress[charge.Id].CanCancel
 					 );
 
-		return (result.ToList(), totalCount);
+		return (result.ToList(), totalCount, statusCounts);
 	}
 
 	public async Task<IQueryable<ChargeLineJoinResult>> GetChargeLinesQueryAsync(
@@ -321,38 +331,45 @@ public class EfCoreChargeRequestRepository(
 		if (requestIds.Count == 0) return [];
 		var db = await GetDbContextAsync();
 		var lines = await db.Set<Charge>().AsNoTracking()
-			.Where(line => requestIds.Contains(line.ChargeRequestId)).ToListAsync(cancellationToken);
+			.Where(line => requestIds.Contains(line.ChargeRequestId))
+			.Select(line => new { line.Id, line.ChargeRequestId, line.Status, line.Amount })
+			.ToListAsync(cancellationToken);
 		var chargeIds = lines.Select(line => line.Id).ToList();
 		var allocations = await (from allocation in db.Set<ChargeCollectionRecord>().AsNoTracking()
 			join transaction in db.Set<FeeRecordMetadata>().AsNoTracking()
-				on allocation.FeeRecordMetadataId equals transaction.Id
-			where chargeIds.Contains(allocation.ChargeId) && transaction.Status != FeeCollectionStatus.Reversed
-			select new { allocation.ChargeId, allocation.Amount }).ToListAsync(cancellationToken);
-		var collected = allocations.GroupBy(x => x.ChargeId)
+				on allocation.FeeRecordMetadataId equals transaction.Id into transactions
+			from transaction in transactions.DefaultIfEmpty()
+			where chargeIds.Contains(allocation.ChargeId)
+			select new { allocation.ChargeId, allocation.Amount,
+				Status = transaction == null ? (FeeCollectionStatus?)null : transaction.Status })
+			.ToListAsync(cancellationToken);
+		var collected = allocations.Where(x => x.Status.HasValue && x.Status != FeeCollectionStatus.Reversed)
+			.GroupBy(x => x.ChargeId)
 			.ToDictionary(g => g.Key, g => g.Sum(x => Convert.ToDecimal(x.Amount)));
-		var waivers = await db.Set<ChargeWaiverApplication>().AsNoTracking()
-			.Where(x => chargeIds.Contains(x.ChargeId)).ToListAsync(cancellationToken);
-		var waived = waivers.GroupBy(x => x.ChargeId)
-			.ToDictionary(g => g.Key, g => g.Sum(x => x.EffectiveAmount));
+		var waived = await db.Set<ChargeWaiverApplication>().AsNoTracking()
+			.Where(x => chargeIds.Contains(x.ChargeId))
+			.GroupBy(x => x.ChargeId)
+			.Select(group => new { ChargeId = group.Key, Amount = group.Sum(x => x.EffectiveAmount) })
+			.ToDictionaryAsync(x => x.ChargeId, x => x.Amount, cancellationToken);
 		// Cancellation must also fail closed for allocations with missing transaction evidence,
 		// exactly like the command guard. Only an explicitly reversed collection is safe.
-		var activeCollectionIds = (await db.Set<ChargeCollectionRecord>().AsNoTracking()
-			.Where(allocation => chargeIds.Contains(allocation.ChargeId) &&
-				!db.Set<FeeRecordMetadata>().Any(transaction => transaction.Id == allocation.FeeRecordMetadataId &&
-					transaction.Status == FeeCollectionStatus.Reversed))
-			.Select(allocation => allocation.ChargeId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
+		var activeCollectionIds = allocations.Where(x => x.Status != FeeCollectionStatus.Reversed)
+			.Select(x => x.ChargeId).ToHashSet();
 		var visibleIds = visibleLineQuery is null ? null :
 			(await visibleLineQuery.Where(line => requestIds.Contains(line.ChargeRequestId))
 				.Select(line => line.Id).ToListAsync(cancellationToken)).ToHashSet();
 		var linesByRequest = lines.ToLookup(line => line.ChargeRequestId);
 		return requestIds.ToDictionary(id => id, id =>
 		{
-			ChargePaymentLine Map(Charge line) => new(line.Status, line.Amount,
-				collected.GetValueOrDefault(line.Id), waived.GetValueOrDefault(line.Id), activeCollectionIds.Contains(line.Id));
-			var entireBatch = ChargePaymentProgress.Resolve(linesByRequest[id].Select(Map));
+			ChargePaymentLine Map(Guid lineId, ChargeStatus lineStatus, decimal amount) =>
+				new(lineStatus, amount, collected.GetValueOrDefault(lineId),
+					waived.GetValueOrDefault(lineId), activeCollectionIds.Contains(lineId));
+			var entireBatch = ChargePaymentProgress.Resolve(linesByRequest[id]
+				.Select(line => Map(line.Id, line.Status, line.Amount)));
 			if (visibleIds is null) return entireBatch;
 			// Counts obey the same row scope and class/division filters as StudentCount.
-			var visible = ChargePaymentProgress.Resolve(linesByRequest[id].Where(line => visibleIds.Contains(line.Id)).Select(Map));
+			var visible = ChargePaymentProgress.Resolve(linesByRequest[id].Where(line => visibleIds.Contains(line.Id))
+				.Select(line => Map(line.Id, line.Status, line.Amount)));
 			return visible with { CanCancel = entireBatch.CanCancel, WorkflowStatus = entireBatch.WorkflowStatus };
 		});
 	}

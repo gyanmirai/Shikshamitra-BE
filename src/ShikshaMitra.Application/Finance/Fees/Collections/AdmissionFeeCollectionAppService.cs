@@ -23,29 +23,32 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 
 [RemoteService(false)]
 public partial class AdmissionFeeCollectionAppService(
-	IAdmissionFinanceContextReader contextReader,
 	IRepository<FinanceFeeAccount, Guid> accounts,
-	IDueFeeRepository dues,
-	IRepository<FeeRecordMetadata, Guid> transactions,
-	IRepository<FeeCollectionDueFeeAllocation, Guid> allocations,
-	IRepository<FeePaymentReceipt, Guid> receipts,
-	IRepository<PaymentMethodRecord, Guid> paymentMethods,
-	IReadOnlyRepository<AcademicYear, Guid> years,
-	IRepository<FeeStructureDetail, Guid> structureDetails,
-	IRepository<FeeHead, Guid> heads,
-	StudentFeeStructureAppService assignmentCalculator,
-	StudentFeeDetailsQueryService studentDetails,
-	CollectFeeWorkflow collector,
 	FinanceScopeAccessService scope,
-	LateFeeBalanceService lateFees,
-	ShikshaMitra.Domain.Finance.Policies.CollectionPolicyResolver policies,
 	IUnitOfWorkManager units) : ApplicationService, IAdmissionFeeCollectionAppService
 {
+	// Finalization only links existing evidence. Resolve pricing and payment graphs
+	// when their operations need them, preserving ABP lifetimes and interception.
+	private IAdmissionFinanceContextReader ContextReader => LazyServiceProvider.LazyGetRequiredService<IAdmissionFinanceContextReader>();
+	private IDueFeeRepository Dues => LazyServiceProvider.LazyGetRequiredService<IDueFeeRepository>();
+	private IRepository<FeeRecordMetadata, Guid> Transactions => LazyServiceProvider.LazyGetRequiredService<IRepository<FeeRecordMetadata, Guid>>();
+	private IRepository<FeeCollectionDueFeeAllocation, Guid> Allocations => LazyServiceProvider.LazyGetRequiredService<IRepository<FeeCollectionDueFeeAllocation, Guid>>();
+	private IRepository<FeePaymentReceipt, Guid> Receipts => LazyServiceProvider.LazyGetRequiredService<IRepository<FeePaymentReceipt, Guid>>();
+	private IRepository<PaymentMethodRecord, Guid> PaymentMethods => LazyServiceProvider.LazyGetRequiredService<IRepository<PaymentMethodRecord, Guid>>();
+	private IReadOnlyRepository<AcademicYear, Guid> Years => LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<AcademicYear, Guid>>();
+	private IRepository<FeeStructureDetail, Guid> StructureDetails => LazyServiceProvider.LazyGetRequiredService<IRepository<FeeStructureDetail, Guid>>();
+	private IRepository<FeeHead, Guid> Heads => LazyServiceProvider.LazyGetRequiredService<IRepository<FeeHead, Guid>>();
+	private StudentFeeStructureAppService AssignmentCalculator => LazyServiceProvider.LazyGetRequiredService<StudentFeeStructureAppService>();
+	private StudentFeeDetailsQueryService StudentDetails => LazyServiceProvider.LazyGetRequiredService<StudentFeeDetailsQueryService>();
+	private CollectFeeWorkflow Collector => LazyServiceProvider.LazyGetRequiredService<CollectFeeWorkflow>();
+	private LateFeeBalanceService LateFees => LazyServiceProvider.LazyGetRequiredService<LateFeeBalanceService>();
+	private CollectionPolicyResolver Policies => LazyServiceProvider.LazyGetRequiredService<CollectionPolicyResolver>();
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View)]
 	public async Task<AdmissionFeeCollectionDto> GetSummaryAsync(Guid applicationId)
 	{
-		var source = await contextReader.GetAsync(applicationId);
-		var year = await years.GetAsync(source.AcademicYearId);
+		var source = await ContextReader.GetAsync(applicationId);
+		var year = await Years.GetAsync(source.AcademicYearId);
 		var account = await accounts.FindAsync(a => a.ApplicationId == applicationId && a.AcademicYearId == source.AcademicYearId);
 		if (account != null) await scope.EnsureFeeAccountAccessibleAsync(account);
 		var result = new AdmissionFeeCollectionDto
@@ -64,13 +67,13 @@ public partial class AdmissionFeeCollectionAppService(
 		{
 			result.StructureName = current.StructureName; result.StructureRevision = current.RevisionNumber;
 			result.ProrationPolicy = ProrationPolicy(current);
-			var rows = await dues.GetListAsync(d => d.FinanceFeeAccountId == account!.Id);
+			var rows = await Dues.GetListAsync(d => d.FinanceFeeAccountId == account!.Id);
 			result.Proration = ProrationResult(current, rows);
-			var tx = await transactions.GetListAsync(t => t.FinanceFeeAccountId == account!.Id ||
+			var tx = await Transactions.GetListAsync(t => t.FinanceFeeAccountId == account!.Id ||
 				t.FinanceFeeAccountId == null && account!.StudentId.HasValue && t.StudentId == account.StudentId && t.AcademicYearId == account.AcademicYearId);
 			result.HasPaymentEvidence = result.HasPaymentEvidence || tx.Count > 0 || rows.Any(d => d.PaidAmount > 0m || d.RefundedAmount > 0m);
 			var pendingIds = tx.Where(t => t.Status == FeeCollectionStatus.InReconciliation).Select(t => t.Id).ToList();
-			var pending = await allocations.GetListAsync(a => pendingIds.Contains(a.FeeRecordMetadataId));
+			var pending = await Allocations.GetListAsync(a => pendingIds.Contains(a.FeeRecordMetadataId));
 			var pendingByDue = pending.GroupBy(a => a.DueFeeId).ToDictionary(g => g.Key, g => g.Sum(a => (decimal)a.Amount));
 			result.TotalAmount = rows.Sum(d => d.OriginalAmount);
 			result.PendingVerificationAmount = pending.Sum(a => (decimal)a.Amount);
@@ -85,12 +88,12 @@ public partial class AdmissionFeeCollectionAppService(
 			}).ToList();
 			if (await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_InvoiceReceipt.View))
 			{
-				var receiptRows = (await receipts.GetListAsync(r => r.FinanceFeeAccountId == account!.Id ||
+				var receiptRows = (await Receipts.GetListAsync(r => r.FinanceFeeAccountId == account!.Id ||
 					r.FinanceFeeAccountId == null && account!.StudentId.HasValue && r.StudentId == account.StudentId && r.AcademicYearId == account.AcademicYearId))
 					.Where(r => r.LinkedFinalReceiptId == null)
 					.OrderByDescending(r => r.ReceiptDate).ThenByDescending(r => r.CreationTime).Take(10).ToList();
 				var ids = receiptRows.Select(r => r.FeeCollectionTransactionId).ToList();
-				var methods = await paymentMethods.GetListAsync(p => ids.Contains(p.FeeRecordMetadataId));
+				var methods = await PaymentMethods.GetListAsync(p => ids.Contains(p.FeeRecordMetadataId));
 				result.Receipts = receiptRows.Select(r => new AdmissionCollectionReceiptDto
 				{
 					Id = r.Id, ReceiptNumber = r.ReceiptNumber, Amount = (decimal)r.TotalPaidAmount,
@@ -116,13 +119,14 @@ public partial class AdmissionFeeCollectionAppService(
 			result.VariableFeeHeads = await VariableHeadsAsync(source);
 			if (result.VariableFeeHeads.Count > 0)
 			{
-				result.ProrationPolicy = await DefaultProrationPolicyAsync(source.AcademicYearId);
+				if (source.JoiningDate.HasValue && source.JoiningDate.Value.Date >= year.StartDate.Date)
+					result.ProrationPolicy = await DefaultProrationPolicyAsync(source.AcademicYearId);
 				result.Blocker = "Enter the initial amounts for the Finance-configured variable fees.";
 			}
 			else
 			{
 				AdmissionAssignmentPreparation calculated;
-				try { calculated = await assignmentCalculator.PrepareAdmissionAsync(source, account?.Id ?? GuidGenerator.Create(), []); }
+				try { calculated = await AssignmentCalculator.PrepareAdmissionAsync(source, account?.Id ?? GuidGenerator.Create(), []); }
 				catch (BusinessException error) when (error.Code == ProrationPolicyErrorCodes.JoiningDateRequired)
 				{
 					result.CanCollect = false;
@@ -201,9 +205,9 @@ public partial class AdmissionFeeCollectionAppService(
 
 	private async Task<List<AssignmentHeadDto>> VariableHeadsAsync(AdmissionFinanceContext source)
 	{
-		var details = await structureDetails.GetListAsync(d => d.FeeStructureId == source.StructureId && d.IsVariable && (!d.IsOptional || source.OptionalHeadIds.Contains(d.FeeHeadId)));
+		var details = await StructureDetails.GetListAsync(d => d.FeeStructureId == source.StructureId && d.IsVariable && (!d.IsOptional || source.OptionalHeadIds.Contains(d.FeeHeadId)));
 		var ids = details.Select(d => d.FeeHeadId).ToList();
-		var names = (await heads.GetListAsync(h => ids.Contains(h.Id))).ToDictionary(h => h.Id, h => h.Name);
+		var names = (await Heads.GetListAsync(h => ids.Contains(h.Id))).ToDictionary(h => h.Id, h => h.Name);
 		return details.Select(d => new AssignmentHeadDto { FeeHeadId = d.FeeHeadId, FeeHeadName = names[d.FeeHeadId],
 			IsVariable = true, IsOptional = d.IsOptional, IsOneTime = d.IsOneTime, Included = true, PaymentTermId = d.PaymentTermId,
 			PaymentTermVersionId = d.PaymentTermVersionId, AmountBasis = "CoverageTotal" }).ToList();

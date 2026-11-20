@@ -30,11 +30,14 @@ public class ClasswiseFeeSetupBuilder(
         var mediumId = request.Filters.MediumId;
         var organizationIds = request.Filters.OrganizationIds ?? new List<Guid>();
         var batchId = request.Filters.BatchId; // AcademicYearId
+        var yearIds = request.Filters.AcademicYearIds?.ToArray() ?? [];
+        var classIds = request.Filters.ClassIds?.ToArray() ?? [];
 
         // 1. Fetch relevant Standards based on Organization (Stage)
         var allowedStandardIds = executionScope.AllowedStandardIds;
         var standardQuery = (await standardRepository.GetQueryableAsync())
             .Where(s => allowedStandardIds.Contains(s.Id))
+            .WhereIf(classIds.Length > 0, s => Enumerable.Contains(classIds, s.Id))
             .WhereIf(organizationIds.Any(), s => organizationIds.Contains(s.EducationMediumStageId));
         var standards = await asyncExecuter.ToListAsync(standardQuery);
         var standardIds = standards.Select(s => s.Id).ToList();
@@ -45,6 +48,7 @@ public class ClasswiseFeeSetupBuilder(
         var metaQuery = (await metadataRepository.GetQueryableAsync())
             .WhereIf(boardId.HasValue, m => m.AcademicBoardId == boardId)
             .WhereIf(mediumId.HasValue, m => m.AcademicMediumId == mediumId)
+            .WhereIf(yearIds.Length > 0, m => m.AcademicYearId.HasValue && Enumerable.Contains(yearIds, m.AcademicYearId.Value))
             .WhereIf(batchId.HasValue, m => m.AcademicYearId == batchId);
         var metadatas = await asyncExecuter.ToListAsync(metaQuery);
         var metaIds = metadatas.Select(m => m.Id).ToList();

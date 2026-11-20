@@ -134,6 +134,9 @@ public partial class StudentDirectoryQueryService(
 				((s.FirstName != null && s.FirstName.ToLower().Contains(term)) || (s.LastName != null && s.LastName.ToLower().Contains(term)) ||
 				 (s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) || (s.GrNumber != null && s.GrNumber.ToLower().Contains(term)) ||
 				 (s.GrNo.HasValue && s.GrNo.Value.ToString().Contains(term)) ||
+				 (input.IncludeActiveStudentList && (((s.FirstName ?? "") +
+					(s.MiddleName != null && s.MiddleName != "" ? " " + s.MiddleName : "") + " " + (s.LastName ?? "")).ToLower().Contains(term) ||
+					(s.AdditionalDetail != null && s.AdditionalDetail.RegistrationFormNo != null && s.AdditionalDetail.RegistrationFormNo.ToLower().Contains(term)))) ||
 				 numericTerm.HasValue && (s.GrNo == numericTerm || identifierEnrollments.Any(e => e.StudentId == s.Id &&
 					e.AcademicYearId == input.AcademicYearId && e.RollNumber == numericTerm))));
 		}
@@ -168,6 +171,7 @@ public partial class StudentDirectoryQueryService(
 		{
 			Id = s.Id, StudentId = s.Id, FirstName = s.FirstName, MiddleName = s.MiddleName, LastName = s.LastName,
 			GrNumber = s.GrNumber, GrNo = s.GrNo, RollNo = s.RollNo, Status = s.Status, AcademicYearId = s.AcademicYearId,
+			IsCurrentAcademicYear = input.IncludeActiveStudentList && input.AcademicYearId.HasValue ? s.AcademicYearId == input.AcademicYearId : null,
 			StandardId = s.StandardId, StandardName = s.Standard != null ? s.Standard.Name : null,
 			DivisionId = s.DivisionId, DivisionName = s.Division != null ? s.Division.Name : null,
 			AcademicMediumId = s.AcademicMediumId, AcademicMediumName = s.AcademicMedium != null ? s.AcademicMedium.Name : null,

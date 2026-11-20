@@ -11,6 +11,7 @@ using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.TenantSettings;
 
@@ -57,6 +58,9 @@ internal static class PayrollRunItemBuilder
 			itemAttendancePolicyWarnings.Add(lateArrivalDeductionWarning);
 		}
 
+		var compensation = BuildCompensationProjection(compensationRevision, components, statutoryRules);
+		var target = !isLocked && compensationRevision is { SalaryBasis: SalaryInputBasis.EmployerCost, ProtectionPolicy: CompensationProtectionPolicy.ProtectEmployerCost } &&
+			compensation?.ExpectedApplicationChange != true ? compensationRevision.ProtectedMonthlyAmount : (decimal?) null;
 		var preview = PayrollRunItemPreview.Prepare(
 			attendanceRecords,
 			components,
@@ -70,11 +74,13 @@ internal static class PayrollRunItemBuilder
 			employmentStartDate,
 			resolvedShift,
 			resolvedPolicies.AttendancePolicy,
-			statutoryRules);
-		var compensation = BuildCompensationProjection(compensationRevision, components, statutoryRules);
-		if (compensation?.HasVariance == true)
+			statutoryRules, target);
+		var protection = preview.Computation.Protection;
+		if (protection is { Status: not "BLOCKED" })
+			compensation = new CompensationProjection(protection.MonthlyTarget, 0m, false, false);
+		if (compensation?.HasVariance == true || protection?.Status == "BLOCKED")
 		{
-			issueCodes.Add(compensation.ExpectedApplicationChange ? "STATUTORY_APPLICATION_COST_VARIANCE" : IssueCodes.CompensationTargetVariance);
+			issueCodes.Add(compensation?.ExpectedApplicationChange == true ? "STATUTORY_APPLICATION_COST_VARIANCE" : IssueCodes.CompensationTargetVariance);
 		}
 
 		return new RunPayrollItem
@@ -93,6 +99,7 @@ internal static class PayrollRunItemBuilder
 			TotalDeduction = (double) preview.Computation.TotalDeduction,
 			EmployerContributionTotal = (double) preview.Computation.EmployerContributionTotal,
 			EmployerCost = (double) (preview.Computation.TotalEarnings + preview.Computation.EmployerContributionTotal),
+			SalaryProtection = preview.Computation.Protection,
 			CompensationRevisionId = compensationRevision?.Id,
 			CompensationRevisionNumber = compensationRevision?.RevisionNumber,
 			CompensationSalaryBasis = compensationRevision == null ? null : ToContractEnum(compensationRevision.SalaryBasis.ToString()),
@@ -210,6 +217,7 @@ internal static class PayrollRunItemBuilder
 			TotalDeduction = (double) preview.Computation.TotalDeduction,
 			EmployerContributionTotal = (double) preview.Computation.EmployerContributionTotal,
 			EmployerCost = (double) (preview.Computation.TotalEarnings + preview.Computation.EmployerContributionTotal),
+			SalaryProtection = preview.Computation.Protection,
 			CompensationRevisionId = compensationRevision?.Id,
 			CompensationRevisionNumber = compensationRevision?.RevisionNumber,
 			CompensationSalaryBasis = compensationRevision == null ? null : ToContractEnum(compensationRevision.SalaryBasis.ToString()),

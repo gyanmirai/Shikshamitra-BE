@@ -9,6 +9,7 @@ using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Payroll.Templates;
 using Shouldly;
 using Xunit;
@@ -112,6 +113,30 @@ public class PayrollChainFunctional_Tests
 		result.EmployerContributions.ShouldBeEmpty();
 		result.StatutoryIssueCodes.ShouldContain(RunPayroll.IssueCodes.PfWageBasisRequired);
 		result.ProvidentFundRuleId.ShouldBe(pfRule.Id);
+	}
+
+	[Fact]
+	public void External_Pf_skips_effective_rule_and_registration_warnings()
+	{
+		var employeeId = Guid.NewGuid();
+		var pfRule = new ProvidentFund(Guid.NewGuid(), null, "PF_TEST", "PF test rule", 12m, 12m, PfContributionBasis.Basic, 15000m);
+		var components = new[]
+		{
+			BuildComponent(employeeId, "Basic", 18000m, isEarning: true, semanticType: PayrollComponentSemanticType.Basic),
+			BuildComponent(employeeId, "PF", 1800m, isEarning: false, semanticType: PayrollComponentSemanticType.EmployeeProvidentFund)
+		};
+		var rules = new PayrollStatutoryRuleSet(pfRule, []) { StatutoryProfile = new() { ApplyPf = true } };
+		var inPlatform = PayrollComputation.Calculate(30, 0, 30m, 30m, components, rules);
+		inPlatform.TotalDeduction.ShouldBe(1800m);
+		inPlatform.EmployerContributionTotal.ShouldBe(1800m);
+		var external = PayrollComputation.Calculate(30, 0, 30m, 30m, components, rules with { PfHandledExternally = true });
+		external.TotalDeduction.ShouldBe(0m);
+		external.EmployerContributionTotal.ShouldBe(0m);
+		external.ProvidentFundRuleId.ShouldBeNull();
+		external.StatutoryApplication!.Profile.ApplyPf.ShouldBeTrue();
+		external.StatutoryApplication.ProvidentFund.Apply.ShouldBeFalse();
+		external.StatutoryApplication.ProvidentFund.Reason.ShouldBe(PayrollSchemeApplication.PfExternalReason);
+		external.StatutoryIssueCodes.ShouldNotContain(code => code.StartsWith("PF_", StringComparison.Ordinal));
 	}
 
 	[Fact]

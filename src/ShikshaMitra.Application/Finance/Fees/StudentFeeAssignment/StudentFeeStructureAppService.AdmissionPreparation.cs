@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
@@ -30,7 +32,10 @@ public partial class StudentFeeStructureAppService
 			ValidatePreparedRequest(input, saved.Preview);
 			return saved;
 		}
-		var policy = await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(input.AcademicYearId);
+		var year = await academicYearRepository.GetAsync(input.AcademicYearId);
+		var policy = facts.JoiningDate.HasValue && facts.JoiningDate.Value.Date >= year.StartDate.Date
+			? await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(input.AcademicYearId)
+			: null;
 		var student = await studentRepository.GetAsync(input.StudentId);
 		// The account's existing unique application/year key serializes Admission and
 		// Finance creation, including when both commands initially see no preparation.
@@ -51,7 +56,8 @@ public partial class StudentFeeStructureAppService
 		return prepared with { Account = account, AdmissionSource = source, NewAccount = facts.Account == null };
 	}
 
-	private async Task<PreparedAssignment> ReadPreparedAdmissionAsync(AssignmentAdmissionFacts facts, Guid studentId, Guid enrollmentId)
+	private async Task<PreparedAssignment> ReadPreparedAdmissionAsync(AssignmentAdmissionFacts facts, Guid studentId, Guid enrollmentId,
+		List<DueFee>? loadedDues = null, IReadOnlyDictionary<Guid, FeeStructure>? loadedStructures = null)
 	{
 		var account = facts.Account!;
 		StudentFeeAssignmentPreviewDto saved;
@@ -63,7 +69,8 @@ public partial class StudentFeeStructureAppService
 			(saved.RegistrationJoiningDate.HasValue || saved.ProrationPolicyVersionId.HasValue) && saved.RegistrationJoiningDate?.Date != facts.JoiningDate?.Date ||
 			!saved.Heads.Where(h => h.IsOptional && h.Included).Select(h => h.FeeHeadId).Order().SequenceEqual(facts.Selection.Heads.Where(h => h.IsOptional).Select(h => h.FeeHeadId).Order()))
 			throw new BusinessException(AssignmentErrorCodes.SourceUnavailable);
-		var rows = (await dueFeeRepository.GetListAsync(d => d.FinanceFeeAccountId == account.Id)).ToList();
+		var rows = loadedDues == null ? (await dueFeeRepository.GetListAsync(d => d.FinanceFeeAccountId == account.Id)).ToList()
+			: loadedDues.Where(d => d.FinanceFeeAccountId == account.Id).ToList();
 		if (rows.Count == 0 || rows.Count != saved.Lines.Count || saved.Lines.Any(l => !l.DueFeeId.HasValue) ||
 			saved.Lines.Select(l => l.DueFeeId).Distinct().Count() != rows.Count ||
 			rows.Any(d => d.StudentFeeStructureId.HasValue || d.StudentId.HasValue && d.StudentId != studentId))
@@ -83,7 +90,8 @@ public partial class StudentFeeStructureAppService
 		saved.EnrollmentId = enrollmentId;
 		saved.AssignmentSource = "Admission";
 		saved.ApplicationId = facts.Application.Id;
-		var structure = await feeStructureRepository.GetAsync(saved.StructureId);
+		var structure = loadedStructures == null ? await feeStructureRepository.GetAsync(saved.StructureId)
+			: loadedStructures.GetValueOrDefault(saved.StructureId) ?? throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
 		var source = new AdmissionFinanceContext(facts.Application.Id, facts.Application.ApplicantId, account.AcademicYearId,
 			account.BoardId, account.EducationMediumId, facts.Offering.StageId, account.StandardId, account.DivisionId, studentId,
 			account.ApplicantName, facts.Application.ApplicationNumber, "", facts.Revision, saved.StructureId, saved.RevisionNumber,

@@ -19,7 +19,7 @@ public class PayrollEsiPolicyCompensationRecalculator(IRepository<SalaryStructur
 {
 	public async Task RecalculateAsync(IReadOnlyDictionary<Guid, PayrollCompensationRevisionResolution> compensation,
 		IReadOnlyDictionary<Guid, PayrollEsiStatutoryContext> contexts,
-		IReadOnlyDictionary<Guid, PayrollStatutoryProfile> profiles, DateTime month)
+		IReadOnlyDictionary<Guid, PayrollStatutoryProfile> profiles, DateTime month, bool pfHandledExternally = false)
 	{
 		var changed = compensation.Values.Where(x => x.Revision.SalaryBasis == SalaryInputBasis.EmployerCost &&
 			x.Revision.SourceSalaryTemplateVersionId.HasValue && contexts.ContainsKey(x.Revision.EmployeeId) &&
@@ -27,7 +27,8 @@ public class PayrollEsiPolicyCompensationRecalculator(IRepository<SalaryStructur
 		if (changed.Count == 0) return;
 		var templateIds = changed.Select(x => x.Revision.SourceSalaryTemplateVersionId!.Value).Distinct().ToArray();
 		var sources = (await templates.GetListAsync(x => Enumerable.Contains(templateIds, x.Id))).ToDictionary(x => x.Id);
-		var pfIds = changed.Where(x => x.Revision.PfRuleId.HasValue).Select(x => x.Revision.PfRuleId!.Value).Distinct().ToArray();
+		var pfIds = changed.Where(x => !pfHandledExternally && x.Revision.PfRuleId.HasValue)
+			.Select(x => x.Revision.PfRuleId!.Value).Distinct().ToArray();
 		var pfRules = (await providentFund.GetListAsync(x => Enumerable.Contains(pfIds, x.Id))).ToDictionary(x => x.Id);
 		var monthEnd = month.AddMonths(1).AddDays(-1);
 		var tax = await professionalTax.GetListAsync(x => x.IsActive && x.JurisdictionCode == "IN-GJ" &&

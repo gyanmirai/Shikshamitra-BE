@@ -23,6 +23,7 @@ public partial class StudentCertificateAppService
 	private async Task<string?> ValidateIssuanceAsync(Student student, StudentCertificatePreviewRequestDto input)
 	{
 		ValidateCertificateType(input.CertificateType);
+		EnsureExpectedAcademicYear(student, input.ExpectedAcademicYearId);
 		var policy = (await recordsPolicies.ResolveAsync(student.AcademicYearId)).Policy;
 		if (!policy.Documents.EnabledCertificateTypes.Contains(input.CertificateType.ToString())) throw new BusinessException("Students:Records:CertificateDisabled");
 		if (input.CertificateFields == null || input.CertificateFields.Count > 100 || input.CertificateFields.Any(f => f.Key.Length > 100 || f.Value?.Length > 4000))
@@ -44,6 +45,12 @@ public partial class StudentCertificateAppService
 		};
 		if (!permitted) throw new BusinessException("Students:Records:LeavingExitNotReady");
 		return JsonSerializer.Serialize(new { exit.Id, exit.StudentId, exit.Outcome, exit.Status, exit.EffectiveDate, exit.Reason, policy.Documents.LeavingCertificateStage }, JsonOptions);
+	}
+
+	private static void EnsureExpectedAcademicYear(Student student, Guid? expectedAcademicYearId)
+	{
+		if (expectedAcademicYearId.HasValue && student.AcademicYearId != expectedAcademicYearId)
+			throw new BusinessException(StudentErrorCodes.CertificateYearMismatch);
 	}
 
 	private static void ValidateDocumentReason(StudentDocumentActionDto? input)

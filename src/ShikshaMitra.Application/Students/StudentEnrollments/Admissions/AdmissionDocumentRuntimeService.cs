@@ -18,7 +18,10 @@ public class AdmissionDocumentRuntimeService(AdmissionDocumentAccessService acce
 	{
 		var context = await access.GetContextAsync(applicationId, stageId);
 		var evaluation = await evaluator.EvaluateAsync(context.Application, stageId, context.Policy!);
-		if (!await onboarding.CanDeferAsync(context.Application)) evaluation.EnsureComplete();
+		// Draft journeys may place Documents before the Registration form. They can
+		// advance with accepted evidence, but cannot use post-submission deferral.
+		if (context.Application.Status == AdmissionApplicationStatus.Draft ||
+			!await onboarding.CanDeferAsync(context.Application)) evaluation.EnsureComplete();
 		return evaluation;
 	}
 

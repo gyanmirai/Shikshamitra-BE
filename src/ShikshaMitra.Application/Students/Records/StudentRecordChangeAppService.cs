@@ -66,10 +66,16 @@ public partial class StudentRecordChangeAppService(
 	public async Task<StudentRecordChangeDto> GetAsync(Guid id) => await MapAsync(await GetScopedAsync(id), true);
 	public async Task<StudentRecordSectionSnapshotDto> GetSnapshotAsync(Guid studentId, string section)
 	{
+		if (section == StudentRecordGrNumberService.Section)
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Create);
 		var allowed = await access.EnsureWritableAsync(studentId, section == "placement");
 		await EnsureVisibleAsync(allowed.Policy, section);
 		var json = await payloads.CaptureAsync(studentId, section);
-		return new() { Section = section, Snapshot = StudentRecordPayloadService.Hash(json), Data = JsonSerializer.Deserialize<JsonElement>(json) };
+		if (section == StudentRecordGrNumberService.Section) await EnsureNoPendingGrAssignmentAsync(studentId);
+		var data = section == StudentRecordGrNumberService.Section
+			? await LazyServiceProvider.LazyGetRequiredService<StudentRecordGrNumberService>().GetOptionsAsync(studentId, json)
+			: JsonSerializer.Deserialize<JsonElement>(json);
+		return new() { Section = section, Snapshot = StudentRecordPayloadService.Hash(json), Data = data };
 	}
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Create)]
 	public Task<StudentRecordChangeDto> CreateAsync(CreateStudentRecordChangeDto input) => CreateCoreAsync(input, false);
@@ -87,7 +93,11 @@ public partial class StudentRecordChangeAppService(
 	private async Task<StudentRecordChangeDto> CreateCoreAsync(CreateStudentRecordChangeDto input, bool joinAdmissionWork)
 	{
 		try { return await CreateCoreInternalAsync(input, joinAdmissionWork); }
-		catch (Exception exception) when (input.Section == "photo" && StudentOnboardingRollConflictMapper.IsSerializationConflict(exception))
+		catch (Exception exception) when (input.Section == StudentRecordGrNumberService.Section &&
+			StudentRecordChangeApplication.IsUniqueConflict(exception))
+		{ return await CreateCoreInternalAsync(input, joinAdmissionWork); }
+		catch (Exception exception) when ((input.Section is "photo" or StudentRecordGrNumberService.Section) &&
+			StudentOnboardingRollConflictMapper.IsSerializationConflict(exception))
 		{ throw new BusinessException("Students:Records:ConcurrencyConflict"); }
 	}
 
@@ -98,6 +108,9 @@ public partial class StudentRecordChangeAppService(
 			IsolationLevel = input.Section == "photo" ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable }, requiresNew: !joinAdmissionWork))
 		{
 			if (input.Section == "photo") await LazyServiceProvider.LazyGetRequiredService<IStudentPhotoChangeLock>().AcquireAsync(CurrentTenant.Id, input.StudentId);
+			var grAssignment = input.Section == StudentRecordGrNumberService.Section;
+			if (grAssignment && (input.EffectiveAt.HasValue || input.CorrectsChangeId.HasValue))
+				throw new BusinessException("Students:Records:InvalidPayload");
 			var allowed = await access.EnsureWritableAsync(input.StudentId, input.Section == "placement");
 			await EnsureVisibleAsync(allowed.Policy, input.Section);
 			var existing = await changes.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == input.StudentId && x.ClientKey == input.ClientKey);
@@ -109,7 +122,7 @@ public partial class StudentRecordChangeAppService(
 				: await payloads.ValidateAndNormalizeAsync(input.Section, input.Payload, input.StudentId);
 			if (existing != null)
 			{
-				if (input.Section == "photo" && existing.RequestedBy != CurrentUser.Id ||
+				if ((input.Section == "photo" || grAssignment) && existing.RequestedBy != CurrentUser.Id ||
 					existing.Section != input.Section || StudentRecordPayloadService.Canonical(existing.PayloadJson) != json ||
 					existing.CorrectsChangeId != input.CorrectsChangeId || existing.Reason != input.Reason.Trim() ||
 					(input.EffectiveAt.HasValue && existing.EffectiveAt != input.EffectiveAt.Value.ToUniversalTime()))
@@ -119,6 +132,7 @@ public partial class StudentRecordChangeAppService(
 			}
 			else
 			{
+			if (grAssignment) await EnsureNoPendingGrAssignmentAsync(input.StudentId);
 			if (input.Section == "photo" && await changes.AnyAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == input.StudentId && x.Section == "photo" &&
 				(x.Status == "Pending" || x.Status == "Approved" || x.Status == "Scheduled"))) throw new BusinessException("Students:Records:PhotoChangePending");
 			await payloads.ValidateImpactAsync(input.StudentId, input.Section, json);
@@ -146,7 +160,9 @@ public partial class StudentRecordChangeAppService(
 			var today = AdmissionCycleWindowEvaluator.GetInstitutionDate(now.UtcDateTime);
 			var approval = rule.RequiresApproval(effectiveDate < today,
 				effectiveDate > today, allowed.Student.Status == StudentLifeCycleStatusEnum.Left);
-			var stages = approval ? rule.Stages : [];
+			var stages = grAssignment
+				? rule.Stages.Count > 0 ? rule.Stages : [new StudentRecordsApprovalStage()]
+				: approval ? rule.Stages : [];
 			var item = new StudentRecordChange(GuidGenerator.Create(), CurrentTenant.Id, input.StudentId, year, CurrentUser.GetId(),
 				input.Section, action, input.ClientKey, input.Reason, before, json, snapshot.Policy.ToJson(), snapshot.VersionId,
 				JsonSerializer.Serialize(stages, StudentRecordPayloadService.JsonOptions), stages.Count, effective, input.CorrectsChangeId);
@@ -159,6 +175,14 @@ public partial class StudentRecordChangeAppService(
 		if (joinAdmissionWork) await CurrentUnitOfWork!.SaveChangesAsync();
 		else await application.ApplyScheduledAsync(id);
 		return await GetAsync(id);
+	}
+
+	private async Task EnsureNoPendingGrAssignmentAsync(Guid studentId)
+	{
+		if (await changes.AnyAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId &&
+			x.Section == StudentRecordGrNumberService.Section &&
+			(x.Status == "Pending" || x.Status == "Approved" || x.Status == "Scheduled")))
+			throw new BusinessException(StudentRecordGrNumberService.Pending);
 	}
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Approve)]
 	public async Task<StudentRecordChangeDto> ApproveAsync(Guid id, StudentRecordDecisionDto input)
@@ -188,6 +212,11 @@ public partial class StudentRecordChangeAppService(
 		var item = await GetScopedAsync(id);
 		EnsureStamp(item, input.ConcurrencyStamp);
 		await EnsureVisibleAsync((await policies.ResolveAsync(item.AcademicYearId)).Policy, item.Section);
+		if (item.Section == StudentRecordGrNumberService.Section)
+		{
+			var current = await access.EnsureWritableAsync(item.StudentId);
+			await EnsureVisibleAsync(current.Policy, item.Section);
+		}
 		if (item.Section == "custom-details" && await payloads.IsCustomMaskedAsync(item.StudentId))
 			throw new BusinessException("Students:Records:RestrictedFields");
 		if (!await IsStageApproverAsync(item)) throw new BusinessException("Students:Records:ApproverRequired");

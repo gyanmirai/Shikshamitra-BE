@@ -7,6 +7,7 @@ using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Records;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.HttpApi.Controllers.Students.Records;
 
@@ -15,6 +16,9 @@ namespace ShikshaMitra.HttpApi.Controllers.Students.Records;
 [Route("api/students/records/ids")]
 public class StudentIdCardController(IStudentIdCardAppService service) : AbpController
 {
+	[HttpGet("photos/{studentId:guid}")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
+	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+	public async Task<Result<ShikshaMitra.Common.IdentityCards.IdentityCardPhotoDto>> PhotoAsync(Guid studentId) => Result.Success(await service.GetPhotoAsync(studentId));
 	[HttpGet("templates/list")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
 	public async Task<Result<List<StudentIdCardTemplateDto>>> GetTemplatesAsync() => Result.Success(await service.GetTemplatesAsync());
 	[HttpGet("templates/{id:guid}")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
@@ -37,6 +41,8 @@ public class StudentIdCardController(IStudentIdCardAppService service) : AbpCont
 	public async Task<IActionResult> ExportAsync([FromBody] StudentIdCardsPdfRequestDto input) { var pdf = await service.ExportPdfAsync(input); return File(pdf.Content, pdf.ContentType, pdf.FileName); }
 	[HttpGet("students/{studentId:guid}/history")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
 	public async Task<Result<List<StudentIdCardDto>>> HistoryAsync(Guid studentId) => Result.Success(await service.GetHistoryAsync(studentId));
+	[HttpGet("history")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
+	public async Task<Result<PagedResultDto<StudentIdCardListItemDto>>> IssuedHistoryAsync([FromQuery] StudentIdCardHistoryQueryDto input) => Result.Success(await service.GetIssuedHistoryAsync(input));
 	[HttpGet("{id:guid}/pdf")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
 	public async Task<IActionResult> PdfAsync(Guid id) { var pdf = await service.GetPdfAsync(id); return File(pdf.Content, pdf.ContentType, pdf.FileName); }
 	[HttpPost("{id:guid}/reprint")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add)]

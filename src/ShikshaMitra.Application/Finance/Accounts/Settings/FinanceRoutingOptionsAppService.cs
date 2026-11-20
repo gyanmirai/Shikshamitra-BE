@@ -11,8 +11,7 @@ using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Finance.Accounts.Settings;
 [Authorize, RemoteService(false)]
-public class FinanceRoutingOptionsAppService(IRepository<TransactionCategory, Guid> categories,
- IRepository<BankAccount, Guid> banks, FinanceScopeAccessService scope) : ApplicationService, IFinanceRoutingOptionsAppService
+public class FinanceRoutingOptionsAppService(IFinanceRoutingLookupReader lookup, FinanceScopeAccessService scope) : ApplicationService, IFinanceRoutingOptionsAppService
 {
  public async Task<FinanceRoutingOptions> GetAsync(Guid academicYearId, string operation)
  {
@@ -35,17 +34,13 @@ public class FinanceRoutingOptionsAppService(IRepository<TransactionCategory, Gu
    if (operation is "collection" or "refund" or "cash-expense") await scope.EnsureCollectionYearAccessibleAsync(academicYearId);
    else await scope.EnsureAcademicContextAccessibleAsync(academicYearId, null, null, null, null);
    var instant = new DateTimeOffset(Clock.Now.ToUniversalTime());
-   var categoryRows = await categories.GetListAsync(x => x.TenantId == CurrentTenant.Id &&
-     x.AcademicYearId == academicYearId && x.IsActive);
-   var bankRows = operation == "cash-expense" ? [] : await banks.GetListAsync(x => x.TenantId == CurrentTenant.Id &&
-     x.AcademicYearId == academicYearId && x.IsActive);
-   // Evaluate DateTimeOffset windows after tenant/year filtering for provider parity.
-   categoryRows.RemoveAll(x => x.EffectiveFrom > instant || x.EffectiveTo < instant);
-   bankRows.RemoveAll(x => x.EffectiveFrom > instant || x.EffectiveTo < instant);
    var income = operation is "income-entry" or "collection" or "collection-policy" or "fee-head" or "charge-category";
    var expense = operation is "expense-entry" or "cash-expense" or "refund" or "refund-policy";
-   return new(income ? categoryRows.Where(x => x.CategoryType == TransactionType.Income).OrderBy(x=>x.IsSystemCategory ? 0 : 1).ThenBy(x=>x.Name).Select(x=>new FinanceRoutingOption(x.Id,x.Name)).ToList() : [],
-     expense ? categoryRows.Where(x => x.CategoryType == TransactionType.Expense).OrderBy(x=>x.IsSystemCategory ? 0 : 1).ThenBy(x=>x.Name).Select(x=>new FinanceRoutingOption(x.Id,x.Name)).ToList() : [],
-     operation is "collection-policy" or "fee-head" or "charge-category" ? [] : bankRows.OrderBy(x=>x.BankName).Select(x=>new FinanceRoutingOption(x.Id,$"{x.BankName} • {x.AccountNumber[^Math.Min(4,x.AccountNumber.Length)..]}")).ToList());
+   var categoryRows = await lookup.GetCategoriesAsync(CurrentTenant.Id, academicYearId, income ? TransactionType.Income : TransactionType.Expense, instant);
+   var includeBanks = operation is not ("cash-expense" or "collection-policy" or "fee-head" or "charge-category");
+   var bankRows = includeBanks ? await lookup.GetBanksAsync(CurrentTenant.Id, academicYearId, instant) : [];
+   return new(income ? categoryRows.Select(x => new FinanceRoutingOption(x.Id, x.Name)).ToList() : [],
+     expense ? categoryRows.Select(x => new FinanceRoutingOption(x.Id, x.Name)).ToList() : [],
+     bankRows.Select(x => new FinanceRoutingOption(x.Id, x.Name)).ToList());
  }
 }

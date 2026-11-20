@@ -25,7 +25,6 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 	: ApplicationService, IStudentIdCardAppService
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-	private static readonly string[] AllowedFields = ["StudentName", "GRNumber", "Class", "Division", "AcademicYear", "DateOfBirth"];
 	public async Task<List<StudentIdCardDto>> PreviewAsync(StudentIdCardPreviewRequestDto input)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View); EnsureTenant(); ValidateStudents(input);
@@ -51,9 +50,10 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 				using var uow = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true }, requiresNew: true);
 				StudentIdCardTemplateDto? template = null; var result = new List<StudentIdCardDto>(); var sequences = new Dictionary<string, int>();
 				var identitySnapshots = new Dictionary<IdentityReadKey, SchoolIdentityDocumentSnapshotDto>();
+				var cohort = await CapturePhotoCohortAsync(input.StudentIds, input.PhotoEdits);
 				foreach (var studentId in input.StudentIds)
 				{
-					var snapshot = await snapshots.CaptureAsync(studentId);
+					var snapshot = cohort[studentId];
 					var key = $"{input.IdempotencyKey.Trim()}:{studentId:N}";
 					var existing = await cards.FindAsync(c => c.TenantId == CurrentTenant.Id && c.IdempotencyKey == key);
 					if (existing != null) { await EnsureIssuedYearVisibleAsync(existing.AcademicYearId); result.Add(Map(existing)); continue; }
@@ -114,7 +114,7 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 		// Redact the returned view without rewriting the issued snapshot used for frozen rendering.
 		template.Selection = null; template.SelectionRestricted = false;
 		return new() { Id = card.Id, StudentId = card.StudentId, CardNumber = card.CardNumber, Status = card.Status,
-			IssuedAt = card.IssuedAt, IssuedByUserId = card.IssuedByUserId, HasPhoto = !string.IsNullOrWhiteSpace(snapshot.GetValueOrDefault("_PhotoBlobName")),
+			IssuedAt = card.IssuedAt, IssuedByUserId = card.IssuedByUserId, HasPhoto = !string.IsNullOrWhiteSpace(snapshot.GetValueOrDefault("_PhotoBlobName")) || snapshot.ContainsKey("_ProcessedPhotoData"),
 			StudentSnapshot = PublicFields(snapshot), TemplateSnapshot = template };
 	}
 	private static bool IsRetryable(Exception ex) => ex.ToString().Contains("23505", StringComparison.Ordinal) || ex.ToString().Contains("unique constraint", StringComparison.OrdinalIgnoreCase) || ex.ToString().Contains("database is locked", StringComparison.OrdinalIgnoreCase);

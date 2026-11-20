@@ -143,7 +143,7 @@ public class CollectionPolicyAppService(
 			return dto;
 		}).ToList();
 
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "collection", items);
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "collection", items, AsyncExecuter);
 		return new PagedResultDto<CollectionPolicyDto>(total, items);
 	}
 
@@ -153,7 +153,7 @@ public class CollectionPolicyAppService(
 		var entity = await GetEntityOrThrowAsync(id);
 		var dto = CollectionPolicyMapping.ToDto(entity);
 		dto.IsUsedInDownstream = (await GetUsageCountsAsync(new[] { id })).Contains(id);
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "collection", new[] { dto });
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "collection", new[] { dto }, AsyncExecuter);
 		return dto;
 	}
 

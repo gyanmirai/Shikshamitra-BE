@@ -11,6 +11,8 @@ public interface IStudentFeeStructureAppService : IApplicationService
 	Task<List<AssignmentContextDto>> GetContextsAsync(AssignmentContextsInput input);
 	Task<List<AssignmentPolicyDto>> GetPolicyOptionsAsync(Guid studentId, Guid academicYearId);
 	Task<StudentFeeStructureResponseDto> UpdatePoliciesAsync(Guid studentId, AssignmentPolicyUpdateDto input);
+	Task<OptionalServiceStopResult> PreviewOptionalServiceStopAsync(Guid studentId, OptionalServiceStopInput input);
+	Task<OptionalServiceStopResult> StopOptionalServiceAsync(Guid studentId, OptionalServiceStopInput input);
 	Task<List<AssignmentTransportSourceDto>> GetTransportSourcesAsync(Guid studentId, Guid academicYearId);
 	Task<AssignmentCommitResultDto> AssignAsync(AssignStudentFeeStructureDto input);
     Task<List<AssignmentCandidateDto>> GetCandidatesAsync(Guid studentId, Guid academicYearId);

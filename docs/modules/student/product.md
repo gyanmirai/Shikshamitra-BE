@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-11-04
+updated_on: 2026-11-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,13 +12,30 @@ audience: humans-and-agents
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
 
+## Registration print settings and saved answers
+
+Registration forms retain Simple, Boxed Grid or Structured Classic print templates with independent Compact/Spacious spacing and A4/A5/Letter/Legal paper in their existing experience metadata, including school header, photo-space and signature-area flags. Existing definitions without a template retain Simple; new-client forms explicitly choose Boxed Grid.
+Historical definitions receive defaults; updates from older clients retain previously saved settings.
+Clone and new-version drafts copy the settings, and version comparison includes presentation changes.
+Inquiry inheritance uses the Registration settings while retaining source-owned questions and frozen Inquiry context.
+Existing frozen application definitions keep their captured settings rather than following a later publication.
+Advanced print presentation configures page orientation/margins, border and typography, school-image positioning, header/footer, photograph, step/section flow, authored section/field overrides, translated instructions/checklists/declaration/signatures/office-use areas and blank/filled copy display. These options do not change the online form, Inquiry ownership, validation or saved answers. Empty advanced settings explicitly reset presentation; older updates that omit them retain it. Unsupported values and oversized content are rejected before mutation.
+
+The application-form read exposes persisted Registration answers separately from automatic editor suggestions.
+Printing saved details consumes the stored answers, including an explicitly empty collection, together with the pinned definition and frozen Inquiry context.
+It does not promote sibling/relationship suggestions into authored answers, save a draft, create a submission or advance a stage.
+Optional printed academic labels come only from the authorized application's linked offering and cycle. School contact information uses the current persisted Institute Setup branding read; missing contact or website information stays empty.
+An explicit save before printing remains governed by the existing draft command, permission, validation and concurrency rules.
+Settings reuse existing extra-property storage; no schema migration or new print permission is introduced.
+See the [API contract](./api.md#registration-print-contract), [validation](./testing.md#registration-print-validation) and [frontend print workflow](../../../../Shikshamitra-FE/docs/student/workflows.md#registration-print-workflow).
+
 ## House Management
 
-Houses belong to an academic medium and can contain any number of active enrolled students across its classes. Membership belongs to the operational enrollment. Each house has at most one optional leader, selected from its eligible members. Each division independently has at most one optional leader; that student need not hold a house role. Both positions may remain vacant, and one student may hold both independent roles.
+Houses belong to an academic medium and can contain any number of active enrolled students across its classes. Membership belongs to the operational enrollment. Each house has one optional House leader across all its divisions. Each division has one optional Division leader. A candidate must be an active enrolled member of the house or division they will lead. A student can hold both roles.
 
-View reads scoped rosters, counts and visible leaders. Add/Update controls house configuration, membership changes and leader appointment, replacement or removal. Delete removes only empty houses. Medium-wide or broader scope is required to change shared house configuration; commands also validate affected students and any replaced leader. Tenant, active identity, academic scope and concurrency checks remain server enforced. No role receives automatic grants.
+View reads scoped rosters, counts and visible leaders. Add/Update controls house configuration, membership changes and leader appointment, replacement or removal. Delete removes only empty houses. Shared house configuration requires medium-wide or broader scope. Appointments require division scope and a candidate visible in that division. Both slots share one division concurrency stamp. Tenant, active identity, academic scope and concurrency checks remain server enforced.
 
-Assignment previews identify departing house leaders. The reviewed batch applies atomically and clears a departing house leader while retaining independent division leadership. Stale previews require fresh review. The bounded assignment command is an operation limit, not house capacity. Existing House Settings remains compatible and cannot delete populated houses. There is no automatic balancing, year rollover, points or competition workflow.
+Each membership change batch is scoped to one division. Assignment previews identify departing House leaders. The reviewed batch applies atomically and clears a departing House lead while retaining the student's Division lead. A same-medium division change retains house membership and House leadership and clears the former Division leadership. A medium change or deactivation clears appointments for the roles the student leaves. Stale previews require fresh review. See the [migration notes](./api.md#house-management).
 
 ## Resume an ended admission
 
@@ -28,11 +45,11 @@ Closed/unavailable intake, expired offers, finalized/enrolled cases and cancelle
 
 ## Archive and restore admission forms
 
-Archiving Inquiry or Registration forms retains their offering, workflow, inherited-source and public-link references. Existing inquiry answers and pinned application schemas are not migrated or rewritten. New intake that requires an archived form is blocked; other offering, cycle, scope and capacity restrictions remain authoritative.
+Archiving Inquiry or Registration forms retains their offering, workflow, inherited-source and public-link references. Existing inquiry answers and pinned application schemas are not migrated or rewritten. New intake that requires an archived form is blocked; other offering, cycle and scope restrictions remain authoritative.
 
 The archive impact read identifies tenant-owned workflow/default/stage, public-link and inherited Registration references, visible linked offerings and scoped saved Inquiry/Application counts. Related feature View permissions govern names, IDs and counts; denied feature reads are skipped and `hasRestrictedDependencies` indicates incomplete visibility. Restricted offering names and IDs are omitted with `hasRestrictedOfferings`. Public-link tokens and student answers are never returned.
 
-Restore returns only an Archived form to Published after current definition validation and exact concurrency checks. Its ID, version, schema and original publication metadata remain fixed; the action appends a Restored audit entry. Restore does not reactivate an offering or bypass workflow approval, registration-source approval, dates or capacity. Replacement forms affect future intake; retained inquiries continue using their original form unless staff explicitly change the inquiry's offering.
+Restore returns only an Archived form to Published after current definition validation and exact concurrency checks. Its ID, version, schema and original publication metadata remain fixed; the action appends a Restored audit entry. Restore does not reactivate an offering or bypass workflow approval, registration-source approval or dates. Replacement forms affect future intake; retained inquiries continue using their original form unless staff explicitly change the inquiry's offering.
 
 Creating another form version requires a non-Draft source and no existing Draft in that code family. Conflicts identify the existing draft rather than returning a deletion message. Version drafts retain their family code; a separate form uses Clone as Draft. Comparison reads meaningful question, section, layout, translation, rule and Inquiry-source approval changes, ignores generated record/audit identifiers, and treats equivalent JSON formatting as unchanged. These operations do not migrate saved inquiries, application schemas or offering references. Current offering configuration locks still govern where a newly published version can be selected.
 
@@ -173,7 +190,7 @@ Local tests and source availability do not certify deployment or authenticated b
 | Inline profile form | The retained original Registration schema displays safe current answers. Authorized staff can save supported mapped and school-specific fields immediately as one atomic actor/time/reason/before/after audit, without an approval step. This explicit profile command leaves generic correction/approval policy unchanged; original submissions, protected identities, placement and fields outside the form remain intact. |
 | Sensitive data | Current database roles govern field groups. Current and historical-year school policy both constrain history and export reads. Free-text reasons and event remarks are withheld when relevant groups are restricted. |
 | Parent / guardian changes | A changed linked person's saved profile uses the published SuspendUntilReview or KeepUntilReview policy. Main-contact-only preferences and added unlinked guardians keep unchanged adult links. Resolution uses verified identity and preserves sibling relationships. |
-| Documents | IDs and certificates retain issued snapshots, numbering, issue history, reasoned reprint/void actions, and idempotency. Certificates may be generated for all active Student List students in staff scope; onboarding or historical entry approval is not required for their certificate operations. Other Records operations and former-student certificate eligibility retain their existing approval rules. Certificate history groups students generated together and filters by generation month. Leaving certificates for withdrawal/transfer require the configured ApprovedExit or EffectiveExit point. Graduation requires an Applied case whose effective date has arrived, including when ApprovedExit is selected. |
+| Documents | IDs and certificates retain issued snapshots, numbering, issue history, reasoned reprint/void actions, and idempotency. Certificates may be generated for all active Student List students in staff scope; onboarding or historical entry approval is not required for their certificate operations. Other Records operations and former-student certificate eligibility retain their existing approval rules. Certificate APIs retain grouped generation-month history and all-type, all-date per-student history. Selected-student generation rejects a mismatch with the permanent Student year. Leaving certificates for withdrawal/transfer require the configured ApprovedExit or EffectiveExit point. Graduation requires an Applied case whose effective date has arrived, including when ApprovedExit is selected. |
 | Year-end | Promote, Repeat, Hold, Graduate, Withdraw, and Transfer use batch preview, owner checks, approval, and per-student atomic apply. ReadyOnly skips exception rows; HoldAll keeps the batch waiting when any submitted row cannot proceed. |
 | Annual renewal | DirectEnrollment creates a unique next-year enrollment after approval and placement checks. ShortChecklist opens year-specific short onboarding; the prior permanent profile stays visible. Finance and portal completion follow enrollment activation. |
 | Returns | Every route follows the frozen Records Status approval rule. ReuseProfile opens short renewal. FreshApplication follows the Offering's Inquiry or DirectRegistration entry; Both requires an explicit choice. ResumeStage resumes the eligible linked application's current stage. Fresh/Resume remain AwaitingAdmission until real Onboarding completion. |
@@ -377,6 +394,8 @@ Existing inquiries and workflows remain compatible; management is created only f
 
 New saved Assessment settings enable managed results by default, with optional scheduling, attendance, aggregate marks/pass thresholds, Maximum attempts, bounded retakes and existing authorized waivers. Independent result review is disabled. The frozen policy and attempt history remain authoritative.
 
+Assessment catalog classes follow saved academic stage order, then saved class order, with name and identity tie-breakers at each level. This matches the Student directory; it does not infer class level from display names or change scope eligibility.
+
 Subject-wise marks are an opt-in version 2 mode inside the existing Assessment stage.
 Each Board/Medium/class has exactly one profile, containing mandatory school or custom entrance subjects and their maximum marks.
 Published Academic subject assignments are suggestions only; any active subject in the profile's Medium may be selected.
@@ -392,21 +411,25 @@ Sessions belong to the Offering and workflow stage; booking enforces capacity an
 
 Assessment does not approve admission or create a Student. Approve, Waitlist and Reject belong to the active Admission decision stage. Approved plus a completed journey can finalize without Offer acceptance, preserving guardian/identity, duplicate, capacity, tenant, academic scope and concurrency checks. Finalization links the Student and Onboarding case; activation owns operational enrollment. Current Offering-linked Onboarding confirms a fee structure without payment or service-consent gates. Historical route-based and Records renewal completion retain their separately documented owner rules.
 
+Approve & Finalize combines the final Admission decision, final-stage completion and Student/Onboarding handoff in one atomic command. Staff review readiness and resolve possible existing-Student matches before applying it. Earlier stages and conditional routes cannot be skipped. Saved primary-contact validity and any separate guardian-responsibility confirmation remain required; this action does not claim mailbox/mobile ownership verification. New combined-flow cases therefore leave contact-verification time unrecorded. Existing approved/completed journeys can use the same finalization command, and successful retries do not create another Student, case or handoff.
+
 ## Managed document verification
 
 New saved Documents settings enable one upload checklist by default. Requirements are Required or Optional, with class applicability, PDF/JPEG/PNG formats, upload limits and optional Student document category. Hidden requirement codes are generated uniquely by the backend and remain stable on later saves. Independent review, waivers, earlier Form collection and physical-original/evidence-mode setup are disabled.
 
 Every upload/replacement and acceptance/rejection remains audited against the current application stamp and latest revision. A replacement requires fresh acceptance. Applicable required uploads block advance, skip and override until accepted; optional evidence does not block completion. Class applicability uses the Offering Standard, not an applicant-typed answer. Finalization rechecks visited evidence and preserves idempotent finalized retries.
 
+Documents may precede the Registration form. An active Draft application can complete that stage when its applicable required evidence is resolved and exactly one next-stage route is eligible; form submission is not a prerequisite. Draft journeys cannot defer unresolved document requirements to Onboarding. Completing Documents leaves the application Draft and the form unsubmitted; the Form stage retains its own submission validation. Closed applications and historical document stages remain blocked.
+
 Accepted mapped uploads remain canonical and can satisfy corresponding Onboarding upload requirements without overwriting existing Student documents. Unmapped custom evidence does not satisfy an independently mandatory onboarding category. Historical revisions remain readable within record scope.
 
 ## Managed eligibility
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Managed Review
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Managed Form stages
 
@@ -420,13 +443,11 @@ Actual fee assignment and collection remain Finance-owned. Offering-linked Onboa
 
 ## Managed Offer stages
 
-Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, division placement, and Finance ownership are separate contracts.
 
 ## Managed Seat stages
 
-Class-level admission capacity is a separate warning-only projection: for an academic year and Standard, sum the capacities of assigned Institute Setup rooms and subtract active enrollments plus accepted or finalized admissions not already enrolled. General, RTE, Management, and Staff offerings for the same class share this count. A full class warns staff at inquiry or registration but does not stop either action. No room assignment means capacity is unknown. This does not change the historical managed Seat-stage reservation and waitlist policy below.
-An Enrolled application does not hold a second seat after its active StudentEnrollment is deactivated;
-transfers and withdrawals free that class seat in the live projection.
+Admission Inquiry and Registration intake has no seat-count limit. Room assignments, active enrollment totals and historical Seat-pool occupancy do not close intake or block Inquiry-to-Registration handoff. Offering availability, published configuration, entry-route, identity, duplicate, tenant and user-scope checks still apply. Room-derived admission capacity and its setup/read APIs are retired. Legacy room-allocation records and schema remain for migration compatibility and have no runtime effect. Actual division placement retains its existing strength, active-enrollment and live-reservation checks in Student Setup. Historical managed Seat stages retain their later workflow operations below.
 
 Seat stages opt into `configurationJson.seat` version 1. Schools set the offering capacity, choose manual reservation or reservation on stage entry, define hold duration and staff override limits, enable bounded renewals and FIFO waitlisting, control authorized capacity exceptions, require release reasons, and choose which outcomes may complete the stage. Missing or disabled settings preserve the basic workflow step.
 
@@ -491,3 +512,17 @@ Parents complete form answers and delegated uploads in one private Registration 
 Private uploaded evidence keeps its original versions and explicit parent-request/contact provenance. Staff acceptance/rejection and the finalization-to-Onboarding handoff retain their canonical owners. Parent links do not expose other applicants, sibling search, staff-only audit content or public blob URLs.
 
 Durable delivery retains Communication's history, consent and approval controls. For an explicit transactional Registration invitation when the tenant has never configured an Email provider, it reuses the same ABP `IEmailSender` and SMTP settings as Student Onboarding without creating provider settings. Any persisted Email configuration, including disabled/suspended/removed setup, prevents that fallback; enabled providers retain their opt-in and template rules. Explicit recipient withdrawal and campaign approval remain authoritative. Ordinary campaigns do not inherit this fallback. Status distinguishes queued, sent, failed, approval-pending and uncertain acceptance. Sent means provider acceptance, not inbox delivery. Only known skips or explicit SMTP rejections permit a retry campaign; timeouts/disconnects remain Unknown and require history review/new-link handling. An invalid/expired/revoked token, changed recipient, lost sender authority or terminal admission state blocks public access. Source and test availability do not certify real mailbox delivery or deployment.
+
+## Future backlog: shared class capacity
+
+Deferred; not implemented. A future read-only class capacity view may derive the selected academic year and class total from division strengths, account for active enrollments and accepted/finalized admissions awaiting enrollment without double counting, and share the count across admission tracks. This future work does not authorize a seat-count limit on Inquiry or Registration intake. Its pending-admission semantics, scope and staff UI require a separate implementation decision.
+
+## Student setup guide
+
+The six-stage guide helps staff configure Admissions, Student Numbering, Records and Houses, then review Student workflows.
+It reuses existing configuration owners and saves only navigation, deferrals and review metadata.
+The first authorized guide or configuration entry is recorded once per school, independently of academic-year progress.
+Completion does not create students, enrollments, credentials, payments, finance records or attendance operations.
+Published configuration presence is advisory for the selected context; a matching numbering rule does not establish readiness for all classes.
+The effective starter Records policy is already configured and is identified as a school default.
+Documents, I-Cards and Attendance do not have separate setup stages.

@@ -135,12 +135,19 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
 		var student = await CreateExistingStudentAsync(offering, "MaskedDirectory", "Student");
 		await GrantCompletedRecordAsync(student);
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var row = await _studentRepository.GetAsync(student.Id);
+			row.AdditionalDetail!.IssueRegistrationForm("MASKED-CERTIFICATE-REGISTRATION", 0);
+			await _studentRepository.UpdateAsync(row, autoSave: true);
+		});
 		var policy = StudentRecordsPolicy.Starter(); policy.Access.Masks.Add(new() { FieldGroup = "Identity", AllowedRoleNames = [] });
 		await PublishDirectoryPolicyAsync(policy);
 		var profile = await GetRequiredService<IStudentRecordProfileAppService>().GetAsync(student.Id);
 		profile.FirstName.ShouldBeNull(); profile.DateOfBirth.ShouldBeNull(); profile.MaskedFields.ShouldContain("Identity");
 		var directory = GetRequiredService<IStudentDirectoryAppService>();
 		(await directory.GetListAsync(new() { Search = "MaskedDirectory" })).TotalCount.ShouldBe(0);
+		(await directory.GetListAsync(new() { Search = "MASKED-CERTIFICATE-REGISTRATION", IncludeActiveStudentList = true })).TotalCount.ShouldBe(0);
 		(await directory.GetListAsync(new() { ColumnFilters = [new() { Column = "name", Operator = "contains", Value = "MaskedDirectory" }] })).TotalCount.ShouldBe(0);
 		(await directory.GetListAsync(new() { ColumnFilters = [new() { Column = "grNumber", Operator = "contains", Value = "GR" }] })).TotalCount.ShouldBe(0);
 		var row = (await directory.GetListAsync(new())).Items.Single(r => r.Id == student.Id);
@@ -192,6 +199,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		{
 			var activeRow = await _studentRepository.GetAsync(active.Id);
 			activeRow.AssignGrNo(839001);
+			activeRow.AdditionalDetail!.IssueRegistrationForm("CERTIFICATE-REGISTRATION-839001", 0);
 			activeRow.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
 			await _studentRepository.UpdateAsync(activeRow, autoSave: true);
 			var formerRow = await _studentRepository.GetAsync(former.Id);
@@ -203,8 +211,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var certificateRow = (await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true })).Items.Single();
 		certificateRow.EntrySource.ShouldBe("ActiveStudentList");
 		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, Search = "839001" })).TotalCount.ShouldBe(1);
-		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, AcademicYearId = active.AcademicYearId,
-			AcademicMediumStageId = active.AcademicMediumStageId })).TotalCount.ShouldBe(1);
+		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, Search = "CertificateListActive Student" })).Items.Single().StudentId.ShouldBe(active.Id);
+		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, Search = "certificate-registration-839001" })).Items.Single().StudentId.ShouldBe(active.Id);
+		var currentYearRow = (await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, AcademicYearId = active.AcademicYearId,
+			AcademicMediumStageId = active.AcademicMediumStageId })).Items.Single();
+		currentYearRow.IsCurrentAcademicYear.ShouldBe(true);
 		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, AcademicYearId = Guid.NewGuid() })).TotalCount.ShouldBe(0);
 		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, AcademicMediumStageId = Guid.NewGuid() })).TotalCount.ShouldBe(0);
 		(await directory.GetListAsync(new() { StudentId = former.Id, IncludeActiveStudentList = true })).TotalCount.ShouldBe(0);

@@ -40,6 +40,9 @@ public partial class FeeReceiptAppService
 				r.ReceiptDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc))
 		};
 
+	private static readonly IReadOnlySet<string> SqlListFilterColumns =
+		new HashSet<string> { "receiptNumber", "totalPaidAmount", "receiptDate" };
+
 	private static FinanceTableQuery ParseListFilters(string? filters)
 	{
 		try

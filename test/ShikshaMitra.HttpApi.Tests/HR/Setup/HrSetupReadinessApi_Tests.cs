@@ -91,19 +91,42 @@ public class HrSetupReadinessApi_Tests(HrSetupReadinessTestFactory factory) : Sh
 	}
 
 	[Theory]
-	[InlineData(true)]
-	[InlineData(false)]
-	public async Task Saving_either_coverage_decision_completes_setup(bool covered)
+	[InlineData(true, false)]
+	[InlineData(false, false)]
+	[InlineData(false, true)]
+	public async Task Saving_a_coverage_decision_completes_setup(bool covered, bool handledExternally)
 	{
 		var school = await SeedAsync(complete: true, coverage: false);
 		using var client = As(school);
 		var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata"));
-		var response = await client.PutAsJsonAsync("/api/payroll/pf-rules/coverage", new SavePfCoverageDto {
-			EffectiveMonth = new(now.Year, now.Month, 1), IsCovered = covered,
-			EvidenceReference = "Synthetic setup coverage decision", IdempotencyKey = Guid.NewGuid()
-		});
+		const string coverageUrl = "/api/payroll/pf-rules/coverage";
+		var month = new DateTime(now.Year, now.Month, 1);
+		var key = Guid.NewGuid();
+		var input = new { EffectiveMonth = month, IsCovered = covered, IsHandledExternally = handledExternally, IdempotencyKey = key };
+		var response = covered
+			? await client.PutAsJsonAsync(coverageUrl, new { input.EffectiveMonth, input.IsCovered, input.IdempotencyKey, EvidenceReference = " PF-123/ABC " })
+			: await client.PutAsJsonAsync(coverageUrl, input);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var saved = await response.Content.ReadFromJsonAsync<PfCoverageSettingsDto>();
+		saved!.History.Single().EvidenceReference.ShouldBe(covered ? "PF-123/ABC" : string.Empty);
+		saved.History.Single().IsHandledExternally.ShouldBe(handledExternally);
+		if (!covered)
+			(await client.PutAsJsonAsync(coverageUrl, input)).StatusCode.ShouldBe(HttpStatusCode.OK);
 		(await GetAsync(client, school.Year)).IsReady.ShouldBeTrue();
+		var management = await client.GetFromJsonAsync<PfManagementDto>($"{coverageUrl}/management?effectiveMonth={month:yyyy-MM-dd}");
+		management!.IsHandledExternally.ShouldBe(handledExternally);
+		var previous = await client.GetFromJsonAsync<PfManagementDto>($"{coverageUrl}/management?effectiveMonth={month.AddMonths(-1):yyyy-MM-dd}");
+		previous!.IsHandledExternally.ShouldBeFalse();
+		if (handledExternally)
+		{
+			var managementUrl = $"{coverageUrl}/management?effectiveMonth={month:yyyy-MM-dd}";
+			using var compensation = As(school, "HR.PayrollManagement.CompensationRevisions.Manage");
+			(await compensation.GetFromJsonAsync<PfManagementDto>(managementUrl))!.IsHandledExternally.ShouldBeTrue();
+			using var viewOnly = As(school, "HR.PayrollManagement.Settings.PfRule.View");
+			(await viewOnly.GetAsync(managementUrl)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+			using var otherSchool = As(await SeedAsync());
+			(await otherSchool.GetFromJsonAsync<PfManagementDto>(managementUrl))!.IsHandledExternally.ShouldBeFalse();
+		}
 	}
 
 	[Fact]

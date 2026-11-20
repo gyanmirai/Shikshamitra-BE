@@ -7,8 +7,10 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Configuration;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Auditing;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.Data;
 using Volo.Abp.Uow;
@@ -54,10 +56,15 @@ public partial class AdmissionParentRegistrationAppService(AdmissionParentRegist
 				AdmissionParentRegistrationData.RecipientFingerprint(applicant, savedRecipient) != latest.RecipientFingerprint) dto.Status = "Closed";
 		}
 		var live = latest?.CanRead(Clock.Now) == true && dto?.Status != "Closed";
+		var canSend = canEdit && initial && (!hasDocuments || canDocuments);
 		var deliveryBlocked = await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Application.Communication.CommunicationAppService>().ParentRegistrationDeliveryBlockedReasonAsync();
 		return new() { ApplicationId = applicationId, ConcurrencyStamp = application.ConcurrencyStamp,
 			Recipients = recipients, Request = dto,
-			CanSend = canEdit && initial && (!hasDocuments || canDocuments), CanRequestCorrections = canEdit && open && (application.SubmittedAt.HasValue ? application.CanCorrectForm : initial) || canRequestDocuments,
+			CanSend = canSend,
+			CanCopyLink = canEdit && live && latest!.Purpose == "initial" && latest.CanWrite(Clock.Now) &&
+				(!latest.AllowsDocuments || canDocuments) && !string.IsNullOrWhiteSpace(latest.ProtectedToken),
+			CanCreateLink = canSend && latest?.CanRead(Clock.Now) != true && recipients.Any(recipient => recipient.CanSend),
+			CanRequestCorrections = canEdit && open && (application.SubmittedAt.HasValue ? application.CanCorrectForm : initial) || canRequestDocuments,
 			CanRequestDocumentCorrections = canRequestDocuments,
 			CanRevoke = canEdit && live, CanTakeover = canEdit && live,
 			CanApply = canEdit && application.CanCorrectForm && open && latest?.Status == "ReadyForReview" && latest.ProposalBaseline != null && dto!.ProposedValues.Count > 0,
@@ -71,12 +78,43 @@ public partial class AdmissionParentRegistrationAppService(AdmissionParentRegist
 	}
 	public Task<AdmissionParentStaffContextDto> SendAsync(Guid applicationId, AdmissionParentSendInput input) => CreateAsync(applicationId, input, null);
 	public Task<AdmissionParentStaffContextDto> RequestCorrectionsAsync(Guid applicationId, AdmissionParentCorrectionInput input) => CreateAsync(applicationId, input, input);
-	private async Task<AdmissionParentStaffContextDto> CreateAsync(Guid applicationId, AdmissionParentSendInput input, AdmissionParentCorrectionInput? correction)
+	[DisableAuditing]
+	public async Task<string> CopyLinkAsync(Guid applicationId, AdmissionParentCopyLinkInput input)
+	{
+		await access.StaffAsync(applicationId, true);
+		var linkPrefix = AdmissionParentRegistrationData.LinkPrefix(LazyServiceProvider.LazyGetRequiredService<IConfiguration>())
+			?? throw AdmissionParentRegistrationData.Invalid("The public registration URL is unavailable.");
+		var requestId = input.RequestId;
+		if (requestId.HasValue == !string.IsNullOrWhiteSpace(input.RecipientRelationship))
+			throw AdmissionParentRegistrationData.Invalid("Select either an existing link or a saved parent contact.");
+
+		if (!requestId.HasValue)
+		{
+			var command = new AdmissionParentSendInput { ConcurrencyStamp = input.ConcurrencyStamp,
+				IdempotencyKey = input.IdempotencyKey, RecipientRelationship = input.RecipientRelationship! };
+			await CreateAsync(applicationId, command, null, copyOnly: true);
+			requestId = RegistrationId(applicationId, input.IdempotencyKey);
+		}
+
+		var grant = await LatestAsync(applicationId);
+		if (grant.Id != requestId || grant.Purpose != "initial" || !grant.CanWrite(Clock.Now) ||
+			string.IsNullOrWhiteSpace(grant.ProtectedToken))
+			throw AdmissionParentRegistrationData.Unavailable();
+		if (grant.AllowsDocuments) await AuthorizationService.CheckAsync(Permissions.AdmissionDocuments.Upload);
+		await access.AuthorizeAsync(grant);
+		try { return linkPrefix + protection.CreateProtector("AdmissionParentRegistration.v1").Unprotect(grant.ProtectedToken); }
+		catch (CryptographicException) { throw AdmissionParentRegistrationData.Unavailable(); }
+	}
+
+	private Guid RegistrationId(Guid applicationId, string key) =>
+		new(SHA256.HashData(Encoding.UTF8.GetBytes($"parent-registration:{CurrentTenant.Id}:{applicationId}:{key}"))[..16]);
+
+	private async Task<AdmissionParentStaffContextDto> CreateAsync(Guid applicationId, AdmissionParentSendInput input, AdmissionParentCorrectionInput? correction, bool copyOnly = false)
 	{
 		return await StaffMutationAsync(applicationId, input, async application =>
 		{
-			var id = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes($"parent-registration:{CurrentTenant.Id}:{applicationId}:{input.IdempotencyKey}"))[..16]);
-			var fingerprint = AdmissionParentRegistration.Hash(JsonSerializer.Serialize((object?)correction ?? input));
+			var id = RegistrationId(applicationId, input.IdempotencyKey);
+			var fingerprint = AdmissionParentRegistration.Hash((copyOnly ? "copy:" : "") + JsonSerializer.Serialize((object?)correction ?? input));
 			var previous = await data.Repo<AdmissionParentRegistration>().FindAsync(id);
 			if (previous != null)
 			{
@@ -114,7 +152,12 @@ public partial class AdmissionParentRegistrationAppService(AdmissionParentRegist
 			var allowDocuments = correction == null ? available.Count > 0 : selected.Count > 0;
 			if (allowDocuments) await AuthorizationService.CheckAsync(Permissions.AdmissionDocuments.Upload);
 			foreach (var old in await data.Repo<AdmissionParentRegistration>().GetListAsync(row => row.ApplicationId == applicationId))
-				if (old.CanRead(Clock.Now)) { old.Close("Revoked"); await data.Repo<AdmissionParentRegistration>().UpdateAsync(old, false); }
+			{
+				if (!old.CanRead(Clock.Now)) continue;
+				if (copyOnly) throw AdmissionParentRegistrationData.Conflict();
+				old.Close("Revoked");
+				await data.Repo<AdmissionParentRegistration>().UpdateAsync(old, false);
+			}
 			var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 			var grant = new AdmissionParentRegistration(id, CurrentTenant.Id ?? throw AdmissionParentRegistrationData.Invalid("A school is required."), applicationId,
 				CurrentUser.Id ?? throw AdmissionParentRegistrationData.Unavailable(), AdmissionParentRegistration.Hash(token),
@@ -122,7 +165,8 @@ public partial class AdmissionParentRegistrationAppService(AdmissionParentRegist
 				AdmissionParentRegistrationData.RecipientFingerprint(applicant, recipient), correction == null ? "initial" : "correction", Clock.Now,
 				fingerprint, allowDocuments, JsonSerializer.Serialize(selectedFields), JsonSerializer.Serialize(selected), correction?.Notes.Trim());
 			await data.Repo<AdmissionParentRegistration>().InsertAsync(grant, false);
-			await jobs.EnqueueAsync(new AdmissionParentRegistrationDeliveryArgs { TenantId = CurrentTenant.Id, RegistrationId = id });
+			if (copyOnly) grant.SetDelivery("NotSent");
+			else await jobs.EnqueueAsync(new AdmissionParentRegistrationDeliveryArgs { TenantId = CurrentTenant.Id, RegistrationId = id });
 			await data.Repo<AdmissionApplication>().UpdateAsync(application, false);
 		});
 	}

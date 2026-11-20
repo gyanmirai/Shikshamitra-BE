@@ -10,7 +10,7 @@ public static class StudentRecordVisibility
 	{
 		string[] groups = section switch
 		{
-			"general" => ["Identity", "Contact"], "family" => ["Guardian", "Contact"], "photo" => ["Identity"],
+			"general" => ["Identity", "Contact"], "family" => ["Guardian", "Contact"], "photo" or StudentRecordGrNumberService.Section => ["Identity"],
 			"communication" => ["Contact"], "medical" => ["Medical"], "bank" => ["Bank"],
 			"additional" => ["Identity", "Medical", "Contact"],
 			"custom-details" => ["Identity", "Contact", "Guardian", "Medical", "Bank"], _ => []

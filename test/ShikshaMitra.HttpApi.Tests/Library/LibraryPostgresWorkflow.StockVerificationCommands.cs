@@ -3,8 +3,6 @@ using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Library.InventoryVerification;
@@ -79,8 +77,7 @@ public sealed partial class LibraryPostgresWorkflow_Tests
 		ledger.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
 		var year = await Should.ThrowAsync<PostgresException>(() => database.ExecuteAsync("UPDATE \"AppLibraryStockVerificationSessions\" SET \"AcademicYearId\"=NULL;"));
 		year.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
-		await using var context = database.CreateContext();
-		var rollback = await Should.ThrowAsync<PostgresException>(() => context.GetService<IMigrator>().MigrateAsync(foundation));
+		var rollback = await Should.ThrowAsync<PostgresException>(() => database.RollbackLibrarySchemaAsync(foundation));
 		rollback.SqlState.ShouldBe("P0001");
 	}
 }

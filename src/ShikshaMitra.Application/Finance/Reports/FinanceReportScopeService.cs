@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -9,6 +10,8 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
+using Volo.Abp.Authorization;
+using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
@@ -24,13 +27,17 @@ public class FinanceReportScopeService(
     IRepository<EducationMediumStage, Guid> stageRepository,
     IRepository<Standard, Guid> standardRepository,
     IRepository<Division, Guid> divisionRepository,
-    ICurrentTenant currentTenant)
+    ICurrentTenant currentTenant,
+    IPermissionChecker permissionChecker)
     : ITransientDependency
 {
     public async Task<FinanceReportExecutionScope> AuthorizeAndNormalizeAsync(
         FinanceReportRequestDto request)
     {
         requestGuard.ValidateAndNormalize(request);
+        var permission = RequiredPermission(request.ReportType);
+        if (permission != null && !await permissionChecker.IsGrantedAsync(permission))
+            throw new AbpAuthorizationException("Access to the source Finance workspace is required.");
 
         var userScope = await userScopeAccessService.GetCurrentUserScopeAsync();
         userScopeAccessService.EnsureHasAnyAccess(userScope, FinanceReportRequestGuard.AccessDenied);
@@ -38,9 +45,14 @@ public class FinanceReportScopeService(
         var hierarchy = await GetHierarchyAsync();
         var allowedRows = hierarchy
             .Where(row => HasAccess(row, userScope))
+            .Select(row => HasWholeStandardAccess(row, userScope) ? row : row with
+                { Divisions = row.Divisions.Where(division => userScope.DivisionIds.Contains(division.Id)).ToList() })
             .ToList();
 
-        EnsureSelectionsAreAccessible(request.Filters, allowedRows);
+        var years = request.Filters.AcademicYearIds ?? [];
+        var matchingRows = FinanceReportTypes.PhaseOne.Contains(request.ReportType)
+            ? allowedRows.Where(row => years.Contains(row.AcademicYearId)).ToList() : allowedRows;
+        EnsureSelectionsAreAccessible(request.Filters, matchingRows);
 
         var academicYears = await academicYearRepository.GetListAsync();
         var existingAcademicYearIds = academicYears.Select(year => year.Id).ToHashSet();
@@ -50,7 +62,8 @@ public class FinanceReportScopeService(
             throw AccessDenied("BatchId", request.Filters.BatchId.Value);
         }
 
-        if (FinanceReportRequestGuard.RequiresAcademicYearWideScope(request.ReportType))
+        if (FinanceReportRequestGuard.RequiresAcademicYearWideScope(request.ReportType) ||
+            (request.ReportType == FinanceReportTypes.FeeDemandSummary && await SummaryRequiresYearWideScopeAsync()))
         {
             NormalizeAggregateAcademicYears(request, academicYears, userScope);
         }
@@ -66,9 +79,47 @@ public class FinanceReportScopeService(
             AllowedStandardIds = allowedRows
                 .Select(row => row.StandardId)
                 .Distinct()
-                .ToList()
+                .ToList(),
+            AllowedWholeStandardIds = allowedRows.Where(row => HasWholeStandardAccess(row, userScope))
+                .Select(row => row.StandardId).ToList(),
+            AllowedDivisionIds = userScope.DivisionIds.ToList()
         };
     }
+
+    public async Task<HashSet<string>> GetAllowedReportTypesAsync()
+    {
+        var aggregateYears = await GetAggregateAcademicYearIdsAsync();
+        var permissions = FinanceReportRequestGuard.SupportedReportTypes.Select(RequiredPermission)
+            .OfType<string>().Distinct().ToArray();
+        var grants = (await permissionChecker.IsGrantedAsync(permissions)).Result;
+        var summaryYearWide = grants.GetValueOrDefault(
+            ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View) != PermissionGrantResult.Granted;
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var group in FinanceReportRequestGuard.SupportedReportTypes.GroupBy(RequiredPermission))
+        {
+            if (group.Key != null && grants.GetValueOrDefault(group.Key) != PermissionGrantResult.Granted)
+                continue;
+            foreach (var report in group.Where(report =>
+                !(FinanceReportRequestGuard.RequiresAcademicYearWideScope(report) ||
+                  (report == FinanceReportTypes.FeeDemandSummary && summaryYearWide)) || aggregateYears.Count > 0))
+                result.Add(report);
+        }
+        return result;
+    }
+
+    public async Task<bool> SummaryRequiresYearWideScopeAsync() =>
+        !await permissionChecker.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View);
+
+    internal static string? RequiredPermission(string report) => report switch
+    {
+        FinanceReportTypes.FeeDemandSummary => null,
+        FinanceReportTypes.ReceiptRegister or FinanceReportTypes.FeeMonthlyRegister or FinanceReportTypes.CustomGroupReceiptList
+            => ShikshaMitraSubmodulePermissions.Finance.Fees_InvoiceReceipt.View,
+        FinanceReportTypes.PaymentVerification or FinanceReportTypes.FeeListChequeClearDateWise or FinanceReportTypes.BankDepositReport
+            => ShikshaMitraSubmodulePermissions.Finance.Accounts_Reconciliation.View,
+        FinanceReportTypes.ClasswiseFeeSetup => ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.View,
+        _ => ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View
+    };
 
     public async Task<IReadOnlyCollection<Guid>?> GetAccessibleAcademicYearIdsAsync()
     {
@@ -103,6 +154,8 @@ public class FinanceReportScopeService(
         var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
         return (await GetHierarchyAsync())
             .Where(row => HasAccess(row, scope))
+            .Select(row => HasWholeStandardAccess(row, scope) ? row : row with
+                { Divisions = row.Divisions.Where(division => scope.DivisionIds.Contains(division.Id)).ToList() })
             .ToList();
     }
 
@@ -153,13 +206,15 @@ public class FinanceReportScopeService(
     }
 
     private static bool HasAccess(FinanceReportHierarchyOption row, UserScopeContext scope) =>
+        HasWholeStandardAccess(row, scope) || row.DivisionIds.Any(scope.DivisionIds.Contains);
+
+    private static bool HasWholeStandardAccess(FinanceReportHierarchyOption row, UserScopeContext scope) =>
         scope.HasTenantWideScope() ||
         scope.HasAcademicYearWideScope(row.AcademicYearId) ||
         scope.WildcardMediumBoardIds.Contains(row.BoardId) ||
         scope.WildcardMediumStageMediumIds.Contains(row.MediumId) ||
         scope.WildcardStandardMediumStageIds.Contains(row.StageId) ||
-        scope.WildcardDivisionStandardIds.Contains(row.StandardId) ||
-        row.DivisionIds.Any(scope.DivisionIds.Contains);
+        scope.WildcardDivisionStandardIds.Contains(row.StandardId);
 
     private static void EnsureSelectionsAreAccessible(
         FinanceReportFilterDto filters,

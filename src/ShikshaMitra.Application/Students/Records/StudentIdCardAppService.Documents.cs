@@ -27,9 +27,10 @@ public partial class StudentIdCardAppService
 		StudentIdCardTemplateDto? template = null;
 		var identitySnapshots = new Dictionary<IdentityReadKey, SchoolIdentityDocumentSnapshotDto>();
 		var cards = new List<(StudentIdCardDto Card, byte[]? Photo, byte[]? Logo)>();
+		var cohort = await CapturePhotoCohortAsync(input.StudentIds, input.PhotoEdits);
 		foreach (var studentId in input.StudentIds)
 		{
-			var snapshot = await snapshots.CaptureAsync(studentId);
+			var snapshot = cohort[studentId];
 			template ??= await LoadTemplateAsync(input.TemplateId);
 			var photo = await LoadPhotoAsync(template, snapshot.Fields);
 			var frozen = await CaptureIdentityTemplateAsync(template, snapshot, identitySnapshots);
@@ -122,6 +123,8 @@ public partial class StudentIdCardAppService
 
 	private async Task<byte[]?> LoadPhotoAsync(StudentIdCardTemplateDto template, Dictionary<string, string?> snapshot)
 	{
+		if (!template.ShowPhoto) return null;
+		if (snapshot.TryGetValue("_ProcessedPhotoData", out var processed)) return IdentityCardRaster.Decode(processed);
 		if (!template.ShowPhoto || !snapshot.TryGetValue("_PhotoBlobName", out var blobName) || string.IsNullOrWhiteSpace(blobName)) return null;
 		var photo = await blobs.GetAllBytesAsync(blobName);
 		if (photo.Length > 5 * 1024 * 1024) throw new BusinessException("Students:Records:PhotoTooLarge");

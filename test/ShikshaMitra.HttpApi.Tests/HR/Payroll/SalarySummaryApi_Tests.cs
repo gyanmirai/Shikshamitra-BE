@@ -153,6 +153,69 @@ public class SalarySummaryApi_Tests(ShikshaMitraApiTestFactory factory) : Shiksh
 	}
 
 	[Fact]
+	public async Task External_Pf_overrides_an_existing_member_for_salary_preview_and_save()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var employee = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "ExternalPf");
+		var month = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1).AddMonths(2);
+		const string coverageUrl = "/api/payroll/pf-rules/coverage";
+		var template = (await GetAndReadAsync<SalaryTemplateListDto>("/api/payroll/salary-templates/active")).Items.First(x => x.IsDefault);
+		var coverage = await GetAndReadAsync<PfCoverageSettingsDto>(coverageUrl);
+		var response = await Client.PutAsJsonAsync(coverageUrl, new SavePfCoverageDto
+		{
+			EffectiveMonth = month, IsHandledExternally = true, IdempotencyKey = Guid.NewGuid(),
+			ExpectedConfigurationId = coverage.History.FirstOrDefault(x => !x.IsCancelled && x.EffectiveMonth <= month)?.Id
+		}, JsonOptions);
+		await EsiPayrollWorkflowScenario.RequireSuccess(response);
+		var externalVersion = (await response.Content.ReadFromJsonAsync<PfCoverageSettingsDto>(JsonOptions))!.History.Single(
+			x => !x.IsCancelled && x.IsHandledExternally && x.EffectiveMonth == month);
+		try
+		{
+			var enrollment = new PfEnrollmentDeclaration { Membership = "EXISTING_MEMBER" };
+			var previewResponse = await Client.PostAsJsonAsync($"/api/payroll/salary-templates/versions/{template.EditableVersion.Id}/calculate", new CalculateSalaryTemplateRequestDto
+			{
+				EmployeeId = employee, EffectiveMonth = month, SalaryBasis = "EMPLOYER_COST", MonthlyAmount = 18000m,
+				PfApplicable = true, PfEnrollment = enrollment, EsiManagementMode = EsiManagement.External, EsiExternalReason = "Test fixture"
+			}, JsonOptions);
+			await EsiPayrollWorkflowScenario.RequireSuccess(previewResponse);
+			var preview = (await previewResponse.Content.ReadFromJsonAsync<SalaryTemplateCalculationDto>(JsonOptions))!;
+			preview.PfEligibility!.Status.ShouldBe(PfEligibilityDecision.HandledExternally);
+			preview.PfEligibility.CanSave.ShouldBeTrue();
+			preview.TargetResult.IsExact.ShouldBeTrue();
+			preview.PfRuleId.ShouldBeNull();
+			preview.StatutoryApplication!.ProvidentFund.AppliedEmployeeAmount.ShouldBe(0m);
+			preview.StatutoryApplication.ProvidentFund.AppliedEmployerAmount.ShouldBe(0m);
+			preview.StatutoryApplication.Profile.ApplyPf.ShouldBeTrue();
+			var saveUrl = $"/api/payroll/employees/{employee}/compensation";
+			var input = new SaveEmployeeCompensationDto
+			{
+				TemplateVersionId = template.EditableVersion.Id, EffectiveMonth = month, MonthlyAmount = 18000m,
+				PfApplicable = true, PfEnrollment = enrollment, EsiManagementMode = EsiManagement.External, EsiExternalReason = "Test fixture",
+				ExpectedPfHandledExternally = false, IdempotencyKey = Guid.NewGuid().ToString("N")
+			};
+			(await Client.PutAsJsonAsync(saveUrl, input, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+			input.ExpectedPfHandledExternally = true;
+			await EsiPayrollWorkflowScenario.RequireSuccess(await Client.PutAsJsonAsync(saveUrl, input, JsonOptions));
+			await EsiPayrollWorkflowScenario.RequireSuccess(await Client.PutAsJsonAsync(saveUrl, input, JsonOptions));
+			var summary = await GetAndReadAsync<SalarySummaryDto>($"/api/payroll/employees/{employee}/salary-summary?month={month:yyyy-MM}");
+			var pf = summary.StatutorySummary.Single(x => x.Scheme == "PF");
+			pf.Status.ShouldBe("TURNED_OFF");
+			pf.Reason.ShouldBe(PayrollSchemeApplication.PfExternalReason);
+			pf.RegistrationPending.ShouldBeFalse();
+			pf.EmployeeAmount.ShouldBe(0m);
+			pf.EmployerAmount.ShouldBe(0m);
+		}
+		finally
+		{
+			using var scope = Factory.Services.CreateScope();
+			using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId));
+			using var unit = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+			await scope.ServiceProvider.GetRequiredService<IRepository<PfCoverageConfiguration, Guid>>().DeleteAsync(externalVersion.Id);
+			await unit.CompleteAsync();
+		}
+	}
+
+	[Fact]
 	public async Task Summary_requires_exact_permission_and_employee_scope_and_valid_month()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();

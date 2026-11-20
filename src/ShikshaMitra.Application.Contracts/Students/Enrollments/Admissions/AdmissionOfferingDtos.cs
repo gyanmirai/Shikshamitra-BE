@@ -30,6 +30,7 @@ public class AdmissionOfferingListDto : EntityDto<Guid>
 	public int? CoreFieldPolicyVersion { get; set; }
 	public bool IsActive { get; set; }
 	public AdmissionOfferingAvailabilityStatus AvailabilityStatus { get; set; }
+	public string? UnavailableReason { get; set; }
 	public AdmissionOfferingConfigurationStatus ConfigurationStatus { get; set; }
 	public bool CanActivate => ConfigurationStatus == AdmissionOfferingConfigurationStatus.Ready;
 	public int ApplicationCount { get; set; }
@@ -42,7 +43,6 @@ public class AdmissionOfferingDto : AdmissionOfferingListDto
 	public int InquiryCount { get; set; }
 	public bool HasConfigurationUsage { get; set; }
 	public bool CanEditConfiguration => !IsActive && !HasConfigurationUsage;
-	public AdmissionClassCapacityDto? ClassCapacity { get; set; }
 	public bool UseCycleDates { get; set; }
 	public DateTimeOffset? OpenDate { get; set; }
 	public DateTimeOffset? CloseDate { get; set; }
@@ -134,7 +134,6 @@ public class AdmissionOfferingConfigurationValidationDto
 
 public class AdmissionOfferingAvailabilityDto
 {
-	public AdmissionClassCapacityDto? ClassCapacity { get; set; }
 	public bool IsAvailable { get; set; }
 	public AdmissionOfferingAvailabilityStatus Status { get; set; }
 	public bool CanCreateInquiry { get; set; }

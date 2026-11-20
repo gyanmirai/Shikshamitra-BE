@@ -139,7 +139,12 @@ public class StudentRecordRenewalCoordinator(IRepository<StudentRecordRenewalCas
 			await placement.ValidateRollRuleAsync(item, approved.GetOnboardingRollRule() ?? "null", input.Remarks);
 			var attendanceActivationDate = ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now);
 			var enrollment = await placement.ActivateTargetEnrollmentAsync(item.StudentId, item.AcademicYearId, item.StandardId, item.DivisionId, item.RollNumber, sameYearReturn, attendanceActivationDate);
-			if (source.Id != enrollment.Id) { source.Deactivate(attendanceActivationDate); await enrollments.UpdateAsync(source); }
+			if (source.Id != enrollment.Id)
+			{
+				await LazyServiceProvider.LazyGetRequiredService<HouseManagement.HouseManagementPlacementService>()
+					.DeactivateAsync(source, attendanceActivationDate);
+				await enrollments.UpdateAsync(source);
+			}
 			var stage = standard.EducationMediumStage; var medium = stage.EducationMedium;
 			student.UpdateAcademicPlacement(item.AcademicYearId, medium.EducationBoardId, medium.Id, stage.Id, item.StandardId, item.DivisionId);
 			student.AssignRollNo(item.RollNumber); student.ChangeOperationalStatus(StudentStatus.Active, "Approved year-specific renewal activation");

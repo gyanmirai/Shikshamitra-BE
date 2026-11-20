@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.Academic.ClassTeacher;
@@ -8,6 +11,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
+using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -17,6 +21,7 @@ using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.Constants.Permissions;
 using Shouldly;
 using Volo.Abp.Authorization;
+using Volo.Abp.PermissionManagement;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
@@ -97,6 +102,50 @@ public class FinanceScopeAccessService_Tests : ShikshaMitraApplicationTestBase<S
 		});
 
 	[Fact]
+	public Task Refund_history_uses_original_year_enrollment_after_promotion() =>
+		RunAsync(true, async oldYearId =>
+		{
+			var oldBoard = await GetRequiredService<IRepository<EducationBoard, Guid>>().InsertAsync(
+				await GetRequiredService<EducationBoardManager>().CreateAsync(oldYearId, EducationBoardType.CBSE), true);
+			var oldMedium = await GetRequiredService<IRepository<EducationMedium, Guid>>().InsertAsync(
+				await GetRequiredService<EducationMediumManager>().CreateAsync(oldBoard.Id, "English"), true);
+			var oldStage = await GetRequiredService<IRepository<EducationMediumStage, Guid>>().InsertAsync(
+				await GetRequiredService<EducationMediumStageManager>().CreateAsync(oldMedium.Id, "Primary"), true);
+			var oldStandard = await GetRequiredService<IRepository<Standard, Guid>>().InsertAsync(
+				await GetRequiredService<StandardManager>().CreateAsync(oldStage.Id, "Class 1", 6, null), true);
+			var oldDivision = await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(
+				await GetRequiredService<DivisionManager>().CreateAsync(oldStandard.Id, "A", 30), true);
+			var nextYear = await _years.InsertAsync(new AcademicYear(Guid.NewGuid(), TestTenantId,
+				"Next refund year", new DateTime(2027, 4, 1), new DateTime(2028, 3, 31)), true);
+			var nextBoard = await GetRequiredService<IRepository<EducationBoard, Guid>>().InsertAsync(
+				await GetRequiredService<EducationBoardManager>().CreateAsync(nextYear.Id, EducationBoardType.CBSE), true);
+			var nextMedium = await GetRequiredService<IRepository<EducationMedium, Guid>>().InsertAsync(
+				await GetRequiredService<EducationMediumManager>().CreateAsync(nextBoard.Id, "English"), true);
+			var nextStage = await GetRequiredService<IRepository<EducationMediumStage, Guid>>().InsertAsync(
+				await GetRequiredService<EducationMediumStageManager>().CreateAsync(nextMedium.Id, "Primary"), true);
+			var nextStandard = await GetRequiredService<IRepository<Standard, Guid>>().InsertAsync(
+				await GetRequiredService<StandardManager>().CreateAsync(nextStage.Id, "Class 2", 7, null), true);
+			var nextDivision = await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(
+				await GetRequiredService<DivisionManager>().CreateAsync(nextStandard.Id, "B", 30), true);
+			var students = GetRequiredService<IRepository<Student, Guid>>();
+			var promoted = await students.InsertAsync(new Student(Guid.NewGuid(), TestTenantId,
+				"Promoted", null, "Student", oldYearId, oldBoard.Id, oldMedium.Id,
+				oldStage.Id, oldStandard.Id, oldDivision.Id), true);
+			await GetRequiredService<IRepository<StudentEnrollment, Guid>>().InsertAsync(
+				StudentEnrollment.Create(Guid.NewGuid(), TestTenantId, promoted.Id,
+					oldYearId, oldStandard.Id, oldDivision.Id), true);
+			promoted.UpdateAcademicPlacement(nextYear.Id, nextBoard.Id, nextMedium.Id,
+				nextStage.Id, nextStandard.Id, nextDivision.Id);
+			await students.UpdateAsync(promoted, true);
+			var userId = GetRequiredService<Volo.Abp.Users.ICurrentUser>().Id!.Value;
+			await GetRequiredService<IPermissionManager>().SetAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View, "U", userId.ToString(), true);
+			var ids = (await _access.GetRefundScopedStudentIdsQueryAsync(userId, oldYearId,
+				ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)).ToArray();
+			ids.ShouldContain(promoted.Id);
+		});
+
+	[Fact]
 	public Task Work_context_reports_database_admin_membership_without_exposing_students() =>
 		RunAsync(true, async yearId =>
 		{
@@ -105,6 +154,56 @@ public class FinanceScopeAccessService_Tests : ShikshaMitraApplicationTestBase<S
 			context.CanViewAllTenant.ShouldBeTrue();
 			context.ScopeOptions.ShouldBeEmpty();
 		});
+
+	[Fact]
+	public Task Work_context_resolves_capabilities_with_bounded_database_commands() =>
+		RunAsync(true, async yearId =>
+		{
+			using var commands = new EfCommandCounter();
+			var context = await GetRequiredService<IFinanceWorkContextAppService>().GetAsync(yearId);
+			context.AcademicYearId.ShouldBe(yearId);
+			context.RequestCapabilities.Count.ShouldBe(4);
+			commands.Count.ShouldBeLessThan(80);
+		});
+
+	private sealed class EfCommandCounter : IObserver<DiagnosticListener>,
+		IObserver<KeyValuePair<string, object?>>, IDisposable
+	{
+		private readonly AsyncLocal<bool> _active = new();
+		private readonly IDisposable _allListeners;
+		private IDisposable? _efListener;
+		private int _count;
+
+		public EfCommandCounter()
+		{
+			_allListeners = DiagnosticListener.AllListeners.Subscribe(this);
+			_active.Value = true;
+		}
+
+		public int Count => Volatile.Read(ref _count);
+
+		public void OnNext(DiagnosticListener listener)
+		{
+			if (listener.Name == "Microsoft.EntityFrameworkCore")
+				_efListener = listener.Subscribe(this, pair =>
+					pair == "Microsoft.EntityFrameworkCore.Database.Command.CommandExecuted");
+		}
+
+		public void OnNext(KeyValuePair<string, object?> value)
+		{
+			if (_active.Value) Interlocked.Increment(ref _count);
+		}
+
+		public void OnError(Exception error) { }
+		public void OnCompleted() { }
+
+		public void Dispose()
+		{
+			_active.Value = false;
+			_efListener?.Dispose();
+			_allListeners.Dispose();
+		}
+	}
 
 	[Fact]
 	public Task Reviewer_must_never_decide_own_request_even_if_database_admin() =>

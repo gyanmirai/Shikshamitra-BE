@@ -71,6 +71,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	public Guid SeededStandardId { get; private set; }
 	public Guid SeededDivisionId { get; private set; }
 	protected virtual bool InitializeTestData => true;
+	protected virtual bool IncludeHrFixtures => true;
 	protected override IHost CreateHost(IHostBuilder builder)
 	{
 		var host = base.CreateHost(builder);
@@ -86,7 +87,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			}
 
 			using var lookupScope = host.Services.CreateScope();
-			await ResolveSeededLookupsAsync(lookupScope.ServiceProvider).ConfigureAwait(false);
+			await ResolveSeededLookupsAsync(lookupScope.ServiceProvider, IncludeHrFixtures).ConfigureAwait(false);
 		}).GetAwaiter().GetResult();
 
 		return host;

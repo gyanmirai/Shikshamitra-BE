@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-08
+updated_on: 2026-11-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -123,6 +123,12 @@ Salary-template coverage must include complete active creation, Needs setup reco
 Compensation coverage must prove direct effective saves, effective-month resolution, immutable history, same-month supersession, scheduled future revisions, idempotent retries, controlled overrides, activation readiness, locked-payroll protection, separate one-time lines, and blocking protected-target drift.
 Monthly payroll coverage must prove that PF uses prorated eligible wages, professional tax uses actual monthly Gross without attendance-prorating the slab amount, cessation-month treatment follows the effective professional-tax profile, ESI uses effective coverage and wages, eligible PwD relief is government funded, employer contributions remain outside net pay, unlocked previews refresh, and locked snapshots remain immutable.
 Salary-summary API regressions compare preview and saved totals with overlapping professional-tax rules and with a cessation-month exemption.
+
+## CTC protection checks
+
+Run `PayrollSalaryProtectionTests` for period proration, PF rounding, ESIC coverage, one-time amounts, and unsolvable earning allocations.
+Run the protection migration cases in `CompensationRevisionApi_Tests` for direct-service authorization, signed preview, stale revisions, locked payroll, and idempotent apply.
+Run `Ctc_protection_rebalances_partial_month_after_pf_change_and_requires_fresh_review` against a disposable loopback PostgreSQL database through `PAYROLL_WORKFLOW_TEST_POSTGRES`.
 
 ## Required docs checks
 
@@ -1215,6 +1221,12 @@ dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Ide
 ```
 
 The older broad HR I-card suite has two host-level fixture failures in `GenerateEmployeeICardsPdfAsync_Should_Return_Pdf_For_Existing_Employee` and `GenerateEmployeeICardsPdfAsync_Should_Reject_Exclude_Incomplete_When_Template_Logo_Missing`: inherited logo loading raises `SchoolIdentity:InvalidContext` because those fixtures have no current tenant. The new duplex case uses explicit Hidden logo mode and a persisted academic year. These fixture failures are separate from physical rendering; production school-identity authorization is unchanged. The source has existing unrelated compiler warnings. Local behavioral validation disabled Roslynator analysis because concurrent builds made analysis expensive; this is not a zero-warning analyzer gate.
+
+## Visual card studio checks
+
+`IdentityCardTextDecoration_Tests` rasterizes the real QuestPDF SVG path. Seven cases check continuous underline/strike-through pixels on both wrapped lines at left/centre/right alignment and 50% opacity, plus bold-italic glyph/decoration advance parity. The regression fails when the native importer drops decoration or silently resolves a different font from the measuring typeface.
+
+Run `IdentityCardStudio_Tests` for actual raster decoding, dimensions, schema enums, rotation/opacity, ellipse/typography, embedded-image PDF output and source-hash/cohort validation. Run `Icard_photo_edits` and `Icard_photo_read` for student frozen-photo isolation, unchanged original blobs, public-data redaction, source/selection rejection, download/reprint and tenant/UserScope denial. The new `Icard_photo` HTTP cases verify each photo route rejects callers without its exact View action before record lookup. Retain the existing physical-layout, duplex, frontend preset and legacy student PDF checks. Use the pinned SDK and isolated `.artifacts/id-card-studio-2026-11-16` outputs with `-p:UseSharedCompilation=false`.
 
 ## Effective leave notice preview
 

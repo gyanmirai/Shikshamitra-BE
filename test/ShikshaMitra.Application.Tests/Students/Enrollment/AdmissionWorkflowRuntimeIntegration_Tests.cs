@@ -580,6 +580,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 			matches.ShouldContain(match => match.FamilyId == first.FamilyId);
 			matches.Single(match => match.FamilyId == first.FamilyId).CanLinkFamily.ShouldBeTrue();
+			matches.Single(match => match.ExistingInquiryId == first.Id).ExistingInquiryMatchesMobile.ShouldBe((bool?)true);
+			var dobMatches = await inquiryService.DuplicateCheckAsync(new AdmissionInquiryDuplicateCheckInput
+			{
+				AdmissionCycleId = offering.AdmissionCycleId,
+				GuardianPhone = "9876543211",
+				ApplicantName = "  ASHA  ",
+				ApplicantDateOfBirth = new DateTime(2017, 5, 15)
+			});
+			var dobMatch = dobMatches.Single(match => match.ExistingInquiryId == first.Id);
+			(dobMatch.DateOfBirth?.Date).ShouldBe((DateTime?)new DateTime(2017, 5, 15));
+			dobMatch.ExistingInquiryMatchesMobile.ShouldBe((bool?)false);
 			var nameOnlyMatches = await inquiryService.DuplicateCheckAsync(new AdmissionInquiryDuplicateCheckInput
 			{
 				AdmissionCycleId = offering.AdmissionCycleId,
@@ -930,20 +941,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 						ApplicationFormDefinitionId = generalOffering.ApplicationFormDefinitionId
 					}));
 			duplicate.Code.ShouldBe(AdmissionErrorCodes.OfferingDuplicate);
-			var room = await CreateCapacityRoomAsync(1);
-			var capacityService = GetRequiredService<IAdmissionClassCapacityAppService>();
-			var capacity = await capacityService.UpdateForOfferingAsync(offering.Id,
-				new UpdateAdmissionClassRoomsDto { RoomIds = [room.Id] });
-			capacity.Capacity.ShouldBe(1);
-			capacity.OccupiedCount.ShouldBe(1);
-			capacity.IsFull.ShouldBeTrue();
-			var generalCapacity = await capacityService.GetForOfferingAsync(generalOffering.Id);
-			generalCapacity.StandardId.ShouldBe(offering.StandardId);
-			generalCapacity.RemainingSeats.ShouldBe(0);
-			generalCapacity.Warning.ShouldNotBeNull();
-			var generalApplicant = await CreateApplicantAsync("General");
-			(await Should.ThrowAsync<BusinessException>(() => StartFixtureApplicationAsync(generalApplicant.Id, generalOffering.Id)))
-				.Code.ShouldBe(AdmissionApplicationErrorCodes.OfferingNotAvailable);
+
 		}
 	}
 

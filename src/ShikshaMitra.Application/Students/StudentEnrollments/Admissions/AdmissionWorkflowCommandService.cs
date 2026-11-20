@@ -254,10 +254,12 @@ public class AdmissionWorkflowCommandService(
 		var workflow = await definitionStore.GetAsync(id);
 		EnsureConcurrency(workflow, concurrencyStamp);
 		var query = await offeringRepository.GetQueryableAsync();
-		if (await AsyncExecuter.AnyAsync(query.Where(offering => offering.WorkflowDefinitionId == id && offering.IsActive)))
+		var activeOfferingCount = await AsyncExecuter.CountAsync(query.Where(offering => offering.WorkflowDefinitionId == id && offering.IsActive));
+		if (activeOfferingCount > 0)
 		{
+			var reason = $"This workflow cannot be archived because it is currently used by {activeOfferingCount} active admission offering{(activeOfferingCount == 1 ? "" : "s")}. Deactivate them or replace their workflow before archiving.";
 			throw new BusinessException(AdmissionWorkflowErrorCodes.WorkflowInUse,
-				"Deactivate offerings that use this workflow before archiving it.");
+				reason).WithData("ActiveOfferingCount", activeOfferingCount).WithData("Reason", reason);
 		}
 		var fromStatus = workflow.Status;
 		workflow.Archive();

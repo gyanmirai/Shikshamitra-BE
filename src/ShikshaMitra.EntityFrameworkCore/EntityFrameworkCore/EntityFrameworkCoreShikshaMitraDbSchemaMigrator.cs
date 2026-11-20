@@ -48,7 +48,7 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 	{
 		var applied = appliedMigrations.ToHashSet(StringComparer.Ordinal);
 		return applied.Contains(LegacyBaselineMigrationId) &&
-		       !applied.Contains(currentBaselineMigrationId);
+			   !applied.Contains(currentBaselineMigrationId);
 	}
 
 	internal static bool HasUnsupportedMigrationHistory(
@@ -57,8 +57,8 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 	{
 		var applied = appliedMigrations.ToHashSet(StringComparer.Ordinal);
 		return applied.Count > 0 &&
-		       !applied.Contains(LegacyBaselineMigrationId) &&
-		       !applied.Contains(currentBaselineMigrationId);
+			   !applied.Contains(LegacyBaselineMigrationId) &&
+			   !applied.Contains(currentBaselineMigrationId);
 	}
 
 	public async Task MigrateAsync()

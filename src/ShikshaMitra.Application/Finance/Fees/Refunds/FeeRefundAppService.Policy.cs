@@ -35,12 +35,26 @@ public partial class FeeRefundAppService
             var account = await accountRepository.GetAsync(accountId.Value);
             if (account.AcademicYearId != academicYearId || studentId.HasValue && account.StudentId != studentId)
                 throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
-            var reference = account.GetPolicyReference("refund")
-                ?? throw new BusinessException(FeeRefundErrorCodes.PolicyNotAssigned);
-            policyId = reference.PolicyId;
-            versionId = reference.VersionId;
             studentId = account.StudentId;
             assignmentId = account.StudentFeeStructureId;
+            if (assignmentId.HasValue)
+            {
+                // The account snapshot remains original payment evidence. Explicit
+                // student policy edits live on its exact linked assignment.
+                var assignment = await assignmentRepository.FindAsync(assignmentId.Value);
+                if (assignment == null || assignment.StudentId != studentId || assignment.AcademicYearId != academicYearId ||
+                    assignment.FinanceFeeAccountId != account.Id)
+                    throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
+                policyId = assignment.RefundPolicyId ?? throw new BusinessException(FeeRefundErrorCodes.PolicyNotAssigned);
+                versionId = assignment.RefundPolicyVersionId ?? throw new BusinessException(FeeRefundErrorCodes.PolicyNotAssigned);
+            }
+            else
+            {
+                var reference = account.GetPolicyReference("refund")
+                    ?? throw new BusinessException(FeeRefundErrorCodes.PolicyNotAssigned);
+                policyId = reference.PolicyId;
+                versionId = reference.VersionId;
+            }
         }
         else
         {

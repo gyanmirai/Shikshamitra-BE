@@ -124,7 +124,7 @@ public sealed partial class LibraryPostgresWorkflow_Tests
 		(await database.ScalarAsync($"""SELECT "SectionId"::text FROM "AppBookCopies" WHERE "Id"='{copy:D}';""")).ShouldBe(destination.ToString());
 		(await Should.ThrowAsync<PostgresException>(() => database.ExecuteAsync(
 			"""UPDATE "AppLibraryCampusTransferItems" SET "Title"='Changed';"""))).SqlState.ShouldBe("23514");
-		(await Should.ThrowAsync<PostgresException>(() => MigrateStockVerificationAsync(database, campuses))).SqlState.ShouldBe("23514");
+		(await Should.ThrowAsync<PostgresException>(() => database.RollbackLibrarySchemaAsync(campuses))).SqlState.ShouldBe("23514");
 	}
 
 	private static async Task<Guid> SeedTransferCampusAsync(LibraryPostgresApiTestFactory factory, Guid tenant, string code)

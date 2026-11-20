@@ -5,11 +5,13 @@ namespace ShikshaMitra.HR.Payroll.Templates;
 
 internal static class SalaryTemplateStatutoryApplication
 {
-	public static SalaryTemplateEvaluation Apply(SalaryTemplateEvaluation evaluation, PayrollStatutoryProfile profile, bool pfEnrolled)
+	public static SalaryTemplateEvaluation Apply(SalaryTemplateEvaluation evaluation, PayrollStatutoryProfile profile,
+		bool pfEnrolled, bool pfHandledExternally)
 	{
 		var pfEmployee = evaluation.Deductions.Where(x => x.SemanticType == "EMPLOYEE_PROVIDENT_FUND").Sum(x => x.Amount);
 		var pfEmployer = evaluation.EmployerContributions.Where(x => x.Code.StartsWith("EMPLOYER_PF")).Sum(x => x.Amount);
-		var pf = PayrollSchemeApplication.Decide("PF", profile.ApplyPf, profile.PfNumber, pfEnrolled, pfEmployee, pfEmployer, profile.PfDisabledReason);
+		var pf = pfHandledExternally ? PayrollSchemeApplication.ExternalPf(profile.PfNumber) :
+			PayrollSchemeApplication.Decide("PF", profile.ApplyPf, profile.PfNumber, pfEnrolled, pfEmployee, pfEmployer, profile.PfDisabledReason);
 		var calculation = evaluation.EmployeeStateInsurance;
 		var esi = PayrollSchemeApplication.Decide("ESI", profile.ApplyEsic, profile.EsicInsuranceNumber, calculation?.IsCovered ?? false,
 			calculation?.EmployeeContribution ?? 0m, calculation?.EmployerContribution ?? 0m, profile.EsicDisabledReason);

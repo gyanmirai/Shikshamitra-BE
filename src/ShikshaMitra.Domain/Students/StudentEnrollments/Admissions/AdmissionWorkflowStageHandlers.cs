@@ -67,6 +67,10 @@ public abstract class SubmittedApplicationAdmissionWorkflowStageHandler : IAdmis
 public sealed class DocumentVerificationAdmissionWorkflowStageHandler : SubmittedApplicationAdmissionWorkflowStageHandler
 {
 	public override AdmissionWorkflowStageType StageType => AdmissionWorkflowStageType.DocumentVerification;
+
+	public override Task<bool> CanCompleteAsync(AdmissionWorkflowStageRuntimeContext context) =>
+		Task.FromResult(context.ApplicationStatus == AdmissionApplicationStatus.Draft ||
+			IsActivePostSubmissionStatus(context.ApplicationStatus));
 }
 
 public sealed class AssessmentAdmissionWorkflowStageHandler : SubmittedApplicationAdmissionWorkflowStageHandler

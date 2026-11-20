@@ -9,7 +9,16 @@ namespace ShikshaMitra.Students.Records;
 
 internal static class StudentIdCardDesign
 {
-	private static readonly string[] Bindings = ["StudentName", "GRNumber", "Class", "Division", "AcademicYear", "DateOfBirth", "CardNumber", "schoolName", "schoolAddress", "headerText", "footerText", "static", "photo"];
+	private static readonly string[] LegacyStudentFields = ["StudentName", "GRNumber", "Class", "Division", "AcademicYear", "DateOfBirth"];
+	private static readonly string[] StudentFields = [.. LegacyStudentFields, "RollNo"];
+	private static readonly string[] Bindings = [.. StudentFields, "CardNumber", "schoolName", "schoolAddress", "headerText", "footerText", "static", "photo"];
+
+	public static bool HasValidStudentFields(IReadOnlyCollection<string>? fields, int schemaVersion)
+	{
+		var allowed = schemaVersion == 2 ? StudentFields : LegacyStudentFields;
+		return fields is { Count: > 0 } && fields.Count <= allowed.Length &&
+			fields.Distinct().Count() == fields.Count && fields.All(field => allowed.Contains(field));
+	}
 
 	public static (IdentityCardLayout Layout, IdentityCardPrintSettings Settings) Resolve(StudentIdCardTemplateDto template, bool cardOutput = false)
 	{

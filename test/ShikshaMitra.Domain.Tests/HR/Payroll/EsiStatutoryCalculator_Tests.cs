@@ -14,6 +14,29 @@ namespace ShikshaMitra.HR.Payroll;
 public class EsiStatutoryCalculator_Tests
 {
 	[Theory]
+	[InlineData(26)]
+	[InlineData(13)]
+	public void CTC_protection_uses_full_month_ESIC_eligibility_and_actual_period_contributions(int days)
+	{
+		var basic = BuildComponent(Guid.NewGuid(), Guid.NewGuid(), "Basic", 20000m, true, PayrollComponentSemanticType.Basic);
+		basic.Formula = new PayrollComponentFormula(SalaryTemplateFormulaType.PercentageOfGross, 100m);
+		var deduction = BuildComponent(basic.EmployeeId, Guid.NewGuid(), "ESI", 0m, false, PayrollComponentSemanticType.EmployeeStateInsurance);
+		var rules = new PayrollStatutoryRuleSet(null, [], EmployeeStateInsurance: new PayrollEsiStatutoryContext(
+			new DateTime(2026, 8, 1), BuildRule(), BuildActiveEstablishment(),
+			BuildEnrollment(EmployeeStatutoryEnrollmentStatus.Covered, "ESI-1001"),
+			new Dictionary<Guid, StatutoryWageTreatment> { [basic.ComponentId!.Value] = StatutoryWageTreatment.Included }, [], deduction));
+
+		var result = PayrollSalaryProtection.Calculate(days, 0, days, 26m, [basic], rules, 20000m);
+
+		result.Protection!.Status.ShouldBe("ADJUSTED");
+		result.Protection.Achieved.ShouldBe(20000m * days / 26m);
+		result.EsiCalculation!.IsCovered.ShouldBeTrue();
+		result.EmployerContributionTotal.ShouldBe(Math.Ceiling(result.GrossSalary * 0.0325m));
+		result.Deductions.Single().Amount.ShouldBe(Math.Ceiling(result.GrossSalary * 0.0075m));
+		PayrollComputation.ToSalarySlipLineItem(result.Earnings.Single()).FullMonthAmount.ShouldBe(result.FullGrossSalary);
+	}
+
+	[Theory]
 	[InlineData("CLASSIFIED_EARNINGS", "GROSS", 10000, true)]
 	[InlineData("GROSS", "CLASSIFIED_EARNINGS", 10000, true)]
 	[InlineData("COMPONENT", "CLASSIFIED_EARNINGS", 10000, true)]

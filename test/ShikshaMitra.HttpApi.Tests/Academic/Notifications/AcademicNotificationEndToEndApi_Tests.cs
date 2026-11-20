@@ -11,12 +11,12 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using MailKit.Security;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using NSubstitute;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Homework;
@@ -35,7 +35,9 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Emailing;
+using Volo.Abp.Emailing.Smtp;
 using Volo.Abp.Identity;
+using Volo.Abp.MailKit;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -52,6 +54,7 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 	private const string TaskTitle = "Practice sheet on fractions";
 	private const string PrimaryEmail = "primary-guardian@example.invalid";
 	private const string OtherEmail = "other-guardian@example.invalid";
+	private const string LearnerEmail = "learner@example.invalid";
 	private const string PrimaryPhone = "+15555550101";
 	private const string PushEndpoint = "https://push.example.test/fixture/subscription";
 	private static readonly Guid School = Guid.Parse(TestAuthHandler.TestTenantId);
@@ -62,8 +65,11 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 	[AcademicPerformancePostgresFact]
 	public async Task Reviewed_homework_delivers_only_to_selected_accounts_and_records_each_channels_actual_outcome()
 	{
-		await using var fixture = new DeliveryApiFactory();
+		await using var mailbox = new LoopbackSmtpMailbox();
+		await using var fixture = new DeliveryApiFactory(mailbox.Configuration);
 		using var staff = fixture.CreateClient();
+		using (var services = fixture.Services.CreateScope())
+			services.ServiceProvider.GetRequiredService<IEmailSender>().ShouldBeAssignableTo<MailKitSmtpEmailSender>();
 		staff.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, string.Join(",",
 			ShikshaMitraSubmodulePermissions.Academics.Notification.View, ShikshaMitraSubmodulePermissions.Academics.Notification.Add,
 			ShikshaMitraSubmodulePermissions.Academics.Notification.Send,
@@ -134,6 +140,7 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 		replay.OperationId.ShouldBe(operation.OperationId);
 		fixture.WhatsApp.Requests.ShouldBeEmpty();
 		fixture.Push.Requests.ShouldBeEmpty();
+		mailbox.Accepted.ShouldBeEmpty();
 		(await InboxAsync(primary)).Items.ShouldBeEmpty();
 
 		await RunQueueAsync(fixture);
@@ -147,9 +154,13 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 			item.Status.ShouldBe(channel == CommunicationChannelType.InApp
 				? NotificationDispatchState.Delivered : NotificationDispatchState.ProviderAccepted);
 		}
-		await fixture.Email.Received(1).SendAsync(PrimaryEmail, Arg.Any<string>(),
-			Arg.Is<string>(body => body.Contains(TaskTitle) && body.Contains("https://school.example.invalid/")), true);
-		await fixture.Email.DidNotReceive().SendAsync(OtherEmail, Arg.Any<string>(), Arg.Any<string>(), true);
+		var firstMail = mailbox.Accepted.ShouldHaveSingleItem();
+		firstMail.Recipient.ShouldBe(PrimaryEmail);
+		firstMail.Message.From.Mailboxes.Single().Address.ShouldBe(LoopbackSmtpMailbox.FromAddress);
+		firstMail.Message.To.Mailboxes.Single().Address.ShouldBe(PrimaryEmail);
+		firstMail.Message.Subject.ShouldNotBeNullOrEmpty();
+		firstMail.Message.HtmlBody.ShouldContain(TaskTitle);
+		firstMail.Message.HtmlBody.ShouldContain("https://school.example.invalid/");
 		var whatsapp = fixture.WhatsApp.Requests.ShouldHaveSingleItem();
 		using (var payload = JsonDocument.Parse(whatsapp.Body))
 		{
@@ -201,9 +212,26 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 		widerHistory.Where(x => x.Channel == CommunicationChannelType.InApp && x.Status == NotificationDispatchState.Delivered)
 			.Select(x => x.RecipientUserId).ShouldBe([(Guid?)sample.Primary, sample.LearnerAccount], ignoreOrder: true);
 		widerHistory.Count(x => x.Channel == CommunicationChannelType.Email && x.Status == NotificationDispatchState.ProviderAccepted).ShouldBe(3);
-		await fixture.Email.Received(1).SendAsync(OtherEmail, Arg.Any<string>(), Arg.Is<string>(body => body.Contains(TaskTitle)), true);
+		mailbox.Accepted.Skip(1).Select(x => x.Recipient).ShouldBe([PrimaryEmail, OtherEmail, LearnerEmail], ignoreOrder: true);
+		mailbox.Accepted.ShouldAllBe(x => x.Message.HtmlBody!.Contains(TaskTitle, StringComparison.Ordinal));
 		(await InboxAsync(learner)).Items.ShouldHaveSingleItem().Body.ShouldContain(TaskTitle);
 		(await InboxAsync(unrelated)).Items.ShouldBeEmpty();
+
+		mailbox.RecipientRejections[OtherEmail] = "550 Mailbox unavailable";
+		var rejectionReview = await PostAsync<AcademicNotificationManualPreviewDto>(staff, $"{Root}/manual/preview",
+			request with { Channels = familyChannels });
+		var rejectedOperation = await PostAsync<AcademicNotificationOperationDto>(staff, $"{Root}/manual/send",
+			new ConfirmAcademicNotificationManualDto(rejectionReview.ReviewToken!.Value, "acceptance-smtp-rejection"), HttpStatusCode.Accepted);
+		await RunQueueAsync(fixture);
+		var rejectionHistory = await HistoryAsync(staff, sample.Homework, rejectedOperation.OperationId);
+		rejectionHistory.Count(x => x.Channel == CommunicationChannelType.InApp && x.Status == NotificationDispatchState.Delivered)
+			.ShouldBe(2);
+		var emailHistory = rejectionHistory.Where(x => x.Channel == CommunicationChannelType.Email).ToArray();
+		emailHistory.Count(x => x.Status == NotificationDispatchState.ProviderAccepted).ShouldBe(2);
+		var rejected = emailHistory.Single(x => x.Status == NotificationDispatchState.Failed);
+		rejected.ReasonCode.ShouldBe("SmtpPermanentRejection");
+		rejected.CanRequestRetry.ShouldBeFalse();
+		mailbox.Accepted.Skip(4).Select(x => x.Recipient).ShouldBe([PrimaryEmail, LearnerEmail], ignoreOrder: true);
 	}
 
 	private static async Task SeedHomeworkAsync(DeliveryApiFactory fixture, IServiceProvider services, SchoolSample sample)
@@ -220,7 +248,7 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 		await InsertAsync(services, homework);
 		var learner = await CreateLearnerAsync(sample.Learner, "River", PrimaryEmail, PrimaryPhone);
 		await CreateAccountAsync(learner.Id, sample.Primary, "guardian", "mother", PrimaryEmail);
-		await CreateAccountAsync(learner.Id, sample.LearnerAccount, "student", "self", "learner@example.invalid");
+		await CreateAccountAsync(learner.Id, sample.LearnerAccount, "student", "self", LearnerEmail);
 		var sibling = await CreateLearnerAsync(Guid.NewGuid(), "Unselected", "unselected@example.invalid", null);
 		await CreateAccountAsync(sibling.Id, sample.UnrelatedGuardian, "guardian", "mother", "unselected@example.invalid");
 		await InsertAsync(services, new ChannelProviderSetting(Guid.NewGuid(), School)
@@ -374,7 +402,7 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 		public Guid UnrelatedGuardian { get; } = Guid.NewGuid();
 	}
 
-	private sealed class DeliveryApiFactory : AcademicPerformancePostgresTestFactory
+	private sealed class DeliveryApiFactory(ISmtpEmailSenderConfiguration smtpConfiguration) : AcademicPerformancePostgresTestFactory
 	{
 		public static readonly Guid ProviderId = Guid.NewGuid();
 		public const string BusinessId = "1001";
@@ -385,7 +413,6 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 		public const string WebhookSecret = "fixture-webhook-secret";
 		public const string MessageId = "wamid.fixture-accepted";
 		public const string PushVersion = "fixture-v1";
-		public IEmailSender Email { get; } = Substitute.For<IEmailSender>();
 		public CaptureTransport WhatsApp { get; } = new(() => new(HttpStatusCode.OK)
 		{
 			Content = JsonContent.Create(new { messages = new[] { new { id = MessageId } } })
@@ -411,8 +438,8 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 			}));
 			builder.ConfigureTestServices(services =>
 			{
-				services.RemoveAll<IEmailSender>();
-				services.AddSingleton(Email);
+				services.Replace(ServiceDescriptor.Singleton(smtpConfiguration));
+				services.PostConfigure<AbpMailKitOptions>(options => options.SecureSocketOption = SecureSocketOptions.None);
 				services.AddHttpClient(WhatsAppProviderClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => WhatsApp);
 				services.RemoveAll<IWebPushEndpointClientFactory>();
 				services.AddSingleton<IWebPushEndpointClientFactory>(new PushCaptureFactory(Push));

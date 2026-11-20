@@ -55,6 +55,40 @@ public class SmtpNotificationChannelSender_Tests
 		result.ErrorCode.ShouldBe(transient ? "SmtpTemporaryRejection" : "SmtpPermanentRejection");
 	}
 
+	[Theory]
+	[InlineData(MailKit.Net.Smtp.SmtpErrorCode.RecipientNotAccepted, 450, true)]
+	[InlineData(MailKit.Net.Smtp.SmtpErrorCode.SenderNotAccepted, 550, false)]
+	[InlineData(MailKit.Net.Smtp.SmtpErrorCode.MessageNotAccepted, 451, true)]
+	public async Task MailKit_negative_delivery_replies_are_classified_as_confirmed_rejections(
+		MailKit.Net.Smtp.SmtpErrorCode error, int status, bool transient)
+	{
+		_emails.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), true)
+			.ThrowsAsync(new MailKit.Net.Smtp.SmtpCommandException(error, (MailKit.Net.Smtp.SmtpStatusCode)status,
+				"private provider response"));
+
+		var result = await new SmtpNotificationChannelSender(_emails).SendAsync(_request, default);
+
+		result.Acceptance.ShouldBe(NotificationProviderAcceptance.Rejected);
+		result.IsTransient.ShouldBe(transient);
+		result.ProviderMessageId.ShouldBeNull();
+		result.ErrorCode.ShouldBe(transient ? "SmtpTemporaryRejection" : "SmtpPermanentRejection");
+	}
+
+	[Fact]
+	public async Task MailKit_unexpected_status_does_not_prove_the_message_was_rejected()
+	{
+		_emails.SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), true)
+			.ThrowsAsync(new MailKit.Net.Smtp.SmtpCommandException(MailKit.Net.Smtp.SmtpErrorCode.UnexpectedStatusCode,
+				(MailKit.Net.Smtp.SmtpStatusCode)550, "private provider response"));
+
+		var result = await new SmtpNotificationChannelSender(_emails).SendAsync(_request, default);
+
+		result.Acceptance.ShouldBe(NotificationProviderAcceptance.UnknownAcceptance);
+		result.IsTransient.ShouldBeFalse();
+		result.ProviderMessageId.ShouldBeNull();
+		result.ErrorCode.ShouldBe("SmtpAcceptanceUnknown");
+	}
+
 	[Fact]
 	public async Task A_lost_connection_after_a_send_attempt_does_not_authorize_retry()
 	{

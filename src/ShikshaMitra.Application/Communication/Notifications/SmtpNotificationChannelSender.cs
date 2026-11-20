@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Mail;
 using System.Threading;
 using System.Threading.Tasks;
+using MailKit.Net.Smtp;
 using Volo.Abp;
 using Volo.Abp.Auditing;
 using Volo.Abp.DependencyInjection;
@@ -37,13 +38,23 @@ public sealed class SmtpNotificationChannelSender(IEmailSender emails) : INotifi
 		}
 		catch (SmtpException error) when ((int)error.StatusCode is >= 400 and < 600)
 		{
-			var temporary = (int)error.StatusCode < 500;
-			return new(NotificationProviderAcceptance.Rejected, null,
-				temporary ? "SmtpTemporaryRejection" : "SmtpPermanentRejection", IsTransient: temporary);
+			return Rejected((int)error.StatusCode);
+		}
+		catch (SmtpCommandException error) when ((int)error.StatusCode is >= 400 and < 600 &&
+			error.ErrorCode is SmtpErrorCode.SenderNotAccepted or SmtpErrorCode.RecipientNotAccepted or SmtpErrorCode.MessageNotAccepted)
+		{
+			return Rejected((int)error.StatusCode);
 		}
 		catch (Exception)
 		{
 			return new(NotificationProviderAcceptance.UnknownAcceptance, null, "SmtpAcceptanceUnknown");
 		}
+	}
+
+	private static NotificationChannelSendResult Rejected(int statusCode)
+	{
+		var temporary = statusCode < 500;
+		return new(NotificationProviderAcceptance.Rejected, null,
+			temporary ? "SmtpTemporaryRejection" : "SmtpPermanentRejection", IsTransient: temporary);
 	}
 }

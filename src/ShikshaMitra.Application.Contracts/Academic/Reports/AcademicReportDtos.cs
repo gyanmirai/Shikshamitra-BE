@@ -66,6 +66,9 @@ public class AcademicReportColumnDto
     public string Label { get; set; } = string.Empty;
 }
 
+public sealed record AcademicReportRecoveryDto(Guid Id, string ReportType, string Format, string Status,
+    DateTime ExpiresAt, bool CanRegenerate);
+
 public class AcademicReportExportCreateResponseDto
 {
     public Guid JobId { get; set; }

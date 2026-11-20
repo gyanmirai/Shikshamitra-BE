@@ -25,7 +25,7 @@ namespace ShikshaMitra.Academic.Reports;
 
 [RemoteService(false)]
 [Authorize]
-public class AcademicReportAppService(
+public partial class AcademicReportAppService(
     AcademicReportGenerator reportGenerator,
     IAcademicAiReportPlanner aiReportPlanner,
     AcademicDynamicReportCatalog dynamicReportCatalog,
@@ -150,7 +150,9 @@ public class AcademicReportAppService(
             AcademicYearId = scope.AcademicYearId,
             EducationBoardId = scope.EducationBoardId,
             EducationMediumId = scope.EducationMediumId,
-            Plan = plan
+            Plan = plan,
+            AllowedClassIds = scope.ClassIds?.ToList(),
+            AllowedDivisionIds = scope.DivisionIds?.ToList()
         };
         var job = new ShikshaMitra.HR.Reports.HrReportExportJob(
             jobId,
@@ -566,6 +568,7 @@ public class AcademicReportExportJobArgs
     public Guid JobId { get; set; }
     public Guid? TenantId { get; set; }
     public Guid UserId { get; set; }
+    public Guid? GenerationId { get; set; }
     public AcademicReportRequestDto? Request { get; set; }
     public AcademicDynamicReportSpecDto? DynamicSpec { get; set; }
     public Guid AcademicYearId { get; set; }
@@ -582,5 +585,7 @@ public class AcademicDynamicStoredReportRequest
     public Guid AcademicYearId { get; set; }
     public Guid EducationBoardId { get; set; }
     public Guid EducationMediumId { get; set; }
+    public List<Guid>? AllowedClassIds { get; set; }
+    public List<Guid>? AllowedDivisionIds { get; set; }
     public AcademicDynamicReportSpecDto Plan { get; set; } = new();
 }

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
 using System;
@@ -61,6 +62,19 @@ public class AcademicReportController(
     public virtual Task<AcademicReportExportJobDto> GetExportAsync(Guid jobId)
     {
         return reportAppService.GetExportAsync(jobId);
+    }
+
+    [HttpGet("exports/{jobId:guid}/recovery"), Authorize]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public virtual Task<AcademicReportRecoveryDto> GetExportRecoveryAsync(Guid jobId)
+    {
+        return reportAppService.GetExportRecoveryAsync(jobId);
+    }
+
+    [HttpPost("exports/{jobId:guid}/regenerate"), Authorize]
+    public virtual Task<AcademicReportExportCreateResponseDto> RegenerateExportAsync(Guid jobId)
+    {
+        return reportAppService.RegenerateExportAsync(jobId);
     }
 
     [HttpGet("exports/{jobId}/download")]

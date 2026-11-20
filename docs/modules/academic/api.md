@@ -164,6 +164,13 @@ The Academic export worker can queue `Academic.Report.ExportReady` or `Academic.
 
 The ready notice opens the authenticated report download route. It checks report ownership, completion and expiry on each request. Failure notices open the inbox. Templates can use `report_name` and `export_format`. Storage keys and worker diagnostics stay out of template data. Ready supports inbox, web push and email. Failure supports inbox and web push.
 
+| Endpoint | Access | Result |
+|---|---|---|
+| `GET /api/app/academic-report/exports/{jobId}/recovery` | Original requester in the same school | Report status and whether the requester can generate it again |
+| `POST /api/app/academic-report/exports/{jobId}/regenerate` | Original requester and the existing report export permission | Queue a replacement for an expired or missing file using the saved request and current data scope |
+
+The replacement keeps the report identifier and the authenticated download link. Repeated requests while queued or running reuse that operation. Worker deliveries from the previous generation cannot claim the replacement. Dynamic exports apply the current scope and any narrower scope stored with the request.
+
 ### Emergency closure notifications
 
 `POST /api/academic/calendar-days/emergency-closure` can queue `Academic.Calendar.EmergencyClosureDeclared` for each saved class or medium and date. `PUT /api/academic/calendar-days/{id}/emergency-closure` can queue `Academic.Calendar.EmergencyClosureChanged` for a date, time or scope change. `POST /api/academic/calendar-days/{id}/cancel-emergency-closure` can queue a reopening notice with the same change event. Capture requires the existing Emergency Closure Add, Edit or Delete permission for the corresponding action and access to the saved scope.

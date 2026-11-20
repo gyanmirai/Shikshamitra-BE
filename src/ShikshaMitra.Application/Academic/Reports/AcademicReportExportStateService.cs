@@ -25,15 +25,21 @@ public class AcademicReportExportStateService(
     INotificationIntentWriter notifications) : ITransientDependency
 {
     private const string RunProperty = "AcademicExportRunId";
+    private const string GenerationProperty = "AcademicExportGenerationId";
     private const string LeaseProperty = "AcademicExportLeaseUntilUtc";
     internal static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(5);
 
-    public Task<Guid?> TryStartAsync(Guid jobId) => TryStartAsync(jobId, DateTime.UtcNow);
+    public Task<Guid?> TryStartAsync(Guid jobId, Guid? generationId = null) => TryStartAsync(jobId, DateTime.UtcNow, generationId);
 
-    internal async Task<Guid?> TryStartAsync(Guid jobId, DateTime now)
+    internal async Task<Guid?> TryStartAsync(Guid jobId, DateTime now, Guid? generationId = null)
     {
         using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: true);
         var job = await repository.GetAsync(jobId);
+        if (ReadGenerationId(job) != generationId)
+        {
+            await uow.CompleteAsync();
+            return null;
+        }
         if (job.Status == HrReportExportStatus.Running && LeaseUntil(job) > now)
             throw new InvalidOperationException("Academic report export already has an active worker lease; retry this delivery later.");
         if (job.Status != HrReportExportStatus.Queued && job.Status != HrReportExportStatus.Running)
@@ -145,8 +151,18 @@ public class AcademicReportExportStateService(
             CancellationToken.None);
     }
 
-    internal static Guid? ReadRunId(HrReportExportJob job) =>
-        Guid.TryParseExact(job.GetProperty<string>(RunProperty), "N", out var run) && run != Guid.Empty ? run : null;
+    internal static void QueueRegeneration(HrReportExportJob job, Guid generationId, DateTime expiresAt)
+    {
+        job.SetProperty(GenerationProperty, generationId.ToString("N"));
+        job.MarkQueued(expiresAt);
+    }
+
+    internal static Guid? ReadGenerationId(HrReportExportJob job) => ReadId(job, GenerationProperty);
+
+    internal static Guid? ReadRunId(HrReportExportJob job) => ReadId(job, RunProperty);
+
+    private static Guid? ReadId(HrReportExportJob job, string property) =>
+        Guid.TryParseExact(job.GetProperty<string>(property), "N", out var id) && id != Guid.Empty ? id : null;
 
     private static bool IsCurrentRun(HrReportExportJob job, Guid runId) =>
         job.Status == HrReportExportStatus.Running && ReadRunId(job) == runId;

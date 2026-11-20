@@ -28,6 +28,7 @@ public sealed record PayrollStatutoryRuleSet(
 	Guid? EsiConfigurationId = null)
 {
 	public PayrollStatutoryProfile? StatutoryProfile { get; init; }
+	public bool PfHandledExternally { get; init; }
 }
 
 public sealed record PayrollEsiStatutoryContext(

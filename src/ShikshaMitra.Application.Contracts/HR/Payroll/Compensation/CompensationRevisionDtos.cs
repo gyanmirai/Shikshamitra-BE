@@ -27,6 +27,7 @@ public class SaveEmployeeCompensationDto
 	[System.Text.Json.Serialization.JsonRequired]
 	public bool PfApplicable { get; set; }
 	public Guid? PfRuleId { get; set; }
+	public bool? ExpectedPfHandledExternally { get; set; }
 	public string EsiManagementMode { get; set; } = EsiManagement.InPlatform;
 	public Guid? EsiPolicyId { get; set; }
 	public Guid? ExpectedEsiPolicyVersionId { get; set; }
@@ -112,7 +113,6 @@ public class SaveEmployeeCompensationDtoValidator : AbstractValidator<SaveEmploy
 		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "EMPLOYER_COST");
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
 		RuleFor(x => x.EffectiveMonth).Must(x => x.Day == 1);
-		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);
 		RuleFor(x => x.ExpectedEsiPolicyVersionId).NotEmpty().When(x => x.EsiManagementMode == EsiManagement.InPlatform)
 			.WithMessage("Preview salary before saving to confirm the effective ESIC policy version.");
 		RuleFor(x => x.StatutoryProfile).Equal("IN-GJ");

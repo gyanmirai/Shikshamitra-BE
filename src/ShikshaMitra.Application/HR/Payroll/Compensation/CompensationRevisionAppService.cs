@@ -32,7 +32,8 @@ public partial class CompensationRevisionAppService(
 	IPayrollInputRevisionStore inputRevisionStore,
 	EsiPolicyResolver esiPolicies,
 	IAsyncQueryableExecuter asyncExecuter,
-	IClock clock, IEmployeeAuthorizationService employeeAuthorizationService, EmployeeStatutoryProfileAppService profileService, EmployeeStatutoryProfileResolver profileResolver) : ApplicationService, ICompensationRevisionAppService
+	IClock clock, IEmployeeAuthorizationService employeeAuthorizationService, EmployeeStatutoryProfileAppService profileService,
+	EmployeeStatutoryProfileResolver profileResolver, PfEligibilityResolver pfEligibility) : ApplicationService, ICompensationRevisionAppService
 {
 	public async Task<CompensationRevisionListDto> GetListAsync(Guid employeeId)
 	{
@@ -83,9 +84,16 @@ public partial class CompensationRevisionAppService(
 		if (replay != null)
 		{
 			var original = TryDeserializeCalculation(replay.CalculationSnapshotJson);
+			var originalExternalPf = original?.PfEligibility?.Status == PfEligibilityDecision.HandledExternally;
+			if (input.ExpectedPfHandledExternally is { } expected && expected != originalExternalPf)
+				throw new BusinessException(HRErrorCodes.PfManagementChanged);
 			if (original != null && input.ExpectedEsiPolicyVersionId != original.EmployeeStateInsurance.RuleId)
 				throw new BusinessException(HRErrorCodes.CompensationPreviewStale);
-			if (original != null && (original.PfEnrollment != input.PfEnrollment || replay.EsiManagementMode != input.EsiManagementMode || replay.EsiPolicyId != input.EsiPolicyId || replay.EsiExternalReason != input.EsiExternalReason?.Trim() || input.PfApplicable && replay.PfRuleId != input.PfRuleId || input.StatutoryProfileOverride != null && NormalizeProfile(original.StatutoryApplication?.Profile) != NormalizeProfile(input.StatutoryProfileOverride)))
+			var pfRuleChanged = !originalExternalPf && input.PfApplicable && replay.PfRuleId != input.PfRuleId;
+			if (original != null && (original.PfEnrollment != input.PfEnrollment || pfRuleChanged ||
+				replay.EsiManagementMode != input.EsiManagementMode || replay.EsiPolicyId != input.EsiPolicyId ||
+				replay.EsiExternalReason != input.EsiExternalReason?.Trim() ||
+				(input.StatutoryProfileOverride != null && NormalizeProfile(original.StatutoryApplication?.Profile) != NormalizeProfile(input.StatutoryProfileOverride))))
 				throw new BusinessException("HR:Payroll:CompensationSaveConflict");
 			var replayResult = await MapAsync(replay, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
 			replayResult.SavedStatutoryProfile = await profileService.GetAsync(employeeId, replay.EffectiveMonth.ToString("yyyy-MM"));
@@ -93,6 +101,9 @@ public partial class CompensationRevisionAppService(
 		}
 
 		var effectiveMonth = NormalizeMonth(input.EffectiveMonth);
+		if (input.ExpectedPfHandledExternally is { } expectedPfManagement &&
+			expectedPfManagement != ((await pfEligibility.GetCoverageAsync(effectiveMonth))?.IsHandledExternally == true))
+			throw new BusinessException(HRErrorCodes.PfManagementChanged);
 		if (input.EsiManagementMode == EsiManagement.InPlatform)
 		{
 			var policy = await esiPolicies.ResolveAsync(input.EsiPolicyId, effectiveMonth);

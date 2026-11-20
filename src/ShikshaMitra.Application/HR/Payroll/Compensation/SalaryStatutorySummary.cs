@@ -10,7 +10,12 @@ internal static class SalaryStatutorySummary
 		Scheme = "ESIC", Status = "TURNED_OFF", Reason = "Handled outside ShikshaMitra. " + reason,
 		EmployeeAmount = 0m, EmployerAmount = 0m
 	};
-	public static SalaryStatutorySummaryDto Pf(PayrollSchemeApplication? application, PfEligibilityDecision? eligibility, ProvidentFund? rule) => new()
+	public static SalaryStatutorySummaryDto Pf(PayrollSchemeApplication? application, PfEligibilityDecision? eligibility, ProvidentFund? rule) =>
+		eligibility?.Status == PfEligibilityDecision.HandledExternally ? new()
+		{
+			Scheme = "PF", Status = "TURNED_OFF", Reason = PayrollSchemeApplication.PfExternalReason,
+			EmployeeAmount = 0m, EmployerAmount = 0m,
+		} : new()
 	{
 		Scheme = "PF",
 		Status = application is { Apply: false } ? "TURNED_OFF" : eligibility?.Status == "NOT_APPLICABLE" ? "NOT_APPLICABLE" : rule == null || eligibility?.CanSave == false ? "NEEDS_SETUP" : "APPLIED",

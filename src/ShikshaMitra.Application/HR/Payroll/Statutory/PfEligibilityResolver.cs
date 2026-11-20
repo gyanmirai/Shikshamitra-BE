@@ -16,12 +16,13 @@ public class PfEligibilityResolver(IRepository<PfCoverageConfiguration, Guid> co
 	IRepository<ShikshaMitra.HR.Payroll.SalarySlips.SalarySlip, Guid> slips, Volo.Abp.Linq.IAsyncQueryableExecuter executer) : ITransientDependency
 {
 	public async Task<PfEligibilityDecision> ResolveAsync(Guid? employeeId, DateTime month, decimal grossSalary, decimal contributionWages,
-		PfEnrollmentDeclaration declaration, bool enrolled)
+		PfEnrollmentDeclaration declaration, bool enrolled, PfCoverageConfiguration? configuration)
 	{
-		var configuration = (await coverage.GetListAsync(x => !x.IsCancelled && x.EffectiveMonth <= month))
-			.OrderByDescending(x => x.EffectiveMonth).FirstOrDefault();
-		var wasMember = employeeId.HasValue && (await GetMemberHistoryAsync([employeeId.Value], month)).ContainsKey(employeeId.Value);
-		return PfEligibilityCalculator.Calculate(grossSalary, contributionWages, configuration?.IsCovered, declaration, wasMember, enrolled);
+		var handledExternally = configuration?.IsHandledExternally == true;
+		var wasMember = !handledExternally && employeeId.HasValue &&
+			(await GetMemberHistoryAsync([employeeId.Value], month)).ContainsKey(employeeId.Value);
+		return PfEligibilityCalculator.Calculate(grossSalary, contributionWages, configuration?.IsCovered,
+			declaration, wasMember, enrolled, handledExternally);
 	}
 
 	public async Task<IReadOnlyDictionary<Guid, bool>> GetMemberHistoryAsync(IReadOnlyCollection<Guid> ids, DateTime month)
@@ -37,8 +38,9 @@ public class PfEligibilityResolver(IRepository<PfCoverageConfiguration, Guid> co
 		return members.Where(IsEstablishedMember).Select(x => x.EmployeeId).Concat(locked.Concat(issued).Where(x => AppliedMembership(x.StatutoryApplicationJson)).Select(x => x.EmployeeId))
 			.Distinct().ToDictionary(x => x, _ => true);
 	}
-	public async Task<bool?> GetCoverageAsync(DateTime month) => (await coverage.GetListAsync(x => !x.IsCancelled && x.EffectiveMonth <= month))
-		.OrderByDescending(x => x.EffectiveMonth).FirstOrDefault()?.IsCovered;
+	public async Task<PfCoverageConfiguration?> GetCoverageAsync(DateTime month) =>
+		(await coverage.GetListAsync(x => !x.IsCancelled && x.EffectiveMonth <= month))
+			.OrderByDescending(x => x.EffectiveMonth).FirstOrDefault();
 	private static bool AppliedMembership(string? json) => json == null ||
 		JsonSerializer.Deserialize<PayrollStatutoryApplication>(json)?.ProvidentFund is { Apply: true, Eligible: true };
 	private static bool IsEstablishedMember(EmployeeCompensationRevision revision)

@@ -601,7 +601,15 @@ Employee and employer PF amounts round independently to the nearest whole rupee,
 Its payload contains `effectiveMonth` (first day of the current or a future month), `isCovered`, `evidenceReference`, `expectedConfigurationId`, and `idempotencyKey`.
 `evidenceReference` carries the PF establishment number for a covered school as nonblank text of up to 1000 characters.
 For `isCovered: false`, callers may omit the reference and history returns an empty string when none was provided.
+Set `isHandledExternally: true` together with `isCovered: false` to manage PF outside ShikshaMitra starting in the effective month.
+This option needs no establishment number and completes the PF setup check.
+An effective external setting returns `HANDLED_EXTERNALLY` for PF eligibility, suppresses PF rules, registration warnings and both contribution shares, and leaves staff registration records and finalized payroll intact.
+Apply the additive `AddExternalSchoolPfManagement` migration before deploying the API.
+Existing coverage versions start with external management disabled.
 Identical retries reuse the saved outcome; stale version IDs and changed retry payloads return 409.
+
+`GET /api/payroll/pf-rules/coverage/management?effectiveMonth=yyyy-MM-01` requires Compensation Revisions Manage and returns only the tenant's effective external-management flag.
+Salary saves can send `expectedPfHandledExternally` from their preview and receive 409 `HR:Payroll:PfManagementChanged` if the school's PF setting changed.
 
 ESIC configuration save accepts `effectiveMonth` (`yyyy-MM`) and `calculationSettings` in addition to the existing configuration fields.
 `eligibilityBasis` and `calculationBasis` independently select `CLASSIFIED_EARNINGS`, `GROSS`, or `COMPONENT`.

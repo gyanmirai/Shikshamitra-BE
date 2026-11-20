@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -5,6 +6,7 @@ using ShikshaMitra.HR.Payroll.Statutory;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
 using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsPfRule;
+using CompensationPermissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions;
 
 namespace ShikshaMitra.Controllers.HR.Payroll;
 
@@ -14,6 +16,8 @@ public class PfCoverageController(IPfCoverageAppService service) : AbpController
 {
 	[HttpGet, Authorize(Permissions.View)]
 	public Task<PfCoverageSettingsDto> GetAsync() => service.GetAsync();
+	[HttpGet("management"), Authorize(CompensationPermissions.Manage)]
+	public Task<PfManagementDto> GetManagementAsync([FromQuery] DateTime effectiveMonth) => service.GetManagementAsync(effectiveMonth);
 	[HttpPut, Authorize(Permissions.Add)]
 	public Task<PfCoverageSettingsDto> SaveAsync([FromBody] SavePfCoverageDto input) => service.SaveAsync(input);
 }

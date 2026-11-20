@@ -19,6 +19,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.AcademicSetups;
@@ -29,6 +30,7 @@ using Shouldly;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.PermissionManagement;
 using Volo.Abp.Uow;
 using Xunit;
 
@@ -42,6 +44,7 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 	private const string Changed = AcademicNotificationEventKeys.TimetableChanged;
 	private const string Withdrawn = AcademicNotificationEventKeys.TimetableWithdrawn;
 	private const string DayReminder = AcademicNotificationEventKeys.TimetableDayReminder;
+	private const string SettingsImpact = AcademicNotificationEventKeys.SettingsOperationalImpact;
 
 	[Fact]
 	public async Task Timetable_transitions_notify_only_affected_locked_elective_cohorts_and_teachers()
@@ -55,6 +58,7 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 		var learnerA = Guid.NewGuid();
 		var learnerB = Guid.NewGuid();
 		var enrollmentA = Guid.NewGuid();
+		var weeklyId = Guid.NewGuid();
 		Employee[] teachers = [];
 		await InSchoolAsync(async services =>
 		{
@@ -88,9 +92,18 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 			var config = new LectureSlotConfig(Guid.NewGuid(), TenantId, classId, "08:00 - 17:00");
 			config.AddSlotGroup(new(Guid.NewGuid(), config.Id, 1, 0, 5));
 			await InsertAsync(services, config);
-			var weekly = new WeeklyLectureSlot(Guid.NewGuid(), TenantId, classId);
+			var weekly = new WeeklyLectureSlot(weeklyId, TenantId, classId);
 			weekly.AddSubject(Guid.NewGuid(), null, groupId, 1);
 			await InsertAsync(services, weekly);
+			foreach (var scheduled in teachers.Take(2))
+			{
+				var userId = scheduled.UserId!.Value;
+				await services.GetRequiredService<IPermissionManager>().SetAsync(AcademicSettingsImpactNotificationSource.View,
+					"U", userId.ToString(), true);
+				await services.GetRequiredService<IUserScopeAssignmentRepository>().InsertAsync(new(Guid.NewGuid(), TenantId,
+					userId, academicYearId: year, educationBoardId: board, educationMediumId: medium,
+					educationMediumStageId: stage, standardId: classId, divisionId: divisionId), autoSave: true);
+			}
 			foreach (var (learner, enrollment, subject) in new[] { (learnerA, enrollmentA, subjectA),
 				(learnerB, Guid.NewGuid(), subjectB), (Guid.NewGuid(), Guid.NewGuid(), Guid.Empty) })
 			{
@@ -104,10 +117,15 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 			}
 
 			var scope = NotificationRuleScope.Create(year, board, medium, classId, divisionId);
-			foreach (var key in new[] { Published, Changed, Withdrawn, DayReminder })
+			foreach (var key in new[] { Published, Changed, Withdrawn, DayReminder, SettingsImpact })
 			{
 				var templateIds = new List<Guid>();
-				var audiences = key == DayReminder ? new[] { "AssignedTeacher", "StudentAccount" } : ["AssignedTeacher", "Guardian"];
+				string[] audiences = key switch
+				{
+					SettingsImpact => ["AssignedTeacher"],
+					DayReminder => ["AssignedTeacher", "StudentAccount"],
+					_ => ["AssignedTeacher", "Guardian"]
+				};
 				foreach (var audience in audiences)
 				{
 					var templateId = Guid.NewGuid();
@@ -148,6 +166,15 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 		slot.Subjects.Reverse();
 		await SaveAsync();
 		var initial = await AssertAudienceAsync(Published, [new("Student", learnerA), new("Student", learnerB), Teacher(0), Teacher(1)]);
+		await UpdateWeeklyRequirementsAsync(2);
+		await UpdateWeeklyRequirementsAsync(2);
+		var impact = await AssertAudienceAsync(SettingsImpact, [Teacher(0), Teacher(1)]);
+		await UpdateWeeklyRequirementsAsync(1);
+		await InSchoolAsync(async services =>
+		{
+			var reader = services.GetRequiredService<NotificationIntentSourceReader>();
+			(await reader.LoadAsync(impact, DateTimeOffset.UtcNow, CancellationToken.None)).CurrentRecipients.ShouldBeEmpty();
+		});
 		var today = DateTime.UtcNow.Date;
 		var monday = today.AddDays((8 - (int)today.DayOfWeek) % 7 + 7);
 		var reminderAt = new DateTimeOffset(monday.AddHours(11).AddMinutes(30), TimeSpan.Zero);
@@ -250,6 +277,13 @@ public sealed class TimetableNotificationDelivery_Tests(ShikshaMitraApiTestFacto
 		async Task SaveAsync()
 		{
 			using var result = await Client.PostAsJsonAsync($"/api/academics/timetable/by-standard/{classId}/division/{divisionId}", input, JsonOptions);
+			result.IsSuccessStatusCode.ShouldBeTrue(await result.Content.ReadAsStringAsync());
+		}
+
+		async Task UpdateWeeklyRequirementsAsync(int count)
+		{
+			using var result = await Client.PutAsJsonAsync($"/api/academics/timetable/settings/weekly-lecture-slots/{weeklyId}",
+				new UpdateWeeklyLectureSlotDto { Subjects = [new() { ElectiveGroupId = groupId, WeeklyLectures = count }] }, JsonOptions);
 			result.IsSuccessStatusCode.ShouldBeTrue(await result.Content.ReadAsStringAsync());
 		}
 

@@ -211,6 +211,12 @@ Staff API tests check stored audit fields for rule saves, template publication a
 
 Template test-send tests use synthetic draft content and the authenticated account. They verify the local inbox item, exact Add permission, rejected destinations and stale revisions, the per-channel limit and required WhatsApp test-account setup.
 
+## Weekly lecture requirements impact
+
+Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AcademicSettingsImpactNotification_Tests"` to verify that the Weekly Lectures save captures a mismatch for a published timetable, targets its authorized staff and suppresses repeated saves and corrected mismatches. Browser acceptance should check the Settings category rule, the inbox notice and its Timetable Management link as a staff member with access to the affected division.
+
+The hosted `TimetableNotificationDelivery_Tests` include the Weekly Lectures HTTP update with an elective group. Run `TimetableNotificationPostgresProbe_Tests` with `ACADEMIC_PERF_TEST_POSTGRES` pointing to a disposable, empty loopback `academic_tests_*` database to check the same workflow against PostgreSQL.
+
 ## Website push checks
 
 Run the backend delivery, subscription protection and authenticated registration tests from the backend repository.

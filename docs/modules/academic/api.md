@@ -166,6 +166,14 @@ The summary counts recorded submissions for published homework and assignments i
 
 Each division can queue one summary per school-local calendar week. Empty weeks create no operation. A schedule edit preserves an already captured window. The delivery window closes at the same local time the following day. The event supports inbox, browser push and email. Templates can use `summary_period`, `summary_text`, `homework_submission_count` and `assignment_submission_count`. Push defaults to a generic message linking to the signed-in inbox.
 
+### Weekly lecture requirements impact
+
+An edit to Weekly Lectures can queue `Academic.Settings.OperationalImpact` for a published division timetable that matched the previous subject and elective lecture counts and now needs review. Save the enabled rule and publish the applicable staff templates for the timetable's scope. The same validation used during timetable publication determines whether the edit created a mismatch.
+
+The audience is the currently scheduled teachers and the eligible reviewer configured through `Notifications:Academic:Tenants:{tenantIdN}:SettingsImpactReviewerUserId`. Each account requires Timetable Management View and access to the affected division. Delivery history requires Academic Notification View and the same timetable access. The event supports inbox and browser push. Templates can use `setting_name`, `impact_summary` and `class_name`.
+
+Saving equivalent requirements or editing an already mismatched timetable's requirements keeps the same incident. Restoring the match, withdrawing the timetable or changing its saved schedule makes pending delivery ineligible.
+
 ### Report export notifications
 
 The Academic export worker can queue `Academic.Report.ExportReady` or `Academic.Report.ExportFailed` when the current export attempt reaches its terminal state. These events use a school-wide rule and target only the saved requester. Interrupted and stale attempts queue no notice. A repeated terminal callback queues no duplicate.

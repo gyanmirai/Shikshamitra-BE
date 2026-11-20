@@ -132,7 +132,7 @@ public sealed class TimetableNotificationSource(ITimetableRepository timetables,
 			AcademicYearStart = year.StartDate, AcademicYearEnd = year.EndDate
 		};
 
-	private async Task<DateTimeOffset?> ResolveExpiryAsync(TimetableNotificationScope scope, CancellationToken token)
+	internal async Task<DateTimeOffset?> ResolveExpiryAsync(TimetableNotificationScope scope, CancellationToken token)
 	{
 		if (scope.AcademicYearEnd.Date == DateTime.MaxValue.Date) return DateTimeOffset.MaxValue;
 		try

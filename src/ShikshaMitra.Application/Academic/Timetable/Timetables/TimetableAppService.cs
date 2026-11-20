@@ -67,7 +67,7 @@ public partial class TimetableAppService(
 
         var allAssignedSubjects = await assignedSubjectRepository.GetListAsync(a => a.StandardId == standardId);
         var assignedSubjects = allAssignedSubjects.Where(a => a.Status == SubjectStatus.Published).ToList();
-        var publishedWeeklySubjects = GetPublishedWeeklyLectureSubjects(weeklySlot, assignedSubjects);
+        var publishedWeeklySubjects = TimetableWeeklyLectureRequirements.Effective(weeklySlot?.Subjects ?? [], assignedSubjects);
         // Saved slots still need their allocation reference while an allocation is being revised as Draft.
         var assignedSubjectBySubjectId = allAssignedSubjects
             .GroupBy(a => a.SubjectId)
@@ -643,7 +643,7 @@ public partial class TimetableAppService(
             assignedSubjectsQueryable.Where(a =>
                 a.StandardId == standardId &&
                 a.Status == SubjectStatus.Published));
-        var publishedWeeklySubjects = GetPublishedWeeklyLectureSubjects(weeklySlot, assignedSubjects);
+        var publishedWeeklySubjects = TimetableWeeklyLectureRequirements.Effective(weeklySlot?.Subjects ?? [], assignedSubjects);
         var roomsCount = await roomRepository.GetCountAsync();
 
         int weeklySlots = 0;
@@ -961,7 +961,7 @@ public partial class TimetableAppService(
         var publishedAssignments = await assignedSubjectRepository.GetListAsync(a =>
             a.StandardId == timetable.StandardId &&
             a.Status == SubjectStatus.Published);
-        var publishedWeeklySubjects = GetPublishedWeeklyLectureSubjects(weeklySlot, publishedAssignments);
+        var publishedWeeklySubjects = TimetableWeeklyLectureRequirements.Effective(weeklySlot.Subjects, publishedAssignments);
         if (publishedWeeklySubjects.Count == 0)
         {
             throw new BusinessException(TimetableErrorCodes.WeeklyLectureSlotNotFound)
@@ -980,7 +980,7 @@ public partial class TimetableAppService(
 
         EnsureNoDuplicateTimetableSlots(periodSlots);
         EnsureNoDuplicateTeacherOrRoomInsideSlot(periodSlots);
-        EnsureWeeklyLectureCountsMatch(timetable, periodSlots, publishedWeeklySubjects);
+        TimetableWeeklyLectureRequirements.EnsureMatches(timetable, periodSlots, publishedWeeklySubjects);
     }
 
     private void ReplaceSlotsFromInput(Timetable timetable, SaveTimetableDto input)
@@ -1090,97 +1090,6 @@ public partial class TimetableAppService(
     private Task EnsureNoTeacherOrRoomConflictsAsync(Timetable timetable, List<TimetableSlot> periodSlots)
     {
         return timetableManager.CheckConflictsAsync(timetable.StandardId, timetable.DivisionId, periodSlots);
-    }
-
-    private static void EnsureWeeklyLectureCountsMatch(
-        Timetable timetable,
-        List<TimetableSlot> periodSlots,
-        IReadOnlyCollection<WeeklyLectureSlotSubject> publishedWeeklySubjects)
-    {
-        var coreOccupied = periodSlots
-            .Where(s => !s.ElectiveGroupId.HasValue)
-            .SelectMany(s => s.Subjects)
-            .GroupBy(s => s.SubjectId)
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        var electiveOccupied = periodSlots
-            .Where(s => s.ElectiveGroupId.HasValue)
-            .GroupBy(s => s.ElectiveGroupId!.Value)
-            .ToDictionary(g => g.Key, g => g.Count());
-
-        foreach (var requirement in publishedWeeklySubjects)
-        {
-            var assigned = 0;
-            Guid? referenceId = null;
-            if (requirement.ElectiveGroupId.HasValue)
-            {
-                referenceId = requirement.ElectiveGroupId.Value;
-                assigned = electiveOccupied.GetValueOrDefault(requirement.ElectiveGroupId.Value, 0);
-            }
-            else if (requirement.SubjectId.HasValue)
-            {
-                referenceId = requirement.SubjectId.Value;
-                assigned = coreOccupied.GetValueOrDefault(requirement.SubjectId.Value, 0);
-            }
-
-            if (assigned != requirement.WeeklyLectures)
-            {
-                throw new BusinessException("Academic:Timetable:WeeklyLectureMismatch")
-                    .WithData("StandardId", timetable.StandardId)
-                    .WithData("DivisionId", timetable.DivisionId)
-                    .WithData("SubjectOrElectiveGroupId", referenceId!)
-                    .WithData("RequiredWeeklyLectures", requirement.WeeklyLectures)
-                    .WithData("AssignedWeeklyLectures", assigned);
-            }
-        }
-
-        var allowedCoreSubjectIds = publishedWeeklySubjects
-            .Where(s => s.SubjectId.HasValue)
-            .Select(s => s.SubjectId!.Value)
-            .ToHashSet();
-        var allowedElectiveGroupIds = publishedWeeklySubjects
-            .Where(s => s.ElectiveGroupId.HasValue)
-            .Select(s => s.ElectiveGroupId!.Value)
-            .ToHashSet();
-
-        var unexpectedCore = coreOccupied.Keys.FirstOrDefault(subjectId => !allowedCoreSubjectIds.Contains(subjectId));
-        if (unexpectedCore != Guid.Empty)
-        {
-            throw new BusinessException("Academic:Timetable:SubjectNotInWeeklyPlan")
-                .WithData("SubjectId", unexpectedCore);
-        }
-
-        var unexpectedElective = electiveOccupied.Keys.FirstOrDefault(groupId => !allowedElectiveGroupIds.Contains(groupId));
-        if (unexpectedElective != Guid.Empty)
-        {
-            throw new BusinessException("Academic:Timetable:ElectiveGroupNotInWeeklyPlan")
-                .WithData("ElectiveGroupId", unexpectedElective);
-        }
-    }
-
-    private static List<WeeklyLectureSlotSubject> GetPublishedWeeklyLectureSubjects(
-        WeeklyLectureSlot? weeklySlot,
-        IReadOnlyCollection<AssignedSubject> publishedAssignments)
-    {
-        if (weeklySlot == null || publishedAssignments.Count == 0)
-        {
-            return [];
-        }
-
-        var publishedSubjectIds = publishedAssignments
-            .Where(assignment => !assignment.ElectiveGroupId.HasValue)
-            .Select(assignment => assignment.SubjectId)
-            .ToHashSet();
-        var publishedElectiveGroupIds = publishedAssignments
-            .Where(assignment => assignment.ElectiveGroupId.HasValue)
-            .Select(assignment => assignment.ElectiveGroupId!.Value)
-            .ToHashSet();
-
-        return weeklySlot.Subjects
-            .Where(subject =>
-                (subject.SubjectId.HasValue && publishedSubjectIds.Contains(subject.SubjectId.Value)) ||
-                (subject.ElectiveGroupId.HasValue && publishedElectiveGroupIds.Contains(subject.ElectiveGroupId.Value)))
-            .ToList();
     }
 
     private async Task<Dictionary<Guid, List<Guid>>> GetSelectedElectiveSubjectIdsByGroupAsync(

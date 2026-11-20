@@ -17,6 +17,7 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 		var title = Words().Replace(action, "$1 $2");
 		var subject = definition.EventKey switch
 		{
+			AcademicNotificationEventKeys.SettingsOperationalImpact => "Academic settings change",
 			AcademicNotificationEventKeys.SummaryWeekly => "Weekly academic summary",
 			AcademicNotificationEventKeys.Student360GuardianMessage => "Academic update",
 			AcademicNotificationEventKeys.Student360MeetingRequested => "Academic meeting request",
@@ -100,6 +101,7 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 				"Please contact the school office to coordinate an academic meeting.",
 			(_, AcademicNotificationEventKeys.Student360MeetingRequested) =>
 				"The school would like to arrange an academic meeting. Please contact the school to agree on a time.",
+			(_, AcademicNotificationEventKeys.SettingsOperationalImpact) => "{{setting_name}} changed for {{class_name}}. {{impact_summary}}",
 			(_, AcademicNotificationEventKeys.ReportExportReady) => "Your academic report export is ready. Sign in to view it.",
 			(_, AcademicNotificationEventKeys.ReportExportFailed) => "Your academic report export could not be completed. Sign in to review the export.",
 			(_, AcademicNotificationEventKeys.CalendarEmergencyClosureDeclared or AcademicNotificationEventKeys.CalendarEmergencyClosureChanged) =>

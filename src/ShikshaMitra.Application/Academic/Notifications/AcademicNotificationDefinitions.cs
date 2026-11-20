@@ -24,7 +24,7 @@ internal static partial class AcademicNotificationDefinitions
 			: new[] { CommunicationChannelType.InApp, CommunicationChannelType.WebPush, CommunicationChannelType.Email, CommunicationChannelType.WhatsApp };
 		if (key == AcademicNotificationEventKeys.ReportExportReady)
 			channels = [CommunicationChannelType.InApp, CommunicationChannelType.WebPush, CommunicationChannelType.Email];
-		else if (key == AcademicNotificationEventKeys.ReportExportFailed)
+		else if (key is AcademicNotificationEventKeys.ReportExportFailed or AcademicNotificationEventKeys.SettingsOperationalImpact)
 			channels = [CommunicationChannelType.InApp, CommunicationChannelType.WebPush];
 		var variables = Variables(family);
 		if (key is AcademicNotificationEventKeys.HomeworkOverdue or AcademicNotificationEventKeys.AssignmentOverdue)

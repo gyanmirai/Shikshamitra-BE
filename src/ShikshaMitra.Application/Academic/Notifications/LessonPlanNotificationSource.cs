@@ -26,13 +26,13 @@ internal sealed record LessonPlanNoticeRevision(string Revision, Guid TeacherId,
 
 [RemoteService(false), ExposeServices(typeof(INotificationSourceAdapter), typeof(IAcademicNotificationSourceAuthorizer))]
 public sealed class LessonPlanNotificationSource(IRepository<LessonPlan, Guid> plans, IRepository<Subject, Guid> subjects,
-	AcademicNotificationDivisionReader divisions, TimetableNotificationAudience staff, IUserScopeService scopes,
+	AcademicNotificationDivisionReader divisions, TimetableNotificationAudience staff, LessonPlanSubmissionNotification submissions, IUserScopeService scopes,
 	AcademicNotificationRuleScopeAccess access, IPermissionChecker permissions, IAsyncQueryableExecuter queries,
 	ICurrentTenant tenant, ICurrentUser actor, ITenantStore tenants) : INotificationSourceAdapter, IAcademicNotificationSourceAuthorizer, ITransientDependency
 {
 	internal const string Type = "Academic.LessonPlan";
 	private const string RevisionProperty = "AcademicLessonPlanReviewNotice";
-	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[] { LessonPlanApproved, LessonPlanChangesRequested, LessonPlanRejected });
+	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[] { LessonPlanSubmitted, LessonPlanApproved, LessonPlanChangesRequested, LessonPlanRejected });
 
 	internal static CurriculumNoticeCapture Record(LessonPlan plan, Guid reviewer)
 	{
@@ -57,6 +57,7 @@ public sealed class LessonPlanNotificationSource(IRepository<LessonPlan, Guid> p
 		if (await FindAsync(school, context.SourceId, token) is not { } record ||
 			(context.SourceScope != null && context.SourceScope != record.Division.Scope)) return Unavailable();
 		var (plan, division) = record;
+		if (context.EventKey == LessonPlanSubmitted) return await submissions.LoadAsync(plan, division, context, token);
 		if (ReviewEvent(plan.Status) != context.EventKey || plan.GetProperty<string>(RevisionProperty) is not { } json)
 			return Unavailable();
 		var source = NotificationRuntimeJson.Deserialize<LessonPlanNoticeRevision>(json, NotificationErrorCodes.SourceUnavailable);

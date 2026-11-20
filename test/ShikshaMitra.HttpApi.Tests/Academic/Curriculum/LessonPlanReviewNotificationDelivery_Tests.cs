@@ -1,8 +1,10 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Notifications;
@@ -30,17 +32,19 @@ namespace ShikshaMitra.Academic.Curriculum;
 public sealed class LessonPlanReviewNotificationDelivery_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private const string EventKey = AcademicNotificationEventKeys.LessonPlanChangesRequested;
+	private const string Submitted = AcademicNotificationEventKeys.LessonPlanSubmitted;
 	private const string Comment = "Private review text for the synthetic workflow.";
 	private static readonly Guid School = Guid.Parse(TestAuthHandler.TestTenantId);
 	private static readonly Guid TeacherUser = Guid.Parse(TestAuthHandler.TestUserId);
 
 	[Fact]
-	public Task A_saved_review_has_one_owner_notice_and_respects_history_permissions() => RunAsync();
+	public Task Submission_and_review_use_the_scoped_reviewer_and_plan_owner() => RunAsync();
 
 	internal async Task RunAsync()
 	{
 		var reviewer = Guid.NewGuid();
-		var planId = Guid.NewGuid();
+		var ids = new[] { Guid.NewGuid(), Guid.NewGuid() }.Order().ToArray();
+		var planId = ids[0];
 		Guid divisionId = default, teacherId = default, chapterId = default;
 		await InSchoolAsync(async services =>
 		{
@@ -65,63 +69,106 @@ public sealed class LessonPlanReviewNotificationDelivery_Tests(ShikshaMitraApiTe
 			var chapter = await InsertAsync(services, new AssignedSubjectChapter(Guid.NewGuid(), assignment.Id, 1, "Lesson plan notice chapter", now, now.AddDays(5))
 				{ TenantId = School, AssignedSubjectId = assignment.Id });
 			chapterId = chapter.Id;
-			var plan = new LessonPlan(planId, School, board.AcademicYearId, teacherId, standard.Id, divisionId, subject.Id,
-				chapter.Id, now.UtcDateTime.Date, "Lesson plan review workflow", 30);
-			plan.Submit();
-			await InsertAsync(services, plan);
-			var template = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), School) { TemplateName = EventKey });
-			var version = new CommunicationTemplateRevision(Guid.NewGuid(), School, template.Id, 1, EventKey, "AssignedTeacher",
-				CommunicationChannelType.InApp, "en", "Lesson plan reviewed", "Open the school inbox.", 1);
-			version.Publish(reviewer, now);
-			await InsertAsync(services, version);
-			var rule = new NotificationRule(Guid.NewGuid(), School, EventKey,
-				NotificationRuleScope.Create(board.AcademicYearId, board.Id, medium.Id, standard.Id, divisionId));
-			var configuration = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, ["AssignedTeacher"],
-				[CommunicationChannelType.InApp], [template.Id], NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");
-			rule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(
-				configuration, services.GetRequiredService<AcademicNotificationCatalogue>().Get(EventKey)), rule.ConcurrencyStamp);
-			await InsertAsync(services, rule);
+			foreach (var id in ids)
+				await InsertAsync(services, new LessonPlan(id, School, board.AcademicYearId, teacherId, standard.Id, divisionId, subject.Id,
+					chapter.Id, new DateTime(2026, 11, 23, 0, 0, 0, DateTimeKind.Utc), $"Lesson plan {id:N}", 30));
+
+			await InsertRuleAsync(Submitted, "ConfiguredReviewer");
+			await InsertRuleAsync(EventKey, "AssignedTeacher");
+
+			async Task InsertRuleAsync(string eventKey, string kind)
+			{
+				var template = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), School) { TemplateName = eventKey });
+				var version = new CommunicationTemplateRevision(Guid.NewGuid(), School, template.Id, 1, eventKey, kind,
+					CommunicationChannelType.InApp, "en", "Lesson plan update", "Open the school inbox.", 1);
+				version.Publish(reviewer, now);
+				await InsertAsync(services, version);
+				var rule = new NotificationRule(Guid.NewGuid(), School, eventKey,
+					NotificationRuleScope.Create(board.AcademicYearId, board.Id, medium.Id, standard.Id, divisionId));
+				var configuration = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false, [kind],
+					[CommunicationChannelType.InApp], [template.Id], NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");
+				rule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(
+					configuration, services.GetRequiredService<AcademicNotificationCatalogue>().Get(eventKey)), rule.ConcurrencyStamp);
+				await InsertAsync(services, rule);
+			}
 		});
 
-		using var client = Factory.CreateClient();
-		client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, reviewer.ToString());
-		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "admin");
-		for (var i = 0; i < 2; i++)
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var config = Factory.Services.GetRequiredService<IConfiguration>();
+		var key = $"Notifications:Academic:Tenants:{School:N}:LessonPlanReviewerUserId";
+		var previous = config[key];
+		config[key] = reviewer.ToString();
+		try { await VerifyAsync(); }
+		finally { config[key] = previous; }
+
+		async Task VerifyAsync()
 		{
-			using var response = await client.PostAsJsonAsync($"/api/academic/curriculum/lesson-plans/{planId}/request-changes",
-				new ReviewRemarksDto { Comment = Comment }, JsonOptions);
-			response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+			using var submission = await Client.PostAsJsonAsync("/api/academic/curriculum/lesson-plans/bulk-submit",
+				new BulkSubmitLessonPlansDto { LessonPlanIds = ids.ToList() }, JsonOptions);
+			submission.StatusCode.ShouldBe(HttpStatusCode.OK, await submission.Content.ReadAsStringAsync());
+			NotificationIntent pending = null!;
+			await InSchoolAsync(async services =>
+			{
+				pending = (await services.GetRequiredService<IRepository<NotificationIntent, Guid>>()
+					.GetListAsync(x => x.EventKey == Submitted && ids.Contains(x.SourceId))).ShouldHaveSingleItem();
+				pending.SourceId.ShouldBe(planId);
+				var source = await services.GetRequiredService<NotificationIntentSourceReader>().LoadAsync(pending, DateTimeOffset.UtcNow, CancellationToken.None);
+				source.CurrentRecipients.ShouldBe([new("ConfiguredReviewer", UserId: reviewer)]);
+				source.Snapshot!.Variables["lesson_plan_count"].Value.ShouldBe("2");
+			});
+
+			using var client = Factory.CreateClient();
+			client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, reviewer.ToString());
+			client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "admin");
+			for (var i = 0; i < 2; i++)
+			{
+				using var response = await client.PostAsJsonAsync($"/api/academic/curriculum/lesson-plans/{planId}/request-changes",
+					new ReviewRemarksDto { Comment = Comment }, JsonOptions);
+				response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+			}
+			NotificationIntent intent = null!;
+			await InSchoolAsync(async services =>
+			{
+				intent = (await services.GetRequiredService<IRepository<NotificationIntent, Guid>>()
+					.GetListAsync(x => x.EventKey == EventKey && x.SourceId == planId)).ShouldHaveSingleItem();
+				var source = await services.GetRequiredService<NotificationIntentSourceReader>().LoadAsync(intent, DateTimeOffset.UtcNow, CancellationToken.None);
+				source.Runtime.SourceScope.DivisionId.ShouldBe(divisionId);
+				source.CurrentRecipients.ShouldBe([new("AssignedTeacher", UserId: TeacherUser, EmployeeId: teacherId)]);
+				source.Snapshot!.Variables.Values.ShouldNotContain(x => x.Value == Comment);
+			});
+
+			await InSchoolAsync(async services =>
+			{
+				var source = await services.GetRequiredService<NotificationIntentSourceReader>().LoadAsync(pending, DateTimeOffset.UtcNow, CancellationToken.None);
+				source.CurrentRecipients.ShouldBe([new("ConfiguredReviewer", UserId: reviewer)]);
+				source.Snapshot!.Variables["lesson_plan_count"].Value.ShouldBe("1");
+			});
+			config[key] = TeacherUser.ToString();
+			await InSchoolAsync(async services =>
+				(await services.GetRequiredService<NotificationIntentSourceReader>().LoadAsync(pending, DateTimeOffset.UtcNow, CancellationToken.None))
+					.CurrentRecipients.ShouldBeEmpty());
+			config[key] = reviewer.ToString();
+
+			var operation = $"/api/academic/notifications/operations/{intent.CampaignId}";
+			using var viewer = Factory.CreateClient();
+			viewer.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, reviewer.ToString());
+			viewer.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, ShikshaMitraSubmodulePermissions.Academics.Notification.View);
+			using var denied = await viewer.GetAsync(operation);
+			denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+			using var allowed = await client.GetAsync(operation);
+			allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
+
+			await InSchoolAsync(async services =>
+			{
+				var plans = services.GetRequiredService<IRepository<LessonPlan, Guid>>();
+				var plan = await plans.GetAsync(planId);
+				plan.UpdatePlan(chapterId, "Updated lesson plan scope notes", null, null, null, 30);
+				await plans.UpdateAsync(plan, autoSave: true);
+			});
+			await InSchoolAsync(async services =>
+				(await services.GetRequiredService<NotificationIntentSourceReader>().LoadAsync(intent, DateTimeOffset.UtcNow, CancellationToken.None))
+					.CurrentRecipients.ShouldBeEmpty());
 		}
-		NotificationIntent intent = null!;
-		await InSchoolAsync(async services =>
-		{
-			intent = (await services.GetRequiredService<IRepository<NotificationIntent, Guid>>()
-				.GetListAsync(x => x.EventKey == EventKey && x.SourceId == planId)).ShouldHaveSingleItem();
-			var source = await services.GetRequiredService<NotificationIntentSourceReader>().LoadAsync(intent, DateTimeOffset.UtcNow, CancellationToken.None);
-			source.Runtime.SourceScope.DivisionId.ShouldBe(divisionId);
-			source.CurrentRecipients.ShouldBe([new("AssignedTeacher", UserId: TeacherUser, EmployeeId: teacherId)]);
-			source.Snapshot!.Variables.Values.ShouldNotContain(x => x.Value == Comment);
-		});
-
-		var operation = $"/api/academic/notifications/operations/{intent.CampaignId}";
-		using var viewer = Factory.CreateClient();
-		viewer.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, reviewer.ToString());
-		viewer.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, ShikshaMitraSubmodulePermissions.Academics.Notification.View);
-		using var denied = await viewer.GetAsync(operation);
-		denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-		using var allowed = await client.GetAsync(operation);
-		allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
-
-		await InSchoolAsync(async services =>
-		{
-			var plans = services.GetRequiredService<IRepository<LessonPlan, Guid>>();
-			var plan = await plans.GetAsync(planId);
-			plan.UpdatePlan(chapterId, "Updated lesson plan scope notes", null, null, null, 30);
-			await plans.UpdateAsync(plan, autoSave: true);
-		});
-		await InSchoolAsync(async services =>
-			(await services.GetRequiredService<NotificationIntentSourceReader>().LoadAsync(intent, DateTimeOffset.UtcNow, CancellationToken.None))
-				.CurrentRecipients.ShouldBeEmpty());
 	}
 
 	private async Task InSchoolAsync(Func<IServiceProvider, Task> action)
@@ -142,7 +189,7 @@ public sealed class LessonPlanReviewNotificationDelivery_Tests(ShikshaMitraApiTe
 public sealed class LessonPlanReviewNotificationPostgres_Tests
 {
 	[AcademicPerformancePostgresFact]
-	public async Task Lesson_plan_feedback_and_notice_commit_together()
+	public async Task Lesson_plan_submission_and_feedback_commit_with_scoped_notices()
 	{
 		await using var fixture = new AcademicPerformancePostgresTestFactory();
 		await new LessonPlanReviewNotificationDelivery_Tests(fixture).RunAsync();

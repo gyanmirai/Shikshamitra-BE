@@ -74,6 +74,7 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 			("PreviousTeacher", AcademicNotificationEventKeys.ElectiveLockedSelectionCorrected) => "An elective teaching assignment has changed.",
 			(_, AcademicNotificationEventKeys.ElectiveLockedSelectionCorrected) => "A confirmed elective assignment has been updated.",
 			(_, AcademicNotificationEventKeys.ElectiveSelectionConfirmed) => "An elective assignment has been confirmed.",
+			(_, AcademicNotificationEventKeys.LessonPlanSubmitted) => "Lesson plans awaiting review: {{lesson_plan_count}}.",
 			(_, AcademicNotificationEventKeys.LessonPlanApproved) => "Your lesson plan has been approved.",
 			(_, AcademicNotificationEventKeys.LessonPlanChangesRequested) => "Changes have been requested for your lesson plan.",
 			(_, AcademicNotificationEventKeys.LessonPlanRejected) => "Your lesson plan was reviewed and rejected.",

@@ -406,6 +406,7 @@ public partial class LessonPlanAppService(
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
+    [UnitOfWork(true)]
     public async Task<LessonPlanDto> CreateAsync(CreateLessonPlanDto input)
     {
         await EnsureOwnTeacherRecordAsync(input.TeacherId, "create");
@@ -454,7 +455,10 @@ public partial class LessonPlanAppService(
 
         await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-create");
         await lessonPlanProgressManager.EnsureTargetAsync(lessonPlan, input.ChapterId, input.PlannedCompletionPercentage);
+        var notices = lessonPlan.Status == LessonPlanStatus.Submitted && CurrentTenant.Id is Guid school
+            ? LessonPlanSubmissionNotification.Record(school, [lessonPlan]) : [];
         var inserted = await lessonPlanRepository.InsertAsync(lessonPlan, autoSave: true);
+        await CaptureLessonPlanNoticesAsync(notices);
         return (await MapLessonPlansAsync(new[] { inserted })).Single();
     }
 
@@ -490,6 +494,7 @@ public partial class LessonPlanAppService(
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
+    [UnitOfWork(true)]
     public async Task<LessonPlanDto> SubmitAsync(Guid id)
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
@@ -506,13 +511,17 @@ public partial class LessonPlanAppService(
         await lessonPlanProgressManager.EnsureTargetAsync(lessonPlan, lessonPlan.ChapterId, lessonPlan.PlannedCompletionPercentage);
 
         lessonPlan.Submit();
-        await lessonPlanRepository.UpdateAsync(lessonPlan);
+        var notices = CurrentTenant.Id is Guid school ? LessonPlanSubmissionNotification.Record(school, [lessonPlan]) : [];
+        await lessonPlanRepository.UpdateAsync(lessonPlan, autoSave: notices.Count != 0);
+        await CaptureLessonPlanNoticesAsync(notices);
         return await GetAsync(id);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
+    [UnitOfWork(true)]
     public async Task BulkSubmitAsync(BulkSubmitLessonPlansDto input)
     {
+        var submitted = new List<LessonPlan>(input.LessonPlanIds.Count);
         foreach (var id in input.LessonPlanIds)
         {
             var plan = await lessonPlanRepository.GetAsync(id);
@@ -529,7 +538,14 @@ public partial class LessonPlanAppService(
             await lessonPlanProgressManager.EnsureTargetAsync(plan, plan.ChapterId, plan.PlannedCompletionPercentage);
             plan.Submit();
             await lessonPlanRepository.UpdateAsync(plan);
+            submitted.Add(plan);
         }
+
+        if (CurrentTenant.Id is not Guid school || submitted.Count == 0) return;
+        var notices = LessonPlanSubmissionNotification.Record(school, submitted);
+        if (notices.Count == 0) return;
+        await CurrentUnitOfWork!.SaveChangesAsync();
+        await CaptureLessonPlanNoticesAsync(notices);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
@@ -617,10 +633,12 @@ public partial class LessonPlanAppService(
         var notice = CurrentTenant.Id is Guid school && plan.TenantId == school
             ? LessonPlanNotificationSource.Record(plan, CurrentUser.GetId()) : null;
         await lessonPlanRepository.UpdateAsync(plan, autoSave: notice != null);
-        if (notice != null)
-            await LazyServiceProvider.LazyGetRequiredService<SubjectAllocationNotification>()
-                .CaptureAsync([notice], CurrentUser.Id, LessonPlanNotificationSource.Type);
+        if (notice != null) await CaptureLessonPlanNoticesAsync([notice]);
     }
+
+    private Task CaptureLessonPlanNoticesAsync(IReadOnlyList<CurriculumNoticeCapture> notices) =>
+        notices.Count == 0 ? Task.CompletedTask : LazyServiceProvider.LazyGetRequiredService<SubjectAllocationNotification>()
+            .CaptureAsync(notices, CurrentUser.Id, LessonPlanNotificationSource.Type);
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_LessonPlan.Add)]
     public async Task<HomeworkCreateResponseDto> CreateHomeworkFromLessonPlanAsync(Guid id, CreateHomeworkFromLessonPlanDto input)
@@ -1225,6 +1243,19 @@ public partial class LessonPlanAppService(
 
         throw new AbpAuthorizationException(
             "Only Admin, Coordinator roles, or assigned Reporting Managers can approve, reject, or request changes for lesson plans.");
+    }
+
+    internal async Task<bool> CanReviewNotificationAsync(LessonPlan plan)
+    {
+        try
+        {
+            await EnsureCanReviewLessonPlansAsync();
+            await EnsureLessonPlanAccessAsync(plan, "lesson-plan-review-notification");
+            await EnsureReviewerIsNotPlanOwnerAsync(plan);
+            return await HasClassTeacherAccessAsync() || await IsReportingManagerOrAdminAsync(plan.TeacherId);
+        }
+        catch (AbpAuthorizationException) { return false; }
+        catch (BusinessException error) when (error.Code == UserScopeErrorCodes.AccessDenied) { return false; }
     }
 
     private async Task EnsureReviewerIsNotPlanOwnerAsync(LessonPlan lessonPlan)

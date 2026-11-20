@@ -29,6 +29,9 @@ internal static partial class AcademicNotificationDefinitions
 		if (key is AcademicNotificationEventKeys.HomeworkSubmitted or AcademicNotificationEventKeys.AssignmentSubmitted)
 			variables = Array.AsReadOnly(variables.Append(new NotificationVariableDefinition("submitted_count",
 				NotificationVariableType.Number, false, NotificationVariableSensitivity.Personal)).ToArray());
+		if (key == AcademicNotificationEventKeys.LessonPlanSubmitted)
+			variables = Array.AsReadOnly(variables.Append(new NotificationVariableDefinition("lesson_plan_count",
+				NotificationVariableType.Number, false, NotificationVariableSensitivity.Personal)).ToArray());
 		if (key == AcademicNotificationEventKeys.TimetableDayReminder)
 			variables = Array.AsReadOnly(variables.Concat(new[]
 			{

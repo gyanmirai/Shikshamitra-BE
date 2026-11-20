@@ -135,6 +135,12 @@ An enabled `Academic.Syllabus.Published` rule can queue work when `POST /api/aca
 
 Capture requires Chapter Management Add and access to the source class. The rule chooses assigned subject teachers and the family audience. Family delivery uses active enrollment in the affected division and a matching locked choice for electives. Parent visibility excludes student accounts even when the rule enables them. Templates can use the chapter and subject names with the authenticated inbox link. Teacher notes and attachment contents stay in the syllabus. History requires Academic Notification View, Chapter Management View and access to the source scope.
 
+### Lesson plan submission notifications
+
+A submitted lesson plan can queue `Academic.LessonPlan.Submitted` from the existing create, submit, or bulk-submit action. The enabled rule sends to the active account configured at `Notifications:Academic:Tenants:<tenantIdN>:LessonPlanReviewerUserId`. The reviewer needs Lesson Plan View and Add, the source division scope, and eligibility under the existing review workflow. Drafts and submissions without an eligible configured reviewer queue no notice.
+
+A bulk request groups plans from the same academic division into one notice. At dispatch, the worker rechecks current reviewer access and includes only the plans still awaiting review under the saved submission revision. The `lesson_plan_count` template variable reflects that current count. When one plan remains, the template can also use its title and subject. A change to the configured reviewer does not reroute earlier queued work. Submission reminders require an actual saved deadline.
+
 ### Lesson plan review notifications
 
 The existing lesson plan `approve`, `request-changes` and `reject` commands can queue the corresponding Academic notification in the same transaction as the saved review. The rule targets the assigned plan owner through their active staff account. Repeated reviews in the same status preserve the original notice. The worker checks the saved review revision, current owner and class and division before delivery. A later revision makes the earlier notice ineligible.

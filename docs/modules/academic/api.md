@@ -84,6 +84,27 @@ Approval-required operations write no sendable intents until approval. Configure
 
 Rule changes, template publication, test sends, confirmation, approval, rejection, retry and cancellation write an action audit in the same transaction as the change. Audit data is limited to the actor, tenant, action, relevant identifiers, revisions, status and counts. Replays of completed actions reuse the original audit history.
 
+### Catalogue availability
+
+Available events have a registered source and a policy for viewing delivery history. Scheduled events also require a registered scanner. Unavailable entries cannot be enabled or sent manually.
+
+| Unavailable events | Source needed for delivery |
+|---|---|
+| Elective preference opened and due | A saved preference window with opening and due dates |
+| Lesson plan submission due | A saved submission deadline policy |
+| Homework and assignment changed or withdrawn | A publication revision and the audience affected by the change or withdrawal |
+| Evaluation grading due | A saved grading deadline |
+| Exam approval requested, approved or changes requested | A review workflow with saved decisions |
+| Exam rescheduled or cancelled | Saved transitions and the affected audiences |
+| Seating changed | An audience snapshot from the preceding release |
+| Exam duty assigned, changed or reminder | A saved duty assignment and reminder workflow |
+| Marks entry opened or due | A saved release and deadline policy |
+| Result ready for review | A saved review transition |
+| Result corrected | Published corrections already use the result publication event with correction wording |
+| Student Academic 360 follow-up due | A saved, authorized follow-up workflow |
+
+### Timetable notifications
+
 Timetable saves can queue `Academic.Timetable.Published`, `Changed` or `Withdrawn` for their saved class and division. Publication requires a transition from draft to published. Withdrawal uses the last published schedule when it returns to draft. A published re-save compares day, period, time, slot type, break, subject, elective group, teacher and room. Reordered input and regenerated child IDs preserve the notification revision. A published teacher change propagated by Curriculum uses the same timetable change event. The existing validation and schedule update commit with capture.
 
 The notification rule selects the channels and recipient kinds. Learner recipients require active enrollment and applicable locked elective choices. A change to one optional subject reaches its affected cohort, including eligible families whose former option was removed. Staff targets come from affected periods before and after the save. Former teachers receive a generic alert with no new class or schedule details. The current source revision, enrollment and school-year expiry are checked again for queued work. Timetable history requires both Academic Notification View and the existing Timetable Management View and record scope.

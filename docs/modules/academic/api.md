@@ -135,6 +135,14 @@ An enabled `Academic.Syllabus.Published` rule can queue work when `POST /api/aca
 
 Capture requires Chapter Management Add and access to the source class. The rule chooses assigned subject teachers and the family audience. Family delivery uses active enrollment in the affected division and a matching locked choice for electives. Parent visibility excludes student accounts even when the rule enables them. Templates can use the chapter and subject names with the authenticated inbox link. Teacher notes and attachment contents stay in the syllabus. History requires Academic Notification View, Chapter Management View and access to the source scope.
 
+### Academic calendar publication notifications
+
+`POST /api/academic/calendars/{id}/publish` can queue `Academic.Calendar.Published` when a calendar becomes published. The existing Calendar Management Edit permission and access to the calendar's medium are required for notification capture. The calendar and its notification revision commit together. Draft saves and repeat publication leave the notification queue unchanged.
+
+The rule uses the calendar's saved academic medium and year. A missing year uses the year of the saved medium. Rules can select current subject teachers and the family audience within the affected divisions. Family eligibility uses active enrollment and the shared recipient policy. Templates can use the calendar title and start date and link to the authenticated inbox. Internal descriptions stay in Calendar Management.
+
+An archived calendar, a different publication revision or a changed title or date range makes a pending notice ineligible. It also expires after the last calendar date in the school's time zone. Delivery History requires Academic Notification View, Calendar Management View and access to the calendar's medium and saved operation scope.
+
 ### Chapter progress digest
 
 An enabled `Academic.Progress.BehindSchedule` rule can queue one digest per published subject and division for the completed school-local window. **Daily digest time** sets the cutoff. A chapter is eligible when its published start and end dates form a valid target, its end falls within the window and its latest division progress is below 100 percent. The scheduler reuses the occurrence on repeat scans, and the worker rechecks dates, progress, publication and staff before delivery.

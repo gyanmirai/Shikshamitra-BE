@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using EducationMedium = ShikshaMitra.TenantSettings.EducationMediums.EducationMedium;
@@ -15,7 +16,9 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.DependencyInjection;
 using Volo.Abp.Identity;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.Calendar;
 
@@ -228,13 +231,17 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             reason: "Calendar deleted");
     }
 
+    [UnitOfWork(true)]
     public async Task<AcademicCalendarDto> PublishCalendarAsync(Guid id)
     {
         var calendar = await _calendarRepository.GetAsync(id);
         var oldVal = System.Text.Json.JsonSerializer.Serialize(calendar);
 
+        var firstPublication = calendar.Status != CalendarStatus.Published;
         calendar.Publish(CurrentUser.Id ?? Guid.Empty);
         await _calendarRepository.UpdateAsync(calendar);
+        if (firstPublication && CurrentTenant.Id.HasValue)
+            await LazyServiceProvider.LazyGetRequiredService<AcademicCalendarPublicationNotification>().RecordAsync(calendar);
 
         await _auditWriter.WriteAsync(
             calendar.Id,

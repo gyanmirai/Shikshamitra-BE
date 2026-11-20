@@ -8,6 +8,9 @@ namespace ShikshaMitra.Finance.Fees.Receipts.Dtos;
 /// </summary>
 public class FeeReceiptDetailDto
 {
+	public Guid? EmployeeId { get; set; }
+	public string? PayerName { get; set; }
+	public string? PayerCode { get; set; }
     public Guid Id { get; set; }
 
     // ── Document identity ─────────────────────────────────────────────────────
@@ -34,6 +37,9 @@ public class FeeReceiptDetailDto
     public double TotalPaidAmount { get; set; }
 	public decimal FeePaidAmount { get; set; }
 	public decimal ChargePaidAmount { get; set; }
+	public string? Currency { get; set; }
+	/// <summary>Saved settlement evidence; null when the original document has none.</summary>
+	public FeeReceiptSettlementSnapshotDto? SettlementSnapshot { get; set; }
 
     // ── Student ───────────────────────────────────────────────────────────────
 
@@ -48,8 +54,8 @@ public class FeeReceiptDetailDto
     // ── Academic context ─────────────────────────────────────────────────────
 
     public Guid AcademicYearId { get; set; }
-    public Guid BoardId { get; set; }
-    public Guid EducationMediumId { get; set; }
+    public Guid? BoardId { get; set; }
+    public Guid? EducationMediumId { get; set; }
     public string? AcademicYearName { get; set; }
     public DateTime? AcademicYearStartDate { get; set; }
     public DateTime? AcademicYearEndDate { get; set; }
@@ -81,6 +87,17 @@ public class FeeReceiptDetailDto
 
     /// <summary>Per-installment allocation lines snapped at collect time.</summary>
     public List<FeeReceiptAllocationLineDto> AllocationDetails { get; set; } = new();
+}
+
+public class FeeReceiptSettlementSnapshotDto
+{
+	public decimal OriginalAmount { get; set; }
+	public decimal SubmittedAmount { get; set; }
+	public decimal SettledAmount { get; set; }
+	public decimal PendingVerificationAmount { get; set; }
+	public decimal FinancialOutstandingAmount { get; set; }
+	public decimal CollectibleAmount { get; set; }
+	public decimal NetWaivedAmount { get; set; }
 }
 
 public class FeeReceiptPaidHeadDto

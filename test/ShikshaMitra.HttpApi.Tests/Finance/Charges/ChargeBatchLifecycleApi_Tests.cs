@@ -220,7 +220,7 @@ public class ChargeBatchLifecycleApi_Tests(ShikshaMitraApiTestFactory factory) :
 					amount, $"REC-{paymentId:N}", FeeCollectionStatus.Paid));
 			await provider.GetRequiredService<IRepository<ChargeCollectionRecord, Guid>>().InsertAsync(
 				new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = tenantId, StudentId = line.StudentId,
-					ChargeId = line.ChargeLineId, Amount = amount, FeeRecordMetadataId = paymentId, PaymentDate = DateTimeOffset.UtcNow });
+					ChargeId = line.ChargeLineId, Amount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble(amount), FeeRecordMetadataId = paymentId, PaymentDate = DateTimeOffset.UtcNow });
 		});
 		return paymentId;
 	}

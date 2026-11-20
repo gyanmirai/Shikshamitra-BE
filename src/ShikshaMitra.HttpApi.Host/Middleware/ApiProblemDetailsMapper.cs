@@ -20,6 +20,13 @@ public static class ApiProblemDetailsMapper
 
 		return errorCode switch
 		{
+			Library.LibraryErrorCodes.ReceivingCommandConflict or Library.LibraryErrorCodes.ReceivingPlanChanged or
+				Library.LibraryErrorCodes.CatalogueConfigurationChanged => StatusCodes.Status409Conflict,
+			Library.LibraryErrorCodes.StockImportPlanChanged or Library.LibraryErrorCodes.StockImportCommandConflict => StatusCodes.Status409Conflict,
+			Library.LibraryErrorCodes.CustodyPlanChanged or Library.LibraryErrorCodes.CustodyCommandConflict => StatusCodes.Status409Conflict,
+			Library.LibraryErrorCodes.StockVerificationPlanChanged or Library.LibraryErrorCodes.StockVerificationCommandConflict or
+				Library.LibraryErrorCodes.StockVerificationInvalidState or Library.LibraryErrorCodes.StockVerificationDecisionsRequired => StatusCodes.Status409Conflict,
+				Library.LibraryErrorCodes.CatalogueRevisionChanged => StatusCodes.Status409Conflict,
 			Academic.Curriculum.ElectivePreferenceErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionJourneyResumeErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionFormCorrectionErrorCodes.Conflict => StatusCodes.Status409Conflict,

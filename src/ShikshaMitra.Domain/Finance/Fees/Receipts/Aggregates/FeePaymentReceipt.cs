@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations.Schema;
+using ShikshaMitra.Finance.ExternalReceivables;
 using Volo.Abp.Data;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -19,7 +20,7 @@ namespace ShikshaMitra.Finance.Fees.Receipts;
 /// <see cref="ReceiptKind"/>, and <see cref="PdfBlobName"/>.
 /// </para>
 /// </summary>
-public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
     private FeePaymentReceipt() { /* For ORM */ }
 
@@ -62,7 +63,8 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// <summary>
     /// Total amount covered by this receipt (sum of the lines for this scope only).
     /// </summary>
-    public double TotalPaidAmount { get; set; }
+    public decimal TotalPaidAmount { get; set; }
+    public string? Currency { get; private set; }
 
     [NotMapped]
     public decimal FeePaidAmount => this.GetProperty<decimal>(nameof(FeePaidAmount), ReceiptScope == FeeReceiptScope.Fee ? (decimal)TotalPaidAmount : 0m);
@@ -100,25 +102,26 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
     // ── Student / context ─────────────────────────────────────────────────────
 
     public Guid? StudentId { get; set; }
+    public Guid? EmployeeId { get; private set; }
     public Guid? FinanceFeeAccountId { get; private set; }
 
     public void SetFinanceFeeAccount(Guid accountId)
     {
-        ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.Validate(StudentId, accountId);
+        ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.Validate(StudentId, accountId, EmployeeId);
         if (FinanceFeeAccountId.HasValue && FinanceFeeAccountId != accountId)
             throw new BusinessException(ShikshaMitra.Finance.Fees.Collections.FinanceFeeAccountErrorCodes.AssignmentConflict);
         FinanceFeeAccountId = accountId;
     }
 
     public void LinkStudent(Guid studentId) => StudentId =
-        ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
+        ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.LinkStudent(StudentId, studentId, EmployeeId);
     public Guid AcademicYearId { get; set; }
 
     /// <summary>Denormalized from student at creation for fast list filtering.</summary>
-    public Guid BoardId { get; set; }
+    public Guid? BoardId { get; set; }
 
     /// <summary>Denormalized from student at creation for fast list filtering.</summary>
-    public Guid EducationMediumId { get; set; }
+    public Guid? EducationMediumId { get; set; }
 
     // ── Receipt date ─────────────────────────────────────────────────────────
 

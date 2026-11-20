@@ -37,13 +37,30 @@ public class EfCoreFeeRefundRepository(
         IReadOnlyCollection<FeeRefundColumnFilter>? columnFilters = null,
         IQueryable<Guid>? scopedAccountIdsQuery = null,
         Guid? financeFeeAccountId = null,
-        IQueryable<Guid>? visibleRequestIdsQuery = null)
+        IQueryable<Guid>? visibleRequestIdsQuery = null,
+        IQueryable<Guid>? authorizedExternalRequestIdsQuery = null,
+        Guid? financeExternalSourceLinkId = null)
     {
         var dbContext = await GetDbContextAsync();
         var dbSet = dbContext.Set<FeeRefundRequest>();
-        var query = dbSet.Include(r => r.Lines).Include(r => r.Reservations).Include(r => r.Settlements).AsQueryable();
+        var legacyScope = dbSet.Where(r => !r.FinanceExternalSourceLinkId.HasValue);
         if (visibleRequestIdsQuery != null)
-            query = query.Where(r => visibleRequestIdsQuery.Contains(r.Id));
+            legacyScope = legacyScope.Where(r => visibleRequestIdsQuery.Contains(r.Id));
+        if (scopedStudentIdsQuery != null && scopedAccountIdsQuery != null)
+            legacyScope = legacyScope.Where(r => (r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value)) ||
+                (!r.StudentId.HasValue && r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value)));
+        else if (scopedStudentIdsQuery != null)
+            legacyScope = legacyScope.Where(r => r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value));
+        else if (scopedAccountIdsQuery != null)
+            legacyScope = legacyScope.Where(r => r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value));
+        var legacyIds = legacyScope.Select(r => r.Id);
+        var externalIds = authorizedExternalRequestIdsQuery ?? dbSet.Where(_ => false).Select(r => r.Id);
+        var query = dbSet.Include(r => r.Lines).Include(r => r.Reservations).Include(r => r.Settlements)
+            .Where(r => !r.FinanceExternalSourceLinkId.HasValue && legacyIds.Contains(r.Id) ||
+                r.FinanceExternalSourceLinkId.HasValue && externalIds.Contains(r.Id));
+
+        if (financeExternalSourceLinkId.HasValue)
+            query = query.Where(r => r.FinanceExternalSourceLinkId == financeExternalSourceLinkId.Value);
 
         if (studentId.HasValue)
             query = query.Where(r => r.StudentId == studentId.Value);
@@ -80,15 +97,6 @@ public class EfCoreFeeRefundRepository(
             query = query.Where(r => (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && filteredStudentIds.Contains(r.StudentId.Value)) ||
                 (r.FinanceFeeAccountId.HasValue && filteredAccountIds.Contains(r.FinanceFeeAccountId.Value)));
         }
-
-        // Linked requests follow the student's scope; account-only requests follow the account scope.
-        if (scopedStudentIdsQuery != null && scopedAccountIdsQuery != null)
-            query = query.Where(r => (r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value)) ||
-                (!r.StudentId.HasValue && r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value)));
-        else if (scopedStudentIdsQuery != null)
-            query = query.Where(r => r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value));
-        else if (scopedAccountIdsQuery != null)
-            query = query.Where(r => r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value));
 
         if (status.HasValue)
             query = query.Where(r => r.Status == status.Value);

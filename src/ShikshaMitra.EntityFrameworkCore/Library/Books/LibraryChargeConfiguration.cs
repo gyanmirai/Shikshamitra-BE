@@ -10,13 +10,18 @@ public class LibraryChargeConfiguration : IEntityTypeConfiguration<LibraryCharge
     {
         builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "LibraryCharges", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
+		builder.Property(row => row.Currency).HasMaxLength(3);
+		builder.Property(row => row.AcademicYearEvidenceJson).HasColumnType("text");
+		builder.Property(row => row.SourceDateEvidenceJson).HasColumnType("text");
+		builder.HasOne<ShikshaMitra.Finance.ExternalReceivables.FinanceExternalReceivableSourceLink>().WithMany()
+			.HasForeignKey(row => row.FinanceSourceLinkId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(x => x.MemberId).IsRequired();
         builder.Property(x => x.MemberRole).IsRequired();
         builder.Property(x => x.ChargeCategoryId).IsRequired();
         builder.Property(x => x.Amount).IsRequired().HasColumnType("decimal(18,2)");
-        builder.Property(x => x.ChargeDate).IsRequired();
-        builder.Property(x => x.DueDate).IsRequired();
+        builder.Property(x => x.ChargeDate).IsRequired(false);
+        builder.Property(x => x.DueDate).IsRequired(false);
         builder.Property(x => x.PaymentStatus).IsRequired().HasDefaultValue(ChargePaymentStatus.Pending);
         builder.Property(x => x.Remarks).HasMaxLength(500);
 

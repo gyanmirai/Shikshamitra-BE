@@ -14,7 +14,7 @@ using Xunit;
 
 namespace ShikshaMitra.Security.UserScope;
 
-public class UserScopeResolution_Tests
+public partial class UserScopeResolution_Tests
 {
     private readonly Guid _user = Guid.NewGuid();
     private readonly Guid _tenantId = Guid.NewGuid();
@@ -31,6 +31,8 @@ public class UserScopeResolution_Tests
         _service = new UserScopeService(_repository, _manager, NullLogger<UserScopeService>.Instance,
             Options.Create(new UserScopeOptions { CacheEnabled = true, CacheDurationMinutes = 15 })) { LazyServiceProvider = lazy };
         _repository.GetRoleNamesAsync(_user, Arg.Any<CancellationToken>()).Returns(new List<string>());
+		_repository.GetActiveUserIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+			.Returns(call => call.ArgAt<IReadOnlyCollection<Guid>>(0).ToList());
         _repository.GetReportingHierarchyAsync(Arg.Any<CancellationToken>()).Returns(new List<ScopeReportingEmployee>());
         _repository.GetAssignmentsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
             .Returns(new List<UserScopeAssignment> { new(Guid.NewGuid(), _tenantId, userId: _user) });
@@ -131,6 +133,7 @@ public class UserScopeResolution_Tests
         scopes[roleUser].HasAnyAccess.ShouldBeTrue();
         scopes[manager].HasAnyAccess.ShouldBeTrue();
         scopes[candidates[4]].HasAnyAccess.ShouldBeFalse();
+		await _repository.Received(1).GetActiveUserIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
         await _repository.Received(1).GetReportingHierarchyAsync(Arg.Any<CancellationToken>());
         await _repository.Received(1).GetRoleNamesByUserIdsAsync(
             Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());

@@ -2,6 +2,8 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.Accounts.Incomes;
+using ShikshaMitra.Finance.ExternalReceivables;
+using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.Receipts;
@@ -18,6 +20,11 @@ public partial class FinanceAuditTrailAppService
             query = query.Where(e => e.AcademicYearId == null || scope.AcademicYearIds.Contains(e.AcademicYearId.Value));
         var students = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
         var accounts = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
+        var employees = await financeScopeAccessService.GetScopedEmployeeIdsQueryAsync();
+        var external = (await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceExternalReceivableSourceLink, Guid>>().GetQueryableAsync())
+            .Where(row => row.TenantId == CurrentTenant.Id);
+        var charges = (await LazyServiceProvider.LazyGetRequiredService<IRepository<Charge, Guid>>().GetQueryableAsync())
+            .Where(row => row.TenantId == CurrentTenant.Id);
         var payments = (await LazyServiceProvider.LazyGetRequiredService<IRepository<FeeRecordMetadata, Guid>>().GetQueryableAsync()).Where(p => p.FinanceFeeAccountId.HasValue);
         var receipts = (await LazyServiceProvider.LazyGetRequiredService<IRepository<FeePaymentReceipt, Guid>>().GetQueryableAsync()).Where(r => r.FinanceFeeAccountId.HasValue);
         var dues = (await LazyServiceProvider.LazyGetRequiredService<IDueFeeRepository>().GetQueryableAsync()).Where(d => d.FinanceFeeAccountId.HasValue);
@@ -26,6 +33,12 @@ public partial class FinanceAuditTrailAppService
         // Resolve account scope through immutable entity references. A null StudentId
         // on an applicant event must never turn it into an unscoped Finance event.
         return query.Where(e =>
+            e.EntityType == FinanceAuditEntityTypes.FeeCharge && external.Any(link => link.FinanceChargeRequestId == e.EntityId)
+                ? external.Any(link => link.FinanceChargeRequestId == e.EntityId &&
+                    charges.Any(charge => charge.Id == link.FinanceChargeId &&
+                        charge.ChargeRequestId == link.FinanceChargeRequestId && charge.AcademicYearId == link.AcademicYearId &&
+                        (charge.StudentId.HasValue && !charge.EmployeeId.HasValue && students.Contains(charge.StudentId.Value) ||
+                         charge.EmployeeId.HasValue && !charge.StudentId.HasValue && employees.Contains(charge.EmployeeId.Value)))) :
             e.EntityType == FinanceAuditEntityTypes.FeePayment && payments.Any(p => p.Id == e.EntityId)
                 ? payments.Any(p => p.Id == e.EntityId && accounts.Contains(p.FinanceFeeAccountId!.Value)) :
             (e.EntityType == FinanceAuditEntityTypes.FeeReceipt || e.EntityType == FinanceAuditEntityTypes.BankReconciliation) && receipts.Any(r => r.Id == e.EntityId)

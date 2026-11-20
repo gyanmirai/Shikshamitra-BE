@@ -230,6 +230,7 @@ public class ShikshaMitraApplicationTestModule : AbpModule
             options.Configure(dbContextConfigurationContext =>
             {
                 dbContextConfigurationContext.DbContextOptions.UseSqlite(_sqliteConnection)
+					.ReplaceService<Microsoft.EntityFrameworkCore.Infrastructure.IModelCustomizer, ShikshaMitra.Testing.LibraryReceivingSqliteModelCustomizer>()
                     // Query-count tests attach listeners after seeding; do not cache a disabled diagnostic listener.
                     .ConfigureLoggingCacheTime(TimeSpan.Zero)
                     .ReplaceService<IMemberTranslatorProvider, SqliteApplicationTestMemberTranslatorProvider>();
@@ -241,9 +242,11 @@ public class ShikshaMitraApplicationTestModule : AbpModule
     {
         var connection = new AbpUnitTestSqliteConnection("Data Source=:memory:");
         connection.Open();
+		ShikshaMitra.Library.FinanceExternalPositionSqliteTestFunctions.Register(connection);
 
         var options = new DbContextOptionsBuilder<ShikshaMitraDbContext>()
             .UseSqlite(connection)
+			.ReplaceService<Microsoft.EntityFrameworkCore.Infrastructure.IModelCustomizer, ShikshaMitra.Testing.LibraryReceivingSqliteModelCustomizer>()
             .Options;
 
         using (var context = new ShikshaMitraDbContext(options))

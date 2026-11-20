@@ -12,6 +12,7 @@ using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Incomes;
 using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Finance.Common;
+using ShikshaMitra.Finance.ExternalReceivables;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
@@ -165,10 +166,10 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 		var students = await scope.GetScopedStudentIdsQueryAsync();
 		var accounts = await scope.GetScopedFeeAccountIdsQueryAsync();
 		var manualAccessible = await scope.IsAcademicContextAccessibleAsync(yearId, null, null, null, null);
-		return (await sources.WithDetailsAsync(x => x.Deposits, x => x.Expenses, x => x.Commands))
-			.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == yearId &&
-				(x.FinanceFeeAccountId.HasValue ? accounts.Contains(x.FinanceFeeAccountId.Value) :
-					x.StudentId.HasValue ? students.Contains(x.StudentId.Value) : manualAccessible));
+		var query = (await sources.WithDetailsAsync(x => x.Deposits, x => x.Expenses, x => x.Commands))
+			.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == yearId);
+		return await LazyServiceProvider.LazyGetRequiredService<FinanceExternalCashSourceScope>()
+			.ApplyAsync(query, students, accounts, manualAccessible);
 	}
 	internal async Task<CashCollection> RequireAsync(Guid id, Guid yearId) =>
 		await AsyncExecuter.FirstOrDefaultAsync((await ScopedQueryAsync(yearId)).Where(x => x.Id == id))

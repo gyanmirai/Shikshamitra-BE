@@ -31,8 +31,12 @@ public class ChargeConfiguration : IEntityTypeConfiguration<Charge>
 		builder.Property(x => x.ApprovalNotes)
 			.HasMaxLength(2000);
 
-		builder.Property(x => x.DueDate)
-			.IsRequired();
+		builder.Property(x => x.DueDate).IsRequired(false);
+		builder.HasIndex(x => x.EmployeeId);
+		builder.HasOne<ShikshaMitra.HR.Employees.Employee>().WithMany()
+			.HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+		builder.ToTable(table => table.HasCheckConstraint("CK_FinanceCharges_Payer",
+			"(\"StudentId\" IS NOT NULL AND \"EmployeeId\" IS NULL) OR (\"StudentId\" IS NULL AND \"EmployeeId\" IS NOT NULL)"));
 
 		builder.Property(x => x.AppliedOn)
 			.IsRequired();

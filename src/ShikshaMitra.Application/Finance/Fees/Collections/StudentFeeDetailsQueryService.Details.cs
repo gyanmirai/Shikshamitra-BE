@@ -197,7 +197,7 @@ public partial class StudentFeeDetailsQueryService
 		{
 			PaymentId = m.Id, ReceiptNumber = m.ReceiptNumber,
 			Date = DateOnly.FromDateTime(m.CreationTime.Date),
-			Amount = m.TotalPaidFee,
+			Amount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(m.TotalPaidFee),
 			PaymentMethods = methodsByMetadata.TryGetValue(m.Id, out var methods) ? methods : [],
 			ReceiptUrl = null, Status = m.Status,
 			Receipts = receiptsByMetadata.GetValueOrDefault(m.Id, []),

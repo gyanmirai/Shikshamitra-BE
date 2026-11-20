@@ -9,6 +9,7 @@ using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Students;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -67,6 +68,8 @@ public class EfCoreFeePaymentReceiptRepository(
             where receiptIds.Contains(r.Id)
             join s in db.Set<Student>() on r.StudentId equals s.Id into sj
             from s in sj.DefaultIfEmpty()
+            join e in db.Set<Employee>() on r.EmployeeId equals (Guid?)e.Id into ej
+            from e in ej.DefaultIfEmpty()
             join a in db.Set<FinanceFeeAccount>() on r.FinanceFeeAccountId equals (Guid?)a.Id into aj
             from a in aj.DefaultIfEmpty()
             join b in db.Set<EducationBoard>() on (a != null ? (Guid?)a.BoardId : s.AcademicBoardId) equals (Guid?)b.Id into bj
@@ -97,6 +100,9 @@ public class EfCoreFeePaymentReceiptRepository(
                 LinkedFinalReceiptNumber   = finalReceipt,
                 FeeCollectionTransactionId = r.FeeCollectionTransactionId,
                 StudentId                  = r.StudentId,
+                r.EmployeeId,
+                EmployeeName = e != null ? (e.FirstName + " " + (e.MiddleName ?? "") + " " + e.LastName).Trim().Replace("  ", " ") : string.Empty,
+                EmployeeCode = e != null ? e.EmployeeCode : null,
                 FinanceFeeAccountId        = r.FinanceFeeAccountId,
                 StudentName                = a != null ? a.ApplicantName : s != null
                     ? (s.FirstName + " " + (s.MiddleName ?? "") + " " + s.LastName).Trim().Replace("  ", " ")
@@ -136,7 +142,7 @@ public class EfCoreFeePaymentReceiptRepository(
                     ReceiptNumber              = x.ReceiptNumber,
                     VerificationStatus         = x.VerificationStatus,
                     ReceiptDate                = x.ReceiptDate,
-                    TotalPaidAmount            = x.TotalPaidAmount,
+                    TotalPaidAmount            = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(x.TotalPaidAmount),
                     Remarks                    = x.Remarks,
                     LinkedFinalReceiptId       = x.LinkedFinalReceiptId,
                     LinkedFinalReceiptNumber   = x.LinkedFinalReceiptNumber,
@@ -149,6 +155,7 @@ public class EfCoreFeePaymentReceiptRepository(
                         ? null
                         : JsonSerializer.Serialize(pmr.PaymentDetails, PaymentDetailsJsonOptions),
                     StudentId                  = x.StudentId,
+                    EmployeeId = x.EmployeeId, EmployeeName = x.EmployeeName, EmployeeCode = x.EmployeeCode,
                     FinanceFeeAccountId        = x.FinanceFeeAccountId,
                     StudentName                = x.StudentName,
                     GrNumber                   = x.GrNumber,
@@ -173,7 +180,8 @@ public class EfCoreFeePaymentReceiptRepository(
         int? year,
         IQueryable<Guid>? scopedStudentIdsQuery = null,
         CancellationToken cancellationToken = default,
-        IQueryable<Guid>? scopedAccountIdsQuery = null)
+        IQueryable<Guid>? scopedAccountIdsQuery = null,
+        IQueryable<Guid>? scopedEmployeeIdsQuery = null)
     {
         var db = await GetDbContextAsync();
 
@@ -187,7 +195,7 @@ public class EfCoreFeePaymentReceiptRepository(
                              && !db.Set<PaymentMethodRecord>().Any(p => p.FeeRecordMetadataId == r.FeeCollectionTransactionId && p.PaymentMethod != PaymentMethodEnum.Cash))));
 
         // User scope — only count receipts for students accessible to the caller
-        receiptQ = ApplyPayerScope(receiptQ, scopedStudentIdsQuery, scopedAccountIdsQuery);
+        receiptQ = ApplyPayerScope(receiptQ, scopedStudentIdsQuery, scopedAccountIdsQuery, scopedEmployeeIdsQuery);
 
         var q = from r in receiptQ
                 join pmr in db.Set<PaymentMethodRecord>()
@@ -248,7 +256,7 @@ public class EfCoreFeePaymentReceiptRepository(
         }
 
         query = ApplySearch(query, db, filter.Search);
-        return ApplyPayerScope(query, filter.ScopedStudentIdsQuery, filter.ScopedAccountIdsQuery);
+        return ApplyPayerScope(query, filter.ScopedStudentIdsQuery, filter.ScopedAccountIdsQuery, filter.ScopedEmployeeIdsQuery);
     }
 
 
@@ -317,8 +325,16 @@ public class EfCoreFeePaymentReceiptRepository(
     }
 
     private static IQueryable<FeePaymentReceipt> ApplyPayerScope(IQueryable<FeePaymentReceipt> query,
-        IQueryable<Guid>? studentIds, IQueryable<Guid>? accountIds)
+        IQueryable<Guid>? studentIds, IQueryable<Guid>? accountIds, IQueryable<Guid>? employeeIds = null)
     {
+		if (employeeIds != null)
+		{
+			var scopedStudents = studentIds ?? query.Where(_ => false).Select(row => row.Id);
+			var scopedAccounts = accountIds ?? query.Where(_ => false).Select(row => row.Id);
+			return query.Where(row => row.EmployeeId.HasValue && !row.StudentId.HasValue && !row.FinanceFeeAccountId.HasValue && employeeIds.Contains(row.EmployeeId.Value) ||
+				!row.EmployeeId.HasValue && ((!row.FinanceFeeAccountId.HasValue && row.StudentId.HasValue && scopedStudents.Contains(row.StudentId.Value)) ||
+				(row.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(row.FinanceFeeAccountId.Value))));
+		}
         if (studentIds != null && accountIds != null)
             return query.Where(r => (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && studentIds.Contains(r.StudentId.Value)) ||
                 (r.FinanceFeeAccountId.HasValue && accountIds.Contains(r.FinanceFeeAccountId.Value)));
@@ -344,7 +360,11 @@ public class EfCoreFeePaymentReceiptRepository(
             .Where(a => a.ApplicantName.ToLower().Contains(term) ||
                 (a.StudentId.HasValue && studentIds.Contains(a.StudentId.Value)))
             .Select(a => a.Id);
+		var employeeIds = db.Set<Employee>().Where(employee =>
+			(employee.FirstName + " " + employee.LastName).ToLower().Contains(term) || employee.EmployeeCode.ToLower().Contains(term))
+			.Select(employee => employee.Id);
         return query.Where(r => r.ReceiptNumber.ToLower().Contains(term) ||
+            (r.EmployeeId.HasValue && employeeIds.Contains(r.EmployeeId.Value)) ||
             (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && studentIds.Contains(r.StudentId.Value)) ||
             (r.FinanceFeeAccountId.HasValue && accountIds.Contains(r.FinanceFeeAccountId.Value)));
     }

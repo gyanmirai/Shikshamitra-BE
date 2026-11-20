@@ -45,9 +45,9 @@ public partial class ChargeAppService
 				ResolvedStudentCount = studentCount,
 			ChargeCategoryId = request.ChargeCategoryId, CategoryName = category.Name,
 				PurposeDescription = request.PurposeDescription, Amount = request.Amount,
-				DueDate = request.DueDate, AppliedOn = request.AppliedOn,
+				DueDate = request.DueDate!.Value, AppliedOn = request.AppliedOn,
 				Priority = (int)request.Priority, Status = (int)status, WorkflowStatus = workflowStatus,
-				BoardId = request.BoardId, EducationMediumId = request.EducationMediumId,
+				BoardId = request.BoardId!.Value, EducationMediumId = request.EducationMediumId!.Value,
 				AdditionalNotes = request.AdditionalNotes,
 				RequestorId = request.RequestorId,
 				RequestorName = requestor.Name ?? requestor.UserName ?? string.Empty,
@@ -56,7 +56,7 @@ public partial class ChargeAppService
 				ConcurrencyStamp = request.ConcurrencyStamp,
 				AvailableActions = await GetAvailableActionsAsync(
 					request.RequestorId, request.AcademicYearId,
-					lines.Where(l => l.Status == ChargeStatus.Pending).Select(l => l.StudentId).ToList(),
+					lines.Where(l => l.Status == ChargeStatus.Pending && l.StudentId.HasValue).Select(l => l.StudentId!.Value).ToList(),
 					lines.Any(l => l.Status == ChargeStatus.Pending),
 					lines.Count == 0 || lines.All(l => l.Status == ChargeStatus.Pending),
 					await CanCancelAsync(lines))
@@ -69,10 +69,10 @@ public partial class ChargeAppService
 		new()
 		{
 			ChargeId = r.Request.Id, ChargeName = r.Request.ChargeName,
-			BoardId = r.Request.BoardId, EducationMediumId = r.Request.EducationMediumId,
+			BoardId = r.Request.BoardId!.Value, EducationMediumId = r.Request.EducationMediumId!.Value,
 			ChargeCategoryId = r.Category.Id, CategoryName = r.Category.Name,
 			Amount = r.Request.Amount, PurposeDescription = r.Request.PurposeDescription,
-			DueDate = r.Request.DueDate, AppliedOn = r.Request.AppliedOn,
+			DueDate = r.Request.DueDate!.Value, AppliedOn = r.Request.AppliedOn,
 			Priority = (int)r.Request.Priority,
 			DisplayStatus = (int)r.WorkflowStatus, WorkflowStatus = r.WorkflowStatus,
 			StudentCount = r.StudentCount, ProcessedCount = r.ProcessedCount,
@@ -97,7 +97,7 @@ public partial class ChargeAppService
 			StandardName = line.Standard.Name, DivisionName = line.Division.Name,
 			ChargeCategoryId = line.Charge.ChargeCategoryId, CategoryName = category?.Name ?? string.Empty,
 			Amount = line.Charge.Amount, PurposeDescription = line.Charge.PurposeDescription,
-			DueDate = line.Charge.DueDate, Status = (int)line.Charge.Status,
+			DueDate = line.Charge.DueDate!.Value, Status = (int)line.Charge.Status,
 			CollectedAmount = 0m, OutstandingAmount = line.Charge.Status == ChargeStatus.Approved ? line.Charge.Amount : 0m
 		};
 	}
@@ -128,10 +128,20 @@ public partial class ChargeAppService
 		return ChargeStatus.Approved;
 	}
 
-	private async Task<ChargeRequest> GetChargeRequestOrThrowAsync(Guid chargeRequestId) =>
-		await chargeRequestRepository.FindAsync(chargeRequestId)
-			?? throw new BusinessException(FinanceChargeErrorCodes.ChargeRequestNotFound)
-				.WithData("ChargeId", chargeRequestId);
+	private async Task<ChargeRequest> GetChargeRequestOrThrowAsync(Guid chargeRequestId)
+	{
+		var request = await chargeRequestRepository.FindAsync(chargeRequestId)
+			?? throw new BusinessException(FinanceChargeErrorCodes.ChargeRequestNotFound).WithData("ChargeId", chargeRequestId);
+		EnsureLegacyRequest(request);
+		return request;
+	}
+
+	private static void EnsureLegacyRequest(ChargeRequest request)
+	{
+		if (request.SchoolDueDate.HasValue || !request.DueDate.HasValue || !request.BoardId.HasValue || !request.EducationMediumId.HasValue)
+			throw new BusinessException(ShikshaMitra.Library.LibraryFinanceErrorCodes.SourceAlreadyLinked,
+				"Use the source receivable workflow for this external assessment.");
+	}
 
 	private async Task<ChargeRequestDetailResult> GetChargeRequestDetailsOrThrowAsync(Guid chargeRequestId) =>
 		await chargeRequestRepository.GetWithLinesAsync(chargeRequestId)
@@ -195,8 +205,9 @@ public partial class ChargeAppService
 	private async Task EnsureRequestAccessibleAsync(Guid chargeRequestId)
 	{
 		var request = await chargeRequestRepository.GetAsync(chargeRequestId);
+		EnsureLegacyRequest(request);
 		var lines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == chargeRequestId);
-		var ids = lines.Select(line => line.StudentId).Distinct().ToList();
+		var ids = lines.Where(line => line.StudentId.HasValue).Select(line => line.StudentId!.Value).Distinct().ToList();
 		if (ids.Count == 0)
 			throw new Volo.Abp.Authorization.AbpAuthorizationException(
 				"Access denied: charge request has no accessible student lines.");

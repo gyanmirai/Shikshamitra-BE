@@ -39,7 +39,7 @@ public partial class ChargeAppService
 			var dto = MapToListItem(item);
 			var pendingStudentIds = (await chargeRepository.GetListAsync(line =>
 				line.ChargeRequestId == item.Request.Id && line.Status == ChargeStatus.Pending))
-				.Select(line => line.StudentId).ToList();
+				.Where(line => line.StudentId.HasValue).Select(line => line.StudentId!.Value).ToList();
 			dto.AvailableActions = await GetAvailableActionsAsync(
 				item.Request.RequestorId, item.Request.AcademicYearId, pendingStudentIds,
 				item.PendingCount > 0, item.PendingCount == item.StudentCount,
@@ -142,7 +142,7 @@ public partial class ChargeAppService
 		var availableActions = await GetAvailableActionsAsync(
 			detail.Request.RequestorId, detail.Request.AcademicYearId,
 			detail.Lines.Where(line => line.Charge.Status == ChargeStatus.Pending)
-				.Select(line => line.Charge.StudentId).ToList(), hasPending, allPending, canCancel);
+				.Where(line => line.Charge.StudentId.HasValue).Select(line => line.Charge.StudentId!.Value).ToList(), hasPending, allPending, canCancel);
 
 		return new ChargeDetailResponse
 		{
@@ -152,7 +152,7 @@ public partial class ChargeAppService
 				ChargeId = detail.Request.Id, ChargeName = detail.Request.ChargeName,
 				ChargeCategoryId = detail.Request.ChargeCategoryId, CategoryName = detail.Category.Name,
 				PurposeDescription = detail.Request.PurposeDescription, Amount = detail.Request.Amount,
-				DueDate = detail.Request.DueDate, AppliedOn = detail.Request.AppliedOn,
+				DueDate = detail.Request.DueDate!.Value, AppliedOn = detail.Request.AppliedOn,
 				Priority = (int)detail.Request.Priority,
 				Status = (int)DeriveRequestStatus(detail.Lines.Select(l => l.Charge.Status).ToList()),
 				AdditionalNotes = detail.Request.AdditionalNotes, Audience = audience,

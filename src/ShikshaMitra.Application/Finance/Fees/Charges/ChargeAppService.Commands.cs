@@ -143,9 +143,9 @@ public partial class ChargeAppService
 		var pendingLines = await chargeRepository.GetListAsync(
 			c => c.ChargeRequestId == request.Id && c.Status == ChargeStatus.Pending);
 		var approvedLines = input.StudentIds is { Count: > 0 }
-			? pendingLines.Where(line => input.StudentIds.Contains(line.StudentId)).ToList()
+			? pendingLines.Where(line => line.StudentId.HasValue && input.StudentIds.Contains(line.StudentId.Value)).ToList()
 			: pendingLines;
-		await EnsureChargeReviewerAsync(request, approvedLines.Select(line => line.StudentId),
+		await EnsureChargeReviewerAsync(request, approvedLines.Where(line => line.StudentId.HasValue).Select(line => line.StudentId!.Value),
 			ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve);
 		var (processed, remaining) = await chargeRequestManager.ApproveLinesAsync(
 			request, input.StudentIds, currentUser.Id!.Value, input.ApprovalNotes);
@@ -193,9 +193,9 @@ public partial class ChargeAppService
 		var pendingLines = await chargeRepository.GetListAsync(
 			c => c.ChargeRequestId == request.Id && c.Status == ChargeStatus.Pending);
 		var selectedLines = input.StudentIds is { Count: > 0 }
-			? pendingLines.Where(line => input.StudentIds.Contains(line.StudentId)).ToList()
+			? pendingLines.Where(line => line.StudentId.HasValue && input.StudentIds.Contains(line.StudentId.Value)).ToList()
 			: pendingLines;
-		await EnsureChargeReviewerAsync(request, selectedLines.Select(line => line.StudentId),
+		await EnsureChargeReviewerAsync(request, selectedLines.Where(line => line.StudentId.HasValue).Select(line => line.StudentId!.Value),
 			ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Reject);
 
 		var (processed, remaining) = await chargeRequestManager.RejectLinesAsync(
@@ -243,7 +243,7 @@ public partial class ChargeAppService
 		if (input.StudentIds is { Count: > 0 })
 		{
 			var requested = input.StudentIds.ToHashSet();
-			approvedLines = approvedLines.Where(line => requested.Contains(line.StudentId)).ToList();
+			approvedLines = approvedLines.Where(line => line.StudentId.HasValue && requested.Contains(line.StudentId.Value)).ToList();
 			if (approvedLines.Count != requested.Count)
 				throw new BusinessException(FinanceChargeErrorCodes.InvalidChargeLineSubset);
 		}
@@ -315,7 +315,7 @@ public partial class ChargeAppService
 			await eventBus.PublishAsync(new ChargeApprovedEto
 			{
 				ChargeId = line.Id,
-				StudentId = line.StudentId,
+				StudentId = line.StudentId!.Value,
 				AcademicYearId = request.AcademicYearId,
 				Amount = line.Amount,
 				ChargeName = request.ChargeName,

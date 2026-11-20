@@ -32,7 +32,7 @@ public partial class FeeReceiptAppService
     {
         var receipt = await receiptRepository.GetAsync(id, cancellationToken: cancellationToken)
             ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
-        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId, cancellationToken);
+        await financeScopeAccessService.EnsureReceiptAccessibleAsync(receipt, cancellationToken);
 
         if (receipt.PdfBlobName != null && receipt.PdfBlobName.Contains("/v5/", StringComparison.Ordinal))
         {

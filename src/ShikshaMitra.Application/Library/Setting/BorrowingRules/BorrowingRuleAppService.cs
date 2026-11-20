@@ -5,8 +5,10 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Library;
+using ShikshaMitra.Library.Books;
 using ShikshaMitra.Library.Setting.BorrowingRules.Dtos;
 using ShikshaMitra.Library.Shared;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -15,13 +17,16 @@ namespace ShikshaMitra.Library.Setting.BorrowingRules;
 
 [Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_BorrowingRules.View)]
 [RemoteService(false)]
-public class BorrowingRuleAppService(IRepository<BorrowingRule, Guid> _repository)
+public class BorrowingRuleAppService(IRepository<BorrowingRule, Guid> _repository,
+	ILibraryAccessService access, ILibraryInventoryLock inventoryLock)
 	: ApplicationService, IBorrowingRuleAppService
 {
 	private static readonly string[] RoleNames = { "Student", "Staff" };
 
 	public async Task<PaginatedResponse<BorrowingRuleDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10)
 	{
+		await access.GetContextAsync(academicYearId);
+		page = Math.Max(1, page); pageSize = Math.Clamp(pageSize, 1, 100);
 		var query = await _repository.GetQueryableAsync();
 		query = query.Where(x => x.AcademicYearId == academicYearId);
 
@@ -56,6 +61,9 @@ public class BorrowingRuleAppService(IRepository<BorrowingRule, Guid> _repositor
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_BorrowingRules.Add)]
 	public async Task<GenericUpdatedResponse> UpdateRulesAsync(Guid academicYearId, BorrowingRulesUpdateRequest input)
 	{
+		await inventoryLock.AcquireAsync(CurrentTenant.Id);
+		if (!(await access.GetContextAsync(academicYearId)).UserScope.HasTenantWideScope())
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
 		ValidateRules(input);
 
 		var query = await _repository.GetQueryableAsync();

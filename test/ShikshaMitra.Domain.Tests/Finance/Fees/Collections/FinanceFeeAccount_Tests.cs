@@ -118,7 +118,7 @@ public class FinanceFeeAccount_Tests
 		Assert.Equal(metadata.Id, allocation.FeeRecordMetadataId);
 		Assert.Equal(dueId, allocation.DueFeeId);
 		Assert.Equal("FIN-2026-1", receipt.ReceiptNumber);
-		Assert.Equal(500d, receipt.TotalPaidAmount);
+		Assert.Equal(500m, receipt.TotalPaidAmount);
 		Assert.Equal(500m, payment.Amount);
 		Assert.Throws<BusinessException>(() => receipt.LinkStudent(Guid.NewGuid()));
 	}

@@ -12,7 +12,7 @@ using Xunit;
 namespace ShikshaMitra.Library;
 
 [Collection(ApiTestCollection.Name)]
-public class LibraryReleaseGateApi_Tests : ShikshaMitraApiTestBase
+public partial class LibraryReleaseGateApi_Tests : ShikshaMitraApiTestBase
 {
 	public LibraryReleaseGateApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
@@ -58,8 +58,9 @@ public class LibraryReleaseGateApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
-	public async Task Delete_Reservation_Should_Return_Library_Problem_For_Invalid_Book_Reservation_Pair()
+	public async Task Delete_Reservation_Should_Return_Library_Problem_For_Reservation_Of_Another_Book()
 	{
+		var pair = await SeedMismatchedReservationPairAsync();
 		using var client = Factory.CreateClient();
 		client.DefaultRequestHeaders.Add(TestAuthHandler.TestTenantIdHeader, TestAuthHandler.TestTenantId);
 		client.DefaultRequestHeaders.Add(
@@ -68,12 +69,13 @@ public class LibraryReleaseGateApi_Tests : ShikshaMitraApiTestBase
 				ShikshaMitraSubmodulePermissions.Library.AllBooks.View,
 				ShikshaMitraSubmodulePermissions.Library.IssueReturn.Reserve));
 
-		var response = await client.DeleteAsync($"/api/library/books/{Guid.NewGuid():D}/reservations/{Guid.NewGuid():D}");
+		var response = await client.DeleteAsync($"/api/library/books/{pair.ParentBookId:D}/reservations/{pair.ReservationId:D}");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
 		var body = await response.Content.ReadAsStringAsync();
 		using var document = JsonDocument.Parse(body);
 		document.RootElement.GetProperty("errorCode").GetString().ShouldBe(LibraryErrorCodes.ReservationNotFound);
+		await AssertReservationPreservedAsync(pair.ReservationId, pair.ReservationBookId);
 	}
 
 	private string ResolveRoute(string routeTemplate)

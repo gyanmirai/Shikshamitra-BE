@@ -87,7 +87,9 @@ public partial class FeeRefundAppService
 
 		return new FeeRefundRequestDto
 		{
-			Id = r.Id, ConcurrencyStamp = r.ConcurrencyStamp, StudentId = r.StudentId, FinanceFeeAccountId = r.FinanceFeeAccountId, AcademicYearId = r.AcademicYearId,
+			Id = r.Id, ConcurrencyStamp = r.ConcurrencyStamp, StudentId = r.StudentId, EmployeeId = r.EmployeeId,
+			FinanceExternalSourceLinkId = r.FinanceExternalSourceLinkId, PayerName = fullName,
+			FinanceFeeAccountId = r.FinanceFeeAccountId, AcademicYearId = r.AcademicYearId,
 			AcademicYearName = year?.Name,
 			AcademicYearStartDate = year == null ? null : DateTime.SpecifyKind(year.StartDate, DateTimeKind.Utc),
 			AcademicYearEndDate = year == null ? null : DateTime.SpecifyKind(year.EndDate, DateTimeKind.Utc),
@@ -237,6 +239,11 @@ public partial class FeeRefundAppService
 
 	private async Task EnsureRefundVisibleAsync(FeeRefundRequest request)
 	{
+		if (request.FinanceExternalSourceLinkId.HasValue)
+		{
+			await ExternalRefundAccess.RequireAsync(request, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
+			return;
+		}
 		if (!request.StudentId.HasValue)
 		{
 			await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(

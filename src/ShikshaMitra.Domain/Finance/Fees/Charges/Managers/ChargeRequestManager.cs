@@ -15,7 +15,7 @@ using Volo.Abp.Guids;
 
 namespace ShikshaMitra.Finance.Fees.Charges;
 
-public class ChargeRequestManager(
+public partial class ChargeRequestManager(
 	IRepository<ChargeRequest, Guid> chargeRequestRepository,
 	IRepository<Charge, Guid> chargeRepository,
 	IStudentRepository studentRepository,
@@ -93,11 +93,11 @@ public class ChargeRequestManager(
 		var existingLines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == request.Id);
 
 		var toRemove = existingLines
-			.Where(l => l.Status == ChargeStatus.Pending && !resolvedIds.Contains(l.StudentId))
+			.Where(l => l.Status == ChargeStatus.Pending && (!l.StudentId.HasValue || !resolvedIds.Contains(l.StudentId.Value)))
 			.ToList();
 
 		var approvedToRemove = existingLines
-			.Where(l => l.Status != ChargeStatus.Pending && !resolvedIds.Contains(l.StudentId))
+			.Where(l => l.Status != ChargeStatus.Pending && (!l.StudentId.HasValue || !resolvedIds.Contains(l.StudentId.Value)))
 			.ToList();
 
 		if (approvedToRemove.Count > 0)
@@ -124,7 +124,7 @@ public class ChargeRequestManager(
 
 		var category = await GetActiveCategoryAsync(request.ChargeCategoryId, academicYearId);
 		await SetIncomeCategoryFromChargeCategoryAsync(request, category);
-		var existingStudentIds = existingLines.Select(l => l.StudentId).ToHashSet();
+		var existingStudentIds = existingLines.Where(l => l.StudentId.HasValue).Select(l => l.StudentId!.Value).ToHashSet();
 		var newStudentIds = resolvedIds.Where(id => !existingStudentIds.Contains(id)).ToList();
 
 		var initialStatus = ChargeStatus.Pending;
@@ -141,7 +141,7 @@ public class ChargeRequestManager(
 				request.ChargeCategoryId,
 				request.PurposeDescription,
 				request.Amount,
-				request.DueDate,
+				request.DueDate ?? throw new BusinessException(FinanceChargeErrorCodes.InvalidDueDate),
 				request.Priority,
 				request.AdditionalNotes);
 			line.SetIncomeCategory(request.IncomeCategoryId!.Value, request.IncomeCategoryName!);
@@ -236,7 +236,7 @@ public class ChargeRequestManager(
 				student.DivisionId.Value,
 				request.PurposeDescription,
 				request.Amount,
-				request.DueDate,
+				request.DueDate ?? throw new BusinessException(FinanceChargeErrorCodes.InvalidDueDate),
 				request.Priority,
 				initialStatus,
 				requestorId,
@@ -301,7 +301,7 @@ public class ChargeRequestManager(
 		if (studentIds is { Count: > 0 })
 		{
 			var idSet = studentIds.ToHashSet();
-			var matched = lines.Where(l => idSet.Contains(l.StudentId)).ToList();
+			var matched = lines.Where(l => l.StudentId.HasValue && idSet.Contains(l.StudentId.Value)).ToList();
 			var unknown = studentIds.Where(id => lines.All(l => l.StudentId != id)).ToList();
 			if (unknown.Count > 0)
 			{

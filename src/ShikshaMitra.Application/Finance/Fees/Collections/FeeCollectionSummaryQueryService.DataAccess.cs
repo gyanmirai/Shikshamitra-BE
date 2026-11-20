@@ -132,10 +132,10 @@ public partial class FeeCollectionSummaryQueryService
 		var chargeQ = await chargeRepository.GetQueryableAsync();
 		var approvedCharges = await AsyncExecuter.ToListAsync(
 			chargeQ
-				.Where(c => studentIds.Contains(c.StudentId)
+				.Where(c => c.StudentId.HasValue && studentIds.Contains(c.StudentId.Value)
 						 && c.AcademicYearId == academicYearId
 						 && c.Status == ChargeStatus.Approved)
-				.Select(c => new { c.Id, c.StudentId, Amount = (double)c.Amount }),
+				.Select(c => new { c.Id, StudentId = c.StudentId!.Value, Amount = (double)c.Amount }),
 			cancellationToken);
 
 		if (approvedCharges.Count == 0)
@@ -147,7 +147,7 @@ public partial class FeeCollectionSummaryQueryService
 		var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
 		var paymentFacts = await AsyncExecuter.ToListAsync(
 			chargeCollQ
-				.Where(r => studentIds.Contains(r.StudentId)
+				.Where(r => r.StudentId.HasValue && studentIds.Contains(r.StudentId.Value)
 						 && chargeIds.Contains(r.ChargeId)
 						 && !metaQ.Any(m => m.Id == r.FeeRecordMetadataId && m.Status == FeeCollectionStatus.Reversed))
 				.Select(r => new { r.ChargeId, r.Amount }),

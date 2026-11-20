@@ -131,6 +131,45 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
         }
     }
 
+    [Fact]
+    public async Task Legacy_Collection_Should_Sum_Ten_And_Twenty_Paise_Without_Floating_Point_Drift()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var (yearId, headId, studentId, _) = await SeedCoreDataAsync();
+            var student = await _studentRepo.GetAsync(studentId);
+            var head = await _feeHeadRepo.GetAsync(headId);
+            var chargeIds = new List<Guid>();
+            foreach (var amount in new[] { 0.10m, 0.20m })
+            {
+                var charge = new Charge(Guid.NewGuid(), TestTenantId, yearId, Guid.NewGuid(),
+                    "Paise charge", Guid.NewGuid(), studentId, student.AcademicBoardId!.Value,
+                    student.AcademicMediumId, Guid.NewGuid(), Guid.NewGuid(), "Paise collection evidence",
+                    amount, DateTimeOffset.UtcNow.AddDays(1), ChargePriority.Medium, ChargeStatus.Pending, Guid.NewGuid());
+                charge.SetIncomeCategory(head.IncomeCategoryId, "Collection Tuition");
+                charge.Approve(Guid.NewGuid());
+                await GetRequiredService<IRepository<Charge, Guid>>().InsertAsync(charge, autoSave: true);
+                chargeIds.Add(charge.Id);
+            }
+
+            var output = await _service.CollectFeeAsync(new CollectFeeInput
+            {
+                IdempotencyKey = Guid.NewGuid().ToString("N"), StudentId = studentId, AcademicYearId = yearId,
+                ChargePayments = [new() { ChargeId = chargeIds[0], Amount = 0.10d }, new() { ChargeId = chargeIds[1], Amount = 0.20d }],
+                Payments = [new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 0.30d }]
+            });
+
+            output.TotalAmount.ShouldBe(0.30d);
+            var metadata = await GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().GetAsync(output.Id);
+            Convert.ToDecimal(metadata.TotalPaidFee).ShouldBe(0.30m);
+            var allocations = await GetRequiredService<IRepository<ChargeCollectionRecord, Guid>>()
+                .GetListAsync(row => row.FeeRecordMetadataId == output.Id);
+            allocations.Count.ShouldBe(2);
+            Convert.ToDecimal(allocations[0].Amount).ShouldBeOneOf(0.10m, 0.20m);
+            Convert.ToDecimal(allocations[1].Amount).ShouldBeOneOf(0.10m, 0.20m);
+        }
+    }
+
     // ── Scenario: UPI + BankReceiptConfirmed=true → FinalFee receipt (FIN-*) ─
 
     [Fact]

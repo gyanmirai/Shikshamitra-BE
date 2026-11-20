@@ -536,7 +536,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
                         TenantId = TestTenantId, FeeCollectionTransactionId = payment.Id, AcademicYearId = fixture.YearId,
                         BoardId = fixture.Offering.BoardId, EducationMediumId = fixture.Offering.MediumId,
                         ReceiptScope = FeeReceiptScope.Fee, ReceiptKind = FeeReceiptKind.FinalFee,
-                        TotalPaidAmount = 300d, ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow), ReceiptNumber = "FIN-QA-CLEARED"
+                        TotalPaidAmount = 300m, ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow), ReceiptNumber = "FIN-QA-CLEARED"
                     };
                     final.SetFinanceFeeAccount(account.AccountId.Value);
                     final.SetLinkedProvisionalReceiptId(provisional.Id);

@@ -15,7 +15,7 @@ public sealed record RefundLineSpec(Guid? DueFeeId, Guid? SourceAllocationId, Gu
     Guid? FeeHeadId, string FeeHeadName, string InstallmentLabel, decimal SettledPaidAmount,
     decimal Amount, decimal CalculatedAmount, Guid? ChargeId = null, Guid? LateFeeDueFeeId = null);
 
-public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository dueFeeRepository,
+public partial class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository dueFeeRepository,
     IRepository<FinanceFeeAccount, Guid> accountRepository,
     PaidChargeRefundService paidChargeRefundService,
     PaidLateFeeRefundService paidLateFeeRefundService,
@@ -85,6 +85,12 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
 
     public async Task ApproveAsync(FeeRefundRequest request, Guid userId, string? notes)
     {
+        if (request.FinanceExternalSourceLinkId.HasValue)
+        {
+            await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.ExternalReceivables.FinanceExternalRefundWorkflow>()
+                .ApproveAsync(request, userId, notes);
+            return;
+        }
         var dueIds = request.Lines.Where(x => x.DueFeeId.HasValue).Select(x => x.DueFeeId!.Value).Distinct().ToList();
         var dues = (await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id))).ToDictionary(x => x.Id);
         var reserved = await repository.GetActiveReservedAmountsAsync(dueIds, request.Id);

@@ -11,7 +11,10 @@ public class FeePaymentReceiptConfiguration : IEntityTypeConfiguration<FeePaymen
     {
         builder.ToTable("Finance_FeePaymentReceipts", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
-        builder.ToTable(t => t.HasCheckConstraint("CK_FeePaymentReceipts_Payer", "\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL"));
+        builder.ToTable(t => t.HasCheckConstraint("CK_FeePaymentReceipts_Payer", ShikshaMitra.Finance.ExternalReceivables.FinancePayerConstraintSql.StudentAccountOrEmployee));
+        builder.Property(row => row.Currency).HasMaxLength(3);
+        builder.HasOne<ShikshaMitra.HR.Employees.Employee>().WithMany().HasForeignKey(row => row.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(row => new { row.TenantId, row.EmployeeId, row.AcademicYearId }).HasFilter("\"EmployeeId\" IS NOT NULL");
         builder.HasOne<ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount>().WithMany()
             .HasForeignKey(x => x.FinanceFeeAccountId).OnDelete(DeleteBehavior.Restrict);
 
@@ -42,10 +45,10 @@ public class FeePaymentReceiptConfiguration : IEntityTypeConfiguration<FeePaymen
             .IsRequired();
 
         builder.Property(x => x.BoardId)
-            .IsRequired();
+            .IsRequired(false);
 
         builder.Property(x => x.EducationMediumId)
-            .IsRequired();
+            .IsRequired(false);
 
         // ── Unique receipt number ─────────────────────────────────────────────
         builder.HasIndex(x => new { x.TenantId, x.ReceiptNumber })

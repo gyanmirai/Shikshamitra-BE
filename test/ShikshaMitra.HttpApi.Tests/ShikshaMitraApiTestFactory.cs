@@ -317,18 +317,21 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	{
 		_keepAliveConnection = new SqliteConnection("Data Source=:memory:");
 		_keepAliveConnection.Open();
+		ShikshaMitra.Library.FinanceExternalPositionSqliteTestFunctions.Register(_keepAliveConnection);
 
 		services.Configure<AbpDbContextOptions>(options =>
 		{
 			options.Configure(ctx =>
 			{
 				ctx.DbContextOptions.UseSqlite(_keepAliveConnection)
+					.ReplaceService<Microsoft.EntityFrameworkCore.Infrastructure.IModelCustomizer, ShikshaMitra.Testing.LibraryReceivingSqliteModelCustomizer>()
 					.AddInterceptors(_accountCategoryTagIdentity);
 			});
 		});
 
 		var dbOptions = new DbContextOptionsBuilder<ShikshaMitraDbContext>()
 			.UseSqlite(_keepAliveConnection)
+			.ReplaceService<Microsoft.EntityFrameworkCore.Infrastructure.IModelCustomizer, ShikshaMitra.Testing.LibraryReceivingSqliteModelCustomizer>()
 			.AddInterceptors(_accountCategoryTagIdentity)
 			.Options;
 

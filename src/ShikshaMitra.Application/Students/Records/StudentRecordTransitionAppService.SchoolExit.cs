@@ -4,13 +4,11 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Collections;
-using ShikshaMitra.Library.Books;
-using ShikshaMitra.Library.Members;
+using ShikshaMitra.Library.Clearance;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using ShikshaMitra.Students.StudentRecords;
 using Volo.Abp;
-using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.Records;
 
@@ -45,10 +43,7 @@ public partial class StudentRecordTransitionAppService
 			catch (Volo.Abp.Authorization.AbpAuthorizationException) { result.Fees = new() { Status = "Restricted", Detail = "Finance access is restricted for this student." }; }
 		}
 		else result.Fees = new() { Status = "Restricted", Detail = "Finance access is required to view amounts. Exit readiness is checked separately." };
-		var memberQuery = await LazyServiceProvider.LazyGetRequiredService<IRepository<LibraryMember, Guid>>().GetQueryableAsync();
-		var issueQuery = await LazyServiceProvider.LazyGetRequiredService<IRepository<BookIssue, Guid>>().GetQueryableAsync();
-		var count = await AsyncExecuter.CountAsync(issueQuery.Where(x => x.TenantId == CurrentTenant.Id && x.MemberRole == 0 && x.Status != BookIssueStatus.Returned &&
-			(x.MemberId == studentId || memberQuery.Any(m => m.TenantId == CurrentTenant.Id && m.Id == x.MemberId && m.StudentId == studentId))));
+		var count = await LazyServiceProvider.LazyGetRequiredService<LibraryStudentClearanceReader>().CountOutstandingAsync(studentId);
 		result.Library = new() { Status = count > 0 ? "Pending" : "Clear", PendingCount = count, Detail = count > 0 ? "Outstanding books remain in Library; exit approval does not return them." : "No outstanding book issues are recorded." };
 		if (!masked && await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View))
 		{

@@ -14,6 +14,9 @@ using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp;
+using ShikshaMitra.Finance.ExternalReceivables;
+using ShikshaMitra.Library;
 
 namespace ShikshaMitra.Application.Finance.Fees.Receipts;
 
@@ -38,6 +41,12 @@ public class FeeReceiptPdfGenerator(
 			? await accounts.GetAsync(receipt.FinanceFeeAccountId.Value, cancellationToken: cancellationToken) : null;
 		var metadata = transactions == null ? null
 			: await transactions.FindAsync(receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+		var payer = FinanceReceiptEvidence.ReadPayer(metadata);
+		if (payer != null && (metadata!.TenantId != receipt.TenantId || metadata.AcademicYearId != receipt.AcademicYearId ||
+			(payer.Kind == FinanceExternalPayerKind.Employee ? receipt.EmployeeId != payer.PersonId : receipt.StudentId != payer.PersonId)) ||
+			receipt.EmployeeId.HasValue && payer == null)
+			throw new BusinessException(LibraryFinanceErrorCodes.SourceRequiresReview);
+		var settlement = FinanceReceiptEvidence.ReadSettlement(receipt, metadata);
 		// A student's current placement may differ from the original payment context.
 		var organization = ReceiptCollectionSnapshot.ReadOrganization(metadata) ?? account?.MediumStageId;
 		var school = schoolIdentity == null ? new ReceiptSchoolIdentity(currentTenant?.Name ?? string.Empty)
@@ -47,6 +56,14 @@ public class FeeReceiptPdfGenerator(
 		var lines = savedLines.Where(line => receipt.ReceiptScope == FeeReceiptScope.Combined ||
 			(line.IsCharge ? receipt.ReceiptScope == FeeReceiptScope.Charge : receipt.ReceiptScope == FeeReceiptScope.Fee)).ToList();
 		if (lines.Count == 0) lines = await LegacyLinesAsync(receipt, cancellationToken);
+		if (settlement != null)
+		{
+			if (lines.Count != 1 || lines[0].TotalFees != settlement.OriginalAmount ||
+				lines[0].ReceivedAmount != settlement.SubmittedAmount)
+				throw new BusinessException(LibraryFinanceErrorCodes.SourceRequiresReview);
+			lines = lines.Select(line => line with { PaidFees = settlement.SettledAmount,
+				PendingFees = settlement.FinancialOutstandingAmount }).ToList();
+		}
 		var predecessor = receipt.LinkedProvisionalReceiptId.HasValue && receipts != null
 			? await receipts.FindAsync(receipt.LinkedProvisionalReceiptId.Value, cancellationToken: cancellationToken) : null;
 		var payments = paymentRecords == null ? [] : await paymentRecords.GetListAsync(
@@ -68,18 +85,35 @@ public class FeeReceiptPdfGenerator(
 		{
 			School = school, Title = (provisional ? "PROVISIONAL " : string.Empty) + scopeTitle,
 			Number = receipt.ReceiptNumber, Date = receipt.ReceiptDate, AcademicYear = academicYear?.Name,
-			StudentFields = [new(student == null ? "Applicant name" : "Student name", student == null ? account?.ApplicantName :
+			PayerHeading = payer?.Kind == FinanceExternalPayerKind.Employee ? "EMPLOYEE DETAILS" : "STUDENT DETAILS",
+			FinancialPositionHeading = settlement == null ? null : provisional ? "FINANCIAL POSITION AT SUBMISSION"
+				: receipt.LinkedProvisionalReceiptId.HasValue ? "FINANCIAL POSITION AT VERIFICATION" : "FINANCIAL POSITION AT COLLECTION",
+			FinancialPositionFields = SettlementFields(settlement),
+			StudentFields = payer != null ? [new(payer.Kind == FinanceExternalPayerKind.Employee ? "Employee name" : "Student name", payer.Name),
+				new(payer.Kind == FinanceExternalPayerKind.Employee ? "Employee code" : "GR No.", payer.Code)]
+				: [new(student == null ? "Applicant name" : "Student name", student == null ? account?.ApplicantName :
 				string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }.Where(name => !string.IsNullOrWhiteSpace(name)))),
 				new("GR No.", student?.GrNumber ?? student?.GrNo?.ToString(CultureInfo.InvariantCulture)),
 				new("Class / section", string.Join(" - ", new[] { standard, division }.Where(value => !string.IsNullOrWhiteSpace(value)))),
 				new("Parent / guardian", guardian), new("Roll no.", student?.RollNo?.ToString(CultureInfo.InvariantCulture))],
 			PaymentFields = PaymentFields(payments), Lines = lines, Amount = (decimal)receipt.TotalPaidAmount,
+			AmountLabel = settlement != null && provisional ? "SUBMITTED AMOUNT" : null,
 			RelatedReceipt = predecessor?.ReceiptNumber,
 			Status = receipt.VerificationStatus == FeeReceiptVerificationStatus.Rejected ? "Rejected" : null
 		});
 	}
 
-	private static Guid? NonEmpty(Guid value) => value == Guid.Empty ? null : value;
+	private static Guid? NonEmpty(Guid? value) => value == Guid.Empty ? null : value;
+	private static IReadOnlyList<ReceiptDocumentField> SettlementFields(FinanceReceiptSettlementEvidence? settlement)
+	{
+		if (settlement == null) return [];
+		static string Money(decimal amount) => $"₹ {amount.ToString("N2", CultureInfo.GetCultureInfo("en-IN"))}";
+		return [new("Submitted amount", Money(settlement.SubmittedAmount)),
+			new("Pending verification", Money(settlement.PendingVerificationAmount)),
+			new("Settled amount", Money(settlement.SettledAmount)),
+			new("Financial outstanding", Money(settlement.FinancialOutstandingAmount)),
+			new("Collectible remaining", Money(settlement.CollectibleAmount))];
+	}
 
 	private async Task<List<ReceiptDocumentLine>> LegacyLinesAsync(FeePaymentReceipt receipt, CancellationToken cancellationToken)
 	{

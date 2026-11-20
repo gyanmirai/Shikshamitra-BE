@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 using ShikshaMitra.Library.Setting.Sections;
@@ -11,6 +12,7 @@ namespace ShikshaMitra.Library.Setting.Sections
 		public Guid? TenantId { get; private set; }
 
 		public Guid? AcademicYearId { get; set; }
+		public Guid? CampusId { get; private set; }
 
 		public string? SectionName { get; set; } // Made nullable
 
@@ -27,6 +29,14 @@ namespace ShikshaMitra.Library.Setting.Sections
 			AcademicYearId = academicYearId;
 			SectionName = sectionName;
 			NumberOfShelf = numberOfShelf;
+		}
+
+		public void BindCampus(Guid campusId)
+		{
+			if (campusId == Guid.Empty) throw new BusinessException(LibraryErrorCodes.SectionCampusUnavailable);
+			if (CampusId.HasValue && CampusId != campusId)
+				throw new BusinessException(LibraryErrorCodes.SectionCampusAlreadyBound);
+			CampusId = campusId;
 		}
 	}
 }

@@ -68,7 +68,7 @@ public static class FeeReceiptTestHelper
             ReceiptScope               = scope,
             ReceiptKind                = kind,
             VerificationStatus         = verificationStatus,
-            TotalPaidAmount            = amount,
+            TotalPaidAmount            = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble(amount),
             ReceiptNumber              = receiptNumber,
             ReceiptDate                = receiptDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
         };

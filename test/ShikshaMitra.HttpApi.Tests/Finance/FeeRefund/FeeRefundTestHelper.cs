@@ -338,7 +338,7 @@ public static class FeeRefundTestHelper
             ReceiptKind = settled ? FeeReceiptKind.FinalFee : FeeReceiptKind.ProvisionalFee,
             ReceiptScope = FeeReceiptScope.Fee,
             VerificationStatus = settled ? FeeReceiptVerificationStatus.Verified : FeeReceiptVerificationStatus.PendingVerification,
-            TotalPaidAmount = Convert.ToDouble(amount), AcademicYearId = DefaultAcademicYearId,
+            TotalPaidAmount = amount, AcademicYearId = DefaultAcademicYearId,
             BoardId = DefaultBoardId, EducationMediumId = DefaultMediumId, ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow)
         };
         receipt.SetFinanceFeeAccount(account.Id);
@@ -364,8 +364,10 @@ public static class FeeRefundTestHelper
         due.ApplyPayment(Convert.ToDecimal(feeAmount));
         var collectionId = Guid.NewGuid();
         var receiptNumber = $"FIN-{Guid.NewGuid().ToString("N")[..16]}";
+        var settledTotal = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble(feeAmount)
+            + ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble(lateFeeAmount);
         var collection = new FeeRecordMetadata(collectionId, tenantId, studentId,
-            DefaultAcademicYearId, feeAmount + lateFeeAmount, receiptNumber, FeeCollectionStatus.Paid);
+            DefaultAcademicYearId, ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(settledTotal), receiptNumber, FeeCollectionStatus.Paid);
         var allocation = new FeeCollectionDueFeeAllocation(Guid.NewGuid(), tenantId,
             collectionId, dueFeeId, feeAmount);
         var receipt = new FeePaymentReceipt(Guid.NewGuid())
@@ -376,7 +378,7 @@ public static class FeeRefundTestHelper
             ReceiptKind = FeeReceiptKind.FinalFee,
             ReceiptScope = FeeReceiptScope.Fee,
             VerificationStatus = FeeReceiptVerificationStatus.Verified,
-            TotalPaidAmount = feeAmount + lateFeeAmount,
+            TotalPaidAmount = settledTotal,
             StudentId = studentId,
             AcademicYearId = DefaultAcademicYearId,
             BoardId = DefaultBoardId,
@@ -497,7 +499,7 @@ public static class FeeRefundTestHelper
             TenantId = tenantId, StudentId = studentId, AcademicYearId = DefaultAcademicYearId,
             FeeCollectionTransactionId = collection.Id, ReceiptNumber = collection.ReceiptNumber,
             ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = FeeReceiptScope.Fee,
-            VerificationStatus = FeeReceiptVerificationStatus.Verified, TotalPaidAmount = amount,
+            VerificationStatus = FeeReceiptVerificationStatus.Verified, TotalPaidAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble(amount),
             BoardId = DefaultBoardId, EducationMediumId = DefaultMediumId,
             ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow)
         };
@@ -540,7 +542,7 @@ public static class FeeRefundTestHelper
                     ? FeeReceiptKind.ProvisionalFee : FeeReceiptKind.FinalFee,
                 VerificationStatus = status == FeeCollectionStatus.InReconciliation
                     ? FeeReceiptVerificationStatus.PendingVerification : FeeReceiptVerificationStatus.Verified,
-                TotalPaidAmount = (double)amount, BoardId = DefaultBoardId, EducationMediumId = DefaultMediumId,
+                TotalPaidAmount = amount, BoardId = DefaultBoardId, EducationMediumId = DefaultMediumId,
                 ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow)
             };
             await receipts.InsertAsync(receipt);
@@ -548,12 +550,12 @@ public static class FeeRefundTestHelper
         else
         {
             receipt.ReceiptScope = FeeReceiptScope.Combined;
-            receipt.TotalPaidAmount += (double)amount;
+            receipt.TotalPaidAmount += amount;
             await receipts.UpdateAsync(receipt);
         }
         var allocation = new ChargeCollectionRecord(Guid.NewGuid())
         {
-            TenantId = tenantId, StudentId = studentId, ChargeId = charge.Id, Amount = (double)amount,
+            TenantId = tenantId, StudentId = studentId, ChargeId = charge.Id, Amount = amount,
             PaymentDate = DateTimeOffset.UtcNow, FeeRecordMetadataId = collection.Id
         };
         await provider.GetRequiredService<IRepository<ChargeCollectionRecord, Guid>>().InsertAsync(allocation);

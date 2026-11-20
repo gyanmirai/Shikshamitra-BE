@@ -1,5 +1,6 @@
 ﻿using System;
 using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Finance.ExternalReceivables;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -22,7 +23,7 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 /// All monetary invariants (payment details validation, DueFee allocation) live here
 /// so that the application service remains a thin coordinator.
 /// </summary>
-public class FeeCollectionManager : DomainService
+public partial class FeeCollectionManager : DomainService
 {
 	private readonly IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository;
 	private readonly IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository;
@@ -200,7 +201,7 @@ public class FeeCollectionManager : DomainService
 			await lateFeeAllocationRepository.InsertManyAsync(lateFeeRows, autoSave: false);
 		}
 
-		var feeLinesTotal = feeCollectionRecords.Sum(r => r.Amount);
+		var feeLinesTotal = FinanceMoneyPrecision.ToLegacyDouble(feeCollectionRecords.Sum(r => FinanceMoneyPrecision.FromLegacyDouble(r.Amount)));
 		var chargeLinesTotal = chargeCollectionRecords.Sum(r => r.Amount);
 		var lateFeeLinesTotal = lateFeeAllocations.Sum(a => a.Amount);
 
@@ -212,7 +213,7 @@ public class FeeCollectionManager : DomainService
 			boardId: command.BoardId,
 			educationMediumId: command.EducationMediumId,
 			feeLinesTotal: feeLinesTotal,
-			chargeLinesTotal: chargeLinesTotal,
+			chargeLinesTotal: FinanceMoneyPrecision.ToLegacyDouble(chargeLinesTotal),
 			paymentMethods: command.Payments.Select(p => p.Method).ToList(),
 			bankReceiptConfirmed: command.BankReceiptConfirmed,
 			remarks: command.Notes, financeFeeAccountId: command.FinanceFeeAccountId,
@@ -229,7 +230,7 @@ public class FeeCollectionManager : DomainService
 			chargeCollectionRecords,
 			receipts,
 			feeLinesTotal,
-			chargeLinesTotal,
+			FinanceMoneyPrecision.ToLegacyDouble(chargeLinesTotal),
 			lateFeeLinesTotal, paymentRecords);
 	}
 
@@ -307,7 +308,7 @@ public class FeeCollectionManager : DomainService
 			TenantId = currentTenant.Id,
 			StudentId = studentId,
 			ChargeId = c.ChargeId,
-			Amount = c.Amount,
+			Amount = FinanceMoneyPrecision.FromLegacyDouble(c.Amount),
 			PaymentDate = now,
 			FeeRecordMetadataId = metadataId,
 		}).ToList();
@@ -327,7 +328,7 @@ public class FeeCollectionManager : DomainService
 		return payments.Select(p => PaymentMethodRecord.Create(
 			studentId: studentId,
 			feeRecordMetadataId: metadataId,
-			amount: (decimal)p.Amount,
+			amount: FinanceMoneyPrecision.FromLegacyDouble(p.Amount),
 			paymentDate: now,
 			paymentMethod: p.Method,
 			paymentDetails: p.Details,

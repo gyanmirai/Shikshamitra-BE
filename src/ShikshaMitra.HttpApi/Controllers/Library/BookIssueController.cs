@@ -39,6 +39,10 @@ public class BookIssueController : AbpController
         return _bookIssueAppService.GetByAccessionAsync(accessionNo);
     }
 
+    [HttpGet("books/accession")]
+    public Task<AccessionBookDto> GetByAccessionQueryAsync([FromQuery] string accessionNo) =>
+        _bookIssueAppService.GetByAccessionAsync(accessionNo);
+
     [HttpGet("issue-returns")]
     [HttpGet("issue-return")]
     public Task<PaginatedResponse<IssueReturnItemDto>> GetIssueReturnListAsync(
@@ -67,4 +71,8 @@ public class BookIssueController : AbpController
         var result = await _bookIssueAppService.SearchReturnBookAsync(accessionNo);
         return await _bookIssueAppService.GetMemberAsync(result.MemberDetails.Id);
     }
+
+    [HttpGet("issuedBook/member")]
+    public Task<LibraryMemberDto> GetIssuedBookMemberByQueryAsync([FromQuery] string accessionNo) =>
+        GetIssuedBookMemberByAccessionAsync(accessionNo);
 }

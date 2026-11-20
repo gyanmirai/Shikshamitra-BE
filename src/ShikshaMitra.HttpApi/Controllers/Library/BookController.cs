@@ -45,8 +45,12 @@ public class BookController : AbpController
         return _bookAppService.GetAsync(bookId);
     }
 
+    [HttpGet("editor-options")]
+    public Task<LibraryBookEditorOptionsDto> GetEditorOptionsAsync([FromQuery] Guid academicYearId) =>
+        _bookAppService.GetEditorOptionsAsync(academicYearId);
+
     [HttpPut("{bookId:guid}")]
-    public Task<GenericUpdatedResponse> UpdateAsync(Guid bookId, [FromBody] UpdateBookRequest input)
+    public Task<LibraryBookUpdatedResponse> UpdateAsync(Guid bookId, [FromBody] UpdateBookRequest input)
     {
         return _bookAppService.UpdateAsync(bookId, input);
     }
@@ -86,6 +90,10 @@ public class BookController : AbpController
         var result = await _bookAppService.UpdateCopyStatusAsync(bookId, accessionNumber, input);
         return Ok(result);
     }
+
+    [HttpPut("{bookId:guid}/copies/status")]
+    public Task<IActionResult> UpdateCopyStatusByQueryAsync(Guid bookId, [FromQuery] string accessionNumber,
+        [FromBody] UpdateBookCopyStatusRequest input) => UpdateCopyStatusAsync(bookId, accessionNumber, input);
 
     [HttpPost("{bookId:guid}/reservations")]
     public async Task<IActionResult> ReserveAsync(Guid bookId, [FromBody] CreateBookReservationRequest input)

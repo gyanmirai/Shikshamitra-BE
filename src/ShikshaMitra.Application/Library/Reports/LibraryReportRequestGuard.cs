@@ -76,10 +76,12 @@ public class LibraryReportRequestGuard : ITransientDependency
 				.Select(value => value.Trim())
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.ToList();
-			if (request.Columns.Count > 30 || request.Columns.Any(column => !definition.DefaultColumns.Contains(column, StringComparer.OrdinalIgnoreCase)))
+			if (request.Columns.Count > 30 || request.Columns.Any(column => !definition.SupportedColumns.Contains(column, StringComparer.OrdinalIgnoreCase)))
 			{
 				throw Invalid("Columns", "One or more columns are not supported by this report.");
 			}
+			request.Columns = request.Columns.Select(column => definition.SupportedColumns.First(supported =>
+				string.Equals(supported, column, StringComparison.OrdinalIgnoreCase))).ToList();
 		}
 
 		if (request.Sorts is not { Count: > 0 }) return;
@@ -92,10 +94,11 @@ public class LibraryReportRequestGuard : ITransientDependency
 		{
 			sort.Field = sort.Field?.Trim() ?? string.Empty;
 			sort.Direction = sort.Direction?.Trim().ToLowerInvariant() ?? "asc";
-			if (!definition.DefaultColumns.Contains(sort.Field, StringComparer.OrdinalIgnoreCase) || sort.Direction is not "asc" and not "desc")
+			if (!definition.SupportedColumns.Contains(sort.Field, StringComparer.OrdinalIgnoreCase) || sort.Direction is not "asc" and not "desc")
 			{
 				throw Invalid("Sorts", "One or more sort fields or directions are invalid.");
 			}
+			sort.Field = definition.SupportedColumns.First(supported => string.Equals(supported, sort.Field, StringComparison.OrdinalIgnoreCase));
 		}
 	}
 
@@ -106,11 +109,11 @@ public class LibraryReportRequestGuard : ITransientDependency
 			LibraryReportTypes.BookMaster => Set("year", "books", "categories", "search"),
 			LibraryReportTypes.StockSummary => Set("year", "books", "categories", "search"),
 			LibraryReportTypes.AvailabilityStatus => Set("year", "books", "categories", "sections", "copyStatuses", "search"),
-			LibraryReportTypes.IssueReturn => Set("year", "books", "categories", "members", "issueStatuses", "memberRole", "dates", "search"),
-			LibraryReportTypes.OverdueBooks => Set("year", "books", "categories", "members", "issueStatuses", "memberRole", "dates", "search"),
+			LibraryReportTypes.IssueReturn => Set("year", "books", "categories", "members", "issueStatuses", "memberRole", "dates", "asOf", "search"),
+			LibraryReportTypes.OverdueBooks => Set("year", "books", "categories", "members", "issueStatuses", "memberRole", "dates", "asOf", "search"),
 			LibraryReportTypes.FineCollection => Set("year", "members", "chargeStatuses", "memberRole", "dates", "search"),
 			LibraryReportTypes.LostDamagedBooks => Set("year", "books", "categories", "sections", "copyStatuses", "search"),
-			LibraryReportTypes.MemberList => Set("year", "members", "memberRole", "search"),
+			LibraryReportTypes.MemberList => Set("year", "members", "memberRole", "asOf", "search"),
 			LibraryReportTypes.ReservationList => Set("year", "books", "categories", "members", "memberRole", "dates", "search"),
 			LibraryReportTypes.PopularBooks => Set("year", "books", "categories", "top", "search"),
 			_ => []
@@ -127,6 +130,7 @@ public class LibraryReportRequestGuard : ITransientDependency
 			["chargeStatuses"] = filters.ChargeStatuses?.Count > 0,
 			["memberRole"] = filters.MemberRole.HasValue,
 			["dates"] = filters.FromDate.HasValue || filters.ToDate.HasValue,
+			["asOf"] = filters.AsOfDate.HasValue,
 			["search"] = filters.Search != null,
 			["top"] = filters.Top.HasValue
 		};

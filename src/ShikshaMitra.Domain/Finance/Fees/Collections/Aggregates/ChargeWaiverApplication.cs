@@ -1,15 +1,22 @@
 using System;
 using Volo.Abp;
-using Volo.Abp.Domain.Entities.Auditing;
+using ShikshaMitra.Finance.ExternalReceivables;
+using Volo.Abp.Auditing;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
 /// <summary>Immutable evidence that the then-current remaining balance of an approved charge was waived.</summary>
-public class ChargeWaiverApplication : CreationAuditedAggregateRoot<Guid>, IMultiTenant
+public class ChargeWaiverApplication : BasicAggregateRoot<Guid>, IMultiTenant, ICreationAuditedObject
 {
+	public DateTime CreationTime { get; private set; }
+	public Guid? CreatorId { get; private set; }
+	public string LegacyConcurrencyStamp { get; private set; } = Guid.NewGuid().ToString("N");
+	public string LegacyExtraPropertiesJson { get; private set; } = "{}";
 	public Guid? TenantId { get; private set; }
-	public Guid StudentId { get; private set; }
+	public Guid? StudentId { get; private set; }
+	public Guid? EmployeeId { get; private set; }
 	public Guid ChargeId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
 	public decimal ChargeAmount { get; private set; }
@@ -40,5 +47,20 @@ public class ChargeWaiverApplication : CreationAuditedAggregateRoot<Guid>, IMult
 		Reason = reason.Trim();
 		AppliedByUserId = appliedByUserId;
 		IdempotencyKey = idempotencyKey.Trim();
+	}
+	public static ChargeWaiverApplication CreateExternal(Guid id, Guid tenantId, FinanceExternalPayerIdentity payer,
+		Guid chargeId, Guid yearId, decimal originalAmount, decimal amount, string reason, Guid actorId, string key)
+	{
+		FinanceExternalSettlementAmounts.EnsureMoney(amount, positive: true);
+		FinanceFeePayerIdentity.Validate(payer.StudentId, null, payer.EmployeeId);
+		if (id == Guid.Empty || tenantId == Guid.Empty || chargeId == Guid.Empty || yearId == Guid.Empty || actorId == Guid.Empty ||
+			amount > originalAmount || string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 1000 || string.IsNullOrWhiteSpace(key))
+			throw new BusinessException(FeeWaiverErrorCodes.SourceNotEligible);
+		return new ChargeWaiverApplication
+		{
+			Id = id, TenantId = tenantId, StudentId = payer.StudentId, EmployeeId = payer.EmployeeId,
+			ChargeId = chargeId, AcademicYearId = yearId, ChargeAmount = originalAmount, EffectiveAmount = amount,
+			Reason = reason.Trim(), AppliedByUserId = actorId, IdempotencyKey = key
+		};
 	}
 }

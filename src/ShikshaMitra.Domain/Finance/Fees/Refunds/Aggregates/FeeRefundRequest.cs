@@ -9,12 +9,14 @@ using ShikshaMitra.Finance.Fees.FeeCollection;
 namespace ShikshaMitra.Finance.Fees.FeeRefund;
 
 /// <summary>Auditable refund workflow. Approval reserves funds; settlement mutates the fee ledger.</summary>
-public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
     public Guid? StudentId { get; private set; }
+    public Guid? EmployeeId { get; private set; }
+    public Guid? FinanceExternalSourceLinkId { get; private set; }
     public Guid? FinanceFeeAccountId { get; private set; }
-    public void LinkStudent(Guid studentId) => StudentId = FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
+    public void LinkStudent(Guid studentId) => StudentId = FinanceFeePayerIdentity.LinkStudent(StudentId, studentId, EmployeeId);
     public Guid AcademicYearId { get; private set; }
     public Guid? StudentFeeStructureId { get; private set; }
     public Guid? RefundPolicyId { get; private set; }
@@ -116,7 +118,7 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     internal void PinPolicy(Guid? assignmentId, Guid policyId, Guid policyVersionId, Guid receiptId,
         string receiptNumber, string policySnapshotJson, string calculationSnapshotJson, string calculationHash)
     {
-        if (RefundPolicyVersionId.HasValue || (!assignmentId.HasValue && !FinanceFeeAccountId.HasValue))
+        if (RefundPolicyVersionId.HasValue || (!assignmentId.HasValue && !FinanceFeeAccountId.HasValue && !FinanceExternalSourceLinkId.HasValue))
             throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
         StudentFeeStructureId = assignmentId;
         RefundPolicyId = policyId;

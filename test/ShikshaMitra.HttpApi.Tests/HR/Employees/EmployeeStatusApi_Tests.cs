@@ -4,13 +4,20 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees.ReportingManagerInfo;
 using ShikshaMitra.HR.Employees.Status;
 using ShikshaMitra.HR.Payroll;
 using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Library.Books;
 using Shouldly;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.HR.Employees;
@@ -136,6 +143,38 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	#endregion
 
 	#region Tier 1 — Important
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Staff_Deactivation_Check_Should_Expose_Library_Obligations_Only_To_An_Authorized_Reader()
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusLibraryClearance");
+		using (var scope = Factory.Services.CreateScope())
+		{
+			var services = scope.ServiceProvider;
+			var school = Guid.Parse(TestAuthHandler.TestTenantId);
+			using var tenant = services.GetRequiredService<ICurrentTenant>().Change(school);
+			using var unit = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+			var issues = services.GetRequiredService<IRepository<BookIssue, Guid>>();
+			var day = new DateTime(2026, 5, 8, 0, 0, 0, DateTimeKind.Utc);
+			await issues.InsertAsync(new(Guid.NewGuid(), Guid.NewGuid(), "STAFF-EXIT-OPEN", employee, 1, day, day.AddDays(7), school), true);
+			await unit.CompleteAsync();
+		}
+		var path = $"{BaseUrl}/{employee:D}/status-deactivation-check";
+		var allowed = await GetAndReadAsync<EmployeeStatusDeactivationCheckResponse>(path);
+		allowed.CanDeactivate.ShouldBeTrue();
+		allowed.LibraryClearanceStatus.ShouldBe("Pending");
+		allowed.LibraryOutstandingLoanCount.ShouldBe(1);
+
+		using var hrOnly = Factory.CreateClient();
+		hrOnly.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit);
+		var restricted = await hrOnly.GetFromJsonAsync<EmployeeStatusDeactivationCheckResponse>(path, JsonOptions);
+		restricted.ShouldNotBeNull();
+		restricted.CanDeactivate.ShouldBeTrue();
+		restricted.LibraryClearanceStatus.ShouldBe("Restricted");
+		restricted.LibraryOutstandingLoanCount.ShouldBeNull();
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]

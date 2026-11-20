@@ -63,7 +63,7 @@ public class FeeRecordMetadata_Tests
         Assert.Equal(id, m.Id);
         Assert.Equal(studentId, m.StudentId);
         Assert.Equal(yearId, m.AcademicYearId);
-        Assert.Equal(500d, m.TotalPaidFee);
+        Assert.Equal(500m, m.TotalPaidFee);
         Assert.Equal("REC-2026-000002", m.ReceiptNumber);
         Assert.Equal(FeeCollectionStatus.Paid, m.Status);
     }

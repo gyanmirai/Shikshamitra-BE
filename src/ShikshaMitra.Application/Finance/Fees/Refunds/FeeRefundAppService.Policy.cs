@@ -88,6 +88,8 @@ public partial class FeeRefundAppService
 
     private async Task<PreparedRefund> PrepareAsync(CreateFeeRefundRequestDto input, Guid? excludingRequestId = null, bool familyAuthorized = false)
     {
+        await EnsureLegacyRefundSourcesAsync(input.Lines.Select(line => line.ChargeId), input.StudentId,
+            input.AcademicYearId, input.FinanceFeeAccountId, familyAuthorized);
         if (input.Lines.Count == 0 || input.Lines.Any(x => x.Amount <= 0 || (x.DueFeeId.HasValue ? 1 : 0) + (x.ChargeId.HasValue ? 1 : 0) + (x.LateFeeDueFeeId.HasValue ? 1 : 0) != 1) ||
             input.Lines.Select(x => x.SourceAllocationId).Distinct().Count() != input.Lines.Count)
             throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
@@ -260,7 +262,7 @@ public partial class FeeRefundAppService
             specs, calculation, version.SnapshotJson, calculationJson, hash, payer.StudentId, payer.FinanceFeeAccountId);
     }
 
-    private static List<RefundLineSpec> AllocateCalculatedAmounts(
+    internal static List<RefundLineSpec> AllocateCalculatedAmounts(
         IReadOnlyCollection<RefundLineSpec> source, decimal finalAmount)
     {
         // Preserve source precision for historic fractional receipt allocations.
@@ -311,7 +313,7 @@ public partial class FeeRefundAppService
             throw new BusinessException(FeeRefundErrorCodes.PayoutMethodNotAllowed);
     }
 
-    private static bool TryMapPayoutMethod(string? value, out RefundPayoutMethod method)
+    internal static bool TryMapPayoutMethod(string? value, out RefundPayoutMethod method)
     {
         method = value switch
         {

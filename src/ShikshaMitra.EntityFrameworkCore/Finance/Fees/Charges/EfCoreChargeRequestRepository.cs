@@ -37,7 +37,7 @@ public class EfCoreChargeRequestRepository(
 			join category in db.Set<ChargeCategory>().AsNoTracking() on request.ChargeCategoryId equals category.Id
 			join academicYear in db.Set<AcademicYear>().AsNoTracking() on request.AcademicYearId equals academicYear.Id
 			join requestor in db.Set<IdentityUser>().AsNoTracking() on request.RequestorId equals requestor.Id
-			where request.Id == chargeRequestId
+			where request.Id == chargeRequestId && request.SchoolDueDate == null
 			select new { request, category, academicYear, requestor }
 		).IgnoreAutoIncludes().FirstOrDefaultAsync(cancellationToken);
 
@@ -48,10 +48,10 @@ public class EfCoreChargeRequestRepository(
 
 		var lines = await (
 			from charge in db.Set<Charge>().AsNoTracking()
-			join student in db.Set<Student>().AsNoTracking() on charge.StudentId equals student.Id
-			join standard in db.Set<Standard>().AsNoTracking() on charge.StandardId equals standard.Id
-			join division in db.Set<Division>().AsNoTracking() on charge.DivisionId equals division.Id
-			where charge.ChargeRequestId == chargeRequestId
+			join student in db.Set<Student>().AsNoTracking() on charge.StudentId equals (Guid?)student.Id
+			join standard in db.Set<Standard>().AsNoTracking() on charge.StandardId equals (Guid?)standard.Id
+			join division in db.Set<Division>().AsNoTracking() on charge.DivisionId equals (Guid?)division.Id
+			where charge.ChargeRequestId == chargeRequestId && charge.SchoolDueDate == null
 			select new ChargeLineJoinResult(charge, student, standard, division)
 		).IgnoreAutoIncludes().ToListAsync(cancellationToken);
 
@@ -81,7 +81,7 @@ public class EfCoreChargeRequestRepository(
 		ChargeRequestReadScope? readScope = null)
 	{
 		var chargeQuery = await GetQueryableAsync();
-		chargeQuery = chargeQuery.Where(r => r.AcademicYearId == academicYearId);
+		chargeQuery = chargeQuery.Where(r => r.AcademicYearId == academicYearId && r.SchoolDueDate == null);
 
 		chargeQuery = boardId.HasValue
 			? chargeQuery.Where(r => r.BoardId == boardId.Value)
@@ -92,14 +92,14 @@ public class EfCoreChargeRequestRepository(
 			chargeQuery.Where(r => r.EducationMediumId != Guid.Empty);
 
 		var chargeLineQuery = await chargeRepository.GetQueryableAsync();
-		chargeLineQuery = chargeLineQuery.Where(c => c.AcademicYearId == academicYearId);
+		chargeLineQuery = chargeLineQuery.Where(c => c.AcademicYearId == academicYearId && c.SchoolDueDate == null);
 		if (readScope != null)
 			chargeQuery = ApplyCompleteLineReadScope(chargeQuery, chargeLineQuery, readScope);
 		if (scopedStudentIds is not null)
 		{
 			if (scopedStudentIds.Count == 0)
 				return ([], 0);
-			chargeLineQuery = chargeLineQuery.Where(c => scopedStudentIds.Contains(c.StudentId));
+			chargeLineQuery = chargeLineQuery.Where(c => c.StudentId.HasValue && scopedStudentIds.Contains(c.StudentId.Value));
 			chargeQuery = chargeQuery.Where(r => chargeLineQuery.Any(c => c.ChargeRequestId == r.Id));
 		}
 
@@ -218,10 +218,10 @@ public class EfCoreChargeRequestRepository(
 		var db = await GetDbContextAsync();
 
 		return from charge in db.Set<Charge>().IgnoreAutoIncludes().AsNoTracking()
-			join student in db.Set<Student>().AsNoTracking() on charge.StudentId equals student.Id
-			join standard in db.Set<Standard>().AsNoTracking() on charge.StandardId equals standard.Id
-			join division in db.Set<Division>().AsNoTracking() on charge.DivisionId equals division.Id
-			where charge.AcademicYearId == academicYearId
+			join student in db.Set<Student>().AsNoTracking() on charge.StudentId equals (Guid?)student.Id
+			join standard in db.Set<Standard>().AsNoTracking() on charge.StandardId equals (Guid?)standard.Id
+			join division in db.Set<Division>().AsNoTracking() on charge.DivisionId equals (Guid?)division.Id
+			where charge.AcademicYearId == academicYearId && charge.SchoolDueDate == null
 			where !status.HasValue || charge.Status == (ChargeStatus)status.Value
 			where !boardId.HasValue || charge.BoardId == boardId.Value
 			where !educationMediumId.HasValue || charge.EducationMediumId == educationMediumId.Value
@@ -244,7 +244,7 @@ public class EfCoreChargeRequestRepository(
 
 		// Build a base query of charge requests in scope.
 		var requestQuery = db.Set<ChargeRequest>().AsNoTracking()
-			.Where(r => r.AcademicYearId == academicYearId);
+			.Where(r => r.AcademicYearId == academicYearId && r.SchoolDueDate == null);
 
 		if (boardId.HasValue)
 			requestQuery = requestQuery.Where(r => r.BoardId == boardId.Value);
@@ -253,7 +253,7 @@ public class EfCoreChargeRequestRepository(
 			requestQuery = requestQuery.Where(r => r.EducationMediumId == educationMediumId.Value);
 
 		var chargeLines = db.Set<Charge>().AsNoTracking()
-			.Where(c => c.AcademicYearId == academicYearId);
+			.Where(c => c.AcademicYearId == academicYearId && c.SchoolDueDate == null);
 		if (readScope != null)
 			requestQuery = ApplyCompleteLineReadScope(requestQuery, chargeLines, readScope);
 
@@ -261,7 +261,7 @@ public class EfCoreChargeRequestRepository(
 		{
 			if (scopedStudentIds.Count == 0)
 				return new ChargeRequestStatusCounts(0, 0);
-			chargeLines = chargeLines.Where(c => scopedStudentIds.Contains(c.StudentId));
+			chargeLines = chargeLines.Where(c => c.StudentId.HasValue && scopedStudentIds.Contains(c.StudentId.Value));
 			requestQuery = requestQuery.Where(r => chargeLines.Any(c => c.ChargeRequestId == r.Id));
 		}
 
@@ -309,10 +309,10 @@ public class EfCoreChargeRequestRepository(
 		return requests.Where(request =>
 			allLines.Any(line => line.ChargeRequestId == request.Id) &&
 			!allLines.Any(line => line.ChargeRequestId == request.Id &&
-				!(Enumerable.Contains(ownStudentIds, line.StudentId) ||
-					Enumerable.Contains(reviewerStudentIds, line.StudentId) &&
+				!(line.StudentId.HasValue && (Enumerable.Contains(ownStudentIds, line.StudentId.Value) ||
+					Enumerable.Contains(reviewerStudentIds, line.StudentId.Value) &&
 					(Enumerable.Contains(reportingMakerIds, request.RequestorId) ||
-					 nonEmployeeMakerIds.Contains(request.RequestorId)))));
+					 nonEmployeeMakerIds.Contains(request.RequestorId))))));
 	}
 
 	private async Task<Dictionary<Guid, ChargePaymentProgress>> GetPaymentProgressAsync(

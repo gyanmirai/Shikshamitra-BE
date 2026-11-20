@@ -55,7 +55,7 @@ public partial class MobileAcademicAppService_Tests
             FeeCollectionTransactionId = payment.Id, ReceiptNumber = $"ADJ-FIN-{Guid.NewGuid():N}",
             ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = FeeReceiptScope.Fee,
             VerificationStatus = FeeReceiptVerificationStatus.Verified,
-            TotalPaidAmount = 500d, ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            TotalPaidAmount = 500m, ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow),
         });
         var key = Guid.NewGuid().ToString("N");
         var input = new MobileAdjustmentInput { IdempotencyKey = key, Reason = "Transfer retained paid credit",

@@ -103,7 +103,7 @@ public class FinanceReportPayerProjection_Tests
 
     private static FeePaymentReceipt Receipt(Guid? studentId, Guid? accountId, double amount)
     {
-        var receipt = new FeePaymentReceipt(Guid.NewGuid()) { StudentId = studentId, TotalPaidAmount = amount };
+        var receipt = new FeePaymentReceipt(Guid.NewGuid()) { StudentId = studentId, TotalPaidAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble(amount) };
         if (accountId.HasValue) receipt.SetFinanceFeeAccount(accountId.Value);
         return receipt;
     }

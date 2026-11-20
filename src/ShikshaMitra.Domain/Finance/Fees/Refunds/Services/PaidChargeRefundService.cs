@@ -7,6 +7,7 @@ using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.FeeRefund.Repositories;
 using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Finance.ExternalReceivables;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 
@@ -24,14 +25,16 @@ public class PaidChargeRefundService(IRepository<Charge, Guid> charges,
     IRepository<ChargeCollectionRecord, Guid> allocations,
     IRepository<FeeRecordMetadata, Guid> collections,
     IRepository<FeePaymentReceipt, Guid> receipts,
-    IFeeRefundRepository refunds) : DomainService
+    IFeeRefundRepository refunds,
+    FinanceExternalSettlementGuard externalSettlementGuard) : DomainService
 {
     public async Task<List<PaidChargeRefundSource>> GetSourcesAsync(Guid? studentId, Guid academicYearId,
         Guid? accountId = null, Guid? receiptId = null, Guid? excludingRequestId = null)
     {
         if (!studentId.HasValue) return [];
+        var linkedChargeIds = await externalSettlementGuard.GetLinkedChargeIdsAsync();
         var eligibleCharges = await charges.GetListAsync(x => x.StudentId == studentId &&
-            x.AcademicYearId == academicYearId && x.Status == ChargeStatus.Approved);
+            x.AcademicYearId == academicYearId && x.Status == ChargeStatus.Approved && !linkedChargeIds.Contains(x.Id));
         var chargeIds = eligibleCharges.Select(x => x.Id).ToList();
         var settled = await collections.GetListAsync(x => x.AcademicYearId == academicYearId &&
             (accountId.HasValue ? x.FinanceFeeAccountId == accountId : x.StudentId == studentId && !x.FinanceFeeAccountId.HasValue) &&

@@ -10,5 +10,8 @@ public class CreateChargeRequest
     public decimal Amount { get; set; }
     public DateTime ChargeDate { get; set; }
     public DateTime DueDate { get; set; }
+    public Guid? AcademicYearId { get; set; }
+    public DateOnly? SchoolChargeDate { get; set; }
+    public DateOnly? SchoolDueDate { get; set; }
     public string? Remarks { get; set; }
 }

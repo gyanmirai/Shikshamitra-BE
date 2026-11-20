@@ -16,12 +16,13 @@ namespace ShikshaMitra.Finance.Accounts.Incomes;
 public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? CashCollectionId { get; private set; }
-	public void LinkCashCollection(Guid id, bool pendingIncome = false, Guid? studentId = null, Guid? financeFeeAccountId = null)
+	public void LinkCashCollection(Guid id, bool pendingIncome = false, Guid? studentId = null, Guid? financeFeeAccountId = null, Guid? employeeId = null)
 	{
 		if (CashCollectionId.HasValue || PaymentMethod != 0 || id == Guid.Empty || pendingIncome && TransactionType != TransactionType.Income)
 			throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidSource);
 		CashCollectionId = id;
-		StudentId = studentId; FinanceFeeAccountId = financeFeeAccountId;
+		if (employeeId.HasValue) ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId, employeeId);
+		StudentId = studentId; FinanceFeeAccountId = financeFeeAccountId; EmployeeId = employeeId;
 		if (pendingIncome) IsConfirmed = false;
 	}
 	public Guid? TenantId { get; private set; }
@@ -30,8 +31,9 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
  public string? SourceKey { get; private set; }
  public Guid? SourceId { get; private set; }
  public Guid? StudentId { get; private set; }
+ public Guid? EmployeeId { get; private set; }
  public Guid? FinanceFeeAccountId { get; private set; }
- public void LinkStudent(Guid studentId) => StudentId = ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
+ public void LinkStudent(Guid studentId) => StudentId = ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.LinkStudent(StudentId, studentId, EmployeeId);
  public Guid? BankAccountId { get; private set; }
  public string? CategoryNameSnapshot { get; private set; }
  public string? BankLabelSnapshot { get; private set; }
@@ -67,12 +69,13 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
  public static Transaction Automatic(Guid id, Guid? tenantId, Guid yearId, Guid categoryId,
    string categoryName, Guid? bankId, string? bankLabel, string name, decimal amount,
    int method, DateTime at, TransactionType type, string key, Guid sourceId, Guid? studentId,
-   bool confirmed = true, bool correction = false, Guid? financeFeeAccountId = null)
+   bool confirmed = true, bool correction = false, Guid? financeFeeAccountId = null, Guid? employeeId = null)
  {
    var entry = new Transaction(id, tenantId, yearId, categoryId, name, null, amount, method, at, null, type);
    entry.SourceKey = Check.NotNullOrWhiteSpace(key, nameof(key));
    entry.SourceId = sourceId; entry.StudentId = studentId; entry.BankAccountId = bankId;
-   entry.FinanceFeeAccountId = financeFeeAccountId;
+   if (employeeId.HasValue) ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId, employeeId);
+   entry.FinanceFeeAccountId = financeFeeAccountId; entry.EmployeeId = employeeId;
    entry.CategoryNameSnapshot = categoryName; entry.BankLabelSnapshot = bankLabel;
    entry.IsConfirmed = confirmed; if (correction) entry.Amount = -amount;
    return entry;

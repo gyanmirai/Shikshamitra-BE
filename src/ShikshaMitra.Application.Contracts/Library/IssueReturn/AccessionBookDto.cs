@@ -13,6 +13,9 @@ public class AccessionBookDto
     public string Edition { get; set; } = null!;
     public DateTime AddedOn { get; set; }
     public string Language { get; set; } = null!;
+	public string? LanguageCode { get; set; }
+	public string? MaterialCode { get; set; }
+	public string? MaterialLabel { get; set; }
     public string Category { get; set; } = null!;
     public int Pages { get; set; }
 }

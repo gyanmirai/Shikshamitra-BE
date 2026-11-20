@@ -129,7 +129,7 @@ public class ReceiptReconciliationHeaderScopeApi_Tests(FinanceRoutingApiTestFact
 				var final = new FeePaymentReceipt(Guid.NewGuid()) { TenantId = tenantId, StudentId = studentId,
 					FeeCollectionTransactionId = tx.Id, AcademicYearId = year.Id, BoardId = board.Id, EducationMediumId = medium.Id,
 					ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = FeeReceiptScope.Fee, ReceiptNumber = standard.Id == visible.Id ? "LINKED-FINAL" : "LINKED-HIDDEN",
-					ReceiptDate = new DateOnly(2026, 6, 12), TotalPaidAmount = 1d };
+					ReceiptDate = new DateOnly(2026, 6, 12), TotalPaidAmount = 1m };
 				final.SetFinanceFeeAccount(accountId!.Value);
 				await Save(final);
 				linkedId = final.Id;
@@ -137,7 +137,7 @@ public class ReceiptReconciliationHeaderScopeApi_Tests(FinanceRoutingApiTestFact
 			var receipt = new FeePaymentReceipt(Guid.NewGuid()) { TenantId = tenantId, StudentId = studentId,
 				FeeCollectionTransactionId = tx.Id, AcademicYearId = year.Id, BoardId = board.Id, EducationMediumId = medium.Id,
 				ReceiptKind = FeeReceiptKind.ProvisionalFee, ReceiptScope = FeeReceiptScope.Fee, VerificationStatus = FeeReceiptVerificationStatus.PendingVerification,
-				ReceiptNumber = "HEADER-" + Guid.NewGuid().ToString("N")[..16], ReceiptDate = new DateOnly(2026, 6, 12), TotalPaidAmount = 999d, LinkedFinalReceiptId = linkedId };
+				ReceiptNumber = "HEADER-" + Guid.NewGuid().ToString("N")[..16], ReceiptDate = new DateOnly(2026, 6, 12), TotalPaidAmount = 999m, LinkedFinalReceiptId = linkedId };
 			if (accountId.HasValue) receipt.SetFinanceFeeAccount(accountId.Value);
 			await Save(receipt);
 		}

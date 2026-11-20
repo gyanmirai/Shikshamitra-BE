@@ -4,13 +4,14 @@ using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Data;
+using ShikshaMitra.Finance.ExternalReceivables;
 
 namespace ShikshaMitra.Finance.Fees.Charges;
 
 /// <summary>
 /// Represents a charge applied to a student
 /// </summary>
-public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	private const string VoidedByProperty = "ChargeVoidedBy";
 	private const string VoidedOnProperty = "ChargeVoidedOn";
@@ -22,14 +23,18 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid ChargeRequestId { get; private set; }
 	public string ChargeName { get; private set; } = string.Empty;
 	public Guid ChargeCategoryId { get; private set; }
-	public Guid StudentId { get; private set; }
-	public Guid BoardId { get; private set; }
-	public Guid EducationMediumId { get; private set; }
-	public Guid StandardId { get; private set; }
-	public Guid DivisionId { get; private set; }
+	public Guid? StudentId { get; private set; }
+	public Guid? EmployeeId { get; private set; }
+	public Guid? BoardId { get; private set; }
+	public Guid? EducationMediumId { get; private set; }
+	public Guid? StandardId { get; private set; }
+	public Guid? DivisionId { get; private set; }
 	public string PurposeDescription { get; private set; }
 	public decimal Amount { get; private set; }
-	public DateTimeOffset DueDate { get; private set; }
+	public DateTimeOffset? DueDate { get; private set; }
+	public DateOnly? SchoolAssessmentDate { get; private set; }
+	public DateOnly? SchoolDueDate { get; private set; }
+	public FinanceCivilDateProvenance DueDateProvenance { get; private set; }
 	public DateTimeOffset AppliedOn { get; private set; }
 	public ChargePriority Priority { get; private set; }
 	public ChargeStatus Status { get; private set; }
@@ -108,6 +113,9 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ChargePriority? priority = null,
 		string? additionalNotes = null)
 	{
+		if (SchoolDueDate.HasValue)
+			throw new BusinessException(ShikshaMitra.Library.LibraryFinanceErrorCodes.SourceAlreadyLinked,
+				"Use the source receivable workflow to correct an external assessment.");
 		if (Status != ChargeStatus.Pending)
 		{
 			throw new BusinessException(FinanceChargeErrorCodes.ChargeNotPending)
@@ -276,9 +284,11 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private void ValidateDueDate()
 	{
-		var dueDateDate = DueDate.Date;
+		if (!DueDate.HasValue)
+			throw new BusinessException(FinanceChargeErrorCodes.InvalidDueDate);
+		var dueDateDate = DueDate.Value.Date;
 		var todayInDueDateOffset = DateTimeOffset.UtcNow
-			.ToOffset(DueDate.Offset)
+			.ToOffset(DueDate.Value.Offset)
 			.Date;
 
 		if (dueDateDate < todayInDueDateOffset)

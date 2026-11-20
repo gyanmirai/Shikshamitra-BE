@@ -39,7 +39,7 @@ public partial class LateFeeCollectionRuntime_Tests
 					FeeCollectionTransactionId = payment.Id, ReceiptNumber = $"KFE-{Guid.NewGuid():N}",
 					ReceiptKind = FeeReceiptKind.ProvisionalFee, ReceiptScope = FeeReceiptScope.Fee,
 					VerificationStatus = FeeReceiptVerificationStatus.PendingVerification,
-					TotalPaidAmount = (double)due.PaidAmount,
+					TotalPaidAmount = due.PaidAmount,
 					ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow),
 				}, autoSave: true);
 
@@ -84,7 +84,7 @@ public partial class LateFeeCollectionRuntime_Tests
 					new ChargeCollectionRecord(Guid.NewGuid())
 					{
 						TenantId = TestTenantId, StudentId = studentId, ChargeId = charge.Id,
-						FeeRecordMetadataId = metadata.Id, Amount = amount, PaymentDate = DateTimeOffset.UtcNow,
+						FeeRecordMetadataId = metadata.Id, Amount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble(amount), PaymentDate = DateTimeOffset.UtcNow,
 					}, autoSave: true);
 			}
 			var detail = (await _feeCollections.GetStudentFeeDetailsAsync(studentId, year)).Charges!.Single();
@@ -142,7 +142,7 @@ public partial class LateFeeCollectionRuntime_Tests
 					FeeCollectionTransactionId = payment.Id, ReceiptNumber = $"ADJ-FIN-{Guid.NewGuid():N}",
 					ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = FeeReceiptScope.Fee,
 					VerificationStatus = FeeReceiptVerificationStatus.Verified,
-					TotalPaidAmount = (double)due.PaidAmount,
+					TotalPaidAmount = due.PaidAmount,
 					ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow),
 				}, autoSave: true);
 			var service = GetRequiredService<IFeeAdjustmentAppService>();

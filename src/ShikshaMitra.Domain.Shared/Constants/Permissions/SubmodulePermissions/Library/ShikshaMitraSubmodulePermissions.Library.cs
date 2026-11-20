@@ -39,6 +39,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			{ "Library.Dashboard", new SubmoduleInfo(Dashboard.All, Dashboard.DisplayNames) },
 			{ "Library.AllBooks", new SubmoduleInfo(AllBooks.All, AllBooks.DisplayNames) },
+			{ "Library.Receiving", new SubmoduleInfo(Receiving.All, Receiving.DisplayNames) },
+			{ "Library.Custody", new SubmoduleInfo(Custody.All, Custody.DisplayNames) },
+			{ "Library.CampusTransfers", new SubmoduleInfo(CampusTransfers.All, CampusTransfers.DisplayNames) },
+			{ "Library.Portal", new SubmoduleInfo(Portal.All, Portal.DisplayNames) },
+			{ "Library.InventoryVerification", new SubmoduleInfo(InventoryVerification.All, InventoryVerification.DisplayNames) },
 			{ "Library.IssueReturn", new SubmoduleInfo(IssueReturn.All, IssueReturn.DisplayNames) },
 			{ "Library.LibraryMembers", new SubmoduleInfo(LibraryMembers.All, LibraryMembers.DisplayNames) },
 			{ "Library.Charges", new SubmoduleInfo(Charges.All, Charges.DisplayNames) },
@@ -47,6 +52,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Library.Settings", new SubmoduleInfo(Settings.All, Settings.DisplayNames) },
 
 			// Settings submodules
+			{ "Library.Settings.CatalogueConfiguration", new SubmoduleInfo(Settings_CatalogueConfiguration.All, Settings_CatalogueConfiguration.DisplayNames) },
 			{ "Library.Settings.BookCategories", new SubmoduleInfo(Settings_BookCategories.All, Settings_BookCategories.DisplayNames) },
 			{ "Library.Settings.ChargesCategories", new SubmoduleInfo(Settings_ChargesCategories.All, Settings_ChargesCategories.DisplayNames) },
 			{ "Library.Settings.LibraryHours", new SubmoduleInfo(Settings_LibraryHours.All, Settings_LibraryHours.DisplayNames) },

@@ -60,7 +60,7 @@ public class FeeCollectionBatchwiseBuilder(
 
         var paymentsList = await asyncExecuter.ToListAsync(paymentsQuery);
 
-        var groupedData = new Dictionary<Guid, Dictionary<Guid, (double Cash, double Gateway, double Total)>>();
+        var groupedData = new Dictionary<Guid, Dictionary<Guid, (decimal Cash, decimal Gateway, decimal Total)>>();
         var txPayments = paymentsList.GroupBy(p => p.FeeRecordMetadataId).ToDictionary(g => g.Key, g => g.ToList());
         var txReceipts = receiptsList.GroupBy(r => r.FeeCollectionTransactionId).ToDictionary(g => g.Key, g => g.ToList());
 
@@ -74,8 +74,8 @@ public class FeeCollectionBatchwiseBuilder(
 
             if (!txPayments.TryGetValue(txId, out var payments)) continue;
 
-            var cashTotal = (double)payments.Where(p => p.PaymentMethod == PaymentMethodEnum.Cash).Sum(p => p.Amount);
-            var gatewayTotal = (double)payments.Where(p => p.PaymentMethod != PaymentMethodEnum.Cash).Sum(p => p.Amount);
+            var cashTotal = payments.Where(p => p.PaymentMethod == PaymentMethodEnum.Cash).Sum(p => p.Amount);
+            var gatewayTotal = payments.Where(p => p.PaymentMethod != PaymentMethodEnum.Cash).Sum(p => p.Amount);
 
             foreach (var receipt in txReceiptsList)
             {

@@ -67,7 +67,7 @@ public class MobileFinanceProjection_Tests
  }
  [Fact] public void Receipt_projection_preserves_real_receipt_ids_and_kachi_final_linkage()
  {
-  var transaction=Guid.NewGuid();var receipt=new FeePaymentReceipt(Guid.NewGuid()){FeeCollectionTransactionId=transaction,LinkedFinalReceiptId=Guid.NewGuid(),TotalPaidAmount=0.30};
+  var transaction=Guid.NewGuid();var receipt=new FeePaymentReceipt(Guid.NewGuid()){FeeCollectionTransactionId=transaction,LinkedFinalReceiptId=Guid.NewGuid(),TotalPaidAmount=0.30m};
   var dto=MobileFinanceProjection.Receipt(receipt);
   dto.Id.ShouldBe(receipt.Id);dto.Id.ShouldNotBe(transaction);dto.FeeCollectionTransactionId.ShouldBe(transaction);dto.LinkedFinalReceiptId.ShouldBe(receipt.LinkedFinalReceiptId);dto.TotalPaidAmount.ShouldBe("0.30");
  }
@@ -92,10 +92,10 @@ public class MobileFinanceProjection_Tests
  }
  [Fact] public void Missing_or_incomplete_decimal_payment_evidence_never_becomes_a_zero_payment()
  {
-  Should.Throw<BusinessException>(()=>MobileFinanceProjection.PaymentAmount(100,[])).Code.ShouldBe("Finance:SelfService:PaymentEvidenceIncomplete");
-  Should.Throw<BusinessException>(()=>MobileFinanceProjection.PaymentAmount(100,[10m]));
+  Should.Throw<BusinessException>(()=>MobileFinanceProjection.PaymentAmount(100d,[])).Code.ShouldBe("Finance:SelfService:PaymentEvidenceIncomplete");
+  Should.Throw<BusinessException>(()=>MobileFinanceProjection.PaymentAmount(100d,[10m]));
   MobileFinanceProjection.PaymentAmount(0.30,[0.10m,0.20m]).ShouldBe(0.30m);
-  MobileFinanceProjection.PaymentAmount(0,[]).ShouldBe(0m);
+  MobileFinanceProjection.PaymentAmount(0d,[]).ShouldBe(0m);
  }
 
  [Fact] public void Canonical_fee_overview_is_annual_principal_with_excess_refunds_and_credits_separate()

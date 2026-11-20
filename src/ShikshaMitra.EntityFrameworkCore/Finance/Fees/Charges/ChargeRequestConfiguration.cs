@@ -32,7 +32,7 @@ public class ChargeRequestConfiguration : IEntityTypeConfiguration<ChargeRequest
 			.IsRequired()
 			.HasColumnType("text");
 
-		builder.Property(x => x.DueDate).IsRequired();
+		builder.Property(x => x.DueDate).IsRequired(false);
 		builder.Property(x => x.AppliedOn).IsRequired();
 		builder.Property(x => x.Priority).IsRequired();
 

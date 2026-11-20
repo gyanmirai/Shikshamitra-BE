@@ -44,7 +44,7 @@ public partial class MobileAcademicAppService_Tests
 		await Insert(PaymentMethodRecord.Create(f.Student.Id, tx.Id, 0.20m, new DateTimeOffset(date), PaymentMethodEnum.Cash, tenantId: tenantId));
 		var receipt = await Insert(new FeePaymentReceipt(Guid.NewGuid()) { TenantId = tenantId, StudentId = f.Student.Id, AcademicYearId = f.Year.Id,
 			FeeCollectionTransactionId = tx.Id, ReceiptNumber = "ACTUAL-COMBINED", ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = FeeReceiptScope.Combined,
-			TotalPaidAmount = 0.30, ReceiptDate = DateOnly.FromDateTime(date) });
+			TotalPaidAmount = 0.30m, ReceiptDate = DateOnly.FromDateTime(date) });
 		var page = await reads.TransactionsAsync(f.Student.Id, f.Year.Id);
 		page.TotalCount.ShouldBe(1); var row = page.Items.ShouldHaveSingleItem();
 		row.TransactionId.ShouldBe($"payment:{tx.Id:D}"); row.PaymentId.ShouldBe(tx.Id);

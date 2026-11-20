@@ -32,6 +32,7 @@ public partial class ReconciliationAppService(
     {
         if (input.AcademicYearId == Guid.Empty)
             throw new BusinessException("AcademicYearId is required.");
+		await financeScopeAccessService.EnsureCollectionYearAccessibleAsync(input.AcademicYearId);
 		var tableQuery = ParseListFilters(input.Filters, input.PaymentMethod);
 		var hasHeaderFilters = tableQuery.Filters.Count > 0;
 		var page = Math.Max(1, input.Page);
@@ -52,6 +53,7 @@ public partial class ReconciliationAppService(
             PageSize              = hasHeaderFilters ? int.MaxValue : pageSize,
             ScopedStudentIdsQuery = scopedStudentIds,
             ScopedAccountIdsQuery = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync(),
+            ScopedEmployeeIdsQuery = await financeScopeAccessService.GetScopedEmployeeIdsQueryAsync(),
         };
 
         var (totalCount, ids) = await receiptRepository
@@ -87,6 +89,7 @@ public partial class ReconciliationAppService(
         Guid academicYearId, int? month, int? year,
         CancellationToken cancellationToken = default)
     {
+        await financeScopeAccessService.EnsureCollectionYearAccessibleAsync(academicYearId);
         var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
         return await GetTabCountsCoreAsync(academicYearId, month, year, scopedStudentIds, cancellationToken);
     }

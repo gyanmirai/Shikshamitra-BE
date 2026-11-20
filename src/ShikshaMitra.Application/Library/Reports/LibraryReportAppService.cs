@@ -10,6 +10,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.BlobStoring;
+using Volo.Abp.Authorization;
 
 namespace ShikshaMitra.Library.Reports;
 
@@ -45,10 +46,11 @@ public class LibraryReportAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Reports.Export)]
 	public async Task<LibraryReportExportCreateResponseDto> CreateExportAsync(LibraryReportRequestDto input)
 	{
-		var executionScope = await reportScopeService.AuthorizeAndNormalizeAsync(input);
-
 		var tenantId = CurrentTenant.Id;
 		var userId = CurrentUser.Id ?? throw new BusinessException(code: LibraryErrorCodes.ReportUserRequired, message: "A signed-in user is required to export Library reports.");
+		var authority = await reportScopeService.ResolveAuthorityAsync(userId, requireExport: true, includeMemberPopulation: true);
+		var executionScope = authority.Scope;
+		reportScopeService.ValidateAndNormalizeForScope(input, executionScope);
 		var jobId = GuidGenerator.Create();
 		var expiresAt = DateTime.UtcNow.AddDays(7);
 		var filterJson = JsonSerializer.Serialize(input.Filters);
@@ -63,6 +65,7 @@ public class LibraryReportAppService(
 			filterJson,
 			requestJson,
 			expiresAt);
+		reportScopeService.CaptureExportScope(job, executionScope, authority.MemberSignature);
 
 		await jobRepository.InsertAsync(job, autoSave: true);
 		await backgroundJobManager.EnqueueAsync(new LibraryReportExportJobArgs
@@ -84,9 +87,10 @@ public class LibraryReportAppService(
 	public async Task<List<LibraryReportExportJobDto>> GetExportsAsync()
 	{
 		var userId = CurrentUser.Id ?? throw new BusinessException(code: LibraryErrorCodes.ReportUserRequired, message: "A signed-in user is required to view Library report exports.");
+		var authority = await reportScopeService.ResolveAuthorityAsync(userId, includeMemberPopulation: true);
 		var jobs = await jobRepository.GetRecentAuthorizedJobsAsync(userId, 100);
 		return jobs
-			.Where(job => LibraryReportCatalog.IsSupported(job.ReportType))
+			.Where(job => LibraryReportCatalog.IsSupported(job.ReportType) && reportScopeService.CanAccessStoredScope(job, authority.Scope, authority.MemberSignature))
 			.Select(MapJob)
 			.ToList();
 	}
@@ -116,6 +120,7 @@ public class LibraryReportAppService(
 		{
 			throw new BusinessException(code: LibraryErrorCodes.ReportExportFileNotFound, message: "Library report export file was not found.");
 		}
+		await GetAuthorizedLibraryJobAsync(jobId);
 
 		return new LibraryReportDownloadDto
 		{
@@ -133,10 +138,12 @@ public class LibraryReportAppService(
 		var job = await jobRepository.GetAsync(jobId);
 		if (job.RequestedByUserId != userId && !job.GetSharedUserIds().Contains(userId))
 		{
-			throw new UnauthorizedAccessException("You are not authorized to access this Library report export.");
+			throw new AbpAuthorizationException("You are not authorized to access this Library report export.");
 		}
 
 		LibraryReportCatalog.Resolve(job.ReportType);
+		var authority = await reportScopeService.ResolveAuthorityAsync(userId, includeMemberPopulation: true);
+		reportScopeService.EnsureStoredScope(job, authority.Scope, authority.MemberSignature);
 		return job;
 	}
 

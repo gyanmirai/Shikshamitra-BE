@@ -7,6 +7,7 @@ namespace ShikshaMitra.Communication.Notifications;
 
 public interface INotificationQueueRepository
 {
+	Task<NotificationQueueHealth> ReadHealthAsync(DateTimeOffset now, CancellationToken cancellationToken);
 	Task<IReadOnlyList<NotificationQueueClaim>> ClaimIntentsAsync(DateTimeOffset now, int batchSize,
 		TimeSpan leaseDuration, CancellationToken cancellationToken);
 	Task<IReadOnlyList<NotificationQueueClaim>> ClaimDispatchesAsync(DateTimeOffset now, int batchSize,

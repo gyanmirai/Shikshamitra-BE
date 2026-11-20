@@ -15,6 +15,13 @@ namespace ShikshaMitra.EntityFrameworkCore.Communication.Notifications;
 public sealed class NotificationQueueRepository(IDbContextProvider<ShikshaMitraDbContext> contexts,
 	ICurrentTenant currentTenant) : INotificationQueueRepository, ITransientDependency
 {
+	public async Task<NotificationQueueHealth> ReadHealthAsync(DateTimeOffset now, CancellationToken cancellationToken)
+	{
+		var tenantId = RequireTenant();
+		var context = await contexts.GetDbContextAsync();
+		return await NotificationPostgresQueueHealth.ReadAsync(context.Database.GetDbConnection(), tenantId, now, cancellationToken);
+	}
+
 	public Task<IReadOnlyList<NotificationQueueClaim>> ClaimIntentsAsync(DateTimeOffset now, int batchSize,
 		TimeSpan leaseDuration, CancellationToken cancellationToken) =>
 		ClaimAsync(NotificationQueueKind.Intent, now, batchSize, leaseDuration, cancellationToken);

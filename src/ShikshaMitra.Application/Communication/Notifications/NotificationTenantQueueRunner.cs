@@ -27,7 +27,11 @@ public sealed class NotificationTenantQueueRunner(ICurrentTenant tenant, IUnitOf
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
 		if (units.Current != null) throw new BusinessException(NotificationErrorCodes.StateConflict);
 		if (batchSize is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(batchSize));
-		await recovery.RecoverAsync(Now(), batchSize, cancellationToken);
+		var recovered = await recovery.RecoverAsync(Now(), batchSize, cancellationToken);
+		if (recovered.Intents > 0 || recovered.Dispatches > 0)
+			logger.LogInformation("AcademicNotificationQueueRecovery TenantId={TenantId} IntentLeases={IntentLeases} DispatchLeases={DispatchLeases} " +
+				"ExpiredIntents={ExpiredIntents} ExpiredDispatches={ExpiredDispatches}", tenantId, recovered.IntentLeases, recovered.DispatchLeases,
+				recovered.Intents - recovered.IntentLeases, recovered.Dispatches - recovered.DispatchLeases);
 		await ProcessAsync(tenantId, batchSize, dispatch: false, cancellationToken);
 		await ProcessAsync(tenantId, batchSize, dispatch: true, cancellationToken);
 		await whatsappReceipts.ProcessBatchAsync(batchSize, cancellationToken);
@@ -49,8 +53,11 @@ public sealed class NotificationTenantQueueRunner(ICurrentTenant tenant, IUnitOf
 				else
 				{
 					using var unit = units.Begin(requiresNew: true, isTransactional: true);
-					await planner.PlanAsync(claim, cancellationToken);
+					var exclusions = await planner.PlanAsync(claim, cancellationToken);
 					await unit.CompleteAsync(cancellationToken);
+					foreach (var item in exclusions)
+						logger.LogInformation("AcademicNotificationPlanningExclusion TenantId={TenantId} Channel={Channel} Reason={Reason} Count={Count}",
+							tenantId, item.Channel, item.Reason, item.Count);
 				}
 			}
 			catch (BusinessException error) when (error.Code == NotificationErrorCodes.LeaseLost)

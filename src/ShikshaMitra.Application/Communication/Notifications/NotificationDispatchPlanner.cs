@@ -15,6 +15,8 @@ using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Communication.Notifications;
 
+public sealed record NotificationPlanningExclusionCount(CommunicationChannelType Channel, string Reason, int Count);
+
 [RemoteService(false), DisableAuditing]
 public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWorkManager units, IClock clock,
 	NotificationIntentSourceReader sources, IEnumerable<INotificationRuntimeRecipientResolver> resolvers,
@@ -23,7 +25,7 @@ public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWo
 	IRepository<NotificationDispatch, Guid> dispatches, IRepository<CommunicationRecipientSnapshot, Guid> evidence,
 	IAsyncQueryableExecuter queries, IGuidGenerator guids, NotificationOutcomeLock outcomeLock) : ITransientDependency
 {
-	public async Task PlanAsync(NotificationQueueClaim claim, CancellationToken cancellationToken)
+	public async Task<IReadOnlyList<NotificationPlanningExclusionCount>> PlanAsync(NotificationQueueClaim claim, CancellationToken cancellationToken)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty || claim.TenantId != tenantId)
@@ -47,7 +49,7 @@ public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWo
 					(!x.ApprovalRequired || x.ApprovedByUserId.HasValue && x.ApprovedAt.HasValue))), cancellationToken))
 		{
 			await StopAsync(intent, claim.LeaseId, NotificationIntentState.NeedsReview, "NotificationOperationUnavailable", unit, cancellationToken);
-			return;
+			return [];
 		}
 
 		var (prepared, stopCode) = await PrepareAsync(intent, now, cancellationToken);
@@ -59,7 +61,7 @@ public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWo
 				_ => NotificationIntentState.NeedsReview
 			};
 			await StopAsync(intent, claim.LeaseId, stopState, stopCode, unit, cancellationToken);
-			return;
+			return [];
 		}
 
 		intent.CompletePlanning(claim.LeaseId, Now());
@@ -79,6 +81,11 @@ public sealed class NotificationDispatchPlanner(ICurrentTenant tenant, IUnitOfWo
 		}
 		await intents.UpdateAsync(intent, cancellationToken: cancellationToken);
 		await unit.SaveChangesAsync(cancellationToken);
+		return prepared.Where(x => x.ExclusionCode is "ConsentRequired" or "VerifiedAccountRequired" or
+				"WebPushSubscriptionUnavailable" or "WhatsAppTemplateNotApproved" or NotificationErrorCodes.ProviderUnavailable)
+			.GroupBy(x => (x.Recipient.Channel, x.ExclusionCode))
+			.Select(group => new NotificationPlanningExclusionCount(group.Key.Channel, group.Key.ExclusionCode!, group.Count()))
+			.ToArray();
 	}
 
 	private async Task<(IReadOnlyList<NotificationPreparedDispatch> Rows, string? StopCode)>

@@ -66,6 +66,8 @@ public class NotificationQueueMaintenance_Tests
 
 		result.Intents.ShouldBe(2);
 		result.Dispatches.ShouldBe(3);
+		result.IntentLeases.ShouldBe(1);
+		result.DispatchLeases.ShouldBe(2);
 		reserved.Status.ShouldBe(CommunicationDeliveryStatus.UnknownAcceptance);
 		overdue.Status.ShouldBe(NotificationIntentState.Expired);
 		lost.Status.ShouldBe(NotificationIntentState.Ready);
@@ -87,6 +89,7 @@ public class NotificationQueueMaintenance_Tests
 		var earlier = Intent(Operation(), expiresAt: Now.AddMinutes(-1));
 		var result = await _recovery.RecoverAsync(Now, 1, default);
 		result.Intents.ShouldBe(1);
+		result.IntentLeases.ShouldBe(0);
 		earlier.Status.ShouldBe(NotificationIntentState.Expired);
 		later.Status.ShouldBe(NotificationIntentState.Ready);
 	}

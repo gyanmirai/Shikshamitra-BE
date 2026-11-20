@@ -227,6 +227,8 @@ Run the hosted `NotificationSelfApi_Tests` to check preference categories, curre
 
 Run `powershell -ExecutionPolicy Bypass -File scripts/testing/verify-academic-notification-coverage.ps1` from the backend repository. It reads the [event evidence table](references/notification-coverage.md), validates the workflow anchors, and runs the named recipient and transition tests. The application test checks the exact available event set, source adapter, history policy and any required due scanner. It also verifies that catalogue-only events have a registered explanation and are unavailable for manual sending. `AcademicNotificationStaffApi_Tests` checks that the catalogue returns the explanation for all unavailable events.
 
+Run `NotificationQueueHealthPostgres_Tests` with `SHIKSHAMITRA_NOTIFICATION_TEST_POSTGRES` pointed at a disposable loopback test cluster. It checks due and future work, expired and deleted rows, the last-hour outcome counts, pending receipt age and tenant isolation. `NotificationQueueHealthReporter_Tests` checks the aggregate log fields and tenant requirement. The hosted notification self-service test checks worker registration.
+
 The command saves the application and hosted API test reports in an ignored coverage directory. These reports record local source and recipient behavior. Provider and device acceptance follow the separate delivery checks.
 
 ## Weekly lecture requirements impact

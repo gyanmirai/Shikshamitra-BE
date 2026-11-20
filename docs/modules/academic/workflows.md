@@ -70,6 +70,19 @@ No recovery path reseeds identities, restores grants or resets school records.
 4. Enable the queue worker in the test environment. Start with one published Homework reminder or notice for a designated class and test contacts. Verify the primary guardian, any selected eligible extra relationships or student account, channel exclusions, and each recorded delivery outcome. Use the [notification tests](testing.md#notification-catalogue-coverage) for catalogue evidence.
 5. Enable the approved rules by school, event and scope after provider and device checks. Review inherited rules at the intended class or division. Expand by event family after its source and audience checks. The [catalogue contract](api.md#catalogue-availability) lists events that still need an owning workflow.
 
+## Monitor Academic notification delivery
+
+The health worker visits one page of active schools every five minutes while `Notifications:QueueWorker:Enabled` is true. Look for these events in the API host logs.
+
+| Event | Read it for |
+|---|---|
+| `AcademicNotificationQueueHealth` | Due intents and the age of the oldest one. For WhatsApp, it also reports unmatched or unapplied receipts and the age of the oldest pending receipt. |
+| `AcademicNotificationChannelHealth` | Pending, due, processing and unknown-acceptance counts per school and channel. It also reports the oldest due age, scheduled retries, provider throttling and quota delays, plus failure, expired-subscription and dispatch-exclusion counts for rows updated in the last hour. |
+| `AcademicNotificationQueueRecovery` | Recovered intent and dispatch leases and expired unclaimed work after a successful maintenance turn. |
+| `AcademicNotificationPlanningExclusion` | Saved consent and channel-setup exclusions by school, channel and reason after the planning transaction commits. |
+
+Queue ages are in seconds. A missing age means there is no matching work. A channel that has no matching work is absent from the channel samples. Use the latest sample per school and channel when reviewing queue health across replicas. Route operational alerts through the platform log monitor. These log events carry counts, school IDs and fixed reason codes.
+
 ## Pause Academic notifications
 
 Set `Notifications:QueueWorker:Enabled` to false on all API replicas to stop new worker turns. A turn already processing work may finish. Check Delivery History for queued, in-progress and provider-accepted work. The pause leaves the existing queue and delivery evidence in place. Source capture and reviewed confirmation can continue creating queued work while the workers are paused.

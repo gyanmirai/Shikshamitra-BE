@@ -274,7 +274,8 @@ public class NotificationDispatchPlanner_Tests
 	{
 		_providers[0].ConsentRequired = true;
 		_recipients.Add(Guardian(_child, CommunicationChannelType.Email));
-		await _planner.PlanAsync(_claim, default);
+		var exclusions = await _planner.PlanAsync(_claim, default);
+		exclusions.ShouldHaveSingleItem().ShouldBe(new(CommunicationChannelType.Email, "ConsentRequired", 1));
 		_dispatches.ShouldBeEmpty();
 		_evidence.ShouldHaveSingleItem().BlockedReason.ShouldBe("ConsentRequired");
 		_intent.Status.ShouldBe(NotificationIntentState.Completed);

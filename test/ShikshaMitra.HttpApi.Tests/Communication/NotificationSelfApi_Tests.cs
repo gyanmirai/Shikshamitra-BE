@@ -30,6 +30,8 @@ public partial class NotificationSelfApi_Tests(ShikshaMitraApiTestFactory factor
 		using var scope = Factory.Services.CreateScope();
 		scope.ServiceProvider.GetRequiredService<AcademicNotificationDispatchWorker>().ShouldNotBeNull();
 		scope.ServiceProvider.GetRequiredService<AcademicNotificationReminderWorker>().ShouldNotBeNull();
+		scope.ServiceProvider.GetRequiredService<AcademicNotificationHealthWorker>().ShouldNotBeNull();
+		scope.ServiceProvider.GetRequiredService<NotificationQueueHealthReporter>().ShouldNotBeNull();
 		scope.ServiceProvider.GetRequiredService<NotificationTenantQueueRunner>().ShouldNotBeNull();
 		scope.ServiceProvider.GetRequiredService<INotificationQueueRepository>().ShouldNotBeNull();
 		scope.ServiceProvider.GetRequiredService<INotificationDueScheduler>().ShouldNotBeNull();

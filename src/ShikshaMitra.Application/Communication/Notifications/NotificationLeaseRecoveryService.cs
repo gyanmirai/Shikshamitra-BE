@@ -13,7 +13,7 @@ using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Communication.Notifications;
 
-public sealed record NotificationRecoveryResult(int Intents, int Dispatches);
+public sealed record NotificationRecoveryResult(int Intents, int Dispatches, int IntentLeases, int DispatchLeases);
 
 [RemoteService(false), DisableAuditing]
 public sealed class NotificationLeaseRecoveryService(ICurrentTenant tenant, IUnitOfWorkManager units,
@@ -31,10 +31,10 @@ public sealed class NotificationLeaseRecoveryService(ICurrentTenant tenant, IUni
 			using var unit = units.Begin(requiresNew: true, isTransactional: true);
 			try
 			{
-				var intentCount = await RecoverIntentsAsync(tenantId, now.ToUniversalTime(), batchSize, cancellationToken);
-				var dispatchCount = await RecoverDispatchesAsync(tenantId, now.ToUniversalTime(), batchSize, cancellationToken);
+				var intentsRecovered = await RecoverIntentsAsync(tenantId, now.ToUniversalTime(), batchSize, cancellationToken);
+				var dispatchesRecovered = await RecoverDispatchesAsync(tenantId, now.ToUniversalTime(), batchSize, cancellationToken);
 				await unit.CompleteAsync(cancellationToken);
-				return new(intentCount, dispatchCount);
+				return new(intentsRecovered.Updated, dispatchesRecovered.Updated, intentsRecovered.Leases, dispatchesRecovered.Leases);
 			}
 			catch (AbpDbConcurrencyException) when (attempt < 2)
 			{
@@ -43,7 +43,7 @@ public sealed class NotificationLeaseRecoveryService(ICurrentTenant tenant, IUni
 		}
 	}
 
-	private async Task<int> RecoverIntentsAsync(Guid tenantId, DateTimeOffset now, int batchSize, CancellationToken cancellationToken)
+	private async Task<(int Updated, int Leases)> RecoverIntentsAsync(Guid tenantId, DateTimeOffset now, int batchSize, CancellationToken cancellationToken)
 	{
 		var rows = await queries.ToListAsync((await intents.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
 			(x.Status == NotificationIntentState.Processing && x.LeaseExpiresAt <= now ||
@@ -52,16 +52,19 @@ public sealed class NotificationLeaseRecoveryService(ICurrentTenant tenant, IUni
 			.OrderBy(x => x.Status == NotificationIntentState.Processing ? x.LeaseExpiresAt : x.ExpiresAt)
 			.ThenBy(x => x.Id).Take(batchSize), cancellationToken);
 		var count = 0;
+		var leases = 0;
 		foreach (var row in rows)
 		{
-			if (!row.RecoverExpiredLease(now) && !row.ExpirePending(now)) continue;
+			var recovered = row.RecoverExpiredLease(now);
+			if (!recovered && !row.ExpirePending(now)) continue;
 			await intents.UpdateAsync(row, cancellationToken: cancellationToken);
 			count++;
+			if (recovered) leases++;
 		}
-		return count;
+		return (count, leases);
 	}
 
-	private async Task<int> RecoverDispatchesAsync(Guid tenantId, DateTimeOffset now, int batchSize, CancellationToken cancellationToken)
+	private async Task<(int Updated, int Leases)> RecoverDispatchesAsync(Guid tenantId, DateTimeOffset now, int batchSize, CancellationToken cancellationToken)
 	{
 		var rows = await queries.ToListAsync((await dispatches.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted &&
 			(x.Status == NotificationDispatchState.Processing && x.LeaseExpiresAt <= now ||
@@ -69,13 +72,16 @@ public sealed class NotificationLeaseRecoveryService(ICurrentTenant tenant, IUni
 			.OrderBy(x => x.Status == NotificationDispatchState.Processing ? x.LeaseExpiresAt : x.ExpiresAt)
 			.ThenBy(x => x.Id).Take(batchSize), cancellationToken);
 		var count = 0;
+		var leases = 0;
 		foreach (var row in rows)
 		{
-			if (!row.RecoverExpiredLease(now) && !row.ExpirePending(now)) continue;
+			var recovered = row.RecoverExpiredLease(now);
+			if (!recovered && !row.ExpirePending(now)) continue;
 			if (row.Status == NotificationDispatchState.UnknownAcceptance) await delivery.RecordAsync(row, now, cancellationToken);
 			await dispatches.UpdateAsync(row, cancellationToken: cancellationToken);
 			count++;
+			if (recovered) leases++;
 		}
-		return count;
+		return (count, leases);
 	}
 }

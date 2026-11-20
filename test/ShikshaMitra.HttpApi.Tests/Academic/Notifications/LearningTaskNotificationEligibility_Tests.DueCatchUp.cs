@@ -30,12 +30,11 @@ public partial class LearningTaskNotificationEligibility_Tests
 		var workers = scope.ServiceProvider;
 		using var school = workers.GetRequiredService<ICurrentTenant>().Change(TenantId, "Synthetic school");
 		var outcomes = workers.GetRequiredService<NotificationOutcomeProjector>();
-		var scheduler = workers.GetRequiredService<INotificationDueScheduler>();
 
 		await SettleWithoutDeliveryAsync(original.Id, scanAt.AddMinutes(3));
 		(await ReadReminderOperationAsync()).Status.ShouldBe(CommunicationCampaignStatus.Cancelled);
 		var lateStudentId = await EnrollStudentAsync();
-		await ScanDueSourcesAsync(scheduler, scanAt.AddMinutes(4));
+		await ScanDueSourcesAsync(workers, scanAt.AddMinutes(4));
 		var captured = await ReadReminderIntentsAsync();
 		captured.Length.ShouldBe(2);
 		var catchUp = captured.Single(x => x.Id != original.Id);
@@ -46,7 +45,7 @@ public partial class LearningTaskNotificationEligibility_Tests
 		var roster = JsonSerializer.Deserialize<NotificationRecipientRefDto[]>(catchUp.AffectedRecipientsJson, JsonOptions);
 		roster!.ShouldHaveSingleItem().StudentId.ShouldBe(lateStudentId);
 		(await ReadReminderOperationAsync()).Status.ShouldBe(CommunicationCampaignStatus.Queued);
-		await ScanDueSourcesAsync(scheduler, scanAt.AddMinutes(5));
+		await ScanDueSourcesAsync(workers, scanAt.AddMinutes(5));
 		(await ReadReminderIntentsAsync()).Length.ShouldBe(2);
 
 		if (settleBeforeCancellation) await SettleWithoutDeliveryAsync(catchUp.Id, scanAt.AddMinutes(6));
@@ -56,7 +55,7 @@ public partial class LearningTaskNotificationEligibility_Tests
 		stopped.RejectionReason.ShouldBe(NotificationErrorCodes.CancelledBeforeDelivery);
 		stopped.Status.ShouldBe(CommunicationCampaignStatus.Cancelled);
 		await EnrollStudentAsync();
-		await ScanDueSourcesAsync(scheduler, scanAt.AddMinutes(7));
+		await ScanDueSourcesAsync(workers, scanAt.AddMinutes(7));
 		(await ReadReminderIntentsAsync()).Length.ShouldBe(2);
 
 		async Task<NotificationIntent[]> ReadReminderIntentsAsync()

@@ -101,9 +101,8 @@ public partial class LearningTaskNotificationEligibility_Tests
 		using (var scope = Factory.Services.CreateScope())
 		{
 			using var school = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(TenantId, "Synthetic school");
-			var scheduler = scope.ServiceProvider.GetRequiredService<INotificationDueScheduler>();
-			(await ScanDueSourcesAsync(scheduler, scanAt)).ShouldBeGreaterThan(0);
-			(await ScanDueSourcesAsync(scheduler, scanAt.AddMinutes(2))).ShouldBe(0);
+			(await ScanDueSourcesAsync(scope.ServiceProvider, scanAt)).ShouldBeGreaterThan(0);
+			(await ScanDueSourcesAsync(scope.ServiceProvider, scanAt.AddMinutes(2))).ShouldBe(0);
 		}
 
 		await InSchoolAsync(async services =>
@@ -146,10 +145,13 @@ public partial class LearningTaskNotificationEligibility_Tests
 	private static Task ResetScanCursorsAsync(IServiceProvider services) =>
 		services.GetRequiredService<IRepository<NotificationScheduleCursor, Guid>>().DeleteDirectAsync(x => x.TenantId == TenantId);
 
-	private static async Task<int> ScanDueSourcesAsync(INotificationDueScheduler scheduler, DateTimeOffset now)
+	private static async Task<int> ScanDueSourcesAsync(IServiceProvider services, DateTimeOffset now)
 	{
+		var scheduler = services.GetRequiredService<INotificationDueScheduler>();
+		// Each source can advance once at this fixed instant. Allow one final call when no cursor is due.
+		var maximumScans = services.GetServices<INotificationDueSource>().Count() + 1;
 		var created = 0;
-		for (var index = 0; index < 8; index++)
+		for (var index = 0; index < maximumScans; index++)
 		{
 			var result = await scheduler.ScanAsync(now, 100, CancellationToken.None);
 			created += result.Created;

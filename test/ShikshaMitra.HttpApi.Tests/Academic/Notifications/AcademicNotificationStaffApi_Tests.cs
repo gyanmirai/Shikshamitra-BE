@@ -164,7 +164,7 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 	public async Task Rule_write_rejects_unknown_event_unsupported_channel_and_unresolvable_template()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
-		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, Add);
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, $"{View},{Add}");
 		const string unknown = "Academic.Homework.Unknown";
 		using var eventResponse = await Client.PutAsJsonAsync($"{Route}/rules/{unknown}",
 			new SaveAcademicNotificationRuleDto { EventKey = unknown, Scope = new() });
@@ -174,8 +174,11 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 			new SaveAcademicNotificationRuleDto { EventKey = Event, Scope = new(), Channels = [CommunicationChannelType.Sms] });
 		(await ErrorCodeAsync(channelResponse)).ShouldBe(NotificationErrorCodes.RuleConfigurationInvalid);
 
+		var configured = (await GetAndReadAsync<PagedResultDto<AcademicNotificationRuleListItemDto>>(
+			$"{Route}/rules?eventKey={Event}")).Items.ShouldHaveSingleItem().EffectiveRule;
 		using var templateResponse = await Client.PutAsJsonAsync($"{Route}/rules/{Event}",
-			new SaveAcademicNotificationRuleDto { EventKey = Event, Scope = new(), TemplateIds = [Guid.NewGuid()] });
+			new SaveAcademicNotificationRuleDto { EventKey = Event, Scope = new(), TemplateIds = [Guid.NewGuid()],
+				ConcurrencyStamp = configured?.ConcurrencyStamp });
 		(await ErrorCodeAsync(templateResponse)).ShouldBe(NotificationErrorCodes.TemplateInvalid);
 	}
 
@@ -217,9 +220,11 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 
 	private static async Task<string?> ErrorCodeAsync(HttpResponseMessage response)
 	{
-		response.IsSuccessStatusCode.ShouldBeFalse();
-		var error = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
-		return error.GetProperty("errorCode").GetString();
+		var body = await response.Content.ReadAsStringAsync();
+		response.IsSuccessStatusCode.ShouldBeFalse(body);
+		using var error = JsonDocument.Parse(body);
+		error.RootElement.TryGetProperty("errorCode", out var code).ShouldBeTrue($"{response.StatusCode} {body}");
+		return code.GetString();
 	}
 
 	private async Task<string[]> ReadStaffAuditAsync(string action, Guid entityId)

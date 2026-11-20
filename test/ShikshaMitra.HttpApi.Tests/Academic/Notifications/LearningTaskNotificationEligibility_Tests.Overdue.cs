@@ -121,9 +121,8 @@ public partial class LearningTaskNotificationEligibility_Tests
 		using (var scope = Factory.Services.CreateScope())
 		{
 			using var school = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(TenantId, "Synthetic school");
-			var scheduler = scope.ServiceProvider.GetRequiredService<INotificationDueScheduler>();
-			(await ScanDueSourcesAsync(scheduler, start)).ShouldBeGreaterThan(0);
-			(await ScanDueSourcesAsync(scheduler, start.AddMinutes(2))).ShouldBe(0);
+			(await ScanDueSourcesAsync(scope.ServiceProvider, start)).ShouldBeGreaterThan(0);
+			(await ScanDueSourcesAsync(scope.ServiceProvider, start.AddMinutes(2))).ShouldBe(0);
 		}
 
 		await InSchoolAsync(async services =>

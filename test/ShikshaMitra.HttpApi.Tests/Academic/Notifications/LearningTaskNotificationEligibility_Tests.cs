@@ -207,9 +207,8 @@ public partial class LearningTaskNotificationEligibility_Tests(ShikshaMitraApiTe
 		{
 			var services = scope.ServiceProvider;
 			using var school = services.GetRequiredService<ICurrentTenant>().Change(TenantId, "Synthetic school");
-			var scheduler = services.GetRequiredService<INotificationDueScheduler>();
-			(await ScanDueSourcesAsync(scheduler, scanAt)).ShouldBeGreaterThan(0);
-			(await ScanDueSourcesAsync(scheduler, scanAt.AddMinutes(2))).ShouldBe(0);
+			(await ScanDueSourcesAsync(services, scanAt)).ShouldBeGreaterThan(0);
+			(await ScanDueSourcesAsync(services, scanAt.AddMinutes(2))).ShouldBe(0);
 		}
 
 		await InSchoolAsync(async services =>

@@ -221,6 +221,10 @@ Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedNam
 
 The hosted `TimetableNotificationDelivery_Tests` include the Weekly Lectures HTTP update with an elective group. Run `TimetableNotificationPostgresProbe_Tests` with `ACADEMIC_PERF_TEST_POSTGRES` pointing to a disposable, empty loopback `academic_tests_*` database to check the same workflow against PostgreSQL.
 
+## Weekly Academic summary
+
+Run `AcademicSummaryNotification_Tests` for the school-local cutoff, current family links and separate child and staff totals. Run `AcademicWeeklySummaryPostgresProbe_Tests` with a new empty loopback `academic_tests_*` database. The hosted worker must capture one division operation, keep the two learners' counts separate and avoid a second operation after a cutoff edit.
+
 ## Website push checks
 
 Run the backend delivery, subscription protection and authenticated registration tests from the backend repository.

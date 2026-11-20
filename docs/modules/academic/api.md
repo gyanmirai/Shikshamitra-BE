@@ -92,7 +92,7 @@ Available events have a registered source and a policy for viewing delivery hist
 |---|---|
 | Elective preference opened and due | A saved preference window with opening and due dates |
 | Lesson plan submission due | A saved submission deadline policy |
-| Homework and assignment changed or withdrawn | A publication revision and the audience affected by the change or withdrawal |
+| Homework and assignment changed or withdrawn | A published edit or withdrawal workflow with its affected audience. The current close action retains the published work and its submissions. |
 | Evaluation grading due | A saved grading deadline |
 | Exam approval requested, approved or changes requested | A review workflow with saved decisions |
 | Exam rescheduled or cancelled | Saved transitions and the affected audiences |

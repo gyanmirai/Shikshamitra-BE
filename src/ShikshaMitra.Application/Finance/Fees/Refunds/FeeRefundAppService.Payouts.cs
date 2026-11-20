@@ -25,7 +25,13 @@ public partial class FeeRefundAppService
         using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
             { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
-        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
+        if (request.FinanceExternalSourceLinkId.HasValue)
+            await EnsureExternalRefundActionAsync(request, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Process);
+        else
+        {
+            await EnsureLegacyRefundSourcesAsync(request);
+            await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
+        }
         EnsureSettlementMethodAllowed(request, input.Method);
         var priorPayout = request.Settlements.FirstOrDefault(x =>
             x.IdempotencyKey == input.IdempotencyKey || x.VerificationKey == input.IdempotencyKey);
@@ -94,6 +100,7 @@ public partial class FeeRefundAppService
         using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
             { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
+        await EnsureLegacyRefundSourcesAsync(request);
         await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
         var payout = request.Settlements.SingleOrDefault(x => x.Id == payoutId)
             ?? throw new BusinessException(FeeRefundErrorCodes.SettlementNotFound);
@@ -131,7 +138,7 @@ public partial class FeeRefundAppService
                 request.VoucherNumber, amount, PayoutMethodValue(payout.Method),
                 ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Expense,
                 $"refund:{payout.Id:N}", request.Id, request.StudentId, paymentDate: payout.SettlementDate.UtcDateTime,
-                financeFeeAccountId: request.FinanceFeeAccountId);
+                financeFeeAccountId: request.FinanceFeeAccountId, employeeId: request.EmployeeId);
         await WriteAuditAsync(request, FinanceAuditActions.Refund,
             $"Refund {request.VoucherNumber} completed.",
             context: new { PayoutId = payout.Id, request.ExpenseCategoryId, request.PayingBankAccountId });
@@ -186,7 +193,13 @@ public partial class FeeRefundAppService
         using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
             { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
-        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
+        if (request.FinanceExternalSourceLinkId.HasValue)
+            await EnsureExternalRefundActionAsync(request, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reverse);
+        else
+        {
+            await EnsureLegacyRefundSourcesAsync(request);
+            await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
+        }
         var original = (await refundAccountingRepository.GetListAsync(x =>
             x.RefundRequestId == id && !x.IsCorrection)).SingleOrDefault();
         if (original == null || original.SettlementId != input.SettlementId ||

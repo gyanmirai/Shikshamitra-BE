@@ -17,7 +17,9 @@ public class ReturnBookSearchBookDto
     public string Isbn { get; set; } = null!;
     public string Publisher { get; set; } = null!;
     public DateTime AddedOn { get; set; }
-    public int Language { get; set; }
+	public int? Language { get; set; }
+	public string? LanguageCode { get; set; }
+	public string? LanguageLabel { get; set; }
     public string Edition { get; set; } = null!;
     public string Category { get; set; } = null!;
     public int Pages { get; set; }

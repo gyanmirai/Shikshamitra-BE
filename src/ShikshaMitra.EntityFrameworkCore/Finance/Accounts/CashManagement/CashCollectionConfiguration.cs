@@ -11,6 +11,9 @@ public class CashCollectionConfiguration : IEntityTypeConfiguration<CashCollecti
 	{
 		b.ToTable("Finance_CashCollections", ShikshaMitraConsts.DbSchema);
 		b.ConfigureByConvention();
+		b.ToTable(table => table.HasCheckConstraint("CK_CashCollections_EmployeePayer", ShikshaMitra.Finance.ExternalReceivables.FinancePayerConstraintSql.OptionalEmployee));
+		b.HasOne<ShikshaMitra.HR.Employees.Employee>().WithMany().HasForeignKey(row => row.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+		b.HasIndex(row => new { row.TenantId, row.EmployeeId, row.AcademicYearId }).HasFilter("\"EmployeeId\" IS NOT NULL");
 		b.HasIndex(x => new { x.TenantId, x.IncomeSourceKeyPrefix }).IsUnique();
 		b.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Status });
 		b.Property(x => x.IncomeSourceKeyPrefix).HasMaxLength(200).IsRequired();

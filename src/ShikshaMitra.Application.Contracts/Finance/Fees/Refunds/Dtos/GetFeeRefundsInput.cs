@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using ShikshaMitra.Finance.Common;
 using Volo.Abp.Application.Dtos;
 
@@ -10,6 +10,8 @@ public class GetFeeRefundsInput : PagedAndSortedResultRequestDto, IFinanceClassD
     public Guid? StudentId { get; set; }
     public Guid? BoardId { get; set; }
     public Guid? FinanceFeeAccountId { get; set; }
+    /// <summary>Intersects the authorized result before counting and pagination; never grants source access.</summary>
+    public Guid? FinanceExternalSourceLinkId { get; set; }
 
     public Guid? AcademicMediumId { get; set; }
 

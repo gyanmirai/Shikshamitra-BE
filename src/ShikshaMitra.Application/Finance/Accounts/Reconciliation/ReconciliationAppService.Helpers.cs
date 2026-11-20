@@ -19,7 +19,8 @@ public partial class ReconciliationAppService
     {
         var counts = await receiptRepository
             .GetReconciliationStatusCountsAsync(academicYearId, month, year, scopedStudentIds, cancellationToken,
-                await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync());
+                await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync(),
+                await financeScopeAccessService.GetScopedEmployeeIdsQueryAsync());
         return BuildTabCounts(counts);
     }
 
@@ -81,6 +82,8 @@ public partial class ReconciliationAppService
             ProvisionalReceiptId       = row.VerificationStatus == FeeReceiptVerificationStatus.NotApplicable ? null : row.ReceiptId,
             ReceiptNumber              = row.ReceiptNumber,
             StudentId                  = row.StudentId,
+			EmployeeId = row.EmployeeId, PayerName = row.EmployeeId.HasValue ? row.EmployeeName : row.StudentName,
+			PayerCode = row.EmployeeCode,
             FinanceFeeAccountId        = row.FinanceFeeAccountId,
             StudentName                = row.StudentName,
             GrNumber                   = row.GrNumber,

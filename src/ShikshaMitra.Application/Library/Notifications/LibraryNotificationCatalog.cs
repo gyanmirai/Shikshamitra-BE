@@ -62,7 +62,7 @@ public class LibraryNotificationCatalog : ISingletonDependency
 			false,
 			null,
 			"Library reservation confirmed: {{bookTitle}}",
-			"Dear {{memberName}}, your reservation for {{bookTitle}} is confirmed until {{reserveDueDate}}."),
+			"Dear {{memberName}}, your request for {{bookTitle}} is recorded. State: {{reservationState}}. {{allocationSummary}} {{reservationDeadlineSummary}}"),
 		new(
 			LibraryNotificationEventTypes.ReservedBookAvailable,
 			LibraryNotificationEventGroups.BookManagement,
@@ -71,7 +71,7 @@ public class LibraryNotificationCatalog : ISingletonDependency
 			false,
 			null,
 			"Reserved book available: {{bookTitle}}",
-			"Dear {{memberName}}, {{bookTitle}} is now available for your reservation. Please collect it by {{reserveDueDate}}."),
+			"Dear {{memberName}}, your assigned copy {{accessionNumber}} of {{bookTitle}} is ready for collection. {{reservationDeadlineSummary}}"),
 		new(
 			LibraryNotificationEventTypes.ReservationExpiring,
 			LibraryNotificationEventGroups.Transactions,
@@ -80,7 +80,7 @@ public class LibraryNotificationCatalog : ISingletonDependency
 			false,
 			1,
 			"Library reservation expiring: {{bookTitle}}",
-			"Dear {{memberName}}, your reservation for {{bookTitle}} expires on {{reserveDueDate}}."),
+			"Dear {{memberName}}, your {{reservationState}} request for {{bookTitle}} is approaching its deadline. {{reservationDeadlineSummary}}"),
 		new(
 			LibraryNotificationEventTypes.FineDueReminder,
 			LibraryNotificationEventGroups.MemberManagement,

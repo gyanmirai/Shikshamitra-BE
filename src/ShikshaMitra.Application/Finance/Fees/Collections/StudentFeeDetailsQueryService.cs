@@ -277,7 +277,7 @@ public partial class StudentFeeDetailsQueryService(
 			var chargeIds = approvedCharges.Select(c => c.Id).ToList();
 			var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
 				.GroupBy(x => x.ChargeId)
-				.ToDictionary(x => x.Key, x => x.Sum(w => (double) w.EffectiveAmount));
+				.ToDictionary(x => x.Key, x => x.Sum(w => w.EffectiveAmount));
 			var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
 			var chargeMetaQ = await feeRecordMetadataRepository.GetQueryableAsync();
 			var reversedTxIds = chargeMetaQ.Where(m => m.Status == FeeCollectionStatus.Reversed).Select(m => m.Id);
@@ -294,10 +294,10 @@ public partial class StudentFeeDetailsQueryService(
 
 			chargeDtos.AddRange(approvedCharges.Select(c =>
 			{
-				var net = (double) c.Amount;
-				var paid = paidPerCharge.GetValueOrDefault(c.Id, 0d);
-				var waived = waivedPerCharge.GetValueOrDefault(c.Id, 0d);
-				var pending = Math.Max(0d, net - paid - waived);
+				var net = c.Amount;
+				var paid = paidPerCharge.GetValueOrDefault(c.Id, 0m);
+				var waived = waivedPerCharge.GetValueOrDefault(c.Id, 0m);
+				var pending = Math.Max(0m, net - paid - waived);
 				return new ChargeDetailDto
 				{
 					ChargeId = c.Id,
@@ -305,15 +305,15 @@ public partial class StudentFeeDetailsQueryService(
 					SourceType = "Charge",
 					IsSystemGenerated = false,
 					Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
-					Amount = net,
-					PaidAmount = paid,
-					PendingAmount = pending,
-					WaivedAmount = waived,
+					Amount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(net),
+					PaidAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(paid),
+					PendingAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(pending),
+					WaivedAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(waived),
 					CanWaive = pending > 0,
-					ReconciliationAmount = Convert.ToDecimal(reconPerCharge.GetValueOrDefault(c.Id, 0d)),
-					Status = reconPerCharge.GetValueOrDefault(c.Id, 0d) > 0d ? FeeCollectionStatus.InReconciliation
-						: pending <= 0d ? (waived > 0d ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
-						: (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
+					ReconciliationAmount = reconPerCharge.GetValueOrDefault(c.Id, 0m),
+					Status = reconPerCharge.GetValueOrDefault(c.Id, 0m) > 0m ? FeeCollectionStatus.InReconciliation
+						: pending <= 0m ? (waived > 0m ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
+						: (paid > 0m ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 				};
 			}));
 		}

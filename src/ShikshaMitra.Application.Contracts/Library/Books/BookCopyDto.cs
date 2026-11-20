@@ -11,4 +11,7 @@ public class BookCopyDto
     public Guid ShelfId { get; set; }
     public string Status { get; set; } = null!;
     public string? Remarks { get; set; }
+	public Guid? ReceivingReceiptId { get; set; }
+	public bool CanRemove { get; set; }
+	public string? RemovalBlockedReason { get; set; }
 }

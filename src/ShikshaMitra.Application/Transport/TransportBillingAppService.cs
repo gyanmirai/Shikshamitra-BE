@@ -365,7 +365,7 @@ public class TransportBillingAppService(
 					$"Generated from transport fee run {run.Id}");
 
 				chargeRequestCount++;
-				var lineMap = lines.ToDictionary(line => line.StudentId);
+				var lineMap = lines.ToDictionary(line => line.StudentId!.Value);
 				foreach (var due in groupDues)
 				{
 					if (!lineMap.TryGetValue(due.StudentId!.Value, out var line))

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using ShikshaMitra.Library.Setting.Sections.Dtos;
 using ShikshaMitra.Library.Shared;
@@ -13,4 +14,6 @@ public interface ILibrarySectionAppService : IApplicationService
 	Task<SectionDetailsResponse> GetAsync(Guid sectionId, Guid academicYearId);
 	Task<GenericUpdatedResponse> UpdateAsync(Guid sectionId, Guid academicYearId, SectionUpdateRequest input);
 	Task DeleteAsync(Guid sectionId, Guid academicYearId);
+	Task<List<LibrarySectionCampusDto>> GetCampusOptionsAsync(Guid academicYearId);
+	Task<SectionDetailsResponse> BindCampusAsync(Guid sectionId, Guid academicYearId, Guid campusId);
 }

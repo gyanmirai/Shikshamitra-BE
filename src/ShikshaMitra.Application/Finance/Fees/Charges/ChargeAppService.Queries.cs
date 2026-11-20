@@ -39,9 +39,9 @@ public partial class ChargeAppService
 		var pendingByRequest = pageRequestIds.Count == 0
 			? new Dictionary<Guid, List<Guid>>()
 			: (await chargeRepository.GetListAsync(line =>
-				pageRequestIds.Contains(line.ChargeRequestId) && line.Status == ChargeStatus.Pending))
+				pageRequestIds.Contains(line.ChargeRequestId) && line.Status == ChargeStatus.Pending && line.StudentId.HasValue))
 				.GroupBy(line => line.ChargeRequestId)
-				.ToDictionary(group => group.Key, group => group.Select(line => line.StudentId).ToList());
+				.ToDictionary(group => group.Key, group => group.Select(line => line.StudentId!.Value).ToList());
 		var actionPermissions = new Dictionary<string, bool>();
 		if (items.Any(item => item.PendingCount == item.StudentCount))
 		{
@@ -183,7 +183,7 @@ public partial class ChargeAppService
 		var availableActions = await GetAvailableActionsAsync(
 			detail.Request.RequestorId, detail.Request.AcademicYearId,
 			detail.Lines.Where(line => line.Charge.Status == ChargeStatus.Pending)
-				.Select(line => line.Charge.StudentId).ToList(), hasPending, allPending, canCancel);
+				.Where(line => line.Charge.StudentId.HasValue).Select(line => line.Charge.StudentId!.Value).ToList(), hasPending, allPending, canCancel);
 
 		return new ChargeDetailResponse
 		{
@@ -193,7 +193,7 @@ public partial class ChargeAppService
 				ChargeId = detail.Request.Id, ChargeName = detail.Request.ChargeName,
 				ChargeCategoryId = detail.Request.ChargeCategoryId, CategoryName = detail.Category.Name,
 				PurposeDescription = detail.Request.PurposeDescription, Amount = detail.Request.Amount,
-				DueDate = detail.Request.DueDate, AppliedOn = detail.Request.AppliedOn,
+				DueDate = detail.Request.DueDate!.Value, AppliedOn = detail.Request.AppliedOn,
 				Priority = (int)detail.Request.Priority,
 				Status = (int)DeriveRequestStatus(detail.Lines.Select(l => l.Charge.Status).ToList()),
 				AdditionalNotes = detail.Request.AdditionalNotes, Audience = audience,

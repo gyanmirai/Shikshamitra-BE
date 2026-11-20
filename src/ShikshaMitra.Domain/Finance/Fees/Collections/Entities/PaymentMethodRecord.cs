@@ -1,6 +1,7 @@
 ﻿using System;
 using ShikshaMitra.Finance.Fees.Collections;
 using Volo.Abp;
+using ShikshaMitra.Finance.ExternalReceivables;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -15,8 +16,9 @@ public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public Guid? StudentId { get; private set; }
+	public Guid? EmployeeId { get; private set; }
 	public Guid? FinanceFeeAccountId { get; private set; }
-	public void LinkStudent(Guid studentId) => StudentId = FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
+	public void LinkStudent(Guid studentId) => StudentId = FinanceFeePayerIdentity.LinkStudent(StudentId, studentId, EmployeeId);
  public Guid? BankAccountId { get; private set; }
  public string? BankLabelSnapshot { get; private set; }
  public void SetReceivingBank(Guid? id, string? label) { BankAccountId = id; BankLabelSnapshot = label; }
@@ -53,11 +55,13 @@ public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PaymentDetails? paymentDetails = null,
 		Guid? tenantId = null,
 		string? notes = null,
-		Guid? financeFeeAccountId = null)
+		Guid? financeFeeAccountId = null,
+		Guid? employeeId = null)
 	{
+		FinanceMoneyPrecision.Ensure(amount, positive: true);
 		if (amount <= 0)
 			throw new BusinessException(FeeCollectionErrorCodes.PaymentAmountMustBePositive);
-		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
+		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId, employeeId);
 
 		// Only Cheque, DemandDraft, BankTransfer, and UPI have dedicated detail types
 		// and therefore require details. CreditCard, OnlinePaymentGateway, and
@@ -78,6 +82,7 @@ public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			Id = Guid.NewGuid(),
 			StudentId = studentId,
+			EmployeeId = employeeId,
 			FinanceFeeAccountId = financeFeeAccountId,
 			FeeRecordMetadataId = feeRecordMetadataId,
 			Amount = amount,

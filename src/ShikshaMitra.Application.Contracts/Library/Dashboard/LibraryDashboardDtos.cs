@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ShikshaMitra.Library.Dashboard.Dtos;
 
 namespace ShikshaMitra.Library.Dashboard;
 
@@ -7,9 +8,15 @@ public class LibraryDashboardOverviewDto
 {
 	public Guid? AcademicYearId { get; set; }
 	public DateTime GeneratedAt { get; set; }
+	public DateOnly? SchoolAsOfDate { get; set; }
+	public string SchoolDateSource { get; set; } = "Unavailable";
+	public string? SchoolDateUnavailableReason { get; set; }
+	public int UnknownIssueDateCount { get; set; }
+	public int UnknownReturnDateCount { get; set; }
 	public LibraryStockTotalsDto StockTotals { get; set; } = new();
 	public LibraryCirculationTotalsDto Circulation { get; set; } = new();
 	public LibraryChargeTotalsDto Charges { get; set; } = new();
+	public LibraryFinancePositionSummaryDto FinancePosition { get; set; } = new();
 	public LibraryReservationTotalsDto Reservations { get; set; } = new();
 	public LibraryUtilizationDto Utilization { get; set; } = new();
 	public List<LibraryDashboardTrendPointDto> WeeklyCirculation { get; set; } = new();
@@ -29,6 +36,8 @@ public class LibraryStockTotalsDto
 	public int LostCopies { get; set; }
 	public int DamagedCopies { get; set; }
 	public int UnderRepairCopies { get; set; }
+	public int InCustodyCopies { get; set; }
+	public int InTransitCopies { get; set; }
 	public int DiscardedCopies { get; set; }
 }
 
@@ -40,6 +49,11 @@ public class LibraryCirculationTotalsDto
 	public int ReturnsToday { get; set; }
 	public int IssuesThisWeek { get; set; }
 	public int ReturnsThisWeek { get; set; }
+	public bool OverdueClassificationAvailable { get; set; }
+	public int UnknownDueDateCount { get; set; }
+	public DateOnly? OverdueAsOfDate { get; set; }
+	public string OverdueDateSource { get; set; } = "Unavailable";
+	public string? OverdueUnavailableReason { get; set; }
 }
 
 public class LibraryChargeTotalsDto

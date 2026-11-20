@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Library.Clearance;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -20,6 +21,7 @@ public class EmployeeStatusAppService(
 	IEmployeeCacheManager employeeCacheManager,
 	EmployeeManager employeeManager,
 	EmployeeStatusTransitionValidator statusTransitionValidator,
+	LibraryStaffClearanceReader libraryClearance,
 	IDistributedEventBus distributedEventBus)
 	: ApplicationService, IEmployeeStatusAppService
 {
@@ -37,11 +39,15 @@ public class EmployeeStatusAppService(
 			?? throw new EntityNotFoundException(typeof(Employee), employeeId);
 
 		var activeDirectReportCount = await GetActiveDirectReportCountAsync(employeeId);
+		var library = await libraryClearance.ReadAsync(employeeId);
 
 		return new EmployeeStatusDeactivationCheckDto
 		{
 			CanDeactivate = activeDirectReportCount == 0,
-			ActiveDirectReportCount = activeDirectReportCount
+			ActiveDirectReportCount = activeDirectReportCount,
+			LibraryClearanceStatus = library.Status,
+			LibraryOutstandingLoanCount = library.OutstandingLoanCount,
+			LibraryOutstandingCustodyCount = await libraryClearance.ReadCustodyCountAsync(employeeId)
 		};
 	}
 

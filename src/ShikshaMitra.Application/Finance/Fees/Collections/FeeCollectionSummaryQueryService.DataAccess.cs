@@ -232,15 +232,16 @@ public partial class FeeCollectionSummaryQueryService
 		var chargeQ = await chargeRepository.GetQueryableAsync();
 		var approvedCharges = await AsyncExecuter.ToListAsync(
 			chargeQ
-				.Where(c => studentIds.Contains(c.StudentId)
+				.Where(c => c.StudentId.HasValue && studentIds.Contains(c.StudentId.Value)
 						 && c.AcademicYearId == academicYearId
 						 && c.Status == ChargeStatus.Approved)
-				.Select(c => new { c.Id, c.StudentId, c.Amount, c.DueDate }),
+				.Select(c => new { c.Id, StudentId = c.StudentId!.Value, c.Amount, c.DueDate }),
 			cancellationToken);
 
 		if (duePeriod is { } period)
 			approvedCharges.RemoveAll(charge =>
-				charge.DueDate.UtcDateTime < period.StartUtc || charge.DueDate.UtcDateTime >= period.EndUtc);
+				charge.DueDate is not { } dueDate ||
+				dueDate.UtcDateTime < period.StartUtc || dueDate.UtcDateTime >= period.EndUtc);
 
 		if (approvedCharges.Count == 0)
 			return result;
@@ -251,7 +252,7 @@ public partial class FeeCollectionSummaryQueryService
 		var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
 		var paymentFacts = await AsyncExecuter.ToListAsync(
 			chargeCollQ
-				.Where(r => studentIds.Contains(r.StudentId)
+				.Where(r => r.StudentId.HasValue && studentIds.Contains(r.StudentId.Value)
 						 && chargeIds.Contains(r.ChargeId)
 						 && !metaQ.Any(m => m.Id == r.FeeRecordMetadataId && m.Status == FeeCollectionStatus.Reversed))
 				.Select(r => new { r.ChargeId, r.Amount }),

@@ -1,5 +1,6 @@
 ﻿using ShikshaMitra.Finance.Fees.Collections;
 using System;
+using ShikshaMitra.Finance.ExternalReceivables;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -10,7 +11,7 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 /// One record is created per collection event, linking all fee-head payments,
 /// charge payments, and payment-method splits together.
 /// </summary>
-public class FeeRecordMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class FeeRecordMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	private FeeRecordMetadata() { /* For ORM */ }
 
@@ -36,7 +37,7 @@ public class FeeRecordMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		StudentId = studentId;
 		FinanceFeeAccountId = financeFeeAccountId;
 		AcademicYearId = academicYearId;
-		TotalPaidFee = totalPaidFee;
+		TotalPaidFee = FinanceMoneyPrecision.FromLegacyDouble(totalPaidFee);
 		ReceiptNumber = receiptNumber;
 		Status = status;
 		Remarks = remarks;
@@ -46,10 +47,12 @@ public class FeeRecordMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public Guid? TenantId { get; private set; }
 	public Guid? StudentId { get; private set; }
+	public Guid? EmployeeId { get; private set; }
+	public string? Currency { get; private set; }
 	public Guid? FinanceFeeAccountId { get; private set; }
-	public void LinkStudent(Guid studentId) => StudentId = FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
+	public void LinkStudent(Guid studentId) => StudentId = FinanceFeePayerIdentity.LinkStudent(StudentId, studentId, EmployeeId);
 	public Guid AcademicYearId { get; private set; }
-	public double TotalPaidFee { get; private set; }
+	public decimal TotalPaidFee { get; private set; }
 
 	/// <summary>Unique receipt number formatted as REC-{YYYY}-{NNNNNN}.</summary>
 	public string ReceiptNumber { get; private set; } = string.Empty;

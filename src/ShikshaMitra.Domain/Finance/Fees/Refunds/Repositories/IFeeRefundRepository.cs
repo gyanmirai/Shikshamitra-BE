@@ -36,6 +36,8 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
         IQueryable<Guid>? scopedAccountIdsQuery = null,
         Guid? financeFeeAccountId = null,
         IQueryable<Guid>? visibleRequestIdsQuery = null,
+        IQueryable<Guid>? authorizedExternalRequestIdsQuery = null,
+        Guid? financeExternalSourceLinkId = null,
         Guid? boardId = null);
 
     /// <summary>Loads a single request with its <see cref="FeeRefundRequest.Lines"/> collection.</summary>

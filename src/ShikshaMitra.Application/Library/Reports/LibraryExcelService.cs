@@ -36,7 +36,15 @@ public class LibraryExcelService(IExcelService excelService) : ITransientDepende
 
 		return excelService.GenerateExcelAsBytes(new ExcelDocument
 		{
-			Sheets = [sheet],
+			Sheets = [sheet, new ExcelSheet
+			{
+				SheetName = "Report context",
+				DefaultColumnWidth = 55,
+				Rows = LibraryReportDateSummary.Read(report).Select(item => new ExcelRow
+				{
+					Cells = [new() { Value = item.Label }, new() { Value = item.Value }]
+				}).ToList()
+			}],
 			OutputFileName = $"{report.ReportType}.xlsx"
 		});
 	}

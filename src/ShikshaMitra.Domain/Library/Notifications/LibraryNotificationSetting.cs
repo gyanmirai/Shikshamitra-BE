@@ -16,6 +16,7 @@ public class LibraryNotificationSetting : AuditedAggregateRoot<Guid>, IMultiTena
 	public bool IsChannelAvailable { get; set; }
 	public bool IsComingSoon { get; set; }
 	public int? ReminderOffsetDays { get; set; }
+	public int RepeatIntervalDays { get; set; } = 1;
 	public string SubjectTemplate { get; set; } = string.Empty;
 	public string MessageTemplate { get; set; } = string.Empty;
 

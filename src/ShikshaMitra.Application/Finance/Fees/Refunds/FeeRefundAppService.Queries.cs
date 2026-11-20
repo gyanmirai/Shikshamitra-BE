@@ -30,12 +30,15 @@ public partial class FeeRefundAppService
             ? null : await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
         var visibleRequestIds = input.AcademicYearId.HasValue
             ? await GetVisibleRefundRequestIdsAsync(input.AcademicYearId.Value) : null;
+        var externalRequestIds = await ExternalRefundAccess.GetReadableRequestIdsAsync();
         var (items, count, statusCounts) = await feeRefundRepository.GetListWithDetailsAsync(input.StudentId, input.AcademicYearId,
             input.AcademicMediumId, input.StandardId, input.DivisionId, input.Status,
             input.LegacyHistory, input.WorkflowVersion, input.Search,
             input.SkipCount, input.MaxResultCount, input.Sorting, scoped,
             scopedAccountIdsQuery: scopedAccounts, financeFeeAccountId: input.FinanceFeeAccountId,
             columnFilters: FeeRefundColumnFilter.Parse(input.Filters), visibleRequestIdsQuery: visibleRequestIds,
+            authorizedExternalRequestIdsQuery: externalRequestIds,
+            financeExternalSourceLinkId: input.FinanceExternalSourceLinkId,
             boardId: input.BoardId);
         var students = await BuildStudentMapAsync(items.Select(x => x.StudentId).Distinct());
         var placements = await BuildRefundYearPlacementsAsync(items, students);
@@ -61,6 +64,7 @@ public partial class FeeRefundAppService
             }
             dtos.Add(dto);
         }
+        await PopulateEmployeeRefundNamesAsync(dtos);
         return new FeeRefundListResultDto
         {
             TotalCount = count,
@@ -93,10 +97,12 @@ public partial class FeeRefundAppService
             var allocationIds = request.Lines.Where(x => x.DueFeeId.HasValue && x.SourceAllocationId.HasValue)
                 .Select(x => x.SourceAllocationId!.Value).Distinct().ToList();
             var allocations = await allocationRepository.GetListAsync(x => allocationIds.Contains(x.Id));
-            var chargeSources = request.Lines.Any(x => x.ChargeId.HasValue)
-                ? await paidChargeRefundService.GetSourcesAsync(request.StudentId, request.AcademicYearId,
-                    request.FinanceFeeAccountId, null, request.Id)
-                : [];
+            var chargeSources = request.FinanceExternalSourceLinkId.HasValue
+                ? await ReadExternalRefundEvidenceAsync(request)
+                : request.Lines.Any(x => x.ChargeId.HasValue)
+                    ? await paidChargeRefundService.GetSourcesAsync(request.StudentId, request.AcademicYearId,
+                        request.FinanceFeeAccountId, null, request.Id)
+                    : [];
             var chargeEvidenceValid = request.Lines.Where(x => x.ChargeId.HasValue).All(line =>
                 chargeSources.Any(source => source.ChargeId == line.ChargeId && source.AllocationId == line.SourceAllocationId &&
                     source.ReceiptId == line.SourceReceiptId && source.Paid >= line.ProcessedAmount - line.ReversedAmount));

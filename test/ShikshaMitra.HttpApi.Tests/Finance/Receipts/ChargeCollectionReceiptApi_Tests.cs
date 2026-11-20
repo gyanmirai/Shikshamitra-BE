@@ -110,7 +110,7 @@ public class ChargeCollectionReceiptApi_Tests : ShikshaMitraApiTestBase
 			var records = await scope.ServiceProvider.GetRequiredService<IRepository<ChargeCollectionRecord, Guid>>()
 				.GetListAsync(record => record.ChargeId == chargeId);
 			records.Count.ShouldBe(1);
-			records.Single().Amount.ShouldBe(1000d);
+			records.Single().Amount.ShouldBe(1000m);
 			await uow.CompleteAsync();
 		}
 	}

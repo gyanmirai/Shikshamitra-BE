@@ -8,5 +8,7 @@ public enum BookCopyStatus
     Lost = 3,
     Damaged = 4,
     UnderRepair = 5,
-    Discarded = 6
+    Discarded = 6,
+    InCustody = 7,
+    InTransit = 8
 }

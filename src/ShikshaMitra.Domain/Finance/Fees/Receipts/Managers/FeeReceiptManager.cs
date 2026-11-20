@@ -1,5 +1,6 @@
 using System;
 using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Finance.ExternalReceivables;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -29,9 +30,9 @@ public class FeeReceiptManager(
 	ICurrentTenant currentTenant
 ) : DomainService
 {
-	public async Task<string> GenerateReceiptNumberAsync(FeeReceiptKind kind)
+	public async Task<string> GenerateReceiptNumberAsync(FeeReceiptKind kind, DateOnly? schoolDate = null)
 	{
-		var year = clock.Now.Year;
+		var year = schoolDate?.Year ?? clock.Now.Year;
 		var sequence = await sequenceRepository.IncrementAndGetAsync(year, kind);
 		var prefix = kind switch
 		{
@@ -74,7 +75,7 @@ public class FeeReceiptManager(
 			ReceiptScope               = scope,
 			ReceiptKind                = kind,
 			VerificationStatus         = verificationStatus,
-			TotalPaidAmount            = totalPaidAmount,
+			TotalPaidAmount            = FinanceMoneyPrecision.FromLegacyDouble(totalPaidAmount),
 			ReceiptNumber              = receiptNumber,
 			ReceiptDate                = DateOnly.FromDateTime(clock.Now.Date),
 			Remarks                    = remarks,
@@ -109,7 +110,7 @@ public class FeeReceiptManager(
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidReceiptGrouping);
 		if (lateFeeLinesTotal < 0m)
 			throw new BusinessException(FeeCollectionErrorCodes.PaymentDetailsMismatch);
-		var allChargesTotal = (decimal)chargeLinesTotal + lateFeeLinesTotal;
+		var allChargesTotal = FinanceMoneyPrecision.FromLegacyDouble(chargeLinesTotal) + lateFeeLinesTotal;
 		var methods = paymentMethods.ToList();
 
 		var feeKind = FeeReceiptPaymentPolicy.DetermineFeeReceiptKind(methods, bankReceiptConfirmed);
@@ -117,8 +118,8 @@ public class FeeReceiptManager(
 		{
 			var number = await GenerateReceiptNumberAsync(feeKind);
 			var receipt = CreateReceipt(feeCollectionTransactionId, studentId, academicYearId, boardId, educationMediumId,
-				FeeReceiptScope.Combined, feeKind, (double)((decimal)feeLinesTotal + allChargesTotal), number, remarks, financeFeeAccountId: financeFeeAccountId);
-			receipt.SetAmountBreakdown((decimal)feeLinesTotal, allChargesTotal);
+				FeeReceiptScope.Combined, feeKind, FinanceMoneyPrecision.ToLegacyDouble(FinanceMoneyPrecision.FromLegacyDouble(feeLinesTotal) + allChargesTotal), number, remarks, financeFeeAccountId: financeFeeAccountId);
+			receipt.SetAmountBreakdown(FinanceMoneyPrecision.FromLegacyDouble(feeLinesTotal), allChargesTotal);
 			receipt.SetLateFeePaidAmount(lateFeeLinesTotal);
 			return [receipt];
 		}
@@ -140,7 +141,7 @@ public class FeeReceiptManager(
 			var number = await GenerateReceiptNumberAsync(chargeKind);
 			receipts.Add(CreateReceipt(
 				feeCollectionTransactionId, studentId, academicYearId, boardId, educationMediumId,
-				FeeReceiptScope.Charge, chargeKind, (double)allChargesTotal, number, remarks, financeFeeAccountId: financeFeeAccountId));
+				FeeReceiptScope.Charge, chargeKind, FinanceMoneyPrecision.ToLegacyDouble(allChargesTotal), number, remarks, financeFeeAccountId: financeFeeAccountId));
 		}
 
 		foreach (var receipt in receipts)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
@@ -15,12 +16,13 @@ using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Library.Charges;
 
 [Authorize(ShikshaMitraSubmodulePermissions.Library.Charges.View)]
 [RemoteService(false)]
-public class LibraryChargeAppService(
+public partial class LibraryChargeAppService(
 	IRepository<LibraryCharge, Guid> chargeRepository,
 	IRepository<LibraryChargeCategory, Guid> chargeCategoryRepository,
 	IRepository<BookIssue, Guid> issueRepository,
@@ -29,13 +31,17 @@ public class LibraryChargeAppService(
 	IRepository<Student, Guid> studentRepository,
 	IRepository<Employee, Guid> employeeRepository,
 	IRepository<Standard, Guid> standardRepository,
-	IRepository<Division, Guid> divisionRepository)
+	IRepository<Division, Guid> divisionRepository,
+	ILibraryAccessService libraryAccess,
+	ILibraryInventoryLock inventoryLock,
+	ICurrentTenant tenant)
 	: ApplicationService, ILibraryChargeAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Charges.Add)]
 	public async Task<GenericCreatedResponse> CreateAsync(CreateChargeRequest input)
 	{
-		EnsureChargeDates(input.ChargeDate, input.DueDate);
+		await inventoryLock.AcquireAsync(tenant.Id);
+		input.MemberId = await libraryAccess.EnsureMemberAsync(input.MemberId);
 		await EnsureChargeCategoryAsync(input.ChargeCategoryId);
 
 		var memberRole = await ResolveActiveMemberRoleAsync(input.MemberId);
@@ -45,7 +51,38 @@ public class LibraryChargeAppService(
 			await EnsureIssueBelongsToMemberAsync(input.BookIssueId.Value, input.MemberId);
 		}
 
-		var charge = new LibraryCharge(
+		LibraryCharge charge;
+		if (input.AcademicYearId.HasValue || input.SchoolChargeDate.HasValue || input.SchoolDueDate.HasValue)
+		{
+			if (!input.AcademicYearId.HasValue || !input.SchoolChargeDate.HasValue || !input.SchoolDueDate.HasValue ||
+				string.IsNullOrWhiteSpace(input.Remarks) || !tenant.Id.HasValue)
+				throw new BusinessException(LibraryFinanceErrorCodes.SourceRequiresReview);
+			await libraryAccess.GetContextAsync(input.AcademicYearId.Value);
+			var category = await chargeCategoryRepository.GetAsync(input.ChargeCategoryId);
+			if (category.AcademicYearId != input.AcademicYearId)
+				throw new BusinessException(LibraryFinanceErrorCodes.SourceRequiresReview,
+					"The assessment year and charge category year must match.");
+			var yearEvidence = JsonSerializer.Serialize(new
+			{
+				input.AcademicYearId, input.BookIssueId, ConfirmedBy = CurrentUser.Id,
+				ConfirmedAt = DateTimeOffset.UtcNow, Reason = input.Remarks,
+				Provenance = LibraryAcademicYearProvenance.ExplicitAssessmentContext
+			});
+			var dateEvidence = JsonSerializer.Serialize(new
+			{
+				input.SchoolChargeDate, input.SchoolDueDate, ConfirmedBy = CurrentUser.Id,
+				ConfirmedAt = DateTimeOffset.UtcNow, Reason = input.Remarks
+			});
+			charge = LibraryCharge.CreateConfirmed(GuidGenerator.Create(), input.MemberId, memberRole,
+				input.ChargeCategoryId, input.BookIssueId, input.Amount, input.SchoolChargeDate.Value,
+				input.SchoolDueDate.Value, input.AcademicYearId.Value,
+				LibraryAcademicYearProvenance.ExplicitAssessmentContext, yearEvidence, dateEvidence,
+				input.Remarks, tenant.Id.Value);
+		}
+		else
+		{
+			EnsureChargeDates(input.ChargeDate, input.DueDate);
+			charge = new LibraryCharge(
 			GuidGenerator.Create(),
 			input.MemberId,
 			memberRole,
@@ -58,6 +95,7 @@ public class LibraryChargeAppService(
 		{
 			Remarks = input.Remarks
 		};
+		}
 
 		await chargeRepository.InsertAsync(charge, autoSave: true);
 
@@ -73,14 +111,15 @@ public class LibraryChargeAppService(
 		page = Math.Max(page, 1);
 		pageSize = Math.Clamp(pageSize, 1, 100);
 
-		var query = await chargeRepository.GetQueryableAsync();
+		var query = await GetReadableChargesAsync();
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-		var charges = await AsyncExecuter.ToListAsync(
+		var offset = ((long)page - 1) * pageSize;
+		List<LibraryCharge> charges = offset >= totalCount ? [] : await AsyncExecuter.ToListAsync(
 			query
 				.OrderByDescending(x => x.CreationTime)
-				.Skip((page - 1) * pageSize)
+				.Skip((int)offset)
 				.Take(pageSize));
 
 		var items = await BuildChargeListDtosAsync(charges);
@@ -103,6 +142,7 @@ public class LibraryChargeAppService(
 			throw LibraryException(LibraryErrorCodes.LibraryChargeNotFound, "Library charge was not found.");
 		}
 
+		await EnsureChargeReadableAsync(charge.Id);
 		var category = await chargeCategoryRepository.FindAsync(charge.ChargeCategoryId);
 		var dto = new ChargeDetailDto
 		{
@@ -115,6 +155,15 @@ public class LibraryChargeAppService(
 			Amount = charge.Amount,
 			ChargeDate = charge.ChargeDate,
 			DueDate = charge.DueDate,
+			SchoolChargeDate = charge.SchoolChargeDate,
+			SchoolDueDate = charge.SchoolDueDate,
+			ChargeDateProvenance = charge.ChargeDateProvenance,
+			DueDateProvenance = charge.DueDateProvenance,
+			AcademicYearId = charge.AcademicYearId,
+			AcademicYearProvenance = charge.AcademicYearProvenance,
+			Currency = charge.Currency,
+			FinanceSourceLinkId = charge.FinanceSourceLinkId,
+			SourceVersion = charge.GetAssessmentVersion(),
 			PaymentStatus = (int)charge.PaymentStatus,
 			PaidDate = charge.PaidDate,
 			Remarks = charge.Remarks,
@@ -131,61 +180,27 @@ public class LibraryChargeAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Charges.Update)]
 	public async Task<GenericUpdatedResponse> UpdateAsync(Guid id, UpdateChargeRequest input)
 	{
+		await inventoryLock.AcquireAsync(tenant.Id);
 		var charge = await chargeRepository.FindAsync(id);
 		if (charge == null)
 		{
 			throw LibraryException(LibraryErrorCodes.LibraryChargeNotFound, "Library charge was not found.");
 		}
 
-		if (input.Amount.HasValue)
-		{
-			if (input.Amount.Value <= 0)
+		await EnsureChargeReadableAsync(charge.Id);
+		var paymentStatus = input.PaymentStatus.HasValue ? (ChargePaymentStatus?)input.PaymentStatus.Value : null;
+		charge.EnsureCanAmend(paymentStatus, input.PaidDate);
+		if (!string.Equals(input.ExpectedSourceVersion, charge.GetAssessmentVersion(), StringComparison.Ordinal))
+			throw new BusinessException(LibraryFinanceErrorCodes.SourceChanged,
+				"The assessment changed. Reload it before applying an amendment.");
+		charge.ApplyUpdate(input.Amount, input.DueDate,
+			paymentStatus,
+			input.PaidDate, input.Remarks, DateTime.UtcNow, input.SchoolDueDate,
+			input.SchoolDueDate.HasValue ? JsonSerializer.Serialize(new
 			{
-				throw LibraryException(LibraryErrorCodes.InvalidCharge, "Charge amount must be greater than zero.");
-			}
-
-			charge.Amount = input.Amount.Value;
-		}
-
-		if (input.DueDate.HasValue)
-		{
-			if (input.DueDate.Value.Date < charge.ChargeDate.Date)
-			{
-				throw LibraryException(LibraryErrorCodes.InvalidCharge, "Charge due date cannot be before charge date.");
-			}
-
-			charge.DueDate = input.DueDate.Value;
-		}
-
-		if (input.PaymentStatus.HasValue)
-		{
-			if (!Enum.IsDefined(typeof(ChargePaymentStatus), input.PaymentStatus.Value))
-			{
-				throw LibraryException(LibraryErrorCodes.InvalidCharge, "Invalid library charge payment status.");
-			}
-
-			charge.PaymentStatus = (ChargePaymentStatus)input.PaymentStatus.Value;
-		}
-
-		if (input.PaidDate.HasValue)
-		{
-			charge.PaidDate = input.PaidDate.Value;
-		}
-
-		if (charge.PaymentStatus == ChargePaymentStatus.Paid && !charge.PaidDate.HasValue)
-		{
-			charge.PaidDate = DateTime.UtcNow;
-		}
-
-		if (charge.PaymentStatus != ChargePaymentStatus.Paid)
-		{
-			charge.PaidDate = null;
-		}
-
-		if (input.Remarks != null)
-		{
-			charge.Remarks = input.Remarks;
-		}
+				SchoolChargeDate = charge.SchoolChargeDate, input.SchoolDueDate,
+				ConfirmedBy = CurrentUser.Id, ConfirmedAt = DateTimeOffset.UtcNow, Reason = input.Remarks
+			}) : null);
 
 		await chargeRepository.UpdateAsync(charge, autoSave: true);
 
@@ -199,16 +214,15 @@ public class LibraryChargeAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Charges.Delete)]
 	public async Task DeleteAsync(Guid id)
 	{
+		await inventoryLock.AcquireAsync(tenant.Id);
 		var charge = await chargeRepository.FindAsync(id);
 		if (charge == null)
 		{
 			throw LibraryException(LibraryErrorCodes.LibraryChargeNotFound, "Library charge was not found.");
 		}
 
-		if (charge.PaymentStatus == ChargePaymentStatus.Paid)
-		{
-			throw LibraryException(LibraryErrorCodes.InvalidCharge, "Paid library charges cannot be deleted.");
-		}
+		await EnsureChargeReadableAsync(charge.Id);
+		charge.EnsureCanDelete();
 
 		await chargeRepository.DeleteAsync(charge, autoSave: true);
 	}
@@ -268,6 +282,15 @@ public class LibraryChargeAppService(
 				Amount = charge.Amount,
 				ChargeDate = charge.ChargeDate,
 				DueDate = charge.DueDate,
+				SchoolChargeDate = charge.SchoolChargeDate,
+				SchoolDueDate = charge.SchoolDueDate,
+				ChargeDateProvenance = charge.ChargeDateProvenance,
+				DueDateProvenance = charge.DueDateProvenance,
+				AcademicYearId = charge.AcademicYearId,
+				AcademicYearProvenance = charge.AcademicYearProvenance,
+				Currency = charge.Currency,
+				FinanceSourceLinkId = charge.FinanceSourceLinkId,
+				SourceVersion = charge.GetAssessmentVersion(),
 				PaymentStatus = (int)charge.PaymentStatus,
 				PaidDate = charge.PaidDate
 			};
@@ -296,17 +319,24 @@ public class LibraryChargeAppService(
 	{
 		if (charge.MemberRole == 0)
 		{
-			var student = await studentRepository.FindAsync(charge.MemberId);
+			var student = await AsyncExecuter.FirstOrDefaultAsync((await studentRepository.GetQueryableAsync())
+				.Where(row => row.TenantId == tenant.Id && row.Id == charge.MemberId)
+				.Select(row => new
+				{
+					row.FirstName, row.MiddleName, row.LastName, row.RollNo, row.GrNo, row.StandardId, row.DivisionId,
+					Avatar = row.AdditionalDetail == null ? null : row.AdditionalDetail.ProfilePictureUrl,
+					ContactNo = row.ContactDetail == null ? null : row.ContactDetail.PrimaryContactNo
+				}));
 			if (student == null)
 			{
 				return;
 			}
 
 			dto.MemberName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim();
-			dto.Avatar = student.AdditionalDetail?.ProfilePictureUrl;
+			dto.Avatar = student.Avatar;
 			dto.RollNo = student.RollNo?.ToString();
 			dto.GrNo = student.GrNo?.ToString();
-			dto.ContactNo = student.ContactDetail?.PrimaryContactNo;
+			dto.ContactNo = student.ContactNo;
 
 			string? standardName = null;
 			string? divisionName = null;
@@ -386,10 +416,12 @@ public class LibraryChargeAppService(
 
 	private async Task<int> ResolveActiveMemberRoleAsync(Guid memberId)
 	{
-		var student = await studentRepository.FindAsync(memberId);
+		var student = await AsyncExecuter.FirstOrDefaultAsync((await studentRepository.GetQueryableAsync())
+			.Where(row => row.TenantId == tenant.Id && row.Id == memberId)
+			.Select(row => new { Active = row.AdditionalDetail != null && row.AdditionalDetail.IsLibraryMember == true }));
 		if (student != null)
 		{
-			if (student.AdditionalDetail?.IsLibraryMember == true)
+			if (student.Active)
 			{
 				return 0;
 			}
@@ -397,10 +429,12 @@ public class LibraryChargeAppService(
 			throw LibraryException(LibraryErrorCodes.MemberInactive, "Student is not an active library member.");
 		}
 
-		var employee = await employeeRepository.FindAsync(memberId);
+		var employee = await AsyncExecuter.FirstOrDefaultAsync((await employeeRepository.GetQueryableAsync())
+			.Where(row => row.TenantId == tenant.Id && row.Id == memberId)
+			.Select(row => new { Active = row.AdditionalDetails != null && row.AdditionalDetails.LibraryMember }));
 		if (employee != null)
 		{
-			if (employee.AdditionalDetails?.LibraryMember == true)
+			if (employee.Active)
 			{
 				return 1;
 			}

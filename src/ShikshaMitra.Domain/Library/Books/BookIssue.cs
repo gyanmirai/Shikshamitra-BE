@@ -4,7 +4,7 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Library.Books;
 
-public class BookIssue : AuditedAggregateRoot<Guid>, IMultiTenant
+public partial class BookIssue : AuditedAggregateRoot<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
 
@@ -19,9 +19,9 @@ public class BookIssue : AuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public int MemberRole { get; set; }
 
-    public DateTime IssueDate { get; set; }
+    public DateTime? IssueDate { get; set; }
 
-    public DateTime DueDate { get; set; }
+    public DateTime? DueDate { get; set; }
 
     public DateTime? ReturnDate { get; set; }
 

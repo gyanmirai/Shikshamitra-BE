@@ -80,6 +80,7 @@ public partial class FeeRefundAppService : IFamilyRefundService
 		if (replay.HasValue)
 		{
 			var saved = await RequireAsync(replay.Value);
+			await EnsureLegacyRefundSourcesAsync(saved, familyAuthorized: true);
 			MobileFinanceCommandRules.RequireOwner(child, year, currentUser.GetId(), saved.StudentId ?? Guid.Empty, saved.AcademicYearId, saved.CreatorId);
 			await uow.CompleteAsync();
 			return MobileFinanceReadService.RefundDto(saved,saved.Reason);

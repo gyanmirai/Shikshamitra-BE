@@ -18,6 +18,9 @@ public class FeeRefundRequestDto
     public string ConcurrencyStamp { get; set; } = string.Empty;
 
     public Guid? StudentId { get; set; }
+    public Guid? EmployeeId { get; set; }
+    public Guid? FinanceExternalSourceLinkId { get; set; }
+    public string? PayerName { get; set; }
     public Guid? FinanceFeeAccountId { get; set; }
 
     public Guid AcademicYearId { get; set; }

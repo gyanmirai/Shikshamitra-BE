@@ -24,4 +24,9 @@ public class LibraryMemberStatisticsDto
     public int CurrentIssue { get; set; }
     public int ReservedBooks { get; set; }
     public int OverdueReturnBooks { get; set; }
+    public bool OverdueClassificationAvailable { get; set; }
+    public int UnknownDueDateCount { get; set; }
+    public DateOnly? OverdueAsOfDate { get; set; }
+    public string OverdueDateSource { get; set; } = "Unavailable";
+    public string? OverdueUnavailableReason { get; set; }
 }

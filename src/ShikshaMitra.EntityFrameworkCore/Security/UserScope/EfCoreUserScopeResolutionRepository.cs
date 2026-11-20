@@ -17,11 +17,21 @@ public sealed class EfCoreUserScopeResolutionRepository(
     IDbContextProvider<ShikshaMitraDbContext> contexts, ICurrentTenant tenant)
     : IUserScopeResolutionRepository, ITransientDependency
 {
+	public async Task<List<Guid>> GetActiveUserIdsAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken = default)
+	{
+		if (userIds.Count == 0) return [];
+		var ids = userIds.Distinct().ToArray();
+		var db = await contexts.GetDbContextAsync();
+		return await db.Set<IdentityUser>().IgnoreAutoIncludes().AsNoTracking()
+			.Where(user => user.TenantId == tenant.Id && user.IsActive && Enumerable.Contains(ids, user.Id))
+			.Select(user => user.Id).ToListAsync(cancellationToken);
+	}
+
     public async Task<List<string>?> GetRoleNamesAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var db = await contexts.GetDbContextAsync();
         var users = db.Set<IdentityUser>().IgnoreAutoIncludes().AsNoTracking()
-            .Where(user => user.TenantId == tenant.Id && user.Id == userId);
+            .Where(user => user.TenantId == tenant.Id && user.Id == userId && user.IsActive);
         if (!await users.AnyAsync(cancellationToken)) return null;
         return await (from user in users
                       from membership in user.Roles

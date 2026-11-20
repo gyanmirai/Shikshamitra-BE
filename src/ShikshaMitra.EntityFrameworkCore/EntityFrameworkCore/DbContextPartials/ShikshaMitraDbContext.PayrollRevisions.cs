@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.HR.Payroll.RunPayroll;
+using ShikshaMitra.Library.Shared;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.EntityFrameworkCore;
@@ -17,6 +18,10 @@ public partial class ShikshaMitraDbContext
 	public override int SaveChanges(bool acceptAllChangesOnSuccess)
 	{
 		ChangeTracker.DetectChanges();
+		LibraryBorrowerScopeEvidenceGuard.Validate(this);
+		ShikshaMitra.Library.Receiving.LibraryReceivingEvidenceGuard.Validate(this);
+		ShikshaMitra.Library.Receiving.LibraryStockImportEvidenceGuard.Validate(this);
+		ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationEvidenceGuard.Validate(this);
 		using var authorizationScopeChange = InvalidateChangedAuthorizationScope();
 		var tenants = ChangeTracker.Entries().Where(x => x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
 			.Where(x => IsPayrollInput(x.Entity, x.Metadata.ClrType) && !IsAdvisorySetupReviewOnly(x)).Select(x => x.Entity is IMultiTenant scoped ? scoped.TenantId : CurrentTenant.Id).Distinct().ToList();
@@ -36,6 +41,10 @@ public partial class ShikshaMitraDbContext
 	public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
 	{
 		ChangeTracker.DetectChanges();
+		LibraryBorrowerScopeEvidenceGuard.Validate(this);
+		ShikshaMitra.Library.Receiving.LibraryReceivingEvidenceGuard.Validate(this);
+		ShikshaMitra.Library.Receiving.LibraryStockImportEvidenceGuard.Validate(this);
+		ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationEvidenceGuard.Validate(this);
 		using var authorizationScopeChange = InvalidateChangedAuthorizationScope();
 		var tenants = ChangeTracker.Entries().Where(x => x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
 			.Where(x => IsPayrollInput(x.Entity, x.Metadata.ClrType) && !IsAdvisorySetupReviewOnly(x)).Select(x => x.Entity is IMultiTenant scoped ? scoped.TenantId : CurrentTenant.Id).Distinct().ToList();

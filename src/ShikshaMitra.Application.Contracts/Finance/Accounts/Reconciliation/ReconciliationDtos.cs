@@ -13,6 +13,9 @@ namespace ShikshaMitra.Finance.Accounts.Reconciliation.Dtos;
 /// </summary>
 public class ReconciliationListItemDto
 {
+	public Guid? EmployeeId { get; set; }
+	public string PayerName { get; set; } = string.Empty;
+	public string? PayerCode { get; set; }
 	public int PaymentReceiptCount { get; set; } = 1;
 	public string ReceiptScope { get; set; } = string.Empty;
     public Guid Id { get; set; }

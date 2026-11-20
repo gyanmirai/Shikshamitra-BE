@@ -1,5 +1,6 @@
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.ExternalReceivables;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Students;
@@ -21,7 +22,7 @@ namespace ShikshaMitra.Finance.Accounts.Reconciliation;
 /// Domain manager that orchestrates the reconciliation approve/reject workflow for both
 /// provisional fee receipts (KFE) and provisional charge receipts (KCH).
 /// </summary>
-public class ReconciliationManager : DomainService
+public partial class ReconciliationManager : DomainService
 {
 	private readonly IFeePaymentReceiptRepository receiptRepository;
 	private readonly IRepository<FeeRecordMetadata, Guid> metadataRepository;
@@ -36,6 +37,7 @@ public class ReconciliationManager : DomainService
 	private readonly IFeeReceiptPdfGenerator pdfGenerator;
 	private readonly FeeReceiptBlobManager blobManager;
 	private readonly ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions;
+	private readonly ICurrentTenant currentTenant;
 
 	public ReconciliationManager(
 		IFeePaymentReceiptRepository receiptRepository,
@@ -69,6 +71,7 @@ public class ReconciliationManager : DomainService
 		this.pdfGenerator = pdfGenerator;
 		this.blobManager = blobManager;
 		this.automaticTransactions = automaticTransactions;
+		this.currentTenant = currentTenant;
 	}
 
 	/// <summary>
@@ -89,20 +92,31 @@ public class ReconciliationManager : DomainService
 		EnsureProvisional(provisional);
 		EnsureNotTerminal(provisional);
 		var originals = await GetVerifiableReceiptsAsync(provisional, cancellationToken);
+        var verifiedSettlement = provisional.Currency == "INR"
+            ? await PrepareTypedVerificationAsync(provisional, cancellationToken) : null;
         FeePaymentReceipt? selectedFinal = null;
         foreach (var original in originals)
         {
             var finalKind = original.ReceiptKind == FeeReceiptKind.ProvisionalFee ? FeeReceiptKind.FinalFee : FeeReceiptKind.FinalCharge;
-            var finalReceiptNumber = await feeReceiptManager.GenerateReceiptNumberAsync(finalKind);
-            var finalReceipt = feeReceiptManager.CreateReceipt(
-                original.FeeCollectionTransactionId, original.StudentId, original.AcademicYearId,
-                original.BoardId, original.EducationMediumId, original.ReceiptScope, finalKind,
-                original.TotalPaidAmount, finalReceiptNumber, remarks, original.ReceiptBookId, original.FinanceFeeAccountId);
+            var finalReceiptNumber = await feeReceiptManager.GenerateReceiptNumberAsync(finalKind,
+                original.Currency == "INR" ? original.ReceiptDate : null);
+            var finalReceipt = original.Currency == "INR"
+                ? FeePaymentReceipt.CreateExternal(GuidGenerator.Create(), currentTenant.Id!.Value,
+                    original.FeeCollectionTransactionId, original.AcademicYearId,
+                    new FinanceExternalPayerIdentity(original.EmployeeId.HasValue ? FinanceExternalPayerKind.Employee : FinanceExternalPayerKind.Student,
+                        original.EmployeeId ?? original.StudentId ?? throw new BusinessException(ReconciliationErrorCodes.InstrumentAttributionRequired)),
+                    original.TotalPaidAmount, original.Currency, finalReceiptNumber, original.ReceiptDate, finalKind, remarks)
+                : feeReceiptManager.CreateReceipt(
+                    original.FeeCollectionTransactionId, original.StudentId, original.AcademicYearId,
+                    original.BoardId ?? throw new BusinessException(ReconciliationErrorCodes.InstrumentAttributionRequired),
+                    original.EducationMediumId ?? throw new BusinessException(ReconciliationErrorCodes.InstrumentAttributionRequired), original.ReceiptScope, finalKind,
+                    FinanceMoneyPrecision.ToLegacyDouble(original.TotalPaidAmount), finalReceiptNumber, remarks, original.ReceiptBookId, original.FinanceFeeAccountId);
             if (original.ReceiptScope == FeeReceiptScope.Combined)
                 finalReceipt.SetAmountBreakdown(original.FeePaidAmount, original.ChargePaidAmount);
             if (original.LateFeePaidAmount.HasValue)
                 finalReceipt.SetLateFeePaidAmount(original.LateFeePaidAmount.Value);
             finalReceipt.SetLinkedProvisionalReceiptId(original.Id);
+            if (verifiedSettlement != null) FinanceReceiptEvidence.CaptureSettlement(finalReceipt, verifiedSettlement);
             await receiptRepository.InsertAsync(finalReceipt, autoSave: false);
             var student = original.StudentId.HasValue
                 ? await LazyServiceProvider.LazyGetRequiredService<Volo.Abp.Linq.IAsyncQueryableExecuter>().FirstOrDefaultAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => s.Id == original.StudentId.Value), cancellationToken) : null;
@@ -115,7 +129,7 @@ public class ReconciliationManager : DomainService
         }
 
 		var metadata = await metadataRepository.FindAsync(provisional.FeeCollectionTransactionId, cancellationToken: cancellationToken);
-		if (metadata != null)
+		if (metadata != null && verifiedSettlement == null)
 		{
 			var calculatedStatus = await DeterminePostApprovalStatusAsync(metadata.Id, cancellationToken);
 			if (calculatedStatus == FeeCollectionStatus.Paid) metadata.MarkPaid();
@@ -162,7 +176,7 @@ public class ReconciliationManager : DomainService
 				await dueFeeRepository.UpdateManyAsync(dueFees, autoSave: false);
 			}
 		}
-		if (originals.Any(r => r.ReceiptScope is FeeReceiptScope.Charge or FeeReceiptScope.Combined))
+		if (provisional.Currency != "INR" && originals.Any(r => r.ReceiptScope is FeeReceiptScope.Charge or FeeReceiptScope.Combined))
 		{
 			// Reverse ChargeCollectionRecord entries for charge receipts
 			var chargeRecords = await chargeCollectionRecordRepository.GetListAsync(
@@ -200,11 +214,13 @@ public class ReconciliationManager : DomainService
         // two queue rows, each linked to its own final document. Never guess mixed-instrument shares.
         if (payments.Count != 1 || originals.Count is < 1 or > 2 ||
             originals.Select(r => r.ReceiptScope).Distinct().Count() != originals.Count ||
-            originals.Any(r => r.StudentId != provisional.StudentId || r.FinanceFeeAccountId != provisional.FinanceFeeAccountId ||
+            originals.Any(r => r.StudentId != provisional.StudentId || r.EmployeeId != provisional.EmployeeId || r.FinanceFeeAccountId != provisional.FinanceFeeAccountId ||
                 r.AcademicYearId != provisional.AcademicYearId ||
                 r.VerificationStatus != FeeReceiptVerificationStatus.PendingVerification ||
                 r.ReceiptKind is not (FeeReceiptKind.ProvisionalFee or FeeReceiptKind.ProvisionalCharge)) ||
-            originals.Sum(r => (decimal)r.TotalPaidAmount) != payments[0].Amount ||
+            originals.Sum(r => r.TotalPaidAmount) != payments[0].Amount ||
+            payments[0].StudentId != provisional.StudentId || payments[0].EmployeeId != provisional.EmployeeId ||
+            payments[0].FinanceFeeAccountId != provisional.FinanceFeeAccountId ||
             originals.Count == 2 && (originals.All(r => r.ReceiptScope != FeeReceiptScope.Fee) ||
                 originals.All(r => r.ReceiptScope != FeeReceiptScope.Charge)))
             throw new BusinessException(ReconciliationErrorCodes.InstrumentAttributionRequired)

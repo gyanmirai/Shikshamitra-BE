@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
@@ -39,42 +38,13 @@ public partial class EfCoreFeePaymentReceiptRepository
         var fields = new Dictionary<string, LambdaExpression>
         {
             ["receiptNumber"] = (Expression<Func<FeePaymentReceipt, string>>)(r => r.ReceiptNumber),
+            ["amount"] = (Expression<Func<FeePaymentReceipt, decimal>>)(r => r.TotalPaidAmount),
             ["status"] = (Expression<Func<FeePaymentReceipt, int>>)(r =>
                 r.VerificationStatus == FeeReceiptVerificationStatus.NotApplicable || r.VerificationStatus == FeeReceiptVerificationStatus.Verified
                     ? 1 : r.VerificationStatus == FeeReceiptVerificationStatus.Rejected ? 2 : 0),
             ["receiptDate"] = (Expression<Func<FeePaymentReceipt, DateOnly>>)(r => r.ReceiptDate)
         };
-        query = ApplyReconciliationAmountHeaders(query, table);
-        return table.Apply(query, fields, column => column != "amount" && ReconciliationHeaderColumns.IsReceipt(column));
-    }
-
-    private static IQueryable<FeePaymentReceipt> ApplyReconciliationAmountHeaders(
-        IQueryable<FeePaymentReceipt> query, FinanceTableQuery table)
-    {
-        // TotalPaidAmount is a legacy Double column. Keep comparisons in its native
-        // numeric type: SQLite's Double -> Decimal conversion becomes TEXT, so
-        // equality/IN can compare textual decimal representations rather than numbers.
-        // Validation remains owned by FinanceTableQuery; alternatives are ORed once.
-        var receipt = Expression.Parameter(typeof(FeePaymentReceipt), "receipt");
-        var amount = Expression.Property(receipt, nameof(FeePaymentReceipt.TotalPaidAmount));
-        Expression? alternatives = null;
-        foreach (var filter in table.Filters.Where(filter => filter.Column == "amount"))
-        {
-            static ConstantExpression Bound(System.Text.Json.JsonElement value) =>
-                Expression.Constant((double)decimal.Parse(value.ToString(), CultureInfo.InvariantCulture));
-            var predicate = filter.Type switch
-            {
-                "between" => Expression.AndAlso(
-                    Expression.GreaterThanOrEqual(amount, Bound(filter.Value.GetProperty("min"))),
-                    Expression.LessThanOrEqual(amount, Bound(filter.Value.GetProperty("max")))),
-                "greaterThan" => Expression.GreaterThan(amount, Bound(filter.Value)),
-                "lessThan" => Expression.LessThan(amount, Bound(filter.Value)),
-                _ => Expression.Equal(amount, Bound(filter.Value))
-            };
-            alternatives = alternatives is null ? predicate : Expression.OrElse(alternatives, predicate);
-        }
-        return alternatives is null ? query :
-            query.Where(Expression.Lambda<Func<FeePaymentReceipt, bool>>(alternatives, receipt));
+        return table.Apply(query, fields, ReconciliationHeaderColumns.IsReceipt);
     }
 
     private sealed class ContextHeaderRow

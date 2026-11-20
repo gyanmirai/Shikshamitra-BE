@@ -20,9 +20,13 @@ public sealed class ReceiptDocumentModel
 	public required DateOnly Date { get; init; }
 	public string? AcademicYear { get; init; }
 	public IReadOnlyList<ReceiptDocumentField> StudentFields { get; init; } = [];
+	public string PayerHeading { get; init; } = "STUDENT DETAILS";
+	public string? FinancialPositionHeading { get; init; }
+	public IReadOnlyList<ReceiptDocumentField> FinancialPositionFields { get; init; } = [];
 	public IReadOnlyList<ReceiptDocumentField> PaymentFields { get; init; } = [];
 	public IReadOnlyList<ReceiptDocumentLine> Lines { get; init; } = [];
 	public required decimal Amount { get; init; }
+	public string? AmountLabel { get; init; }
 	public bool IsRefund { get; init; }
 	public string? RelatedReceipt { get; init; }
 	public string? Status { get; init; }

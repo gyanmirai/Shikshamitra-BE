@@ -10234,6 +10234,9 @@ namespace ShikshaMitra.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -10306,6 +10309,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("BankAccountId");
 
+                    b.HasIndex("EmployeeId");
+
                     b.HasIndex("FinanceFeeAccountId");
 
                     b.HasIndex("TenantId", "IncomeSourceKeyPrefix")
@@ -10313,7 +10318,13 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "AcademicYearId", "Status");
 
-                    b.ToTable("Finance_CashCollections", (string)null);
+                    b.HasIndex("TenantId", "EmployeeId", "AcademicYearId")
+                        .HasFilter("\"EmployeeId\" IS NOT NULL");
+
+                    b.ToTable("Finance_CashCollections", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CashCollections_EmployeePayer", "(\"EmployeeId\" IS NULL OR (\"StudentId\" IS NULL AND \"FinanceFeeAccountId\" IS NULL))");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Incomes.Transaction", b =>
@@ -10366,6 +10377,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
@@ -10432,6 +10446,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("CashCollectionId");
 
+                    b.HasIndex("EmployeeId");
+
                     b.HasIndex("FinanceFeeAccountId");
 
                     b.HasIndex("SourceId");
@@ -10440,7 +10456,13 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasFilter("\"SourceKey\" IS NOT NULL");
 
-                    b.ToTable("Finance_Transactions", (string)null);
+                    b.HasIndex("TenantId", "EmployeeId", "AcademicYearId")
+                        .HasFilter("\"EmployeeId\" IS NOT NULL");
+
+                    b.ToTable("Finance_Transactions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Transactions_EmployeePayer", "(\"EmployeeId\" IS NULL OR (\"StudentId\" IS NULL AND \"FinanceFeeAccountId\" IS NULL))");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Posting.AccountingPeriod", b =>
@@ -11033,6 +11055,368 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("Finance_AuditEvents", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.ExternalReceivables.FinanceChargeWaiverReversal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("ReversedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<Guid>("WaiverApplicationId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WaiverApplicationId");
+
+                    b.HasIndex("TenantId", "WaiverApplicationId");
+
+                    b.ToTable("Finance_ChargeWaiverReversals", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalReceivableCommand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CommandFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("ResultEntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResultEntityType")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("SourceLinkId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceLinkId");
+
+                    b.HasIndex("TenantId", "Operation", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ExternalReceivableCommands_Tenant_Operation_Key");
+
+                    b.ToTable("Finance_ExternalReceivableCommands", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalReceivableSourceLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CollectionPolicyVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<Guid>("FinanceChargeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FinanceChargeRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("LegacyConcurrencyStamp")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("LegacyExtraPropertiesJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<Guid?>("RefundPolicyVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SourceFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SourceKind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourceSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SourceVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollectionPolicyVersionId");
+
+                    b.HasIndex("FinanceChargeId");
+
+                    b.HasIndex("FinanceChargeRequestId");
+
+                    b.HasIndex("RefundPolicyVersionId");
+
+                    b.HasIndex("SourceId");
+
+                    b.HasIndex("TenantId", "FinanceChargeId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ExternalReceivableSources_Tenant_Charge");
+
+                    b.HasIndex("TenantId", "FinanceChargeRequestId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ExternalReceivableSources_Tenant_Request");
+
+                    b.HasIndex("TenantId", "SourceKind", "SourceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ExternalReceivableSources_Tenant_Source");
+
+                    b.ToTable("Finance_ExternalReceivableSourceLinks", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalSettlementPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BoundByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CollectionPolicyVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("RefundPolicyVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SourceLinkId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollectionPolicyVersionId");
+
+                    b.HasIndex("RefundPolicyVersionId");
+
+                    b.HasIndex("SourceLinkId");
+
+                    b.HasIndex("TenantId", "SourceLinkId")
+                        .IsUnique();
+
+                    b.ToTable("Finance_ExternalSettlementPolicies", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalWaiverRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("AppliedWaiverId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DecisionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid>("PolicyVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("RequiresApproval")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("SourceLinkId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("State")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppliedWaiverId")
+                        .IsUnique();
+
+                    b.HasIndex("PolicyVersionId");
+
+                    b.HasIndex("SourceLinkId");
+
+                    b.HasIndex("TenantId", "SourceLinkId", "State");
+
+                    b.ToTable("Finance_ExternalWaiverRequests", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.Charges.Charge", b =>
                 {
                     b.Property<Guid>("Id")
@@ -11061,7 +11445,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTimeOffset?>("ApprovedOn")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("BoardId")
+                    b.Property<Guid?>("BoardId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("ChargeCategoryId")
@@ -11098,13 +11482,19 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("DivisionId")
+                    b.Property<Guid?>("DivisionId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("DueDate")
+                    b.Property<DateTimeOffset?>("DueDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("EducationMediumId")
+                    b.Property<int>("DueDateProvenance")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("EducationMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EmployeeId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
@@ -11141,13 +11531,19 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("RequestorId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("StandardId")
+                    b.Property<DateOnly?>("SchoolAssessmentDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("SchoolDueDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("StandardId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("StudentId")
+                    b.Property<Guid?>("StudentId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("TenantId")
@@ -11165,6 +11561,8 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("DueDate")
                         .HasDatabaseName("IX_Charges_DueDate");
 
+                    b.HasIndex("EmployeeId");
+
                     b.HasIndex("StudentId")
                         .HasDatabaseName("IX_Charges_StudentId");
 
@@ -11174,7 +11572,10 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("CreatorId", "Status")
                         .HasDatabaseName("IX_Charges_CreatorId_Status");
 
-                    b.ToTable("Finance_Charges", (string)null);
+                    b.ToTable("Finance_Charges", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_FinanceCharges_Payer", "(\"StudentId\" IS NOT NULL AND \"EmployeeId\" IS NULL) OR (\"StudentId\" IS NULL AND \"EmployeeId\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.Charges.ChargeRequest", b =>
@@ -11199,7 +11600,7 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid>("BoardId")
+                    b.Property<Guid?>("BoardId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("ChargeCategoryId")
@@ -11233,10 +11634,13 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<DateTimeOffset>("DueDate")
+                    b.Property<DateTimeOffset?>("DueDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("EducationMediumId")
+                    b.Property<int>("DueDateProvenance")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("EducationMediumId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
@@ -11275,6 +11679,9 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<Guid>("RequestorId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("SchoolDueDate")
+                        .HasColumnType("date");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
@@ -12012,8 +12419,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<double>("Amount")
-                        .HasColumnType("double precision");
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
 
                     b.Property<Guid>("ChargeId")
                         .HasColumnType("uuid");
@@ -12041,6 +12449,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -12066,7 +12477,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTimeOffset>("PaymentDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("StudentId")
+                    b.Property<Guid?>("StudentId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("TenantId")
@@ -12075,13 +12486,21 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("EmployeeId");
+
                     b.HasIndex("FeeRecordMetadataId")
                         .HasDatabaseName("IX_ChargeCollectionRecords_FeeRecordMetadataId");
 
                     b.HasIndex("StudentId")
                         .HasDatabaseName("IX_ChargeCollectionRecords_StudentId");
 
-                    b.ToTable("Finance_ChargeCollectionRecords", (string)null);
+                    b.HasIndex("TenantId", "EmployeeId")
+                        .HasFilter("\"EmployeeId\" IS NOT NULL");
+
+                    b.ToTable("Finance_ChargeCollectionRecords", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ChargeCollectionRecords_Payer", "((\"StudentId\" IS NOT NULL AND \"EmployeeId\" IS NULL) OR (\"StudentId\" IS NULL AND \"EmployeeId\" IS NOT NULL))");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeCollection.ChargeWaiverApplication", b =>
@@ -12101,13 +12520,6 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("ChargeId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ConcurrencyStamp")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("ConcurrencyStamp");
-
                     b.Property<DateTime>("CreationTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("CreationTime");
@@ -12119,22 +12531,31 @@ namespace ShikshaMitra.Migrations
                     b.Property<decimal>("EffectiveAmount")
                         .HasColumnType("numeric(18,2)");
 
-                    b.Property<string>("ExtraProperties")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("ExtraProperties");
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("IdempotencyKey")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("LegacyConcurrencyStamp")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("LegacyExtraPropertiesJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
                     b.Property<string>("Reason")
                         .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
-                    b.Property<Guid>("StudentId")
+                    b.Property<Guid?>("StudentId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("TenantId")
@@ -12146,11 +12567,19 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("ChargeId")
                         .HasDatabaseName("IX_ChargeWaiverApplications_ChargeId");
 
+                    b.HasIndex("EmployeeId");
+
                     b.HasIndex("AppliedByUserId", "IdempotencyKey")
                         .IsUnique()
                         .HasDatabaseName("UX_ChargeWaiverApplications_Actor_IdempotencyKey");
 
-                    b.ToTable("Finance_ChargeWaiverApplications", (string)null);
+                    b.HasIndex("TenantId", "EmployeeId")
+                        .HasFilter("\"EmployeeId\" IS NOT NULL");
+
+                    b.ToTable("Finance_ChargeWaiverApplications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ChargeWaiverApplications_Payer", "((\"StudentId\" IS NOT NULL AND \"EmployeeId\" IS NULL) OR (\"StudentId\" IS NULL AND \"EmployeeId\" IS NOT NULL))");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeCollection.DueFee", b =>
@@ -12552,6 +12981,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<string>("Currency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
                         .HasColumnName("DeleterId");
@@ -12559,6 +12992,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
@@ -12605,10 +13041,13 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
-                    b.Property<double>("TotalPaidFee")
-                        .HasColumnType("double precision");
+                    b.Property<decimal>("TotalPaidFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
 
                     b.HasIndex("FinanceFeeAccountId");
 
@@ -12624,9 +13063,12 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_FeeRecordMetadatas_TenantId_ReceiptNumber");
 
+                    b.HasIndex("TenantId", "EmployeeId", "AcademicYearId")
+                        .HasFilter("\"EmployeeId\" IS NOT NULL");
+
                     b.ToTable("Finance_FeeRecordMetadatas", null, t =>
                         {
-                            t.HasCheckConstraint("CK_FeeRecordMetadatas_Payer", "\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL");
+                            t.HasCheckConstraint("CK_FeeRecordMetadatas_Payer", "((\"EmployeeId\" IS NULL AND (\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL)) OR (\"EmployeeId\" IS NOT NULL AND \"StudentId\" IS NULL AND \"FinanceFeeAccountId\" IS NULL))");
                         });
                 });
 
@@ -12947,6 +13389,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -12997,6 +13442,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("BankAccountId");
 
+                    b.HasIndex("EmployeeId");
+
                     b.HasIndex("FeeRecordMetadataId")
                         .HasDatabaseName("IX_PaymentMethodRecords_FeeRecordMetadataId");
 
@@ -13005,9 +13452,12 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("StudentId")
                         .HasDatabaseName("IX_PaymentMethodRecords_StudentId");
 
+                    b.HasIndex("TenantId", "EmployeeId")
+                        .HasFilter("\"EmployeeId\" IS NOT NULL");
+
                     b.ToTable("Finance_PaymentMethodRecords", null, t =>
                         {
-                            t.HasCheckConstraint("CK_PaymentMethodRecords_Payer", "\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL");
+                            t.HasCheckConstraint("CK_PaymentMethodRecords_Payer", "((\"EmployeeId\" IS NULL AND (\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL)) OR (\"EmployeeId\" IS NOT NULL AND \"StudentId\" IS NULL AND \"FinanceFeeAccountId\" IS NULL))");
                         });
                 });
 
@@ -13136,6 +13586,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("ExpenseCategoryId")
                         .HasColumnType("uuid");
 
@@ -13151,6 +13604,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("FailureReason")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("FinanceExternalSourceLinkId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("FinanceFeeAccountId")
                         .HasColumnType("uuid");
@@ -13274,7 +13730,11 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("EmployeeId");
+
                     b.HasIndex("ExpenseCategoryId");
+
+                    b.HasIndex("FinanceExternalSourceLinkId");
 
                     b.HasIndex("FinanceFeeAccountId");
 
@@ -13304,13 +13764,16 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("StudentId", "AcademicYearId", "Status")
                         .HasDatabaseName("IX_FeeRefundRequests_Student_Year_Status");
 
+                    b.HasIndex("TenantId", "EmployeeId", "AcademicYearId")
+                        .HasFilter("\"EmployeeId\" IS NOT NULL");
+
                     b.HasIndex("TenantId", "AcademicYearId", "WorkflowVersion", "Status", "CreationTime")
                         .HasDatabaseName("IX_FeeRefundRequests_Worklist")
                         .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("Finance_FeeRefundRequests", null, t =>
                         {
-                            t.HasCheckConstraint("CK_FeeRefundRequests_Payer", "\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL");
+                            t.HasCheckConstraint("CK_FeeRefundRequests_Payer", "((\"EmployeeId\" IS NULL AND (\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL)) OR (\"EmployeeId\" IS NOT NULL AND \"StudentId\" IS NULL AND \"FinanceFeeAccountId\" IS NULL))");
                         });
                 });
 
@@ -13322,7 +13785,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("BoardId")
+                    b.Property<Guid?>("BoardId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -13340,6 +13803,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<string>("Currency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
                         .HasColumnName("DeleterId");
@@ -13348,7 +13815,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeletionTime");
 
-                    b.Property<Guid>("EducationMediumId")
+                    b.Property<Guid?>("EducationMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EmployeeId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
@@ -13414,13 +13884,15 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
-                    b.Property<double>("TotalPaidAmount")
+                    b.Property<decimal>("TotalPaidAmount")
                         .HasColumnType("numeric(18,2)");
 
                     b.Property<int>("VerificationStatus")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
 
                     b.HasIndex("FeeCollectionTransactionId")
                         .HasDatabaseName("IX_FeePaymentReceipts_FeeCollectionTransactionId");
@@ -13430,6 +13902,9 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "ReceiptNumber")
                         .IsUnique()
                         .HasDatabaseName("UX_FeePaymentReceipts_TenantId_ReceiptNumber");
+
+                    b.HasIndex("TenantId", "EmployeeId", "AcademicYearId")
+                        .HasFilter("\"EmployeeId\" IS NOT NULL");
 
                     b.HasIndex("TenantId", "AcademicYearId", "BoardId", "EducationMediumId", "ReceiptKind")
                         .HasDatabaseName("IX_FeePaymentReceipts_ListFilter");
@@ -13443,7 +13918,7 @@ namespace ShikshaMitra.Migrations
 
                     b.ToTable("Finance_FeePaymentReceipts", null, t =>
                         {
-                            t.HasCheckConstraint("CK_FeePaymentReceipts_Payer", "\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL");
+                            t.HasCheckConstraint("CK_FeePaymentReceipts_Payer", "((\"EmployeeId\" IS NULL AND (\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL)) OR (\"EmployeeId\" IS NOT NULL AND \"StudentId\" IS NULL AND \"FinanceFeeAccountId\" IS NULL))");
                         });
                 });
 
@@ -22511,8 +22986,12 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<int>("Language")
+                    b.Property<int?>("Language")
                         .HasColumnType("integer");
+
+                    b.Property<string>("LanguageCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
 
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
@@ -22522,13 +23001,17 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<string>("MaterialCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<int>("NumberOfCopies")
                         .HasColumnType("integer");
 
                     b.Property<int>("Pages")
                         .HasColumnType("integer");
 
-                    b.Property<decimal>("Price")
+                    b.Property<decimal?>("Price")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("Publisher")
@@ -22573,6 +23056,13 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("CopyNumber")
                         .HasColumnType("integer");
 
+                    b.Property<string>("NormalizedAccessionNumber")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasComputedColumnSql("upper(trim(\"AccessionNumber\"))", true);
+
                     b.Property<string>("Remarks")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -22588,12 +23078,18 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("AccessionNumber")
+                    b.HasIndex("BookId");
+
+                    b.HasIndex("TenantId", "NormalizedAccessionNumber")
                         .IsUnique();
 
-                    b.HasIndex("BookId");
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("TenantId", "NormalizedAccessionNumber"), false);
 
                     b.ToTable("AppBookCopies", (string)null);
                 });
@@ -22601,6 +23097,9 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Library.Books.BookIssue", b =>
                 {
                     b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AcademicYearId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("AccessionNumber")
@@ -22612,6 +23111,33 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid>("BookCopyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BorrowerBoardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BorrowerDivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BorrowerMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BorrowerScopeCaptureId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("BorrowerScopeCaptureVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BorrowerScopeProvenance")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BorrowerSnapshotJson")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("BorrowerStageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BorrowerStandardId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("ChargeCategoryId")
@@ -22632,8 +23158,11 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
-                    b.Property<DateTime>("DueDate")
+                    b.Property<DateTime?>("DueDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DueDateProvenance")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
@@ -22643,8 +23172,17 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("FineDueDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("IssueDate")
+                    b.Property<DateTime?>("IssueDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("IssueDateProvenance")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("IssueRecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("IssuedByUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
@@ -22660,12 +23198,36 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("MemberRole")
                         .HasColumnType("integer");
 
+                    b.Property<string>("OriginalCalendarSnapshotJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly?>("OriginalSchoolDueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("PolicySnapshotJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("Remarks")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<int>("RenewalCount")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("ReturnDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ReturnDateProvenance")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("SchoolDueDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("SchoolIssueDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("SchoolReturnDate")
+                        .HasColumnType("date");
 
                     b.Property<int>("Status")
                         .ValueGeneratedOnAdd()
@@ -22684,6 +23246,10 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("MemberId");
 
+                    b.HasIndex("TenantId", "BorrowerScopeCaptureId");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "Status", "SchoolDueDate");
+
                     b.ToTable("AppBookIssues", (string)null);
                 });
 
@@ -22692,7 +23258,42 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AcademicYearId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("BookId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BorrowerBoardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BorrowerDivisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BorrowerMediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BorrowerScopeCaptureId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("BorrowerScopeCaptureVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BorrowerScopeProvenance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("BorrowerScopeSnapshotJson")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("BorrowerStageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BorrowerStandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CanonicalMemberId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreationTime")
@@ -22703,24 +23304,98 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("MemberId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("RequestedDate")
+                    b.Property<int?>("MemberRole")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("OriginalMemberId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("PickupCampusId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PickupLabel")
+                        .HasMaxLength(384)
+                        .HasColumnType("character varying(384)");
+
+                    b.Property<Guid?>("PickupSectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PolicySnapshotJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("QueueProvenance")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("QueueSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("RequestExpiryDateProvenance")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("RequestedDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("ReserveDueDate")
+                    b.Property<int>("RequestedDateProvenance")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ReserveDueDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateOnly?>("SchoolRequestExpiryDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("SchoolRequestedDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("State")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
+
+                    b.Property<string>("TerminalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("BookId");
 
                     b.HasIndex("MemberId");
+
+                    b.HasIndex("TenantId", "BorrowerScopeCaptureId");
+
+                    b.HasIndex("TenantId", "QueueSequence")
+                        .IsUnique()
+                        .HasFilter("\"QueueSequence\" IS NOT NULL");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("TenantId", "QueueSequence"), false);
+
+                    b.HasIndex("TenantId", "BookId", "CanonicalMemberId")
+                        .IsUnique()
+                        .HasFilter("\"State\" IN (0, 1) AND \"CanonicalMemberId\" IS NOT NULL");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("TenantId", "BookId", "CanonicalMemberId"), false);
+
+                    b.HasIndex("TenantId", "PickupSectionId", "State")
+                        .HasFilter("\"PickupSectionId\" IS NOT NULL");
 
                     b.ToTable("AppBookReservations", (string)null);
                 });
@@ -22729,6 +23404,15 @@ namespace ShikshaMitra.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("AcademicYearEvidenceJson")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AcademicYearProvenance")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
@@ -22739,8 +23423,11 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("ChargeCategoryId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("ChargeDate")
+                    b.Property<DateTime?>("ChargeDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ChargeDateProvenance")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -22757,13 +23444,23 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
-                    b.Property<DateTime>("DueDate")
+                    b.Property<string>("Currency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateTime?>("DueDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DueDateProvenance")
+                        .HasColumnType("integer");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
+
+                    b.Property<Guid?>("FinanceSourceLinkId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("LastModificationTime")
                         .HasColumnType("timestamp with time zone")
@@ -22791,6 +23488,15 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<DateOnly?>("SchoolChargeDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("SchoolDueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("SourceDateEvidenceJson")
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
@@ -22801,9 +23507,1113 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ChargeCategoryId");
 
+                    b.HasIndex("FinanceSourceLinkId");
+
                     b.HasIndex("MemberId");
 
                     b.ToTable("AppLibraryCharges", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Books.LibraryCopyEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessionNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ActorKind")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<Guid>("BookId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CopyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("EventType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("FromSectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FromShelfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NextRemarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("NextStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreviousRemarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("PreviousStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("RelatedLoanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("SystemPurpose")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<Guid>("ToSectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ToShelfId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookId");
+
+                    b.HasIndex("CopyId");
+
+                    b.HasIndex("RelatedLoanId");
+
+                    b.HasIndex("TenantId", "CopyId", "Sequence")
+                        .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("TenantId", "CopyId", "Sequence"), false);
+
+                    b.ToTable("AppLibraryCopyEvents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LibraryCopyEvents_Actor", "(\"ActorKind\" = 1 AND \"ActorId\" IS NOT NULL AND \"SystemPurpose\" IS NULL) OR (\"ActorKind\" = 2 AND \"ActorId\" IS NULL AND \"SystemPurpose\" IS NOT NULL AND \"SystemPurpose\" IN (1, 2))");
+                        });
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Books.LibraryLoanCommand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("LoanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Operation")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LoanId");
+
+                    b.HasIndex("TenantId", "ActorId", "Operation", "IdempotencyKey")
+                        .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("TenantId", "ActorId", "Operation", "IdempotencyKey"), false);
+
+                    b.ToTable("AppLibraryLoanCommands", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Books.LibraryLoanEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AfterBorrowerScopeCaptureId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AfterJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("BeforeBorrowerScopeCaptureId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BeforeJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("EventKind")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("LoanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LoanId");
+
+                    b.HasIndex("TenantId", "AfterBorrowerScopeCaptureId");
+
+                    b.HasIndex("TenantId", "BeforeBorrowerScopeCaptureId");
+
+                    b.HasIndex("TenantId", "LoanId", "Sequence")
+                        .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("TenantId", "LoanId", "Sequence"), false);
+
+                    b.ToTable("AppLibraryLoanEvents", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.CampusTransfers.LibraryCampusTransfer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CopyCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DestinationCampus")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid>("DestinationCampusId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DestinationSection")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("DestinationSectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DestinationShelf")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("DestinationShelfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("DispatchedOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SourceCampus")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid>("SourceCampusId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SourceSection")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("SourceSectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "DestinationSectionId");
+
+                    b.HasIndex("TenantId", "ActorId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "RecordedAt", "Id");
+
+                    b.ToTable("AppLibraryCampusTransfers", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.CampusTransfers.LibraryCampusTransferItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessionNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("BookId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("Condition")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("CopyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DispatchEventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReceiptEventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReceiptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SourceShelfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("TransferId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CopyId");
+
+                    b.HasIndex("DispatchEventId")
+                        .IsUnique();
+
+                    b.HasIndex("ReceiptEventId")
+                        .IsUnique();
+
+                    b.HasIndex("ReceiptId");
+
+                    b.HasIndex("TenantId", "CopyId")
+                        .IsUnique()
+                        .HasFilter("\"ReceiptId\" IS NULL");
+
+                    b.HasIndex("TenantId", "TransferId", "CopyId")
+                        .IsUnique();
+
+                    b.ToTable("AppLibraryCampusTransferItems", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.CampusTransfers.LibraryCampusTransferReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CopyCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateOnly>("ReceivedOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<Guid>("TransferId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "TransferId", "ActorId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("AppLibraryCampusTransferReceipts", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Catalogue.LibraryCatalogueConfiguration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("Revision")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique();
+
+                    b.ToTable("AppLibraryCatalogueConfigurations", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Custody.LibraryCustodyHandoff", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ClassName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("CopyCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Custodian")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("ExpectedReturnOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("HandedOffOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RoomName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("StandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "ActorId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "RecordedAt", "Id");
+
+                    b.ToTable("AppLibraryCustodyHandoffs", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Custody.LibraryCustodyItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessionNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("BookId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CopyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HandoffEventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HandoffId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HomeSectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HomeShelfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReturnEventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReturnReceiptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ReturnedCondition")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CopyId");
+
+                    b.HasIndex("HandoffEventId")
+                        .IsUnique();
+
+                    b.HasIndex("ReturnEventId")
+                        .IsUnique();
+
+                    b.HasIndex("ReturnReceiptId");
+
+                    b.HasIndex("TenantId", "CopyId")
+                        .IsUnique()
+                        .HasFilter("\"ReturnReceiptId\" IS NULL");
+
+                    b.HasIndex("TenantId", "HandoffId", "CopyId")
+                        .IsUnique();
+
+                    b.ToTable("AppLibraryCustodyItems", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Custody.LibraryCustodyReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CopyCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("HandoffId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateOnly>("ReceivedOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "HandoffId");
+
+                    b.HasIndex("TenantId", "ActorId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("AppLibraryCustodyReceipts", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationBaseline", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessionNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("BookId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CopyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CopyStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ShelfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "SessionId", "CopyId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_LibraryStockVerificationBaseline_Tenant_Session_Copy");
+
+                    b.ToTable("AppLibraryStockVerificationBaselines", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationCommand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ObservationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("TenantId", "SessionId", "Id")
+                        .HasName("AK_LibraryStockCommand_Tenant_Session_Id");
+
+                    b.HasIndex("TenantId", "ActorId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_LibraryStockCommand_Tenant_Actor_Key");
+
+                    b.HasIndex("TenantId", "SessionId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("UX_LibraryStockCommand_Tenant_Session_Transition")
+                        .HasFilter("\"Kind\" IN (3, 4, 6)");
+
+                    b.HasIndex("TenantId", "SessionId", "ObservationId");
+
+                    b.ToTable("AppLibraryStockVerificationCommands", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LibraryStockVerificationCommand_Target", "(\"Kind\" IN (1, 3, 4, 5, 6) AND \"ObservationId\" IS NULL) OR (\"Kind\" = 2 AND \"ObservationId\" IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessionNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("CommandId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DecidedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EvidenceRevision")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Finding")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("RowId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("TenantId", "SessionId", "Id")
+                        .HasName("AK_LibraryStockDecision_Tenant_Session_Id");
+
+                    b.HasIndex("TenantId", "SessionId", "CommandId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_LibraryStockDecision_Tenant_Session_Command");
+
+                    b.HasIndex("TenantId", "SessionId", "Source", "RowId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("UX_LibraryStockDecision_Tenant_Session_Row_Version");
+
+                    b.ToTable("AppLibraryStockVerificationDecisions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LibraryStockDecision_Outcome", "\"Outcome\" IN (1, 2, 3)");
+
+                            t.HasCheckConstraint("CK_LibraryStockDecision_Source", "\"Source\" IN (1, 2, 3)");
+
+                            t.HasCheckConstraint("CK_LibraryStockDecision_Version", "\"Version\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationObservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessionNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid?>("CopyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ObservedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ObservedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ObservedSectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ObservedShelfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("SchoolDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("TenantId", "SessionId", "Id")
+                        .HasName("AK_LibraryStockObservation_Tenant_Session_Id");
+
+                    b.HasIndex("TenantId", "SessionId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("UX_LibraryStockVerificationObservation_Tenant_Session_Sequence");
+
+                    b.HasIndex("TenantId", "SessionId", "CopyId", "Sequence")
+                        .HasDatabaseName("IX_LibraryStockObservation_Tenant_Session_Copy_Sequence")
+                        .HasFilter("\"CopyId\" IS NOT NULL");
+
+                    b.ToTable("AppLibraryStockVerificationObservations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LibraryStockVerificationObservation_Location", "\"ObservedShelfId\" IS NULL OR \"ObservedSectionId\" IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_LibraryStockVerificationObservation_Sequence", "\"Sequence\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessionNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int?>("BaselineStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("CommandId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("CurrentStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("DecisionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EvidenceRevision")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ExpectedLocation")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Finding")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ObservationSequence")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ObservedLocation")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("ReceivedAfterOpening")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("RowId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "SessionId", "CommandId");
+
+                    b.HasIndex("TenantId", "SessionId", "DecisionId");
+
+                    b.HasIndex("TenantId", "SessionId", "Position")
+                        .IsUnique()
+                        .HasDatabaseName("UX_LibraryStockResult_Tenant_Session_Position");
+
+                    b.HasIndex("TenantId", "SessionId", "Source", "RowId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_LibraryStockResult_Tenant_Session_Source_Row");
+
+                    b.ToTable("AppLibraryStockVerificationResults", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LibraryStockResult_Decision", "(\"Finding\" IN (2, 3, 4, 10, 12, 13, 14, 15)) = (\"DecisionId\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_LibraryStockResult_Finding", "\"Finding\" BETWEEN 1 AND 17");
+
+                            t.HasCheckConstraint("CK_LibraryStockResult_Position", "\"Position\" > 0");
+
+                            t.HasCheckConstraint("CK_LibraryStockResult_ReceiptSource", "NOT \"ReceivedAfterOpening\" OR \"Source\" = 2");
+
+                            t.HasCheckConstraint("CK_LibraryStockResult_Source", "\"Source\" IN (1, 2, 3)");
+                        });
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CancelledBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<int>("ExpectedCopyCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<DateTimeOffset?>("FinalizedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("FinalizedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FinalizedEvidenceFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<DateTimeOffset?>("LastObservedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<int>("ObservationCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("OpenedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OpenedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ReviewStartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewStartedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("SchoolDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("SectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ShelfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("TenantId", "Id")
+                        .HasName("AK_LibraryStockVerificationSession_Tenant_Id");
+
+                    b.HasIndex("TenantId", "SchoolDate", "Id")
+                        .HasDatabaseName("IX_LibraryStockVerificationSession_Tenant_Date");
+
+                    b.ToTable("AppLibraryStockVerificationSessions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LibraryStockVerificationSession_Counts", "\"ExpectedCopyCount\" >= 0 AND \"ObservationCount\" >= 0");
+
+                            t.HasCheckConstraint("CK_LibraryStockVerificationSession_Location", "\"SectionId\" IS NOT NULL OR (\"ShelfId\" IS NULL AND \"AcademicYearId\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_LibraryStockVerificationSession_State", "(\"ReviewStartedBy\" IS NULL) = (\"ReviewStartedAt\" IS NULL) AND\n(\"FinalizedBy\" IS NULL) = (\"FinalizedAt\" IS NULL) AND\n(\"FinalizedBy\" IS NULL) = (\"FinalizedEvidenceFingerprint\" IS NULL) AND\n(\"CancelledBy\" IS NULL) = (\"CancelledAt\" IS NULL) AND\n(\"CancelledBy\" IS NULL) = (\"CancellationReason\" IS NULL) AND\n((\"Status\" = 1 AND \"ReviewStartedBy\" IS NULL AND \"FinalizedBy\" IS NULL AND \"CancelledBy\" IS NULL) OR\n (\"Status\" = 2 AND \"ReviewStartedBy\" IS NOT NULL AND \"FinalizedBy\" IS NULL AND \"CancelledBy\" IS NULL) OR\n (\"Status\" = 3 AND \"ReviewStartedBy\" IS NOT NULL AND \"FinalizedBy\" IS NOT NULL AND \"CancelledBy\" IS NULL) OR\n (\"Status\" = 4 AND \"FinalizedBy\" IS NULL AND \"CancelledBy\" IS NOT NULL))");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Members.LibraryMember", b =>
@@ -22877,10 +24687,18 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("AttemptCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<string>("Channel")
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -22938,6 +24756,12 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
 
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("RecipientEmail")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
@@ -22953,6 +24777,9 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasMaxLength(60)
                         .HasColumnType("character varying(60)");
+
+                    b.Property<Guid?>("RecipientUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("RelatedEntityId")
                         .HasColumnType("uuid");
@@ -22994,6 +24821,12 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("RelatedEntityId");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.HasIndex("TenantId", "DeduplicationKey");
+
+                    b.HasIndex("TenantId", "RecipientUserId", "Channel", "Status");
 
                     b.ToTable("AppLibraryNotificationHistories", (string)null);
                 });
@@ -23073,6 +24906,11 @@ namespace ShikshaMitra.Migrations
                     b.Property<int?>("ReminderOffsetDays")
                         .HasColumnType("integer");
 
+                    b.Property<int>("RepeatIntervalDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<string>("SubjectTemplate")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -23086,10 +24924,674 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("EventGroup");
 
-                    b.HasIndex("EventType", "RecipientRole", "Channel")
+                    b.HasIndex("TenantId", "EventType", "RecipientRole", "Channel")
                         .IsUnique();
 
                     b.ToTable("AppLibraryNotificationSettings", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Policies.LibraryBorrowingPolicyVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ArchiveReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateOnly?>("ArchivedFrom")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("BookCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<Guid?>("EducationMediumStageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid>("OriginAcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PolicyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("SectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("StandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookCategoryId");
+
+                    b.HasIndex("EducationMediumStageId");
+
+                    b.HasIndex("OriginAcademicYearId");
+
+                    b.HasIndex("SectionId");
+
+                    b.HasIndex("StandardId");
+
+                    b.HasIndex("TenantId", "PolicyId", "Version")
+                        .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("TenantId", "PolicyId", "Version"), false);
+
+                    b.HasIndex("TenantId", "Role", "Status", "EffectiveFrom", "EffectiveTo");
+
+                    b.ToTable("AppLibraryBorrowingPolicyVersions", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Policies.LibraryCalendarClosure", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("SectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<DateOnly>("ToDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SectionId");
+
+                    b.HasIndex("TenantId", "FromDate", "ToDate", "SectionId");
+
+                    b.ToTable("AppLibraryCalendarClosures", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Receiving.LibraryReceivedCopy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessionNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("CopyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CopyNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ReceiptLineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CopyId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "ReceiptLineId");
+
+                    b.ToTable("AppLibraryReceivedCopies", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Receiving.LibraryStockImportBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("ImportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ImportedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("NewTitleCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("RowCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ShelfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourceName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "ImportedBy", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "AcademicYearId", "ImportedAt", "Id");
+
+                    b.ToTable("AppLibraryStockImportBatches", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Receiving.LibraryStockImportRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessionNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BookId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CopyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsNewTitle")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("NormalizedSourceRowId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("ReceiptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("RowNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourceRowId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CopyId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "NormalizedSourceRowId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "ReceiptId");
+
+                    b.HasIndex("TenantId", "BatchId", "RowNumber")
+                        .IsUnique();
+
+                    b.ToTable("AppLibraryStockImportRows", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Receiving.LibraryStockReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ExpectedCopyCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ExpectedLineCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("ReceivedOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecordedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourceName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "ReceivedOn", "Id");
+
+                    b.ToTable("AppLibraryStockReceipts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LibraryStockReceipts_Counts", "\"ExpectedLineCount\" BETWEEN 1 AND 100 AND \"ExpectedCopyCount\" BETWEEN 1 AND 5000");
+
+                            t.HasCheckConstraint("CK_LibraryStockReceipts_Source", "\"Source\" IN (0, 1, 2, 3)");
+                        });
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Receiving.LibraryStockReceiptCommand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("ReceiptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceiptId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "ReceiptId");
+
+                    b.HasIndex("TenantId", "ActorId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.ToTable("AppLibraryStockReceiptCommands", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Receiving.LibraryStockReceiptLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BookId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Currency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<int>("ExpectedCopyCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ReceiptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ShelfId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasColumnType("numeric");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookId");
+
+                    b.HasIndex("SectionId");
+
+                    b.HasIndex("ShelfId");
+
+                    b.HasIndex("ReceiptId", "LineNumber")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "ReceiptId");
+
+                    b.ToTable("AppLibraryStockReceiptLines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LibraryStockReceiptLines_Cost", "(\"UnitCost\" IS NULL AND \"Currency\" IS NULL) OR (\"UnitCost\" IS NOT NULL AND \"Currency\" IS NOT NULL AND length(\"Currency\") = 3 AND \"UnitCost\" >= 0 AND \"UnitCost\" <= 9999999999999999.99 AND \"UnitCost\" = round(\"UnitCost\", 2))");
+
+                            t.HasCheckConstraint("CK_LibraryStockReceiptLines_Count", "\"ExpectedCopyCount\" BETWEEN 1 AND 5000");
+
+                            t.HasCheckConstraint("CK_LibraryStockReceiptLines_Number", "\"LineNumber\" BETWEEN 1 AND 100");
+                        });
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Reservations.LibraryHold", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("AllocatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("BookId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CalendarSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CopyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EndReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PickupDeadlineProvenance")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PolicySnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("RelatedLoanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ReservationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("SchoolPickupDeadline")
+                        .HasColumnType("date");
+
+                    b.Property<int>("State")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<string>("TimeZoneId")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookId");
+
+                    b.HasIndex("CopyId");
+
+                    b.HasIndex("RelatedLoanId");
+
+                    b.HasIndex("ReservationId");
+
+                    b.HasIndex("TenantId", "CopyId")
+                        .IsUnique()
+                        .HasFilter("\"State\" = 0");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("TenantId", "CopyId"), false);
+
+                    b.HasIndex("TenantId", "ReservationId")
+                        .IsUnique()
+                        .HasFilter("\"State\" = 0");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("TenantId", "ReservationId"), false);
+
+                    b.ToTable("AppLibraryHolds", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Reservations.LibraryReservationEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ActorKind")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("AfterBorrowerScopeCaptureId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AfterSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("BeforeBorrowerScopeCaptureId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BeforeSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("CopyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<Guid?>("HoldId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("LoanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("NextState")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("PreviousState")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("ReservationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("SystemPurpose")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CopyId");
+
+                    b.HasIndex("HoldId");
+
+                    b.HasIndex("LoanId");
+
+                    b.HasIndex("ReservationId");
+
+                    b.HasIndex("TenantId", "AfterBorrowerScopeCaptureId");
+
+                    b.HasIndex("TenantId", "BeforeBorrowerScopeCaptureId");
+
+                    b.HasIndex("TenantId", "ReservationId", "Sequence")
+                        .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("TenantId", "ReservationId", "Sequence"), false);
+
+                    b.ToTable("AppLibraryReservationEvents", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LibraryReservationEvents_Actor", "(\"ActorKind\" = 1 AND \"ActorId\" IS NOT NULL AND \"SystemPurpose\" IS NULL) OR (\"ActorKind\" = 2 AND \"ActorId\" IS NULL AND \"SystemPurpose\" IS NOT NULL AND \"SystemPurpose\" IN (1, 2))");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Setting.BorrowingRules.BorrowingRule", b =>
@@ -23336,6 +25838,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("AcademicYearId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CampusId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -23378,6 +25883,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CampusId");
+
                     b.ToTable("AppLibrarySections", (string)null);
                 });
 
@@ -23399,6 +25906,115 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("SectionId");
 
                     b.ToTable("AppLibraryShelves", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Shared.LibraryBorrowerAssignmentSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BoardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CaptureId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("MediumId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OrganizationAssignmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("StageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "CaptureId", "OrganizationAssignmentId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "CaptureId", "AcademicYearId", "StageId");
+
+                    b.ToTable("AppLibraryBorrowerAssignmentSnapshots", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Shared.LibraryBorrowerScopeCapture", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ActorKind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("AuditJson")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("CanonicalEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CapturedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ExpectedAssignmentCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IncompleteReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsComplete")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Provenance")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SourceKind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourceName")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int?>("SystemPurpose")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "SourceKind", "SourceId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("AppLibraryBorrowerScopeCaptures", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LibraryBorrowerScopeCaptures_Actor", "(\"ActorKind\" = 1 AND \"ActorId\" IS NOT NULL AND \"SystemPurpose\" IS NULL) OR (\"ActorKind\" = 2 AND \"ActorId\" IS NULL AND \"SystemPurpose\" IS NOT NULL AND \"SystemPurpose\" IN (1, 2))");
+
+                            t.HasCheckConstraint("CK_LibraryBorrowerScopeCaptures_AssignmentCount", "\"ExpectedAssignmentCount\" >= 0");
+
+                            t.HasCheckConstraint("CK_LibraryBorrowerScopeCaptures_Source", "\"SourceKind\" IN (1, 2) AND \"Version\" > 0 AND \"Provenance\" IN (1, 2)");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.Security.Permissions.UserPermissionDeny", b =>
@@ -39868,6 +42484,11 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("BankAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount", null)
                         .WithMany()
                         .HasForeignKey("FinanceFeeAccountId")
@@ -40030,6 +42651,11 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("CashCollectionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount", null)
                         .WithMany()
                         .HasForeignKey("FinanceFeeAccountId")
@@ -40135,6 +42761,104 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.ExternalReceivables.FinanceChargeWaiverReversal", b =>
+                {
+                    b.HasOne("ShikshaMitra.Finance.Fees.FeeCollection.ChargeWaiverApplication", null)
+                        .WithMany()
+                        .HasForeignKey("WaiverApplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalReceivableCommand", b =>
+                {
+                    b.HasOne("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalReceivableSourceLink", null)
+                        .WithMany()
+                        .HasForeignKey("SourceLinkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalReceivableSourceLink", b =>
+                {
+                    b.HasOne("ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("CollectionPolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Finance.Fees.Charges.Charge", null)
+                        .WithMany()
+                        .HasForeignKey("FinanceChargeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Finance.Fees.Charges.ChargeRequest", null)
+                        .WithMany()
+                        .HasForeignKey("FinanceChargeRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("RefundPolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_Finance_ExternalReceivableSourceLinks_Finance_PolicyVersio~1");
+
+                    b.HasOne("ShikshaMitra.Library.Books.LibraryCharge", null)
+                        .WithMany()
+                        .HasForeignKey("SourceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalSettlementPolicy", b =>
+                {
+                    b.HasOne("ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("CollectionPolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("RefundPolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalReceivableSourceLink", null)
+                        .WithMany()
+                        .HasForeignKey("SourceLinkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalWaiverRequest", b =>
+                {
+                    b.HasOne("ShikshaMitra.Finance.Fees.FeeCollection.ChargeWaiverApplication", null)
+                        .WithMany()
+                        .HasForeignKey("AppliedWaiverId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalReceivableSourceLink", null)
+                        .WithMany()
+                        .HasForeignKey("SourceLinkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Fees.Charges.Charge", b =>
+                {
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.Charges.ChargeRequest", b =>
                 {
                     b.HasOne("ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory", null)
@@ -40223,6 +42947,22 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeCollection.ChargeCollectionRecord", b =>
+                {
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeCollection.ChargeWaiverApplication", b =>
+                {
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeCollection.DueFee", b =>
                 {
                     b.HasOne("ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount", null)
@@ -40257,6 +42997,11 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeCollection.FeeRecordMetadata", b =>
                 {
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount", null)
                         .WithMany()
                         .HasForeignKey("FinanceFeeAccountId")
@@ -40283,6 +43028,11 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("BankAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount", null)
                         .WithMany()
                         .HasForeignKey("FinanceFeeAccountId")
@@ -40291,9 +43041,19 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundRequest", b =>
                 {
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory", null)
                         .WithMany()
                         .HasForeignKey("ExpenseCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalReceivableSourceLink", null)
+                        .WithMany()
+                        .HasForeignKey("FinanceExternalSourceLinkId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount", null)
@@ -40521,6 +43281,11 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.Receipts.FeePaymentReceipt", b =>
                 {
+                    b.HasOne("ShikshaMitra.HR.Employees.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount", null)
                         .WithMany()
                         .HasForeignKey("FinanceFeeAccountId")
@@ -41668,13 +44433,473 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Library.Books.BookIssue", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Shared.LibraryBorrowerScopeCapture", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BorrowerScopeCaptureId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Library.Books.BookReservation", b =>
                 {
                     b.HasOne("ShikshaMitra.Library.Books.Book", null)
                         .WithMany()
                         .HasForeignKey("BookId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Shared.LibraryBorrowerScopeCapture", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BorrowerScopeCaptureId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Books.LibraryCharge", b =>
+                {
+                    b.HasOne("ShikshaMitra.Finance.ExternalReceivables.FinanceExternalReceivableSourceLink", null)
+                        .WithMany()
+                        .HasForeignKey("FinanceSourceLinkId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Books.LibraryCopyEvent", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Books.Book", null)
+                        .WithMany()
+                        .HasForeignKey("BookId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Books.BookCopy", null)
+                        .WithMany()
+                        .HasForeignKey("CopyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Books.BookIssue", null)
+                        .WithMany()
+                        .HasForeignKey("RelatedLoanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Books.LibraryLoanCommand", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Books.BookIssue", null)
+                        .WithMany()
+                        .HasForeignKey("LoanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Books.LibraryLoanEvent", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Books.BookIssue", null)
+                        .WithMany()
+                        .HasForeignKey("LoanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Shared.LibraryBorrowerScopeCapture", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "AfterBorrowerScopeCaptureId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Library.Shared.LibraryBorrowerScopeCapture", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BeforeBorrowerScopeCaptureId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_AppLibraryLoanEvents_AppLibraryBorrowerScopeCaptures_Tenan~1");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.CampusTransfers.LibraryCampusTransferItem", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Books.BookCopy", null)
+                        .WithMany()
+                        .HasForeignKey("CopyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Books.LibraryCopyEvent", null)
+                        .WithMany()
+                        .HasForeignKey("DispatchEventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Books.LibraryCopyEvent", null)
+                        .WithMany()
+                        .HasForeignKey("ReceiptEventId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Library.CampusTransfers.LibraryCampusTransferReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("ReceiptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Library.CampusTransfers.LibraryCampusTransfer", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "TransferId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.CampusTransfers.LibraryCampusTransferReceipt", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.CampusTransfers.LibraryCampusTransfer", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "TransferId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Custody.LibraryCustodyItem", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Books.BookCopy", null)
+                        .WithMany()
+                        .HasForeignKey("CopyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Books.LibraryCopyEvent", null)
+                        .WithMany()
+                        .HasForeignKey("HandoffEventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Books.LibraryCopyEvent", null)
+                        .WithMany()
+                        .HasForeignKey("ReturnEventId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Library.Custody.LibraryCustodyReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("ReturnReceiptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Library.Custody.LibraryCustodyHandoff", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "HandoffId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Custody.LibraryCustodyReceipt", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Custody.LibraryCustodyHandoff", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "HandoffId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationBaseline", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationSession", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SessionId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LibraryStockVerificationBaseline_Session");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationCommand", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationSession", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SessionId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LibraryStockCommand_Session");
+
+                    b.HasOne("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationObservation", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SessionId", "ObservationId")
+                        .HasPrincipalKey("TenantId", "SessionId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LibraryStockCommand_Observation");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationDecision", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationCommand", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SessionId", "CommandId")
+                        .HasPrincipalKey("TenantId", "SessionId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LibraryStockDecision_Command");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationObservation", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationSession", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SessionId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LibraryStockVerificationObservation_Session");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationResult", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationCommand", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SessionId", "CommandId")
+                        .HasPrincipalKey("TenantId", "SessionId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LibraryStockResult_Command");
+
+                    b.HasOne("ShikshaMitra.Library.InventoryVerification.LibraryStockVerificationDecision", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SessionId", "DecisionId")
+                        .HasPrincipalKey("TenantId", "SessionId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_LibraryStockResult_Decision");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Policies.LibraryBorrowingPolicyVersion", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Setting.GeneralSetting.BookCategory.BookCategory", null)
+                        .WithMany()
+                        .HasForeignKey("BookCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage", null)
+                        .WithMany()
+                        .HasForeignKey("EducationMediumStageId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.TenantSettings.AcademicYears.AcademicYear", null)
+                        .WithMany()
+                        .HasForeignKey("OriginAcademicYearId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Setting.Sections.LibrarySection", null)
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", null)
+                        .WithMany()
+                        .HasForeignKey("StandardId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.OwnsOne("ShikshaMitra.Library.Policies.LibraryBorrowingTerms", "Terms", b1 =>
+                        {
+                            b1.Property<Guid>("LibraryBorrowingPolicyVersionId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int>("DayCountingMode")
+                                .HasColumnType("integer")
+                                .HasColumnName("DayCountingMode");
+
+                            b1.Property<int>("DueDateMode")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("integer")
+                                .HasDefaultValue(1)
+                                .HasColumnName("DueDateMode");
+
+                            b1.Property<int>("LoanDays")
+                                .HasColumnType("integer")
+                                .HasColumnName("LoanDays");
+
+                            b1.Property<int>("MaxBooksAtTime")
+                                .HasColumnType("integer")
+                                .HasColumnName("MaxBooksAtTime");
+
+                            b1.Property<int>("MaxRenewals")
+                                .HasColumnType("integer")
+                                .HasColumnName("MaxRenewals");
+
+                            b1.Property<bool>("MoveDueDateToNextOpenDay")
+                                .HasColumnType("boolean")
+                                .HasColumnName("MoveDueDateToNextOpenDay");
+
+                            b1.Property<int>("PickupWindowDays")
+                                .HasColumnType("integer")
+                                .HasColumnName("PickupWindowDays");
+
+                            b1.Property<int>("RenewalDays")
+                                .HasColumnType("integer")
+                                .HasColumnName("RenewalDays");
+
+                            b1.Property<int>("ReservationLimit")
+                                .HasColumnType("integer")
+                                .HasColumnName("ReservationLimit");
+
+                            b1.HasKey("LibraryBorrowingPolicyVersionId");
+
+                            b1.ToTable("AppLibraryBorrowingPolicyVersions");
+
+                            b1.WithOwner()
+                                .HasForeignKey("LibraryBorrowingPolicyVersionId");
+                        });
+
+                    b.Navigation("Terms")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Policies.LibraryCalendarClosure", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Setting.Sections.LibrarySection", null)
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Receiving.LibraryReceivedCopy", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Books.BookCopy", null)
+                        .WithMany()
+                        .HasForeignKey("CopyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Receiving.LibraryStockReceiptLine", null)
+                        .WithMany("Copies")
+                        .HasForeignKey("TenantId", "ReceiptLineId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Receiving.LibraryStockImportRow", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Receiving.LibraryStockImportBatch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BatchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Receiving.LibraryStockReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ReceiptId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Receiving.LibraryStockReceiptCommand", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Receiving.LibraryStockReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ReceiptId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Receiving.LibraryStockReceiptLine", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Books.Book", null)
+                        .WithMany()
+                        .HasForeignKey("BookId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Setting.Sections.LibrarySection", null)
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Setting.Sections.LibraryShelf", null)
+                        .WithMany()
+                        .HasForeignKey("ShelfId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Receiving.LibraryStockReceipt", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("TenantId", "ReceiptId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Reservations.LibraryHold", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Books.Book", null)
+                        .WithMany()
+                        .HasForeignKey("BookId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Books.BookCopy", null)
+                        .WithMany()
+                        .HasForeignKey("CopyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Books.BookIssue", null)
+                        .WithMany()
+                        .HasForeignKey("RelatedLoanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Library.Books.BookReservation", null)
+                        .WithMany()
+                        .HasForeignKey("ReservationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Reservations.LibraryReservationEvent", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Books.BookCopy", null)
+                        .WithMany()
+                        .HasForeignKey("CopyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Library.Reservations.LibraryHold", null)
+                        .WithMany()
+                        .HasForeignKey("HoldId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Library.Books.BookIssue", null)
+                        .WithMany()
+                        .HasForeignKey("LoanId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Library.Books.BookReservation", null)
+                        .WithMany()
+                        .HasForeignKey("ReservationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Library.Shared.LibraryBorrowerScopeCapture", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "AfterBorrowerScopeCaptureId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Library.Shared.LibraryBorrowerScopeCapture", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BeforeBorrowerScopeCaptureId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_AppLibraryReservationEvents_AppLibraryBorrowerScopeCapture~1");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Setting.Sections.LibrarySection", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionCampus", null)
+                        .WithMany()
+                        .HasForeignKey("CampusId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Library.Setting.Sections.LibraryShelf", b =>
@@ -41686,6 +44911,16 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
 
                     b.Navigation("Section");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Shared.LibraryBorrowerAssignmentSnapshot", b =>
+                {
+                    b.HasOne("ShikshaMitra.Library.Shared.LibraryBorrowerScopeCapture", null)
+                        .WithMany("Assignments")
+                        .HasForeignKey("TenantId", "CaptureId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceEntry", b =>
@@ -44398,9 +47633,24 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Copies");
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Library.Receiving.LibraryStockReceipt", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Receiving.LibraryStockReceiptLine", b =>
+                {
+                    b.Navigation("Copies");
+                });
+
             modelBuilder.Entity("ShikshaMitra.Library.Setting.Sections.LibrarySection", b =>
                 {
                     b.Navigation("Shelves");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Library.Shared.LibraryBorrowerScopeCapture", b =>
+                {
+                    b.Navigation("Assignments");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Attendance.AttendanceDay", b =>

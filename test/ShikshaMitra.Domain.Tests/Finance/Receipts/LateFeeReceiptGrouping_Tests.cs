@@ -48,7 +48,7 @@ public class LateFeeReceiptGrouping_Tests
         due.HasPaymentEvidence().ShouldBeTrue();
         due.PaidAmount.ShouldBe(0m);
         result.Receipts.Count.ShouldBe(count);
-        result.Receipts.Sum(r => (decimal)r.TotalPaidAmount).ShouldBe(total);
+        result.Receipts.Sum(r => r.TotalPaidAmount).ShouldBe(Convert.ToDecimal(total));
         result.Receipts.Sum(r => r.FeePaidAmount).ShouldBe(principal);
         result.Receipts.Sum(r => r.ChargePaidAmount).ShouldBe(late + charges);
         result.Receipts.Sum(r => r.LateFeePaidAmount ?? 0m).ShouldBe(late);
@@ -59,10 +59,10 @@ public class LateFeeReceiptGrouping_Tests
         if (grouping == CollectionReceiptGrouping.Separate)
         {
             result.Receipts.Single(r => r.ReceiptScope == FeeReceiptScope.Charge)
-                .TotalPaidAmount.ShouldBe(late + charges);
+                .TotalPaidAmount.ShouldBe(Convert.ToDecimal(late) + Convert.ToDecimal(charges));
             if (principal > 0)
                 result.Receipts.Single(r => r.ReceiptScope == FeeReceiptScope.Fee)
-                    .TotalPaidAmount.ShouldBe(principal);
+                    .TotalPaidAmount.ShouldBe(Convert.ToDecimal(principal));
         }
     }
 

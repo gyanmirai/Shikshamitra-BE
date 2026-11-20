@@ -3,7 +3,7 @@ module: library
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-07-08
+updated_on: 2026-11-18
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,8 @@ audience: humans-and-agents
 
 TL;DR: use this page as the entrypoint for Library behavior, API families, architecture, workflows, and validation.
 Library covers catalog, copies, reservations, issue and return, members, charges, reports, notifications, and settings.
+Schools can configure descriptive catalogue requirements and language/material choices without changing existing defaults or stock history.
+Frontend routes, editor sessions, cache behavior and browser validation belong to the [frontend Library documentation](https://github.com/gyanmirai/Shikshamitra-FE/blob/main/docs/library/README.md).
 
 ## Read order
 

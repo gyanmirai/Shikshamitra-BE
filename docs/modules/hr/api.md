@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-16
+updated_on: 2026-11-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -80,12 +80,17 @@ Employee APIs manage staff identity, profile data, documents, status, reporting,
 | Employee payroll details | `/api/employees/{id}/payroll` | `HR.Employee.EmployeeList.*` |
 | Reporting manager | `/api/employees/reporting-manager` | `HR.Employee.EmployeeList.*` |
 | Employee status | `/api/employees/{id}/status` | `HR.Employee.EmployeeList.*` |
+| Employee deactivation check | `GET /api/employees/{id}/status-deactivation-check` | `HR.Employee.EmployeeList.Edit` and employee scope |
 | Document settings | `/api/employees/document-config` | `HR.Employee.Setting.DocumentTypes.*` |
 | Employee documents | `/api/employees/{id}/documents` | `HR.Employee.EmployeeList.*` |
 | Employee onboarding | `/api/employee-applications*` | `HR.Employee.EmployeeOnboarding.*` |
 | Public employee application | `/api/public/employee-applications/{token}`, `/api/public/employee-applications/{token}/submit` | Anonymous token |
 
 Employee create and update flows must protect email, mobile, date of birth, date of joining, role, and academic scope consistency.
+
+The deactivation check returns reporting-manager eligibility and advisory `libraryClearanceStatus` and `libraryOutstandingLoanCount`. Library totals require exact `Library.LibraryMembers.View` and school-wide scope. Narrow assignments receive Limited with their permitted count. Restricted returns a null count. HR's existing `canDeactivate` decision continues to enforce the direct-report rule. Library staff process physical returns through the original loan.
+
+`libraryOutstandingCustodyCount` is a separate advisory count of outstanding classroom copies assigned to the staff member. It requires school-wide scope with exact `Library.Custody.View` and `Library.AllBooks.View`. The field is null when the caller lacks this independent authority.
 
 Staff Academic Permission reads use `academicYearId` and return the existing scope hierarchy shape.
 PUT accepts `BulkScopeAssignmentDto`, with exactly the employee's linked user ID.

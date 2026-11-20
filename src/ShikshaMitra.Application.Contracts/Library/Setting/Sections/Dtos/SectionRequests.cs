@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -26,3 +27,5 @@ public class SectionUpdateRequest
 	[Required]
 	public List<string> ShelfItems { get; set; } = new();
 }
+
+public sealed record BindLibrarySectionCampusRequest(Guid CampusId);

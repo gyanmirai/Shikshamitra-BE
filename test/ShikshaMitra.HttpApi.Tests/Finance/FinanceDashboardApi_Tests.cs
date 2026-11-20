@@ -147,11 +147,11 @@ public class FinanceDashboardApi_Tests(FinanceRoutingApiTestFactory factory) : S
                 new DueFee(Guid.NewGuid(), tenantId, student.Id, head.Id, MonthEnum.June, 2025, false,
                     amount, new DateTime(2025, 6, standard.Id == visible.Id ? 1 : 2)), autoSave: true);
 
-            var receiptAmount = standard.Id == visible.Id ? 25d : 75d;
+            var receiptAmount = standard.Id == visible.Id ? 25m : 75m;
             var code = "DASH-" + Guid.NewGuid().ToString("N")[..16];
             var transaction = await Save(new FeeRecordMetadata(Guid.NewGuid(), tenantId, student.Id,
-                year.Id, receiptAmount, code, FeeCollectionStatus.Paid));
-            await Save(PaymentMethodRecord.Create(student.Id, transaction.Id, (decimal)receiptAmount,
+                year.Id, (double)receiptAmount, code, FeeCollectionStatus.Paid));
+            await Save(PaymentMethodRecord.Create(student.Id, transaction.Id, receiptAmount,
                 paymentDate, PaymentMethodEnum.Cash, tenantId: tenantId));
             await Save(new FeePaymentReceipt(Guid.NewGuid())
             {
@@ -179,7 +179,7 @@ public class FinanceDashboardApi_Tests(FinanceRoutingApiTestFactory factory) : S
             AcademicYearId = year.Id, BoardId = board.Id, EducationMediumId = medium.Id,
             ReceiptNumber = applicantCode, ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = FeeReceiptScope.Combined,
             VerificationStatus = FeeReceiptVerificationStatus.NotApplicable, ReceiptDate = new DateOnly(2025, 6, 12),
-            TotalPaidAmount = 45d,
+            TotalPaidAmount = 45m,
         };
         combined.SetFinanceFeeAccount(applicant.Id);
         combined.SetAmountBreakdown(15m, 30m);

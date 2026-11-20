@@ -40,11 +40,11 @@ public partial class MobileAcademicAppService_Tests
 		foreach (var pair in new[] { (200d, FeeCollectionStatus.Paid), (300d, FeeCollectionStatus.InReconciliation), (700d, FeeCollectionStatus.Reversed) })
 		{
 			var tx = await Insert(new FeeRecordMetadata(Guid.NewGuid(), tenantId, f.Student.Id, f.Year.Id, pair.Item1, Guid.NewGuid().ToString("N")[..18], pair.Item2));
-			await Insert(new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = tenantId, StudentId = f.Student.Id, ChargeId = charge.Id, FeeRecordMetadataId = tx.Id, Amount = pair.Item1, PaymentDate = DateTimeOffset.UtcNow });
+			await Insert(new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = tenantId, StudentId = f.Student.Id, ChargeId = charge.Id, FeeRecordMetadataId = tx.Id, Amount = Convert.ToDecimal(pair.Item1), PaymentDate = DateTimeOffset.UtcNow });
 			await Insert(PaymentMethodRecord.Create(f.Student.Id, tx.Id, (decimal)pair.Item1, DateTimeOffset.UtcNow, PaymentMethodEnum.Cash, tenantId: tenantId));
 		}
 		var foreignYearTx = await Insert(new FeeRecordMetadata(Guid.NewGuid(), tenantId, f.Student.Id, Guid.NewGuid(), 999d, Guid.NewGuid().ToString("N")[..18], FeeCollectionStatus.Paid));
-		await Insert(new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = tenantId, StudentId = f.Student.Id, ChargeId = charge.Id, FeeRecordMetadataId = foreignYearTx.Id, Amount = 999d, PaymentDate = DateTimeOffset.UtcNow });
+		await Insert(new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = tenantId, StudentId = f.Student.Id, ChargeId = charge.Id, FeeRecordMetadataId = foreignYearTx.Id, Amount = 999m, PaymentDate = DateTimeOffset.UtcNow });
 		await Insert(new ChargeWaiverApplication(Guid.NewGuid(), tenantId, f.Student.Id, charge.Id, Guid.NewGuid(), 1000m, 999m, "Other year", f.User.Id, Guid.NewGuid().ToString("N")[..18]));
 		// Expectations are hand-derived from the original obligation and persisted allocation outcomes.
 		var reads = RealFinanceReads();
@@ -130,9 +130,9 @@ public partial class MobileAcademicAppService_Tests
 		await GrantFinancePermissionAsync(f.User.Id, Permissions.ViewCharges);
 		var charge = await Insert(NewFamilyCharge(f, tenantId, Guid.NewGuid(), "Charge history", 1000m));
 		var tx = await Insert(new FeeRecordMetadata(Guid.NewGuid(), tenantId, f.Student.Id, f.Year.Id, 900d, "MIXED", FeeCollectionStatus.Paid));
-		var allocation = await Insert(new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = tenantId, StudentId = f.Student.Id, ChargeId = charge.Id, FeeRecordMetadataId = tx.Id, Amount = 200d, PaymentDate = DateTimeOffset.UtcNow });
+		var allocation = await Insert(new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = tenantId, StudentId = f.Student.Id, ChargeId = charge.Id, FeeRecordMetadataId = tx.Id, Amount = 200m, PaymentDate = DateTimeOffset.UtcNow });
 		await Insert(PaymentMethodRecord.Create(f.Student.Id, tx.Id, 900m, DateTimeOffset.UtcNow, PaymentMethodEnum.Cash, tenantId: tenantId));
-		FeePaymentReceipt Receipt(FeeReceiptScope scope, Guid? owner = null) => new(Guid.NewGuid()) { TenantId = tenantId, StudentId = owner ?? f.Student.Id, AcademicYearId = f.Year.Id, FeeCollectionTransactionId = tx.Id, ReceiptNumber = Guid.NewGuid().ToString("N")[..18], ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = scope, TotalPaidAmount = scope == FeeReceiptScope.Combined ? 900d : 200d, ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow) };
+		FeePaymentReceipt Receipt(FeeReceiptScope scope, Guid? owner = null) => new(Guid.NewGuid()) { TenantId = tenantId, StudentId = owner ?? f.Student.Id, AcademicYearId = f.Year.Id, FeeCollectionTransactionId = tx.Id, ReceiptNumber = Guid.NewGuid().ToString("N")[..18], ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = scope, TotalPaidAmount = scope == FeeReceiptScope.Combined ? 900m : 200m, ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow) };
 		await Insert(Receipt(FeeReceiptScope.Fee));
 		var actual = await Insert(Receipt(FeeReceiptScope.Charge));
 		var combined = await Insert(Receipt(FeeReceiptScope.Combined));
@@ -220,7 +220,7 @@ public partial class MobileAcademicAppService_Tests
 			foreach (var payment in new[] { (c.Verified, FeeCollectionStatus.Paid), (c.Pending, FeeCollectionStatus.InReconciliation) }.Where(x => x.Item1 > 0))
 			{
 				var transaction = await Insert(new FeeRecordMetadata(Guid.NewGuid(), tenantId, f.Student.Id, f.Year.Id, (double)payment.Item1, Guid.NewGuid().ToString("N")[..18], payment.Item2));
-				await Insert(new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = tenantId, StudentId = f.Student.Id, ChargeId = charge.Id, FeeRecordMetadataId = transaction.Id, Amount = (double)payment.Item1, PaymentDate = DateTimeOffset.UtcNow });
+				await Insert(new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = tenantId, StudentId = f.Student.Id, ChargeId = charge.Id, FeeRecordMetadataId = transaction.Id, Amount = payment.Item1, PaymentDate = DateTimeOffset.UtcNow });
 			}
 			if (c.Waived > 0) await Insert(new ChargeWaiverApplication(Guid.NewGuid(), tenantId, f.Student.Id, charge.Id, f.Year.Id, 1000m, c.Waived, "Private", f.User.Id, Guid.NewGuid().ToString("N")[..18]));
 			var detail = (await reads.ChargeAsync(f.Student.Id, f.Year.Id, charge.Id)).Charge;

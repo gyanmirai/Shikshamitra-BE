@@ -25,7 +25,7 @@ public class FeeRefundSettlement : Entity<Guid>
     public DateTimeOffset? CompletedAt { get; private set; }
     private FeeRefundSettlement() { }
     internal FeeRefundSettlement(Guid id, Guid requestId, int attempt, Guid userId, string key, string method, decimal amount, DateTimeOffset date, string? reference, string? details) : base(id)
-    { FeeRefundRequestId = requestId; AttemptNumber = attempt; InitiatedByUserId = userId; IdempotencyKey = Check.NotNullOrWhiteSpace(key, nameof(key), 100); Method = Check.NotNullOrWhiteSpace(method, nameof(method), 100); Amount = amount; SettlementDate = date; ExternalReference = reference?.Trim(); PaymentDetailsJson = details; Status = FeeRefundSettlementStatus.Processing; CreatedAt = DateTimeOffset.UtcNow; }
+    { FeeRefundRequestId = requestId; AttemptNumber = attempt; InitiatedByUserId = userId; IdempotencyKey = Check.NotNullOrWhiteSpace(key, nameof(key), 100); Method = Check.NotNullOrWhiteSpace(method, nameof(method), 100); Amount = amount; SettlementDate = date.ToUniversalTime(); ExternalReference = reference?.Trim(); PaymentDetailsJson = details; Status = FeeRefundSettlementStatus.Processing; CreatedAt = DateTimeOffset.UtcNow; }
     internal FeeRefundSettlement(Guid id, Guid requestId, int attempt, Guid userId, string key, string method,
         decimal amount, DateTimeOffset date, string? reference, string? details, Guid? bankAccountId,
         string evidenceReference)

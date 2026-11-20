@@ -13,6 +13,9 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
 		builder.ToTable("Finance_Transactions", ShikshaMitraConsts.DbSchema);
         builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount>().WithMany().HasForeignKey(x=>x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
 		builder.ConfigureByConvention();
+		builder.ToTable(table => table.HasCheckConstraint("CK_Transactions_EmployeePayer", ShikshaMitra.Finance.ExternalReceivables.FinancePayerConstraintSql.OptionalEmployee));
+		builder.HasOne<ShikshaMitra.HR.Employees.Employee>().WithMany().HasForeignKey(row => row.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+		builder.HasIndex(row => new { row.TenantId, row.EmployeeId, row.AcademicYearId }).HasFilter("\"EmployeeId\" IS NOT NULL");
 		builder.HasOne<ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount>().WithMany()
 			.HasForeignKey(x => x.FinanceFeeAccountId).OnDelete(DeleteBehavior.Restrict);
 

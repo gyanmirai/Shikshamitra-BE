@@ -20,7 +20,11 @@ public class BookCopyConfiguration : IEntityTypeConfiguration<BookCopy>
 
         builder.Property(x => x.AccessionNumber)
             .IsRequired()
-            .HasMaxLength(50);
+            .HasMaxLength(BookCopy.MaximumAccessionLength);
+
+        builder.Property(x => x.NormalizedAccessionNumber)
+            .HasMaxLength(BookCopy.MaximumAccessionLength)
+            .HasComputedColumnSql("upper(trim(\"AccessionNumber\"))", stored: true);
 
         builder.Property(x => x.SectionId)
             .IsRequired();
@@ -40,7 +44,9 @@ public class BookCopyConfiguration : IEntityTypeConfiguration<BookCopy>
             .HasForeignKey(c => c.BookId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(x => x.AccessionNumber).IsUnique();
+        builder.HasIndex(x => new { x.TenantId, x.NormalizedAccessionNumber })
+            .IsUnique()
+            .AreNullsDistinct(false);
         builder.HasIndex(x => x.BookId);
     }
 }

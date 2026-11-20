@@ -21,6 +21,12 @@ public partial class FeeRefundAppService
     // Recheck every immutable source at the financial transition, including secondary receipts.
     private async Task ValidateRefundSourceEvidenceAsync(FeeRefundRequest request)
     {
+        if (request.FinanceExternalSourceLinkId.HasValue)
+        {
+            await ExternalRefundWorkflow.ReadSourcesAsync(request);
+            return;
+        }
+        await EnsureLegacyRefundSourcesAsync(request);
         if (request.WorkflowVersion != 1) return;
         if (request.Lines.Any(line => !line.SourceReceiptId.HasValue || !line.SourceAllocationId.HasValue))
             throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);

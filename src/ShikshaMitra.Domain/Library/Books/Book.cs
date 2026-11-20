@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
+using ShikshaMitra.Library.Catalogue;
 
 namespace ShikshaMitra.Library.Books;
 
-public class Book : AuditedAggregateRoot<Guid>, IMultiTenant
+public partial class Book : AuditedAggregateRoot<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
 
@@ -25,11 +26,14 @@ public class Book : AuditedAggregateRoot<Guid>, IMultiTenant
 
     public Guid CategoryId { get; set; }
 
-    public Language Language { get; set; }
+    public Language? Language { get; set; }
+
+	public string? LanguageCode { get; private set; }
+	public string? MaterialCode { get; private set; }
 
     public string ApplicableAge { get; set; }
 
-    public decimal Price { get; set; }
+    public decimal? Price { get; set; }
 
     public int Pages { get; set; }
 
@@ -59,9 +63,9 @@ public class Book : AuditedAggregateRoot<Guid>, IMultiTenant
         string edition,
         string subject,
         Guid categoryId,
-        Language language,
+        Language? language,
         string applicableAge,
-        decimal price,
+        decimal? price,
         int pages,
         int numberOfCopies,
         Guid? academicYearId = null,

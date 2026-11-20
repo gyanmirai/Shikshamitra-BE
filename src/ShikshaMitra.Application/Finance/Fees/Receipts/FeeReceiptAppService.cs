@@ -181,7 +181,7 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
                 LinkedFinalReceiptNumber   = r.LinkedFinalReceiptId.HasValue
                     ? linkedFinalMap.GetValueOrDefault(r.LinkedFinalReceiptId.Value)
                     : null,
-                TotalPaidAmount            = r.TotalPaidAmount,
+                TotalPaidAmount            = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(r.TotalPaidAmount),
                 StudentId                  = r.StudentId,
                 FinanceFeeAccountId        = r.FinanceFeeAccountId,
                 StudentName                = student != null
@@ -204,7 +204,7 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
     {
         var receipt = await receiptRepository.GetAsync(id, cancellationToken: cancellationToken)
             ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
-        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId, cancellationToken);
+        await financeScopeAccessService.EnsureReceiptAccessibleAsync(receipt, cancellationToken);
 
         var student      = receipt.StudentId.HasValue ? await AsyncExecuter.FirstOrDefaultAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => s.Id == receipt.StudentId.Value), cancellationToken) : null;
         var account = receipt.FinanceFeeAccountId.HasValue
@@ -292,6 +292,13 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
 
         var receiptPayments = await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<PaymentMethodRecord, Guid>>()
             .GetListAsync(p => p.FeeRecordMetadataId == receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+        var metadata = await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FeeRecordMetadata, Guid>>()
+            .FindAsync(receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+        var payerEvidence = FinanceReceiptEvidence.ReadPayer(metadata);
+        var settlement = FinanceReceiptEvidence.ReadSettlement(receipt, metadata);
+        if (payerEvidence != null && (payerEvidence.Kind == ShikshaMitra.Finance.ExternalReceivables.FinanceExternalPayerKind.Employee
+                ? receipt.EmployeeId != payerEvidence.PersonId : receipt.StudentId != payerEvidence.PersonId))
+            throw new BusinessException(ShikshaMitra.Library.LibraryFinanceErrorCodes.SourceRequiresReview);
         return new FeeReceiptDetailDto
         {
             Id                             = receipt.Id,
@@ -307,9 +314,20 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
             LinkedProvisionalReceiptNumber = linkedProvisional?.ReceiptNumber,
             LinkedFinalReceiptId           = receipt.LinkedFinalReceiptId,
             LinkedFinalReceiptNumber       = linkedFinal?.ReceiptNumber,
-            TotalPaidAmount                = receipt.TotalPaidAmount,
+            TotalPaidAmount                = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(receipt.TotalPaidAmount),
 			FeePaidAmount = receipt.FeePaidAmount, ChargePaidAmount = receipt.ChargePaidAmount,
+			Currency = receipt.Currency,
+			SettlementSnapshot = settlement == null ? null : new FeeReceiptSettlementSnapshotDto
+			{
+				OriginalAmount = settlement.OriginalAmount, SubmittedAmount = settlement.SubmittedAmount,
+				SettledAmount = settlement.SettledAmount, PendingVerificationAmount = settlement.PendingVerificationAmount,
+				FinancialOutstandingAmount = settlement.FinancialOutstandingAmount, CollectibleAmount = settlement.CollectibleAmount,
+				NetWaivedAmount = settlement.NetWaivedAmount
+			},
             StudentId                      = receipt.StudentId,
+            EmployeeId = receipt.EmployeeId, PayerName = payerEvidence?.Name ?? (student != null
+                ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ") : account?.ApplicantName),
+            PayerCode = payerEvidence?.Code,
             FinanceFeeAccountId            = receipt.FinanceFeeAccountId,
             StudentName                    = student != null
                 ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ")

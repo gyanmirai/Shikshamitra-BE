@@ -37,7 +37,7 @@ public class FeeReceiptPdfGenerator_Tests
             StudentId = Guid.NewGuid(), FeeCollectionTransactionId = transactionId,
             ReceiptNumber = $"SPLIT-{scope}-2026", ReceiptScope = scope,
             ReceiptKind = scope == FeeReceiptScope.Charge ? FeeReceiptKind.FinalCharge : FeeReceiptKind.FinalFee,
-            TotalPaidAmount = total, ReceiptDate = new DateOnly(2026, 10, 30),
+            TotalPaidAmount = Convert.ToDecimal(total), ReceiptDate = new DateOnly(2026, 10, 30),
             Remarks = "Synthetic receipt grouping verification."
         };
         if (scope == FeeReceiptScope.Combined) receipt.SetAmountBreakdown(20000m, 60600m);
@@ -76,7 +76,7 @@ public class FeeReceiptPdfGenerator_Tests
         {
             StudentId = studentId, FeeCollectionTransactionId = transactionId,
             ReceiptNumber = "TEST-2026-000001", ReceiptKind = kind, ReceiptScope = scope,
-            TotalPaidAmount = 12345.67, ReceiptDate = new DateOnly(2026, 10, 23),
+            TotalPaidAmount = 12345.67m, ReceiptDate = new DateOnly(2026, 10, 23),
             Remarks = "Sample receipt for PDF layout verification."
         };
         if (scope == FeeReceiptScope.Combined) receipt.SetAmountBreakdown(10000m, 2345.67m);

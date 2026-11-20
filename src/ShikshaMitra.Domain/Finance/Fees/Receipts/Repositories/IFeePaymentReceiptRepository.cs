@@ -48,7 +48,8 @@ public interface IFeePaymentReceiptRepository : IRepository<FeePaymentReceipt, G
         int? year,
         IQueryable<Guid>? scopedStudentIdsQuery = null,
         CancellationToken cancellationToken = default,
-        IQueryable<Guid>? scopedAccountIdsQuery = null);
+        IQueryable<Guid>? scopedAccountIdsQuery = null,
+        IQueryable<Guid>? scopedEmployeeIdsQuery = null);
     /// <summary>
     /// Returns the total count and a paged, sorted slice of receipts matching
     /// the supplied filter. Results are ordered by <c>CreationTime</c> descending
@@ -128,6 +129,7 @@ public sealed class FeeReceiptListFilterRow
 /// <summary>Filter for the reconciliation inbox query.</summary>
 public sealed class ReconciliationListFilter
 {
+    public IQueryable<Guid>? ScopedEmployeeIdsQuery { get; init; }
     public FinanceTableQuery? TableQuery { get; init; }
     public Guid AcademicYearId { get; init; }
     public int? Month { get; init; }
@@ -166,6 +168,9 @@ public static class ReconciliationHeaderColumns
 /// </summary>
 public sealed class ReconciliationRow
 {
+	public Guid? EmployeeId { get; init; }
+	public string EmployeeName { get; init; } = string.Empty;
+	public string? EmployeeCode { get; init; }
     public int PaymentReceiptCount { get; init; } = 1;
     public FeeReceiptScope ReceiptScope { get; init; }
     public Guid ReceiptId { get; init; }

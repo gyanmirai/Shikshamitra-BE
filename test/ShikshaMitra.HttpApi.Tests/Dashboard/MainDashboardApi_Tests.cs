@@ -1477,7 +1477,7 @@ public class MainDashboardApi_Tests : ShikshaMitraApiTestBase
 				await metadata.InsertAsync(new FeeRecordMetadata(id, tenantId, student, Factory.SeededAcademicYearId, amount, $"TEST-{id:N}", status));
 				await receipts.InsertAsync(new FeePaymentReceipt(Guid.NewGuid()) { TenantId = tenantId, StudentId = student,
 					AcademicYearId = Factory.SeededAcademicYearId, ReceiptDate = date, FeeCollectionTransactionId = id,
-					ReceiptKind = kind, ReceiptScope = FeeReceiptScope.Fee, VerificationStatus = verification, TotalPaidAmount = amount, ReceiptNumber = $"TEST-{id:N}" });
+					ReceiptKind = kind, ReceiptScope = FeeReceiptScope.Fee, VerificationStatus = verification, TotalPaidAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble(amount), ReceiptNumber = $"TEST-{id:N}" });
 			}
 			await uow.CompleteAsync();
 		}

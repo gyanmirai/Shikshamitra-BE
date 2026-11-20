@@ -738,9 +738,19 @@ public partial class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, checkerId);
         var expenseCategoryId = await FeeRefundTestHelper.SeedRefundExpenseCategoryAsync(Factory.Services);
         using var checker = CreateClientAs(checkerId);
-        var approve = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve",
-            new FeeRefundActionDto { Notes = "Applicant source checked", ExpenseCategoryId = expenseCategoryId, BankAccountId = await FeeRefundTestHelper.SeedSchoolBankAccountAsync(Factory.Services) }, JsonOptions);
-        approve.StatusCode.ShouldBe(HttpStatusCode.OK, await approve.Content.ReadAsStringAsync());
+        var approval = new FeeRefundActionDto { Notes = "Applicant source checked", ExpenseCategoryId = expenseCategoryId, BankAccountId = await FeeRefundTestHelper.SeedSchoolBankAccountAsync(Factory.Services) };
+        using var denied = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve", approval, JsonOptions);
+        denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        await FeeRefundTestHelper.SetAdministratorAsync(Factory.Services, checkerId, true);
+        try
+        {
+            using var approve = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve", approval, JsonOptions);
+            approve.StatusCode.ShouldBe(HttpStatusCode.OK, await approve.Content.ReadAsStringAsync());
+        }
+        finally
+        {
+            await FeeRefundTestHelper.SetAdministratorAsync(Factory.Services, checkerId, false);
+        }
         var detail = await Client.GetFromJsonAsync<FeeRefundRequestDto>($"{BaseUrl}/{request.Id}", JsonOptions);
         detail!.StudentId.ShouldBeNull();
         detail.FinanceFeeAccountId.ShouldBe(source.AccountId);

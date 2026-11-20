@@ -11,6 +11,7 @@ using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Students;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -29,7 +30,7 @@ public partial class EfCoreFeePaymentReceiptRepository(
         new Dictionary<string, LambdaExpression>
         {
             ["receiptNumber"] = (Expression<Func<FeePaymentReceipt, string>>)(r => r.ReceiptNumber),
-            ["totalPaidAmount"] = (Expression<Func<FeePaymentReceipt, double>>)(r => r.TotalPaidAmount),
+            ["totalPaidAmount"] = (Expression<Func<FeePaymentReceipt, decimal>>)(r => r.TotalPaidAmount),
             ["receiptDate"] = (Expression<Func<FeePaymentReceipt, DateOnly>>)(r => r.ReceiptDate)
         };
     private static readonly JsonSerializerOptions PaymentDetailsJsonOptions =
@@ -81,6 +82,8 @@ public partial class EfCoreFeePaymentReceiptRepository(
             where receiptIds.Contains(r.Id)
             join s in db.Set<Student>() on r.StudentId equals s.Id into sj
             from s in sj.DefaultIfEmpty()
+            join e in db.Set<Employee>() on r.EmployeeId equals (Guid?)e.Id into ej
+            from e in ej.DefaultIfEmpty()
             join a in db.Set<FinanceFeeAccount>() on r.FinanceFeeAccountId equals (Guid?)a.Id into aj
             from a in aj.DefaultIfEmpty()
             join b in db.Set<EducationBoard>() on (a != null ? (Guid?)a.BoardId : s.AcademicBoardId) equals (Guid?)b.Id into bj
@@ -111,6 +114,9 @@ public partial class EfCoreFeePaymentReceiptRepository(
                 LinkedFinalReceiptNumber   = finalReceipt,
                 FeeCollectionTransactionId = r.FeeCollectionTransactionId,
                 StudentId                  = r.StudentId,
+                r.EmployeeId,
+                EmployeeName = e != null ? (e.FirstName + " " + (e.MiddleName ?? "") + " " + e.LastName).Trim().Replace("  ", " ") : string.Empty,
+                EmployeeCode = e != null ? e.EmployeeCode : null,
                 FinanceFeeAccountId        = r.FinanceFeeAccountId,
                 StudentName                = a != null ? a.ApplicantName : s != null
                     ? (s.FirstName + " " + (s.MiddleName ?? "") + " " + s.LastName).Trim().Replace("  ", " ")
@@ -152,7 +158,7 @@ public partial class EfCoreFeePaymentReceiptRepository(
                     ReceiptNumber              = x.ReceiptNumber,
                     VerificationStatus         = x.VerificationStatus,
                     ReceiptDate                = x.ReceiptDate,
-                    TotalPaidAmount            = x.TotalPaidAmount,
+                    TotalPaidAmount            = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(x.TotalPaidAmount),
                     Remarks                    = x.Remarks,
                     LinkedFinalReceiptId       = x.LinkedFinalReceiptId,
                     LinkedFinalReceiptNumber   = x.LinkedFinalReceiptNumber,
@@ -165,6 +171,7 @@ public partial class EfCoreFeePaymentReceiptRepository(
                         ? null
                         : JsonSerializer.Serialize(pmr.PaymentDetails, PaymentDetailsJsonOptions),
                     StudentId                  = x.StudentId,
+                    EmployeeId = x.EmployeeId, EmployeeName = x.EmployeeName, EmployeeCode = x.EmployeeCode,
                     FinanceFeeAccountId        = x.FinanceFeeAccountId,
                     StudentName                = x.StudentName,
                     GrNumber                   = x.GrNumber,
@@ -189,7 +196,8 @@ public partial class EfCoreFeePaymentReceiptRepository(
         int? year,
         IQueryable<Guid>? scopedStudentIdsQuery = null,
         CancellationToken cancellationToken = default,
-        IQueryable<Guid>? scopedAccountIdsQuery = null)
+        IQueryable<Guid>? scopedAccountIdsQuery = null,
+        IQueryable<Guid>? scopedEmployeeIdsQuery = null)
     {
         var db = await GetDbContextAsync();
 
@@ -203,7 +211,7 @@ public partial class EfCoreFeePaymentReceiptRepository(
                              && !db.Set<PaymentMethodRecord>().Any(p => p.FeeRecordMetadataId == r.FeeCollectionTransactionId && p.PaymentMethod != PaymentMethodEnum.Cash))));
 
         // User scope — only count receipts for students accessible to the caller
-        receiptQ = ApplyPayerScope(receiptQ, scopedStudentIdsQuery, scopedAccountIdsQuery);
+        receiptQ = ApplyPayerScope(receiptQ, scopedStudentIdsQuery, scopedAccountIdsQuery, scopedEmployeeIdsQuery);
 
         var q = from r in receiptQ
                 join pmr in db.Set<PaymentMethodRecord>()
@@ -269,7 +277,7 @@ public partial class EfCoreFeePaymentReceiptRepository(
             query = ApplyReconciliationContextHeaders(query, db, filter.TableQuery);
         }
         query = ApplySearch(query, db, filter.Search);
-        return ApplyPayerScope(query, filter.ScopedStudentIdsQuery, filter.ScopedAccountIdsQuery);
+        return ApplyPayerScope(query, filter.ScopedStudentIdsQuery, filter.ScopedAccountIdsQuery, filter.ScopedEmployeeIdsQuery);
     }
 
 
@@ -337,7 +345,7 @@ public partial class EfCoreFeePaymentReceiptRepository(
             ReceiptScope = row.ReceiptScope,
             VerificationStatus = row.VerificationStatus,
             LinkedFinalReceiptNumber = row.LinkedFinalReceiptNumber,
-            TotalPaidAmount = row.TotalPaidAmount,
+            TotalPaidAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(row.TotalPaidAmount),
             ReceiptDate = row.ReceiptDate,
             StudentName = row.StudentName,
             GrNo = row.GrNo,
@@ -416,8 +424,16 @@ public partial class EfCoreFeePaymentReceiptRepository(
     }
 
     private static IQueryable<FeePaymentReceipt> ApplyPayerScope(IQueryable<FeePaymentReceipt> query,
-        IQueryable<Guid>? studentIds, IQueryable<Guid>? accountIds)
+        IQueryable<Guid>? studentIds, IQueryable<Guid>? accountIds, IQueryable<Guid>? employeeIds = null)
     {
+		if (employeeIds != null)
+		{
+			var scopedStudents = studentIds ?? query.Where(_ => false).Select(row => row.Id);
+			var scopedAccounts = accountIds ?? query.Where(_ => false).Select(row => row.Id);
+			return query.Where(row => row.EmployeeId.HasValue && !row.StudentId.HasValue && !row.FinanceFeeAccountId.HasValue && employeeIds.Contains(row.EmployeeId.Value) ||
+				!row.EmployeeId.HasValue && ((!row.FinanceFeeAccountId.HasValue && row.StudentId.HasValue && scopedStudents.Contains(row.StudentId.Value)) ||
+				(row.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(row.FinanceFeeAccountId.Value))));
+		}
         if (studentIds != null && accountIds != null)
             return query.Where(r => (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && studentIds.Contains(r.StudentId.Value)) ||
                 (r.FinanceFeeAccountId.HasValue && accountIds.Contains(r.FinanceFeeAccountId.Value)));
@@ -444,7 +460,12 @@ public partial class EfCoreFeePaymentReceiptRepository(
             .Where(a => EF.Functions.Like(a.ApplicantName.ToLower(), pattern, "\\") ||
                 (a.StudentId.HasValue && studentIds.Contains(a.StudentId.Value)))
             .Select(a => a.Id);
+        var employeeIds = db.Set<Employee>().Where(employee =>
+            EF.Functions.Like((employee.FirstName + " " + employee.LastName).ToLower(), pattern, "\\") ||
+            EF.Functions.Like(employee.EmployeeCode.ToLower(), pattern, "\\"))
+            .Select(employee => employee.Id);
         return query.Where(r => EF.Functions.Like(r.ReceiptNumber.ToLower(), pattern, "\\") ||
+            (r.EmployeeId.HasValue && employeeIds.Contains(r.EmployeeId.Value)) ||
             (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && studentIds.Contains(r.StudentId.Value)) ||
             (r.FinanceFeeAccountId.HasValue && accountIds.Contains(r.FinanceFeeAccountId.Value)));
     }

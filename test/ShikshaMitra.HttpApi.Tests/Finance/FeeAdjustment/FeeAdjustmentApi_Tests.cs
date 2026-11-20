@@ -152,7 +152,7 @@ public class FeeAdjustmentAdministratorCreationApi_Tests(FinanceRoutingApiTestFa
                     BoardId = Factory.SeededBoardId, EducationMediumId = Factory.SeededMediumId,
                     FeeCollectionTransactionId = collection.Id, ReceiptNumber = number,
                     ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = FeeReceiptScope.Fee,
-                    VerificationStatus = FeeReceiptVerificationStatus.Verified, TotalPaidAmount = (double)payment,
+                    VerificationStatus = FeeReceiptVerificationStatus.Verified, TotalPaidAmount = payment,
                     ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 });
             if (!hasDestinations)

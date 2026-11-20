@@ -187,6 +187,8 @@ The calendar date-change suite also covers published holiday and vacation edits.
 
 `AcademicCalendarEventReminder_Tests` uses the real transactional scheduler for a published event with a holiday on the immediately preceding date. It checks the scheduled time on the previous open school day, repeated scan deduplication, exact scope and cancellation before delivery.
 
+`AcademicReportNotificationEvents_Tests` covers the ready and failed terminal transitions, stale callbacks, repeated completion, requester-only resolution and history access, expiry and private template data.
+
 `AcademicEmergencyClosureNotificationEvents_Tests` covers class-scoped declarations, saved audience choices, silent updates to the selected audience, rescheduling and reopening through the calendar app service. The hosted SQLite and PostgreSQL calendar workflows verify the parent-only choice, protected history, repeat reopening, isolation of a second day in the same closure range and original versus revised content after a class change.
 
 `SyllabusNotificationEvents_Tests` covers publication, suppressed repeats and progress edits, assigned staff and material revisions. `SyllabusNotificationDelivery_Tests` and `SyllabusNotificationPostgres_Tests` exercise the hosted chapter create and update workflow, exact locked elective eligibility, parent-only delivery limits, history authorization and suppression after returning to draft.

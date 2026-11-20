@@ -84,6 +84,8 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 			(_, AcademicNotificationEventKeys.CalendarEventCancelled) => "{{event_title}} on {{event_date}} has been cancelled.",
 			(_, AcademicNotificationEventKeys.CalendarHolidayChanged) => "The holiday schedule for {{event_title}} changed. {{change_summary}}",
 			(_, AcademicNotificationEventKeys.CalendarEventReminder) => "Reminder for {{event_title}} on {{event_date}}.",
+			(_, AcademicNotificationEventKeys.ReportExportReady) => "Your academic report export is ready. Sign in to view it.",
+			(_, AcademicNotificationEventKeys.ReportExportFailed) => "Your academic report export could not be completed. Sign in to review the export.",
 			(_, AcademicNotificationEventKeys.CalendarEmergencyClosureDeclared or AcademicNotificationEventKeys.CalendarEmergencyClosureChanged) =>
 				"{{event_title}} on {{event_date}}. {{change_summary}}",
 			(_, AcademicNotificationEventKeys.ProgressBehindSchedule) => "Review the incomplete chapters for {{subject_name}} in {{class_name}} ({{chapter_count}}).",

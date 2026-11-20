@@ -22,6 +22,10 @@ internal static partial class AcademicNotificationDefinitions
 		var channels = profile is NotificationDeliveryProfile.Internal or NotificationDeliveryProfile.Digest
 			? new[] { CommunicationChannelType.InApp, CommunicationChannelType.WebPush, CommunicationChannelType.Email }
 			: new[] { CommunicationChannelType.InApp, CommunicationChannelType.WebPush, CommunicationChannelType.Email, CommunicationChannelType.WhatsApp };
+		if (key == AcademicNotificationEventKeys.ReportExportReady)
+			channels = [CommunicationChannelType.InApp, CommunicationChannelType.WebPush, CommunicationChannelType.Email];
+		else if (key == AcademicNotificationEventKeys.ReportExportFailed)
+			channels = [CommunicationChannelType.InApp, CommunicationChannelType.WebPush];
 		var variables = Variables(family);
 		if (key is AcademicNotificationEventKeys.HomeworkOverdue or AcademicNotificationEventKeys.AssignmentOverdue)
 			variables = Array.AsReadOnly(variables.Append(new NotificationVariableDefinition("missing_submission_count",

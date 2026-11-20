@@ -1,10 +1,16 @@
 using System;
 using System.Globalization;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using ShikshaMitra.Academic.Notifications;
+using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.HR.Reports;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Linq;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.Reports;
@@ -12,7 +18,11 @@ namespace ShikshaMitra.Academic.Reports;
 // Read each checkpoint in its own UOW: an export's data-reading context may hold a stale tracked job.
 public class AcademicReportExportStateService(
     IRepository<HrReportExportJob, Guid> repository,
-    IUnitOfWorkManager unitOfWorkManager) : ITransientDependency
+    IUnitOfWorkManager unitOfWorkManager,
+    ICurrentTenant tenant,
+    IRepository<NotificationRule, Guid> rules,
+    IAsyncQueryableExecuter queries,
+    INotificationIntentWriter notifications) : ITransientDependency
 {
     private const string RunProperty = "AcademicExportRunId";
     private const string LeaseProperty = "AcademicExportLeaseUntilUtc";
@@ -91,6 +101,7 @@ public class AcademicReportExportStateService(
         }
         job.MarkCompleted(blobName, DateTime.UtcNow, rowCount, fileSize);
         await repository.UpdateAsync(job);
+        await CaptureTerminalNoticeAsync(job, runId);
         await uow.CompleteAsync();
         return true;
     }
@@ -113,10 +124,30 @@ public class AcademicReportExportStateService(
         {
             job.MarkFailed(errorMessage, DateTime.UtcNow);
             await repository.UpdateAsync(job);
+            await CaptureTerminalNoticeAsync(job, runId);
         }
         await uow.CompleteAsync();
     }
 
+    private async Task CaptureTerminalNoticeAsync(HrReportExportJob job, Guid runId)
+    {
+        if (tenant.Id is not Guid school || school == Guid.Empty || job.TenantId != school ||
+            job.RequestedByUserId == Guid.Empty || job.CompletedAt is not { } completed ||
+            job.ExpiresAt <= completed || AcademicReportNotificationSource.TerminalEvent(job) is not { } eventKey)
+            return;
+
+        var enabled = (await rules.GetQueryableAsync()).Where(x =>
+            x.TenantId == school && !x.IsDeleted && x.IsEnabled && x.EventKey == eventKey && x.AcademicYearId == null);
+        if (!await queries.AnyAsync(enabled)) return;
+
+        await notifications.WriteAsync(new(eventKey, AcademicReportNotificationSource.Type, job.Id, runId.ToString("N"),
+            AcademicReportNotificationSource.Utc(completed), [new("Requester", UserId: job.RequestedByUserId)]),
+            CancellationToken.None);
+    }
+
+    internal static Guid? ReadRunId(HrReportExportJob job) =>
+        Guid.TryParseExact(job.GetProperty<string>(RunProperty), "N", out var run) && run != Guid.Empty ? run : null;
+
     private static bool IsCurrentRun(HrReportExportJob job, Guid runId) =>
-        job.Status == HrReportExportStatus.Running && job.GetProperty<string>(RunProperty) == runId.ToString("N");
+        job.Status == HrReportExportStatus.Running && ReadRunId(job) == runId;
 }

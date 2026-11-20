@@ -155,6 +155,12 @@ Material edits to a published holiday or vacation through `PUT /api/academic/cal
 
 An enabled `Academic.Calendar.EventReminder` rule schedules reminders for active events on published calendars. The selected division's school days determine the configured reminder date and time. The reminder expires when the event starts, or when its school-local date begins for an all-day event. Cancellation, publication changes and material event edits invalidate earlier pending reminders. Templates can use `event_date` and `event_start`. The reminder runs through the scheduler.
 
+### Report export notifications
+
+The Academic export worker can queue `Academic.Report.ExportReady` or `Academic.Report.ExportFailed` when the current export attempt reaches its terminal state. These events use a school-wide rule and target only the saved requester. Interrupted and stale attempts queue no notice. A repeated terminal callback queues no duplicate.
+
+The ready notice opens the authenticated report download route. It checks report ownership, completion and expiry on each request. Failure notices open the inbox. Templates can use `report_name` and `export_format`. Storage keys and worker diagnostics stay out of template data. Ready supports inbox, web push and email. Failure supports inbox and web push.
+
 ### Emergency closure notifications
 
 `POST /api/academic/calendar-days/emergency-closure` can queue `Academic.Calendar.EmergencyClosureDeclared` for each saved class or medium and date. `PUT /api/academic/calendar-days/{id}/emergency-closure` can queue `Academic.Calendar.EmergencyClosureChanged` for a date, time or scope change. `POST /api/academic/calendar-days/{id}/cancel-emergency-closure` can queue a reopening notice with the same change event. Capture requires the existing Emergency Closure Add, Edit or Delete permission for the corresponding action and access to the saved scope.

@@ -546,7 +546,7 @@ public class ChapterProgressAppService(
 		throw new BusinessException(UserScopeErrorCodes.AccessDenied);
 	}
 
-	private static bool CanAccessClassDivision(UserScopeContext scope, Guid standardId, Guid divisionId)
+	internal static bool CanAccessClassDivision(UserScopeContext scope, Guid standardId, Guid divisionId)
 	{
 		return scope.IsAdmin ||
 			scope.HasTenantWideScope() ||

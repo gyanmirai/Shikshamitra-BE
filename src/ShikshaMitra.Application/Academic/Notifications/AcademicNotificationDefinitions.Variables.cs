@@ -24,7 +24,8 @@ internal static partial class AcademicNotificationDefinitions
 			"ClassTeacher" or "Subject" or "Elective" => Fields("subject_name", "teacher_name", "group_name"),
 			"Syllabus" => Fields("subject_name", "syllabus_title", "revision_summary"),
 			"Diary" => Fields("subject_name", "lesson_plan_title"),
-			"LessonPlan" or "Progress" => Fields("subject_name", "lesson_plan_title", "review_comment"),
+			"LessonPlan" => Fields("subject_name", "lesson_plan_title", "review_comment"),
+			"Progress" => Fields("subject_name").Append(new("chapter_count", Number, false, Public)),
 			"Substitution" => Fields("subject_name", "period_name", "room_name", "teacher_name", "start_time", "end_time")
 				.Append(new("session_date", Date, false, Public)),
 			"Room" => Fields("subject_name", "period_name", "room_name", "teacher_name", "start_time", "end_time")
@@ -44,7 +45,7 @@ internal static partial class AcademicNotificationDefinitions
 			"Settings" => Fields("setting_name", "impact_summary"),
 			_ => throw new ArgumentOutOfRangeException(nameof(family))
 		};
-		var shared = family == "Diary" ? common.Where(x => x.Key != "student_name") : common;
+		var shared = family is "Diary" or "Progress" ? common.Where(x => x.Key != "student_name") : common;
 		return Array.AsReadOnly(shared.Concat(specific).ToArray());
 	}
 

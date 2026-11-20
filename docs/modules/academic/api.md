@@ -135,6 +135,12 @@ An enabled `Academic.Syllabus.Published` rule can queue work when `POST /api/aca
 
 Capture requires Chapter Management Add and access to the source class. The rule chooses assigned subject teachers and the family audience. Family delivery uses active enrollment in the affected division and a matching locked choice for electives. Parent visibility excludes student accounts even when the rule enables them. Templates can use the chapter and subject names with the authenticated inbox link. Teacher notes and attachment contents stay in the syllabus. History requires Academic Notification View, Chapter Management View and access to the source scope.
 
+### Chapter progress digest
+
+An enabled `Academic.Progress.BehindSchedule` rule can queue one digest per published subject and division for the completed school-local window. **Daily digest time** sets the cutoff. A chapter is eligible when its published start and end dates form a valid target, its end falls within the window and its latest division progress is below 100 percent. The scheduler reuses the occurrence on repeat scans, and the worker rechecks dates, progress, publication and staff before delivery.
+
+The rule can select assigned subject teachers, the active class teacher, and an eligible reviewer configured at `Notifications:Academic:Tenants:<tenantIdN>:ProgressReviewerUserId`. The reviewer needs Chapter Management View and access to the division. The published template can use `chapter_count` with the class and subject and link to Chapter Management. Delivery History requires Academic Notification View, Chapter Management View and the stored division scope.
+
 ### Teacher diary follow-up
 
 An operator can manually send `Academic.Diary.FollowUpRequested` for a submitted diary attached to an approved lesson plan. Diary saves and submissions queue no notice. `GET /api/academic/notifications/manual/diary-follow-up-recipients/{diaryId}` returns the diary teacher's active staff reference and the configured lesson plan reviewer when eligible. It requires Academic Notification View and Send, Lesson Plan View, the saved division scope and existing diary read access. The configured reviewer must have the existing lesson plan review access.

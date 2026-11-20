@@ -55,12 +55,18 @@ public partial class LibraryCampusTransferAppService
 	private static LibraryCampusTransferHeader Map(LibraryCampusTransfer row) => new(row.Id,
 		new(row.SourceCampusId, row.SourceCampus, row.SourceSectionId, row.SourceSection),
 		new(row.DestinationCampusId, row.DestinationCampus, row.DestinationSectionId, row.DestinationSection),
-		new(row.DestinationShelfId, row.DestinationShelf), row.DispatchedOn, row.Reason, row.ActorId, row.RecordedAt, row.CopyCount);
+		new(row.DestinationShelfId, row.DestinationShelf), row.DispatchedOn, row.Reason, row.ActorId,
+		AsUtcRecordedAt(row.RecordedAt), row.CopyCount);
 
 	private static List<LibraryCampusTransferCopyDto> MapItems(IEnumerable<LibraryCampusTransferItem> rows) => rows
 		.OrderBy(row => row.AccessionNumber).ThenBy(row => row.CopyId).Select(row => new LibraryCampusTransferCopyDto(
 			row.CopyId, row.BookId, row.Title, row.AccessionNumber, row.SourceShelfId, row.ReceiptId, row.Condition)).ToList();
 
 	private static LibraryCampusTransferReceiptDto MapReceipt(LibraryCampusTransferReceipt row, IEnumerable<LibraryCampusTransferItem> copies) =>
-		new(row.Id, row.TransferId, row.ReceivedOn, row.Notes, row.ActorId, row.RecordedAt, MapItems(copies));
+		new(row.Id, row.TransferId, row.ReceivedOn, row.Notes, row.ActorId, AsUtcRecordedAt(row.RecordedAt), MapItems(copies));
+
+	// The legacy Npgsql timestamp reader can materialize timestamptz as local time.
+	private static DateTime AsUtcRecordedAt(DateTime timestamp) => timestamp.Kind == DateTimeKind.Local
+		? timestamp.ToUniversalTime()
+		: DateTime.SpecifyKind(timestamp, DateTimeKind.Utc);
 }

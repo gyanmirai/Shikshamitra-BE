@@ -116,7 +116,9 @@ public sealed partial class LibraryPostgresWorkflow_Tests
 		receivePlan.Errors.ShouldBeEmpty();
 		var receiptCommand = new LibraryCampusReceiveCommand(receipt, receivePlan.Revision!, "native-campus-receipt");
 		var saved = await PostAsync<LibraryCampusTransferReceiptDto>(operatorClient, transferRoute + "/receipts", receiptCommand);
-		(await PostAsync<LibraryCampusTransferReceiptDto>(operatorClient, transferRoute + "/receipts", receiptCommand)).Id.ShouldBe(saved.Id);
+		var repeatedReceipt = await PostAsync<LibraryCampusTransferReceiptDto>(operatorClient, transferRoute + "/receipts", receiptCommand);
+		repeatedReceipt.Id.ShouldBe(saved.Id);
+		repeatedReceipt.RecordedAt.ShouldBe(saved.RecordedAt);
 		var detail = await reader.GetFromJsonAsync<LibraryCampusTransferDetail>(transferRoute, JsonOptions);
 		detail.ShouldNotBeNull();
 		detail.PendingCount.ShouldBe(1);

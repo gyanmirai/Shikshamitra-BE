@@ -56,6 +56,8 @@ public sealed class NotificationRuleConfigurationCodec : ITransientDependency
 			Require(isProgressMilestone && percentage is >= 1 and <= 100);
 		else
 			Require(!isProgressMilestone || allowNoTemplates);
+		if (timing.WeeklySummaryDay is DayOfWeek day)
+			Require(definition.EventKey == AcademicNotificationEventKeys.SummaryWeekly && Enum.IsDefined(day));
 		Require(!timing.QuietHoursEnabled || timing.QuietStart != timing.QuietEnd);
 		Require(!timing.BypassQuietHours || definition.AllowsQuietHoursBypass);
 	}

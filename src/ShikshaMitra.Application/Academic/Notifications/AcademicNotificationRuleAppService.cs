@@ -112,7 +112,8 @@ public class AcademicNotificationRuleAppService(IRepository<IdentityUser, Guid> 
 				quiet.Enabled, quiet.Start ?? defaults.QuietStart, quiet.End ?? defaults.QuietEnd, quiet.Bypass)
 			{
 				ReviewerEscalationMinutes = timing.ReviewerEscalationMinutes,
-				ProgressMilestonePercentage = timing.ProgressMilestonePercentage
+				ProgressMilestonePercentage = timing.ProgressMilestonePercentage,
+				WeeklySummaryDay = timing.WeeklySummaryDay
 			}, input.FallbackLanguage);
 	}
 }

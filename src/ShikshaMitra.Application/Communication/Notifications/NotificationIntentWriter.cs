@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using ShikshaMitra.Academic.Notifications;
 using Volo.Abp;
 using Volo.Abp.Auditing;
 using Volo.Abp.Data;
@@ -38,7 +39,10 @@ public sealed class NotificationIntentWriter(ICurrentTenant tenant, IUnitOfWorkM
 		var moduleName = definition.EventKey.Split('.')[0];
 		if (!Enum.GetNames<CommunicationSourceModule>().Contains(moduleName, StringComparer.Ordinal)) throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
 		var module = Enum.Parse<CommunicationSourceModule>(moduleName);
-		var eventIdentity = input.DueOccurrence is { Phase: not null } phased
+		// A cutoff edit in an already captured school week must not create a second digest operation.
+		var eventIdentity = input.EventKey == AcademicNotificationEventKeys.SummaryWeekly && input.DueOccurrence is { } weekly
+			? WeeklyIdentity(tenantId, input, weekly)
+			: input.DueOccurrence is { Phase: not null } phased
 			? JsonSerializer.Serialize(new { tenantId, input.EventKey, input.SourceType, input.SourceId, input.SourceRevision,
 				Occurrence = phased.OccurrenceAt.ToUniversalTime(), phased.Scope, phased.Phase }, Json)
 			: input.DueOccurrence is { } occurrence
@@ -148,5 +152,14 @@ public sealed class NotificationIntentWriter(ICurrentTenant tenant, IUnitOfWorkM
 			await intents.InsertAsync(intent, cancellationToken: cancellationToken);
 		}
 	}
+	private static string WeeklyIdentity(Guid tenantId, NotificationEventInput input, NotificationDueOccurrenceDto occurrence)
+	{
+		var window = AcademicWeeklySummaryWindow.Read(input.SourceRevision);
+		if (window == null || window.Period.End != occurrence.OccurrenceAt || window.Period.ExpiresAt != input.ExpiresAt ||
+			occurrence.Scope.DivisionId != input.SourceId)
+			throw new BusinessException(NotificationErrorCodes.SourceUnavailable);
+		return JsonSerializer.Serialize(new { tenantId, input.EventKey, input.SourceType, input.SourceId, occurrence.Scope, window.Week }, Json);
+	}
+
 	private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 }

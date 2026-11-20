@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Students;
 using Volo.Abp;
@@ -53,6 +54,11 @@ public sealed class AcademicNotificationRuntimeRecipientResolver(ICurrentTenant 
 				{
 					var family = AcademicNotificationFamilyRecipients.ResolveRuntime(row, source.TenantId, policy, config.Channels,
 						source.Definition.RecipientSelectors);
+					if (source.Definition.EventKey == AcademicNotificationEventKeys.SummaryWeekly)
+						family = family.Select(item => item.IsEligible && !CanSendWeeklySummary(row, item)
+							? new NotificationRuntimeRecipient(item.SourceRecipient, item.Recipient, item.Channel,
+								item.Recipient.UserId.HasValue ? "VerifiedEmailRequired" : "VerifiedAccountRequired",
+								item.AssociationRevision) : item);
 					var relationships = source.Runtime.SelectedFamilyRelationships;
 					results.AddRange(relationships == null ? family : family.Where(item =>
 						item.Recipient.FamilyRelationship is { } relationship && relationships.Contains(relationship)));
@@ -82,6 +88,12 @@ public sealed class AcademicNotificationRuntimeRecipientResolver(ICurrentTenant 
 			foreach (var channel in config.Channels) results.Add(new(recipient, recipient, channel, reason));
 		}
 	}
+
+	private static bool CanSendWeeklySummary(AcademicNotificationStudent row, NotificationRuntimeRecipient candidate) =>
+		candidate.Recipient.UserId is Guid user &&
+		(candidate.Channel != CommunicationChannelType.Email || row.Accounts.Any(account =>
+			account.User.Id == user && account.User.EmailConfirmed &&
+			string.Equals(account.User.Email, candidate.Destination, StringComparison.OrdinalIgnoreCase)));
 
 	private static bool InScope(Student student, NotificationSourceScopeDto scope) =>
 		(!scope.AcademicYearId.HasValue || student.AcademicYearId == scope.AcademicYearId) &&

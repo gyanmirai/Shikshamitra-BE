@@ -41,7 +41,8 @@ internal static partial class AcademicNotificationDefinitions
 				.Append(new("seat_number", Text, false, Personal)),
 			"Student360" => [],
 			"Report" => Fields("report_name", "export_format"),
-			"Summary" => Fields("summary_period", "summary_text"),
+			"Summary" => Fields("summary_period", "summary_text").Concat(
+				[new("homework_submission_count", Number, false, Personal), new("assignment_submission_count", Number, false, Personal)]),
 			"Settings" => Fields("setting_name", "impact_summary"),
 			_ => throw new ArgumentOutOfRangeException(nameof(family))
 		};

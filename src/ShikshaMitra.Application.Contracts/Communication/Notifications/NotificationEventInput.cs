@@ -33,6 +33,7 @@ public sealed record NotificationIntentContext(
 	NotificationSourceScopeDto? SourceScope = null, DateTimeOffset? DueOccurrenceAt = null)
 {
 	public NotificationDuePhase? DuePhase { get; init; }
+	public NotificationRecipientRefDto? DeliveryRecipient { get; init; }
 }
 
 public sealed record NotificationVariableValueDto(NotificationVariableType Type, string? Value);

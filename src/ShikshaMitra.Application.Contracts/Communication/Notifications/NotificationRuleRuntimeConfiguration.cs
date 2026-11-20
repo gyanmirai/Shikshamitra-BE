@@ -14,6 +14,9 @@ public sealed record NotificationRuleTimingConfiguration(int DelayMinutes, int R
 
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public int? ProgressMilestonePercentage { get; init; }
+
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public DayOfWeek? WeeklySummaryDay { get; init; }
 }
 
 public sealed record NotificationRuleRuntimeConfiguration(int SchemaVersion, NotificationGuardianMode GuardianMode,

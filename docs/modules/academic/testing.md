@@ -189,6 +189,8 @@ The calendar date-change suite also covers published holiday and vacation edits.
 
 `AcademicCalendarEventReminder_Tests` uses the real transactional scheduler for a published event with a holiday on the immediately preceding date. It checks the scheduled time on the previous open school day, repeated scan deduplication, exact scope and cancellation before delivery.
 
+`AcademicSummaryNotification_Tests` verifies the school-local weekly window across daylight saving, saved and published submission eligibility, personalized family counts and distinct staff totals. It covers repeat scans, schedule changes, restricted family email, and per-delivery revalidation for the selected child.
+
 `AcademicReportNotificationEvents_Tests` covers the ready and failed terminal transitions, stale callbacks, repeated completion, requester-only resolution and history access, expiry and private template data.
 
 `AcademicReportRecovery_Tests` verifies one durable replacement job, rejection of stale deliveries, the completed file through the existing worker, and the saved and current dynamic scope intersection. `AcademicReportRecoveryApi_Tests` checks the expired download response, ownership and the current export action grant through the HTTP routes.

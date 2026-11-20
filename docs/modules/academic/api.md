@@ -158,6 +158,14 @@ Material edits to a published holiday or vacation through `PUT /api/academic/cal
 
 An enabled `Academic.Calendar.EventReminder` rule schedules reminders for active events on published calendars. The selected division's school days determine the configured reminder date and time. The reminder expires when the event starts, or when its school-local date begins for an all-day event. Cancellation, publication changes and material event edits invalidate earlier pending reminders. Templates can use `event_date` and `event_start`. The reminder runs through the scheduler.
 
+### Weekly Academic summary
+
+Enable `Academic.Summary.Weekly` at the desired Academic scope after publishing templates. The rule uses `timing.weeklySummaryDay` (Sunday = 0 through Saturday = 6) and `timing.reminderLocalTime` in the school time zone. The default cutoff is Friday at 17:00. A saved, enabled rule is required.
+
+The summary counts recorded submissions for published homework and assignments in the preceding seven-day window. It applies the current division, enrollment, and locked elective roster. Each family message uses its own child's counts. The primary guardian is the default. Additional relationships and student accounts follow the rule and require an active link to that child. Family email also requires the verified address on that linked account. Assigned class teachers and the configured reviewer receive division totals with Assessment and Feedback View and division access. The reviewer is configured through `Notifications:Academic:Tenants:{tenantId}:WeeklySummaryReviewerUserId`.
+
+Each division can queue one summary per school-local calendar week. Empty weeks create no operation. A schedule edit preserves an already captured window. The delivery window closes at the same local time the following day. The event supports inbox, browser push and email. Templates can use `summary_period`, `summary_text`, `homework_submission_count` and `assignment_submission_count`. Push defaults to a generic message linking to the signed-in inbox.
+
 ### Report export notifications
 
 The Academic export worker can queue `Academic.Report.ExportReady` or `Academic.Report.ExportFailed` when the current export attempt reaches its terminal state. These events use a school-wide rule and target only the saved requester. Interrupted and stale attempts queue no notice. A repeated terminal callback queues no duplicate.

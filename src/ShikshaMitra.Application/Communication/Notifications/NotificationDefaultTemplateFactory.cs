@@ -17,6 +17,7 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 		var title = Words().Replace(action, "$1 $2");
 		var subject = definition.EventKey switch
 		{
+			AcademicNotificationEventKeys.SummaryWeekly => "Weekly academic summary",
 			AcademicNotificationEventKeys.Student360GuardianMessage => "Academic update",
 			AcademicNotificationEventKeys.Student360MeetingRequested => "Academic meeting request",
 			_ => definition.Category + ": " + title
@@ -89,6 +90,10 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 			(_, AcademicNotificationEventKeys.CalendarEventCancelled) => "{{event_title}} on {{event_date}} has been cancelled.",
 			(_, AcademicNotificationEventKeys.CalendarHolidayChanged) => "The holiday schedule for {{event_title}} changed. {{change_summary}}",
 			(_, AcademicNotificationEventKeys.CalendarEventReminder) => "Reminder for {{event_title}} on {{event_date}}.",
+			("Guardian" or "StudentAccount", AcademicNotificationEventKeys.SummaryWeekly) =>
+				"Learning activity for {{student_name}} from {{summary_period}}. Homework submissions: {{homework_submission_count}}. Assignment submissions: {{assignment_submission_count}}.",
+			(_, AcademicNotificationEventKeys.SummaryWeekly) =>
+				"Learning activity for {{class_name}} from {{summary_period}}. Homework submissions: {{homework_submission_count}}. Assignment submissions: {{assignment_submission_count}}.",
 			(_, AcademicNotificationEventKeys.Student360GuardianMessage) =>
 				"Please contact the school to discuss an academic update.",
 			("ClassTeacher", AcademicNotificationEventKeys.Student360MeetingRequested) =>

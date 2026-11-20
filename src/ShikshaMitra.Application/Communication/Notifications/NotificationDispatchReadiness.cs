@@ -43,7 +43,7 @@ public sealed class NotificationDispatchReadiness(NotificationDispatchPayloadPro
 		var payload = protector.Unprotect(dispatch);
 		if (intent.SourceType == NotificationCampaignTypes.AcademicTemplateTestSource)
 			return await templateTests.CheckAsync(intent, dispatch, payload, now, cancellationToken);
-		var source = await sources.LoadAsync(intent, now, cancellationToken);
+		var source = await sources.LoadAsync(intent, now, cancellationToken, payload.SourceRecipient);
 		if (source.ExclusionCode != null) return Exclude(source.ExclusionCode);
 		if (source.Snapshot == null || !source.CurrentRecipients.Contains(payload.SourceRecipient))
 			return Exclude(NotificationErrorCodes.RecipientIneligible);

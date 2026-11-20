@@ -50,7 +50,7 @@ public sealed class AcademicNotificationHistoryRows(IRepository<NotificationDisp
 		NotificationErrorCodes.CancelledBeforeDelivery, NotificationErrorCodes.StaffRetryRequested,
 		"SourceExpired", "SourceRevisionChanged", "RuleDisabled", "NoEligibleRecipients", "SomeRecipientsSkipped",
 		"DeliveryFailed", "DeliveryConfigurationNeedsReview", "ProviderChanged", "GuardianAccessReviewPending",
-		"GuardianRelationshipUnavailable", "VerifiedAccountRequired", "AccountAssociationAmbiguous", "StudentNotEnrolled", "StudentScopeChanged",
+		"GuardianRelationshipUnavailable", "VerifiedAccountRequired", "VerifiedEmailRequired", "AccountAssociationAmbiguous", "StudentNotEnrolled", "StudentScopeChanged",
 		"StaffAccountInactive", "EmailMissing", "EmailInvalid", "PhoneMissing", "PhoneInvalid", "ChannelUnsupported",
 		"ConsentRequired", "ConsentRevoked", "ChannelDisabledByPreference", "QuietHours", "QuietHoursUnavailable",
 		"PreferenceConfigurationInvalid", "RecipientAssociationChanged", "RecipientContentAmbiguous", "WhatsAppTemplateNotApproved",

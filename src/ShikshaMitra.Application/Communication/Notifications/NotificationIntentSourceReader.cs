@@ -18,7 +18,8 @@ public sealed class NotificationIntentSourceReader(ICurrentTenant tenant, IEnume
 	IEnumerable<INotificationSourceAdapter> adapters, NotificationIntentSnapshotCodec snapshots, NotificationSourcePartitioner partitions)
 	: ITransientDependency
 {
-	public async Task<NotificationCurrentSource> LoadAsync(NotificationIntent intent, DateTimeOffset now, CancellationToken cancellationToken)
+	public async Task<NotificationCurrentSource> LoadAsync(NotificationIntent intent, DateTimeOffset now, CancellationToken cancellationToken,
+		NotificationRecipientRefDto? deliveryRecipient = null)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty || intent.TenantId != tenantId)
@@ -36,11 +37,12 @@ public sealed class NotificationIntentSourceReader(ICurrentTenant tenant, IEnume
 			captured.Any(x => !NotificationSourcePartitioner.ValidReference(x, definition)))
 			throw new BusinessException(NotificationErrorCodes.RuntimeSnapshotInvalid);
 		var expiry = intent.ExpiresAt;
+		if (deliveryRecipient != null && !captured.Contains(deliveryRecipient)) return Exclude(NotificationErrorCodes.RecipientIneligible);
 		if (expiry <= now) return Exclude("SourceExpired");
 		var matchingAdapters = adapters.Where(x => x.EventKeys.Contains(intent.EventKey)).Take(2).ToArray();
 		if (matchingAdapters.Length != 1) return Exclude(NotificationErrorCodes.SourceUnavailable);
 		var context = new NotificationIntentContext(intent.Id, tenantId, intent.EventKey, intent.SourceType, intent.SourceId,
-			intent.SourceRevision, intent.OccurredAt, captured, runtime.SourceScope, runtime.DueOccurrenceAt) { DuePhase = runtime.DuePhase };
+			intent.SourceRevision, intent.OccurredAt, captured, runtime.SourceScope, runtime.DueOccurrenceAt) { DuePhase = runtime.DuePhase, DeliveryRecipient = deliveryRecipient };
 		var source = await matchingAdapters[0].LoadAsync(context, cancellationToken);
 		if (!source.IsEligible) return Exclude(NotificationErrorCodes.SourceUnavailable);
 		if (source.SourceRevision != intent.SourceRevision) return Exclude("SourceRevisionChanged");

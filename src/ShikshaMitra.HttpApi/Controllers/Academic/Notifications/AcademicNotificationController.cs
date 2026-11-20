@@ -75,6 +75,18 @@ public class AcademicNotificationController(IAcademicNotificationCatalogueAppSer
 	public Task<AcademicNotificationOperationDto> RejectManualAsync(Guid id, CancellationToken cancellationToken) =>
 		manual.RejectAsync(id, cancellationToken);
 
+	[HttpGet("operations/pending-approvals")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Add)]
+	public Task<AcademicNotificationPendingApprovalsDto> GetPendingApprovalsAsync([FromQuery] Guid? afterId,
+		CancellationToken cancellationToken) => history.GetPendingApprovalsAsync(afterId, cancellationToken);
+
+	[HttpGet("operations/{id:guid}/approval-review")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Add)]
+	public Task<AcademicNotificationApprovalReviewDto> GetApprovalReviewAsync(Guid id, CancellationToken cancellationToken) =>
+		manual.GetApprovalReviewAsync(id, cancellationToken);
+
 	[HttpGet("operations/{id:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
 	public Task<AcademicNotificationOperationStatusDto> GetOperationAsync(Guid id, CancellationToken cancellationToken) =>

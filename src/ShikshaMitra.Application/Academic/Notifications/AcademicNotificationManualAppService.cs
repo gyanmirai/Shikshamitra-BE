@@ -19,7 +19,7 @@ namespace ShikshaMitra.Academic.Notifications;
 public class AcademicNotificationManualAppService(AcademicNotificationAccessService sourceAccess,
 	AcademicNotificationManualPlanner planner, AcademicNotificationReviewService reviews,
 	AcademicNotificationManualOperations operations, AcademicNotificationStaffAudit audit, IClock clock,
-	Student360NotificationAudience student360)
+	Student360NotificationAudience student360, AcademicNotificationOperationAccess operationAccess)
 	: ApplicationService, IAcademicNotificationManualAppService
 {
 	public virtual async Task<Student360NotificationAudienceDto> GetStudent360AudienceAsync(Guid studentId, string eventKey,
@@ -83,6 +83,29 @@ public class AcademicNotificationManualAppService(AcademicNotificationAccessServ
 	public virtual Task<AcademicNotificationOperationDto> RejectAsync(Guid operationId, CancellationToken cancellationToken = default) =>
 		DecideAsync(operationId, approve: false, cancellationToken);
 
+	public virtual async Task<AcademicNotificationApprovalReviewDto> GetApprovalReviewAsync(Guid operationId,
+		CancellationToken cancellationToken = default)
+	{
+		var identity = await sourceAccess.RequireHistoryViewerAsync(cancellationToken);
+		if (!await sourceAccess.CanUseStaffActionsAsync()) throw new AbpAuthorizationException();
+		operations.RequireAssignedApprover(identity.TenantId, identity.ActorId);
+		var review = await reviews.RequireAssignedAsync(identity.TenantId, operationId, identity.ActorId, cancellationToken);
+		var authorized = await operationAccess.RequireAsync(operationId, null, identity.TenantId, identity.Scope, cancellationToken);
+		if (!authorized.Record.ApprovalRequired || authorized.Record.Status != CommunicationCampaignStatus.PendingApproval)
+			throw new BusinessException(NotificationErrorCodes.ReviewConsumed);
+		var request = reviews.ReadRequest(review);
+		try
+		{
+			var context = await LoadReviewedSourceAsync(request, identity, cancellationToken);
+			var summary = (await RequireSameReviewAsync(review, request, context, cancellationToken)).Summary;
+			return new(true, summary.EligibleRecipientCount, summary.Channels, summary.Samples, summary.BlockingIssues);
+		}
+		catch (BusinessException error) when (error.Code == NotificationErrorCodes.ReviewChanged)
+		{
+			return new(false, 0, [], [], []);
+		}
+	}
+
 	private async Task<AcademicNotificationOperationDto> DecideAsync(Guid operationId, bool approve, CancellationToken cancellationToken)
 	{
 		var identity = await sourceAccess.RequireStaffActionAsync(cancellationToken);
@@ -90,9 +113,12 @@ public class AcademicNotificationManualAppService(AcademicNotificationAccessServ
 		var review = await reviews.LockDecisionAsync(identity.TenantId, operationId, identity.ActorId, cancellationToken);
 		var request = reviews.ReadRequest(review);
 		var context = await LoadReviewedSourceAsync(request, identity, cancellationToken);
+		if (!approve)
+			await operationAccess.RequireAsync(operationId, null, identity.TenantId, identity.Scope, cancellationToken);
 		var operation = await operations.GetAsync(identity.TenantId, operationId, request, cancellationToken);
 		if (approve && operation.ApprovedByUserId == identity.ActorId ||
-			!approve && operation.Status == CommunicationCampaignStatus.Cancelled) return Map(operation);
+			!approve && operation.Status == CommunicationCampaignStatus.Cancelled &&
+			operation.RejectionReason == AcademicNotificationManualOperations.ApprovalRejectionReason) return Map(operation);
 		if (!operation.ApprovalRequired || operation.Status != CommunicationCampaignStatus.PendingApproval)
 			throw new BusinessException(NotificationErrorCodes.ReviewConsumed);
 		if (approve)
@@ -105,9 +131,8 @@ public class AcademicNotificationManualAppService(AcademicNotificationAccessServ
 		}
 		else
 		{
-			await planner.EnsureScopeAsync(request, context, cancellationToken);
 			operation.Status = CommunicationCampaignStatus.Cancelled;
-			operation.RejectionReason = "Rejected by the assigned approver.";
+			operation.RejectionReason = AcademicNotificationManualOperations.ApprovalRejectionReason;
 		}
 		await operations.SaveAsync(operation, cancellationToken);
 		await audit.WriteAsync(identity.TenantId, identity.ActorId, approve ? "ApproveManualSend" : "RejectManualSend", operation.Id,

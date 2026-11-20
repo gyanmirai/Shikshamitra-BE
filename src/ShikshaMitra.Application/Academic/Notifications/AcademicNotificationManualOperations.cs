@@ -25,6 +25,8 @@ public sealed class AcademicNotificationManualOperations(IRepository<Communicati
 	IConfiguration configuration, IGuidGenerator guids, AcademicNotificationCatalogue catalogue, NotificationIntentSnapshotCodec snapshots)
 	: ITransientDependency
 {
+	internal const string ApprovalRejectionReason = "Rejected by the assigned approver.";
+
 	internal async Task<CommunicationCampaign> GetAsync(Guid tenantId, Guid operationId,
 		PreviewAcademicNotificationManualDto request, CancellationToken cancellationToken) =>
 		await queries.SingleOrDefaultAsync((await campaigns.GetQueryableAsync()).Where(x => x.Id == operationId &&
@@ -85,8 +87,10 @@ public sealed class AcademicNotificationManualOperations(IRepository<Communicati
 
 	internal void RequireAssignedApprover(Guid tenantId, Guid actorId)
 	{
-		if (ConfiguredApprover(tenantId) != actorId) throw new AbpAuthorizationException();
+		if (!IsConfiguredApprover(tenantId, actorId)) throw new AbpAuthorizationException();
 	}
+
+	internal bool IsConfiguredApprover(Guid tenantId, Guid actorId) => ConfiguredApprover(tenantId) == actorId;
 
 	private Guid? ConfiguredApprover(Guid tenantId) =>
 		Guid.TryParse(configuration[$"Notifications:Academic:Tenants:{tenantId:N}:ApproverUserId"], out var id) &&

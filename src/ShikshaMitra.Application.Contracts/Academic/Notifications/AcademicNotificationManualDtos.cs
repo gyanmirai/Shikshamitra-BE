@@ -28,6 +28,10 @@ public sealed record ConfirmAcademicNotificationManualDto(Guid ReviewToken, stri
 
 public sealed record AcademicNotificationOperationDto(Guid OperationId, CommunicationCampaignStatus Status);
 
+public sealed record AcademicNotificationApprovalReviewDto(bool CanApprove, int EligibleRecipientCount,
+	IReadOnlyList<AcademicNotificationPreviewChannelDto> Channels, IReadOnlyList<AcademicNotificationPreviewSampleDto> Samples,
+	IReadOnlyList<string> BlockingIssues);
+
 public interface IAcademicNotificationManualAppService : IApplicationService
 {
 	Task<Student360NotificationAudienceDto> GetStudent360AudienceAsync(Guid studentId, string eventKey,
@@ -38,6 +42,7 @@ public interface IAcademicNotificationManualAppService : IApplicationService
 		CancellationToken cancellationToken = default);
 	Task<AcademicNotificationOperationDto> SendAsync(ConfirmAcademicNotificationManualDto input,
 		CancellationToken cancellationToken = default);
+	Task<AcademicNotificationApprovalReviewDto> GetApprovalReviewAsync(Guid operationId, CancellationToken cancellationToken = default);
 	Task<AcademicNotificationOperationDto> ApproveAsync(Guid operationId, CancellationToken cancellationToken = default);
 	Task<AcademicNotificationOperationDto> RejectAsync(Guid operationId, CancellationToken cancellationToken = default);
 }

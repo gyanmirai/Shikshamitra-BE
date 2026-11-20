@@ -1,10 +1,14 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using ShikshaMitra.Academic.Notifications;
+using ShikshaMitra.Security.UserScope;
 using Shouldly;
+using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
@@ -61,6 +65,60 @@ public class AcademicNotificationHistoryPostgres_Tests(NotificationPostgresFixtu
 		last.Items.Single().ReasonCode.ShouldBe("EmailMissing");
 		var none = await sut.GetPageAsync(tenant, [], [], definition, new() { MaxResultCount = 1 }, default);
 		none.TotalCount.ShouldBe(0);
+	}
+
+	[NotificationPostgresFact]
+	public async Task Pending_approvals_page_only_assigned_operations_with_current_source_access()
+	{
+		await using var db = fixture.CreateContext();
+		var tenant = Guid.NewGuid();
+		var approver = Guid.NewGuid();
+		var actor = Guid.NewGuid();
+		var source = Guid.NewGuid();
+		const string sourceType = "Academic.Homework";
+		const string eventKey = AcademicNotificationEventKeys.HomeworkPublished;
+		var protection = new EphemeralDataProtectionProvider();
+		var now = DateTimeOffset.UtcNow;
+		for (var index = 1; index <= 15; index++)
+		{
+			var campaign = new CommunicationCampaign(new Guid(index, 0, 0, new byte[8]),
+				index == 14 ? Guid.NewGuid() : tenant)
+			{
+				CampaignType = NotificationCampaignTypes.Academic, SourceModule = CommunicationSourceModule.Academic,
+				SourceEntityType = sourceType, SourceEntityId = index == 1 ? Guid.NewGuid() : source,
+				ApprovalRequired = true, EligibleRecipientCount = 101, CreationTime = now.UtcDateTime,
+				Status = index == 15 ? CommunicationCampaignStatus.Queued : CommunicationCampaignStatus.PendingApproval
+			};
+			var review = new NotificationSendReview(Guid.NewGuid(), campaign.TenantId!.Value, actor, "digest", now.AddMinutes(10));
+			var request = new PreviewAcademicNotificationManualDto(eventKey, sourceType, campaign.SourceEntityId!.Value, [], []);
+			var guard = protection.CreateProtector("Academic.Notification.Review.v1",
+				review.TenantId!.Value.ToString("N"), actor.ToString("N"), review.Id.ToString("N"));
+			review.BindRequest(guard.Protect(JsonSerializer.Serialize(new { request, scopes = Array.Empty<NotificationSourceScopeDto>() },
+				new JsonSerializerOptions(JsonSerializerDefaults.Web))));
+			review.AssignApprover(index == 13 ? Guid.NewGuid() : approver);
+			review.Consume(campaign.Id, $"send-{index}", now);
+			db.AddRange(campaign, review);
+		}
+		await db.SaveChangesAsync();
+
+		var authorizer = Substitute.For<IAcademicNotificationSourceAuthorizer>();
+		authorizer.EventKeys.Returns([eventKey]);
+		authorizer.EnsureCanViewAsync(eventKey, Arg.Is<Guid>(id => id != source), default)
+			.Returns(_ => Task.FromException(new AbpAuthorizationException()));
+		var access = new AcademicNotificationAccessService(null!, null!, null!, null!, null!, [], [authorizer],
+			new AcademicNotificationCatalogue([]));
+		var queries = new AsyncQueryableExecuter([]);
+		var receipts = Repository<NotificationSendReview>(db);
+		var sut = new AcademicNotificationOperationAccess(access, null!, null!,
+			new AcademicNotificationReviewService(receipts, queries, protection, null!, null!),
+			Repository<CommunicationCampaign>(db), Repository<NotificationIntent>(db), receipts, queries);
+		var scope = new UserScopeContext { TenantId = tenant, UserId = approver, IsAdmin = true };
+		var first = await sut.ReadPendingApprovalsAsync(tenant, approver, scope, null, default);
+		first.Items.Select(x => x.OperationId).ShouldBe(Enumerable.Range(2, 10).Select(i => new Guid(i, 0, 0, new byte[8])));
+		first.NextAfterId.ShouldBe(first.Items[^1].OperationId);
+		var second = await sut.ReadPendingApprovalsAsync(tenant, approver, scope, first.NextAfterId, default);
+		second.Items.Single().OperationId.ShouldBe(new Guid(12, 0, 0, new byte[8]));
+		second.NextAfterId.ShouldBeNull();
 	}
 
 	[NotificationPostgresFact]

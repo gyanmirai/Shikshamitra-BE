@@ -74,10 +74,20 @@ public sealed class AcademicNotificationReviewService(IRepository<NotificationSe
 	{
 		if (operationId == Guid.Empty) throw new EntityNotFoundException(typeof(NotificationSendReview), operationId);
 		await writeLock.AcquireAsync([$"manual-operation:{operationId:N}"], cancellationToken);
-		return await queries.SingleOrDefaultAsync((await reviews.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
-			x.OperationId == operationId && x.AssignedApproverUserId == approverId && x.ActorUserId != approverId &&
-			!x.IsDeleted), cancellationToken) ?? throw new Volo.Abp.Authorization.AbpAuthorizationException();
+		return await RequireAssignedAsync(tenantId, operationId, approverId, cancellationToken);
 	}
+
+	internal async Task<IQueryable<NotificationSendReview>> AssignedAsync(Guid tenantId, Guid approverId) =>
+		(await reviews.GetQueryableAsync()).Where(x => x.TenantId == tenantId && !x.IsDeleted && x.OperationId != null &&
+			x.AssignedApproverUserId == approverId && x.ActorUserId != approverId);
+
+	internal async Task<bool> IsAssignedAsync(Guid tenantId, Guid operationId, Guid approverId, CancellationToken cancellationToken) =>
+		await queries.AnyAsync((await AssignedAsync(tenantId, approverId)).Where(x => x.OperationId == operationId), cancellationToken);
+
+	internal async Task<NotificationSendReview> RequireAssignedAsync(Guid tenantId, Guid operationId, Guid approverId,
+		CancellationToken cancellationToken) =>
+		await queries.SingleOrDefaultAsync((await AssignedAsync(tenantId, approverId)).Where(x => x.OperationId == operationId),
+			cancellationToken) ?? throw new Volo.Abp.Authorization.AbpAuthorizationException();
 
 	internal PreviewAcademicNotificationManualDto ReadRequest(NotificationSendReview review) => ReadReview(review).Request;
 

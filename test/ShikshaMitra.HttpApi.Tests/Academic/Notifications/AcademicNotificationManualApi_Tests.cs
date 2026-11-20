@@ -209,6 +209,9 @@ public partial class AcademicNotificationManualApi_Tests(AcademicNotificationPre
 				CommunicationCampaignStatus.PendingApproval);
 			var status = await GetAndReadAsync<JsonElement>($"{BasePath}/operations/{pending.OperationId}");
 			status.GetProperty("status").GetInt32().ShouldBe((int)CommunicationCampaignStatus.PendingApproval);
+			status.GetProperty("canReviewApproval").GetBoolean().ShouldBeFalse();
+			var queueRoute = $"{BasePath}/operations/pending-approvals";
+			var reviewRoute = $"{BasePath}/operations/{pending.OperationId}/approval-review";
 			var decisionRoute = $"{BasePath}/operations/{pending.OperationId}/{(approve ? "approve" : "reject")}";
 			await WithDatabaseAsync(async (db, _) =>
 			{
@@ -216,13 +219,73 @@ public partial class AcademicNotificationManualApi_Tests(AcademicNotificationPre
 			});
 			using var self = await Client.PostAsync(decisionRoute, null);
 			self.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+			var senderQueue = await Client.GetFromJsonAsync<JsonElement>(queueRoute);
+			senderQueue.GetProperty("items").GetArrayLength().ShouldBe(0);
+			using var senderReview = await Client.GetAsync(reviewRoute);
+			senderReview.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 			using var approver = CreateClientAs(AcademicNotificationPreviewApiFactory.ApproverId);
 			approver.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Staff");
+			Permissions(approver, View);
+			using var readOnlyQueue = await approver.GetAsync(queueRoute);
+			readOnlyQueue.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+			using var readOnlyReview = await approver.GetAsync(reviewRoute);
+			readOnlyReview.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+			Permissions(approver, $"{View},{Add}");
+			var assigned = await approver.GetFromJsonAsync<JsonElement>(queueRoute);
+			var listed = assigned.GetProperty("items").EnumerateArray().ShouldHaveSingleItem();
+			listed.GetProperty("operationId").GetGuid().ShouldBe(pending.OperationId);
+			listed.GetProperty("eligibleRecipientCount").GetInt32().ShouldBe(101);
+			var detail = await approver.GetFromJsonAsync<JsonElement>($"{BasePath}/operations/{pending.OperationId}");
+			detail.GetProperty("canReviewApproval").GetBoolean().ShouldBeTrue();
+			var approvalReview = await approver.GetFromJsonAsync<JsonElement>(reviewRoute);
+			approvalReview.GetProperty("canApprove").GetBoolean().ShouldBeTrue();
+			approvalReview.GetProperty("eligibleRecipientCount").GetInt32().ShouldBe(101);
+			approvalReview.GetProperty("channels").GetArrayLength().ShouldBe(1);
+			approvalReview.GetProperty("samples").GetArrayLength().ShouldBeGreaterThan(0);
+			approvalReview.GetRawText().ShouldNotContain("Private source text");
+			approvalReview.GetRawText().ShouldNotContain("private@example.invalid");
+			try
+			{
+				factory.DenySourceView = true;
+				var inaccessible = await approver.GetFromJsonAsync<JsonElement>(queueRoute);
+				inaccessible.GetProperty("items").GetArrayLength().ShouldBe(0);
+				using var forbiddenReview = await approver.GetAsync(reviewRoute);
+				forbiddenReview.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+			}
+			finally
+			{
+				factory.DenySourceView = false;
+			}
+			try
+			{
+				factory.SourceRevision = "updated-after-confirmation";
+				var outdated = await approver.GetFromJsonAsync<JsonElement>(reviewRoute);
+				outdated.GetProperty("canApprove").GetBoolean().ShouldBeFalse();
+				outdated.GetProperty("samples").GetArrayLength().ShouldBe(0);
+				using var stale = await approver.PostAsync($"{BasePath}/operations/{pending.OperationId}/approve", null);
+				await AssertConflictAsync(stale, NotificationErrorCodes.ReviewChanged);
+			}
+			finally
+			{
+				factory.SourceRevision = "homework-v1";
+			}
+			if (!approve)
+			{
+				factory.AdditionalStudents = factory.AdditionalStudents[..^1];
+				var changedAudience = await approver.GetFromJsonAsync<JsonElement>(reviewRoute);
+				changedAudience.GetProperty("canApprove").GetBoolean().ShouldBeFalse();
+			}
 			Permissions(approver, Add);
 			using var decision = await approver.PostAsync(decisionRoute, null);
 			decision.StatusCode.ShouldBe(HttpStatusCode.OK, await decision.Content.ReadAsStringAsync());
 			using var repeated = await approver.PostAsync(decisionRoute, null);
 			repeated.StatusCode.ShouldBe(HttpStatusCode.OK, await repeated.Content.ReadAsStringAsync());
+			Permissions(approver, $"{View},{Add}");
+			var remaining = await approver.GetFromJsonAsync<JsonElement>(queueRoute);
+			remaining.GetProperty("items").GetArrayLength().ShouldBe(0);
+			var decidedStatus = await approver.GetFromJsonAsync<JsonElement>($"{BasePath}/operations/{pending.OperationId}");
+			decidedStatus.GetProperty("canReviewApproval").GetBoolean().ShouldBeFalse();
+			decidedStatus.GetProperty("approvalRejected").GetBoolean().ShouldBe(!approve);
 			await WithDatabaseAsync(async (db, _) =>
 			{
 				var operation = await db.CommunicationCampaigns.SingleAsync(x => x.Id == pending.OperationId);

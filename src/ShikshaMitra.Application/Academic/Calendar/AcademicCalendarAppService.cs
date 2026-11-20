@@ -775,7 +775,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         var group = new List<AcademicCalendarDay> { day };
         group.AddRange(siblings);
         var groupIds = group.Select(x => x.Id).ToHashSet();
-        var eventBefore = calendar.Status == CalendarStatus.Published && day.DayType == DayType.Event && input.DayType == DayType.Event
+        var eventBefore = calendar.Status == CalendarStatus.Published && day.DayType == input.DayType &&
+            AcademicCalendarEventChangedSource.EventKeyFor(day.DayType) != null
             ? group.Select(AcademicCalendarEventMaterial.From).ToArray() : [];
         var savedRows = new List<AcademicCalendarDay>();
         var previousEventTitle = day.Title;
@@ -1010,6 +1011,10 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             (day.AppliesToAll || d.StandardId == day.StandardId ||
                 (input.StandardIds != null && d.StandardId.HasValue && input.StandardIds.Contains(d.StandardId.Value))));
 
+        var previousTitle = day.Title;
+        var vacationBefore = calendar.Status == CalendarStatus.Published && day.DayType == DayType.Vacation
+            ? existingRows.Select(AcademicCalendarEventMaterial.From).ToArray() : [];
+        var savedVacationRows = new List<AcademicCalendarDay>();
         var desired = new HashSet<(DateTime Date, Guid? StandardId)>();
         for (var date = startDate; date <= endDate; date = date.AddDays(1))
         {
@@ -1050,6 +1055,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 roomId: null,
                 meetingLink: null);
             await _calendarDayRepository.UpdateAsync(existing);
+            savedVacationRows.Add(existing);
             resultDay ??= existing;
         }
 
@@ -1068,6 +1074,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 input.AppliesToAll || targetStandardIds.Count != 1 ? null : input.DivisionId,
                 input.HolidayCategory);
             await _calendarDayRepository.InsertAsync(newDay);
+            savedVacationRows.Add(newDay);
             resultDay ??= newDay;
         }
 
@@ -1081,6 +1088,10 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             entityName: resultDay.Title,
             reason: input.ChangeReason,
             academicCalendarDayId: resultDay.Id);
+
+        if (vacationBefore.Length != 0)
+            await LazyServiceProvider.LazyGetRequiredService<AcademicCalendarEventChangedNotification>()
+                .RecordAsync(calendar, resultDay.Id, vacationBefore, savedVacationRows, previousTitle);
 
         var result = ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(resultDay);
         result.EndDate = endDate;

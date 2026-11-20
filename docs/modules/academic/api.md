@@ -151,6 +151,8 @@ The saved rule selects eligible staff and families within those scopes. Recipien
 
 `DELETE /api/academic/calendar-days/{id}` can queue `Academic.Calendar.EventCancelled` for an active event on a published calendar. Capture requires Calendar Management Delete and access to the deleted event's scope. A draft deletion stays silent. Deletion supersedes pending reschedules. The cancellation rechecks the saved deleted row, current recipients, calendar publication and the scheduled date in the school's time zone.
 
+Material edits to a published holiday or vacation through `PUT /api/academic/calendar-days/{id}` can queue `Academic.Calendar.HolidayChanged`. A vacation range edit uses the date and class rows saved together. The previous audience receives its original dates and the revised audience receives the new dates. Templates can use `event_date` for the first date and `holiday_end_date` for the last date. Draft and description-only edits stay silent.
+
 ### Emergency closure notifications
 
 `POST /api/academic/calendar-days/emergency-closure` can queue `Academic.Calendar.EmergencyClosureDeclared` for each saved class or medium and date. `PUT /api/academic/calendar-days/{id}/emergency-closure` can queue `Academic.Calendar.EmergencyClosureChanged` for a date, time or scope change. `POST /api/academic/calendar-days/{id}/cancel-emergency-closure` can queue a reopening notice with the same change event. Capture requires the existing Emergency Closure Add, Edit or Delete permission for the corresponding action and access to the saved scope.

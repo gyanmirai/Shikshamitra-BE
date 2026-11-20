@@ -35,6 +35,7 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 	private const string EventKey = AcademicNotificationEventKeys.CalendarPublished;
 	private const string EventChanged = AcademicNotificationEventKeys.CalendarEventChanged;
 	private const string EventCancelled = AcademicNotificationEventKeys.CalendarEventCancelled;
+	private const string HolidayChanged = AcademicNotificationEventKeys.CalendarHolidayChanged;
 	private const string ClosureDeclared = AcademicNotificationEventKeys.CalendarEmergencyClosureDeclared;
 	private const string ClosureChanged = AcademicNotificationEventKeys.CalendarEmergencyClosureChanged;
 	private const string Path = "/api/academic/calendars";
@@ -129,6 +130,22 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 				config with { StaffAudienceSelectors = [], TemplateIds = [cancellationHeader.Id] },
 				services.GetRequiredService<AcademicNotificationCatalogue>().Get(EventCancelled)), cancellationRule.ConcurrencyStamp);
 			await InsertAsync(services, cancellationRule);
+
+			var holidayHeader = await InsertAsync(services, new CommunicationTemplate(Guid.NewGuid(), School)
+				{ TemplateName = "Holiday schedule changed" });
+			var holidayVersion = new CommunicationTemplateRevision(Guid.NewGuid(), School, holidayHeader.Id, 1, HolidayChanged,
+				"Guardian", CommunicationChannelType.InApp, "en", "Holiday schedule changed", "{{change_summary}}", 1);
+			holidayVersion.Publish(Teacher, DateTimeOffset.UtcNow);
+			await InsertAsync(services, holidayVersion);
+			foreach (var (classScope, sectionScope) in new[] { (classId, divisionId), (otherClassId, otherClassDivision) })
+			{
+				var holidayRule = new NotificationRule(Guid.NewGuid(), School, HolidayChanged,
+					NotificationRuleScope.Create(board.AcademicYearId, board.Id, medium.Id, classScope, sectionScope));
+				holidayRule.Configure(true, services.GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(
+					config with { StaffAudienceSelectors = [], TemplateIds = [holidayHeader.Id] },
+					services.GetRequiredService<AcademicNotificationCatalogue>().Get(HolidayChanged)), holidayRule.ConcurrencyStamp);
+				await InsertAsync(services, holidayRule);
+			}
 
 			foreach (var key in new[] { ClosureDeclared, ClosureChanged })
 			{
@@ -354,6 +371,48 @@ public sealed class AcademicCalendarPublicationDelivery_Tests(ShikshaMitraApiTes
 					source.CurrentRecipients.ShouldBe([new("Student", StudentId: otherClassLearner)]);
 					source.Snapshot!.Variables["event_title"].Value.ShouldBe("Revised severe weather closure");
 					source.Snapshot.Variables["event_date"].Value.ShouldBe(start.AddDays(11).ToString("yyyy-MM-dd"));
+				}
+			}
+		});
+
+		var vacation = new CreateCalendarDayDto
+		{
+			Date = start.AddDays(14), EndDate = start.AddDays(16), DayType = DayType.Vacation,
+			Title = "Term break", StandardId = classId, DivisionId = divisionId
+		};
+		using var addedVacation = await Client.PostAsJsonAsync($"{Path}/{calendarId}/days", vacation, JsonOptions);
+		addedVacation.StatusCode.ShouldBe(HttpStatusCode.OK, await addedVacation.Content.ReadAsStringAsync());
+		var priorVacation = (await addedVacation.Content.ReadFromJsonAsync<AcademicCalendarDayDto>(JsonOptions))!;
+		vacation.Date = start.AddDays(15);
+		vacation.EndDate = start.AddDays(17);
+		vacation.StandardId = otherClassId;
+		vacation.DivisionId = otherClassDivision;
+		using var vacationUpdate = await Client.PutAsJsonAsync($"{closurePath}/{priorVacation.Id}", vacation, JsonOptions);
+		vacationUpdate.StatusCode.ShouldBe(HttpStatusCode.OK, await vacationUpdate.Content.ReadAsStringAsync());
+		var revisedVacation = (await vacationUpdate.Content.ReadFromJsonAsync<AcademicCalendarDayDto>(JsonOptions))!;
+		await InSchoolAsync(async services =>
+		{
+			var repository = services.GetRequiredService<IRepository<NotificationIntent, Guid>>();
+			var changes = await repository.GetListAsync(x => x.SourceId == revisedVacation.Id && x.EventKey == HolidayChanged);
+			changes.Count.ShouldBe(2);
+			changes.Select(x => x.CampaignId).Distinct().ShouldHaveSingleItem();
+			var reader = services.GetRequiredService<NotificationIntentSourceReader>();
+			foreach (var changed in changes)
+			{
+				var source = await reader.LoadAsync(changed, DateTimeOffset.UtcNow, CancellationToken.None);
+				var variables = source.Snapshot!.Variables;
+				if (source.Runtime.SourceScope.DivisionId == divisionId)
+				{
+					source.CurrentRecipients.ShouldBe([new("Student", StudentId: learner)]);
+					variables["event_date"].Value.ShouldBe(start.AddDays(14).ToString("yyyy-MM-dd"));
+					variables["holiday_end_date"].Value.ShouldBe(start.AddDays(16).ToString("yyyy-MM-dd"));
+				}
+				else
+				{
+					source.Runtime.SourceScope.DivisionId.ShouldBe(otherClassDivision);
+					source.CurrentRecipients.ShouldBe([new("Student", StudentId: otherClassLearner)]);
+					variables["event_date"].Value.ShouldBe(start.AddDays(15).ToString("yyyy-MM-dd"));
+					variables["holiday_end_date"].Value.ShouldBe(start.AddDays(17).ToString("yyyy-MM-dd"));
 				}
 			}
 		});

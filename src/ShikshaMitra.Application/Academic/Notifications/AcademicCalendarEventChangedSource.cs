@@ -49,7 +49,15 @@ public sealed class AcademicCalendarEventChangedSource(AcademicCalendarPublicati
 	: INotificationSourceAdapter, IAcademicNotificationSourceAuthorizer, ITransientDependency
 {
 	internal const string EventKey = AcademicNotificationEventKeys.CalendarEventChanged;
-	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[] { EventKey });
+	internal const string HolidayKey = AcademicNotificationEventKeys.CalendarHolidayChanged;
+	public IReadOnlyCollection<string> EventKeys { get; } = Array.AsReadOnly(new[] { EventKey, HolidayKey });
+
+	internal static string? EventKeyFor(DayType type) => type switch
+	{
+		DayType.Event => EventKey,
+		DayType.Holiday or DayType.Vacation => HolidayKey,
+		_ => null
+	};
 
 	internal static string Record(AcademicCalendar calendar, Guid anchor, AcademicCalendarEventMaterial[] before,
 		AcademicCalendarEventMaterial[] after, string previousTitle)
@@ -66,7 +74,8 @@ public sealed class AcademicCalendarEventChangedSource(AcademicCalendarPublicati
 	{
 		var school = context.TenantId;
 		if (school == Guid.Empty || tenant.Id != school || context.SourceType != AcademicCalendarPublicationSource.Type ||
-			context.EventKey != EventKey || await FindAsync(school, context.SourceId, token) is not { } record ||
+			!EventKeys.Contains(context.EventKey) || await FindAsync(school, context.SourceId, token) is not { } record ||
+			context.EventKey != EventKeyFor(record.Change.After[0].Type) ||
 			record.Calendar.Status != CalendarStatus.Published || record.Day.Status != CalendarDayStatus.Active ||
 			(!string.IsNullOrEmpty(context.SourceRevision) && context.SourceRevision != record.Change.Revision) ||
 			record.Change.CalendarRevision != AcademicCalendarPublicationSource.CurrentRevision(record.Calendar))
@@ -98,20 +107,33 @@ public sealed class AcademicCalendarEventChangedSource(AcademicCalendarPublicati
 			.Select(group => new NotificationSourceAudienceSliceDto(group.Key, group.SelectMany(x => x.Recipients).Distinct().ToArray()))
 			.ToArray();
 		var recipients = slices.SelectMany(x => x.Recipients).Distinct().ToArray();
+		var holiday = context.EventKey == HolidayKey;
+		if (holiday && recipients.Length == 0) return Unavailable();
 		var settings = AcademicCalendarEventMaterial.From(record.Day);
-		var variables = Variables(schoolName, record.Day.Title, settings.Date, settings.Venue, "The event details have changed.");
+		var variables = holiday
+			? revised.Count == 0
+				? HolidayVariables(schoolName, record.Change.PreviousTitle, record.Change.Before, context.SourceScope, removed: true)
+				: HolidayVariables(schoolName, record.Day.Title, record.Change.After, context.SourceScope, removed: false)
+			: Variables(schoolName, record.Day.Title, settings.Date, settings.Venue, "The event details have changed.");
 		var earlier = record.Change.Before[0];
+		var earlierScopes = holiday && context.SourceScope == null
+			? previous.SelectMany(slice => slice.Recipients.Select(recipient => (recipient, slice.Scope)))
+				.ToLookup(x => x.recipient, x => x.Scope) : null;
 		var removedContent = recipients.Where(x => !currentRecipients.Contains(x)).Select(x =>
-			new NotificationSourceRecipientContentDto(x, Variables(schoolName, record.Change.PreviousTitle,
-				earlier.Date, earlier.Venue, "The previous event details no longer apply to your division."), Link)).ToArray();
+			new NotificationSourceRecipientContentDto(x, holiday
+				? HolidayVariables(schoolName, record.Change.PreviousTitle, record.Change.Before,
+					context.SourceScope ?? earlierScopes?[x].FirstOrDefault(), removed: true)
+				: Variables(schoolName, record.Change.PreviousTitle, earlier.Date, earlier.Venue,
+					"The previous event details no longer apply to your division."), Link)).ToArray();
 		return new(true, null, record.Change.Revision, Link, variables, recipients, expires, slices, removedContent);
 	}
 
 	public async Task EnsureCanViewAsync(string eventKey, Guid sourceId, CancellationToken token)
 	{
-		if (eventKey != EventKey || tenant.Id is not Guid school || current.Id is not Guid user ||
+		if (!EventKeys.Contains(eventKey) || tenant.Id is not Guid school || current.Id is not Guid user ||
 			!await permissions.IsGrantedAsync(CalendarPermissions.View) ||
-			await FindAsync(school, sourceId, token) is not { } record) throw new AbpAuthorizationException();
+			await FindAsync(school, sourceId, token) is not { } record ||
+			eventKey != EventKeyFor(record.Change.After[0].Type)) throw new AbpAuthorizationException();
 		var caller = await scopes.GetUserScopeAsync(user);
 		if (caller.TenantId != school) throw new AbpAuthorizationException();
 		foreach (var scope in record.Change.Before.Concat(record.Change.After).Select(row => row.Scope(record.Scope)).Distinct())
@@ -167,6 +189,20 @@ public sealed class AcademicCalendarEventChangedSource(AcademicCalendarPublicati
 		["change_summary"] = new(NotificationVariableType.Text, summary)
 	};
 
+	private static Dictionary<string, NotificationVariableValueDto> HolidayVariables(string schoolName, string title,
+		IReadOnlyList<AcademicCalendarEventMaterial> rows, NotificationSourceScopeDto? scope, bool removed)
+	{
+		var dates = rows.Where(row => scope == null || row.Includes(scope)).Select(row => row.Date).ToArray();
+		var start = dates.Min();
+		var end = dates.Max();
+		var range = start == end ? start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) :
+			FormattableString.Invariant($"{start:yyyy-MM-dd} through {end:yyyy-MM-dd}");
+		var summary = removed ? $"The previous dates of {range} no longer apply to your division." : $"The revised dates are {range}.";
+		var values = Variables(schoolName, title, start, null, summary);
+		values["holiday_end_date"] = new(NotificationVariableType.Date, end.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+		return values;
+	}
+
 	private static string Property(Guid id) => $"AcademicCalendarEventChangedNotice:{id:N}";
 }
 
@@ -184,7 +220,8 @@ public sealed class AcademicCalendarEventChangedNotification(AcademicCalendarPub
 			calendar.TenantId != school || calendar.Status != CalendarStatus.Published || current.Id is not Guid user ||
 			before.Length == 0 || saved.Count == 0 || !await permissions.IsGrantedAsync(CalendarPermissions.Edit)) return;
 		var after = saved.Select(AcademicCalendarEventMaterial.From).ToArray();
-		if (before.ToHashSet().SetEquals(after)) return;
+		var key = AcademicCalendarEventChangedSource.EventKeyFor(after[0].Type);
+		if (key == null || before.ToHashSet().SetEquals(after)) return;
 
 		var token = cancellation.Token;
 		var medium = await publication.ReadScopeAsync(school, calendar, token);
@@ -201,11 +238,11 @@ public sealed class AcademicCalendarEventChangedNotification(AcademicCalendarPub
 		var revision = AcademicCalendarEventChangedSource.Record(calendar, anchor, before, after, previousTitle);
 		await calendars.UpdateAsync(calendar, cancellationToken: token);
 		var applicable = (await rules.GetQueryableAsync()).Where(x =>
-			x.TenantId == school && !x.IsDeleted && x.IsEnabled && x.EventKey == AcademicCalendarEventChangedSource.EventKey &&
+			x.TenantId == school && !x.IsDeleted && x.IsEnabled && x.EventKey == key &&
 			(!x.AcademicYearId.HasValue || x.AcademicYearId == medium.AcademicYearId) &&
 			(!x.BoardId.HasValue || x.BoardId == medium.BoardId) && (!x.MediumId.HasValue || x.MediumId == medium.MediumId));
 		if (!await queries.AnyAsync(applicable, token)) return;
-		await writer.WriteAsync(new(AcademicCalendarEventChangedSource.EventKey, AcademicCalendarPublicationSource.Type,
+		await writer.WriteAsync(new(key, AcademicCalendarPublicationSource.Type,
 			anchor, revision, DateTimeOffset.UtcNow, [], ActorUserId: user), token);
 	}
 }

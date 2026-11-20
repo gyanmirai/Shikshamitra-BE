@@ -35,6 +35,9 @@ internal static partial class AcademicNotificationDefinitions
 		if (key == AcademicNotificationEventKeys.ProgressMilestoneReached)
 			variables = Array.AsReadOnly(variables.Append(new NotificationVariableDefinition("milestone_percentage",
 				NotificationVariableType.Number, false, NotificationVariableSensitivity.Public)).ToArray());
+		if (key == AcademicNotificationEventKeys.CalendarHolidayChanged)
+			variables = Array.AsReadOnly(variables.Append(new NotificationVariableDefinition("holiday_end_date",
+				NotificationVariableType.Date, false, NotificationVariableSensitivity.Public)).ToArray());
 		if (key == AcademicNotificationEventKeys.TimetableDayReminder)
 			variables = Array.AsReadOnly(variables.Concat(new[]
 			{

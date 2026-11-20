@@ -19,10 +19,11 @@ namespace ShikshaMitra.Academic.Calendar;
 
 public sealed class AcademicCalendarDayNotificationEvents_Tests : SubjectTeacherReassignmentTestBase
 {
-	private const string EventKey = AcademicNotificationEventKeys.CalendarEventChanged;
-
-	[Fact]
-	public async Task A_published_event_date_change_queues_for_the_saved_division_only()
+	[Theory]
+	[InlineData(DayType.Event, AcademicNotificationEventKeys.CalendarEventChanged)]
+	[InlineData(DayType.Holiday, AcademicNotificationEventKeys.CalendarHolidayChanged)]
+	[InlineData(DayType.Vacation, AcademicNotificationEventKeys.CalendarHolidayChanged)]
+	public async Task A_published_calendar_date_change_queues_for_the_saved_division_only(DayType dayType, string eventKey)
 	{
 		using var school = Tenant.Change(TenantId, "Synthetic school");
 		using var actor = GetRequiredService<ICurrentPrincipalAccessor>().Change(new ClaimsPrincipal(new ClaimsIdentity(
@@ -43,35 +44,38 @@ public sealed class AcademicCalendarDayNotificationEvents_Tests : SubjectTeacher
 				AcademicMediumId, board.AcademicYearId, "Events calendar", initial.Date.AddDays(-10), initial.Date.AddDays(30)), autoSave: true);
 			var header = new CommunicationTemplate(Guid.NewGuid(), TenantId) { TemplateName = "Calendar event changed" };
 			await GetRequiredService<IRepository<CommunicationTemplate, Guid>>().InsertAsync(header, autoSave: true);
-			var version = new CommunicationTemplateRevision(Guid.NewGuid(), TenantId, header.Id, 1, EventKey, "AssignedTeacher",
+			var version = new CommunicationTemplateRevision(Guid.NewGuid(), TenantId, header.Id, 1, eventKey, "AssignedTeacher",
 				CommunicationChannelType.InApp, "en", "Calendar event changed", "Check the revised date.", 1);
 			version.Publish(ActorId, DateTimeOffset.UtcNow);
 			await GetRequiredService<IRepository<CommunicationTemplateRevision, Guid>>().InsertAsync(version, autoSave: true);
-			var rule = new NotificationRule(Guid.NewGuid(), TenantId, EventKey,
+			var rule = new NotificationRule(Guid.NewGuid(), TenantId, eventKey,
 				NotificationRuleScope.Create(board.AcademicYearId, board.Id, medium.Id, StandardId, DivisionId));
 			var config = new NotificationRuleRuntimeConfiguration(1, NotificationGuardianMode.PrimaryOnly, [], false,
 				["AssignedTeacher"], [CommunicationChannelType.InApp], [header.Id],
 				NotificationRuleTimingConfiguration.Default with { QuietHoursEnabled = false }, "en");
 			rule.Configure(true, GetRequiredService<NotificationRuleConfigurationCodec>().Serialize(
-				config, GetRequiredService<AcademicNotificationCatalogue>().Get(EventKey)), rule.ConcurrencyStamp);
+				config, GetRequiredService<AcademicNotificationCatalogue>().Get(eventKey)), rule.ConcurrencyStamp);
 			await GetRequiredService<IRepository<NotificationRule, Guid>>().InsertAsync(rule, autoSave: true);
 		});
 
 		var service = GetRequiredService<IAcademicCalendarAppService>();
 		var input = new CreateCalendarDayDto
 		{
-			Date = initial, DayType = DayType.Event, Title = "Science exhibition", Venue = "Main hall",
+			Date = initial, DayType = dayType, Title = "Calendar marker", Venue = "Main hall",
+			EndDate = dayType == DayType.Vacation ? initial.AddDays(2) : null,
 			StartTime = TimeSpan.FromHours(10), EndTime = TimeSpan.FromHours(12), StandardId = StandardId, DivisionId = DivisionId
 		};
 		var dayId = Guid.Empty;
 		await WithTransactionalUnitOfWorkAsync(async () => dayId = (await service.CreateCalendarDayAsync(calendarId, input)).Id);
 		input.Date = initial.AddDays(1);
+		if (dayType == DayType.Vacation) input.EndDate = initial.AddDays(3);
 		await SaveAsync();
 		await WithUnitOfWorkAsync(async () => (await NoticesAsync()).ShouldBeEmpty());
 		await WithTransactionalUnitOfWorkAsync(async () =>
 			(await service.PublishCalendarAsync(calendarId)).Status.ShouldBe(CalendarStatus.Published));
 
 		input.Date = initial.AddDays(2);
+		if (dayType == DayType.Vacation) input.EndDate = initial.AddDays(4);
 		await SaveAsync();
 		input.Description = "Private organizer notes";
 		await SaveAsync();
@@ -83,13 +87,23 @@ public sealed class AcademicCalendarDayNotificationEvents_Tests : SubjectTeacher
 			source.Runtime.SourceScope.DivisionId.ShouldBe(DivisionId);
 			source.CurrentRecipients.Select(x => x.EmployeeId!.Value).ShouldBe([OldTeacher, OtherTeacher], ignoreOrder: true);
 			source.Snapshot!.Variables["event_date"].Value.ShouldBe(input.Date.ToString("yyyy-MM-dd"));
+			if (dayType != DayType.Event)
+				source.Snapshot.Variables["holiday_end_date"].Value.ShouldBe((input.EndDate ?? input.Date).ToString("yyyy-MM-dd"));
 			source.Snapshot.Variables.Values.ShouldNotContain(x => x.Value == input.Description);
 		});
 
 		Task SaveAsync() => WithTransactionalUnitOfWorkAsync(async () =>
-			(await service.UpdateCalendarDayAsync(dayId, input)).Date.Date.ShouldBe(input.Date.Date));
+		{
+			var updated = await service.UpdateCalendarDayAsync(dayId, input);
+			if (dayType == DayType.Vacation)
+			{
+				updated.EndDate!.Value.Date.ShouldBe(input.EndDate!.Value.Date);
+				dayId = updated.Id;
+			}
+			else updated.Date.Date.ShouldBe(input.Date.Date);
+		});
 		Task<List<NotificationIntent>> NoticesAsync() =>
 			GetRequiredService<IRepository<NotificationIntent, Guid>>().GetListAsync(x =>
-				x.TenantId == TenantId && x.SourceId == dayId && x.EventKey == EventKey);
+				x.TenantId == TenantId && x.SourceId == dayId && x.EventKey == eventKey);
 	}
 }

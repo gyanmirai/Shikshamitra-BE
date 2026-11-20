@@ -3,7 +3,7 @@ module: academic
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-19
+updated_on: 2026-11-20
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -26,6 +26,7 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 | `GET /rules` | View | Paged event rules at a school, year, board, medium, class or division scope, with the effective rule and inheritance marker |
 | `PUT /rules/{eventKey}` | Add | Save an explicitly scoped rule and return its revision and concurrency stamp |
 | `POST /rules/{eventKey}/preview` | Add + source access | Preview a proposed `rule` for the given `sourceType` and `sourceId` |
+| `GET /manual/student-360-audience/{studentId}?eventKey={eventKey}` | View + Send + Dashboard View + student and division scope | Get selectable family relationships, the saved academic medium and the assigned class teacher when available |
 | `POST /manual/preview` | View + Send + source access | Review a saved source audience, chosen channels and published templates |
 | `POST /manual/send` | Send + source access | Confirm a `reviewToken` with an `idempotencyKey`. Returns 202 with `operationId` and `status` |
 | `POST /operations/{id}/approve` and `/{id}/reject` | Add + assigned approver + source access | Decide an Academic operation in `PendingApproval` |
@@ -50,6 +51,8 @@ Rules default to the primary guardian for family events. Other saved guardian re
 Rule preview uses the saved source audience within the proposed rule's scope. It reports eligible recipients after contact, preference, consent and timing checks, estimated ready deliveries per channel, and grouped exclusions. Ready delivery counts depend on published template coverage, channel setup, and current device or provider approval. Selected drafts can render fictional samples. The preview response omits recipient identities and destinations, and the request creates no rules, campaigns, or dispatches.
 
 Manual preview accepts `eventKey`, `sourceType`, `sourceId`, `selectedRecipients`, `channels`, and optional `templateId`. Recipient references must come from the authorized source roster. An empty selection uses the source roster, subject to scope checks for every included segment. The in-app channel is required. The optional template selects a compatible published recipient, channel, and language variant. An effective rule supplies family preferences where present. Otherwise, the family audience defaults to the primary guardian.
+
+For `Academic.Student360.GuardianMessage` and `Academic.Student360.MeetingRequested`, select the saved student reference and optionally the meeting's class teacher reference. The request must identify at least one source recipient. Omit `selectedFamilyRelationships` to use the student's primary guardian, or send a nonempty subset of the authorized choices, using `father`, `mother`, `guardian` and `self`. The audience endpoint returns relationship identifiers and their primary status without contact destinations. In-app and push require an active linked account. The preview applies channel access, preferences and published template coverage. Confirmation and dispatch recheck the saved source and reviewed audience. A meeting request asks recipients to arrange a time with the school.
 
 Homework Due manual review uses the published task and upcoming division deadlines. It requires Learning Tasks View and the same source scope used by Homework Evaluation and Feedback. The roster uses current enrollment and locked elective selections where required, and excludes completed submissions. The reminder opens the personal notification inbox after sign-in.
 

@@ -15,7 +15,12 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 		if (!string.Equals(language, "en", StringComparison.OrdinalIgnoreCase)) throw new BusinessException(NotificationErrorCodes.TemplateInvalid);
 		var action = definition.EventKey.Split('.')[^1];
 		var title = Words().Replace(action, "$1 $2");
-		var subject = definition.Category + ": " + title;
+		var subject = definition.EventKey switch
+		{
+			AcademicNotificationEventKeys.Student360GuardianMessage => "Academic update",
+			AcademicNotificationEventKeys.Student360MeetingRequested => "Academic meeting request",
+			_ => definition.Category + ": " + title
+		};
 		var message = (recipientKind, definition.EventKey) switch
 		{
 			("AssignedTeacher", AcademicNotificationEventKeys.HomeworkOverdue or AcademicNotificationEventKeys.AssignmentOverdue) =>
@@ -84,6 +89,12 @@ public sealed partial class NotificationDefaultTemplateFactory : ITransientDepen
 			(_, AcademicNotificationEventKeys.CalendarEventCancelled) => "{{event_title}} on {{event_date}} has been cancelled.",
 			(_, AcademicNotificationEventKeys.CalendarHolidayChanged) => "The holiday schedule for {{event_title}} changed. {{change_summary}}",
 			(_, AcademicNotificationEventKeys.CalendarEventReminder) => "Reminder for {{event_title}} on {{event_date}}.",
+			(_, AcademicNotificationEventKeys.Student360GuardianMessage) =>
+				"Please contact the school to discuss an academic update.",
+			("ClassTeacher", AcademicNotificationEventKeys.Student360MeetingRequested) =>
+				"Please contact the school office to coordinate an academic meeting.",
+			(_, AcademicNotificationEventKeys.Student360MeetingRequested) =>
+				"The school would like to arrange an academic meeting. Please contact the school to agree on a time.",
 			(_, AcademicNotificationEventKeys.ReportExportReady) => "Your academic report export is ready. Sign in to view it.",
 			(_, AcademicNotificationEventKeys.ReportExportFailed) => "Your academic report export could not be completed. Sign in to review the export.",
 			(_, AcademicNotificationEventKeys.CalendarEmergencyClosureDeclared or AcademicNotificationEventKeys.CalendarEmergencyClosureChanged) =>

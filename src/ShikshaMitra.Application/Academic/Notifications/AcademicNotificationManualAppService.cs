@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Communication;
@@ -17,9 +18,24 @@ namespace ShikshaMitra.Academic.Notifications;
 [RemoteService(false), DisableAuditing]
 public class AcademicNotificationManualAppService(AcademicNotificationAccessService sourceAccess,
 	AcademicNotificationManualPlanner planner, AcademicNotificationReviewService reviews,
-	AcademicNotificationManualOperations operations, AcademicNotificationStaffAudit audit, IClock clock)
+	AcademicNotificationManualOperations operations, AcademicNotificationStaffAudit audit, IClock clock,
+	Student360NotificationAudience student360)
 	: ApplicationService, IAcademicNotificationManualAppService
 {
+	public virtual async Task<Student360NotificationAudienceDto> GetStudent360AudienceAsync(Guid studentId, string eventKey,
+		CancellationToken cancellationToken = default)
+	{
+		if (!Student360NotificationAudience.Supports(eventKey)) throw new AbpAuthorizationException();
+		var input = new PreviewAcademicNotificationManualDto(eventKey, Student360NotificationSourceAdapter.Type,
+			studentId, [], [CommunicationChannelType.InApp]);
+		var context = await sourceAccess.RequireManualPreviewAsync(input, cancellationToken);
+		await planner.EnsureScopeAsync(input, context, cancellationToken);
+		if (!context.Source.IsEligible) return new(null, [], []);
+		return new(context.Source.AudienceSlices!.Single().Scope.MediumId,
+			await student360.ReadFamilyChoicesAsync(eventKey, context, cancellationToken),
+			context.Source.EligibleRecipients.Where(x => x.Kind == "ClassTeacher").ToArray());
+	}
+
 	public virtual async Task<IReadOnlyList<NotificationRecipientRefDto>> GetDiaryFollowUpRecipientsAsync(Guid diaryId,
 		CancellationToken cancellationToken = default)
 	{

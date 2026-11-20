@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using ShikshaMitra.Academic.Notifications;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 
@@ -22,6 +23,8 @@ public sealed class NotificationIntentSnapshotCodec(NotificationRuleConfiguratio
 		if (snapshot?.SchemaVersion != 1 || snapshot.SourceScope == null || snapshot.Configuration == null) throw Invalid();
 		if (snapshot.ReviewedDeliveryDigest != null && (snapshot.ReviewedDeliveryDigest.Length != 64 ||
 			!snapshot.ReviewedDeliveryDigest.All(Uri.IsHexDigit) || snapshot.DueOccurrenceAt.HasValue)) throw Invalid();
+		if (snapshot.SelectedFamilyRelationships is { } family && (snapshot.ReviewedDeliveryDigest == null ||
+			!Student360NotificationAudience.Supports(definition.EventKey) || !Student360NotificationAudience.ValidSelection(family))) throw Invalid();
 		if (snapshot.DueOccurrenceAt.HasValue && (definition.TriggerType != NotificationTriggerType.Due ||
 			snapshot.DueOccurrenceAt.Value == default)) throw Invalid();
 		if (snapshot.DuePhase.HasValue && (snapshot.DuePhase != NotificationDuePhase.ReviewerEscalation ||

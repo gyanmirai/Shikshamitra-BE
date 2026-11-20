@@ -12,7 +12,12 @@ namespace ShikshaMitra.Academic.Notifications;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record PreviewAcademicNotificationManualDto(string EventKey, string SourceType, Guid SourceId,
 	IReadOnlyList<NotificationRecipientRefDto> SelectedRecipients, IReadOnlyList<CommunicationChannelType> Channels,
-	Guid? TemplateId = null);
+	Guid? TemplateId = null, IReadOnlyList<string>? SelectedFamilyRelationships = null);
+
+public sealed record Student360NotificationFamilyChoiceDto(string Relationship, bool IsPrimary);
+
+public sealed record Student360NotificationAudienceDto(Guid? AcademicMediumId,
+	IReadOnlyList<Student360NotificationFamilyChoiceDto> Family, IReadOnlyList<NotificationRecipientRefDto> Staff);
 
 public sealed record AcademicNotificationManualPreviewDto(Guid? ReviewToken, DateTimeOffset? ExpiresAt,
 	int EligibleRecipientCount, bool RequiresApproval, IReadOnlyList<AcademicNotificationPreviewChannelDto> Channels,
@@ -25,6 +30,8 @@ public sealed record AcademicNotificationOperationDto(Guid OperationId, Communic
 
 public interface IAcademicNotificationManualAppService : IApplicationService
 {
+	Task<Student360NotificationAudienceDto> GetStudent360AudienceAsync(Guid studentId, string eventKey,
+		CancellationToken cancellationToken = default);
 	Task<IReadOnlyList<NotificationRecipientRefDto>> GetDiaryFollowUpRecipientsAsync(Guid diaryId,
 		CancellationToken cancellationToken = default);
 	Task<AcademicNotificationManualPreviewDto> PreviewAsync(PreviewAcademicNotificationManualDto input,

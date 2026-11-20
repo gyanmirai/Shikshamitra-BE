@@ -39,7 +39,7 @@ internal static partial class AcademicNotificationDefinitions
 			"Exam" or "Seating" or "ExamDuty" or "Marks" or "Result" => Fields("exam_name", "subject_name", "room_name")
 				.Append(new("exam_date", NotificationVariableType.DateTime, false, Public))
 				.Append(new("seat_number", Text, false, Personal)),
-			"Student360" => Fields("message_text", "meeting_proposal"),
+			"Student360" => [],
 			"Report" => Fields("report_name", "export_format"),
 			"Summary" => Fields("summary_period", "summary_text"),
 			"Settings" => Fields("setting_name", "impact_summary"),

@@ -50,8 +50,13 @@ public sealed class AcademicNotificationRuntimeRecipientResolver(ICurrentTenant 
 				else if (row.Student.TenantId != source.TenantId || !InScope(row.Student, source.Runtime.SourceScope))
 					Exclude(recipient, "StudentScopeChanged");
 				else
-					results.AddRange(AcademicNotificationFamilyRecipients.ResolveRuntime(row, source.TenantId, policy, config.Channels,
-						source.Definition.RecipientSelectors));
+				{
+					var family = AcademicNotificationFamilyRecipients.ResolveRuntime(row, source.TenantId, policy, config.Channels,
+						source.Definition.RecipientSelectors);
+					var relationships = source.Runtime.SelectedFamilyRelationships;
+					results.AddRange(relationships == null ? family : family.Where(item =>
+						item.Recipient.FamilyRelationship is { } relationship && relationships.Contains(relationship)));
+				}
 				continue;
 			}
 			if (recipient.UserId is not Guid userId || !config.StaffAudienceSelectors.Contains(recipient.Kind))

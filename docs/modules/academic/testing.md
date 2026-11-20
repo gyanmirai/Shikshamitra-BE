@@ -3,7 +3,7 @@ module: academic
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-19
+updated_on: 2026-11-20
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -148,6 +148,8 @@ The Homework publication fixture verifies zero draft intents, the staff publicat
 Manual preview tests check independent View and Send grants, source-bound selections, the persisted expiry and digest, contact and source changes, and the approval threshold. The test verifies that a review creates no campaign or queued intent.
 
 Confirmation tests exercise Send without Add, exact replay, stale and expired reviews, approval and rejection, self-approval denial and the worker's delivery check after confirmation. Run the PostgreSQL test `ReviewedAcademicNotificationMigrationPostgres_Tests` with the local notification test database to verify that migration preserves existing automatic work and allows reviewed manual work without an automatic rule.
+
+`Student360NotificationAccess_Tests` reads the real Academic 360 timetable tab and the manual notification source without queuing work. It tests the authorized family options, rejection of an unrelated student and absent guardian relationship, primary guardian behavior with a missing in-app association, confirmation replay, and the selected guardian in the stored intent and runtime audience.
 
 History tests cover independent View and source authorization, per-scope attempts, cross-scope aggregate denial, page and status filters, and accepted-versus-delivered timestamps. The fixture includes sensitive stored values to verify they stay out of the response.
 

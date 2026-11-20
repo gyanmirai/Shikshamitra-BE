@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace ShikshaMitra.Communication.Notifications;
@@ -8,4 +9,7 @@ public sealed record NotificationIntentRuntimeSnapshot(int SchemaVersion, Notifi
 {
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public NotificationDuePhase? DuePhase { get; init; }
+
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public IReadOnlyList<string>? SelectedFamilyRelationships { get; init; }
 }

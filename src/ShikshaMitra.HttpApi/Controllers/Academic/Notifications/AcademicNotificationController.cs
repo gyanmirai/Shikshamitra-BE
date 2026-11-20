@@ -41,6 +41,12 @@ public class AcademicNotificationController(IAcademicNotificationCatalogueAppSer
 	public Task<AcademicNotificationRulePreviewDto> PreviewRuleAsync(string eventKey, [FromBody] PreviewAcademicNotificationRuleDto input,
 		CancellationToken cancellationToken) => rules.PreviewAsync(eventKey, input, cancellationToken);
 
+	[HttpGet("manual/student-360-audience/{studentId:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Send)]
+	public Task<Student360NotificationAudienceDto> GetStudent360AudienceAsync(Guid studentId, [FromQuery] string eventKey,
+		CancellationToken cancellationToken) => manual.GetStudent360AudienceAsync(studentId, eventKey, cancellationToken);
+
 	[HttpGet("manual/diary-follow-up-recipients/{diaryId:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.Send)]

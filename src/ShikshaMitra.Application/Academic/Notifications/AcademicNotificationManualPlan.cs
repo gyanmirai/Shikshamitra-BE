@@ -25,7 +25,8 @@ internal sealed record AcademicNotificationManualPlan(IReadOnlyList<AcademicNoti
 public sealed class AcademicNotificationManualPlanner(AcademicNotificationCatalogue catalogue, NotificationSourcePartitioner partitioner,
 	AcademicNotificationRuleScopeAccess scopeAccess, NotificationEffectiveRuleResolver rules, NotificationRuleConfigurationCodec codec,
 	AcademicNotificationManualTemplates templates, AcademicNotificationAudienceEvaluator evaluator,
-	IRepository<CommunicationApprovalRule, Guid> approvalRules, IAsyncQueryableExecuter queries) : ITransientDependency
+	IRepository<CommunicationApprovalRule, Guid> approvalRules, IAsyncQueryableExecuter queries,
+	Student360NotificationAudience student360Audience) : ITransientDependency
 {
 	internal async Task<AcademicNotificationManualPlan> BuildAsync(PreviewAcademicNotificationManualDto input,
 		AcademicNotificationAccessContext context, DateTimeOffset now, CancellationToken cancellationToken)
@@ -37,6 +38,15 @@ public sealed class AcademicNotificationManualPlanner(AcademicNotificationCatalo
 			return new([], AcademicNotificationRulePreview.Summarize(channels, [], [], [],
 				[snapshot.ExclusionCode ?? NotificationErrorCodes.SourceUnavailable]), false);
 		var partitions = await ReadAuthorizedPartitionsAsync(input, context, definition, now, cancellationToken);
+		var isStudent360 = Student360NotificationAudience.Supports(input.EventKey);
+		var requestedFamily = input.SelectedFamilyRelationships;
+		if (requestedFamily != null)
+		{
+			var available = await student360Audience.ReadFamilyChoicesAsync(input.EventKey, context, cancellationToken);
+			if (requestedFamily.Any(x => !available.Any(choice => choice.Relationship == x)))
+				throw new BusinessException(NotificationErrorCodes.RecipientIneligible);
+		}
+		var additionalGuardians = requestedFamily?.Where(x => x != "self").Order(StringComparer.Ordinal).ToArray() ?? [];
 		var effectiveDefinition = NotificationSourceDeliveryPolicy.Restrict(definition, snapshot);
 		if (channels.Any(x => !effectiveDefinition.SupportedChannels.Contains(x)))
 			return new([], AcademicNotificationRulePreview.Summarize(channels, [], [], [], ["ChannelsExcludedBySource"]), false);
@@ -53,16 +63,21 @@ public sealed class AcademicNotificationManualPlanner(AcademicNotificationCatalo
 				? codec.Deserialize(rule.ConfigurationJson, definition, allowNoTemplates: !rule.IsEnabled) : null;
 			var staff = group.SelectMany(x => x.Recipients).Where(x => x.Kind != "Student")
 				.Select(x => x.Kind).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-			if (configured != null) staff = staff.Where(configured.StaffAudienceSelectors.Contains).ToArray();
+			if (!isStudent360 && configured != null) staff = staff.Where(configured.StaffAudienceSelectors.Contains).ToArray();
 
-			var configuration = new NotificationRuleRuntimeConfiguration(1, configured?.GuardianMode ?? NotificationGuardianMode.PrimaryOnly,
-				configured?.AdditionalGuardianRelationships ?? [], configured?.IncludeStudentAccount == true,
+			var guardianMode = isStudent360
+				? additionalGuardians.Length == 0 ? NotificationGuardianMode.PrimaryOnly : NotificationGuardianMode.PrimaryAndSelected
+				: configured?.GuardianMode ?? NotificationGuardianMode.PrimaryOnly;
+			var configuration = new NotificationRuleRuntimeConfiguration(1, guardianMode,
+				isStudent360 ? additionalGuardians : configured?.AdditionalGuardianRelationships ?? [],
+				isStudent360 ? requestedFamily?.Contains("self") == true : configured?.IncludeStudentAccount == true,
 				staff, channels, configured?.TemplateIds ?? [], (configured?.Timing ?? NotificationRuleTimingConfiguration.Default) with
 				{ DelayMinutes = 0, BypassQuietHours = false }, configured?.FallbackLanguage ?? "en");
 			configuration = NotificationSourceDeliveryPolicy.Restrict(configuration, effectiveDefinition, snapshot);
 			var family = group.SelectMany(x => x.Recipients).Any(x => x.Kind == "Student");
 			var kinds = NotificationTemplateSnapshotSelector.RecipientKinds(configuration, effectiveDefinition)
-				.Where(x => family || x is not ("Guardian" or "StudentAccount")).ToArray();
+				.Where(x => family || x is not ("Guardian" or "StudentAccount"))
+				.Where(x => x != "Guardian" || requestedFamily == null || additionalGuardians.Length != 0).ToArray();
 			if (snapshot.DeliveryLimits != null && kinds.Length == 0) continue;
 			var selected = await templates.SelectAsync(context.TenantId, scope.MediumId, effectiveDefinition, configuration, kinds,
 				input.TemplateId, cancellationToken);
@@ -76,7 +91,7 @@ public sealed class AcademicNotificationManualPlanner(AcademicNotificationCatalo
 					: NotificationSourceDeliveryPolicy.Includes(x, configuration, effectiveDefinition)).ToArray();
 				if (recipients.Length == 0) continue;
 				var runtime = new NotificationIntentRuntimeSnapshot(1, new(scope.AcademicYearId, scope.BoardId, scope.MediumId,
-					scope.ClassId, scope.DivisionId), configuration);
+					scope.ClassId, scope.DivisionId), configuration) { SelectedFamilyRelationships = requestedFamily };
 				var current = new NotificationCurrentSource(context.TenantId, effectiveDefinition, runtime, recipients, recipients,
 					snapshot, snapshot.ExpiresAt, null);
 				var evaluated = await evaluator.EvaluateAsync(current, selected.Revisions, email, now, cancellationToken);
@@ -127,6 +142,11 @@ public sealed class AcademicNotificationManualPlanner(AcademicNotificationCatalo
 			input.Channels == null || input.Channels.Count is 0 or > 4 || !input.Channels.Contains(CommunicationChannelType.InApp) ||
 			input.Channels.Distinct().Count() != input.Channels.Count || input.Channels.Any(x => !definition.SupportedChannels.Contains(x)) ||
 			input.TemplateId == Guid.Empty)
+			throw new BusinessException(NotificationErrorCodes.RecipientIneligible);
+		var isStudent360 = Student360NotificationAudience.Supports(definition.EventKey);
+		if ((isStudent360 && input.SelectedRecipients.Count == 0) ||
+			(input.SelectedFamilyRelationships is { } family && (!isStudent360 ||
+				!Student360NotificationAudience.ValidSelection(family) || !input.SelectedRecipients.Any(x => x.Kind == "Student"))))
 			throw new BusinessException(NotificationErrorCodes.RecipientIneligible);
 		return input.Channels.Order().ToArray();
 	}

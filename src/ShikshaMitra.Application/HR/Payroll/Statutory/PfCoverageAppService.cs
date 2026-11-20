@@ -10,19 +10,29 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Uow;
 using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsPfRule;
+using CompensationPermissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions;
 
 namespace ShikshaMitra.HR.Payroll.Statutory;
 
 [RemoteService(false), Authorize]
 public class PfCoverageAppService(IRepository<PfCoverageConfiguration, Guid> configurations,
 	IUserScopeService scope, IPayrollInputRevisionStore inputRevisions,
-	EsiConfigurationPeriodGuard periods) : ApplicationService, IPfCoverageAppService
+	EsiConfigurationPeriodGuard periods, PfEligibilityResolver eligibility) : ApplicationService, IPfCoverageAppService
 {
 	[Authorize(Permissions.View)]
 	public async Task<PfCoverageSettingsDto> GetAsync()
 	{
 		await AuthorizationService.CheckAsync(Permissions.View);
 		return await ReadAsync();
+	}
+	[Authorize(CompensationPermissions.Manage)]
+	public async Task<PfManagementDto> GetManagementAsync(DateTime effectiveMonth)
+	{
+		await AuthorizationService.CheckAsync(CompensationPermissions.Manage);
+		if (effectiveMonth.Year is < 2000 or >= 9999 || effectiveMonth.Day != 1)
+			throw new BusinessException("HR:Payroll:PfCoverageConfigurationInvalid");
+		var coverage = await eligibility.GetCoverageAsync(effectiveMonth.Date);
+		return new(coverage?.IsHandledExternally == true);
 	}
 	[Authorize(Permissions.Add), UnitOfWork(isTransactional: true)]
 	public async Task<PfCoverageSettingsDto> SaveAsync(SavePfCoverageDto input)
@@ -37,11 +47,13 @@ public class PfCoverageAppService(IRepository<PfCoverageConfiguration, Guid> con
 			throw new BusinessException("HR:Payroll:PfCoveragePastMonth");
 		await inputRevisions.LockAsync();
 		var key = input.IdempotencyKey.ToString("N");
+		var evidenceReference = input.EvidenceReference?.Trim() ?? string.Empty;
 		var replay = await configurations.FindAsync(x => x.RequestKey == key);
 		if (replay != null)
 		{
-			if (replay.IsCovered != input.IsCovered || replay.EffectiveMonth != input.EffectiveMonth.Date ||
-				replay.EvidenceReference != input.EvidenceReference.Trim())
+			if (replay.IsCovered != input.IsCovered || replay.IsHandledExternally != input.IsHandledExternally ||
+				replay.EffectiveMonth != input.EffectiveMonth.Date ||
+				replay.EvidenceReference != evidenceReference)
 				throw new BusinessException("HR:Payroll:PfCoverageSaveConflict");
 			return await ReadAsync();
 		}
@@ -54,7 +66,7 @@ public class PfCoverageAppService(IRepository<PfCoverageConfiguration, Guid> con
 			await configurations.UpdateAsync(current, autoSave: true);
 		}
 		await configurations.InsertAsync(new PfCoverageConfiguration(GuidGenerator.Create(), CurrentTenant.Id,
-			input.EffectiveMonth, input.IsCovered, input.EvidenceReference, key));
+			input.EffectiveMonth, input.IsCovered, evidenceReference, key, input.IsHandledExternally));
 		await periods.InvalidateAsync(input.EffectiveMonth, null);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		return await ReadAsync();
@@ -64,7 +76,7 @@ public class PfCoverageAppService(IRepository<PfCoverageConfiguration, Guid> con
 	private async Task<PfCoverageSettingsDto> ReadAsync() => new() {
 		HasSchoolWideScope = await SchoolWideAsync(),
 		History = (await configurations.GetListAsync()).OrderByDescending(x => x.EffectiveMonth).Select(x => new PfCoverageDto {
-			Id = x.Id, EffectiveMonth = x.EffectiveMonth, IsCovered = x.IsCovered,
+			Id = x.Id, EffectiveMonth = x.EffectiveMonth, IsCovered = x.IsCovered, IsHandledExternally = x.IsHandledExternally,
 			EvidenceReference = x.EvidenceReference, IsCancelled = x.IsCancelled
 		}).ToList()
 	};

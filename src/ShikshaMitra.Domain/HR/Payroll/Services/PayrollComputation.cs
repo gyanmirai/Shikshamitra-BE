@@ -65,7 +65,8 @@ public static class PayrollComputation
 		int? pfRuleVersion = null;
 		var pfSource = components.FirstOrDefault(x =>
 			!x.IsEarning && x.SemanticType == Templates.PayrollComponentSemanticType.EmployeeProvidentFund);
-		var pfRule = statutoryRules?.ProvidentFund;
+		var pfHandledExternally = statutoryRules?.PfHandledExternally == true;
+		var pfRule = pfHandledExternally ? null : statutoryRules?.ProvidentFund;
 		PayrollSchemeApplication? pfApplication = null;
 		if (pfSource != null && pfRule is { IsActive: true })
 		{
@@ -194,7 +195,8 @@ public static class PayrollComputation
 		PayrollStatutoryApplication? statutoryApplication = null;
 		if (statutoryRules?.StatutoryProfile is { } appliedProfile)
 		{
-			pfApplication ??= PayrollSchemeApplication.Decide("PF", appliedProfile.ApplyPf, appliedProfile.PfNumber, false, 0m, 0m, appliedProfile.PfDisabledReason);
+			pfApplication ??= pfHandledExternally ? PayrollSchemeApplication.ExternalPf(appliedProfile.PfNumber) :
+				PayrollSchemeApplication.Decide("PF", appliedProfile.ApplyPf, appliedProfile.PfNumber, false, 0m, 0m, appliedProfile.PfDisabledReason);
 			var esiApplication = esiCalculation?.Application ?? PayrollSchemeApplication.Decide("ESI", appliedProfile.ApplyEsic, appliedProfile.EsicInsuranceNumber, false, 0m, 0m, appliedProfile.EsicDisabledReason);
 			statutoryApplication = new(appliedProfile, pfApplication, esiApplication);
 			statutoryIssueCodes.AddRange(statutoryApplication.Warnings);

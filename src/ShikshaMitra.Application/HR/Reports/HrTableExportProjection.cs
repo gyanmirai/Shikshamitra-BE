@@ -104,6 +104,7 @@ public static class HrTableExportProjection
 		};
 		if (table == "hr-payroll-registration-readiness") return field switch
 		{
+			"applyPf" when Get("pfHandledExternally") is true => "Handled outside ShikshaMitra",
 			"applyPf" => Get("applyPf") is true ? Get("pfNumberPresent") is true ? "Number recorded" : "Number missing" : "Turned off",
 			"applyEsic" => Get("applyEsic") is true ? Get("esicNumberPresent") is true ? "Number recorded" : "Number missing" : "Turned off", _ => Get(field)
 		};

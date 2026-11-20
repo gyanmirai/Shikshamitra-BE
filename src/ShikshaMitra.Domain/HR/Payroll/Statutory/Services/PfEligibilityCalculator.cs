@@ -7,10 +7,11 @@ public static class PfEligibilityCalculator
 	public const decimal GrossEnrollmentCeiling = 25_000m;
 
 	public static PfEligibilityDecision Calculate(decimal grossSalary, decimal contributionWages, bool? establishmentCovered,
-		PfEnrollmentDeclaration declaration, bool wasMember, bool enrolled)
+		PfEnrollmentDeclaration declaration, bool wasMember, bool enrolled, bool handledExternally = false)
 	{
 		PfEligibilityDecision Result(string status, bool required, string? issue = null) =>
 			new(status, contributionWages, GrossEnrollmentCeiling, required, issue == null, issue) { GrossSalary = grossSalary };
+		if (handledExternally) return Result(PfEligibilityDecision.HandledExternally, false);
 		if (enrolled && contributionWages <= 0m) return Result("NEEDS_REVIEW", false, "PF_WAGE_BASIS_REQUIRED");
 		if (wasMember || declaration.Membership == "EXISTING_MEMBER")
 			return Result("CONTINUING_MEMBER", true, enrolled ? null : "PF_ENROLLMENT_REQUIRED");

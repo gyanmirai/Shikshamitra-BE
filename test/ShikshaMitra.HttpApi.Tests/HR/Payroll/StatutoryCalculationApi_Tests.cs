@@ -223,7 +223,8 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 		using var denied = Factory.CreateClient();
 		denied.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, "HR.PayrollManagement.Settings.PfRule.View");
 		(await denied.PutAsJsonAsync(PfUrl, input)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-		input.EvidenceReference = "Registration evidence";
+		(await Client.PutAsJsonAsync(PfUrl, input)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		input.EvidenceReference = "PF-123/ABC";
 		var initial = await GetAndReadAsync<PfCoverageSettingsDto>(PfUrl);
 		input.ExpectedConfigurationId = initial.History.Where(x => !x.IsCancelled && x.EffectiveMonth <= month).OrderByDescending(x => x.EffectiveMonth).FirstOrDefault()?.Id;
 		var response = await Client.PutAsJsonAsync(PfUrl, input);

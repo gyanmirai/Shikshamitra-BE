@@ -169,7 +169,6 @@ public class PreviewSalaryTemplateRequestDtoValidator : AbstractValidator<Previe
 		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "EMPLOYER_COST");
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
 		RuleFor(x => x.EffectiveMonth).Must(x => x.Year >= 1900 && x.Day == 1);
-		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);
 		RuleFor(x => x.Rules).NotEmpty();
 		RuleForEach(x => x.Rules).SetValidator(new SalaryTemplateRuleDtoValidator());
 	}
@@ -335,7 +334,6 @@ public class CalculateSalaryTemplateRequestDtoValidator : AbstractValidator<Calc
 		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "EMPLOYER_COST");
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
 		RuleFor(x => x.EffectiveMonth).Must(x => x.Day == 1).WithMessage("EffectiveMonth must be the first day of a month.");
-		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);
 		RuleFor(x => x.StatutoryProfile).Equal("IN-GJ");
 		RuleFor(x => x.CustomizationReason).NotEmpty().MaximumLength(500).When(x => x.Overrides.Count > 0);
 		RuleForEach(x => x.Overrides).SetValidator(new SalaryRuleOverrideDtoValidator());

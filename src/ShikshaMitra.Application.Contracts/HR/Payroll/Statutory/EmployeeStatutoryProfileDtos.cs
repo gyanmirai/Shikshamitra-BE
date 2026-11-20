@@ -45,4 +45,7 @@ public class PayrollRegistrationReadinessDto
 	public List<PayrollRegistrationReadinessRowDto> Items { get; set; } = [];
 }
 public record PayrollRegistrationReadinessRowDto(Guid EmployeeId, string EmployeeName, string? EmployeeCode,
-	bool ApplyPf, bool PfNumberPresent, bool ApplyEsic, bool EsicNumberPresent, string EffectiveMonth);
+	bool ApplyPf, bool PfNumberPresent, bool ApplyEsic, bool EsicNumberPresent, string EffectiveMonth)
+{
+	public bool PfHandledExternally { get; init; }
+}

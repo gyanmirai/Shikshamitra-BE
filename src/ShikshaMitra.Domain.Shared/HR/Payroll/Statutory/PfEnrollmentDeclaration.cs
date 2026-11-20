@@ -11,5 +11,6 @@ public sealed record PfEnrollmentDeclaration
 public sealed record PfEligibilityDecision(string Status, decimal Wages, decimal CoverageCeiling,
 	bool EnrollmentRequired, bool CanSave, string? IssueCode)
 {
+	public const string HandledExternally = "HANDLED_EXTERNALLY";
 	public decimal? GrossSalary { get; init; }
 }

@@ -24,7 +24,8 @@ namespace ShikshaMitra.HR.Payroll.Statutory;
 public class EmployeeStatutoryProfileAppService(IRepository<EmployeeStatutoryProfileVersion, Guid> versions,
 	EmployeeStatutoryProfileResolver resolver, IEmployeeAuthorizationService access,
 	IRepository<PayrollRunItemSnapshot, Guid> snapshots, IRepository<PayrollRunReview, Guid> reviews,
-	IRepository<SalarySlip, Guid> slips, IPayrollInputRevisionStore fence, IClock clock, PayrollScopedEmployeeResolver employeeScope)
+	IRepository<SalarySlip, Guid> slips, IPayrollInputRevisionStore fence, IClock clock, PayrollScopedEmployeeResolver employeeScope,
+	PfEligibilityResolver pfEligibility)
 	: ApplicationService, IEmployeeStatutoryProfileAppService
 {
 	public async Task<PayrollRegistrationReadinessDto> GetReadinessAsync(string? month = null, int page = 1, int pageSize = 25, string? search = null)
@@ -46,12 +47,14 @@ public class EmployeeStatutoryProfileAppService(IRepository<EmployeeStatutoryPro
 		var staff = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.EmployeeCode).ThenBy(x => x.Id).Skip(offset).Take(size)
 			.Select(x => new { x.Id, x.FirstName, x.LastName, x.EmployeeCode }));
 		var profiles = await resolver.ResolveAsync(effective, staff.Select(x => x.Id).ToList());
+		var pfHandledExternally = (await pfEligibility.GetCoverageAsync(effective))?.IsHandledExternally == true;
 		return new() { TotalCount = total, Items = staff.Select(x =>
 		{
 			var profile = profiles[x.Id];
-			return new PayrollRegistrationReadinessRowDto(x.Id, $"{x.FirstName} {x.LastName}".Trim(), x.EmployeeCode, profile.ApplyPf,
+			return new PayrollRegistrationReadinessRowDto(x.Id, $"{x.FirstName} {x.LastName}".Trim(), x.EmployeeCode, !pfHandledExternally && profile.ApplyPf,
 				PayrollSchemeApplication.HasNumber(profile.PfNumber), profile.ApplyEsic, PayrollSchemeApplication.HasNumber(profile.EsicInsuranceNumber),
-				profile.VersionId.HasValue ? profile.EffectiveMonth.ToString("yyyy-MM") : monthKey);
+				profile.VersionId.HasValue ? profile.EffectiveMonth.ToString("yyyy-MM") : monthKey)
+			{ PfHandledExternally = pfHandledExternally };
 		}).ToList() };
 	}
 	public async Task<EmployeeStatutoryProfileDto> GetAsync(Guid employeeId, string? month = null)

@@ -9,8 +9,11 @@ public sealed record CreateWhatsAppTemplateBindingDto(Guid TemplateId, Guid Revi
 public sealed record WhatsAppTemplateBindingDto(Guid Id, Guid TemplateId, Guid RevisionId, Guid ProviderSettingId, string ProviderTemplateName,
 	string LanguageCode, string? ProviderTemplateId, NotificationProviderTemplateState ProviderStatus, DateTimeOffset? LastSyncedAt);
 
+public sealed record WhatsAppTemplateBindingContextDto(Guid? ProviderSettingId, WhatsAppTemplateBindingDto? Binding, bool BindingMatchesProvider);
+
 public interface IWhatsAppTemplateBindingAppService
 {
+	Task<WhatsAppTemplateBindingContextDto> GetContextAsync(Guid templateId, Guid revisionId, CancellationToken cancellationToken = default);
 	Task<WhatsAppTemplateBindingDto?> GetAsync(Guid templateId, Guid revisionId, Guid providerSettingId, CancellationToken cancellationToken = default);
 	Task<WhatsAppTemplateBindingDto> CreateAsync(CreateWhatsAppTemplateBindingDto input, CancellationToken cancellationToken = default);
 	Task<WhatsAppTemplateBindingDto> SubmitAsync(Guid id, CancellationToken cancellationToken = default);

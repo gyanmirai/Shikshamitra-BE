@@ -211,6 +211,8 @@ Staff API tests check stored audit fields for rule saves, template publication a
 
 Template test-send tests use synthetic draft content and the authenticated account. They verify the local inbox item, exact Add permission, rejected destinations and stale revisions, the per-channel limit and required WhatsApp test-account setup. Operation reads and attempt history verify that the sender can follow their own test from queued to delivered or skipped. A colleague with the same permissions cannot read it.
 
+`WhatsAppTemplateBindingApi_Tests` uses a synthetic provider. The hosted cases check that context resolves the configured route for the exact published revision, requires both permission groups and reports when the provider account changes. The response excludes the account configuration and credentials.
+
 Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AcademicNotificationEndToEndApi_Tests"` against a fresh loopback `academic_tests_*` database set through `ACADEMIC_PERF_TEST_POSTGRES`. The hosted test uses a saved Homework record and PostgreSQL queue claims. The existing MailKit sender connects to a loopback mailbox to verify the SMTP recipient, rendered message, provider acceptance and permanent rejection. WhatsApp and Web Push use captured HTTP requests to verify consent, the published template binding, the signed receipt and the encrypted push payload. The inbox tests cover the delivered item and the exclusion of an unlinked guardian. The reviewed sends verify primary guardian routing and the explicit inclusion of an additional saved guardian and a linked student. Real providers and physical devices require separate acceptance.
 
 ## Delivery retry

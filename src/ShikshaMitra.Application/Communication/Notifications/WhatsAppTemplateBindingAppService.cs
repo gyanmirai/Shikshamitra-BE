@@ -32,6 +32,20 @@ public sealed class WhatsAppTemplateBindingAppService(ICurrentTenant tenant, ICu
 	private const string ViewPermission = ShikshaMitraSubmodulePermissions.Communication.Settings_ProviderSettings.View;
 	private const string WritePermission = ShikshaMitraSubmodulePermissions.Communication.Settings_ProviderSettings.Add;
 
+	public async Task<WhatsAppTemplateBindingContextDto> GetContextAsync(Guid templateId, Guid revisionId,
+		CancellationToken cancellationToken = default)
+	{
+		using var read = units.Begin(requiresNew: true, isTransactional: false);
+		var tenantId = await RequirePermissionAsync(ViewPermission);
+		var (_, revision) = await templates.LoadCommandAsync(templateId, revisionId, NotificationTemplateAction.Read, cancellationToken);
+		EnsureWhatsAppRevision(revision);
+		var provider = await routes.FindAsync(cancellationToken);
+		var row = provider == null ? null : await FindBindingAsync(tenantId, revision.Id, provider.Id, cancellationToken);
+		var matches = row != null && provider != null && WhatsAppApprovedTemplates.ReadParameters(row, provider.Connection) != null;
+		await read.CompleteAsync(cancellationToken);
+		return new(provider?.Id, row == null ? null : Map(row, templateId), matches);
+	}
+
 	public async Task<WhatsAppTemplateBindingDto?> GetAsync(Guid templateId, Guid revisionId, Guid providerSettingId,
 		CancellationToken cancellationToken = default)
 	{

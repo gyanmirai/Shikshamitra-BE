@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Communication.Notifications;
@@ -72,6 +74,12 @@ public class WhatsAppTemplateBindingApi_Tests(WhatsAppTemplateBindingApiFactory 
 	public async Task Staff_can_create_submit_and_sync_a_binding_without_exposing_account_configuration()
 	{
 		var input = await SeedAsync();
+		using var beforeContext = await Client.GetAsync(ContextUrl(input));
+		beforeContext.StatusCode.ShouldBe(HttpStatusCode.OK, await beforeContext.Content.ReadAsStringAsync());
+		beforeContext.Headers.CacheControl?.NoStore.ShouldBe(true);
+		var initial = await beforeContext.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		initial.GetProperty("providerSettingId").GetGuid().ShouldBe(input.ProviderSettingId);
+		initial.GetProperty("binding").ValueKind.ShouldBe(JsonValueKind.Null);
 		using var missing = await Client.GetAsync(GetUrl(input));
 		missing.StatusCode.ShouldBe(HttpStatusCode.NoContent, await missing.Content.ReadAsStringAsync());
 		using var create = await Client.PostAsJsonAsync(Route, input);
@@ -89,11 +97,24 @@ public class WhatsAppTemplateBindingApi_Tests(WhatsAppTemplateBindingApiFactory 
 		binding.Id.ShouldBe(draft.Id);
 		binding.ProviderStatus.ShouldBe(NotificationProviderTemplateState.Approved);
 		binding.ProviderTemplateId.ShouldBe("3001");
-		var payload = await get.Content.ReadAsStringAsync();
+		using var context = await Client.GetAsync(ContextUrl(input));
+		context.StatusCode.ShouldBe(HttpStatusCode.OK, await context.Content.ReadAsStringAsync());
+		var selected = await context.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		selected.GetProperty("bindingMatchesProvider").GetBoolean().ShouldBeTrue();
+		selected.GetProperty("binding").GetProperty("revisionId").GetGuid().ShouldBe(input.RevisionId);
+		selected.GetProperty("binding").GetProperty("providerStatus").GetInt32().ShouldBe((int)NotificationProviderTemplateState.Approved);
+		var payload = await context.Content.ReadAsStringAsync();
 		payload.ShouldNotContain(WhatsAppTemplateBindingApiFactory.TestSecret);
 		payload.ShouldNotContain("phoneNumberId");
 		payload.ShouldNotContain("businessAccountId");
 		payload.ShouldNotContain("parameterMappingsJson");
+		await ChangeProviderPhoneAsync(input.ProviderSettingId);
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, $"{ProviderView},{AcademicView}");
+		using var changed = await Client.GetAsync(ContextUrl(input));
+		changed.StatusCode.ShouldBe(HttpStatusCode.OK, await changed.Content.ReadAsStringAsync());
+		var changedContext = await changed.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		changedContext.GetProperty("bindingMatchesProvider").GetBoolean().ShouldBeFalse();
+		changedContext.GetProperty("binding").GetProperty("id").GetGuid().ShouldBe(draft.Id);
 	}
 
 	[Theory]
@@ -105,12 +126,29 @@ public class WhatsAppTemplateBindingApi_Tests(WhatsAppTemplateBindingApiFactory 
 		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, $"{view},{add}");
 		using var read = await Client.GetAsync(GetUrl(input));
 		read.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await read.Content.ReadAsStringAsync());
+		using var context = await Client.GetAsync(ContextUrl(input));
+		context.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await context.Content.ReadAsStringAsync());
 		using var create = await Client.PostAsJsonAsync(Route, input);
 		create.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await create.Content.ReadAsStringAsync());
 	}
 
 	private static string GetUrl(CreateWhatsAppTemplateBindingDto input) =>
 		$"{Route}?templateId={input.TemplateId}&revisionId={input.RevisionId}&providerSettingId={input.ProviderSettingId}";
+
+	private static string ContextUrl(CreateWhatsAppTemplateBindingDto input) =>
+		$"{Route}/context?templateId={input.TemplateId}&revisionId={input.RevisionId}";
+
+	private async Task ChangeProviderPhoneAsync(Guid providerId)
+	{
+		using var scope = Factory.Services.CreateScope();
+		var services = scope.ServiceProvider;
+		using var tenant = services.GetRequiredService<ICurrentTenant>().Change(WhatsAppTemplateBindingApiFactory.TenantId);
+		using var unit = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
+		var db = await services.GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+		var provider = await db.Set<ChannelProviderSetting>().SingleAsync(x => x.Id == providerId);
+		provider.ConfigurationJson = """{"schemaVersion":1,"phoneNumberId":"1002","businessAccountId":"2001"}""";
+		await unit.CompleteAsync();
+	}
 
 	private async Task<CreateWhatsAppTemplateBindingDto> SeedAsync()
 	{
@@ -128,7 +166,7 @@ public class WhatsAppTemplateBindingApi_Tests(WhatsAppTemplateBindingApiFactory 
 		revision.Publish(Guid.Parse(TestAuthHandler.TestUserId), DateTimeOffset.UtcNow);
 		var provider = new ChannelProviderSetting(Guid.NewGuid(), tenantId) {
 			Channel = CommunicationChannelType.WhatsApp, ProviderName = WhatsAppProviderRoute.ProviderName,
-			IsEnabled = true, Status = CommunicationProviderStatus.Enabled, SecretReference = "binding",
+			IsEnabled = true, IsDefault = true, Status = CommunicationProviderStatus.Enabled, SecretReference = "binding",
 			ConfigurationJson = """{"schemaVersion":1,"phoneNumberId":"1001","businessAccountId":"2001"}"""
 		};
 		db.AddRange(header, revision, provider);

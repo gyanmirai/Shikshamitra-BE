@@ -16,6 +16,10 @@ namespace ShikshaMitra.Controllers.Communication.Notifications;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class WhatsAppTemplateBindingsController(IWhatsAppTemplateBindingAppService bindings) : AbpControllerBase
 {
+	[HttpGet("context")]
+	public Task<WhatsAppTemplateBindingContextDto> GetContextAsync(Guid templateId, Guid revisionId, CancellationToken cancellationToken) =>
+		bindings.GetContextAsync(templateId, revisionId, cancellationToken);
+
 	[HttpGet]
 	public Task<WhatsAppTemplateBindingDto?> GetAsync(Guid templateId, Guid revisionId, Guid providerSettingId, CancellationToken cancellationToken) =>
 		bindings.GetAsync(templateId, revisionId, providerSettingId, cancellationToken);

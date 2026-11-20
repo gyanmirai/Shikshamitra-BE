@@ -25,8 +25,15 @@ public class AcademicNotificationCatalogueAppService(IRepository<IdentityUser, G
 	{
 		await AcademicNotificationIdentityAccess.RequireAsync(CurrentTenant, CurrentUser, users, scopes, permissions,
 			ShikshaMitraSubmodulePermissions.Academics.Notification.View, cancellationToken);
-		var events = catalogue.GetAll().Select(x => new AcademicNotificationCatalogueEventDto(x,
-			catalogue.GetAvailability(x.EventKey), catalogue.GetManualAvailability(x.EventKey))).ToArray();
+		var events = catalogue.GetAll().Select(definition =>
+		{
+			var key = definition.EventKey;
+			var availability = catalogue.GetAvailability(key);
+			return new AcademicNotificationCatalogueEventDto(definition, availability, catalogue.GetManualAvailability(key))
+			{
+				AvailabilityDetail = availability.IsAvailable ? null : AcademicNotificationCatalogue.GetSourceDependency(key)
+			};
+		}).ToArray();
 		return new(events, [
 			new(CommunicationChannelType.InApp, true),
 			new(CommunicationChannelType.Email, await email.FindAsync(cancellationToken) != null),

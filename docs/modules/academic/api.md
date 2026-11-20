@@ -100,7 +100,7 @@ Account channel restrictions apply to linked student deliveries as well. A stude
 
 ### Catalogue availability
 
-Available events have a registered source and a policy for viewing delivery history. Scheduled events also require a registered scanner. Unavailable entries cannot be enabled or sent manually.
+Available events have a registered source and a policy for viewing delivery history. Scheduled events also require a registered scanner. Unavailable entries cannot be enabled or sent manually. The catalogue returns `availabilityDetail` with the known source dependency or the existing workflow that covers the notice. Available entries return null for this field.
 
 | Unavailable events | Source needed for delivery |
 |---|---|

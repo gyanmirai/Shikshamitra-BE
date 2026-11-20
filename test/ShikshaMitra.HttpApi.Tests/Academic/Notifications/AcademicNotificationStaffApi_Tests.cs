@@ -43,11 +43,26 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 		result.StatusCode.ShouldBe(HttpStatusCode.OK, await result.Content.ReadAsStringAsync());
 		result.Headers.CacheControl?.NoStore.ShouldBe(true);
 		var data = await result.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
-		var homework = data.GetProperty("events").EnumerateArray()
+		var events = data.GetProperty("events").EnumerateArray().ToArray();
+		var homework = events
 			.Single(x => x.GetProperty("definition").GetProperty("eventKey").GetString() == Event);
 		var availability = homework.GetProperty("availability");
-		availability.GetProperty("isAvailable").GetBoolean().ShouldBe(
-			availability.GetProperty("reasonCode").ValueKind == JsonValueKind.Null);
+		availability.GetProperty("isAvailable").GetBoolean().ShouldBeTrue();
+		availability.GetProperty("reasonCode").ValueKind.ShouldBe(JsonValueKind.Null);
+		homework.TryGetProperty("availabilityDetail", out var homeworkDetail).ShouldBeTrue();
+		homeworkDetail.ValueKind.ShouldBe(JsonValueKind.Null);
+		var unavailable = events.Where(x => !x.GetProperty("availability").GetProperty("isAvailable").GetBoolean()).ToArray();
+		unavailable.Length.ShouldBe(22);
+		foreach (var pending in unavailable)
+		{
+			pending.GetProperty("availability").GetProperty("reasonCode").GetString().ShouldBe(NotificationErrorCodes.SourceUnavailable);
+			pending.GetProperty("availabilityDetail").GetString().ShouldNotBeNullOrWhiteSpace();
+			pending.GetProperty("manualAvailability").GetProperty("isAvailable").GetBoolean().ShouldBeFalse();
+		}
+		var reschedule = unavailable.Single(x =>
+			x.GetProperty("definition").GetProperty("eventKey").GetString() == AcademicNotificationEventKeys.ExamRescheduled);
+		reschedule.GetProperty("availabilityDetail").GetString().ShouldBe(
+			"This notice requires a saved exam reschedule and a list of the people affected.");
 		data.GetProperty("channels").GetArrayLength().ShouldBe(4);
 		var raw = await result.Content.ReadAsStringAsync();
 		raw.ShouldNotContain("privateKey", Case.Insensitive);

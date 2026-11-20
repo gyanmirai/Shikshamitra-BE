@@ -4,6 +4,7 @@ using System.Linq;
 using ShikshaMitra.Communication.Notifications;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
+using static ShikshaMitra.Communication.Notifications.AcademicNotificationEventKeys;
 
 namespace ShikshaMitra.Academic.Notifications;
 
@@ -44,6 +45,29 @@ public sealed class AcademicNotificationCatalogue : INotificationEventDefinition
 			? new(true, null)
 			: new(false, NotificationErrorCodes.SourceUnavailable);
 	}
+
+	internal static string? GetSourceDependency(string eventKey) => eventKey switch
+	{
+		ElectivePreferenceOpened or ElectivePreferenceDue =>
+			"This notice requires an elective preference window with saved opening and due dates.",
+		LessonPlanSubmissionDue => "This reminder requires a saved lesson plan submission deadline.",
+		HomeworkChanged or AssignmentChanged => "This notice requires a published task edit that identifies the affected families.",
+		HomeworkWithdrawn or AssignmentWithdrawn => "This notice requires a withdrawal that identifies who could see the published task.",
+		EvaluationGradingDue => "This reminder requires a saved grading deadline.",
+		ExamApprovalRequested or ExamApproved or ExamChangesRequested =>
+			"This notice requires an exam review workflow with saved decisions.",
+		ExamRescheduled => "This notice requires a saved exam reschedule and a list of the people affected.",
+		ExamCancelled => "This notice requires a saved exam cancellation and a list of the people affected.",
+		SeatingChanged => "This notice requires the saved seating list from the previous release.",
+		ExamDutyAssigned or ExamDutyChanged => "This notice requires saved invigilation assignments and changes.",
+		ExamDutyReminder => "This reminder requires a saved invigilation assignment and reminder schedule.",
+		MarksEntryOpened => "This notice requires a saved marks-entry opening date.",
+		MarksEntryDue => "This reminder requires a saved marks-entry deadline.",
+		ResultReadyForReview => "This notice requires a saved result review step.",
+		ResultCorrected => "Published corrections use the Result published notice.",
+		Student360FollowUpDue => "This reminder requires a saved follow-up and an assigned staff member.",
+		_ => null
+	};
 
 	public void EnsureAvailable(string eventKey)
 	{

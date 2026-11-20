@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,30 +6,12 @@ using ShikshaMitra.Communication.Notifications;
 using Shouldly;
 using Xunit;
 using Xunit.Abstractions;
-using static ShikshaMitra.Communication.Notifications.AcademicNotificationEventKeys;
 
 namespace ShikshaMitra.Academic.Notifications;
 
 public sealed class AcademicNotificationSourceCoverage_Tests(ITestOutputHelper output)
 	: ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
-	private static readonly (string Reason, string[] Events)[] PendingSources =
-	[
-		("Elective preference windows require saved opening and due dates.", [ElectivePreferenceOpened, ElectivePreferenceDue]),
-		("Lesson plan deadlines require a persisted submission policy.", [LessonPlanSubmissionDue]),
-		("Published learning task changes need an audience revision and withdrawal source.",
-			[HomeworkChanged, HomeworkWithdrawn, AssignmentChanged, AssignmentWithdrawn]),
-		("The grading workflow has no saved reminder deadline.", [EvaluationGradingDue]),
-		("Exam approval decisions need a review lifecycle.", [ExamApprovalRequested, ExamApproved, ExamChangesRequested]),
-		("Exam schedule changes need saved reschedule and cancellation audiences.", [ExamRescheduled, ExamCancelled]),
-		("A seating change needs an audience snapshot of the earlier release.", [SeatingChanged]),
-		("Exam duties need an assignment and reminder lifecycle.", [ExamDutyAssigned, ExamDutyChanged, ExamDutyReminder]),
-		("Marks entry opening and deadline need a saved release and timing policy.", [MarksEntryOpened, MarksEntryDue]),
-		("Result review needs a separate review transition.", [ResultReadyForReview]),
-		("A released correction already uses the result publication notice with correction content.", [ResultCorrected]),
-		("Student follow-ups need a persisted, authorized follow-up workflow.", [Student360FollowUpDue])
-	];
-
 	[Fact]
 	public void Registered_academic_events_have_a_source_and_history_policy_and_unavailable_events_have_a_reason()
 	{
@@ -42,11 +23,12 @@ public sealed class AcademicNotificationSourceCoverage_Tests(ITestOutputHelper o
 		var historyPolicies = ServiceProvider.GetServices<IAcademicNotificationSourceAuthorizer>()
 			.SelectMany(policy => policy.EventKeys).ToLookup(key => key, StringComparer.Ordinal);
 		var schedulers = ServiceProvider.GetServices<INotificationDueSource>().ToArray();
-		var gaps = PendingSources.SelectMany(group => group.Events.Select(key => (Key: key, group.Reason)))
-			.ToDictionary(x => x.Key, x => x.Reason, StringComparer.Ordinal);
+		var gaps = events.Select(x => x.EventKey)
+			.Where(key => !string.IsNullOrWhiteSpace(AcademicNotificationCatalogue.GetSourceDependency(key)))
+			.ToHashSet(StringComparer.Ordinal);
 
 		var unavailable = events.Where(x => !catalogue.GetAvailability(x.EventKey).IsAvailable).Select(x => x.EventKey);
-		unavailable.Order(StringComparer.Ordinal).ShouldBe(gaps.Keys.Order(StringComparer.Ordinal));
+		unavailable.Order(StringComparer.Ordinal).ShouldBe(gaps.Order(StringComparer.Ordinal));
 		using var manifest = typeof(AcademicNotificationSourceCoverage_Tests).Assembly.GetManifestResourceStream("AcademicNotificationCoverage.md");
 		using var reader = new StreamReader(manifest.ShouldNotBeNull());
 		var documented = reader.ReadToEnd().Split('\n')
@@ -57,9 +39,8 @@ public sealed class AcademicNotificationSourceCoverage_Tests(ITestOutputHelper o
 		foreach (var definition in events)
 		{
 			var key = definition.EventKey;
-			if (gaps.TryGetValue(key, out var reason))
+			if (gaps.Contains(key))
 			{
-				reason.ShouldNotBeNullOrWhiteSpace();
 				catalogue.GetAvailability(key).ReasonCode.ShouldBe(NotificationErrorCodes.SourceUnavailable, key);
 				catalogue.GetManualAvailability(key).IsAvailable.ShouldBeFalse(key);
 				continue;

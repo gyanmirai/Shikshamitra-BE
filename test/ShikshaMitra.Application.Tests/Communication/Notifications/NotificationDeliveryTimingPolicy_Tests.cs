@@ -13,6 +13,20 @@ public class NotificationDeliveryTimingPolicy_Tests
 	private static DateTimeOffset At(string value) => DateTimeOffset.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
 
 	[Theory]
+	[InlineData(DateTimeKind.Unspecified)]
+	[InlineData(DateTimeKind.Local)]
+	[InlineData(DateTimeKind.Utc)]
+	public void A_saved_school_boundary_uses_the_school_clock_for_any_storage_kind(DateTimeKind kind)
+	{
+		var midnight = new DateTime(2026, 11, 19, 0, 0, 0, kind);
+
+		var boundary = NotificationDeliveryTimingPolicy.Boundary(midnight, India, later: false);
+
+		boundary.ShouldBe(At("2026-11-18T18:30:00Z"));
+		boundary.Offset.ShouldBe(TimeSpan.Zero);
+	}
+
+	[Theory]
 	[InlineData("2026-11-18T20:00:00+05:30", "2026-11-19T01:30:00Z")]
 	[InlineData("2026-11-18T23:30:00+05:30", "2026-11-19T01:30:00Z")]
 	[InlineData("2026-11-19T06:59:00+05:30", "2026-11-19T01:30:00Z")]

@@ -79,7 +79,10 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 			ShikshaMitraSubmodulePermissions.Academics.Notification.Send,
 			ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View,
 			ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.View,
-			ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.Publish));
+			ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.Publish,
+			ShikshaMitraSubmodulePermissions.Academics.AcademicCalendar_EmergencyClosure.View,
+			ShikshaMitraSubmodulePermissions.Academics.AcademicCalendar_EmergencyClosure.Add,
+			ShikshaMitraSubmodulePermissions.Academics.AcademicCalendar_EmergencyClosure.Delete));
 		var sample = new SchoolSample();
 		await InSchoolAsync(fixture, services => SeedHomeworkAsync(fixture, services, sample));
 		using var primary = PersonalClient(fixture, sample.Primary, "Guardian");
@@ -271,6 +274,7 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 		mailbox.Accepted.Skip(4).Select(x => x.Recipient).ShouldBe([PrimaryEmail, LearnerEmail], ignoreOrder: true);
 
 		await VerifyResultPublicationDeliveryAsync(fixture, staff, sample, scope, primary, learner, unrelated);
+		await VerifyEmergencyClosureDeliveryAsync(fixture, staff, sample, scope, primary, learner);
 
 		if (UseMigratedSchema)
 		{

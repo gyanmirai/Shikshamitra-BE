@@ -38,6 +38,8 @@ public sealed class NotificationDeliveryTimingPolicy : ITransientDependency
 
 	internal static DateTimeOffset Boundary(DateTime local, TimeZoneInfo zone, bool later)
 	{
+		// Persistence can attach a DateTimeKind to a school wall-clock time.
+		local = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
 		// A skipped local minute must advance, while repeated quiet hours cover both occurrences.
 		for (var minute = 0; zone.IsInvalidTime(local); minute++)
 		{

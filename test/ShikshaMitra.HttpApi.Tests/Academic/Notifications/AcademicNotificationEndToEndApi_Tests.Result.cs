@@ -38,17 +38,7 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 				100, 74, 74, privateGrade, 3, 3, ExamStudentResultStatus.Withheld, School));
 		});
 
-		await PostAsync<int>(staff, $"{Root}/templates/initialize-defaults", new { eventKey });
-		var templates = await staff.GetFromJsonAsync<PagedResultDto<NotificationTemplateDto>>(
-			$"{Root}/templates?eventKey={eventKey}&maxResultCount=100");
-		var draft = templates!.Items.Single(x => x.RecipientKind == "Guardian" && x.Channel == CommunicationChannelType.InApp);
-		var published = await PostAsync<NotificationTemplateDto>(staff, $"{Root}/templates/{draft.TemplateId}/publish",
-			new NotificationTemplateRevisionCommandDto(draft.RevisionId, draft.ConcurrencyStamp));
-		var rule = await SaveRuleAsync(staff, new()
-		{
-			EventKey = eventKey, Scope = scope, Enabled = true, Channels = [CommunicationChannelType.InApp],
-			TemplateIds = [published.TemplateId], QuietHours = new(false)
-		});
+		var rule = await PublishGuardianInboxRuleAsync(staff, eventKey, scope);
 		rule.Configuration!.GuardianMode.ShouldBe(NotificationGuardianMode.PrimaryOnly);
 		rule.Configuration.IncludeStudentAccount.ShouldBeFalse();
 
@@ -74,5 +64,21 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 		var delivery = history!.Items.ShouldHaveSingleItem();
 		delivery.RecipientUserId.ShouldBe(sample.Primary);
 		delivery.Status.ShouldBe(NotificationDispatchState.Delivered);
+	}
+
+	private static async Task<AcademicNotificationRuleDto> PublishGuardianInboxRuleAsync(HttpClient staff, string eventKey,
+		AcademicNotificationScopeDto scope)
+	{
+		await PostAsync<int>(staff, $"{Root}/templates/initialize-defaults", new { eventKey });
+		var templates = await staff.GetFromJsonAsync<PagedResultDto<NotificationTemplateDto>>(
+			$"{Root}/templates?eventKey={eventKey}&maxResultCount=100");
+		var draft = templates!.Items.Single(x => x.RecipientKind == "Guardian" && x.Channel == CommunicationChannelType.InApp);
+		var published = await PostAsync<NotificationTemplateDto>(staff, $"{Root}/templates/{draft.TemplateId}/publish",
+			new NotificationTemplateRevisionCommandDto(draft.RevisionId, draft.ConcurrencyStamp));
+		return await SaveRuleAsync(staff, new()
+		{
+			EventKey = eventKey, Scope = scope, Enabled = true, Channels = [CommunicationChannelType.InApp],
+			TemplateIds = [published.TemplateId], QuietHours = new(false)
+		});
 	}
 }

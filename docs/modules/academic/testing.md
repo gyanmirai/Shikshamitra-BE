@@ -3,7 +3,7 @@ module: academic
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-20
+updated_on: 2026-11-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -248,7 +248,7 @@ dotnet ef migrations script 20261118051353_AddLibraryStockReceivingEvidence 2026
 
 Apply the script twice on the disposable database with `psql` configured to stop on SQL errors. The first run must add the five Academic schema migrations and the merged model record. This rehearsal went from 191 to 197 migrations, kept existing tables and check constraints, and left notification rules, intents and dispatches empty. The second run left the schema and migration history identical.
 
-Clone the upgraded, unseeded database to a disposable loopback `academic_tests_*` database. Point `ACADEMIC_PERF_TEST_POSTGRES` at the clone and set `ACADEMIC_NOTIFICATION_VERIFY_MIGRATED_SCHEMA=1`. Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AcademicNotificationEndToEndApi_Tests"`. The fixture checks the full migration history and empty user and tenant tables before it seeds synthetic school data. It verifies the reviewed Homework send, recipient selection, provider outcomes and unchanged migration history. Use a fresh clone for each run.
+Clone the upgraded, unseeded database to a disposable loopback `academic_tests_*` database. Point `ACADEMIC_PERF_TEST_POSTGRES` at the clone and set `ACADEMIC_NOTIFICATION_VERIFY_MIGRATED_SCHEMA=1`. Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AcademicNotificationEndToEndApi_Tests"`. The fixture checks the full migration history and empty user and tenant tables before it seeds synthetic school data. It verifies the reviewed Homework send, provider outcomes, and unchanged migration history. It also runs the Result Publication API and the real queue. The first published result produces one generic inbox notice and one delivered history entry for the primary guardian. Drafts, repeat requests, withheld results and unselected student accounts produce no additional result notice. Use a fresh clone for each run.
 
 ## Weekly lecture requirements impact
 

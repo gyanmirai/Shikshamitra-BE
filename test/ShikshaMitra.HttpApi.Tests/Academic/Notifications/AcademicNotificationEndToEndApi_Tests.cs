@@ -47,7 +47,7 @@ using Xunit;
 namespace ShikshaMitra.Academic.Notifications;
 
 [Collection(ApiTestCollection.Name)]
-public sealed class AcademicNotificationEndToEndApi_Tests
+public sealed partial class AcademicNotificationEndToEndApi_Tests
 {
 	private static bool UseMigratedSchema =>
 		Environment.GetEnvironmentVariable("ACADEMIC_NOTIFICATION_VERIFY_MIGRATED_SCHEMA") == "1";
@@ -77,7 +77,9 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 		staff.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, string.Join(",",
 			ShikshaMitraSubmodulePermissions.Academics.Notification.View, ShikshaMitraSubmodulePermissions.Academics.Notification.Add,
 			ShikshaMitraSubmodulePermissions.Academics.Notification.Send,
-			ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View));
+			ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View,
+			ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.View,
+			ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.Publish));
 		var sample = new SchoolSample();
 		await InSchoolAsync(fixture, services => SeedHomeworkAsync(fixture, services, sample));
 		using var primary = PersonalClient(fixture, sample.Primary, "Guardian");
@@ -240,6 +242,8 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 		rejected.CanRequestRetry.ShouldBeFalse();
 		mailbox.Accepted.Skip(4).Select(x => x.Recipient).ShouldBe([PrimaryEmail, LearnerEmail], ignoreOrder: true);
 
+		await VerifyResultPublicationDeliveryAsync(fixture, staff, sample, scope, primary, learner, unrelated);
+
 		if (UseMigratedSchema)
 		{
 			await using var database = new ShikshaMitraDbContext(new DbContextOptionsBuilder<ShikshaMitraDbContext>()
@@ -263,7 +267,7 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 		var learner = await CreateLearnerAsync(sample.Learner, "River", PrimaryEmail, PrimaryPhone);
 		await CreateAccountAsync(learner.Id, sample.Primary, "guardian", "mother", PrimaryEmail);
 		await CreateAccountAsync(learner.Id, sample.LearnerAccount, "student", "self", LearnerEmail);
-		var sibling = await CreateLearnerAsync(Guid.NewGuid(), "Unselected", "unselected@example.invalid", null);
+		var sibling = await CreateLearnerAsync(sample.OtherLearner, "Unselected", "unselected@example.invalid", null);
 		await CreateAccountAsync(sibling.Id, sample.UnrelatedGuardian, "guardian", "mother", "unselected@example.invalid");
 		await InsertAsync(services, new ChannelProviderSetting(Guid.NewGuid(), School)
 		{
@@ -384,7 +388,7 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 
 	private static async Task<AcademicNotificationRuleDto> SaveRuleAsync(HttpClient staff, SaveAcademicNotificationRuleDto request)
 	{
-		using var response = await staff.PutAsJsonAsync($"{Root}/rules/{Event}", request);
+		using var response = await staff.PutAsJsonAsync($"{Root}/rules/{request.EventKey}", request);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		return (await response.Content.ReadFromJsonAsync<AcademicNotificationRuleDto>())!;
 	}
@@ -411,6 +415,7 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 		public Guid Division { get; set; }
 		public Guid Homework { get; } = Guid.NewGuid();
 		public Guid Learner { get; } = Guid.NewGuid();
+		public Guid OtherLearner { get; } = Guid.NewGuid();
 		public Guid LearnerAccount { get; } = Guid.NewGuid();
 		public Guid Primary { get; } = Guid.NewGuid();
 		public Guid UnrelatedGuardian { get; } = Guid.NewGuid();

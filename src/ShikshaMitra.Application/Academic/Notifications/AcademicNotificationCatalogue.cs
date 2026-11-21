@@ -58,13 +58,13 @@ public sealed class AcademicNotificationCatalogue : INotificationEventDefinition
 			"This notice requires an exam review workflow with saved decisions.",
 		ExamRescheduled => "This notice requires a saved exam reschedule and a list of the people affected.",
 		ExamCancelled => "This notice requires a saved exam cancellation and a list of the people affected.",
-		SeatingChanged => "This notice requires the saved seating list from the previous release.",
+		SeatingChanged => "Published seating is locked. This notice requires a correction release that identifies the affected learners.",
 		ExamDutyAssigned or ExamDutyChanged => "This notice requires saved invigilation assignments and changes.",
 		ExamDutyReminder => "This reminder requires a saved invigilation assignment and reminder schedule.",
 		MarksEntryOpened => "This notice requires a saved marks-entry opening date.",
 		MarksEntryDue => "This reminder requires a saved marks-entry deadline.",
 		ResultReadyForReview => "This notice requires a saved result review step.",
-		ResultCorrected => "Published corrections use the Result published notice.",
+		ResultCorrected => "This notice requires a saved result correction and republication workflow.",
 		Student360FollowUpDue => "This reminder requires a saved follow-up and an assigned staff member.",
 		_ => null
 	};

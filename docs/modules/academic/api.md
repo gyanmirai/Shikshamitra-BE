@@ -120,11 +120,11 @@ Available events have a registered source and a policy for viewing delivery hist
 | Evaluation grading due | A saved grading deadline |
 | Exam approval requested, approved or changes requested | A review workflow with saved decisions |
 | Exam rescheduled or cancelled | Saved transitions and the affected audiences |
-| Seating changed | An audience snapshot from the preceding release |
+| Seating changed | Published seating is locked. This event needs a correction release that identifies whose seats changed. |
 | Exam duty assigned, changed or reminder | A saved duty assignment and reminder workflow |
 | Marks entry opened or due | A saved release and deadline policy |
 | Result ready for review | A saved review transition |
-| Result corrected | Published corrections already use the result publication event with correction wording |
+| Result corrected | A saved result correction and republication workflow |
 | Student Academic 360 follow-up due | A saved, authorized follow-up workflow |
 
 ### Timetable notifications
@@ -280,7 +280,7 @@ Templates carry the exam and subject names with an authenticated Record Marks li
 
 The first successful `POST /api/academics/results/publish` can queue `Academic.Result.Published` in the publication transaction. The exam must be visible to learners and the result must have a published revision for the saved exam and division. The source uses released result rows and current enrollment. Withheld rows and students outside the division are excluded. The school's family rule and the shared guardian and student-account checks determine delivery.
 
-The notice uses generic result-availability content and the authenticated school inbox link. Scores, grades, ranks, pass status and report cards stay in the authorized result views. Delivery history requires Academic Notification View, Result Creation View and current exam access. Earlier publication audit history distinguishes the first publication from a later correction release.
+The notice uses generic result-availability content and the authenticated school inbox link. Scores, grades, ranks, pass status and report cards stay in the authorized result views. Delivery history requires Academic Notification View, Result Creation View and current exam access. The operation is recorded once for the first publication. A correction notice depends on a result correction and republication workflow.
 
 Substitution creation and assignment use the saved Send notification choice. With an enabled rule, a checked choice queues the assignment for the substitute and any configured staff audience. The unchecked choice skips automatic assignment and acknowledgement reminders. The existing Send reminder action queues a notice for an open duty awaiting acknowledgement when a reminder rule covers the duty. An explicitly queued reminder and the school-day schedule share one operation for the current duty and period end. A response, changed assignment, cancellation or expired period makes earlier reminder work ineligible. Recipient resolution uses saved staff identities and the duty's division. Templates receive the class, subject, period and date. Staffing notes stay in the duty record.
 

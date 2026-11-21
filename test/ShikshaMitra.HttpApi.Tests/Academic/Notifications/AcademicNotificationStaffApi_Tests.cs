@@ -87,6 +87,12 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 			x.GetProperty("definition").GetProperty("eventKey").GetString() == AcademicNotificationEventKeys.ExamRescheduled);
 		reschedule.GetProperty("availabilityDetail").GetString().ShouldBe(
 			"This notice requires a saved exam reschedule and a list of the people affected.");
+		var seatingChange = unavailable.Single(x =>
+			x.GetProperty("definition").GetProperty("eventKey").GetString() == AcademicNotificationEventKeys.SeatingChanged);
+		seatingChange.GetProperty("availabilityDetail").GetString().ShouldContain("Published seating is locked.");
+		var resultCorrection = unavailable.Single(x =>
+			x.GetProperty("definition").GetProperty("eventKey").GetString() == AcademicNotificationEventKeys.ResultCorrected);
+		resultCorrection.GetProperty("availabilityDetail").GetString().ShouldContain("correction and republication");
 		data.GetProperty("channels").GetArrayLength().ShouldBe(4);
 		var raw = await result.Content.ReadAsStringAsync();
 		raw.ShouldNotContain("privateKey", Case.Insensitive);

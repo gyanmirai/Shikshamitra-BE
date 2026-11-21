@@ -69,16 +69,22 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 	private static async Task<AcademicNotificationRuleDto> PublishGuardianInboxRuleAsync(HttpClient staff, string eventKey,
 		AcademicNotificationScopeDto scope)
 	{
-		await PostAsync<int>(staff, $"{Root}/templates/initialize-defaults", new { eventKey });
-		var templates = await staff.GetFromJsonAsync<PagedResultDto<NotificationTemplateDto>>(
-			$"{Root}/templates?eventKey={eventKey}&maxResultCount=100");
-		var draft = templates!.Items.Single(x => x.RecipientKind == "Guardian" && x.Channel == CommunicationChannelType.InApp);
-		var published = await PostAsync<NotificationTemplateDto>(staff, $"{Root}/templates/{draft.TemplateId}/publish",
-			new NotificationTemplateRevisionCommandDto(draft.RevisionId, draft.ConcurrencyStamp));
+		var published = await PublishInboxTemplateAsync(staff, eventKey, "Guardian");
 		return await SaveRuleAsync(staff, new()
 		{
 			EventKey = eventKey, Scope = scope, Enabled = true, Channels = [CommunicationChannelType.InApp],
 			TemplateIds = [published.TemplateId], QuietHours = new(false)
 		});
+	}
+
+	private static async Task<NotificationTemplateDto> PublishInboxTemplateAsync(HttpClient staff, string eventKey,
+		string recipient)
+	{
+		await PostAsync<int>(staff, $"{Root}/templates/initialize-defaults", new { eventKey });
+		var templates = await staff.GetFromJsonAsync<PagedResultDto<NotificationTemplateDto>>(
+			$"{Root}/templates?eventKey={eventKey}&maxResultCount=100");
+		var draft = templates!.Items.Single(x => x.RecipientKind == recipient && x.Channel == CommunicationChannelType.InApp);
+		return await PostAsync<NotificationTemplateDto>(staff, $"{Root}/templates/{draft.TemplateId}/publish",
+			new NotificationTemplateRevisionCommandDto(draft.RevisionId, draft.ConcurrencyStamp));
 	}
 }

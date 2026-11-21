@@ -15,6 +15,7 @@ using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
@@ -387,7 +388,7 @@ public partial class AcademicReportAppService(
 
         if (job.RequestedByUserId != userId)
         {
-            throw new UnauthorizedAccessException("You are not authorized to access this export job.");
+            throw new AbpAuthorizationException();
         }
 
         return job;

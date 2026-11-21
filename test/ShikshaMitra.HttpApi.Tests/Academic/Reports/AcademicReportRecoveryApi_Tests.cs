@@ -51,6 +51,8 @@ public sealed class AcademicReportRecoveryApi_Tests(ShikshaMitraApiTestFactory f
 		using var anonymous = CreateAnonymousClient();
 		(await anonymous.GetAsync(path + "/recovery")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 		using var another = CreateClientAs(Guid.NewGuid());
+		using var otherDownload = await another.GetAsync(path + "/download");
+		otherDownload.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 		(await another.GetAsync(path + "/recovery")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 		(await another.PostAsync(path + "/regenerate", null)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 

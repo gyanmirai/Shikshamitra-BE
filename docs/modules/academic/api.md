@@ -223,7 +223,7 @@ Saving equivalent requirements or editing an already mismatched timetable's requ
 
 The Academic export worker can queue `Academic.Report.ExportReady` or `Academic.Report.ExportFailed` when the current export attempt reaches its terminal state. These events use a school-wide rule and target only the saved requester. Interrupted and stale attempts queue no notice. A repeated terminal callback queues no duplicate.
 
-The ready notice opens the authenticated report download route. It checks report ownership, completion and expiry on each request. Failure notices open the inbox. Templates can use `report_name` and `export_format`. Storage keys and worker diagnostics stay out of template data. Ready supports inbox, web push and email. Failure supports inbox and web push.
+The ready notice opens the authenticated report download route. It checks report ownership, completion and expiry on each request. A signed-in account other than the requester receives HTTP 403 for an existing export in its school. Failure notices open the inbox. Templates can use `report_name` and `export_format`. Storage keys and worker diagnostics stay out of template data. Ready supports inbox, web push and email. Failure supports inbox and web push.
 
 | Endpoint | Access | Result |
 |---|---|---|

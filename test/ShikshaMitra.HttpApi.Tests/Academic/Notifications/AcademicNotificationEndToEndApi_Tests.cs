@@ -80,6 +80,7 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 			ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.View,
 			ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.View,
 			ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.Publish,
+			ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_Reports.Add,
 			ShikshaMitraSubmodulePermissions.Academics.AcademicCalendar_EmergencyClosure.View,
 			ShikshaMitraSubmodulePermissions.Academics.AcademicCalendar_EmergencyClosure.Add,
 			ShikshaMitraSubmodulePermissions.Academics.AcademicCalendar_EmergencyClosure.Delete));
@@ -275,6 +276,7 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 
 		await VerifyResultPublicationDeliveryAsync(fixture, staff, sample, scope, primary, learner, unrelated);
 		await VerifyEmergencyClosureDeliveryAsync(fixture, staff, sample, scope, primary, learner);
+		await VerifyReportExportDeliveryAsync(fixture, staff, sample);
 
 		if (UseMigratedSchema)
 		{

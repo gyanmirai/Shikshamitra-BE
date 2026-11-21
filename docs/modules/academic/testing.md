@@ -252,6 +252,8 @@ Clone the upgraded, unseeded database to a disposable loopback `academic_tests_*
 
 The same fixture declares an emergency closure for a single class with a medium-wide notification rule. Inbox and history checks cover the primary guardians in the affected class, the exclusion of students and other classes, and the omission of staff notes. Reopening before dispatch cancels the queued closure and delivers the reopening notice. `NotificationDeliveryTimingPolicy_Tests` checks school-local boundaries when the stored date carries a local or UTC timestamp label.
 
+The report case submits an Academic export over HTTP and runs the saved job through the real export worker. It checks the requester's notification and workbook download, denies access to a different signed-in account, and verifies that regenerating a missing file keeps the same download link. Duplicate regeneration requests produce one replacement job and one new notice.
+
 ## Weekly lecture requirements impact
 
 Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AcademicSettingsImpactNotification_Tests"` to verify that the Weekly Lectures save captures a mismatch for a published timetable, targets its authorized staff and suppresses repeated saves and corrected mismatches. Browser acceptance should check the Settings category rule, the inbox notice and its Timetable Management link as a staff member with access to the affected division.

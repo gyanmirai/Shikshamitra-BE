@@ -11,6 +11,7 @@ using ShikshaMitra.Academic.Notifications;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Emailing.Smtp;
 using Volo.Abp.Guids;
 using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
@@ -96,6 +97,12 @@ public class NotificationDispatchPlanner_Tests
 		resolver.ResolveAsync(Arg.Any<NotificationCurrentSource>(), Arg.Any<CancellationToken>())
 			.Returns(_ => (IReadOnlyList<NotificationRuntimeRecipient>)_recipients);
 		var queries = new AsyncQueryableExecuter([]);
+		var smtp = Substitute.For<ISmtpEmailSenderConfiguration>();
+		smtp.GetHostAsync().Returns("smtp.example.invalid");
+		smtp.GetPortAsync().Returns(25);
+		smtp.GetDefaultFromAddressAsync().Returns("fixture@example.invalid");
+		smtp.GetDefaultFromDisplayNameAsync().Returns("Fixture school");
+		smtp.GetUseDefaultCredentialsAsync().Returns(true);
 		var settings = Substitute.For<ISettingManager>();
 		settings.GetOrNullAsync(NotificationSettingNames.SchoolTimeZone, "T", _tenantId.ToString(), false).Returns("UTC");
 		using var vapid = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -123,7 +130,8 @@ public class NotificationDispatchPlanner_Tests
 		_planner = new(_tenant, units, _clock, new(_tenant, [catalogue], [_adapter], snapshotCodec, new()),
 			[resolver], new(_tenant, new(_tenant, Repository<NotificationRule>([rule]), queries), Repository(_preferences),
 				Repository(_consents), queries, new(_tenant, settings), new()),
-			new(_tenant, Repository(_providers), queries), new(_tenant, revisionRows, queries, renderer, new(app, validator), _protector, ids,
+			new(_tenant, Repository(_providers), queries, smtp),
+			new(_tenant, revisionRows, queries, renderer, new(app, validator), _protector, ids,
 				new(_tenant, Repository(_providers), queries, app), new(_tenant, Repository(_bindings), queries),
 				new(_tenant, Repository(_subscriptions), queries, new(app))),
 			Repository<NotificationIntent>([_intent]), Repository<CommunicationCampaign>([operation]),

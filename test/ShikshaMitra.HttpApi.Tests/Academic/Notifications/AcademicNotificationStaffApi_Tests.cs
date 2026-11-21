@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -17,6 +18,7 @@ using ShikshaMitra.Security.UserScope;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AuditLogging;
+using Volo.Abp.Emailing;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
@@ -97,6 +99,50 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 		var raw = await result.Content.ReadAsStringAsync();
 		raw.ShouldNotContain("privateKey", Case.Insensitive);
 		raw.ShouldNotContain("secretReference", Case.Insensitive);
+	}
+
+	[Fact]
+	public async Task Catalogue_requires_usable_smtp_configuration_for_an_enabled_email_provider()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		const string providers = "/api/communication/provider-settings";
+		var permissions = $"{View},{ShikshaMitraSubmodulePermissions.Communication.Settings_ProviderSettings.Add}," +
+			ShikshaMitraSubmodulePermissions.Communication.Settings_ProviderSettings.Delete;
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, permissions);
+		var settings = Factory.Services.GetRequiredService<IConfiguration>().GetSection("Settings");
+		var fixture = new Dictionary<string, string?> {
+			[EmailSettingNames.Smtp.Host] = "127.0.0.1",
+			[EmailSettingNames.Smtp.Port] = "2525",
+			[EmailSettingNames.Smtp.UseDefaultCredentials] = "false",
+			[EmailSettingNames.Smtp.UserName] = "",
+			[EmailSettingNames.DefaultFromAddress] = "fixture@example.invalid",
+			[EmailSettingNames.DefaultFromDisplayName] = "Fixture school"
+		};
+		var previous = fixture.Keys.ToDictionary(key => key, key => settings[key]);
+		var provider = await PostAndReadAsync<ChannelProviderSettingDto>(providers, new CreateUpdateChannelProviderSettingDto {
+			Channel = CommunicationChannelType.Email, ProviderName = "SMTP", IsEnabled = true, Status = CommunicationProviderStatus.Enabled
+		});
+		try
+		{
+			foreach (var (key, value) in fixture) settings[key] = value;
+			(await EmailConfiguredAsync()).ShouldBeFalse();
+			settings[EmailSettingNames.Smtp.UseDefaultCredentials] = "true";
+			(await EmailConfiguredAsync()).ShouldBeTrue();
+			settings[EmailSettingNames.Smtp.Port] = "invalid";
+			(await EmailConfiguredAsync()).ShouldBeFalse();
+		}
+		finally
+		{
+			foreach (var (key, value) in previous) settings[key] = value;
+			using var removed = await Client.DeleteAsync($"{providers}/{provider.Id}");
+			removed.IsSuccessStatusCode.ShouldBeTrue();
+		}
+
+		async Task<bool> EmailConfiguredAsync()
+		{
+			var catalogue = await GetAndReadAsync<AcademicNotificationCatalogueDto>($"{Route}/catalogue");
+			return catalogue.Channels.Single(row => row.Channel == CommunicationChannelType.Email).IsConfigured;
+		}
 	}
 
 	[Fact]

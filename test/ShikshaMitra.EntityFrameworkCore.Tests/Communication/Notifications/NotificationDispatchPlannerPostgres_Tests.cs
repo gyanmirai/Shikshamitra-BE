@@ -14,6 +14,7 @@ using ShikshaMitra.EntityFrameworkCore.Communication.Notifications;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Emailing.Smtp;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
 using Volo.Abp.Linq;
@@ -350,7 +351,13 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 		var policy = new NotificationDispatchPolicy(tenant, new(tenant, Repository<NotificationRule>(db), queries), Repository<NotificationPreference>(db),
 			Repository<ConsentRecord>(db), queries, new(tenant, settings), new());
 		var providers = Repository<ChannelProviderSetting>(db);
-		var email = new NotificationEmailRoute(tenant, providers, queries);
+		var smtp = Substitute.For<ISmtpEmailSenderConfiguration>();
+		smtp.GetHostAsync().Returns("smtp.example.invalid");
+		smtp.GetPortAsync().Returns(25);
+		smtp.GetDefaultFromAddressAsync().Returns("fixture@example.invalid");
+		smtp.GetDefaultFromDisplayNameAsync().Returns("Fixture school");
+		smtp.GetUseDefaultCredentialsAsync().Returns(true);
+		var email = new NotificationEmailRoute(tenant, providers, queries, smtp);
 		var whatsApp = new WhatsAppProviderRoute(tenant, providers, queries, app);
 		var approvals = new WhatsAppApprovedTemplates(tenant, Repository<WhatsAppTemplateBinding>(db), queries);
 		var push = new WebPushDispatchSubscriptions(tenant, Repository<WebPushSubscription>(db), queries, new(app));

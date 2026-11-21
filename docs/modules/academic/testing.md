@@ -130,6 +130,7 @@ dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~Academi
 ```
 
 The authenticated API fixture covers catalogue response fields, template initialization and synthetic preview, action permissions, published revision immutability, stale writes, disabled overrides, hierarchy validation and unsupported rule options.
+The SMTP checks cover a missing login, a usable configuration and a malformed port. The dispatcher test verifies that losing SMTP setup after queueing skips the email before the sender is called.
 The Homework feedback fixture covers the first Reviewed status, repeated feedback edits, draft and submitted rubric evaluations, and rubric approval. It checks the exact student and division and verifies that the source variables exclude marks and feedback text.
 
 Assignment publication coverage exercises the staff status route and scheduled publisher with staggered divisions. It verifies that the first release targets its own learners and class teacher, that the later release targets its own division, and that repeated scheduler runs create no duplicate intents.

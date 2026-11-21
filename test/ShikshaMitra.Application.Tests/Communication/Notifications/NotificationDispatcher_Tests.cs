@@ -10,6 +10,7 @@ using ShikshaMitra.Academic.Notifications;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Emailing.Smtp;
 using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.SettingManagement;
@@ -34,6 +35,7 @@ public class NotificationDispatcher_Tests
 	private readonly IClock _clock = Substitute.For<IClock>();
 	private readonly List<INotificationChannelSender> _senders = [];
 	private readonly INotificationChannelSender _sender = Substitute.For<INotificationChannelSender>();
+	private readonly ISmtpEmailSenderConfiguration _smtp = Substitute.For<ISmtpEmailSenderConfiguration>();
 	private readonly List<NotificationPreference> _preferences = [];
 	private readonly List<ConsentRecord> _consents = [];
 	private readonly List<string> _steps = [];
@@ -113,7 +115,12 @@ public class NotificationDispatcher_Tests
 		var reader = new NotificationIntentSourceReader(_tenant, [catalogue], [adapter], snapshots, new());
 		var policy = new NotificationDispatchPolicy(_tenant, new(_tenant, Repository<NotificationRule>([_rule]), queries),
 			Repository(_preferences), Repository(_consents), queries, new(_tenant, settings), new());
-		var emailRoute = new NotificationEmailRoute(_tenant, Repository<ChannelProviderSetting>([_provider]), queries);
+		_smtp.GetHostAsync().Returns("smtp.example.invalid");
+		_smtp.GetPortAsync().Returns(25);
+		_smtp.GetDefaultFromAddressAsync().Returns("fixture@example.invalid");
+		_smtp.GetDefaultFromDisplayNameAsync().Returns("Fixture school");
+		_smtp.GetUseDefaultCredentialsAsync().Returns(true);
+		var emailRoute = new NotificationEmailRoute(_tenant, Repository<ChannelProviderSetting>([_provider]), queries, _smtp);
 		var whatsAppRoute = new WhatsAppProviderRoute(_tenant, Repository<ChannelProviderSetting>([_provider]), queries, app);
 		var approvals = new WhatsAppApprovedTemplates(_tenant, Repository<WhatsAppTemplateBinding>([]), queries);
 		var webPush = new WebPushDispatchSubscriptions(_tenant, Repository<WebPushSubscription>([]), queries, new(app));
@@ -186,6 +193,7 @@ public class NotificationDispatcher_Tests
 	[InlineData("expired", "SourceExpired")]
 	[InlineData("consent", "ConsentRevoked")]
 	[InlineData("provider", NotificationErrorCodes.ProviderUnavailable)]
+	[InlineData("smtp-configuration", NotificationErrorCodes.ProviderUnavailable)]
 	[InlineData("sender", NotificationErrorCodes.ProviderUnavailable)]
 	[InlineData("rule", "RuleDisabled")]
 	public async Task Send_time_changes_produce_a_safe_skip_without_provider_io(string change, string reason)
@@ -204,6 +212,7 @@ public class NotificationDispatcher_Tests
 				});
 				break;
 			case "provider": _provider.IsEnabled = false; break;
+			case "smtp-configuration": _smtp.GetHostAsync().Returns(string.Empty); break;
 			case "sender": _senders.Clear(); break;
 			case "rule": _rule.Configure(false, _rule.ConfigurationJson, _rule.ConcurrencyStamp); break;
 		}

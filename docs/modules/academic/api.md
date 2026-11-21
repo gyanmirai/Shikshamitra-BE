@@ -3,7 +3,7 @@ module: academic
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-21
+updated_on: 2026-11-22
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -107,6 +107,8 @@ Account channel restrictions apply to linked student deliveries as well. A stude
 The authenticated school account can call `GET /api/communication/notifications/me/push/subscriptions/{id}` to read the current registration state. The response contains only `isEnabled` and uses `Cache-Control: no-store`. A missing registration or one owned by a different account or school returns `404`.
 
 ### Catalogue availability
+
+Email setup requires an enabled SMTP provider for the school and usable host, port, sender defaults and credentials where required by the existing mail configuration. Planning and dispatch use the same check. A test send verifies that the SMTP server accepts the message.
 
 `isQueueWorkerEnabled` reads the same server configuration as the dispatch and reminder workers. A missing or invalid setting reports `false`. The flag describes the API replica that answered the request and is independent of provider setup and worker health.
 

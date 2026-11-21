@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Security.UserScope;
@@ -19,7 +20,7 @@ namespace ShikshaMitra.Academic.Notifications;
 public class AcademicNotificationManualAppService(AcademicNotificationAccessService sourceAccess,
 	AcademicNotificationManualPlanner planner, AcademicNotificationReviewService reviews,
 	AcademicNotificationManualOperations operations, AcademicNotificationStaffAudit audit, IClock clock,
-	Student360NotificationAudience student360, AcademicNotificationOperationAccess operationAccess)
+	Student360NotificationAudience student360, AcademicNotificationOperationAccess operationAccess, IConfiguration configuration)
 	: ApplicationService, IAcademicNotificationManualAppService
 {
 	public virtual async Task<Student360NotificationAudienceDto> GetStudent360AudienceAsync(Guid studentId, string eventKey,
@@ -57,7 +58,10 @@ public class AcademicNotificationManualAppService(AcademicNotificationAccessServ
 		var summary = plan.Summary;
 		var review = await reviews.CreateAsync(input, context, plan, Now(), cancellationToken);
 		return new(review?.Id, review?.ExpiresAt, summary.EligibleRecipientCount, plan.RequiresApproval, summary.Channels,
-			summary.Samples, summary.BlockingIssues);
+			summary.Samples, summary.BlockingIssues)
+		{
+			IsQueueWorkerEnabled = NotificationQueueWorkerConfiguration.IsEnabled(configuration)
+		};
 	}
 
 	[UnitOfWork(true)]
@@ -170,6 +174,9 @@ public class AcademicNotificationManualAppService(AcademicNotificationAccessServ
 		}
 	}
 
-	private static AcademicNotificationOperationDto Map(CommunicationCampaign operation) => new(operation.Id, operation.Status);
+	private AcademicNotificationOperationDto Map(CommunicationCampaign operation) => new(operation.Id, operation.Status)
+	{
+		IsQueueWorkerEnabled = NotificationQueueWorkerConfiguration.IsEnabled(configuration)
+	};
 	private DateTimeOffset Now() => new(clock.Now.ToUniversalTime());
 }

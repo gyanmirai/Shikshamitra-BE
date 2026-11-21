@@ -24,12 +24,19 @@ public sealed record Student360NotificationAudienceDto(Guid? AcademicMediumId,
 
 public sealed record AcademicNotificationManualPreviewDto(Guid? ReviewToken, DateTimeOffset? ExpiresAt,
 	int EligibleRecipientCount, bool RequiresApproval, IReadOnlyList<AcademicNotificationPreviewChannelDto> Channels,
-	IReadOnlyList<AcademicNotificationPreviewSampleDto> Samples, IReadOnlyList<string> BlockingIssues);
+	IReadOnlyList<AcademicNotificationPreviewSampleDto> Samples, IReadOnlyList<string> BlockingIssues)
+{
+	public bool IsQueueWorkerEnabled { get; init; }
+}
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ConfirmAcademicNotificationManualDto(Guid ReviewToken, string IdempotencyKey);
 
-public sealed record AcademicNotificationOperationDto(Guid OperationId, CommunicationCampaignStatus Status);
+public sealed record AcademicNotificationOperationDto(Guid OperationId, CommunicationCampaignStatus Status)
+{
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public bool? IsQueueWorkerEnabled { get; init; }
+}
 
 public sealed record AcademicNotificationApprovalReviewDto(bool CanApprove, int EligibleRecipientCount,
 	IReadOnlyList<AcademicNotificationPreviewChannelDto> Channels, IReadOnlyList<AcademicNotificationPreviewSampleDto> Samples,

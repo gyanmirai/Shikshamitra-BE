@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
@@ -152,6 +153,46 @@ public partial class AcademicNotificationManualApi_Tests(AcademicNotificationPre
 		{
 			factory.ActiveSourceId = AcademicNotificationPreviewApiFactory.SourceId;
 			factory.PrimaryEmail = "private@example.invalid";
+		}
+	}
+
+	[Fact]
+	public async Task Preview_confirmation_and_replay_report_the_current_servers_queue_configuration()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		await PublishGuardianTemplateAsync();
+		factory.ActiveSourceId = Guid.NewGuid();
+		const string workerKey = "Notifications:QueueWorker:Enabled";
+		var configuration = Factory.Services.GetRequiredService<IConfiguration>();
+		var previousValue = configuration[workerKey];
+		try
+		{
+			configuration[workerKey] = "true";
+			Permissions(Client, $"{View},{Send}");
+			var preview = await PostAndReadAsync<JsonElement>(Route, Request(sourceId: factory.ActiveSourceId));
+			preview.GetProperty("isQueueWorkerEnabled").GetBoolean().ShouldBeTrue();
+			var reviewToken = preview.GetProperty("reviewToken").GetGuid();
+			var request = new { reviewToken, idempotencyKey = $"queue-configuration-{reviewToken:N}" };
+
+			configuration[workerKey] = "false";
+			Permissions(Client, Send);
+			using var response = await Client.PostAsJsonAsync(SendRoute, request);
+			response.StatusCode.ShouldBe(HttpStatusCode.Accepted, await response.Content.ReadAsStringAsync());
+			var queued = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+			queued.GetProperty("status").Deserialize<CommunicationCampaignStatus>(JsonOptions).ShouldBe(CommunicationCampaignStatus.Queued);
+			queued.GetProperty("isQueueWorkerEnabled").GetBoolean().ShouldBeFalse();
+
+			configuration[workerKey] = "true";
+			using var replayResponse = await Client.PostAsJsonAsync(SendRoute, request);
+			replayResponse.StatusCode.ShouldBe(HttpStatusCode.Accepted, await replayResponse.Content.ReadAsStringAsync());
+			var replay = await replayResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+			replay.GetProperty("operationId").GetGuid().ShouldBe(queued.GetProperty("operationId").GetGuid());
+			replay.GetProperty("isQueueWorkerEnabled").GetBoolean().ShouldBeTrue();
+		}
+		finally
+		{
+			configuration[workerKey] = previousValue;
+			factory.ActiveSourceId = AcademicNotificationPreviewApiFactory.SourceId;
 		}
 	}
 

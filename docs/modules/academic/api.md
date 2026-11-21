@@ -27,8 +27,8 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 | `PUT /rules/{eventKey}` | Add | Save an explicitly scoped rule and return its revision and concurrency stamp |
 | `POST /rules/{eventKey}/preview` | Add + source access | Preview a proposed `rule` for the given `sourceType` and `sourceId` |
 | `GET /manual/student-360-audience/{studentId}?eventKey={eventKey}` | View + Send + Dashboard View + student and division scope | Get selectable family relationships, the saved academic medium, the main-contact setup flag and the assigned class teacher when available |
-| `POST /manual/preview` | View + Send + source access | Review a saved source audience, chosen channels and published templates |
-| `POST /manual/send` | Send + source access | Confirm a `reviewToken` with an `idempotencyKey`. Returns 202 with `operationId` and `status` |
+| `POST /manual/preview` | View + Send + source access | Review a saved source audience, chosen channels, published templates and current server queue configuration |
+| `POST /manual/send` | Send + source access | Confirm a `reviewToken` with an `idempotencyKey`. Returns 202 with `operationId`, `status`, and current server queue configuration |
 | `GET /operations/pending-approvals?afterId={id}` | View + Add + source read access | List up to ten pending operations for the current assigned approver. Use `nextAfterId` for the next page |
 | `GET /operations/{id}/approval-review` | View + Add + assigned approver + source access | Read eligible counts, channel exclusions and synthetic samples for a pending approval |
 | `POST /operations/{id}/approve` and `/{id}/reject` | Add + assigned approver + source access | Decide an Academic operation in `PendingApproval` |
@@ -107,6 +107,8 @@ The authenticated school account can call `GET /api/communication/notifications/
 ### Catalogue availability
 
 `isQueueWorkerEnabled` reads the same server configuration as the dispatch and reminder workers. A missing or invalid setting reports `false`. The flag describes the API replica that answered the request and is independent of provider setup and worker health.
+
+The manual preview and confirmation responses also return `isQueueWorkerEnabled`. A confirmation replay reads the current flag and returns the existing operation. A changed pause setting is independent of recipient eligibility and leaves the review valid.
 
 Available events have a registered source and a policy for viewing delivery history. Scheduled events also require a registered scanner. Unavailable entries cannot be enabled or sent manually. The catalogue returns `availabilityDetail` with the known source dependency or the existing workflow that covers the notice. Available entries return null for this field.
 

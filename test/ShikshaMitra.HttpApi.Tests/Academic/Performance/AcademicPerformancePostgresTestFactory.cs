@@ -45,6 +45,11 @@ public class AcademicPerformancePostgresTestFactory : ShikshaMitraApiTestFactory
 				_preparingFixture ? QuerySplittingBehavior.SplitQuery : QuerySplittingBehavior.SingleQuery)).AddInterceptors(Metrics)));
 		using var database = new ShikshaMitraDbContext(new DbContextOptionsBuilder<ShikshaMitraDbContext>()
 			.UseNpgsql(ConnectionString).Options);
+		InitializeTestSchema(database);
+	}
+
+	protected virtual void InitializeTestSchema(ShikshaMitraDbContext database)
+	{
 		// Refuse an existing schema. This harness never resets or deletes a database.
 		database.GetService<IRelationalDatabaseCreator>().CreateTables();
 	}

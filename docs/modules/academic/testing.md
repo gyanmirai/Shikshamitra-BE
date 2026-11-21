@@ -248,6 +248,8 @@ dotnet ef migrations script 20261118051353_AddLibraryStockReceivingEvidence 2026
 
 Apply the script twice on the disposable database with `psql` configured to stop on SQL errors. The first run must add the five Academic schema migrations and the merged model record. This rehearsal went from 191 to 197 migrations, kept existing tables and check constraints, and left notification rules, intents and dispatches empty. The second run left the schema and migration history identical.
 
+Clone the upgraded, unseeded database to a disposable loopback `academic_tests_*` database. Point `ACADEMIC_PERF_TEST_POSTGRES` at the clone and set `ACADEMIC_NOTIFICATION_VERIFY_MIGRATED_SCHEMA=1`. Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AcademicNotificationEndToEndApi_Tests"`. The fixture checks the full migration history and empty user and tenant tables before it seeds synthetic school data. It verifies the reviewed Homework send, recipient selection, provider outcomes and unchanged migration history. Use a fresh clone for each run.
+
 ## Weekly lecture requirements impact
 
 Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AcademicSettingsImpactNotification_Tests"` to verify that the Weekly Lectures save captures a mismatch for a published timetable, targets its authorized staff and suppresses repeated saves and corrected mismatches. Browser acceptance should check the Settings category rule, the inbox notice and its Timetable Management link as a staff member with access to the affected division.

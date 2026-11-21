@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using MailKit.Security;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -25,6 +26,7 @@ using ShikshaMitra.Academic.Performance;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.Portal;
@@ -47,6 +49,8 @@ namespace ShikshaMitra.Academic.Notifications;
 [Collection(ApiTestCollection.Name)]
 public sealed class AcademicNotificationEndToEndApi_Tests
 {
+	private static bool UseMigratedSchema =>
+		Environment.GetEnvironmentVariable("ACADEMIC_NOTIFICATION_VERIFY_MIGRATED_SCHEMA") == "1";
 	private const string Root = "/api/academic/notifications";
 	private const string Self = "/api/communication/notifications/me";
 	private const string Event = AcademicNotificationEventKeys.HomeworkPublished;
@@ -232,6 +236,13 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 		rejected.ReasonCode.ShouldBe("SmtpPermanentRejection");
 		rejected.CanRequestRetry.ShouldBeFalse();
 		mailbox.Accepted.Skip(4).Select(x => x.Recipient).ShouldBe([PrimaryEmail, LearnerEmail], ignoreOrder: true);
+
+		if (UseMigratedSchema)
+		{
+			await using var database = new ShikshaMitraDbContext(new DbContextOptionsBuilder<ShikshaMitraDbContext>()
+				.UseNpgsql(fixture.ConnectionString).Options);
+			(await database.Database.GetAppliedMigrationsAsync()).ShouldBe(database.Database.GetMigrations());
+		}
 	}
 
 	private static async Task SeedHomeworkAsync(DeliveryApiFactory fixture, IServiceProvider services, SchoolSample sample)
@@ -418,6 +429,20 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 			Content = JsonContent.Create(new { messages = new[] { new { id = MessageId } } })
 		});
 		public CaptureTransport Push { get; } = new(() => new(HttpStatusCode.Created));
+
+		protected override void InitializeTestSchema(ShikshaMitraDbContext database)
+		{
+			if (!UseMigratedSchema)
+			{
+				base.InitializeTestSchema(database);
+				return;
+			}
+
+			if (!database.Database.GetAppliedMigrations().SequenceEqual(database.Database.GetMigrations()))
+				throw new InvalidOperationException("The Academic delivery fixture requires the full current migration history.");
+			if (database.Users.IgnoreQueryFilters().Any() || database.Tenants.IgnoreQueryFilters().Any())
+				throw new InvalidOperationException("The Academic delivery fixture requires an unseeded disposable database.");
+		}
 
 		protected override void ConfigureWebHost(IWebHostBuilder builder)
 		{

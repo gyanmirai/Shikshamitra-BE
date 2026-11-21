@@ -233,6 +233,21 @@ Run `NotificationQueueHealthPostgres_Tests` with `SHIKSHAMITRA_NOTIFICATION_TEST
 
 The command saves the application and hosted API test reports in an ignored coverage directory. These reports record local source and recipient behavior. Provider and device acceptance follow the separate delivery checks.
 
+## Academic notification migration rehearsal
+
+Use a disposable PostgreSQL database with the exact migration history of the release baseline. For backend main `0a84e8d0b`, the rehearsal started with 191 applied migrations and used this range. An EF idempotent script checks recorded migration IDs, including when later IDs are already present. [EF Core script guidance](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/applying#idempotent-sql-scripts)
+
+```powershell
+New-Item -ItemType Directory -Force .artifacts/academic-release-upgrade | Out-Null
+dotnet build src/ShikshaMitra.DbMigrator/ShikshaMitra.DbMigrator.csproj
+dotnet ef migrations script 20261118051353_AddLibraryStockReceivingEvidence 20261121045305_RecordMergedAcademicNotificationModel `
+  --project src/ShikshaMitra.EntityFrameworkCore `
+  --startup-project src/ShikshaMitra.DbMigrator/ShikshaMitra.DbMigrator.csproj `
+  --no-build --idempotent --output .artifacts/academic-release-upgrade/upgrade.sql
+```
+
+Apply the script twice on the disposable database with `psql` configured to stop on SQL errors. The first run must add the five Academic schema migrations and the merged model record. This rehearsal went from 191 to 197 migrations, kept existing tables and check constraints, and left notification rules, intents and dispatches empty. The second run left the schema and migration history identical.
+
 ## Weekly lecture requirements impact
 
 Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AcademicSettingsImpactNotification_Tests"` to verify that the Weekly Lectures save captures a mismatch for a published timetable, targets its authorized staff and suppresses repeated saves and corrected mismatches. Browser acceptance should check the Settings category rule, the inbox notice and its Timetable Management link as a staff member with access to the affected division.

@@ -70,6 +70,8 @@ No recovery path reseeds identities, restores grants or resets school records.
 4. Enable the queue worker in the test environment. Start with one published Homework reminder or notice for a designated class and test contacts. Verify the primary guardian, any selected eligible extra relationships or student account, channel exclusions, and each recorded delivery outcome. Use the [notification tests](testing.md#notification-catalogue-coverage) for catalogue evidence.
 5. Enable the approved rules by school, event and scope after provider and device checks. Review inherited rules at the intended class or division. Expand by event family after its source and audience checks. The [catalogue contract](api.md#catalogue-availability) lists events that still need an owning workflow.
 
+For an existing backend database, start the reviewed idempotent script range immediately before the earliest missing Academic notification migration. A database can already have later Library and Payroll migration IDs. Check the actual migration history against the [verified upgrade range](testing.md#academic-notification-migration-rehearsal) before applying it.
+
 ## Monitor Academic notification delivery
 
 The health worker visits one page of active schools every five minutes while `Notifications:QueueWorker:Enabled` is true. Look for these events in the API host logs.

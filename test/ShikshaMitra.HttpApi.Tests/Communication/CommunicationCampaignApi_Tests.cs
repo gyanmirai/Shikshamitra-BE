@@ -394,6 +394,7 @@ public class CommunicationCampaignApi_Tests : ShikshaMitraApiTestBase
 	{
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "CommGroup");
 		employee.UserId.ShouldNotBeNull();
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
 		var group = await CreateEmployeeGroupAsync(employee.Id);
 
 		var preview = await PostAndReadAsync<CommunicationAudiencePreviewDto>(

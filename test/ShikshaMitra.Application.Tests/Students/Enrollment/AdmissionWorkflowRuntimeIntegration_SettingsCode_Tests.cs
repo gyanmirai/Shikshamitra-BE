@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Volo.Abp;
 using ShikshaMitra.HR.Employees;
 using Shouldly;
 using Xunit;
@@ -10,6 +11,49 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Fact]
+	public async Task SettingsCode_Workflow_Versions_Return_Existing_Draft_And_Allow_Other_Families()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var published = await CreateAndPublishCurrentWorkflowAsync();
+		var draft = await _workflowAppService.CreateNewVersionAsync(published.Id);
+
+		var conflict = await Should.ThrowAsync<BusinessException>(() =>
+			_workflowAppService.CreateNewVersionAsync(published.Id));
+
+		conflict.Code.ShouldBe(AdmissionWorkflowErrorCodes.DraftRequired);
+		conflict.Data["DraftId"].ShouldBe(draft.Id);
+		var versions = await _workflowAppService.GetVersionHistoryAsync(published.Id);
+		versions.Count.ShouldBe(2);
+		versions.Count(item => item.Status == AdmissionWorkflowStatus.Draft).ShouldBe(1);
+
+		var otherPublished = await CreateAndPublishCurrentWorkflowAsync("Second admission workflow");
+		var otherDraft = await _workflowAppService.CreateNewVersionAsync(otherPublished.Id);
+		otherDraft.Version.ShouldBe(2);
+		(await _workflowAppService.GetVersionHistoryAsync(otherPublished.Id)).Count.ShouldBe(2);
+	}
+
+	[Fact]
+	public async Task SettingsCode_Workflow_Clone_Default_Name_Gets_A_Unique_Copy_Suffix()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var source = await _workflowAppService.CreateAsync(new CreateUpdateAdmissionWorkflowDto { Name = "Copy naming workflow" });
+		var first = await _workflowAppService.CloneAsync(source.Id, new CloneAdmissionWorkflowDto
+		{
+			Name = $"{source.Name} Copy"
+		});
+		var second = await _workflowAppService.CloneAsync(source.Id, new CloneAdmissionWorkflowDto
+		{
+			Name = $"{source.Name} Copy"
+		});
+
+		first.Name.ShouldBe("Copy naming workflow Copy");
+		second.Name.ShouldBe("Copy naming workflow Copy 2");
+		second.Code.ShouldNotBe(first.Code);
+	}
+
 
 	[Fact]
 	public async Task SettingsCode_Workflows_Should_Create_And_Clone_With_Independent_References()
@@ -54,17 +98,85 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
 		var first = await _formAppService.CreateAsync(new CreateUpdateAdmissionFormDto { Name = "Registration" });
-		var second = await _formAppService.CreateAsync(new CreateUpdateAdmissionFormDto { Name = first.Name });
+		var second = await _formAppService.CreateAsync(new CreateUpdateAdmissionFormDto { Name = "Registration 2" });
 		var cloneOne = await _formAppService.CloneAsync(first.Id, new CloneAdmissionFormDto { Name = "Registration copy" });
-		var cloneTwo = await _formAppService.CloneAsync(first.Id, new CloneAdmissionFormDto { Name = "Registration copy" });
+		var cloneTwo = await _formAppService.CloneAsync(first.Id, new CloneAdmissionFormDto { Name = "Registration copy 2" });
 		new[] { first.Code, second.Code, cloneOne.Code, cloneTwo.Code }.Distinct().Count().ShouldBe(4);
 		first.Code.ShouldStartWith("FORM_");
 		(await _formAppService.GetAsync(first.Id)).Code.ShouldBe(first.Code);
-		var edited = await _formAppService.UpdateAsync(first.Id, new CreateUpdateAdmissionFormDto
-		{
-			Name = "Registration renamed", ConcurrencyStamp = first.ConcurrencyStamp
-		});
+		var update = System.Text.Json.JsonSerializer.Deserialize<CreateUpdateAdmissionFormDto>(
+			System.Text.Json.JsonSerializer.Serialize(first))!;
+		update.Name = "Registration renamed";
+		var edited = await _formAppService.UpdateAsync(first.Id, update);
 		edited.Code.ShouldBe(first.Code);
+	}
+
+	[Fact]
+	public async Task AdmissionFormNames_Should_Be_Unique_Case_Insensitively_Across_Purposes()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		await _formAppService.CreateAsync(new CreateUpdateAdmissionFormDto
+		{
+			Name = "MAIN REG form Stage 8th",
+			Purpose = AdmissionFormPurpose.Registration
+		});
+
+		var error = await Should.ThrowAsync<BusinessException>(() => _formAppService.CreateAsync(
+			new CreateUpdateAdmissionFormDto
+			{
+				Name = "  main reg FORM stage 8th  ",
+				Purpose = AdmissionFormPurpose.Inquiry
+			}));
+
+		error.Code.ShouldBe("Admissions.FormNameAlreadyExists");
+		error.Message.ShouldContain("Current");
+	}
+
+	[Fact]
+	public async Task AdmissionFormNames_Should_Report_Archived_And_Allow_Same_Name_Within_A_Version_Family()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var archived = new AdmissionFormDefinition(Guid.NewGuid(), TestTenantId, "Archived form name",
+			"ARCHIVED_FORM_NAME", AdmissionFormLayoutType.SinglePage);
+		archived.Publish(TestUserId);
+		archived.Archive();
+		await WithUnitOfWorkAsync(() => _formRepository.InsertAsync(archived, autoSave: true));
+
+		var archivedAvailability = await _formAppService.CheckNameAvailabilityAsync(" archived form name ");
+		archivedAvailability.IsAvailable.ShouldBeFalse();
+		archivedAvailability.ExistingStatus.ShouldBe(AdmissionFormStatus.Archived);
+		archivedAvailability.Message.ShouldContain("Archived forms");
+
+		var published = new AdmissionFormDefinition(Guid.NewGuid(), TestTenantId, "Version family name",
+			"VERSION_FAMILY_NAME", AdmissionFormLayoutType.SinglePage);
+		published.Publish(TestUserId);
+		await WithUnitOfWorkAsync(() => _formRepository.InsertAsync(published, autoSave: true));
+		var version = await _formAppService.CreateNewVersionAsync(published.Id);
+
+		version.Name.ShouldBe(published.Name);
+		version.Version.ShouldBe(2);
+		var versionAvailability = await _formAppService.CheckNameAvailabilityAsync(version.Name, version.Id);
+		versionAvailability.IsAvailable.ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task AdmissionFormNames_Should_Reject_Update_And_Clone_Duplicates()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var first = await _formAppService.CreateAsync(new CreateUpdateAdmissionFormDto { Name = "First form" });
+		await _formAppService.CreateAsync(new CreateUpdateAdmissionFormDto { Name = "Second form" });
+
+		var updateError = await Should.ThrowAsync<BusinessException>(() => _formAppService.UpdateAsync(
+			first.Id,
+			new CreateUpdateAdmissionFormDto { Name = " second FORM ", ConcurrencyStamp = first.ConcurrencyStamp }));
+		updateError.Code.ShouldBe(AdmissionFormErrorCodes.NameAlreadyExists);
+
+		var cloneError = await Should.ThrowAsync<BusinessException>(() => _formAppService.CloneAsync(
+			first.Id, new CloneAdmissionFormDto { Name = "SECOND FORM" }));
+		cloneError.Code.ShouldBe(AdmissionFormErrorCodes.NameAlreadyExists);
 	}
 
 	[Fact]

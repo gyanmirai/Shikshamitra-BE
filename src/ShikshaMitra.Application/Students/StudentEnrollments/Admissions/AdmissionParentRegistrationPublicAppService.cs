@@ -102,14 +102,26 @@ public partial class AdmissionParentRegistrationPublicAppService(AdmissionParent
 	private async Task<AdmissionParentPublicContextDto> ContextAsync(AdmissionParentRegistration grant, AdmissionApplication application)
 	{
 		var form = await data.FormAsync(application);
-		var editable = AdmissionParentRegistrationForms.Editable(form, grant, await data.Repo<AdmissionApplicant>().GetAsync(application.ApplicantId));
 		var applicant = await data.Repo<AdmissionApplicant>().GetAsync(application.ApplicantId);
+		var editable = AdmissionParentRegistrationForms.Editable(form, grant, applicant);
+		var applicantName = string.Join(" ", new[] { applicant.FirstName, applicant.MiddleName, applicant.LastName }
+			.Where(value => !string.IsNullOrWhiteSpace(value)));
+		if (string.IsNullOrWhiteSpace(applicant.LastName) && application.InquiryId.HasValue)
+		{
+			var inquiry = await data.Repo<AdmissionInquiry>().FindAsync(application.InquiryId.Value);
+			var inquiryName = inquiry?.ApplicantName?.Trim();
+			var firstName = applicant.FirstName.Trim();
+			if (!string.IsNullOrWhiteSpace(inquiryName) && inquiryName.Length > firstName.Length &&
+				inquiryName.StartsWith(firstName, StringComparison.OrdinalIgnoreCase) &&
+				char.IsWhiteSpace(inquiryName[firstName.Length]))
+				applicantName = inquiryName;
+		}
 		var proposals = JsonSerializer.Deserialize<List<AdmissionFormValueDto>>(grant.ProposedValuesJson)!;
 		var merged = AdmissionParentRegistrationForms.Merge(form.Values, proposals);
 		var definition = await forms.ProjectAsync(application, form with { Values = merged }, editable);
 		var exposed = definition.Sections.SelectMany(section => section.Fields).Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
 		var tenantName = CurrentTenant.Id.HasValue ? (await LazyServiceProvider.LazyGetRequiredService<Volo.Abp.TenantManagement.ITenantRepository>().FindAsync(CurrentTenant.Id.Value))?.Name : null;
-		return new() { SchoolName = tenantName ?? "School admission", ApplicantName = string.Join(" ", new[] { applicant.FirstName, applicant.MiddleName, applicant.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))),
+		return new() { SchoolName = tenantName ?? "School admission", ApplicantName = applicantName,
 			ApplicationNumber = application.ApplicationNumber, Purpose = grant.Purpose, Status = grant.Status, ExpiresAt = grant.ExpiresAt,
 			SnapshotToken = await data.SnapshotAsync(grant, application), CanEdit = grant.CanWrite(Clock.Now), CanHandIn = grant.CanWrite(Clock.Now),
 			ProposalOnly = application.SubmittedAt.HasValue, Notes = grant.Notes, Definition = definition, EditableFieldCodes = editable.ToList(),

@@ -552,6 +552,7 @@ The former Offering class-capacity GET/PUT and room-choice endpoints are retired
 | POST | `/api/student/enrollment/admissions/workflows/{id}/clone` | `Students.Admissions.Workflows.Add` |
 | POST | `/api/student/enrollment/admissions/workflows/{id}/new-version` | `Students.Admissions.Workflows.Add` |
 | POST | `/api/student/enrollment/admissions/workflows/{id}/validate` | `Students.Admissions.Workflows.Add` |
+| POST | `/api/student/enrollment/admissions/workflows/{id}/validate-preview` | `Students.Admissions.Workflows.Add` |
 | POST | `/api/student/enrollment/admissions/workflows/{id}/publish` | `Students.Admissions.Workflows.Add` |
 | POST | `/api/student/enrollment/admissions/workflows/{id}/governance/publish` | `Students.Admissions.Workflows.Add` |
 | POST | `/api/student/enrollment/admissions/workflows/{id}/submit-for-approval` | `Students.Admissions.Workflows.Add` |
@@ -567,6 +568,15 @@ The former Offering class-capacity GET/PUT and room-choice endpoints are retired
 | GET | `/api/student/enrollment/admissions/workflows/governance/notifications` | `Students.Admissions.Workflows.View` |
 | POST | `/api/student/enrollment/admissions/workflows/governance/notifications/{notificationId}/read` | `Students.Admissions.Workflows.View` |
 | GET | `/api/student/enrollment/admissions/workflows/stage-types` | `Students.Admissions.Workflows.View` |
+
+The validation preview accepts `defaultInquiryFormDefinitionId`, `stages`, and `transitions` in the request body and returns the same `AdmissionWorkflowValidationResultDto` as workflow validation.
+It validates this supplied graph through the current tenant's existing form, document, assessment and review checks without saving children, changing workflow status, or recording a governance event.
+
+`POST /workflows/{id}/new-version` allows only one pending version per workflow code. If one exists,
+the endpoint returns `Admissions.WorkflowDraftRequired` and includes the existing `DraftId` in the
+business error data so clients can direct the user to the draft. Version creation is serialized by
+workflow family. Cloning is independent and creates a new code; the default name is `[Name] Copy`,
+with an incrementing numeric suffix when that name is already reserved.
 
 Both workflow publish endpoints execute immediate publication with the existing Workflow Add,
 tenant ownership, graph validation and concurrency checks. Stored maker-checker settings do not
@@ -606,6 +616,8 @@ Omitting `advanced` or sending it as null preserves the saved advanced configura
 | Titles, captions, signature labels and checklist items | Up to 128 characters; at most 20 checklist items per language |
 | Translations / colours | Up to 8 valid language codes / `#RRGGBB` |
 
+Advanced content may include `parentSignatureImage` and `officeSignatureImage` as PNG/JPEG data URIs. Each decoded image is limited to 5 MiB and must match its declared PNG/JPEG signature. Instruction translations remain newline-separated strings; the print renderer presents non-empty lines as bullets.
+
 All placement, alignment, orientation, palette, font, border, spacing, width, answer-style and copy-mode strings are allowlisted. Invalid nested values reject the command before aggregate mutation. Section/field options address authored question codes and do not alter question bindings, values, required rules or Inquiry locks.
 Clone/new-version drafts copy the experience metadata, version comparisons report print-setting changes, and Inquiry composition retains the Registration definition's settings.
 Frozen application definitions retain the settings captured with that schema.
@@ -644,6 +656,8 @@ Inquiry and Registration form definitions publish directly from Draft after vali
 Choice fields support either static option arrays or an approved source descriptor such as `{ "source": "EducationBoards" }` or `{ "source": "EducationMediums", "parentField": "BOARD_FIELD" }`. Approved source metadata is exposed by `GET /api/student/enrollment/admissions/forms/metadata/data-sources`; tenant-scoped options are read through `GET /api/student/enrollment/admissions/forms/metadata/options?sourceKey=...&parentId=...`. Arbitrary URLs and executable data sources are not accepted, and submission validates selected values against the authoritative source.
 
 Form list, detail, create, and update contracts expose `purpose`; new forms support `Inquiry` or `Registration`, and list requests may filter by purpose. The additive form-purpose migration may have classified earlier test definitions as `Correction` or `Consent`; those values are retained for reading existing records, but new drafts, clones, and versions cannot use them.
+
+`GET /api/student/enrollment/admissions/forms/name-availability?name=...&excludingFormId=...` checks names tenant-wide across Inquiry and Registration, including Archived forms. It compares case-insensitively after trimming outer whitespace and returns `isAvailable`, the conflicting `existingStatus`, and staff-facing guidance. Create, clone, update and restore enforce the same rule; update/restore exclude every version sharing the current form code so a New Version can retain its family name.
 
 The form list also accepts optional `columnFilters`: a JSON array of `{column,type,value,valueType}`
 criteria, limited to 20 entries and 12,000 characters. `name` supports case-insensitive string

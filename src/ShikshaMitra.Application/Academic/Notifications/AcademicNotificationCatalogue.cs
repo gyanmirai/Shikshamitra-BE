@@ -9,7 +9,7 @@ using static ShikshaMitra.Communication.Notifications.AcademicNotificationEventK
 namespace ShikshaMitra.Academic.Notifications;
 
 [ExposeServices(typeof(AcademicNotificationCatalogue), typeof(INotificationEventDefinitionProvider))]
-public sealed class AcademicNotificationCatalogue : INotificationEventDefinitionProvider, ITransientDependency
+public sealed class AcademicNotificationCatalogue : INotificationEventDefinitionProvider, IScopedDependency
 {
 	private static readonly IReadOnlyList<NotificationEventDefinition> Definitions = AcademicNotificationDefinitions.Create();
 	private static readonly IReadOnlyDictionary<string, NotificationEventDefinition> ByKey =

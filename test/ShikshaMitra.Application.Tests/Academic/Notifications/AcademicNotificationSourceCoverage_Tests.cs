@@ -13,6 +13,18 @@ public sealed class AcademicNotificationSourceCoverage_Tests(ITestOutputHelper o
 	: ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	[Fact]
+	public void Catalogue_and_definition_provider_reuse_the_same_instance_within_a_service_scope()
+	{
+		using var first = ServiceProvider.CreateScope();
+		using var second = ServiceProvider.CreateScope();
+
+		var catalogue = first.ServiceProvider.GetRequiredService<AcademicNotificationCatalogue>();
+		first.ServiceProvider.GetServices<INotificationEventDefinitionProvider>()
+			.OfType<AcademicNotificationCatalogue>().ShouldHaveSingleItem().ShouldBeSameAs(catalogue);
+		second.ServiceProvider.GetRequiredService<AcademicNotificationCatalogue>().ShouldNotBeSameAs(catalogue);
+	}
+
+	[Fact]
 	public void Registered_academic_events_have_a_source_and_history_policy_and_unavailable_events_have_a_reason()
 	{
 		var catalogue = GetRequiredService<AcademicNotificationCatalogue>();

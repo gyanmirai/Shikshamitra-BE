@@ -22,7 +22,7 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 
 | Endpoint | Action | Result |
 |---|---|---|
-| `GET /catalogue` | View | Event schemas, audience options, source availability and channel configuration flags |
+| `GET /catalogue` | View | Event schemas, audience options, source availability, channel setup and the current server's queue worker configuration |
 | `GET /rules` | View | Paged event rules at a school, year, board, medium, class or division scope, with the effective rule and inheritance marker |
 | `PUT /rules/{eventKey}` | Add | Save an explicitly scoped rule and return its revision and concurrency stamp |
 | `POST /rules/{eventKey}/preview` | Add + source access | Preview a proposed `rule` for the given `sourceType` and `sourceId` |
@@ -105,6 +105,8 @@ Account channel restrictions apply to linked student deliveries as well. A stude
 The authenticated school account can call `GET /api/communication/notifications/me/push/subscriptions/{id}` to read the current registration state. The response contains only `isEnabled` and uses `Cache-Control: no-store`. A missing registration or one owned by a different account or school returns `404`.
 
 ### Catalogue availability
+
+`isQueueWorkerEnabled` reads the same server configuration as the dispatch and reminder workers. A missing or invalid setting reports `false`. The flag describes the API replica that answered the request and is independent of provider setup and worker health.
 
 Available events have a registered source and a policy for viewing delivery history. Scheduled events also require a registered scanner. Unavailable entries cannot be enabled or sent manually. The catalogue returns `availabilityDetail` with the known source dependency or the existing workflow that covers the notice. Available entries return null for this field.
 

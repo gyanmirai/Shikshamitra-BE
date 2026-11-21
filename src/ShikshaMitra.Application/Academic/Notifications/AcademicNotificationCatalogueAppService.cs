@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Constants.Permissions;
@@ -19,7 +20,7 @@ namespace ShikshaMitra.Academic.Notifications;
 public class AcademicNotificationCatalogueAppService(IRepository<IdentityUser, Guid> users,
 	IUserScopeAccessService scopes, IPermissionChecker permissions,
 	AcademicNotificationCatalogue catalogue, NotificationEmailRoute email, WhatsAppProviderRoute whatsApp,
-	WebPushKeyConfiguration push) : ApplicationService, IAcademicNotificationCatalogueAppService
+	WebPushKeyConfiguration push, IConfiguration configuration) : ApplicationService, IAcademicNotificationCatalogueAppService
 {
 	public virtual async Task<AcademicNotificationCatalogueDto> GetAsync(CancellationToken cancellationToken = default)
 	{
@@ -39,6 +40,6 @@ public class AcademicNotificationCatalogueAppService(IRepository<IdentityUser, G
 			new(CommunicationChannelType.Email, await email.FindAsync(cancellationToken) != null),
 			new(CommunicationChannelType.WhatsApp, await whatsApp.FindAsync(cancellationToken) != null),
 			new(CommunicationChannelType.WebPush, push.Read() != null)
-		]);
+		]) { IsQueueWorkerEnabled = NotificationQueueWorkerConfiguration.IsEnabled(configuration) };
 	}
 }

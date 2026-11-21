@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
@@ -33,6 +34,29 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 	private const string Add = ShikshaMitraSubmodulePermissions.Academics.Notification.Add;
 	private const string Event = AcademicNotificationEventKeys.HomeworkPublished;
 	private const string RuleEvent = AcademicNotificationEventKeys.HomeworkDue;
+
+	[Fact]
+	public async Task Catalogue_reports_the_current_servers_queue_processing_configuration()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, View);
+		const string workerKey = "Notifications:QueueWorker:Enabled";
+		var configuration = Factory.Services.GetRequiredService<IConfiguration>();
+		var previousValue = configuration[workerKey];
+		try
+		{
+			foreach (var (value, enabled) in new (string?, bool)[] { (null, false), ("false", false), ("true", true), ("invalid", false) })
+			{
+				configuration[workerKey] = value;
+				var catalogue = await GetAndReadAsync<JsonElement>($"{Route}/catalogue");
+				catalogue.GetProperty("isQueueWorkerEnabled").GetBoolean().ShouldBe(enabled);
+			}
+		}
+		finally
+		{
+			configuration[workerKey] = previousValue;
+		}
+	}
 
 	[Fact]
 	public async Task Catalogue_reports_event_availability_and_channel_setup_independently()

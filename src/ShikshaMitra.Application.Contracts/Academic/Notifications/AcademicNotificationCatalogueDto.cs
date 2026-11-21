@@ -14,7 +14,10 @@ public sealed record AcademicNotificationCatalogueEventDto(NotificationEventDefi
 }
 public sealed record AcademicNotificationChannelDto(CommunicationChannelType Channel, bool IsConfigured);
 public sealed record AcademicNotificationCatalogueDto(IReadOnlyList<AcademicNotificationCatalogueEventDto> Events,
-	IReadOnlyList<AcademicNotificationChannelDto> Channels);
+	IReadOnlyList<AcademicNotificationChannelDto> Channels)
+{
+	public bool IsQueueWorkerEnabled { get; init; }
+}
 public sealed record InitializeAcademicNotificationDefaultsDto(string EventKey);
 
 public interface IAcademicNotificationCatalogueAppService : IApplicationService

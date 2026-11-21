@@ -28,7 +28,7 @@ public abstract class AcademicNotificationWorker : AsyncPeriodicBackgroundWorker
 	protected sealed override async Task DoWorkAsync(PeriodicBackgroundWorkerContext context)
 	{
 		var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
-		if (!configuration.GetValue<bool>("Notifications:QueueWorker:Enabled")) return;
+		if (!NotificationQueueWorkerConfiguration.IsEnabled(configuration)) return;
 		var timeLimit = TimeSpan.FromSeconds(Math.Clamp(configuration.GetValue<int>("Notifications:QueueWorker:SchoolTurnSeconds", 45), 15, 900));
 		var schools = context.ServiceProvider.GetRequiredService<NotificationWorkerTenants>();
 		var workerName = GetType().Name;

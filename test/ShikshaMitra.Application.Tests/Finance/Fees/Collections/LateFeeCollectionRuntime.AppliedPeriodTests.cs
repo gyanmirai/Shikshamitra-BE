@@ -144,14 +144,17 @@ public partial class LateFeeCollectionRuntime_Tests
 			var (yearId, student, _, dueId, _) = await SeedStudentWithOverdueDueFeeAsync(daysOverdue, attachPolicy: true);
 			var due = await _dueFeeRepo.GetAsync(dueId);
 			var assignment = await _studentFeeStructureRepo.GetAsync(due.StudentFeeStructureId!.Value);
-			var assessmentAt = DateTimeOffset.UtcNow;
+			var assessmentDate = due.DueDate.Date.AddDays(daysOverdue);
+			var assessmentAt = new DateTimeOffset(assessmentDate.AddHours(12), TimeSpan.Zero);
 			due.PreserveLateFeeAssessment(daysOverdue * 20m, assessmentAt,
 				assignment.CollectionPolicyVersionId!.Value, "Historical individual late-fee assessment.");
+			due.ApplyPayment(due.OutstandingAmount);
 			await _dueFeeRepo.UpdateAsync(due, autoSave: true);
 
 			var charge = (await _feeCollections.GetCollectFormAsync(student, yearId)).Charges.Single();
+			charge.PendingAmount.ShouldBe(daysOverdue * 20d);
 			var json = JsonSerializer.SerializeToElement(charge, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-			AssertAppliedPeriod(json, due.DueDate.AddDays(1), assessmentAt.DateTime.Date, daysOverdue, 1);
+			AssertAppliedPeriod(json, due.DueDate.AddDays(1), assessmentDate, daysOverdue, 1);
 		}
 	}
 

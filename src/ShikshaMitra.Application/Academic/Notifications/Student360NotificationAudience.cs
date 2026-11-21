@@ -22,24 +22,25 @@ public sealed class Student360NotificationAudience(IAcademicNotificationRecipien
 		relationships.Count is > 0 and <= 4 && relationships.Distinct(StringComparer.Ordinal).Count() == relationships.Count &&
 		relationships.All(x => x is "father" or "mother" or "guardian" or "self");
 
-	internal async Task<IReadOnlyList<Student360NotificationFamilyChoiceDto>> ReadFamilyChoicesAsync(string eventKey,
+	internal async Task<(IReadOnlyList<Student360NotificationFamilyChoiceDto> Choices, bool PrimaryGuardianNotConfigured)> ReadFamilyAsync(string eventKey,
 		AcademicNotificationAccessContext context, CancellationToken token)
 	{
 		var student = context.Source.EligibleRecipients.SingleOrDefault(x => x.Kind == "Student");
-		if (!context.Source.IsEligible || student == null) return [];
+		if (!context.Source.IsEligible || student == null) return ([], false);
 		var data = await projection.LoadAsync(context.TenantId, [student], token);
 		var child = data.Students.SingleOrDefault(x => x.Student.Id == student.StudentId);
 		if (child == null || child.Student.Status != StudentLifeCycleStatusEnum.Enrolled ||
-			!StudentRecordScope.HasAccess(child.Student, context.Scope)) return [];
+			!StudentRecordScope.HasAccess(child.Student, context.Scope)) return ([], false);
 		var primary = StudentFamilyContactSelection.Resolve(child.Student, child.Family);
 		var definition = catalogue.Get(eventKey);
 		var allFamily = new AcademicNotificationRecipientPolicy(NotificationGuardianMode.PrimaryAndSelected,
 			["father", "mother", "guardian"], IncludeStudentAccount: true);
-		return AcademicNotificationFamilyRecipients.ResolveRuntime(child, context.TenantId, allFamily, definition.SupportedChannels,
+		var choices = AcademicNotificationFamilyRecipients.ResolveRuntime(child, context.TenantId, allFamily, definition.SupportedChannels,
 				definition.RecipientSelectors)
 			.Where(x => x.ExclusionCode == null && x.Recipient.FamilyRelationship != null)
 			.Select(x => x.Recipient.FamilyRelationship!).Distinct(StringComparer.Ordinal)
 			.Select(relationship => new Student360NotificationFamilyChoiceDto(relationship, relationship == primary))
 			.OrderByDescending(x => x.IsPrimary).ThenBy(x => x.Relationship, StringComparer.Ordinal).ToArray();
+		return (choices, primary == null);
 	}
 }

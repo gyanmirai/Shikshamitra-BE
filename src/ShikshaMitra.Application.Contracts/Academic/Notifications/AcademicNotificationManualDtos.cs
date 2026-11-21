@@ -17,7 +17,10 @@ public sealed record PreviewAcademicNotificationManualDto(string EventKey, strin
 public sealed record Student360NotificationFamilyChoiceDto(string Relationship, bool IsPrimary);
 
 public sealed record Student360NotificationAudienceDto(Guid? AcademicMediumId,
-	IReadOnlyList<Student360NotificationFamilyChoiceDto> Family, IReadOnlyList<NotificationRecipientRefDto> Staff);
+	IReadOnlyList<Student360NotificationFamilyChoiceDto> Family, IReadOnlyList<NotificationRecipientRefDto> Staff)
+{
+	public bool PrimaryGuardianNotConfigured { get; init; }
+}
 
 public sealed record AcademicNotificationManualPreviewDto(Guid? ReviewToken, DateTimeOffset? ExpiresAt,
 	int EligibleRecipientCount, bool RequiresApproval, IReadOnlyList<AcademicNotificationPreviewChannelDto> Channels,

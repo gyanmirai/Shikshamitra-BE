@@ -31,9 +31,12 @@ public class AcademicNotificationManualAppService(AcademicNotificationAccessServ
 		var context = await sourceAccess.RequireManualPreviewAsync(input, cancellationToken);
 		await planner.EnsureScopeAsync(input, context, cancellationToken);
 		if (!context.Source.IsEligible) return new(null, [], []);
-		return new(context.Source.AudienceSlices!.Single().Scope.MediumId,
-			await student360.ReadFamilyChoicesAsync(eventKey, context, cancellationToken),
-			context.Source.EligibleRecipients.Where(x => x.Kind == "ClassTeacher").ToArray());
+		var family = await student360.ReadFamilyAsync(eventKey, context, cancellationToken);
+		return new(context.Source.AudienceSlices!.Single().Scope.MediumId, family.Choices,
+			context.Source.EligibleRecipients.Where(x => x.Kind == "ClassTeacher").ToArray())
+		{
+			PrimaryGuardianNotConfigured = family.PrimaryGuardianNotConfigured
+		};
 	}
 
 	public virtual async Task<IReadOnlyList<NotificationRecipientRefDto>> GetDiaryFollowUpRecipientsAsync(Guid diaryId,

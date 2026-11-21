@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -38,6 +39,7 @@ public sealed class Student360NotificationAccess_Tests : SubjectTeacherReassignm
 			[new Claim(AbpClaimTypes.UserId, ActorId.ToString()), new Claim(AbpClaimTypes.TenantId, TenantId.ToString()),
 				new Claim(AbpClaimTypes.Role, "admin")], "Test")));
 		var studentId = Guid.NewGuid();
+		var unresolvedStudentId = Guid.NewGuid();
 		var father = Guid.NewGuid();
 		var self = Guid.NewGuid();
 		var studentReference = new NotificationRecipientRefDto("Student", StudentId: studentId);
@@ -60,6 +62,14 @@ public sealed class Student360NotificationAccess_Tests : SubjectTeacherReassignm
 			StudentFamilyContactSelection.Select(student, "mother", family);
 			await GetRequiredService<IRepository<Student, Guid>>().InsertAsync(student, autoSave: true);
 			await GetRequiredService<IRepository<StudentFamilyDetail, Guid>>().InsertAsync(family, autoSave: true);
+			var unresolvedStudent = new Student(unresolvedStudentId, TenantId, "Unresolved", null, "Student",
+				board.AcademicYearId, board.Id, medium.Id, standard.EducationMediumStageId, StandardId, DivisionId,
+				status: StudentLifeCycleStatusEnum.Enrolled);
+			var unresolvedFamily = new StudentFamilyDetail(unresolvedStudentId, TenantId);
+			unresolvedFamily.UpdateFatherDetails(Contact("Second father", "father2@example.invalid"));
+			unresolvedFamily.UpdateMotherDetails(Contact("Second mother", "mother2@example.invalid"));
+			await GetRequiredService<IRepository<Student, Guid>>().InsertAsync(unresolvedStudent, autoSave: true);
+			await GetRequiredService<IRepository<StudentFamilyDetail, Guid>>().InsertAsync(unresolvedFamily, autoSave: true);
 			var teacher = await GetRequiredService<IRepository<Employee, Guid>>().GetAsync(OldTeacher);
 			classTeacher = new("ClassTeacher", UserId: teacher.UserId, EmployeeId: teacher.Id);
 			await GetRequiredService<IRepository<ClassTeacherRecord, Guid>>().InsertAsync(
@@ -109,6 +119,16 @@ public sealed class Student360NotificationAccess_Tests : SubjectTeacherReassignm
 			var audience = await app.GetStudent360AudienceAsync(studentId, request.EventKey);
 			audience.Family.ShouldBe([new("mother", true), new("father", false), new("self", false)]);
 			audience.Staff.ShouldBeEmpty();
+			JsonSerializer.SerializeToElement(audience, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+				.TryGetProperty("primaryGuardianNotConfigured", out var configuredStatus).ShouldBeTrue();
+			configuredStatus.GetBoolean().ShouldBeFalse();
+			var unresolved = await app.GetStudent360AudienceAsync(unresolvedStudentId, request.EventKey);
+			unresolved.Family.ShouldBe([new("father", false), new("mother", false)]);
+			JsonSerializer.SerializeToElement(unresolved, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+				.TryGetProperty("primaryGuardianNotConfigured", out var unresolvedStatus).ShouldBeTrue();
+			unresolvedStatus.GetBoolean().ShouldBeTrue();
+			await Should.ThrowAsync<AbpAuthorizationException>(() =>
+				app.GetStudent360AudienceAsync(Guid.NewGuid(), request.EventKey));
 			await Should.ThrowAsync<AbpAuthorizationException>(() => app.PreviewAsync(request with
 			{
 				SelectedRecipients = [new("Student", StudentId: Guid.NewGuid())]

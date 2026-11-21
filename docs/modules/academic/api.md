@@ -26,7 +26,7 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 | `GET /rules` | View | Paged event rules at a school, year, board, medium, class or division scope, with the effective rule and inheritance marker |
 | `PUT /rules/{eventKey}` | Add | Save an explicitly scoped rule and return its revision and concurrency stamp |
 | `POST /rules/{eventKey}/preview` | Add + source access | Preview a proposed `rule` for the given `sourceType` and `sourceId` |
-| `GET /manual/student-360-audience/{studentId}?eventKey={eventKey}` | View + Send + Dashboard View + student and division scope | Get selectable family relationships, the saved academic medium and the assigned class teacher when available |
+| `GET /manual/student-360-audience/{studentId}?eventKey={eventKey}` | View + Send + Dashboard View + student and division scope | Get selectable family relationships, the saved academic medium, the main-contact setup flag and the assigned class teacher when available |
 | `POST /manual/preview` | View + Send + source access | Review a saved source audience, chosen channels and published templates |
 | `POST /manual/send` | Send + source access | Confirm a `reviewToken` with an `idempotencyKey`. Returns 202 with `operationId` and `status` |
 | `GET /operations/pending-approvals?afterId={id}` | View + Add + source read access | List up to ten pending operations for the current assigned approver. Use `nextAfterId` for the next page |
@@ -51,6 +51,8 @@ Scope IDs form a contiguous tenant-owned hierarchy. A rule applies to the select
 Rules default to the primary guardian for family events. Other saved guardian relationships and the student account can be selected when the event supports them. Enabling a rule requires an available source and valid published template coverage for its audiences, channels and fallback language. The catalogue reports automatic rule readiness as `availability` and reviewed send readiness as `manualAvailability`. Channel flags report configuration status. WhatsApp also requires approval for the selected template revision before dispatch.
 
 Rule preview uses the saved source audience within the proposed rule's scope. It reports eligible recipients after contact, preference, consent and timing checks, estimated ready deliveries per channel, and grouped exclusions. Ready delivery counts depend on published template coverage, channel setup, and current device or provider approval. Selected drafts can render fictional samples. The preview response omits recipient identities and destinations, and the request creates no rules, campaigns, or dispatches.
+
+The Student Academic 360 audience response sets `primaryGuardianNotConfigured` when the authorized active student has no resolvable main contact. This is independent of the configured guardian's eligibility on individual channels. Student Records owns main-contact changes and their permissions.
 
 Manual preview accepts `eventKey`, `sourceType`, `sourceId`, `selectedRecipients`, `channels`, and optional `templateId`. Recipient references must come from the authorized source roster. An empty selection uses the source roster, subject to scope checks for every included segment. The in-app channel is required. The optional template selects a compatible published recipient, channel, and language variant. An effective rule supplies family preferences where present. Otherwise, the family audience defaults to the primary guardian.
 

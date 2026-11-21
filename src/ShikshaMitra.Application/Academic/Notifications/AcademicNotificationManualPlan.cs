@@ -42,8 +42,8 @@ public sealed class AcademicNotificationManualPlanner(AcademicNotificationCatalo
 		var requestedFamily = input.SelectedFamilyRelationships;
 		if (requestedFamily != null)
 		{
-			var available = await student360Audience.ReadFamilyChoicesAsync(input.EventKey, context, cancellationToken);
-			if (requestedFamily.Any(x => !available.Any(choice => choice.Relationship == x)))
+			var available = await student360Audience.ReadFamilyAsync(input.EventKey, context, cancellationToken);
+			if (requestedFamily.Any(x => !available.Choices.Any(choice => choice.Relationship == x)))
 				throw new BusinessException(NotificationErrorCodes.RecipientIneligible);
 		}
 		var additionalGuardians = requestedFamily?.Where(x => x != "self").Order(StringComparer.Ordinal).ToArray() ?? [];

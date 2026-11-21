@@ -322,8 +322,13 @@ Every new form version carries an Inquiry or Registration purpose. Clone and new
 6. Publish the validated version immediately with Workflow Add authority and a current concurrency
    stamp. Stored maker-checker settings do not gate publication; no scheduling or notification
    configuration is part of this flow. The previous published version becomes Superseded.
-7. Create a new immutable version for later edits. Existing Offerings and Applications continue to
-   use their pinned Published, Superseded, or Archived version.
+7. Create a new immutable version for later edits. Only one pending version is permitted in a
+   workflow family. A repeated request returns `Admissions.WorkflowDraftRequired` with the existing
+   `DraftId`; workflow-list clients should offer a direct link to that draft. Version creation uses
+   the workflow-family publication lock so concurrent requests cannot create duplicate drafts.
+   Independent clones use a distinct workflow code and default to `[Workflow Name] Copy`, then
+   `[Workflow Name] Copy 2`, and so on when that name is already reserved. Existing Offerings and
+   Applications continue to use their pinned Published, Superseded, or Archived version.
 8. Historical scheduled records do not auto-publish. An explicit publish request revalidates and
    publishes an eligible historical schedule immediately, preserving its existing audit history.
 9. Archive a Published or Superseded version only when the existing usage rule permits it.

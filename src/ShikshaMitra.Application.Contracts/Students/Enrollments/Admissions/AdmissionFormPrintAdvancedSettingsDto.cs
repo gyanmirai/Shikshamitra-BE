@@ -155,6 +155,8 @@ public sealed class AdmissionPrintContentSettingsDto
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? SignaturePlacement { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? ParentSignature { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? OfficeSignature { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ParentSignatureImage { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? OfficeSignatureImage { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? SignatureDate { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? ShowOfficeUse { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? OfficePlacement { get; set; }

@@ -47,6 +47,9 @@ public class AdmissionWorkflowsController(IAdmissionWorkflowAppService appServic
 	[HttpPost("{id:guid}/validate")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Validate)]
 	public async Task<Result<AdmissionWorkflowValidationResultDto>> Validate(Guid id) => Result.Success(await appService.ValidateAsync(id));
+	[HttpPost("{id:guid}/validate-preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Validate)]
+	public async Task<Result<AdmissionWorkflowValidationResultDto>> ValidatePreview(Guid id, AdmissionWorkflowValidationPreviewDto input) => Result.Success(await appService.ValidatePreviewAsync(id, input));
 	[HttpPost("{id:guid}/publish")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Publish)]
 	public async Task<Result<AdmissionWorkflowDto>> Publish(Guid id, [FromQuery] string? concurrencyStamp = null) => Result.Success(await appService.PublishAsync(id, concurrencyStamp));

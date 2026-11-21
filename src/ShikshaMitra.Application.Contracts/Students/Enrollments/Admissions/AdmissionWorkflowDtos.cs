@@ -120,6 +120,13 @@ public class AdmissionWorkflowValidationResultDto
 		.ConvertAll(issue => issue.Code);
 }
 
+public class AdmissionWorkflowValidationPreviewDto
+{
+	public Guid? DefaultInquiryFormDefinitionId { get; set; }
+	public List<CreateUpdateAdmissionWorkflowStageDto> Stages { get; set; } = [];
+	public List<CreateUpdateAdmissionWorkflowTransitionDto> Transitions { get; set; } = [];
+}
+
 public class AdmissionWorkflowValidationIssueDto
 {
 	public string Code { get; set; } = string.Empty;

@@ -1421,6 +1421,11 @@ dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.c
 
 This gate compiles the current dependencies and exercises the service/DI/query behavior on SQLite. PostgreSQL name-lock contention, updated-host HTTP acceptance and deployment require separate verification. English/Hindi conflict resources must parse and retain `Admissions.WorkflowNameAlreadyExists`.
 
+`AdmissionWorkflowRuntimeIntegration_SettingsCode_Tests` also covers repeated version creation:
+the conflict returns the existing draft ID without adding a record, another workflow family can
+create its own draft, and repeated default clones receive unique `Copy` suffixes. Run these cases
+with the focused workflow gate above.
+
 ## Archived workflow re-open checks (2026-10-16)
 
 `AdmissionWorkflowDefinition_Tests` checks immutable same-version restoration, invalid transitions and prior/sibling publication status.

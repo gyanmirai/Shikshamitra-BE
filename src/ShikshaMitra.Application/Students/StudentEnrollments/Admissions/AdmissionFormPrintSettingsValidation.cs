@@ -8,6 +8,10 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 internal static class AdmissionFormPrintSettingsValidation
 {
+	private const int SignatureImageMaxBytes = 5 * 1024 * 1024;
+	private const int SignatureImageMaxBase64Characters = ((SignatureImageMaxBytes + 2) / 3) * 4;
+	private static readonly byte[] PngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
+
 	public static void Validate(AdmissionFormPrintAdvancedSettingsDto? settings)
 	{
 		if (settings == null) return;
@@ -78,6 +82,8 @@ internal static class AdmissionFormPrintSettingsValidation
 		}
 		if (settings.Content is { } content)
 		{
+			SignatureImage(content.ParentSignatureImage, "parent signature");
+			SignatureImage(content.OfficeSignatureImage, "office signature");
 			Choice(content.InstructionsPlacement, "instructions placement", "first", "section", "before-declaration", "separate-page");
 			Text(content.InstructionSection, 128, "instructions section");
 			Choice(content.ChecklistPlacement, "checklist placement", "first", "last", "separate-page");
@@ -123,6 +129,27 @@ internal static class AdmissionFormPrintSettingsValidation
 		Range(asset.X, 0, 100, "asset horizontal position"); Range(asset.Y, 0, 100, "asset vertical position");
 		Range(asset.Width, 5, 100, "asset width"); Range(asset.Height, 5, 100, "asset height");
 		if (asset.X + asset.Width > 100 || asset.Y + asset.Height > 100) Invalid("Keep the school image inside the header area.");
+	}
+	private static void SignatureImage(string? value, string label)
+	{
+		if (string.IsNullOrWhiteSpace(value)) return;
+		const string pngPrefix = "data:image/png;base64,";
+		const string jpegPrefix = "data:image/jpeg;base64,";
+		var isPng = value.StartsWith(pngPrefix, StringComparison.Ordinal);
+		var isJpeg = value.StartsWith(jpegPrefix, StringComparison.Ordinal);
+		if (!isPng && !isJpeg) Invalid($"Choose a PNG or JPG image for the {label}.");
+		var encoded = value[(isPng ? pngPrefix : jpegPrefix).Length..];
+		if (encoded.Length == 0 || encoded.Length > SignatureImageMaxBase64Characters)
+			Invalid($"Keep the {label} image at or below 5 MB.");
+		byte[] bytes;
+		try { bytes = Convert.FromBase64String(encoded); }
+		catch (FormatException) { Invalid($"Choose a valid image for the {label}."); return; }
+		if (bytes.Length == 0 || bytes.Length > SignatureImageMaxBytes)
+			Invalid($"Keep the {label} image at or below 5 MB.");
+		var validImage = isPng
+			? bytes.Length >= PngSignature.Length && bytes.AsSpan(0, PngSignature.Length).SequenceEqual(PngSignature)
+			: bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
+		if (!validImage) Invalid($"Choose a valid image for the {label}.");
 	}
 	private static void Choice(string? value, string label, params string[] allowed)
 	{

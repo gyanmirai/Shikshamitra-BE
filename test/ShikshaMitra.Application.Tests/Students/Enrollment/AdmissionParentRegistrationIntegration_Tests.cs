@@ -21,6 +21,19 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
+	public async Task ParentRegistration_uses_the_full_name_from_the_linked_inquiry_when_applicant_last_name_is_missing()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var fixture = await ParentFixtureAsync(applicantFirstName: "Dhananjay", applicantLastName: null,
+			inquiryApplicantName: "Dhananjay Manohar");
+
+		var context = await GetRequiredService<IAdmissionParentRegistrationPublicAppService>().GetAsync(fixture.Token);
+
+		context.ApplicantName.ShouldBe("Dhananjay Manohar");
+	}
+
+	[Fact]
 	public async Task ParentRegistration_initial_draft_is_shared_handin_is_not_submit_and_retries_are_exact()
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
@@ -293,7 +306,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await parent.HandInAsync(token, new() { SnapshotToken = context.SnapshotToken, IdempotencyKey = "replacement-complete" })).Status.ShouldBe("ReadyForReview");
 		(await staff.GetAsync(fixture.Application.Id)).CanApply.ShouldBeFalse();
 	}
-	private async Task<ParentFixture> ParentFixtureAsync(bool staffRequired = false, bool withDocuments = false, bool optionalDocument = false, bool documentBranch = false)
+	private async Task<ParentFixture> ParentFixtureAsync(bool staffRequired = false, bool withDocuments = false, bool optionalDocument = false, bool documentBranch = false,
+		string applicantFirstName = "ParentChild", string? applicantLastName = "Patel", string? inquiryApplicantName = null)
 	{
 		await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: TestUserId), true);
 		var workflow = await CreateAndPublishCurrentWorkflowAsync();
@@ -323,9 +337,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				new AdmissionFormFieldDefinition(Guid.NewGuid(), formId, section.Id, "HIDDEN", "Conditional answer", AdmissionFormFieldType.Text, AdmissionFormBindingType.Custom, null, false, false, 4, null, null, null, null, "{\"operator\":\"Equals\",\"field\":\"NOTE\",\"value\":\"show\"}") })
 				await _formFieldRepository.InsertAsync(field, true);
 		});
-		var offering = await CreateAvailableOfferingAsync(workflow.Id, registrationFormId: formId); var applicant = await CreateApplicantAsync("ParentChild");
+		var offering = await CreateAvailableOfferingAsync(workflow.Id, registrationFormId: formId); var applicant = await CreateApplicantAsync(applicantFirstName, applicantLastName);
 		await WithUnitOfWorkAsync(async () => { var row = await _applicantRepository.GetAsync(applicant.Id); row.SetProperty("AdmissionStudentField.Mother.Name", "Mother Test"); row.SetProperty("AdmissionStudentField.Mother.Email", "mother@example.test"); row.SetProperty(StudentFamilyContactSelection.SelectionKey, "mother"); await _applicantRepository.UpdateAsync(row, true); });
-		var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
+		var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id, inquiryApplicantName);
 		var staff = GetRequiredService<IAdmissionParentRegistrationAppService>();
 		var result = await staff.SendAsync(application.Id, new() { ConcurrencyStamp = application.ConcurrencyStamp!, IdempotencyKey = "initial", RecipientRelationship = "mother" });
 		return new(application, result.Request!.Id, await ParentTokenAsync(result.Request.Id));

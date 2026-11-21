@@ -85,10 +85,10 @@ public class AdmissionWorkflowCommandService(
 		await definitionStore.EnsureSupportedStagesAsync(source.Id);
 		var cloneId = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "WF", cloneId);
-		await EnsureNameAvailableAsync(input.Name);
+		var cloneName = await ResolveCloneNameAsync(source.Name, input.Name);
 		await EnsureCodeVersionAvailableAsync(code, 1);
 		var clone = new AdmissionWorkflowDefinition(
-			cloneId, CurrentTenant.Id, input.Name, code, description: input.Description,
+			cloneId, CurrentTenant.Id, cloneName, code, description: input.Description,
 			ownerUserId: CurrentUser.Id,
 			defaultInquiryFormDefinitionId: source.DefaultInquiryFormDefinitionId);
 		clone.IsDeleted = false;
@@ -102,15 +102,17 @@ public class AdmissionWorkflowCommandService(
 
 	public async Task<AdmissionWorkflowDto> CreateNewVersionAsync(Guid id)
 	{
+		await AcquirePublicationLockAsync(id);
 		var source = await definitionStore.GetAsync(id);
 		if (IsPending(source.Status))
 			throw new BusinessException(AdmissionWorkflowErrorCodes.DraftRequired,
 				"Publish the current draft before creating another version.");
 		var query = await workflowRepository.GetQueryableAsync();
 		var versions = await AsyncExecuter.ToListAsync(query.Where(workflow => workflow.Code == source.Code));
-		if (versions.Any(workflow => IsPending(workflow.Status)))
-			throw new BusinessException(AdmissionWorkflowErrorCodes.DraftRequired,
-				"This workflow already has a draft version.");
+		var existingDraft = versions.Where(workflow => IsPending(workflow.Status))
+			.OrderByDescending(workflow => workflow.Version).FirstOrDefault();
+		if (existingDraft != null)
+			throw ExistingDraftRequired(existingDraft);
 		await definitionStore.EnsureSupportedStagesAsync(source.Id);
 		var version = new AdmissionWorkflowDefinition(
 			GuidGenerator.Create(), CurrentTenant.Id, source.Name, source.Code,
@@ -222,6 +224,7 @@ public class AdmissionWorkflowCommandService(
 
 	public async Task<AdmissionWorkflowDto> CreateRollbackDraftAsync(Guid sourceId, RollbackAdmissionWorkflowDto input)
 	{
+		await AcquirePublicationLockAsync(sourceId);
 		var source = await definitionStore.GetAsync(sourceId);
 		if (IsPending(source.Status))
 			throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidGovernanceTransition,
@@ -229,9 +232,10 @@ public class AdmissionWorkflowCommandService(
 		var reason = RequireReason(input.ChangeReason);
 		var query = await workflowRepository.GetQueryableAsync();
 		var versions = await AsyncExecuter.ToListAsync(query.Where(workflow => workflow.Code == source.Code));
-		if (versions.Any(workflow => IsPending(workflow.Status)))
-			throw new BusinessException(AdmissionWorkflowErrorCodes.DraftRequired,
-				"Complete or remove the existing pending version before creating a rollback draft.");
+		var existingDraft = versions.Where(workflow => IsPending(workflow.Status))
+			.OrderByDescending(workflow => workflow.Version).FirstOrDefault();
+		if (existingDraft != null)
+			throw ExistingDraftRequired(existingDraft);
 		var rollback = new AdmissionWorkflowDefinition(GuidGenerator.Create(), CurrentTenant.Id, source.Name, source.Code,
 			versions.Max(workflow => workflow.Version) + 1, source.Id, source.Description, CurrentUser.Id,
 			source.DefaultInquiryFormDefinitionId);
@@ -347,6 +351,32 @@ public class AdmissionWorkflowCommandService(
 
 	private async Task EnsureNameAvailableAsync(string name, string? familyCode = null)
 	{
+		if (await IsNameAvailableAsync(name, familyCode)) return;
+		throw new BusinessException(AdmissionWorkflowErrorCodes.NameAlreadyExists,
+			"A workflow with this name already exists. Please enter a different name.");
+	}
+
+	private async Task<string> ResolveCloneNameAsync(string sourceName, string requestedName)
+	{
+		var defaultName = BuildCloneName(sourceName, 1);
+		if (!string.Equals(requestedName.Trim(), defaultName, StringComparison.OrdinalIgnoreCase))
+		{
+			await EnsureNameAvailableAsync(requestedName);
+			return requestedName;
+		}
+
+		for (var copyNumber = 1; copyNumber < int.MaxValue; copyNumber++)
+		{
+			var candidate = BuildCloneName(sourceName, copyNumber);
+			if (await IsNameAvailableAsync(candidate)) return candidate;
+		}
+
+		throw new BusinessException(AdmissionWorkflowErrorCodes.NameAlreadyExists,
+			"A unique workflow copy name could not be generated. Enter a different name.");
+	}
+
+	private async Task<bool> IsNameAvailableAsync(string name, string? familyCode = null)
+	{
 		var normalizedName = Check.NotNullOrWhiteSpace(name, nameof(name), AdmissionWorkflowConsts.MaxNameLength)
 			.Trim().ToUpperInvariant();
 		await LazyServiceProvider.LazyGetRequiredService<IAdmissionWorkflowNameLock>()
@@ -358,10 +388,22 @@ public class AdmissionWorkflowCommandService(
 			workflow.TenantId == tenantId && !workflow.IsDeleted &&
 			(familyCode == null || workflow.Code != familyCode)).Select(workflow => workflow.Name));
 		// Compare using the same invariant normalization as the lock, independent of database collation.
-		if (names.Any(existing => string.Equals(existing.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase)))
-			throw new BusinessException(AdmissionWorkflowErrorCodes.NameAlreadyExists,
-				"A workflow with this name already exists. Please enter a different name.");
+		return !names.Any(existing => string.Equals(existing.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
 	}
+
+	private static string BuildCloneName(string sourceName, int copyNumber)
+	{
+		var suffix = copyNumber == 1 ? " Copy" : $" Copy {copyNumber}";
+		var prefix = sourceName.Trim();
+		var maxPrefixLength = AdmissionWorkflowConsts.MaxNameLength - suffix.Length;
+		if (prefix.Length > maxPrefixLength) prefix = prefix[..maxPrefixLength].TrimEnd();
+		return prefix + suffix;
+	}
+
+	private static BusinessException ExistingDraftRequired(AdmissionWorkflowDefinition draft) =>
+		new BusinessException(AdmissionWorkflowErrorCodes.DraftRequired,
+			"A draft version already exists for this workflow. Open the existing draft to continue editing.")
+			.WithData("DraftId", draft.Id);
 
 	private async Task EnsureCodeVersionAvailableAsync(string code, int version, Guid? excludingId = null)
 	{

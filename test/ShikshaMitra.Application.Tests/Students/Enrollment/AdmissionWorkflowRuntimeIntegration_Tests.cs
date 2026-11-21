@@ -945,13 +945,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		}
 	}
 
-	private async Task<AdmissionWorkflowDto> CreateDirectWorkflowDraftAsync()
+	private async Task<AdmissionWorkflowDto> CreateDirectWorkflowDraftAsync(string name = "RTE direct registration")
 	{
 		var entryId = Guid.NewGuid();
 		var terminalId = Guid.NewGuid();
 		var workflow = await _workflowAppService.CreateAsync(new CreateUpdateAdmissionWorkflowDto
 		{
-			Name = "RTE direct registration",
+			Name = name,
 			Code = $"RTE_{Guid.NewGuid():N}"[..24],
 			Stages =
 			[
@@ -979,9 +979,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		return workflow;
 	}
 
-	private async Task<AdmissionWorkflowDto> CreateAndPublishCurrentWorkflowAsync()
+	private async Task<AdmissionWorkflowDto> CreateAndPublishCurrentWorkflowAsync(string name = "RTE direct registration")
 	{
-		var draft = await CreateDirectWorkflowDraftAsync();
+		var draft = await CreateDirectWorkflowDraftAsync(name);
 		var form = await WithUnitOfWorkAsync(async () =>
 		{
 			var definition = new AdmissionFormDefinition(Guid.NewGuid(), TestTenantId, "Current registration form",
@@ -1226,12 +1226,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		await _offeringRepository.InsertAsync(offering, autoSave: true);
 	});
 
-	private async Task<AdmissionApplicant> CreateApplicantAsync(string firstName)
+	private async Task<AdmissionApplicant> CreateApplicantAsync(string firstName, string? lastName = "Patel")
 	{
 		var family = new AdmissionFamily(Guid.NewGuid(), TestTenantId, $"FAM-{Guid.NewGuid():N}");
 		await _familyRepository.InsertAsync(family, autoSave: true);
 		var applicant = new AdmissionApplicant(
-			Guid.NewGuid(), TestTenantId, family.Id, firstName, null, "Patel", new DateTime(2016, 5, 14), "Male", null,
+			Guid.NewGuid(), TestTenantId, family.Id, firstName, null, lastName, new DateTime(2016, 5, 14), "Male", null,
 			Guid.NewGuid());
 		await _applicantRepository.InsertAsync(applicant, autoSave: true);
 		return applicant;
@@ -1277,7 +1277,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				autoSave: true);
 	});
 
-	private async Task<AdmissionApplicationDto> StartFixtureApplicationAsync(Guid applicantId, Guid offeringId)
+	private async Task<AdmissionApplicationDto> StartFixtureApplicationAsync(Guid applicantId, Guid offeringId, string? inquiryApplicantName = null)
 	{
 		var offering = await _offeringRepository.GetAsync(offeringId);
 		if (offering.EntryMode != AdmissionEntryMode.Inquiry)
@@ -1289,7 +1289,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		{
 			var inquiry = new AdmissionInquiry(Guid.NewGuid(), TestTenantId,
 				$"FIXTURE-{Guid.NewGuid():N}", offering.AdmissionCycleId, offeringId,
-				$"{applicant.FirstName} {applicant.LastName}".Trim(), "9876543210", null,
+				inquiryApplicantName ?? $"{applicant.FirstName} {applicant.LastName}".Trim(), "9876543210", null,
 				AdmissionInquirySource.Manual, "Integration fixture");
 			inquiry.LinkIdentity(applicant.FamilyId, applicantId);
 			inquiry.SetStatus(AdmissionInquiryStatus.Interested);

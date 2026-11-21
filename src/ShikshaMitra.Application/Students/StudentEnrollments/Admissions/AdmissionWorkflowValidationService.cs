@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -24,12 +25,47 @@ public class AdmissionWorkflowValidationService(
 		var workflow = await definitionStore.GetAsync(workflowId);
 		var stages = await definitionStore.GetStagesAsync(workflowId);
 		var transitions = await definitionStore.GetTransitionsAsync(workflowId);
+		return await ValidateAsync(workflow.DefaultInquiryFormDefinitionId, stages, transitions);
+	}
+
+	public async Task<AdmissionWorkflowValidationResultDto> ValidatePreviewAsync(
+		Guid workflowId,
+		AdmissionWorkflowValidationPreviewDto input)
+	{
+		_ = await definitionStore.GetAsync(workflowId);
+		var stageIdMap = new Dictionary<Guid, Guid>();
+		var stages = new List<AdmissionWorkflowStageDefinition>();
+		foreach (var stage in input.Stages.OrderBy(item => item.DisplayOrder))
+		{
+			var requestedId = stage.Id.GetValueOrDefault();
+			var id = requestedId == Guid.Empty ? GuidGenerator.Create() : requestedId;
+			if (requestedId != Guid.Empty) stageIdMap[requestedId] = id;
+			var allowManualSkip = stage.StageType == AdmissionWorkflowStageType.Approval && stage.AllowManualSkip;
+			stages.Add(new AdmissionWorkflowStageDefinition(
+				id, workflowId, stage.Code, stage.Name, stage.StageType, stage.DisplayOrder,
+				stage.IsRequired, allowManualSkip, stage.Description, stage.ConfigurationJson,
+				stage.IsEntryStage, stage.IsTerminalStage));
+		}
+		var transitions = input.Transitions.Select(transition => new AdmissionWorkflowTransitionDefinition(
+			transition.Id.GetValueOrDefault() == Guid.Empty ? GuidGenerator.Create() : transition.Id.GetValueOrDefault(),
+			workflowId,
+			stageIdMap.GetValueOrDefault(transition.FromStageId, transition.FromStageId),
+			stageIdMap.GetValueOrDefault(transition.ToStageId, transition.ToStageId),
+			transition.Priority, transition.ConditionRuleJson, transition.IsDefault)).ToList();
+		return await ValidateAsync(input.DefaultInquiryFormDefinitionId, stages, transitions);
+	}
+
+	private async Task<AdmissionWorkflowValidationResultDto> ValidateAsync(
+		Guid? defaultInquiryFormDefinitionId,
+		IReadOnlyCollection<AdmissionWorkflowStageDefinition> stages,
+		IReadOnlyCollection<AdmissionWorkflowTransitionDefinition> transitions)
+	{
 		var issues = graphValidator.Validate(stages, transitions)
 			.Select(AdmissionWorkflowMapper.ToDto)
 			.ToList();
-		if (workflow.DefaultInquiryFormDefinitionId.HasValue)
+		if (defaultInquiryFormDefinitionId.HasValue)
 		{
-			var inquiryForm = await formRepository.FindAsync(workflow.DefaultInquiryFormDefinitionId.Value);
+			var inquiryForm = await formRepository.FindAsync(defaultInquiryFormDefinitionId.Value);
 			if (inquiryForm == null || inquiryForm.Status != AdmissionFormStatus.Published ||
 				inquiryForm.Purpose != AdmissionFormPurpose.Inquiry)
 				issues.Add(new AdmissionWorkflowValidationIssueDto { Code = AdmissionWorkflowErrorCodes.InvalidInquiryForm,

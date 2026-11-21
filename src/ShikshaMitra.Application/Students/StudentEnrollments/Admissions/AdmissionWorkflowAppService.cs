@@ -12,6 +12,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionWorkflowAppService(
 	AdmissionWorkflowReadService readService,
 	AdmissionWorkflowCommandService commandService,
+	AdmissionWorkflowValidationService validationService,
 	AdmissionWorkflowGovernanceService governanceService,
 	AdmissionAssessmentCatalogService assessmentCatalog)
 	: ApplicationService, IAdmissionWorkflowAppService
@@ -48,6 +49,10 @@ public class AdmissionWorkflowAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Validate)]
 	public Task<AdmissionWorkflowValidationResultDto> ValidateAsync(Guid id) =>
 		commandService.ValidateAsync(id);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Validate)]
+	public Task<AdmissionWorkflowValidationResultDto> ValidatePreviewAsync(Guid id, AdmissionWorkflowValidationPreviewDto input) =>
+		validationService.ValidatePreviewAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Publish)]
 	public Task<AdmissionWorkflowDto> PublishAsync(Guid id, string? concurrencyStamp = null) =>

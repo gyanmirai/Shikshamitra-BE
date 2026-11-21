@@ -7,6 +7,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public interface IAdmissionFormAppService : IApplicationService
 {
 	Task<PagedResultDto<AdmissionFormDto>> GetListAsync(AdmissionFormListInput input);
+	Task<AdmissionFormNameAvailabilityDto> CheckNameAvailabilityAsync(string name, Guid? excludingFormId = null);
 	Task<AdmissionFormDto> GetAsync(Guid id);
 	Task<AdmissionFormDto> PreviewAsync(Guid id);
 	Task<PagedResultDto<AdmissionFormInheritanceSourceSummaryDto>> GetInheritanceSourcesAsync(Guid id, PagedResultRequestDto input);

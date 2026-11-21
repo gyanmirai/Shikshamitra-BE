@@ -20,9 +20,10 @@ public partial class StudentFeeDetailsQueryService
 		Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
 	{
 		EnsureNotEmpty(academicYearId, "academicYearId");
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId, cancellationToken);
+		await financeScopeAccessService.EnsureFeeCollectionStudentAccessibleAsync(
+			studentId, academicYearId, cancellationToken);
 
-		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
+		var student = await GetStudentSnapshotAsync(studentId, academicYearId, cancellationToken);
 		var dueFees = await GetDueFeesAsync(studentId, academicYearId);
 		var overdueFee = CalculateOverdueFee(dueFees);
 		var feeHeads = await BuildFeeHeadSummariesAsync(studentId, dueFees);
@@ -70,9 +71,9 @@ public partial class StudentFeeDetailsQueryService
 		var academicYearFeeHeadIds = feeHeadsQ
 			.Where(fh => fh.AcademicYearId == academicYearId)
 			.Select(fh => fh.Id);
-		return dueFeesQ
+		return await AsyncExecuter.ToListAsync(dueFeesQ
 			.Where(d => d.StudentId == studentId && academicYearFeeHeadIds.Contains(d.FeeHeadId))
-			.ToList();
+			);
 	}
 
 	private async Task<IQueryable<Guid>> GetReversedTransactionIdsAsync()
@@ -125,8 +126,8 @@ public partial class StudentFeeDetailsQueryService
 	private async Task<List<FeeChargeDetailDto>?> BuildChargeDetailsAsync(Guid studentId, Guid academicYearId)
 	{
 		var chargesQ = await chargeRepository.GetQueryableAsync();
-		var studentCharges = chargesQ.Where(c => c.StudentId == studentId
-			&& c.AcademicYearId == academicYearId && c.Status == ChargeStatus.Approved).ToList();
+		var studentCharges = await AsyncExecuter.ToListAsync(chargesQ.Where(c => c.StudentId == studentId
+			&& c.AcademicYearId == academicYearId && c.Status == ChargeStatus.Approved));
 
 		if (studentCharges.Count == 0) return null;
 		var chargeIds = studentCharges.Select(c => c.Id).ToList();
@@ -165,8 +166,8 @@ public partial class StudentFeeDetailsQueryService
 	private async Task<List<FeePaymentHistoryDto>?> BuildPaymentHistoryAsync(Guid studentId, Guid academicYearId)
 	{
 		var metaQ = await feeRecordMetadataRepository.GetQueryableAsync();
-		var metadataForStudent = metaQ.Where(m => m.StudentId == studentId && m.AcademicYearId == academicYearId)
-			.OrderByDescending(m => m.CreationTime).ToList();
+		var metadataForStudent = await AsyncExecuter.ToListAsync(metaQ.Where(m => m.StudentId == studentId && m.AcademicYearId == academicYearId)
+			.OrderByDescending(m => m.CreationTime));
 
 		if (metadataForStudent.Count == 0) return null;
 
@@ -197,7 +198,7 @@ public partial class StudentFeeDetailsQueryService
 		{
 			PaymentId = m.Id, ReceiptNumber = m.ReceiptNumber,
 			Date = DateOnly.FromDateTime(m.CreationTime.Date),
-			Amount = m.TotalPaidFee,
+			Amount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(m.TotalPaidFee),
 			PaymentMethods = methodsByMetadata.TryGetValue(m.Id, out var methods) ? methods : [],
 			ReceiptUrl = null, Status = m.Status,
 			Receipts = receiptsByMetadata.GetValueOrDefault(m.Id, []),

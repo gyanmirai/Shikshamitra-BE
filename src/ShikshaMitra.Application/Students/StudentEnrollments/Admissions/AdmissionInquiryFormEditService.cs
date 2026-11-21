@@ -21,13 +21,22 @@ public class AdmissionInquiryFormEditService(
 	AdmissionApplicationFormValidator validator,
 	AdmissionFormDataSourceRegistry dataSources) : ApplicationService, ITransientDependency
 {
-	public async Task ApplyAsync(AdmissionInquiry inquiry, UpdateAdmissionInquiryDto input, AdmissionOffering offering)
+	// One operation's validated entities, never a cache or authority shared across requests.
+	public sealed record Context(AdmissionOffering Offering, Guid? FormId, AdmissionApplicant? Applicant,
+		AdmissionFamily? Family, AdmissionGuardian? Guardian, AdmissionFormDefinition? Form,
+		List<AdmissionFormFieldDefinition> Fields, List<AdmissionFormSectionDefinition>? Sections);
+
+	public async Task<Context> ApplyAsync(AdmissionInquiry inquiry, UpdateAdmissionInquiryDto input, AdmissionOffering offering)
 	{
 		var changedOffering = inquiry.AdmissionOfferingId != offering.Id;
 		var formId = changedOffering ? offering.InquiryFormDefinitionId : inquiry.FormResponseDefinitionId ?? offering.InquiryFormDefinitionId;
+		AdmissionFormDefinition? form = null;
+		List<AdmissionFormSectionDefinition>? formSections = null;
 		var applicant = inquiry.ApplicantId.HasValue ? await applicants.FindAsync(inquiry.ApplicantId.Value) : null;
 		var family = inquiry.FamilyId.HasValue ? await families.FindAsync(inquiry.FamilyId.Value) : null;
 		var guardian = family?.PrimaryGuardianId.HasValue == true ? await guardians.FindAsync(family.PrimaryGuardianId.Value) : null;
+		var ownContact = applicant != null && AdmissionSiblingFamilyLink.HasOwnContact(applicant);
+		if (ownContact) guardian = AdmissionSiblingFamilyLink.OwnGuardian(applicant!);
 		var confirmedSibling = applicant != null && AdmissionSiblingParentSelection.ReadConfirmation(applicant) != null;
 		var definitions = formId.HasValue ? await fields.GetListAsync(field => field.FormDefinitionId == formId.Value) : [];
 		if (applicant != null && AdmissionFirstParentContactMapping.CanMap(applicant) && inquiry.FormResponseDefinitionId.HasValue)
@@ -39,7 +48,8 @@ public class AdmissionInquiryFormEditService(
 		}
 		if (input.FormValues != null)
 		{
-			if (!formId.HasValue || (await forms.FindAsync(formId.Value))?.Status is not (AdmissionFormStatus.Published or AdmissionFormStatus.Archived))
+			form = formId.HasValue ? await forms.FindAsync(formId.Value) : null;
+			if (!formId.HasValue || form?.Status is not (AdmissionFormStatus.Published or AdmissionFormStatus.Archived))
 				throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);
 			if (input.FormValues.GroupBy(value => value.FieldCode, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Submit each inquiry field once.");
@@ -55,7 +65,7 @@ public class AdmissionInquiryFormEditService(
 				value => AdmissionApplicationValueConverter.Unwrap(value.ValueJson), StringComparer.OrdinalIgnoreCase);
 			var original = string.IsNullOrWhiteSpace(inquiry.FormResponseSnapshotJson) ? new Dictionary<string, string>() :
 				JsonSerializer.Deserialize<Dictionary<string, string>>(inquiry.FormResponseSnapshotJson) ?? [];
-			var formSections = await sections.GetListAsync(section => section.FormDefinitionId == formId.Value);
+			formSections = await sections.GetListAsync(section => section.FormDefinitionId == formId.Value);
 			var visibleFieldCodes = validator.GetVisibleInquiryFieldCodes(definitions, formSections, values);
 			if (!changedOffering && applicant != null)
 				foreach (var field in definitions.Where(field => field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey)))
@@ -164,7 +174,7 @@ public class AdmissionInquiryFormEditService(
 		}
 		else if (changedOffering)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed, "Complete the selected offering's inquiry form before changing the admission option.");
-		var policyForm = formId.HasValue ? await forms.FindAsync(formId.Value) : null;
+		var policyForm = form ?? (formId.HasValue ? await forms.FindAsync(formId.Value) : null);
 		AdmissionCoreFieldPolicy.EnsureParentEmail(policyForm == null ? null : AdmissionFormMetadataStore.ReadExperience(policyForm).CoreFieldPolicyVersion, input.Email);
 		if (applicant != null)
 		{
@@ -186,8 +196,14 @@ public class AdmissionInquiryFormEditService(
 				}, guardian);
 				await applicants.UpdateAsync(applicant, false);
 			}
-			await guardians.UpdateAsync(guardian, false);
+			if (ownContact)
+			{
+				AdmissionSiblingFamilyLink.CaptureContact(applicant!, guardian);
+				await applicants.UpdateAsync(applicant!, false);
+			}
+			else await guardians.UpdateAsync(guardian, false);
 		}
 		if (applicant != null) AdmissionFamilyContactCapture.CopyToInquiry(applicant, inquiry);
+		return new(offering, formId, applicant, family, guardian, policyForm, definitions, formSections);
 	}
 }

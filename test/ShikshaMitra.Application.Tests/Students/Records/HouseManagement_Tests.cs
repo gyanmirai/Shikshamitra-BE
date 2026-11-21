@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.Records.HouseManagement;
+using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -54,6 +55,114 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		input.Filter = "nonexistent-student-identifier";
 		(await f.Service.GetStudentsAsync(input)).TotalCount.ShouldBe(0);
 	});
+
+	[Fact]
+	public Task House_management_has_one_leader_per_house_even_when_houses_share_a_division() => RunCertificationScenarioAsync(async () =>
+	{
+		var f = await HouseFixtureAsync();
+		var mediumId = f.Student.AcademicMediumId;
+		var first = await f.Service.CreateHouseAsync(NewHouse(f.Student, "Falcons"));
+		var second = await f.Service.CreateHouseAsync(NewHouse(f.Student, "Eagles"));
+		var (peerId, separateEnrollmentId, separateDivisionId) = await WithUnitOfWorkAsync(async () =>
+		{
+			var anotherDivision = await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(
+				new Division(Guid.NewGuid(), TestTenantId, "HouseB", f.Student.StandardId!.Value, 50, ""), true);
+			async Task<Guid> InsertMemberAsync(string name, Guid divisionId)
+			{
+				var student = new Student(Guid.NewGuid(), TestTenantId, name, "", "Test", f.Student.AcademicYearId!.Value,
+					f.Student.AcademicBoardId!.Value, mediumId, f.Student.AcademicMediumStageId!.Value, f.Student.StandardId,
+					divisionId, status: StudentLifeCycleStatusEnum.Enrolled);
+				await _studentRepository.InsertAsync(student, true);
+				var enrollment = StudentEnrollment.Create(Guid.NewGuid(), TestTenantId, student.Id, f.Student.AcademicYearId.Value, f.Student.StandardId, divisionId);
+				await _studentEnrollmentRepository.InsertAsync(enrollment, true);
+				return enrollment.Id;
+			}
+			return (await InsertMemberAsync("Peer", f.DivisionId), await InsertMemberAsync("Another", anotherDivision.Id), anotherDivision.Id);
+		});
+		async Task<HouseManagementDivisionDto> ReadDivisionAsync(Guid divisionId) =>
+			(await f.Service.GetDivisionsAsync(new() { AcademicMediumId = mediumId, DivisionId = divisionId })).Items.Single();
+		async Task<HouseManagementHouseDto> ReadHouseAsync(Guid houseId) =>
+			(await f.Service.GetHousesAsync(new() { AcademicMediumId = mediumId })).Items.Single(x => x.Id == houseId);
+		async Task AssignAsync(Guid divisionId, Guid houseId, params Guid[] enrollmentIds)
+		{
+			var request = new HouseAssignmentRequest { AcademicMediumId = mediumId, DivisionId = divisionId, HouseId = houseId, EnrollmentIds = enrollmentIds.ToList() };
+			request.PreviewToken = (await f.Service.PreviewAssignmentAsync(request)).PreviewToken;
+			await f.Service.CommitAssignmentAsync(request);
+		}
+
+		var appointment = new ReplaceStudentLeaderRequest
+		{
+			AcademicMediumId = mediumId,
+			EnrollmentId = f.EnrollmentId,
+			ConcurrencyStamp = (await ReadDivisionAsync(f.DivisionId)).ConcurrencyStamp
+		};
+		(await Should.ThrowAsync<BusinessException>(() => f.Service.ReplaceHouseLeaderAsync(first.Id, new() { AcademicMediumId = mediumId, EnrollmentId = f.EnrollmentId, ConcurrencyStamp = first.ConcurrencyStamp }))).Code.ShouldBe(HouseManagementErrorCodes.IneligibleLeader);
+		await f.Service.ReplaceDivisionLeaderAsync(f.DivisionId, appointment);
+		var mixed = new HouseAssignmentRequest
+		{
+			AcademicMediumId = mediumId, DivisionId = f.DivisionId, HouseId = first.Id,
+			EnrollmentIds = [f.EnrollmentId, separateEnrollmentId]
+		};
+		(await Should.ThrowAsync<BusinessException>(() => f.Service.PreviewAssignmentAsync(mixed))).Code.ShouldBe(HouseManagementErrorCodes.AssignmentDivisionMismatch);
+		await AssignAsync(f.DivisionId, first.Id, f.EnrollmentId);
+		await AssignAsync(separateDivisionId, first.Id, separateEnrollmentId);
+		await AssignAsync(f.DivisionId, second.Id, peerId);
+		mixed.HouseId = null;
+		mixed.EnrollmentIds = [f.EnrollmentId];
+		mixed.PreviewToken = (await f.Service.PreviewAssignmentAsync(mixed)).PreviewToken;
+		mixed.DivisionId = separateDivisionId;
+		(await Should.ThrowAsync<BusinessException>(() => f.Service.CommitAssignmentAsync(mixed))).Code.ShouldBe(HouseManagementErrorCodes.AssignmentDivisionMismatch);
+		mixed.EnrollmentIds.Add(separateEnrollmentId);
+		(await Should.ThrowAsync<BusinessException>(() => f.Service.PreviewAssignmentAsync(mixed))).Code.ShouldBe(HouseManagementErrorCodes.AssignmentDivisionMismatch);
+		(await Should.ThrowAsync<BusinessException>(() => f.Service.CommitAssignmentAsync(mixed))).Code.ShouldBe(HouseManagementErrorCodes.AssignmentDivisionMismatch);
+		var eligible = await f.Service.GetStudentsAsync(new() { AcademicMediumId = mediumId, DivisionId = f.DivisionId, AssignedOnly = true });
+		eligible.Items.Select(x => x.EnrollmentId).ShouldBe([f.EnrollmentId, peerId], ignoreOrder: true);
+		appointment.ConcurrencyStamp = (await ReadHouseAsync(first.Id)).ConcurrencyStamp;
+		await f.Service.ReplaceHouseLeaderAsync(first.Id, appointment);
+		appointment.EnrollmentId = peerId;
+		appointment.ConcurrencyStamp = (await ReadHouseAsync(second.Id)).ConcurrencyStamp;
+		await f.Service.ReplaceHouseLeaderAsync(second.Id, appointment);
+		(await ReadHouseAsync(first.Id)).Leader!.EnrollmentId.ShouldBe(f.EnrollmentId);
+		(await ReadHouseAsync(second.Id)).Leader!.EnrollmentId.ShouldBe(peerId);
+		(await f.Service.GetStudentsAsync(new() { AcademicMediumId = mediumId, DivisionId = f.DivisionId }))
+			.Items.Where(x => x.IsHouseLeader).Select(x => x.EnrollmentId).ShouldBe([f.EnrollmentId, peerId], ignoreOrder: true);
+
+		appointment.EnrollmentId = separateEnrollmentId;
+		appointment.ConcurrencyStamp = (await ReadHouseAsync(first.Id)).ConcurrencyStamp;
+		await f.Service.ReplaceHouseLeaderAsync(first.Id, appointment);
+		var updatedHouse = await ReadHouseAsync(first.Id);
+		updatedHouse.Leader!.EnrollmentId.ShouldBe(separateEnrollmentId);
+		updatedHouse.HouseLeaderCount.ShouldBe(1);
+		(await ReadHouseAsync(second.Id)).Leader!.EnrollmentId.ShouldBe(peerId);
+		(await ReadDivisionAsync(f.DivisionId)).Leader!.EnrollmentId.ShouldBe(f.EnrollmentId);
+		(await f.Service.GetStudentsAsync(new() { AcademicMediumId = mediumId, DivisionId = f.DivisionId }))
+			.Items.Single(x => x.EnrollmentId == f.EnrollmentId).IsHouseLeader.ShouldBeFalse();
+		(await f.Service.GetDivisionsAsync(new() { AcademicMediumId = mediumId, DivisionId = separateDivisionId, HouseId = second.Id })).Items.ShouldBeEmpty();
+	});
+
+	[Fact]
+	public Task House_management_deactivation_clears_house_and_division_appointments() => RunCertificationScenarioAsync(async () =>
+	{
+		var f = await HouseFixtureAsync();
+		var house = await f.Service.CreateHouseAsync(NewHouse(f.Student, "Falcons"));
+		var assignment = new HouseAssignmentRequest { AcademicMediumId = f.Student.AcademicMediumId, DivisionId = f.DivisionId, HouseId = house.Id, EnrollmentIds = [f.EnrollmentId] };
+		assignment.PreviewToken = (await f.Service.PreviewAssignmentAsync(assignment)).PreviewToken;
+		await f.Service.CommitAssignmentAsync(assignment);
+		var divisionQuery = new HouseManagementQuery { AcademicMediumId = f.Student.AcademicMediumId, DivisionId = f.DivisionId };
+		var currentHouse = (await f.Service.GetHousesAsync(divisionQuery)).Items.Single(x => x.Id == house.Id);
+		var appointment = new ReplaceStudentLeaderRequest { AcademicMediumId = f.Student.AcademicMediumId, EnrollmentId = f.EnrollmentId, ConcurrencyStamp = currentHouse.ConcurrencyStamp };
+		await f.Service.ReplaceHouseLeaderAsync(house.Id, appointment);
+		appointment.ConcurrencyStamp = (await f.Service.GetDivisionsAsync(divisionQuery)).Items.Single().ConcurrencyStamp;
+		await f.Service.ReplaceDivisionLeaderAsync(f.DivisionId, appointment);
+
+		await WithUnitOfWorkAsync(() => GetRequiredService<StudentRecordPlacementService>()
+			.ApplyStatusAsync(f.Student.Id, new() { Status = StudentLifeCycleStatusEnum.InActive }));
+		var division = await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<Division, Guid>>().GetAsync(f.DivisionId));
+		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<HouseSettings, Guid>>().GetAsync(house.Id))).LeaderEnrollmentId.ShouldBeNull();
+		division.LeaderEnrollmentId.ShouldBeNull();
+		(await WithUnitOfWorkAsync(() => _studentEnrollmentRepository.GetAsync(f.EnrollmentId))).IsActive.ShouldBeFalse();
+	});
+
 	[Fact]
 	public Task House_management_moves_clear_only_house_leadership_and_legacy_delete_is_blocked() => RunCertificationScenarioAsync(async () =>
 	{
@@ -63,6 +172,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var assignment = new HouseAssignmentRequest
 		{
 			AcademicMediumId = f.Student.AcademicMediumId,
+			DivisionId = f.DivisionId,
 			HouseId = first.Id,
 			EnrollmentIds = [f.EnrollmentId]
 		};
@@ -73,13 +183,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			AcademicMediumId = f.Student.AcademicMediumId,
 			MaxResultCount = 100
 		};
-		first = (await f.Service.GetHousesAsync(query)).Items.Single(x => x.Id == first.Id);
-		await f.Service.ReplaceHouseLeaderAsync(first.Id, new() { AcademicMediumId = query.AcademicMediumId, EnrollmentId = f.EnrollmentId, ConcurrencyStamp = first.ConcurrencyStamp });
+		assignment.HouseId = next.Id;
+		assignment.PreviewToken = (await f.Service.PreviewAssignmentAsync(assignment)).PreviewToken;
+		var sourceHouse = (await f.Service.GetHousesAsync(query)).Items.Single(x => x.Id == first.Id);
+		await f.Service.ReplaceHouseLeaderAsync(first.Id, new() { AcademicMediumId = query.AcademicMediumId, EnrollmentId = f.EnrollmentId, ConcurrencyStamp = sourceHouse.ConcurrencyStamp });
+		(await Should.ThrowAsync<BusinessException>(() => f.Service.CommitAssignmentAsync(assignment))).Code.ShouldBe(HouseManagementErrorCodes.StalePreview);
 		var division = (await f.Service.GetDivisionsAsync(query)).Items.Single(x => x.Id == f.DivisionId);
 		await f.Service.ReplaceDivisionLeaderAsync(division.Id, new() { AcademicMediumId = query.AcademicMediumId, EnrollmentId = f.EnrollmentId, ConcurrencyStamp = division.ConcurrencyStamp });
 		var populatedHouse = (await f.Service.GetHousesAsync(query)).Items.Single(x => x.Id == first.Id);
 		(await Should.ThrowAsync<BusinessException>(() => f.Service.DeleteHouseAsync(populatedHouse.Id, query.AcademicMediumId, populatedHouse.ConcurrencyStamp))).Code.ShouldBe(HouseManagementErrorCodes.HousePopulated);
 		// A reviewed no-op keeps leadership intact.
+		assignment.HouseId = first.Id;
 		assignment.PreviewToken = (await f.Service.PreviewAssignmentAsync(assignment)).PreviewToken;
 		await f.Service.CommitAssignmentAsync(assignment);
 		(await f.Service.GetStudentsAsync(query)).Items.Single(x => x.EnrollmentId == f.EnrollmentId).IsHouseLeader.ShouldBeTrue();
@@ -92,7 +206,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		row.HouseId.ShouldBe(next.Id);
 		row.IsHouseLeader.ShouldBeFalse();
 		row.IsDivisionLeader.ShouldBeTrue();
-		(await f.Service.GetHousesAsync(query)).Items.Single(x => x.Id == first.Id).Leader.ShouldBeNull();
+		(await f.Service.GetHousesAsync(query)).Items.Single(x => x.Id == first.Id).HouseLeaderCount.ShouldBe(0);
 	});
 	[Fact]
 	public Task House_management_rejects_stale_preview_and_mixed_invalid_batches_without_partial_writes() => RunCertificationScenarioAsync(async () =>
@@ -102,6 +216,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var input = new HouseAssignmentRequest
 		{
 			AcademicMediumId = f.Student.AcademicMediumId,
+			DivisionId = f.DivisionId,
 			HouseId = house.Id,
 			EnrollmentIds = [f.EnrollmentId]
 		};
@@ -115,29 +230,30 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await Should.ThrowAsync<Exception>(() => f.Service.GetStudentsAsync(new() { AcademicMediumId = input.AcademicMediumId }));
 	});
 	[Fact]
-	public Task House_management_narrow_scope_masks_peers_and_cannot_replace_medium_leader_or_create_house() => RunCertificationScenarioAsync(async () =>
+	public Task House_management_narrow_scope_masks_peers_and_cannot_replace_outside_division_or_create_house() => RunCertificationScenarioAsync(async () =>
 	{
 		var f = await HouseFixtureAsync();
 		var house = await f.Service.CreateHouseAsync(NewHouse(f.Student, "Falcons"));
-		var outsiderId = await WithUnitOfWorkAsync(async () =>
+		var outsider = await WithUnitOfWorkAsync(async () =>
 		{
 			var otherDivision = await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(new Division(Guid.NewGuid(), TestTenantId, "HiddenB", f.Student.StandardId!.Value, 50, ""), true);
-			var outsider = new Student(Guid.NewGuid(), TestTenantId, "Hidden", "", "Peer", f.Student.AcademicYearId!.Value, f.Student.AcademicBoardId!.Value, f.Student.AcademicMediumId, f.Student.AcademicMediumStageId!.Value, f.Student.StandardId, otherDivision.Id, status: StudentLifeCycleStatusEnum.Enrolled);
-			await _studentRepository.InsertAsync(outsider, true);
-			var enrollment = StudentEnrollment.Create(Guid.NewGuid(), TestTenantId, outsider.Id, f.Student.AcademicYearId.Value, f.Student.StandardId, otherDivision.Id);
+			var outsiderStudent = new Student(Guid.NewGuid(), TestTenantId, "Hidden", "", "Peer", f.Student.AcademicYearId!.Value, f.Student.AcademicBoardId!.Value, f.Student.AcademicMediumId, f.Student.AcademicMediumStageId!.Value, f.Student.StandardId, otherDivision.Id, status: StudentLifeCycleStatusEnum.Enrolled);
+			await _studentRepository.InsertAsync(outsiderStudent, true);
+			var enrollment = StudentEnrollment.Create(Guid.NewGuid(), TestTenantId, outsiderStudent.Id, f.Student.AcademicYearId.Value, f.Student.StandardId, otherDivision.Id);
 			await _studentEnrollmentRepository.InsertAsync(enrollment, true);
-			return enrollment.Id;
+			return (EnrollmentId: enrollment.Id, DivisionId: otherDivision.Id);
 		});
 		var hiddenAssignment = new HouseAssignmentRequest
 		{
 			AcademicMediumId = f.Student.AcademicMediumId,
+			DivisionId = outsider.DivisionId,
 			HouseId = house.Id,
-			EnrollmentIds = [outsiderId]
+			EnrollmentIds = [outsider.EnrollmentId]
 		};
 		hiddenAssignment.PreviewToken = (await f.Service.PreviewAssignmentAsync(hiddenAssignment)).PreviewToken;
 		await f.Service.CommitAssignmentAsync(hiddenAssignment);
-		house = (await f.Service.GetHousesAsync(new() { AcademicMediumId = f.Student.AcademicMediumId })).Items.Single(x => x.Id == house.Id);
-		await f.Service.ReplaceHouseLeaderAsync(house.Id, new() { AcademicMediumId = f.Student.AcademicMediumId, EnrollmentId = outsiderId, ConcurrencyStamp = house.ConcurrencyStamp });
+		var currentHouse = (await f.Service.GetHousesAsync(new() { AcademicMediumId = f.Student.AcademicMediumId })).Items.Single(x => x.Id == house.Id);
+		await f.Service.ReplaceHouseLeaderAsync(house.Id, new() { AcademicMediumId = f.Student.AcademicMediumId, EnrollmentId = outsider.EnrollmentId, ConcurrencyStamp = currentHouse.ConcurrencyStamp });
 		var operatorId = Guid.NewGuid();
 		await EnsureTestIdentityUserAsync(operatorId, "house-operator");
 		await WithUnitOfWorkAsync(() => _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: operatorId, academicYearId: f.Student.AcademicYearId, educationBoardId: f.Student.AcademicBoardId, educationMediumId: f.Student.AcademicMediumId, educationMediumStageId: f.Student.AcademicMediumStageId, standardId: f.Student.StandardId, divisionId: f.DivisionId), true));
@@ -149,15 +265,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			visibleHouse.CanManage.ShouldBeFalse();
 			visibleHouse.MemberCount.ShouldBe(0);
 			visibleHouse.Leader.ShouldBeNull();
+			visibleHouse.HouseLeaderCount.ShouldBe(0);
 			var visibleStudents = await f.Service.GetStudentsAsync(new() { AcademicMediumId = f.Student.AcademicMediumId });
-			visibleStudents.Items.ShouldNotContain(x => x.EnrollmentId == outsiderId);
-			await Should.ThrowAsync<BusinessException>(() => f.Service.CommitAssignmentAsync(new() { AcademicMediumId = f.Student.AcademicMediumId, HouseId = house.Id, EnrollmentIds = [f.EnrollmentId, outsiderId], PreviewToken = hiddenAssignment.PreviewToken }));
+			visibleStudents.Items.ShouldNotContain(x => x.EnrollmentId == outsider.EnrollmentId);
+			await Should.ThrowAsync<BusinessException>(() => f.Service.CommitAssignmentAsync(new() { AcademicMediumId = f.Student.AcademicMediumId, DivisionId = f.DivisionId, HouseId = house.Id, EnrollmentIds = [f.EnrollmentId, outsider.EnrollmentId], PreviewToken = hiddenAssignment.PreviewToken }));
 			(await WithUnitOfWorkAsync(() => _studentEnrollmentRepository.GetAsync(f.EnrollmentId))).HouseId.ShouldBeNull();
 			await Should.ThrowAsync<BusinessException>(() => f.Service.CreateHouseAsync(NewHouse(f.Student, "Not permitted")));
-			await Should.ThrowAsync<BusinessException>(() => f.Service.ReplaceHouseLeaderAsync(house.Id, new() { AcademicMediumId = f.Student.AcademicMediumId, ConcurrencyStamp = house.ConcurrencyStamp }));
+			await Should.ThrowAsync<BusinessException>(() => f.Service.ReplaceHouseLeaderAsync(house.Id, new() { AcademicMediumId = f.Student.AcademicMediumId, ConcurrencyStamp = currentHouse.ConcurrencyStamp }));
 			var input = new HouseAssignmentRequest
 			{
 				AcademicMediumId = f.Student.AcademicMediumId,
+				DivisionId = f.DivisionId,
 				HouseId = house.Id,
 				EnrollmentIds = [f.EnrollmentId]
 			};
@@ -181,14 +299,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var input = new HouseAssignmentRequest
 		{
 			AcademicMediumId = f.Student.AcademicMediumId,
+			DivisionId = f.DivisionId,
 			HouseId = house.Id,
 			EnrollmentIds = [f.EnrollmentId]
 		};
 		input.PreviewToken = (await f.Service.PreviewAssignmentAsync(input)).PreviewToken;
 		await f.Service.CommitAssignmentAsync(input);
-		house = (await f.Service.GetHousesAsync(new() { AcademicMediumId = input.AcademicMediumId })).Items.Single(x => x.Id == house.Id);
-		await f.Service.ReplaceHouseLeaderAsync(house.Id, new() { AcademicMediumId = input.AcademicMediumId, EnrollmentId = f.EnrollmentId, ConcurrencyStamp = house.ConcurrencyStamp });
-		var sourceDivision = (await f.Service.GetDivisionsAsync(new() { AcademicMediumId = input.AcademicMediumId })).Items.Single(x => x.Id == f.DivisionId);
+		var sourceHouse = (await f.Service.GetHousesAsync(new() { AcademicMediumId = input.AcademicMediumId })).Items.Single(x => x.Id == house.Id);
+		await f.Service.ReplaceHouseLeaderAsync(house.Id, new() { AcademicMediumId = input.AcademicMediumId, EnrollmentId = f.EnrollmentId, ConcurrencyStamp = sourceHouse.ConcurrencyStamp });
+		var sourceDivision = (await f.Service.GetDivisionsAsync(new() { AcademicMediumId = input.AcademicMediumId, DivisionId = f.DivisionId })).Items.Single();
 		await f.Service.ReplaceDivisionLeaderAsync(sourceDivision.Id, new() { AcademicMediumId = input.AcademicMediumId, EnrollmentId = f.EnrollmentId, ConcurrencyStamp = sourceDivision.ConcurrencyStamp });
 		var target = await WithUnitOfWorkAsync(async () =>
 		{
@@ -200,12 +319,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 		await WithUnitOfWorkAsync(() => GetRequiredService<StudentRecordPlacementService>().ApplyAsync(f.Student.Id, new() { AcademicYearId = f.Student.AcademicYearId!.Value, StandardId = target.StandardId, DivisionId = target.DivisionId }));
 		(await WithUnitOfWorkAsync(() => _studentEnrollmentRepository.GetAsync(f.EnrollmentId))).HouseId.ShouldBeNull();
-		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<Division, Guid>>().GetAsync(f.DivisionId))).LeaderEnrollmentId.ShouldBeNull();
+		var departedDivision = await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<Division, Guid>>().GetAsync(f.DivisionId));
+		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<HouseSettings, Guid>>().GetAsync(house.Id))).LeaderEnrollmentId.ShouldBeNull();
+		departedDivision.LeaderEnrollmentId.ShouldBeNull();
 		house = (await f.Service.GetHousesAsync(new() { AcademicMediumId = input.AcademicMediumId })).Items.Single(x => x.Id == house.Id);
-		house.Leader.ShouldBeNull();
+		house.HouseLeaderCount.ShouldBe(0);
 		await f.Service.DeleteHouseAsync(house.Id, input.AcademicMediumId, house.ConcurrencyStamp);
 		var newHouse = await f.Service.CreateHouseAsync(new() { AcademicMediumId = target.MediumId, Name = "New Eagles", Color = "#2468ab" });
 		input.AcademicMediumId = target.MediumId;
+		input.DivisionId = target.DivisionId;
 		input.HouseId = newHouse.Id;
 		input.PreviewToken = (await f.Service.PreviewAssignmentAsync(input)).PreviewToken;
 		await f.Service.CommitAssignmentAsync(input);

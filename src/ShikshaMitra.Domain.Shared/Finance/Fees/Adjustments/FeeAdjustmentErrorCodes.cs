@@ -14,6 +14,7 @@ public static class FeeAdjustmentErrorCodes
     public const string ApplyExceedsRemaining = Namespace + ":ApplyExceedsRemaining";
     public const string NoAllocationLines = Namespace + ":NoAllocationLines";
     public const string NoUnpaidDestination = Namespace + ":NoUnpaidDestination";
+    public const string NoEligibleDestination = Namespace + ":NoEligibleDestination";
     public const string AlreadyFullyApplied = Namespace + ":AlreadyFullyApplied";
     public const string DuplicateIdempotencyKey = Namespace + ":DuplicateIdempotencyKey";
     public const string DueFeeNotFound = Namespace + ":DueFeeNotFound";

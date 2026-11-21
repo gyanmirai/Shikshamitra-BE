@@ -30,6 +30,7 @@ public class LibraryReportFilterDto
 	public int? MemberRole { get; set; }
 	public DateTime? FromDate { get; set; }
 	public DateTime? ToDate { get; set; }
+	public DateOnly? AsOfDate { get; set; }
 	public string? Search { get; set; }
 	public int? Top { get; set; }
 }
@@ -50,6 +51,16 @@ public class LibraryReportPreviewDto
 	public List<Dictionary<string, string?>> Rows { get; set; } = new();
 	public LibraryReportFilterDto NormalizedFilters { get; set; } = new();
 	public List<string> QueryWarnings { get; set; } = new();
+	public DateOnly? SchoolAsOfDate { get; set; }
+	public string SchoolDateSource { get; set; } = "Unavailable";
+	public string? SchoolDateUnavailableReason { get; set; }
+	public int UnknownIssueDateCount { get; set; }
+	public int UnknownReturnDateCount { get; set; }
+	public bool OverdueClassificationAvailable { get; set; }
+	public int UnknownDueDateCount { get; set; }
+	public DateOnly? OverdueAsOfDate { get; set; }
+	public string OverdueDateSource { get; set; } = "Unavailable";
+	public string? OverdueUnavailableReason { get; set; }
 }
 
 public class LibraryReportColumnDto

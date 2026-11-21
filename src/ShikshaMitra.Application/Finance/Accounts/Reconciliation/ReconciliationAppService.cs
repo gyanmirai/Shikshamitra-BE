@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,8 +33,9 @@ public partial class ReconciliationAppService(
     {
         if (input.AcademicYearId == Guid.Empty)
             throw new BusinessException("AcademicYearId is required.");
+		await financeScopeAccessService.EnsureCollectionYearAccessibleAsync(input.AcademicYearId);
 		var tableQuery = ParseListFilters(input.Filters, input.PaymentMethod);
-		var hasHeaderFilters = tableQuery.Filters.Count > 0;
+        var hasRenderedFilters = tableQuery.Filters.Any(f => !ReconciliationHeaderColumns.IsScalar(f.Column, input.PaymentMethod));
 		var page = Math.Max(1, input.Page);
 		var pageSize = Math.Clamp(input.PageSize, 1, 100);
 
@@ -47,26 +49,21 @@ public partial class ReconciliationAppService(
             PaymentMethod         = input.PaymentMethod,
             VerificationStatus    = input.VerificationStatus,
             Search                = input.Search,
-            // The repository applies the same scope/search/order without an internal page-size cap.
-            Page                  = hasHeaderFilters ? 1 : page,
-            PageSize              = hasHeaderFilters ? int.MaxValue : pageSize,
+            TableQuery            = tableQuery,
+            Page                  = page,
+            PageSize              = pageSize,
             ScopedStudentIdsQuery = scopedStudentIds,
             ScopedAccountIdsQuery = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync(),
+            ScopedEmployeeIdsQuery = await financeScopeAccessService.GetScopedEmployeeIdsQueryAsync(),
         };
 
-        var (totalCount, ids) = await receiptRepository
-            .GetReconciliationPagedIdsAsync(filter, cancellationToken);
+        var (totalCount, ids) = hasRenderedFilters
+            ? await GetRenderedFilterPageAsync(filter, tableQuery, page, pageSize, cancellationToken)
+            : await receiptRepository.GetReconciliationPagedIdsAsync(filter, cancellationToken);
         var rows = ids.Count > 0
             ? await receiptRepository.GetReconciliationRowsByIdsAsync(ids, cancellationToken)
             : [];
 		var items = rows.Select(MapRow).ToList();
-		if (hasHeaderFilters)
-		{
-			var matching = tableQuery.Apply(items.AsQueryable(), ListFilterFields).ToList();
-			totalCount = matching.Count;
-			var skip = (int)Math.Min((long)(page - 1) * pageSize, int.MaxValue);
-			items = matching.Skip(skip).Take(pageSize).ToList();
-		}
 
         var tabCounts = await GetTabCountsCoreAsync(
             input.AcademicYearId, input.Month, input.Year, scopedStudentIds, cancellationToken);
@@ -83,10 +80,35 @@ public partial class ReconciliationAppService(
         };
     }
 
+    private async Task<(int TotalCount, List<Guid> Ids)> GetRenderedFilterPageAsync(
+        ReconciliationListFilter filter, ShikshaMitra.Finance.Common.FinanceTableQuery table,
+        int page, int pageSize, CancellationToken cancellationToken)
+    {
+        // Legacy instrument values use the existing .NET date/display rules. Scan
+        // narrow bounded candidates; only the selected IDs receive detail enrichment.
+        const int batchSize = 256;
+        var skip = (long)(page - 1) * pageSize;
+        var total = 0;
+        var selected = new List<Guid>(pageSize);
+        for (var offset = 0; ; offset = checked(offset + batchSize))
+        {
+            var candidates = await receiptRepository.GetReconciliationFilterCandidatesAsync(filter, offset, batchSize, cancellationToken);
+            var matches = table.Apply(candidates.Select(MapRow).AsQueryable(), ListFilterFields);
+            foreach (var row in matches)
+            {
+                if (total >= skip && selected.Count < pageSize) selected.Add(row.Id);
+                total++;
+            }
+            if (candidates.Count < batchSize) break;
+        }
+        return (total, selected);
+    }
+
     public async Task<ReconciliationTabCountsDto> GetTabCountsAsync(
         Guid academicYearId, int? month, int? year,
         CancellationToken cancellationToken = default)
     {
+        await financeScopeAccessService.EnsureCollectionYearAccessibleAsync(academicYearId);
         var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
         return await GetTabCountsCoreAsync(academicYearId, month, year, scopedStudentIds, cancellationToken);
     }

@@ -1,9 +1,12 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Library.Books;
 using ShikshaMitra.Library.Members;
 using ShikshaMitra.Library.Notifications;
+using ShikshaMitra.Library.Policies;
+using ShikshaMitra.Library.Shared;
 using ShikshaMitra.Library.Setting.ChargeCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.Sections;
@@ -15,6 +18,10 @@ using ShikshaMitra.TenantSettings.EducationMediums;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.PermissionManagement;
+using Volo.Abp.SettingManagement;
+using Volo.Abp.Users;
 using Xunit;
 
 namespace ShikshaMitra.Library;
@@ -61,6 +68,7 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 	[Fact]
 	public async Task Settings_Should_Seed_Defaults_With_Disabled_Future_Channels()
 	{
+		await WithUnitOfWorkAsync(() => LibraryTestAuthorization.GrantTenantWideAsync(ServiceProvider));
 		var settings = await _notificationAppService.GetSettingsAsync();
 
 		settings.Items.ShouldContain(x =>
@@ -80,8 +88,27 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 	}
 
 	[Fact]
+	public async Task Notification_Settings_Can_Use_The_Same_Event_In_Two_Schools()
+	{
+		var tenant = GetRequiredService<ICurrentTenant>();
+		var repository = GetRequiredService<IRepository<LibraryNotificationSetting, Guid>>();
+		foreach (var tenantId in new[] { Guid.NewGuid(), Guid.NewGuid() })
+		{
+			using var school = tenant.Change(tenantId);
+			await WithUnitOfWorkAsync(async () =>
+			{
+				await repository.InsertAsync(new LibraryNotificationSetting(Guid.NewGuid(), tenantId,
+					LibraryNotificationEventTypes.DueDateReminder, LibraryNotificationEventGroups.Transactions,
+					"Due reminder", LibraryNotificationRecipientRoles.Member, LibraryNotificationChannels.Email,
+					true, true, false, 2, "Due", "Return the book."), autoSave: true);
+			});
+		}
+	}
+
+	[Fact]
 	public async Task Settings_Update_Should_Edit_Templates_And_Block_Disabled_Channel_Enable()
 	{
+		await WithUnitOfWorkAsync(() => LibraryTestAuthorization.GrantTenantWideAsync(ServiceProvider));
 		var settings = await _notificationAppService.GetSettingsAsync();
 		var dueInApp = settings.Items.Single(x =>
 			x.EventType == LibraryNotificationEventTypes.DueDateReminder &&
@@ -130,6 +157,11 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 	[Fact]
 	public async Task RunReminders_Should_Create_Due_Reminder_History_And_Dedupe_Repeated_Run()
 	{
+		using var school = LibraryCopyLifecycleTestFixture.EnterSchool(ServiceProvider);
+		await GrantNotificationActorAsync();
+		await WithUnitOfWorkAsync(() => GetRequiredService<ISettingManager>().SetForTenantAsync(GetRequiredService<ICurrentTenant>().Id!.Value,
+			LibraryPolicySettingNames.CalendarTimeZone, "UTC", forceToSet: true));
+		var today = (await WithUnitOfWorkAsync(() => GetRequiredService<LibraryCalendarService>().TodayAsync())).ToDateTime(TimeOnly.MinValue);
 		var settings = await _notificationAppService.GetSettingsAsync();
 		await _notificationAppService.UpdateSettingsAsync(new UpdateLibraryNotificationSettingsRequest
 		{
@@ -147,22 +179,23 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 
 		var context = await SeedLibraryContextAsync(email: null);
 		var copy = await CreateBookCopyAsync(context, UniqueAccession("P3B-DUE"));
-		var issueId = await SeedActiveIssueAsync(context.ActiveStudentId, copy, DateTime.UtcNow.Date.AddDays(2));
+		var issueId = await SeedActiveIssueAsync(context.ActiveStudentId, copy, today.AddDays(2));
 
 		var firstRun = await _notificationAppService.RunRemindersAsync(new LibraryNotificationRunRemindersRequest
 		{
-			RunDate = DateTime.UtcNow.Date
+			RunDate = today
 		});
 		var secondRun = await _notificationAppService.RunRemindersAsync(new LibraryNotificationRunRemindersRequest
 		{
-			RunDate = DateTime.UtcNow.Date
+			RunDate = today
 		});
 
 		firstRun.Items.ShouldContain(x =>
 			x.EventType == LibraryNotificationEventTypes.DueDateReminder &&
 			x.RelatedEntityId == issueId &&
 			x.Channel == LibraryNotificationChannels.InApp &&
-			x.Status == LibraryNotificationDeliveryStatuses.Sent);
+			x.Status == LibraryNotificationDeliveryStatuses.Skipped &&
+			x.ErrorMessage == "In-app delivery requires a current verified recipient account. Configure the member or operational recipient association.");
 		firstRun.Items.ShouldContain(x =>
 			x.EventType == LibraryNotificationEventTypes.DueDateReminder &&
 			x.RelatedEntityId == issueId &&
@@ -183,8 +216,27 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 	}
 
 	[Fact]
+	public async Task Email_Send_Should_Queue_Durable_Delivery_Instead_Of_Claiming_A_Send()
+	{
+		using var school = LibraryCopyLifecycleTestFixture.EnterSchool(ServiceProvider);
+		await GrantNotificationActorAsync();
+		var result = await _notificationAppService.SendAsync(new SendLibraryNotificationRequest
+		{
+			EventType = LibraryNotificationEventTypes.FineDueReminder,
+			Channel = LibraryNotificationChannels.Email,
+			Message = "Please review your Library fine.",
+			Recipients = [new() { RecipientName = "Library member", RecipientEmail = "library@example.test" }]
+		});
+		result.Items.Single().Status.ShouldBe("Queued");
+		result.Items.Single().SentAt.ShouldBeNull();
+		result.Queued.ShouldBe(1);
+		result.Sent.ShouldBe(0);
+	}
+
+	[Fact]
 	public async Task Manual_Send_Should_Record_Missing_Email_As_Skipped()
 	{
+		await WithUnitOfWorkAsync(() => LibraryTestAuthorization.GrantTenantWideAsync(ServiceProvider));
 		var result = await _notificationAppService.SendAsync(new SendLibraryNotificationRequest
 		{
 			EventType = LibraryNotificationEventTypes.FineDueReminder,
@@ -207,10 +259,21 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 		result.Items.Single().ErrorMessage.ShouldBe("Recipient email is missing.");
 	}
 
+	private Task GrantNotificationActorAsync() => WithUnitOfWorkAsync(async () =>
+	{
+		await LibraryTestAuthorization.GrantTenantWideAsync(ServiceProvider);
+		var actorId = GetRequiredService<ICurrentUser>().Id!.Value.ToString();
+		var permissions = GetRequiredService<IPermissionManager>();
+		await permissions.SetAsync(ShikshaMitraSubmodulePermissions.Library.Notification.View, "U", actorId, true);
+		await permissions.SetAsync(ShikshaMitraSubmodulePermissions.Library.Notification.Add, "U", actorId, true);
+	});
+
 	private async Task<LibraryTestContext> SeedLibraryContextAsync(string? email)
 	{
 		return await WithUnitOfWorkAsync(async () =>
 		{
+			await LibraryTestAuthorization.GrantTenantWideAsync(ServiceProvider);
+			var tenantId = GetRequiredService<ICurrentTenant>().Id;
 			var academicYearId = Guid.NewGuid();
 			var educationBoardId = Guid.NewGuid();
 			var educationMediumId = Guid.NewGuid();
@@ -220,24 +283,24 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 			await _academicYearRepository.InsertAsync(
 				new AcademicYear(
 					academicYearId,
-					tenantId: null,
+					tenantId,
 					$"Library Phase3B {Guid.NewGuid():N}"[..30],
 					new DateTime(2026, 4, 1),
 					new DateTime(2027, 3, 31)),
 				autoSave: true);
 
 			await _educationBoardRepository.InsertAsync(
-				new EducationBoard(educationBoardId, tenantId: null, EducationBoardType.CBSE, academicYearId),
+				new EducationBoard(educationBoardId, tenantId, EducationBoardType.CBSE, academicYearId),
 				autoSave: true);
 
 			await _educationMediumRepository.InsertAsync(
-				new EducationMedium(educationMediumId, tenantId: null, "English", educationBoardId),
+				new EducationMedium(educationMediumId, tenantId, "English", educationBoardId),
 				autoSave: true);
 
 			await _educationMediumStageRepository.InsertAsync(
 				new EducationMediumStage(
 					educationMediumStageId,
-					Guid.Parse("11111111-1111-1111-1111-111111111111"),
+					tenantId,
 					"Primary",
 					bannerPicture: null,
 					educationMediumId),
@@ -245,7 +308,7 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 
 			var student = Student.CreateDirectRegistration(
 				studentId,
-				tenantId: null,
+				tenantId,
 				firstName: "Library",
 				middleName: null,
 				lastName: "Notifier",
@@ -264,7 +327,7 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 
 			var member = new LibraryMember(
 				Guid.NewGuid(),
-				tenantId: null,
+				tenantId,
 				studentId,
 				$"LIB-{Guid.NewGuid():N}"[..20],
 				isActive: true);
@@ -274,12 +337,12 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 				$"Phase3B {Guid.NewGuid():N}"[..30],
 				"Phase 3B notification category",
 				academicYearId,
-				tenantId: null);
+				tenantId);
 			await _bookCategoryRepository.InsertAsync(category, autoSave: true);
 
 			var chargeCategory = new LibraryChargeCategory(
 				Guid.NewGuid(),
-				tenantId: null,
+				tenantId,
 				academicYearId,
 				"Late Fine",
 				50m,
@@ -289,7 +352,7 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 
 			var section = new LibrarySection(
 				Guid.NewGuid(),
-				tenantId: null,
+				tenantId,
 				academicYearId,
 				$"P3B Section {Guid.NewGuid():N}"[..30],
 				numberOfShelf: 1);
@@ -314,7 +377,7 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 		var bookId = Guid.Parse((await _bookAppService.CreateAsync(context.AcademicYearId, new CreateBookRequest
 		{
 			Title = $"Phase 3B Book {Guid.NewGuid():N}",
-			Isbn = $"ISBN-{Guid.NewGuid():N}",
+			Isbn = "9780140328721",
 			Author = "Library Test Author",
 			Publisher = "Library Test Publisher",
 			Edition = Guid.NewGuid().ToString("N")[..8],
@@ -349,15 +412,15 @@ public class LibraryPhase3BNotification_Tests : ShikshaMitraApplicationTestBase<
 	{
 		return await WithUnitOfWorkAsync(async () =>
 		{
-			var issue = new BookIssue(
-				Guid.NewGuid(),
-				copy.Id,
-				copy.AccessionNumber,
-				memberId,
-				memberRole: 0,
-				DateTime.UtcNow.Date,
-				dueDate,
-				tenantId: null);
+			var student = await _studentRepository.GetAsync(memberId);
+			var today = await GetRequiredService<LibraryCalendarService>().TodayAsync();
+			var issue = BookIssue.CreateCivil(Guid.NewGuid(), copy.TenantId, copy.Id, copy.AccessionNumber, memberId, 0,
+				today, DateOnly.FromDateTime(dueDate), new(student.AcademicYearId!.Value, student.AcademicBoardId,
+					student.AcademicMediumId, student.AcademicMediumStageId, student.StandardId, student.DivisionId,
+					"{}", "{}", "{}", GetRequiredService<ICurrentUser>().Id!.Value, DateTimeOffset.UtcNow));
+			issue.SchoolDueDate.ShouldBe(DateOnly.FromDateTime(dueDate));
+			issue.DueDateProvenance.ShouldBe(LibraryCivilDateProvenance.ExplicitSchoolDate);
+			issue.DueDate.ShouldBeNull();
 			await _bookIssueRepository.InsertAsync(issue, autoSave: true);
 
 			var reloadedCopy = await _bookCopyRepository.GetAsync(copy.Id);

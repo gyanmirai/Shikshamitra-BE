@@ -28,7 +28,7 @@ public partial class ReconciliationAppService
             throw new Volo.Abp.UserFriendlyException(validation.Errors[0].ErrorMessage);
 
         var provisionalForScope = await receiptRepository.GetAsync(provisionalReceiptId, cancellationToken: cancellationToken);
-        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(provisionalForScope.StudentId, provisionalForScope.FinanceFeeAccountId, cancellationToken);
+        await financeScopeAccessService.EnsureReceiptAccessibleAsync(provisionalForScope, cancellationToken);
 
         var finalReceipt = await reconciliationManager.ApproveAsync(
             provisionalReceiptId, input.Remarks, cancellationToken);
@@ -47,7 +47,7 @@ public partial class ReconciliationAppService
                 FinalReceiptId = document.Id, FinalReceiptNumber = document.ReceiptNumber,
                 StudentId = document.StudentId, FinanceFeeAccountId = document.FinanceFeeAccountId,
                 AcademicYearId = document.AcademicYearId, ReceiptKind = document.ReceiptKind,
-                TotalPaidAmount = document.TotalPaidAmount, TenantId = CurrentTenant.Id, ApprovedAt = DateTime.UtcNow
+                TotalPaidAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(document.TotalPaidAmount), TenantId = CurrentTenant.Id, ApprovedAt = DateTime.UtcNow
             });
 
         var verifiedProvisional = await receiptRepository.GetAsync(provisionalReceiptId, cancellationToken: cancellationToken);
@@ -70,7 +70,7 @@ public partial class ReconciliationAppService
             throw new Volo.Abp.UserFriendlyException(validation.Errors[0].ErrorMessage);
 
         var provisionalForScope = await receiptRepository.GetAsync(provisionalReceiptId, cancellationToken: cancellationToken);
-        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(provisionalForScope.StudentId, provisionalForScope.FinanceFeeAccountId, cancellationToken);
+        await financeScopeAccessService.EnsureReceiptAccessibleAsync(provisionalForScope, cancellationToken);
 
         var rejected = await reconciliationManager.RejectAsync(
             provisionalReceiptId, input.Remarks, cancellationToken);

@@ -6,6 +6,7 @@ using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Events;
+using ShikshaMitra.Finance.ExternalReceivables;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
@@ -107,6 +108,12 @@ public partial class CollectFeeWorkflow : ApplicationService, ITransientDependen
 	{
 		using var serializableUow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
 			{ IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+		var sourceAccess = LazyServiceProvider.LazyGetRequiredService<FinanceChargeSettlementAccessService>();
+		await sourceAccess.EnsureLegacySourcesAsync(input.ChargePayments.Select(row => row.ChargeId),
+			input.StudentId, input.AcademicYearId, input.FinanceFeeAccountId);
+		if (input.AutomaticAllocation != null)
+			await sourceAccess.EnsureLegacySourcesAsync(input.AutomaticAllocation.ChargeIds, input.StudentId,
+				input.AcademicYearId, input.FinanceFeeAccountId, includesLateFeeSelections: true);
 		var admissionEntry = input.FinanceFeeAccountId.HasValue;
 		var commandFingerprint = ComputeCommandFingerprint(input);
 		if (!admissionEntry && input.StudentId.HasValue)
@@ -136,7 +143,7 @@ public partial class CollectFeeWorkflow : ApplicationService, ITransientDependen
 			? await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().GetAsync(input.FinanceFeeAccountId.Value) : null;
 		if (account != null)
 		{
-			await financeScopeAccessService.EnsureFeeAccountAccessibleAsync(account);
+			await financeScopeAccessService.EnsureFeeCollectionAccountAccessibleAsync(account);
 		}
 		var idempotencyKey = input.IdempotencyKey.Trim();
 		var replay = await feeRecordMetadataRepository.FirstOrDefaultAsync(x =>
@@ -145,8 +152,9 @@ public partial class CollectFeeWorkflow : ApplicationService, ITransientDependen
 		{
 			if ((admissionEntry || replay.FinanceFeeAccountId.HasValue) && replay.FinanceFeeAccountId != input.FinanceFeeAccountId)
 				throw new BusinessException(AdmissionFeeCollectionErrorCodes.RetryConflict);
-			if (replay.FinanceFeeAccountId.HasValue) await financeScopeAccessService.EnsureFeeAccountAccessibleAsync(account!);
-			else await financeScopeAccessService.EnsureStudentAccessibleAsync(replay.StudentId!.Value);
+			if (replay.FinanceFeeAccountId.HasValue) await financeScopeAccessService.EnsureFeeCollectionAccountAccessibleAsync(account!);
+			else await financeScopeAccessService.EnsureFeeCollectionStudentAccessibleAsync(
+				replay.StudentId!.Value, replay.AcademicYearId);
 			if (!string.Equals(replay.CommandFingerprint, commandFingerprint, StringComparison.Ordinal))
 				throw new UserFriendlyException("This retry key was already used for a different fee collection request.",
 					code: FeeCollectionErrorCodes.IdempotencyConflict);
@@ -184,8 +192,11 @@ public partial class CollectFeeWorkflow : ApplicationService, ITransientDependen
 			input.AcademicYearId, clock.Now, preserveAssessment: true);
 
 		var paymentMethods = input.Payments.Select(p => p.PaymentMethod).ToList();
-		var received = input.DueFeePayments.Sum(dfp => dfp.Amount) + input.ChargePayments.Sum(cp => cp.Amount)
-			+ input.LateFeePayments.Sum(lfp => lfp.Amount);
+		var received = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(
+			input.DueFeePayments.Select(row => row.Amount)
+				.Concat(input.ChargePayments.Select(row => row.Amount))
+				.Concat(input.LateFeePayments.Select(row => row.Amount))
+				.Sum(ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble));
 		var status = DetermineCollectionStatus(
 			input.DueFeePayments, dueFeeContext.DueFeeMap,
 			input.ChargePayments, chargeContext.PendingChargeMap,
@@ -196,7 +207,8 @@ public partial class CollectFeeWorkflow : ApplicationService, ITransientDependen
 
 		var feeHeadGroups = input.DueFeePayments
 			.GroupBy(dfp => dfp.FeeHeadId)
-			.Select(g => (FeeHeadId: g.Key, Amount: g.Sum(dfp => dfp.Amount))).ToList();
+			.Select(g => (FeeHeadId: g.Key, Amount: ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(
+				g.Sum(row => ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble(row.Amount))))).ToList();
 		var allAllocations = input.DueFeePayments.Select(dfp => (dfp.DueFeeId, dfp.Amount)).ToList();
 		var paymentRows = input.Payments
 			.Select(p => (p.PaymentMethod, p.Amount, FeeCollectionManager.MapPaymentDetails(p.PaymentMethod, p.Details)))
@@ -290,7 +302,7 @@ public partial class CollectFeeWorkflow : ApplicationService, ITransientDependen
 					ChargeName = string.IsNullOrWhiteSpace(chargeContext.ChargeMap[r.ChargeId].ChargeName)
 						? chargeContext.ChargeMap[r.ChargeId].PurposeDescription
 						: chargeContext.ChargeMap[r.ChargeId].ChargeName,
-					AmountPaid = r.Amount,
+					AmountPaid = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(r.Amount),
 				}).ToList() : null,
 			CorrelationId = $"fc-{transaction.Metadata.Id:N}", AuditEventIds = auditEventIds,
 			AuditSummary = new FinanceAuditSummaryDto

@@ -21,7 +21,7 @@ public partial class StudentOnboardingAppService
 			if (series == null) throw new BusinessException(StudentOnboardingErrorCodes.IdentifierSeriesUnavailable);
 			var collisionRead = new GrCollisionReadContext();
 			long sequence; string value;
-			do { (sequence, value) = series.Allocate(Clock.Now); } while (await GrValueExistsAsync(value, student.Id, null, collisionRead));
+			do { (sequence, value) = series.Allocate(Clock.Now); } while (await GrNumbers.IsInUseAsync(value, student.Id, null, collisionRead));
 			await seriesRepository.UpdateAsync(series, false);
 			var allocation = new StudentIdentifierAllocation(GuidGenerator.Create(), CurrentTenant.Id, item.Id, student.Id,
 				series.Id, StudentIdentifierType.GrNumber, sequence, value, Clock.Now);

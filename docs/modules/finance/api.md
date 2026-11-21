@@ -10,6 +10,25 @@ audience: humans-and-agents
 
 # Use Finance backend APIs
 
+## Finance Dashboard
+
+Both reads require `ShikshaMitra.Module.Finance.Dashboard`, an active school identity, and access to
+`academicYearId`. Source view grants govern which sections are returned. Student and fee-account
+rows follow the caller's academic scope, including eligible historical enrollments.
+
+| Endpoint | Additional access | Result |
+| --- | --- | --- |
+| `GET /api/finance/dashboard/overview` | Fee Collection View for balances. Charges View for separate charges. Refund and Concession View for their respective worklists. | Current unpaid fee principal, overdue principal, balances by class, and open requests. Optional inclusive `from` and `to` dates filter by due date for balances and submission date for requests. Supply both dates together. |
+| `GET /api/finance/dashboard/activity` | Fee Collection View for receipts. Income and Expense View for their respective totals. | Confirmed fee-only amounts by receipt date, recorded payment-method amounts, and recognized accounts entries for inclusive `from` and `to` dates. Unassigned accounts entries require year-wide scope. |
+
+Use ISO calendar dates (`YYYY-MM-DD`) within the academic year. Timestamp filters use India
+calendar boundaries. Payment method totals reflect recorded payments tied to confirmed fee
+receipts, including charges paid in those transactions. The
+confirmed receipt totals exclude provisional and reversed collections and the charge component
+of combined receipts. Older combined receipts without a stored fee breakdown make the receipt
+total unavailable for that period. Amounts are INR decimals. Net movement is confirmed income
+less confirmed expenses and is available when both registers are visible.
+
 ## Finance setup guide
 
 | Endpoint | Contract |
@@ -129,6 +148,8 @@ by the old mapper cannot be reconstructed.
 ## Refund receipt PDF
 
 `GET /api/fee-refunds/{id}/receipt/pdf` returns `application/pdf` under the existing `Finance.Fees_Refund.View` permission constant and the same authorized payer scope as refund details.
+
+`GET /api/fee-refunds` accepts `boardId` alongside academic year, medium, standard and division filters. Student-linked refund history uses the enrollment placement for the refund's academic year for visibility, filtering and displayed academic labels after promotion. Current grants and tenant scope still apply; prior access alone does not grant access. Applicant-account requests continue to use their saved account placement.
 Processing payouts produce a Provisional Refund Receipt; completed payouts produce a Refund Receipt.
 Unpaid, failed, cancelled, rejected and reversed requests fail with the existing `PaymentNotSettled` business error.
 The PDF uses the scoped refund detail projection, preserving `ViewSensitivePaymentDetails` masking of payout references, and the configured school identity.
@@ -168,6 +189,12 @@ policy caps apply; principal paid/refunded balances remain separate. Apply
 preserves history, and rejects a downgrade after late-fee refund evidence exists.
 Focused regression cases are `FeeRefundApi_Tests.Paid_Late_Fees_*`.
 
+Student-only eligibility also includes settled extras paid through accounts bound to that exact student's academic-year assignment, while preserving legacy student receipt sources.
+For an account linked to an enrolled assignment, new refunds resolve that assignment's current pinned policy version; the account's original assignment snapshot remains immutable.
+Editing a policy definition alone does not change the student's assigned version.
+Each `receipts[]` entry includes nullable `financeFeeAccountId` from the original receipt: null denotes a legacy student payment.
+One request may combine receipts for the same original payer; legacy and account payments require separate requests, and server validation continues to reject mixed payers.
+
 Whole-receipt requests retain every selected source when a cap or deduction rounds an
 individual calculated share to zero. Such a line preserves selection evidence without a
 reservation or principal balance mutation; the request still requires a positive total payout.
@@ -193,7 +220,11 @@ Student and Admission collect-form responses add `allocationBasis`, `collectionP
 `collectionPolicyName`, `collectionPolicyVersion`, `allocationDueFeeOrder` and `allocationRevision`.
 Configured modes use the same ordered ledger in the screen and command validation. Installment
 groups use schedule installment IDs (date/label fallback for legacy dues), not month labels alone.
-Fee-head groups retain the collection head-name order. Both retain the displayed line sequence.
+Fee-head allocation follows the assigned fee structure's saved fee head sequence, then due date
+within each head. Older structures use the publication review sequence when available and then
+the original line creation order. Saved fee head order uses the structure's existing extra
+properties. Student and Admission ledger lines expose the configured `paymentTermName` when a
+term is recorded, alongside the recorded `dueDate` and any installment coverage dates.
 
 Configured collection commands require `automaticAllocation: { revision, dueFeeIds, chargeIds }`.
 Selection includes unfunded rows. The server reloads the scope-checked, assignment/account-pinned
@@ -343,6 +374,19 @@ Original manual Income creation retries retain their gross request amount after 
 
 ## Reports and audit API families
 
+The report workspace uses `GET /api/app/finance-report/options` for available report types and filter choices, `POST /preview` for paginated rows, `POST /exports` to queue a PDF or Excel workbook, `GET /exports` for the requester's recent jobs, and `GET /exports/{jobId}/download` for a ready file. These paths share the `/api/app/finance-report` prefix. Exports use the same report and normalized filters as preview. Downloads reauthorize against the requester's current permissions and data scope.
+
+| Phase 1 report | Additional access | Row and date basis |
+| --- | --- | --- |
+| Fee demand and collection summary | Academic year-wide scope, or scoped `Finance.Fees.FeeCollections.View` | Class/division or fee head. Current amounts across installments selected by demand date. |
+| Outstanding fees and ageing | `Finance.Fees.FeeCollections.View` | Unpaid installment. Age uses the current school date and the canonical bill and due dates. |
+| Student fee statement | `Finance.Fees.FeeCollections.View` | Installment for one scoped student or applicant account, using current balances. |
+| Daily collection register | `Finance.Fees.FeeCollections.View` | Payment instrument, using its payment date in India Standard Time. |
+| Receipt register and corrections | `Finance.Fees.InvoiceReceipt.View` | Receipt document, using its issue date. Linked provisional and official documents have separate rows. |
+| Payment verification and clearing ageing | `Finance.Accounts.Reconciliation.View` | Non-cash instrument, using its payment date or recorded verification decision date. |
+
+Each Phase 1 request selects one academic year. The Reports permission is required throughout. Legacy reports remain available with the source feature's View permission and their existing scope rules. Payment references are masked in report rows and exports. Dates on balance reports filter the installment population, and the balance date identifies the current snapshot.
+
 | Family              | Controller path                                            |
 | ------------------- | ---------------------------------------------------------- |
 | Finance reports     | `Controllers/Finance/Reports/FinanceReportController.cs`   |
@@ -359,9 +403,9 @@ Known Finance families include `Finance.Fees.Charges.*`, `Finance.Fees.Concessio
 
 Fee adjustments define `Finance.Fees.Adjustment.{View|Add|Approve|Reject|Delete}`.
 Add does not confer a decision grant; Apply and its context require Approve, while
-Reject requires Reject. The reviewer must have View, the exact decision grant,
-current student scope, and a current reporting-manager route. The creator cannot
-review their own request. No existing Add grant is promoted or reseeded.
+Reject requires Reject. Explicit decisions require an independent reviewer with View,
+the exact decision grant, and current student scope. Ordinary reviewers also require a
+current reporting-manager route.
 
 Paid-credit transfer sources are capped by retained overpayment from settled
 principal receipt allocations. Outstanding debt and provisional unverified
@@ -376,8 +420,12 @@ replay the original result and changed payloads fail. List/detail include
 `availableActions` (`Approve` and `Reject`) computed from current reviewer
 authority. Historical requests without source reservations remain readable and
 may be rejected, but application returns
-`Finance:FeeAdjustment:PaidCreditTransferUnavailable`. Existing applied history
-is unchanged. There is no adjustment administrator auto-approval.
+`Finance:FeeAdjustment:PaidCreditTransferUnavailable`.
+
+For a configured administrator with View, Add, and Approve, `POST /api/fee-adjustments`
+creates and applies the request in one transaction. The response returns `Applied` or
+`PartiallyApplied`. Staff submissions outside the administrator creation path enter
+`Pending`. See the [administrator approval contract](./references/admin-request-auto-approval-contract.md).
 
 Accounts settings use `Finance.Accounts.Settings.{IncomeCategory|ExpenseCategory|BankAccount}.{View|Add|Edit|ChangeStatus|Delete}`.
 Each action is independent; module visibility and Add do not authorize Edit or ChangeStatus.
@@ -747,8 +795,14 @@ The Fee Structure metadata, Concession Type, Charge Category, Income Category, E
 
 Bank account number, IFSC and UPI header criteria match the masked table values; hidden bank fragments are not searchable through masked headers. Concession document criteria match document names. Fee Structure board/medium and configured-class criteria match their displayed text, including the configured/total fraction. Display-only mappings require materializing the complete authorized candidate set before returning matching IDs for count and pagination; production-scale performance requires separate measurement.
 
-Receipt and reconciliation list header filters: `GET /api/v1/fee-receipts` and `GET /api/v1/finance/reconciliations` accept optional serialized `filters` with the existing Finance table operators. Receipt fields cover displayed identity/kind/method/verification/roll, paid amount and date; the six reconciliation methods expose their displayed student/academic/instrument/status/amount/date fields. Method-specific allowlists reject unsupported or malformed criteria, including empty-result searches. Header filters intersect the existing tenant, student/applicant, academic context, month/status and global search scopes before count/page. Bank Transfer account-holder and Credit/Debit Card holder/digit criteria match the table’s displayed dash for missing values; explicitly empty holder text remains blank, and card digits remain masked. Only filtered requests materialize complete authorized candidates; unfiltered requests keep provider pagination. This has no first-100 cap, but filtered-request cost scales with candidate volume; production load is not verified.
+Receipt and reconciliation list header filters: `GET /api/v1/fee-receipts` and `GET /api/v1/finance/reconciliations` accept optional serialized `filters` with the existing Finance table operators. Receipt fields cover displayed identity/kind/method/verification/roll, paid amount and date; the six reconciliation methods expose their displayed student/academic/instrument/status/amount/date fields. Method-specific allowlists reject unsupported or malformed criteria, including empty-result searches. Header filters intersect the existing tenant, student/applicant, academic context, month/status and global search scopes before count/page. Bank Transfer account-holder and Credit/Debit Card holder/digit criteria match the table’s displayed dash for missing values; explicitly empty holder text remains blank, and card digits remain masked. Receipt display-column filters read lightweight authorized keys before count/page and hydrate only the selected page. Other filtered requests may still materialize complete authorized candidates. There is no first-100 cap; filtered-request cost still scales with candidate volume, and production load is not verified.
+
+The receipt read-index migration requires PostgreSQL `pg_trgm` for substring search indexes. Allow the extension before running migrations on managed PostgreSQL services that restrict extensions (for Azure Database for PostgreSQL Flexible Server, add `pg_trgm` to `azure.extensions`). The migration does not change receipt numbers, amounts, scope, or PDF content.
 
 Fee Head and Receipt Book list endpoints accept an optional appended `filters` query parameter and forward it unchanged with existing year/category/search/paging context. Their allowlists match displayed text, numeric ranges and active-state values; malformed criteria fail before an empty result. Header filtering counts the complete authorized match before paging, while ordinary lists retain provider pagination.
 Fee Head and Receipt Book name search trims surrounding whitespace and ignores case; it remains limited to the existing name field.
 Adjustment applications add `Filters` alongside existing global `Filter`; the query intersects tenant, scoped student IDs and year/board/medium/class/division before status counts and rows. Search preserves voucher/reason and includes displayed identity/GR/roll/requester/amount/date/status. Text/header requests filter complete authorized candidates before count/page; ordinary requests remain provider-paged. Existing adjustment wire states are unchanged. No command or lifecycle transition is modified.
+
+## Policy list read bounds
+
+Refund Policy list filtering, display sorting (including selected fee-head and payout-method counts), deterministic ID ties and pagination execute before DTO mapping. Proration downstream-use flags project distinct policy references from fee structures and student assignments, without materializing assignment snapshots. Current-version IDs across all four policy families are resolved by exact policy/year/version keys using an ID-only projection; list and detail current-version lookups do not read historical snapshot payloads. Tenant and soft-delete filters remain active. Existing list and paged version endpoint contracts are unchanged.

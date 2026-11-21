@@ -47,7 +47,7 @@ public class ReconciliationSeederContributor : BaseSeederContributor
 {
     private const string MarkerReceiptNumber = "KFE-RECON-CHEQUE";
     private const string TuitionFeeHeadName  = "Seed – Monthly Tuition Fee";
-    private const double SeedAmount          = 1_000d;
+    private const int SeedAmount          = 1_000;
 
     private readonly IFeePaymentReceiptRepository              _receiptRepository;
     private readonly IRepository<FeeRecordMetadata, Guid>      _feeRecordMetadataRepository;

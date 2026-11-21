@@ -25,26 +25,17 @@ public partial class CashManagementAppService
 	{
 		var year = await years.GetAsync(input.AcademicYearId);
 		var period = AccountsRegisterPeriod.Resolve(year.StartDate, year.EndDate, input.Month, input.Year);
-		if (input.Month.HasValue)
-		{
-			var start = new DateTimeOffset(period.StartUtc);
-			var end = new DateTimeOffset(period.EndUtc);
-			// Keep instant comparison exact on every provider, including SQLite,
-			// which cannot translate DateTimeOffset inequalities. Only authorized
-			// source IDs/timestamps are materialized; counts/paging remain in SQL.
-			var dates = await AsyncExecuter.ToListAsync(query.Select(x => new { x.Id, x.CollectedAt }));
-			var ids = dates.Where(x => x.CollectedAt >= start && x.CollectedAt < end).Select(x => x.Id).ToArray();
-			query = query.Where(x => Enumerable.Contains(ids, x.Id));
-		}
-		return query;
+		return input.Month.HasValue
+			? await reads.FilterCollectionPeriodAsync(query, new DateTimeOffset(period.StartUtc), new DateTimeOffset(period.EndUtc))
+			: query;
 	}
 	private async Task<CashSummary> SummarizeAsync(IQueryable<CashCollection> query)
 	{
-		var rows = await AsyncExecuter.ToListAsync(query.Select(x => new { x.Amount, x.Status, x.SpentAmount, x.DepositedAmount, x.InTransitAmount }));
-		return new CashSummary { Collected = rows.Sum(x => x.Amount),
-			PendingApproval = rows.Where(x => x.Status == 0).Sum(x => x.Amount - x.SpentAmount - x.DepositedAmount - x.InTransitAmount),
-			Approved = rows.Where(x => x.Status == 1).Sum(x => x.Amount), Spent = rows.Sum(x => x.SpentAmount),
-			Deposited = rows.Sum(x => x.DepositedAmount), InTransit = rows.Sum(x => x.InTransitAmount),
-			Remaining = rows.Sum(x => x.Amount - x.SpentAmount - x.DepositedAmount - x.InTransitAmount) };
+		var facts = await reads.SummarizeAsync(query);
+		return new CashSummary
+		{
+			Collected = facts.Collected, PendingApproval = facts.PendingApproval, Approved = facts.Approved,
+			Spent = facts.Spent, Deposited = facts.Deposited, InTransit = facts.InTransit, Remaining = facts.Remaining
+		};
 	}
 }

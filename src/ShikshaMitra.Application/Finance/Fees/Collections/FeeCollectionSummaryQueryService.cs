@@ -48,11 +48,10 @@ public partial class FeeCollectionSummaryQueryService(
 		if (tableQuery.Filters.Count == 0 && !input.Status.HasValue && tableQuery.SortBy is null &&
 			string.IsNullOrWhiteSpace(input.Sorting))
 		{
-			var (payers, singleAccountStudents) = await BuildPayerRowsAsync(input, cancellationToken);
-			var pagePayers = ApplySorting(payers, null).ThenBy(row => row.StudentId)
-				.Skip(input.SkipCount).Take(input.MaxResultCount).ToList();
+			var (pagePayers, singleAccountStudents, pageTotalCount) =
+				await BuildPagedPayerRowsAsync(input, cancellationToken);
 			await PopulateBalancesAsync(input, pagePayers, singleAccountStudents, cancellationToken);
-			return new PagedResultDto<FeeCollectionSummaryItemDto>(payers.Count, MapToDto(pagePayers));
+			return new PagedResultDto<FeeCollectionSummaryItemDto>(pageTotalCount, MapToDto(pagePayers));
 		}
 		var allRows = await BuildRawRowsAsync(input, cancellationToken);
         // Keep the canonical balances/status mapping; apply header filters to those same values before counting or paging.

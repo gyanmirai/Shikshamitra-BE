@@ -64,9 +64,10 @@ public partial class StudentFeeDetailsQueryService(
 		Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
 	{
 		EnsureNotEmpty(academicYearId, "academicYearId");
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId, cancellationToken);
+		await financeScopeAccessService.EnsureFeeCollectionStudentAccessibleAsync(
+			studentId, academicYearId, cancellationToken);
 
-		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
+		var student = await GetStudentSnapshotAsync(studentId, academicYearId, cancellationToken);
 		var feeStructureAssignment = await studentFeeStructureRepository.FirstOrDefaultAsync(
 			x => x.StudentId == studentId && x.AcademicYearId == academicYearId);
 		if (feeStructureAssignment == null)
@@ -87,6 +88,7 @@ public partial class StudentFeeDetailsQueryService(
 		var feeSummary = new FeeSummaryDto();
 		var allowOnlineCollection = true;
 		CollectionPolicy? allocationPolicy = null;
+		IReadOnlyList<Guid> feeHeadOrder = [];
 
 		if (feeStructureAssignment != null)
 		{
@@ -104,6 +106,9 @@ public partial class StudentFeeDetailsQueryService(
 			var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
 			var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
 			var feeHeadNameMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
+			var assignmentHeads = ReadLedgerAssignmentHeads(feeStructureAssignment.AssignmentSnapshotJson);
+			var paymentTermNames = await GetLedgerPaymentTermNamesAsync(
+				dueFees, academicYearId, assignmentHeads, cancellationToken);
 			var prorationVersionIds = dueFees.Where(d => d.ProrationPolicyVersionId.HasValue)
 				.Select(d => d.ProrationPolicyVersionId!.Value).Distinct().ToList();
 			var prorationVersions = (await financePolicyVersionRepository.GetListAsync(v =>
@@ -129,6 +134,9 @@ public partial class StudentFeeDetailsQueryService(
 				studentId, feeStructureAssignment.FeeStructureStandardId);
 			allowOnlineCollection = effectiveRules.Policy?.AllowOnlineCollection ?? true;
 			allocationPolicy = effectiveRules.Policy;
+			if (allocationPolicy?.AllocationBasis == CollectionAllocationBasis.FeeHead)
+				feeHeadOrder = await GetLedgerFeeHeadOrderAsync(
+					feeStructureAssignment.FeeStructureStandardId, cancellationToken);
 
 			var lateFeeBalances = await lateFeeBalanceService.GetBalancesAsync(dueFees, academicYearId, today);
 
@@ -176,6 +184,7 @@ public partial class StudentFeeDetailsQueryService(
 							DueFeeId = d.Id,
 							FeeHeadId = d.FeeHeadId,
 							FeeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty),
+							PaymentTermName = paymentTermNames.GetValueOrDefault(d.Id),
 							InstallmentLabel = d.GetDisplayInstallmentLabel(),
 							InstallmentId = d.PaymentTermInstallmentId,
 							DueDate = d.ScheduleDueDate ?? d.DueDate,
@@ -268,7 +277,7 @@ public partial class StudentFeeDetailsQueryService(
 			var chargeIds = approvedCharges.Select(c => c.Id).ToList();
 			var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
 				.GroupBy(x => x.ChargeId)
-				.ToDictionary(x => x.Key, x => x.Sum(w => (double) w.EffectiveAmount));
+				.ToDictionary(x => x.Key, x => x.Sum(w => w.EffectiveAmount));
 			var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
 			var chargeMetaQ = await feeRecordMetadataRepository.GetQueryableAsync();
 			var reversedTxIds = chargeMetaQ.Where(m => m.Status == FeeCollectionStatus.Reversed).Select(m => m.Id);
@@ -285,10 +294,10 @@ public partial class StudentFeeDetailsQueryService(
 
 			chargeDtos.AddRange(approvedCharges.Select(c =>
 			{
-				var net = (double) c.Amount;
-				var paid = paidPerCharge.GetValueOrDefault(c.Id, 0d);
-				var waived = waivedPerCharge.GetValueOrDefault(c.Id, 0d);
-				var pending = Math.Max(0d, net - paid - waived);
+				var net = c.Amount;
+				var paid = paidPerCharge.GetValueOrDefault(c.Id, 0m);
+				var waived = waivedPerCharge.GetValueOrDefault(c.Id, 0m);
+				var pending = Math.Max(0m, net - paid - waived);
 				return new ChargeDetailDto
 				{
 					ChargeId = c.Id,
@@ -296,15 +305,15 @@ public partial class StudentFeeDetailsQueryService(
 					SourceType = "Charge",
 					IsSystemGenerated = false,
 					Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
-					Amount = net,
-					PaidAmount = paid,
-					PendingAmount = pending,
-					WaivedAmount = waived,
+					Amount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(net),
+					PaidAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(paid),
+					PendingAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(pending),
+					WaivedAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(waived),
 					CanWaive = pending > 0,
-					ReconciliationAmount = Convert.ToDecimal(reconPerCharge.GetValueOrDefault(c.Id, 0d)),
-					Status = reconPerCharge.GetValueOrDefault(c.Id, 0d) > 0d ? FeeCollectionStatus.InReconciliation
-						: pending <= 0d ? (waived > 0d ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
-						: (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
+					ReconciliationAmount = reconPerCharge.GetValueOrDefault(c.Id, 0m),
+					Status = reconPerCharge.GetValueOrDefault(c.Id, 0m) > 0m ? FeeCollectionStatus.InReconciliation
+						: pending <= 0m ? (waived > 0m ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
+						: (paid > 0m ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 				};
 			}));
 		}
@@ -316,7 +325,7 @@ public partial class StudentFeeDetailsQueryService(
 			Ledger = ledger,
 			Charges = chargeDtos,
 			AllowOnlineCollection = allowOnlineCollection,
-		}, allocationPolicy);
+		}, allocationPolicy, feeHeadOrder);
 	}
 
 	private async Task<Dictionary<Guid, (double Amount, string Description)>> GetRefundsByDueFeeAsync(Guid studentId)

@@ -76,8 +76,7 @@ public partial class BankAccountAppService(
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.BankName)
 			.Skip((page - 1) * pageSize).Take(pageSize));
-		var items = new List<BankAccountResponse>();
-		foreach (var row in rows) items.Add(await MapAsync(row, includeSensitive: false));
+		var items = await MapPageAsync(rows);
 		return new PaginatedBankAccountResponse
 		{
 			TotalCount = total, CurrentPage = page, PageSize = pageSize,
@@ -182,10 +181,13 @@ public partial class BankAccountAppService(
 	private async Task<BankAccountResponse> MapAsync(BankAccount entity, bool includeSensitive)
 	{
 		var head = entity.AccountHeadId.HasValue ? await accountHeadRepository.FindAsync(entity.AccountHeadId.Value) : null;
-		return new BankAccountResponse
+		return Map(entity, includeSensitive, head?.Name, await IsUsedAsync(entity.Id));
+	}
+
+	private static BankAccountResponse Map(BankAccount entity, bool includeSensitive, string? headName, bool used) => new BankAccountResponse
 		{
 			Id = entity.Id, AcademicYearId = entity.AcademicYearId, Code = entity.Code,
-			AccountHeadId = entity.AccountHeadId, AccountHeadName = head?.Name,
+			AccountHeadId = entity.AccountHeadId, AccountHeadName = headName,
 			BankName = entity.BankName, BranchName = entity.BranchName, BranchAddress = entity.BranchAddress,
 			AccountHolderName = entity.AccountHolderName, AccountType = entity.AccountType,
 			AccountNumber = includeSensitive ? entity.AccountNumber : null,
@@ -196,9 +198,29 @@ public partial class BankAccountAppService(
 			EffectiveFrom = entity.EffectiveFrom, EffectiveTo = entity.EffectiveTo,
 			IsActive = entity.IsActive, DeactivationReason = entity.DeactivationReason,
 			Version = entity.Version, ConcurrencyStamp = entity.ConcurrencyStamp,
-			IsUsedInDownstream = await IsUsedAsync(entity.Id)
+			IsUsedInDownstream = used
 		};
-	}
+
+
+    private async Task<List<BankAccountResponse>> MapPageAsync(List<BankAccount> rows)
+    {
+        if (rows.Count == 0) return [];
+        var ids = rows.Select(x => x.Id).ToArray();
+        var used = new HashSet<Guid>();
+        var requests = await refundRequestRepository.GetQueryableAsync();
+        used.UnionWith(await SettingsUsageBatch.ReadAsync(requests.SelectMany(x => x.Settlements).Select(x => (Guid?)x.BankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync(requests.Select(x => (Guid?)x.PayingBankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync((await refundAccountingRepository.GetQueryableAsync()).Select(x => (Guid?)x.BankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync((await destinationRuleRepository.GetQueryableAsync()).Select(x => (Guid?)x.BankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync((await refundPolicies.GetQueryableAsync()).Select(x => (Guid?)x.DefaultPayingBankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync((await payments.GetQueryableAsync()).Select(x => (Guid?)x.BankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync((await transactions.GetQueryableAsync()).Select(x => (Guid?)x.BankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadPolicyUsageAsync(await policyVersions.GetQueryableAsync(), ids, AsyncExecuter));
+        var headIds = rows.Where(x => x.AccountHeadId.HasValue).Select(x => x.AccountHeadId!.Value).Distinct().ToArray();
+        var heads = await AsyncExecuter.ToListAsync((await accountHeadRepository.GetQueryableAsync()).Where(x => Enumerable.Contains(headIds, x.Id)).Select(x => new { x.Id, x.Name }));
+        var names = heads.ToDictionary(x => x.Id, x => x.Name);
+        return rows.Select(row => Map(row, false, row.AccountHeadId.HasValue ? names.GetValueOrDefault(row.AccountHeadId.Value) : null, used.Contains(row.Id))).ToList();
+    }
 
 	private static string Mask(string value) => value.Length <= 4 ? value : new string('*', value.Length - 4) + value[^4..];
 	private static string MaskIfsc(string value) => value.Length <= 4 ? value : value[..4] + new string('*', value.Length - 4);

@@ -23,6 +23,8 @@ public class RunPayrollItem
 	/// Indicates whether payroll is already finalized/locked for this employee in the selected month.
 	/// </summary>
 	public bool IsLocked { get; set; }
+	public bool IsSubmitted { get; set; }
+	public bool IsIssuedWithoutRegisterDetails { get; set; }
 
 	/// <summary>
 	/// Review state for lock gating: PENDING, REVIEWED, or LOCKED.
@@ -75,6 +77,7 @@ public class RunPayrollItem
 	public double TotalDeduction { get; set; }
 	public double EmployerContributionTotal { get; set; }
 	public double EmployerCost { get; set; }
+	public ShikshaMitra.HR.Payroll.Templates.SalaryProtectionResult? SalaryProtection { get; set; }
 	public Guid? CompensationRevisionId { get; set; }
 	public int? CompensationRevisionNumber { get; set; }
 	public string? CompensationSalaryBasis { get; set; }

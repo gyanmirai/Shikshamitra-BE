@@ -5,6 +5,7 @@ namespace ShikshaMitra.Library.Books;
 
 public class CreateBookReservationRequest
 {
+    public Guid? AcademicYearId { get; set; }
     [Required]
     public DateTime RequestedDate { get; set; }
 

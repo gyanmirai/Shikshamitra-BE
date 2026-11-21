@@ -10,6 +10,7 @@ public sealed record ScopeReportingEmployee(Guid Id, Guid? UserId, Guid? Reporti
 /// <summary>Tenant-filtered projections for authorization, without employee profile graphs.</summary>
 public interface IUserScopeResolutionRepository
 {
+	Task<List<Guid>> GetActiveUserIdsAsync(IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken = default);
     Task<List<string>?> GetRoleNamesAsync(Guid userId, CancellationToken cancellationToken = default);
     Task<Dictionary<Guid, List<string>>> GetRoleNamesByUserIdsAsync(
         IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken = default);

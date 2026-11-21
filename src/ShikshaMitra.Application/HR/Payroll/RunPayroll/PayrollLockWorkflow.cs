@@ -17,6 +17,7 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
 public class PayrollLockWorkflow(
 	PayrollPreviewReviewGuard previewGuard,
+	PayrollApprovalAccess approvalAccess,
 	ISalarySlipRepository salarySlipRepository,
 	PayrollCalendarResolver payrollCalendarResolver,
 	HrAuditWriter auditWriter,
@@ -58,6 +59,7 @@ public class PayrollLockWorkflow(
 		Guid? academicYearId)
 	{
 		await previewGuard.EnsureCurrentAsync(request.PreviewRunId, request.Month, academicYearId, request.EmployeeIds);
+		await approvalAccess.EnsureLegacyIssuanceAsync();
 		await previewGuard.EnsureReviewedAsync(request.PreviewRunId, request.EmployeeIds!);
 		using var scope = logger.BeginScope(new Dictionary<string, object>
 		{
@@ -135,7 +137,7 @@ public class PayrollLockWorkflow(
 			lockCalendar.AcademicYearId,
 			"payroll_run",
 			guidGenerator.Create(),
-			request.Month,
+			internalMonthYear,
 			"locked",
 			$"Locked payroll for {request.Month}.",
 			context: new

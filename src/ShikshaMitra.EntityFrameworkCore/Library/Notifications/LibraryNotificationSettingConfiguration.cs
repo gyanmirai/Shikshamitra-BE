@@ -18,8 +18,9 @@ public class LibraryNotificationSettingConfiguration : IEntityTypeConfiguration<
 		builder.Property(x => x.Channel).IsRequired().HasMaxLength(40);
 		builder.Property(x => x.SubjectTemplate).IsRequired().HasMaxLength(300);
 		builder.Property(x => x.MessageTemplate).IsRequired().HasMaxLength(2000);
+		builder.Property(x => x.RepeatIntervalDays).HasDefaultValue(1);
 
-		builder.HasIndex(x => new { x.EventType, x.RecipientRole, x.Channel }).IsUnique();
+		builder.HasIndex(x => new { x.TenantId, x.EventType, x.RecipientRole, x.Channel }).IsUnique();
 		builder.HasIndex(x => x.EventGroup);
 	}
 }

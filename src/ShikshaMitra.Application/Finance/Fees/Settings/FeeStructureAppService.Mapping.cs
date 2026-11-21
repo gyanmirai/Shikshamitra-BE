@@ -152,6 +152,7 @@ public partial class FeeStructureAppService
 	{
 
 		entity.ChangeName(input.Name);
+		FeeStructureHeadOrder.Save(entity, input.FeeHeads.Select(line => line.FeeHeadId));
 
 		entity.AttachCollectionPolicy(input.CollectionPolicyId, input.CollectionPolicyVersionId);
 
@@ -252,7 +253,7 @@ public partial class FeeStructureAppService
 
 		ConcessionFeeHeadScope = entity.ConcessionFeeHeadScope, ConcessionApplicableFeeHeadIds = entity.GetConcessionApplicableFeeHeadIds().ToList(),
 
-		FeeHeads = entity.FeeStructureDetails.Select(x => new FeeHeadAssignmentRequest
+		FeeHeads = FeeStructureHeadOrder.Order(entity).Select(x => new FeeHeadAssignmentRequest
 
 		{
 
@@ -324,7 +325,7 @@ public partial class FeeStructureAppService
 
 		var terms = context.Terms;
 
-		foreach (var line in entity.FeeStructureDetails)
+		foreach (var line in FeeStructureHeadOrder.Order(entity))
 
 		{
 

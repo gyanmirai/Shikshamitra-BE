@@ -34,15 +34,15 @@ public class EfCoreChargeRepository(
 
 		var result = await (
 			from charge in db.Set<Charge>().IgnoreAutoIncludes().AsNoTracking()
-			join student in db.Set<Student>().IgnoreAutoIncludes().AsNoTracking() on charge.StudentId equals student.Id
+			join student in db.Set<Student>().IgnoreAutoIncludes().AsNoTracking() on charge.StudentId equals (Guid?)student.Id
 			join category in db.Set<ChargeCategory>().IgnoreAutoIncludes().AsNoTracking() on charge.ChargeCategoryId equals category.Id
-			join standard in db.Set<Standard>().IgnoreAutoIncludes().AsNoTracking() on charge.StandardId equals standard.Id
-			join division in db.Set<Division>().IgnoreAutoIncludes().AsNoTracking() on charge.DivisionId equals division.Id
-			join board in db.Set<EducationBoard>().IgnoreAutoIncludes().AsNoTracking() on charge.BoardId equals board.Id
-			join medium in db.Set<EducationMedium>().IgnoreAutoIncludes().AsNoTracking() on charge.EducationMediumId equals medium.Id
+			join standard in db.Set<Standard>().IgnoreAutoIncludes().AsNoTracking() on charge.StandardId equals (Guid?)standard.Id
+			join division in db.Set<Division>().IgnoreAutoIncludes().AsNoTracking() on charge.DivisionId equals (Guid?)division.Id
+			join board in db.Set<EducationBoard>().IgnoreAutoIncludes().AsNoTracking() on charge.BoardId equals (Guid?)board.Id
+			join medium in db.Set<EducationMedium>().IgnoreAutoIncludes().AsNoTracking() on charge.EducationMediumId equals (Guid?)medium.Id
 			join academicYear in db.Set<AcademicYear>().IgnoreAutoIncludes().AsNoTracking() on charge.AcademicYearId equals academicYear.Id
 			join requestor in db.Set<IdentityUser>().IgnoreAutoIncludes().AsNoTracking() on charge.RequestorId equals requestor.Id
-			where charge.Id == chargeId
+			where charge.Id == chargeId && charge.SchoolDueDate == null
 			select new ChargeJoinResult(charge, student, category, standard, division, board, medium, academicYear, requestor)
 		).FirstOrDefaultAsync(cancellationToken);
 
@@ -62,15 +62,15 @@ public class EfCoreChargeRepository(
 		var searchLower = search?.ToLower();
 
 		return from charge in db.Set<Charge>().IgnoreAutoIncludes().AsNoTracking()
-			join student in db.Set<Student>().IgnoreAutoIncludes().AsNoTracking() on charge.StudentId equals student.Id
+			join student in db.Set<Student>().IgnoreAutoIncludes().AsNoTracking() on charge.StudentId equals (Guid?)student.Id
 			join category in db.Set<ChargeCategory>().IgnoreAutoIncludes().AsNoTracking() on charge.ChargeCategoryId equals category.Id
-			join standard in db.Set<Standard>().IgnoreAutoIncludes().AsNoTracking() on charge.StandardId equals standard.Id
-			join division in db.Set<Division>().IgnoreAutoIncludes().AsNoTracking() on charge.DivisionId equals division.Id
-			join board in db.Set<EducationBoard>().IgnoreAutoIncludes().AsNoTracking() on charge.BoardId equals board.Id
-			join medium in db.Set<EducationMedium>().IgnoreAutoIncludes().AsNoTracking() on charge.EducationMediumId equals medium.Id
+			join standard in db.Set<Standard>().IgnoreAutoIncludes().AsNoTracking() on charge.StandardId equals (Guid?)standard.Id
+			join division in db.Set<Division>().IgnoreAutoIncludes().AsNoTracking() on charge.DivisionId equals (Guid?)division.Id
+			join board in db.Set<EducationBoard>().IgnoreAutoIncludes().AsNoTracking() on charge.BoardId equals (Guid?)board.Id
+			join medium in db.Set<EducationMedium>().IgnoreAutoIncludes().AsNoTracking() on charge.EducationMediumId equals (Guid?)medium.Id
 			join academicYear in db.Set<AcademicYear>().IgnoreAutoIncludes().AsNoTracking() on charge.AcademicYearId equals academicYear.Id
 			join requestor in db.Set<IdentityUser>().IgnoreAutoIncludes().AsNoTracking() on charge.RequestorId equals requestor.Id
-			where charge.AcademicYearId == academicYearId
+			where charge.AcademicYearId == academicYearId && charge.SchoolDueDate == null
 			where charge.Status == chargeStatus
 			where !boardId.HasValue || charge.BoardId == boardId.Value
 			where !educationMediumId.HasValue || charge.EducationMediumId == educationMediumId.Value

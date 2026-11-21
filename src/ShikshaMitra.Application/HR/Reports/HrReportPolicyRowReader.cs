@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.HR.Audit;
+using ShikshaMitra.HR.Audit;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Security.UserScope;
 using System;
@@ -73,7 +73,9 @@ public class HrReportPolicyRowReader(
 		var visibleAssignmentIds = await policyScopeService.ResolveVisibleAssignmentIdsForAuditAsync(visibleAssignments, scope);
 		var auditQuery = BuildScopedAuditQuery(
 			ApplyAuditDateFilters(await auditRepository.GetQueryableAsync(), input),
-			visibleAssignmentIds);
+			visibleAssignmentIds)
+			// Payroll review activity has its own permission and scope checks.
+			.Where(x => x.EntityType != "payroll_run" || x.Action == "locked");
 
 		var policyRows = policyQuery.Select(x => new PolicyReportProjection
 		{

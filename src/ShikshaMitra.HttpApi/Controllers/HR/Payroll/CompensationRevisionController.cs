@@ -45,6 +45,22 @@ public class CompensationRevisionController(
 		return await appService.SaveAsync(employeeId, input);
 	}
 
+	[HttpPost("protection-migration/preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage)]
+	public async Task<ProtectionMigrationPreviewDto> PreviewProtectionMigrationAsync(Guid employeeId, [FromBody] PreviewProtectionMigrationDto input)
+	{
+		await employeeAuthorizationService.CheckEmployeeScopeAccessAsync(employeeId);
+		return await appService.PreviewProtectionMigrationAsync(employeeId, input);
+	}
+
+	[HttpPost("protection-migration/apply")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage)]
+	public async Task<CompensationRevisionDto> ApplyProtectionMigrationAsync(Guid employeeId, [FromBody] ApplyProtectionMigrationDto input)
+	{
+		await employeeAuthorizationService.CheckEmployeeScopeAccessAsync(employeeId);
+		return await appService.ApplyProtectionMigrationAsync(employeeId, input);
+	}
+
 	private async Task CheckReadPermissionAsync()
 	{
 		if (await AuthorizationService.IsGrantedAsync(

@@ -4,6 +4,7 @@ using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Common;
+using ShikshaMitra.Finance.ExternalReceivables;
 using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
@@ -51,6 +52,9 @@ public class FeeWaiverAppService(
 
 		using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
 			{ IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+		if (sourceType == "Charge")
+			await LazyServiceProvider.LazyGetRequiredService<FinanceChargeSettlementAccessService>()
+				.EnsureLegacySourcesAsync([input.SourceId]);
 
 		var actorId = CurrentUser.Id ?? Guid.Empty;
 		var replay = await FindReplayAsync(actorId, idempotencyKey, sourceType, input.SourceId);
@@ -114,7 +118,9 @@ public class FeeWaiverAppService(
 	{
 		var charge = await chargeRepository.FindAsync(chargeId)
 			?? throw new BusinessException(FeeWaiverErrorCodes.SourceNotFound).WithData("sourceId", chargeId);
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(charge.StudentId);
+		if (!charge.StudentId.HasValue || charge.SchoolDueDate.HasValue)
+			throw new BusinessException(FeeWaiverErrorCodes.SourceNotEligible);
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(charge.StudentId.Value);
 		if (charge.Status != ChargeStatus.Approved)
 			throw new BusinessException(FeeWaiverErrorCodes.SourceNotEligible).WithData("status", charge.Status);
 
@@ -129,7 +135,7 @@ public class FeeWaiverAppService(
 		if (remaining <= 0) throw new BusinessException(FeeWaiverErrorCodes.NoRemainingBalance);
 
 		var entity = new ChargeWaiverApplication(GuidGenerator.Create(), CurrentTenant.Id,
-			charge.StudentId, charge.Id, charge.AcademicYearId, charge.Amount, remaining,
+			charge.StudentId.Value, charge.Id, charge.AcademicYearId, charge.Amount, remaining,
 			reason, actorId, idempotencyKey);
 		await chargeWaiverRepository.InsertAsync(entity, autoSave: false);
 		await financeAuditWriter.WriteAsync(charge.AcademicYearId, FinanceAuditEntityTypes.FeeCharge,
@@ -179,7 +185,7 @@ public class FeeWaiverAppService(
 	private static FeeWaiverResultDto ToResult(ChargeWaiverApplication entity) => new()
 	{
 		Id = entity.Id, SourceType = "Charge", SourceId = entity.ChargeId,
-		StudentId = entity.StudentId, AcademicYearId = entity.AcademicYearId,
+		StudentId = entity.StudentId ?? throw new BusinessException(FeeWaiverErrorCodes.SourceNotEligible), AcademicYearId = entity.AcademicYearId,
 		WaivedAmount = entity.EffectiveAmount, RemainingAmount = 0,
 		Reason = entity.Reason, CreationTime = entity.CreationTime
 	};

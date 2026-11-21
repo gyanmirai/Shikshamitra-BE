@@ -8,6 +8,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 {
+	/// <summary>Informational scoped family membership; never parent-account authority.</summary>
+	public bool HasLinkedSiblings { get; set; }
 	public bool SiblingFamilyConfirmed { get; set; }
 	public AdmissionSchoolContactDto? MainSchoolContact { get; set; }
 	public string? ParentRelationship { get; set; }
@@ -67,18 +69,20 @@ public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 
 public class ConfirmAdmissionInquiryFamilyDto
 {
+	public bool FamilyLinkOnly { get; set; }
 	[Required]
 	public Guid ExistingFamilyId { get; set; }
 	[Required]
 	public Guid ExistingParentApplicantId { get; set; }
-	[Required, RegularExpression("^(father|mother)$")]
-	public string ParentRelationship { get; set; } = string.Empty;
+	[RegularExpression("^(father|mother)$")]
+	public string? ParentRelationship { get; set; }
 	[Required, StringLength(40)]
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
 public class CreateAdmissionInquiryDto
 {
+	public bool FamilyLinkOnly { get; set; }
 	public bool GuardianResponsibilityConfirmed { get; set; }
 	public AdmissionFamilyContactsDto? FamilyContacts { get; set; }
 	public Guid? ExistingFamilyId { get; set; }
@@ -111,6 +115,10 @@ public class CreateAdmissionInquiryDto
 
 public class AdmissionInquiryListInput : PagedAndSortedResultRequestDto
 {
+	/// <summary>Inclusive UTC creation timestamp; omitted to leave the lower bound open.</summary>
+	public DateTime? CreationTimeFrom { get; set; }
+	/// <summary>Exclusive UTC creation timestamp; omitted to leave the upper bound open.</summary>
+	public DateTime? CreationTimeBefore { get; set; }
 	[System.ComponentModel.DataAnnotations.MaxLength(250)] public string? StandardName { get; set; }
 	public string? StandardNameFilterType { get; set; }
 	public bool DashboardFollowUpsDue { get; set; }
@@ -216,7 +224,7 @@ public class BulkAdmissionInquiryResultDto
 }
 
 public class AdmissionInquiryDuplicateCheckInput { public Guid AdmissionCycleId { get; set; } public string GuardianPhone { get; set; } = string.Empty; public string? GuardianEmail { get; set; } public string ApplicantName { get; set; } = string.Empty; public DateTime? ApplicantDateOfBirth { get; set; } [MaxLength(2)] public List<AdmissionSiblingParentContactDto> ParentContacts { get; set; } = []; }
-public class AdmissionInquiryDuplicateMatchDto { public Guid ApplicantId { get; set; } public Guid FamilyId { get; set; } public Guid? ExistingInquiryId { get; set; } public string? ExistingInquiryNumber { get; set; } public Guid? ExistingInquiryAdmissionCycleId { get; set; } public string ApplicantName { get; set; } = string.Empty; public string? GuardianPhone { get; set; } public string? GuardianEmail { get; set; } public DateTime? DateOfBirth { get; set; } public bool CanLinkFamily { get; set; } public List<AdmissionSiblingParentCandidateDto> Parents { get; set; } = []; public bool MatchByEmail { get; set; } public bool MatchByMobile { get; set; } }
+public class AdmissionInquiryDuplicateMatchDto { public Guid ApplicantId { get; set; } public Guid FamilyId { get; set; } public Guid? ExistingInquiryId { get; set; } public string? ExistingInquiryNumber { get; set; } public Guid? ExistingInquiryAdmissionCycleId { get; set; } public bool? ExistingInquiryMatchesMobile { get; set; } public string ApplicantName { get; set; } = string.Empty; public string? GuardianPhone { get; set; } public string? GuardianEmail { get; set; } public DateTime? DateOfBirth { get; set; } public bool CanLinkFamily { get; set; } public List<AdmissionSiblingParentCandidateDto> Parents { get; set; } = []; public bool MatchByEmail { get; set; } public bool MatchByMobile { get; set; } }
 public class AssignAdmissionCounsellorDto { public AdmissionCounsellorAssignmentMode Mode { get; set; } public Guid? CounsellorId { get; set; } public List<Guid> CandidateCounsellorIds { get; set; } = []; [StringLength(1024)] public string? Reason { get; set; } }
 
 public class CreateAdmissionInquiryCommunicationDto

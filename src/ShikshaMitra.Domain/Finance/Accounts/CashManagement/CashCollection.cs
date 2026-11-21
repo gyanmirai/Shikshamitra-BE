@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Volo.Abp;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -20,6 +21,7 @@ public class CashCollection : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Reference { get; private set; } = "";
 	public string PayerName { get; private set; } = "";
 	public Guid? StudentId { get; private set; }
+	public Guid? EmployeeId { get; private set; }
 	public Guid? FinanceFeeAccountId { get; private set; }
 	public Guid CollectedBy { get; private set; }
 	public DateTimeOffset CollectedAt { get; private set; }
@@ -40,9 +42,10 @@ public class CashCollection : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	private CashCollection() { }
 	public CashCollection(Guid id, Guid? tenantId, Guid yearId, Guid sourceId, string incomePrefix,
 		Guid? incomeTransactionId, string reference, string payerName, decimal amount, DateTimeOffset at,
-		Guid actor, Guid? studentId, Guid? feeAccountId, Guid? paymentInstrumentId = null) : base(id)
+		Guid actor, Guid? studentId, Guid? feeAccountId, Guid? paymentInstrumentId = null, Guid? employeeId = null) : base(id)
 	{
 		EnsureMoney(amount);
+		if (employeeId.HasValue) FinanceFeePayerIdentity.Validate(studentId, feeAccountId, employeeId);
 		if (id == Guid.Empty || yearId == Guid.Empty || sourceId == Guid.Empty || actor == Guid.Empty || at == default)
 			throw new BusinessException(CashManagementErrorCodes.InvalidSource);
 		TenantId = tenantId; AcademicYearId = yearId; SourceId = sourceId;
@@ -50,7 +53,7 @@ public class CashCollection : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		IncomeSourceKeyPrefix = Evidence(incomePrefix, 200); IncomeTransactionId = incomeTransactionId;
 		Reference = Evidence(reference, 200); PayerName = Evidence(payerName, 500);
 		Amount = amount; CollectedAt = at; CollectedBy = actor;
-		StudentId = studentId; FinanceFeeAccountId = feeAccountId;
+		StudentId = studentId; FinanceFeeAccountId = feeAccountId; EmployeeId = employeeId;
 	}
 	public void Approve(Guid actor, Guid bankId, string bankLabel, decimal countedAmount, DateTimeOffset at, string? notes,
 		bool allowSelfApproval = false)

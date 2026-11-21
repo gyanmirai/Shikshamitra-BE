@@ -152,6 +152,7 @@ public class AdmissionApplicationLifecycleService(
 		var family = await familyRepository.FindAsync(applicant.FamilyId);
 		var guardian = family?.PrimaryGuardianId.HasValue == true
 			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
+		if (AdmissionSiblingFamilyLink.HasOwnContact(applicant)) guardian = AdmissionSiblingFamilyLink.OwnGuardian(applicant);
 		var inquiryValues = ReadInquiryValues(inquiry?.FormResponseSnapshotJson);
 		var frozen = AdmissionEffectiveFormStore.Read(instance);
 		AdmissionFormFieldValue[] initialValues;

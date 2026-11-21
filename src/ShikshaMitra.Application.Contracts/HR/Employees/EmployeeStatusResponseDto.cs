@@ -42,6 +42,9 @@ public class EmployeeStatusDeactivationCheckDto
 {
 	public bool CanDeactivate { get; set; }
 	public int ActiveDirectReportCount { get; set; }
+	public string? LibraryClearanceStatus { get; set; }
+	public int? LibraryOutstandingLoanCount { get; set; }
+	public int? LibraryOutstandingCustodyCount { get; set; }
 }
 
 public class EmployeeActivationReadinessDto

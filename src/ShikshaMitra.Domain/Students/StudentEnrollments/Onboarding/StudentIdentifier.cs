@@ -59,6 +59,10 @@ public class StudentIdentifierSeries : FullAuditedAggregateRoot<Guid>, IMultiTen
 	public void EnsureAvailable(DateTime at)
 	{
 		var now = at.ToUniversalTime();
+		if (MaximumSequence.HasValue && NextSequence > MaximumSequence.Value)
+			throw new BusinessException(StudentOnboardingErrorCodes.IdentifierSeriesUnavailable)
+				.WithData("ReasonCode", "SeriesLimitReached")
+				.WithData("MaximumNumber", MaximumSequence.Value).WithData("NextSequence", NextSequence);
 		if (!IsActive || now < EffectiveFrom || EffectiveUntil.HasValue && now > EffectiveUntil.Value ||
 		    MaximumSequence.HasValue && NextSequence > MaximumSequence.Value)
 			throw new BusinessException(StudentOnboardingErrorCodes.IdentifierSeriesUnavailable);

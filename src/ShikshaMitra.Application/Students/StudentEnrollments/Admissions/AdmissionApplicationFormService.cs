@@ -58,6 +58,8 @@ public partial class AdmissionApplicationFormService(
 		var values = await valueRepository.GetListAsync(value => value.FormInstanceId == instance.Id);
 		var storedValues = values.OrderBy(value => value.FieldCode).Select(value => new AdmissionFormValueDto
 			{ FieldCode = value.FieldCode, ValueJson = value.ValueJson }).ToList();
+		var persistedValues = storedValues.Select(value => new AdmissionFormValueDto
+			{ FieldCode = value.FieldCode, ValueJson = value.ValueJson }).ToList();
 		var applicant = context.Applicant;
 		var prefill = applicant == null || application.Status != AdmissionApplicationStatus.Draft || application.SubmittedAt.HasValue ? new AdmissionApplicationFormDto { Values = storedValues } :
 			await LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingRegistrationPrefillService>()
@@ -65,8 +67,15 @@ public partial class AdmissionApplicationFormService(
 		if (applicant != null && application.Status == AdmissionApplicationStatus.Draft && !application.SubmittedAt.HasValue)
 			AdmissionRegistrationRelationshipPrefill.Project(definitionDto, applicant, prefill, formValidator);
 		var correctionBlockedReason = await GetCorrectionBlockedReasonAsync(application);
+		var printHeader = definitionDto.PrintSettings.Advanced?.Header;
+		var printAcademicDetails = printHeader != null &&
+			(printHeader.Board == true || printHeader.Medium == true || printHeader.Class == true || printHeader.AcademicYear == true)
+			? await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationPrintContextReader>().ReadAsync(application, printHeader)
+			: null;
 		return new AdmissionApplicationFormDto
 		{
+			PrintAcademicDetails = printAcademicDetails,
+			ApplicationNumber = application.ApplicationNumber,
 			ConcurrencyStamp = application.ConcurrencyStamp,
 			CanCorrectForm = correctionBlockedReason == null,
 			CorrectionBlockedReason = correctionBlockedReason,
@@ -81,6 +90,7 @@ public partial class AdmissionApplicationFormService(
 			InquiryContextSections = frozen?.InquiryContextSections ?? [],
 			InquiryContextValues = frozen?.InquiryContextValues ?? [],
 			Values = prefill.Values,
+			PersistedValues = persistedValues,
 			AutoFilledFieldCodes = prefill.AutoFilledFieldCodes,
 			FamilyPrefill = prefill.FamilyPrefill
 		};
@@ -169,6 +179,7 @@ public partial class AdmissionApplicationFormService(
 		{
 			var family = await familyRepository.FindAsync(applicant.FamilyId);
 			if (family?.PrimaryGuardianId is Guid guardianId) guardian = await guardianRepository.FindAsync(guardianId);
+			if (AdmissionSiblingFamilyLink.HasOwnContact(applicant)) guardian = AdmissionSiblingFamilyLink.OwnGuardian(applicant);
 		}
 		var definitionCodes = definitions.Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
 		var unknownCode = input.Values.FirstOrDefault(value => !definitionCodes.Contains(value.FieldCode))?.FieldCode;
@@ -282,6 +293,7 @@ public partial class AdmissionApplicationFormService(
 		if (applicant is not null)
 		{
 			AdmissionFirstParentContactMapping.Apply(applicant, parentAnswers, guardian);
+			AdmissionSiblingFamilyLink.SynchronizeStructuredContact(applicant, parentAnswers);
 			await applicantRepository.UpdateAsync(applicant, false);
 			if (application.InquiryId.HasValue)
 			{
@@ -294,7 +306,8 @@ public partial class AdmissionApplicationFormService(
 				}
 			}
 		}
-		if (guardian is not null && applicant?.ExistingStudentId.HasValue != true && (applicant == null || AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null)) await guardianRepository.UpdateAsync(guardian, false);
+		if (guardian is not null && applicant?.ExistingStudentId.HasValue != true && (applicant == null ||
+			!AdmissionSiblingFamilyLink.HasOwnContact(applicant) && AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null)) await guardianRepository.UpdateAsync(guardian, false);
 		if (prefill?.FamilyPrefill != null)
 		{
 			var copied = automaticCodes.Where(code => acceptedCodes.Contains(code) &&
@@ -479,6 +492,7 @@ public partial class AdmissionApplicationFormService(
 			Id = definition.Id, Name = definition.Name, Code = definition.Code, Description = definition.Description,
 			Version = definition.Version, Status = definition.Status, LayoutType = definition.LayoutType, Purpose = definition.Purpose,
 			CoreFieldPolicyVersion = experience.CoreFieldPolicyVersion,
+			PrintSettings = experience.PrintSettings ?? new(),
 			FieldsPerRow = definition.FieldsPerRow, DefaultLanguage = experience.DefaultLanguage,
 			SupportedLanguages = experience.SupportedLanguages, ParentVersionId = definition.ParentVersionId,
 			PublishedAt = definition.PublishedAt, PublishedBy = definition.PublishedBy,

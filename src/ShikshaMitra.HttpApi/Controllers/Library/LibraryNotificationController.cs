@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -13,6 +15,10 @@ namespace ShikshaMitra.HttpApi.Controllers.Library;
 [Route("api/library/notifications")]
 public class LibraryNotificationController(ILibraryNotificationAppService notificationAppService) : AbpControllerBase
 {
+	[HttpGet("settings/operational-recipients")]
+	public Task<List<LibraryOperationalRecipientOptionDto>> GetOperationalRecipientsAsync([FromQuery] string? filter = null) =>
+		notificationAppService.GetOperationalRecipientsAsync(filter);
+
 	[HttpGet("settings")]
 	[ProducesResponseType(typeof(LibraryNotificationSettingsDto), StatusCodes.Status200OK)]
 	public Task<LibraryNotificationSettingsDto> GetSettingsAsync()
@@ -47,4 +53,9 @@ public class LibraryNotificationController(ILibraryNotificationAppService notifi
 	{
 		return notificationAppService.RunRemindersAsync(input);
 	}
+
+	[HttpPost("history/{historyId:guid}/retry")]
+	[ProducesResponseType(typeof(LibraryNotificationHistoryDto), StatusCodes.Status200OK)]
+	public Task<LibraryNotificationHistoryDto> RetryAsync(Guid historyId, [FromBody] RetryLibraryNotificationRequest input) =>
+		notificationAppService.RetryAsync(historyId, input);
 }

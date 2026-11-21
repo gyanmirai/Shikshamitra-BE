@@ -113,7 +113,7 @@ public class ProrationPolicyAppService(
 			dto.IsUsedInDownstream = usedIds.Contains(x.Id);
 			return dto;
 		}).ToList();
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "proration", items);
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "proration", items, AsyncExecuter);
 		return new PagedResultDto<ProrationPolicyDto>(total, items);
 	}
 
@@ -122,7 +122,7 @@ public class ProrationPolicyAppService(
 	{
 		var entity = await GetRequiredAsync(id);
 		var dto = await ToDtoAsync(entity);
-		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "proration", new[] { dto });
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "proration", new[] { dto }, AsyncExecuter);
 		return dto;
 	}
 
@@ -388,10 +388,15 @@ public class ProrationPolicyAppService(
 	private async Task<HashSet<Guid>> GetUsedIdsAsync(List<Guid> ids)
 	{
 		if (ids.Count == 0) return [];
-		var structureIds = await feeStructureRepository.GetListAsync(x => x.ProrationPolicyId.HasValue && ids.Contains(x.ProrationPolicyId.Value));
-		var assignmentIds = await studentFeeStructureRepository.GetListAsync(x => x.ProrationPolicyId.HasValue && ids.Contains(x.ProrationPolicyId.Value));
-		return structureIds.Select(x => x.ProrationPolicyId!.Value)
-			.Concat(assignmentIds.Select(x => x.ProrationPolicyId!.Value)).ToHashSet();
+		var structures = await feeStructureRepository.GetQueryableAsync();
+		var assignments = await studentFeeStructureRepository.GetQueryableAsync();
+		var structureIds = await AsyncExecuter.ToListAsync(structures
+			.Where(x => x.ProrationPolicyId.HasValue && ids.Contains(x.ProrationPolicyId.Value))
+			.Select(x => x.ProrationPolicyId!.Value).Distinct());
+		var assignmentIds = await AsyncExecuter.ToListAsync(assignments
+			.Where(x => x.ProrationPolicyId.HasValue && ids.Contains(x.ProrationPolicyId.Value))
+			.Select(x => x.ProrationPolicyId!.Value).Distinct());
+		return structureIds.Concat(assignmentIds).ToHashSet();
 	}
 
 	private async Task WriteVersionAsync(ProrationPolicy entity, string action, string? reason = null)

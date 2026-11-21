@@ -64,6 +64,8 @@ public class AssignmentCandidateDto
 	public int RevisionNumber { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid StandardId { get; set; }
+	public DateTime? BoardStartDate { get; set; }
+	public DateTime? BoardEndDate { get; set; }
 	public decimal Total { get; set; }
 	public List<AssignmentHeadDto> Heads { get; set; } = [];
 }

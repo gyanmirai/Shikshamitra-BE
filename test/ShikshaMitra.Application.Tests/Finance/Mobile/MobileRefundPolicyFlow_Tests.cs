@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -10,6 +11,7 @@ using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.FeeRefund;
+using ShikshaMitra.Finance.Fees.FeeRefund.Repositories;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Mobile;
@@ -27,9 +29,9 @@ public partial class MobileAcademicAppService_Tests
 {
 	[Theory]
 	[InlineData(RefundAmountMode.ManualUpToEligible, "150.00", "150.00", "student")]
-	[InlineData(RefundAmountMode.RemainingPaidAmount, "1200.00", "1200.00", "student")]
-	[InlineData(RefundAmountMode.Percentage, "1200.00", "600.00", "student")]
-	[InlineData(RefundAmountMode.FixedAmount, "1200.00", "100.00", "student")]
+	[InlineData(RefundAmountMode.RemainingPaidAmount, "150.00", "150.00", "student")]
+	[InlineData(RefundAmountMode.Percentage, "150.00", "150.00", "student")]
+	[InlineData(RefundAmountMode.FixedAmount, "150.00", "100.00", "student")]
 	[InlineData(RefundAmountMode.ManualUpToEligible, "150.00", "150.00", "account")]
 	[InlineData(RefundAmountMode.ManualUpToEligible, "150.00", "150.00", "adopted")]
 	public Task Family_refund_uses_pinned_rules_and_combined_payment_sources(RefundAmountMode mode, string requested, string expected, string payerKind) => WithUnitOfWorkAsync(new AbpUnitOfWorkOptions { IsTransactional = false }, async () =>
@@ -70,10 +72,10 @@ public partial class MobileAcademicAppService_Tests
 		var tx = await Insert(new FeeRecordMetadata(Guid.NewGuid(), tenantId, f.Student.Id, f.Year.Id, 1200d, "REF-PAYMENT", FeeCollectionStatus.Paid,
 			financeFeeAccountId: payerKind == "account" ? accountId : null));
 		var allocation = await Insert(new FeeCollectionDueFeeAllocation(Guid.NewGuid(), tenantId, tx.Id, due.Id, 1000d));
-		var chargeAllocation = await Insert(new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = tenantId, StudentId = f.Student.Id, ChargeId = charge.Id, FeeRecordMetadataId = tx.Id, Amount = 200d, PaymentDate = DateTimeOffset.UtcNow });
+		var chargeAllocation = await Insert(new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = tenantId, StudentId = f.Student.Id, ChargeId = charge.Id, FeeRecordMetadataId = tx.Id, Amount = 200m, PaymentDate = DateTimeOffset.UtcNow });
 		var receipt = await Insert(new FeePaymentReceipt(Guid.NewGuid()) { TenantId = tenantId, StudentId = f.Student.Id,
 			AcademicYearId = f.Year.Id, FeeCollectionTransactionId = tx.Id, ReceiptNumber = "REF-COMBINED", ReceiptDate = new DateOnly(2026, 7, 1),
-			ReceiptScope = FeeReceiptScope.Combined, ReceiptKind = FeeReceiptKind.FinalFee, VerificationStatus = FeeReceiptVerificationStatus.Verified, TotalPaidAmount = 1200d });
+			ReceiptScope = FeeReceiptScope.Combined, ReceiptKind = FeeReceiptKind.FinalFee, VerificationStatus = FeeReceiptVerificationStatus.Verified, TotalPaidAmount = 1200m });
 		if (payerKind == "account")
 		{
 			receipt.SetFinanceFeeAccount(accountId!.Value);
@@ -87,7 +89,7 @@ public partial class MobileAcademicAppService_Tests
 		eligibility.RefundPolicyVersionId.ShouldBe(fixture.versionId);
 		eligibility.FinanceFeeAccountId.ShouldBe(fixture.accountId);
 		eligibility.FormRules!.AmountMode.ShouldBe(mode.ToString());
-		eligibility.FormRules.CanEditLineAmounts.ShouldBe(mode == RefundAmountMode.ManualUpToEligible);
+		eligibility.FormRules.CanEditLineAmounts.ShouldBeTrue();
 		eligibility.FeeHeads.SelectMany(x => x.Months).Count().ShouldBe(2);
 		eligibility.FeeHeads.SelectMany(x => x.Months).Single(x => x.ChargeId.HasValue).ChargeId.ShouldBe(fixture.charge.Id);
 		eligibility.FeeHeads.SelectMany(x => x.Months).All(x => x.PaymentDate == new DateOnly(2026, 7, 1)).ShouldBeTrue();
@@ -98,6 +100,13 @@ public partial class MobileAcademicAppService_Tests
 		// Preview and create are separate requests/contexts in the real API.
 		var preview = await FinanceRequestAsync(() => service.FamilyRefundPreviewAsync(fixture.f.Student.Id, fixture.f.Year.Id, input));
 		preview.RequestedAmount.ShouldBe(requested); preview.MaximumAllowedAmount.ShouldBe(expected);
+		if (mode == RefundAmountMode.Percentage)
+		{
+			preview.SettledPaidAmount.ShouldBe("1200.00");
+			preview.PolicyCalculatedAmount.ShouldBe("600.00");
+			preview.CapAdjustment.ShouldBe("450.00");
+			preview.MaximumAllowedAmount.ShouldBe("150.00");
+		}
 		input.Lines[1].DueFeeId = fixture.due.Id;
 		await Should.ThrowAsync<BusinessException>(() => service.FamilyRefundPreviewAsync(fixture.f.Student.Id, fixture.f.Year.Id, input));
 		input.Lines[1].DueFeeId = null;
@@ -108,6 +117,24 @@ public partial class MobileAcademicAppService_Tests
 		created.Status.ShouldBe("Submitted"); created.CalculatedAmount.ShouldBe(expected);
 		var replay = await service.FamilyRefundCreateAsync(fixture.f.Student.Id, fixture.f.Year.Id, input);
 		replay.Id.ShouldBe(created.Id);
+		await FinanceRequestAsync(async () =>
+		{
+			var stored = await GetRequiredService<IFeeRefundRepository>().FindWithLinesAsync(created.Id);
+			stored.ShouldNotBeNull();
+			stored.RefundPolicyVersionId.ShouldBe(fixture.versionId);
+			stored.OriginalReceiptId.ShouldBe(fixture.receipt.Id);
+			stored.Lines.Sum(line => line.RequestedAmount).ShouldBe(150m);
+			stored.Lines.Sum(line => line.CalculatedAmount).ShouldBe(decimal.Parse(expected, CultureInfo.InvariantCulture));
+			stored.Lines.ShouldAllBe(line => line.CalculatedAmount <= line.RequestedAmount &&
+				line.RequestedAmount <= line.SettledPaidAmount && line.SourceReceiptId == fixture.receipt.Id);
+			stored.Lines.Select(line => line.SourceAllocationId).OrderBy(id => id).ToArray().ShouldBe(
+				new Guid?[] { fixture.allocation.Id, fixture.chargeAllocation.Id }.OrderBy(id => id).ToArray());
+			stored.Lines.Sum(line => line.ProcessedAmount).ShouldBe(0m);
+			(await GetRequiredService<IDueFeeRepository>().GetAsync(fixture.due.Id)).RefundedAmount.ShouldBe(0m);
+			Convert.ToDecimal((await GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().GetAsync(fixture.receipt.FeeCollectionTransactionId))
+				.TotalPaidFee).ShouldBe(1200m);
+			return true;
+		});
 		fixture.due.RefundedAmount.ShouldBe(0m, "Submitting a request must not record a payout.");
 	});
 }

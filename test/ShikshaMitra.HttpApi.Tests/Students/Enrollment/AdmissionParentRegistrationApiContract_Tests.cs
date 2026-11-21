@@ -88,6 +88,15 @@ public class AdmissionParentRegistrationApiContract_Tests
 		await service.DidNotReceiveWithAnyArgs().SendAsync(default, default!);
 	}
 	[Fact]
+	public void Copy_link_is_edit_scoped_and_never_cached_or_audited_with_its_url()
+	{
+		var method = typeof(AdmissionParentRegistrationController).GetMethod("CopyLinkAsync")!;
+		method.GetCustomAttribute<HttpPostAttribute>()!.Template.ShouldBe("copy-link");
+		method.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBe(Permissions.Edit);
+		method.GetCustomAttribute<ResponseCacheAttribute>()!.NoStore.ShouldBeTrue();
+		method.GetCustomAttribute<DisableAuditingAttribute>().ShouldNotBeNull();
+	}
+	[Fact]
 	public async Task Saved_email_change_is_a_scoped_staff_command_and_never_calls_send()
 	{
 		var method = typeof(AdmissionParentRegistrationController).GetMethod("EmailAsync")!;

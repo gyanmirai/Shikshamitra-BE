@@ -32,7 +32,10 @@ public static class EmployeeStatusContractMapper
 		return new EmployeeStatusDeactivationCheckResponse
 		{
 			CanDeactivate = dto.CanDeactivate,
-			ActiveDirectReportCount = dto.ActiveDirectReportCount
+			ActiveDirectReportCount = dto.ActiveDirectReportCount,
+			LibraryClearanceStatus = dto.LibraryClearanceStatus,
+			LibraryOutstandingLoanCount = dto.LibraryOutstandingLoanCount,
+			LibraryOutstandingCustodyCount = dto.LibraryOutstandingCustodyCount
 		};
 	}
 

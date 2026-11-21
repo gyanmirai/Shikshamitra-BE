@@ -79,6 +79,7 @@ public class FeeStructurePolicyOptionDto
 
 public class FeeStructureTermOptionDto
 {
+ public bool IsDefault { get; set; }
 	public Guid Id { get; set; }
 	public Guid VersionId { get; set; }
 	public string Name { get; set; } = string.Empty;

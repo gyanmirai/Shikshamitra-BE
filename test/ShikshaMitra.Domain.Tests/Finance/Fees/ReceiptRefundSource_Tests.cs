@@ -12,8 +12,10 @@ using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.FeeRefund.Repositories;
 using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Finance.ExternalReceivables;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
 using Xunit;
 
 namespace ShikshaMitra.Finance.Fees;
@@ -58,7 +60,7 @@ public class ReceiptRefundSource_Tests
 	{
 		var fixture = new Fixture(legacy, verifiedProvisional);
 		var service = new PaidChargeRefundService(fixture.Charges, fixture.ChargeAllocations,
-			fixture.Collections, fixture.Receipts, fixture.Refunds);
+			fixture.Collections, fixture.Receipts, fixture.Refunds, EmptyExternalLinks(fixture.ChargeReceipt.TenantId));
 
 		var source = Assert.Single(await service.GetSourcesAsync(fixture.StudentId, fixture.YearId));
 		var expected = legacy ? fixture.FeeReceipt : fixture.ChargeReceipt;
@@ -69,6 +71,15 @@ public class ReceiptRefundSource_Tests
 		var sibling = legacy ? fixture.ChargeReceipt : fixture.FeeReceipt;
 		Assert.Empty(await service.GetSourcesAsync(fixture.StudentId, fixture.YearId, receiptId: sibling.Id));
 		Assert.Single(await service.GetSourcesAsync(fixture.StudentId, fixture.YearId, receiptId: expected.Id));
+	}
+
+	private static FinanceExternalSettlementGuard EmptyExternalLinks(Guid? tenantId)
+	{
+		var links = Substitute.For<IRepository<FinanceExternalReceivableSourceLink, Guid>>();
+		links.GetQueryableAsync().Returns(Task.FromResult(Array.Empty<FinanceExternalReceivableSourceLink>().AsQueryable()));
+		var tenant = Substitute.For<ICurrentTenant>();
+		tenant.Id.Returns(tenantId);
+		return new FinanceExternalSettlementGuard(links, tenant);
 	}
 
 	[Theory]
@@ -136,7 +147,7 @@ public class ReceiptRefundSource_Tests
 				ChargeStatus.Approved, Guid.NewGuid());
 			ChargeAllocation = new ChargeCollectionRecord(Guid.NewGuid())
 			{
-				TenantId = tenant, StudentId = StudentId, ChargeId = charge.Id, Amount = 600d,
+				TenantId = tenant, StudentId = StudentId, ChargeId = charge.Id, Amount = 600m,
 				FeeRecordMetadataId = collection.Id,
 			};
 			ReadRows(Dues, [due]);
@@ -156,7 +167,7 @@ public class ReceiptRefundSource_Tests
 			FeePaymentReceipt Receipt(FeeReceiptScope scope, double amount) => new(Guid.NewGuid())
 			{
 				TenantId = tenant, StudentId = StudentId, AcademicYearId = YearId,
-				FeeCollectionTransactionId = collection.Id, ReceiptScope = scope, TotalPaidAmount = amount,
+				FeeCollectionTransactionId = collection.Id, ReceiptScope = scope, TotalPaidAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble(amount),
 				ReceiptNumber = $"{scope}-TEST", ReceiptDate = new DateOnly(2026, 10, 30),
 				ReceiptKind = (scope, verifiedProvisional) switch
 				{

@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Library.Books;
+using ShikshaMitra.Library.Charges;
 using ShikshaMitra.Library.IssueReturn;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.ChargeCategory;
@@ -24,12 +25,9 @@ namespace ShikshaMitra.Library.Members;
 
 [Authorize(ShikshaMitraSubmodulePermissions.Library.LibraryMembers.View)]
 [RemoteService(false)]
-public class LibraryMemberAppService(
+public partial class LibraryMemberAppService(
 IRepository<LibraryMember, Guid> libraryMemberRepository,
 IStudentRepository studentRepository,
-IRepository<Employee, Guid> employeeRepository,
-IRepository<BookIssue, Guid> bookIssueRepository,
-IRepository<BookReservation, Guid> bookReservationRepository,
 IRepository<Standard, Guid> standardRepository,
 IRepository<Division, Guid> divisionRepository,
 IRepository<BookCopy, Guid> bookCopyRepository,
@@ -38,7 +36,12 @@ IRepository<BookCategory, Guid> bookCategoryRepository,
 IRepository<LibraryCharge, Guid> libraryChargeRepository,
 IRepository<LibraryChargeCategory, Guid> libraryChargeCategoryRepository,
 LibraryMemberManager libraryMemberManager,
-IGuidGenerator guidGenerator
+IGuidGenerator guidGenerator,
+ILibraryAccessService libraryAccess,
+LibraryMemberStatisticsReader statisticsReader,
+LibraryStoredLoanScope loanScope,
+LibraryStoredReservationScope requestScope,
+ILibraryChargePositionReader chargePositionReader
 ) : ApplicationService, ILibraryMemberAppService
 {
   [Authorize(ShikshaMitraSubmodulePermissions.Library.LibraryMembers.Update)]
@@ -78,6 +81,7 @@ IGuidGenerator guidGenerator
 
   private async Task<Student> GetStudentForLibraryMemberAsync(Guid studentId)
   {
+    await libraryAccess.EnsureMemberAsync(studentId);
     var queryable = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
     var student = await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(student => student.Id == studentId));
 
@@ -86,8 +90,8 @@ IGuidGenerator guidGenerator
 
   public async Task<PaginatedResponse<LibraryMemberDto>> GetListAsync(GetLibraryMembersInput input)
   {
-    var studentQueryable = await studentRepository.GetQueryableAsync();
-    var employeeQueryable = await employeeRepository.GetQueryableAsync();
+    var studentQueryable = await libraryAccess.GetStudentsAsync();
+    var employeeQueryable = await libraryAccess.GetEmployeesAsync();
 
     // Base filters for search
     if (!string.IsNullOrWhiteSpace(input.Search))
@@ -177,6 +181,8 @@ IGuidGenerator guidGenerator
       );
     }
 
+    var statistics = await GetStatisticsMapAsync(students.Select(x => x.Id).Concat(employees.Select(x => x.Id)));
+
     // Resolve names/statistics for current page items dynamically
     if (students.Any())
     {
@@ -217,7 +223,7 @@ IGuidGenerator guidGenerator
           ContactNo = student.ContactDetail?.PrimaryContactNo,
           Phone = student.ContactDetail?.SecondaryContactNo ?? student.ContactDetail?.PrimaryContactNo,
           JoinDate = student.CreationTime,
-          Statistics = await GetStatisticsAsync(student.Id)
+          Statistics = statistics[student.Id]
         });
       }
     }
@@ -237,7 +243,7 @@ IGuidGenerator guidGenerator
           ContactNo = emp.MobileNo,
           Phone = emp.SecondaryMobileNo ?? emp.MobileNo,
           JoinDate = emp.CreationTime,
-          Statistics = await GetStatisticsAsync(emp.Id)
+          Statistics = statistics[emp.Id]
         });
       }
     }
@@ -255,57 +261,20 @@ IGuidGenerator guidGenerator
     };
   }
 
-  private async Task<LibraryMemberStatisticsDto> GetStatisticsAsync(Guid memberId)
-  {
-    var issueQuery = await bookIssueRepository.GetQueryableAsync();
-    var resQuery = await bookReservationRepository.GetQueryableAsync();
-    var now = DateTime.UtcNow;
-
-    var currentIssue = await AsyncExecuter.CountAsync(
-    issueQuery.Where(i => i.MemberId == memberId && i.Status == BookIssueStatus.Issued)
-    );
-
-    var overdue = await AsyncExecuter.CountAsync(
-    issueQuery.Where(i => i.MemberId == memberId && i.Status == BookIssueStatus.Issued && i.DueDate < now)
-    );
-
-    var reserved = await AsyncExecuter.CountAsync(
-    resQuery.Where(r => r.MemberId == memberId)
-    );
-
-    return new LibraryMemberStatisticsDto
-    {
-      CurrentIssue = currentIssue,
-      ReservedBooks = reserved,
-      OverdueReturnBooks = overdue
-    };
-  }
-
   public async Task<PaginatedResponse<MemberBorrowedBookDto>> GetBorrowedBooksAsync(Guid memberId, int page = 1, int pageSize = 10)
   {
-    var issueQuery = await bookIssueRepository.GetQueryableAsync();
-    var filteredQuery = issueQuery.Where(i => i.MemberId == memberId && i.Status == BookIssueStatus.Issued);
+    page = Math.Max(page, 1);
+    pageSize = Math.Clamp(pageSize, 1, 100);
+    var filteredQuery = (await GetMemberLoanQueryAsync(memberId)).Where(i => i.Status == BookIssueStatus.Issued);
 
     var totalCount = await AsyncExecuter.CountAsync(filteredQuery);
     var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
 
     var issues = await AsyncExecuter.ToListAsync(
-      filteredQuery.OrderByDescending(i => i.IssueDate).Skip((page - 1) * pageSize).Take(pageSize));
+      filteredQuery.OrderByDescending(i => i.SchoolIssueDate).ThenByDescending(i => i.CreationTime).ThenBy(i => i.Id)
+        .Skip((page - 1) * pageSize).Take(pageSize));
 
-    var accessionNos = issues.Select(i => i.AccessionNumber).Distinct().ToList();
-    var copyQuery = await bookCopyRepository.GetQueryableAsync();
-    var copies = await AsyncExecuter.ToListAsync(copyQuery.Where(c => accessionNos.Contains(c.AccessionNumber)));
-    var copyBookIdLookup = copies.ToDictionary(c => c.AccessionNumber, c => c.BookId);
-
-    var bookIds = copies.Select(c => c.BookId).Distinct().ToList();
-    var bookQuery = await bookRepository.GetQueryableAsync();
-    var books = await AsyncExecuter.ToListAsync(bookQuery.Where(b => bookIds.Contains(b.Id)));
-    var bookLookup = books.ToDictionary(b => b.Id);
-
-    var catIds = books.Select(b => b.CategoryId).Distinct().ToList();
-    var catQuery = await bookCategoryRepository.GetQueryableAsync();
-    var categories = await AsyncExecuter.ToListAsync(catQuery.Where(c => catIds.Contains(c.Id)));
-    var catLookup = categories.ToDictionary(c => c.Id, c => c.Name);
+    var books = await GetMemberIssueBooksAsync(issues);
 
     var items = issues.Select(issue =>
     {
@@ -314,15 +283,17 @@ IGuidGenerator guidGenerator
         Id = issue.Id,
         AccessionNo = issue.AccessionNumber,
         IssuedOn = issue.IssueDate,
-        DueOn = issue.DueDate
+        DueOn = issue.DueDate,
+        AcademicYearId = issue.AcademicYearId,
+        SchoolIssueDate = issue.SchoolIssueDate,
+        SchoolDueDate = issue.SchoolDueDate,
+        IssueDateProvenance = (int)issue.IssueDateProvenance,
+        DueDateProvenance = (int)issue.DueDateProvenance
       };
 
-      if (copyBookIdLookup.TryGetValue(issue.AccessionNumber, out var bookId) &&
-          bookLookup.TryGetValue(bookId, out var book))
-      {
-        dto.BookTitle = book.Title;
-        dto.BookCategory = catLookup.GetValueOrDefault(book.CategoryId);
-      }
+      var book = books[issue.Id];
+      dto.CopyId = book.CopyId; dto.BookId = book.BookId; dto.BookTitle = book.Title; dto.BookCategory = book.Category;
+      dto.CopyLinkSource = book.LinkSource; dto.RequiresCopyReconciliation = book.RequiresReconciliation;
 
       return dto;
     }).ToList();
@@ -339,14 +310,16 @@ IGuidGenerator guidGenerator
 
   public async Task<PaginatedResponse<MemberReservedBookDto>> GetReservedBooksAsync(Guid memberId, int page = 1, int pageSize = 10)
   {
-    var resQuery = await bookReservationRepository.GetQueryableAsync();
-    var filteredQuery = resQuery.Where(r => r.MemberId == memberId);
+    page = Math.Max(page, 1);
+    pageSize = Math.Clamp(pageSize, 1, 100);
+    var filteredQuery = await GetMemberRequestQueryAsync(memberId);
 
     var totalCount = await AsyncExecuter.CountAsync(filteredQuery);
     var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
 
     var reservations = await AsyncExecuter.ToListAsync(
-      filteredQuery.OrderByDescending(r => r.RequestedDate).Skip((page - 1) * pageSize).Take(pageSize));
+      filteredQuery.OrderByDescending(r => r.SchoolRequestedDate).ThenByDescending(r => r.CreationTime).ThenBy(r => r.Id)
+        .Skip((page - 1) * pageSize).Take(pageSize));
 
     var bookIds = reservations.Select(r => r.BookId).Distinct().ToList();
     var bookQuery = await bookRepository.GetQueryableAsync();
@@ -363,7 +336,13 @@ IGuidGenerator guidGenerator
       var dto = new MemberReservedBookDto
       {
         Id = reservation.Id,
-        ReservedOn = reservation.RequestedDate
+        ReservedOn = reservation.RequestedDate,
+        AcademicYearId = reservation.AcademicYearId,
+        RequestedDate = reservation.SchoolRequestedDate,
+        RequestExpiryDate = reservation.SchoolRequestExpiryDate,
+        RequestedDateProvenance = (int)reservation.RequestedDateProvenance,
+        RequestExpiryDateProvenance = (int)reservation.RequestExpiryDateProvenance,
+        State = (int)reservation.State
       };
 
       if (bookLookup.TryGetValue(reservation.BookId, out var book))
@@ -386,131 +365,44 @@ IGuidGenerator guidGenerator
     };
   }
 
-  public async Task<PaginatedResponse<MemberChargeItemDto>> GetMemberChargesAsync(Guid memberId, int page = 1, int pageSize = 10)
-  {
-    var chargeQuery = await libraryChargeRepository.GetQueryableAsync();
-    var filteredQuery = chargeQuery.Where(c => c.MemberId == memberId);
-
-    var totalCount = await AsyncExecuter.CountAsync(filteredQuery);
-    var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
-
-    var charges = await AsyncExecuter.ToListAsync(
-      filteredQuery.OrderByDescending(c => c.ChargeDate).Skip((page - 1) * pageSize).Take(pageSize));
-
-    var categoryIds = charges.Select(c => c.ChargeCategoryId).Distinct().ToList();
-    var chargeCatQuery = await libraryChargeCategoryRepository.GetQueryableAsync();
-    var chargeCategories = await AsyncExecuter.ToListAsync(chargeCatQuery.Where(c => categoryIds.Contains(c.Id)));
-    var chargeCatLookup = chargeCategories.ToDictionary(c => c.Id, c => c.ChargeType);
-
-    var issueIds = charges.Where(c => c.BookIssueId.HasValue).Select(c => c.BookIssueId!.Value).Distinct().ToList();
-    Dictionary<Guid, BookIssue> issueLookup = new();
-    Dictionary<string, (string title, string? category)> accessionBookLookup = new();
-
-    if (issueIds.Any())
-    {
-      var issueQuery = await bookIssueRepository.GetQueryableAsync();
-      var issues = await AsyncExecuter.ToListAsync(issueQuery.Where(i => issueIds.Contains(i.Id)));
-      issueLookup = issues.ToDictionary(i => i.Id);
-
-      var accessionNos = issues.Select(i => i.AccessionNumber).Distinct().ToList();
-      var copyQuery = await bookCopyRepository.GetQueryableAsync();
-      var copies = await AsyncExecuter.ToListAsync(copyQuery.Where(c => accessionNos.Contains(c.AccessionNumber)));
-      var bookIds = copies.Select(c => c.BookId).Distinct().ToList();
-
-      var bookQuery = await bookRepository.GetQueryableAsync();
-      var books = await AsyncExecuter.ToListAsync(bookQuery.Where(b => bookIds.Contains(b.Id)));
-      var bookLookup = books.ToDictionary(b => b.Id);
-
-      var catIds = books.Select(b => b.CategoryId).Distinct().ToList();
-      var bookCatQuery = await bookCategoryRepository.GetQueryableAsync();
-      var bookCats = await AsyncExecuter.ToListAsync(bookCatQuery.Where(c => catIds.Contains(c.Id)));
-      var bookCatLookup = bookCats.ToDictionary(c => c.Id, c => c.Name);
-
-      foreach (var copy in copies)
-      {
-        if (bookLookup.TryGetValue(copy.BookId, out var book))
-          accessionBookLookup[copy.AccessionNumber] = (book.Title, bookCatLookup.GetValueOrDefault(book.CategoryId));
-      }
-    }
-
-    var items = charges.Select(charge =>
-    {
-      var dto = new MemberChargeItemDto
-      {
-        Id = charge.Id,
-        Amount = charge.Amount,
-        Date = charge.ChargeDate,
-        ChargeType = chargeCatLookup.GetValueOrDefault(charge.ChargeCategoryId, "Unknown"),
-        Reason = charge.Remarks,
-        PaymentStatus = (int) charge.PaymentStatus
-      };
-
-      if (charge.BookIssueId.HasValue && issueLookup.TryGetValue(charge.BookIssueId.Value, out var issue))
-      {
-        dto.AccessionNo = issue.AccessionNumber;
-        if (accessionBookLookup.TryGetValue(issue.AccessionNumber, out var bookInfo))
-        {
-          dto.BookTitle = bookInfo.title;
-          dto.BookCategory = bookInfo.category;
-        }
-      }
-
-      return dto;
-    }).ToList();
-
-    return new PaginatedResponse<MemberChargeItemDto>
-    {
-      TotalCount = totalCount,
-      CurrentPage = page,
-      PageSize = pageSize,
-      TotalPages = totalPages,
-      Items = items
-    };
-  }
-
   public async Task<PaginatedResponse<MemberBorrowHistoryDto>> GetBorrowHistoryAsync(Guid memberId, int page = 1, int pageSize = 10)
   {
-    var issueQuery = await bookIssueRepository.GetQueryableAsync();
-    var filteredQuery = issueQuery.Where(i => i.MemberId == memberId);
+    page = Math.Max(page, 1);
+    pageSize = Math.Clamp(pageSize, 1, 100);
+    var filteredQuery = await GetMemberLoanQueryAsync(memberId);
 
     var totalCount = await AsyncExecuter.CountAsync(filteredQuery);
     var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
 
     var issues = await AsyncExecuter.ToListAsync(
-      filteredQuery.OrderByDescending(i => i.IssueDate).Skip((page - 1) * pageSize).Take(pageSize));
+      filteredQuery.OrderByDescending(i => i.SchoolIssueDate).ThenByDescending(i => i.CreationTime).ThenBy(i => i.Id)
+        .Skip((page - 1) * pageSize).Take(pageSize));
 
-    var accessionNos = issues.Select(i => i.AccessionNumber).Distinct().ToList();
-    var copyQuery = await bookCopyRepository.GetQueryableAsync();
-    var copies = await AsyncExecuter.ToListAsync(copyQuery.Where(c => accessionNos.Contains(c.AccessionNumber)));
-    var copyBookIdLookup = copies.ToDictionary(c => c.AccessionNumber, c => c.BookId);
-
-    var bookIds = copies.Select(c => c.BookId).Distinct().ToList();
-    var bookQuery = await bookRepository.GetQueryableAsync();
-    var books = await AsyncExecuter.ToListAsync(bookQuery.Where(b => bookIds.Contains(b.Id)));
-    var bookLookup = books.ToDictionary(b => b.Id);
-
-    var catIds = books.Select(b => b.CategoryId).Distinct().ToList();
-    var catQuery = await bookCategoryRepository.GetQueryableAsync();
-    var categories = await AsyncExecuter.ToListAsync(catQuery.Where(c => catIds.Contains(c.Id)));
-    var catLookup = categories.ToDictionary(c => c.Id, c => c.Name);
+    var books = await GetMemberIssueBooksAsync(issues);
 
     var items = issues.Select(issue =>
     {
       var dto = new MemberBorrowHistoryDto
       {
         BorrowId = issue.Id,
-        BookId = issue.BookCopyId,
+        BookId = books[issue.Id].BookId ?? Guid.Empty,
         AccessionNo = issue.AccessionNumber,
         IssuedOn = issue.IssueDate,
-        DueOn = issue.DueDate
+        DueOn = issue.DueDate,
+        AcademicYearId = issue.AcademicYearId,
+        SchoolIssueDate = issue.SchoolIssueDate,
+        SchoolDueDate = issue.SchoolDueDate,
+        SchoolReturnDate = issue.SchoolReturnDate,
+        IssueDateProvenance = (int)issue.IssueDateProvenance,
+        DueDateProvenance = (int)issue.DueDateProvenance,
+        ReturnDateProvenance = (int)issue.ReturnDateProvenance,
+        ReturnedOn = issue.ReturnDate,
+        StoredStatus = (int)issue.Status
       };
 
-      if (copyBookIdLookup.TryGetValue(issue.AccessionNumber, out var bookId) &&
-          bookLookup.TryGetValue(bookId, out var book))
-      {
-        dto.BookTitle = book.Title;
-        dto.BookCategory = catLookup.GetValueOrDefault(book.CategoryId);
-      }
+      var book = books[issue.Id];
+      dto.CopyId = book.CopyId; dto.BookTitle = book.Title; dto.BookCategory = book.Category;
+      dto.CopyLinkSource = book.LinkSource; dto.RequiresCopyReconciliation = book.RequiresReconciliation;
 
       return dto;
     }).ToList();

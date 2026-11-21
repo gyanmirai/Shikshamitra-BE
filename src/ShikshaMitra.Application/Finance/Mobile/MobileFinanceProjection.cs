@@ -25,6 +25,17 @@ public static partial class MobileFinanceProjection
 		legacy ? requestedAmount : calculatedAmount;
 	// Legacy storage is converted per row before summation, never reaggregated as binary floating point.
 	public static decimal LegacyMoney(double value) => decimal.Round(Convert.ToDecimal(value), 2, MidpointRounding.AwayFromZero);
+	public static decimal LegacyMoney(decimal value)
+	{
+		ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.Ensure(value);
+		return value;
+	}
+	public static decimal PaymentAmount(decimal recordedTotal, IReadOnlyList<decimal> decimalSplits)
+	{
+		var amount = decimalSplits.Sum();
+		if (amount != recordedTotal) throw new BusinessException("Finance:SelfService:PaymentEvidenceIncomplete");
+		return amount;
+	}
 	public static decimal PaymentAmount(double recordedTotal,IReadOnlyList<decimal> decimalSplits)
 	{
 		var amount=decimalSplits.Sum();

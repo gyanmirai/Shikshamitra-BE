@@ -272,6 +272,37 @@ public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTes
 		}
 	}
 
+	[Fact]
+	public async Task FeeHead_Allocation_Follows_Structure_Order_And_Then_Due_Date()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (year, student, firstHeadId, firstDueId, structureId) =
+				await SeedStudentWithOverdueDueFeeAsync(10, true, enableLateFee: false, allocationBasis: "FeeHead");
+			var firstDue = await _dueFeeRepo.GetAsync(firstDueId);
+			var firstHead = await _feeHeadRepo.GetAsync(firstHeadId);
+			var secondHead = new FeeHead(Guid.NewGuid(), TestTenantId, year, firstHead.FeeCategoryId,
+				"Annual Fee", FeeHeadModule.Finance, false, null, firstHead.IncomeCategoryId);
+			await _feeHeadRepo.InsertAsync(secondHead, autoSave: true);
+
+			var structure = await _feeStructureRepo.GetAsync(structureId);
+			FeeStructureHeadOrder.Save(structure, [firstHeadId, secondHead.Id]);
+			await _feeStructureRepo.UpdateAsync(structure, autoSave: true);
+
+			var laterDate = firstDue.DueDate.AddMonths(1);
+			var laterDue = new DueFee(Guid.NewGuid(), TestTenantId, student, firstHeadId,
+				(MonthEnum)(laterDate.Month - 1), laterDate.Year, false, 100m, laterDate);
+			var secondHeadDue = new DueFee(Guid.NewGuid(), TestTenantId, student, secondHead.Id,
+				firstDue.Month, firstDue.Year, true, 100m, firstDue.DueDate);
+			laterDue.BindAssignment(firstDue.StudentFeeStructureId!.Value);
+			secondHeadDue.BindAssignment(firstDue.StudentFeeStructureId!.Value);
+			await _dueFeeRepo.InsertManyAsync([laterDue, secondHeadDue], autoSave: true);
+
+			var form = await _feeCollections.GetCollectFormAsync(student, year);
+			form.AllocationDueFeeOrder.ShouldBe(new[] { firstDueId, laterDue.Id, secondHeadDue.Id });
+		}
+	}
+
 	[Theory]
 	[InlineData("Installment")]
 	[InlineData("FeeHead")]

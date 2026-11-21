@@ -8,6 +8,37 @@ using Xunit;
 namespace ShikshaMitra.Finance.Accounts;
 public class BankActivityQuery_Tests
 {
+	[Fact]
+	public void Method_totals_provide_exact_filtered_count_summary_and_breakdown_before_paging()
+	{
+		var student = Guid.NewGuid();
+		var facts = new[] {
+			new BankActivityFact { StudentId = student, Source = "income", PaymentMethod = 3, Incoming = 123.45m },
+			new BankActivityFact { StudentId = student, Source = "expense", PaymentMethod = 3, Outgoing = 20.01m },
+			new BankActivityFact { StudentId = student, Source = "collection", PaymentMethod = 1, PendingAmount = 7.89m, RecognitionStatus = 1 },
+			new BankActivityFact { StudentId = student, Source = "cash-deposit", PaymentMethod = 0, InTransitAmount = 50.05m },
+			new BankActivityFact { StudentId = Guid.NewGuid(), Source = "income", PaymentMethod = 3, Incoming = 99999m }
+		}.AsQueryable();
+		var scoped = BankActivityQueryRules.Scope(facts, new[] { student }.AsQueryable(), Array.Empty<Guid>().AsQueryable(), false);
+		var visible = BankActivityQueryRules.AuthorizedSlices(scoped, true, true, true, true);
+		var totals = BankActivityQueryRules.MethodTotals(visible).ToList();
+		totals.Sum(x => x.Count).ShouldBe(4);
+		totals.Single(x => x.PaymentMethod == 3).Count.ShouldBe(2);
+		var summary = BankActivityQueryRules.Summarize(totals);
+		summary.Incoming.ShouldBe(123.45m); summary.Outgoing.ShouldBe(20.01m); summary.Net.ShouldBe(103.44m);
+		summary.PendingIncoming.ShouldBe(7.89m); summary.InTransit.ShouldBe(50.05m);
+		// The bounded complete export facts use the same totals, independent of the UI page size.
+		BankActivityQueryRules.Summarize(BankActivityQueryRules.MethodTotals(visible.ToList().AsQueryable())).Net.ShouldBe(summary.Net);
+	}
+	[Fact]
+	public void Empty_method_totals_return_zero_count_and_all_summary_amounts()
+	{
+		var totals = BankActivityQueryRules.MethodTotals(Array.Empty<BankActivityFact>().AsQueryable()).ToList();
+		totals.ShouldBeEmpty();
+		var summary = BankActivityQueryRules.Summarize(totals);
+		summary.Incoming.ShouldBe(0m); summary.Outgoing.ShouldBe(0m); summary.Net.ShouldBe(0m);
+		summary.PendingIncoming.ShouldBe(0m); summary.InTransit.ShouldBe(0m);
+	}
 	[Theory]
 	[InlineData(0, 10)]
 	[InlineData(1, 0)]

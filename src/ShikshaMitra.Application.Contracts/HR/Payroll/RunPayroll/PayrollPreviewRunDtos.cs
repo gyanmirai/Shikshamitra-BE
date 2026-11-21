@@ -4,11 +4,21 @@ using System.Threading.Tasks;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
-public class StartPayrollPreviewRequest
+public class PayrollPreviewMonthInput
 {
 	[Required, MaxLength(30)] public string Month { get; set; } = "";
 	public Guid? AcademicYearId { get; set; }
+}
+
+public class StartPayrollPreviewRequest : PayrollPreviewMonthInput
+{
 	public bool Refresh { get; set; }
+	public Guid? CommandKey { get; set; }
+}
+
+public class PayrollPreviewLookupDto
+{
+	public PayrollPreviewStatusDto? CurrentRun { get; set; }
 }
 
 public class PayrollPreviewStatusDto
@@ -28,7 +38,22 @@ public class PayrollPreviewStatusDto
 	public string? ErrorMessage { get; set; }
 }
 
-public class PayrollPreviewPageInput
+public class PayrollPreviewPageInput : PayrollPageInput
+{
+}
+
+public class PayrollRegisterInput : PayrollPageInput
+{
+	[Required, MaxLength(30)] public string Month { get; set; } = "";
+	public Guid? AcademicYearId { get; set; }
+	public string? Sort { get; set; }
+	public bool Descending { get; set; }
+	public string? ReviewState { get; set; }
+	public string? IssueClass { get; set; }
+	[MaxLength(100)] public string? IssueCode { get; set; }
+}
+
+public class PayrollPageInput
 {
 	[Range(0, int.MaxValue)] public int Page { get; set; }
 	[Range(1, 100)] public int PageSize { get; set; } = 25;
@@ -38,6 +63,8 @@ public class PayrollPreviewPageInput
 public interface IPayrollPreviewRunAppService
 {
 	Task<PayrollPreviewStatusDto> StartAsync(StartPayrollPreviewRequest request);
+	Task<PayrollPreviewLookupDto> GetCurrentAsync(PayrollPreviewMonthInput input);
+	Task<RunPayrollResponse> GetRegisterAsync(PayrollRegisterInput input);
 	Task<PayrollPreviewStatusDto> GetAsync(Guid id);
 	Task<RunPayrollResponse> GetEmployeesAsync(Guid id, PayrollPreviewPageInput input);
 }

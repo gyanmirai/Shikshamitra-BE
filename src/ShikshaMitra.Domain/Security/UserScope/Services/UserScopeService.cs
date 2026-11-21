@@ -67,6 +67,20 @@ public class UserScopeService(
                 unresolved.Add(id);
         }
         if (unresolved.Count == 0) return results;
+		// Readiness applies to requested actors, not their reporting populations.
+		// A manager may still inherit the scope of a disabled-login subordinate.
+		var activeRows = await repository.GetActiveUserIdsAsync(unresolved, cancellationToken);
+		cancellationToken.ThrowIfCancellationRequested();
+		var activeRootIds = activeRows.ToHashSet();
+		foreach (var id in unresolved.Where(id => !activeRootIds.Contains(id)))
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			var denied = new UserScopeContext { UserId = id, TenantId = CurrentTenant.Id };
+			results[id] = denied;
+			if (local != null) local[(CurrentTenant.Id, id)] = denied;
+		}
+		unresolved = unresolved.Where(activeRootIds.Contains).ToList();
+		if (unresolved.Count == 0) return results;
 
         // Resolve the reporting tree and roles once for the entire candidate page.
         var hierarchy = await repository.GetReportingHierarchyAsync(cancellationToken);

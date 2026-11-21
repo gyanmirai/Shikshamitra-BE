@@ -158,8 +158,15 @@ public class AdmissionApplicationAppService(
 	public Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => DecisionService.DeclineOfferAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
-	public Task<AdmissionFinalizationPreviewDto> GetFinalizationPreviewAsync(Guid id) =>
-		DecisionService.GetFinalizationPreviewAsync(id);
+	public Task<AdmissionFinalizationPreviewDto> GetFinalizationPreviewAsync(Guid id, bool forApproval = false) =>
+		DecisionService.GetFinalizationPreviewAsync(id, forApproval);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Advance)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
+	[UnitOfWork(true)]
+	public Task<AdmissionFinalizationResultDto> ApproveAndFinalizeAsync(Guid id, ApproveAndFinalizeAdmissionApplicationDto input) =>
+		DecisionService.ApproveAndFinalizeAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
 	[UnitOfWork(true)]

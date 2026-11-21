@@ -47,7 +47,7 @@ public class FeeMonthlyRegisterBuilder(
         var divMap = divisions.ToDictionary(d => d.Id, d => d.Name);
 
         // Group receipts by canonical payer and month.
-        var groupedData = new Dictionary<FinanceReportPayerKey, Dictionary<int, double>>();
+        var groupedData = new Dictionary<FinanceReportPayerKey, Dictionary<int, decimal>>();
 
         foreach (var receipt in receipts)
         {
@@ -98,7 +98,7 @@ public class FeeMonthlyRegisterBuilder(
                 { "Division", divName }
             };
 
-            double rowTotal = 0;
+            decimal rowTotal = 0m;
             foreach (var month in months)
             {
                 if (monthData.TryGetValue(month, out var amount))

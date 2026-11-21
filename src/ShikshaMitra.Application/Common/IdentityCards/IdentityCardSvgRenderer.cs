@@ -40,7 +40,8 @@ internal static class IdentityCardSvgRenderer
 	{
 		var style = element.Style;
 		value = string.IsNullOrWhiteSpace(value) ? "-" : value;
-		if (style.ShowLabel == true && !string.IsNullOrWhiteSpace(element.Label)) value = $"{element.Label}{style.Separator ?? ": "}{value}";
+		if (element.Prefix is not null && element.FieldKey is not (null or "" or "static")) value = element.Prefix + value;
+		else if (style.ShowLabel == true && !string.IsNullOrWhiteSpace(element.Label)) value = $"{element.Label}{style.Separator ?? ": "}{value}";
 		var size = style.FontSize ?? 9;
 		var family = style.FontFamily ?? "Arial";
 		var bold = style.FontWeight?.ToString() is "600" or "700" or "800" or "900" or "bold";

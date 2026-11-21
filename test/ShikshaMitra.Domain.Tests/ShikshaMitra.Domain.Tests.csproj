@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\Shared\FinanceExternalFingerprintV1Vectors.json" Link="FinanceExternalFingerprintV1Vectors.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\ShikshaMitra.Domain\ShikshaMitra.Domain.csproj" />
     <ProjectReference Include="..\ShikshaMitra.TestBase\ShikshaMitra.TestBase.csproj" />
   </ItemGroup>

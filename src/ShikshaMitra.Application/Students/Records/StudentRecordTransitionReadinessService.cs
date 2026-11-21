@@ -6,8 +6,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.Examination.Results;
 using ShikshaMitra.Finance.Fees.Collections;
-using ShikshaMitra.Library.Books;
-using ShikshaMitra.Library.Members;
+using ShikshaMitra.Library.Clearance;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
@@ -52,8 +51,7 @@ public class StudentRecordTransitionReadinessService
 	private readonly IRepository<ExamResultDetail, Guid> results;
 	private readonly IRepository<ExamResultHeader, Guid> headers;
 	private readonly IRepository<Exam, Guid> exams;
-	private readonly IRepository<LibraryMember, Guid> members;
-	private readonly IRepository<BookIssue, Guid> bookIssues;
+	private readonly LibraryStudentClearanceReader library;
 	private readonly IRepository<TransportMember, Guid> transportMembers;
 	private readonly StudentTransitionFinanceClearanceReader finance;
 	private readonly IRepository<StudentRecordTransition, Guid> transitions;
@@ -74,8 +72,7 @@ public class StudentRecordTransitionReadinessService
 		IRepository<ExamResultDetail, Guid> results,
 		IRepository<ExamResultHeader, Guid> headers,
 		IRepository<Exam, Guid> exams,
-		IRepository<LibraryMember, Guid> members,
-		IRepository<BookIssue, Guid> bookIssues,
+		LibraryStudentClearanceReader library,
 		IRepository<TransportMember, Guid> transportMembers,
 		StudentTransitionFinanceClearanceReader finance,
 		IRepository<StudentRecordTransition, Guid> transitions,
@@ -98,8 +95,7 @@ public class StudentRecordTransitionReadinessService
 		this.results = results;
 		this.headers = headers;
 		this.exams = exams;
-		this.members = members;
-		this.bookIssues = bookIssues;
+		this.library = library;
 		this.transportMembers = transportMembers;
 		this.finance = finance;
 		this.transitions = transitions;
@@ -312,9 +308,7 @@ public class StudentRecordTransitionReadinessService
 		}
 		if (checks.RequireLibraryClearance || isExit)
 		{
-			var memberQuery = await members.GetQueryableAsync(); var issueQuery = await bookIssues.GetQueryableAsync();
-			var pending = await AsyncExecuter.ToListAsync(issueQuery.Where(x => x.TenantId == CurrentTenant.Id && x.MemberRole == 0 && x.Status != BookIssueStatus.Returned &&
-				(x.MemberId == studentId || memberQuery.Any(m => m.Id == x.MemberId && m.StudentId == studentId && m.TenantId == CurrentTenant.Id))).OrderBy(x => x.Id).Select(x => x.Id));
+			var pending = await library.GetOutstandingIssueIdsAsync(studentId);
 			if (pending.Count > 0) { Add(row, isExit ? "OutstandingBooks" : "LibraryClearanceRequired", "Outstanding books remain recorded in Library."); evidence["Library"] = JsonSerializer.Serialize(pending); }
 		}
 		row.OutstandingEvidence = JsonSerializer.Serialize(evidence);

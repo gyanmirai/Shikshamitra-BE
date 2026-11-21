@@ -125,6 +125,7 @@ public class AdmissionFormAppService(
 	public async Task<AdmissionFormDto> CreateAsync(CreateUpdateAdmissionFormDto input)
 	{
 		EnsureSupportedPurpose(input.Purpose);
+		AdmissionFormMetadataStore.ValidatePrintSettings(input.PrintSettings);
 		AdmissionCoreFieldPolicy.PrepareNew(input);
 		AdmissionCoreFieldPolicy.EnsureValid(input);
 		AdmissionGenderChoices.NormalizeDraftDefinition(input);
@@ -145,6 +146,7 @@ public class AdmissionFormAppService(
 	public async Task<AdmissionFormDto> UpdateAsync(Guid id, CreateUpdateAdmissionFormDto input)
 	{
 		EnsureSupportedPurpose(input.Purpose);
+		AdmissionFormMetadataStore.ValidatePrintSettings(input.PrintSettings);
 		var form = await GetFormAsync(id);
 		EnsureConcurrency(form, input.ConcurrencyStamp);
 		input.CoreFieldPolicyVersion = AdmissionFormMetadataStore.ReadExperience(form).CoreFieldPolicyVersion;
@@ -683,6 +685,7 @@ public class AdmissionFormAppService(
 			Id = form.Id, Name = form.Name, Code = form.Code, Description = form.Description,
 			Version = form.Version, Status = form.Status, LayoutType = form.LayoutType, Purpose = form.Purpose,
 			CoreFieldPolicyVersion = experience.CoreFieldPolicyVersion,
+			PrintSettings = experience.PrintSettings ?? new(),
 			FieldsPerRow = form.FieldsPerRow, DefaultLanguage = experience.DefaultLanguage,
 			SupportedLanguages = experience.SupportedLanguages,
 			ParentVersionId = form.ParentVersionId, PublishedAt = form.PublishedAt, PublishedBy = form.PublishedBy,

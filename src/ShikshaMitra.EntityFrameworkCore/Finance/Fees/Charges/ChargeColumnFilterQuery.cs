@@ -23,12 +23,15 @@ internal static class ChargeColumnFilterQuery
         ["description"] = (Expression<Func<Row, string>>)(r => r.Request.PurposeDescription),
         ["amount"] = (Expression<Func<Row, decimal>>)(r => r.Request.Amount),
         ["studentCount"] = (Expression<Func<Row, int>>)(r => r.StudentCount),
-        ["dueDate"] = (Expression<Func<Row, DateTimeOffset>>)(r => r.Request.DueDate)
+        ["dueDate"] = (Expression<Func<Row, DateTimeOffset>>)(r => r.Request.DueDate!.Value)
     };
 
     public static IQueryable<ChargeRequest> Apply(IQueryable<ChargeRequest> requests, IQueryable<Charge> visibleLines,
         IQueryable<ChargeCategory> categories, IReadOnlyCollection<ChargeColumnFilter> filters)
     {
+        requests = requests.Where(request => request.SchoolDueDate == null);
+        if (filters.Any(filter => filter.Column == "dueDate"))
+            requests = requests.Where(request => request.DueDate.HasValue);
         if (!filters.Any(f => f.Column != "workflowStatus")) return requests;
         var rows = requests.Select(request => new Row
         {

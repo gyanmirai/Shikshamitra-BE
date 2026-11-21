@@ -11,6 +11,9 @@ public interface IFeeAdjustmentRepository : IRepository<FeeAdjustmentRequest, Gu
 {
     Task<FeeAdjustmentRequest> GetWithDetailsAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<List<FeeAdjustmentRequest>> GetListForActionAvailabilityAsync(
+        IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken = default);
+
     Task<FeeAdjustmentRequest?> FindByIdempotencyKeyAsync(
         Guid requestId,
         string idempotencyKey,

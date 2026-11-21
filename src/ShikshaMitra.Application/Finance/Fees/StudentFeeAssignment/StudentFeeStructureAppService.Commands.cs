@@ -15,6 +15,7 @@ public partial class StudentFeeStructureAppService
 	[Authorize(AssignPermission)]
 	public async Task<AssignmentBulkPreviewDto> PreviewBulkAsync(BulkAssignStudentFeeStructureDto input)
 	{
+		using var readBatch = BeginAssignmentPreviewReads();
 		var result = new AssignmentBulkPreviewDto();
 		var items = BulkItems(input);
 		await ValidateBulkCorrectionGroupAsync(items);

@@ -1,18 +1,17 @@
 using System;
-using System.ComponentModel.DataAnnotations;
 using ShikshaMitra.Library.Books;
 
 namespace ShikshaMitra.Library.IssueReturn;
 
 public class ReturnBookRequest
 {
-    [Required]
-    public string AccessionNo { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
+    public Guid? LoanId { get; set; }
+    public LibraryLoanReturnRequest? Return { get; set; }
 
-    [Required]
+    public string? AccessionNo { get; set; }
+
     public Guid MemberId { get; set; }
 
-    [Required]
     public DateTime ReturnDate { get; set; }
 
     public Guid? ChargeCategoryId { get; set; }

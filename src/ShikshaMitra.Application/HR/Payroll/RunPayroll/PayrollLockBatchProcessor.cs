@@ -27,7 +27,8 @@ public class PayrollLockBatchProcessor(
 	internal async Task<PayrollLockBatchResult> ProcessAsync(
 		IReadOnlyList<PayrollTargetEmployee> employees,
 		IReadOnlyDictionary<Guid, PayrollRunItemSnapshot> snapshotByEmployee,
-		string month)
+		string month,
+		bool requireAll = false)
 	{
 		logger.LogInformation(
 			"Generating salary slips from reviewed payroll snapshots for {ProcessCount} staff",
@@ -49,7 +50,7 @@ public class PayrollLockBatchProcessor(
 
 			foreach (var employee in batch)
 			{
-				await ProcessEmployeeAsync(employee, snapshotByEmployee[employee.Id], result);
+				await ProcessEmployeeAsync(employee, snapshotByEmployee[employee.Id], result, requireAll);
 			}
 
 			await SaveBatchAsync(batchNum, totalBatches, month, result);
@@ -61,7 +62,8 @@ public class PayrollLockBatchProcessor(
 	private async Task ProcessEmployeeAsync(
 		PayrollTargetEmployee employee,
 		PayrollRunItemSnapshot snapshot,
-		PayrollLockBatchResult result)
+		PayrollLockBatchResult result,
+		bool requireAll)
 	{
 		var persistenceStarted = false;
 		try
@@ -86,6 +88,7 @@ public class PayrollLockBatchProcessor(
 
 			if (salarySlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			{
+				if (requireAll) throw new BusinessException(HRErrorCodes.PayrollAlreadyLocked);
 				logger.LogDebug(
 					"Salary slip for staff {EmployeeCode} is already immutable, skipping",
 					employee.EmployeeCode);
@@ -106,7 +109,7 @@ public class PayrollLockBatchProcessor(
 		{
 			// A caught exception must never commit a partially created document, slip or delivery intent.
 			// Known pre-write validation failures can still be reported per employee.
-			if (persistenceStarted) throw;
+			if (requireAll || persistenceStarted) throw;
 			logger.LogWarning(bex,
 				"Business rule violation generating salary slip for staff {EmployeeCode} ({EmployeeName}): {ErrorCode}",
 				employee.EmployeeCode, employee.EmployeeName, bex.Code);
@@ -115,7 +118,7 @@ public class PayrollLockBatchProcessor(
 		}
 		catch (Exception ex)
 		{
-			if (persistenceStarted) throw;
+			if (requireAll || persistenceStarted) throw;
 			logger.LogError(ex,
 				"Unexpected error generating salary slip for staff {EmployeeCode} ({EmployeeName})",
 				employee.EmployeeCode, employee.EmployeeName);

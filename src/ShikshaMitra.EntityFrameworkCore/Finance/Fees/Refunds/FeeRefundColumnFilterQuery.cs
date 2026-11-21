@@ -5,6 +5,9 @@ using System.Linq;
 using System.Linq.Expressions;
 using ShikshaMitra.Students;
 using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.Divisions;
 
 namespace ShikshaMitra.Finance.Fees.FeeRefund;
 
@@ -19,11 +22,35 @@ internal static class FeeRefundColumnFilterQuery
         public DateTime RequestedAt { get; set; }
     }
 
+    private sealed class HistoricalClassDivision
+    {
+        public Guid StudentId { get; set; }
+        public Guid AcademicYearId { get; set; }
+        public string Name { get; set; } = "";
+    }
+
     public static IQueryable<FeeRefundRequest> Apply(IQueryable<FeeRefundRequest> requests,
         IQueryable<Student> students, IReadOnlyCollection<FeeRefundColumnFilter> filters,
-        IQueryable<FeePaymentReceipt>? receipts = null)
+        IQueryable<FeePaymentReceipt>? receipts = null,
+        IQueryable<StudentEnrollment>? enrollments = null,
+        IQueryable<Standard>? standards = null,
+        IQueryable<Division>? divisions = null)
     {
         if (filters.Count == 0) return requests;
+        IQueryable<HistoricalClassDivision>? historical = null;
+        if (enrollments != null && standards != null && divisions != null &&
+            filters.Any(filter => filter.Column == "classDivision"))
+            historical = from enrollment in enrollments
+                         join standard in standards on enrollment.StandardId equals (Guid?)standard.Id
+                         join division in divisions on enrollment.DivisionId equals (Guid?)division.Id into divisionMatches
+                         from division in divisionMatches.DefaultIfEmpty()
+                         where standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId == enrollment.AcademicYearId
+                         select new HistoricalClassDivision
+                         {
+                             StudentId = enrollment.StudentId,
+                             AcademicYearId = enrollment.AcademicYearId,
+                             Name = standard.Name + " / " + (division.Name ?? "—")
+                         };
         var rows = from request in requests
                    join student in students on request.StudentId equals student.Id into matches
                    from student in matches.DefaultIfEmpty()
@@ -34,8 +61,11 @@ internal static class FeeRefundColumnFilterQuery
                            (student.FirstName + " " +
                            (student.MiddleName == null || student.MiddleName == "" ? "" : student.MiddleName + " ") +
                            student.LastName).Trim() + (student.GrNo == null ? "" : " (" + student.GrNo.ToString() + ")"),
-                       ClassDivision = (student == null || student.Standard == null ? "—" : student.Standard.Name) +
-                           " / " + (student == null || student.Division == null ? "—" : student.Division.Name),
+                       ClassDivision = student != null && student.AcademicYearId == request.AcademicYearId || historical == null
+                           ? (student == null || student.Standard == null ? "—" : student.Standard.Name) +
+                             " / " + (student == null || student.Division == null ? "—" : student.Division.Name)
+                           : historical.Where(p => p.StudentId == request.StudentId && p.AcademicYearId == request.AcademicYearId)
+                               .Select(p => p.Name).FirstOrDefault() ?? "— / —",
                        Amount = !request.RefundPolicyVersionId.HasValue && !request.ConcessionRequestId.HasValue
                            ? request.TotalAmount : request.ApprovedAmount != 0 ? request.ApprovedAmount : request.CalculatedAmount,
                        RequestedAt = request.SubmittedAt.HasValue ? request.SubmittedAt.Value.UtcDateTime : request.CreationTime

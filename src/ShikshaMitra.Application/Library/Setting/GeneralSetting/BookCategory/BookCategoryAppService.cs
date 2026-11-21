@@ -17,13 +17,17 @@ namespace ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 [RemoteService(false)]
 public class BookCategoryAppService(
 	IRepository<BookCategory, Guid> _bookCategoryRepository,
-	IRepository<Book, Guid> _bookRepository)
+	IRepository<Book, Guid> _bookRepository,
+	ILibraryAccessService libraryAccess,
+	ILibraryInventoryLock inventoryLock)
 	: ApplicationService, IBookCategoryAppService
 {
 	public async Task<PaginatedResponse<BookCategoryDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10)
 	{
+		await libraryAccess.GetContextAsync(academicYearId);
+		page = Math.Max(1, page);
+		pageSize = Math.Clamp(pageSize, 1, 100);
 		var query = await _bookCategoryRepository.GetQueryableAsync();
-		query = query.Where(x => x.AcademicYearId == academicYearId);
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
@@ -54,9 +58,12 @@ public class BookCategoryAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_BookCategories.Add)]
 	public async Task<GenericCreatedResponse> CreateAsync(Guid? academicYearId, BookCategoryCreateRequest input)
 	{
+		await inventoryLock.AcquireAsync(CurrentTenant.Id);
+		if (!academicYearId.HasValue || academicYearId == Guid.Empty) throw LibraryException(LibraryErrorCodes.AcademicYearRequired, "Academic year context is required.");
+		await libraryAccess.GetContextAsync(academicYearId.Value);
 		var query = await _bookCategoryRepository.GetQueryableAsync();
 		var normalizedName = input.CategoryName.Trim().ToLower();
-		var exists = await AsyncExecuter.AnyAsync(query.Where(x => x.Name.ToLower() == normalizedName && x.AcademicYearId == academicYearId));
+		var exists = await AsyncExecuter.AnyAsync(query.Where(x => x.Name.ToLower() == normalizedName));
 		if (exists)
 		{
 			throw LibraryException(LibraryErrorCodes.BookCategoryAlreadyExists, "Category name already exists.");
@@ -81,14 +88,14 @@ public class BookCategoryAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_BookCategories.Add)]
 	public async Task<GenericUpdatedResponse> UpdateAsync(Guid categoryId, BookCategoryUpdateRequest input)
 	{
+		await inventoryLock.AcquireAsync(CurrentTenant.Id);
 		var entity = await _bookCategoryRepository.GetAsync(categoryId);
 		var query = await _bookCategoryRepository.GetQueryableAsync();
 		var normalizedName = input.CategoryName.Trim().ToLower();
 		var exists = await AsyncExecuter.AnyAsync(query.Where(x =>
 			x.Id != categoryId &&
-			x.AcademicYearId == entity.AcademicYearId &&
 			x.Name.ToLower() == normalizedName));
-		if (exists)
+		if (exists && !string.Equals(entity.Name.Trim(), input.CategoryName.Trim(), StringComparison.OrdinalIgnoreCase))
 		{
 			throw LibraryException(LibraryErrorCodes.BookCategoryAlreadyExists, "Category name already exists.");
 		}
@@ -108,6 +115,8 @@ public class BookCategoryAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_BookCategories.Delete)]
 	public async Task DeleteAsync(Guid categoryId)
 	{
+		await inventoryLock.AcquireAsync(CurrentTenant.Id);
+		await _bookCategoryRepository.GetAsync(categoryId);
 		var bookQuery = await _bookRepository.GetQueryableAsync();
 		var isInUse = await AsyncExecuter.AnyAsync(bookQuery.Where(x => x.CategoryId == categoryId));
 		if (isInUse)

@@ -98,8 +98,7 @@ public partial class TransactionCategoryAppService(
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.Name)
 			.Skip((page - 1) * pageSize).Take(pageSize));
-		var items = new List<TransactionCategoryResponse>();
-		foreach (var row in rows) items.Add(await MapAsync(row));
+		var items = await MapPageAsync(rows);
 		return new PaginatedTransactionCategoryResponse
 		{
 			TotalCount = total, CurrentPage = page, PageSize = pageSize,
@@ -224,11 +223,14 @@ public partial class TransactionCategoryAppService(
 		var blockedReason = entity.IsSystemCategory
 			? "None is a built-in category and cannot be changed or deleted."
 			: await GetDeletionBlockedReasonAsync(entity.Id);
-		return new TransactionCategoryResponse
+		return Map(entity, account?.Name, blockedReason);
+	}
+
+	private static TransactionCategoryResponse Map(TransactionCategory entity, string? accountName, string? blockedReason) => new TransactionCategoryResponse
 		{
 			Id = entity.Id, AcademicYearId = entity.AcademicYearId, Code = entity.Code,
 			Name = entity.Name, Description = entity.Description, Tags = entity.Tags.Select(x => x.Value).ToList(),
-			DefaultAccountHeadId = entity.DefaultAccountHeadId, DefaultAccountHeadName = account?.Name,
+			DefaultAccountHeadId = entity.DefaultAccountHeadId, DefaultAccountHeadName = accountName,
 			EffectiveFrom = entity.EffectiveFrom, EffectiveTo = entity.EffectiveTo,
 			IsActive = entity.IsActive, DeactivationReason = entity.DeactivationReason,
 			IsSystemCategory = entity.IsSystemCategory,
@@ -237,7 +239,36 @@ public partial class TransactionCategoryAppService(
 			DeletionBlockedReason = blockedReason,
 			CanDelete = blockedReason == null && (entity.CategoryType == TransactionType.Income || !entity.IsActive)
 		};
-	}
+
+
+    private async Task<List<TransactionCategoryResponse>> MapPageAsync(List<TransactionCategory> rows)
+    {
+        if (rows.Count == 0) return [];
+        var ids = rows.Where(x => !x.IsSystemCategory).Select(x => x.Id).ToArray();
+        var reasons = new Dictionary<Guid, string>();
+        void Record(HashSet<Guid> referenced, string reason)
+        {
+            foreach (var id in referenced) reasons.TryAdd(id, reason);
+        }
+        if (ids.Length > 0)
+        {
+            Record(await SettingsUsageBatch.ReadAsync((await transactionRepository.GetQueryableAsync()).Select(x => (Guid?)x.CategoryId), ids, AsyncExecuter), "Used by transactions.");
+            Record(await SettingsUsageBatch.ReadAsync((await feeHeadRepository.GetQueryableAsync()).Select(x => (Guid?)x.IncomeCategoryId), ids, AsyncExecuter), "Used by fee heads.");
+            Record(await SettingsUsageBatch.ReadAsync((await chargeRequests.GetQueryableAsync()).Select(x => (Guid?)x.IncomeCategoryId), ids, AsyncExecuter), "Used by charge requests.");
+            Record(await SettingsUsageBatch.ReadAsync((await refunds.GetQueryableAsync()).Select(x => (Guid?)x.ExpenseCategoryId), ids, AsyncExecuter), "Used by refund requests.");
+            Record(await SettingsUsageBatch.ReadAsync((await collectionPolicies.GetQueryableAsync()).Select(x => (Guid?)x.LateFeeIncomeCategoryId), ids, AsyncExecuter), "Used by collection policies.");
+            Record(await SettingsUsageBatch.ReadAsync((await refundPolicies.GetQueryableAsync()).Select(x => (Guid?)x.ExpenseCategoryId), ids, AsyncExecuter), "Used by refund policies.");
+            Record(await SettingsUsageBatch.ReadPolicyUsageAsync(await policyVersions.GetQueryableAsync(), ids, AsyncExecuter), "Used by policy versions.");
+            // ExtraProperties has no mapped category reference; read it once per page.
+            var configuredCharges = await chargeCategories.GetListAsync();
+            Record(configuredCharges.Where(x => x.IncomeCategoryId.HasValue && Enumerable.Contains(ids, x.IncomeCategoryId.Value)).Select(x => x.IncomeCategoryId!.Value).ToHashSet(), "Used by charge categories.");
+        }
+        var headIds = rows.Where(x => x.DefaultAccountHeadId.HasValue).Select(x => x.DefaultAccountHeadId!.Value).Distinct().ToArray();
+        var heads = await AsyncExecuter.ToListAsync((await accountHeadRepository.GetQueryableAsync()).Where(x => Enumerable.Contains(headIds, x.Id)).Select(x => new { x.Id, x.Name }));
+        var names = heads.ToDictionary(x => x.Id, x => x.Name);
+        return rows.Select(row => Map(row, row.DefaultAccountHeadId.HasValue ? names.GetValueOrDefault(row.DefaultAccountHeadId.Value) : null,
+            row.IsSystemCategory ? "None is a built-in category and cannot be changed or deleted." : reasons.GetValueOrDefault(row.Id))).ToList();
+    }
 
 	private async Task CheckPermissionAsync(TransactionType type, string action)
 	{

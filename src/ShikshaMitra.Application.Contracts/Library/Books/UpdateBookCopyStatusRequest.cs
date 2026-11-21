@@ -8,4 +8,10 @@ public class UpdateBookCopyStatusRequest
     public BookCopyStatus Status { get; set; }
 
     public string? Remarks { get; set; }
+
+    [StringLength(500)]
+    public string? Reason { get; set; }
+
+    [StringLength(128)]
+    public string? Revision { get; set; }
 }

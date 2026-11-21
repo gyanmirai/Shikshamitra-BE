@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common.Responses;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Auditing;
 using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.AdmissionApplications;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -16,6 +17,10 @@ public class AdmissionParentRegistrationController(IAdmissionParentRegistrationA
 	[HttpGet] public async Task<Result<AdmissionParentStaffContextDto>> GetAsync(Guid applicationId) => Result.Success(await service.GetAsync(applicationId));
 	[HttpGet("email-history")] public async Task<Result<System.Collections.Generic.List<AdmissionParentEmailHistoryDto>>> GetEmailHistoryAsync(Guid applicationId) => Result.Success(await service.GetEmailHistoryAsync(applicationId));
 	[HttpPost("send"), Authorize(Permissions.Edit)] public async Task<Result<AdmissionParentStaffContextDto>> SendAsync(Guid applicationId, AdmissionParentSendInput input) => Result.Success(await service.SendAsync(applicationId, input));
+	[HttpPost("copy-link"), Authorize(Permissions.Edit), DisableAuditing]
+	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+	public async Task<Result<string>> CopyLinkAsync(Guid applicationId, AdmissionParentCopyLinkInput input) =>
+		Result.Success(await service.CopyLinkAsync(applicationId, input));
 	[HttpPost("email"), Authorize(Permissions.Edit)] public async Task<Result<AdmissionParentStaffContextDto>> EmailAsync(Guid applicationId, AdmissionParentEmailInput input) => Result.Success(await service.ChangeEmailAsync(applicationId, input));
 	[HttpPost("corrections"), Authorize(Permissions.Edit)] public async Task<Result<AdmissionParentStaffContextDto>> CorrectionsAsync(Guid applicationId, AdmissionParentCorrectionInput input) => Result.Success(await service.RequestCorrectionsAsync(applicationId, input));
 	[HttpPost("revoke"), Authorize(Permissions.Edit)] public async Task<Result<AdmissionParentStaffContextDto>> RevokeAsync(Guid applicationId, AdmissionParentCommand input) => Result.Success(await service.RevokeAsync(applicationId, input));

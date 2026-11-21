@@ -72,7 +72,7 @@ public partial class LateFeeCollectionRuntime_Tests
 				else
 					await GetRequiredService<IRepository<ChargeCollectionRecord, Guid>>().InsertAsync(
 						new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = TestTenantId, StudentId = student,
-							ChargeId = chargeId, FeeRecordMetadataId = metadata.Id, Amount = paid, PaymentDate = DateTimeOffset.UtcNow }, autoSave: true);
+							ChargeId = chargeId, FeeRecordMetadataId = metadata.Id, Amount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble(paid), PaymentDate = DateTimeOffset.UtcNow }, autoSave: true);
 			}
 			var row = await GetSummaryRowAsync(year, student);
 			row.TotalCharges.ShouldBe(expectedTotal);
@@ -189,7 +189,7 @@ public partial class LateFeeCollectionRuntime_Tests
 			await GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().InsertAsync(metadata, autoSave: true);
 			await GetRequiredService<IRepository<ChargeCollectionRecord, Guid>>().InsertAsync(
 				new ChargeCollectionRecord(Guid.NewGuid()) { TenantId = TestTenantId, StudentId = payer.Id,
-					ChargeId = charge.Id, FeeRecordMetadataId = metadata.Id, Amount = amount, PaymentDate = DateTimeOffset.UtcNow }, autoSave: true);
+					ChargeId = charge.Id, FeeRecordMetadataId = metadata.Id, Amount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.FromLegacyDouble(amount), PaymentDate = DateTimeOffset.UtcNow }, autoSave: true);
 		}
 	}
 }

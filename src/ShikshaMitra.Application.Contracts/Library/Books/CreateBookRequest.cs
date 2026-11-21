@@ -6,14 +6,15 @@ namespace ShikshaMitra.Library.Books;
 
 public class CreateBookRequest
 {
+	public string? ExpectedCatalogueConfigurationRevision { get; set; }
+	public string? LanguageCode { get; set; }
+	public string? MaterialCode { get; set; }
     [Required]
     public string Title { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
-    [Required]
-    public string Isbn { get; set; } = null!;
+    public string? Isbn { get; set; }
 
-    [Required]
-    public string Author { get; set; } = null!;
+	public string? Author { get; set; }
 
     public string Publisher { get; set; } = null!;
 
@@ -24,17 +25,17 @@ public class CreateBookRequest
     [Required]
     public Guid CategoryId { get; set; }
 
-    [Required]
-    public Language Language { get; set; }
+	public Language? Language { get; set; }
 
     public string ApplicableAge { get; set; } = null!;
 
-    public decimal Price { get; set; }
+    public decimal? Price { get; set; }
+	public string? PriceText { get; set; }
 
     public int Pages { get; set; }
 
     [Required]
-    [Range(1, int.MaxValue, ErrorMessage = "Number of copies must be at least 1.")]
+    [Range(0, int.MaxValue)]
     public int NumberOfCopies { get; set; }
 
     public string? CoverImage { get; set; }
@@ -44,14 +45,17 @@ public class CreateBookRequest
 
 public class UpdateBookRequest
 {
+	public string? ExpectedMetadataRevision { get; set; }
+	public string? ExpectedCopiesRevision { get; set; }
+	public string? ExpectedCatalogueConfigurationRevision { get; set; }
+	public string? LanguageCode { get; set; }
+	public string? MaterialCode { get; set; }
     [Required]
     public string Title { get; set; } = null!; // Request binding defers initialization; retain the null default and existing validation.
 
-    [Required]
-    public string Isbn { get; set; } = null!;
+    public string? Isbn { get; set; }
 
-    [Required]
-    public string Author { get; set; } = null!;
+	public string? Author { get; set; }
 
     public string Publisher { get; set; } = null!;
 
@@ -62,17 +66,17 @@ public class UpdateBookRequest
     [Required]
     public Guid CategoryId { get; set; }
 
-    [Required]
-    public Language Language { get; set; }
+	public Language? Language { get; set; }
 
     public string ApplicableAge { get; set; } = null!;
 
-    public decimal Price { get; set; }
+    public decimal? Price { get; set; }
+	public string? PriceText { get; set; }
 
     public int Pages { get; set; }
 
     [Required]
-    [Range(1, int.MaxValue, ErrorMessage = "Number of copies must be at least 1.")]
+    [Range(0, int.MaxValue)]
     public int NumberOfCopies { get; set; }
 
     public string? CoverImage { get; set; }

@@ -15,6 +15,23 @@ namespace ShikshaMitra.HttpApi.Tests.Students.Enrollment;
 public class AdmissionInquiryFamilyConfirmationApiContract_Tests
 {
 	[Fact]
+	public async Task Family_only_confirmation_forwards_the_child_witness_without_parent_role_or_account_proof()
+	{
+		new ConfirmAdmissionInquiryFamilyDto().FamilyLinkOnly.ShouldBeFalse();
+		new CreateAdmissionInquiryDto().FamilyLinkOnly.ShouldBeFalse();
+		var service = Substitute.For<IAdmissionInquiryAppService>();
+		var id = Guid.NewGuid();
+		var input = new ConfirmAdmissionInquiryFamilyDto { FamilyLinkOnly = true, ExistingFamilyId = Guid.NewGuid(),
+			ExistingParentApplicantId = Guid.NewGuid(), ConcurrencyStamp = "current-stamp" };
+		service.ConfirmFamilyAsync(id, input).Returns(new AdmissionInquiryDto { Id = id, HasLinkedSiblings = true, SiblingFamilyConfirmed = false });
+		var response = await new AdmissionInquiriesController(service).ConfirmFamilyAsync(id, input);
+		var body = response.Data.ShouldNotBeNull();
+		body.HasLinkedSiblings.ShouldBeTrue(); body.SiblingFamilyConfirmed.ShouldBeFalse();
+		input.ParentRelationship.ShouldBeNull();
+		await service.Received(1).ConfirmFamilyAsync(id, input);
+	}
+
+	[Fact]
 	public async Task Confirm_family_is_an_additive_staff_post_requiring_manage_at_both_boundaries_and_forwards_exact_input()
 	{
 		foreach (var type in new[] { typeof(AdmissionInquiriesController), typeof(AdmissionInquiryAppService) })
@@ -30,6 +47,6 @@ public class AdmissionInquiryFamilyConfirmationApiContract_Tests
 		await service.DidNotReceiveWithAnyArgs().CreateAsync(default!);
 		await service.DidNotReceiveWithAnyArgs().UpdateAsync(default, default!);
 		typeof(ConfirmAdmissionInquiryFamilyDto).GetProperties().Select(property => property.Name).OrderBy(name => name)
-			.ShouldBe(new[] { "ConcurrencyStamp", "ExistingFamilyId", "ExistingParentApplicantId", "ParentRelationship" });
+			.ShouldBe(new[] { "ConcurrencyStamp", "ExistingFamilyId", "ExistingParentApplicantId", "FamilyLinkOnly", "ParentRelationship" });
 	}
 }

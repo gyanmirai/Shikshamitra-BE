@@ -104,14 +104,26 @@ public static class HrTableExportProjection
 		};
 		if (table == "hr-payroll-registration-readiness") return field switch
 		{
+			"applyPf" when Get("pfHandledExternally") is true => "Handled outside ShikshaMitra",
 			"applyPf" => Get("applyPf") is true ? Get("pfNumberPresent") is true ? "Number recorded" : "Number missing" : "Turned off",
 			"applyEsic" => Get("applyEsic") is true ? Get("esicNumberPresent") is true ? "Number recorded" : "Number missing" : "Turned off", _ => Get(field)
 		};
 		if (table == "payroll-monthly-workbench-table") return field switch {
 			"employeeName" => Join(Text("employeeName"), Text("employeeIdentifier"), Text("employeeGroup")),
 			"netSalary" => Get("netPay"),
-			"status" => Get("isLocked") is true ? "LOCKED" : Get("reviewStatus"),
+			"status" => Get("isLocked") is true ? "LOCKED" : Get("isSubmitted") is true ? "SUBMITTED" : Get("reviewStatus"),
+			"payableDays" or "fullGrossSalary" or "grossSalary" or "additionalEarnings" when Get("isIssuedWithoutRegisterDetails") is true => null,
 			"issueFilter" => PayrollIssues(row), _ => Get(field) };
+		if (table == "payroll-review-sheet") return field switch
+		{
+			"netSalary" => Get("netPay"),
+			"earningBreakdown" or "deductionBreakdown" => row.TryGetProperty(field == "earningBreakdown"
+				? "earningComponents" : "deductionComponents", out var components) && components.ValueKind == JsonValueKind.Array
+				? string.Join("\n", components.EnumerateArray().Select(component =>
+					$"{component.GetProperty("name").GetString()} {component.GetProperty("amount").GetDecimal().ToString("N2", CultureInfo.InvariantCulture)}"))
+				: null,
+			_ => Get(field)
+		};
 		if (table is "hr-leave-requests" or "hr-self-leave-history") return field switch { "name" => Join(Text("name"), Text("employeeIdentifier")), "submittedBy" => Get("submittedByName"), "employeeName" => Get("name"), "employeeIdentifier" => Get("employeeIdentifier"), "organization" => Get("mediumStageName"), "reason" => Get("description"), _ => Get(field) };
 		if (table == "hr-manual-attendance") return field switch {
 			"fullName" => Join(Text("fullName"), Text("employeeCode")),

@@ -12,11 +12,25 @@ public partial class Division
 
 	public void ReplaceLeader(StudentEnrollment? enrollment, string expectedStamp)
 	{
-		if (string.IsNullOrWhiteSpace(expectedStamp) || expectedStamp != ConcurrencyStamp)
-			throw new BusinessException(HouseManagementErrorCodes.StalePreview);
-		if (enrollment != null && (!enrollment.IsActive || enrollment.DivisionId != Id || enrollment.TenantId != TenantId))
-			throw new BusinessException(HouseManagementErrorCodes.IneligibleLeader);
+		EnsureLeaderAppointment(enrollment, expectedStamp);
 		LeaderEnrollmentId = enrollment?.Id;
 		LeadershipRevision++;
+	}
+
+	public void RosterMemberDeparted(Guid enrollmentId)
+	{
+		if (LeaderEnrollmentId == enrollmentId)
+			LeaderEnrollmentId = null;
+		// Even a vacant slot must conflict with an appointment based on the old roster.
+		LeadershipRevision++;
+	}
+
+	private void EnsureLeaderAppointment(StudentEnrollment? enrollment, string expectedStamp)
+	{
+		if (string.IsNullOrWhiteSpace(expectedStamp) || expectedStamp != ConcurrencyStamp)
+			throw new BusinessException(HouseManagementErrorCodes.StalePreview);
+		if (enrollment != null && (!enrollment.IsActive || enrollment.DivisionId != Id ||
+			enrollment.StandardId != StandardId || enrollment.TenantId != TenantId))
+			throw new BusinessException(HouseManagementErrorCodes.IneligibleLeader);
 	}
 }

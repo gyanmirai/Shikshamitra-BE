@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-16
+updated_on: 2026-11-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -80,12 +80,17 @@ Employee APIs manage staff identity, profile data, documents, status, reporting,
 | Employee payroll details | `/api/employees/{id}/payroll` | `HR.Employee.EmployeeList.*` |
 | Reporting manager | `/api/employees/reporting-manager` | `HR.Employee.EmployeeList.*` |
 | Employee status | `/api/employees/{id}/status` | `HR.Employee.EmployeeList.*` |
+| Employee deactivation check | `GET /api/employees/{id}/status-deactivation-check` | `HR.Employee.EmployeeList.Edit` and employee scope |
 | Document settings | `/api/employees/document-config` | `HR.Employee.Setting.DocumentTypes.*` |
 | Employee documents | `/api/employees/{id}/documents` | `HR.Employee.EmployeeList.*` |
 | Employee onboarding | `/api/employee-applications*` | `HR.Employee.EmployeeOnboarding.*` |
 | Public employee application | `/api/public/employee-applications/{token}`, `/api/public/employee-applications/{token}/submit` | Anonymous token |
 
 Employee create and update flows must protect email, mobile, date of birth, date of joining, role, and academic scope consistency.
+
+The deactivation check returns reporting-manager eligibility and advisory `libraryClearanceStatus` and `libraryOutstandingLoanCount`. Library totals require exact `Library.LibraryMembers.View` and school-wide scope. Narrow assignments receive Limited with their permitted count. Restricted returns a null count. HR's existing `canDeactivate` decision continues to enforce the direct-report rule. Library staff process physical returns through the original loan.
+
+`libraryOutstandingCustodyCount` is a separate advisory count of outstanding classroom copies assigned to the staff member. It requires school-wide scope with exact `Library.Custody.View` and `Library.AllBooks.View`. The field is null when the caller lacks this independent authority.
 
 Staff Academic Permission reads use `academicYearId` and return the existing scope hierarchy shape.
 PUT accepts `BulkScopeAssignmentDto`, with exactly the employee's linked user ID.
@@ -217,6 +222,7 @@ Payroll APIs manage setup, preview, review, lock, and salary slips:
 | Payroll policies | `/api/hr/payroll/policies` | `HR.PayrollManagement.Settings.PayrollPolicies.*` | Implemented |
 | One-time salary components | `/api/payroll/employees/{employeeId}/salary-structure` | GET: `HR.Employee.EmployeeList.View`; PUT: `HR.PayrollManagement.PayrollStructure.Add` plus existing employee-modification authority | Implemented |
 | Compensation revisions | `/api/payroll/employees/{employeeId}/compensation` | `HR.PayrollManagement.CompensationRevisions.View`, `Manage`, or `ViewAudit` | Implemented |
+| Reviewed CTC migration | `POST /api/payroll/employees/{employeeId}/compensation/protection-migration/preview` and `/apply` | `HR.PayrollManagement.CompensationRevisions.Manage` and employee scope | Implemented |
 | Run payroll | `/api/payroll/run` | `HR.PayrollManagement.RunPayroll.*` | Generation-bound review and lock; rollout pending |
 | Durable payroll previews | `/api/payroll/run/previews*` | `HR.PayrollManagement.RunPayroll.View` | Additive migration and integration verification pending |
 | Salary slips | `/api/payroll/salary-slips` | `HR.PayrollManagement.GenerateSalarySlip.*` | Implemented |
@@ -227,6 +233,14 @@ Salary-structure application calls retain the same employee ownership/scope and 
 Salary-template reads require Salary Templates View, except the active assignment catalogue, which requires Compensation Revisions Manage.
 Template create, update, default and archive calls retain their independent Add, Edit, SetDefault and Archive actions, including idempotent responses without an extra View prerequisite.
 Compensation-history and effective-revision application reads require Compensation Revisions View or Manage plus the existing employee-scope check before querying salary data.
+
+Migration preview accepts `sourceRevisionId` and the first day of the target `effectiveMonth`.
+Apply also requires the signed `previewToken` returned by preview.
+The source must be the effective approved Monthly salary revision with a complete calculation snapshot.
+Stale sources, changed calculation inputs, and locked payroll prevent applying the preview.
+An authorized retry using the original proof returns the revision created by the first successful apply.
+Payroll preview rows include optional `salaryProtection` evidence for the recurring CTC target, achieved cost, difference, gross adjustment, and result status.
+The calculated CTC evidence does not extend the public payslip response.
 
 Payroll month parameters use `MMMM-YYYY`, such as `JANUARY-2025`.
 Payroll lock is idempotent for an already locked month and returns the documented payroll lock error.
@@ -242,7 +256,8 @@ Do not deploy this contract until the additive migration, PostgreSQL concurrency
 
 | Operation | Contract |
 |---|---|
-| `POST /api/payroll/run/previews` | Accepts `month`, optional `academicYearId`, and `refresh`; returns HTTP 202 and the authorized run status |
+| `POST /api/payroll/run/previews` | Accepts `month`, optional `academicYearId`, `refresh`, and `commandKey`. Returns HTTP 202 and the authorized run status. A matching command key returns its original run. |
+| `GET /api/payroll/run/previews/current` | Accepts `month` and optional `academicYearId`. Returns `currentRun` with the latest status for the exact authorized preview scope, or `null` when no matching run exists. An active or failed run may include `lastCompletedRunId`. The lookup does not change runs, calculation inputs, or jobs. |
 | `GET /api/payroll/run/previews/{id}` | Returns status, completed employee count, timestamps, freshness, and safe failure information |
 | `GET /api/payroll/run/previews/{id}/employees` | Accepts zero-based `page`, `pageSize` from 1 to 100, and trimmed `search`; returns one page plus unfiltered authorized-population readiness |
 | Review and lock | Require `previewRunId` and explicit selected `employeeIds`; stale inputs return HTTP 409 with `PAYROLL_PREVIEW_STALE` |
@@ -255,6 +270,33 @@ Attendance, HR policy/calendar, compensation, employment, enrollment, and manual
 Calculator-generated adjustments are outputs and do not invalidate their own calculation.
 Review markers identify the exact generation, and locking retains the revision fence and owner-checked month lease until commit.
 Finalized employees are excluded before recalculation.
+
+### Payroll register and approval
+
+| Operation | Contract |
+|---|---|
+| `GET /api/payroll/run/register` | Uses Run Payroll View and current staff scope. Accepts month, academic year, zero-based paging, staff name or code search, review state, issue class or code, and one sort. Counts eligible staff plus issued staff before filtering. |
+| `GET /api/payroll/run/approval-settings` | Returns the school's Legacy, Active or Paused mode and its settings version. |
+| `GET /api/payroll/run/approval-settings/approvers` | Requires ManageWorkflow and school-wide HR scope. Searches active users with payroll view and lock permissions. |
+| `PUT /api/payroll/run/approval-settings` and `POST /api/payroll/run/approval-settings/{activate,pause,resume}` | Require ManageWorkflow, school-wide scope, a reason and the expected settings version. |
+| `GET /api/payroll/run/submissions` and `GET /api/payroll/run/submissions/{id}` | Show batches to currently authorized participants who cover every employee in the batch. The read may mark evidence stale in the response while preserving the saved state. |
+| `POST /api/payroll/run/submissions` | Requires Submit, exact reviewed staff IDs, current preview evidence and a command key. The server checks that the designated approver covers every selected employee. |
+| `POST /api/payroll/run/submissions/{id}/{finalize,return,withdraw,return-stale}` | Requires the expected batch version, command key and the relevant current permission and scope. All financial writes for one batch share a transaction. |
+| `POST /api/hr/table-exports` with `table=payroll-review-sheet` | Requires Run Payroll ExportReview and View. Exports an exact reviewed preview selection or the exact pending submission version in Excel or PDF. |
+
+Active and Paused schools use the approval boundary for payroll issuance.
+Self-finalization requires the school setting and current Add, Submit and Lock permissions.
+Mark Reviewed rejects the entire request with `HR:Payroll:ReviewAttendanceRequired` when any selected preview row has `NO_ATTENDANCE`.
+Record attendance and recalculate before marking the affected rows reviewed.
+If evidence changes, the assigned approver's finalization attempt returns the whole batch for fresh review and releases its claims.
+An earlier finalized batch keeps its original payslips.
+Review sheets display Pending finalization, and a new staff claim permanently revokes earlier selection exports.
+Submitted review sheets remain valid while the exact version is pending, current and accessible to the requester.
+The official salary register uses issued records and records capture-time month coverage separately from included rows.
+
+Apply both payroll workflow and register criteria migrations before starting the updated APIs and preview workers.
+Drain the older preview workers before the migration so every new result writes the typed register fields.
+For a multi-instance deployment, the payroll API and export workers need the same retained ASP.NET Core Data Protection key ring.
 
 Salary structure templates are tenant-scoped, versioned calculation definitions.
 Exactly one Basic earning is required, while an explicitly designated balancing earning is optional.
@@ -590,7 +632,17 @@ Employee and employer PF amounts round independently to the nearest whole rupee,
 `GET /api/payroll/pf-rules/coverage` requires `HR.PayrollManagement.Settings.PfRule.View` and returns immutable configuration history and `hasSchoolWideScope`.
 `PUT` requires `HR.PayrollManagement.Settings.PfRule.Add` and school-wide UserScope.
 Its payload contains `effectiveMonth` (first day of the current or a future month), `isCovered`, `evidenceReference`, `expectedConfigurationId`, and `idempotencyKey`.
+`evidenceReference` carries the PF establishment number for a covered school as nonblank text of up to 1000 characters.
+For `isCovered: false`, callers may omit the reference and history returns an empty string when none was provided.
+Set `isHandledExternally: true` together with `isCovered: false` to manage PF outside ShikshaMitra starting in the effective month.
+This option needs no establishment number and completes the PF setup check.
+An effective external setting returns `HANDLED_EXTERNALLY` for PF eligibility, suppresses PF rules, registration warnings and both contribution shares, and leaves staff registration records and finalized payroll intact.
+Apply the additive `AddExternalSchoolPfManagement` migration before deploying the API.
+Existing coverage versions start with external management disabled.
 Identical retries reuse the saved outcome; stale version IDs and changed retry payloads return 409.
+
+`GET /api/payroll/pf-rules/coverage/management?effectiveMonth=yyyy-MM-01` requires Compensation Revisions Manage and returns only the tenant's effective external-management flag.
+Salary saves can send `expectedPfHandledExternally` from their preview and receive 409 `HR:Payroll:PfManagementChanged` if the school's PF setting changed.
 
 ESIC configuration save accepts `effectiveMonth` (`yyyy-MM`) and `calculationSettings` in addition to the existing configuration fields.
 `eligibilityBasis` and `calculationBasis` independently select `CLASSIFIED_EARNINGS`, `GROSS`, or `COMPONENT`.

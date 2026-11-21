@@ -6,10 +6,14 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Library;
 using ShikshaMitra.Library.Books;
+using ShikshaMitra.Library.CampusTransfers;
+using ShikshaMitra.Library.Reservations;
 using ShikshaMitra.Library.Setting.Sections.Dtos;
 using ShikshaMitra.Library.Shared;
+using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Uow;
 
@@ -17,17 +21,26 @@ namespace ShikshaMitra.Library.Setting.Sections;
 
 [Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_SectionManagement.View)]
 [RemoteService(false)]
-public class LibrarySectionAppService(
+public partial class LibrarySectionAppService(
 	IRepository<LibrarySection, Guid> _sectionRepository,
 	IRepository<LibraryShelf, Guid> _shelfRepository,
 	IRepository<BookCopy, Guid> _bookCopyRepository,
-	IUnitOfWorkManager _unitOfWorkManager)
+	IUnitOfWorkManager _unitOfWorkManager,
+	ILibraryAccessService libraryAccess,
+	ILibraryInventoryLock inventoryLock,
+	IRepository<AdmissionCampus, Guid> campuses,
+	IRepository<LibraryCampusTransfer, Guid> transfers,
+	IRepository<LibraryCampusTransferItem, Guid> transferItems,
+	IRepository<BookReservation, Guid> reservations,
+	IPermissionChecker permissions)
 	: ApplicationService, ILibrarySectionAppService
 {
 	public async Task<PaginatedSectionResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10)
 	{
+		await libraryAccess.GetContextAsync(academicYearId);
+		page = Math.Max(1, page);
+		pageSize = Math.Clamp(pageSize, 1, 100);
 		var query = await _sectionRepository.GetQueryableAsync();
-		query = query.Where(x => x.AcademicYearId == academicYearId);
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
@@ -38,6 +51,7 @@ public class LibrarySectionAppService(
 				.Skip((page - 1) * pageSize)
 				.Take(pageSize)
 		);
+		var campusNames = await GetCampusNamesAsync(items);
 
 		return new PaginatedSectionResponse
 		{
@@ -50,6 +64,8 @@ public class LibrarySectionAppService(
 				Id = x.Id,
 				SectionName = x.SectionName,
 				NumberOfShelf = x.NumberOfShelf,
+				CampusId = x.CampusId,
+				CampusName = x.CampusId is Guid campusId ? campusNames.GetValueOrDefault(campusId) : null,
 				ShelfDetails = x.Shelves.Select(s => new ShelfDetailDto { ShelfName = s.ShelfName,Id=s.Id }).ToList()
 			}).ToList()
 		};
@@ -58,11 +74,13 @@ public class LibrarySectionAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_SectionManagement.Add)]
 	public async Task<GenericCreatedResponse> CreateAsync(Guid academicYearId, SectionCreateRequest input)
 	{
+		await inventoryLock.AcquireAsync(CurrentTenant.Id);
+		await libraryAccess.GetContextAsync(academicYearId);
 		ValidateShelfPayload(input.SectionName, input.NumberOfShelf, input.ShelfItems);
 
 		var query = await _sectionRepository.GetQueryableAsync();
 		var normalizedSectionName = input.SectionName.Trim().ToLower();
-		var exists = await AsyncExecuter.AnyAsync(query.Where(x => x.SectionName!.ToLower() == normalizedSectionName && x.AcademicYearId == academicYearId));
+		var exists = await AsyncExecuter.AnyAsync(query.Where(x => x.SectionName!.ToLower() == normalizedSectionName));
 		if (exists)
 		{
 			throw LibraryException(LibraryErrorCodes.SectionAlreadyExists, "Section already exists.");
@@ -97,15 +115,23 @@ public class LibrarySectionAppService(
 	public async Task<SectionDetailsResponse> GetAsync(Guid sectionId, Guid academicYearId)
 	{
 		var section = await GetSectionAsync(sectionId, academicYearId);
+		return await MapDetailsAsync(section);
+	}
+
+	private async Task<SectionDetailsResponse> MapDetailsAsync(LibrarySection section)
+	{
+		var campusNames = await GetCampusNamesAsync([section]);
 		var shelfQuery = await _shelfRepository.GetQueryableAsync();
 		var shelves = await AsyncExecuter.ToListAsync(
-			shelfQuery.Where(x => x.SectionId == sectionId).OrderBy(x => x.ShelfName));
+			shelfQuery.Where(x => x.SectionId == section.Id).OrderBy(x => x.ShelfName));
 
 		return new SectionDetailsResponse
 		{
 			Id = section.Id.ToString(),
 			SectionName = section.SectionName,
 			NumberOfShelf = section.NumberOfShelf,
+			CampusId = section.CampusId,
+			CampusName = section.CampusId is Guid campusId ? campusNames.GetValueOrDefault(campusId) : null,
 			ShelfDetails = shelves.Select(s => new ShelfDetailDto { ShelfName = s.ShelfName, Id = s.Id }).ToList()
 		};
 	}
@@ -113,15 +139,15 @@ public class LibrarySectionAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_SectionManagement.Add)]
 	public async Task<GenericUpdatedResponse> UpdateAsync(Guid sectionId, Guid academicYearId, SectionUpdateRequest input)
 	{
+		await inventoryLock.AcquireAsync(CurrentTenant.Id);
 		ValidateShelfPayload(input.SectionName, input.NumberOfShelf, input.ShelfItems);
 		var section = await GetSectionAsync(sectionId, academicYearId);
 		var sectionQuery = await _sectionRepository.GetQueryableAsync();
 		var normalizedSectionName = input.SectionName.Trim().ToLower();
 		var exists = await AsyncExecuter.AnyAsync(sectionQuery.Where(x =>
 			x.Id != sectionId &&
-			x.AcademicYearId == academicYearId &&
 			x.SectionName!.ToLower() == normalizedSectionName));
-		if (exists)
+		if (exists && !string.Equals(section.SectionName?.Trim(), input.SectionName.Trim(), StringComparison.OrdinalIgnoreCase))
 		{
 			throw LibraryException(LibraryErrorCodes.SectionAlreadyExists, "Section already exists.");
 		}
@@ -162,7 +188,12 @@ public class LibrarySectionAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_SectionManagement.Delete)]
 	public async Task DeleteAsync(Guid sectionId, Guid academicYearId)
 	{
+		await inventoryLock.AcquireAsync(CurrentTenant.Id);
 		await GetSectionAsync(sectionId, academicYearId);
+		await EnsureNoIncomingTransferAsync(sectionId);
+		var activePickup = await reservations.AnyAsync(row => row.TenantId == CurrentTenant.Id && row.PickupSectionId == sectionId &&
+			(row.State == LibraryReservationState.Waiting || row.State == LibraryReservationState.Ready || row.State == LibraryReservationState.NeedsReview));
+		if (activePickup) throw LibraryException(LibraryErrorCodes.SectionInUse, "Resolve the active pickup reservations before deleting this section.");
 		var bookCopyQuery = await _bookCopyRepository.GetQueryableAsync();
 		var isInUse = await AsyncExecuter.AnyAsync(bookCopyQuery.Where(x => x.SectionId == sectionId));
 		if (isInUse)
@@ -185,8 +216,9 @@ public class LibrarySectionAppService(
 
 	private async Task<LibrarySection> GetSectionAsync(Guid sectionId, Guid academicYearId)
 	{
+		await libraryAccess.GetContextAsync(academicYearId);
 		var query = await _sectionRepository.GetQueryableAsync();
-		var section = await AsyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Id == sectionId && x.AcademicYearId == academicYearId));
+		var section = await AsyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Id == sectionId));
 		if (section == null)
 		{
 			throw LibraryException(LibraryErrorCodes.SectionNotFound, "Library section was not found.");
@@ -197,6 +229,7 @@ public class LibrarySectionAppService(
 
 	private async Task EnsureShelvesCanBeReplacedAsync(Guid sectionId)
 	{
+		await EnsureNoIncomingTransferAsync(sectionId);
 		var existingShelfQuery = await _shelfRepository.GetQueryableAsync();
 		var existingShelves = await AsyncExecuter.ToListAsync(existingShelfQuery.Where(x => x.SectionId == sectionId));
 		var existingShelfIds = existingShelves.Select(x => x.Id).ToList();
@@ -212,6 +245,20 @@ public class LibrarySectionAppService(
 		{
 			throw LibraryException(LibraryErrorCodes.SectionInUse, "Cannot replace shelves while they contain book copies.");
 		}
+	}
+
+	private async Task EnsureNoIncomingTransferAsync(Guid sectionId)
+	{
+		var tenant = CurrentTenant.Id;
+		var headers = await transfers.GetQueryableAsync();
+		var lines = await transferItems.GetQueryableAsync();
+		var incoming = from header in headers
+			join line in lines on header.Id equals line.TransferId
+			where header.TenantId == tenant && line.TenantId == tenant && header.DestinationSectionId == sectionId &&
+				!line.ReceiptId.HasValue
+			select line.Id;
+		if (await AsyncExecuter.AnyAsync(incoming))
+			throw LibraryException(LibraryErrorCodes.SectionInUse, "Receive the outstanding campus transfer before replacing or deleting its destination shelves.");
 	}
 
 	private static void ValidateShelfPayload([System.Diagnostics.CodeAnalysis.NotNull] string? sectionName, int numberOfShelf, IReadOnlyCollection<string> shelfItems)

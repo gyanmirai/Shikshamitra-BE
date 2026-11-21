@@ -8,7 +8,7 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
-public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 
@@ -46,6 +46,7 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
         if (AssignmentSnapshotJson != null) throw new InvalidOperationException("Assignment evidence is immutable.");
         AssignmentRequestFingerprint = Volo.Abp.Check.NotNullOrWhiteSpace(fingerprint, nameof(fingerprint), maxLength: 64);
         AssignmentSnapshotJson = Volo.Abp.Check.NotNullOrWhiteSpace(snapshot, nameof(snapshot));
+		IncludedFeeHeadIds = ReadIncludedFeeHeadIds(snapshot);
     }
     protected StudentFeeStructure() { }
 
@@ -169,6 +170,7 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ChargePeriodOverrideReason = replacement.ChargePeriodOverrideReason;
 		AssignmentRequestFingerprint = Volo.Abp.Check.NotNullOrWhiteSpace(fingerprint, nameof(fingerprint), maxLength: 64);
 		AssignmentSnapshotJson = Volo.Abp.Check.NotNullOrWhiteSpace(snapshot, nameof(snapshot));
+		IncludedFeeHeadIds = ReadIncludedFeeHeadIds(snapshot);
 	}
 
 	public void ChangeAssignedPolicies(

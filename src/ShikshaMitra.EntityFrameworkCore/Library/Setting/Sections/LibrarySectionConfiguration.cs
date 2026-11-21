@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Library.Setting.Sections;
+using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
 namespace ShikshaMitra.Library.Setting.Sections
@@ -22,6 +23,11 @@ namespace ShikshaMitra.Library.Setting.Sections
 
 			builder.Property(x => x.NumberOfShelf)
 				.IsRequired();
+
+			builder.HasOne<AdmissionCampus>()
+				.WithMany()
+				.HasForeignKey(x => x.CampusId)
+				.OnDelete(DeleteBehavior.Restrict);
 
 			builder.HasMany(x => x.Shelves)
 				.WithOne(x => x.Section)

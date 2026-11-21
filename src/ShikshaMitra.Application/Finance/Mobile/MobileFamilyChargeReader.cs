@@ -26,7 +26,8 @@ public class MobileFamilyChargeReader(IChargeRepository charges, IRepository<Cha
 	{
 		var tenantId = CurrentTenant.Id;
 		var rows = await charges.GetListAsync(x => x.TenantId == tenantId && x.StudentId == studentId && x.AcademicYearId == yearId
-			&& (x.Status == ChargeStatus.Approved || x.Status == ChargeStatus.Voided), cancellationToken: ct);
+			&& x.SchoolDueDate == null && x.DueDate.HasValue &&
+			(x.Status == ChargeStatus.Approved || x.Status == ChargeStatus.Voided), cancellationToken: ct);
 		if (rows.Count == 0) return [];
 		var ids = rows.Select(x => x.Id).ToArray();
 		var categoryIds = rows.Select(x => x.ChargeCategoryId).Distinct().ToArray();
@@ -55,10 +56,7 @@ public class MobileFamilyChargeReader(IChargeRepository charges, IRepository<Cha
 	}
 }
 
-internal record FamilyChargeAllocation(Guid Id, Guid ChargeId, Guid TransactionId, DateTimeOffset Date, double LegacyAmount, FeeCollectionStatus Status)
-{
-	public decimal Amount => MobileFinanceProjection.LegacyMoney(LegacyAmount);
-}
+internal record FamilyChargeAllocation(Guid Id, Guid ChargeId, Guid TransactionId, DateTimeOffset Date, decimal Amount, FeeCollectionStatus Status);
 internal record FamilyChargeRefund(Guid Id, FeeRefundStatus Status, Guid ChargeId, Guid? AllocationId, decimal Processed, decimal Reversed)
 {
 	public decimal Net => Math.Max(0m, Processed - Reversed);
@@ -74,7 +72,7 @@ internal record FamilyChargeFacts(Charge Charge, string CategoryName, List<Famil
 	public MobileChargeBalance Legacy => new(Charge.Id, Charge.ChargeName, Charge.PurposeDescription, Charge.Amount, Verified + Pending, Waived, Pending);
 	public MobileFamilyCharge ToDto(DateTimeOffset now)
 	{
-		var dueDate = DateOnly.FromDateTime(Charge.DueDate.ToOffset(TimeSpan.FromMinutes(330)).DateTime);
+		var dueDate = DateOnly.FromDateTime(Charge.DueDate!.Value.ToOffset(TimeSpan.FromMinutes(330)).DateTime);
 		var today = DateOnly.FromDateTime(now.ToOffset(TimeSpan.FromMinutes(330)).DateTime);
 		var status = Charge.Status == ChargeStatus.Voided ? "Voided" : Pending > 0m ? "InReconciliation"
 			: Outstanding > 0m ? Verified > 0m ? "Partial" : "Pending"

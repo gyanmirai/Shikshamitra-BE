@@ -1,12 +1,16 @@
 using System;
 using System.Linq;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 
 namespace ShikshaMitra.HR.Audit;
 
 public static class HrAuditTrailQuery
 {
+	internal const string PayrollReviewReceiptAction = "review_unchanged";
+
 	public static IQueryable<HrAuditEvent> ApplyFilters(IQueryable<HrAuditEvent> query, HrAuditEventListRequestDto input)
 	{
+		query = query.Where(x => x.EntityType != "payroll_run" || x.Action != PayrollReviewReceiptAction);
 		if (input.AcademicYearId.HasValue)
 		{
 			query = query.Where(x => x.AcademicYearId == input.AcademicYearId.Value);
@@ -15,6 +19,17 @@ public static class HrAuditTrailQuery
 		{
 			var entityType = Normalize(input.EntityType);
 			query = query.Where(x => x.EntityType == entityType);
+		}
+		if (!string.IsNullOrWhiteSpace(input.PayrollMonth))
+		{
+			var (year, month, canonicalMonth) = PayrollRunRules.ParseMonth(input.PayrollMonth);
+			// Legacy lock names preserve the submitted format. The audit writer stores these
+			// numeric fields in compact JSON before the counts, so the comma matches a whole value.
+			var yearField = FormattableString.Invariant($"\"year\":{year},");
+			var monthField = FormattableString.Invariant($"\"monthNumber\":{month},");
+			query = query.Where(x => x.EntityType == "payroll_run" &&
+				(x.EntityName == canonicalMonth || (x.Action == "locked" && x.ContextJson != null &&
+					x.ContextJson.Contains(yearField) && x.ContextJson.Contains(monthField))));
 		}
 		if (input.EntityId.HasValue)
 		{

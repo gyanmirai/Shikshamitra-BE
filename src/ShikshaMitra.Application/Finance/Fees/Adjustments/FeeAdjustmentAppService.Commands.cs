@@ -8,8 +8,11 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Events;
 using ShikshaMitra.Finance.Fees.Charges;
+using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Students;
 using Volo.Abp;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Finance.Fees.FeeAdjustment;
@@ -27,6 +30,13 @@ public partial class FeeAdjustmentAppService
         using var uow = BeginBalanceUnitOfWork();
         await financeScopeAccessService.EnsureRequestStudentAccessibleAsync(input.StudentId, academicYearId,
             ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Add);
+        var actorId = currentUser.Id.GetValueOrDefault();
+        var autoApprove = actorId != Guid.Empty && await userScopeService.IsAdminUserAsync(actorId);
+        if (autoApprove)
+            await financeScopeAccessService.EnsureReviewerStudentAccessibleAsync(input.StudentId, academicYearId,
+                ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.View,
+                ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Approve);
+
         var payload = new { academicYearId, input.StudentId, input.Reason,
             Lines = input.SourceLines.OrderBy(line => line.DueFeeId).Select(line =>
                 new { line.DueFeeId, line.Amount }).ToList() };
@@ -39,20 +49,41 @@ public partial class FeeAdjustmentAppService
         }
 
         var lines = input.SourceLines.Select(l => (l.DueFeeId, l.Amount)).ToList();
-        var request = await feeAdjustmentManager.CreateAsync(
-            academicYearId, input.StudentId, input.Reason, lines);
+        var request = autoApprove
+            ? await feeAdjustmentManager.CreateAndApplyForAdministratorAsync(
+                academicYearId, input.StudentId, input.Reason, lines, actorId)
+            : await feeAdjustmentManager.CreateAsync(academicYearId, input.StudentId, input.Reason, lines);
 
         await feeAdjustmentRepository.InsertAsync(request, autoSave: false);
         await feeAdjustmentCommandStore.RecordAsync("create", input.IdempotencyKey, payload,
             request.Id, request.StudentId, academicYearId);
 
-        var student = await studentRepository.GetAsync(input.StudentId);
+        var student = await studentRepository.GetForFinanceContextAsync(input.StudentId)
+            ?? throw new EntityNotFoundException(typeof(Student), input.StudentId);
+        var studentContext = BuildStudentContext(student, request.VoucherNumber);
         await financeAuditWriter.WriteAsync(
             academicYearId, FinanceAuditEntityTypes.FeeAdjustment, request.Id, request.VoucherNumber,
             FinanceAuditActions.Adjustment, $"Fee adjustment request {request.VoucherNumber} created.",
-            BuildStudentContext(student, request.VoucherNumber), input.Reason);
+            studentContext, input.Reason);
+
+        if (autoApprove)
+            await financeAuditWriter.WriteAsync(
+                academicYearId, FinanceAuditEntityTypes.FeeAdjustment, request.Id, request.VoucherNumber,
+                FinanceAuditActions.Approve, $"Automatically approved adjustment {request.VoucherNumber} for {request.AppliedAmount:F2}.",
+                studentContext, request.ApproverNotes, context: new
+                {
+                    AutomaticApproval = true,
+                    PreviousStatus = FeeAdjustmentStatus.Pending,
+                    request.Status,
+                    request.Kind,
+                    request.AppliedAmount,
+                    request.RemainingAmount,
+                    AllocationCount = request.TargetAllocations.Count,
+                });
 
         await uow.CompleteAsync();
+        if (autoApprove)
+            await PublishPaidCreditAppliedAsync(request, request.AppliedAmount);
         return await MapDetailAsync(request);
     }
 
@@ -204,20 +235,24 @@ public partial class FeeAdjustmentAppService
             BuildStudentContext(student, request.VoucherNumber), input.ApprovalNotes, context: input.Lines);
 
         await uow.CompleteAsync();
+        var batchAmount = request.AppliedAmount - batchBefore;
+        await PublishPaidCreditAppliedAsync(request, batchAmount);
+        return await MapApplyResultAsync(request, approverId, batchAmount);
+    }
 
+    private async Task PublishPaidCreditAppliedAsync(FeeAdjustmentRequest request, double amount)
+    {
         if (request.Kind == FeeAdjustmentKind.PaidCredit)
             await eventBus.PublishAsync(new FeeAdjustmentAppliedEto
-        {
-            AdjustmentRequestId   = request.Id,
-            VoucherNumber         = request.VoucherNumber,
-            StudentId             = request.StudentId,
-            AcademicYearId        = request.AcademicYearId,
-            TotalAdjustedAmount   = request.AppliedAmount - batchBefore,
-            TenantId              = CurrentTenant.Id,
-            AppliedAt             = Clock.Now,
-        });
-
-        return await MapApplyResultAsync(request, approverId, request.AppliedAmount - batchBefore);
+            {
+                AdjustmentRequestId = request.Id,
+                VoucherNumber = request.VoucherNumber,
+                StudentId = request.StudentId,
+                AcademicYearId = request.AcademicYearId,
+                TotalAdjustedAmount = amount,
+                TenantId = CurrentTenant.Id,
+                AppliedAt = Clock.Now,
+            });
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Adjustment.Reject)]

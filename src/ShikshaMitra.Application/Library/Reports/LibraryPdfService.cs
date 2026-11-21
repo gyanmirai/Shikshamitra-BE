@@ -1,6 +1,6 @@
 ﻿using System;
-using System.Linq;
 using System.Threading.Tasks;
+using System.Linq;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using ShikshaMitra.Common.PDF;
@@ -35,6 +35,20 @@ public class LibraryPdfService : ITransientDependency
 	}
 
 	private static void ComposeHeader(QuestPDF.Infrastructure.IContainer container, LibraryReportPreviewDto report)
+	{
+		container.Column(column =>
+		{
+			column.Item().Element(item => ComposeBanner(item, report));
+			column.Item().PaddingVertical(6).Column(evidence =>
+			{
+				foreach (var item in LibraryReportDateSummary.Read(report).Where(item => item.Label is not ("Report" or "Matching records" or "School date source") &&
+					(!item.Label.StartsWith("Unknown ", StringComparison.Ordinal) || item.Value != "0")))
+					evidence.Item().Text($"{item.Label}: {item.Value}").FontSize(7.5f).FontColor(Colors.Grey.Darken3);
+			});
+		});
+	}
+
+	private static void ComposeBanner(QuestPDF.Infrastructure.IContainer container, LibraryReportPreviewDto report)
 	{
 		container.Background("#1E3A5F").Padding(14).Row(row =>
 		{
@@ -89,7 +103,7 @@ public class LibraryPdfService : ITransientDependency
 			});
 
 			var rowIndex = 0;
-			foreach (var reportRow in report.Rows.Take(500))
+			foreach (var reportRow in report.Rows)
 			{
 				var background = rowIndex % 2 == 1 ? "#F8FAFC" : "#FFFFFF";
 				foreach (var column in report.Columns)

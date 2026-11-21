@@ -78,8 +78,16 @@ public class StudentRecordTransitionCorrectionService(IRepository<StudentRecordT
 		var source = await enrollments.GetAsync(x => x.Id == before.EnrollmentId && x.TenantId == CurrentTenant.Id);
 		if (before.EnrollmentActive && before.DivisionId.HasValue && (!source.IsActive || current.Id != source.Id))
 			await placement.ValidateCapacityAsync(student.Id, before.AcademicYearId, before.DivisionId.Value, before.RollNumber, (await divisions.GetAsync(x => x.Id == before.DivisionId && x.TenantId == CurrentTenant.Id)).Strength);
-		if (current.Id != source.Id) { current.Deactivate(correction.EffectiveDate); await enrollments.UpdateAsync(current); }
-		if (before.EnrollmentActive) source.Activate(correction.EffectiveDate); else source.Deactivate(correction.EffectiveDate);
+		var housePlacement = LazyServiceProvider.LazyGetRequiredService<HouseManagement.HouseManagementPlacementService>();
+		if (current.Id != source.Id)
+		{
+			await housePlacement.DeactivateAsync(current, correction.EffectiveDate);
+			await enrollments.UpdateAsync(current);
+		}
+		if (before.EnrollmentActive)
+			source.Activate(correction.EffectiveDate);
+		else
+			await housePlacement.DeactivateAsync(source, correction.EffectiveDate);
 		await enrollments.UpdateAsync(source);
 		student.UpdateAcademicPlacement(before.AcademicYearId, before.BoardId, before.MediumId, before.StageId, before.StandardId, before.DivisionId);
 		student.AssignRollNo(before.RollNumber);

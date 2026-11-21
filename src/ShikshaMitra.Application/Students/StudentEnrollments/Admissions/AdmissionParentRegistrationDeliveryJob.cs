@@ -53,11 +53,10 @@ public class AdmissionParentRegistrationDeliveryJob(AdmissionParentRegistrationD
 		try
 		{
 			var application = await access.AuthorizeAsync(row);
-			var baseUrl = configuration["App:ClientUrl"] ?? configuration["App:AngularUrl"];
-			if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http"))
-				throw new BusinessException("Communication:ClientUrlMissing");
+			var linkPrefix = AdmissionParentRegistrationData.LinkPrefix(configuration)
+				?? throw new BusinessException("Communication:ClientUrlMissing");
 			var token = protection.CreateProtector("AdmissionParentRegistration.v1").Unprotect(row.ProtectedToken);
-			var link = baseUrl!.TrimEnd('/') + "/admission-registration#token=" + token;
+			var link = linkPrefix + token;
 			var result = await communication.PublishParentRegistrationAsync(row.CampaignId!.Value, row, application,
 				JsonSerializer.Deserialize<AdmissionParentRecipientDto>(row.RecipientJson)!, link);
 			row.SetDelivery(result.Status, result.Error);

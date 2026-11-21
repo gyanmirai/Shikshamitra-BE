@@ -16,6 +16,11 @@ public class AdmissionParentSendInput : AdmissionParentCommand
 {
 	[Required, RegularExpression("^(father|mother|guardian)$")] public string RecipientRelationship { get; set; } = "";
 }
+public class AdmissionParentCopyLinkInput : AdmissionParentCommand
+{
+	public Guid? RequestId { get; set; }
+	[RegularExpression("^(father|mother|guardian)$")] public string? RecipientRelationship { get; set; }
+}
 public class AdmissionParentEmailInput : AdmissionParentSendInput
 {
 	[Required, EmailAddress, StringLength(256)] public string Email { get; set; } = "";
@@ -92,6 +97,8 @@ public class AdmissionParentStaffContextDto
 	public List<AdmissionParentRecipientDto> Recipients { get; set; } = [];
 	public AdmissionParentRequestDto? Request { get; set; }
 	public bool CanSend { get; set; }
+	public bool CanCopyLink { get; set; }
+	public bool CanCreateLink { get; set; }
 	public bool CanRequestCorrections { get; set; }
 	public bool CanRequestDocumentCorrections { get; set; }
 	public bool CanRevoke { get; set; }
@@ -224,6 +231,7 @@ public interface IAdmissionParentRegistrationAppService : IApplicationService
 	Task<AdmissionParentStaffContextDto> GetAsync(Guid applicationId);
 	Task<List<AdmissionParentEmailHistoryDto>> GetEmailHistoryAsync(Guid applicationId);
 	Task<AdmissionParentStaffContextDto> SendAsync(Guid applicationId, AdmissionParentSendInput input);
+	Task<string> CopyLinkAsync(Guid applicationId, AdmissionParentCopyLinkInput input);
 	Task<AdmissionParentStaffContextDto> ChangeEmailAsync(Guid applicationId, AdmissionParentEmailInput input);
 	Task<AdmissionParentStaffContextDto> RequestCorrectionsAsync(Guid applicationId, AdmissionParentCorrectionInput input);
 	Task<AdmissionParentStaffContextDto> RevokeAsync(Guid applicationId, AdmissionParentCommand input);

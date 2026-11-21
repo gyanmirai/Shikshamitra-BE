@@ -610,6 +610,7 @@ public partial class StudentOnboardingAppService
 				series.EnsureAvailable(now);
 				long sequence;
 				string value;
+				var collisionRead = new GrCollisionReadContext();
 				var isManual = !string.IsNullOrWhiteSpace(input.ManualValue);
 				if (isManual)
 				{
@@ -619,17 +620,17 @@ public partial class StudentOnboardingAppService
 
 					sequence = input.ManualSequence ?? 0;
 					value = input.ManualValue!.Trim();
+					if (await GrNumbers.IsInUseAsync(value, student.Id, null, collisionRead))
+						throw new BusinessException(StudentOnboardingErrorCodes.IdentifierAlreadyAllocated);
 				}
 				else
 				{
 					if (configuration != null && OnboardingRuleConfiguration.Text(configuration.Root.GetProperty("grNumber"), "assignmentMode") == "manual")
 						throw OnboardingRuleConfiguration.Invalid("Enter a GR number and reason under the manual assignment rule.");
-					(sequence, value) = series.Allocate(now);
+					do { (sequence, value) = series.Allocate(now); }
+					while (await GrNumbers.IsInUseAsync(value, student.Id, null, collisionRead));
 					await seriesRepository.UpdateAsync(series, false);
 				}
-				if (await allocationRepository.AnyAsync(a => a.Value == value && a.Status != StudentIdentifierAllocationStatus.Released) ||
-					await studentRepository.AnyAsync(s => s.Id != student.Id && s.GrNumber == value))
-					throw new BusinessException(StudentOnboardingErrorCodes.IdentifierAlreadyAllocated);
 				var allocation = new StudentIdentifierAllocation(GuidGenerator.Create(), CurrentTenant.Id, id,
 					student.Id, series.Id, series.IdentifierType, sequence, value, now, isManual, input.OverrideReason);
 				await allocationRepository.InsertAsync(allocation, false);

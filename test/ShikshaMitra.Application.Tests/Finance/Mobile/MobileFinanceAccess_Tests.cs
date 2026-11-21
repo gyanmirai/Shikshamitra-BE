@@ -156,7 +156,7 @@ public partial class MobileAcademicAppService_Tests
 		await Insert(PaymentMethodRecord.Create(f.Student.Id,transaction.Id,0.10m,DateTimeOffset.UtcNow,PaymentMethodEnum.Cash,tenantId:tenantId));
 		await Insert(PaymentMethodRecord.Create(f.Student.Id,transaction.Id,0.20m,DateTimeOffset.UtcNow,PaymentMethodEnum.Cash,tenantId:tenantId));
 		var receipt=await Insert(new FeePaymentReceipt(Guid.NewGuid()){TenantId=tenantId,StudentId=f.Student.Id,AcademicYearId=f.Year.Id,
-			FeeCollectionTransactionId=transaction.Id,ReceiptNumber="FIN-FAMILY-1",ReceiptKind=FeeReceiptKind.FinalFee,ReceiptScope=FeeReceiptScope.Fee,TotalPaidAmount=0.30,ReceiptDate=DateOnly.FromDateTime(DateTime.UtcNow),BoardId=f.Student.AcademicBoardId!.Value,EducationMediumId=f.Student.AcademicMediumId});
+			FeeCollectionTransactionId=transaction.Id,ReceiptNumber="FIN-FAMILY-1",ReceiptKind=FeeReceiptKind.FinalFee,ReceiptScope=FeeReceiptScope.Fee,TotalPaidAmount=0.30m,ReceiptDate=DateOnly.FromDateTime(DateTime.UtcNow),BoardId=f.Student.AcademicBoardId!.Value,EducationMediumId=f.Student.AcademicMediumId});
 		var other=await Insert(new FeePaymentReceipt(Guid.NewGuid()){TenantId=tenantId,StudentId=Guid.NewGuid(),AcademicYearId=f.Year.Id,
 			FeeCollectionTransactionId=transaction.Id,ReceiptNumber="FIN-FAMILY-OTHER",ReceiptKind=FeeReceiptKind.FinalFee,ReceiptScope=FeeReceiptScope.Fee,TotalPaidAmount=1,ReceiptDate=receipt.ReceiptDate});
 		var reads=RealFinanceReads();var item=(await reads.PaymentsAsync(f.Student.Id,f.Year.Id)).Items.Single();

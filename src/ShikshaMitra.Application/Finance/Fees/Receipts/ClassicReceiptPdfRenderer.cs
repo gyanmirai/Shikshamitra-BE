@@ -66,7 +66,7 @@ public static class ClassicReceiptPdfRenderer
 				content.Spacing(17);
 				content.Item().Border(.6f).BorderColor(Border).Padding(12).Column(student =>
 				{
-					student.Item().Text("STUDENT DETAILS").FontSize(8).Bold().FontColor(Muted);
+					student.Item().Text(model.PayerHeading).FontSize(8).Bold().FontColor(Muted);
 					student.Item().PaddingTop(12).Element(container => Fields(container, model.StudentFields));
 				});
 				content.Item().Column(payment =>
@@ -76,6 +76,11 @@ public static class ClassicReceiptPdfRenderer
 				});
 				content.Item().Column(fees =>
 				{
+					if (model.FinancialPositionFields.Count > 0)
+					{
+						fees.Item().PaddingBottom(10).Text(model.FinancialPositionHeading ?? "FINANCIAL POSITION").FontSize(8).Bold();
+						fees.Item().PaddingBottom(17).Element(container => Fields(container, model.FinancialPositionFields));
+					}
 					fees.Item().PaddingBottom(10).Text(model.IsRefund ? "REFUND BREAKDOWN" : "FEE BREAKDOWN").FontSize(8).Bold();
 					fees.Item().Element(container => LineTable(container, model));
 				});
@@ -83,7 +88,7 @@ public static class ClassicReceiptPdfRenderer
 				{
 					summary.Item().BorderTop(.6f).BorderColor(Border).PaddingTop(13).Row(row =>
 					{
-						row.RelativeItem().AlignMiddle().Text(model.IsRefund ? "REFUND AMOUNT" : "AMOUNT RECEIVED").FontSize(8).Bold().FontColor(Muted);
+						row.RelativeItem().AlignMiddle().Text(model.AmountLabel ?? (model.IsRefund ? "REFUND AMOUNT" : "AMOUNT RECEIVED")).FontSize(8).Bold().FontColor(Muted);
 						row.AutoItem().Text(Money(model.Amount)).FontSize(22).Bold();
 					});
 					summary.Item().PaddingTop(12).Text($"Amount in words: {IndianCurrencyWords.Format(model.Amount)}").SemiBold();

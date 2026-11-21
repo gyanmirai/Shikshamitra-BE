@@ -52,6 +52,22 @@ public class HouseManagementApi_Tests(ShikshaMitraApiTestFactory factory) : Shik
 		response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 	}
 
+	[Theory]
+	[InlineData("preview")]
+	[InlineData("commit")]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Membership_commands_require_a_division(string command)
+	{
+		using var response = await Client.PostAsJsonAsync($"{Root}/assignments/{command}", new
+		{
+			AcademicMediumId = Factory.SeededMediumId,
+			EnrollmentIds = new[] { Guid.NewGuid() }
+		}, JsonOptions);
+		var body = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+		body.ShouldContain("Select a division to change house membership.");
+	}
+
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Legacy_house_settings_routes_are_retired()
@@ -71,6 +87,15 @@ public class HouseManagementApi_Tests(ShikshaMitraApiTestFactory factory) : Shik
 		}
 		using var create = await Client.PostAsJsonAsync(routes[0], new { name = "Legacy Falcons", color = "#2468ab" }, JsonOptions);
 		create.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Former_division_scoped_house_leader_command_is_retired()
+	{
+		using var response = await Client.PutAsJsonAsync($"{Root}/divisions/{Guid.NewGuid()}/house-leader",
+			new ReplaceStudentLeaderRequest { AcademicMediumId = Factory.SeededMediumId, ConcurrencyStamp = "previous-version" }, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 
 	[Fact]

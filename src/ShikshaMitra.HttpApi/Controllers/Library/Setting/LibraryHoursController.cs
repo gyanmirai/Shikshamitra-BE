@@ -19,7 +19,7 @@ public class LibraryHoursController : AbpController
 	}
 
 	[HttpGet]
-	public Task<PaginatedResponse<LibraryTimingDto>> GetListAsync(
+	public Task<LibraryHoursListDto> GetListAsync(
 		[FromQuery] Guid academicYearId,
 		[FromQuery] int pageSize = 10,
 		[FromQuery] int page = 1)

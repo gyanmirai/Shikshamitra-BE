@@ -1,15 +1,22 @@
 using System;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Library.Books;
 
-public class BookCopy : Entity<Guid>
+public class BookCopy : Entity<Guid>, IMultiTenant
 {
+    public const int MaximumAccessionLength = 50;
+
+    public Guid? TenantId { get; private set; }
+
     public Guid BookId { get; set; }
 
     public int CopyNumber { get; set; }
 
     public string AccessionNumber { get; set; }
+
+    public string NormalizedAccessionNumber { get; private set; } = null!;
 
     public Guid SectionId { get; set; }
 
@@ -25,9 +32,10 @@ public class BookCopy : Entity<Guid>
         AccessionNumber = null!;
     }
 
-    public BookCopy(Guid id, Guid bookId, int copyNumber, string accessionNumber, Guid sectionId, Guid shelfId)
+    public BookCopy(Guid id, Guid bookId, int copyNumber, string accessionNumber, Guid sectionId, Guid shelfId, Guid? tenantId = null)
         : base(id)
     {
+        TenantId = tenantId;
         BookId = bookId;
         CopyNumber = copyNumber;
         AccessionNumber = accessionNumber;

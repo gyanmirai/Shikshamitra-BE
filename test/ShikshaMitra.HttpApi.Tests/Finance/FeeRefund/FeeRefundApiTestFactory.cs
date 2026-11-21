@@ -25,6 +25,9 @@ public sealed class FeeRefundApiTestCollection : ICollectionFixture<FeeRefundApi
 
 public sealed class FeeRefundApiTestFactory : ShikshaMitraApiTestFactory
 {
+    // These workflow fixtures use an independent scoped reviewer and a maker without an employee reporting line.
+    protected override bool IncludeHrFixtures => false;
+
     public StudentRecordsInsertBarrier Barrier { get; } = new();
     public ConcurrentQueue<string> ServerErrors { get; } = new();
     private static readonly string ConnectionString =

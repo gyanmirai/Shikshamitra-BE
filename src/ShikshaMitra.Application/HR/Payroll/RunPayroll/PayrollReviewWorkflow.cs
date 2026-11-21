@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.Audit;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -13,23 +17,31 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 [RemoteService(false)]
 public class PayrollReviewWorkflow(
 	PayrollPreviewReviewGuard previewGuard,
+	IRepository<PayrollEmployeeClaim, Guid> claims,
 	ISalarySlipRepository salarySlipRepository,
 	IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
 	PayrollAdjustmentReader adjustmentReader,
 	PayrollScopedEmployeeResolver scopedEmployeeResolver,
 	PayrollRunSnapshotStore snapshotStore,
-	PayrollAcademicYearScopeResolver academicYearScopeResolver) : ApplicationService, ITransientDependency
+	PayrollAcademicYearScopeResolver academicYearScopeResolver,
+	HrAuditWriter auditWriter,
+	IRepository<HrAuditEvent, Guid> auditEvents) : ApplicationService, ITransientDependency
 {
 	public async Task<PayrollLockResponse> MarkReviewedAsync(PayrollRunReviewRequest request)
 	{
 		await previewGuard.EnsureCurrentAsync(request.PreviewRunId, request.Month, request.AcademicYearId, request.EmployeeIds);
 		var (year, month, internalMonthYear) = PayrollRunRules.ParseMonth(request.Month);
-		await academicYearScopeResolver.ResolveAsync(request.AcademicYearId, year, month);
+		var academicYearId = await academicYearScopeResolver.ResolveAsync(request.AcademicYearId, year, month);
 		var employeeIds = PayrollRunRules.NormalizeReviewEmployeeIds(request.EmployeeIds);
 		var actorUserId = CurrentUser.Id ?? throw new BusinessException(HRErrorCodes.AttendanceImportPreviewInvalid);
+		const string action = "reviewed";
+		var operationKey = GetOperationKey(request, action);
 
 		var targetEmployees = await scopedEmployeeResolver.ResolveScopedTargetEmployeesAsync(year, month, employeeIds);
+		await EnsureUnclaimedAsync(internalMonthYear, employeeIds);
+		if (await FindRecordedOperationAsync(request.PreviewRunId, operationKey) is { } recorded)
+			return BuildResponse(request.Month, action, recorded);
 		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
 
 		var existingByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
@@ -46,15 +58,31 @@ public class PayrollReviewWorkflow(
 				.WithData("employeeIds", missingSnapshotEmployeeIds);
 		}
 
+		var issuesByEmployee = targetEmployees.ToDictionary(
+			employee => employee.Id,
+			employee => JsonSerializer.Deserialize<List<string>>(snapshotByEmployee[employee.Id].IssueCodesJson) ?? []);
+		var missingAttendanceIds = issuesByEmployee
+			.Where(entry => entry.Value.Contains(IssueCodes.NoAttendance))
+			.Select(entry => entry.Key)
+			.ToList();
+		if (missingAttendanceIds.Count > 0)
+		{
+			throw new BusinessException(HRErrorCodes.PayrollReviewAttendanceRequired)
+				.WithData("month", request.Month)
+				.WithData("employeeIds", missingAttendanceIds);
+		}
+
 		var reviewedAt = Clock.Now;
 		var updated = 0;
 
 		foreach (var employee in targetEmployees)
 		{
+			if (existingByEmployee.TryGetValue(employee.Id, out var existingReview) && existingReview.PreviewRunId == request.PreviewRunId)
+				continue;
 			var evidence = snapshotByEmployee[employee.Id];
-			var profile = evidence.StatutoryApplicationJson == null ? null : System.Text.Json.JsonSerializer.Deserialize<ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryApplication>(evidence.StatutoryApplicationJson)?.Profile;
-			var warnings = System.Text.Json.JsonSerializer.Deserialize<List<string>>(evidence.IssueCodesJson) ?? [];
-			if (existingByEmployee.TryGetValue(employee.Id, out var existingReview))
+			var profile = evidence.StatutoryApplicationJson == null ? null : JsonSerializer.Deserialize<ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryApplication>(evidence.StatutoryApplicationJson)?.Profile;
+			var warnings = issuesByEmployee[employee.Id];
+			if (existingReview is not null)
 			{
 				existingReview.Refresh(actorUserId, reviewedAt, request.PreviewRunId);
 				existingReview.AcknowledgeWarnings(warnings, profile?.VersionId);
@@ -75,22 +103,21 @@ public class PayrollReviewWorkflow(
 			updated++;
 		}
 
-		await UnitOfWorkManager.Current!.SaveChangesAsync();
-		return new PayrollLockResponse
-		{
-			Message = $"Marked {updated} payroll row(s) as reviewed.",
-			Month = request.Month,
-			EmployeesProcessed = updated
-		};
+		return await SaveReviewAsync(request, academicYearId, $"{year:0000}-{month:00}", action, updated, operationKey);
 	}
 
 	public async Task<PayrollLockResponse> UnmarkReviewedAsync(PayrollRunReviewRequest request)
 	{
 		await previewGuard.EnsureCurrentAsync(request.PreviewRunId, request.Month, request.AcademicYearId, request.EmployeeIds);
 		var (year, month, internalMonthYear) = PayrollRunRules.ParseMonth(request.Month);
-		await academicYearScopeResolver.ResolveAsync(request.AcademicYearId, year, month);
+		var academicYearId = await academicYearScopeResolver.ResolveAsync(request.AcademicYearId, year, month);
 		var employeeIds = PayrollRunRules.NormalizeReviewEmployeeIds(request.EmployeeIds);
+		const string action = "review_removed";
+		var operationKey = GetOperationKey(request, action);
 		var targetEmployees = await scopedEmployeeResolver.ResolveScopedTargetEmployeesAsync(year, month, employeeIds);
+		await EnsureUnclaimedAsync(internalMonthYear, employeeIds);
+		if (await FindRecordedOperationAsync(request.PreviewRunId, operationKey) is { } recorded)
+			return BuildResponse(request.Month, action, recorded);
 		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
 
 		var existingByEmployee = await GetReviewsByEmployeeAsync(internalMonthYear);
@@ -112,7 +139,7 @@ public class PayrollReviewWorkflow(
 		var removed = 0;
 		foreach (var employee in targetEmployees)
 		{
-			if (!existingByEmployee.TryGetValue(employee.Id, out var existingReview))
+			if (!existingByEmployee.TryGetValue(employee.Id, out var existingReview) || existingReview.PreviewRunId != request.PreviewRunId)
 			{
 				continue;
 			}
@@ -126,14 +153,59 @@ public class PayrollReviewWorkflow(
 			removed++;
 		}
 
-		await UnitOfWorkManager.Current!.SaveChangesAsync();
-		return new PayrollLockResponse
-		{
-			Message = $"Removed review from {removed} payroll row(s).",
-			Month = request.Month,
-			EmployeesProcessed = removed
-		};
+		return await SaveReviewAsync(request, academicYearId, $"{year:0000}-{month:00}", action, removed, operationKey);
 	}
+
+	private async Task EnsureUnclaimedAsync(string month, List<Guid> ids)
+	{
+		if (await claims.AnyAsync(x => x.Month == month && x.SubmissionId.HasValue && ids.Contains(x.EmployeeId)))
+			throw new BusinessException("PAYROLL_EMPLOYEE_ALREADY_SUBMITTED");
+	}
+
+	private string? GetOperationKey(PayrollRunReviewRequest request, string action)
+	{
+		if (request.OperationId is null)
+			return null;
+		var employeeIds = string.Join(",", request.EmployeeIds.Distinct().Order());
+		var fingerprint = $"{CurrentUser.Id}:{request.OperationId}:{action}:{request.PreviewRunId}:{employeeIds}";
+		return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint)));
+	}
+
+	private async Task<int?> FindRecordedOperationAsync(Guid previewRunId, string? operationKey)
+	{
+		if (operationKey is null)
+			return null;
+		var recorded = await auditEvents.FindAsync(x => x.EntityType == "payroll_run"
+			&& x.TenantId == CurrentTenant.Id && x.EntityId == previewRunId && x.CorrelationId == operationKey);
+		if (recorded?.ContextJson is null)
+			return null;
+		using var context = JsonDocument.Parse(recorded.ContextJson);
+		return context.RootElement.GetProperty("employeeCount").GetInt32();
+	}
+
+	private async Task<PayrollLockResponse> SaveReviewAsync(
+		PayrollRunReviewRequest request, Guid? academicYearId, string month, string action, int count, string? operationKey)
+	{
+		var response = BuildResponse(month, action, count);
+		if (count > 0 || operationKey is not null)
+		{
+			// Store idempotency receipts even for no-ops, without displaying them as activity.
+			var recordedAction = count > 0 ? action : HrAuditTrailQuery.PayrollReviewReceiptAction;
+			await auditWriter.WriteAsync(academicYearId, "payroll_run", request.PreviewRunId, month, recordedAction, response.Message,
+				context: new { request.PreviewRunId, EmployeeCount = count }, correlationId: operationKey);
+		}
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
+		return response;
+	}
+
+	private static PayrollLockResponse BuildResponse(string month, string action, int count) => new()
+	{
+		Message = action == "reviewed"
+			? $"Marked {count} payroll row(s) as reviewed."
+			: $"Removed review from {count} payroll row(s).",
+		Month = month,
+		EmployeesProcessed = count
+	};
 
 	internal async Task EnsureReviewCanChangeAsync(
 		string internalMonthYear,

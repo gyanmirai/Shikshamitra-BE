@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Text.Json;
@@ -6,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BackgroundJobs;
@@ -21,6 +23,10 @@ public class PayrollPreviewRunAppService(
 	IRepository<PayrollPreviewEmployee, Guid> employees,
 	IRepository<PayrollRunItemSnapshot, Guid> snapshots,
 	IRepository<PayrollRunReview, Guid> runReviews,
+	IRepository<PayrollEmployeeClaim, Guid> claims,
+	IRepository<PayrollCommandReceipt, Guid> receipts,
+	IRepository<PayslipDocument, Guid> documents,
+	PayrollMonthCoverageReader coverage,
 	PayrollScopedEmployeeResolver scopeResolver,
 	PayrollAcademicYearScopeResolver academicYearResolver,
 	IPayrollInputRevisionStore revisions,
@@ -36,9 +42,26 @@ public class PayrollPreviewRunAppService(
 		var scoped = await scopeResolver.GetScopedPayrollEmployeesAsync(year, month, false);
 		var fingerprint = ScopeFingerprint(scoped.Select(x => x.Id));
 		var revision = await revisions.LockAsync();
-		var query = await runs.GetQueryableAsync();
-		var latest = await AsyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Month == canonicalMonth
-			&& x.AcademicYearId == academicYear && x.ScopeFingerprint == fingerprint).OrderByDescending(x => x.CreatedAtUtc));
+		const string command = "start-preview";
+		var actor = CurrentUser.Id!.Value;
+		var requestFingerprint = PayrollSubmissionEvidence.Fingerprint(new { canonicalMonth, academicYear, fingerprint, request.Refresh });
+		if (request.CommandKey.HasValue)
+		{
+			if (request.CommandKey == Guid.Empty) throw new BusinessException("PAYROLL_PREVIEW_COMMAND_INVALID");
+			var receipt = await receipts.FindAsync(x => x.ActorId == actor && x.Command == command && x.Key == request.CommandKey.Value);
+			if (receipt != null)
+			{
+				if (receipt.Fingerprint != requestFingerprint) throw new BusinessException("PAYROLL_COMMAND_KEY_CONFLICT");
+				return await ReadStatusAsync(await GetAuthorizedRunAsync(receipt.ResultId));
+			}
+		}
+		async Task RecordAsync(PayrollPreviewRun run, bool reused)
+		{
+			if (request.CommandKey is { } key && CurrentTenant.Id is { } tenant)
+				await receipts.InsertAsync(new PayrollCommandReceipt(GuidGenerator.Create(), tenant, actor,
+					command, key, requestFingerprint, run.Id, JsonSerializer.Serialize(new { Reused = reused })));
+		}
+		var latest = await AsyncExecuter.FirstOrDefaultAsync(await GetScopedRunsAsync(canonicalMonth, academicYear, fingerprint));
 		if (latest != null && !latest.HasCurrentCalculationVersion && (latest.Status is "QUEUED" or "RUNNING"))
 		{
 			latest.Supersede(Clock.Now);
@@ -47,6 +70,7 @@ public class PayrollPreviewRunAppService(
 		if (latest != null && latest.HasCurrentCalculationVersion && ((latest.Status is "QUEUED" or "RUNNING") ||
 			(!request.Refresh && latest.Status == "SUCCEEDED" && latest.InputRevision == revision)))
 		{
+			await RecordAsync(latest, reused: true);
 			await uow.CompleteAsync();
 			return ToStatus(latest, revision);
 		}
@@ -54,28 +78,217 @@ public class PayrollPreviewRunAppService(
 			canonicalMonth, academicYear, fingerprint, scoped.Count, Clock.Now);
 		await runs.InsertAsync(run, autoSave: true);
 		await jobs.EnqueueAsync(new PayrollPreviewJobArgs { TenantId = CurrentTenant.Id, RunId = run.Id });
+		await RecordAsync(run, reused: false);
 		await uow.CompleteAsync();
 		return ToStatus(run, revision);
 	}
 
-	public virtual async Task<PayrollPreviewStatusDto> GetAsync(Guid id)
+	public virtual async Task<PayrollPreviewLookupDto> GetCurrentAsync(PayrollPreviewMonthInput input)
 	{
-		var run = await GetAuthorizedRunAsync(id);
+		var (year, month, _) = PayrollRunRules.ParseMonth(input.Month);
+		var academicYear = await academicYearResolver.ResolveAsync(input.AcademicYearId, year, month);
+		var scoped = await scopeResolver.GetScopedPayrollEmployeesAsync(year, month, false);
+		var scopedRuns = await GetScopedRunsAsync($"{year:0000}-{month:00}", academicYear, ScopeFingerprint(scoped.Select(x => x.Id)));
+		var latest = await AsyncExecuter.FirstOrDefaultAsync(scopedRuns);
+		return new PayrollPreviewLookupDto
+		{
+			CurrentRun = latest == null ? null : await ReadStatusAsync(latest)
+		};
+	}
+
+	public virtual async Task<PayrollPreviewStatusDto> GetAsync(Guid id) =>
+		await ReadStatusAsync(await GetAuthorizedRunAsync(id));
+
+	public virtual async Task<RunPayrollResponse> GetRegisterAsync(PayrollRegisterInput input)
+	{
+		ValidatePage(input);
+		if (input.Sort is not (null or "employeeName" or "payableDays" or "netPay" or "netPayDelta") ||
+			input.ReviewState is not (null or "PENDING" or "REVIEWED" or "SUBMITTED" or "LOCKED") ||
+			input.IssueClass is not (null or "CLEAN" or "CRITICAL" or "HAS_ISSUES"))
+			throw new BusinessException("PAYROLL_REGISTER_CRITERIA_INVALID");
+		var (year, month, internalMonth) = PayrollRunRules.ParseMonth(input.Month);
+		var canonicalMonth = $"{year:0000}-{month:00}";
+		var academicYear = await academicYearResolver.ResolveAsync(input.AcademicYearId, year, month);
+		var scopedStaff = await scopeResolver.GetScopedEmployeeQueryAsync(false);
+		var scopedIds = scopedStaff.Select(x => x.Id);
+		var eligible = await PayrollScopedEmployeeResolver.ReadEligibleAsync(scopedStaff, year, month, AsyncExecuter);
+		var eligibleIds = eligible.Select(x => x.Id).ToHashSet();
+		var scopedRuns = await GetScopedRunsAsync(canonicalMonth, academicYear, ScopeFingerprint(eligibleIds));
+		var workingRun = await AsyncExecuter.FirstOrDefaultAsync(scopedRuns.Where(x => x.Status == "SUCCEEDED"));
+		var issuedSlips = await coverage.GetIssuedAsync(canonicalMonth, scopedStaff);
+		var issuedIdsQuery = issuedSlips.Select(x => x.EmployeeId);
+		var issuedIds = (await AsyncExecuter.ToListAsync(issuedIdsQuery)).ToHashSet();
+		var monthSnapshots = (await snapshots.GetQueryableAsync()).Where(x => x.MonthYear == internalMonth);
+		var lockedSnapshots = monthSnapshots.Where(x => x.IsLocked && issuedIdsQuery.Contains(x.EmployeeId));
+		var finalized = lockedSnapshots;
+		var legacyIssued =
+			from slip in issuedSlips
+			join staff in scopedStaff on slip.EmployeeId equals staff.Id
+			where !lockedSnapshots.Any(x => x.EmployeeId == slip.EmployeeId)
+			select new
+			{
+				slip.Id, slip.EmployeeId, EmployeeName = ((staff.FirstName ?? "") + " " + (staff.LastName ?? "")).Trim(),
+				Code = staff.EmployeeCode ?? "", slip.PayableDays, slip.NetSalary, slip.TotalDeduction, slip.Status
+			};
+		var working = (await employees.GetQueryableAsync()).Where(x => workingRun != null && x.RunId == workingRun.Id
+			&& scopedIds.Contains(x.EmployeeId) && !issuedIdsQuery.Contains(x.EmployeeId));
+		var allWorking = working;
+		var issueCode = input.IssueCode?.Trim();
+		if (!string.IsNullOrEmpty(issueCode))
+		{
+			working = working.Where(x => Enumerable.Contains(x.RegisterIssueCodes, issueCode));
+			finalized = finalized.Where(x => Enumerable.Contains(x.RegisterIssueCodes, issueCode));
+		}
+		var blockingCodes = PayrollLockPreconditionGuard.BlockingIssueCodes.ToArray();
+		switch (input.IssueClass)
+		{
+			case "CLEAN":
+				working = working.Where(x => !x.RegisterIssueCodes.Any());
+				finalized = finalized.Where(x => !x.RegisterIssueCodes.Any());
+				break;
+			case "CRITICAL":
+				working = working.Where(x => x.RegisterIssueCodes.Intersect(blockingCodes).Any());
+				finalized = finalized.Where(x => x.RegisterIssueCodes.Intersect(blockingCodes).Any());
+				break;
+			case "HAS_ISSUES":
+				working = working.Where(x => x.RegisterIssueCodes.Any() && !x.RegisterIssueCodes.Intersect(blockingCodes).Any());
+				finalized = finalized.Where(x => x.RegisterIssueCodes.Any() && !x.RegisterIssueCodes.Intersect(blockingCodes).Any());
+				break;
+		}
+		if (!string.IsNullOrEmpty(issueCode) || input.IssueClass is "CRITICAL" or "HAS_ISSUES")
+			legacyIssued = legacyIssued.Where(_ => false);
+		var reviewQuery = (await runReviews.GetQueryableAsync()).Where(x => workingRun != null && x.PreviewRunId == workingRun.Id);
+		var submittedQuery = (await claims.GetQueryableAsync()).Where(x => x.Month == canonicalMonth && x.SubmissionId.HasValue);
+		var displayRows = working.Select(x => new
+			{
+				x.EmployeeId, x.EmployeeName, Code = x.EmployeeCode, x.PayableDays, x.NetPay, x.NetPayDelta,
+				State = submittedQuery.Any(claim => claim.EmployeeId == x.EmployeeId) ? "SUBMITTED" :
+					reviewQuery.Any(review => review.EmployeeId == x.EmployeeId) ? "REVIEWED" : "PENDING"
+			})
+			.Concat(finalized.Select(x => new
+			{
+				x.EmployeeId, x.EmployeeName, Code = x.EmployeeIdentifier, PayableDays = (decimal?) x.PayableDays,
+				NetPay = (decimal?) x.NetPay, x.NetPayDelta, State = "LOCKED"
+			}))
+			.Concat(legacyIssued.Select(x => new
+			{
+				x.EmployeeId, x.EmployeeName, x.Code, x.PayableDays,
+				NetPay = (decimal?) x.NetSalary, NetPayDelta = (decimal?) null, State = "LOCKED"
+			}));
+		var search = input.Search?.Trim().ToLowerInvariant();
+		if (!string.IsNullOrEmpty(search))
+			displayRows = displayRows.Where(x => x.EmployeeName.ToLower().Contains(search) || x.Code.ToLower().Contains(search));
+		if (input.ReviewState != null)
+			displayRows = displayRows.Where(x => x.State == input.ReviewState);
+		var ordered = (input.Sort, input.Descending) switch
+		{
+			("payableDays", true) => displayRows.OrderBy(x => x.PayableDays == null).ThenByDescending(x => x.PayableDays),
+			("payableDays", false) => displayRows.OrderBy(x => x.PayableDays == null).ThenBy(x => x.PayableDays),
+			("netPay", true) => displayRows.OrderBy(x => x.NetPay == null).ThenByDescending(x => x.NetPay),
+			("netPay", false) => displayRows.OrderBy(x => x.NetPay == null).ThenBy(x => x.NetPay),
+			("netPayDelta", true) => displayRows.OrderBy(x => x.NetPayDelta == null).ThenByDescending(x => x.NetPayDelta),
+			("netPayDelta", false) => displayRows.OrderBy(x => x.NetPayDelta == null).ThenBy(x => x.NetPayDelta),
+			(_, true) => displayRows.OrderByDescending(x => x.EmployeeName),
+			_ => displayRows.OrderBy(x => x.EmployeeName)
+		};
+		var count = await AsyncExecuter.CountAsync(displayRows);
+		var pageIds = await AsyncExecuter.ToListAsync(ordered.ThenBy(x => x.EmployeeId)
+			.Skip(checked(input.Page * input.PageSize)).Take(input.PageSize).Select(x => x.EmployeeId));
+
+		var workingRows = await AsyncExecuter.ToListAsync(working.Where(x => pageIds.Contains(x.EmployeeId)));
+		var finalizedRows = await AsyncExecuter.ToListAsync(finalized.Where(x => pageIds.Contains(x.EmployeeId)));
+		var pageReviews = (await AsyncExecuter.ToListAsync(reviewQuery.Where(x => pageIds.Contains(x.EmployeeId))))
+			.ToDictionary(x => x.EmployeeId);
+		var submitted = (await AsyncExecuter.ToListAsync(submittedQuery
+			.Where(x => pageIds.Contains(x.EmployeeId))
+			.Select(x => x.EmployeeId))).ToHashSet();
+		var items = finalizedRows.ToDictionary(x => x.EmployeeId, PayrollRunProjection.ToItem);
+		var legacyRows = await AsyncExecuter.ToListAsync(legacyIssued.Where(x => pageIds.Contains(x.EmployeeId)));
+		if (legacyRows.Count > 0)
+		{
+			var slipIds = legacyRows.Select(x => x.Id).ToList();
+			var documentQuery = await documents.GetQueryableAsync();
+			var currentDocuments = await AsyncExecuter.ToListAsync(documentQuery.Where(x => slipIds.Contains(x.SalarySlipId) &&
+				!documentQuery.Any(other => other.SalarySlipId == x.SalarySlipId && other.Revision > x.Revision))
+				.Select(x => new { x.SalarySlipId, x.FactsJson }));
+			var factsBySlip = currentDocuments.ToDictionary(x => x.SalarySlipId, x => JsonSerializer.Deserialize<SalarySlipDto>(x.FactsJson));
+			foreach (var row in legacyRows)
+			{
+				var facts = factsBySlip.GetValueOrDefault(row.Id);
+				items.Add(row.EmployeeId, new RunPayrollItem
+				{
+					EmployeeId = row.EmployeeId, EmployeeName = facts?.EmployeeName ?? row.EmployeeName,
+					EmployeeIdentifier = facts?.EmployeeCode ?? row.Code, IsLocked = true, ReviewStatus = ReviewStatuses.Locked,
+					IsIssuedWithoutRegisterDetails = facts?.FullGrossSalary == null || facts.PayableDays == null || facts.PayrollBasisDays == null,
+					FullGrossSalary = (double) (facts?.FullGrossSalary ?? 0m),
+					GrossSalary = (double) (facts?.GrossSalary ?? 0m), NetPay = (double) row.NetSalary, TotalDeduction = (double) row.TotalDeduction,
+					PayableDays = (double) (facts?.PayableDays ?? 0m), TotalWorkingDays = (double) (facts?.PayrollBasisDays ?? 0m)
+				});
+			}
+		}
+		foreach (var row in workingRows)
+		{
+			var item = JsonSerializer.Deserialize<RunPayrollItem>(row.ItemJson)!;
+			item.IsLocked = false;
+			item.IsSubmitted = submitted.Contains(row.EmployeeId);
+			item.ReviewStatus = ReviewStatuses.Pending;
+			item.ReviewedAt = null;
+			item.ReviewedByUserId = null;
+			if (pageReviews.TryGetValue(row.EmployeeId, out var review))
+			{
+				item.ReviewStatus = ReviewStatuses.Reviewed;
+				item.ReviewedAt = review.ReviewedAt;
+				item.ReviewedByUserId = review.ReviewedByUserId;
+			}
+			items.Add(row.EmployeeId, item);
+		}
+
+		var isCurrent = workingRun is { HasCurrentCalculationVersion: true }
+			&& workingRun.InputRevision == await revisions.ReadAsync();
+		var summary = workingRun?.SummaryJson is { } json
+			? JsonSerializer.Deserialize<RunPayrollReadinessSummary>(json)!
+			: new RunPayrollReadinessSummary { Month = canonicalMonth };
+		summary.EmployeeCount = eligibleIds.Union(issuedIds).Count();
+		summary.LockedCount = issuedIds.Count;
+		summary.ReviewedCount = await AsyncExecuter.CountAsync(reviewQuery.Where(x => allWorking.Any(row => row.EmployeeId == x.EmployeeId)));
+		summary.CanLock = isCurrent && summary.BlockingIssues.Count == 0 && summary.ReviewedCount > 0;
+		return new RunPayrollResponse
+		{
+			PreviewRunId = workingRun?.Id,
+			IsCurrent = isCurrent,
+			IsGenerated = summary.EmployeeCount > 0 && summary.LockedCount == summary.EmployeeCount,
+			TotalCount = count,
+			CurrentPage = input.Page,
+			PageSize = input.PageSize,
+			TotalPages = (int) Math.Ceiling((double) count / input.PageSize),
+			Items = pageIds.Where(items.ContainsKey).Select(id => items[id]).ToList(),
+			Readiness = summary
+		};
+	}
+
+	private async Task<PayrollPreviewStatusDto> ReadStatusAsync(PayrollPreviewRun run)
+	{
 		var status = ToStatus(run, await revisions.ReadAsync());
+		status.IsCurrent = status.IsCurrent && await IsLatestCompletedRunAsync(run);
+		if (!run.HasCurrentCalculationVersion && status.Status is "QUEUED" or "RUNNING")
+			status.Status = "SUPERSEDED";
 		if (run.Status != "SUCCEEDED")
 		{
-			status.LastCompletedRunId = await AsyncExecuter.FirstOrDefaultAsync((await runs.GetQueryableAsync())
-				.Where(x => x.Month == run.Month && x.AcademicYearId == run.AcademicYearId &&
-					x.ScopeFingerprint == run.ScopeFingerprint && x.Status == "SUCCEEDED")
-				.OrderByDescending(x => x.CreatedAtUtc).Select(x => (Guid?) x.Id));
+			var scopedRuns = await GetScopedRunsAsync(run.Month, run.AcademicYearId, run.ScopeFingerprint);
+			status.LastCompletedRunId = await AsyncExecuter.FirstOrDefaultAsync(scopedRuns
+				.Where(x => x.Status == "SUCCEEDED").Select(x => (Guid?) x.Id));
 		}
 		return status;
 	}
 
+	private async Task<IOrderedQueryable<PayrollPreviewRun>> GetScopedRunsAsync(string month, Guid? academicYearId, string fingerprint) =>
+		(await runs.GetQueryableAsync())
+			.Where(x => x.Month == month && x.AcademicYearId == academicYearId && x.ScopeFingerprint == fingerprint)
+			.OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id);
+
 	public virtual async Task<RunPayrollResponse> GetEmployeesAsync(Guid id, PayrollPreviewPageInput input)
 	{
-		if (input.Page < 0 || input.PageSize is < 1 or > 100 || (long) input.Page * input.PageSize > int.MaxValue)
-			throw new BusinessException(HRErrorCodes.PayrollInvalidPageSize);
+		ValidatePage(input);
 		var run = await GetAuthorizedRunAsync(id);
 		if (run.Status != "SUCCEEDED" && !(run.Status == "SUPERSEDED" && run.SummaryJson != null))
 			throw new BusinessException(HRErrorCodes.PayrollPreviewNotReady);
@@ -108,9 +321,11 @@ public class PayrollPreviewRunAppService(
 			}
 			item.ReviewStatus = snapshot.IsLocked || reviewedIds.Contains(item.EmployeeId) ? snapshot.ReviewStatus : ReviewStatuses.Pending;
 			item.ReviewedAt = snapshot.IsLocked || reviewedIds.Contains(item.EmployeeId) ? snapshot.ReviewedAt : null;
+			item.ReviewedByUserId = snapshot.IsLocked || reviewedIds.Contains(item.EmployeeId) ? snapshot.ReviewedByUserId : null;
 			item.IsLocked = snapshot.IsLocked;
 		}
-		var isCurrent = run.HasCurrentCalculationVersion && run.Status == "SUCCEEDED" && run.InputRevision == await revisions.ReadAsync();
+		var isCurrent = run.HasCurrentCalculationVersion && run.Status == "SUCCEEDED"
+			&& run.InputRevision == await revisions.ReadAsync() && await IsLatestCompletedRunAsync(run);
 		summary.CanLock = isCurrent && summary.BlockingIssues.Count == 0 && summary.ReviewedCount > 0;
 		return new RunPayrollResponse
 		{
@@ -126,6 +341,12 @@ public class PayrollPreviewRunAppService(
 		};
 	}
 
+	private static void ValidatePage(PayrollPageInput input)
+	{
+		if (input.Page < 0 || input.PageSize is < 1 or > 100 || (long) input.Page * input.PageSize > int.MaxValue)
+			throw new BusinessException(HRErrorCodes.PayrollInvalidPageSize);
+	}
+
 	internal async Task<PayrollPreviewRun> GetAuthorizedRunAsync(Guid id)
 	{
 		var run = await runs.FindAsync(id) ?? throw new BusinessException(HRErrorCodes.PayrollPreviewNotFound);
@@ -138,6 +359,16 @@ public class PayrollPreviewRunAppService(
 
 	internal static string ScopeFingerprint(System.Collections.Generic.IEnumerable<Guid> ids) =>
 		Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join(",", ids.OrderBy(x => x)))));
+
+	internal async Task<bool> IsLatestCompletedRunAsync(PayrollPreviewRun run)
+	{
+		var query = await runs.GetQueryableAsync();
+		var latestId = await AsyncExecuter.FirstOrDefaultAsync(query.Where(x => x.Month == run.Month
+			&& x.AcademicYearId == run.AcademicYearId && x.ScopeFingerprint == run.ScopeFingerprint
+			&& x.InputRevision == run.InputRevision && x.Status == "SUCCEEDED")
+			.OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id).Select(x => x.Id));
+		return latestId == run.Id;
+	}
 
 	internal static PayrollPreviewStatusDto ToStatus(PayrollPreviewRun run, Guid revision) => new()
 	{

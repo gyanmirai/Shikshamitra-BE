@@ -21,7 +21,7 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 public partial class AdmissionFeeCollectionAppService : IAdmissionFinanceIntegration
 {
     // Called only inside the scoped assignment write transaction. Reuses the same
-    // identity handoff for dues, allocations, payments and immutable receipts.
+    // identity handoff for dues, allocations, payments and immutable Receipts.
     [RemoteService(false)]
     public async Task LinkForAssignmentAsync(AdmissionFinanceContext source, FinanceFeeAccount account)
     {
@@ -35,13 +35,13 @@ public partial class AdmissionFeeCollectionAppService : IAdmissionFinanceIntegra
     {
         // Context resolution enforces the caller's Student/Finance read permission,
         // tenant and application scope. Only the decision crosses this internal contract.
-        var source = await contextReader.GetAsync(applicationId);
+        var source = await ContextReader.GetAsync(applicationId);
         var account = await accounts.FindAsync(a => a.ApplicationId == applicationId && a.AcademicYearId == source.AcademicYearId);
         if (account?.AssignmentSnapshotJson == null || !SelectionMatches(source, ReadAssignment(account))) return false;
         await scope.EnsureFeeAccountAccessibleAsync(account);
-        var rows = await dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id);
+        var rows = await Dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id);
         if (rows.Count == 0 || rows.Any(d => d.OutstandingAmount != 0m)) return false;
-        if (await transactions.AnyAsync(t => (t.FinanceFeeAccountId == account.Id ||
+        if (await Transactions.AnyAsync(t => (t.FinanceFeeAccountId == account.Id ||
             t.FinanceFeeAccountId == null && account.StudentId.HasValue && t.StudentId == account.StudentId && t.AcademicYearId == account.AcademicYearId) &&
             t.Status == FeeCollectionStatus.InReconciliation)) return false;
         return IsCollectionSettled(await BuildCollectFormAsync(source, account, ReadAssignment(account), rows));
@@ -52,7 +52,7 @@ public partial class AdmissionFeeCollectionAppService : IAdmissionFinanceIntegra
         await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize);
         var account = await accounts.FindAsync(a => a.ApplicationId == applicationId);
         if (account == null) return;
-        var source = await contextReader.GetAsync(applicationId);
+        var source = await ContextReader.GetAsync(applicationId);
         EnsureHandoffContext(source, account, studentId);
         await LinkAccountStudentAsync(source, account, studentId);
     }
@@ -62,7 +62,7 @@ public partial class AdmissionFeeCollectionAppService : IAdmissionFinanceIntegra
         await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate);
         var account = await accounts.FindAsync(a => a.ApplicationId == applicationId);
         if (account == null) return;
-        var source = await contextReader.GetAsync(applicationId);
+        var source = await ContextReader.GetAsync(applicationId);
         EnsureHandoffContext(source, account, studentId);
         if (enrollmentId == Guid.Empty || source.EnrollmentId != enrollmentId)
             throw new BusinessException(AdmissionFeeCollectionErrorCodes.InvalidState);
@@ -89,22 +89,22 @@ public partial class AdmissionFeeCollectionAppService : IAdmissionFinanceIntegra
             account.SetDivision(source.DivisionId);
             await accounts.UpdateAsync(account, false);
         }
-        var accountDues = await dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id && d.StudentId != studentId);
+        var accountDues = await Dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id && d.StudentId != studentId);
         foreach (var due in accountDues) due.LinkStudent(studentId);
-        await dues.UpdateManyAsync(accountDues, false);
-        var metadata = await transactions.GetListAsync(t => t.FinanceFeeAccountId == account.Id && t.StudentId != studentId);
+        await Dues.UpdateManyAsync(accountDues, false);
+        var metadata = await Transactions.GetListAsync(t => t.FinanceFeeAccountId == account.Id && t.StudentId != studentId);
         foreach (var row in metadata) row.LinkStudent(studentId);
-        await transactions.UpdateManyAsync(metadata, false);
+        await Transactions.UpdateManyAsync(metadata, false);
         var feeRowsRepository = LazyServiceProvider.LazyGetRequiredService<IRepository<FeeCollectionRecord, Guid>>();
         var feeRows = await feeRowsRepository.GetListAsync(r => r.FinanceFeeAccountId == account.Id && r.StudentId != studentId);
         foreach (var row in feeRows) row.LinkStudent(studentId);
         await feeRowsRepository.UpdateManyAsync(feeRows, false);
-        var methodRows = await paymentMethods.GetListAsync(p => p.FinanceFeeAccountId == account.Id && p.StudentId != studentId);
+        var methodRows = await PaymentMethods.GetListAsync(p => p.FinanceFeeAccountId == account.Id && p.StudentId != studentId);
         foreach (var row in methodRows) row.LinkStudent(studentId);
-        await paymentMethods.UpdateManyAsync(methodRows, false);
-        var receiptRows = await receipts.GetListAsync(r => r.FinanceFeeAccountId == account.Id && r.StudentId != studentId);
+        await PaymentMethods.UpdateManyAsync(methodRows, false);
+        var receiptRows = await Receipts.GetListAsync(r => r.FinanceFeeAccountId == account.Id && r.StudentId != studentId);
         foreach (var row in receiptRows) row.LinkStudent(studentId);
-        await receipts.UpdateManyAsync(receiptRows, false);
+        await Receipts.UpdateManyAsync(receiptRows, false);
         var incomeRepository = LazyServiceProvider.LazyGetRequiredService<IRepository<Transaction, Guid>>();
         var incomeRows = await incomeRepository.GetListAsync(t => t.FinanceFeeAccountId == account.Id && t.StudentId != studentId);
         foreach (var row in incomeRows) row.LinkStudent(studentId);
@@ -151,7 +151,7 @@ public partial class AdmissionFeeCollectionAppService : IAdmissionFinanceIntegra
             await accounts.UpdateAsync(account, false);
             return;
         }
-        var existingDues = await dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id);
+        var existingDues = await Dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id);
         if (assignment != null)
         {
             if (assignment.FinanceFeeAccountId != account.Id || assignment.FeeStructureStandardId != saved.StructureId ||
@@ -181,7 +181,7 @@ public partial class AdmissionFeeCollectionAppService : IAdmissionFinanceIntegra
         }
         var unbound = existingDues.Where(d => d.StudentFeeStructureId != assignment.Id).ToList();
         foreach (var due in unbound) due.BindAssignment(assignment.Id);
-        await dues.UpdateManyAsync(unbound, false);
+        await Dues.UpdateManyAsync(unbound, false);
         if (account.StudentFeeStructureId != assignment.Id)
         {
             account.BindStudentAssignment(assignment.Id);
@@ -197,18 +197,18 @@ public partial class AdmissionFeeCollectionAppService : IAdmissionFinanceIntegra
     private async Task ResetUnusedPreparationAsync(FinanceFeeAccount account)
     {
         if (account.HasPaymentEvidence || account.StudentFeeStructureId.HasValue ||
-            await transactions.AnyAsync(t => t.FinanceFeeAccountId == account.Id ||
+            await Transactions.AnyAsync(t => t.FinanceFeeAccountId == account.Id ||
                 account.StudentId.HasValue && t.StudentId == account.StudentId && t.AcademicYearId == account.AcademicYearId) ||
             account.StudentId.HasValue && await LazyServiceProvider.LazyGetRequiredService<IRepository<StudentFeeStructure, Guid>>()
                 .AnyAsync(a => a.StudentId == account.StudentId && a.AcademicYearId == account.AcademicYearId))
             throw new BusinessException(AdmissionFeeCollectionErrorCodes.SelectionChanged);
-        var draftRows = await dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id);
+        var draftRows = await Dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id);
         var ids = draftRows.Select(d => d.Id).ToList();
         if (draftRows.Any(d => d.PaidAmount != 0m || d.RefundedAmount != 0m || d.NetAmount != 0m || d.StudentFeeStructureId.HasValue) ||
-            await allocations.AnyAsync(a => ids.Contains(a.DueFeeId)))
+            await Allocations.AnyAsync(a => ids.Contains(a.DueFeeId)))
             throw new BusinessException(AdmissionFeeCollectionErrorCodes.AssignmentConflict);
         account.ResetUnpaidPreparation();
-        await dues.DeleteManyAsync(draftRows, false);
+        await Dues.DeleteManyAsync(draftRows, false);
         await CurrentUnitOfWork!.SaveChangesAsync();
     }
 }

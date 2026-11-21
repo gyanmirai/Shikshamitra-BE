@@ -304,10 +304,16 @@ public partial class ConcessionRequestAppService
 				};
 			}).ToList(),
 		};
+		var decisionChecks = result.Items.Any(item =>
+			item.AvailableActions.Contains("approve") || item.AvailableActions.Contains("reject"))
+			? await CreatePageDecisionChecksAsync() : null;
+		if (decisionChecks is { IsAdmin: false })
+			financeReviewerAccessService.PrepareReviewerAccessForStudents(items.Select(request => request.StudentId));
+		var requestsById = items.ToDictionary(request => request.Id);
 		foreach (var item in result.Items)
 		{
-			var request = items.First(r => r.Id == item.Id);
-			item.AvailableActions = await FilterDecisionActionsAsync(request, item.AvailableActions);
+			var request = requestsById[item.Id];
+			item.AvailableActions = await FilterDecisionActionsAsync(request, item.AvailableActions, decisionChecks);
 		}
 		return result;
 	}
@@ -378,10 +384,16 @@ public partial class ConcessionRequestAppService
 			return MapStudentItem(r, type, feeHeadMap, canViewDocuments,
 				refundMap.GetValueOrDefault(r.Id, []), isAdministrator);
 		}).ToList();
+		var studentDecisionChecks = items.Any(item =>
+			item.AvailableActions.Contains("approve") || item.AvailableActions.Contains("reject"))
+			? await CreatePageDecisionChecksAsync() : null;
+		if (studentDecisionChecks is { IsAdmin: false })
+			financeReviewerAccessService.PrepareReviewerAccessForStudents(page.Select(request => request.StudentId));
+		var studentRequestsById = page.ToDictionary(request => request.Id);
 		foreach (var item in items)
 		{
-			var request = page.First(r => r.Id == item.StudentConcessionTypeRequestId);
-			item.AvailableActions = await FilterDecisionActionsAsync(request, item.AvailableActions);
+			var request = studentRequestsById[item.StudentConcessionTypeRequestId];
+			item.AvailableActions = await FilterDecisionActionsAsync(request, item.AvailableActions, studentDecisionChecks);
 		}
 
 		return new StudentConcessionRequestsDto

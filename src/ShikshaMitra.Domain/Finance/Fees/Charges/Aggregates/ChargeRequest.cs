@@ -2,13 +2,14 @@
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
+using ShikshaMitra.Finance.ExternalReceivables;
 
 namespace ShikshaMitra.Finance.Fees.Charges;
 
 /// <summary>
 /// Aggregate root for a batch charge request applied to one or more students.
 /// </summary>
-public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public const int MaxChargeNameLength = 100;
 
@@ -20,10 +21,12 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? IncomeCategoryName { get; private set; }
 	public string PurposeDescription { get; private set; } = string.Empty;
 	public decimal Amount { get; private set; }
-	public DateTimeOffset DueDate { get; private set; }
+	public DateTimeOffset? DueDate { get; private set; }
+	public DateOnly? SchoolDueDate { get; private set; }
+	public FinanceCivilDateProvenance DueDateProvenance { get; private set; }
 	public ChargePriority Priority { get; private set; }
-	public Guid BoardId { get; private set; }
-	public Guid EducationMediumId { get; private set; }
+	public Guid? BoardId { get; private set; }
+	public Guid? EducationMediumId { get; private set; }
 	public string? AdditionalNotes { get; private set; }
 	public Guid RequestorId { get; private set; }
 	public DateTimeOffset AppliedOn { get; private set; }
@@ -95,6 +98,9 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? additionalNotes = null,
 		string? audienceSnapshot = null)
 	{
+		if (SchoolDueDate.HasValue)
+			throw new BusinessException(ShikshaMitra.Library.LibraryFinanceErrorCodes.SourceAlreadyLinked,
+				"Use the source receivable workflow to correct an external assessment.");
 		if (!string.IsNullOrWhiteSpace(chargeName))
 		{
 			if (chargeName.Length > MaxChargeNameLength)
@@ -167,9 +173,11 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private void ValidateDueDate()
 	{
-		var dueDateDate = DueDate.Date;
+		if (!DueDate.HasValue)
+			throw new BusinessException(FinanceChargeErrorCodes.InvalidDueDate);
+		var dueDateDate = DueDate.Value.Date;
 		var todayInDueDateOffset = DateTimeOffset.UtcNow
-			.ToOffset(DueDate.Offset)
+			.ToOffset(DueDate.Value.Offset)
 			.Date;
 
 		if (dueDateDate < todayInDueDateOffset)

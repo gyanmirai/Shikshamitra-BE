@@ -47,9 +47,9 @@ public class FeeReceiptSeederContributor : BaseSeederContributor
 {
     // ── Seed constants ────────────────────────────────────────────────────────
 
-    private const double MonthlyFeeAmount  = 1_000d;   // matches FeeCollectionSeeder's ₹12,000/12
-    private const double ChargeAmount      =   250d;
-    private const double ChequeAmount      = 1_000d;
+    private const int MonthlyFeeAmount  = 1_000;   // matches FeeCollectionSeeder's ₹12,000/12
+    private const int ChargeAmount      =   250;
+    private const int ChequeAmount      = 1_000;
 
     // ── Dependencies ─────────────────────────────────────────────────────────
 

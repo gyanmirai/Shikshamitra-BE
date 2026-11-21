@@ -39,6 +39,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			(await Should.ThrowAsync<BusinessException>(() => service.GetSettingsAsync(year))).Code.ShouldBe(UserScopeErrorCodes.AccessDenied);
 			(await Should.ThrowAsync<BusinessException>(() => service.GetPoliciesAsync(year))).Code.ShouldBe(UserScopeErrorCodes.AccessDenied);
 			(await Should.ThrowAsync<BusinessException>(() => service.GetIdentifierSeriesAsync(year))).Code.ShouldBe(UserScopeErrorCodes.AccessDenied);
+			(await Should.ThrowAsync<BusinessException>(() => service.GetGrNumberPreviewsAsync(year))).Code.ShouldBe(UserScopeErrorCodes.AccessDenied);
 			(await Should.ThrowAsync<BusinessException>(() => service.GetAvailableOfferingsAsync(year))).Code.ShouldBe(UserScopeErrorCodes.AccessDenied);
 			(await service.GetAvailableOfferingsAsync(null)).ShouldBeEmpty();
 			using (_principalAccessor.Change(ProfilePrincipal(scopedUserId)))

@@ -41,7 +41,7 @@ public class AdmissionInquiryFamilyConfirmationService(
 		var actorId = CurrentUser.Id;
 		if (!actorId.HasValue || !await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage))
 			throw new AbpAuthorizationException();
-		if (input.ExistingFamilyId == Guid.Empty || input.ExistingParentApplicantId == Guid.Empty || !AdmissionSiblingParentSelection.IsRelationship(input.ParentRelationship))
+		if (input.ExistingFamilyId == Guid.Empty || input.ExistingParentApplicantId == Guid.Empty || !input.FamilyLinkOnly && !AdmissionSiblingParentSelection.IsRelationship(input.ParentRelationship))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Choose a saved Father or Mother and their family.");
 		using var unit = units.Begin(requiresNew: units.Current?.Options.IsTransactional != true, isTransactional: true);
 		var initial = await inquiryScope.GetAsync(inquiryId);
@@ -55,6 +55,12 @@ public class AdmissionInquiryFamilyConfirmationService(
 		if (target == null || target.IsDeleted || target.TenantId != CurrentTenant.Id || inquiry.TenantId != CurrentTenant.Id || inquiry.FamilyId != target.FamilyId || target.Id == input.ExistingParentApplicantId)
 			throw InvalidState();
 		var source = await ReadSourceAsync(input.ExistingParentApplicantId, input.ExistingFamilyId);
+		if (input.FamilyLinkOnly)
+		{
+			await ConfirmFamilyOnlyAsync(inquiry, target, source, input, actorId.Value);
+			await unit.CompleteAsync();
+			return;
+		}
 		var confirmation = AdmissionSiblingParentSelection.ReadConfirmation(target);
 		if (confirmation != null)
 		{
@@ -73,7 +79,7 @@ public class AdmissionInquiryFamilyConfirmationService(
 		var oldFamilyId = target.FamilyId;
 		var now = Clock.Now.ToUniversalTime();
 		inquiry.ConfirmPendingSiblingFamily(target, oldFamilyId, source.FamilyId, now);
-		AdmissionPrimaryContactSelection.Capture(target, input.ParentRelationship, parent.Name, parent.Mobile ?? string.Empty,
+		AdmissionPrimaryContactSelection.Capture(target, input.ParentRelationship!, parent.Name, parent.Mobile ?? string.Empty,
 			parent.Email, false, actorId, now, false);
 		AdmissionSiblingParentSelection.Confirm(target, parent, actorId.Value, now, inquiry.NormalizedPhone, inquiry.Email);
 		AdmissionFamilyContactCapture.CopyToInquiry(target, inquiry);
@@ -87,7 +93,39 @@ public class AdmissionInquiryFamilyConfirmationService(
 		await unit.CompleteAsync();
 	}
 
-	private async Task<AdmissionApplicant> ReadSourceAsync(Guid sourceId, Guid familyId)
+	private async Task ConfirmFamilyOnlyAsync(AdmissionInquiry inquiry, AdmissionApplicant target, AdmissionApplicant source,
+		ConfirmAdmissionInquiryFamilyDto input, Guid actorId)
+	{
+		// Existing membership is an informational no-op, never a new parent-account attestation.
+		if (target.FamilyId == source.FamilyId) return;
+		if (target.ExtraProperties.ContainsKey("SiblingParentConfirmation") || target.ExtraProperties.ContainsKey(AdmissionSiblingFamilyLink.ProofKey)) throw InvalidState();
+		if (string.IsNullOrWhiteSpace(input.ConcurrencyStamp) || inquiry.ConcurrencyStamp != input.ConcurrencyStamp)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.ConcurrencyConflict);
+		await EnsurePendingGraphAsync(inquiry, target, source.FamilyId);
+		var contacts = new[] { "Father", "Mother" }.Select(prefix => new AdmissionSiblingParentContactDto
+		{
+			Relationship = prefix.ToLowerInvariant(), Mobile = AdmissionStudentProfileMapping.Read(target, prefix + ".Mobile"),
+			Email = AdmissionStudentProfileMapping.Read(target, prefix + ".Email")
+		}).ToList();
+		await parentMatches.ResolveFamilyLinkAsync(source.FamilyId, source.Id, inquiry.NormalizedPhone, inquiry.Email, contacts, AdmissionErrorCodes.InquiryFamilyMismatch);
+		var oldFamily = await families.GetAsync(target.FamilyId);
+		var guardian = oldFamily.PrimaryGuardianId.HasValue
+			? await Repository<AdmissionGuardian>().FindAsync(oldFamily.PrimaryGuardianId.Value) : null;
+		if (guardian == null || guardian.TenantId != CurrentTenant.Id || guardian.FamilyId != oldFamily.Id) throw InvalidState();
+		AdmissionSiblingFamilyLink.CaptureContact(target, guardian.FirstName, guardian.LastName, inquiry.NormalizedPhone, inquiry.Email);
+		var now = Clock.Now.ToUniversalTime();
+		inquiry.ConfirmPendingSiblingFamily(target, oldFamily.Id, source.FamilyId, now);
+		AdmissionSiblingFamilyLink.Capture(target, source.Id, actorId, now);
+		AdmissionFamilyContactCapture.CopyToInquiry(target, inquiry);
+		await applicants.UpdateAsync(target, false);
+		await inquiries.UpdateAsync(inquiry, false);
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(
+			"SiblingFamilyConfirmed", "Staff confirmed this pending child's sibling family without changing parent details.", target.Id, null, inquiry.Id,
+			JsonSerializer.Serialize(new { PreviousFamilyId = oldFamily.Id, FamilyId = source.FamilyId, SourceApplicantId = source.Id,
+				FamilyLinkOnly = true, ConfirmedBy = actorId, ConfirmedAt = now })), true);
+	}
+
+	internal async Task<AdmissionApplicant> ReadSourceAsync(Guid sourceId, Guid familyId)
 	{
 		var canRead = false;
 		var hasAction = false;

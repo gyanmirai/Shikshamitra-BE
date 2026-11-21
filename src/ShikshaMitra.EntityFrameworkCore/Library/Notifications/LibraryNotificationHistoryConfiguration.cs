@@ -24,6 +24,7 @@ public class LibraryNotificationHistoryConfiguration : IEntityTypeConfiguration<
 		builder.Property(x => x.ErrorMessage).HasMaxLength(1000);
 		builder.Property(x => x.RelatedEntityType).HasMaxLength(80);
 		builder.Property(x => x.DeduplicationKey).HasMaxLength(300);
+		builder.Property(x => x.AttemptCount).HasDefaultValue(0);
 
 		builder.HasIndex(x => x.EventType);
 		builder.HasIndex(x => x.Channel);
@@ -31,5 +32,8 @@ public class LibraryNotificationHistoryConfiguration : IEntityTypeConfiguration<
 		builder.HasIndex(x => x.RecipientMemberId);
 		builder.HasIndex(x => x.RelatedEntityId);
 		builder.HasIndex(x => x.DeduplicationKey);
+		builder.HasIndex(x => new { x.TenantId, x.DeduplicationKey });
+		builder.HasIndex(x => new { x.Status, x.NextAttemptAt });
+		builder.HasIndex(x => new { x.TenantId, x.RecipientUserId, x.Channel, x.Status });
 	}
 }

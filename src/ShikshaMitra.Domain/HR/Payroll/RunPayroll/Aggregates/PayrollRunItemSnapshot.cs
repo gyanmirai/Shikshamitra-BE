@@ -39,6 +39,7 @@ public class PayrollRunItemSnapshot : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public decimal? NetPayDelta { get; set; }
 	public decimal? NetPayDeltaPercent { get; set; }
 	public string IssueCodesJson { get; set; } = "[]";
+	public string[] RegisterIssueCodes { get; set; } = [];
 	public decimal PresentDays { get; set; }
 	public decimal HalfWorkingDays { get; set; }
 	public decimal TotalWorkingDays { get; set; }

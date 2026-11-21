@@ -22,6 +22,7 @@ public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> 
 		var family = await familyRepository.FindAsync(applicant.FamilyId);
 		var guardian = family?.PrimaryGuardianId.HasValue == true
 			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
+		if (AdmissionSiblingFamilyLink.HasOwnContact(applicant)) guardian = AdmissionSiblingFamilyLink.OwnGuardian(applicant);
 		var applications = (await AsyncExecuter.ToListAsync(await applicantScope.GetApplicationsAsync(id)))
 			.OrderByDescending(x => x.CreationTime).ToList();
 		var workflows = await workflowInstanceRepository.GetListAsync(x => applications.Select(a => a.Id).Contains(x.ApplicationId));
@@ -69,12 +70,14 @@ public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> 
 			var guardian = family?.PrimaryGuardianId.HasValue == true
 				? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value)
 				: null;
+			if (AdmissionSiblingFamilyLink.HasOwnContact(applicant)) guardian = AdmissionSiblingFamilyLink.OwnGuardian(applicant);
 			if (guardian == null)
 				throw new BusinessException(AdmissionErrorCodes.InquiryIdentityIncomplete,
 					"A primary guardian is required before updating guardian contact details.");
 			guardian.UpdateContact(guardian.FirstName, guardian.LastName,
 				input.GuardianMobile ?? guardian.Mobile, input.GuardianEmail);
-			await guardianRepository.UpdateAsync(guardian, false);
+			if (AdmissionSiblingFamilyLink.HasOwnContact(applicant)) AdmissionSiblingFamilyLink.CaptureContact(applicant, guardian);
+			else await guardianRepository.UpdateAsync(guardian, false);
 		}
 		await applicantRepository.UpdateAsync(applicant, false);
 		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("ApplicantProfileUpdated", "Applicant identity and guardian contact updated", id, null, null), true);

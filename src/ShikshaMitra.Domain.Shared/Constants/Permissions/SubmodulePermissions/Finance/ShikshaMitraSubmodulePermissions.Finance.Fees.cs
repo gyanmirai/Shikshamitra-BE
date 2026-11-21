@@ -15,14 +15,20 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
 			public const string ApplyWaiver = $"{SubmoduleName}.ApplyWaiver";
-			public static readonly string[] All = { View, Add, Delete, ApplyWaiver };
+			public const string ApproveWaiver = $"{SubmoduleName}.ApproveWaiver";
+			public const string RejectWaiver = $"{SubmoduleName}.RejectWaiver";
+			public const string ReverseWaiver = $"{SubmoduleName}.ReverseWaiver";
+			public static readonly string[] All = { View, Add, Delete, ApplyWaiver, ApproveWaiver, RejectWaiver, ReverseWaiver };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" },
-				{ ApplyWaiver, $"{SubmoduleDisplayName}.ApplyWaiver" }
+				{ ApplyWaiver, $"{SubmoduleDisplayName}.ApplyWaiver" },
+				{ ApproveWaiver, $"{SubmoduleDisplayName}.ApproveWaiver" },
+				{ RejectWaiver, $"{SubmoduleDisplayName}.RejectWaiver" },
+				{ ReverseWaiver, $"{SubmoduleDisplayName}.ReverseWaiver" }
 			};
 		}
 
@@ -196,9 +202,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string OverrideAmount = $"{SubmoduleName}.OverrideAmount";
 			public const string OverridePolicies = $"{SubmoduleName}.OverridePolicies";
+			public const string StopOptionalService = $"{SubmoduleName}.StopOptionalService";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { View, Add, Delete, OverrideAmount, OverridePolicies };
+			public static readonly string[] All = { View, Add, Delete, OverrideAmount, OverridePolicies, StopOptionalService };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
@@ -206,6 +213,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ OverrideAmount, $"{SubmoduleDisplayName}.OverrideAmount" },
 				{ OverridePolicies, $"{SubmoduleDisplayName}.OverridePolicies" },
+				{ StopOptionalService, $"{SubmoduleDisplayName}.StopOptionalService" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}

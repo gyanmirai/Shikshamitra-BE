@@ -47,8 +47,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Lock = $"{SubmoduleName}.Lock";
 			public const string ViewAudit = $"{SubmoduleName}.ViewAudit";
 			public const string Adjustments = $"{SubmoduleName}.Adjustments";
+			public const string Submit = $"{SubmoduleName}.Submit";
+			public const string ManageWorkflow = $"{SubmoduleName}.ManageWorkflow";
+			public const string ExportReview = $"{SubmoduleName}.ExportReview";
 
-			public static readonly string[] All = { View, Add, Delete, Lock, ViewAudit, Adjustments };
+			public static readonly string[] All = { View, Add, Delete, Lock, ViewAudit, Adjustments, Submit, ManageWorkflow, ExportReview };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
@@ -57,7 +60,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Delete, $"{SubmoduleDisplayName}.Delete" },
 				{ Lock, $"{SubmoduleDisplayName}.Lock" },
 				{ ViewAudit, $"{SubmoduleDisplayName}.ViewAudit" },
-				{ Adjustments, $"{SubmoduleDisplayName}.Adjustments" }
+				{ Adjustments, $"{SubmoduleDisplayName}.Adjustments" },
+				{ Submit, $"{SubmoduleDisplayName}.Submit" },
+				{ ManageWorkflow, $"{SubmoduleDisplayName}.ManageWorkflow" },
+				{ ExportReview, $"{SubmoduleDisplayName}.ExportReview" }
 			};
 		}
 

@@ -5,74 +5,84 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Library.Books;
-using ShikshaMitra.Library.Setting.ChargeCategory;
+using ShikshaMitra.Library.Charges;
+using ShikshaMitra.Library.Shared;
+using ShikshaMitra.Library.Policies;
+using ShikshaMitra.Library.Reservations;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.Sections;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Timing;
 
 namespace ShikshaMitra.Library.Dashboard;
 
 [Authorize(ShikshaMitraSubmodulePermissions.Library.Dashboard.View)]
 [RemoteService(false)]
-public class LibraryDashboardAppService(
+public partial class LibraryDashboardAppService(
 	IRepository<Book, Guid> bookRepository,
 	IRepository<BookCopy, Guid> bookCopyRepository,
+	LibraryStoredLoanScope loanScope,
+	LibraryStoredReservationScope requestScope,
+	IRepository<LibraryHold, Guid> holdRepository,
 	IRepository<BookIssue, Guid> issueRepository,
-	IRepository<BookReservation, Guid> reservationRepository,
 	IRepository<LibraryCharge, Guid> chargeRepository,
+	ILibraryChargePositionReader chargePositionReader,
 	IRepository<BookCategory, Guid> categoryRepository,
-	IRepository<LibraryChargeCategory, Guid> chargeCategoryRepository,
-	IRepository<LibrarySection, Guid> sectionRepository)
+	IRepository<LibrarySection, Guid> sectionRepository,
+	ILibraryAccessService libraryAccess,
+	LibraryCalendarService calendar,
+	IClock clock)
 	: ApplicationService, ILibraryDashboardAppService
 {
 	public async Task<LibraryDashboardOverviewDto> GetOverviewAsync(Guid? academicYearId = null)
 	{
-		var today = DateTime.UtcNow.Date;
-		var weekStart = today.AddDays(-6);
+		var positions = await chargePositionReader.GetQueryAsync(new(LibraryChargePositionReadPurpose.Dashboard, academicYearId));
+		var executionScope = await libraryAccess.GetContextAsync(academicYearId);
+		var day = await LibraryReadDateEvidence.ReadAsync(calendar, clock);
+		var today = day.Day;
+		var weekStart = today?.AddDays(-6);
 
-		var books = await GetBooksAsync(academicYearId);
-		var bookIds = books.Select(x => x.Id).ToHashSet();
+		var inventoryBooks = await AsyncExecuter.ToListAsync((await bookRepository.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id));
+		var inventoryCopies = await GetBookCopiesAsync(inventoryBooks.Select(x => x.Id).ToHashSet());
 
-		var copies = await GetBookCopiesAsync(bookIds);
-		var copyIds = copies.Select(x => x.Id).ToHashSet();
-		var accessionNumbers = copies.Select(x => x.AccessionNumber).ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-		var issues = await GetIssuesAsync(copyIds, accessionNumbers);
-		var reservations = await GetReservationsAsync(bookIds);
-		var charges = await GetChargesAsync(academicYearId, issues.Select(x => x.Id).ToHashSet());
-		var categories = await GetCategoriesAsync(books.Select(x => x.CategoryId).Distinct());
-		var sections = await GetSectionsAsync(copies.Select(x => x.SectionId).Distinct());
+		var issues = await GetIssuesAsync(executionScope, academicYearId);
+		var reservations = await GetReservationsAsync(executionScope, academicYearId);
+		var holds = await GetCollectableHoldsAsync(reservations);
+		var charges = await ReadDashboardChargesAsync(positions, today);
+		var categories = await GetCategoriesAsync(inventoryBooks.Select(x => x.CategoryId).Distinct());
+		var sections = await GetSectionsAsync(inventoryCopies.Select(x => x.SectionId).Distinct());
 
 		var overview = new LibraryDashboardOverviewDto
 		{
 			AcademicYearId = academicYearId,
-			GeneratedAt = DateTime.UtcNow,
-			StockTotals = BuildStockTotals(books, copies),
+			GeneratedAt = clock.Now,
+			SchoolAsOfDate = day.Day,
+			SchoolDateSource = day.Source,
+			SchoolDateUnavailableReason = day.UnavailableReason,
+			UnknownIssueDateCount = LibraryReadDateEvidence.UnknownIssueDates(issues),
+			UnknownReturnDateCount = LibraryReadDateEvidence.UnknownReturnDates(issues),
+			StockTotals = BuildStockTotals(inventoryBooks, inventoryCopies),
 			Circulation = BuildCirculationTotals(issues, today, weekStart),
-			Charges = BuildChargeTotals(charges),
-			Reservations = BuildReservationTotals(reservations, today),
+			Charges = charges.Compatibility,
+			FinancePosition = charges.Finance,
+			Reservations = BuildReservationTotals(reservations, holds, today),
 			WeeklyCirculation = BuildWeeklyCirculation(issues, weekStart, today),
-			CategoryDistribution = BuildCategoryDistribution(books, copies, categories),
-			SectionInventory = BuildSectionInventory(copies, sections),
-			PopularBooks = BuildPopularBooks(books, copies, issues, reservations, categories),
+			CategoryDistribution = BuildCategoryDistribution(inventoryBooks, inventoryCopies, categories),
+			SectionInventory = BuildSectionInventory(inventoryCopies, sections),
+			PopularBooks = BuildPopularBooks(inventoryBooks, inventoryCopies, issues, reservations, categories),
 		};
+		var unknownDue = LibraryReadDateEvidence.UnknownDueDates(issues);
+		overview.Circulation.UnknownDueDateCount = unknownDue;
+		overview.Circulation.OverdueAsOfDate = day.Day;
+		overview.Circulation.OverdueDateSource = day.Source;
+		overview.Circulation.OverdueClassificationAvailable = day.Day.HasValue && unknownDue == 0;
+		overview.Circulation.OverdueUnavailableReason = LibraryReadDateEvidence.OverdueReason(day, unknownDue);
 
 		overview.Utilization = BuildUtilization(overview);
-		overview.Alerts = BuildAlerts(overview, charges);
+		overview.Alerts = BuildAlerts(overview, charges.CollectibleCount, charges.OverdueCount);
 		return overview;
-	}
-
-	private async Task<List<Book>> GetBooksAsync(Guid? academicYearId)
-	{
-		var query = await bookRepository.GetQueryableAsync();
-		if (academicYearId.HasValue)
-		{
-			query = query.Where(x => x.AcademicYearId == academicYearId.Value);
-		}
-
-		return await AsyncExecuter.ToListAsync(query);
 	}
 
 	private async Task<List<BookCopy>> GetBookCopiesAsync(IReadOnlySet<Guid> bookIds)
@@ -86,48 +96,18 @@ public class LibraryDashboardAppService(
 		return await AsyncExecuter.ToListAsync(query.Where(x => bookIds.Contains(x.BookId)));
 	}
 
-	private async Task<List<BookIssue>> GetIssuesAsync(IReadOnlySet<Guid> copyIds, IReadOnlySet<string> accessionNumbers)
+	private async Task<List<BookIssue>> GetIssuesAsync(LibraryAcademicContext context, Guid? academicYearId)
 	{
-		if (copyIds.Count == 0 && accessionNumbers.Count == 0)
-		{
-			return [];
-		}
-
-		var query = await issueRepository.GetQueryableAsync();
-		return await AsyncExecuter.ToListAsync(
-			query.Where(x => copyIds.Contains(x.BookCopyId) || accessionNumbers.Contains(x.AccessionNumber)));
+		var query = await loanScope.GetReadableLoansAsync(context.UserScope);
+		if (academicYearId.HasValue) query = query.Where(x => x.AcademicYearId == academicYearId.Value);
+		return await AsyncExecuter.ToListAsync(query);
 	}
 
-	private async Task<List<BookReservation>> GetReservationsAsync(IReadOnlySet<Guid> bookIds)
+	private async Task<List<BookReservation>> GetReservationsAsync(LibraryAcademicContext context, Guid? academicYearId)
 	{
-		if (bookIds.Count == 0)
-		{
-			return [];
-		}
-
-		var query = await reservationRepository.GetQueryableAsync();
-		return await AsyncExecuter.ToListAsync(query.Where(x => bookIds.Contains(x.BookId)));
-	}
-
-	private async Task<List<LibraryCharge>> GetChargesAsync(Guid? academicYearId, IReadOnlySet<Guid> issueIds)
-	{
-		var query = await chargeRepository.GetQueryableAsync();
-		var charges = await AsyncExecuter.ToListAsync(query);
-		if (!academicYearId.HasValue)
-		{
-			return charges;
-		}
-
-		var categoryQuery = await chargeCategoryRepository.GetQueryableAsync();
-		var chargeCategoryIds = (await AsyncExecuter.ToListAsync(
-				categoryQuery.Where(x => x.AcademicYearId == academicYearId.Value)))
-			.Select(x => x.Id)
-			.ToHashSet();
-
-		return charges
-			.Where(x => chargeCategoryIds.Contains(x.ChargeCategoryId) ||
-			            (x.BookIssueId.HasValue && issueIds.Contains(x.BookIssueId.Value)))
-			.ToList();
+		var query = await requestScope.GetReadableRequestsAsync(context.UserScope);
+		if (academicYearId.HasValue) query = query.Where(x => x.AcademicYearId == academicYearId.Value);
+		return await AsyncExecuter.ToListAsync(query);
 	}
 
 	private async Task<Dictionary<Guid, string>> GetCategoriesAsync(IEnumerable<Guid> categoryIds)
@@ -169,59 +149,52 @@ public class LibraryDashboardAppService(
 			LostCopies = copies.Count(x => x.Status == BookCopyStatus.Lost),
 			DamagedCopies = copies.Count(x => x.Status == BookCopyStatus.Damaged),
 			UnderRepairCopies = copies.Count(x => x.Status == BookCopyStatus.UnderRepair),
+			InCustodyCopies = copies.Count(x => x.Status == BookCopyStatus.InCustody),
+			InTransitCopies = copies.Count(x => x.Status == BookCopyStatus.InTransit),
 			DiscardedCopies = copies.Count(x => x.Status == BookCopyStatus.Discarded)
 		};
 
 	private static LibraryCirculationTotalsDto BuildCirculationTotals(
 		IReadOnlyCollection<BookIssue> issues,
-		DateTime today,
-		DateTime weekStart) =>
+		DateOnly? today,
+		DateOnly? weekStart) =>
 		new()
 		{
 			ActiveIssues = issues.Count(x => x.Status == BookIssueStatus.Issued),
-			OverdueIssues = issues.Count(x => x.Status == BookIssueStatus.Issued && x.DueDate.Date < today),
-			IssuesToday = issues.Count(x => x.IssueDate.Date == today),
-			ReturnsToday = issues.Count(x => x.ReturnDate.HasValue && x.ReturnDate.Value.Date == today),
-			IssuesThisWeek = issues.Count(x => x.IssueDate.Date >= weekStart && x.IssueDate.Date <= today),
-			ReturnsThisWeek = issues.Count(x => x.ReturnDate.HasValue && x.ReturnDate.Value.Date >= weekStart && x.ReturnDate.Value.Date <= today)
-		};
-
-	private static LibraryChargeTotalsDto BuildChargeTotals(IReadOnlyCollection<LibraryCharge> charges) =>
-		new()
-		{
-			PendingCount = charges.Count(x => x.PaymentStatus == ChargePaymentStatus.Pending),
-			PendingAmount = charges.Where(x => x.PaymentStatus == ChargePaymentStatus.Pending).Sum(x => x.Amount),
-			PaidCount = charges.Count(x => x.PaymentStatus == ChargePaymentStatus.Paid),
-			PaidAmount = charges.Where(x => x.PaymentStatus == ChargePaymentStatus.Paid).Sum(x => x.Amount),
-			WaivedCount = charges.Count(x => x.PaymentStatus == ChargePaymentStatus.Waived),
-			WaivedAmount = charges.Where(x => x.PaymentStatus == ChargePaymentStatus.Waived).Sum(x => x.Amount)
+			OverdueIssues = issues.Count(x => x.Status == BookIssueStatus.Issued && today.HasValue && LibraryLoanDates.ConfirmedDueDate(x) < today),
+			IssuesToday = issues.Count(x => today.HasValue && LibraryLoanDates.ConfirmedIssueDate(x) == today),
+			ReturnsToday = issues.Count(x => today.HasValue && LibraryLoanDates.ConfirmedReturnDate(x) == today),
+			IssuesThisWeek = issues.Count(x => today.HasValue && LibraryLoanDates.ConfirmedIssueDate(x) >= weekStart && LibraryLoanDates.ConfirmedIssueDate(x) <= today),
+			ReturnsThisWeek = issues.Count(x => today.HasValue && LibraryLoanDates.ConfirmedReturnDate(x) >= weekStart && LibraryLoanDates.ConfirmedReturnDate(x) <= today)
 		};
 
 	private static LibraryReservationTotalsDto BuildReservationTotals(
 		IReadOnlyCollection<BookReservation> reservations,
-		DateTime today) =>
+		IReadOnlyCollection<LibraryHold> holds,
+		DateOnly? today) =>
 		new()
 		{
-			ActiveReservations = reservations.Count(x => x.ReserveDueDate.Date >= today),
-			ExpiringToday = reservations.Count(x => x.ReserveDueDate.Date == today),
-			ExpiredReservations = reservations.Count(x => x.ReserveDueDate.Date < today)
+			ActiveReservations = reservations.Count(x => x.State is LibraryReservationState.Waiting or LibraryReservationState.Ready),
+			ExpiringToday = reservations.Count(x => today.HasValue && RequestDeadline(x, holds) == today),
+			ExpiredReservations = reservations.Count(x => x.State == LibraryReservationState.Expired)
 		};
 
 	private static List<LibraryDashboardTrendPointDto> BuildWeeklyCirculation(
 		IReadOnlyCollection<BookIssue> issues,
-		DateTime weekStart,
-		DateTime today)
+		DateOnly? weekStart,
+		DateOnly? today)
 	{
 		var points = new List<LibraryDashboardTrendPointDto>();
-		for (var date = weekStart; date <= today; date = date.AddDays(1))
+		if (!weekStart.HasValue || !today.HasValue) return points;
+		for (var date = weekStart.Value; date <= today.Value; date = date.AddDays(1))
 		{
-			var current = date.Date;
+			var current = date;
 			points.Add(new LibraryDashboardTrendPointDto
 			{
-				Date = current,
+				Date = current.ToDateTime(TimeOnly.MinValue),
 				Label = current.ToString("ddd"),
-				Issued = issues.Count(x => x.IssueDate.Date == current),
-				Returned = issues.Count(x => x.ReturnDate.HasValue && x.ReturnDate.Value.Date == current)
+				Issued = issues.Count(x => LibraryLoanDates.ConfirmedIssueDate(x) == current),
+				Returned = issues.Count(x => LibraryLoanDates.ConfirmedReturnDate(x) == current)
 			});
 		}
 
@@ -278,16 +251,16 @@ public class LibraryDashboardAppService(
 		IReadOnlyDictionary<Guid, string> categories)
 	{
 		var copyBookLookup = copies.ToDictionary(x => x.Id, x => x.BookId);
-		var accessionBookLookup = copies
-			.GroupBy(x => x.AccessionNumber, StringComparer.OrdinalIgnoreCase)
-			.ToDictionary(x => x.Key, x => x.First().BookId, StringComparer.OrdinalIgnoreCase);
+		var accessionBookLookup = copies.GroupBy(x => x.AccessionNumber.Trim().ToUpperInvariant(), StringComparer.Ordinal)
+			.Where(group => group.Count() == 1).ToDictionary(group => group.Key, group => group.Single().BookId, StringComparer.Ordinal);
+		Guid? BookId(BookIssue issue) => issue.BookCopyId != Guid.Empty
+			? copyBookLookup.TryGetValue(issue.BookCopyId, out var id) ? id : null
+			: accessionBookLookup.TryGetValue(issue.AccessionNumber.Trim().ToUpperInvariant(), out var legacyId) ? legacyId : null;
 
 		return books
 			.Select(book =>
 			{
-				var issueCount = issues.Count(issue =>
-					copyBookLookup.GetValueOrDefault(issue.BookCopyId) == book.Id ||
-					accessionBookLookup.GetValueOrDefault(issue.AccessionNumber) == book.Id);
+				var issueCount = issues.Count(issue => BookId(issue) == book.Id);
 
 				return new LibraryDashboardPopularBookDto
 				{
@@ -296,9 +269,7 @@ public class LibraryDashboardAppService(
 					Author = book.Author,
 					CategoryName = categories.GetValueOrDefault(book.CategoryId, string.Empty),
 					IssueCount = issueCount,
-					ActiveIssues = issues.Count(issue => issue.Status == BookIssueStatus.Issued &&
-						(copyBookLookup.GetValueOrDefault(issue.BookCopyId) == book.Id ||
-						 accessionBookLookup.GetValueOrDefault(issue.AccessionNumber) == book.Id)),
+					ActiveIssues = issues.Count(issue => issue.Status == BookIssueStatus.Issued && BookId(issue) == book.Id),
 					ReservationCount = reservations.Count(x => x.BookId == book.Id)
 				};
 			})
@@ -327,7 +298,8 @@ public class LibraryDashboardAppService(
 
 	private static List<LibraryDashboardAlertDto> BuildAlerts(
 		LibraryDashboardOverviewDto overview,
-		IReadOnlyCollection<LibraryCharge> charges)
+		int collectibleCharges,
+		int overdueCharges)
 	{
 		var alerts = new List<LibraryDashboardAlertDto>();
 
@@ -344,34 +316,7 @@ public class LibraryDashboardAppService(
 			});
 		}
 
-		if (overview.Charges.PendingAmount > 0)
-		{
-			alerts.Add(new LibraryDashboardAlertDto
-			{
-				Type = "pendingCharges",
-				Severity = "warning",
-				Title = "Pending Library charges",
-				Message = $"{overview.Charges.PendingCount} charges are pending collection.",
-				Count = overview.Charges.PendingCount,
-				Link = "/library/charges-management"
-			});
-		}
-
-		var overdueCharges = charges.Count(x =>
-			x.PaymentStatus == ChargePaymentStatus.Pending &&
-			x.DueDate.Date < DateTime.UtcNow.Date);
-		if (overdueCharges > 0)
-		{
-			alerts.Add(new LibraryDashboardAlertDto
-			{
-				Type = "overdueCharges",
-				Severity = "error",
-				Title = "Overdue charge dues",
-				Message = $"{overdueCharges} pending charges crossed the due date.",
-				Count = overdueCharges,
-				Link = "/library/charges-management"
-			});
-		}
+		AppendFinancialAlerts(alerts, overview.FinancePosition, collectibleCharges, overdueCharges);
 
 		var lostDamaged = overview.StockTotals.LostCopies + overview.StockTotals.DamagedCopies;
 		if (lostDamaged > 0)

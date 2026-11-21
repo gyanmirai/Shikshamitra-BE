@@ -257,7 +257,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
         {
             foreach (var scope in calendarScopes)
                 EnsureNoCriticalConflicts(await _conflictService.CheckScopedConflictsAsync(scope, input.RoomId, input.Date,
-                    input.StartTime, input.EndTime, teacherId: input.TeacherId), "Cannot complete booking");
+                    input.StartTime, input.EndTime, teacherId: input.TeacherId, enforceAcademicCalendar: false), "Cannot complete booking");
         }
 
         var isAdmin = IsAdministrator();
@@ -781,7 +781,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
         {
             foreach (var scope in calendarScopes)
                 EnsureNoCriticalConflicts(await _conflictService.CheckScopedConflictsAsync(scope, reservation.RoomId, reservation.Date,
-                    reservation.StartTime, reservation.EndTime, reservation.Id, reservation.TeacherId), "Cannot approve booking");
+                    reservation.StartTime, reservation.EndTime, reservation.Id, reservation.TeacherId, enforceAcademicCalendar: false), "Cannot approve booking");
             return;
         }
         var conflicts = await _conflictService.CheckConflictsAsync(

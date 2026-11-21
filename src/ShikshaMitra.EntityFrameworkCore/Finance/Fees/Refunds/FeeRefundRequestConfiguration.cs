@@ -113,6 +113,9 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
 
         builder.HasIndex(x => new { x.StudentId, x.AcademicYearId, x.Status })
             .HasDatabaseName("IX_FeeRefundRequests_Student_Year_Status");
+        builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.WorkflowVersion, x.Status, x.CreationTime })
+            .HasFilter("\"IsDeleted\" = false")
+            .HasDatabaseName("IX_FeeRefundRequests_Worklist");
         builder.HasIndex(x => x.OriginalReceiptId);
         builder.HasIndex(x => new { x.TenantId, x.RequestIdempotencyKey }).IsUnique()
             .HasFilter("\"RequestIdempotencyKey\" IS NOT NULL");
@@ -125,7 +128,10 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
             .HasDatabaseName("UX_FeeRefundRequests_Concession_Receipt");
 
         builder.ConfigureByConvention();
-        builder.ToTable(t => t.HasCheckConstraint("CK_FeeRefundRequests_Payer", "\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL"));
+        builder.ToTable(t => t.HasCheckConstraint("CK_FeeRefundRequests_Payer", ShikshaMitra.Finance.ExternalReceivables.FinancePayerConstraintSql.StudentAccountOrEmployee));
+        builder.HasOne<ShikshaMitra.HR.Employees.Employee>().WithMany().HasForeignKey(row => row.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ShikshaMitra.Finance.ExternalReceivables.FinanceExternalReceivableSourceLink>().WithMany().HasForeignKey(row => row.FinanceExternalSourceLinkId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(row => new { row.TenantId, row.EmployeeId, row.AcademicYearId }).HasFilter("\"EmployeeId\" IS NOT NULL");
         builder.HasOne<ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount>().WithMany()
             .HasForeignKey(x => x.FinanceFeeAccountId).OnDelete(DeleteBehavior.Restrict);
     }

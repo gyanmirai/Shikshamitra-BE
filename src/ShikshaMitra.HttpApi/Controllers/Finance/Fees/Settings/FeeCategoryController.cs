@@ -4,6 +4,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -18,6 +19,10 @@ public class FeeCategoryController(
 	IFeeCategoryAppService feeCategoryAppService
 ) : AbpController
 {
+ [HttpGet("options")]
+ [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.View)]
+ public Task<List<FeeCategoryOptionDto>> GetOptionsAsync([FromQuery] Guid academicYearId, [FromQuery] Guid? selectedId = null) => feeCategoryAppService.GetOptionsAsync(academicYearId, selectedId);
+
     [HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.Add)]
 	public Task<FeeCategoryResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] FeeCategoryCreateRequest input)

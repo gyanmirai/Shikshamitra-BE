@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Volo.Abp.Data;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
+using ShikshaMitra.Students;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -38,9 +39,43 @@ public partial class ChargeAppService
 		var pendingByRequest = pageRequestIds.Count == 0
 			? new Dictionary<Guid, List<Guid>>()
 			: (await chargeRepository.GetListAsync(line =>
-				pageRequestIds.Contains(line.ChargeRequestId) && line.Status == ChargeStatus.Pending))
+				pageRequestIds.Contains(line.ChargeRequestId) && line.Status == ChargeStatus.Pending && line.StudentId.HasValue))
 				.GroupBy(line => line.ChargeRequestId)
-				.ToDictionary(group => group.Key, group => group.Select(line => line.StudentId).ToList());
+				.ToDictionary(group => group.Key, group => group.Select(line => line.StudentId!.Value).ToList());
+		var actionPermissions = new Dictionary<string, bool>();
+		if (items.Any(item => item.PendingCount == item.StudentCount))
+		{
+			actionPermissions[ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Update] =
+				await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Update);
+			actionPermissions[ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Delete] =
+				await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Delete);
+		}
+		var reviewRows = items.Where(item => item.PendingCount > 0 &&
+			CurrentUser.Id != item.Request.RequestorId).ToList();
+		if (reviewRows.Count > 0)
+		{
+			actionPermissions[ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve] =
+				await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve);
+			actionPermissions[ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Reject] =
+				await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Reject);
+		}
+		if (items.Any(item => item.CanCancel))
+			actionPermissions[ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Void] =
+				await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Void);
+		ChargeReviewPageCache? reviewCache = null;
+		if (CurrentUser.Id.HasValue && reviewRows.Count > 0 &&
+			(actionPermissions[ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve] ||
+			 actionPermissions[ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Reject]))
+		{
+			var pendingIds = reviewRows.SelectMany(item =>
+				pendingByRequest.GetValueOrDefault(item.Request.Id) ?? []).Distinct().ToArray();
+			var isAdmin = await userScopeService.IsAdminUserAsync(CurrentUser.Id.Value);
+			var studentsById = isAdmin ? new Dictionary<Guid, Student>() :
+				(await studentRepository.GetListAsync(student => pendingIds.Contains(student.Id)))
+					.ToDictionary(student => student.Id);
+			if (!isAdmin) financeReviewerAccessService.PrepareReviewerAccessForStudents(pendingIds);
+			reviewCache = new ChargeReviewPageCache(studentsById, isAdmin);
+		}
 		var mappedItems = new System.Collections.Generic.List<ChargeListItem>();
 		foreach (var item in items)
 		{
@@ -49,7 +84,7 @@ public partial class ChargeAppService
 			dto.AvailableActions = await GetAvailableActionsAsync(
 				item.Request.RequestorId, item.Request.AcademicYearId, pendingStudentIds,
 				item.PendingCount > 0, item.PendingCount == item.StudentCount,
-				item.CanCancel);
+				item.CanCancel, actionPermissions, reviewCache);
 			mappedItems.Add(dto);
 		}
 
@@ -148,7 +183,7 @@ public partial class ChargeAppService
 		var availableActions = await GetAvailableActionsAsync(
 			detail.Request.RequestorId, detail.Request.AcademicYearId,
 			detail.Lines.Where(line => line.Charge.Status == ChargeStatus.Pending)
-				.Select(line => line.Charge.StudentId).ToList(), hasPending, allPending, canCancel);
+				.Where(line => line.Charge.StudentId.HasValue).Select(line => line.Charge.StudentId!.Value).ToList(), hasPending, allPending, canCancel);
 
 		return new ChargeDetailResponse
 		{
@@ -158,7 +193,7 @@ public partial class ChargeAppService
 				ChargeId = detail.Request.Id, ChargeName = detail.Request.ChargeName,
 				ChargeCategoryId = detail.Request.ChargeCategoryId, CategoryName = detail.Category.Name,
 				PurposeDescription = detail.Request.PurposeDescription, Amount = detail.Request.Amount,
-				DueDate = detail.Request.DueDate, AppliedOn = detail.Request.AppliedOn,
+				DueDate = detail.Request.DueDate!.Value, AppliedOn = detail.Request.AppliedOn,
 				Priority = (int)detail.Request.Priority,
 				Status = (int)DeriveRequestStatus(detail.Lines.Select(l => l.Charge.Status).ToList()),
 				AdditionalNotes = detail.Request.AdditionalNotes, Audience = audience,

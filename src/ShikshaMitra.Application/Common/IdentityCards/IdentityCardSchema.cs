@@ -46,6 +46,8 @@ internal static class IdentityCardSchema
 						element.X < 0 || element.Y < 0 || element.W <= 0 || element.H <= 0 || element.X + element.W > layout.Width + 0.01f || element.Y + element.H > layout.Height + 0.01f ||
 						element.Z is < -1000 or > 1000 || element.Value?.Length > 2000 || element.Label?.Length > 150 ||
 						(!string.IsNullOrEmpty(element.FieldKey) && !allowed.Contains(element.FieldKey))) throw IdentityCardGeometry.Invalid("Invalid element bounds, duplicate IDs, type or field binding.");
+					if (element.Prefix != null && (element.Type != "text" || element.Prefix.Length > 150))
+						throw IdentityCardGeometry.Invalid("Only text elements can use a prefix of up to 150 characters.");
 					var style = element.Style;
 					if (!ValidNumber(element.Rotation, -180, 180) || !ValidNumber(element.Opacity, 0, 1) || element.GroupId?.Length > 100 ||
 						(element.ImageData != null && element.Type != "image")) throw IdentityCardGeometry.Invalid("Invalid rotation, opacity, group or image binding.");

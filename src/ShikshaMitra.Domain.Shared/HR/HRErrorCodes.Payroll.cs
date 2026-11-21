@@ -2,6 +2,7 @@ namespace ShikshaMitra.HR;
 
 public static partial class HRErrorCodes
 {
+	public const string PfManagementChanged = "HR:Payroll:PfManagementChanged";
 	public const string PayslipNotAvailable = "HR:Payroll:PayslipNotAvailable";
 	public const string PayslipReportRequiresIssued = "HR:Payroll:PayslipReportRequiresIssued";
 	public const string CompensationTargetNotSolvable = "HR:Payroll:CompensationTargetNotSolvable";
@@ -31,6 +32,7 @@ public static partial class HRErrorCodes
 	public const string SalarySlipFetchFailed = "HR:Payroll:030010";
 	public const string PayrollPreviewFailed = "HR:Payroll:030011";
 	public const string PayrollReviewRequiredBeforeLock = "HR:Payroll:030013";
+	public const string PayrollReviewAttendanceRequired = "HR:Payroll:ReviewAttendanceRequired";
 	public const string PayrollReviewEmployeeIdsRequired = "HR:Payroll:030014";
 	public const string PayrollReviewCannotChangeLocked = "HR:Payroll:030015";
 	public const string PayrollInvalidPageSize = "HR:Payroll:030016";

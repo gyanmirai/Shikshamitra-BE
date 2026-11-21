@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Library.Books;
+using ShikshaMitra.Library.Members;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.StudentRecords;
 using Shouldly;
@@ -54,5 +56,31 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		summary.StudentId.ShouldBe(fixture.Student.Id); summary.Fees.Status.ShouldBeOneOf("Unavailable", "Restricted"); summary.Fees.OutstandingAmount.ShouldBeNull();
 		summary.Library.PendingCount.ShouldBe(0); summary.Documents.Detail.ShouldNotBeNullOrWhiteSpace();
 		using (_currentTenant.Change(Guid.NewGuid())) await Should.ThrowAsync<Exception>(() => fixture.Service.GetSchoolExitSummaryAsync(fixture.Student.Id, fixture.Input.AcademicYearId));
+	});
+
+	[Fact]
+	public Task School_exit_summary_and_approval_preserve_the_same_legacy_book_obligation() => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await TransitionFixtureAsync();
+		var alias = new LibraryMember(Guid.NewGuid(), TestTenantId, fixture.Student.Id, "LEGACY-EXIT-CARD", false);
+		var due = DateTime.UtcNow.AddDays(-2);
+		var open = new BookIssue(Guid.NewGuid(), Guid.NewGuid(), "EXIT-ALIAS", alias.Id, 0, due.AddDays(-7), due, TestTenantId)
+			{ Status = BookIssueStatus.Overdue };
+		await WithUnitOfWorkAsync(async () =>
+		{
+			await GetRequiredService<IRepository<LibraryMember, Guid>>().InsertAsync(alias, true);
+			var issues = GetRequiredService<IRepository<BookIssue, Guid>>();
+			await issues.InsertAsync(open, true);
+			await issues.InsertAsync(new(Guid.NewGuid(), Guid.NewGuid(), "EXIT-RETURNED", fixture.Student.Id, 0, due.AddDays(-9), due, TestTenantId)
+				{ Status = BookIssueStatus.Returned }, true);
+			await issues.InsertAsync(new(Guid.NewGuid(), Guid.NewGuid(), "EXIT-STAFF", fixture.Student.Id, 1, due.AddDays(-9), due, TestTenantId), true);
+		});
+		var summary = await fixture.Service.GetSchoolExitSummaryAsync(fixture.Student.Id, fixture.Input.AcademicYearId);
+		summary.Library.Status.ShouldBe("Pending");
+		summary.Library.PendingCount.ShouldBe(1);
+		var preview = (await fixture.Service.PreviewAsync(fixture.Input)).Items.Single();
+		preview.OutstandingItems.Single().Code.ShouldBe("Students:Records:OutstandingBooks");
+		using var evidence = JsonDocument.Parse(preview.OutstandingEvidence);
+		JsonSerializer.Deserialize<Guid[]>(evidence.RootElement.GetProperty("Library").GetString()!).ShouldBe([open.Id]);
 	});
 }

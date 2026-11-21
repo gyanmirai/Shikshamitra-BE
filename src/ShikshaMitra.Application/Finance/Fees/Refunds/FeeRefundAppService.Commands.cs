@@ -24,6 +24,8 @@ public partial class FeeRefundAppService
     {
         using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
             { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+        await EnsureLegacyRefundSourcesAsync(input.Lines.Select(line => line.ChargeId), input.StudentId,
+            input.AcademicYearId, input.FinanceFeeAccountId);
         var autoApprove = await userScopeService.IsAdminUserAsync(currentUser.GetId());
         if (autoApprove)
             await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve);
@@ -176,6 +178,7 @@ public partial class FeeRefundAppService
     private async Task ApproveOnAdministratorSubmissionAsync(FeeRefundRequest request,
         FeeRefundActionDto? routing = null)
     {
+        await EnsureLegacyRefundSourcesAsync(request);
         var method = request.RefundMethod ?? "Cash";
         EnsureSettlementMethodAllowed(request, method);
         await EnsureApprovalWithinAnnualCapAsync(request);
@@ -212,6 +215,9 @@ public partial class FeeRefundAppService
         using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
             { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
+        if (request.FinanceExternalSourceLinkId.HasValue)
+            await EnsureExternalRefundActionAsync(request, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve);
+        else await EnsureLegacyRefundSourcesAsync(request);
         await EnsureRefundVisibleAsync(request);
         await EnsureMakerCheckerAsync(request, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve);
         var method = input.Method ?? request.RefundMethod ?? "Cash";
@@ -278,6 +284,7 @@ public partial class FeeRefundAppService
     public async Task<FeeRefundRequestDto> ProcessAsync(Guid id, ProcessFeeRefundDto input)
     {
         var request = await RequireAsync(id);
+        await EnsureLegacyRefundSourcesAsync(request);
         if (request.WorkflowVersion == 1)
             throw new BusinessException(FeeRefundErrorCodes.IllegalStatusTransition);
         await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
@@ -313,6 +320,7 @@ public partial class FeeRefundAppService
     public async Task<FeeRefundRequestDto> ReverseAsync(Guid id, ReverseFeeRefundDto input)
     {
         var request = await RequireAsync(id);
+        await EnsureLegacyRefundSourcesAsync(request);
         if (request.WorkflowVersion == 1)
             throw new BusinessException(FeeRefundErrorCodes.IllegalStatusTransition);
         await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
@@ -372,10 +380,13 @@ public partial class FeeRefundAppService
     private async Task<FeeRefundRequestDto> MapAsync(FeeRefundRequest request)
     {
         var map = await BuildStudentMapAsync([request.StudentId]);
+        var placements = await BuildRefundYearPlacementsAsync([request], map);
         var accounts = await BuildAccountMapAsync([request.FinanceFeeAccountId]);
         var years = await BuildYearMapAsync([request.AcademicYearId]);
         var receipts = await BuildSourceReceiptMapAsync([request]);
         var dto = MapToDto(request, map, accounts, years, receipts);
+        await PopulateEmployeeRefundNamesAsync([dto]);
+        ApplyRefundYearPlacement(dto, request, placements);
         await FilterAvailableActionsAsync(request, dto);
         return dto;
     }

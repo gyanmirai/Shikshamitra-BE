@@ -48,10 +48,8 @@ public partial class CollectFeeWorkflow
 		var student = await AsyncExecuter.FirstOrDefaultAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => s.Id == input.StudentId!.Value))
             ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), input.StudentId!.Value);
 
-		if (student.AcademicYearId != input.AcademicYearId)
-			throw new BusinessException(FeeCollectionErrorCodes.StudentAcademicYearMismatch);
-
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId!.Value);
+		await financeScopeAccessService.EnsureFeeCollectionStudentAccessibleAsync(
+			input.StudentId!.Value, input.AcademicYearId);
 		return (student, academicYear);
 	}
 
@@ -145,7 +143,8 @@ public partial class CollectFeeWorkflow
 			return new ChargeValidationContext(chargeMap, pendingChargeMap, payableChargeMap);
 
 		var chargeIds = input.ChargePayments.Select(cp => cp.ChargeId).Distinct().ToList();
-		var charges = await chargeRepository.GetListAsync(c => chargeIds.Contains(c.Id) && c.Status == ChargeStatus.Approved);
+		var charges = await chargeRepository.GetListAsync(c => chargeIds.Contains(c.Id) && c.Status == ChargeStatus.Approved &&
+			c.StudentId.HasValue && c.SchoolDueDate == null);
 		if (charges.Count != chargeIds.Count) throw new BusinessException(FeeCollectionErrorCodes.InvalidCharge);
 		chargeMap = charges.ToDictionary(c => c.Id);
 
@@ -161,18 +160,18 @@ public partial class CollectFeeWorkflow
 			.ToDictionary(x => x.ChargeId, x => x.Paid);
 		var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
 			.GroupBy(x => x.ChargeId)
-			.ToDictionary(x => x.Key, x => x.Sum(w => (double)w.EffectiveAmount));
+			.ToDictionary(x => x.Key, x => x.Sum(w => w.EffectiveAmount));
 
 		foreach (var cp in input.ChargePayments)
 		{
 			var charge = chargeMap[cp.ChargeId];
 			if (charge.StudentId != input.StudentId || charge.AcademicYearId != input.AcademicYearId)
 				throw new BusinessException(FeeCollectionErrorCodes.InvalidCharge);
-			var paid = paidPerCharge.GetValueOrDefault(cp.ChargeId, 0d);
-			var pending = Math.Max(0d, (double)charge.Amount - paid
-				- waivedPerCharge.GetValueOrDefault(cp.ChargeId, 0d));
+			var paid = paidPerCharge.GetValueOrDefault(cp.ChargeId, 0m);
+			var pending = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(Math.Max(0m, charge.Amount - paid
+				- waivedPerCharge.GetValueOrDefault(cp.ChargeId, 0m)));
 			pendingChargeMap[cp.ChargeId] = pending;
-			payableChargeMap[cp.ChargeId] = charge.Amount - (decimal)waivedPerCharge.GetValueOrDefault(cp.ChargeId, 0d);
+			payableChargeMap[cp.ChargeId] = charge.Amount - waivedPerCharge.GetValueOrDefault(cp.ChargeId, 0m);
 			if (cp.Amount > pending)
 				throw new BusinessException(FeeCollectionErrorCodes.AmountExceedsOutstanding)
 					.WithData("ChargeId", charge.Id).WithData("Pending", pending).WithData("Amount", cp.Amount);

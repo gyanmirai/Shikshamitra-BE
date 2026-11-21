@@ -42,7 +42,7 @@ public class FinancePdfPortability_Tests
 			ReceiptKind = kind,
 			ReceiptNumber = "SYN-2026-000001",
 			ReceiptDate = new DateOnly(2026, 10, 1),
-			TotalPaidAmount = 325.00,
+			TotalPaidAmount = 325.00m,
 			Remarks = "Synthetic receipt font regression"
 		};
 		var student = new Student(Guid.NewGuid(), null, "દીપ્તિ", null, "શાહ", Guid.NewGuid(),

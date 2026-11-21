@@ -49,14 +49,18 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Issue = $"{SubmoduleName}.Issue";
 			public const string Return = $"{SubmoduleName}.Return";
 			public const string Reserve = $"{SubmoduleName}.Reserve";
+			public const string Renew = $"{SubmoduleName}.Renew";
+			public const string ReviewDates = $"{SubmoduleName}.ReviewDates";
 
-			public static readonly string[] All = { View, Issue, Return, Reserve };
+			public static readonly string[] All = { View, Issue, Return, Reserve, Renew, ReviewDates };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Issue, $"{SubmoduleDisplayName}.Issue" },
 				{ Return, $"{SubmoduleDisplayName}.Return" },
-				{ Reserve, $"{SubmoduleDisplayName}.Reserve" }
+				{ Reserve, $"{SubmoduleDisplayName}.Reserve" },
+				{ Renew, $"{SubmoduleDisplayName}.Renew" },
+				{ ReviewDates, $"{SubmoduleDisplayName}.ReviewDates" }
 			};
 		}
 

@@ -33,8 +33,9 @@ public class BookConfiguration : IEntityTypeConfiguration<Book>
         builder.Property(x => x.Subject)
             .HasMaxLength(128);
 
-        builder.Property(x => x.Language)
-            .IsRequired();
+		builder.Property(x => x.Language).IsRequired(false);
+		builder.Property(x => x.LanguageCode).HasMaxLength(32);
+		builder.Property(x => x.MaterialCode).HasMaxLength(32);
 
         builder.Property(x => x.ApplicableAge)
             .HasMaxLength(10);

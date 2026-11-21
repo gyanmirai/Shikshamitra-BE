@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using Volo.Abp;
 using Volo.Abp.Data;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 internal sealed class AdmissionFormExperienceMetadata
 {
+	public AdmissionFormPrintSettingsDto PrintSettings { get; set; } = new();
 	public int? CoreFieldPolicyVersion { get; set; }
 	public string DefaultLanguage { get; set; } = "en";
 	public List<string> SupportedLanguages { get; set; } = ["en"];
@@ -30,11 +32,44 @@ internal static class AdmissionFormMetadataStore
 	private const string AuditKey = "AdmissionFormAudit";
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-	public static AdmissionFormExperienceMetadata ReadExperience(AdmissionFormDefinition form) =>
-		Deserialize(form.GetProperty<string>(ExperienceKey), new AdmissionFormExperienceMetadata());
+	public static AdmissionFormExperienceMetadata ReadExperience(AdmissionFormDefinition form)
+	{
+		var metadata = Deserialize(form.GetProperty<string>(ExperienceKey), new AdmissionFormExperienceMetadata());
+		metadata.PrintSettings = NormalizePrintSettings(metadata.PrintSettings);
+		return metadata;
+	}
+
+	internal static AdmissionFormPrintSettingsDto NormalizePrintSettings(AdmissionFormPrintSettingsDto? settings,
+		AdmissionFormPrintSettingsDto? saved = null)
+	{
+		settings ??= saved ?? new();
+		return new()
+		{
+			Template = settings.Template ?? saved?.Template ?? "simple",
+			Layout = settings.Layout,
+			PaperSize = settings.PaperSize,
+			ShowSchoolHeader = settings.ShowSchoolHeader,
+			ShowPhoto = settings.ShowPhoto,
+			ShowSignature = settings.ShowSignature,
+			Advanced = JsonSerializer.Deserialize<AdmissionFormPrintAdvancedSettingsDto>(
+				JsonSerializer.Serialize(settings.Advanced ?? saved?.Advanced, JsonOptions), JsonOptions)
+		};
+	}
+
+	internal static void ValidatePrintSettings(AdmissionFormPrintSettingsDto? settings)
+	{
+		if (settings == null) return;
+		if (settings.Layout is not ("compact" or "spacious") || settings.PaperSize is not ("A4" or "A5" or "LETTER" or "LEGAL") ||
+			settings.Template is not (null or "simple" or "boxed-grid" or "structured-classic"))
+			throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition,
+				"Choose a supported print template, compact or spacious layout, and paper size.");
+		AdmissionFormPrintSettingsValidation.Validate(settings.Advanced);
+	}
 
 	public static void WriteExperience(AdmissionFormDefinition form, CreateUpdateAdmissionFormDto input)
 	{
+		ValidatePrintSettings(input.PrintSettings);
+		var printSettings = NormalizePrintSettings(input.PrintSettings, ReadExperience(form).PrintSettings);
 		AdmissionFormInheritanceMetadataStore.Write(form, input);
 		var languages = input.SupportedLanguages
 			.Where(language => !string.IsNullOrWhiteSpace(language))
@@ -49,6 +84,7 @@ internal static class AdmissionFormMetadataStore
 
 		var metadata = new AdmissionFormExperienceMetadata
 		{
+			PrintSettings = printSettings,
 			CoreFieldPolicyVersion = input.CoreFieldPolicyVersion,
 			DefaultLanguage = defaultLanguage,
 			SupportedLanguages = languages,

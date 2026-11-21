@@ -53,6 +53,13 @@ public static class HrReportingDocumentWriter
 			foreach (var column in sheet.ColumnsUsed()) column.Width = Math.Clamp(column.Width, 12, 40);
 		}
 		sheet.SheetView.FreezeRows(header); sheet.SheetView.FreezeColumns(Math.Min(2, result.Columns.Count));
+		if (run.DataSource == "table:payroll-review-sheet" && result.Rows.Count > 0)
+		{
+			for (var col = 0; col < result.Columns.Count; col++)
+				if (result.Columns[col].Id is "earningBreakdown" or "deductionBreakdown")
+					sheet.Range(header + 1, col + 1, index - 1, col + 1).Style.Alignment.WrapText = true;
+			sheet.Rows(header + 1, index - 1).AdjustToContents();
+		}
 		var info = workbook.Worksheets.Add("Report details");
 		var lines = new[] { result.SchoolName, result.SchoolAddress, run.Name, Context(run), "Template: " + run.TemplateId + " revision " + run.Revision, "Rules: " + Rules(run), "Parameters: " + run.ParametersJson, "Rows: " + run.RowCount };
 		for (var i = 0; i < lines.Length; i++) info.Cell(i + 1, 1).Value = lines[i];
@@ -86,6 +93,8 @@ public static class HrReportingDocumentWriter
 						column.Item().Text(Context(run));
 						column.Item().Text("Staff selection: " + (parameters.EmployeeIds.Count > 0 ? parameters.EmployeeIds.Count + " selected staff" : "All authorized staff") + "; departments: " + (parameters.Departments.Count > 0 ? string.Join(", ", parameters.Departments) : "All"));
 						column.Item().Text("Rules: " + Rules(run));
+						if (run.DataSource == "table:hr-salary-documents")
+							foreach (var warning in result.Warnings) column.Item().Text(warning);
 						if (design.DataSource is HrReportDataSources.PayrollRegister or HrReportDataSources.PayrollStatement)
 							column.Item().Text("Issued payroll only. Unavailable months are not counted as zero pay.");
 					});

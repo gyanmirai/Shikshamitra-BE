@@ -5,9 +5,13 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Library;
+using ShikshaMitra.Library.Books;
 using ShikshaMitra.Library.Shared;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
+using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 
@@ -15,11 +19,15 @@ namespace ShikshaMitra.Library.Setting.GeneralSetting.LibraryTimings;
 
 [Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_LibraryHours.View)]
 [RemoteService(false)]
-public class LibraryTimingAppService(IRepository<LibraryTiming, Guid> _repository)
+public class LibraryTimingAppService(IRepository<LibraryTiming, Guid> _repository,
+	ILibraryAccessService access, ILibraryInventoryLock inventoryLock, IPermissionChecker permissions)
 	: ApplicationService, ILibraryTimingAppService
 {
-	public async Task<PaginatedResponse<LibraryTimingDto>> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10)
+	public async Task<LibraryHoursListDto> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10)
 	{
+		await RequireActionAsync(write: false);
+		var context = await access.GetContextAsync(academicYearId);
+		page = Math.Max(1, page); pageSize = Math.Clamp(pageSize, 1, 100);
 		var query = await _repository.GetQueryableAsync();
 		query = query.Where(x => x.AcademicYearId == academicYearId);
 
@@ -33,8 +41,10 @@ public class LibraryTimingAppService(IRepository<LibraryTiming, Guid> _repositor
 				.Take(pageSize)
 		);
 
-		return new PaginatedResponse<LibraryTimingDto>
+		return new LibraryHoursListDto
 		{
+			CanManageHours = context.UserScope.HasTenantWideScope() &&
+				await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Library.Settings_LibraryHours.Add),
 			TotalCount = totalCount,
 			CurrentPage = page,
 			PageSize = pageSize,
@@ -46,6 +56,10 @@ public class LibraryTimingAppService(IRepository<LibraryTiming, Guid> _repositor
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Settings_LibraryHours.Add)]
 	public async Task<GenericUpdatedResponse> UpdateHoursAsync(Guid academicYearId, LibraryHoursUpdateRequest input)
 	{
+		await RequireActionAsync(write: true);
+		await inventoryLock.AcquireAsync(CurrentTenant.Id);
+		if (!(await access.GetContextAsync(academicYearId)).UserScope.HasTenantWideScope())
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
 		ValidateHours(input);
 
 		var query = await _repository.GetQueryableAsync();
@@ -116,6 +130,14 @@ public class LibraryTimingAppService(IRepository<LibraryTiming, Guid> _repositor
 				throw LibraryException(LibraryErrorCodes.LibraryHoursInvalid, $"Start time must be earlier than end time for {hour.Day}.");
 			}
 		}
+	}
+
+	private async Task RequireActionAsync(bool write)
+	{
+		if (!CurrentUser.IsAuthenticated || !CurrentTenant.Id.HasValue ||
+			!await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Library.Settings_LibraryHours.View) ||
+			write && !await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Library.Settings_LibraryHours.Add))
+			throw new AbpAuthorizationException();
 	}
 
 	private static BusinessException LibraryException(string code, string message)

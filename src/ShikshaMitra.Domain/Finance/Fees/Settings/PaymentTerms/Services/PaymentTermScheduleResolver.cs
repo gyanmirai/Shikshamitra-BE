@@ -141,15 +141,30 @@ public class PaymentTermScheduleResolver(
 			isValid: true);
 	}
 
+	/// <summary>Read each distinct template once for a calculation, including its pinned versions.</summary>
+	public async Task<IReadOnlyDictionary<Guid, PaymentTerm>> LoadTermsAsync(IEnumerable<FeeStructureDetail> details)
+	{
+		var ids = details.Where(detail => detail.PaymentTermId.HasValue && detail.PaymentTermVersionId.HasValue)
+			.Select(detail => detail.PaymentTermId!.Value).Distinct().ToArray();
+		if (ids.Length == 0) return new Dictionary<Guid, PaymentTerm>();
+		using var tracking = paymentTermRepository.DisableTracking();
+		return (await paymentTermRepository.GetListAsync(term => Enumerable.Contains(ids, term.Id)))
+			.ToDictionary(term => term.Id);
+	}
+
+	public ResolvedFeeHeadSchedule ResolveFromTerms(FeeStructureDetail detail, IReadOnlyDictionary<Guid, PaymentTerm> terms)
+	{
+		if (!detail.PaymentTermId.HasValue || !detail.PaymentTermVersionId.HasValue)
+			return ResolvedFeeHeadSchedule.Legacy(detail);
+		if (!terms.TryGetValue(detail.PaymentTermId.Value, out var term))
+			throw new BusinessException(PaymentTermErrorCodes.NotFound).WithData("PaymentTermId", detail.PaymentTermId);
+		return Resolve(detail, term);
+	}
+
 	public async Task<List<ResolvedFeeHeadSchedule>> ResolveAllAsync(FeeStructure feeStructure)
 	{
-		var result = new List<ResolvedFeeHeadSchedule>();
-		foreach (var detail in feeStructure.FeeStructureDetails)
-		{
-			result.Add(await ResolveAsync(detail));
-		}
-
-		return result;
+		var terms = await LoadTermsAsync(feeStructure.FeeStructureDetails);
+		return feeStructure.FeeStructureDetails.Select(detail => ResolveFromTerms(detail, terms)).ToList();
 	}
 }
 

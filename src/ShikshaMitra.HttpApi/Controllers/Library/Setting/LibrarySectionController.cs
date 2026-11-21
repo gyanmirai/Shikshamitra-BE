@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Library.Setting.Sections;
@@ -27,6 +28,15 @@ public class LibrarySectionController : AbpController
 	{
 		return _service.GetListAsync(academicYearId, page, pageSize);
 	}
+
+	[HttpGet("campus-options")]
+	public Task<List<LibrarySectionCampusDto>> GetCampusOptionsAsync([FromQuery] Guid academicYearId) =>
+		_service.GetCampusOptionsAsync(academicYearId);
+
+	[HttpPut("{sectionId:guid}/campus")]
+	public Task<SectionDetailsResponse> BindCampusAsync(Guid sectionId, [FromQuery] Guid academicYearId,
+		[FromBody] BindLibrarySectionCampusRequest input) =>
+		_service.BindCampusAsync(sectionId, academicYearId, input.CampusId);
 
 	[HttpPost]
 	public async Task<IActionResult> CreateAsync(

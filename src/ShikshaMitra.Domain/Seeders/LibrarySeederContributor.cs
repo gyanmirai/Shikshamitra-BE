@@ -17,6 +17,7 @@ using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 
@@ -39,6 +40,7 @@ public class LibrarySeederContributor : BaseSeederContributor
 	private readonly IRepository<LibraryMember, Guid> _libraryMemberRepository;
 	private readonly IRepository<Student, Guid> _studentRepository;
 	private readonly IRepository<Employee, Guid> _employeeRepository;
+	private readonly IAsyncQueryableExecuter _queries;
 	private readonly ILogger<LibrarySeederContributor> _logger;
 
 	public LibrarySeederContributor(
@@ -60,6 +62,7 @@ public class LibrarySeederContributor : BaseSeederContributor
 		IRepository<LibraryMember, Guid> libraryMemberRepository,
 		IRepository<Student, Guid> studentRepository,
 		IRepository<Employee, Guid> employeeRepository,
+		IAsyncQueryableExecuter queries,
 		ILogger<LibrarySeederContributor> logger)
 		: base(currentTenant, guidGenerator, unitOfWork)
 	{
@@ -78,6 +81,7 @@ public class LibrarySeederContributor : BaseSeederContributor
 		_libraryMemberRepository = libraryMemberRepository;
 		_studentRepository = studentRepository;
 		_employeeRepository = employeeRepository;
+		_queries = queries;
 		_logger = logger;
 	}
 
@@ -187,10 +191,10 @@ public class LibrarySeederContributor : BaseSeederContributor
 	private async Task<List<(Guid MemberId, int Role)>> SeedMembersAsync()
 	{
 		var members = new List<(Guid MemberId, int Role)>();
-		var students = (await _studentRepository.GetListAsync())
-			.Where(x => x.AdditionalDetail != null)
-			.Take(3)
-			.ToList();
+		var students = await _queries.ToListAsync((await _studentRepository.WithDetailsAsync(x => x.AdditionalDetail!))
+			.Where(x => x.TenantId == CurrentTenant.Id && x.AdditionalDetail != null)
+			.OrderBy(x => x.Id)
+			.Take(3));
 
 		foreach (var student in students)
 		{
@@ -207,10 +211,10 @@ public class LibrarySeederContributor : BaseSeederContributor
 			members.Add((student.Id, 0));
 		}
 
-		var employees = (await _employeeRepository.GetListAsync())
-			.Where(x => x.AdditionalDetails != null)
-			.Take(2)
-			.ToList();
+		var employees = await _queries.ToListAsync((await _employeeRepository.WithDetailsAsync(x => x.AdditionalDetails!))
+			.Where(x => x.TenantId == CurrentTenant.Id && x.AdditionalDetails != null)
+			.OrderBy(x => x.Id)
+			.Take(2));
 
 		foreach (var employee in employees)
 		{

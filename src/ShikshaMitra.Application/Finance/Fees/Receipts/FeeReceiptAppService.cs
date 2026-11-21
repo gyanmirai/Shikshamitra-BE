@@ -94,34 +94,46 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
             TableQuery            = tableQuery,
         };
 
-        var batchSize = hasDisplayFilters ? 200 : input.MaxResultCount;
+        if (hasDisplayFilters)
+        {
+            var filterRows = await receiptRepository.GetListFilterRowsAsync(
+                CreateFilter(0, 0),
+                tableQuery.Filters.Any(f => f.Column == "paymentMethodLabel"),
+                cancellationToken);
+            var filterItems = filterRows.Select(row => new FeeReceiptListItemDto
+            {
+                Id = row.Id,
+                ReceiptNumber = row.ReceiptNumber,
+                ReceiptKind = row.ReceiptKind,
+                ReceiptKindLabel = FeeReceiptPresentation.GetLabel(row.ReceiptKind, row.ReceiptScope),
+                PaymentMethodLabel = row.PaymentMethodLabel,
+                VerificationStatus = row.VerificationStatus,
+                LinkedFinalReceiptNumber = row.LinkedFinalReceiptNumber,
+                TotalPaidAmount = row.TotalPaidAmount,
+                ReceiptDate = row.ReceiptDate,
+                StudentName = row.StudentName,
+                GrNo = row.GrNo,
+                RollNo = row.RollNo,
+            }).ToList();
+            var matching = tableQuery.Apply(filterItems.AsQueryable(), ListFilterFields).ToList();
+            var pageIds = matching.Skip(input.SkipCount).Take(input.MaxResultCount)
+                .Select(item => item.Id).ToList();
+            if (pageIds.Count == 0)
+                return new PagedResultDto<FeeReceiptListItemDto>(matching.Count, []);
+
+            var pageReceipts = await receiptRepository.GetListAsync(
+                receipt => pageIds.Contains(receipt.Id), cancellationToken: cancellationToken);
+            var positions = pageIds.Select((id, index) => (id, index))
+                .ToDictionary(pair => pair.id, pair => pair.index);
+            pageReceipts = pageReceipts.OrderBy(receipt => positions[receipt.Id]).ToList();
+            return new PagedResultDto<FeeReceiptListItemDto>(matching.Count,
+                await LoadReceiptItemsAsync(pageReceipts, cancellationToken));
+        }
+
         var (totalCount, receipts) = await receiptRepository.GetPagedListAsync(
-            CreateFilter(hasDisplayFilters ? 0 : input.SkipCount, batchSize), cancellationToken);
+            CreateFilter(input.SkipCount, input.MaxResultCount), cancellationToken);
         if (totalCount == 0)
             return new PagedResultDto<FeeReceiptListItemDto>(0, []);
-
-		if (hasDisplayFilters)
-		{
-			var matchingCount = 0;
-			var page = new List<FeeReceiptListItemDto>();
-			var offset = 0;
-			while (receipts.Count > 0)
-			{
-				var matching = tableQuery.Apply((await LoadReceiptItemsAsync(receipts, cancellationToken)).AsQueryable(),
-					ListFilterFields).ToList();
-				foreach (var item in matching)
-				{
-					if (matchingCount >= input.SkipCount && page.Count < input.MaxResultCount)
-						page.Add(item);
-					matchingCount++;
-				}
-				offset += receipts.Count;
-				if (offset >= totalCount) break;
-				(_, receipts) = await receiptRepository.GetPagedListAsync(CreateFilter(offset, batchSize),
-					cancellationToken, includeTotalCount: false);
-			}
-			return new PagedResultDto<FeeReceiptListItemDto>(matchingCount, page);
-		}
 
 		return new PagedResultDto<FeeReceiptListItemDto>(totalCount,
 			await LoadReceiptItemsAsync(receipts, cancellationToken));
@@ -169,7 +181,7 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
                 LinkedFinalReceiptNumber   = r.LinkedFinalReceiptId.HasValue
                     ? linkedFinalMap.GetValueOrDefault(r.LinkedFinalReceiptId.Value)
                     : null,
-                TotalPaidAmount            = r.TotalPaidAmount,
+                TotalPaidAmount            = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(r.TotalPaidAmount),
                 StudentId                  = r.StudentId,
                 FinanceFeeAccountId        = r.FinanceFeeAccountId,
                 StudentName                = student != null
@@ -192,7 +204,7 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
     {
         var receipt = await receiptRepository.GetAsync(id, cancellationToken: cancellationToken)
             ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
-        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId, cancellationToken);
+        await financeScopeAccessService.EnsureReceiptAccessibleAsync(receipt, cancellationToken);
 
         var student      = receipt.StudentId.HasValue ? await AsyncExecuter.FirstOrDefaultAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => s.Id == receipt.StudentId.Value), cancellationToken) : null;
         var account = receipt.FinanceFeeAccountId.HasValue
@@ -280,6 +292,13 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
 
         var receiptPayments = await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<PaymentMethodRecord, Guid>>()
             .GetListAsync(p => p.FeeRecordMetadataId == receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+        var metadata = await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FeeRecordMetadata, Guid>>()
+            .FindAsync(receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+        var payerEvidence = FinanceReceiptEvidence.ReadPayer(metadata);
+        var settlement = FinanceReceiptEvidence.ReadSettlement(receipt, metadata);
+        if (payerEvidence != null && (payerEvidence.Kind == ShikshaMitra.Finance.ExternalReceivables.FinanceExternalPayerKind.Employee
+                ? receipt.EmployeeId != payerEvidence.PersonId : receipt.StudentId != payerEvidence.PersonId))
+            throw new BusinessException(ShikshaMitra.Library.LibraryFinanceErrorCodes.SourceRequiresReview);
         return new FeeReceiptDetailDto
         {
             Id                             = receipt.Id,
@@ -295,9 +314,20 @@ public partial class FeeReceiptAppService : ApplicationService, IFeeReceiptAppSe
             LinkedProvisionalReceiptNumber = linkedProvisional?.ReceiptNumber,
             LinkedFinalReceiptId           = receipt.LinkedFinalReceiptId,
             LinkedFinalReceiptNumber       = linkedFinal?.ReceiptNumber,
-            TotalPaidAmount                = receipt.TotalPaidAmount,
+            TotalPaidAmount                = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(receipt.TotalPaidAmount),
 			FeePaidAmount = receipt.FeePaidAmount, ChargePaidAmount = receipt.ChargePaidAmount,
+			Currency = receipt.Currency,
+			SettlementSnapshot = settlement == null ? null : new FeeReceiptSettlementSnapshotDto
+			{
+				OriginalAmount = settlement.OriginalAmount, SubmittedAmount = settlement.SubmittedAmount,
+				SettledAmount = settlement.SettledAmount, PendingVerificationAmount = settlement.PendingVerificationAmount,
+				FinancialOutstandingAmount = settlement.FinancialOutstandingAmount, CollectibleAmount = settlement.CollectibleAmount,
+				NetWaivedAmount = settlement.NetWaivedAmount
+			},
             StudentId                      = receipt.StudentId,
+            EmployeeId = receipt.EmployeeId, PayerName = payerEvidence?.Name ?? (student != null
+                ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ") : account?.ApplicantName),
+            PayerCode = payerEvidence?.Code,
             FinanceFeeAccountId            = receipt.FinanceFeeAccountId,
             StudentName                    = student != null
                 ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ")

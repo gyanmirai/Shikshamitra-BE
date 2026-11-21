@@ -12,6 +12,7 @@ using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Incomes;
 using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Finance.Common;
+using ShikshaMitra.Finance.ExternalReceivables;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
@@ -27,7 +28,7 @@ namespace ShikshaMitra.Finance.Accounts.CashManagement;
 public partial class CashManagementAppService(IRepository<CashCollection, Guid> sources,
 	IRepository<Transaction, Guid> transactions, IRepository<BankAccount, Guid> banks,
 	IRepository<AcademicYear, Guid> years, FinanceScopeAccessService scope, FinanceRoutingManager routing,
-	ICashCollectionLock sourceLock, ICashCommandStore commands, IUnitOfWorkManager uows,
+	ICashCollectionLock sourceLock, ICashCommandStore commands, ICashReadQueries reads, IUnitOfWorkManager uows,
 	IUserScopeService userScopes) : ApplicationService, ICashManagementAppService
 {
 	public async Task<CashPage> GetListAsync(CashQuery input)
@@ -60,19 +61,11 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 		};
 		if (input.Status.HasValue) query = query.Where(x => x.Status == input.Status);
 		var total = await AsyncExecuter.CountAsync(query);
-		// All seven totals use the identical scoped/filter predicate as the register.
-		var facts = await AsyncExecuter.ToListAsync(query.Select(x => new { x.Amount, x.Status, x.SpentAmount, x.DepositedAmount, x.InTransitAmount }));
-		var totals = new CashSummary
-		{
-			Collected = facts.Sum(x => x.Amount), PendingApproval = facts.Where(x => x.Status == 0).Sum(x => x.Amount - x.SpentAmount - x.DepositedAmount - x.InTransitAmount),
-			Approved = facts.Where(x => x.Status == 1).Sum(x => x.Amount), Spent = facts.Sum(x => x.SpentAmount),
-			Deposited = facts.Sum(x => x.DepositedAmount), InTransit = facts.Sum(x => x.InTransitAmount),
-			Remaining = facts.Sum(x => x.Amount - x.SpentAmount - x.DepositedAmount - x.InTransitAmount)
-		};
-		var page = await AsyncExecuter.ToListAsync(table.Order(query, TableFields, "creationTime", true, x => x.Id)
-			.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize));
+		var totals = await SummarizeAsync(query);
 		var flags = await FlagsAsync();
-		return new CashPage { Items = page.Select(x => (CashRow)Map(x, flags)).ToList(), TotalCount = total,
+		var page = await ReadRowsAsync(table.Order(query, TableFields, "creationTime", true, x => x.Id)
+			.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize), flags);
+		return new CashPage { Items = page, TotalCount = total,
 			Page = input.Page, PageSize = input.PageSize, Summary = totals, YearSummary = yearSummary,
 			AvailableCash = yearSummary.Remaining, ActivitySummary = activitySummary, StatusCounts = counts };
 	}
@@ -90,14 +83,16 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 			_ => throw new AbpAuthorizationException()
 		});
 		var query = await ScopedQueryAsync(academicYearId);
-		var available = operation == "approve" ? [] : await AsyncExecuter.ToListAsync(query.Where(x => (operation == "expense" || x.Status == 1) &&
-			x.Amount > x.SpentAmount + x.DepositedAmount + x.InTransitAmount).OrderBy(x => x.CreationTime));
-		var bankRows = operation == "expense" ? [] : await banks.GetListAsync(x => x.TenantId == CurrentTenant.Id &&
-			x.AcademicYearId == academicYearId && x.IsActive);
+		var available = operation == "approve" ? [] : await AsyncExecuter.ToListAsync(CashManagementReadProjection.Sources(
+			query.Where(x => (operation == "expense" || x.Status == 1) && x.Amount > x.SpentAmount + x.DepositedAmount + x.InTransitAmount)
+				.OrderBy(x => x.CreationTime).ThenBy(x => x.Id)));
+		var bankRows = operation == "expense" ? [] : await AsyncExecuter.ToListAsync((await banks.GetQueryableAsync())
+			.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId && x.IsActive)
+			.Select(x => new { x.Id, x.BankName, x.AccountNumber, x.EffectiveFrom, x.EffectiveTo }));
 		var now = Now;
 		return new CashOptions(bankRows.Where(x => !(x.EffectiveFrom > now || x.EffectiveTo < now))
-			.OrderBy(x => x.BankName).Select(x => new CashBankOption(x.Id, BankLabel(x))).ToList(),
-			available.Select(x => new CashSourceOption(x.Id, $"{x.Reference} • {x.PayerName}", x.RemainingAmount, x.ConcurrencyStamp)).ToList());
+			.OrderBy(x => x.BankName).Select(x => new CashBankOption(x.Id, $"{x.BankName} • {x.AccountNumber[^Math.Min(4, x.AccountNumber.Length)..]}")).ToList(),
+			available);
 	}
 	public Task<CashDetail> ApproveAsync(Guid id, CashApproval input) => ExecuteAsync(id, input, P.Approve, "approve", async cash =>
 	{
@@ -159,19 +154,22 @@ public partial class CashManagementAppService(IRepository<CashCollection, Guid> 
 		if (date == default || date > Now || date.UtcDateTime < period.StartUtc || date.UtcDateTime >= period.EndUtc)
 			throw new BusinessException(CashManagementErrorCodes.InvalidEvidence);
 	}
-	private async Task<IQueryable<CashCollection>> ScopedQueryAsync(Guid yearId)
+	private async Task<IQueryable<CashCollection>> ScopedQueryAsync(Guid yearId, bool includeDetails = false)
 	{
 		await scope.EnsureCollectionYearAccessibleAsync(yearId);
 		var students = await scope.GetScopedStudentIdsQueryAsync();
 		var accounts = await scope.GetScopedFeeAccountIdsQueryAsync();
 		var manualAccessible = await scope.IsAcademicContextAccessibleAsync(yearId, null, null, null, null);
-		return (await sources.WithDetailsAsync(x => x.Deposits, x => x.Expenses, x => x.Commands))
-			.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == yearId &&
-				(x.FinanceFeeAccountId.HasValue ? accounts.Contains(x.FinanceFeeAccountId.Value) :
-					x.StudentId.HasValue ? students.Contains(x.StudentId.Value) : manualAccessible));
+		var sourceQuery = includeDetails
+			? await sources.WithDetailsAsync(x => x.Deposits, x => x.Expenses, x => x.Commands)
+			: await sources.GetQueryableAsync();
+		var query = sourceQuery
+			.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == yearId);
+		return await LazyServiceProvider.LazyGetRequiredService<FinanceExternalCashSourceScope>()
+			.ApplyAsync(query, students, accounts, manualAccessible);
 	}
 	internal async Task<CashCollection> RequireAsync(Guid id, Guid yearId) =>
-		await AsyncExecuter.FirstOrDefaultAsync((await ScopedQueryAsync(yearId)).Where(x => x.Id == id))
+		await AsyncExecuter.FirstOrDefaultAsync((await ScopedQueryAsync(yearId, includeDetails: true)).Where(x => x.Id == id))
 		?? throw new BusinessException(CashManagementErrorCodes.InvalidSource);
 	private async Task<CashCollection> RequireForUpdateAsync(Guid id, Guid yearId)
 	{

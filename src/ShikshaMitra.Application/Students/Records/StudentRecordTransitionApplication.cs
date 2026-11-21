@@ -101,7 +101,9 @@ public partial class StudentRecordTransitionApplication(IRepository<StudentRecor
 			}
 			var standard = await readiness.ValidateTargetAsync(item.StudentId, item.AcademicYearId, input.TargetAcademicYearId!.Value, input.TargetStandardId!.Value, input.TargetDivisionId!.Value, input.RollNumber);
 			var next = await readiness.ActivateTargetEnrollmentAsync(item.StudentId, input.TargetAcademicYearId.Value, input.TargetStandardId.Value, input.TargetDivisionId.Value, input.RollNumber, effectiveDate: item.EffectiveDate);
-			source.Enrollment.Deactivate(item.EffectiveDate); await enrollments.UpdateAsync(source.Enrollment);
+			await LazyServiceProvider.LazyGetRequiredService<HouseManagement.HouseManagementPlacementService>()
+				.DeactivateAsync(source.Enrollment, item.EffectiveDate);
+			await enrollments.UpdateAsync(source.Enrollment);
 			var stage = standard.EducationMediumStage; var medium = stage.EducationMedium;
 			source.Student.UpdateAcademicPlacement(input.TargetAcademicYearId.Value, medium.EducationBoardId, medium.Id, stage.Id, standard.Id, input.TargetDivisionId.Value);
 			source.Student.AssignRollNo(input.RollNumber); source.Student.ChangeOperationalStatus(StudentStatus.Active, item.Reason); await students.UpdateAsync(source.Student);
@@ -114,7 +116,9 @@ public partial class StudentRecordTransitionApplication(IRepository<StudentRecor
 					.ApplyAsync(item.Id, item.StudentId, item.AcademicYearId, item.EffectiveDate, item.Reason);
 			var removalDate = policy.Transitions.RosterRemovalTiming == "Approval"
 				? AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now) : item.EffectiveDate;
-			source.Enrollment.Deactivate(removalDate); source.Student.ChangeOperationalStatus(StudentStatus.Left, item.Reason);
+			await LazyServiceProvider.LazyGetRequiredService<HouseManagement.HouseManagementPlacementService>()
+				.DeactivateAsync(source.Enrollment, removalDate);
+			source.Student.ChangeOperationalStatus(StudentStatus.Left, item.Reason);
 			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Portal.StudentPortalLifecycleService>().RevokeAsync(item, source.Student);
 			await enrollments.UpdateAsync(source.Enrollment); await students.UpdateAsync(source.Student);
 		}

@@ -8,6 +8,8 @@ public class SectionDto
 	public Guid Id { get; set; }
 	public string? SectionName { get; set; }
 	public int NumberOfShelf { get; set; }
+	public Guid? CampusId { get; set; }
+	public string? CampusName { get; set; }
 
 	public List<ShelfDetailDto> ShelfDetails { get; set; } = null!; // The response mapper populates these members after construction.
 }
@@ -24,6 +26,8 @@ public class SectionDetailsResponse
 	public string? Id { get; set; }
 	public string? SectionName { get; set; }
 	public int NumberOfShelf { get; set; }
+	public Guid? CampusId { get; set; }
+	public string? CampusName { get; set; }
 	public List<ShelfDetailDto> ShelfDetails { get; set; } = new();
 }
 
@@ -34,4 +38,11 @@ public class PaginatedSectionResponse
 	public int TotalPages { get; set; }
 	public int CurrentPage { get; set; }
 	public List<SectionDto> Items { get; set; } = new();
+}
+
+public sealed class LibrarySectionCampusDto
+{
+	public Guid Id { get; init; }
+	public string Name { get; init; } = string.Empty;
+	public string Code { get; init; } = string.Empty;
 }

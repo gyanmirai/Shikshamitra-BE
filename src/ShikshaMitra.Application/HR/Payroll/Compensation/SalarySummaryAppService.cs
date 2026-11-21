@@ -50,8 +50,11 @@ public class SalarySummaryAppService(
 		var profile = await profiles.ResolveAsync(employeeId, date);
 		if (salary.Revision.EsiManagementMode == EsiManagement.External)
 			profile = profile with { ApplyEsic = false, EsicDisabledReason = salary.Revision.EsiExternalReason };
-		var components = await providentFund.AddProvidentFundDeductionAsync(employeeId, salary.Revision.PfRuleId, salary.Components, date.Year, date.Month);
-		var pfRule = await providentFund.ResolveRuleAsync(salary.Revision.PfRuleId, employeeId, date.Year, date.Month);
+		var pfCoverage = await pfEligibility.GetCoverageAsync(date);
+		var pfHandledExternally = pfCoverage?.IsHandledExternally == true;
+		var pfRuleId = pfHandledExternally ? null : salary.Revision.PfRuleId;
+		var components = await providentFund.AddProvidentFundDeductionAsync(employeeId, pfRuleId, salary.Components, date.Year, date.Month);
+		var pfRule = await providentFund.ResolveRuleAsync(pfRuleId, employeeId, date.Year, date.Month);
 		var slabs = await professionalTax.GetListAsync(x => x.IsActive && x.JurisdictionCode == salary.Revision.StatutoryProfile && x.EffectiveFrom <= date && (!x.EffectiveTo.HasValue || x.EffectiveTo >= date));
 		var configuration = await esiConfiguration.ResolveAsync(date);
 		PayrollEsiStatutoryContext? esiContext = null;
@@ -59,14 +62,16 @@ public class SalarySummaryAppService(
 		catch (BusinessException error) when (error.Code is HRErrorCodes.StatutoryRuleNotFound or HRErrorCodes.EsiPolicyNotEffective) { summary.BlockingIssues.Add("ESI_POLICY_REQUIRED"); }
 		if (esiContext != null)
 			await esiCompensation.RecalculateAsync(resolved, new Dictionary<Guid, PayrollEsiStatutoryContext> { [employeeId] = esiContext },
-				new Dictionary<Guid, PayrollStatutoryProfile> { [employeeId] = profile }, date);
+				new Dictionary<Guid, PayrollStatutoryProfile> { [employeeId] = profile }, date, pfHandledExternally);
 		// Full-month estimate: no attendance, adjustments, snapshots, reviews, or payroll-run writes.
 		var cessationMonth = EmployeeLifecycleEligibility.IsEmploymentCessationMonth(await employees.GetAsync(employeeId), date.Year, date.Month);
 		var result = PayrollComputation.Calculate(0, 0, 1m, 1m, components,
-			new PayrollStatutoryRuleSet(pfRule, slabs, cessationMonth, EmployeeStateInsurance: esiContext, EsiConfigurationId: configuration?.Id) { StatutoryProfile = profile });
+			new PayrollStatutoryRuleSet(pfRule, slabs, cessationMonth, EmployeeStateInsurance: esiContext, EsiConfigurationId: configuration?.Id)
+			{ StatutoryProfile = profile, PfHandledExternally = pfHandledExternally });
 		summary.GrossSalary = result.FullGrossSalary;
 		var pfWages = components.Where(x => x.IsEarning && x.SemanticType is PayrollComponentSemanticType.Basic or PayrollComponentSemanticType.DearnessAllowance).Sum(x => x.Amount);
-		var decision = await pfEligibility.ResolveAsync(employeeId, date.AddMonths(1).AddDays(-1), result.GrossSalary, pfWages, PfEligibilityResolver.Declaration(salary.Revision), salary.Revision.PfRuleId.HasValue);
+		var decision = await pfEligibility.ResolveAsync(employeeId, date.AddMonths(1).AddDays(-1), result.GrossSalary, pfWages,
+			PfEligibilityResolver.Declaration(salary.Revision), pfRuleId.HasValue, pfCoverage);
 		var includesPt = components.Any(x => x.SemanticType == PayrollComponentSemanticType.ProfessionalTax);
 		var pt = slabs.FirstOrDefault(x => x.Id == result.ProfessionalTaxRuleId);
 		var cessationExemption = includesPt && cessationMonth && pt == null && slabs.Any(x =>

@@ -42,7 +42,6 @@ public partial class StudentFeeStructureAppService(
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository,
 	IRepository<ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.PaymentTerm, Guid> paymentTermRepository,
-	IRepository<ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.PaymentTermVersion, Guid> paymentTermVersionRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisionRepository,
 	IRepository<TransportMember, Guid> transportMemberRepository,
@@ -108,7 +107,7 @@ public partial class StudentFeeStructureAppService(
 	{
 		using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
 			{ IsTransactional = true, IsolationLevel = input.EditAssignmentId.HasValue ? System.Data.IsolationLevel.Serializable : null }, requiresNew: true);
-		await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, false);
+		var enrollment = await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, false);
 		var commandFingerprint = CommandFingerprint(input);
 		var existing = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == input.StudentId && x.AcademicYearId == input.AcademicYearId);
 		if (existing != null && (!input.EditAssignmentId.HasValue || existing.AssignmentRequestFingerprint == commandFingerprint))
@@ -144,6 +143,7 @@ public partial class StudentFeeStructureAppService(
 			await uow.CompleteAsync();
 			return corrected;
 		}
+		assignment.CaptureAcademicPlacement(enrollment.StandardId!.Value, enrollment.DivisionId, enrollment.RollNumber);
 		if (prepared.Account != null)
 			await LazyServiceProvider.LazyGetRequiredService<AdmissionFeeCollectionAppService>()
 				.LinkForAssignmentAsync(prepared.AdmissionSource!, prepared.Account);

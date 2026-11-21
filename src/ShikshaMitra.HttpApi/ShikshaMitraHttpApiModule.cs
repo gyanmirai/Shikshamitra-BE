@@ -27,6 +27,19 @@ public class ShikshaMitraHttpApiModule : AbpModule
 		ConfigureLocalization();
 		Configure<Volo.Abp.AspNetCore.ExceptionHandling.AbpExceptionHttpStatusCodeOptions>(options =>
 		{
+			options.Map(Library.LibraryErrorCodes.ReceivingCommandConflict, System.Net.HttpStatusCode.Conflict);
+			options.Map(Library.LibraryErrorCodes.ReceivingPlanChanged, System.Net.HttpStatusCode.Conflict);
+			options.Map(Library.LibraryErrorCodes.StockImportPlanChanged, System.Net.HttpStatusCode.Conflict);
+			options.Map(Library.LibraryErrorCodes.StockImportCommandConflict, System.Net.HttpStatusCode.Conflict);
+			options.Map(Library.LibraryErrorCodes.CustodyPlanChanged, System.Net.HttpStatusCode.Conflict);
+			options.Map(Library.LibraryErrorCodes.CustodyCommandConflict, System.Net.HttpStatusCode.Conflict);
+			options.Map(Library.LibraryErrorCodes.CampusTransferPlanChanged, System.Net.HttpStatusCode.Conflict);
+			options.Map(Library.LibraryErrorCodes.CampusTransferCommandConflict, System.Net.HttpStatusCode.Conflict);
+			options.Map(Library.LibraryErrorCodes.StockVerificationPlanChanged, System.Net.HttpStatusCode.Conflict);
+			options.Map(Library.LibraryErrorCodes.StockVerificationCommandConflict, System.Net.HttpStatusCode.Conflict);
+			options.Map(Library.LibraryErrorCodes.StockVerificationInvalidState, System.Net.HttpStatusCode.Conflict);
+			options.Map(Library.LibraryErrorCodes.CatalogueConfigurationChanged, System.Net.HttpStatusCode.Conflict);
+			options.Map(Library.LibraryErrorCodes.CatalogueRevisionChanged, System.Net.HttpStatusCode.Conflict);
 			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Conflict, System.Net.HttpStatusCode.Conflict);
 			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Unavailable, System.Net.HttpStatusCode.NotFound);
 			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Invalid, System.Net.HttpStatusCode.BadRequest);

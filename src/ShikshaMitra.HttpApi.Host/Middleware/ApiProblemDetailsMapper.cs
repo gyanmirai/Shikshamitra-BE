@@ -24,6 +24,13 @@ public static class ApiProblemDetailsMapper
 			NotificationErrorCodes.ReviewChanged or NotificationErrorCodes.ReviewExpired or NotificationErrorCodes.ReviewConsumed or
 			NotificationErrorCodes.ApprovalSetupRequired or NotificationErrorCodes.RetryRequiresReview => StatusCodes.Status409Conflict,
 			NotificationErrorCodes.TemplateTestRateLimited => StatusCodes.Status429TooManyRequests,
+			Library.LibraryErrorCodes.ReceivingCommandConflict or Library.LibraryErrorCodes.ReceivingPlanChanged or
+				Library.LibraryErrorCodes.CatalogueConfigurationChanged => StatusCodes.Status409Conflict,
+			Library.LibraryErrorCodes.StockImportPlanChanged or Library.LibraryErrorCodes.StockImportCommandConflict => StatusCodes.Status409Conflict,
+			Library.LibraryErrorCodes.CustodyPlanChanged or Library.LibraryErrorCodes.CustodyCommandConflict => StatusCodes.Status409Conflict,
+			Library.LibraryErrorCodes.StockVerificationPlanChanged or Library.LibraryErrorCodes.StockVerificationCommandConflict or
+				Library.LibraryErrorCodes.StockVerificationInvalidState or Library.LibraryErrorCodes.StockVerificationDecisionsRequired => StatusCodes.Status409Conflict,
+				Library.LibraryErrorCodes.CatalogueRevisionChanged => StatusCodes.Status409Conflict,
 			Academic.Curriculum.ElectivePreferenceErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionJourneyResumeErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionFormCorrectionErrorCodes.Conflict => StatusCodes.Status409Conflict,
@@ -48,6 +55,10 @@ public static class ApiProblemDetailsMapper
 			HRErrorCodes.WorkShiftReferenced or HRErrorCodes.ShiftAssignmentProtected => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewStale or HRErrorCodes.PayrollPreviewNotReady => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewNotFound => StatusCodes.Status404NotFound,
+			"PAYROLL_SUBMISSION_VERSION_CONFLICT" or "PAYROLL_SETTINGS_VERSION_CONFLICT" or "PAYROLL_COMMAND_KEY_CONFLICT" or
+			"PAYROLL_EMPLOYEE_ALREADY_SUBMITTED" or "PAYROLL_REVIEW_SHEET_EXPIRED" or "PAYROLL_WORKFLOW_NOT_ACTIVE" or
+			"PAYROLL_SUBMISSION_REQUIRED" or "PAYROLL_SUBMISSION_REVIEW_REQUIRED" => StatusCodes.Status409Conflict,
+			"PAYROLL_SUBMISSION_NOT_FOUND" => StatusCodes.Status404NotFound,
 			HRErrorCodes.LeaveEmployeeNotFound => StatusCodes.Status403Forbidden,
 			HRErrorCodes.EmployeePolicyAccessRequired => StatusCodes.Status403Forbidden,
 			HRErrorCodes.TakeAttendanceMediumStageOutOfScope => StatusCodes.Status403Forbidden,
@@ -57,7 +68,7 @@ public static class ApiProblemDetailsMapper
 			HRErrorCodes.TakeAttendanceApprovedLeaveMutationNotAllowed => StatusCodes.Status409Conflict,
 			HRErrorCodes.StatutoryPreviewStale => StatusCodes.Status409Conflict,
 			HRErrorCodes.EsiPolicyInUse => StatusCodes.Status409Conflict,
-			HRErrorCodes.CompensationPreviewStale => StatusCodes.Status409Conflict,
+			HRErrorCodes.CompensationPreviewStale or HRErrorCodes.PfManagementChanged => StatusCodes.Status409Conflict,
 			"HR:Payroll:StatutoryProfileConflict" or "HR:Payroll:PfCoverageSaveConflict" or "HR:Payroll:CompensationSaveConflict" or
 			"HR:Payroll:SalaryTemplateSaveConflict" => StatusCodes.Status409Conflict,
 			HRErrorCodes.EsiConfigurationLocked or HRErrorCodes.EsiConfigurationCancellationInvalid => StatusCodes.Status409Conflict,

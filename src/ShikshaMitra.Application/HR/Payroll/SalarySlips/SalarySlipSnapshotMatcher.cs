@@ -55,7 +55,8 @@ internal static class SalarySlipSnapshotMatcher
 		salarySlip.CompensationQuotedAmount == snapshot.CompensationQuotedAmount &&
 		salarySlip.CompensationProtectedAmount == snapshot.CompensationProtectedAmount &&
 		salarySlip.CompensationNormalizedProtectedAmount == snapshot.CompensationNormalizedProtectedAmount &&
-		salarySlip.CompensationTargetDifference == snapshot.CompensationTargetDifference;
+		salarySlip.CompensationTargetDifference == snapshot.CompensationTargetDifference &&
+		SalaryProtectionSnapshot.Read(salarySlip) == SalaryProtectionSnapshot.Read(snapshot);
 
 	public static bool SalarySlipFinancialLinesMatchSnapshot(
 		SalarySlip salarySlip,

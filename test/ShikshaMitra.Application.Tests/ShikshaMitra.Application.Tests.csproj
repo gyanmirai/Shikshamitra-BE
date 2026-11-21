@@ -9,6 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\Shared\LibraryReceivingSqliteModelCustomizer.cs" Link="Infrastructure\LibraryReceivingSqliteModelCustomizer.cs" />
+    <Compile Include="..\Shared\FinanceExternalPositionSqliteTestFunctions.cs" Link="Infrastructure\FinanceExternalPositionSqliteTestFunctions.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\ShikshaMitra.Application\ShikshaMitra.Application.csproj" />
     <ProjectReference Include="..\..\src\ShikshaMitra.EntityFrameworkCore\ShikshaMitra.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\ShikshaMitra.Domain.Tests\ShikshaMitra.Domain.Tests.csproj" />

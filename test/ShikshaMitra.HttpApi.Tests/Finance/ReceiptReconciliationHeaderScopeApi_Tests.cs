@@ -52,15 +52,17 @@ public class ReceiptReconciliationHeaderScopeApi_Tests(FinanceRoutingApiTestFact
 			await AssertAsync(restricted, url, "studentName", "equals", "Header Applicant", 1);
 			await AssertAsync(restricted, url + "&search=Header%20Applicant", "studentName", "contains", "Student", 0);
 			await AssertAsync(restricted, url + "&search=456789", "studentName", "contains", "Student", 1);
-			await AssertAsync(Client, Url(foreign, receipts), column, "greaterThan", 900, 0);
 			if (receipts)
 			{
+				await AssertAsync(Client, Url(foreign, receipts), column, "greaterThan", 900, 0);
 				await AssertAsync(restricted, url, "paymentMethodLabel", "equals", "Not recorded", 1);
 				await AssertAsync(restricted, url, "verificationStatus", "equals", "Receipt: LINKED-FINAL", 1);
 				await AssertAsync(restricted, url + $"&standardId={current.HiddenClassId}", column, "greaterThan", 900, 0);
 			}
 			else
 			{
+				using var foreignResponse = await Client.GetAsync(WithFilter(Url(foreign, receipts), column, "greaterThan", 900));
+				foreignResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 				await AssertAsync(restricted, url, "standardName", "equals", "Visible", 2);
 				await AssertAsync(restricted, url, "bankName", "equals", "Hidden payer bank", 0);
 			}
@@ -73,12 +75,17 @@ public class ReceiptReconciliationHeaderScopeApi_Tests(FinanceRoutingApiTestFact
 
 	private static async Task AssertAsync(HttpClient client, string url, string column, string type, object value, int count)
 	{
-		var filters = Uri.EscapeDataString(JsonSerializer.Serialize(new[] { new { column, type, value } }));
-		var response = await client.GetAsync(url + "&filters=" + filters);
+		using var response = await client.GetAsync(WithFilter(url, column, type, value));
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var result = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
 		result.GetProperty("totalCount").GetInt32().ShouldBe(count, column + "=" + value);
 		result.GetProperty("items").GetArrayLength().ShouldBe(count);
+	}
+
+	private static string WithFilter(string url, string column, string type, object value)
+	{
+		var filters = Uri.EscapeDataString(JsonSerializer.Serialize(new[] { new { column, type, value } }));
+		return url + "&filters=" + filters;
 	}
 
 	private async Task<Context> SeedAsync(Guid tenantId)
@@ -129,7 +136,7 @@ public class ReceiptReconciliationHeaderScopeApi_Tests(FinanceRoutingApiTestFact
 				var final = new FeePaymentReceipt(Guid.NewGuid()) { TenantId = tenantId, StudentId = studentId,
 					FeeCollectionTransactionId = tx.Id, AcademicYearId = year.Id, BoardId = board.Id, EducationMediumId = medium.Id,
 					ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = FeeReceiptScope.Fee, ReceiptNumber = standard.Id == visible.Id ? "LINKED-FINAL" : "LINKED-HIDDEN",
-					ReceiptDate = new DateOnly(2026, 6, 12), TotalPaidAmount = 1d };
+					ReceiptDate = new DateOnly(2026, 6, 12), TotalPaidAmount = 1m };
 				final.SetFinanceFeeAccount(accountId!.Value);
 				await Save(final);
 				linkedId = final.Id;
@@ -137,7 +144,7 @@ public class ReceiptReconciliationHeaderScopeApi_Tests(FinanceRoutingApiTestFact
 			var receipt = new FeePaymentReceipt(Guid.NewGuid()) { TenantId = tenantId, StudentId = studentId,
 				FeeCollectionTransactionId = tx.Id, AcademicYearId = year.Id, BoardId = board.Id, EducationMediumId = medium.Id,
 				ReceiptKind = FeeReceiptKind.ProvisionalFee, ReceiptScope = FeeReceiptScope.Fee, VerificationStatus = FeeReceiptVerificationStatus.PendingVerification,
-				ReceiptNumber = "HEADER-" + Guid.NewGuid().ToString("N")[..16], ReceiptDate = new DateOnly(2026, 6, 12), TotalPaidAmount = 999d, LinkedFinalReceiptId = linkedId };
+				ReceiptNumber = "HEADER-" + Guid.NewGuid().ToString("N")[..16], ReceiptDate = new DateOnly(2026, 6, 12), TotalPaidAmount = 999m, LinkedFinalReceiptId = linkedId };
 			if (accountId.HasValue) receipt.SetFinanceFeeAccount(accountId.Value);
 			await Save(receipt);
 		}

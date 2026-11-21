@@ -27,6 +27,8 @@ public sealed record AcademicNotificationManualPreviewDto(Guid? ReviewToken, Dat
 	IReadOnlyList<AcademicNotificationPreviewSampleDto> Samples, IReadOnlyList<string> BlockingIssues)
 {
 	public bool IsQueueWorkerEnabled { get; init; }
+	public bool IsSchoolQueuePaused { get; init; }
+	public IReadOnlyList<CommunicationChannelType> PausedChannels { get; init; } = [];
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
@@ -36,6 +38,10 @@ public sealed record AcademicNotificationOperationDto(Guid OperationId, Communic
 {
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public bool? IsQueueWorkerEnabled { get; init; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public bool? IsSchoolQueuePaused { get; init; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public IReadOnlyList<CommunicationChannelType>? PausedChannels { get; init; }
 }
 
 public sealed record AcademicNotificationApprovalReviewDto(bool CanApprove, int EligibleRecipientCount,

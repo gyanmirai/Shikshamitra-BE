@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
@@ -27,8 +28,9 @@ public sealed class NotificationQueueRepository(IDbContextProvider<ShikshaMitraD
 		ClaimAsync(NotificationQueueKind.Intent, now, batchSize, leaseDuration, cancellationToken);
 
 	public Task<IReadOnlyList<NotificationQueueClaim>> ClaimDispatchesAsync(DateTimeOffset now, int batchSize,
-		TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null) =>
-		ClaimAsync(NotificationQueueKind.Dispatch, now, batchSize, leaseDuration, cancellationToken, maxActivePerChannel);
+		TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null,
+		IReadOnlyList<CommunicationChannelType>? pausedChannels = null) =>
+		ClaimAsync(NotificationQueueKind.Dispatch, now, batchSize, leaseDuration, cancellationToken, maxActivePerChannel, pausedChannels);
 
 	public async Task<bool> RenewDispatchAsync(Guid dispatchId, Guid leaseId, DateTimeOffset now, TimeSpan leaseDuration,
 		CancellationToken cancellationToken)
@@ -40,13 +42,14 @@ public sealed class NotificationQueueRepository(IDbContextProvider<ShikshaMitraD
 	}
 
 	private async Task<IReadOnlyList<NotificationQueueClaim>> ClaimAsync(NotificationQueueKind kind,
-		DateTimeOffset now, int batchSize, TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null)
+		DateTimeOffset now, int batchSize, TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null,
+		IReadOnlyList<CommunicationChannelType>? pausedChannels = null)
 	{
 		var tenantId = RequireTenant();
 		var context = await contexts.GetDbContextAsync();
 		return await NotificationPostgresQueueClaims.ClaimAsync(context.Database.GetDbConnection(),
 			context.Database.CurrentTransaction?.GetDbTransaction(), tenantId, kind, now,
-			batchSize, leaseDuration, cancellationToken, maxActivePerChannel);
+			batchSize, leaseDuration, cancellationToken, maxActivePerChannel, pausedChannels);
 	}
 
 	private Guid RequireTenant() => currentTenant.Id is Guid tenantId && tenantId != Guid.Empty

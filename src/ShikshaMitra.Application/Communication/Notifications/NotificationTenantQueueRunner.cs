@@ -4,6 +4,7 @@ using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Volo.Abp;
 using Volo.Abp.Auditing;
@@ -20,7 +21,7 @@ public sealed class NotificationTenantQueueRunner(ICurrentTenant tenant, IUnitOf
 	INotificationQueueRepository queue, NotificationDispatchPlanner planner, INotificationDispatcher dispatcher,
 	NotificationDispatchHeartbeat heartbeat, NotificationLeaseRecoveryService recovery, NotificationOutcomeProjector projector,
 	WhatsAppProviderEventProcessor whatsappReceipts,
-	ILogger<NotificationTenantQueueRunner> logger) : ITransientDependency
+	ILogger<NotificationTenantQueueRunner> logger, IConfiguration configuration) : ITransientDependency
 {
 	public async Task RunAsync(int batchSize, CancellationToken cancellationToken)
 	{
@@ -43,7 +44,7 @@ public sealed class NotificationTenantQueueRunner(ICurrentTenant tenant, IUnitOf
 		for (var index = 0; index < batchSize; index++)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			var claim = await ClaimNextAsync(dispatch, cancellationToken);
+			var claim = await ClaimNextAsync(tenantId, dispatch, cancellationToken);
 			if (claim == null) return;
 			if (claim.TenantId != tenantId) throw new BusinessException(NotificationErrorCodes.TenantRequired);
 			try
@@ -77,11 +78,14 @@ public sealed class NotificationTenantQueueRunner(ICurrentTenant tenant, IUnitOf
 		}
 	}
 
-	private async Task<NotificationQueueClaim?> ClaimNextAsync(bool dispatch, CancellationToken cancellationToken)
+	private async Task<NotificationQueueClaim?> ClaimNextAsync(Guid tenantId, bool dispatch, CancellationToken cancellationToken)
 	{
+		if (NotificationQueueWorkerConfiguration.IsSchoolPaused(configuration, tenantId)) return null;
+		var pausedChannels = dispatch ? NotificationQueueWorkerConfiguration.ReadPausedChannels(configuration, tenantId) : [];
 		using var claim = units.Begin(requiresNew: true, isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted);
 		IReadOnlyList<NotificationQueueClaim> rows = dispatch
-			? await queue.ClaimDispatchesAsync(Now(), 1, NotificationDispatchHeartbeat.LeaseDuration, cancellationToken, maxActivePerChannel: 1)
+			? await queue.ClaimDispatchesAsync(Now(), 1, NotificationDispatchHeartbeat.LeaseDuration, cancellationToken,
+				maxActivePerChannel: 1, pausedChannels: pausedChannels.Length > 0 ? pausedChannels : null)
 			: await queue.ClaimIntentsAsync(Now(), 1, NotificationDispatchHeartbeat.LeaseDuration, cancellationToken);
 		await claim.CompleteAsync(cancellationToken);
 		return rows.SingleOrDefault();

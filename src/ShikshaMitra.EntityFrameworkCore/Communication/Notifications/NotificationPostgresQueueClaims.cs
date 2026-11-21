@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
 using Npgsql;
 
@@ -15,7 +17,8 @@ internal static class NotificationPostgresQueueClaims
 {
 	internal static async Task<IReadOnlyList<NotificationQueueClaim>> ClaimAsync(DbConnection connection,
 		DbTransaction? transaction, Guid tenantId, NotificationQueueKind kind, DateTimeOffset now,
-		int batchSize, TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null)
+		int batchSize, TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null,
+		IReadOnlyList<CommunicationChannelType>? pausedChannels = null)
 	{
 		if (connection is not NpgsqlConnection) throw new NotSupportedException("Notification queue claims require PostgreSQL.");
 		if (tenantId == Guid.Empty) throw new ArgumentException("A tenant is required.", nameof(tenantId));
@@ -26,6 +29,8 @@ internal static class NotificationPostgresQueueClaims
 			throw new ArgumentOutOfRangeException(nameof(maxActivePerChannel));
 		if (maxActivePerChannel.HasValue && transaction?.IsolationLevel != IsolationLevel.ReadCommitted)
 			throw new InvalidOperationException("Notification channel capacity requires a read committed transaction.");
+		var filterPaused = pausedChannels is { Count: > 0 };
+		if (filterPaused && kind != NotificationQueueKind.Dispatch) throw new ArgumentException("Only dispatches have channels.", nameof(pausedChannels));
 		var (table, dueColumn, firstState, secondState, processing, attemptSql) = kind switch
 		{
 			NotificationQueueKind.Intent => ("NotificationIntents", "DueAt", (int)NotificationIntentState.Ready,
@@ -48,6 +53,7 @@ internal static class NotificationPostgresQueueClaims
 				     WHERE active."TenantId" = @tenant AND active."Channel" = candidate."Channel"
 				       AND active."Status" = @processing AND active."IsDeleted" = false AND active."LeaseExpiresAt" > @now) < @maxActive
 				""" : "";
+			var pauseFilter = filterPaused ? """AND candidate."Channel" <> ALL (@pausedChannels)""" : "";
 			await using var command = connection.CreateCommand();
 			command.Transaction = transaction;
 			command.CommandText = $"""
@@ -56,6 +62,7 @@ internal static class NotificationPostgresQueueClaims
 				    WHERE "TenantId" = @tenant AND "IsDeleted" = false
 				      AND "Status" IN (@firstState, @secondState) AND "{dueColumn}" <= @now
 				      AND ("ExpiresAt" IS NULL OR "ExpiresAt" > @now)
+				      {pauseFilter}
 				      {capacity}
 				    ORDER BY "{dueColumn}", "Id" LIMIT @batch FOR UPDATE SKIP LOCKED
 				)
@@ -75,6 +82,7 @@ internal static class NotificationPostgresQueueClaims
 			Parameter(command, "expires", now.ToUniversalTime().Add(leaseDuration));
 			Parameter(command, "stamp", leaseId.ToString("N"));
 			if (maxActivePerChannel.HasValue) Parameter(command, "maxActive", maxActivePerChannel.Value);
+			if (filterPaused) Parameter(command, "pausedChannels", pausedChannels!.Select(channel => (int)channel).ToArray());
 			var claims = new List<NotificationQueueClaim>();
 			await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 			while (await reader.ReadAsync(cancellationToken))

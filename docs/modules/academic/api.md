@@ -108,7 +108,7 @@ The authenticated school account can call `GET /api/communication/notifications/
 
 `isQueueWorkerEnabled` reads the same server configuration as the dispatch and reminder workers. A missing or invalid setting reports `false`. The flag describes the API replica that answered the request and is independent of provider setup and worker health.
 
-The manual preview and confirmation responses also return `isQueueWorkerEnabled`. A confirmation replay reads the current flag and returns the existing operation. A changed pause setting is independent of recipient eligibility and leaves the review valid.
+The catalogue, manual preview and confirmation also report `isSchoolQueuePaused` and `pausedChannels` for the current school. These fields report live configuration separately from channel setup and recipient eligibility. A confirmation replay reads the current configuration and returns the existing operation. Updating a pause leaves a saved review valid.
 
 Available events have a registered source and a policy for viewing delivery history. Scheduled events also require a registered scanner. Unavailable entries cannot be enabled or sent manually. The catalogue returns `availabilityDetail` with the known source dependency or the existing workflow that covers the notice. Available entries return null for this field.
 

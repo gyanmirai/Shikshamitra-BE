@@ -63,6 +63,37 @@ public class NotificationQueueConcurrency_Tests(NotificationPostgresFixture fixt
 	}
 
 	[NotificationPostgresFact]
+	public async Task Paused_channels_hold_rows_without_attempts_and_do_not_block_another_school()
+	{
+		var school = Guid.NewGuid();
+		var other = Guid.NewGuid();
+		Guid heldEmail, push, otherEmail;
+		await using (var seed = fixture.CreateContext())
+		{
+			heldEmail = (await NotificationAccountPersistence_Tests.SeedDispatchAsync(seed, school)).Id;
+			push = (await NotificationAccountPersistence_Tests.SeedDispatchAsync(seed, school, CommunicationChannelType.WebPush)).Id;
+			otherEmail = (await NotificationAccountPersistence_Tests.SeedDispatchAsync(seed, other)).Id;
+		}
+		var now = DateTimeOffset.UtcNow.AddSeconds(1);
+		var leaseTime = TimeSpan.FromMinutes(5);
+		await using var connection = fixture.CreateConnection();
+		var allowed = await NotificationPostgresQueueClaims.ClaimAsync(connection, null, school, NotificationQueueKind.Dispatch,
+			now, 10, leaseTime, default, pausedChannels: [CommunicationChannelType.Email, CommunicationChannelType.WhatsApp]);
+		allowed.ShouldHaveSingleItem().Id.ShouldBe(push);
+		var isolated = await NotificationPostgresQueueClaims.ClaimAsync(connection, null, other, NotificationQueueKind.Dispatch,
+			now, 10, leaseTime, default);
+		isolated.ShouldHaveSingleItem().Id.ShouldBe(otherEmail);
+		await using var check = fixture.CreateContext();
+		var held = await check.Set<NotificationDispatch>().SingleAsync(x => x.Id == heldEmail);
+		held.Status.ShouldBe(NotificationDispatchState.Pending);
+		held.AttemptNumber.ShouldBe(0);
+		held.LeaseId.ShouldBeNull();
+		var resumed = await NotificationPostgresQueueClaims.ClaimAsync(connection, null, school, NotificationQueueKind.Dispatch,
+			now, 10, leaseTime, default);
+		resumed.ShouldHaveSingleItem().Id.ShouldBe(heldEmail);
+	}
+
+	[NotificationPostgresFact]
 	public async Task Renewal_extends_only_the_current_unexpired_lease_and_fences_stale_row_updates()
 	{
 		var tenant = Guid.NewGuid();

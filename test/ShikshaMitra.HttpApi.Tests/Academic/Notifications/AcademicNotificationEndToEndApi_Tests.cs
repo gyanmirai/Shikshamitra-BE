@@ -227,10 +227,38 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 		(await InboxAsync(unrelated)).Items.ShouldBeEmpty();
 
 		mailbox.RecipientRejections[OtherEmail] = "550 Mailbox unavailable";
+		var configuration = fixture.Services.GetRequiredService<IConfiguration>();
+		var schoolQueue = $"Notifications:QueueWorker:Tenants:{School:N}";
+		configuration[$"{schoolQueue}:Paused"] = "true";
 		var rejectionReview = await PostAsync<AcademicNotificationManualPreviewDto>(staff, $"{Root}/manual/preview",
 			request with { Channels = familyChannels });
+		rejectionReview.IsSchoolQueuePaused.ShouldBeTrue();
+		var confirmedRejection = new ConfirmAcademicNotificationManualDto(rejectionReview.ReviewToken!.Value, "acceptance-smtp-rejection");
 		var rejectedOperation = await PostAsync<AcademicNotificationOperationDto>(staff, $"{Root}/manual/send",
-			new ConfirmAcademicNotificationManualDto(rejectionReview.ReviewToken!.Value, "acceptance-smtp-rejection"), HttpStatusCode.Accepted);
+			confirmedRejection, HttpStatusCode.Accepted);
+		rejectedOperation.IsSchoolQueuePaused.ShouldBe(true);
+
+		await RunQueueAsync(fixture);
+		(await InboxAsync(learner)).Items.ShouldHaveSingleItem();
+		mailbox.Accepted.Count.ShouldBe(4);
+
+		configuration[$"{schoolQueue}:Paused"] = "false";
+		configuration[$"{schoolQueue}:Channels:Email:Paused"] = "true";
+		var pausedCatalogue = await staff.GetFromJsonAsync<AcademicNotificationCatalogueDto>($"{Root}/catalogue");
+		pausedCatalogue!.IsSchoolQueuePaused.ShouldBeFalse();
+		pausedCatalogue.PausedChannels.ShouldBe([CommunicationChannelType.Email]);
+		var pauseReplay = await PostAsync<AcademicNotificationOperationDto>(staff, $"{Root}/manual/send",
+			confirmedRejection, HttpStatusCode.Accepted);
+		pauseReplay.OperationId.ShouldBe(rejectedOperation.OperationId);
+		pauseReplay.IsSchoolQueuePaused.ShouldBe(false);
+		pauseReplay.PausedChannels.ShouldBe([CommunicationChannelType.Email]);
+		await RunQueueAsync(fixture);
+		var heldHistory = await HistoryAsync(staff, sample.Homework, rejectedOperation.OperationId);
+		heldHistory.Count(x => x.Channel == CommunicationChannelType.InApp && x.Status == NotificationDispatchState.Delivered).ShouldBe(2);
+		heldHistory.Count(x => x.Channel == CommunicationChannelType.Email && x.Status == NotificationDispatchState.Pending).ShouldBe(3);
+		mailbox.Accepted.Count.ShouldBe(4);
+
+		configuration[$"{schoolQueue}:Channels:Email:Paused"] = "false";
 		await RunQueueAsync(fixture);
 		var rejectionHistory = await HistoryAsync(staff, sample.Homework, rejectedOperation.OperationId);
 		rejectionHistory.Count(x => x.Channel == CommunicationChannelType.InApp && x.Status == NotificationDispatchState.Delivered)

@@ -3,7 +3,7 @@ module: academic
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-11-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -88,5 +88,9 @@ Queue ages are in seconds. A missing age means there is no matching work. A chan
 ## Pause Academic notifications
 
 Set `Notifications:QueueWorker:Enabled` to false on all API replicas to stop new worker turns. A turn already processing work may finish. Check Delivery History for queued, in-progress and provider-accepted work. The pause leaves the existing queue and delivery evidence in place. Source capture and reviewed confirmation can continue creating queued work while the workers are paused.
+
+Platform operators can set `Notifications:QueueWorker:Tenants:<tenantIdN>:Paused` to `true` to hold new intent and delivery claims and reminder scans for one school. Set `Notifications:QueueWorker:Tenants:<tenantIdN>:Channels:<channel>:Paused` to `true` to hold just that channel. Use the school's tenant ID without hyphens and a channel name of `InApp`, `Email`, `WhatsApp`, or `WebPush`. Apply the same values across worker replicas and set the scoped key to `false` to resume it.
+
+Scoped pauses preserve queued state and attempt counts. Already claimed work may finish. Workers continue receipt reconciliation, lease recovery, and normal expiry. The staff catalogue and reviewed-send responses report the current pause settings for the school.
 
 Disable the affected automatic rules, including scoped overrides, if the school also needs to stop capturing new notices. Cancel eligible pending operations through Delivery History when their work should end. Provider-accepted messages stay in history. Confirm any application rollback against the applied schema and retain the additive tables and business records. Before resuming workers, review remaining queued work and the current rules, recipients, templates and providers.

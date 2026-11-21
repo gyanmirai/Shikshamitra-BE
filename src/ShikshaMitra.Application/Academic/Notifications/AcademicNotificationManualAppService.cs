@@ -60,7 +60,9 @@ public class AcademicNotificationManualAppService(AcademicNotificationAccessServ
 		return new(review?.Id, review?.ExpiresAt, summary.EligibleRecipientCount, plan.RequiresApproval, summary.Channels,
 			summary.Samples, summary.BlockingIssues)
 		{
-			IsQueueWorkerEnabled = NotificationQueueWorkerConfiguration.IsEnabled(configuration)
+			IsQueueWorkerEnabled = NotificationQueueWorkerConfiguration.IsEnabled(configuration),
+			IsSchoolQueuePaused = NotificationQueueWorkerConfiguration.IsSchoolPaused(configuration, context.TenantId),
+			PausedChannels = NotificationQueueWorkerConfiguration.ReadPausedChannels(configuration, context.TenantId)
 		};
 	}
 
@@ -176,7 +178,9 @@ public class AcademicNotificationManualAppService(AcademicNotificationAccessServ
 
 	private AcademicNotificationOperationDto Map(CommunicationCampaign operation) => new(operation.Id, operation.Status)
 	{
-		IsQueueWorkerEnabled = NotificationQueueWorkerConfiguration.IsEnabled(configuration)
+		IsQueueWorkerEnabled = NotificationQueueWorkerConfiguration.IsEnabled(configuration),
+		IsSchoolQueuePaused = NotificationQueueWorkerConfiguration.IsSchoolPaused(configuration, operation.TenantId),
+		PausedChannels = NotificationQueueWorkerConfiguration.ReadPausedChannels(configuration, operation.TenantId)
 	};
 	private DateTimeOffset Now() => new(clock.Now.ToUniversalTime());
 }

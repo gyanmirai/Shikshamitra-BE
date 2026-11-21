@@ -24,7 +24,7 @@ public class AcademicNotificationCatalogueAppService(IRepository<IdentityUser, G
 {
 	public virtual async Task<AcademicNotificationCatalogueDto> GetAsync(CancellationToken cancellationToken = default)
 	{
-		await AcademicNotificationIdentityAccess.RequireAsync(CurrentTenant, CurrentUser, users, scopes, permissions,
+		var (tenantId, _, _) = await AcademicNotificationIdentityAccess.RequireAsync(CurrentTenant, CurrentUser, users, scopes, permissions,
 			ShikshaMitraSubmodulePermissions.Academics.Notification.View, cancellationToken);
 		var events = catalogue.GetAll().Select(definition =>
 		{
@@ -40,6 +40,11 @@ public class AcademicNotificationCatalogueAppService(IRepository<IdentityUser, G
 			new(CommunicationChannelType.Email, await email.FindAsync(cancellationToken) != null),
 			new(CommunicationChannelType.WhatsApp, await whatsApp.FindAsync(cancellationToken) != null),
 			new(CommunicationChannelType.WebPush, push.Read() != null)
-		]) { IsQueueWorkerEnabled = NotificationQueueWorkerConfiguration.IsEnabled(configuration) };
+		])
+		{
+			IsQueueWorkerEnabled = NotificationQueueWorkerConfiguration.IsEnabled(configuration),
+			IsSchoolQueuePaused = NotificationQueueWorkerConfiguration.IsSchoolPaused(configuration, tenantId),
+			PausedChannels = NotificationQueueWorkerConfiguration.ReadPausedChannels(configuration, tenantId)
+		};
 	}
 }

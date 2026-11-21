@@ -17,6 +17,8 @@ public sealed record AcademicNotificationCatalogueDto(IReadOnlyList<AcademicNoti
 	IReadOnlyList<AcademicNotificationChannelDto> Channels)
 {
 	public bool IsQueueWorkerEnabled { get; init; }
+	public bool IsSchoolQueuePaused { get; init; }
+	public IReadOnlyList<CommunicationChannelType> PausedChannels { get; init; } = [];
 }
 public sealed record InitializeAcademicNotificationDefaultsDto(string EventKey);
 

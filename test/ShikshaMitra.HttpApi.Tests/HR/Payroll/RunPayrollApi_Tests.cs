@@ -48,6 +48,47 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 
 	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Payroll_review_rejects_the_batch_until_missing_attendance_is_recorded()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		const string month = "2026-06";
+		var joining = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+		var ready = await EmployeeTestHelper.CreateEmployeeAsync(Client, "PayrollReviewPresent", dateOfJoining: joining);
+		var blocked = await EmployeeTestHelper.CreateEmployeeAsync(Client, "PayrollReviewMissingAttendance", dateOfJoining: joining);
+		await AssignSalaryStructureAsync(ready.Id, "PayrollReviewPresent");
+		await AssignSalaryStructureAsync(blocked.Id, "PayrollReviewMissingAttendance");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, ready.Id);
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, blocked.Id);
+		await SeedAttendanceOnDateAsync(ready.Id, new DateOnly(2026, 6, 4));
+
+		var first = await GetPayrollPreviewAsync(month, forceRefresh: true);
+		first.Items.Single(x => x.EmployeeId == ready.Id).IssueCodes.ShouldNotContain(IssueCodes.NoAttendance);
+		first.Items.Single(x => x.EmployeeId == blocked.Id).IssueCodes.ShouldContain(IssueCodes.NoAttendance);
+
+		using var rejected = await Client.PostAsJsonAsync(ReviewUrl, new PayrollRunReviewRequest
+		{
+			Month = month, PreviewRunId = LastPreviewId(month), EmployeeIds = [ready.Id, blocked.Id]
+		}, JsonOptions);
+		var rejectedBody = await rejected.Content.ReadAsStringAsync();
+		rejected.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rejectedBody);
+		rejectedBody.ShouldContain(HRErrorCodes.PayrollReviewAttendanceRequired);
+		await AssertPayrollReviewInvalidatedAsync(ready.Id, month);
+		await AssertPayrollReviewInvalidatedAsync(blocked.Id, month);
+
+		await SeedAttendanceOnDateAsync(blocked.Id, new DateOnly(2026, 6, 4));
+		var refreshed = await GetPayrollPreviewAsync(month, forceRefresh: true);
+		refreshed.Items.Single(x => x.EmployeeId == blocked.Id).IssueCodes.ShouldNotContain(IssueCodes.NoAttendance);
+		using var reviewed = await Client.PostAsJsonAsync(ReviewUrl, new PayrollRunReviewRequest
+		{
+			Month = month, PreviewRunId = LastPreviewId(month), EmployeeIds = [ready.Id, blocked.Id]
+		}, JsonOptions);
+		var reviewedBody = await reviewed.Content.ReadAsStringAsync();
+		reviewed.StatusCode.ShouldBe(HttpStatusCode.OK, reviewedBody);
+		(await reviewed.Content.ReadFromJsonAsync<PayrollLockResponse>(JsonOptions))!.EmployeesProcessed.ShouldBe(2);
+	}
+
+	[PayrollWorkflowPostgresFact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Get_Payroll_Preview_Without_500()
 	{
 		var response = await RequestPreviewAsync($"{BaseUrl}?month=2026-05&page=0&pageSize=100");

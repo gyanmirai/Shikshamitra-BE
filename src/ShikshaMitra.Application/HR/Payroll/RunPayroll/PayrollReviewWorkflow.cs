@@ -58,6 +58,20 @@ public class PayrollReviewWorkflow(
 				.WithData("employeeIds", missingSnapshotEmployeeIds);
 		}
 
+		var issuesByEmployee = targetEmployees.ToDictionary(
+			employee => employee.Id,
+			employee => JsonSerializer.Deserialize<List<string>>(snapshotByEmployee[employee.Id].IssueCodesJson) ?? []);
+		var missingAttendanceIds = issuesByEmployee
+			.Where(entry => entry.Value.Contains(IssueCodes.NoAttendance))
+			.Select(entry => entry.Key)
+			.ToList();
+		if (missingAttendanceIds.Count > 0)
+		{
+			throw new BusinessException(HRErrorCodes.PayrollReviewAttendanceRequired)
+				.WithData("month", request.Month)
+				.WithData("employeeIds", missingAttendanceIds);
+		}
+
 		var reviewedAt = Clock.Now;
 		var updated = 0;
 
@@ -67,7 +81,7 @@ public class PayrollReviewWorkflow(
 				continue;
 			var evidence = snapshotByEmployee[employee.Id];
 			var profile = evidence.StatutoryApplicationJson == null ? null : JsonSerializer.Deserialize<ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryApplication>(evidence.StatutoryApplicationJson)?.Profile;
-			var warnings = JsonSerializer.Deserialize<List<string>>(evidence.IssueCodesJson) ?? [];
+			var warnings = issuesByEmployee[employee.Id];
 			if (existingReview is not null)
 			{
 				existingReview.Refresh(actorUserId, reviewedAt, request.PreviewRunId);

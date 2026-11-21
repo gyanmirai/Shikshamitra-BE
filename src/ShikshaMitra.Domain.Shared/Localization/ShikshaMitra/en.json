@@ -727,6 +727,7 @@
         "HR:Payroll:030026": "Resolve critical payroll setup issues before locking payroll.",
         "HR:Payroll:030027": "Payroll adjustments can be changed only after the payroll row is reviewed and before it is locked.",
         "HR:Payroll:030028": "Remove payroll-only adjustments before removing review from this payroll row.",
+        "HR:Payroll:ReviewAttendanceRequired": "Record attendance and recalculate payroll before reviewing these staff.",
         "HR:Calendar:040005": "Calendar item with ID '{itemId}' was not found.",
         "ShikshaMitra:DueFee:10001": "Due fees have already been generated for this student.",
         "ShikshaMitra:DefaultAttendancePolicyRequired": "This attendance policy is the only active default for the selected academic year. Set another active attendance policy as default before clearing this policy's default status or archiving it.",

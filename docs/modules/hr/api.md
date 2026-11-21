@@ -286,6 +286,8 @@ Finalized employees are excluded before recalculation.
 
 Active and Paused schools use the approval boundary for payroll issuance.
 Self-finalization requires the school setting and current Add, Submit and Lock permissions.
+Mark Reviewed rejects the entire request with `HR:Payroll:ReviewAttendanceRequired` when any selected preview row has `NO_ATTENDANCE`.
+Record attendance and recalculate before marking the affected rows reviewed.
 If evidence changes, the assigned approver's finalization attempt returns the whole batch for fresh review and releases its claims.
 An earlier finalized batch keeps its original payslips.
 Review sheets display Pending finalization, and a new staff claim permanently revokes earlier selection exports.

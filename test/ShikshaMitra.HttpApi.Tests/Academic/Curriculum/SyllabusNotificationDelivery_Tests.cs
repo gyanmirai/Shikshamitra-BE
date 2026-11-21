@@ -93,7 +93,7 @@ public sealed class SyllabusNotificationDelivery_Tests(ShikshaMitraApiTestFactor
 		});
 
 		var route = $"{ChapterPath}?standardId={classId}&subjectId={subjectId}";
-		var startDate = DateTimeOffset.UtcNow.AddDays(2);
+		var startDate = new DateTimeOffset(DateTime.UtcNow.Date.AddDays(2).AddTicks(7));
 		var endDate = startDate.AddDays(3);
 		using var created = await Client.PostAsJsonAsync(route, new[]
 		{
@@ -112,6 +112,7 @@ public sealed class SyllabusNotificationDelivery_Tests(ShikshaMitraApiTestFactor
 				x.TenantId == School && x.EventKey == Published && x.SourceId == chapter.Id)).ShouldHaveSingleItem();
 			var source = await services.GetRequiredService<NotificationIntentSourceReader>().LoadAsync(publication, DateTimeOffset.UtcNow, CancellationToken.None);
 			source.Runtime.SourceScope.DivisionId.ShouldBe(divisionId);
+			source.ExclusionCode.ShouldBeNull();
 			source.CurrentRecipients.ShouldBe([new("Student", StudentId: learner)]);
 			source.Runtime.Configuration.GuardianMode.ShouldBe(NotificationGuardianMode.PrimaryOnly);
 			source.Runtime.Configuration.IncludeStudentAccount.ShouldBeFalse();

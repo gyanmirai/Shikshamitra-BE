@@ -45,7 +45,7 @@ internal static class SyllabusNotificationRevision
 		var content = JsonSerializer.SerializeToUtf8Bytes(new
 		{
 			chapter.ChapterNumber, chapter.ChapterName, chapter.Description,
-			Start = chapter.ChapterStartTime.UtcDateTime, End = chapter.ChapterEndTime.UtcDateTime,
+			Start = PersistedUtcTime(chapter.ChapterStartTime), End = PersistedUtcTime(chapter.ChapterEndTime),
 			chapter.UnitName, chapter.TermName, chapter.Topic, chapter.LearningOutcomes,
 			chapter.EstimatedTeachingDays, chapter.EstimatedPeriods, chapter.DifficultyLevel, chapter.BloomLevel,
 			chapter.Tags, chapter.ClassActivities, chapter.CompletionCriteria, chapter.AssessmentMethod,
@@ -54,6 +54,13 @@ internal static class SyllabusNotificationRevision
 			Documents = chapter.Documents.Where(x => !x.IsDeleted).Select(x => x.BlobName).Distinct().Order(StringComparer.Ordinal)
 		});
 		return Convert.ToHexString(SHA256.HashData(content));
+	}
+
+	private static DateTime PersistedUtcTime(DateTimeOffset value)
+	{
+		// PostgreSQL retains microseconds. Capture and reload must hash the same stored instant.
+		var utcTicks = value.UtcTicks;
+		return new DateTime(utcTicks - utcTicks % TimeSpan.TicksPerMicrosecond, DateTimeKind.Utc);
 	}
 
 	private static string Property(Guid chapterId) => $"AcademicSyllabusNotice:{chapterId:N}";

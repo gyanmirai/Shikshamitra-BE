@@ -15,6 +15,24 @@ namespace ShikshaMitra.Academic.Curriculum;
 public sealed class SyllabusNotificationEvents_Tests : SubjectTeacherReassignmentTestBase
 {
 	[Fact]
+	public void Syllabus_revision_uses_persisted_timestamp_precision()
+	{
+		var subject = new AssignedSubject(Guid.NewGuid(), TenantId, StandardId, SubjectId, "SYL", SubjectStatus.Published);
+		var start = new DateTimeOffset(2026, 11, 21, 10, 0, 0, TimeSpan.FromMinutes(330));
+		var end = start.AddDays(2);
+		var chapter = new AssignedSubjectChapter(Guid.NewGuid(), subject.Id, 1, "Synthetic chapter",
+			start.AddTicks(7), end.AddTicks(9)) { PublishStatus = "Published", Visibility = "Parents" };
+		var original = SyllabusNotificationRevision.Content(subject, chapter).ShouldNotBeNull();
+
+		chapter.ChapterStartTime = start.ToUniversalTime();
+		chapter.ChapterEndTime = end.ToUniversalTime();
+		SyllabusNotificationRevision.Content(subject, chapter).ShouldBe(original);
+
+		chapter.ChapterEndTime = end.AddTicks(TimeSpan.TicksPerMicrosecond);
+		SyllabusNotificationRevision.Content(subject, chapter).ShouldNotBe(original);
+	}
+
+	[Fact]
 	public async Task Syllabus_only_notifies_for_the_saved_publication_and_material_revision()
 	{
 		using var actor = AsAdmin();

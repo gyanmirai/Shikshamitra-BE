@@ -3,7 +3,7 @@ module: academic
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-11-21
+updated_on: 2026-11-22
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -66,7 +66,7 @@ No recovery path reseeds identities, restores grants or resets school records.
 
 1. Apply the additive notification migrations before deploying the backend and website together. Keep `Notifications:QueueWorker:Enabled` false on all API replicas during the initial rollout. Academic Notifications shows the paused worker configuration for the API replica answering its catalogue request. Staff can check the catalogue and template editor while the dispatch and reminder workers are paused.
 2. Use an isolated test school for the first send. Grant Notification View to reviewers, Add to people who manage rules or templates, and Send to people who confirm messages from Academic records. Each source still requires its owning permission and current school scope.
-3. Initialize and preview the draft template variants. Publish the intended variants per recipient, channel and language. An external channel needs its school provider setup. WhatsApp also needs an approved binding and consent, and website push needs a supported device with an active subscription.
+3. Verify that the backend's `App:ClientUrl` points to the HTTPS website for the environment. The renderer checks links in sample previews and outgoing messages against that website's origin. Initialize and preview the draft template variants, then publish the intended variants per recipient, channel and language. An external channel needs its school provider setup. WhatsApp also needs an approved binding and consent, and website push needs a supported device with an active subscription.
 4. Enable the queue worker in the test environment. Start with one published Homework reminder or notice for a designated class and test contacts. Verify the primary guardian, any selected eligible extra relationships or student account, channel exclusions, and each recorded delivery outcome. Use the [notification tests](testing.md#notification-catalogue-coverage) for catalogue evidence.
 5. Enable the approved rules by school, event and scope after provider and device checks. Review inherited rules at the intended class or division. Expand by event family after its source and audience checks. The [catalogue contract](api.md#catalogue-availability) lists events that still need an owning workflow.
 

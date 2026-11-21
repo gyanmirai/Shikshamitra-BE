@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Communication.Notifications;
 
 namespace ShikshaMitra.Academic.Notifications;
@@ -23,7 +24,8 @@ internal static class LearningTaskNotificationContent
 		Dictionary<string, NotificationVariableValueDto> common, DateTimeOffset dueAt) =>
 		new(common, StringComparer.Ordinal)
 		{
-			["due_date"] = new(NotificationVariableType.DateTime, dueAt.ToString("O", CultureInfo.InvariantCulture)),
+			["due_date"] = new(NotificationVariableType.DateTime,
+				LearningTaskScheduleTimestamp.ToSchoolTime(dueAt.UtcDateTime).ToString("O", CultureInfo.InvariantCulture)),
 		};
 
 	internal static NotificationSourceSnapshot Unavailable() =>

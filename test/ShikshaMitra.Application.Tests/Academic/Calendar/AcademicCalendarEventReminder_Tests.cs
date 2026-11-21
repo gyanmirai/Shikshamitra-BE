@@ -95,7 +95,9 @@ public sealed class AcademicCalendarEventReminder_Tests : SubjectTeacherReassign
 			source.Runtime.SourceScope.DivisionId.ShouldBe(DivisionId);
 			source.CurrentRecipients.Select(x => x.EmployeeId!.Value).ShouldBe([OldTeacher, OtherTeacher], ignoreOrder: true);
 			source.Snapshot!.Variables["event_date"].Value.ShouldBe(date.ToString("yyyy-MM-dd"));
-			DateTimeOffset.Parse(source.Snapshot.Variables["event_start"].Value!).ShouldBe(date.AddHours(10));
+			var start = DateTimeOffset.Parse(source.Snapshot.Variables["event_start"].Value!);
+			start.ShouldBe(date.AddHours(10));
+			start.Offset.ShouldBe(date.Offset);
 			source.Snapshot.Variables.Values.ShouldNotContain(x => x.Value == "Private organizer notes");
 		});
 

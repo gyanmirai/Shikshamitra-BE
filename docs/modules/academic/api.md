@@ -72,6 +72,8 @@ Changed and Withdrawn remain unavailable for Homework and Assignment. Editing is
 
 An enabled Homework Due rule uses the school time zone and working days to queue reminders for each published division deadline. The worker scans current and legacy schedules by school, then rechecks the exact division, deadline and eligible learners. A deadline change invalidates queued work for the old occurrence. The reminder expires at the deadline.
 
+The `due_date` template field uses the same Asia/Kolkata date and time as the Homework and Assignment schedules. The cutoff and expiry still use the saved deadline instant.
+
 Assignment Due follows the same school-day timing. It reads the publication state and deadline of each saved assignment division. Only the assigned elective cohort is eligible where required, and submitted or excused work is excluded using submissions tied to that assignment. Manual review requires Assessment and Feedback View plus access to the assignment.
 
 For both due events, each scan can add newly eligible learners to the same division and deadline operation until the deadline. The worker keeps previously captured recipients in history and applies the current rule and quiet hours to new recipients. Cancelling the operation also stops future additions to that occurrence.
@@ -201,7 +203,7 @@ The saved rule selects eligible staff and families within those scopes. Recipien
 
 Material edits to a published holiday or vacation through `PUT /api/academic/calendar-days/{id}` can queue `Academic.Calendar.HolidayChanged`. A vacation range edit uses the date and class rows saved together. The previous audience receives its original dates and the revised audience receives the new dates. Templates can use `event_date` for the first date and `holiday_end_date` for the last date. Draft and description-only edits stay silent.
 
-An enabled `Academic.Calendar.EventReminder` rule schedules reminders for active events on published calendars. The selected division's school days determine the configured reminder date and time. The reminder expires when the event starts, or when its school-local date begins for an all-day event. Cancellation, publication changes and material event edits invalidate earlier pending reminders. Templates can use `event_date` and `event_start`. The reminder runs through the scheduler.
+An enabled `Academic.Calendar.EventReminder` rule schedules reminders for active events on published calendars. The selected division's school days determine the configured reminder date and time. The reminder expires when the event starts, or when its school-local date begins for an all-day event. Cancellation, publication changes and material event edits invalidate earlier pending reminders. Templates can use `event_date` and `event_start` in the school's calendar time zone. The reminder runs through the scheduler.
 
 ### Weekly Academic summary
 

@@ -77,7 +77,8 @@ public sealed class AcademicCalendarEventReminderSource(AcademicCalendarPublicat
 			["event_title"] = new(NotificationVariableType.Text, record.Day.Title),
 			["event_date"] = new(NotificationVariableType.Date, record.Day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
 			["location"] = new(NotificationVariableType.Text, record.Day.Venue),
-			["event_start"] = new(NotificationVariableType.DateTime, starts.ToString("O", CultureInfo.InvariantCulture))
+			["event_start"] = new(NotificationVariableType.DateTime,
+				TimeZoneInfo.ConvertTime(starts, zone).ToString("O", CultureInfo.InvariantCulture))
 		};
 		return new(true, null, context.SourceRevision, Link, variables, slices.SelectMany(x => x.Recipients).Distinct().ToArray(),
 			starts, AudienceSlices: slices);

@@ -189,7 +189,7 @@ Run `ExamTimetableNotificationPostgresProbe_Tests` with a fresh loopback `academ
 
 The calendar date-change suite also covers published holiday and vacation edits. The hosted workflow moves a vacation range between classes and verifies that the old and revised audiences receive their own first and last dates.
 
-`AcademicCalendarEventReminder_Tests` uses the real transactional scheduler for a published event with a holiday on the immediately preceding date. It checks the scheduled time on the previous open school day, repeated scan deduplication, exact scope and cancellation before delivery.
+`AcademicCalendarEventReminder_Tests` uses the real transactional scheduler for a published event with a holiday on the immediately preceding date. It checks the scheduled time on the previous open school day, repeated scan deduplication, exact scope, the school-local offset in the template start time and cancellation before delivery.
 
 `AcademicSummaryNotification_Tests` verifies the school-local weekly window across daylight saving, saved and published submission eligibility, personalized family counts and distinct staff totals. It covers repeat scans, schedule changes, restricted family email, and per-delivery revalidation for the selected child.
 
@@ -216,6 +216,8 @@ Template test-send tests use synthetic draft content and the authenticated accou
 `WhatsAppTemplateBindingApi_Tests` uses a synthetic provider. The hosted cases check that context resolves the configured route for the exact published revision, requires both permission groups and reports when the provider account changes. The response excludes the account configuration and credentials.
 
 Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AcademicNotificationEndToEndApi_Tests"` against a fresh loopback `academic_tests_*` database set through `ACADEMIC_PERF_TEST_POSTGRES`. The hosted test uses a saved Homework record and PostgreSQL queue claims. The existing MailKit sender connects to a loopback mailbox to verify the SMTP recipient, rendered message, provider acceptance and permanent rejection. WhatsApp and Web Push use captured HTTP requests to verify consent, the published template binding, the signed receipt and the encrypted push payload. The inbox tests cover the delivered item and the exclusion of an unlinked guardian. The reviewed sends verify primary guardian routing and the explicit inclusion of an additional saved guardian and a linked student. Real providers and physical devices require separate acceptance.
+
+The reviewed Homework send checks that the inbox, loopback email and captured WhatsApp template all display the same school-local deadline, including when the date changes at midnight.
 
 ## Delivery retry
 

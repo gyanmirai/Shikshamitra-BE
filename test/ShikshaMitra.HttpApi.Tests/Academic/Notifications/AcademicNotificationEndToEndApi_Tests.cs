@@ -104,7 +104,7 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 			(x.RecipientKind == "Guardian" && Channels.Contains(x.Channel)) ||
 			(x.RecipientKind == "StudentAccount" && x.Channel is CommunicationChannelType.InApp or CommunicationChannelType.Email)))
 		{
-			var draft = item.Channel is CommunicationChannelType.InApp or CommunicationChannelType.Email
+			var draft = item.Channel is CommunicationChannelType.InApp or CommunicationChannelType.Email or CommunicationChannelType.WhatsApp
 				? await SaveTemplateBodyAsync(staff, item)
 				: item;
 			published.Add(await PostAsync<NotificationTemplateDto>(staff, $"{Root}/templates/{draft.TemplateId}/publish",
@@ -173,6 +173,8 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 		firstMail.Message.To.Mailboxes.Single().Address.ShouldBe(PrimaryEmail);
 		firstMail.Message.Subject.ShouldNotBeNullOrEmpty();
 		firstMail.Message.HtmlBody.ShouldContain(TaskTitle);
+		var localDeadline = sample.DueAt.ToOffset(TimeSpan.FromMinutes(330)).ToString("dd MMM yyyy, HH:mm", CultureInfo.GetCultureInfo("en"));
+		firstMail.Message.HtmlBody.ShouldContain($"Due {localDeadline}.");
 		firstMail.Message.HtmlBody.ShouldContain("https://school.example.invalid/");
 		var whatsapp = fixture.WhatsApp.Requests.ShouldHaveSingleItem();
 		using (var payload = JsonDocument.Parse(whatsapp.Body))
@@ -180,7 +182,9 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 			payload.RootElement.GetProperty("to").GetString().ShouldBe(PrimaryPhone.TrimStart('+'));
 			payload.RootElement.GetProperty("type").GetString().ShouldBe("template");
 			payload.RootElement.GetProperty("template").GetProperty("name").GetString().ShouldBe(DeliveryApiFactory.TemplateName);
-			payload.RootElement.GetProperty("template").GetProperty("components").GetArrayLength().ShouldBeGreaterThan(0);
+			var components = payload.RootElement.GetProperty("template").GetProperty("components");
+			components.EnumerateArray().SelectMany(component => component.GetProperty("parameters").EnumerateArray())
+				.Select(parameter => parameter.GetProperty("text").GetString()).ShouldContain(localDeadline);
 		}
 		var push = fixture.Push.Requests.ShouldHaveSingleItem();
 		push.Endpoint.ShouldBe(new Uri(PushEndpoint));
@@ -188,6 +192,7 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 		push.Body.Length.ShouldBeGreaterThan(0);
 		var firstInbox = (await InboxAsync(primary)).Items.ShouldHaveSingleItem();
 		firstInbox.Body.ShouldContain(TaskTitle);
+		firstInbox.Body.ShouldContain($"Due {localDeadline}.");
 		(await InboxAsync(learner)).Items.ShouldBeEmpty();
 		(await InboxAsync(unrelated)).Items.ShouldBeEmpty();
 
@@ -295,7 +300,7 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 		var type = await services.GetRequiredService<HomeworkTypeManager>().CreateAsync(fixture.SeededMediumId, "Delivery test homework");
 		var homework = new HomeworkAssignmentEntity(sample.Homework, fixture.SeededStandardId, subject.Id, TaskTitle, "",
 			type.Id, SubmissionType.OnlineText, School, educationMediumId: fixture.SeededMediumId);
-		homework.AddDivisionSchedule(new(Guid.NewGuid(), homework.Id, division.Id, null, DateTime.UtcNow.AddDays(3), School));
+		homework.AddDivisionSchedule(new(Guid.NewGuid(), homework.Id, division.Id, null, sample.DueAt.UtcDateTime, School));
 		homework.PublishAll();
 		await InsertAsync(services, homework);
 		var learner = await CreateLearnerAsync(sample.Learner, "River", PrimaryEmail, PrimaryPhone);
@@ -430,7 +435,7 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 	private static async Task<NotificationTemplateDto> SaveTemplateBodyAsync(HttpClient staff, NotificationTemplateDto template)
 	{
 		var body = template.Body + (template.Channel == CommunicationChannelType.Email
-			? "<p>Homework: {{task_title}}.</p>" : "\nHomework: {{task_title}}.");
+			? "<p>Homework: {{task_title}}. Due {{due_date}}.</p>" : "\nHomework: {{task_title}}. Due {{due_date}}.");
 		using var response = await staff.PutAsJsonAsync($"{Root}/templates/{template.TemplateId}/draft",
 			new UpdateNotificationTemplateDraftDto(template.RevisionId, template.Subject, body, template.ConcurrencyStamp));
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
@@ -447,6 +452,7 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 	private sealed class SchoolSample
 	{
 		public Guid Division { get; set; }
+		public DateTimeOffset DueAt { get; } = new(DateTime.UtcNow.Date.AddDays(3).AddHours(18).AddMinutes(30));
 		public Guid Homework { get; } = Guid.NewGuid();
 		public Guid Learner { get; } = Guid.NewGuid();
 		public Guid OtherLearner { get; } = Guid.NewGuid();

@@ -134,7 +134,11 @@ public partial class LearningTaskNotificationEligibility_Tests
 			var source = (await ReadSourcesAsync(services, scheduledScheduleId)).ShouldHaveSingleItem();
 			source.Runtime.SourceScope.DivisionId.ShouldBe(laterDivision);
 			source.CurrentRecipients.ShouldBe([laterTeacher]);
-			source.Snapshot!.Variables["due_date"].Type.ShouldBe(NotificationVariableType.DateTime);
+			var publishedDeadline = source.Snapshot!.Variables["due_date"];
+			publishedDeadline.Type.ShouldBe(NotificationVariableType.DateTime);
+			var shown = DateTimeOffset.Parse(publishedDeadline.Value!);
+			shown.UtcDateTime.ShouldBe(deadline);
+			shown.Offset.ShouldBe(TimeSpan.FromMinutes(330));
 
 			await services.GetRequiredService<IRepository<TeacherSubjectAllocation, Guid>>().DeleteAsync(allocationId, autoSave: true);
 			(await ReadSourcesAsync(services, scheduledScheduleId)).ShouldHaveSingleItem().CurrentRecipients.ShouldBeEmpty();

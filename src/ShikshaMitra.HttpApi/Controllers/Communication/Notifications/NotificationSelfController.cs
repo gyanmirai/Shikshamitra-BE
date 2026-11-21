@@ -49,6 +49,10 @@ public class NotificationSelfController(INotificationInboxAppService inbox, INot
 	public Task<WebPushSubscriptionDto> RegisterPushAsync([FromBody] RegisterWebPushSubscriptionDto input, CancellationToken cancellationToken) =>
 		push.RegisterAsync(input, cancellationToken);
 
+	[HttpGet("push/subscriptions/{id:guid}")]
+	public Task<WebPushSubscriptionStatusDto> GetPushSubscriptionStatusAsync(Guid id, CancellationToken cancellationToken) =>
+		push.GetStatusAsync(id, cancellationToken);
+
 	[HttpDelete("push/subscriptions/{id:guid}")]
 	public Task DisablePushAsync(Guid id, CancellationToken cancellationToken) => push.DisableAsync(id, cancellationToken);
 }

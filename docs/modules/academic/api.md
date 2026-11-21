@@ -100,6 +100,10 @@ The authenticated school account owns its preferences. The endpoints below are r
 
 Account channel restrictions apply to linked student deliveries as well. A student setting can narrow those channels further. Rule eligibility, channel consent and device registration govern actual delivery.
 
+### Personal browser subscriptions
+
+The authenticated school account can call `GET /api/communication/notifications/me/push/subscriptions/{id}` to read the current registration state. The response contains only `isEnabled` and uses `Cache-Control: no-store`. A missing registration or one owned by a different account or school returns `404`.
+
 ### Catalogue availability
 
 Available events have a registered source and a policy for viewing delivery history. Scheduled events also require a registered scanner. Unavailable entries cannot be enabled or sent manually. The catalogue returns `availabilityDetail` with the known source dependency or the existing workflow that covers the notice. Available entries return null for this field.

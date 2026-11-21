@@ -161,6 +161,36 @@ public class NotificationSelfApi_Tests_Push(NotificationSelfPushApiFactory facto
 	}
 
 	[Fact]
+	public async Task Subscription_status_exposes_only_the_current_accounts_enabled_state()
+	{
+		using var owner = CreateClientAs(await CreateUserAsync());
+		using var registration = await owner.PostAsJsonAsync($"{Route}/subscriptions", Input(Guid.NewGuid(), Endpoint()));
+		registration.StatusCode.ShouldBe(HttpStatusCode.OK, await registration.Content.ReadAsStringAsync());
+		var id = (await registration.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+		var path = $"{Route}/subscriptions/{id}";
+
+		using var anonymous = CreateAnonymousClient();
+		using var unauthenticated = await anonymous.GetAsync(path);
+		unauthenticated.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+		using var other = CreateClientAs(await CreateUserAsync());
+		using var denied = await other.GetAsync(path);
+		denied.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+		using var enabled = await owner.GetAsync(path);
+		enabled.StatusCode.ShouldBe(HttpStatusCode.OK);
+		(enabled.Headers.CacheControl?.NoStore).ShouldBe(true);
+		var status = await enabled.Content.ReadFromJsonAsync<JsonElement>();
+		status.EnumerateObject().Select(property => property.Name).ShouldBe(new[] { "isEnabled" });
+		status.GetProperty("isEnabled").GetBoolean().ShouldBeTrue();
+
+		using var deletion = await owner.DeleteAsync(path);
+		deletion.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+		using var disabled = await owner.GetAsync(path);
+		disabled.StatusCode.ShouldBe(HttpStatusCode.OK);
+		(await disabled.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("isEnabled").GetBoolean().ShouldBeFalse();
+	}
+
+	[Fact]
 	public async Task Another_user_cannot_delete_a_subscription_but_its_owner_can_disable_it_idempotently()
 	{
 		var owner = await CreateUserAsync(); using var client = CreateClientAs(owner);

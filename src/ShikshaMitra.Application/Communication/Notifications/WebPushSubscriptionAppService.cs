@@ -31,6 +31,16 @@ public class WebPushSubscriptionAppService(NotificationSelfIdentity identity, We
 		return keys == null ? new(false, null, null, NotificationErrorCodes.ProviderUnavailable) : new(true, keys.PublicKey, keys.Version);
 	}
 
+	public virtual async Task<WebPushSubscriptionStatusDto> GetStatusAsync(Guid id, CancellationToken cancellationToken = default)
+	{
+		var owner = await identity.RequireAsync(cancellationToken);
+		var query = await subscriptions.GetQueryableAsync();
+		return await AsyncExecuter.FirstOrDefaultAsync(query
+			.Where(x => x.Id == id && x.TenantId == owner.TenantId && x.UserId == owner.UserId && !x.IsDeleted)
+			.Select(x => new WebPushSubscriptionStatusDto(x.IsEnabled)), cancellationToken)
+			?? throw new EntityNotFoundException(typeof(WebPushSubscription), id);
+	}
+
 	[UnitOfWork(true)]
 	public virtual async Task<WebPushSubscriptionDto> RegisterAsync(RegisterWebPushSubscriptionDto input, CancellationToken cancellationToken = default)
 	{

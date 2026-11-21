@@ -279,7 +279,7 @@ dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~Notific
 ```
 
 The provider fixtures cover signed encrypted requests, delivery-time DNS checks, rejection, throttling, registration expiry and account changes.
-The HTTP tests verify that the subscription status returns only the enabled flag for the current account and disallows anonymous or unrelated-account reads.
+The HTTP tests verify that the subscription status returns only the enabled flag for the current account and disallows anonymous or unrelated-account reads. They check that unusable provider origins leave the channel unconfigured and prevent subscription records from being saved, even with valid VAPID keys.
 The key-ring test reloads the same directory after rotating the Data Protection key and reads the original browser subscription from a fresh service provider.
 Production acceptance requires replica and restart verification with the deployed key repository, plus an actual notification on supported desktop and mobile browsers.
 

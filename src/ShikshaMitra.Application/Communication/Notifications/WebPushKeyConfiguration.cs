@@ -23,7 +23,7 @@ public sealed class WebPushKeyConfiguration(IConfiguration configuration) : ITra
 		if (!string.IsNullOrEmpty(subject) && !ValidSubject(subject)) return null;
 		if (!WebPushKeyEncoding.ValidPublicKey(publicKey) || WebPushKeyEncoding.Decode(privateKey, 32) is not byte[] secret ||
 			string.IsNullOrWhiteSpace(version) || version.Length > 64 || version.Any(x => !char.IsAsciiLetterOrDigit(x) && x is not ('.' or '-' or '_')) ||
-			!configuration.GetSection("Notifications:WebPush:AllowedOrigins").GetChildren().Any()) return null;
+			!WebPushEndpointValidator.ReadAllowedOrigins(configuration).Any()) return null;
 		var bytes = WebPushKeyEncoding.Decode(publicKey, 65)!;
 		try {
 			using var signing = ECDsa.Create(new ECParameters { Curve = ECCurve.NamedCurves.nistP256, D = secret,

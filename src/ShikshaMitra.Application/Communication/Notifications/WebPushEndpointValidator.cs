@@ -26,9 +26,7 @@ public sealed class WebPushEndpointValidator(IConfiguration configuration, IWebP
 		if (string.IsNullOrWhiteSpace(endpoint) || endpoint.Length > 2048 || endpoint.Any(char.IsControl) || endpoint.Contains('\\') ||
 			!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps ||
 			uri.UserInfo.Length != 0 || uri.Fragment.Length != 0 || uri.HostNameType != UriHostNameType.Dns || uri.Host.EndsWith('.') ||
-			!configuration.GetSection("Notifications:WebPush:AllowedOrigins").GetChildren().Any(x =>
-				Uri.TryCreate(x.Value, UriKind.Absolute, out var allowed) && allowed.Scheme == Uri.UriSchemeHttps &&
-				allowed.UserInfo.Length == 0 && allowed.AbsolutePath == "/" && allowed.Query.Length == 0 && allowed.Fragment.Length == 0 &&
+			!ReadAllowedOrigins(configuration).Any(allowed =>
 				string.Equals(allowed.IdnHost, uri.IdnHost, StringComparison.OrdinalIgnoreCase) && allowed.Port == uri.Port))
 			throw new BusinessException(Invalid);
 		IPAddress[] addresses;
@@ -39,6 +37,21 @@ public sealed class WebPushEndpointValidator(IConfiguration configuration, IWebP
 		}
 		if (addresses.Length == 0 || addresses.Any(x => !IsPublic(x))) throw new BusinessException(Invalid);
 		return new(uri, addresses.Distinct().ToArray());
+	}
+
+	internal static IEnumerable<Uri> ReadAllowedOrigins(IConfiguration configuration)
+	{
+		foreach (var entry in configuration.GetSection("Notifications:WebPush:AllowedOrigins").GetChildren())
+		{
+			var value = entry.Value;
+			if (string.IsNullOrWhiteSpace(value) || value.Length > 2048 || value.Any(char.IsControl) || value.Contains('\\'))
+				continue;
+
+			if (Uri.TryCreate(value, UriKind.Absolute, out var origin) && origin.Scheme == Uri.UriSchemeHttps &&
+				origin.HostNameType == UriHostNameType.Dns && !origin.IsLoopback && !origin.Host.EndsWith('.') && origin.Port > 0 &&
+				origin.UserInfo.Length == 0 && origin.AbsolutePath == "/" && origin.Query.Length == 0 && origin.Fragment.Length == 0)
+				yield return origin;
+		}
 	}
 
 	private static bool IsPublic(IPAddress address)

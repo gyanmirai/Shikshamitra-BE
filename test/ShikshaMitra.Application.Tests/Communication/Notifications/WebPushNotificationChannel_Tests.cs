@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -32,7 +33,7 @@ public partial class WebPushNotificationChannel_Tests : IDisposable
 	public WebPushNotificationChannel_Tests()
 	{
 		var config = new ConfigurationBuilder().AddInMemoryCollection(
-			new System.Collections.Generic.Dictionary<string, string?> {
+			new Dictionary<string, string?> {
 				["Notifications:WebPush:AllowedOrigins:0"] = "https://push.example.test"
 			}).Build();
 		_dns.ResolveAsync("push.example.test", Arg.Any<CancellationToken>()).Returns(new[] { IPAddress.Parse("8.8.8.8") });
@@ -47,6 +48,32 @@ public partial class WebPushNotificationChannel_Tests : IDisposable
 		_client = new(_endpoints, factory, clock, _cache);
 		_subscription = new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Endpoint,
 			new(PublicKey(CreateKeys()), Encode(RandomNumberGenerator.GetBytes(16))), "local-v1");
+	}
+
+	[Theory]
+	[InlineData(null, false)]
+	[InlineData("", false)]
+	[InlineData("http://push.example.test", false)]
+	[InlineData("https://push.example.test/subscription", false)]
+	[InlineData("https://push.example.test/?token=value", false)]
+	[InlineData("https://push.example.test/#fragment", false)]
+	[InlineData("https://user@push.example.test", false)]
+	[InlineData("https://127.0.0.1", false)]
+	[InlineData("https://localhost", false)]
+	[InlineData("https://push.example.test.", false)]
+	[InlineData("https://push.example.test:0", false)]
+	[InlineData("https://push.example.test", true)]
+	[InlineData("https://push.example.test:8443/", true)]
+	public void Website_push_requires_a_usable_origin_even_with_valid_keys(string? origin, bool expected)
+	{
+		var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+			["Notifications:WebPush:PublicKey"] = PublicKey(_senderKeys),
+			["Notifications:WebPush:PrivateKey"] = Encode(_senderKeys.D!),
+			["Notifications:WebPush:KeyVersion"] = "test-v1",
+			["Notifications:WebPush:AllowedOrigins:0"] = origin
+		}).Build();
+
+		(new WebPushKeyConfiguration(config).Read() != null).ShouldBe(expected);
 	}
 
 	[Fact]

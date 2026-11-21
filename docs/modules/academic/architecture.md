@@ -85,9 +85,11 @@ Provider acceptance records Sent, and the delivery result stays independent of u
 | Setting | Deployment responsibility |
 |---|---|
 | `Notifications:WebPush:PublicKey`, `PrivateKey`, `KeyVersion` | Load a stable P-256 key pair from server configuration and expose only the public key and version through the authenticated API. Change the version when rotating the pair so browsers can renew their subscriptions. |
-| `Notifications:WebPush:AllowedOrigins` | List the exact HTTPS origins of the browser push services in use, including the configured port. |
+| `Notifications:WebPush:AllowedOrigins` | List the exact HTTPS origins of the browser push services in use, including any custom port. Supply a DNS hostname for each origin and leave out credentials, paths, queries and fragments. |
 | `Notifications:WebPush:Subject` | Supply an optional HTTPS or mail address URI for the operator contact in VAPID tokens. |
 | ASP.NET Core Data Protection | Use one protected, persistent key repository and a stable application discriminator across web and worker replicas in each environment. Restrict access to deployment identities and retain earlier keys after rotation so existing registrations stay readable. |
+
+The Academic channel catalogue and the authenticated public-key API both require at least one usable origin before reporting push as configured. The server checks the endpoint's exact origin and resolves it to public addresses during registration and delivery.
 
 Before enabling delivery in production, verify that a registration created by one replica can be read after a restart and across replicas using the deployed key repository.
 Keep separate Data Protection repositories for environments that should be isolated. [Configure ASP.NET Core Data Protection](https://learn.microsoft.com/en-us/aspnet/core/security/data-protection/configuration/overview?view=aspnetcore-9.0)

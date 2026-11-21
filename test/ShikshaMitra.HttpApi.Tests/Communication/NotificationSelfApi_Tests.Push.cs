@@ -139,6 +139,40 @@ public class NotificationSelfApi_Tests_Push(NotificationSelfPushApiFactory facto
 	}
 
 	[Fact]
+	public async Task Unusable_origins_report_unconfigured_and_reject_registration_before_persisting()
+	{
+		var user = await CreateUserAsync();
+		using var client = CreateClientAs(user);
+		var configuration = Factory.Services.GetRequiredService<IConfiguration>();
+		const string first = "Notifications:WebPush:AllowedOrigins:0";
+		const string second = "Notifications:WebPush:AllowedOrigins:1";
+		var previousFirst = configuration[first];
+		var previousSecond = configuration[second];
+		try
+		{
+			configuration[first] = "https://push.example.test/subscription";
+			configuration[second] = "http://ordinary.example.test";
+			using var publicKey = await client.GetAsync($"{Route}/public-key");
+			publicKey.StatusCode.ShouldBe(HttpStatusCode.OK);
+			var setup = await publicKey.Content.ReadFromJsonAsync<JsonElement>();
+			setup.GetProperty("isConfigured").GetBoolean().ShouldBeFalse();
+			(setup.TryGetProperty("publicKey", out var key) && key.ValueKind != JsonValueKind.Null).ShouldBeFalse();
+			setup.GetProperty("reasonCode").GetString().ShouldBe(NotificationErrorCodes.ProviderUnavailable);
+
+			using var registration = await client.PostAsJsonAsync($"{Route}/subscriptions", Input(Guid.NewGuid(), Endpoint()));
+			registration.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+			var error = await registration.Content.ReadFromJsonAsync<JsonElement>();
+			error.GetProperty("errorCode").GetString().ShouldBe(NotificationErrorCodes.ProviderUnavailable);
+			await WithDbAsync(async db => (await db.Set<WebPushSubscription>().CountAsync(x => x.UserId == user)).ShouldBe(0));
+		}
+		finally
+		{
+			configuration[first] = previousFirst;
+			configuration[second] = previousSecond;
+		}
+	}
+
+	[Fact]
 	public async Task Duplicate_registration_is_idempotent_owned_encrypted_and_secret_free_in_responses()
 	{
 		var user = await CreateUserAsync(); using var client = CreateClientAs(user);

@@ -93,7 +93,8 @@ public sealed class ExamNotificationSource(IExamRepository exams, ExamNotificati
 		var content = firstStart.Select(x => new NotificationSourceRecipientContentDto(x.Key,
 			new Dictionary<string, NotificationVariableValueDto>(variables, StringComparer.Ordinal)
 			{
-				["exam_date"] = new(NotificationVariableType.DateTime, x.Value.ToString("O", CultureInfo.InvariantCulture))
+				["exam_date"] = new(NotificationVariableType.DateTime,
+					ExamScheduleStatusResolver.ToInstitutionTime(x.Value).ToString("O", CultureInfo.InvariantCulture))
 			}, Link)).ToArray();
 		return new(true, null, revision, Link, variables, firstStart.Keys.ToArray(), occurrence ?? schedule.Max(x => x.End), slices, content);
 	}

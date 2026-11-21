@@ -165,6 +165,8 @@ The hosted timetable workflow also verifies the automatic day reminder, includin
 
 `ExamNotificationEvents_Tests` exercises the real exam publish action and the due scheduler. It covers repetition, class and division staff assignments, separate locked-elective sittings, school-local timing, calendar closure suppression and Schedule Exam View for history.
 
+Run `ExamTimetableNotificationPostgresProbe_Tests` with a fresh loopback `academic_tests_*` database. The hosted queue delivers a rendered inbox notice to each primary guardian with their child's own sitting in the timetable's time zone. A closure suppresses the pending reminder for the first sitting. The next open sitting still sends one reminder to its applicable family.
+
 `SeatingNotificationEvents_Tests` uses the existing exam and seating publication actions in both orders. It verifies repeat publication, one-learner seat projection, saved timing, student-only template selection, email exclusion and unavailable exam-staff delivery. The hosted exam tests verify the seating history permission. Run `SeatingNotificationPostgresProbe_Tests` against a fresh disposable PostgreSQL fixture to verify concurrent exam and seating publication queues one operation.
 
 `CurriculumNotificationEvents_Tests` covers class teacher confirmation, repeated saves, silent drafts, replacement, removal, generic outgoing content and suppression of older revisions. `ClassTeacherNotificationDelivery_Tests` verifies the canonical save API with an assignment created before notice metadata existed and checks staff history permissions. `ClassTeacherNotificationPostgres_Tests` runs the workflow with concurrent confirmations against a disposable PostgreSQL database.

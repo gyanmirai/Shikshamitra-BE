@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
@@ -20,6 +21,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Students;
+using ShikshaMitra.Students.Portal;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -30,8 +32,10 @@ using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes;
 using Shouldly;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -47,14 +51,23 @@ public sealed class ExamNotificationEvents_Tests(ShikshaMitraApiTestFactory fact
 	private static readonly Guid Actor = Guid.Parse(TestAuthHandler.TestUserId);
 
 	[Fact]
-	public async Task Publishing_an_exam_and_its_reminders_follow_the_released_subject_audience()
+	public Task Publishing_an_exam_and_its_reminders_follow_the_released_subject_audience() => PublishExamAsync();
+
+	internal async Task PublishExamAsync(ExamNotificationTestClock? deliveryClock = null)
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		var examId = Guid.NewGuid();
 		var studentA = Guid.NewGuid();
 		var studentB = Guid.NewGuid();
-		var today = DateTime.UtcNow.Date;
+		var guardianA = Guid.NewGuid();
+		var guardianB = Guid.NewGuid();
+		var today = (deliveryClock?.Now ?? DateTime.UtcNow).Date;
 		var monday = today.AddDays((8 - (int)today.DayOfWeek) % 7 + 7);
+		var firstDate = monday.ToString("dd MMM yyyy", CultureInfo.GetCultureInfo("en"));
+		var secondDate = monday.AddDays(1).ToString("dd MMM yyyy", CultureInfo.GetCultureInfo("en"));
+		const string examName = "Exam notice fixture";
+		const string scheduleTitle = "Exam schedule";
+		const string reminderTitle = "Exam reminder";
 		Employee teacher = null!;
 		Employee primary = null!;
 		NotificationRuleScope scope = null!;
@@ -93,10 +106,24 @@ public sealed class ExamNotificationEvents_Tests(ShikshaMitraApiTestFactory fact
 			}
 			foreach (var (student, choice) in new[] { (studentA, art.Id), (studentB, music.Id), (Guid.NewGuid(), Guid.Empty) })
 			{
-				await InsertAsync(services, new Student(student, TenantId, "Sample", null, "Learner", year.Id, board.Id,
-					medium.Id, stage.Id, standard.Id, division.Id, status: StudentLifeCycleStatusEnum.Enrolled));
+				var learner = new Student(student, TenantId, "Sample", null, "Learner", year.Id, board.Id,
+					medium.Id, stage.Id, standard.Id, division.Id, status: StudentLifeCycleStatusEnum.Enrolled);
+				if (deliveryClock != null && choice != Guid.Empty)
+				{
+					var guardianId = student == studentA ? guardianA : guardianB;
+					var email = $"exam-guardian-{guardianId:N}@example.invalid";
+					learner.UpdateFamilyInfo(null, new("Exam guardian", null, null, email, null, null, null, null, null, null, null, null, null), null, []);
+					StudentFamilyContactSelection.Select(learner, "mother");
+					var guardian = new IdentityUser(guardianId, $"exam-guardian-{guardianId:N}", email, TenantId);
+					guardian.SetEmailConfirmed(true);
+					await services.GetRequiredService<IIdentityUserRepository>().InsertAsync(guardian, autoSave: true);
+				}
+				await InsertAsync(services, learner);
 				await InsertAsync(services, StudentEnrollment.Create(Guid.NewGuid(), TenantId, student, year.Id, standard.Id, division.Id));
 				if (choice == Guid.Empty) continue;
+				if (deliveryClock != null)
+					await InsertAsync(services, new StudentPortalAccountLink(Guid.NewGuid(), TenantId, student,
+						student == studentA ? guardianA : guardianB, "guardian", "mother", Actor));
 				var selection = new StudentElectiveSelection(Guid.NewGuid(), TenantId, student, group.Id, choice, medium.Id);
 				selection.LockSelection();
 				await InsertAsync(services, selection);
@@ -105,7 +132,7 @@ public sealed class ExamNotificationEvents_Tests(ShikshaMitraApiTestFactory fact
 			allocation.Teachers.Add(new(allocation.Id, teacher.Id));
 			await InsertAsync(services, allocation);
 
-			var exam = new Exam(examId, type.Id, "Exam notice fixture", standard.Id, TenantId, scale.Id);
+			var exam = new Exam(examId, type.Id, examName, standard.Id, TenantId, scale.Id);
 			exam.AddDivision(Guid.NewGuid(), division.Id);
 			exam.AddSubject(new(Guid.NewGuid(), examId, art.Id, monday, monday.AddHours(10), monday.AddHours(11), 100, 35, gradeScalingId: scale.Id));
 			exam.AddSubject(new(Guid.NewGuid(), examId, music.Id, monday.AddDays(1), monday.AddDays(1).AddHours(10),
@@ -121,7 +148,8 @@ public sealed class ExamNotificationEvents_Tests(ShikshaMitraApiTestFactory fact
 					var templateId = Guid.NewGuid();
 					await InsertAsync(services, new CommunicationTemplate(templateId, TenantId) { TemplateName = key + "." + audience });
 					var version = new CommunicationTemplateRevision(Guid.NewGuid(), TenantId, templateId, 1, key, audience,
-						CommunicationChannelType.InApp, "en", "Exam schedule", "Open the school inbox.", 1);
+						CommunicationChannelType.InApp, "en", key == Published ? scheduleTitle : reminderTitle,
+						"{{exam_name}} starts at {{exam_date}}.", 1);
 					version.Publish(Actor, DateTimeOffset.UtcNow);
 					await InsertAsync(services, version);
 					templates.Add(templateId);
@@ -146,6 +174,14 @@ public sealed class ExamNotificationEvents_Tests(ShikshaMitraApiTestFactory fact
 		var staff = new NotificationRecipientRefDto("AssignedTeacher", UserId: Actor, EmployeeId: teacher.Id);
 		var classTeacher = new NotificationRecipientRefDto("AssignedTeacher", UserId: primary.UserId, EmployeeId: primary.Id);
 		var intent = await CheckAsync(Published, [new("Student", studentA), new("Student", studentB), staff, classTeacher]);
+		if (deliveryClock != null)
+		{
+			await RunQueueAsync();
+			(await ReadInboxAsync(guardianA)).Single(x => x.Title == scheduleTitle).Body
+				.ShouldBe($"{examName} starts at {firstDate}, 10:00.");
+			(await ReadInboxAsync(guardianB)).Single(x => x.Title == scheduleTitle).Body
+				.ShouldBe($"{examName} starts at {secondDate}, 10:00.");
+		}
 		using (var viewer = Factory.CreateClient())
 		{
 			viewer.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, ShikshaMitraSubmodulePermissions.Academics.Notification.View);
@@ -184,6 +220,38 @@ public sealed class ExamNotificationEvents_Tests(ShikshaMitraApiTestFactory fact
 			var reader = services.GetRequiredService<NotificationIntentSourceReader>();
 			(await reader.LoadAsync(reminder, cutoff, CancellationToken.None)).CurrentRecipients.ShouldBeEmpty();
 		});
+		if (deliveryClock != null)
+		{
+			deliveryClock.Now = cutoff.UtcDateTime;
+			await RunQueueAsync();
+			(await ReadInboxAsync(guardianA)).ShouldNotContain(x => x.Title == reminderTitle);
+			(await ReadInboxAsync(guardianB)).ShouldNotContain(x => x.Title == reminderTitle);
+			await InSchoolAsync(async services =>
+				(await services.GetRequiredService<IRepository<NotificationIntent, Guid>>().GetAsync(reminder.Id))
+					.Status.ShouldBe(NotificationIntentState.Cancelled));
+			deliveryClock.Now = cutoff.AddDays(1).UtcDateTime;
+			await RunQueueAsync();
+			await RunQueueAsync();
+			(await ReadInboxAsync(guardianA)).ShouldNotContain(x => x.Title == reminderTitle);
+			(await ReadInboxAsync(guardianB)).Single(x => x.Title == reminderTitle).Body
+				.ShouldBe($"{examName} starts at {secondDate}, 10:00.");
+		}
+
+		async Task RunQueueAsync()
+		{
+			using var workers = Factory.Services.CreateScope();
+			var services = workers.ServiceProvider;
+			using var school = services.GetRequiredService<ICurrentTenant>().Change(TenantId, "Synthetic school");
+			await services.GetRequiredService<NotificationTenantQueueRunner>().RunAsync(20, CancellationToken.None);
+		}
+
+		async Task<IReadOnlyList<NotificationInboxItemDto>> ReadInboxAsync(Guid guardian)
+		{
+			using var personal = CreateClientAs(guardian);
+			personal.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Guardian");
+			var response = await personal.GetFromJsonAsync<PagedResultDto<NotificationInboxItemDto>>("/api/communication/notifications/me/inbox", JsonOptions);
+			return response!.Items;
+		}
 
 		async Task ScanAsync(DateTimeOffset now)
 		{
@@ -208,7 +276,7 @@ public sealed class ExamNotificationEvents_Tests(ShikshaMitraApiTestFactory fact
 				captured = notices.MaxBy(x => x.OccurredAt)!;
 				var outcome = await services.GetRequiredService<NotificationIntentSourceReader>().LoadAsync(captured, DateTimeOffset.UtcNow, CancellationToken.None);
 				outcome.CurrentRecipients.ToHashSet().SetEquals(expected).ShouldBeTrue();
-				outcome.Snapshot!.RecipientContent!.ShouldAllBe(x => x.Variables.ContainsKey("exam_date"));
+				outcome.Snapshot!.RecipientContent!.ShouldAllBe(x => x.Variables["exam_date"].Value!.EndsWith("+05:30", StringComparison.Ordinal));
 			});
 			return captured;
 		}

@@ -3,7 +3,7 @@ module: academic
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-20
+updated_on: 2026-11-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -301,6 +301,8 @@ Template test-send accepts only `revisionId` and `concurrencyStamp`. It renders 
 Template test status and history are available to the staff member who queued the test while they have Notification View and access to the template. Read the operation using the returned ID, then pass that ID and its event, template ID and `Academic.NotificationTemplateTest` source type to history. These operations expose delivery evidence without recipient destinations or message content.
 
 History takes `eventKey`, `sourceType`, `sourceId`, optional `operationId` and `state`, and standard `skipCount` and `maxResultCount` pagination. Staff see rows for their authorized source scopes. Whole-operation status and exclusions recorded before dispatch require access to every scope represented by that operation.
+
+Operation status and pending approval results expose `createdAt` in UTC. For a reviewed send, it records the sender's original confirmation time and stays the same through approval. The operation records release and approval separately in `publishedAt` and `approvedAt`.
 
 History keeps provider acceptance, delivery, read, failure, skips and unknown acceptance distinct. It returns recipient references, timestamps, and recognized reason codes. Message bodies, destinations and raw provider references or errors stay private.
 

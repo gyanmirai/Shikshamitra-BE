@@ -33,7 +33,7 @@ public class AcademicNotificationHistoryAppService(AcademicNotificationAccessSer
 			manual.IsConfiguredApprover(tenantId, actorId) && await access.CanUseStaffActionsAsync() &&
 			await reviews.IsAssignedAsync(tenantId, operationId, actorId, cancellationToken);
 		return new(operation.Id, authorized.Definition.EventKey, operation.SourceType!, operation.SourceId!.Value,
-			operation.Status, operation.ApprovalRequired, AcademicNotificationHistoryRows.Utc(operation.CreatedAt),
+			operation.Status, operation.ApprovalRequired, operation.CreatedAt,
 			operation.PublishedAt, operation.ScheduledAt, operation.ApprovedAt, deliveries, outcomes, excluded)
 		{
 			CanReviewApproval = canReviewApproval, ApprovalRejected = operation.ApprovalRejected,

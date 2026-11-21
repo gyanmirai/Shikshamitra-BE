@@ -24,8 +24,12 @@ public sealed class AcademicNotificationOperationAccess(AcademicNotificationAcce
 	NotificationTemplateRevisionService templates, AcademicNotificationCatalogue catalogue) : ITransientDependency
 {
 	internal sealed record Operation(Guid Id, string? SourceType, Guid? SourceId, CommunicationCampaignStatus Status,
-		bool ApprovalRequired, DateTime CreatedAt, DateTimeOffset? PublishedAt, DateTimeOffset? ScheduledAt,
-		DateTimeOffset? ApprovedAt, bool ApprovalRejected);
+		bool ApprovalRequired, DateTime AuditCreatedAt, DateTimeOffset? ConfirmedAt, DateTimeOffset? PublishedAt,
+		DateTimeOffset? ScheduledAt, DateTimeOffset? ApprovedAt, bool ApprovalRejected)
+	{
+		public DateTimeOffset CreatedAt => (ConfirmedAt ?? (ApprovalRequired ? null : PublishedAt)
+			?? AcademicNotificationHistoryRows.Utc(AuditCreatedAt)).ToUniversalTime();
+	}
 	internal sealed record HistoricalIntent(Guid Id, Guid OperationId, string EventKey, string RuntimeJson,
 		NotificationIntentState State, string? ReasonCode, Guid? ActorUserId);
 
@@ -34,8 +38,11 @@ public sealed class AcademicNotificationOperationAccess(AcademicNotificationAcce
 	internal async Task<AuthorizedOperation> RequireAsync(Guid operationId, Guid? targetIntentId, Guid tenantId,
 		UserScopeContext callerScope, CancellationToken cancellationToken, Guid? templateTestViewerId = null)
 	{
+		var confirmationTimes = (await receipts.GetQueryableAsync())
+			.Where(x => x.TenantId == tenantId && !x.IsDeleted && x.OperationId == operationId);
 		var operation = await queries.SingleOrDefaultAsync((await OwnedOperationsAsync(tenantId)).Where(x => x.Id == operationId)
 			.Select(x => new Operation(x.Id, x.SourceEntityType, x.SourceEntityId, x.Status, x.ApprovalRequired, x.CreationTime,
+				confirmationTimes.Select(review => review.ConsumedAt).FirstOrDefault(),
 				x.PublishedAt, x.ScheduledAt, x.ApprovedAt, x.Status == CommunicationCampaignStatus.Cancelled &&
 					x.RejectionReason == AcademicNotificationManualOperations.ApprovalRejectionReason)), cancellationToken)
 			?? throw new EntityNotFoundException(typeof(CommunicationCampaign), operationId);
@@ -97,7 +104,7 @@ public sealed class AcademicNotificationOperationAccess(AcademicNotificationAcce
 				if (operation.Record.Status != CommunicationCampaignStatus.PendingApproval) continue;
 				if (visible.Count == pageSize) return new(visible, visible[^1].OperationId);
 				visible.Add(new(candidate.Id, operation.Definition.EventKey,
-					AcademicNotificationHistoryRows.Utc(operation.Record.CreatedAt), candidate.EligibleRecipientCount));
+					operation.Record.CreatedAt, candidate.EligibleRecipientCount));
 			}
 			if (batch.Count < scanBatch) return new(visible, null);
 			cursor = batch[^1].Id;

@@ -78,7 +78,7 @@ public class AcademicNotificationHistoryPostgres_Tests(NotificationPostgresFixtu
 		const string sourceType = "Academic.Homework";
 		const string eventKey = AcademicNotificationEventKeys.HomeworkPublished;
 		var protection = new EphemeralDataProtectionProvider();
-		var now = DateTimeOffset.UtcNow;
+		var now = new DateTimeOffset(2026, 11, 21, 10, 0, 0, TimeSpan.Zero);
 		for (var index = 1; index <= 15; index++)
 		{
 			var campaign = new CommunicationCampaign(new Guid(index, 0, 0, new byte[8]),
@@ -86,7 +86,7 @@ public class AcademicNotificationHistoryPostgres_Tests(NotificationPostgresFixtu
 			{
 				CampaignType = NotificationCampaignTypes.Academic, SourceModule = CommunicationSourceModule.Academic,
 				SourceEntityType = sourceType, SourceEntityId = index == 1 ? Guid.NewGuid() : source,
-				ApprovalRequired = true, EligibleRecipientCount = 101, CreationTime = now.UtcDateTime,
+				ApprovalRequired = true, EligibleRecipientCount = 101, CreationTime = now.UtcDateTime.AddMinutes(330),
 				Status = index == 15 ? CommunicationCampaignStatus.Queued : CommunicationCampaignStatus.PendingApproval
 			};
 			var review = new NotificationSendReview(Guid.NewGuid(), campaign.TenantId!.Value, actor, "digest", now.AddMinutes(10));
@@ -115,6 +115,7 @@ public class AcademicNotificationHistoryPostgres_Tests(NotificationPostgresFixtu
 		var scope = new UserScopeContext { TenantId = tenant, UserId = approver, IsAdmin = true };
 		var first = await sut.ReadPendingApprovalsAsync(tenant, approver, scope, null, default);
 		first.Items.Select(x => x.OperationId).ShouldBe(Enumerable.Range(2, 10).Select(i => new Guid(i, 0, 0, new byte[8])));
+		first.Items.ShouldAllBe(x => x.CreatedAt == now);
 		first.NextAfterId.ShouldBe(first.Items[^1].OperationId);
 		var second = await sut.ReadPendingApprovalsAsync(tenant, approver, scope, first.NextAfterId, default);
 		second.Items.Single().OperationId.ShouldBe(new Guid(12, 0, 0, new byte[8]));

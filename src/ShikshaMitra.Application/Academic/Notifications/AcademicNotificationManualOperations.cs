@@ -45,7 +45,7 @@ public sealed class AcademicNotificationManualOperations(IRepository<Communicati
 			Title = "Academic notification: " + catalogue.Get(request.EventKey).Category,
 			Body = string.Empty, ChannelsJson = JsonSerializer.Serialize(request.Channels.Order()),
 			ApprovalRequired = plan.RequiresApproval, Status = CommunicationCampaignStatus.PendingApproval,
-			EligibleRecipientCount = plan.Summary.EligibleRecipientCount
+			EligibleRecipientCount = plan.Summary.EligibleRecipientCount, CreationTime = now.UtcDateTime
 		};
 		if (plan.RequiresApproval)
 			review.AssignApprover(await FindApproverAsync(tenantId, review.ActorUserId, now, cancellationToken));

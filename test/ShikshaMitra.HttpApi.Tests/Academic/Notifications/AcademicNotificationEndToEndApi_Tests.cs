@@ -140,6 +140,9 @@ public sealed class AcademicNotificationEndToEndApi_Tests
 		var confirmation = new ConfirmAcademicNotificationManualDto(review.ReviewToken!.Value, "acceptance-primary");
 		var operation = await PostAsync<AcademicNotificationOperationDto>(staff, $"{Root}/manual/send", confirmation, HttpStatusCode.Accepted);
 		operation.Status.ShouldBe(CommunicationCampaignStatus.Queued);
+		var queued = (await staff.GetFromJsonAsync<AcademicNotificationOperationStatusDto>($"{Root}/operations/{operation.OperationId}"))!;
+		queued.PublishedAt.ShouldNotBeNull();
+		queued.CreatedAt.ShouldBe(queued.PublishedAt.Value);
 		var replay = await PostAsync<AcademicNotificationOperationDto>(staff, $"{Root}/manual/send", confirmation, HttpStatusCode.Accepted);
 		replay.OperationId.ShouldBe(operation.OperationId);
 		fixture.WhatsApp.Requests.ShouldBeEmpty();

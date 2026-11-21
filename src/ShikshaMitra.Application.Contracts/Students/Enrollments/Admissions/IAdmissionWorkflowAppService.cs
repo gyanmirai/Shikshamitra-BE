@@ -17,6 +17,7 @@ public interface IAdmissionWorkflowAppService : IApplicationService
 	Task<AdmissionWorkflowDto> CloneAsync(Guid id, CloneAdmissionWorkflowDto input);
 	Task<AdmissionWorkflowDto> CreateNewVersionAsync(Guid id);
 	Task<AdmissionWorkflowValidationResultDto> ValidateAsync(Guid id);
+	Task<AdmissionWorkflowValidationResultDto> ValidatePreviewAsync(Guid id, AdmissionWorkflowValidationPreviewDto input);
 	Task<AdmissionWorkflowDto> PublishAsync(Guid id, string? concurrencyStamp = null);
 	Task<AdmissionWorkflowDto> PublishWithGovernanceAsync(Guid id, PublishAdmissionWorkflowDto input);
 	Task<AdmissionWorkflowDto> SubmitForApprovalAsync(Guid id, SubmitAdmissionWorkflowDto input);

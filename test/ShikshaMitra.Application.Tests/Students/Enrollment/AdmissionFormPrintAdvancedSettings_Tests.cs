@@ -22,7 +22,7 @@ public class AdmissionFormPrintAdvancedSettings_Tests
 		"flow":{"stepTitles":true,"sectionNumbers":true},
 		"sections":{"DETAILS":{"columns":2,"spacing":"spacious","fullWidth":true,"startNewPage":true,"keepHeading":true,"repeatTableHeadings":true,"blankRows":3}},
 		"fields":{"NAME":{"width":"full","labelPosition":"above","answerStyle":"line","writingLines":2,"showRequired":true,"showHelp":false,"showConditional":true}},
-		"content":{"showInstructions":true,"instructionsPlacement":"section","instructionSection":"DETAILS","showChecklist":true,"checklistPlacement":"last","showDeclaration":true,"signaturePlacement":"last","parentSignature":true,"officeSignature":false,"signatureDate":true,"showOfficeUse":true,"officePlacement":"last","documentChecks":true,"remarks":true,"verificationDate":true,"stamp":true,"translations":{"en":{"instructions":"Use capital letters.","checklist":["Birth certificate"],"declaration":"I confirm the details.","parentLabel":"Parent signature","officeLabel":"School office"},"gu":{"instructions":"વિગતો ભરો"}}},
+		"content":{"showInstructions":true,"instructionsPlacement":"section","instructionSection":"DETAILS","showChecklist":true,"checklistPlacement":"last","showDeclaration":true,"signaturePlacement":"last","parentSignature":true,"officeSignature":false,"parentSignatureImage":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=","officeSignatureImage":"data:image/jpeg;base64,/9j/","signatureDate":true,"showOfficeUse":true,"officePlacement":"last","documentChecks":true,"remarks":true,"verificationDate":true,"stamp":true,"translations":{"en":{"instructions":"Use capital letters.","checklist":["Birth certificate"],"declaration":"I confirm the details.","parentLabel":"Parent signature","officeLabel":"School office"},"gu":{"instructions":"વિગતો ભરો"}}},
 		"copies":{"unanswered":"dash","selectedChoices":"mark"}}
 		""";
 
@@ -78,6 +78,8 @@ public class AdmissionFormPrintAdvancedSettings_Tests
 	[InlineData("{\"fields\":{\"NAME\":null}}")]
 	[InlineData("{\"content\":{\"instructionsPlacement\":\"unknown\"}}")]
 	[InlineData("{\"content\":{\"translations\":{\"en\":null}}}")]
+	[InlineData("{\"content\":{\"parentSignatureImage\":\"data:text/plain;base64,AA==\"}}")]
+	[InlineData("{\"content\":{\"officeSignatureImage\":\"data:image/png;base64,not base64!\"}}")]
 	[InlineData("{\"copies\":{\"unanswered\":\"guess\"}}")]
 	public void Invalid_advanced_settings_are_rejected_before_metadata_changes(string advanced)
 	{
@@ -94,6 +96,7 @@ public class AdmissionFormPrintAdvancedSettings_Tests
 		{
 			new JsonObject { ["header"] = new JsonObject { ["title"] = new string('x', 129) } },
 			new JsonObject { ["content"] = new JsonObject { ["translations"] = new JsonObject { ["en"] = new JsonObject { ["instructions"] = new string('x', 2001) } } } },
+			new JsonObject { ["content"] = new JsonObject { ["parentSignatureImage"] = "data:image/png;base64," + Convert.ToBase64String(new byte[5 * 1024 * 1024 + 1]) } },
 			new JsonObject { ["content"] = new JsonObject { ["translations"] = new JsonObject { ["en"] = new JsonObject { ["checklist"] = new JsonArray(System.Linq.Enumerable.Range(0, 21).Select(index => (JsonNode?)JsonValue.Create($"Item {index}")).ToArray()) } } } },
 			new JsonObject { ["sections"] = Collection(129) },
 			new JsonObject { ["fields"] = Collection(513) }

@@ -15,6 +15,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionFormsController(IAdmissionFormAppService service) : AbpController
 {
 	[HttpGet, Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)] public async Task<Result<PagedResultDto<AdmissionFormDto>>> GetListAsync([FromQuery] AdmissionFormListInput input) => Result.Success(await service.GetListAsync(input));
+	[HttpGet("name-availability"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)] public async Task<Result<AdmissionFormNameAvailabilityDto>> CheckNameAvailabilityAsync([FromQuery] string name, [FromQuery] Guid? excludingFormId = null) => Result.Success(await service.CheckNameAvailabilityAsync(name, excludingFormId));
 	[HttpGet("{id:guid}"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)] public async Task<Result<AdmissionFormDto>> GetAsync(Guid id) => Result.Success(await service.GetAsync(id));
 	[HttpGet("{id:guid}/preview"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)] public async Task<Result<AdmissionFormDto>> PreviewAsync(Guid id) => Result.Success(await service.PreviewAsync(id));
 	[HttpGet("{id:guid}/inheritance/sources"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.ViewUsage)]

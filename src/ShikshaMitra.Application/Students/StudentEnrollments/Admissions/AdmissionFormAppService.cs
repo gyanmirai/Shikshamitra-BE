@@ -94,6 +94,22 @@ public class AdmissionFormAppService(
 		return new PagedResultDto<AdmissionFormDto>(count, items);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
+	public async Task<AdmissionFormNameAvailabilityDto> CheckNameAvailabilityAsync(string name, Guid? excludingFormId = null)
+	{
+		if (string.IsNullOrWhiteSpace(name)) return new() { IsAvailable = true };
+		var excludingCode = excludingFormId.HasValue ? (await GetFormAsync(excludingFormId.Value)).Code : null;
+		var conflict = await FindNameConflictAsync(name, excludingCode);
+		return conflict is null
+			? new() { IsAvailable = true }
+			: new()
+			{
+				IsAvailable = false,
+				ExistingStatus = conflict.Status,
+				Message = AdmissionFormNameConflictMessage(name, conflict.Status)
+			};
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public async Task<AdmissionFormDto> GetAsync(Guid id) => await MapAsync(await GetFormAsync(id));
 
@@ -125,6 +141,7 @@ public class AdmissionFormAppService(
 	public async Task<AdmissionFormDto> CreateAsync(CreateUpdateAdmissionFormDto input)
 	{
 		EnsureSupportedPurpose(input.Purpose);
+		await EnsureNameAvailableAsync(input.Name, null);
 		AdmissionFormMetadataStore.ValidatePrintSettings(input.PrintSettings);
 		AdmissionCoreFieldPolicy.PrepareNew(input);
 		AdmissionCoreFieldPolicy.EnsureValid(input);
@@ -149,6 +166,7 @@ public class AdmissionFormAppService(
 		AdmissionFormMetadataStore.ValidatePrintSettings(input.PrintSettings);
 		var form = await GetFormAsync(id);
 		EnsureConcurrency(form, input.ConcurrencyStamp);
+		await EnsureNameAvailableAsync(input.Name, form.Code);
 		input.CoreFieldPolicyVersion = AdmissionFormMetadataStore.ReadExperience(form).CoreFieldPolicyVersion;
 		AdmissionCoreFieldPolicy.EnsureValid(input, await GuaranteedInheritedCoreKeysAsync(input));
 		AdmissionGenderChoices.NormalizeDraftDefinition(input);
@@ -174,6 +192,7 @@ public class AdmissionFormAppService(
 		var cloneId = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "FORM", cloneId);
 		var name = string.IsNullOrWhiteSpace(input.Name) ? $"{source.Name} copy" : input.Name;
+		await EnsureNameAvailableAsync(name, null);
 		await EnsureCodeAvailableAsync(code, null);
 		var clone = new AdmissionFormDefinition(cloneId, CurrentTenant.Id, name, code,
 			source.LayoutType, description: input.Description ?? source.Description, fieldsPerRow: source.FieldsPerRow, purpose: source.Purpose);
@@ -245,6 +264,7 @@ public class AdmissionFormAppService(
 		var form = await GetFormAsync(id);
 		EnsureConcurrency(form, concurrencyStamp);
 		if (form.Status != AdmissionFormStatus.Archived) throw new BusinessException(AdmissionFormErrorCodes.ArchivedRequired);
+		await EnsureNameAvailableAsync(form.Name, form.Code);
 		var validation = await ValidateDefinitionAsync(id);
 		if (!validation.IsValid)
 			throw new BusinessException(AdmissionFormErrorCodes.RestoreInvalidDefinition)
@@ -659,6 +679,29 @@ public class AdmissionFormAppService(
 	private static CreateUpdateAdmissionFormDto ToInput(AdmissionFormDto definition) =>
 		JsonSerializer.Deserialize<CreateUpdateAdmissionFormDto>(JsonSerializer.Serialize(definition))!;
 	private AdmissionFormFieldDefinition CreateField(Guid formId, Guid sectionId, CreateUpdateAdmissionFormFieldDto input) => new(GuidGenerator.Create(), formId, sectionId, input.Code, input.Label, input.FieldType, input.BindingType, input.BindingKey, input.Required, input.ReadOnly, input.DisplayOrder, input.Placeholder, input.HelpText, input.DefaultValue, input.ValidationJson, input.VisibilityRuleJson, input.OptionsJson, input.RequiredRuleJson);
+	private async Task EnsureNameAvailableAsync(string name, string? excludingCode)
+	{
+		var conflict = await FindNameConflictAsync(name, excludingCode);
+		if (conflict is not null)
+			throw new BusinessException(AdmissionFormErrorCodes.NameAlreadyExists,
+				AdmissionFormNameConflictMessage(name, conflict.Status));
+	}
+	private async Task<AdmissionFormDefinition?> FindNameConflictAsync(string name, string? excludingCode)
+	{
+		var normalizedName = name.Trim().ToLowerInvariant();
+		var query = await formRepository.GetQueryableAsync();
+		var matching = await AsyncExecuter.ToListAsync(query.Where(form =>
+			form.Name.Trim().ToLower() == normalizedName &&
+			(excludingCode == null || form.Code != excludingCode)));
+		return matching
+			.OrderBy(form => form.Status == AdmissionFormStatus.Archived ? 1 : 0)
+			.FirstOrDefault();
+	}
+	private static string AdmissionFormNameConflictMessage(string name, AdmissionFormStatus status)
+	{
+		var location = status == AdmissionFormStatus.Archived ? "Archived" : "Current";
+		return $"A form named '{name.Trim()}' already exists in {location} forms. Use a different name or create a new version of the existing form.";
+	}
 	private async Task EnsureCodeAvailableAsync(string code, Guid? excludingId) { var normalized = code.Trim().ToUpperInvariant(); var query = await formRepository.GetQueryableAsync(); if (await AsyncExecuter.AnyAsync(query.Where(form => form.Code == normalized && (!excludingId.HasValue || form.Id != excludingId.Value)))) throw new BusinessException(AdmissionFormErrorCodes.CodeAlreadyExists); }
 	private async Task<AdmissionFormDefinition> GetFormAsync(Guid id) => await formRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionFormDefinition), id);
 	private async Task<List<AdmissionFormSectionDefinition>> GetSectionsAsync(Guid id) => await AsyncExecuter.ToListAsync((await sectionRepository.GetQueryableAsync()).Where(section => section.FormDefinitionId == id).OrderBy(section => section.DisplayOrder));

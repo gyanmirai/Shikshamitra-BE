@@ -26,4 +26,5 @@ public interface INotificationTemplateAppService : IApplicationService, INotific
 	Task RetireAsync(Guid templateId, NotificationTemplateRevisionCommandDto input, CancellationToken cancellationToken = default);
 	Task DeleteDraftAsync(Guid templateId, NotificationTemplateRevisionCommandDto input, CancellationToken cancellationToken = default);
 	Task<NotificationTemplatePreviewDto> PreviewAsync(Guid templateId, Guid revisionId, CancellationToken cancellationToken = default);
+	Task<NotificationTemplatePreviewDto> PreviewDraftAsync(PreviewNotificationTemplateDraftDto input, CancellationToken cancellationToken = default);
 }

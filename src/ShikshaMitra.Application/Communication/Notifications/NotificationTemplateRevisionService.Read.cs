@@ -12,6 +12,16 @@ namespace ShikshaMitra.Communication.Notifications;
 
 public partial class NotificationTemplateRevisionService
 {
+	internal async Task<CommunicationTemplateRevision> BuildDraftPreviewAsync(PreviewNotificationTemplateDraftDto input,
+		CancellationToken cancellationToken)
+	{
+		var tenantId = RequireTenant();
+		await AuthorizeAsync(input.EventKey, input.AcademicMediumId, NotificationTemplateAction.Write, cancellationToken);
+		var definition = validator.GetDefinition(input.EventKey);
+		return new(guids.Create(), tenantId, guids.Create(), 1, input.EventKey, input.RecipientKind, input.Channel,
+			input.LanguageCode, input.Subject, NormalizeBody(input.Channel, input.Body), definition.SchemaVersion);
+	}
+
 	public virtual async Task<NotificationTemplateDto> GetAsync(Guid templateId, CancellationToken cancellationToken = default)
 	{
 		var header = await LoadHeaderAsync(templateId, cancellationToken);

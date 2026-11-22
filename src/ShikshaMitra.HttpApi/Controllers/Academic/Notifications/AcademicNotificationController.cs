@@ -103,6 +103,12 @@ public class AcademicNotificationController : AbpControllerBase
 		[FromServices] IAcademicNotificationHistoryAppService history, CancellationToken cancellationToken) =>
 		history.GetOperationAsync(id, cancellationToken);
 
+	[HttpGet("history/recent")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
+	public Task<AcademicNotificationRecentDeliveriesDto> GetRecentAsync([FromQuery] string? eventKey, [FromQuery] string? cursor,
+		[FromServices] IAcademicNotificationHistoryAppService history, CancellationToken cancellationToken) =>
+		history.GetRecentAsync(eventKey, cursor, cancellationToken);
+
 	[HttpGet("history")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Notification.View)]
 	public Task<PagedResultDto<AcademicNotificationHistoryItemDto>> GetHistoryAsync([FromQuery] GetAcademicNotificationHistoryDto input,

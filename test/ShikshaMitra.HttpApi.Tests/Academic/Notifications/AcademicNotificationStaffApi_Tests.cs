@@ -190,6 +190,38 @@ public class AcademicNotificationStaffApi_Tests(ShikshaMitraApiTestFactory facto
 	}
 
 	[Fact]
+	public async Task Unsaved_template_preview_renders_synthetic_values_without_creating_a_revision()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, $"{View},{Add}");
+		var configuration = Factory.Services.GetRequiredService<IConfiguration>();
+		var previousClientUrl = configuration["App:ClientUrl"];
+		var list = $"{Templates}?eventKey={Event}&maxResultCount=100";
+		var request = new {
+			eventKey = Event, recipientKind = "Guardian", channel = CommunicationChannelType.InApp,
+			languageCode = "en", subject = "Homework preview", body = "Unsaved {{task_title}}"
+		};
+		try
+		{
+			configuration["App:ClientUrl"] = "https://school.example.test";
+			var before = await GetAndReadAsync<PagedResultDto<NotificationTemplateDto>>(list);
+			var preview = await PostAndReadAsync<NotificationTemplatePreviewDto>($"{Templates}/preview", request);
+			preview.IsSynthetic.ShouldBeTrue();
+			preview.Rendered.IsSuccess.ShouldBeTrue();
+			preview.Rendered.Body.ShouldBe("Unsaved Example task title");
+			var after = await GetAndReadAsync<PagedResultDto<NotificationTemplateDto>>(list);
+			after.TotalCount.ShouldBe(before.TotalCount);
+			after.Items.Select(x => x.RevisionId).ShouldBe(before.Items.Select(x => x.RevisionId));
+
+			Client.DefaultRequestHeaders.Remove(AlwaysGrantPermissionChecker.TestPermissionsHeader);
+			Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, View);
+			using var denied = await Client.PostAsJsonAsync($"{Templates}/preview", request);
+			denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		}
+		finally { configuration["App:ClientUrl"] = previousClientUrl; }
+	}
+
+	[Fact]
 	public async Task View_and_send_permissions_do_not_allow_template_creation()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();

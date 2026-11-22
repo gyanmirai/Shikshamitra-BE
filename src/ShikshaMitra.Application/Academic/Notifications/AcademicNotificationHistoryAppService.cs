@@ -1,7 +1,10 @@
 using System;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.DataProtection;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
 using Volo.Abp;
@@ -15,8 +18,34 @@ namespace ShikshaMitra.Academic.Notifications;
 [RemoteService(false), DisableAuditing]
 public class AcademicNotificationHistoryAppService(AcademicNotificationAccessService access,
 	AcademicNotificationOperationAccess operations, AcademicNotificationHistoryRows history,
-	AcademicNotificationManualOperations manual, AcademicNotificationReviewService reviews) : ApplicationService, IAcademicNotificationHistoryAppService
+	AcademicNotificationManualOperations manual, AcademicNotificationReviewService reviews,
+	IDataProtectionProvider protection) : ApplicationService, IAcademicNotificationHistoryAppService
 {
+	public virtual async Task<AcademicNotificationRecentDeliveriesDto> GetRecentAsync(string? eventKey, string? cursor,
+		CancellationToken cancellationToken = default)
+	{
+		var (tenantId, actorId, callerScope) = await access.RequireHistoryViewerAsync(cancellationToken);
+		if (eventKey?.Length > 160 || cursor?.Length > 1024) throw new BusinessException(NotificationErrorCodes.HistoryInvalid);
+		var key = string.IsNullOrWhiteSpace(eventKey) ? null : eventKey.Trim();
+		var protector = protection.CreateProtector("Academic.Notification.HistoryCursor.v1", tenantId.ToString("N"),
+			actorId.ToString("N"), key ?? "(all)");
+		var before = ReadRecentCursor(protector, cursor);
+		var (items, next) = await operations.ReadRecentAsync(tenantId, callerScope, key, before, cancellationToken);
+		return new(items, next == null ? null : protector.Protect(JsonSerializer.Serialize(next)));
+	}
+
+	private static AcademicNotificationOperationAccess.RecentKey? ReadRecentCursor(IDataProtector protector, string? cursor)
+	{
+		if (string.IsNullOrEmpty(cursor)) return null;
+		try
+		{
+			var key = JsonSerializer.Deserialize<AcademicNotificationOperationAccess.RecentKey>(protector.Unprotect(cursor));
+			if (key is { OperationId: var id } && id != Guid.Empty && key.CreatedAt != default) return key;
+		}
+		catch (Exception error) when (error is CryptographicException or JsonException) { }
+		throw new BusinessException(NotificationErrorCodes.HistoryInvalid);
+	}
+
 	public virtual async Task<AcademicNotificationOperationStatusDto> GetOperationAsync(Guid operationId,
 		CancellationToken cancellationToken = default)
 	{

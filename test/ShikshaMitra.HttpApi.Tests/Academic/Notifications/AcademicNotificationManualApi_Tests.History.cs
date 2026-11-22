@@ -39,6 +39,10 @@ public partial class AcademicNotificationManualApi_Tests
 			detail.GetProperty("eventKey").GetString().ShouldBe(Event);
 			detail.GetProperty("excludedBeforeDispatch").GetInt32().ShouldBe(1);
 			detail.GetProperty("deliveries")[0].GetProperty("status").GetInt32().ShouldBe((int)NotificationDispatchState.ProviderAccepted);
+			var recent = await GetAndReadAsync<JsonElement>($"{BasePath}/history/recent?eventKey={Event}");
+			var recentItem = recent.GetProperty("items").EnumerateArray()
+				.Single(row => row.GetProperty("operationId").GetGuid() == operation.OperationId);
+			recentItem.GetProperty("canViewSummary").GetBoolean().ShouldBeTrue();
 
 			var path = $"{BasePath}/history?eventKey={Event}&sourceType={SourceType}&sourceId={factory.ActiveSourceId}&operationId={operation.OperationId}";
 			using var accepted = await Client.GetAsync(path + "&state=ProviderAccepted&maxResultCount=1");
@@ -66,7 +70,20 @@ public partial class AcademicNotificationManualApi_Tests
 			secondPage.GetProperty("totalCount").GetInt64().ShouldBe(2);
 			secondPage.GetProperty("items").GetArrayLength().ShouldBe(1);
 
+			await SeedRecentOperationsAsync(operation.OperationId);
+			var recentPath = $"{BasePath}/history/recent?eventKey={Event}";
+			var firstRecent = await GetAndReadAsync<AcademicNotificationRecentDeliveriesDto>(recentPath);
+			firstRecent.Items.Count.ShouldBe(15);
+			firstRecent.NextCursor.ShouldNotBeNullOrEmpty();
+			var nextRecent = await GetAndReadAsync<AcademicNotificationRecentDeliveriesDto>(
+				recentPath + "&cursor=" + Uri.EscapeDataString(firstRecent.NextCursor!));
+			nextRecent.Items.Count.ShouldBe(15);
+			nextRecent.Items.Select(x => x.OperationId).Intersect(firstRecent.Items.Select(x => x.OperationId)).ShouldBeEmpty();
+
 			factory.DenySourceView = true;
+			var inaccessible = await GetAndReadAsync<JsonElement>($"{BasePath}/history/recent?eventKey={Event}");
+			inaccessible.GetProperty("items").GetArrayLength().ShouldBe(0);
+			inaccessible.GetProperty("nextCursor").ValueKind.ShouldBe(JsonValueKind.Null);
 			using var deniedDetail = await Client.GetAsync($"{BasePath}/operations/{operation.OperationId}");
 			deniedDetail.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 			using var deniedHistory = await Client.GetAsync(path);
@@ -134,6 +151,12 @@ public partial class AcademicNotificationManualApi_Tests
 			Permissions(viewer, View);
 			using var detail = await viewer.GetAsync($"{BasePath}/operations/{operation.OperationId}");
 			detail.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await detail.Content.ReadAsStringAsync());
+			using var recent = await viewer.GetAsync($"{BasePath}/history/recent?eventKey={Event}");
+			recent.StatusCode.ShouldBe(HttpStatusCode.OK, await recent.Content.ReadAsStringAsync());
+			var recentPage = await recent.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+			var recentItem = recentPage.GetProperty("items").EnumerateArray()
+				.Single(row => row.GetProperty("operationId").GetGuid() == operation.OperationId);
+			recentItem.GetProperty("canViewSummary").GetBoolean().ShouldBeFalse();
 			using var result = await viewer.GetAsync($"{BasePath}/history?eventKey={Event}&sourceType={SourceType}&sourceId={factory.ActiveSourceId}");
 			result.StatusCode.ShouldBe(HttpStatusCode.OK, await result.Content.ReadAsStringAsync());
 			var page = await result.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
@@ -142,6 +165,28 @@ public partial class AcademicNotificationManualApi_Tests
 		}
 		finally { factory.ActiveSourceId = AcademicNotificationPreviewApiFactory.SourceId; }
 	}
+
+	private Task SeedRecentOperationsAsync(Guid operationId) => WithDatabaseAsync(async (db, _) =>
+	{
+		var original = await db.NotificationIntents.SingleAsync(x => x.CampaignId == operationId);
+		var originalCampaign = await db.CommunicationCampaigns.SingleAsync(x => x.Id == operationId);
+		var tenant = AcademicNotificationPreviewApiFactory.TenantId;
+		for (var i = 0; i < 41; i++)
+		{
+			var campaign = new CommunicationCampaign(Guid.NewGuid(), tenant) {
+				CampaignType = NotificationCampaignTypes.Academic, SourceModule = CommunicationSourceModule.Academic,
+				SourceEntityType = original.SourceType, SourceEntityId = original.SourceId,
+				Title = "Recent notification fixture", Status = CommunicationCampaignStatus.Queued,
+				CreationTime = originalCampaign.CreationTime.AddDays(-1)
+			};
+			var copy = NotificationIntent.CreateReviewedManual(Guid.NewGuid(), tenant, null, 0, original.EventKey,
+				original.SourceType, original.SourceId, original.SourceRevision, Guid.NewGuid().ToString("N"),
+				DateTimeOffset.UtcNow, original.AffectedRecipientsJson, original.TemplateRevisionIdsJson,
+				original.ExpiresAt, original.ActorUserId!.Value, campaign.Id, original.RuleConfigurationJson);
+			db.AddRange(campaign, copy);
+		}
+		await db.SaveChangesAsync();
+	});
 
 	private Task SeedHistoryAsync(Guid operationId, Guid recipientId) => WithDatabaseAsync(async (db, services) =>
 	{

@@ -38,4 +38,8 @@ public class NotificationTemplateAppService(NotificationTemplateRevisionService 
 	public virtual Task RetireAsync(Guid templateId, NotificationTemplateRevisionCommandDto input, CancellationToken cancellationToken = default) => revisions.RetireAsync(templateId, input, cancellationToken);
 	public virtual Task DeleteDraftAsync(Guid templateId, NotificationTemplateRevisionCommandDto input, CancellationToken cancellationToken = default) => revisions.DeleteDraftAsync(templateId, input, cancellationToken);
 	public virtual Task<NotificationTemplatePreviewDto> PreviewAsync(Guid templateId, Guid revisionId, CancellationToken cancellationToken = default) => previews.PreviewAsync(templateId, revisionId, cancellationToken);
+	[UnitOfWork(false)]
+	public virtual async Task<NotificationTemplatePreviewDto> PreviewDraftAsync(PreviewNotificationTemplateDraftDto input,
+		CancellationToken cancellationToken = default) =>
+		previews.RenderExample(await revisions.BuildDraftPreviewAsync(input, cancellationToken));
 }

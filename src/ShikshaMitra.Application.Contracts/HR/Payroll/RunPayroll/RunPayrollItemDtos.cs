@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
@@ -24,6 +25,8 @@ public class RunPayrollItem
 	/// </summary>
 	public bool IsLocked { get; set; }
 	public bool IsSubmitted { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+	public bool HasPendingSectionReview { get; set; }
 	public bool IsIssuedWithoutRegisterDetails { get; set; }
 
 	/// <summary>

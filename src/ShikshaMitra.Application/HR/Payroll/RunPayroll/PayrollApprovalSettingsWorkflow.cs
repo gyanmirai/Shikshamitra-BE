@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Audit;
 using Volo.Abp;
@@ -10,7 +12,8 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
 public class PayrollApprovalSettingsWorkflow(PayrollApprovalAccess access, IPayrollInputRevisionStore revisions,
-	IRepository<PayrollApprovalSettings, Guid> settings, IUnitOfWorkManager units, HrAuditWriter audit)
+	IRepository<PayrollApprovalSettings, Guid> settings, IRepository<PayrollSubmission, Guid> submissions,
+	PayrollSectionScope sectionScope, IUnitOfWorkManager units, HrAuditWriter audit)
 	: ITransientDependency
 {
 	internal async Task<PayrollApprovalSettingsDto> GetAsync() => ToDto(await access.ReadSettingsAsync());
@@ -20,6 +23,42 @@ public class PayrollApprovalSettingsWorkflow(PayrollApprovalAccess access, IPayr
 		{
 			await EnsureApproverAsync(command.ApproverId);
 			current.Configure(command.ApproverId, command.AllowSelfFinalization);
+		});
+
+	internal async Task<PayrollSectionOptionsDto> GetSectionOptionsAsync()
+	{
+		if (!await access.CanManageAsync()) throw new AbpAuthorizationException();
+		return await sectionScope.GetOptionsAsync();
+	}
+
+	internal Task<PayrollApprovalSettingsDto> ConfigureSectionsAsync(ConfigurePayrollSectionsCommand command) =>
+		ChangeAsync("configure-sections", command, async current =>
+		{
+			var routes = command.SectionRoutes ?? throw new BusinessException("PAYROLL_SECTION_ROUTE_INVALID");
+			if (routes.Count == 0)
+			{
+				if (current.Mode != PayrollApprovalSettings.SectionReview)
+					throw new BusinessException("PAYROLL_WORKFLOW_TRANSITION_INVALID");
+				if (await submissions.AnyAsync(batch => batch.TenantId == access.TenantId &&
+					batch.StageId.HasValue && batch.State == PayrollSubmission.Pending))
+					throw new BusinessException("PAYROLL_SECTION_BATCHES_PENDING");
+				current.ConfigureSections(null);
+				return;
+			}
+
+			if (current.Mode is PayrollApprovalSettings.Active or PayrollApprovalSettings.Paused &&
+				await submissions.AnyAsync(batch => batch.TenantId == access.TenantId &&
+					!batch.StageId.HasValue && batch.State == PayrollSubmission.Pending))
+				throw new BusinessException("PAYROLL_LEGACY_BATCHES_PENDING");
+
+			var options = await sectionScope.GetOptionsAsync();
+			var stageIds = options.Stages.Select(stage => stage.Id).ToHashSet();
+			var roleIds = options.Roles.Select(role => role.Id).ToHashSet();
+			if (routes.Any(route => route == null || !stageIds.Contains(route.StageId) || !roleIds.Contains(route.RoleId)) ||
+				routes.Count != routes.Select(route => route.StageId).Distinct().Count())
+				throw new BusinessException("PAYROLL_SECTION_ROUTE_INVALID");
+
+			current.ConfigureSections(JsonSerializer.Serialize(routes.OrderBy(route => route.StageId)));
 		});
 
 	internal Task<PayrollApprovalSettingsDto> ChangeModeAsync(string action, PayrollApprovalSettingsCommand command) =>
@@ -54,7 +93,7 @@ public class PayrollApprovalSettingsWorkflow(PayrollApprovalAccess access, IPayr
 			throw new BusinessException("PAYROLL_APPROVER_PERMISSION_REQUIRED");
 	}
 
-	private static PayrollApprovalSettingsDto ToDto(PayrollApprovalSettings? setting) =>
+	private PayrollApprovalSettingsDto ToDto(PayrollApprovalSettings? setting) =>
 		new(setting?.Mode ?? PayrollApprovalSettings.Legacy, setting?.Version ?? 0,
-			setting?.ApproverId, setting?.AllowSelfFinalization ?? false);
+			setting?.ApproverId, setting?.AllowSelfFinalization ?? false, access.SectionRoutes(setting));
 }

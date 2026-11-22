@@ -275,16 +275,28 @@ Finalized employees are excluded before recalculation.
 
 | Operation | Contract |
 |---|---|
-| `GET /api/payroll/run/register` | Uses Run Payroll View and current staff scope. Accepts month, academic year, zero-based paging, staff name or code search, review state, issue class or code, and one sort. Counts eligible staff plus issued staff before filtering. |
-| `GET /api/payroll/run/approval-settings` | Returns the school's Legacy, Active or Paused mode and its settings version. |
+| `GET /api/payroll/run/register` | Uses Run Payroll View and current staff scope. Accepts month, academic year, zero-based paging, staff name or code search, review state, issue class or code, and one sort. Counts eligible staff plus issued staff before filtering. Flags pending section reviews separately from submissions for finalization. |
+| `GET /api/payroll/run/approval-settings` | Returns the school's mode, settings version and section routes. Legacy is the default. |
 | `GET /api/payroll/run/approval-settings/approvers` | Requires ManageWorkflow and school-wide HR scope. Searches active users with payroll view and lock permissions. |
 | `PUT /api/payroll/run/approval-settings` and `POST /api/payroll/run/approval-settings/{activate,pause,resume}` | Require ManageWorkflow, school-wide scope, a reason and the expected settings version. |
+| `GET /api/payroll/run/approval-settings/{section-options,section-reviewers}` | Requires ManageWorkflow and school-wide scope. Lists tenant sections and roles or eligible users for one exact stage and role. |
+| `PUT /api/payroll/run/approval-settings/sections` | Requires ManageWorkflow, school-wide scope, a reason and the expected settings version. Maps each academic section to one tenant role. An empty configuration returns to manual finalization once open section reviews have been resolved. |
 | `GET /api/payroll/run/submissions` and `GET /api/payroll/run/submissions/{id}` | Show batches to currently authorized participants who cover every employee in the batch. The read may mark evidence stale in the response while preserving the saved state. |
 | `POST /api/payroll/run/submissions` | Requires Submit, exact reviewed staff IDs, current preview evidence and a command key. The server checks that the designated approver covers every selected employee. |
+| `POST /api/payroll/run/section-reviews` | Requires View and Submit, reviewed staff from the selected academic year, current preview evidence, a command key and settings version. Creates one batch per configured section in the selection. |
+| `POST /api/payroll/run/submissions/{id}/review` | Requires current membership in the configured role, View, Add, and scope for the exact section and staff. An eligible reviewer other than the submitter records review without issuing payroll. |
 | `POST /api/payroll/run/submissions/{id}/{finalize,return,withdraw,return-stale}` | Requires the expected batch version, command key and the relevant current permission and scope. All financial writes for one batch share a transaction. |
+| `POST /api/payroll/run` | In SectionReview mode, authorized HR still locks current, reviewed payroll. A nonblank `sectionReviewOverrideReason` is required for selected staff awaiting review or whose latest section review for the payroll month was returned. Recalculation does not clear a return. |
 | `POST /api/hr/table-exports` with `table=payroll-review-sheet` | Requires Run Payroll ExportReview and View. Exports an exact reviewed preview selection or the exact pending submission version in Excel or PDF. |
 
 Active and Paused schools use the approval boundary for payroll issuance.
+SectionReview schools retain HR finalization and use section reviews as optional evidence.
+Sending a selection rejects a staff member with no configured section or more than one matching section.
+Switching from the single-approver workflow requires resolving its open batches first.
+The override audit records the affected batches and HR's reason.
+An open section batch from an older calculation does not prevent HR from marking the current calculation reviewed.
+Locking staff from a pending section batch closes that batch and releases its outstanding claims in the issuance transaction.
+HR must have scope for the full pending batch to close it, and can send its remaining eligible rows again.
 Self-finalization requires the school setting and current Add, Submit and Lock permissions.
 Mark Reviewed rejects the entire request with `HR:Payroll:ReviewAttendanceRequired` when any selected preview row has `NO_ATTENDANCE`.
 Record attendance and recalculate before marking the affected rows reviewed.

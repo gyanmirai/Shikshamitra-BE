@@ -9,6 +9,7 @@ public class PayrollSubmission : AggregateRoot<Guid>, IMultiTenant
 {
 	public const string Pending = "Pending";
 	public const string Finalized = "Finalized";
+	public const string Reviewed = "Reviewed";
 	public const string Returned = "Returned";
 	public const string Withdrawn = "Withdrawn";
 
@@ -19,6 +20,8 @@ public class PayrollSubmission : AggregateRoot<Guid>, IMultiTenant
 	public Guid InputRevision { get; private set; }
 	public Guid SubmitterId { get; private set; }
 	public Guid ApproverId { get; private set; }
+	public Guid? StageId { get; private set; }
+	public Guid? ReviewerRoleId { get; private set; }
 	public bool SelfFinalization { get; private set; }
 	public int SettingsVersion { get; private set; }
 	public Guid? PreviousSubmissionId { get; private set; }
@@ -29,13 +32,20 @@ public class PayrollSubmission : AggregateRoot<Guid>, IMultiTenant
 	public DateTime SubmittedAt { get; private set; }
 	public DateTime? ResolvedAt { get; private set; }
 	public string? ReasonCode { get; private set; }
+	public Guid? ResolvedByUserId { get; private set; }
+	public string? ResolutionReason { get; private set; }
 
 	private PayrollSubmission() { }
 
 	public PayrollSubmission(Guid id, Guid tenantId, Guid? academicYearId, string month, Guid sourceRunId,
 		Guid inputRevision, Guid submitterId, Guid approverId, bool selfFinalization, int settingsVersion,
-		Guid? previousSubmissionId, decimal netPay, int staffCount, DateTime submittedAt) : base(id)
+		Guid? previousSubmissionId, decimal netPay, int staffCount, DateTime submittedAt,
+		Guid? stageId = null, Guid? reviewerRoleId = null) : base(id)
 	{
+		if (stageId.HasValue != reviewerRoleId.HasValue ||
+			(stageId.HasValue && (stageId == Guid.Empty || reviewerRoleId == Guid.Empty ||
+				approverId != Guid.Empty || selfFinalization)))
+			throw new ArgumentException("Invalid payroll section review assignment.");
 		TenantId = tenantId;
 		AcademicYearId = academicYearId;
 		Month = month;
@@ -43,6 +53,8 @@ public class PayrollSubmission : AggregateRoot<Guid>, IMultiTenant
 		InputRevision = inputRevision;
 		SubmitterId = submitterId;
 		ApproverId = approverId;
+		StageId = stageId;
+		ReviewerRoleId = reviewerRoleId;
 		SelfFinalization = selfFinalization;
 		SettingsVersion = settingsVersion;
 		PreviousSubmissionId = previousSubmissionId;
@@ -51,16 +63,23 @@ public class PayrollSubmission : AggregateRoot<Guid>, IMultiTenant
 		SubmittedAt = submittedAt;
 	}
 
-	public void Resolve(int expectedVersion, string state, DateTime resolvedAt, string reasonCode)
+	public void Resolve(int expectedVersion, string state, DateTime resolvedAt, string reasonCode,
+		Guid? resolvedByUserId = null, string? resolutionReason = null)
 	{
 		if (Version != expectedVersion || State != Pending)
 			throw new BusinessException("PAYROLL_SUBMISSION_VERSION_CONFLICT");
-		if (state is not (Finalized or Returned or Withdrawn))
+		if (state is not (Finalized or Reviewed or Returned or Withdrawn) ||
+			(state == Reviewed && !StageId.HasValue) || (state == Finalized && StageId.HasValue))
 			throw new ArgumentOutOfRangeException(nameof(state));
 		State = state;
 		Version++;
 		ResolvedAt = resolvedAt;
 		ReasonCode = reasonCode;
+		if (StageId.HasValue)
+		{
+			ResolvedByUserId = resolvedByUserId;
+			ResolutionReason = resolutionReason;
+		}
 	}
 }
 

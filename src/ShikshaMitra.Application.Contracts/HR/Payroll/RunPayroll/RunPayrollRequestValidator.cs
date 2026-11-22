@@ -38,6 +38,8 @@ public class RunPayrollRequestValidator : AbstractValidator<RunPayrollRequest>
 		RuleFor(x => x.EmployeeIds)
 			.Must(ids => ids == null || ids.Count <= 500)
 			.WithMessage("EmployeeIds cannot contain more than 500 entries.");
+		RuleFor(x => x.SectionReviewOverrideReason)
+			.MaximumLength(RunPayrollRequest.MaxSectionReviewOverrideReasonLength);
 	}
 
 	private static bool BeValidMonthInput(string month)

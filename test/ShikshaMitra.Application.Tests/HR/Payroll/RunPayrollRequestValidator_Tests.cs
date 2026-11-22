@@ -64,4 +64,18 @@ public class RunPayrollRequestValidator_Tests
 		result.IsValid.ShouldBeFalse();
 		result.Errors.Count.ShouldBeGreaterThan(0);
 	}
+
+	[Theory]
+	[InlineData(500, true)]
+	[InlineData(501, false)]
+	public void Should_Limit_Section_Review_Override_Reason(int length, bool valid)
+	{
+		var result = _validator.Validate(new RunPayrollRequest
+		{
+			Month = "2026-04", PreviewRunId = Guid.NewGuid(), EmployeeIds = [Guid.NewGuid()],
+			SectionReviewOverrideReason = new string('a', length)
+		});
+
+		result.IsValid.ShouldBe(valid);
+	}
 }

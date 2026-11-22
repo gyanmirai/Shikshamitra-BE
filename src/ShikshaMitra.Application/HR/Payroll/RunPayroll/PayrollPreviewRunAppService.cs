@@ -24,6 +24,7 @@ public class PayrollPreviewRunAppService(
 	IRepository<PayrollRunItemSnapshot, Guid> snapshots,
 	IRepository<PayrollRunReview, Guid> runReviews,
 	IRepository<PayrollEmployeeClaim, Guid> claims,
+	IRepository<PayrollSubmission, Guid> submissions,
 	IRepository<PayrollCommandReceipt, Guid> receipts,
 	IRepository<PayslipDocument, Guid> documents,
 	PayrollMonthCoverageReader coverage,
@@ -158,7 +159,9 @@ public class PayrollPreviewRunAppService(
 		if (!string.IsNullOrEmpty(issueCode) || input.IssueClass is "CRITICAL" or "HAS_ISSUES")
 			legacyIssued = legacyIssued.Where(_ => false);
 		var reviewQuery = (await runReviews.GetQueryableAsync()).Where(x => workingRun != null && x.PreviewRunId == workingRun.Id);
-		var submittedQuery = (await claims.GetQueryableAsync()).Where(x => x.Month == canonicalMonth && x.SubmissionId.HasValue);
+		var activeClaims = (await claims.GetQueryableAsync()).Where(x => x.Month == canonicalMonth && x.SubmissionId.HasValue);
+		var batches = await submissions.GetQueryableAsync();
+		var submittedQuery = activeClaims.Where(x => batches.Any(batch => batch.Id == x.SubmissionId && batch.StageId == null));
 		var displayRows = working.Select(x => new
 			{
 				x.EmployeeId, x.EmployeeName, Code = x.EmployeeCode, x.PayableDays, x.NetPay, x.NetPayDelta,
@@ -199,9 +202,12 @@ public class PayrollPreviewRunAppService(
 		var finalizedRows = await AsyncExecuter.ToListAsync(finalized.Where(x => pageIds.Contains(x.EmployeeId)));
 		var pageReviews = (await AsyncExecuter.ToListAsync(reviewQuery.Where(x => pageIds.Contains(x.EmployeeId))))
 			.ToDictionary(x => x.EmployeeId);
-		var submitted = (await AsyncExecuter.ToListAsync(submittedQuery
-			.Where(x => pageIds.Contains(x.EmployeeId))
-			.Select(x => x.EmployeeId))).ToHashSet();
+		var pageClaims = (await AsyncExecuter.ToListAsync(
+			from claim in activeClaims
+			join batch in batches on claim.SubmissionId equals (Guid?)batch.Id
+			where pageIds.Contains(claim.EmployeeId)
+			select new { claim.EmployeeId, SectionReview = batch.StageId.HasValue }))
+			.ToDictionary(claim => claim.EmployeeId, claim => claim.SectionReview);
 		var items = finalizedRows.ToDictionary(x => x.EmployeeId, PayrollRunProjection.ToItem);
 		var legacyRows = await AsyncExecuter.ToListAsync(legacyIssued.Where(x => pageIds.Contains(x.EmployeeId)));
 		if (legacyRows.Count > 0)
@@ -230,7 +236,9 @@ public class PayrollPreviewRunAppService(
 		{
 			var item = JsonSerializer.Deserialize<RunPayrollItem>(row.ItemJson)!;
 			item.IsLocked = false;
-			item.IsSubmitted = submitted.Contains(row.EmployeeId);
+			var hasClaim = pageClaims.TryGetValue(row.EmployeeId, out var awaitingSectionReview);
+			item.IsSubmitted = hasClaim && !awaitingSectionReview;
+			item.HasPendingSectionReview = hasClaim && awaitingSectionReview;
 			item.ReviewStatus = ReviewStatuses.Pending;
 			item.ReviewedAt = null;
 			item.ReviewedByUserId = null;

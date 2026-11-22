@@ -19005,8 +19005,11 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<string>("Mode")
                         .IsRequired()
-                        .HasMaxLength(12)
-                        .HasColumnType("character varying(12)");
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("SectionRoutesJson")
+                        .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")
@@ -19748,8 +19751,18 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(48)
                         .HasColumnType("character varying(48)");
 
+                    b.Property<string>("ResolutionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<DateTime?>("ResolvedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReviewerRoleId")
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("SelfFinalization")
                         .HasColumnType("boolean");
@@ -19762,6 +19775,9 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<int>("StaffCount")
                         .HasColumnType("integer");
+
+                    b.Property<Guid?>("StageId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("State")
                         .IsRequired()
@@ -19784,6 +19800,8 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId", "Month", "ApproverId", "SubmittedAt");
+
+                    b.HasIndex("TenantId", "Month", "ReviewerRoleId", "SubmittedAt");
 
                     b.HasIndex("TenantId", "Month", "SubmitterId", "SubmittedAt");
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Reports;
 using ShikshaMitra.Security.UserScope;
@@ -21,7 +22,7 @@ public class PayrollApprovalAccess(IRepository<PayrollApprovalSettings, Guid> se
 	IRepository<IdentityUser, Guid> users,
 	PayrollScopedEmployeeResolver staff, IUserScopeService scopes, HrReportingAccess principals,
 	IPermissionChecker permissions, IAsyncQueryableExecuter queries, ICurrentTenant tenant,
-	ICurrentUser currentUser) : ITransientDependency
+	ICurrentUser currentUser, PayrollSectionScope sections) : ITransientDependency
 {
 	internal Guid TenantId => tenant.Id ?? throw new AbpAuthorizationException();
 	internal Guid ActorId => currentUser.Id ?? throw new AbpAuthorizationException();
@@ -31,9 +32,75 @@ public class PayrollApprovalAccess(IRepository<PayrollApprovalSettings, Guid> se
 
 	internal async Task EnsureLegacyIssuanceAsync()
 	{
-		if ((await ReadSettingsAsync())?.Mode is PayrollApprovalSettings.Active or PayrollApprovalSettings.Paused)
+		if ((await ReadSettingsAsync())?.Mode is PayrollApprovalSettings.Active or PayrollApprovalSettings.Paused or PayrollApprovalSettings.SectionReview)
 			throw new BusinessException("PAYROLL_SUBMISSION_REQUIRED");
 	}
+
+	internal IReadOnlyList<PayrollSectionRouteDto> SectionRoutes(PayrollApprovalSettings? setting) =>
+		setting?.SectionRoutesJson is { } json ? JsonSerializer.Deserialize<PayrollSectionRouteDto[]>(json) ?? [] : [];
+
+	internal Task<Guid[]> GetCurrentRoleIdsAsync(Guid userId) => sections.GetRoleIdsAsync(userId);
+
+	internal Task<Dictionary<Guid, Guid>> ResolveSectionRoutesAsync(IReadOnlyCollection<Guid> employeeIds,
+		Guid? academicYearId, IReadOnlyList<PayrollSectionRouteDto> routes) =>
+		sections.ResolveRoutesAsync(employeeIds, academicYearId, routes);
+
+	internal Task<(string? StageName, string? RoleName)> GetSectionRouteNamesAsync(Guid stageId, Guid roleId) =>
+		sections.GetRouteNamesAsync(stageId, roleId);
+
+	internal Task<string?> GetSectionReviewerNameAsync(Guid userId) => sections.GetUserNameAsync(userId);
+
+	internal async Task<bool> CoversSectionAsync(Guid userId, Guid stageId, Guid? academicYearId,
+		IReadOnlyCollection<Guid> employeeIds)
+	{
+		var stage = await sections.FindStageAsync(stageId);
+		return stage != null && stage.AcademicYearId == academicYearId &&
+			await sections.CoversAsync(userId, stage, employeeIds);
+	}
+
+	internal async Task<bool> CanSectionReviewAsync(Guid userId, Guid stageId, Guid roleId, Guid? academicYearId,
+		IReadOnlyCollection<Guid> employeeIds)
+	{
+		if (!academicYearId.HasValue || employeeIds.Count == 0) return false;
+		var stage = await sections.FindStageAsync(stageId);
+		if (stage == null || stage.AcademicYearId != academicYearId) return false;
+		return await queries.AnyAsync((await sections.GetRoleMembersAsync(roleId)).Where(user => user.Id == userId)) &&
+			await CanReviewSectionAsync(userId, stage, employeeIds);
+	}
+
+	internal async Task<bool> HasSectionReviewerAsync(Guid stageId, Guid roleId, Guid? academicYearId,
+		IReadOnlyCollection<Guid> employeeIds)
+	{
+		if (!academicYearId.HasValue || employeeIds.Count == 0) return false;
+		var stage = await sections.FindStageAsync(stageId);
+		if (stage == null || stage.AcademicYearId != academicYearId) return false;
+		var submitter = ActorId;
+		var ids = await queries.ToListAsync((await sections.GetRoleMembersAsync(roleId))
+			.Where(user => user.Id != submitter).Select(user => user.Id));
+		foreach (var id in ids)
+			if (await CanReviewSectionAsync(id, stage, employeeIds)) return true;
+		return false;
+	}
+
+	internal async Task<List<PayrollApproverDto>> GetSectionReviewersAsync(Guid stageId, Guid roleId)
+	{
+		if (!await CanManageAsync()) throw new AbpAuthorizationException();
+		var stage = await sections.FindStageAsync(stageId) ?? throw new BusinessException("PAYROLL_SECTION_ROUTE_INVALID");
+		var members = await queries.ToListAsync((await sections.GetRoleMembersAsync(roleId))
+			.OrderBy(user => user.UserName).ThenBy(user => user.Id)
+			.Select(user => new { user.Id, user.Name, user.Surname, user.UserName }));
+		var result = new List<PayrollApproverDto>();
+		foreach (var member in members)
+		{
+			if (!await CanReviewSectionAsync(member.Id, stage, [])) continue;
+			var name = $"{member.Name} {member.Surname}".Trim();
+			result.Add(new(member.Id, name.Length > 0 ? $"{name} ({member.UserName})" : member.UserName));
+		}
+		return result;
+	}
+
+	private async Task<bool> CanReviewSectionAsync(Guid userId, HrMediumStageScope stage, IReadOnlyCollection<Guid> employeeIds) =>
+		await CanAsync(userId, Permission.View, Permission.Add) && await sections.CoversAsync(userId, stage, employeeIds);
 
 	internal async Task<bool> CanManageAsync()
 	{

@@ -3,7 +3,7 @@ module: academic
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-21
+updated_on: 2026-11-22
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -258,6 +258,10 @@ Clone the upgraded, unseeded database to a disposable loopback `academic_tests_*
 The same fixture declares an emergency closure for a single class with a medium-wide notification rule. Inbox and history checks cover the primary guardians in the affected class, the exclusion of students and other classes, and the omission of staff notes. Reopening before dispatch cancels the queued closure and delivers the reopening notice. `NotificationDeliveryTimingPolicy_Tests` checks school-local boundaries when the stored date carries a local or UTC timestamp label.
 
 The report case submits an Academic export over HTTP and runs the saved job through the real export worker. It checks the requester's notification and workbook download, denies access to a different signed-in account, and verifies that regenerating a missing file keeps the same download link. Duplicate regeneration requests produce one replacement job and one new notice.
+
+## Staging notification route check
+
+The [backend deployment workflow](../../../.github/workflows/deploy.yml) checks the Academic catalogue, rules, history, recent deliveries, and unsaved template preview routes in staging OpenAPI after the OpenID startup check passes. The anonymous catalogue request must require sign-in. If this check fails, the [check script](../../../scripts/deployment/Test-DeployedAcademicNotificationRoutes.ps1) attempts to compare the deployed Web App files against the publish output using Azure SCM. It reports whether the files match, differ, or cannot be read. The signed-in school workflow and live provider delivery require separate verification.
 
 ## Weekly lecture requirements impact
 

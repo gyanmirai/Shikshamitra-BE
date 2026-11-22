@@ -43,6 +43,8 @@ public class SecurityReleaseWorkflow_Tests
 		Assert.Contains("publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}", workflow);
 		Assert.Contains("- name: Verify deployed API startup", workflow);
 		Assert.Contains("https://stage-api.gyanmirai.in/.well-known/openid-configuration", workflow);
+		Assert.Contains("- name: Verify deployed Academic notification routes", workflow);
+		Assert.Contains("./scripts/deployment/Test-DeployedAcademicNotificationRoutes.ps1", workflow);
 		Assert.Contains("- name: Diagnose an existing production startup failure", workflow);
 		Assert.Contains("- name: Collect Azure startup diagnostics", workflow);
 		Assert.Contains("./scripts/deployment/Get-AzureStartupDiagnostics.ps1", workflow);
@@ -50,8 +52,12 @@ public class SecurityReleaseWorkflow_Tests
 		var publishGate = workflow.IndexOf("- name: Validate Azure publish profile", StringComparison.Ordinal);
 		var migrate = workflow.IndexOf("- name: Run DbMigrator", StringComparison.Ordinal);
 		var deploy = workflow.IndexOf("- name: Deploy to Azure Web App", StringComparison.Ordinal);
+		var startup = workflow.IndexOf("- name: Verify deployed API startup", StringComparison.Ordinal);
+		var routes = workflow.IndexOf("- name: Verify deployed Academic notification routes", StringComparison.Ordinal);
 		Assert.True(startupGate < migrate && publishGate < migrate && migrate < deploy,
 			"Startup and publish validation must precede migration, and migration must precede deployment.");
+		Assert.True(deploy < startup && startup < routes,
+			"The Academic notification route check must run after deployment and startup.");
 	}
 
 	[Fact]

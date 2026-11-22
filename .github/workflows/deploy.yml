@@ -143,6 +143,15 @@ jobs:
 
                   Write-Error "Staging API startup check failed after 60 attempts (last status: $lastStatus)."
 
+            - name: Verify deployed Academic notification routes
+              shell: pwsh
+              env:
+                  AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+              run: |
+                  ./scripts/deployment/Test-DeployedAcademicNotificationRoutes.ps1 `
+                    -ApiBaseUri 'https://stage-api.gyanmirai.in' `
+                    -PublishedDirectory './publish'
+
             - name: Collect Azure startup diagnostics
               if: failure() && steps.deploy.outcome == 'success'
               shell: pwsh

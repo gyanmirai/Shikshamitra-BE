@@ -51,6 +51,14 @@ public class SetAdmissionPublicInquiryLinkFormDto
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
+public class RenameAdmissionPublicInquiryLinkDto
+{
+	[Required, StringLength(128, MinimumLength = 1)]
+	public string Name { get; set; } = string.Empty;
+	[Required]
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+}
+
 public class PublicAdmissionInquiryContextDto
 {
 	public string? LogoUrl { get; set; }

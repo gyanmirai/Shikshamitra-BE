@@ -49,12 +49,15 @@ public partial class StudentIdCardAppService
 	}
 	public async Task DeleteTemplateAsync(Guid id)
 	{
-		await EnsureTemplateActorAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Delete);
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Delete);
+		EnsureTenant();
 		try
 		{
 			using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+			await access.EnsureActiveActorAsync();
 			var row = await FindTemplateRowAsync(id) ?? throw new EntityNotFoundException(typeof(StudentIdCardTemplate), id);
 			await ValidateAffectedMembersAsync(MapTemplate(row).Selection, null);
+			await EnsureTemplateHasNoLiveAssignmentsAsync(id);
 			await templates.DeleteAsync(row, autoSave: true);
 			await work.CompleteAsync();
 		}

@@ -9,6 +9,7 @@ public interface IAdmissionPublicInquiryAppService
 	Task<List<AdmissionPublicInquiryLinkDto>> GetLinksAsync();
 	Task<List<AdmissionPublicInquiryLinkOptionDto>> GetLinkOptionsAsync(Guid admissionCycleId);
 	Task<AdmissionPublicInquiryLinkCreatedDto> CreateLinkAsync(CreateAdmissionPublicInquiryLinkDto input);
+	Task<AdmissionPublicInquiryLinkDto> RenameLinkAsync(Guid id, RenameAdmissionPublicInquiryLinkDto input);
 	Task<AdmissionPublicInquiryLinkDto> SetLinkFormAsync(Guid id, SetAdmissionPublicInquiryLinkFormDto input);
 	Task RevokeLinkAsync(Guid id, string concurrencyStamp);
 	Task<PublicAdmissionInquiryContextDto> GetPublicAsync(string token, Guid? offeringId = null);

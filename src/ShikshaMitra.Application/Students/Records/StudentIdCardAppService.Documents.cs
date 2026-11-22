@@ -23,8 +23,12 @@ public partial class StudentIdCardAppService
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add);
 		EnsureTenant(); ValidateStudents(input);
+		return await ExportCoreAsync(input);
+	}
+
+	private async Task<StudentCertificatePdfDto> ExportCoreAsync(StudentIdCardsPdfRequestDto input, StudentIdCardTemplateDto? template = null)
+	{
 		if (input.CardsPerPage is < 1 or > 10) throw new BusinessException("Students:Records:InvalidIdTemplate");
-		StudentIdCardTemplateDto? template = null;
 		var identitySnapshots = new Dictionary<IdentityReadKey, SchoolIdentityDocumentSnapshotDto>();
 		var cards = new List<(StudentIdCardDto Card, byte[]? Photo, byte[]? Logo)>();
 		var cohort = await CapturePhotoCohortAsync(input.StudentIds, input.PhotoEdits);

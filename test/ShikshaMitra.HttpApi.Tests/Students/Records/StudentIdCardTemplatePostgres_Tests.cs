@@ -159,6 +159,49 @@ public sealed partial class StudentRecordsApplicationPostgres_Tests
 		await using var read = new NpgsqlCommand("SELECT jsonb_agg(to_jsonb(t) ORDER BY \"Id\")::text FROM \"AppStudentIdCardTemplates\" t WHERE \"Id\"=ANY(@ids)", connection);
 		read.Parameters.AddWithValue("ids", ids); return (string)(await read.ExecuteScalarAsync())!;
 	}
+
+	[StudentRecordsApplicationPostgresFact]
+	public async Task Icard_class_assignment_Postgres_concurrent_issue_creates_one_valid_card()
+	{
+		Client.DefaultRequestHeaders.Add("__tenant", TenantId.ToString());
+		var member = await SeedIcardTemplateProviderStudentAsync();
+		await InTenantAsync(async services =>
+		{
+			var repository = services.GetRequiredService<IRepository<StudentIdCard, Guid>>();
+			var previous = await repository.GetAsync(member.Card);
+			previous.Void();
+			await repository.UpdateAsync(previous, true);
+			return true;
+		});
+		var template = await CreateIcardProviderTemplateAsync("Class issuance " + Guid.NewGuid().ToString("N"));
+		var rule = $"/api/students/records/ids/assignments/{member.Year}/{factory.SeededStandardId}";
+		using var assignment = await Client.PutAsJsonAsync(rule, new { templateId = template.GetProperty("id").GetGuid() }, JsonOptions);
+		assignment.StatusCode.ShouldBe(HttpStatusCode.OK, await assignment.Content.ReadAsStringAsync());
+		using var saved = JsonDocument.Parse(await assignment.Content.ReadAsStringAsync());
+		var data = saved.RootElement.GetProperty("data");
+		var concurrencyStamp = data.GetProperty("concurrencyStamp").GetString();
+		var templateConcurrencyStamp = data.GetProperty("templateConcurrencyStamp").GetString();
+		var studentIds = new[] { member.Student };
+		factory.Barrier.Arm("INSERT INTO \"AppStudentIdCards\"");
+		var requests = new[] { "race-first", "race-second" }.Select(idempotencyKey =>
+			Client.PostAsJsonAsync(rule + "/issue", new { studentIds, concurrencyStamp, templateConcurrencyStamp, idempotencyKey }, JsonOptions)).ToArray();
+		try { await factory.Barrier.Reached.WaitAsync(TimeSpan.FromSeconds(30)); }
+		finally { factory.Barrier.Release(); }
+		var responses = await Task.WhenAll(requests).WaitAsync(TimeSpan.FromSeconds(60));
+		try
+		{
+			responses.Count(response => response.StatusCode == HttpStatusCode.OK).ShouldBe(1);
+			var rejected = responses.Single(response => response.StatusCode != HttpStatusCode.OK);
+			rejected.StatusCode.ShouldBe(HttpStatusCode.Conflict, await rejected.Content.ReadAsStringAsync());
+			(await rejected.Content.ReadAsStringAsync()).ShouldContain("Students:Records:IdAssignmentAlreadyIssued");
+			factory.Barrier.Connections.Count.ShouldBe(2);
+			var cards = await InTenantAsync(services => services.GetRequiredService<IRepository<StudentIdCard, Guid>>()
+				.GetListAsync(card => card.StudentId == member.Student));
+			cards.Count(card => card.AcademicYearId == member.Year && card.Status == "Issued").ShouldBe(1);
+			cards.Single(card => card.Status == "Voided").Id.ShouldBe(member.Card);
+		}
+		finally { foreach (var response in responses) response.Dispose(); }
+	}
 	private static object IcardProviderSelection(Guid year, Guid student) => new
 	{
 		academicYearId = year, boardIds = Array.Empty<Guid>(), mediumIds = Array.Empty<Guid>(),

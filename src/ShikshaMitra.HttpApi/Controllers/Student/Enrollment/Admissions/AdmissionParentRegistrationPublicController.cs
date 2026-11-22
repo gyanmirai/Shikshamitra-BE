@@ -27,6 +27,12 @@ public class AdmissionParentRegistrationPublicController(IAdmissionParentRegistr
 		return values[0] ?? "";
 	}
 	[HttpGet] public Task<AdmissionParentPublicContextDto> GetAsync() => service.GetAsync(Token());
+	[HttpGet("branding/logo")]
+	public async Task<IActionResult> GetLogoAsync()
+	{
+		var logo = await service.GetLogoAsync(Token());
+		return logo == null ? NoContent() : File(logo.Content, logo.ContentType);
+	}
 	[HttpPut("draft"), RequestSizeLimit(12 * 1024 * 1024)] public Task<AdmissionParentPublicContextDto> SaveAsync(AdmissionParentDraftInput input) => service.SaveAsync(Token(), input);
 	[HttpPost("hand-in")] public Task<AdmissionParentPublicContextDto> HandInAsync(AdmissionParentPublicCommand input) => service.HandInAsync(Token(), input);
 	[HttpPost("documents/{stageInstanceId:guid}/{requirementCode}")]

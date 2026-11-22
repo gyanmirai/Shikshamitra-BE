@@ -3,6 +3,9 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public static class AdmissionErrorCodes
 {
 	public const string CycleCodeAlreadyExists = "Admissions.CycleCodeAlreadyExists";
+	public const string CycleNameAlreadyExists = "Admissions.CycleNameAlreadyExists";
+	public const string ArchivedCycleNameAlreadyExists = "Admissions.ArchivedCycleNameAlreadyExists";
+	public const string CycleWindowDateTooEarly = "Admissions.CycleWindowDateTooEarly";
 	public const string CycleCannotBeModified = "Admissions.CycleCannotBeModified";
 	public const string CycleDateRangeInvalid = "Admissions.CycleDateRangeInvalid";
 	public const string CycleOutsideAcademicYear = "Admissions.CycleOutsideAcademicYear";
@@ -29,6 +32,7 @@ public static class AdmissionErrorCodes
 	public const string PublicInquiryCounsellorUnavailable = "Admissions.PublicInquiry.CounsellorUnavailable";
 	public const string PublicInquiryFallbackUnavailable = "Admissions.PublicInquiry.FallbackUnavailable";
 	public const string PublicInquiryExpiryInvalid = "Admissions.PublicInquiry.ExpiryInvalid";
+	public const string PublicInquiryLinkNameExists = "Admissions.PublicInquiryLinkNameExists";
 	public const string InquiryOfferingRequired = "Admissions.InquiryOfferingRequired";
 	public const string InquiryEntryNotAllowed = "Admissions.InquiryEntryNotAllowed";
 	public const string InquiryFamilyMismatch = "Admissions.InquiryFamilyMismatch";

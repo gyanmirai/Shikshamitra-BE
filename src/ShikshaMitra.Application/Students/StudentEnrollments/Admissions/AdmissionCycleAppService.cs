@@ -78,7 +78,9 @@ public class AdmissionCycleAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	public async Task<AdmissionCycleDto> CreateAsync(CreateUpdateAdmissionCycleDto input)
 	{
-		await EnsureAcademicYearExistsAsync(input.AcademicYearId);
+		var academicYear = await EnsureAcademicYearExistsAsync(input.AcademicYearId);
+		EnsureWindowDates(input.StartDate, input.EndDate, academicYear: academicYear);
+		await EnsureNameAvailableAsync(input.Name);
 		var id = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "CYCLE", id);
 		await EnsureCodeIsUniqueAsync(code);
@@ -98,6 +100,8 @@ public class AdmissionCycleAppService(
 		var cycle = await GetCycleAsync(id);
 		EnsureConcurrency(cycle, input.ConcurrencyStamp);
 		await EnsureAcademicYearExistsAsync(input.AcademicYearId);
+		EnsureWindowDates(input.StartDate, input.EndDate, cycle);
+		await EnsureNameAvailableAsync(input.Name, id);
 		var code = AdmissionSettingsCode.ForUpdate(input.Code, cycle.Code);
 		await EnsureCodeIsUniqueAsync(code, id);
 		cycle.UpdateDetails(input.Name, code, input.AcademicYearId, input.StartDate, input.EndDate,
@@ -219,6 +223,7 @@ public class AdmissionCycleAppService(
 	{
 		var source = await GetCycleAsync(input.SourceCycleId);
 		await EnsureAcademicYearExistsAsync(input.AcademicYearId);
+		await EnsureNameAvailableAsync(input.Name);
 		var cloneId = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "CYCLE", cloneId);
 		await EnsureCodeIsUniqueAsync(code);
@@ -237,6 +242,7 @@ public class AdmissionCycleAppService(
 		var cycle = await GetCycleAsync(id);
 		EnsureConcurrency(cycle, input.ConcurrencyStamp);
 		EnsureReason(input.Reason);
+		EnsureWindowDates(input.StartDate, input.EndDate, cycle);
 		await EnsureOfferingsFitWindowAsync(id, input.StartDate, input.EndDate);
 		cycle.ReviseWindow(input.StartDate, input.EndDate);
 		await cycleRepository.UpdateAsync(cycle, autoSave: false);
@@ -458,9 +464,9 @@ public class AdmissionCycleAppService(
 		{
 			result.Errors.Add(Issue("CycleStatus", "Only a draft admission cycle can be published."));
 		}
-		if (cycle.EndDate.Date <= cycle.StartDate.Date)
+		if (cycle.EndDate.Date < cycle.StartDate.Date)
 		{
-			result.Errors.Add(Issue("DateRange", "Applications close date must be after the open date."));
+			result.Errors.Add(Issue("DateRange", "Applications close date must be on or after the open date."));
 		}
 		if (await academicYearRepository.FindAsync(cycle.AcademicYearId) == null)
 		{
@@ -496,7 +502,7 @@ public class AdmissionCycleAppService(
 
 	private async Task EnsureOfferingsFitWindowAsync(Guid id, DateTime startDate, DateTime endDate)
 	{
-		if (endDate.Date <= startDate.Date)
+		if (endDate.Date < startDate.Date)
 		{
 			throw new BusinessException(AdmissionErrorCodes.CycleDateRangeInvalid);
 		}
@@ -586,14 +592,52 @@ public class AdmissionCycleAppService(
 		return cycle;
 	}
 
-	private async Task EnsureAcademicYearExistsAsync(Guid id)
+	private async Task<AcademicYear> EnsureAcademicYearExistsAsync(Guid id)
 	{
-		if (id == Guid.Empty || await academicYearRepository.FindAsync(id) == null)
-		{
+		var year = id == Guid.Empty ? null : await academicYearRepository.FindAsync(id);
+		if (year == null)
 			throw new EntityNotFoundException(typeof(AcademicYear), id);
-		}
 		if (!await studentScope.CurrentUserHasAcademicYearWideScopeAsync(id))
 			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+		return year;
+	}
+
+	private void EnsureWindowDates(DateTime startDate, DateTime endDate, AdmissionCycle? existing = null, AcademicYear? academicYear = null)
+	{
+		var minimum = AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now);
+		if (academicYear != null && academicYear.StartDate.Year > minimum.Year)
+			minimum = new DateTime(academicYear.StartDate.Year, 1, 1);
+
+		if ((startDate.Date < minimum && startDate.Date != existing?.StartDate.Date) ||
+			(endDate.Date < minimum && endDate.Date != existing?.EndDate.Date))
+		{
+			throw new BusinessException(AdmissionErrorCodes.CycleWindowDateTooEarly,
+				$"Choose an application date on or after {minimum:dd/MM/yyyy}.");
+		}
+	}
+
+	private async Task EnsureNameAvailableAsync(string name, Guid? excludingId = null)
+	{
+		var normalizedName = name.Trim().ToUpperInvariant();
+		await LazyServiceProvider.LazyGetRequiredService<IAdmissionCycleNameLock>()
+			.AcquireAsync(CurrentTenant.Id, normalizedName);
+		var query = await cycleRepository.GetQueryableAsync();
+		var tenantId = CurrentTenant.Id;
+		var cycles = await AsyncExecuter.ToListAsync(query
+			.Where(cycle => cycle.TenantId == tenantId &&
+				(!excludingId.HasValue || cycle.Id != excludingId.Value))
+			.Select(cycle => new { cycle.Name, cycle.Status }));
+		// Use the same normalization as the lock, regardless of database collation.
+		var matches = cycles
+			.Where(cycle => cycle.Name.Trim().ToUpperInvariant() == normalizedName)
+			.Select(cycle => cycle.Status)
+			.ToHashSet();
+		if (matches.Any(status => status != AdmissionCycleStatus.Archived))
+			throw new BusinessException(AdmissionErrorCodes.CycleNameAlreadyExists,
+				"An admission cycle with this name already exists. Enter a different name.");
+		if (matches.Contains(AdmissionCycleStatus.Archived))
+			throw new BusinessException(AdmissionErrorCodes.ArchivedCycleNameAlreadyExists,
+				"An archived admission cycle with this name already exists. Enter a different name.");
 	}
 
 	private async Task EnsureCodeIsUniqueAsync(string code, Guid? excludingId = null)

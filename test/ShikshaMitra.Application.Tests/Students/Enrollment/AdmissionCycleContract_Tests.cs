@@ -41,10 +41,12 @@ public class AdmissionCycleContract_Tests
 	public void Create_contract_rejects_invalid_dates_and_accepts_future_academic_year_windows()
 	{
 		var invalid = ValidCreateInput();
-		invalid.EndDate = invalid.StartDate;
+		invalid.EndDate = invalid.StartDate.AddDays(-1);
 		new CreateUpdateAdmissionCycleDtoValidator().Validate(invalid).IsValid.ShouldBeFalse();
 
 		var valid = ValidCreateInput();
+		new CreateUpdateAdmissionCycleDtoValidator().Validate(valid).IsValid.ShouldBeTrue();
+		valid.EndDate = valid.StartDate;
 		new CreateUpdateAdmissionCycleDtoValidator().Validate(valid).IsValid.ShouldBeTrue();
 	}
 

@@ -31,7 +31,7 @@ public class AdmissionPublicInquiryLink : FullAuditedAggregateRoot<Guid>, IMulti
 		CounsellorAssignmentProfileId = assignmentProfileId;
 		if (inquiryFormDefinitionId == Guid.Empty) throw new ArgumentOutOfRangeException(nameof(inquiryFormDefinitionId));
 		InquiryFormDefinitionId = inquiryFormDefinitionId;
-		Name = Check.NotNullOrWhiteSpace(name, nameof(name), 128).Trim();
+		Rename(name);
 		TokenHash = Check.NotNullOrWhiteSpace(tokenHash, nameof(tokenHash), 64);
 		if (!Enum.IsDefined(source)) throw new ArgumentOutOfRangeException(nameof(source));
 		Source = source;
@@ -43,6 +43,8 @@ public class AdmissionPublicInquiryLink : FullAuditedAggregateRoot<Guid>, IMulti
 		(!ExpiresAtUtc.HasValue || ExpiresAtUtc.Value > nowUtc.ToUniversalTime());
 
 	public void Revoke() => IsActive = false;
+
+	public void Rename(string name) => Name = Check.NotNullOrWhiteSpace(name, nameof(name), 128).Trim();
 
 	public void SetInquiryForm(Guid formDefinitionId)
 	{

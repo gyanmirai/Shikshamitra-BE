@@ -389,6 +389,7 @@ public class ApiProblemDetailsPipeline_Tests
 	[InlineData(AdmissionErrorCodes.PublicInquiryCounsellorUnavailable, "counsellor pool")]
 	[InlineData(AdmissionErrorCodes.PublicInquiryFallbackUnavailable, "fallback manager")]
 	[InlineData(AdmissionErrorCodes.PublicInquiryExpiryInvalid, "Choose a future link expiry")]
+	[InlineData(AdmissionErrorCodes.PublicInquiryLinkNameExists, "An inquiry link with this name already exists. Enter a different name.")]
 	public async Task Public_inquiry_rejection_should_include_localized_reason_and_next_action(string code, string nextAction)
 	{
 		var assembly = typeof(ShikshaMitraDomainSharedModule).Assembly;
@@ -413,9 +414,9 @@ public class ApiProblemDetailsPipeline_Tests
 		await filter.OnResultExecutionAsync(context, () => Task.FromResult(new ResultExecutedContext(
 			context, new List<IFilterMetadata>(), context.Result, new object())));
 		var output = ((ObjectResult)context.Result).Value.ShouldBeOfType<ProblemDetails>();
-		output.Status.ShouldBe(400);
+		output.Status.ShouldBe(code == AdmissionErrorCodes.PublicInquiryLinkNameExists ? 409 : 400);
 		output.Extensions["errorCode"].ShouldBe(code);
-		if (code != AdmissionErrorCodes.PublicInquiryExpiryInvalid)
+		if (code is not (AdmissionErrorCodes.PublicInquiryExpiryInvalid or AdmissionErrorCodes.PublicInquiryLinkNameExists))
 			output.Detail.ShouldNotBeNull().ShouldContain("RTE");
 		output.Detail.ShouldNotBeNull().ShouldContain(nextAction);
 		output.Detail.ShouldNotContain("{PeriodName}");

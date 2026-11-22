@@ -2,24 +2,59 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.DataProtection;
 using ShikshaMitra.Application.Communication;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Content;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using Volo.Abp.Security.Claims;
 using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Fact]
+	public async Task ParentRegistration_logo_reads_Institute_Setup_for_a_valid_link_only()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(new ClaimsPrincipal(new ClaimsIdentity(
+			BuildAdminPrincipal().Claims.Append(new Claim(AbpClaimTypes.TenantId, TestTenantId.ToString())), "Test")));
+		var fixture = await ParentFixtureAsync();
+		var parent = GetRequiredService<IAdmissionParentRegistrationPublicAppService>();
+		(await parent.GetLogoAsync(fixture.Token)).ShouldBeNull();
+
+		var identity = GetRequiredService<ISchoolIdentityAppService>();
+		var logoBytes = SchoolIdentityTestImage.Png(32, 32);
+		var logo = await identity.UploadAsync(SchoolIdentityAssetKind.Logo, null, null, "institute-logo.png", logoBytes);
+		var profile = await identity.UpdateAsync(new()
+		{
+			Choices = new() { Logo = new() { Mode = SchoolIdentityAssetMode.Custom, AssetId = logo.Id } }
+		});
+
+		var file = (await parent.GetLogoAsync(fixture.Token)).ShouldNotBeNull();
+		file.ContentType.ShouldBe("image/png");
+		file.Content.ShouldBe(logoBytes);
+		(await Should.ThrowAsync<BusinessException>(() => parent.GetLogoAsync(new string('A', 64))))
+			.Code.ShouldBe(AdmissionParentRegistrationErrors.Unavailable);
+
+		await identity.UpdateAsync(new()
+		{
+			ConcurrencyStamp = profile.ConcurrencyStamp,
+			Choices = new() { Logo = new() { Mode = SchoolIdentityAssetMode.Hidden } }
+		});
+		(await parent.GetLogoAsync(fixture.Token)).ShouldBeNull();
+	}
+
 	[Fact]
 	public async Task ParentRegistration_uses_the_full_name_from_the_linked_inquiry_when_applicant_last_name_is_missing()
 	{

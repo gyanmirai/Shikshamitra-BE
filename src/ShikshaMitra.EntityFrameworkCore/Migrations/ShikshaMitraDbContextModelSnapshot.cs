@@ -29587,6 +29587,82 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppStudentIdCards", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.Records.StudentIdCardAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<Guid>("StandardId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TemplateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TemplateId");
+
+                    b.HasIndex("TenantId", "TemplateId")
+                        .HasDatabaseName("IX_StudentIdCardAssignments_TenantTemplate")
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "StandardId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_StudentIdCardAssignments_TenantYearClass")
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("AppStudentIdCardAssignments", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.Records.StudentIdCardTemplate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -46637,6 +46713,16 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("StudentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.Records.StudentIdCardAssignment", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.Records.StudentIdCardTemplate", null)
+                        .WithMany()
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_StudentIdCardAssignments_Templates");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.Records.StudentRecordChange", b =>

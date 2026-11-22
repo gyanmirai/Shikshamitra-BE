@@ -63,6 +63,16 @@ dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~Icard_i
 
 Report isolated test compilation and any migration-metadata exclusions separately from full runtime artifacts; tests using reduced migration compilation cannot establish deployment/migration readiness. Frontend browser checks and deployed school acceptance remain separate.
 
+## Class I-Card assignments
+
+Run the focused HTTP contract tests for unassigned and empty classes, division-only scope, stamp conflicts, preview, PDF export, same-key issue retry, replacement and template deletion protection.
+
+```powershell
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~Icard_class_assignment"
+```
+
+Set `STUDENT_RECORDS_APPLICATION_POSTGRES` to a fresh loopback `records_tests_*` database to include real concurrent issue requests. The provider test uses two serializable transactions and expects a single valid issued card and a conflict for the competing batch.
+
 ## Documents before Registration
 
 Run `AdmissionDocumentWorkflowStageHandler_Tests`, `AdmissionDocumentPolicyAndEvidence_Tests` and `AdmissionAssessmentWorkflowStageHandler_Tests`, then the `Draft_documents_` and `Managed_documents_` Application selections. The Draft fixture starts at Documents with the Form still unsubmitted. Cover accepted evidence progressing to Form while remaining Draft, one transition on exact-key replay, an absent next route, and missing/pending/rejected/new replacement evidence blocked by both readiness and the command. Retain the existing historical-stage, tenant/private-download, stale-stamp, optional-document and early-collection cases. Full dependency compilation and SQLite integration do not establish deployed-tenant acceptance; never advance a real school application just to verify a local patch.

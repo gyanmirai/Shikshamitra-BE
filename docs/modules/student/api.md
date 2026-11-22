@@ -24,6 +24,10 @@ Finalization may report `Students:Family:MainContactInvalid` when the selected m
 
 Workflow `POST /api/student/enrollment/admissions/workflows/{id}/archive` retains its current concurrency and active-Offering guard. A blocked archive returns `Admissions.WorkflowInUse` with `data.ActiveOfferingCount` and `data.Reason`, explaining how many active offerings must be deactivated or moved to another workflow. Inactive offerings do not block archiving. Refusal leaves workflow status, concurrency stamp and governance history unchanged; the same error code on Delete retains its existing semantics.
 
+## Admission form audit
+
+`GET /api/student/enrollment/admissions/forms/{id}/audit` returns the exact form version's activity newest first. Admission Forms View and tenant scope govern the read. Each entry includes the action, occurrence timestamp, version, recorded actor ID and optional comment. The additive `actorName` field resolves recorded identities within the current tenant when available.
+
 ## Admission form archive and restore
 
 | Endpoint | Existing permission | Contract |
@@ -34,6 +38,8 @@ Workflow `POST /api/student/enrollment/admissions/workflows/{id}/archive` retain
 Offering validation errors retain `code`/`message` and optionally include `formDefinitionId`, `formName`, `formPurpose`, `workflowDefinitionId`, `workflowStageId`, and `workflowStageName` for actionable recovery. Failed activation writes include `ConfigurationErrors`, `ValidationErrors` and `ValidationMessages` in business-error data. Archived form errors identify restore/replacement actions; inherited Inquiry approval remains required in the Registration form. Restore rejects non-archived states, invalid immutable definitions, stale stamps, unauthorized access and other-tenant IDs.
 
 Form version writes retain Forms Add/Update access. `Admissions.FormVersionSourceRequired` identifies a Draft source; `Admissions.FormDraftAlreadyExists` includes `DraftId` for the existing same-family draft; `Admissions.FormVersionCodeImmutable` rejects changing a version's family code. These are HTTP 400 business validations with corrective messages. Version comparison returns an empty `changes` list when the definitions are equivalent; it never rewrites either definition or captured answers. Change messages use configured field labels and section names, include both names for a rename, and use `Unnamed field` / `Unnamed section` for legacy missing names. Internal codes continue to match definitions but are not displayed as change descriptions.
+
+Publication readiness reports `Admissions.FormVersionUnchanged:<version>` when a valid Inquiry or Registration draft matches its latest Published version. The publish endpoint independently rejects the same condition with HTTP 400, code `Admissions.FormVersionUnchanged` and business data containing `Version` and `Reason`. Draft saves and in-place restore retain their existing contracts.
 
 ## Correct an application before finalization
 
@@ -223,6 +229,8 @@ Registration's legacy System-bound `Guardian.Relationship` question can prefill 
 
 `GET /api/student/enrollment/admissions/public-inquiry-links/options?admissionCycleId={guid}` retains Offerings View and returns distinct published Inquiry forms from accessible active Inquiry/Both Offerings. The legacy assignment-profile field is always null. Create retains Offerings Add and requires the selected published form on an accessible active Offering in that period. It stores no assignment profile. Existing links retain their form, token hash, source, expiry and revocation behavior; their former routing profile no longer controls public capture. `Admissions.PublicInquiry.OfferingRequired` remains HTTP 400 with corrective form/Offering guidance and `PeriodName`. No new schema migration is required.
 
+`PATCH /api/student/enrollment/admissions/public-inquiry-links/{id}/name` uses Offerings Add, accepts `name` and `concurrencyStamp`, and returns the updated link without its token. Create and rename reserve names tenant-wide across periods, including expired and revoked links. Matching ignores case and surrounding whitespace. A conflict returns HTTP 409 with `Admissions.PublicInquiryLinkNameExists`; existing duplicate records can be individually renamed without a data migration.
+
 Activity and timeline DTOs return `actorName`; completed workflow and Onboarding steps return `completedByName`, and Onboarding events return `actorName`. New activities/events/transitions snapshot the authenticated server actor. Historical rows resolve retained creator IDs in the current tenant where possible; missing attribution is not replaced by a former case owner.
 
 ## Admission student field contracts
@@ -381,6 +389,26 @@ I-card designs return `id`, `concurrencyStamp`, and a saved `selection` containi
 
 Template metadata remains readable with I-card View when a saved cohort is outside the actor's current scope. In that case the server returns `selectionRestricted: true` and `selection: null`, including when stored class/division filters alone are inaccessible. Clients must omit selection for a design-only edit. Explicit cohort replacement, removal and design deletion validate the affected saved and replacement scope, student eligibility and Identity masks; denied writes also withhold opaque saved member IDs from error details. No additional Student List grant is inferred. Transfers are atomic within a Serializable transaction; stale template stamps fail with `Students:Records:IdTemplateConflict`, and a concurrent serialization conflict returns HTTP 409 for a fresh reload. Issued-card responses and PDFs never disclose a template's saved cohort, and template edits/deletion do not rewrite persisted issued snapshots. Apply the existing `20261012060526_AllowMultipleStudentIdCardTemplates` migration before enabling multiple designs on an existing database; it changes only the template tenant index from unique to nonunique.
 
+### Class I-Card assignment
+
+Class assignment uses one saved template per tenant, academic year and class. It applies to newly enrolled students when they enter the current class roster. Existing template selections remain available through their existing API. The new table starts empty. Class assignments resolve the latest saved design when staff preview, export or issue. Issued cards retain their original snapshots. Removing an assignment leaves previous issues available.
+
+All routes below are under `/api/students/records/ids/assignments`. Paged list and roster requests accept `skipCount`, `maxResultCount` (1–100) and `search` (up to 150 characters).
+
+| Route | Permission and behavior |
+| --- | --- |
+| GET `/` | StudentICard.View. Requires `academicYearId`, `boardId` and `mediumId`. An optional `standardId` narrows the result to that class in the authorized medium. Returns authorized classes, including empty and unassigned classes, with `canManage`, template identity and current rule and template stamps. Search matches class or stage. |
+| PUT `/{academicYearId}/{standardId}` | StudentICard.Add and whole-class scope. Accepts `templateId` and `concurrencyStamp` for an existing rule. Omit the stamp for initial assignment. |
+| DELETE `/{academicYearId}/{standardId}?concurrencyStamp=...` | StudentICard.Delete and whole-class scope. Requires the current rule stamp. |
+| GET `/{academicYearId}/{standardId}/roster` | StudentICard.View. Optional `divisionId` narrows the current class and the caller's scope. Search matches student name or GR number. Visible rows require active enrollment matching current Student placement, Full Records access and visible Identity fields. `hasValidIssuedCard` reports an Issued or Printed card for the selected year. |
+| POST `/{academicYearId}/{standardId}/preview` | StudentICard.View. Returns the usual preview envelope. |
+| POST `/{academicYearId}/{standardId}/export` | StudentICard.Add. Returns a PDF sheet for printing and accepts optional `cardsPerPage` and `photoEdits`. Defaults to the assigned template's cards-per-page setting. |
+| POST `/{academicYearId}/{standardId}/issue` | StudentICard.Add. Returns issued card snapshots. Requires `idempotencyKey` and accepts optional `photoEdits`. An exact batch retry returns its original cards while the scope and stamps are current. A new request rejects if any selected student has a valid same-year card. Void a card before issuing its replacement. |
+
+The class document commands accept 1–100 distinct `studentIds`, the rule's `concurrencyStamp` and `templateConcurrencyStamp`. The server resolves the assigned template and rechecks every student against the current scoped roster. A division-only actor can view the class and operate on their eligible students with the appropriate action grant. Changing or removing the whole class rule requires whole-class scope.
+
+Stale rules or studio revisions return HTTP 409 with `Students:Records:IdAssignmentChanged`. A changed roster returns `IdAssignmentRosterChanged`, a valid existing card returns `IdAssignmentAlreadyIssued`, and reusing a batch key with different students, stamps or photo edits returns `IdAssignmentIssueKeyReused` in the same error namespace. Remove or change the template's active class assignments before deleting it. The delete endpoint returns HTTP 409 with `Students:Records:IdTemplateAssigned` while those assignments exist. When deletion succeeds, it retires assignments whose academic placement has been removed in the same transaction.
+
 Batch requests contain one to 100 distinct students, source academic year, stable idempotency key, per-row outcome/reason/effective date, and preview student/enrollment concurrency stamps. Promote/Repeat/Return additionally require target year/class/division and roll number. Submission validates stamps and school batch behavior again. Reusing a key for a different request is rejected.
 
 Registration evidence uses the frozen form version and final submitted snapshot before finalization, never Inquiry answers or current draft values. Original Aadhaar evidence is masked and raw profile-photo payloads are omitted. Current custom storage excludes mapped Student fields; nonmapped catalogue fields and custom questions retain typed values, including false, zero and repeated entries. Unclassified captured data requires Identity, Contact, Guardian, Medical and Bank policy visibility together, under current and source-year policies. Restricted source values, definitions, snapshots and change payload/history are withheld consistently. Correction DTOs add tenant-resolved `requestedByName` and decision `actorName`; missing former actors remain unknown.
@@ -444,6 +472,8 @@ Base route: `/api/student/enrollment/admissions/cycles`.
 | POST | `/{id}/close` | `Students.Admissions.Delete` | Stop new applications with reason and dependency acknowledgement |
 | POST | `/{id}/archive` | `Students.Admissions.Delete` | Archive a Closed cycle with reason |
 | DELETE | `/{id}` | `Students.Admissions.Delete` | Permanently remove only an unused Draft |
+
+Create, draft update, and clone reserve cycle names tenant-wide before writing. Matching ignores case and surrounding spaces, includes archived cycles, and excludes the edited ID. Conflicts return `Admissions.CycleNameAlreadyExists` or `Admissions.ArchivedCycleNameAlreadyExists`. New dates on create must be on or after the later of the institution date and January 1 of the selected academic start year. Draft edits and window revisions keep unchanged historical dates and reject changed past dates with `Admissions.CycleWindowDateTooEarly`. The closing date may equal the opening date.
 
 List results include `status`, computed `windowStatus`, `isAcceptingApplications`, Academic Year
 name, schedule timestamps, and usage counts. All action DTOs carry the current concurrency stamp.
@@ -1211,6 +1241,7 @@ Parent invitations include a common five-rule guide in the token-free campaign t
 | Method / suffix | Contract |
 |---|---|
 | GET root | Public-safe frozen definition/values, school/applicant context, editable codes, requirements, capabilities and opaque `snapshotToken` |
+| GET `/branding/logo` | Reauthorizes the private registration link and returns only the effective Institute Setup logo for the application's offering. Returns 204 when no logo is configured or the effective logo is hidden. |
 | PUT `/draft` | `{snapshotToken,idempotencyKey,values:[{fieldCode,valueJson}]}`; initial shared draft save or restricted later proposal |
 | POST `/hand-in` | `{snapshotToken,idempotencyKey}`; validate completeness and lock parent editing without formal submission |
 | POST `/documents/{stageInstanceId}/{requirementCode}` | Multipart `file`, `snapshotToken`, `idempotencyKey`, optional `notes`; canonical file validation and new private evidence revision |

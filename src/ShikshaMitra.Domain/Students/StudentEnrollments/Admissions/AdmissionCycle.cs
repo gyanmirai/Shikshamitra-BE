@@ -46,7 +46,7 @@ public class AdmissionCycle : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(AdmissionErrorCodes.CycleCannotBeModified);
 		}
 
-		if (endDate.Date <= startDate.Date)
+		if (endDate.Date < startDate.Date)
 		{
 			throw new BusinessException(AdmissionErrorCodes.CycleDateRangeInvalid);
 		}
@@ -107,7 +107,7 @@ public class AdmissionCycle : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			throw new BusinessException(AdmissionErrorCodes.CycleCannotBeModified);
 		}
-		if (endDate.Date <= startDate.Date)
+		if (endDate.Date < startDate.Date)
 		{
 			throw new BusinessException(AdmissionErrorCodes.CycleDateRangeInvalid);
 		}

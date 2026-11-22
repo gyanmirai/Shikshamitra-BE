@@ -58,10 +58,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 		var cycleService = GetRequiredService<IAdmissionCycleAppService>();
 		var currentTargetCycle = await cycleService.GetAsync(targetCycleId);
+		var today = AdmissionCycleWindowEvaluator.GetInstitutionDate(DateTime.UtcNow);
+		var revisedStart = currentTargetCycle.StartDate.AddDays(30);
+		if (revisedStart < today) revisedStart = DateTime.SpecifyKind(today, DateTimeKind.Utc);
+		var revisedEnd = currentTargetCycle.EndDate.AddDays(-30);
+		if (revisedEnd <= revisedStart) revisedEnd = revisedStart.AddDays(30);
 		var revisedCycle = await cycleService.UpdateWindowAsync(targetCycleId, new()
 		{
 			ConcurrencyStamp = currentTargetCycle.ConcurrencyStamp, Reason = "Revise the cloned intake cycle window",
-			StartDate = currentTargetCycle.StartDate.AddDays(30), EndDate = currentTargetCycle.EndDate.AddDays(-30)
+			StartDate = revisedStart, EndDate = revisedEnd
 		});
 		var refreshedClone = await service.GetAsync(clone.Id);
 		refreshedClone.UseCycleDates.ShouldBeTrue();

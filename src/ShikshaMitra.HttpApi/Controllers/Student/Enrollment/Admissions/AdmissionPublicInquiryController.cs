@@ -28,6 +28,11 @@ public class AdmissionPublicInquiryLinksController(IAdmissionPublicInquiryAppSer
 		[FromBody] CreateAdmissionPublicInquiryLinkDto input) =>
 		Result.Success(await service.CreateLinkAsync(input));
 
+	[HttpPatch("{id:guid}/name"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
+	public async Task<Result<AdmissionPublicInquiryLinkDto>> RenameAsync(Guid id,
+		[FromBody] RenameAdmissionPublicInquiryLinkDto input) =>
+		Result.Success(await service.RenameLinkAsync(id, input));
+
 	[HttpPut("{id:guid}/form"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
 	public async Task<Result<AdmissionPublicInquiryLinkDto>> SetFormAsync(Guid id,
 		[FromBody] SetAdmissionPublicInquiryLinkFormDto input) =>

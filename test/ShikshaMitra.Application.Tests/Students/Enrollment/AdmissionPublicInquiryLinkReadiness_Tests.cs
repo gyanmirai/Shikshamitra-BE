@@ -42,6 +42,72 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	});
 
 	[Fact]
+	public Task Public_link_create_should_reject_duplicate_name_across_periods_and_preserve_existing_link() => RunCertificationScenarioAsync(async () =>
+	{
+		var firstOffering = await CreateOptionalIntakeOfferingAsync();
+		var secondOffering = await CreateOptionalIntakeOfferingAsync();
+		var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
+		var firstInput = FormLinkInput(firstOffering);
+		firstInput.Name = "  Link 1  ";
+		var saved = await service.CreateLinkAsync(firstInput);
+		saved.Name.ShouldBe("Link 1");
+		var duplicateInput = FormLinkInput(secondOffering);
+		duplicateInput.Name = " link 1 ";
+		var error = await Should.ThrowAsync<BusinessException>(() => service.CreateLinkAsync(duplicateInput));
+		error.Code.ShouldBe(AdmissionErrorCodes.PublicInquiryLinkNameExists);
+		(await service.GetLinksAsync()).ShouldHaveSingleItem().Id.ShouldBe(saved.Id);
+	});
+
+	[Fact]
+	public Task Public_link_rename_should_reject_a_reserved_name_and_preserve_link_state() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateOptionalIntakeOfferingAsync();
+		var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
+		var input = FormLinkInput(offering);
+		input.Name = "Original";
+		input.ExpiresAtUtc = GetRequiredService<IClock>().Now.ToUniversalTime().AddDays(1);
+		var original = await service.CreateLinkAsync(input);
+		input.Name = "Reserved";
+		var reserved = await service.CreateLinkAsync(input);
+		await service.RevokeLinkAsync(reserved.Id, reserved.ConcurrencyStamp);
+		var repository = GetRequiredService<IRepository<AdmissionPublicInquiryLink, Guid>>();
+		var originalTokenHash = (await repository.GetAsync(original.Id)).TokenHash;
+
+		var rename = new RenameAdmissionPublicInquiryLinkDto { Name = " reserved ", ConcurrencyStamp = original.ConcurrencyStamp };
+		var duplicate = await Should.ThrowAsync<BusinessException>(() => service.RenameLinkAsync(original.Id, rename));
+		duplicate.Code.ShouldBe(AdmissionErrorCodes.PublicInquiryLinkNameExists);
+		(await repository.GetAsync(original.Id)).Name.ShouldBe("Original");
+
+		rename.Name = " original ";
+		var renamed = await service.RenameLinkAsync(original.Id, rename);
+		renamed.Name.ShouldBe("original");
+		renamed.AdmissionCycleId.ShouldBe(original.AdmissionCycleId);
+		renamed.InquiryFormDefinitionId.ShouldBe(original.InquiryFormDefinitionId);
+		renamed.Source.ShouldBe(original.Source);
+		renamed.ExpiresAtUtc.ShouldBe(original.ExpiresAtUtc);
+		renamed.IsActive.ShouldBeTrue();
+		(await repository.GetAsync(original.Id)).TokenHash.ShouldBe(originalTokenHash);
+		var stale = await Should.ThrowAsync<BusinessException>(() => service.RenameLinkAsync(original.Id, rename));
+		stale.Code.ShouldBe(AdmissionIntakeProfileErrorCodes.ConcurrencyConflict);
+	});
+
+	[Fact]
+	public Task Public_link_names_should_be_independent_across_tenants() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateOptionalIntakeOfferingAsync();
+		var otherTenantId = Guid.NewGuid();
+		var repository = GetRequiredService<IRepository<AdmissionPublicInquiryLink, Guid>>();
+		using (_currentTenant.Change(otherTenantId))
+		{
+			await repository.InsertAsync(new AdmissionPublicInquiryLink(Guid.NewGuid(), otherTenantId,
+				offering.AdmissionCycleId, null, "FORM READINESS TEST", "other-tenant-hash", AdmissionInquirySource.Website,
+				null, null, offering.InquiryFormDefinitionId), autoSave: true);
+		}
+		(await GetRequiredService<IAdmissionPublicInquiryAppService>().CreateLinkAsync(FormLinkInput(offering))).Name
+			.ShouldBe("Form readiness test");
+	});
+
+	[Fact]
 	public Task Public_link_should_ignore_retired_pool_and_fallback_and_preserve_form_matching() => RunCertificationScenarioAsync(async () =>
 	{
 		var offering = await CreateOptionalIntakeOfferingAsync();
@@ -55,6 +121,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		input.InquiryFormDefinitionId = (await CreateOptionalIntakeOfferingAsync()).InquiryFormDefinitionId;
 		(await Should.ThrowAsync<BusinessException>(() => service.CreateLinkAsync(input))).Code.ShouldBe(AdmissionErrorCodes.PublicInquiryOfferingRequired);
 		input.InquiryFormDefinitionId = originalForm;
+		input.Name = "Second form readiness test";
 		(await service.CreateLinkAsync(input)).IsActive.ShouldBeTrue();
 	});
 

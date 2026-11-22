@@ -61,6 +61,7 @@ public class AdmissionPublicInquiryAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
+	[UnitOfWork(isTransactional: true)]
 	public async Task<AdmissionPublicInquiryLinkCreatedDto> CreateLinkAsync(CreateAdmissionPublicInquiryLinkDto input)
 	{
 		if (input.AdmissionCycleId == Guid.Empty || !input.InquiryFormDefinitionId.HasValue ||
@@ -76,6 +77,7 @@ public class AdmissionPublicInquiryAppService(
 		if (!await AsyncExecuter.AnyAsync(activeOfferings.Where(offering => offering.InquiryFormDefinitionId == input.InquiryFormDefinitionId)))
 			throw new BusinessException(AdmissionErrorCodes.PublicInquiryOfferingRequired,
 				"Choose a published inquiry form linked to an accessible active Offering in this period.").WithData("PeriodName", cycle.Name);
+		await EnsureLinkNameAvailableAsync(input.Name);
 		var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 		var link = new AdmissionPublicInquiryLink(GuidGenerator.Create(), CurrentTenant.Id,
 			cycle.Id, null, input.Name, Hash(token), input.Source,
@@ -91,6 +93,33 @@ public class AdmissionPublicInquiryAppService(
 			ConcurrencyStamp = link.ConcurrencyStamp
 		};
 		return result;
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
+	[UnitOfWork(isTransactional: true)]
+	public async Task<AdmissionPublicInquiryLinkDto> RenameLinkAsync(Guid id, RenameAdmissionPublicInquiryLinkDto input)
+	{
+		var link = await links.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionPublicInquiryLink), id);
+		if (string.IsNullOrWhiteSpace(input.ConcurrencyStamp) || link.ConcurrencyStamp != input.ConcurrencyStamp)
+			throw new BusinessException(AdmissionIntakeProfileErrorCodes.ConcurrencyConflict);
+		await EnsureLinkNameAvailableAsync(input.Name, id);
+		link.Rename(input.Name);
+		await links.UpdateAsync(link, autoSave: true);
+		return Map(link);
+	}
+
+	private async Task EnsureLinkNameAvailableAsync(string name, Guid? excludingId = null)
+	{
+		var tenantId = CurrentTenant.Id;
+		var normalizedName = name.Trim().ToUpperInvariant();
+		await LazyServiceProvider.LazyGetRequiredService<IAdmissionPublicInquiryLinkNameLock>()
+			.AcquireAsync(tenantId, normalizedName);
+		var query = await links.GetQueryableAsync();
+		var names = await AsyncExecuter.ToListAsync(query.Where(link => link.TenantId == tenantId &&
+			!link.IsDeleted && (!excludingId.HasValue || link.Id != excludingId.Value)).Select(link => link.Name));
+		if (names.Any(existing => string.Equals(existing.Trim().ToUpperInvariant(), normalizedName, StringComparison.Ordinal)))
+			throw new BusinessException(AdmissionErrorCodes.PublicInquiryLinkNameExists,
+				"An inquiry link with this name already exists. Enter a different name.");
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]

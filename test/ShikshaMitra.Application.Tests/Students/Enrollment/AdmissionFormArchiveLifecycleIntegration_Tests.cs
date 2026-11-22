@@ -6,12 +6,43 @@ using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Fact]
+	public Task Form_audit_resolves_recorded_staff_without_guessing_missing_actors() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateOptionalIntakeOfferingAsync();
+		var id = offering.InquiryFormDefinitionId!.Value;
+		var actorId = Guid.NewGuid();
+		var unknownActorId = Guid.NewGuid();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var userName = $"audit-{actorId:N}";
+			var actor = new IdentityUser(actorId, userName, $"{userName}@example.test", TestTenantId)
+			{
+				Name = "Audit",
+				Surname = "Reviewer"
+			};
+			(await GetRequiredService<IdentityUserManager>().CreateAsync(actor)).Succeeded.ShouldBeTrue();
+			var forms = GetRequiredService<IRepository<AdmissionFormDefinition, Guid>>();
+			var form = await forms.GetAsync(id);
+			AdmissionFormMetadataStore.AddAudit(form, "Published", actorId);
+			AdmissionFormMetadataStore.AddAudit(form, "Archived", unknownActorId);
+			AdmissionFormMetadataStore.AddAudit(form, "SystemEvent", null);
+			await forms.UpdateAsync(form, autoSave: true);
+		});
+
+		var entries = await GetRequiredService<IAdmissionFormAppService>().GetAuditAsync(id);
+		entries.Single(entry => entry.ActorId == actorId).ActorName.ShouldBe("Audit Reviewer");
+		entries.Single(entry => entry.ActorId == unknownActorId).ActorName.ShouldBeNull();
+		entries.Single(entry => entry.Action == "SystemEvent").ActorName.ShouldBeNull();
+	});
+
 	[Fact]
 	public Task Form_archive_restore_retains_ten_saved_inquiries_and_all_links() => RunCertificationScenarioAsync(async () =>
 	{

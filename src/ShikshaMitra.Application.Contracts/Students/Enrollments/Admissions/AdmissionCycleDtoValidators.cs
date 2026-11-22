@@ -11,8 +11,8 @@ public class CreateUpdateAdmissionCycleDtoValidator : AbstractValidator<CreateUp
 		RuleFor(x => x.Description).MaximumLength(AdmissionCycleConsts.MaxDescriptionLength);
 		RuleFor(x => x.AcademicYearId).NotEmpty();
 		RuleFor(x => x.EndDate)
-			.GreaterThan(x => x.StartDate)
-			.WithMessage("Applications close date must be after the open date.");
+			.GreaterThanOrEqualTo(x => x.StartDate)
+			.WithMessage("Applications close date must be on or after the open date.");
 	}
 }
 
@@ -39,8 +39,8 @@ public class UpdateAdmissionCycleWindowDtoValidator : AbstractValidator<UpdateAd
 	{
 		Include(new AdmissionCycleActionDtoValidator());
 		RuleFor(x => x.EndDate)
-			.GreaterThan(x => x.StartDate)
-			.WithMessage("Applications close date must be after the open date.");
+			.GreaterThanOrEqualTo(x => x.StartDate)
+			.WithMessage("Applications close date must be on or after the open date.");
 	}
 }
 

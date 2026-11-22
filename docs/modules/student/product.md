@@ -53,6 +53,8 @@ Restore returns only an Archived form to Published after current definition vali
 
 Creating another form version requires a non-Draft source and no existing Draft in that code family. Conflicts identify the existing draft rather than returning a deletion message. Version drafts retain their family code; a separate form uses Clone as Draft. Comparison reads meaningful question, section, layout, translation, rule and Inquiry-source approval changes, ignores generated record/audit identifiers, and treats equivalent JSON formatting as unchanged. These operations do not migrate saved inquiries, application schemas or offering references. Current offering configuration locks still govern where a newly published version can be selected.
 
+Inquiry and Registration drafts can be saved even when they match the highest-numbered Published version in their form family. Publishing requires a definition change from that version. A draft restored from history can publish as a new version when its older definition differs from the latest Published version. Restoring an Archived version in place uses the existing restore rules.
+
 ## Student identity at runtime
 
 Student name, date of birth and a supported gender are checked against saved identity when the admission form is submitted.

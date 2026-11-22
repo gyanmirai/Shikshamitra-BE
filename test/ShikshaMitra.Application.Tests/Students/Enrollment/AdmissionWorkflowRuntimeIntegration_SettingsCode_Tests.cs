@@ -218,9 +218,19 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var input = new CreateUpdateAdmissionCycleDto
 		{
 			Name = "Admission 2026-27", AcademicYearId = board.AcademicYearId,
-			StartDate = new DateTime(2026, 1, 1), EndDate = new DateTime(2026, 12, 31)
+			StartDate = DateTime.UtcNow.Date.AddDays(7), EndDate = DateTime.UtcNow.Date.AddDays(60)
 		};
 		var first = await service.CreateAsync(input);
+		input.Name = "  admission 2026-27  ";
+		(await Should.ThrowAsync<Volo.Abp.BusinessException>(() => service.CreateAsync(input)))
+			.Code.ShouldBe(AdmissionErrorCodes.CycleNameAlreadyExists);
+		(await Should.ThrowAsync<Volo.Abp.BusinessException>(() => service.UpdateAsync(first.Id,
+			new CreateUpdateAdmissionCycleDto
+			{
+				Name = "Past application window", AcademicYearId = input.AcademicYearId,
+				StartDate = DateTime.UtcNow.Date.AddDays(-2), EndDate = input.EndDate, ConcurrencyStamp = first.ConcurrencyStamp
+			}))).Code.ShouldBe(AdmissionErrorCodes.CycleWindowDateTooEarly);
+		input.Name = "Second admission period";
 		var second = await service.CreateAsync(input);
 		var cloneInput = new CloneAdmissionCycleDto
 		{
@@ -228,17 +238,37 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			StartDate = input.StartDate, EndDate = input.EndDate
 		};
 		var cloneOne = await service.CloneAsync(cloneInput);
+		(await Should.ThrowAsync<Volo.Abp.BusinessException>(() => service.CloneAsync(cloneInput)))
+			.Code.ShouldBe(AdmissionErrorCodes.CycleNameAlreadyExists);
+		cloneInput.Name = "Second admission copy";
 		var cloneTwo = await service.CloneAsync(cloneInput);
 		new[] { first.Code, second.Code, cloneOne.Code, cloneTwo.Code }.Distinct().Count().ShouldBe(4);
 		first.Code.ShouldStartWith("CYCLE_");
 		(await service.GetAsync(first.Id)).Code.ShouldBe(first.Code);
 
+		var archived = new AdmissionCycle(Guid.NewGuid(), TestTenantId, "Archived intake É", "ARCHIVED-INTAKE",
+			input.AcademicYearId, input.StartDate, input.EndDate);
+		archived.Publish(TestUserId, DateTime.UtcNow);
+		archived.Close();
+		archived.Archive();
+		await WithUnitOfWorkAsync(() => _cycleRepository.InsertAsync(archived, autoSave: true));
+		input.Name = "  ARCHIVED Intake é ";
+		(await Should.ThrowAsync<Volo.Abp.BusinessException>(() => service.CreateAsync(input)))
+			.Code.ShouldBe(AdmissionErrorCodes.ArchivedCycleNameAlreadyExists);
+		input.ConcurrencyStamp = second.ConcurrencyStamp;
+		(await Should.ThrowAsync<Volo.Abp.BusinessException>(() => service.UpdateAsync(second.Id, input)))
+			.Code.ShouldBe(AdmissionErrorCodes.ArchivedCycleNameAlreadyExists);
+		input.Name = "Legacy admission";
 		input.Code = "ADMISSION_2026";
 		var legacy = await service.CreateAsync(input);
 		input.Code = string.Empty;
 		input.Name = "Admission period renamed";
 		input.ConcurrencyStamp = legacy.ConcurrencyStamp;
-		(await service.UpdateAsync(legacy.Id, input)).Code.ShouldBe("ADMISSION_2026");
+		var renamed = await service.UpdateAsync(legacy.Id, input);
+		renamed.Code.ShouldBe("ADMISSION_2026");
+		input.Name = "  ADMISSION Period RENAMED ";
+		input.ConcurrencyStamp = renamed.ConcurrencyStamp;
+		(await service.UpdateAsync(legacy.Id, input)).Name.ShouldBe("ADMISSION Period RENAMED");
 	}
 
 	[Theory]

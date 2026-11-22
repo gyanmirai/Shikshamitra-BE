@@ -124,6 +124,7 @@ public partial class ShikshaMitraDbContext
 	public DbSet<StudentGuardianAccessReview> StudentGuardianAccessReviews { get; set; }
 	public DbSet<StudentIdCard> StudentIdCards { get; set; }
 	public DbSet<StudentIdCardTemplate> StudentIdCardTemplates { get; set; }
+	public DbSet<StudentIdCardAssignment> StudentIdCardAssignments { get; set; }
 	public DbSet<StudentRecordLegacyOverride> StudentRecordLegacyOverrides { get; set; }
 	public DbSet<ShikshaMitra.Students.StudentRecords.StudentRecordsConfiguration> StudentRecordsConfigurations { get; set; }
 	public DbSet<ShikshaMitra.Students.StudentRecords.StudentRecordsPolicyVersion> StudentRecordsPolicyVersions { get; set; }

@@ -85,4 +85,10 @@ public static class StudentErrorCodes
     public const string InvalidCertificateBatchQuery         = "Students:Records:InvalidCertificateBatchQuery";
     public const string InvalidIdHistoryQuery                = "Students:Records:InvalidIdHistoryQuery";
     public const string InvalidIdHistorySort                 = "Students:Records:InvalidIdHistorySort";
+    public const string InvalidIdAssignment                  = "Students:Records:InvalidIdAssignment";
+    public const string IdAssignmentChanged                  = "Students:Records:IdAssignmentChanged";
+    public const string IdAssignmentRosterChanged            = "Students:Records:IdAssignmentRosterChanged";
+    public const string IdAssignmentAlreadyIssued            = "Students:Records:IdAssignmentAlreadyIssued";
+    public const string IdAssignmentIssueKeyReused           = "Students:Records:IdAssignmentIssueKeyReused";
+    public const string IdTemplateAssigned                   = "Students:Records:IdTemplateAssigned";
 }

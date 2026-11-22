@@ -25,24 +25,29 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var board = await _boardRepository.GetAsync(medium.EducationBoardId);
 		var service = GetRequiredService<IAdmissionCycleAppService>();
 		var serializer = GetRequiredService<IJsonSerializer>();
-		var input = serializer.Deserialize<CreateUpdateAdmissionCycleDto>("""
-			{"name":"Calendar dates","startDate":"2026-06-01T00:00:00+05:30","endDate":"2027-03-31T00:00:00+05:30"}
+		var today = AdmissionCycleWindowEvaluator.GetInstitutionDate(DateTime.UtcNow);
+		var start = today.AddDays(1).ToString("yyyy-MM-dd");
+		var revisedStart = today.AddDays(2).ToString("yyyy-MM-dd");
+		var end = today.AddDays(90).ToString("yyyy-MM-dd");
+		var revisedEnd = today.AddDays(100).ToString("yyyy-MM-dd");
+		var input = serializer.Deserialize<CreateUpdateAdmissionCycleDto>($$"""
+			{"name":"Calendar dates","startDate":"{{start}}T00:00:00+05:30","endDate":"{{end}}T00:00:00+05:30"}
 			""");
 		input.AcademicYearId = board.AcademicYearId;
 		var created = await service.CreateAsync(input);
-		await AssertStoredCalendarDates(created.Id, "2026-06-01", "2027-03-31");
+		await AssertStoredCalendarDates(created.Id, start, end);
 
 		input.ConcurrencyStamp = created.ConcurrencyStamp;
-		input.EndDate = new DateTime(2037, 3, 31, 0, 0, 0, DateTimeKind.Utc);
+		input.EndDate = DateTime.SpecifyKind(today.AddDays(100), DateTimeKind.Utc);
 		var edited = await service.UpdateAsync(created.Id, input);
-		await AssertStoredCalendarDates(edited.Id, "2026-06-01", "2037-03-31");
-		var cloneInput = serializer.Deserialize<CloneAdmissionCycleDto>("""
-			{"name":"Clone calendar dates","startDate":"2026-06-01T23:30:00-07:00","endDate":"2037-03-31T00:00:00+05:30"}
+		await AssertStoredCalendarDates(edited.Id, start, revisedEnd);
+		var cloneInput = serializer.Deserialize<CloneAdmissionCycleDto>($$"""
+			{"name":"Clone calendar dates","startDate":"{{start}}T23:30:00-07:00","endDate":"{{revisedEnd}}T00:00:00+05:30"}
 			""");
 		cloneInput.AcademicYearId = board.AcademicYearId;
 		cloneInput.SourceCycleId = edited.Id;
 		var clone = await service.CloneAsync(cloneInput);
-		await AssertStoredCalendarDates(clone.Id, "2026-06-01", "2037-03-31");
+		await AssertStoredCalendarDates(clone.Id, start, revisedEnd);
 
 		var publishAt = DateTime.UtcNow.AddDays(1);
 		var closeAt = publishAt.AddDays(1);
@@ -54,23 +59,41 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		scheduled.ScheduledCloseAt!.Value.ToUniversalTime().ShouldBe(closeAt);
 
 		var published = await service.PublishAsync(edited.Id, scheduled.ConcurrencyStamp);
-		var revision = serializer.Deserialize<UpdateAdmissionCycleWindowDto>("""
-			{"startDate":"2026-06-02T00:00:00+05:30","endDate":"2037-03-30T00:00:00+05:30","reason":"Approved date revision"}
+		var revision = serializer.Deserialize<UpdateAdmissionCycleWindowDto>($$"""
+			{"startDate":"{{revisedStart}}T00:00:00+05:30","endDate":"{{end}}T00:00:00+05:30","reason":"Approved date revision"}
 			""");
 		revision.ConcurrencyStamp = published.ConcurrencyStamp;
 		var revised = await service.UpdateWindowAsync(edited.Id, revision);
-		await AssertStoredCalendarDates(revised.Id, "2026-06-02", "2037-03-30");
+		await AssertStoredCalendarDates(revised.Id, revisedStart, end);
 		var closed = await service.CloseAsync(revised.Id, new AdmissionCycleActionDto
 		{
 			ConcurrencyStamp = revised.ConcurrencyStamp, Reason = "Temporary closure"
 		});
-		var reopen = serializer.Deserialize<ReopenAdmissionCycleDto>("""
-			{"newEndDate":"2037-03-31T00:00:00+05:30","reason":"Approved reopening"}
+		var reopen = serializer.Deserialize<ReopenAdmissionCycleDto>($$"""
+			{"newEndDate":"{{revisedEnd}}T00:00:00+05:30","reason":"Approved reopening"}
 			""");
 		reopen.ConcurrencyStamp = closed.ConcurrencyStamp;
 		var reopened = await service.ReopenAsync(closed.Id, reopen);
 		reopened.Status.ShouldBe(AdmissionCycleStatus.Published);
-		await AssertStoredCalendarDates(reopened.Id, "2026-06-02", "2037-03-31");
+		await AssertStoredCalendarDates(reopened.Id, revisedStart, revisedEnd);
+
+		var historicalStart = DateTime.SpecifyKind(today.AddDays(-30), DateTimeKind.Utc);
+		var retainedCycle = new AdmissionCycle(Guid.NewGuid(), TestTenantId, "Retained historical intake",
+			"HISTORICAL-INTAKE", board.AcademicYearId, historicalStart, DateTime.SpecifyKind(today.AddDays(30), DateTimeKind.Utc));
+		retainedCycle.Publish(TestUserId, DateTime.UtcNow);
+		await WithUnitOfWorkAsync(() => _cycleRepository.InsertAsync(retainedCycle, autoSave: true));
+		var retainStart = new UpdateAdmissionCycleWindowDto
+		{
+			StartDate = historicalStart, EndDate = DateTime.SpecifyKind(today.AddDays(60), DateTimeKind.Utc),
+			Reason = "Extend the current window", ConcurrencyStamp = retainedCycle.ConcurrencyStamp
+		};
+		var retained = await service.UpdateWindowAsync(retainedCycle.Id, retainStart);
+		retained.StartDate.ShouldBe(historicalStart);
+		retained.EndDate.ShouldBe(retainStart.EndDate);
+		retainStart.StartDate = historicalStart.AddDays(1);
+		retainStart.ConcurrencyStamp = retained.ConcurrencyStamp;
+		(await Should.ThrowAsync<Volo.Abp.BusinessException>(() => service.UpdateWindowAsync(retainedCycle.Id, retainStart)))
+			.Code.ShouldBe(AdmissionErrorCodes.CycleWindowDateTooEarly);
 
 		async Task AssertStoredCalendarDates(Guid id, string expectedStart, string expectedEnd)
 		{

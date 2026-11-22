@@ -35,7 +35,11 @@ public static class ApiProblemDetailsMapper
 			Students.StudentEnrollments.Admissions.AdmissionJourneyResumeErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionFormCorrectionErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Conflict => StatusCodes.Status409Conflict,
+			Students.StudentEnrollments.Admissions.AdmissionErrorCodes.PublicInquiryLinkNameExists => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Unavailable => StatusCodes.Status404NotFound,
+			Students.StudentErrorCodes.IdAssignmentChanged or Students.StudentErrorCodes.IdAssignmentRosterChanged or
+				Students.StudentErrorCodes.IdAssignmentAlreadyIssued or Students.StudentErrorCodes.IdAssignmentIssueKeyReused or
+				Students.StudentErrorCodes.IdTemplateAssigned => StatusCodes.Status409Conflict,
 			Academic.Mobile.MobileSubmissionErrorCodes.SubmissionConflict or
 			Academic.Mobile.MobileSubmissionErrorCodes.IdempotencyConflict => StatusCodes.Status409Conflict,
 			StudentRollNumberErrorCodes.StalePreview or StudentRollNumberErrorCodes.InvalidState => StatusCodes.Status409Conflict,

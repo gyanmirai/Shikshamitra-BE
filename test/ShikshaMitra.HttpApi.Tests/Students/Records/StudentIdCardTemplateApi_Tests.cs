@@ -27,15 +27,150 @@ using Xunit;
 
 namespace ShikshaMitra.Students.Records;
 
+public class StudentIdCardTemplateTestFactory : ShikshaMitraApiTestFactory
+{
+	protected override bool InitializeTestData => false;
+}
+
 /// <summary>JSON contracts intentionally compile against the pre-library DTO and HTTP surface.</summary>
-[Collection(ApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.Students)]
-public class StudentIdCardTemplateApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
+public class StudentIdCardTemplateApi_Tests(StudentIdCardTemplateTestFactory factory)
+	: ShikshaMitraApiTestBase(factory), IClassFixture<StudentIdCardTemplateTestFactory>
 {
 	private const string Route = "/api/students/records/ids/templates";
 	private const string View = "Students.Records.StudentICard.View";
 	private const string Add = "Students.Records.StudentICard.Add";
 	private const string Delete = "Students.Records.StudentICard.Delete";
+
+	[Fact, TestTier(TestTraits.Tiers.Critical)]
+	public async Task Icard_class_assignment_separates_rule_management_from_issuing_and_prevents_duplicate_cards()
+	{
+		var actor = await CreateActorAsync();
+		var member = await SeedStudentAsync(actor);
+		var placement = await InTenantAsync(actor.TenantId, async services =>
+		{
+			var student = await services.GetRequiredService<IStudentRepository>().GetAsync(member.Student);
+			var emptyClass = await services.GetRequiredService<StandardManager>().CreateAsync(
+				student.AcademicMediumStageId!.Value, "Empty Class", 6, null);
+			await services.GetRequiredService<IRepository<Standard, Guid>>().InsertAsync(emptyClass, true);
+			return (Board: student.AcademicBoardId!.Value, Medium: student.AcademicMediumId, Standard: student.StandardId!.Value, Empty: emptyClass.Id);
+		});
+		using var client = AsActor(actor, View + "," + Add + "," + Delete);
+		using var viewer = AsActor(actor, View);
+		var classes = $"/api/students/records/ids/assignments?academicYearId={member.Year}&boardId={placement.Board}&mediumId={placement.Medium}";
+		var rule = $"/api/students/records/ids/assignments/{member.Year}/{placement.Standard}";
+		var rows = (await ReadAsync(await viewer.GetAsync(classes)))["items"]!.AsArray();
+		rows.Select(item => item!["standardId"]!.GetValue<Guid>()).ShouldContain(placement.Empty);
+		var row = rows.Single(item => item!["standardId"]!.GetValue<Guid>() == placement.Standard)!;
+		row["standardId"]!.GetValue<Guid>().ShouldBe(placement.Standard);
+		row["templateId"].ShouldBeNull();
+		var filtered = await ReadAsync(await viewer.GetAsync($"{classes}&standardId={placement.Empty}&maxResultCount=1"));
+		filtered["totalCount"]!.GetValue<int>().ShouldBe(1);
+		filtered["items"]!.AsArray().Single()!["standardId"]!.GetValue<Guid>().ShouldBe(placement.Empty);
+		var template = await ReadAsync(await client.PostAsJsonAsync(Route, Body("Class design"), JsonOptions));
+		var templateId = template["id"]!.GetValue<Guid>();
+		(await viewer.PutAsJsonAsync(rule, new { templateId }, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		var saved = await ReadAsync(await client.PutAsJsonAsync(rule, new { templateId }, JsonOptions));
+		var concurrencyStamp = saved["concurrencyStamp"]!.GetValue<string>();
+		var templateConcurrencyStamp = saved["templateConcurrencyStamp"]!.GetValue<string>();
+		(await client.PutAsJsonAsync(rule, new { templateId }, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+		(await client.DeleteAsync(Route + "/" + templateId)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+		var beforeIssue = (await ReadAsync(await viewer.GetAsync(rule + "/roster")))["items"]!.AsArray().Single()!;
+		beforeIssue["hasValidIssuedCard"]!.GetValue<bool>().ShouldBeFalse();
+		var studentIds = new[] { member.Student };
+		var preview = await ReadAsync(await viewer.PostAsJsonAsync(rule + "/preview", new { studentIds, concurrencyStamp, templateConcurrencyStamp }, JsonOptions));
+		preview.AsArray().Single()!["templateSnapshot"]!["name"]!.GetValue<string>().ShouldBe("Class design");
+		var stalePreview = await viewer.PostAsJsonAsync(rule + "/preview", new { studentIds, concurrencyStamp, templateConcurrencyStamp = "stale-template" }, JsonOptions);
+		stalePreview.StatusCode.ShouldBe(HttpStatusCode.Conflict, await stalePreview.Content.ReadAsStringAsync());
+		var invalidSelection = await viewer.PostAsJsonAsync(rule + "/preview", new { studentIds = new[] { Guid.NewGuid() }, concurrencyStamp, templateConcurrencyStamp }, JsonOptions);
+		invalidSelection.StatusCode.ShouldBe(HttpStatusCode.Conflict, await invalidSelection.Content.ReadAsStringAsync());
+		using var export = await client.PostAsJsonAsync(rule + "/export", new { studentIds, concurrencyStamp, templateConcurrencyStamp }, JsonOptions);
+		export.StatusCode.ShouldBe(HttpStatusCode.OK, await export.Content.ReadAsStringAsync());
+		export.Content.Headers.ContentType!.MediaType.ShouldBe("application/pdf");
+		var afterExport = (await ReadAsync(await viewer.GetAsync(rule + "/roster")))["items"]!.AsArray().Single()!;
+		afterExport["hasValidIssuedCard"]!.GetValue<bool>().ShouldBeFalse();
+		var issue = new { studentIds, concurrencyStamp, templateConcurrencyStamp, idempotencyKey = "class-first-issue" };
+		var first = (await ReadAsync(await client.PostAsJsonAsync(rule + "/issue", issue, JsonOptions))).AsArray().Single()!;
+		var replay = (await ReadAsync(await client.PostAsJsonAsync(rule + "/issue", issue, JsonOptions))).AsArray().Single()!;
+		replay["id"]!.GetValue<Guid>().ShouldBe(first["id"]!.GetValue<Guid>());
+		replay["studentSnapshot"]!["_AssignmentBatchFingerprint"].ShouldBeNull();
+		using var changedPhoto = await client.PostAsJsonAsync(rule + "/issue", new
+		{
+			studentIds, concurrencyStamp, templateConcurrencyStamp, idempotencyKey = "class-first-issue",
+			photoEdits = new[] { new { recordId = member.Student, sourceHash = "changed", imageData = "changed" } }
+		}, JsonOptions);
+		changedPhoto.StatusCode.ShouldBe(HttpStatusCode.Conflict, await changedPhoto.Content.ReadAsStringAsync());
+		(await changedPhoto.Content.ReadAsStringAsync()).ShouldContain("Students:Records:IdAssignmentIssueKeyReused");
+		(await client.PostAsJsonAsync(rule + "/issue", new { studentIds, concurrencyStamp, templateConcurrencyStamp, idempotencyKey = "class-second-issue" }, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+		var afterIssue = (await ReadAsync(await viewer.GetAsync(rule + "/roster")))["items"]!.AsArray().Single()!;
+		afterIssue["hasValidIssuedCard"]!.GetValue<bool>().ShouldBeTrue();
+		var edit = await ReadAsync(await client.GetAsync(Route + "/" + templateId));
+		edit["name"] = "Revised class design";
+		await ReadAsync(await client.PutAsJsonAsync(Route + "/" + templateId, edit, JsonOptions));
+		var revisedClass = (await ReadAsync(await viewer.GetAsync(classes)))["items"]!.AsArray()
+			.Single(item => item!["standardId"]!.GetValue<Guid>() == placement.Standard)!;
+		var revisedStamp = revisedClass["templateConcurrencyStamp"]!.GetValue<string>();
+		revisedStamp.ShouldNotBe(templateConcurrencyStamp);
+		templateConcurrencyStamp = revisedStamp;
+		using var changedTemplate = await client.PostAsJsonAsync(rule + "/issue", new
+		{
+			studentIds, concurrencyStamp, templateConcurrencyStamp, idempotencyKey = "class-first-issue"
+		}, JsonOptions);
+		changedTemplate.StatusCode.ShouldBe(HttpStatusCode.Conflict, await changedTemplate.Content.ReadAsStringAsync());
+		(await changedTemplate.Content.ReadAsStringAsync()).ShouldContain("Students:Records:IdAssignmentIssueKeyReused");
+		var issuedId = first["id"]!.GetValue<Guid>();
+		(await client.PostAsJsonAsync($"/api/students/records/ids/{issuedId}/void", new { reason = "Synthetic replacement" }, JsonOptions)).IsSuccessStatusCode.ShouldBeTrue();
+		(await ReadAsync(await client.PostAsJsonAsync(rule + "/issue", new { studentIds, concurrencyStamp, templateConcurrencyStamp, idempotencyKey = "class-replacement-issue" }, JsonOptions)))
+			.AsArray().Single()!["id"]!.GetValue<Guid>().ShouldNotBe(issuedId);
+		var emptyClassRule = $"/api/students/records/ids/assignments/{member.Year}/{placement.Empty}";
+		await ReadAsync(await client.PutAsJsonAsync(emptyClassRule, new { templateId }, JsonOptions));
+		await InTenantAsync(actor.TenantId, async services =>
+		{
+			await services.GetRequiredService<IRepository<Standard, Guid>>().DeleteAsync(placement.Empty, true);
+			return true;
+		});
+		(await client.DeleteAsync(Route + "/" + templateId)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+		(await client.DeleteAsync(rule + "?concurrencyStamp=" + concurrencyStamp)).IsSuccessStatusCode.ShouldBeTrue();
+		using var deletedTemplate = await client.DeleteAsync(Route + "/" + templateId);
+		deletedTemplate.IsSuccessStatusCode.ShouldBeTrue(await deletedTemplate.Content.ReadAsStringAsync());
+		var remainingRules = await InTenantAsync(actor.TenantId, services => services.GetRequiredService<IRepository<StudentIdCardAssignment, Guid>>()
+			.GetListAsync(item => item.TemplateId == templateId));
+		remainingRules.ShouldBeEmpty();
+	}
+
+	[Fact, TestTier(TestTraits.Tiers.Critical)]
+	public async Task Icard_class_assignment_does_not_allow_division_scope_to_manage_a_class()
+	{
+		var owner = await CreateActorAsync();
+		var member = await SeedStudentAsync(owner);
+		var placement = await InTenantAsync(owner.TenantId, async services =>
+		{
+			var student = await services.GetRequiredService<IStudentRepository>().GetAsync(member.Student);
+			var userId = Guid.NewGuid();
+			await services.GetRequiredService<IRepository<IdentityUser, Guid>>().InsertAsync(
+				new IdentityUser(userId, "narrow-" + userId.ToString("N"), userId.ToString("N") + "@example.test", owner.TenantId), true);
+			await services.GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(new UserScopeAssignment(Guid.NewGuid(),
+				owner.TenantId, userId: userId, academicYearId: member.Year, educationBoardId: student.AcademicBoardId,
+				educationMediumId: student.AcademicMediumId, educationMediumStageId: student.AcademicMediumStageId,
+				standardId: student.StandardId, divisionId: student.DivisionId, description: "Division-only I-Card staff"), true);
+			return (Actor: new Actor(owner.TenantId, userId), Board: student.AcademicBoardId!.Value, Medium: student.AcademicMediumId, Standard: student.StandardId!.Value);
+		});
+		using var client = AsActor(owner, View + "," + Add + "," + Delete);
+		using var scoped = AsActor(placement.Actor, View + "," + Add + "," + Delete);
+		var classes = $"/api/students/records/ids/assignments?academicYearId={member.Year}&boardId={placement.Board}&mediumId={placement.Medium}";
+		var rule = $"/api/students/records/ids/assignments/{member.Year}/{placement.Standard}";
+		var template = await ReadAsync(await client.PostAsJsonAsync(Route, Body("Scoped access design"), JsonOptions));
+		var templateId = template["id"]!.GetValue<Guid>();
+		var saved = await ReadAsync(await client.PutAsJsonAsync(rule, new { templateId }, JsonOptions));
+		var concurrencyStamp = saved["concurrencyStamp"]!.GetValue<string>();
+		var row = (await ReadAsync(await scoped.GetAsync(classes)))["items"]!.AsArray().Single()!;
+		row["canManage"]!.GetValue<bool>().ShouldBeFalse();
+		row["templateId"]!.GetValue<Guid>().ShouldBe(templateId);
+		var roster = (await ReadAsync(await scoped.GetAsync(rule + "/roster")))["items"]!.AsArray().Single()!;
+		roster["studentId"]!.GetValue<Guid>().ShouldBe(member.Student);
+		(await scoped.PutAsJsonAsync(rule, new { templateId, concurrencyStamp }, JsonOptions)).IsSuccessStatusCode.ShouldBeFalse();
+		(await scoped.DeleteAsync(rule + "?concurrencyStamp=" + concurrencyStamp)).IsSuccessStatusCode.ShouldBeFalse();
+	}
 	[Fact, TestTier(TestTraits.Tiers.Critical)]
 	public async Task Icard_photo_HTTP_requires_view_before_record_lookup()
 	{

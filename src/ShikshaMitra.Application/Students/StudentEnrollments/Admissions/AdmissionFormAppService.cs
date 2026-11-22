@@ -254,8 +254,10 @@ public class AdmissionFormAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public async Task<AdmissionFormValidationResultDto> ValidateAsync(Guid id)
 	{
-		await GetFormAsync(id);
-		return await ValidateDefinitionAsync(id);
+		var (validation, matchingVersion) = await ValidateDefinitionAsync(await GetFormAsync(id), checkPublishedVersion: true);
+		if (matchingVersion.HasValue)
+			validation.Errors.Add($"{AdmissionFormErrorCodes.VersionUnchanged}:{matchingVersion.Value}");
+		return validation;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Archive)]
@@ -265,7 +267,7 @@ public class AdmissionFormAppService(
 		EnsureConcurrency(form, concurrencyStamp);
 		if (form.Status != AdmissionFormStatus.Archived) throw new BusinessException(AdmissionFormErrorCodes.ArchivedRequired);
 		await EnsureNameAvailableAsync(form.Name, form.Code);
-		var validation = await ValidateDefinitionAsync(id);
+		var (validation, _) = await ValidateDefinitionAsync(form);
 		if (!validation.IsValid)
 			throw new BusinessException(AdmissionFormErrorCodes.RestoreInvalidDefinition)
 				.WithData("Errors", string.Join("; ", validation.Errors));
@@ -284,8 +286,12 @@ public class AdmissionFormAppService(
 	{
 		var form = await GetFormAsync(id);
 		EnsureConcurrency(form, concurrencyStamp);
-		var validation = await ValidateDefinitionAsync(id);
+		var (validation, matchingVersion) = await ValidateDefinitionAsync(form, checkPublishedVersion: true);
 		if (!validation.IsValid) throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition).WithData("Errors", string.Join(";", validation.Errors));
+		if (matchingVersion is int version)
+			throw new BusinessException(AdmissionFormErrorCodes.VersionUnchanged)
+				.WithData("Version", version)
+				.WithData("Reason", $"This draft matches published v{version}. Make a change before publishing, or keep using v{version}.");
 		if (form.Status == AdmissionFormStatus.Draft)
 		{
 			var fields = await GetFieldsAsync(id);
@@ -325,7 +331,12 @@ public class AdmissionFormAppService(
 	public async Task<IReadOnlyList<AdmissionFormAuditEntryDto>> GetAuditAsync(Guid id)
 	{
 		var form = await GetFormAsync(id);
-		return AdmissionFormMetadataStore.ReadAudit(form).OrderByDescending(entry => entry.OccurredAt).ToList();
+		var entries = AdmissionFormMetadataStore.ReadAudit(form).OrderByDescending(entry => entry.OccurredAt).ToList();
+		var names = await LazyServiceProvider.LazyGetRequiredService<StudentJourneyActorReader>()
+			.ReadAsync(entries.Select(entry => entry.ActorId));
+		foreach (var entry in entries)
+			entry.ActorName = entry.ActorId is Guid actorId ? names.GetValueOrDefault(actorId) : null;
+		return entries;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
@@ -385,9 +396,10 @@ public class AdmissionFormAppService(
 	private static List<string> Compare(AdmissionFormDto from, AdmissionFormDto to)
 		=> AdmissionFormVersionComparer.Compare(from, to);
 
-	private async Task<AdmissionFormValidationResultDto> ValidateDefinitionAsync(Guid id)
+	private async Task<(AdmissionFormValidationResultDto Validation, int? MatchingVersion)> ValidateDefinitionAsync(
+		AdmissionFormDefinition form, bool checkPublishedVersion = false)
 	{
-		var form = await GetFormAsync(id);
+		var id = form.Id;
 		var sections = await GetSectionsAsync(id);
 		var fields = (await GetFieldsAsync(id)).Select(field => AdmissionGenderChoices.ForValidation(field, form.Status)).ToList();
 		var result = new AdmissionFormValidationResultDto();
@@ -395,7 +407,8 @@ public class AdmissionFormAppService(
 		ValidateApplicantNameMappings(form.Purpose, fields, result);
 		var experience = AdmissionFormMetadataStore.ReadExperience(form);
 		var inheritance = AdmissionFormInheritanceMetadataStore.ReadPolicy(form);
-		var coreInput = ToInput(Map(form, sections, fields));
+		var definition = Map(form, sections, fields);
+		var coreInput = ToInput(definition);
 		result.Errors.AddRange(AdmissionCoreFieldPolicy.Validate(coreInput, await GuaranteedInheritedCoreKeysAsync(coreInput)));
 		var usesInheritedFields = inheritance?.Enabled == true && inheritance.Sources.Count > 0;
 		if (form.Purpose == AdmissionFormPurpose.Inquiry)
@@ -458,7 +471,21 @@ public class AdmissionFormAppService(
 			var inheritanceIssues = await LazyServiceProvider.LazyGetRequiredService<AdmissionFormInheritanceService>().ValidatePolicyAsync(id);
 			result.Errors.AddRange(inheritanceIssues.Select(issue => $"{AdmissionFormInheritanceErrorCodes.IncompatibleSource}:{issue.Message}"));
 		}
-		return result;
+		var matchingVersion = checkPublishedVersion && result.IsValid && form.Status == AdmissionFormStatus.Draft
+			? await FindMatchingPublishedVersionAsync(definition)
+			: null;
+		return (result, matchingVersion);
+	}
+
+	private async Task<int?> FindMatchingPublishedVersionAsync(AdmissionFormDto draft)
+	{
+		var query = await formRepository.GetQueryableAsync();
+		var latest = await AsyncExecuter.FirstOrDefaultAsync(query
+			.Where(form => form.Code == draft.Code && form.Status == AdmissionFormStatus.Published)
+			.OrderByDescending(form => form.Version));
+		if (latest is null) return null;
+
+		return Compare(await MapAsync(latest), draft).Count == 0 ? latest.Version : null;
 	}
 
 	internal static void ValidateClassInterestQuestions(IEnumerable<AdmissionFormFieldDefinition> fields, AdmissionFormValidationResultDto result)

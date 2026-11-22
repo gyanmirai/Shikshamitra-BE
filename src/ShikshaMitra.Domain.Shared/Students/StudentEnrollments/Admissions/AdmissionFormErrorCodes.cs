@@ -18,6 +18,7 @@ public static class AdmissionFormErrorCodes
 	public const string DraftAlreadyExists = "Admissions.FormDraftAlreadyExists";
 	public const string VersionSourceRequired = "Admissions.FormVersionSourceRequired";
 	public const string VersionCodeImmutable = "Admissions.FormVersionCodeImmutable";
+	public const string VersionUnchanged = "Admissions.FormVersionUnchanged";
 	public const string ArchivedRequired = "Admissions.FormArchivedRequired";
 	public const string RestoreInvalidDefinition = "Admissions.FormRestoreInvalidDefinition";
 	public const string FormInUse = "Admissions.FormInUse";

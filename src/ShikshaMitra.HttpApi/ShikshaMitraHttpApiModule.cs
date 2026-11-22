@@ -41,6 +41,7 @@ public class ShikshaMitraHttpApiModule : AbpModule
 			options.Map(Library.LibraryErrorCodes.CatalogueConfigurationChanged, System.Net.HttpStatusCode.Conflict);
 			options.Map(Library.LibraryErrorCodes.CatalogueRevisionChanged, System.Net.HttpStatusCode.Conflict);
 			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Conflict, System.Net.HttpStatusCode.Conflict);
+			options.Map(Students.StudentEnrollments.Admissions.AdmissionErrorCodes.PublicInquiryLinkNameExists, System.Net.HttpStatusCode.Conflict);
 			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Unavailable, System.Net.HttpStatusCode.NotFound);
 			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Invalid, System.Net.HttpStatusCode.BadRequest);
 			options.Map(Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Incomplete, System.Net.HttpStatusCode.BadRequest);
@@ -48,6 +49,12 @@ public class ShikshaMitraHttpApiModule : AbpModule
 			options.Map(Academic.Curriculum.ElectivePreferenceErrorCodes.Conflict, System.Net.HttpStatusCode.Conflict);
 			options.Map(Academic.Curriculum.ElectivePreferenceErrorCodes.InvalidRequest, System.Net.HttpStatusCode.BadRequest);
 			options.Map("MobileAcademics:IdempotencyConflict", System.Net.HttpStatusCode.Conflict);
+			options.Map(Students.StudentErrorCodes.InvalidIdAssignment, System.Net.HttpStatusCode.BadRequest);
+			options.Map(Students.StudentErrorCodes.IdAssignmentChanged, System.Net.HttpStatusCode.Conflict);
+			options.Map(Students.StudentErrorCodes.IdAssignmentRosterChanged, System.Net.HttpStatusCode.Conflict);
+			options.Map(Students.StudentErrorCodes.IdAssignmentAlreadyIssued, System.Net.HttpStatusCode.Conflict);
+			options.Map(Students.StudentErrorCodes.IdAssignmentIssueKeyReused, System.Net.HttpStatusCode.Conflict);
+			options.Map(Students.StudentErrorCodes.IdTemplateAssigned, System.Net.HttpStatusCode.Conflict);
 			foreach (var code in new[] {
 				Academic.Mobile.MobileSubmissionErrorCodes.AmbiguousAnswer,
 				Academic.Mobile.MobileSubmissionErrorCodes.InvalidRequestId,

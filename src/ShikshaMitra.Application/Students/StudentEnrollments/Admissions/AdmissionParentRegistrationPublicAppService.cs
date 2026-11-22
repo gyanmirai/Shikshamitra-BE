@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Auditing;
@@ -17,7 +18,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 [AllowAnonymous, RemoteService(false), DisableAuditing]
 public partial class AdmissionParentRegistrationPublicAppService(AdmissionParentRegistrationData data,
 	AdmissionParentRegistrationAccess access, AdmissionParentRegistrationForms forms, AdmissionParentRegistrationDocuments documents,
-	AdmissionApplicationFormService formOwner, ICurrentPrincipalAccessor principals)
+	AdmissionApplicationFormService formOwner, ICurrentPrincipalAccessor principals,
+	SchoolIdentityReadService schoolIdentity, SchoolIdentityDocumentService identityDocuments)
 	: ApplicationService, IAdmissionParentRegistrationPublicAppService
 {
 	public async Task<AdmissionParentPublicContextDto> GetAsync(string token)
@@ -26,6 +28,26 @@ public partial class AdmissionParentRegistrationPublicAppService(AdmissionParent
 		var grant = await access.ResolveAsync(token);
 		using var tenant = CurrentTenant.Change(grant.TenantId);
 		return await ContextAsync(grant, await access.AuthorizeAsync(grant));
+	}
+
+	public async Task<SchoolIdentityAssetDownloadDto?> GetLogoAsync(string token)
+	{
+		using var anonymous = principals.Change(new ClaimsPrincipal(new ClaimsIdentity()));
+		var grant = await access.ResolveAsync(token);
+		using var tenant = CurrentTenant.Change(grant.TenantId);
+		var application = await access.AuthorizeAsync(grant);
+		if (grant.TenantId is not Guid tenantId) return null;
+		var offering = await data.Repo<AdmissionOffering>().FindAsync(application.AdmissionOfferingId);
+		if (offering == null || offering.TenantId != tenantId) return null;
+
+		var branding = await schoolIdentity.ReadAsync(offering.BoardId, offering.MediumId, null,
+			signature: false, organizationId: offering.StageId);
+		if (branding.Effective["logo"].Asset is not { } logo) return null;
+
+		var assets = await identityDocuments.LoadAsync(new() { TenantId = tenantId, LogoAssetId = logo.Id });
+		return assets.Logo is { Length: > 0 } content
+			? new() { Content = content, ContentType = logo.ContentType, FileName = logo.FileName }
+			: null;
 	}
 	public Task<AdmissionParentPublicContextDto> SaveAsync(string token, AdmissionParentDraftInput input) =>
 		MutateAsync(token, input, "save", input, async (grant, application) =>

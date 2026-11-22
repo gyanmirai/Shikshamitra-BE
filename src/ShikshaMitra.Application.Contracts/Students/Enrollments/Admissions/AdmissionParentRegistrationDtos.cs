@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Content;
 
@@ -242,6 +243,7 @@ public interface IAdmissionParentRegistrationAppService : IApplicationService
 public interface IAdmissionParentRegistrationPublicAppService : IApplicationService
 {
 	Task<AdmissionParentPublicContextDto> GetAsync(string token);
+	Task<SchoolIdentityAssetDownloadDto?> GetLogoAsync(string token);
 	Task<AdmissionParentPublicContextDto> SaveAsync(string token, AdmissionParentDraftInput input);
 	Task<AdmissionParentPublicContextDto> HandInAsync(string token, AdmissionParentPublicCommand input);
 	Task<AdmissionParentPublicContextDto> UploadAsync(string token, Guid stageId, string code, AdmissionParentUploadInput input);

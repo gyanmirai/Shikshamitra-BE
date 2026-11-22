@@ -18,6 +18,7 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 public class PayrollLockWorkflow(
 	PayrollPreviewReviewGuard previewGuard,
 	PayrollApprovalAccess approvalAccess,
+	PayrollSectionReviewLockGuard sectionReviewLock,
 	ISalarySlipRepository salarySlipRepository,
 	PayrollCalendarResolver payrollCalendarResolver,
 	HrAuditWriter auditWriter,
@@ -59,7 +60,8 @@ public class PayrollLockWorkflow(
 		Guid? academicYearId)
 	{
 		await previewGuard.EnsureCurrentAsync(request.PreviewRunId, request.Month, academicYearId, request.EmployeeIds);
-		await approvalAccess.EnsureLegacyIssuanceAsync();
+		var sectionReview = (await approvalAccess.ReadSettingsAsync())?.Mode == PayrollApprovalSettings.SectionReview;
+		if (!sectionReview) await approvalAccess.EnsureLegacyIssuanceAsync();
 		await previewGuard.EnsureReviewedAsync(request.PreviewRunId, request.EmployeeIds!);
 		using var scope = logger.BeginScope(new Dictionary<string, object>
 		{
@@ -102,13 +104,26 @@ public class PayrollLockWorkflow(
 			.ToDictionary(x => x.EmployeeId, x => x);
 		PayrollLockPreconditionGuard.EnsureReviewed(targetEmployeeIds, snapshotByEmployee, request.Month);
 		PayrollLockPreconditionGuard.EnsureNoBlockingSetupIssues(targetEmployeeIds, snapshotByEmployee, request.Month);
+		var sectionReviewPlan = sectionReview
+			? await sectionReviewLock.PrepareAsync(request, internalMonthYear, targetEmployeeIds)
+			: null;
 
 		logger.LogInformation(
 			"Generating salary slips from reviewed payroll snapshots for {ProcessCount} staff",
 			employees.Count);
 
 		await issuance.EnsureSchoolConfiguredAsync();
-		var result = await batchProcessor.ProcessAsync(employees, snapshotByEmployee, request.Month);
+		var result = await batchProcessor.ProcessAsync(employees, snapshotByEmployee, request.Month, requireAll: sectionReview);
+		if (sectionReviewPlan != null)
+		{
+			var issued = (await salarySlipRepository.GetByMonthAsync(internalMonthYear))
+				.Where(x => targetEmployeeIds.Contains(x.EmployeeId) && x.Status == SalarySlipStatus.Finalized).ToList();
+			if (result.GeneratedCount != targetEmployeeIds.Count || issued.Count != targetEmployeeIds.Count ||
+				issued.Select(x => x.EmployeeId).Distinct().Count() != targetEmployeeIds.Count ||
+				issued.Any(x => x.NetSalary != snapshotByEmployee[x.EmployeeId].NetPay))
+				throw new BusinessException("PAYROLL_SUBMISSION_ISSUANCE_MISMATCH");
+			await sectionReviewLock.RecordOverridesAsync(sectionReviewPlan);
+		}
 		await continuityInvalidator.InvalidateAsync(internalMonthYear, targetEmployeeIds);
 
 		if (result.GeneratedCount == 0 && result.FailedCount == employees.Count)
@@ -140,6 +155,7 @@ public class PayrollLockWorkflow(
 			internalMonthYear,
 			"locked",
 			$"Locked payroll for {request.Month}.",
+			reason: sectionReviewPlan?.OverrideReason,
 			context: new
 			{
 				RequestedMonth = request.Month,
@@ -149,6 +165,7 @@ public class PayrollLockWorkflow(
 				generatedCount = result.GeneratedCount,
 				skippedCount = result.SkippedCount,
 				failedCount = result.FailedCount,
+				sectionReviewOverrideBatchCount = sectionReviewPlan?.OverrideBatchCount ?? 0,
 				hasPolicyMetadataSnapshots = snapshotByEmployee.Values.Any(x => x.PayrollPolicyId.HasValue || x.AttendancePolicyId.HasValue || x.WorkCalendarPolicyId.HasValue)
 			});
 		return response;

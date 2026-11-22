@@ -23,6 +23,17 @@ public class PayrollApprovalAppService(PayrollApprovalSettingsWorkflow settings,
 		settings.ConfigureAsync(command);
 
 	[Authorize(Permission.ManageWorkflow)]
+	public virtual Task<PayrollSectionOptionsDto> GetSectionOptionsAsync() => settings.GetSectionOptionsAsync();
+
+	[Authorize(Permission.ManageWorkflow)]
+	public virtual Task<List<PayrollApproverDto>> GetSectionReviewersAsync(Guid stageId, Guid roleId) =>
+		access.GetSectionReviewersAsync(stageId, roleId);
+
+	[Authorize(Permission.ManageWorkflow)]
+	public virtual Task<PayrollApprovalSettingsDto> ConfigureSectionsAsync(ConfigurePayrollSectionsCommand command) =>
+		settings.ConfigureSectionsAsync(command);
+
+	[Authorize(Permission.ManageWorkflow)]
 	public virtual Task<PayrollApprovalSettingsDto> ChangeModeAsync(string action, PayrollApprovalSettingsCommand command) =>
 		settings.ChangeModeAsync(action, command);
 
@@ -31,6 +42,10 @@ public class PayrollApprovalAppService(PayrollApprovalSettingsWorkflow settings,
 
 	[Authorize(Permission.Submit)]
 	public virtual Task<PayrollSubmissionDto> SubmitAsync(SubmitPayrollCommand command) => submissions.SubmitAsync(command);
+
+	[Authorize(Permission.Submit)]
+	public virtual Task<List<PayrollSubmissionDto>> SubmitSectionsAsync(SubmitPayrollCommand command) =>
+		submissions.SubmitSectionsAsync(command);
 
 	public virtual Task<PayrollSubmissionDto> ResolveAsync(Guid id, string action, ResolvePayrollSubmissionCommand command) =>
 		submissions.ResolveAsync(id, action, command);

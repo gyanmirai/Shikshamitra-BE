@@ -16,7 +16,7 @@ public class PayrollApprovalConfiguration :
 		builder.ToTable("HR_PayrollApprovalSettings");
 		builder.ConfigureByConvention();
 		builder.Property(x => x.TenantId).IsRequired();
-		builder.Property(x => x.Mode).IsRequired().HasMaxLength(12);
+		builder.Property(x => x.Mode).IsRequired().HasMaxLength(16);
 		builder.HasIndex(x => x.TenantId).IsUnique();
 	}
 
@@ -28,8 +28,10 @@ public class PayrollApprovalConfiguration :
 		builder.Property(x => x.Month).IsRequired().HasMaxLength(7);
 		builder.Property(x => x.State).IsRequired().HasMaxLength(12);
 		builder.Property(x => x.ReasonCode).HasMaxLength(48);
+		builder.Property(x => x.ResolutionReason).HasMaxLength(500);
 		builder.Property(x => x.NetPay).HasPrecision(18, 2);
 		builder.HasIndex(x => new { x.TenantId, x.Month, x.ApproverId, x.SubmittedAt });
+		builder.HasIndex(x => new { x.TenantId, x.Month, x.ReviewerRoleId, x.SubmittedAt });
 		builder.HasIndex(x => new { x.TenantId, x.Month, x.SubmitterId, x.SubmittedAt });
 	}
 

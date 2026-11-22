@@ -8,6 +8,8 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 /// </summary>
 public class RunPayrollRequest
 {
+	public const int MaxSectionReviewOverrideReasonLength = 500;
+
 	public Guid PreviewRunId { get; set; }
 	/// <summary>
 	/// Payroll month in MMMM-YYYY format (e.g., JANUARY-2025)
@@ -23,6 +25,11 @@ public class RunPayrollRequest
 	/// Explicit employees selected from the reviewed preview generation.
 	/// </summary>
 	public List<Guid>? EmployeeIds { get; set; }
+
+	/// <summary>
+	/// HR's reason for issuing payroll while a current section review is pending or returned.
+	/// </summary>
+	public string? SectionReviewOverrideReason { get; set; }
 }
 
 /// <summary>

@@ -42,11 +42,13 @@ public class PayrollSubmissionWorkflow(
 		var (year, month, period) = PayrollRunRules.ParseMonth(input.Month);
 		var academicYear = await academicYears.ResolveAsync(input.AcademicYearId, year, month);
 		var actor = access.ActorId;
+		var roleIds = await access.GetCurrentRoleIdsAsync(actor);
 		var manager = await access.CanManageAsync();
 		var setting = await access.ReadSettingsAsync();
 		var revision = await revisions.ReadAsync();
 		var query = (await submissions.GetQueryableAsync()).Where(x => x.Month == period && x.AcademicYearId == academicYear &&
-			(manager || x.SubmitterId == actor || x.ApproverId == actor));
+			(manager || x.SubmitterId == actor || x.ApproverId == actor ||
+				(x.ReviewerRoleId.HasValue && Enumerable.Contains(roleIds, x.ReviewerRoleId.Value))));
 		var visible = new List<PayrollSubmissionDto>();
 		foreach (var batch in await AsyncExecuter.ToListAsync(query.OrderByDescending(x => x.SubmittedAt).ThenBy(x => x.Id)))
 		{
@@ -54,7 +56,7 @@ public class PayrollSubmissionWorkflow(
 			var roles = await ReadRolesAsync(batch, setting, rows);
 			if (!roles.CanRead) continue;
 			var stale = batch.State == PayrollSubmission.Pending && await ReadCurrentAsync(batch, rows, revision) == null;
-			visible.Add(ToDto(batch, roles, setting, stale));
+			visible.Add(await DescribeAsync(batch, roles, setting, stale));
 		}
 		return visible;
 	}
@@ -71,7 +73,7 @@ public class PayrollSubmissionWorkflow(
 		var saved = await AsyncExecuter.ToListAsync((await previewRows.GetQueryableAsync()).Where(x => previewIds.Contains(x.Id))
 			.OrderBy(x => x.EmployeeName).ThenBy(x => x.EmployeeId));
 		var items = saved.Select(x => JsonSerializer.Deserialize<RunPayrollItem>(x.ItemJson)!).ToList();
-		return new(ToDto(batch, roles, setting, stale), items);
+		return new(await DescribeAsync(batch, roles, setting, stale), items);
 	}
 
 	internal async Task<(string Month, List<PayrollVerifiedRow> Rows)> ReadPendingForExportAsync(Guid id, int version, Guid revision)
@@ -125,39 +127,116 @@ public class PayrollSubmissionWorkflow(
 			await previews.EnsureCurrentAsync(command.PreviewRunId, period, academicYear, ids);
 			var ready = await evidence.ReadCurrentAsync(access.TenantId, command.PreviewRunId, revision, period, academicYear, ids)
 				?? throw new BusinessException("PAYROLL_SUBMISSION_REVIEW_REQUIRED");
-			var staffClaims = (await ReadClaimsAsync(period, ids)).ToDictionary(x => x.EmployeeId);
-			if (staffClaims.Values.Any(x => x.SubmissionId.HasValue))
-				throw new BusinessException("PAYROLL_EMPLOYEE_ALREADY_SUBMITTED");
-
-			var batch = new PayrollSubmission(GuidGenerator.Create(), access.TenantId, academicYear, period, command.PreviewRunId,
-				revision, actor, approver.Value, command.SelfFinalize, setting.Version, command.PreviousSubmissionId,
-				ready.Sum(x => x.Snapshot.NetPay), ready.Count, Clock.Now);
-			await submissions.InsertAsync(batch);
-			foreach (var row in ready)
-			{
-				var id = row.Preview.EmployeeId;
-				await submissionRows.InsertAsync(new PayrollSubmissionEmployee(GuidGenerator.Create(), access.TenantId,
-					batch.Id, id, row.Preview.Id, evidence.Seal(row), row.Snapshot.NetPay));
-				if (staffClaims.TryGetValue(id, out var existing))
-				{
-					existing.Claim(batch.Id);
-					await claims.UpdateAsync(existing);
-				}
-				else
-				{
-					var claim = new PayrollEmployeeClaim(GuidGenerator.Create(), access.TenantId, period, id);
-					claim.Claim(batch.Id);
-					await claims.InsertAsync(claim);
-				}
-			}
+			var staffClaims = await ReadAvailableClaimsAsync(period, ids);
+			var batch = await CreateBatchAsync(command, period, academicYear, revision, setting.Version,
+				ready, staffClaims, approver.Value);
 			var roles = new SubmissionRoles(true, command.SelfFinalize, false);
 			return await RecordAsync(batch, setting, roles, "submit", command.CommandKey, fingerprint, null, false);
 		});
 	}
 
+	internal async Task<List<PayrollSubmissionDto>> SubmitSectionsAsync(SubmitPayrollCommand command)
+	{
+		var (year, month, period) = PayrollRunRules.ParseMonth(command.Month);
+		var ids = command.EmployeeIds.Order().ToList();
+		if (command.CommandKey == Guid.Empty || ids.Count == 0 || ids.Contains(Guid.Empty) ||
+			ids.Distinct().Count() != ids.Count || command.SelfFinalize || command.PreviousSubmissionId.HasValue)
+			throw new BusinessException("PAYROLL_SUBMISSION_SELECTION_INVALID");
+		return await UnderFenceAsync(period, async revision =>
+		{
+			var actor = access.ActorId;
+			if (!await access.CanAsync(actor, Permission.View, Permission.Submit) || !await access.CoversAsync(actor, ids))
+				throw new AbpAuthorizationException();
+			var academicYear = await academicYears.ResolveAsync(command.AcademicYearId, year, month);
+			const string operation = "submit-sections";
+			var fingerprint = PayrollSubmissionEvidence.Fingerprint(new
+			{
+				period, academicYear, ids, command.PreviewRunId, command.ExpectedSettingsVersion
+			});
+			var receipt = await receipts.FindAsync(x => x.ActorId == actor && x.Command == operation && x.Key == command.CommandKey);
+			if (receipt != null)
+			{
+				if (receipt.Fingerprint != fingerprint) throw new BusinessException("PAYROLL_COMMAND_KEY_CONFLICT");
+				var recorded = JsonSerializer.Deserialize<List<PayrollSubmissionDto>>(receipt.ResultJson)!;
+				var currentSettings = await access.ReadSettingsAsync();
+				foreach (var result in recorded)
+				{
+					var batch = await GetBatchAsync(result.Id);
+					if (!(await ReadRolesAsync(batch, currentSettings, await ReadRowsAsync(batch))).Submitter)
+						throw new AbpAuthorizationException();
+				}
+				return recorded;
+			}
+			var setting = await access.ReadSettingsAsync();
+			if (setting?.Mode != PayrollApprovalSettings.SectionReview) throw new BusinessException("PAYROLL_WORKFLOW_NOT_ACTIVE");
+			if (setting.Version != command.ExpectedSettingsVersion) throw new BusinessException("PAYROLL_SETTINGS_VERSION_CONFLICT");
+			var routes = access.SectionRoutes(setting);
+			var stageForEmployee = await access.ResolveSectionRoutesAsync(ids, academicYear, routes);
+			var roleByStage = routes.ToDictionary(x => x.StageId, x => x.RoleId);
+			await previews.EnsureCurrentAsync(command.PreviewRunId, period, academicYear, ids);
+			var ready = await evidence.ReadCurrentAsync(access.TenantId, command.PreviewRunId, revision, period, academicYear, ids)
+				?? throw new BusinessException("PAYROLL_SUBMISSION_REVIEW_REQUIRED");
+			var staffClaims = await ReadAvailableClaimsAsync(period, ids);
+			var results = new List<PayrollSubmissionDto>();
+			foreach (var section in ready.GroupBy(row => stageForEmployee[row.Preview.EmployeeId]).OrderBy(group => group.Key))
+			{
+				var roleId = roleByStage[section.Key];
+				var sectionRows = section.ToList();
+				var sectionEmployeeIds = sectionRows.Select(row => row.Preview.EmployeeId).ToList();
+				if (!await access.CoversSectionAsync(actor, section.Key, academicYear, sectionEmployeeIds))
+					throw new AbpAuthorizationException();
+				if (!await access.HasSectionReviewerAsync(section.Key, roleId, academicYear, sectionEmployeeIds))
+					throw new BusinessException("PAYROLL_APPROVER_UNAVAILABLE");
+				var batch = await CreateBatchAsync(command, period, academicYear, revision, setting.Version,
+					sectionRows, staffClaims, Guid.Empty, section.Key, roleId);
+				results.Add(await DescribeAsync(batch, new(true, false, false), setting, false));
+				await WriteAuditAsync(batch, setting, operation, null);
+			}
+			await receipts.InsertAsync(new PayrollCommandReceipt(GuidGenerator.Create(), access.TenantId, actor,
+				operation, command.CommandKey, fingerprint, results[0].Id, JsonSerializer.Serialize(results)));
+			return results;
+		});
+	}
+
+	private async Task<Dictionary<Guid, PayrollEmployeeClaim>> ReadAvailableClaimsAsync(string period, IReadOnlyCollection<Guid> ids)
+	{
+		var staffClaims = (await ReadClaimsAsync(period, ids)).ToDictionary(x => x.EmployeeId);
+		if (staffClaims.Values.Any(x => x.SubmissionId.HasValue))
+			throw new BusinessException("PAYROLL_EMPLOYEE_ALREADY_SUBMITTED");
+		return staffClaims;
+	}
+
+	private async Task<PayrollSubmission> CreateBatchAsync(SubmitPayrollCommand command, string period, Guid? academicYear,
+		Guid revision, int settingsVersion, List<PayrollVerifiedRow> ready, Dictionary<Guid, PayrollEmployeeClaim> staffClaims,
+		Guid approver, Guid? stageId = null, Guid? roleId = null)
+	{
+		var batch = new PayrollSubmission(GuidGenerator.Create(), access.TenantId, academicYear, period, command.PreviewRunId,
+			revision, access.ActorId, approver, command.SelfFinalize, settingsVersion, command.PreviousSubmissionId,
+			ready.Sum(x => x.Snapshot.NetPay), ready.Count, Clock.Now, stageId, roleId);
+		await submissions.InsertAsync(batch);
+		foreach (var row in ready)
+		{
+			var id = row.Preview.EmployeeId;
+			await submissionRows.InsertAsync(new PayrollSubmissionEmployee(GuidGenerator.Create(), access.TenantId,
+				batch.Id, id, row.Preview.Id, evidence.Seal(row), row.Snapshot.NetPay));
+			if (staffClaims.TryGetValue(id, out var existing))
+			{
+				existing.Claim(batch.Id);
+				await claims.UpdateAsync(existing);
+			}
+			else
+			{
+				var claim = new PayrollEmployeeClaim(GuidGenerator.Create(), access.TenantId, period, id);
+				claim.Claim(batch.Id);
+				await claims.InsertAsync(claim);
+			}
+		}
+		return batch;
+	}
+
 	internal async Task<PayrollSubmissionDto> ResolveAsync(Guid id, string action, ResolvePayrollSubmissionCommand command)
 	{
-		if (action is not ("finalize" or "withdraw" or "return" or "return-stale") || command.CommandKey == Guid.Empty)
+		if (action is not ("finalize" or "review" or "withdraw" or "return" or "return-stale") || command.CommandKey == Guid.Empty)
 			throw new BusinessException("PAYROLL_SUBMISSION_COMMAND_INVALID");
 		var month = (await GetBatchAsync(id)).Month;
 		return await UnderFenceAsync(month, async revision =>
@@ -176,17 +255,19 @@ public class PayrollSubmissionWorkflow(
 				throw new BusinessException("PAYROLL_SUBMISSION_VERSION_CONFLICT");
 			if ((action is "withdraw" or "return") && string.IsNullOrEmpty(reason))
 				throw new BusinessException("PAYROLL_CHANGE_REASON_REQUIRED");
-			if (action == "finalize" && setting?.Mode != PayrollApprovalSettings.Active)
+			var sectionReview = batch.StageId.HasValue;
+			if ((action == "finalize" && (sectionReview || setting?.Mode != PayrollApprovalSettings.Active)) ||
+				(action == "review" && (!sectionReview || setting?.Mode != PayrollApprovalSettings.SectionReview)))
 				throw new BusinessException("PAYROLL_WORKFLOW_NOT_ACTIVE");
 			var ids = rows.Select(x => x.EmployeeId).ToList();
 			var activeClaims = await ReadClaimsAsync(month, ids);
 			if (activeClaims.Count != rows.Count || activeClaims.Any(x => x.SubmissionId != batch.Id))
 				throw new BusinessException("PAYROLL_SUBMISSION_CLAIM_MISMATCH");
 
-			var verified = action is "finalize" or "return-stale" ? await ReadCurrentAsync(batch, rows, revision) : null;
+			var verified = action is "finalize" or "review" or "return-stale" ? await ReadCurrentAsync(batch, rows, revision) : null;
 			if (action == "return-stale" && verified != null)
 				throw new BusinessException("PAYROLL_SUBMISSION_IS_CURRENT");
-			var stale = verified == null && (action is "finalize" or "return-stale");
+			var stale = verified == null && (action is "finalize" or "review" or "return-stale");
 			if (action == "finalize" && verified != null)
 			{
 				try { await IssueAsync(batch, verified); }
@@ -195,10 +276,12 @@ public class PayrollSubmissionWorkflow(
 					throw new BusinessException("PAYROLL_BATCH_ISSUANCE_FAILED", innerException: failure);
 				}
 			}
-			if (stale) await ClearStaleReviewsAsync(batch, ids);
+			if (stale && !sectionReview) await ClearStaleReviewsAsync(batch, ids);
 			var nextState = action == "withdraw" ? PayrollSubmission.Withdrawn
-				: action == "finalize" && !stale ? PayrollSubmission.Finalized : PayrollSubmission.Returned;
-			batch.Resolve(command.ExpectedVersion, nextState, Clock.Now, stale ? "EvidenceChanged" : action);
+				: action == "finalize" && !stale ? PayrollSubmission.Finalized
+				: action == "review" && !stale ? PayrollSubmission.Reviewed : PayrollSubmission.Returned;
+			batch.Resolve(command.ExpectedVersion, nextState, Clock.Now, stale ? "EvidenceChanged" : action,
+				access.ActorId, reason);
 			await submissions.UpdateAsync(batch);
 			foreach (var claim in activeClaims)
 			{
@@ -268,14 +351,18 @@ public class PayrollSubmissionWorkflow(
 	private async Task<PayrollSubmissionDto> RecordAsync(PayrollSubmission batch, PayrollApprovalSettings? setting, SubmissionRoles roles,
 		string command, Guid key, string fingerprint, string? reason, bool stale)
 	{
-		var dto = ToDto(batch, roles, setting, stale);
+		var dto = await DescribeAsync(batch, roles, setting, stale);
 		await receipts.InsertAsync(new PayrollCommandReceipt(GuidGenerator.Create(), access.TenantId, access.ActorId,
 			command, key, fingerprint, batch.Id, JsonSerializer.Serialize(dto)));
-		await audit.WriteAsync(batch.AcademicYearId, "payroll_submission", batch.Id, batch.Month, command,
-			$"Payroll batch {batch.State.ToLowerInvariant()}.", reason,
-			context: new { batch.Version, batch.StaffCount, batch.ApproverId, SettingsVersion = setting?.Version, batch.ReasonCode });
+		await WriteAuditAsync(batch, setting, command, reason);
 		return dto;
 	}
+
+	private async Task WriteAuditAsync(PayrollSubmission batch, PayrollApprovalSettings? setting, string command, string? reason) =>
+		await audit.WriteAsync(batch.AcademicYearId, "payroll_submission", batch.Id, batch.Month, command,
+			$"Payroll batch {batch.State.ToLowerInvariant()}.", reason,
+			context: new { batch.Version, batch.StaffCount, batch.ApproverId, batch.StageId, batch.ReviewerRoleId,
+				SettingsVersion = setting?.Version, batch.ReasonCode });
 
 	private async Task<PayrollSubmission> GetBatchAsync(Guid id) =>
 		await submissions.FindAsync(x => x.Id == id && x.TenantId == access.TenantId)
@@ -299,15 +386,26 @@ public class PayrollSubmissionWorkflow(
 	private async Task<SubmissionRoles> ReadRolesAsync(PayrollSubmission batch, PayrollApprovalSettings? setting, List<PayrollSubmissionEmployee> rows)
 	{
 		var actor = access.ActorId;
-		if (rows.Count != batch.StaffCount || !await access.CoversAsync(actor, rows.Select(x => x.EmployeeId).ToList()))
+		var ids = rows.Select(x => x.EmployeeId).ToList();
+		if (rows.Count != batch.StaffCount || !await access.CoversAsync(actor, ids))
 			return new(false, false, false);
 		var submitter = actor == batch.SubmitterId && await access.CanAsync(actor, Permission.View, Permission.Submit);
+		var manager = await access.CanManageAsync();
+		if (batch.StageId is { } stageId && batch.ReviewerRoleId is { } roleId)
+		{
+			var reviewer = actor != batch.SubmitterId && setting?.Mode == PayrollApprovalSettings.SectionReview &&
+				access.SectionRoutes(setting).Any(route => route.StageId == stageId && route.RoleId == roleId) &&
+				await access.CanSectionReviewAsync(actor, stageId, roleId, batch.AcademicYearId, ids);
+			return new(submitter && await access.CoversSectionAsync(actor, stageId, batch.AcademicYearId, ids),
+				reviewer, manager);
+		}
 		var approver = actor == batch.ApproverId && PayrollApprovalAccess.MatchesRoute(batch, setting) &&
 			await access.CanApproveAsync(actor, batch.SelfFinalization);
-		return new(submitter, approver, await access.CanManageAsync());
+		return new(submitter, approver, manager);
 	}
 
-	private static PayrollSubmissionDto ToDto(PayrollSubmission batch, SubmissionRoles roles, PayrollApprovalSettings? setting, bool stale)
+	private async Task<PayrollSubmissionDto> DescribeAsync(PayrollSubmission batch, SubmissionRoles roles,
+		PayrollApprovalSettings? setting, bool stale)
 	{
 		var actions = new List<string>();
 		if (batch.State == PayrollSubmission.Pending)
@@ -320,11 +418,17 @@ public class PayrollSubmissionWorkflow(
 			if (roles.Approver)
 			{
 				actions.Add("return");
-				if (setting?.Mode == PayrollApprovalSettings.Active) actions.Add("finalize");
+				if (batch.StageId.HasValue && setting?.Mode == PayrollApprovalSettings.SectionReview) actions.Add("review");
+				if (!batch.StageId.HasValue && setting?.Mode == PayrollApprovalSettings.Active) actions.Add("finalize");
 			}
 		}
+		var (stageName, roleName) = batch.StageId is { } stageId && batch.ReviewerRoleId is { } roleId
+			? await access.GetSectionRouteNamesAsync(stageId, roleId) : (null, null);
+		var resolvedByName = batch.ResolvedByUserId is { } userId
+			? await access.GetSectionReviewerNameAsync(userId) : null;
 		return new(batch.Id, batch.Month, batch.State, batch.Version, batch.StaffCount, batch.NetPay, batch.SubmitterId,
-			batch.ApproverId, batch.SelfFinalization, batch.SubmittedAt, batch.ResolvedAt, batch.ReasonCode, stale, actions.ToArray());
+			batch.ApproverId, batch.SelfFinalization, batch.SubmittedAt, batch.ResolvedAt, batch.ReasonCode, stale, actions.ToArray(),
+			batch.StageId, batch.ReviewerRoleId, stageName, roleName, batch.ResolvedByUserId, batch.ResolutionReason, resolvedByName);
 	}
 
 	private sealed record SubmissionRoles(bool Submitter, bool Approver, bool Manager)

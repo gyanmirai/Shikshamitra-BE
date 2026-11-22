@@ -10,21 +10,36 @@ public class PayrollApprovalSettings : AggregateRoot<Guid>, IMultiTenant
 	public const string Legacy = "Legacy";
 	public const string Active = "Active";
 	public const string Paused = "Paused";
+	public const string SectionReview = "SectionReview";
 
 	public Guid? TenantId { get; private set; }
 	public Guid? ApproverId { get; private set; }
 	public bool AllowSelfFinalization { get; private set; }
 	public int Version { get; private set; }
 	public string Mode { get; private set; } = Legacy;
+	public string? SectionRoutesJson { get; private set; }
 
 	private PayrollApprovalSettings() { }
 	public PayrollApprovalSettings(Guid tenantId) : base(tenantId) => TenantId = tenantId;
 
 	public void Configure(Guid approverId, bool allowSelfFinalization)
 	{
+		if (Mode == SectionReview) throw new BusinessException("PAYROLL_WORKFLOW_TRANSITION_INVALID");
 		if (approverId == Guid.Empty) throw new BusinessException("PAYROLL_APPROVER_REQUIRED");
 		ApproverId = approverId;
 		AllowSelfFinalization = allowSelfFinalization;
+		Version++;
+	}
+
+	public void ConfigureSections(string? routesJson)
+	{
+		if (routesJson == null && Mode != SectionReview)
+			throw new BusinessException("PAYROLL_WORKFLOW_TRANSITION_INVALID");
+
+		SectionRoutesJson = routesJson;
+		Mode = routesJson == null ? Legacy : SectionReview;
+		ApproverId = null;
+		AllowSelfFinalization = false;
 		Version++;
 	}
 

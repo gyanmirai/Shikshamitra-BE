@@ -18,6 +18,7 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 public class PayrollReviewWorkflow(
 	PayrollPreviewReviewGuard previewGuard,
 	IRepository<PayrollEmployeeClaim, Guid> claims,
+	IRepository<PayrollSubmission, Guid> submissions,
 	ISalarySlipRepository salarySlipRepository,
 	IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
@@ -39,7 +40,7 @@ public class PayrollReviewWorkflow(
 		var operationKey = GetOperationKey(request, action);
 
 		var targetEmployees = await scopedEmployeeResolver.ResolveScopedTargetEmployeesAsync(year, month, employeeIds);
-		await EnsureUnclaimedAsync(internalMonthYear, employeeIds);
+		await EnsureUnclaimedAsync(internalMonthYear, employeeIds, request.PreviewRunId);
 		if (await FindRecordedOperationAsync(request.PreviewRunId, operationKey) is { } recorded)
 			return BuildResponse(request.Month, action, recorded);
 		await EnsureReviewCanChangeAsync(internalMonthYear, request.Month, targetEmployees);
@@ -156,9 +157,18 @@ public class PayrollReviewWorkflow(
 		return await SaveReviewAsync(request, academicYearId, $"{year:0000}-{month:00}", action, removed, operationKey);
 	}
 
-	private async Task EnsureUnclaimedAsync(string month, List<Guid> ids)
+	private async Task EnsureUnclaimedAsync(string month, List<Guid> ids, Guid? markingRunId = null)
 	{
-		if (await claims.AnyAsync(x => x.Month == month && x.SubmissionId.HasValue && ids.Contains(x.EmployeeId)))
+		var active = (await claims.GetQueryableAsync()).Where(x =>
+			x.Month == month && x.SubmissionId.HasValue && ids.Contains(x.EmployeeId));
+		if (markingRunId is { } runId)
+		{
+			// A review for an older preview must not block HR from reviewing the current payroll.
+			var olderSectionBatches = (await submissions.GetQueryableAsync()).Where(batch =>
+				batch.StageId.HasValue && batch.SourceRunId != runId);
+			active = active.Where(claim => !olderSectionBatches.Any(batch => batch.Id == claim.SubmissionId));
+		}
+		if (await AsyncExecuter.AnyAsync(active))
 			throw new BusinessException("PAYROLL_EMPLOYEE_ALREADY_SUBMITTED");
 	}
 

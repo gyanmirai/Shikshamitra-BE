@@ -29,6 +29,20 @@ public class PayrollApprovalController(IPayrollApprovalAppService service) : Abp
 	public Task<PayrollApprovalSettingsDto> ConfigureAsync([FromBody] ConfigurePayrollApprovalCommand command) =>
 		service.ConfigureAsync(command);
 
+	[HttpGet("approval-settings/section-options")]
+	[Authorize(Permission.ManageWorkflow)]
+	public Task<PayrollSectionOptionsDto> GetSectionOptionsAsync() => service.GetSectionOptionsAsync();
+
+	[HttpGet("approval-settings/section-reviewers")]
+	[Authorize(Permission.ManageWorkflow)]
+	public Task<List<PayrollApproverDto>> GetSectionReviewersAsync([FromQuery] Guid stageId, [FromQuery] Guid roleId) =>
+		service.GetSectionReviewersAsync(stageId, roleId);
+
+	[HttpPut("approval-settings/sections")]
+	[Authorize(Permission.ManageWorkflow)]
+	public Task<PayrollApprovalSettingsDto> ConfigureSectionsAsync([FromBody] ConfigurePayrollSectionsCommand command) =>
+		service.ConfigureSectionsAsync(command);
+
 	[HttpPost("approval-settings/{actionName:regex(^(activate|pause|resume)$)}")]
 	[Authorize(Permission.ManageWorkflow)]
 	public Task<PayrollApprovalSettingsDto> ChangeModeAsync(string actionName, [FromBody] PayrollApprovalSettingsCommand command) =>
@@ -44,7 +58,12 @@ public class PayrollApprovalController(IPayrollApprovalAppService service) : Abp
 	[Authorize(Permission.Submit)]
 	public Task<PayrollSubmissionDto> SubmitAsync([FromBody] SubmitPayrollCommand command) => service.SubmitAsync(command);
 
-	[HttpPost("submissions/{id:guid}/{actionName:regex(^(finalize|withdraw|return|return-stale)$)}")]
+	[HttpPost("section-reviews")]
+	[Authorize(Permission.Submit)]
+	public Task<List<PayrollSubmissionDto>> SubmitSectionsAsync([FromBody] SubmitPayrollCommand command) =>
+		service.SubmitSectionsAsync(command);
+
+	[HttpPost("submissions/{id:guid}/{actionName:regex(^(finalize|withdraw|return|return-stale|review)$)}")]
 	public Task<PayrollSubmissionDto> ResolveAsync(Guid id, string actionName, [FromBody] ResolvePayrollSubmissionCommand command) =>
 		service.ResolveAsync(id, actionName, command);
 }

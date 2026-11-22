@@ -17,7 +17,7 @@ using Volo.Abp.Linq;
 namespace ShikshaMitra.Academic.Notifications;
 
 [RemoteService(false), DisableAuditing]
-public sealed class AcademicNotificationOperationAccess(AcademicNotificationAccessService access,
+public sealed partial class AcademicNotificationOperationAccess(AcademicNotificationAccessService access,
 	AcademicNotificationRuleScopeAccess scopes, NotificationIntentSnapshotCodec snapshots, AcademicNotificationReviewService reviews,
 	IRepository<CommunicationCampaign, Guid> campaigns, IRepository<NotificationIntent, Guid> intents,
 	IRepository<NotificationSendReview, Guid> receipts, IAsyncQueryableExecuter queries,

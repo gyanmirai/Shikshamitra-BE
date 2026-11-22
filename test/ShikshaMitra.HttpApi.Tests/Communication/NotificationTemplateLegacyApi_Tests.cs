@@ -2,10 +2,12 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Communication.Notifications;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Infrastructure.Auth;
 using Shouldly;
@@ -50,6 +52,37 @@ public class NotificationTemplateLegacyApi_Tests(ShikshaMitraApiTestFactory fact
 		update.StatusCode.ShouldBe(HttpStatusCode.OK, await update.Content.ReadAsStringAsync());
 		using var deletion = await Client.DeleteAsync($"{Templates}/{header.Id}");
 		deletion.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+	}
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Legacy_browse_excludes_linked_templates_and_detail_requires_academic_access(bool tombstone)
+	{
+		var linked = await CreateHeaderAsync();
+		var unlinked = await CreateHeaderAsync();
+		await LinkAsync(linked.Id, tombstone);
+		Client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			ShikshaMitraSubmodulePermissions.Communication.Notification_Templates.View);
+
+		using var hidden = await Client.GetAsync($"{Templates}?search={Uri.EscapeDataString(linked.TemplateName)}");
+		hidden.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var hiddenPage = await hidden.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		hiddenPage.GetProperty("totalCount").GetInt32().ShouldBe(0);
+		hiddenPage.GetProperty("items").GetArrayLength().ShouldBe(0);
+		using var denied = await Client.GetAsync($"{Templates}/{linked.Id}");
+		denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+
+		using var visible = await Client.GetAsync($"{Templates}?search={Uri.EscapeDataString(unlinked.TemplateName)}");
+		visible.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var visiblePage = await visible.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		visiblePage.GetProperty("totalCount").GetInt32().ShouldBe(1);
+		using var ordinary = await Client.GetAsync($"{Templates}/{unlinked.Id}");
+		ordinary.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		Client.DefaultRequestHeaders.Remove(AlwaysGrantPermissionChecker.TestPermissionsHeader);
+		using var authorized = await Client.GetAsync($"{Templates}/{linked.Id}");
+		authorized.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 
 	[Theory]

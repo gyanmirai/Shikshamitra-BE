@@ -45,6 +45,10 @@ public class AcademicNotificationTemplateController(INotificationTemplateAppServ
 	public Task<NotificationTemplatePreviewDto> PreviewAsync(Guid id, Guid revisionId, CancellationToken cancellationToken) =>
 		templates.PreviewAsync(id, revisionId, cancellationToken);
 
+	[HttpPost("preview"), Authorize(Add)]
+	public Task<NotificationTemplatePreviewDto> PreviewDraftAsync([FromBody] PreviewNotificationTemplateDraftDto input,
+		CancellationToken cancellationToken) => templates.PreviewDraftAsync(input, cancellationToken);
+
 	[HttpPost, Authorize(Add)]
 	public Task<NotificationTemplateDto> CreateAsync([FromBody] CreateNotificationTemplateDto input,
 		CancellationToken cancellationToken) => templates.CreateAsync(input, cancellationToken);

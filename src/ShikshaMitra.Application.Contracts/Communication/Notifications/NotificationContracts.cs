@@ -34,7 +34,8 @@ public interface INotificationDispatcher
 
 public interface INotificationDueScheduler
 {
-	Task<NotificationScanResult> ScanAsync(DateTimeOffset now, int batchSize, CancellationToken cancellationToken);
+	Task<NotificationScanResult> ScanAsync(DateTimeOffset now, int batchSize, CancellationToken cancellationToken,
+		TimeSpan? readTimeout = null);
 }
 
 public interface INotificationChannelSender

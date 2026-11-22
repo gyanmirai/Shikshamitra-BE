@@ -4,6 +4,7 @@ using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Notifications;
 using Volo.Abp;
 using Volo.Abp.Auditing;
@@ -21,13 +22,17 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 	IRepository<NotificationScheduleCursor, Guid> cursors, IAsyncQueryableExecuter executer, IGuidGenerator guids,
 	IEnumerable<INotificationDueSource> sources, IEnumerable<INotificationEventDefinitionProvider> definitions, NotificationEffectiveRuleResolver rules,
 	NotificationRuleConfigurationCodec configuration, NotificationSchoolTimeZone schoolZone, AcademicNotificationWorkingDays calendar,
-	NotificationReminderTimingPolicy timing, INotificationIntentWriter writer) : INotificationDueScheduler, ITransientDependency
+	NotificationReminderTimingPolicy timing, INotificationIntentWriter writer, ILogger<NotificationDueScheduler> logger)
+	: INotificationDueScheduler, ITransientDependency
 {
 	private sealed record CursorState(int SchemaVersion, DateTimeOffset? CycleStartedAt, string? Key);
 	private sealed record ScanRule(Guid Id, int Revision, NotificationRuleTimingConfiguration Timing);
+	private sealed record DueAdapter(INotificationDueSource Source, string Key, NotificationScheduleCursor? Cursor);
+	private static readonly TimeSpan RetryDelay = TimeSpan.FromMinutes(2);
 	private const int MaximumContinuationLength = 2048;
 
-	public async Task<NotificationScanResult> ScanAsync(DateTimeOffset now, int batchSize, CancellationToken cancellationToken)
+	public async Task<NotificationScanResult> ScanAsync(DateTimeOffset now, int batchSize, CancellationToken cancellationToken,
+		TimeSpan? readTimeout = null)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
@@ -45,25 +50,52 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 			throw new BusinessException(NotificationErrorCodes.StateConflict);
 
 		now = now.ToUniversalTime();
-		using var unit = units.Begin(requiresNew: true, isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted);
-		await writeLock.AcquireAsync(["notification-due-scan"], cancellationToken);
-		var keys = adapters.Select(x => SchedulerKey(x.Key)).ToArray();
-		var current = await executer.ToListAsync((await cursors.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
-			Enumerable.Contains(keys, x.SchedulerKey)), cancellationToken);
-		var bySource = current.ToDictionary(x => x.SchedulerKey, StringComparer.Ordinal);
-		var available = adapters.Select(x => (x.Source, Key: SchedulerKey(x.Key), Cursor: bySource.GetValueOrDefault(SchedulerKey(x.Key))))
-			.Where(x => x.Cursor == null || x.Cursor.NextScanAt <= now)
-			.OrderBy(x => x.Cursor?.NextScanAt).ThenBy(x => x.Key, StringComparer.Ordinal).Take(2).ToArray();
-		if (available.Length == 0)
+		(string Key, string? Stamp, bool HasOtherDue)? attempted = null;
+		try
 		{
+			using var unit = units.Begin(requiresNew: true, isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted);
+			await writeLock.AcquireAsync(["notification-due-scan"], cancellationToken);
+			var keys = adapters.Select(x => SchedulerKey(x.Key)).ToArray();
+			var current = await executer.ToListAsync((await cursors.GetQueryableAsync()).Where(x => x.TenantId == tenantId &&
+				Enumerable.Contains(keys, x.SchedulerKey)), cancellationToken);
+			var bySource = current.ToDictionary(x => x.SchedulerKey, StringComparer.Ordinal);
+			var available = adapters.Select(x => new DueAdapter(x.Source, SchedulerKey(x.Key), bySource.GetValueOrDefault(SchedulerKey(x.Key))))
+				.Where(x => x.Cursor == null || x.Cursor.NextScanAt <= now)
+				.OrderBy(x => x.Cursor?.NextScanAt).ThenBy(x => x.Key, StringComparer.Ordinal).Take(2).ToArray();
+			var result = new NotificationScanResult(0, 0, 0, false);
+			if (available.Length > 0)
+			{
+				var selected = available[0];
+				attempted = (selected.Key, selected.Cursor?.ConcurrencyStamp, available.Length > 1);
+				result = await ScanPageAsync(selected, tenantId, now, batchSize, readTimeout, cancellationToken);
+			}
 			await unit.CompleteAsync(cancellationToken);
-			return new(0, 0, 0, false);
+			return result with { HasMore = result.HasMore || available.Length > 1 };
 		}
+		catch (Exception error) when (attempted.HasValue && !cancellationToken.IsCancellationRequested)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			var failed = attempted.Value;
+			logger.LogWarning("Reminder source {SchedulerKey} failed for school {TenantId}. Failure type {FailureType}.",
+				failed.Key, tenantId, error.GetType().Name);
+			await DeferAsync(tenantId, failed.Key, failed.Stamp, now, cancellationToken);
+			return new(0, 0, 0, failed.HasOtherDue);
+		}
+	}
 
-		var (source, key, cursor) = available[0];
+	private async Task<NotificationScanResult> ScanPageAsync(DueAdapter adapter, Guid tenantId, DateTimeOffset now,
+		int batchSize, TimeSpan? readTimeout, CancellationToken cancellationToken)
+	{
+		var (source, key, cursor) = adapter;
 		var previous = ReadContinuation(cursor, now);
 		var startedAt = previous?.CycleStartedAt ?? now;
-		var page = await source.ReadPageAsync(new(tenantId, startedAt, now, previous?.Key, batchSize), cancellationToken);
+		var request = new NotificationDueScanRequest(tenantId, startedAt, now, previous?.Key, batchSize);
+		NotificationDueSourcePage page;
+		using (var readLimit = readTimeout.HasValue ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken) : null)
+		{
+			if (readTimeout is TimeSpan timeout) readLimit!.CancelAfter(timeout);
+			page = await source.ReadPageAsync(request, readLimit?.Token ?? cancellationToken);
+		}
 		if (page?.Candidates == null || page.Candidates.Count > batchSize ||
 			(page.Continuation != null && (!ValidContinuation(page.Continuation) || page.Continuation == previous?.Key)))
 			throw new BusinessException(NotificationErrorCodes.StateConflict);
@@ -84,8 +116,25 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 			cursor.Advance(snapshot, nextScan);
 			await cursors.UpdateAsync(cursor, cancellationToken: cancellationToken);
 		}
+		return new(page.Candidates.Count, created, page.Candidates.Count - created, hasNextPage);
+	}
+
+	private async Task DeferAsync(Guid tenantId, string key, string? attemptedStamp, DateTimeOffset now,
+		CancellationToken cancellationToken)
+	{
+		using var unit = units.Begin(requiresNew: true, isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted);
+		await writeLock.AcquireAsync(["notification-due-scan"], cancellationToken);
+		var cursor = await executer.FirstOrDefaultAsync((await cursors.GetQueryableAsync())
+			.Where(x => x.TenantId == tenantId && x.SchedulerKey == key), cancellationToken);
+		var retryAt = now.Add(RetryDelay);
+		if (cursor == null && attemptedStamp == null)
+			await cursors.InsertAsync(new NotificationScheduleCursor(guids.Create(), tenantId, key, retryAt), cancellationToken: cancellationToken);
+		else if (cursor != null && cursor.ConcurrencyStamp == attemptedStamp && cursor.NextScanAt <= now)
+		{
+			cursor.Defer(retryAt);
+			await cursors.UpdateAsync(cursor, cancellationToken: cancellationToken);
+		}
 		await unit.CompleteAsync(cancellationToken);
-		return new(page.Candidates.Count, created, page.Candidates.Count - created, hasNextPage || available.Length > 1);
 	}
 
 	private async Task<int> CapturePageAsync(INotificationDueSource source, IReadOnlyList<NotificationDueSourceCandidate> candidates,

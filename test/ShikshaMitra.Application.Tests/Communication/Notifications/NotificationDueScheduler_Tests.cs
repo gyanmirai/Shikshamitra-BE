@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Notifications;
@@ -10,7 +11,6 @@ using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
-using Volo.Abp;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
@@ -32,6 +32,7 @@ public class NotificationDueScheduler_Tests
 	private readonly INotificationDueSource _source = Substitute.For<INotificationDueSource>();
 	private readonly INotificationIntentWriter _writer = Substitute.For<INotificationIntentWriter>();
 	private readonly List<NotificationScheduleCursor> _cursorRows = [];
+	private readonly List<INotificationDueSource> _sources;
 	private readonly NotificationRule _rule;
 	private readonly NotificationDueScheduler _scheduler;
 
@@ -46,6 +47,7 @@ public class NotificationDueScheduler_Tests
 			[CommunicationChannelType.InApp], [Guid.NewGuid()], NotificationRuleTimingConfiguration.Default, "en");
 		_rule.Configure(true, codec.Serialize(config, catalogue.Get(EventKey)), _rule.ConcurrencyStamp);
 		_source.SourceType.Returns(SourceType);
+		_sources = [_source];
 		var unit = Substitute.For<IUnitOfWork>();
 		var units = Substitute.For<IUnitOfWorkManager>();
 		units.Current.Returns((IUnitOfWork?)null);
@@ -59,8 +61,8 @@ public class NotificationDueScheduler_Tests
 			Repository<AcademicCalendarDay>([]), Substitute.For<ILectureSlotConfigRepository>(), Substitute.For<ITimetableRepository>());
 		var guids = Substitute.For<IGuidGenerator>(); guids.Create().Returns(_ => Guid.NewGuid());
 		_scheduler = new NotificationDueScheduler(tenant, units, Substitute.For<INotificationPersonalWriteLock>(), cursors, executer, guids,
-			[_source], [catalogue], new(tenant, Repository(new[] { _rule }), executer), codec, new(tenant, Substitute.For<ISettingManager>()),
-			calendar, new(), _writer);
+			_sources, [catalogue], new(tenant, Repository(new[] { _rule }), executer), codec, new(tenant, Substitute.For<ISettingManager>()),
+			calendar, new(), _writer, NullLogger<NotificationDueScheduler>.Instance);
 	}
 
 	[Fact]
@@ -96,17 +98,57 @@ public class NotificationDueScheduler_Tests
 	}
 
 	[Fact]
-	public async Task Repeated_continuation_leaves_the_existing_cursor_unchanged()
+	public async Task Adapter_cancellation_keeps_the_school_turn_available_for_other_sources()
+	{
+		_source.ReadPageAsync(Arg.Any<NotificationDueScanRequest>(), Arg.Any<CancellationToken>())
+			.Returns(async call => {
+				await Task.Delay(Timeout.Infinite, call.Arg<CancellationToken>());
+				return new NotificationDueSourcePage([], null);
+			});
+		var healthy = Substitute.For<INotificationDueSource>();
+		healthy.SourceType.Returns(SourceType);
+		healthy.ScanKey.Returns("HealthySource");
+		healthy.ReadPageAsync(Arg.Any<NotificationDueScanRequest>(), Arg.Any<CancellationToken>())
+			.Returns(new NotificationDueSourcePage([], null));
+		_sources.Add(healthy);
+
+		using var schoolTurn = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+		(await _scheduler.ScanAsync(Now, 2, schoolTurn.Token, readTimeout: TimeSpan.FromMilliseconds(25))).HasMore.ShouldBeTrue();
+		schoolTurn.IsCancellationRequested.ShouldBeFalse();
+		await _scheduler.ScanAsync(Now, 2, default);
+
+		await healthy.Received(1).ReadPageAsync(Arg.Any<NotificationDueScanRequest>(), Arg.Any<CancellationToken>());
+		_cursorRows.Single(x => x.SchedulerKey == $"due:{SourceType}").NextScanAt.ShouldBeGreaterThan(Now);
+	}
+
+	[Fact]
+	public async Task A_repeated_continuation_preserves_its_position_and_allows_another_due_source_to_progress()
 	{
 		_source.ReadPageAsync(Arg.Any<NotificationDueScanRequest>(), Arg.Any<CancellationToken>())
 			.Returns(new NotificationDueSourcePage([], "same"));
 		await _scheduler.ScanAsync(Now, 2, default);
-		var next = _cursorRows.Single().NextScanAt;
+		var blocked = _cursorRows.Single();
+		var originalPosition = blocked.CursorJson;
+		var healthy = Substitute.For<INotificationDueSource>();
+		healthy.SourceType.Returns(SourceType);
+		healthy.ScanKey.Returns("HealthySource");
+		var candidate = Candidate(Now.AddSeconds(45), Now.AddHours(1));
+		healthy.ReadPageAsync(Arg.Any<NotificationDueScanRequest>(), Arg.Any<CancellationToken>())
+			.Returns(new NotificationDueSourcePage([], null), new NotificationDueSourcePage([candidate], null));
+		_sources.Add(healthy);
+		await _scheduler.ScanAsync(Now, 2, default);
+		_writer.WriteWithOutcomeAsync(Arg.Is<NotificationEventInput>(x => x.SourceId == candidate.SourceId), Arg.Any<CancellationToken>())
+			.Returns(new NotificationIntentWriteResult(Guid.NewGuid(), true));
+		var nextTurn = Now.AddMinutes(1);
 
-		var error = await Should.ThrowAsync<BusinessException>(() => _scheduler.ScanAsync(Now.AddMinutes(1), 2, default));
+		var deferred = await _scheduler.ScanAsync(nextTurn, 2, default);
+		var delivered = await _scheduler.ScanAsync(nextTurn, 2, default);
 
-		error.Code.ShouldBe(NotificationErrorCodes.StateConflict);
-		_cursorRows.Single().NextScanAt.ShouldBe(next);
+		deferred.ShouldBe(new NotificationScanResult(0, 0, 0, true));
+		delivered.ShouldBe(new NotificationScanResult(1, 1, 0, false));
+		blocked.CursorJson.ShouldBe(originalPosition);
+		blocked.NextScanAt.ShouldBeGreaterThan(nextTurn);
+		await _writer.Received(1).WriteWithOutcomeAsync(Arg.Is<NotificationEventInput>(x => x.SourceId == candidate.SourceId), Arg.Any<CancellationToken>());
 	}
 
 	private NotificationDueSourceCandidate Candidate(DateTimeOffset at, DateTimeOffset expires) =>

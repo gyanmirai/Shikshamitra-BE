@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -19,10 +20,14 @@ public sealed class AcademicNotificationReminderWorker(AbpAsyncTimer timer, ISer
 		var scheduler = services.GetRequiredService<INotificationDueScheduler>();
 		var configuration = services.GetRequiredService<IConfiguration>();
 		var tenantId = services.GetRequiredService<ICurrentTenant>().Id;
+		var budget = SchoolTurnBudget(configuration);
+		var elapsed = Stopwatch.StartNew();
 		for (var page = 0; page < 4; page++)
 		{
 			if (NotificationQueueWorkerConfiguration.IsSchoolPaused(configuration, tenantId)) return;
-			var result = await scheduler.ScanAsync(now, 100, cancellationToken);
+			var remaining = budget - elapsed.Elapsed;
+			if (remaining < TimeSpan.FromSeconds(2)) return;
+			var result = await scheduler.ScanAsync(now, 100, cancellationToken, readTimeout: remaining / 2);
 			if (!result.HasMore) break;
 		}
 	}

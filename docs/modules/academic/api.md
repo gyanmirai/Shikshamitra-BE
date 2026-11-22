@@ -37,14 +37,22 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 | `POST /dispatches/{id}/retry` | Add + source read access | Queue a verified retry of this channel's definitively rejected attempt. Pass `expectedAttemptId` to bind the request to the history row. |
 | `POST /operations/{id}/cancel` | Add + source read access | Stop unclaimed work and return cancelled intent and dispatch counts plus remaining in-flight work |
 | `GET /templates` | View | Paged template headers for the selected `eventKey` and optional `academicMediumId` |
+| `GET /history/recent` | View + source and intent scope | Page recent real notification operations using an optional `eventKey` filter and a cursor bound to the current school and account |
 | `GET /templates/{id}` and `/{id}/history` | View | Current template and revision history |
 | `GET /templates/{id}/preview/{revisionId}` | View | Render with synthetic values for review |
+| `POST /templates/preview` | Add + template scope | Render the current subject and message with synthetic values before saving |
 | `POST /templates` and `PUT /templates/{id}/draft` | Add | Create or edit a draft |
 | `POST /templates/initialize-defaults` | Add + school-wide scope | Create missing English variant drafts for one `eventKey` |
 | `GET /templates/options` | View + template scope | Page published, non-retired variant names, channels and languages for an event without reading message content |
 | `POST /templates/{id}/test-send` | Add + template scope | Queue a synthetic test for a single verified account |
 | `POST /templates/{id}/publish` and `/{id}/restore-default` | Add | Publish an immutable revision or create a fresh draft from the system default |
 | `DELETE /templates/{id}/draft` | Delete | Delete the selected unused draft |
+
+Academic-bound templates appear in the Academic template catalogue. The legacy Communication and Notifications template lists exclude them. A legacy detail request by ID requires the same Academic View and scope checks as the Academic template endpoint, along with the legacy View action.
+
+Draft preview takes the event, recipient kind, channel, language, subject, message and optional Academic medium. It uses the same sample values and channel renderer as saved-revision preview. A draft preview leaves template history and the delivery queue untouched.
+
+Recent delivery history returns identifiers and creation time for authorized operations. It examines up to 40 recent candidates per request and returns up to 15 visible operations. The cursor is issued when the scan finds another visible operation. Use the event filter to narrow the search. A scoped staff member can open the attempts they are allowed to see even when the operation spans other scopes. The response reports whether they can also read its full summary. Pending approvals and synthetic tests use their own authorized routes.
 
 Scope IDs form a contiguous tenant-owned hierarchy. A rule applies to the selected scope and its descendants. The nearest rule takes precedence, including a disabled override. Page items without a rule return a null `effectiveRule`. New overrides omit the concurrency stamp. Updates use the stamp of the exact rule being edited. A stale rule or draft write returns 409.
 

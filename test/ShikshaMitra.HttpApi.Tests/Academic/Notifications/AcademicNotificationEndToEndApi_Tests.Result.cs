@@ -64,6 +64,10 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 		var delivery = history!.Items.ShouldHaveSingleItem();
 		delivery.RecipientUserId.ShouldBe(sample.Primary);
 		delivery.Status.ShouldBe(NotificationDispatchState.Delivered);
+		var recent = await staff.GetFromJsonAsync<AcademicNotificationRecentDeliveriesDto>($"{Root}/history/recent?eventKey={eventKey}");
+		var listed = recent!.Items.Single(item => item.SourceId == resultId);
+		listed.OperationId.ShouldBe(delivery.OperationId);
+		listed.CanViewSummary.ShouldBeTrue();
 	}
 
 	private static async Task<AcademicNotificationRuleDto> PublishGuardianInboxRuleAsync(HttpClient staff, string eventKey,

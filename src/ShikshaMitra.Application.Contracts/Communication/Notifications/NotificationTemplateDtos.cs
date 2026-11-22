@@ -26,6 +26,8 @@ public sealed record NotificationTemplateDto(Guid TemplateId, Guid RevisionId, i
 	DateTimeOffset? PublishedAt, Guid? PublishedByUserId, bool IsDeleted = false);
 
 public sealed record NotificationTemplatePreviewDto(bool IsSynthetic, NotificationRenderResult Rendered);
+public sealed record PreviewNotificationTemplateDraftDto(string EventKey, string RecipientKind,
+	CommunicationChannelType Channel, string LanguageCode, string Subject, string Body, Guid? AcademicMediumId = null);
 
 public sealed record PublishedNotificationTemplateOptionDto(Guid TemplateId, Guid RevisionId, string TemplateName,
 	string RecipientKind, CommunicationChannelType Channel, string LanguageCode, Guid? AcademicMediumId);

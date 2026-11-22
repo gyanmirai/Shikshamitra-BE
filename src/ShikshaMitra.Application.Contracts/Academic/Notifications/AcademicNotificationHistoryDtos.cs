@@ -46,10 +46,16 @@ public sealed record AcademicNotificationPendingApprovalDto(Guid OperationId, st
 public sealed record AcademicNotificationPendingApprovalsDto(IReadOnlyList<AcademicNotificationPendingApprovalDto> Items,
 	Guid? NextAfterId);
 
+public sealed record AcademicNotificationRecentDeliveryDto(Guid OperationId, string EventKey, string SourceType, Guid SourceId,
+	DateTimeOffset CreatedAt, bool CanViewSummary);
+public sealed record AcademicNotificationRecentDeliveriesDto(IReadOnlyList<AcademicNotificationRecentDeliveryDto> Items,
+	string? NextCursor);
+
 public interface IAcademicNotificationHistoryAppService : IApplicationService
 {
 	Task<AcademicNotificationOperationStatusDto> GetOperationAsync(Guid operationId, CancellationToken cancellationToken = default);
 	Task<AcademicNotificationPendingApprovalsDto> GetPendingApprovalsAsync(Guid? afterId, CancellationToken cancellationToken = default);
+	Task<AcademicNotificationRecentDeliveriesDto> GetRecentAsync(string? eventKey, string? cursor, CancellationToken cancellationToken = default);
 	Task<PagedResultDto<AcademicNotificationHistoryItemDto>> GetHistoryAsync(GetAcademicNotificationHistoryDto input,
 		CancellationToken cancellationToken = default);
 }

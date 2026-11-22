@@ -85,6 +85,8 @@ The health worker visits one page of active schools every five minutes while `No
 
 Queue ages are in seconds. A missing age means there is no matching work. A channel that has no matching work is absent from the channel samples. Use the latest sample per school and channel when reviewing queue health across replicas. Route operational alerts through the platform log monitor. These log events carry counts, school IDs and fixed reason codes.
 
+A failed reminder scan logs the school, source key and failure type. It keeps that source's saved position, defers its retry for two minutes, and allows other due sources to continue. Each page read has its own time budget so the worker can record a timeout and continue within the school turn.
+
 ## Pause Academic notifications
 
 Set `Notifications:QueueWorker:Enabled` to false on all API replicas to stop new worker turns. A turn already processing work may finish. Check Delivery History for queued, in-progress and provider-accepted work. The pause leaves the existing queue and delivery evidence in place. Source capture and reviewed confirmation can continue creating queued work while the workers are paused.

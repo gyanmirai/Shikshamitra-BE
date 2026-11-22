@@ -24,8 +24,13 @@ public class NotificationScheduleCursor : FullAuditedAggregateRoot<Guid>, IMulti
 	public void Advance(string cursorJson, DateTimeOffset nextScanAt)
 	{
 		NotificationRuntimeGuard.Snapshot(cursorJson);
-		NotificationRuntimeGuard.State(nextScanAt > NextScanAt);
+		Defer(nextScanAt);
 		CursorJson = cursorJson;
+	}
+
+	public void Defer(DateTimeOffset nextScanAt)
+	{
+		NotificationRuntimeGuard.State(nextScanAt > NextScanAt);
 		NextScanAt = nextScanAt.ToUniversalTime();
 		ConcurrencyStamp = Guid.NewGuid().ToString("N");
 	}

@@ -16,6 +16,18 @@ public sealed class NotificationTemplateLegacyCompatibilityService(ICurrentTenan
 	IRepository<CommunicationTemplateRevision, Guid> revisions, IAsyncQueryableExecuter executer,
 	IDataFilter filters, NotificationTemplateRevisionService owner) : ITransientDependency
 {
+	internal async Task<IQueryable<CommunicationTemplate>> ExcludeBoundTemplatesAsync(IQueryable<CommunicationTemplate> headers)
+	{
+		if (tenant.Id is not Guid tenantId) return headers;
+		var bound = (await revisions.GetQueryableAsync()).Where(revision => revision.TenantId == tenantId);
+		return headers.Where(header => !bound.Any(revision => revision.TemplateId == header.Id));
+	}
+
+	internal async Task EnsureCanReadHeaderAsync(Guid templateId)
+	{
+		if (await IsBoundAsync(templateId)) await owner.GetAsync(templateId);
+	}
+
 	public async Task<bool> TryAppendDraftAsync(CommunicationTemplate header, CreateUpdateCommunicationTemplateDto input)
 	{
 		if (!await IsBoundAsync(header.Id)) return false;

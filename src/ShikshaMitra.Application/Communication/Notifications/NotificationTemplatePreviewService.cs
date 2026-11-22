@@ -26,8 +26,11 @@ public sealed class NotificationTemplatePreviewService(INotificationTemplateRead
 		var revision = await executer.FirstOrDefaultAsync((await revisions.GetQueryableAsync()).Where(x => x.Id == revisionId &&
 			x.TemplateId == templateId && x.TenantId == tenantId && !x.IsDeleted), cancellationToken)
 			?? throw new EntityNotFoundException(typeof(CommunicationTemplateRevision), revisionId);
-		return new(true, RenderSynthetic(revision, validator.GetDefinition(revision.EventKey)));
+		return RenderExample(revision);
 	}
+
+	internal NotificationTemplatePreviewDto RenderExample(CommunicationTemplateRevision revision) =>
+		new(true, RenderSynthetic(revision, validator.GetDefinition(revision.EventKey)));
 
 	internal NotificationRenderResult RenderSynthetic(CommunicationTemplateRevision revision, NotificationEventDefinition definition)
 	{

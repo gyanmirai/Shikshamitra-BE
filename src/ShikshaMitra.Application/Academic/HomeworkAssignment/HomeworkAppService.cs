@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
@@ -16,6 +17,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 using Volo.Abp.Linq;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
@@ -39,7 +41,8 @@ public partial class HomeworkAppService(
     IRepository<AcademicCalendar, Guid> calendarRepository,
     IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
     IRepository<Employee, Guid> employeeRepository,
-    IReportingManagerAccessService reportingManagerAccessService
+    IReportingManagerAccessService reportingManagerAccessService,
+    HomeworkPublicationEventCapture publicationEvents
 ) : ApplicationService, IHomeworkAppService
 {
 
@@ -409,7 +412,8 @@ public partial class HomeworkAppService(
     // ─────────────────────────────────────────────────────────────────────
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.Add)]
-    public async Task<HomeworkStatusUpdateResponseDto> ChangeStatusAsync(
+    [UnitOfWork(true)]
+    public virtual async Task<HomeworkStatusUpdateResponseDto> ChangeStatusAsync(
         Guid homeworkId,
         HomeworkStatusUpdateDto input
     )
@@ -439,6 +443,10 @@ public partial class HomeworkAppService(
         }
 
         await homeworkRepository.UpdateAsync(homework, autoSave: true);
+        if (newStatus == HomeworkStatus.Published)
+        {
+            await publicationEvents.CaptureAsync(homework, CurrentUser.Id);
+        }
 
         var updaterName = string.Empty;
         if (CurrentUser.Id.HasValue)

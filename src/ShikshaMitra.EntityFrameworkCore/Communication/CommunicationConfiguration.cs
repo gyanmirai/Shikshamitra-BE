@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Communication;
+using ShikshaMitra.Communication.Notifications;
 
 namespace ShikshaMitra.EntityFrameworkCore.Communication;
 
@@ -56,7 +57,8 @@ public class CommunicationTemplateConfiguration : IEntityTypeConfiguration<Commu
 {
 	public void Configure(EntityTypeBuilder<CommunicationTemplate> builder)
 	{
-		builder.ToTable("CommunicationTemplates");
+		builder.ToTable("CommunicationTemplates", table => table.HasCheckConstraint("CK_CommTemplate_NotificationTenant",
+			"\"CurrentNotificationRevisionId\" IS NULL OR \"TenantId\" IS NOT NULL"));
 
 		builder.Property(x => x.TemplateName).IsRequired().HasMaxLength(160);
 		builder.Property(x => x.TargetRole).HasMaxLength(80);
@@ -70,6 +72,11 @@ public class CommunicationTemplateConfiguration : IEntityTypeConfiguration<Commu
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicMediumId, x.TemplateName, x.LanguageCode })
 			.HasDatabaseName("IX_CommTemplates_Tenant_Medium_Name_Language");
+		builder.HasIndex(x => new { x.TenantId, x.Id, x.CurrentNotificationRevisionId }).HasDatabaseName("IX_CommTemplate_CurrentRevision");
+		builder.HasOne<CommunicationTemplateRevision>().WithMany()
+			.HasForeignKey(x => new { x.TenantId, x.Id, x.CurrentNotificationRevisionId })
+			.HasPrincipalKey(x => new { x.TenantId, x.TemplateId, x.Id })
+			.OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_CommTemplate_CurrentRevision");
 	}
 }
 
@@ -141,6 +148,14 @@ public class DeliveryAttemptConfiguration : IEntityTypeConfiguration<DeliveryAtt
 
 		builder.HasIndex(x => new { x.TenantId, x.CampaignId, x.Channel });
 		builder.HasIndex(x => new { x.TenantId, x.Status });
+
+		builder.HasIndex(x => new { x.TenantId, x.NotificationDispatchId, x.AttemptNumber }).IsUnique()
+			.HasFilter("\"NotificationDispatchId\" IS NOT NULL").HasDatabaseName("UX_DeliveryAttempt_NotificationAttempt");
+		builder.HasIndex(x => new { x.TenantId, x.NotificationProviderSettingId, x.QueuedAt })
+			.HasFilter("\"NotificationProviderSettingId\" IS NOT NULL").HasDatabaseName("IX_DeliveryAttempt_NotificationQuota");
+		builder.HasOne<NotificationDispatch>().WithMany()
+			.HasForeignKey(x => new { x.TenantId, x.NotificationDispatchId }).HasPrincipalKey(x => new { x.TenantId, x.Id })
+			.OnDelete(DeleteBehavior.Restrict);
 
 		builder.HasOne<CommunicationRecipientSnapshot>()
 			.WithMany()

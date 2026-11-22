@@ -20,7 +20,7 @@ public sealed class AcademicPerformancePostgresFactAttribute : FactAttribute
 	}
 }
 
-public sealed class AcademicPerformancePostgresTestFactory : ShikshaMitraApiTestFactory
+public class AcademicPerformancePostgresTestFactory : ShikshaMitraApiTestFactory
 {
 	private bool _preparingFixture = true;
 	public AcademicCommandMetrics Metrics { get; } = new();
@@ -45,6 +45,11 @@ public sealed class AcademicPerformancePostgresTestFactory : ShikshaMitraApiTest
 				_preparingFixture ? QuerySplittingBehavior.SplitQuery : QuerySplittingBehavior.SingleQuery)).AddInterceptors(Metrics)));
 		using var database = new ShikshaMitraDbContext(new DbContextOptionsBuilder<ShikshaMitraDbContext>()
 			.UseNpgsql(ConnectionString).Options);
+		InitializeTestSchema(database);
+	}
+
+	protected virtual void InitializeTestSchema(ShikshaMitraDbContext database)
+	{
 		// Refuse an existing schema. This harness never resets or deletes a database.
 		database.GetService<IRelationalDatabaseCreator>().CreateTables();
 	}

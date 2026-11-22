@@ -41,6 +41,8 @@
 
   <ItemGroup>
     <None Update="HR\Employees\ICards\Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="..\..\docs\modules\academic\references\notification-coverage.md"
+                      LogicalName="AcademicNotificationCoverage.md" />
   </ItemGroup>
 
 </Project>

@@ -20,6 +20,14 @@ public class CommunicationTemplate : FullAuditedAggregateRoot<Guid>, IMultiTenan
 	public CommunicationTemplateApprovalStatus ApprovalStatus { get; set; }
 	public int Version { get; set; } = 1;
 	public bool IsActive { get; set; } = true;
+	public Guid? CurrentNotificationRevisionId { get; private set; }
+
+	public void SetNotificationRevision(Guid? revisionId)
+	{
+		if (revisionId.HasValue && (revisionId.Value == Guid.Empty || !TenantId.HasValue || TenantId == Guid.Empty))
+			throw new Volo.Abp.BusinessException(Notifications.NotificationErrorCodes.TemplateInvalid);
+		CurrentNotificationRevisionId = revisionId;
+	}
 
 	protected CommunicationTemplate()
 	{

@@ -23,7 +23,7 @@ public sealed class LibraryStockVerificationSessionConfiguration : IEntityTypeCo
 				 ("Status" = 2 AND "ReviewStartedBy" IS NOT NULL AND "FinalizedBy" IS NULL AND "CancelledBy" IS NULL) OR
 				 ("Status" = 3 AND "ReviewStartedBy" IS NOT NULL AND "FinalizedBy" IS NOT NULL AND "CancelledBy" IS NULL) OR
 				 ("Status" = 4 AND "FinalizedBy" IS NULL AND "CancelledBy" IS NOT NULL))
-				""");
+				""".ReplaceLineEndings("\n"));
 		});
 		// Configure auditing without the optional tenant convention for this required composite key.
 		builder.ConfigureFullAuditedAggregateRoot();

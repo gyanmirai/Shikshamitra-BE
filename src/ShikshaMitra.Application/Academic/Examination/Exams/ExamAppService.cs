@@ -15,6 +15,7 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Academic.Examination.Results;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -22,6 +23,8 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Identity;
+using Volo.Abp.DependencyInjection;
+using Volo.Abp.Uow;
 using ShikshaMitra.Academic.Examination.SeatAllocation;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.HR.Employees;
@@ -577,13 +580,23 @@ public partial class ExamAppService(
 		await examRepository.DeleteAsync(exam);
 	}
 
+	[UnitOfWork(true)]
 	public async Task ChangeStatusAsync(Guid examId, ExamStatus status)
 	{
+		var seating = status == ExamStatus.Published ? LazyServiceProvider.LazyGetRequiredService<SeatingNotificationPublication>() : null;
+		if (seating != null) await seating.LockPublicationAsync(examId);
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 		await EnsureCanAccessExamAsync(exam);
 		await EnsureValidExamStatusTransitionAsync(exam, status);
+		var publish = exam.Status == ExamStatus.Pending && status == ExamStatus.Published;
 		exam.ChangeStatus(status);
-		await examRepository.UpdateAsync(exam);
+		if (publish) ExamTimetablePublication.MarkReleased(exam);
+		await examRepository.UpdateAsync(exam, autoSave: publish);
+		if (publish)
+		{
+			await LazyServiceProvider.LazyGetRequiredService<ExamTimetablePublication>().CaptureAsync(exam, CurrentUser.Id);
+			await seating!.CaptureAsync(exam.Id, CurrentUser.Id);
+		}
 	}
 
 	public async Task<ExamListResultDto> GetListAsync(GetExamsInput input)
@@ -861,7 +874,7 @@ public partial class ExamAppService(
 		return scope.HasWildcardMedium && scope.MediumIds.Contains(mediumId);
 	}
 
-	private async Task EnsureCanAccessExamAsync(Exam exam)
+	internal async Task EnsureCanAccessExamAsync(Exam exam)
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
 		if (scope.IsAdmin)
@@ -2318,7 +2331,7 @@ public partial class ExamAppService(
 		return state;
 	}
 
-	private async Task<Exam> EnsureMarksWorkflowTargetAsync(Guid examId, Guid subjectId, Guid divisionId)
+	internal async Task<Exam> EnsureMarksWorkflowTargetAsync(Guid examId, Guid subjectId, Guid divisionId)
 	{
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 		await EnsureCanAccessExamAsync(exam);
@@ -2367,8 +2380,11 @@ public partial class ExamAppService(
 	// ─── 2. Submit Marks ───────────────────────────────────────────────────────
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	[UnitOfWork(true)]
 	public async Task<MarksWorkflowActionResponseDto> SubmitMarksAsync(Guid examId, MarksWorkflowActionInput input)
 	{
+		var notification = LazyServiceProvider.LazyGetRequiredService<MarksWorkflowNotification>();
+		await notification.LockAsync(examId, input.SubjectId, input.DivisionId);
 		await EnsureMarksWorkflowTargetAsync(examId, input.SubjectId, input.DivisionId);
 		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
 
@@ -2394,6 +2410,7 @@ public partial class ExamAppService(
 
 		state.TransitionTo(ExamMarksWorkflowStatus.Submitted);
 		await examMarksWorkflowStateRepository.UpdateAsync(state, autoSave: true);
+		await notification.CaptureAsync(state);
 
 		return BuildWorkflowResponse("Marks submitted for verification.", examId, input, ExamMarksWorkflowStatus.Submitted);
 	}
@@ -2401,8 +2418,11 @@ public partial class ExamAppService(
 	// ─── 3. Verify Marks ───────────────────────────────────────────────────────
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	[UnitOfWork(true)]
 	public async Task<MarksWorkflowActionResponseDto> VerifyMarksAsync(Guid examId, MarksWorkflowActionInput input)
 	{
+		var notification = LazyServiceProvider.LazyGetRequiredService<MarksWorkflowNotification>();
+		await notification.LockAsync(examId, input.SubjectId, input.DivisionId);
 		await EnsureMarksWorkflowTargetAsync(examId, input.SubjectId, input.DivisionId);
 		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
 
@@ -2807,8 +2827,11 @@ public partial class ExamAppService(
 	// ─── 10. Request Changes ───────────────────────────────────────────────────
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
+	[UnitOfWork(true)]
 	public async Task<MarksWorkflowActionResponseDto> RequestChangesAsync(Guid examId, RequestChangesInputDto input)
 	{
+		var notification = LazyServiceProvider.LazyGetRequiredService<MarksWorkflowNotification>();
+		await notification.LockAsync(examId, input.SubjectId, input.DivisionId);
 		await EnsureMarksWorkflowTargetAsync(examId, input.SubjectId, input.DivisionId);
 		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
 
@@ -2821,6 +2844,7 @@ public partial class ExamAppService(
 		state.TransitionTo(ExamMarksWorkflowStatus.ChangesRequested);
 		state.SetReviewerNote(input.ReviewerNote.Trim());
 		await examMarksWorkflowStateRepository.UpdateAsync(state, autoSave: true);
+		await notification.CaptureAsync(state);
 
 		return BuildWorkflowResponse("Correction requested and note recorded.", examId, new MarksWorkflowActionInput { SubjectId = input.SubjectId, DivisionId = input.DivisionId }, ExamMarksWorkflowStatus.ChangesRequested);
 	}

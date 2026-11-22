@@ -5,12 +5,10 @@ using ShikshaMitra.Academic.Examination.SeatAllocation.Dtos;
 namespace ShikshaMitra.Academic.Examination.SeatAllocation;
 
 /// <summary>
-/// Extension seam for the "publish to teachers/students/parents" notification options in spec §19.2.
-/// No real email/SMS/in-app provider is wired up in this codebase yet, so the default
-/// implementation only logs intent — swap in a real implementation once a notification
-/// provider exists, without touching <c>ExamSeatAllocationAppService.PublishSeatingPlanAsync</c>.
+/// Saves the notification options with the immutable seating publication and captures eligible delivery.
 /// </summary>
 public interface ISeatingPlanNotifier
 {
+    Task LockPublicationAsync(Guid examId);
     Task NotifyAsync(Guid examId, PublishSeatingPlanInputDto options);
 }

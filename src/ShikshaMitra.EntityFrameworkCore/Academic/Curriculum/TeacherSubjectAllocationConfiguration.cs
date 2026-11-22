@@ -20,6 +20,7 @@ public class TeacherSubjectAllocationConfiguration : IEntityTypeConfiguration<Te
 
 			// Configure composite key
 			teachers.HasKey(t => new { t.TeacherSubjectAllocationId, t.TeacherId });
+			teachers.Property(t => t.TeacherId).ValueGeneratedNever();
 
 			// Configure the foreign key relationship
 			teachers.WithOwner(t => t.Allocation)

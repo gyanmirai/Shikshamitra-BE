@@ -194,6 +194,7 @@ public class AssignmentEntity : FullAuditedAggregateRoot<Guid>, IMultiTenant, IU
 			!s.IsPublished && (!s.PublishDate.HasValue || s.PublishDate.Value <= now)))
 		{
 			schedule.Publish(now);
+			AddLocalEvent(new AssignmentDivisionPublished(TenantId, schedule.Id, now));
 		}
 	}
 

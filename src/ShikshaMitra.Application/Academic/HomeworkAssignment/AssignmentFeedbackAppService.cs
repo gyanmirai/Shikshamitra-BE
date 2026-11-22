@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students;
 using ShikshaMitra.Security.UserScope;
@@ -11,8 +12,10 @@ using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
@@ -31,6 +34,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		private readonly StudentSubmissionManager _submissionManager;
 		private readonly IUserScopeService _userScopeService;
 		private readonly IAsyncQueryableExecuter _asyncExecuter;
+	private readonly LearningTaskFeedbackEventCapture _feedbackEvents;
 
 
 	public AssignmentFeedbackAppService(
@@ -42,7 +46,8 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			IAssignmentTypeRepository assignmentTypeRepository,
 			StudentSubmissionManager submissionManager,
 			IUserScopeService userScopeService,
-			IAsyncQueryableExecuter asyncExecuter
+			IAsyncQueryableExecuter asyncExecuter,
+		LearningTaskFeedbackEventCapture feedbackEvents
 
 	)
 	{
@@ -55,6 +60,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 			_submissionManager = submissionManager;
 			_userScopeService = userScopeService;
 			_asyncExecuter = asyncExecuter;
+		_feedbackEvents = feedbackEvents;
 
 	}
 
@@ -274,7 +280,8 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 	/// Gives or updates feedback for a student's assignment
 	/// </summary>
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.Add)]
-	public async Task<FeedbackResponseDto> GiveFeedbackAsync(
+	[UnitOfWork(true)]
+	public virtual async Task<FeedbackResponseDto> GiveFeedbackAsync(
 		Guid assignmentId,
 		Guid studentId,
 		Guid academicMediumId,
@@ -295,7 +302,9 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		EnsureAssignmentOpenForEvaluation(assignment);
 
 		// 2. Validate student exists and get their division
-		var student = await _studentRepository.GetAsync(studentId);
+		var student = await _asyncExecuter.FirstOrDefaultAsync((await _studentRepository.GetQueryableAsync())
+			.Where(x => x.Id == studentId).Select(x => new { x.DivisionId }))
+			?? throw new EntityNotFoundException(typeof(Student), studentId);
 
 		// 3. Get division schedule for student's division
 		var divisionSchedule = assignment.DivisionSchedules
@@ -344,6 +353,8 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 		EnsureSubmissionCanBeEvaluated(submission);
 
 		// 6. Update feedback
+		var previousStatus = submission.Status;
+		var startsRevisionRequest = LearningTaskFeedbackEventCapture.StartsRevisionRequest(submission, input.Status);
 		submission.UpdateFeedback(
 			input.Marks,
 			input.TotalMarks,
@@ -355,6 +366,7 @@ public class AssignmentFeedbackAppService : ApplicationService, IAssignmentFeedb
 
 		// 7. Save changes
 		await _submissionRepository.UpdateAsync(submission, autoSave: true);
+		await _feedbackEvents.CaptureAsync(submission, previousStatus, CurrentUser.Id, startsRevisionRequest);
 
 		// 8. Build and return response
 		return new FeedbackResponseDto

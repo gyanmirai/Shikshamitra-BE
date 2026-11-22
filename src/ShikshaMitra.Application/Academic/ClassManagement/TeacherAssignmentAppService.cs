@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -6,6 +6,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -16,6 +17,7 @@ using Volo.Abp.Caching;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.ClassManagement.TeacherAssignment;
 
@@ -335,6 +337,7 @@ public class TeacherAssignmentAppService(
 		}
 	}
 
+	[UnitOfWork(true)]
 	public async Task<ApiSuccessResponseDto> SaveTeacherAssignmentsForClassAsync(
 		SaveTeacherAssignmentsDto input
 	)
@@ -502,6 +505,9 @@ public class TeacherAssignmentAppService(
 				);
 			}
 
+			var notices = LazyServiceProvider.LazyGetRequiredService<DivisionSubjectNotification>();
+			await notices.LockAsync(input.ClassId);
+
 			// Batch load all existing allocations for this class
 			List<TeacherSubjectAllocation> existingAllocations;
 			try
@@ -542,6 +548,7 @@ public class TeacherAssignmentAppService(
 				a => (a.DivisionId, a.SubjectId)
 			);
 
+			var changes = new Dictionary<Guid, DivisionSubjectChange>();
 			int updatedCount = 0;
 			int createdCount = 0;
 
@@ -569,11 +576,10 @@ public class TeacherAssignmentAppService(
 					if (existingAllocation != null)
 					{
 						// Update existing allocation - remove old teachers and add new ones
-						var currentTeacherIds = existingAllocation.Teachers?
-							.Where(t => !t.IsDeleted)
-							.Select(t => t.TeacherId)
-							.ToHashSet() ?? new HashSet<Guid>();
+						var currentTeacherIds = DivisionSubjectNotification.Teachers(existingAllocation);
 						var newTeacherIds = assignment.TeacherIds.ToHashSet();
+						if (!newTeacherIds.SetEquals(currentTeacherIds))
+							changes.TryAdd(existingAllocation.Id, new(existingAllocation, currentTeacherIds));
 
 						// Remove teachers that are no longer assigned
 						var teachersToRemove = existingAllocation.Teachers?
@@ -606,7 +612,8 @@ public class TeacherAssignmentAppService(
 							}
 						}
 
-						await allocationRepository.UpdateAsync(existingAllocation);
+						// The allocation is tracked. Updating the whole graph marks newly added
+						// owned teachers with composite keys as existing rows.
 						updatedCount++;
 
 						logger.LogDebug(
@@ -638,6 +645,8 @@ public class TeacherAssignmentAppService(
 						}
 
 						await allocationRepository.InsertAsync(newAllocation);
+						allocationLookup[(assignment.DivisionId, assignment.SubjectId)] = newAllocation;
+						changes[newAllocation.Id] = new(newAllocation, []);
 						createdCount++;
 
 						logger.LogDebug(
@@ -660,6 +669,13 @@ public class TeacherAssignmentAppService(
 						code: "ClassManagement:AssignmentSaveFailed"
 					);
 				}
+			}
+
+			if (changes.Count > 0)
+			{
+				await CurrentUnitOfWork!.SaveChangesAsync();
+				var writer = LazyServiceProvider.LazyGetRequiredService<SubjectAllocationNotification>();
+				await notices.PrepareAndCaptureAsync(changes.Values.ToArray(), input.AcademicMediumId, CurrentUser.Id, writer);
 			}
 
 			logger.LogInformation(

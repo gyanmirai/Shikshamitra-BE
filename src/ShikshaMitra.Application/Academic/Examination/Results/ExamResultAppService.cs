@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.Examination.Results.Dtos;
 using ShikshaMitra.Academic.Examination.Settings;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.Standards;
@@ -14,7 +15,9 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 using Volo.Abp.Users;
 
 namespace ShikshaMitra.Academic.Examination.Results;
@@ -371,6 +374,7 @@ public partial class ExamResultAppService(
     // ─────────────────────────────────────────────────────────────────────────
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.Publish)]
+    [UnitOfWork(true)]
     public async Task<ResultHeaderDto> PublishAsync(PublishResultRequestDto input)
     {
         var header = await resultHeaderRepository.GetAsync(input.ResultHeaderId);
@@ -383,6 +387,8 @@ public partial class ExamResultAppService(
         if (details.Count == 0)
             throw new UserFriendlyException("Result has no student details to publish.");
 
+        var notification = LazyServiceProvider.LazyGetRequiredService<ResultPublicationNotification>();
+        var revision = await notification.RecordAsync(header);
         header.Publish(userId);
         await resultHeaderRepository.UpdateAsync(header, autoSave: false);
 
@@ -390,6 +396,7 @@ public partial class ExamResultAppService(
             GuidGenerator.Create(), header.ExamId, header.DivisionId,
             "Published", userId, null, CurrentTenant.Id);
         await resultAuditLogRepository.InsertAsync(log, autoSave: true);
+        await notification.CaptureAsync(header, revision, userId);
 
         return MapToHeaderDto(header, details);
     }
@@ -460,7 +467,7 @@ public partial class ExamResultAppService(
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
 
-    private async Task<Exam> GetScopedExamAsync(Guid examId, Guid? divisionId = null)
+    internal async Task<Exam> GetScopedExamAsync(Guid examId, Guid? divisionId = null)
     {
         var exam = await examRepository.GetAsync(examId, includeDetails: true);
         if (divisionId.HasValue && exam.ExamDivisions.All(row => row.DivisionId != divisionId.Value))

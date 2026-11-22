@@ -303,7 +303,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
 
                 if (isAdmin)
                 {
-                    subReservation.Approve(approverId);
+                    subReservation.Approve(approverId, notify: false);
                 }
 
                 await EnsureCanAccessReservationAsync(subReservation, "room-reservation-create");
@@ -323,6 +323,10 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
         if (isAdmin)
         {
             mainReservation.Approve(approverId);
+        }
+        else
+        {
+            mainReservation.RequestApprovalNotice();
         }
 
         await EnsureCanAccessReservationAsync(mainReservation, "room-reservation-create");
@@ -588,7 +592,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
                 !r.IsRecurring);
             foreach (var child in children)
             {
-                child.Cancel(CurrentUser.Id ?? Guid.Empty, reason);
+                child.Cancel(CurrentUser.Id ?? Guid.Empty, reason, notify: false);
                 await _reservationRepository.UpdateAsync(child);
             }
         }
@@ -641,13 +645,17 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
         creatorUserId != currentUserId &&
         (isPrivilegedRoomOperator || visibleUserIds.Contains(creatorUserId));
 
-    private bool IsAdministrator() => CurrentUser.Roles.Any(role =>
+    private bool IsAdministrator() => IsAdministrator(CurrentUser.Roles);
+
+    private static bool IsAdministrator(IEnumerable<string> roles) => roles.Any(role =>
         string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase));
 
-	private bool IsPrivilegedRoomOperator() =>
-		IsAdministrator() ||
-		CurrentUser.Roles.Any(role =>
+	private bool IsPrivilegedRoomOperator() => IsPrivilegedRoomOperator(CurrentUser.Roles);
+
+	private static bool IsPrivilegedRoomOperator(IEnumerable<string> roles) =>
+		IsAdministrator(roles) ||
+		roles.Any(role =>
 			string.Equals(role, "coordinator", StringComparison.OrdinalIgnoreCase) ||
 			string.Equals(role, "hod", StringComparison.OrdinalIgnoreCase) ||
 			string.Equals(role, "principal", StringComparison.OrdinalIgnoreCase));
@@ -737,7 +745,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
             foreach (var child in children)
             {
                 EnsureNoCriticalConflicts(await session.CheckAsync(ReservationWindow(child)), "Cannot approve booking");
-                child.Approve(CurrentUser.Id ?? Guid.Empty);
+                child.Approve(CurrentUser.Id ?? Guid.Empty, notify: false);
             }
             await _reservationRepository.UpdateManyAsync(children.Prepend(reservation));
         }
@@ -795,7 +803,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
         reservation.Date, reservation.StartTime, reservation.EndTime, reservation.Id, reservation.TeacherId,
         reservation.StandardId, reservation.DivisionId, ReservationCalendarMedium(reservation));
 
-    private static Guid? ReservationCalendarMedium(RoomReservation reservation) =>
+    internal static Guid? ReservationCalendarMedium(RoomReservation reservation) =>
         reservation.ExtraProperties.TryGetValue("CalendarMediumId", out var value) &&
         Guid.TryParse(value?.ToString(), out var mediumId) ? mediumId : null;
 
@@ -864,7 +872,7 @@ public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvail
                 !r.IsRecurring);
             foreach (var child in children)
             {
-                child.Reject(CurrentUser.Id ?? Guid.Empty, normalizedReason);
+                child.Reject(CurrentUser.Id ?? Guid.Empty, normalizedReason, notify: false);
                 await _reservationRepository.UpdateAsync(child);
             }
         }

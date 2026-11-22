@@ -5,7 +5,8 @@ public enum CommunicationChannelType
 	WhatsApp = 0,
 	Sms = 1,
 	Email = 2,
-	InApp = 3
+	InApp = 3,
+	WebPush = 4
 }
 
 public enum CommunicationCampaignStatus
@@ -77,7 +78,8 @@ public enum CommunicationDeliveryStatus
 	Bounced = 5,
 	Replied = 6,
 	Acknowledged = 7,
-	Skipped = 8
+	Skipped = 8,
+	UnknownAcceptance = 9
 }
 
 public enum CommunicationReplyStatus

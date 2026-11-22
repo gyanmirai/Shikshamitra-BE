@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using ShikshaMitra.HR;
+using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Security.Roles;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.Finance.Fees.Collections;
@@ -20,6 +21,9 @@ public static class ApiProblemDetailsMapper
 
 		return errorCode switch
 		{
+			NotificationErrorCodes.ReviewChanged or NotificationErrorCodes.ReviewExpired or NotificationErrorCodes.ReviewConsumed or
+			NotificationErrorCodes.ApprovalSetupRequired or NotificationErrorCodes.RetryRequiresReview => StatusCodes.Status409Conflict,
+			NotificationErrorCodes.TemplateTestRateLimited => StatusCodes.Status429TooManyRequests,
 			Library.LibraryErrorCodes.ReceivingCommandConflict or Library.LibraryErrorCodes.ReceivingPlanChanged or
 				Library.LibraryErrorCodes.CatalogueConfigurationChanged => StatusCodes.Status409Conflict,
 			Library.LibraryErrorCodes.StockImportPlanChanged or Library.LibraryErrorCodes.StockImportCommandConflict => StatusCodes.Status409Conflict,

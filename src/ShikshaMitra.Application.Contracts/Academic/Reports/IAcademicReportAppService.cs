@@ -16,4 +16,6 @@ public interface IAcademicReportAppService : IApplicationService
     Task<List<AcademicReportExportJobDto>> GetExportsAsync();
     Task<AcademicReportExportJobDto> GetExportAsync(Guid jobId);
     Task<AcademicReportDownloadDto> DownloadExportAsync(Guid jobId);
+    Task<AcademicReportRecoveryDto> GetExportRecoveryAsync(Guid jobId);
+    Task<AcademicReportExportCreateResponseDto> RegenerateExportAsync(Guid jobId);
 }

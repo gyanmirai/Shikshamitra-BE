@@ -39,7 +39,7 @@ public class AcademicReportExportBackgroundJob(
     {
         using (currentTenant.Change(args.TenantId))
         {
-            var runId = await exportState.TryStartAsync(args.JobId);
+            var runId = await exportState.TryStartAsync(args.JobId, args.GenerationId);
             if (!runId.HasValue)
             {
                 logger.LogInformation("Skipping Academic report export {JobId} because it is no longer queued", args.JobId);

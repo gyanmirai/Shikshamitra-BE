@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Security.Permissions;
 using Volo.Abp;
@@ -56,10 +57,18 @@ public class StudentElectiveCorrectionAppService(
 		var before = JsonSerializer.Serialize(new { prepared.Selection.SelectedSubjectId, prepared.Selection.StudentPreference, prepared.Selection.PreferenceOverrideSubjectId });
 		prepared.Selection.CorrectLockedSelection(input.SelectedSubjectId, input.PreferredSubjectId, prepared.Review.PreferredSubject);
 		await selections.UpdateAsync(prepared.Selection);
-		await corrections.InsertAsync(new StudentElectiveCorrection(GuidGenerator.Create(), CurrentTenant.Id!.Value,
+		await unit.SaveChangesAsync();
+		var notice = new ElectiveCorrectionNotice(prepared.Selection.Id, prepared.Selection.ConcurrencyStamp, prepared.Scope);
+		var audit = await corrections.InsertAsync(new StudentElectiveCorrection(GuidGenerator.Create(), CurrentTenant.Id!.Value,
 			input.StudentId, input.ElectiveGroupId, CurrentUser.Id!.Value, before,
-			JsonSerializer.Serialize(new { prepared.Selection.SelectedSubjectId, prepared.Selection.StudentPreference, prepared.Selection.PreferenceOverrideSubjectId }),
-			JsonSerializer.Serialize(prepared.Review.Impacts), input.Reason?.Trim()));
+			JsonSerializer.Serialize(new
+			{
+				prepared.Selection.SelectedSubjectId, prepared.Selection.StudentPreference,
+				prepared.Selection.PreferenceOverrideSubjectId, Notice = notice
+			}), JsonSerializer.Serialize(prepared.Review.Impacts), input.Reason?.Trim()), autoSave: true);
+		await LazyServiceProvider.LazyGetRequiredService<SubjectAllocationNotification>().CaptureAsync(
+			[new(audit.Id, ElectiveCorrectionNotificationSource.EventKey, audit.Id.ToString("N"))],
+			CurrentUser.Id, ElectiveCorrectionNotificationSource.Type);
 		await unit.CompleteAsync();
 	}
 

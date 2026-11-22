@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Security.UserScope;
@@ -19,6 +20,7 @@ using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings.Divisions;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
@@ -50,9 +52,12 @@ public partial class SubjectAssignmentAppService(
 	SubjectTeacherReassignmentManager teacherReassignmentManager,
 	SubjectScheduleBreakdownQueryService scheduleBreakdownQueryService,
 	SubjectAssignmentTeacherEligibilityManager teacherEligibilityManager,
-	SubjectAssignmentScopeAccess assignmentScope
+	SubjectAssignmentScopeAccess assignmentScope,
+	TimetableNotificationDelivery timetableNotifications,
+	SubjectAllocationNotification subjectNotifications
 ) : ApplicationService, ISubjectAssignmentAppService
 {
+	[UnitOfWork(true)]
 	public async Task CreateAsync(
 		Guid academicMediumId,
 		CreateUpdateSubjectAssignmentDto createSubjectAssignmentDto
@@ -69,6 +74,7 @@ public partial class SubjectAssignmentAppService(
 				Array.Empty<Guid>());
 
 			var assignedSubjects = new List<AssignedSubject>();
+			var notices = new List<CurriculumNoticeCapture>();
 			foreach (var subject in createSubjectAssignmentDto.Subjects)
 			{
 				var assignedSubject =
@@ -121,6 +127,8 @@ public partial class SubjectAssignmentAppService(
 			}
 
 			await EnsureTeachersBelongToClassAsync(createSubjectAssignmentDto.ClassId, createSubjectAssignmentDto.Subjects);
+			if (createSubjectAssignmentDto.Status == SubjectStatus.Published && await subjectNotifications.CanRecordAsync())
+				foreach (var assignment in assignedSubjects) SubjectAllocationNotification.Record(notices, assignment, null);
 			await assignmentRepository.InsertManyAsync(assignedSubjects, autoSave: true);
 
 			// Auto-add new subjects to the weekly lecture slot for this class (with 0 weekly lectures).
@@ -175,6 +183,7 @@ public partial class SubjectAssignmentAppService(
 
 			if (anyAdded)
 				await weeklyLectureSlotRepository.UpdateAsync(weeklySlot, autoSave: true);
+			await subjectNotifications.CaptureAsync(notices, CurrentUser.Id);
 		}
 		catch (BusinessException)
 		{
@@ -735,7 +744,8 @@ public partial class SubjectAssignmentAppService(
 		return Math.Max(months, 0);
 	}
 
-	public async Task<SubjectAssignmentDto?> UpdateAsync(
+	[UnitOfWork(true)]
+	public virtual async Task<SubjectAssignmentDto?> UpdateAsync(
 		Guid assignmentId,
 		Guid academicMediumId,
 		CreateUpdateSubjectAssignmentDto input
@@ -771,6 +781,8 @@ public partial class SubjectAssignmentAppService(
 		// We match existing subjects with input subjects by SubjectId
 		var subjectsToDelete = new List<AssignedSubject>();
 		var teacherChanges = new List<SubjectTeacherChange>();
+		var notices = new List<CurriculumNoticeCapture>();
+		var canNotify = await subjectNotifications.CanRecordAsync();
 		var processedSubjectIds = new HashSet<Guid>();
 		await EnsureSubjectsAreNotAlreadyAssignedAsync(
 			input.ClassId,
@@ -785,6 +797,7 @@ public partial class SubjectAssignmentAppService(
 			if (existingSubject != null)
 			{
 				await EnsureTeacherRemovalAllowedAsync(existingSubject, inputSubject);
+				var before = SubjectAllocationNotification.Before(existingSubject);
 				var previousPrimaryTeacherId = existingSubject.Teachers
 					.FirstOrDefault(teacher => teacher.TeacherType == SubjectTeacherType.Primary)?.TeacherId;
 				var previousStandardId = existingSubject.StandardId;
@@ -834,6 +847,7 @@ public partial class SubjectAssignmentAppService(
 				{
 					teacherChanges.Add(new SubjectTeacherChange(existingSubject, previousPrimaryTeacherId));
 				}
+				SubjectAllocationNotification.Record(notices, existingSubject, before, capture: canNotify);
 				await assignmentRepository.UpdateAsync(existingSubject);
 			}
 			else
@@ -872,12 +886,13 @@ public partial class SubjectAssignmentAppService(
 
 				newSubject.RecalculateSetupHealth();
 				await EnsureCurrentUserCanAccessAssignmentAsync(newSubject, operation: "subject-assignment-create");
+				SubjectAllocationNotification.Record(notices, newSubject, null, capture: canNotify);
 				await assignmentRepository.InsertAsync(newSubject);
 				existingGroup.Add(newSubject); // Add to local list for return mapping
 			}
 		}
 
-		await teacherReassignmentManager.SynchronizeAsync(teacherChanges);
+		var affectedTimetables = await teacherReassignmentManager.SynchronizeAsync(teacherChanges);
 
 		// 3. Delete removed subjects
 		foreach (var subject in existingGroup)
@@ -885,9 +900,12 @@ public partial class SubjectAssignmentAppService(
 			if (!processedSubjectIds.Contains(subject.SubjectId))
 			{
 				await EnsureAssignmentRemovalAllowedAsync(subject);
+				SubjectAllocationNotification.Record(notices, subject, SubjectAllocationNotification.Before(subject), deleting: true, capture: canNotify);
 				await assignmentRepository.DeleteAsync(subject);
 			}
 		}
+		await timetableNotifications.CaptureReassignmentsAsync(affectedTimetables, CurrentUser.Id);
+		await subjectNotifications.CaptureAsync(notices, CurrentUser.Id);
 
 		// Re-fetch or use modified list.
 		// Since we modified existingGroup in memory (for updates) and adding new ones,
@@ -917,6 +935,7 @@ public partial class SubjectAssignmentAppService(
 		return null;
 	}
 
+	[UnitOfWork(true)]
 	public async Task ChangeStatusAsync(Guid assignmentId, ChangeStatusRequestDto input)
 	{
 		var query = await assignmentRepository.WithDetailsAsync(a => a.Teachers, a => a.Documents, a => a.Chapters, a => a.Subject);
@@ -950,19 +969,25 @@ public partial class SubjectAssignmentAppService(
 			}
 		}
 
+		var notices = new List<CurriculumNoticeCapture>();
+		var canNotify = await subjectNotifications.CanRecordAsync();
 		foreach (var groupAssignment in assignments)
 		{
+			var before = SubjectAllocationNotification.Before(groupAssignment);
 			groupAssignment.ChangeStatus(status);
 			if (status == SubjectStatus.Published)
 			{
 				groupAssignment.PublishedAt = DateTimeOffset.UtcNow;
 				groupAssignment.ClearCopiedFromPreviousYearMarker();
 			}
+			SubjectAllocationNotification.Record(notices, groupAssignment, before, capture: canNotify);
 		}
 
 		await assignmentRepository.UpdateManyAsync(assignments, autoSave: true);
+		await subjectNotifications.CaptureAsync(notices, CurrentUser.Id);
 	}
 
+	[UnitOfWork(true)]
 	public async Task<PublishResponseDto> PublishAsync(List<Guid> assignmentIds)
 	{
 		if (assignmentIds == null || assignmentIds.Count == 0)
@@ -992,16 +1017,21 @@ public partial class SubjectAssignmentAppService(
 				await SynchronizeWeeklyPeriodsAndRecalculateHealthAsync(classGroup.ToList(), classGroup.Key);
 			}
 
+			var notices = new List<CurriculumNoticeCapture>();
+			var canNotify = await subjectNotifications.CanRecordAsync();
 			foreach (var assignment in assignments)
 			{
+				var before = SubjectAllocationNotification.Before(assignment);
 				EnsureSubjectAssignmentStatusTransitionAllowed(assignment, SubjectStatus.Published);
 				EnsureSubjectAssignmentReadyToPublish(assignment);
 				assignment.ChangeStatus(SubjectStatus.Published);
 				assignment.PublishedAt = DateTimeOffset.UtcNow;
 				assignment.ClearCopiedFromPreviousYearMarker();
+				SubjectAllocationNotification.Record(notices, assignment, before, capture: canNotify);
 			}
 
 			await assignmentRepository.UpdateManyAsync(assignments, autoSave: true);
+			await subjectNotifications.CaptureAsync(notices, CurrentUser.Id);
 
 			return new PublishResponseDto
 			{
@@ -1021,15 +1051,16 @@ public partial class SubjectAssignmentAppService(
 		}
 	}
 
+	[UnitOfWork(true)]
 	public async Task DeleteAsync(Guid assignmentId)
 	{
-		var assignment = await assignmentRepository.GetAsync(assignmentId);
+		var assignment = await ReadAssignmentWithTeachersAsync(assignmentId);
 		await EnsureCurrentUserCanAccessAssignmentAsync(assignment, operation: "subject-assignment-delete");
 
 		List<AssignedSubject> groupAssignments;
 		if (assignment.ElectiveGroupId.HasValue)
 		{
-			groupAssignments = await assignmentRepository.GetListAsync(a =>
+			groupAssignments = await ReadGroupWithTeachersAsync(a =>
 				a.ElectiveGroupId == assignment.ElectiveGroupId && a.StandardId == assignment.StandardId
 			);
 		}
@@ -1046,27 +1077,11 @@ public partial class SubjectAssignmentAppService(
 			assignment.ElectiveGroupId,
 			groupAssignments.Sum(a => a.Chapters.Count));
 
-		if (usageParts.Count > 0)
+		if (usageParts.Count > 0 || groupAssignments.Any(a => a.Status == SubjectStatus.Published))
 		{
-			foreach (var groupAssignment in groupAssignments)
-			{
-				await EnsureAssignmentRemovalAllowedAsync(groupAssignment);
-				groupAssignment.ChangeStatus(SubjectStatus.Archived);
-			}
-
-			await assignmentRepository.UpdateManyAsync(groupAssignments, autoSave: true);
-			return;
-		}
-
-		if (groupAssignments.Any(a => a.Status == SubjectStatus.Published))
-		{
-			foreach (var groupAssignment in groupAssignments)
-			{
-				await EnsureAssignmentRemovalAllowedAsync(groupAssignment);
-				groupAssignment.ChangeStatus(SubjectStatus.Archived);
-			}
-
-			await assignmentRepository.UpdateManyAsync(groupAssignments, autoSave: true);
+			foreach (var groupAssignment in groupAssignments) await EnsureAssignmentRemovalAllowedAsync(groupAssignment);
+			var canNotify = await subjectNotifications.CanRecordAsync(deletion: true);
+			await ArchiveAndNotifyAsync(groupAssignments, canNotify);
 			return;
 		}
 
@@ -1295,21 +1310,42 @@ public partial class SubjectAssignmentAppService(
 		};
 	}
 
+	[UnitOfWork(true)]
 	public async Task ArchiveAsync(Guid assignmentId)
 	{
-		var assignment = await assignmentRepository.GetAsync(assignmentId);
+		var assignment = await ReadAssignmentWithTeachersAsync(assignmentId);
 		var groupAssignments = assignment.ElectiveGroupId.HasValue
-			? await assignmentRepository.GetListAsync(a =>
-				a.ElectiveGroupId == assignment.ElectiveGroupId &&
-				a.StandardId == assignment.StandardId)
+			? await ReadGroupWithTeachersAsync(a => a.ElectiveGroupId == assignment.ElectiveGroupId && a.StandardId == assignment.StandardId)
 			: new List<AssignedSubject> { assignment };
 
-		foreach (var groupAssignment in groupAssignments)
+		var canNotify = await subjectNotifications.CanRecordAsync(deletion: true);
+		if (canNotify)
 		{
-			groupAssignment.ChangeStatus(SubjectStatus.Archived);
+			try { await assignmentScope.EnsureAsync(assignment); }
+			catch (BusinessException error) when (error.Code == UserScopeErrorCodes.AccessDenied) { canNotify = false; }
+		}
+		await ArchiveAndNotifyAsync(groupAssignments, canNotify);
+	}
+
+	private async Task<AssignedSubject> ReadAssignmentWithTeachersAsync(Guid id) =>
+		await AsyncExecuter.SingleOrDefaultAsync((await assignmentRepository.WithDetailsAsync()).Where(x => x.Id == id))
+		?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(AssignedSubject), id);
+
+	private async Task<List<AssignedSubject>> ReadGroupWithTeachersAsync(System.Linq.Expressions.Expression<Func<AssignedSubject, bool>> predicate) =>
+		await AsyncExecuter.ToListAsync((await assignmentRepository.WithDetailsAsync(x => x.Teachers)).Where(predicate));
+
+	private async Task ArchiveAndNotifyAsync(List<AssignedSubject> assignments, bool canNotify)
+	{
+		var notices = new List<CurriculumNoticeCapture>();
+		foreach (var row in assignments)
+		{
+			var before = SubjectAllocationNotification.Before(row);
+			row.ChangeStatus(SubjectStatus.Archived);
+			SubjectAllocationNotification.Record(notices, row, before, capture: canNotify);
 		}
 
-		await assignmentRepository.UpdateManyAsync(groupAssignments, autoSave: true);
+		await assignmentRepository.UpdateManyAsync(assignments, autoSave: true);
+		await subjectNotifications.CaptureAsync(notices, CurrentUser.Id);
 	}
 
 	public async Task RestoreAsync(Guid assignmentId)
@@ -2185,7 +2221,7 @@ public partial class SubjectAssignmentAppService(
 		return await assignmentScope.FilterAsync(query);
 	}
 
-	private async Task EnsureCurrentUserCanAccessAssignmentAsync(
+	internal async Task EnsureCurrentUserCanAccessAssignmentAsync(
 		AssignedSubject assignment,
 		string operation, Guid? academicMediumId = null)
 	{

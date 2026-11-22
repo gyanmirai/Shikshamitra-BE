@@ -14,6 +14,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using OpenIddict.Validation.AspNetCore;
 using QuestPDF.Infrastructure;
+using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Common.Middleware;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Extensions;
@@ -111,6 +112,9 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
         Configure<AbpBackgroundWorkerOptions>(options => options.IsEnabled = configuration.GetValue<bool>("BackgroundWorkers:IsEnabled", true));
         Configure<Volo.Abp.BackgroundJobs.AbpBackgroundJobOptions>(options => options.IsJobExecutionEnabled = configuration.GetValue<bool>("BackgroundJobs:IsJobExecutionEnabled", true));
 		services.AddHttpClient();
+		services.AddHttpClient(WhatsAppProviderClient.HttpClientName)
+			.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+			.RemoveAllLoggers();
 		services.AddHostedService<ShikshaMitra.Diagnostics.ApiDatabaseTimingObserver>();
 		services.AddRateLimiter(options =>
 		{
@@ -600,6 +604,9 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
         if (!context.ServiceProvider.GetRequiredService<IConfiguration>().GetValue<bool>("BackgroundWorkers:IsEnabled", true)) return;
 		await ConfigureSmtpPasswordAsync(context.ServiceProvider);
 		await context.AddBackgroundWorkerAsync<AssignmentScheduledPublicationWorker>();
+		await context.AddBackgroundWorkerAsync<AcademicNotificationDispatchWorker>();
+		await context.AddBackgroundWorkerAsync<AcademicNotificationReminderWorker>();
+		await context.AddBackgroundWorkerAsync<AcademicNotificationHealthWorker>();
 		await context.AddBackgroundWorkerAsync<AdmissionCycleScheduleWorker>();
 		await context.AddBackgroundWorkerAsync<StudentRecordScheduleWorker>();
 		await context.AddBackgroundWorkerAsync<StudentRecordReportWorker>();

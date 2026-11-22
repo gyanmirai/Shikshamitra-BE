@@ -6,12 +6,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Students;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.ClassManagement.StudentElectiveAssignment;
 
@@ -287,6 +289,7 @@ public class StudentElectiveAssignmentAppService(
 		}
 	}
 
+	[UnitOfWork(true)]
 	public async Task<ApiSuccessResponseDto> LockStudentElectiveAssignmentsAsync(
 		LockStudentElectiveAssignmentsDto input
 	)
@@ -298,22 +301,15 @@ public class StudentElectiveAssignmentAppService(
 
 		try
 		{
-			// Get students in the specified class and division
-			var studentsQuery = await studentRepository.GetQueryableAsync();
-			var students = await AsyncExecuter.ToListAsync(
-				studentsQuery.Where(s =>
-					s.AcademicMediumId == input.AcademicMediumId &&
-					s.StandardId == input.ClassId &&
-					s.DivisionId == input.DivisionId
-				)
-			);
-
-			if (!students.Any())
+			var notices = LazyServiceProvider.LazyGetRequiredService<ElectiveSelectionNotification>();
+			await notices.LockAsync(input.DivisionId, input.ElectiveGroupId);
+			var studentIds = await AsyncExecuter.ToListAsync((await studentRepository.GetQueryableAsync()).Where(s =>
+				s.AcademicMediumId == input.AcademicMediumId && s.StandardId == input.ClassId && s.DivisionId == input.DivisionId)
+				.Select(s => s.Id));
+			if (studentIds.Count == 0)
 			{
 				throw new UserFriendlyException("No students found in the specified class and division.");
 			}
-
-			var studentIds = students.Select(s => s.Id).ToList();
 
 			// Get existing selections
 			var selections = await selectionRepository.GetListAsync(s =>
@@ -323,9 +319,7 @@ public class StudentElectiveAssignmentAppService(
 
 			// Verify that every student has a saved selection
 			var selectionStudentIds = selections.Select(s => s.StudentId).ToHashSet();
-			var studentsWithoutSelection = students.Where(s => !selectionStudentIds.Contains(s.Id)).ToList();
-
-			if (studentsWithoutSelection.Any())
+			if (studentIds.Any(id => !selectionStudentIds.Contains(id)))
 			{
 				throw new UserFriendlyException("All students must have an elective subject assigned and saved before locking.");
 			}
@@ -347,6 +341,14 @@ public class StudentElectiveAssignmentAppService(
 			}
 
 			await selectionRepository.UpdateManyAsync(unlockedSelections);
+			if (await notices.CanCaptureAsync(input.AcademicMediumId, input.ClassId, input.DivisionId))
+			{
+				await CurrentUnitOfWork!.SaveChangesAsync();
+				var captures = unlockedSelections.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicMediumId == input.AcademicMediumId)
+					.Select(x => new CurriculumNoticeCapture(x.Id, ElectiveSelectionNotification.EventKey, x.ConcurrencyStamp)).ToArray();
+				await LazyServiceProvider.LazyGetRequiredService<SubjectAllocationNotification>()
+					.CaptureAsync(captures, CurrentUser.Id, ElectiveSelectionNotification.Type);
+			}
 
 			return new ApiSuccessResponseDto
 			{

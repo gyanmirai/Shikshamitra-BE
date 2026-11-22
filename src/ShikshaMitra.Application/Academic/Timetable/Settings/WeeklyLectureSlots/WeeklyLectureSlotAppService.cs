@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.TenantSettings.Standards;
@@ -12,6 +13,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 
@@ -23,7 +25,8 @@ public class WeeklyLectureSlotAppService(
     IRepository<Subject, Guid> subjectRepository,
     IRepository<ElectiveGroup, Guid> electiveGroupRepository,
     ILectureSlotConfigRepository lectureSlotConfigRepository,
-    IRepository<AssignedSubject, Guid> assignedSubjectRepository
+    IRepository<AssignedSubject, Guid> assignedSubjectRepository,
+    AcademicSettingsImpactNotificationService notifications
 ) : ApplicationService, IWeeklyLectureSlotAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsWeeklyLectures.View)]
@@ -221,14 +224,19 @@ public class WeeklyLectureSlotAppService(
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsWeeklyLectures.Add)]
-    public async Task<WeeklyLectureSlotDto> UpdateAsync(Guid id, UpdateWeeklyLectureSlotDto input)
+    [UnitOfWork(true)]
+    public virtual async Task<WeeklyLectureSlotDto> UpdateAsync(Guid id, UpdateWeeklyLectureSlotDto input)
     {
         var slot = await weeklyLectureSlotRepository.GetAsync(id);
+        var previous = slot.Subjects.ToArray();
 
         slot.ReplaceSubjects(input.Subjects.Select(s =>
             (GuidGenerator.Create(), s.SubjectId, s.ElectiveGroupId, s.WeeklyLectures)));
 
-        await weeklyLectureSlotRepository.UpdateAsync(slot);
+        var impacts = await notifications.PrepareWeeklyLectureUpdateAsync(slot, previous, CurrentUser.Id);
+        await weeklyLectureSlotRepository.UpdateAsync(slot, autoSave: impacts.Count != 0);
+        if (impacts.Count != 0)
+            await notifications.CaptureAsync(impacts, CurrentUser.Id);
 
         return await GetAsync(slot.Id);
     }

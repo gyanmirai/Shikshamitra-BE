@@ -1,4 +1,5 @@
 using System;
+using ShikshaMitra.Communication.Notifications;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 using ShikshaMitra.Security.UserScope;
@@ -96,6 +97,9 @@ public class RoomReservation : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUs
         string? reservedFor = null,
         string? remarks = null)
     {
+        var bookingChanged = RoomId != roomId || Date != date.Date || StartTime != startTime || EndTime != endTime ||
+            TeacherId != teacherId || StandardId != standardId || DivisionId != divisionId;
+        var previousTeacher = TeacherId;
         RoomId = roomId;
         Date = date.Date;
         StartTime = startTime;
@@ -108,28 +112,57 @@ public class RoomReservation : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUs
         SubjectId = subjectId;
         ReservedFor = reservedFor;
         Remarks = remarks;
+        if (!bookingChanged) return;
+        if (IsConfirmed(Status))
+            RecordNotice(AcademicNotificationEventKeys.RoomChanged, previousTeacher);
+        else if (Status == RoomReservationStatus.PendingApproval)
+            RequestApprovalNotice();
+        else
+            RoomReservationNoticeRevision.Forget(this);
     }
 
-    public void Approve(Guid userId)
+    public void RequestApprovalNotice()
     {
+        if (Status == RoomReservationStatus.PendingApproval)
+            RecordNotice(AcademicNotificationEventKeys.RoomApprovalRequested);
+    }
+
+    public void Approve(Guid userId, bool notify = true)
+    {
+        var changed = !IsConfirmed(Status);
         Status = RoomReservationStatus.Approved;
         ApprovedByUserId = userId;
         ApprovedAt = DateTime.UtcNow;
+        if (changed) RecordNotice(AcademicNotificationEventKeys.RoomApproved, notify: notify);
     }
 
-    public void Reject(Guid userId, string reason)
+    public void Reject(Guid userId, string reason, bool notify = true)
     {
+        var changed = Status != RoomReservationStatus.Rejected;
         Status = RoomReservationStatus.Rejected;
         RejectionReason = reason;
         Remarks = reason;
         ApprovedByUserId = userId;
         ApprovedAt = DateTime.UtcNow;
+        if (changed) RecordNotice(AcademicNotificationEventKeys.RoomRejected, notify: notify);
     }
 
-    public void Cancel(Guid userId, string reason)
+    public void Cancel(Guid userId, string reason, bool notify = true)
     {
+        var wasConfirmed = IsConfirmed(Status);
         Status = RoomReservationStatus.Cancelled;
         CancellationReason = reason;
+        if (wasConfirmed) RecordNotice(AcademicNotificationEventKeys.RoomCancelled, notify: notify);
+    }
+
+    public static bool IsConfirmed(RoomReservationStatus status) =>
+        status is RoomReservationStatus.Approved or RoomReservationStatus.Active or RoomReservationStatus.CheckedIn;
+
+    private void RecordNotice(string eventKey, Guid? previousTeacherId = null, bool notify = true)
+    {
+        if (!TenantId.HasValue) return;
+        var revision = RoomReservationNoticeRevision.Record(this, eventKey, previousTeacherId);
+        if (notify) AddLocalEvent(new RoomReservationNotification(TenantId, Id, eventKey, revision.Revision));
     }
 
     public void CheckIn()

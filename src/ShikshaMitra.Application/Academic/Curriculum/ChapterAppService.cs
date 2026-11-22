@@ -1,4 +1,5 @@
 using ShikshaMitra.Academic.Syllabus;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Common;
 using System;
 using System.Collections.Generic;
@@ -9,6 +10,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Uow;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.Academic.QuestionBank;
 using ShikshaMitra.Academic.QuestionPapers;
@@ -46,6 +48,7 @@ public class ChapterAppService(
 			{ Id = chapter.Id, ChapterNumber = chapter.ChapterNumber, ChapterName = chapter.ChapterName }));
 	}
 
+	[UnitOfWork(true)]
 	public async Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, List<CreateChapterDto> input)
 	{
 		var assignedSubject = (await assignedSubjectRepository.GetListAsync(
@@ -63,6 +66,8 @@ public class ChapterAppService(
 			throw new BusinessException("Academic:Chapter:005", "Duplicate chapter numbers are not allowed.");
 		}
 
+		var notices = new List<CurriculumNoticeCapture>();
+		bool? canNotify = null;
 		foreach (var createChapterDto in input)
 		{
 			if (assignedSubject.Chapters.Any(c => c.ChapterNumber == createChapterDto.ChapterNo))
@@ -79,11 +84,19 @@ public class ChapterAppService(
 				createChapterDto.Documents ?? [],
 				createChapterDto.Description
 			);
+			chapter.TenantId = assignedSubject.TenantId;
 			ApplyPlanningDetails(chapter, createChapterDto);
+			if (SyllabusNotificationRevision.Content(assignedSubject, chapter) is { } content)
+			{
+				canNotify ??= await LazyServiceProvider.LazyGetRequiredService<SyllabusNotificationAccess>().CanCaptureAsync(assignedSubject);
+				if (SyllabusNotificationRevision.Record(assignedSubject, chapter, before: null, content, canNotify.Value) is { } notice)
+					notices.Add(notice);
+			}
 		}
 
 		assignedSubject.RecalculateSetupHealth();
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
+		await CaptureSyllabusNoticesAsync(notices);
 
 		return new ApiSuccessResponseDto { Message = "Chapters created successfully." };
 	}
@@ -162,6 +175,7 @@ public class ChapterAppService(
 			allocation.Teachers.Any(teacher => employeeIds.Contains(teacher.TeacherId)));
 	}
 
+	[UnitOfWork(true)]
 	public async Task<ChapterDto> UpdateAsync(Guid id, CreateUpdateChapterDto updateChapterDto)
 	{
 		var assignedSubject =
@@ -176,6 +190,7 @@ public class ChapterAppService(
 		}
 
 		var chapter = assignedSubject.Chapters.First(c => c.Id == id);
+		var before = SyllabusNotificationRevision.Content(assignedSubject, chapter);
 		chapter.UpdateDetails(
 			updateChapterDto.ChapterNo,
 			updateChapterDto.ChapterName,
@@ -217,8 +232,17 @@ public class ChapterAppService(
 			}
 		}
 
+		var content = SyllabusNotificationRevision.Content(assignedSubject, chapter);
+		CurriculumNoticeCapture? notice = null;
+		if (!string.Equals(before, content, StringComparison.Ordinal))
+		{
+			var allowed = content != null && await LazyServiceProvider.LazyGetRequiredService<SyllabusNotificationAccess>()
+				.CanCaptureAsync(assignedSubject);
+			notice = SyllabusNotificationRevision.Record(assignedSubject, chapter, before, content, allowed);
+		}
 		assignedSubject.RecalculateSetupHealth();
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
+		if (notice != null) await CaptureSyllabusNoticesAsync([notice]);
 
 		var dto = ObjectMapper.Map<AssignedSubjectChapter, ChapterDto>(chapter);
 		ApplyResourceStatusFallback(new List<ChapterDto> { dto });
@@ -277,9 +301,14 @@ public class ChapterAppService(
 		}
 
 		assignedSubject.RemoveChapter(id);
+		SyllabusNotificationRevision.Clear(assignedSubject, id);
 		assignedSubject.RecalculateSetupHealth();
 		await assignedSubjectRepository.UpdateAsync(assignedSubject, autoSave: true);
 	}
+
+	private Task CaptureSyllabusNoticesAsync(IReadOnlyList<CurriculumNoticeCapture> notices) =>
+		notices.Count == 0 ? Task.CompletedTask : LazyServiceProvider.LazyGetRequiredService<SubjectAllocationNotification>()
+			.CaptureAsync(notices, CurrentUser.Id, SyllabusNotificationSource.Type);
 
 	private static void ApplyPlanningDetails(AssignedSubjectChapter chapter, CreateChapterDto dto)
 	{

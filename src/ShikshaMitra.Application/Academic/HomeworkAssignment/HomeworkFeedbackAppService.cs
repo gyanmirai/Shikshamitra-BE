@@ -1,18 +1,21 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Homework;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.HomeworkAssignment;
 
@@ -31,6 +34,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	private readonly IAsyncQueryableExecuter _asyncExecuter;
 	private readonly StudentSubmissionManager _submissionManager;
 	private readonly HomeworkAppService _homeworkAppService;
+	private readonly LearningTaskFeedbackEventCapture _feedbackEvents;
 
 	public HomeworkFeedbackAppService(
 		IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
@@ -41,7 +45,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		IRepository<Subject, Guid> subjectRepository,
 		IAsyncQueryableExecuter asyncExecuter,
 		StudentSubmissionManager submissionManager,
-		HomeworkAppService homeworkAppService
+		HomeworkAppService homeworkAppService,
+		LearningTaskFeedbackEventCapture feedbackEvents
 	)
 	{
 		_homeworkRepository = homeworkRepository;
@@ -53,6 +58,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		_asyncExecuter = asyncExecuter;
 		_submissionManager = submissionManager;
 		_homeworkAppService = homeworkAppService;
+		_feedbackEvents = feedbackEvents;
 	}
 
 	/// <summary>
@@ -288,7 +294,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 	/// Gives or updates feedback for a student's homework
 	/// </summary>
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_LearningTasks.Add)]
-	public async Task<FeedbackResponseDto> GiveFeedbackAsync(
+	[UnitOfWork(true)]
+	public virtual async Task<FeedbackResponseDto> GiveFeedbackAsync(
 		Guid homeworkId,
 		Guid studentId,
 		Guid academicMediumId,
@@ -308,8 +315,9 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		}
 		EnsureHomeworkOpenForEvaluation(homework);
 
-		// 2. Validate student exists
-		var student = await _studentRepository.GetAsync(studentId);
+		var student = await _asyncExecuter.FirstOrDefaultAsync((await _studentRepository.GetQueryableAsync())
+			.Where(x => x.Id == studentId).Select(x => new { x.DivisionId }))
+			?? throw new EntityNotFoundException(typeof(Student), studentId);
 
 		// 3. Validate feedback data
 		EnsureFeedbackStatusAllowed(input);
@@ -329,7 +337,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 					.WithData("HomeworkId", homeworkId);
 			}
 
-			var divisionId = ResolveStudentDivisionForHomework(student, homework);
+			var divisionId = ResolveStudentDivisionForHomework(studentId, student.DivisionId, homework);
 			var dueDate = homework.DivisionSchedules.FirstOrDefault(ds => ds.DivisionId == divisionId)?.DueDate
 				?? homework.DueDate
 				?? DateTime.UtcNow;
@@ -347,6 +355,8 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 		// 5. Update feedback
 		var preservedRemarks = input.Remarks ?? submission.Remarks;
+		var previousStatus = submission.Status;
+		var startsRevisionRequest = LearningTaskFeedbackEventCapture.StartsRevisionRequest(submission, input.Status);
 		submission.UpdateFeedback(
 			submission.Marks,
 			submission.TotalMarks,
@@ -358,6 +368,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 
 		// 6. Save changes
 		await _submissionRepository.UpdateAsync(submission, autoSave: true);
+		await _feedbackEvents.CaptureAsync(submission, previousStatus, CurrentUser.Id, startsRevisionRequest);
 
 		// 7. Build and return response
 		return new FeedbackResponseDto
@@ -473,16 +484,16 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 		}
 	}
 
-	private static Guid ResolveStudentDivisionForHomework(Student student, HomeworkAssignmentEntity homework)
+	private static Guid ResolveStudentDivisionForHomework(Guid studentId, Guid? studentDivisionId, HomeworkAssignmentEntity homework)
 	{
-		var divisionId = student.DivisionId
+		var divisionId = studentDivisionId
 			?? throw new BusinessException("ShikshaMitra.Homework:StudentDivisionRequired")
-				.WithData("StudentId", student.Id);
+				.WithData("StudentId", studentId);
 
 		if (homework.DivisionId.HasValue && homework.DivisionId.Value != divisionId)
 		{
 			throw new BusinessException("ShikshaMitra.Homework:StudentNotInAssignedDivision")
-				.WithData("StudentId", student.Id)
+				.WithData("StudentId", studentId)
 				.WithData("DivisionId", divisionId);
 		}
 
@@ -490,7 +501,7 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 			homework.DivisionSchedules.All(ds => ds.DivisionId != divisionId))
 		{
 			throw new BusinessException("ShikshaMitra.Homework:StudentNotInAssignedDivision")
-				.WithData("StudentId", student.Id)
+				.WithData("StudentId", studentId)
 				.WithData("DivisionId", divisionId);
 		}
 

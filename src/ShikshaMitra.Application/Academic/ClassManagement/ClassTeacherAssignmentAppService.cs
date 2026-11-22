@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.ClassTeacher;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
@@ -16,6 +17,7 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.ClassManagement.ClassTeacherAssignment;
 
@@ -166,6 +168,7 @@ public class ClassTeacherAssignmentAppService(
 			.ToList();
 	}
 
+	[UnitOfWork(true)]
 	public async Task<ApiSuccessResponseDto> SaveClassTeacherAssignmentsAsync(
 		SaveClassTeacherAssignmentsDto input
 	)
@@ -174,6 +177,9 @@ public class ClassTeacherAssignmentAppService(
 			"Saving class teacher assignments for organization {OrganizationId}",
 			input.OrganizationId
 		);
+
+		var notices = LazyServiceProvider.LazyGetRequiredService<ClassTeacherNotificationPublication>();
+		await notices.LockAsync(input.OrganizationId);
 
 		var validation = await ValidateClassTeacherAssignmentsAsync(input);
 		if (!validation.CanConfirm)
@@ -225,6 +231,7 @@ public class ClassTeacherAssignmentAppService(
 					.Where(employee => employee.UserId.HasValue)
 					.Select(employee => employee.UserId!.Value)
 					.ToList();
+			var notificationChanges = await notices.PrepareAsync(input, orgStandardIds.ToArray(), existingAssignments, CurrentUser.Id);
 			if (existingAssignments.Any())
 			{
 				await classTeacherRepository.DeleteManyAsync(existingAssignments, autoSave: true);
@@ -267,6 +274,7 @@ public class ClassTeacherAssignmentAppService(
 			{
 				await academicPermissionUserScopeSyncer.SyncAsync();
 				await classTeacherAccessService.InvalidateAsync(affectedUserIds);
+				await notices.CaptureAsync(notificationChanges);
 			}
 
 			return new ApiSuccessResponseDto

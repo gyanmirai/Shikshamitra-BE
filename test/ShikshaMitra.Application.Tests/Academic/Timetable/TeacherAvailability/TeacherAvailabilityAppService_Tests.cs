@@ -12,8 +12,8 @@ using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
-using ShikshaMitra.TenantSettings;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.WorkShifts;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -567,16 +567,16 @@ public partial class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicati
     public async Task AttendanceSync_Should_Use_Employee_Shift_And_Cancel_When_Present(
         EmployeeAttendanceStatusType status, string expectedEnd, bool isFullDay)
     {
-        var employee = await CreateEmployeeAsync(Guid.NewGuid(), "Shift", "Teacher");
-        var shift = await GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(
-            new ShiftManagement { ShiftName = "Teaching shift", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(15, 0) },
-            autoSave: true);
-        employee.ShiftId = shift.Id;
-        await _employeeRepository.UpdateAsync(employee, autoSave: true);
+        var tenantId = Guid.NewGuid();
+        using var tenant = GetRequiredService<ICurrentTenant>().Change(tenantId);
+        var employee = await CreateEmployeeAsync(Guid.NewGuid(), "Shift", "Teacher", tenantId: tenantId);
+        var date = new DateOnly(2026, 9, 30);
+        await AssignTeachingShiftAsync(employee, tenantId, date);
         var attendance = await _employeeAttendanceRepository.InsertAsync(new EmployeeAttendance
         {
+            TenantId = tenantId,
             EmployeeId = employee.Id,
-            AttendanceDate = new DateOnly(2026, 9, 30),
+            AttendanceDate = date,
             StatusType = status
         }, autoSave: true);
         var sync = GetRequiredService<TakeAttendanceTeacherAvailabilitySyncService>();
@@ -606,18 +606,14 @@ public partial class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicati
         {
             var employee = await CreateEmployeeAsync(Guid.NewGuid(), "LegacyShift", "Teacher", tenantId: tenantId);
             await GrantCurrentActorScopeAsync(tenantId);
-            var shift = await GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(
-                new ShiftManagement { ShiftName = "Teaching shift", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(15, 0) },
-                autoSave: true);
-            employee.ShiftId = shift.Id;
-            await _employeeRepository.UpdateAsync(employee, autoSave: true);
+            var date = new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc);
+            await AssignTeachingShiftAsync(employee, tenantId, DateOnly.FromDateTime(date));
             var context = await SeedTimetableContextAsync(
                 tenantId, employee.Id, "2026-2027", new DateTime(2026, 6, 1), new DateTime(2027, 5, 31),
                 "Early Class", new TimeOnly(8, 0), new TimeOnly(8, 45));
             await SeedTimetableContextAsync(
                 tenantId, employee.Id, "2026-2027-late", new DateTime(2026, 6, 1), new DateTime(2027, 5, 31),
                 "Late Class", new TimeOnly(14, 30), new TimeOnly(15, 0), existingAcademicYearId: context.AcademicYearId);
-            var date = new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc);
             var legacy = await _availabilityRepository.InsertAsync(new TeacherAvailability(
                 Guid.NewGuid(), tenantId, employee.EmployeeName, date,
                 new TimeOnly(9, 0), new TimeOnly(14, 15), TeacherAvailabilityStatus.Unavailable,
@@ -641,6 +637,16 @@ public partial class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicati
                     result, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
             }
         }
+    }
+
+    private async Task AssignTeachingShiftAsync(Employee employee, Guid tenantId, DateOnly effectiveDate)
+    {
+        var shift = await GetRequiredService<IRepository<EmployeeWorkShift, Guid>>().InsertAsync(
+            new EmployeeWorkShift(Guid.NewGuid(), tenantId, "Teaching shift", new TimeOnly(8, 0), new TimeOnly(15, 0)),
+            autoSave: true);
+        await GetRequiredService<IRepository<EmployeeShiftAssignment, Guid>>().InsertAsync(
+            new EmployeeShiftAssignment(Guid.NewGuid(), employee.Id, shift, effectiveDate),
+            autoSave: true);
     }
 
     private async Task<Employee> CreateEmployeeAsync(

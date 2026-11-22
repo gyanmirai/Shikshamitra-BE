@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Academic.Notifications;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using EducationMedium = ShikshaMitra.TenantSettings.EducationMediums.EducationMedium;
@@ -15,7 +16,9 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.DependencyInjection;
 using Volo.Abp.Identity;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.Calendar;
 
@@ -228,13 +231,17 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             reason: "Calendar deleted");
     }
 
+    [UnitOfWork(true)]
     public async Task<AcademicCalendarDto> PublishCalendarAsync(Guid id)
     {
         var calendar = await _calendarRepository.GetAsync(id);
         var oldVal = System.Text.Json.JsonSerializer.Serialize(calendar);
 
+        var firstPublication = calendar.Status != CalendarStatus.Published;
         calendar.Publish(CurrentUser.Id ?? Guid.Empty);
         await _calendarRepository.UpdateAsync(calendar);
+        if (firstPublication && CurrentTenant.Id.HasValue)
+            await LazyServiceProvider.LazyGetRequiredService<AcademicCalendarPublicationNotification>().RecordAsync(calendar);
 
         await _auditWriter.WriteAsync(
             calendar.Id,
@@ -720,6 +727,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         return result;
     }
 
+    [UnitOfWork(true)]
     public async Task<AcademicCalendarDayDto> UpdateCalendarDayAsync(Guid id, CreateCalendarDayDto input)
     {
         var day = await _calendarDayRepository.GetAsync(id);
@@ -767,6 +775,11 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         var group = new List<AcademicCalendarDay> { day };
         group.AddRange(siblings);
         var groupIds = group.Select(x => x.Id).ToHashSet();
+        var eventBefore = calendar.Status == CalendarStatus.Published && day.DayType == input.DayType &&
+            AcademicCalendarEventChangedSource.EventKeyFor(day.DayType) != null
+            ? group.Select(AcademicCalendarEventMaterial.From).ToArray() : [];
+        var savedRows = new List<AcademicCalendarDay>();
+        var previousEventTitle = day.Title;
 
         if (input.AppliesToAll)
         {
@@ -830,6 +843,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 meetingLink: details.MeetingLink
             );
             await _calendarDayRepository.UpdateAsync(day);
+            savedRows.Add(day);
             resultDay = day;
         }
         else
@@ -864,6 +878,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                         meetingLink: details.MeetingLink
                     );
                     await _calendarDayRepository.UpdateAsync(row);
+                    savedRows.Add(row);
                     resultDay ??= row;
                 }
                 else
@@ -900,6 +915,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                         meetingLink: details.MeetingLink
                     );
                     await _calendarDayRepository.UpdateAsync(row);
+                    savedRows.Add(row);
                     resultDay ??= row;
                 }
                 else
@@ -934,6 +950,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                     meetingLink: details.MeetingLink
                 );
                 await _calendarDayRepository.InsertAsync(newDay);
+                savedRows.Add(newDay);
                 resultDay ??= newDay;
             }
         }
@@ -949,6 +966,10 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             entityName: resultDay.Title,
             reason: input.ChangeReason,
             academicCalendarDayId: resultDay.Id);
+
+        if (eventBefore.Length != 0)
+            await LazyServiceProvider.LazyGetRequiredService<AcademicCalendarEventChangedNotification>()
+                .RecordAsync(calendar, resultDay.Id, eventBefore, savedRows, previousEventTitle);
 
         return ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(resultDay);
     }
@@ -990,6 +1011,10 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             (day.AppliesToAll || d.StandardId == day.StandardId ||
                 (input.StandardIds != null && d.StandardId.HasValue && input.StandardIds.Contains(d.StandardId.Value))));
 
+        var previousTitle = day.Title;
+        var vacationBefore = calendar.Status == CalendarStatus.Published && day.DayType == DayType.Vacation
+            ? existingRows.Select(AcademicCalendarEventMaterial.From).ToArray() : [];
+        var savedVacationRows = new List<AcademicCalendarDay>();
         var desired = new HashSet<(DateTime Date, Guid? StandardId)>();
         for (var date = startDate; date <= endDate; date = date.AddDays(1))
         {
@@ -1030,6 +1055,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 roomId: null,
                 meetingLink: null);
             await _calendarDayRepository.UpdateAsync(existing);
+            savedVacationRows.Add(existing);
             resultDay ??= existing;
         }
 
@@ -1048,6 +1074,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 input.AppliesToAll || targetStandardIds.Count != 1 ? null : input.DivisionId,
                 input.HolidayCategory);
             await _calendarDayRepository.InsertAsync(newDay);
+            savedVacationRows.Add(newDay);
             resultDay ??= newDay;
         }
 
@@ -1062,11 +1089,16 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             reason: input.ChangeReason,
             academicCalendarDayId: resultDay.Id);
 
+        if (vacationBefore.Length != 0)
+            await LazyServiceProvider.LazyGetRequiredService<AcademicCalendarEventChangedNotification>()
+                .RecordAsync(calendar, resultDay.Id, vacationBefore, savedVacationRows, previousTitle);
+
         var result = ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(resultDay);
         result.EndDate = endDate;
         return result;
     }
 
+    [UnitOfWork(isTransactional: true)]
     public async Task DeleteCalendarDayAsync(Guid id)
     {
         var day = await _calendarDayRepository.GetAsync(id);
@@ -1083,6 +1115,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             entityName: day.Title,
             reason: "Day configuration deleted",
             academicCalendarDayId: day.Id);
+
+        if (day.DayType == DayType.Event && day.Status == CalendarDayStatus.Active)
+            await LazyServiceProvider.LazyGetRequiredService<AcademicCalendarEventCancelledNotification>().RecordAsync(day);
     }
 
     // ─── Working Hours ──────────────────────────────────────────────────────
@@ -1297,6 +1332,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         var items = rows.Select(x =>
         {
             var dayImpacts = impacts.Where(i => i.AcademicCalendarDayId == x.day.Id).ToList();
+            var audience = AcademicEmergencyClosureNotificationSource.ReadAudience(x.calendar, x.day.Id);
             return new EmergencyClosureListItemDto
             {
                 Id = x.day.Id,
@@ -1313,6 +1349,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 Status = x.day.Status,
                 ChangeReason = x.day.ChangeReason,
                 AutoScanImpacts = x.day.AutoScanImpacts,
+                NotifyTeachers = audience?.Teachers == true,
+                NotifyParents = audience?.Guardians == true,
+                NotifyStudents = audience?.Students == true,
                 ImpactCount = dayImpacts.Count,
                 PendingImpactCount = dayImpacts.Count(i =>
                     i.Status == CalendarImpactStatus.Pending ||
@@ -1324,6 +1363,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     }
 
     [AllowAnonymous]
+    [UnitOfWork(isTransactional: true)]
     public async Task<List<AcademicCalendarDayDto>> CreateEmergencyClosureAsync(CreateEmergencyClosureDto input)
     {
         var startDate = (input.StartDate ?? input.Date).DateTime.Date;
@@ -1354,6 +1394,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         return results;
     }
 
+    [UnitOfWork(isTransactional: true)]
     public async Task<AcademicCalendarDayDto> UpdateEmergencyClosureAsync(Guid dayId, UpdateEmergencyClosureDto input)
     {
         var day = await _calendarDayRepository.GetAsync(dayId);
@@ -1428,6 +1469,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             }
         }
 
+        var previousPlacement = AcademicEmergencyClosurePlacement.From(day);
         var beforeJson = System.Text.Json.JsonSerializer.Serialize(day);
 
         day.Update(
@@ -1458,6 +1500,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             academicCalendarDayId: day.Id,
             module: "EmergencyClosure");
 
+        await LazyServiceProvider.LazyGetRequiredService<AcademicEmergencyClosureNotification>().ChangeAsync(calendar, day, previousPlacement,
+            new AcademicEmergencyClosureAudience(input.NotifyTeachers, input.NotifyParents, input.NotifyStudents));
+
         return ObjectMapper.Map<AcademicCalendarDay, AcademicCalendarDayDto>(day);
     }
 
@@ -1467,6 +1512,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         AcademicCalendar calendar,
         List<AcademicCalendarDayDto> results)
     {
+        var notifications = LazyServiceProvider.LazyGetRequiredService<AcademicEmergencyClosureNotification>();
+        var selection = new AcademicEmergencyClosureAudience(input.NotifyTeachers, input.NotifyParents, input.NotifyStudents);
         // Create Day records for each standard/division if specific standards are requested
         if (!input.AppliesToAll && input.StandardIds != null && input.StandardIds.Count > 0)
         {
@@ -1511,6 +1558,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                     reason: "Emergency Closure Declared for class: " + input.Title,
                     academicCalendarDayId: day.Id,
                     module: "EmergencyClosure");
+
+                await notifications.DeclareAsync(calendar, day, selection);
             }
         }
         else
@@ -1556,6 +1605,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                 reason: "Emergency Closure Declared globally: " + input.Title,
                 academicCalendarDayId: day.Id,
                 module: "EmergencyClosure");
+
+            await notifications.DeclareAsync(calendar, day, selection);
         }
     }
 
@@ -1642,6 +1693,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     }
 
     [AllowAnonymous]
+    [UnitOfWork(isTransactional: true)]
     public async Task CancelEmergencyClosureAsync(Guid dayId)
     {
         var day = await _calendarDayRepository.GetAsync(dayId);
@@ -1650,6 +1702,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             throw new UserFriendlyException("Selected day is not an emergency closure.");
         }
 
+        var wasActive = day.Status == CalendarDayStatus.Active;
         var beforeJson = System.Text.Json.JsonSerializer.Serialize(day);
         day.Cancel("Emergency closure cancelled by administrator");
         await _calendarDayRepository.UpdateAsync(day);
@@ -1671,6 +1724,9 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             imp.Resolve(CurrentUser.Id ?? Guid.Empty, "Closure cancelled");
             await _impactLogRepository.UpdateAsync(imp);
         }
+
+        if (wasActive)
+            await LazyServiceProvider.LazyGetRequiredService<AcademicEmergencyClosureNotification>().ReopenAsync(day);
     }
 
     // ─── Impact Logs ────────────────────────────────────────────────────────

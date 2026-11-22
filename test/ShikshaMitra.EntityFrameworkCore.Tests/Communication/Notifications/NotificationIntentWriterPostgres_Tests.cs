@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Notifications;
@@ -164,7 +165,7 @@ public class NotificationIntentWriterPostgres_Tests(NotificationPostgresFixture 
 			Repository<AcademicCalendarDay>(db), Substitute.For<ILectureSlotConfigRepository>(), Substitute.For<ITimetableRepository>());
 		return new(tenant, units, locks, Repository<NotificationScheduleCursor>(db), executer, guids, [dueSource], [catalogue],
 			new(tenant, Repository<NotificationRule>(db), executer), new(), new(tenant, settings), calendar, new(),
-			CreateWriter(db, seed, sourceAdapter: source).Writer);
+			CreateWriter(db, seed, sourceAdapter: source).Writer, NullLogger<NotificationDueScheduler>.Instance);
 	}
 
 	private async Task<(Guid Tenant, Guid SourceId, Guid StudentId)> SeedAsync(string sourceState, string eventKey = "Academic.Homework.Published",

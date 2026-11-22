@@ -532,7 +532,9 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 	{
 		await CheckPolicyAsync(ShikshaMitraSubmodulePermissions.Communication.Notification_Templates.View);
 
-		var query = await _templateRepository.GetQueryableAsync();
+		using var includeTemplateTombstones = DataFilter.Disable<ISoftDelete>();
+		var query = await _notificationCompatibility.ExcludeBoundTemplatesAsync(
+			(await _templateRepository.GetQueryableAsync()).Where(x => !x.IsDeleted));
 
 		if (input.AcademicMediumId.HasValue)
 		{
@@ -573,7 +575,9 @@ public partial class CommunicationAppService : ApplicationService, ICommunicatio
 	public async Task<CommunicationTemplateDto> GetTemplateAsync(Guid id)
 	{
 		await CheckPolicyAsync(ShikshaMitraSubmodulePermissions.Communication.Notification_Templates.View);
-		return MapTemplate(await _templateRepository.GetAsync(id));
+		var template = await _templateRepository.GetAsync(id);
+		await _notificationCompatibility.EnsureCanReadHeaderAsync(template.Id);
+		return MapTemplate(template);
 	}
 
 	public async Task<CommunicationTemplateDto> CreateTemplateAsync(CreateUpdateCommunicationTemplateDto input)

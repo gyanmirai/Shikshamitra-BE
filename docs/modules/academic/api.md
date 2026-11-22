@@ -46,6 +46,8 @@ Routes use the base path `/api/academic/notifications` and an authenticated, act
 | `POST /templates/{id}/publish` and `/{id}/restore-default` | Add | Publish an immutable revision or create a fresh draft from the system default |
 | `DELETE /templates/{id}/draft` | Delete | Delete the selected unused draft |
 
+Academic-bound templates appear in the Academic template catalogue. The legacy Communication and Notifications template lists exclude them. A legacy detail request by ID requires the same Academic View and scope checks as the Academic template endpoint, along with the legacy View action.
+
 Scope IDs form a contiguous tenant-owned hierarchy. A rule applies to the selected scope and its descendants. The nearest rule takes precedence, including a disabled override. Page items without a rule return a null `effectiveRule`. New overrides omit the concurrency stamp. Updates use the stamp of the exact rule being edited. A stale rule or draft write returns 409.
 
 Rules default to the primary guardian for family events. Other saved guardian relationships and the student account can be selected when the event supports them. Enabling a rule requires an available source and valid published template coverage for its audiences, channels and fallback language. The catalogue reports automatic rule readiness as `availability` and reviewed send readiness as `manualAvailability`. Channel flags report configuration status. WhatsApp also requires approval for the selected template revision before dispatch.

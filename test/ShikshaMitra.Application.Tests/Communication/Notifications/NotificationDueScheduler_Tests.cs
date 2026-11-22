@@ -98,6 +98,30 @@ public class NotificationDueScheduler_Tests
 	}
 
 	[Fact]
+	public async Task Adapter_cancellation_keeps_the_school_turn_available_for_other_sources()
+	{
+		_source.ReadPageAsync(Arg.Any<NotificationDueScanRequest>(), Arg.Any<CancellationToken>())
+			.Returns(async call => {
+				await Task.Delay(Timeout.Infinite, call.Arg<CancellationToken>());
+				return new NotificationDueSourcePage([], null);
+			});
+		var healthy = Substitute.For<INotificationDueSource>();
+		healthy.SourceType.Returns(SourceType);
+		healthy.ScanKey.Returns("HealthySource");
+		healthy.ReadPageAsync(Arg.Any<NotificationDueScanRequest>(), Arg.Any<CancellationToken>())
+			.Returns(new NotificationDueSourcePage([], null));
+		_sources.Add(healthy);
+
+		using var schoolTurn = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+		(await _scheduler.ScanAsync(Now, 2, schoolTurn.Token, readTimeout: TimeSpan.FromMilliseconds(25))).HasMore.ShouldBeTrue();
+		schoolTurn.IsCancellationRequested.ShouldBeFalse();
+		await _scheduler.ScanAsync(Now, 2, default);
+
+		await healthy.Received(1).ReadPageAsync(Arg.Any<NotificationDueScanRequest>(), Arg.Any<CancellationToken>());
+		_cursorRows.Single(x => x.SchedulerKey == $"due:{SourceType}").NextScanAt.ShouldBeGreaterThan(Now);
+	}
+
+	[Fact]
 	public async Task A_repeated_continuation_preserves_its_position_and_allows_another_due_source_to_progress()
 	{
 		_source.ReadPageAsync(Arg.Any<NotificationDueScanRequest>(), Arg.Any<CancellationToken>())

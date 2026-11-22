@@ -25,11 +25,14 @@ public abstract class AcademicNotificationWorker : AsyncPeriodicBackgroundWorker
 
 	protected abstract Task RunSchoolAsync(IServiceProvider services, CancellationToken cancellationToken);
 
+	protected static TimeSpan SchoolTurnBudget(IConfiguration configuration) =>
+		TimeSpan.FromSeconds(Math.Clamp(configuration.GetValue<int>("Notifications:QueueWorker:SchoolTurnSeconds", 45), 15, 900));
+
 	protected sealed override async Task DoWorkAsync(PeriodicBackgroundWorkerContext context)
 	{
 		var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
 		if (!NotificationQueueWorkerConfiguration.IsEnabled(configuration)) return;
-		var timeLimit = TimeSpan.FromSeconds(Math.Clamp(configuration.GetValue<int>("Notifications:QueueWorker:SchoolTurnSeconds", 45), 15, 900));
+		var timeLimit = SchoolTurnBudget(configuration);
 		var schools = context.ServiceProvider.GetRequiredService<NotificationWorkerTenants>();
 		var workerName = GetType().Name;
 		var logger = context.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(workerName);

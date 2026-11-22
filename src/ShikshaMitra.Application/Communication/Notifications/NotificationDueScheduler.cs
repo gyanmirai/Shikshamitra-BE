@@ -31,7 +31,8 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 	private static readonly TimeSpan RetryDelay = TimeSpan.FromMinutes(2);
 	private const int MaximumContinuationLength = 2048;
 
-	public async Task<NotificationScanResult> ScanAsync(DateTimeOffset now, int batchSize, CancellationToken cancellationToken)
+	public async Task<NotificationScanResult> ScanAsync(DateTimeOffset now, int batchSize, CancellationToken cancellationToken,
+		TimeSpan? readTimeout = null)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
@@ -66,12 +67,12 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 			{
 				var selected = available[0];
 				attempted = (selected.Key, selected.Cursor?.ConcurrencyStamp, available.Length > 1);
-				result = await ScanPageAsync(selected, tenantId, now, batchSize, cancellationToken);
+				result = await ScanPageAsync(selected, tenantId, now, batchSize, readTimeout, cancellationToken);
 			}
 			await unit.CompleteAsync(cancellationToken);
 			return result with { HasMore = result.HasMore || available.Length > 1 };
 		}
-		catch (Exception error) when (attempted.HasValue && error is not OperationCanceledException)
+		catch (Exception error) when (attempted.HasValue && !cancellationToken.IsCancellationRequested)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 			var failed = attempted.Value;
@@ -83,12 +84,18 @@ public sealed class NotificationDueScheduler(ICurrentTenant tenant, IUnitOfWorkM
 	}
 
 	private async Task<NotificationScanResult> ScanPageAsync(DueAdapter adapter, Guid tenantId, DateTimeOffset now,
-		int batchSize, CancellationToken cancellationToken)
+		int batchSize, TimeSpan? readTimeout, CancellationToken cancellationToken)
 	{
 		var (source, key, cursor) = adapter;
 		var previous = ReadContinuation(cursor, now);
 		var startedAt = previous?.CycleStartedAt ?? now;
-		var page = await source.ReadPageAsync(new(tenantId, startedAt, now, previous?.Key, batchSize), cancellationToken);
+		var request = new NotificationDueScanRequest(tenantId, startedAt, now, previous?.Key, batchSize);
+		NotificationDueSourcePage page;
+		using (var readLimit = readTimeout.HasValue ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken) : null)
+		{
+			if (readTimeout is TimeSpan timeout) readLimit!.CancelAfter(timeout);
+			page = await source.ReadPageAsync(request, readLimit?.Token ?? cancellationToken);
+		}
 		if (page?.Candidates == null || page.Candidates.Count > batchSize ||
 			(page.Continuation != null && (!ValidContinuation(page.Continuation) || page.Continuation == previous?.Key)))
 			throw new BusinessException(NotificationErrorCodes.StateConflict);

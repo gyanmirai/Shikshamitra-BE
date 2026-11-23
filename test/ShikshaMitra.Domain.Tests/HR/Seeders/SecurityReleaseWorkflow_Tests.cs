@@ -75,6 +75,12 @@ public class SecurityReleaseWorkflow_Tests
 		Assert.False(sdk.GetProperty("allowPrerelease").GetBoolean());
 		Assert.Contains("dotnet-version: '9.0.x'", security);
 		Assert.Contains("[[ \"$sdk_version\" == 9.0.* ]]", security);
+		Assert.Contains("DOTNET_GCHeapCount: '2'", security);
+		Assert.Contains("dotnet build --configuration Release --no-restore -m:1 -p:UseSharedCompilation=false test/ShikshaMitra.EntityFrameworkCore.Tests", security);
+		Assert.Contains("dotnet build --configuration Release --no-restore -m:1 -p:UseSharedCompilation=false test/ShikshaMitra.HttpApi.Tests", security);
+		var testCommands = Regex.Matches(security, @"(?m)^\s+dotnet test [^\r\n]+");
+		Assert.NotEmpty(testCommands);
+		Assert.All(testCommands, command => Assert.Contains("--no-build", command.Value));
 		Assert.Contains("--filter \"FullyQualifiedName~CanonicalStudentFeeAssignmentPostgres_Tests|FullyQualifiedName~LegacyMigrationBaselineBridge_Tests\"", security);
 		Assert.Contains("--filter \"FullyQualifiedName~EsiFullDemoConfigurationSeederContributor_Integration_Tests\"", security);
 		Assert.Contains("FullyQualifiedName~SecurityReleaseWorkflow_Tests", security);

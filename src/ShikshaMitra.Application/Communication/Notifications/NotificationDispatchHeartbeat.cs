@@ -15,13 +15,14 @@ public sealed class NotificationDispatchHeartbeat(IServiceScopeFactory scopes, I
 {
 	internal static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(5);
 
-	internal async Task RunAsync(NotificationQueueClaim claim, INotificationDispatcher dispatcher, CancellationToken cancellationToken)
+	internal async Task RunAsync(NotificationQueueClaim claim, INotificationDispatcher dispatcher, CancellationToken cancellationToken,
+		Guid? inAppPilotUserId = null)
 	{
 		using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 		var heartbeat = RenewUntilFinishedAsync(claim, stop.Token);
 		try
 		{
-			await dispatcher.DispatchAsync(claim.Id, claim.LeaseId, cancellationToken);
+			await dispatcher.DispatchAsync(claim.Id, claim.LeaseId, cancellationToken, inAppPilotUserId);
 		}
 		finally
 		{

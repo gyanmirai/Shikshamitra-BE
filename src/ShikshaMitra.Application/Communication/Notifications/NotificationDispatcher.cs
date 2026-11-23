@@ -24,12 +24,12 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 {
 	private sealed record PreparedSend(INotificationChannelSender Sender, NotificationChannelSendRequest Request, DateTimeOffset? ExpiresAt);
 
-	public async Task DispatchAsync(Guid dispatchId, Guid leaseToken, CancellationToken cancellationToken)
+	public async Task DispatchAsync(Guid dispatchId, Guid leaseToken, CancellationToken cancellationToken, Guid? inAppPilotUserId = null)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
 		if (units.Current != null) throw new BusinessException(NotificationErrorCodes.StateConflict);
-		var prepared = await PrepareAsync(tenantId, dispatchId, leaseToken, cancellationToken);
+		var prepared = await PrepareAsync(tenantId, dispatchId, leaseToken, cancellationToken, inAppPilotUserId);
 		if (prepared == null) return;
 
 		NotificationChannelSendResult? result;
@@ -46,7 +46,8 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 		cancellationToken.ThrowIfCancellationRequested();
 	}
 
-	private async Task<PreparedSend?> PrepareAsync(Guid tenantId, Guid dispatchId, Guid lease, CancellationToken cancellationToken)
+	private async Task<PreparedSend?> PrepareAsync(Guid tenantId, Guid dispatchId, Guid lease, CancellationToken cancellationToken,
+		Guid? inAppPilotUserId)
 	{
 		using var unit = units.Begin(requiresNew: true, isTransactional: true);
 		var row = await FindAsync(tenantId, dispatchId, cancellationToken);
@@ -63,13 +64,19 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 		else
 		{
 			var intent = await FindCurrentIntentAsync(tenantId, row, cancellationToken);
-			decision = intent == null ? new(null, null, null, "NotificationOperationUnavailable") :
-				await readiness.CheckAsync(intent, row, now, cancellationToken);
+			decision = intent == null || (inAppPilotUserId.HasValue &&
+				(row.Channel != CommunicationChannelType.InApp || row.AttemptNumber != 1 ||
+					intent.SourceType != NotificationCampaignTypes.AcademicTemplateTestSource))
+				? new(null, null, null, "NotificationOperationUnavailable")
+				: await readiness.CheckAsync(intent, row, now, cancellationToken);
 		}
 		cancellationToken.ThrowIfCancellationRequested();
 		now = Now();
 		PreparedSend? prepared = null;
 		var error = decision.ExclusionCode;
+		if (error == null && inAppPilotUserId is Guid userId &&
+			(decision.Payload?.Recipient is not { UserId: { } recipientId, StudentId: null } || recipientId != userId))
+			error = NotificationErrorCodes.RecipientIneligible;
 		if (error == null && (decision.ExpiresAt <= now || row.ExpiresAt <= now)) error = "SourceExpired";
 		if (error != null) row.SkipBeforeIo(lease, now, error);
 		else if (decision.DueAt > now) row.DeferBeforeIo(lease, now, decision.DueAt.Value);

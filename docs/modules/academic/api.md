@@ -3,7 +3,7 @@ module: academic
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-22
+updated_on: 2026-11-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -118,7 +118,7 @@ The authenticated school account can call `GET /api/communication/notifications/
 
 Email setup requires an enabled SMTP provider for the school and usable host, port, sender defaults and credentials where required by the existing mail configuration. Planning and dispatch use the same check. A test send verifies that the SMTP server accepts the message.
 
-`isQueueWorkerEnabled` reads the same server configuration as the dispatch and reminder workers. A missing or invalid setting reports `false`. The flag describes the API replica that answered the request and is independent of provider setup and worker health.
+`isQueueWorkerEnabled` reports whether the shared dispatch and reminder workers can process the normal queue on the replica that answered the request. A missing or invalid setting reports `false`. The [single In-App pilot](workflows.md#deliver-one-in-app-pilot-test) also reports `false` because it permits only a selected synthetic test. The flag is independent of provider setup and worker health.
 
 The catalogue, manual preview and confirmation also report `isSchoolQueuePaused` and `pausedChannels` for the current school. These fields report live configuration separately from channel setup and recipient eligibility. A confirmation replay reads the current configuration and returns the existing operation. Updating a pause leaves a saved review valid.
 

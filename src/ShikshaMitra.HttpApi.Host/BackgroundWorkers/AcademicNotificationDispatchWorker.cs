@@ -1,7 +1,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Communication.Notifications;
 using Volo.Abp.Threading;
 
@@ -12,4 +14,12 @@ public sealed class AcademicNotificationDispatchWorker(AbpAsyncTimer timer, ISer
 {
 	protected override Task RunSchoolAsync(IServiceProvider services, CancellationToken cancellationToken) =>
 		services.GetRequiredService<NotificationTenantQueueRunner>().RunAsync(10, cancellationToken);
+
+	protected override Task RunWhilePausedAsync(IConfiguration configuration, ILogger logger, CancellationToken cancellationToken)
+	{
+		var pilot = NotificationQueueWorkerConfiguration.ReadInAppPilot(configuration);
+		return pilot == null ? Task.CompletedTask :
+			ProcessSchoolAsync(pilot.TenantId, SchoolTurnBudget(configuration), logger, cancellationToken,
+				(services, token) => services.GetRequiredService<NotificationTenantQueueRunner>().RunInAppPilotAsync(pilot, token)).AsTask();
+	}
 }

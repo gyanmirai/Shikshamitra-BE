@@ -3,7 +3,7 @@ module: academic
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-11-22
+updated_on: 2026-11-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -71,6 +71,23 @@ No recovery path reseeds identities, restores grants or resets school records.
 5. Enable the approved rules by school, event and scope after provider and device checks. Review inherited rules at the intended class or division. Expand by event family after its source and audience checks. The [catalogue contract](api.md#catalogue-availability) lists events that still need an owning workflow.
 
 For an existing backend database, start the reviewed idempotent script range immediately before the earliest missing Academic notification migration. A database can already have later Library and Payroll migration IDs. Check the actual migration history against the [verified upgrade range](testing.md#academic-notification-migration-rehearsal) before applying it.
+
+## Deliver one In-App pilot test
+
+1. Confirm the shared queue is paused on all replicas. Use an active test account in the selected school. Confirm which account the existing template test will use, then queue one synthetic **In-App** test and copy its operation ID from Delivery History.
+2. Apply these settings together on the backend. Use the school and user GUIDs from ShikshaMitra.
+
+   | App setting | Value |
+   |---|---|
+   | `Notifications__QueueWorker__Enabled` | `false` |
+   | `Notifications__QueueWorker__InAppPilot__TenantId` | Selected school GUID |
+   | `Notifications__QueueWorker__InAppPilot__OperationId` | Queued template test operation GUID |
+   | `Notifications__QueueWorker__InAppPilot__RecipientUserId` | Designated test account GUID |
+
+3. Verify that the selected operation shows Delivered and the test appears once in the designated account's inbox. The catalogue continues to report shared processing paused. A school pause or an In-App channel pause also holds the pilot.
+4. Remove the three pilot settings after checking the result. The test expires ten minutes after it is queued. Confirm the result in history before considering any new test after a failure or expiry.
+
+The dispatch worker can claim only the selected operation's single, unexpired, first-attempt In-App dispatch with matching tenant and test recipient evidence. The regular dispatcher rechecks eligibility and delivers it to the existing inbox. A partial pilot configuration or a pilot configured with the shared switch enabled holds all work. Pilot turns skip the general queue, reminder scans and provider receipt processing.
 
 ## Monitor Academic notification delivery
 

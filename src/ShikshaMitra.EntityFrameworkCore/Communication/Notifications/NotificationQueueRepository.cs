@@ -29,8 +29,8 @@ public sealed class NotificationQueueRepository(IDbContextProvider<ShikshaMitraD
 
 	public Task<IReadOnlyList<NotificationQueueClaim>> ClaimDispatchesAsync(DateTimeOffset now, int batchSize,
 		TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null,
-		IReadOnlyList<CommunicationChannelType>? pausedChannels = null) =>
-		ClaimAsync(NotificationQueueKind.Dispatch, now, batchSize, leaseDuration, cancellationToken, maxActivePerChannel, pausedChannels);
+		IReadOnlyList<CommunicationChannelType>? pausedChannels = null, NotificationInAppPilot? pilot = null) =>
+		ClaimAsync(NotificationQueueKind.Dispatch, now, batchSize, leaseDuration, cancellationToken, maxActivePerChannel, pausedChannels, pilot);
 
 	public async Task<bool> RenewDispatchAsync(Guid dispatchId, Guid leaseId, DateTimeOffset now, TimeSpan leaseDuration,
 		CancellationToken cancellationToken)
@@ -43,13 +43,13 @@ public sealed class NotificationQueueRepository(IDbContextProvider<ShikshaMitraD
 
 	private async Task<IReadOnlyList<NotificationQueueClaim>> ClaimAsync(NotificationQueueKind kind,
 		DateTimeOffset now, int batchSize, TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null,
-		IReadOnlyList<CommunicationChannelType>? pausedChannels = null)
+		IReadOnlyList<CommunicationChannelType>? pausedChannels = null, NotificationInAppPilot? pilot = null)
 	{
 		var tenantId = RequireTenant();
 		var context = await contexts.GetDbContextAsync();
 		return await NotificationPostgresQueueClaims.ClaimAsync(context.Database.GetDbConnection(),
 			context.Database.CurrentTransaction?.GetDbTransaction(), tenantId, kind, now,
-			batchSize, leaseDuration, cancellationToken, maxActivePerChannel, pausedChannels);
+			batchSize, leaseDuration, cancellationToken, maxActivePerChannel, pausedChannels, pilot);
 	}
 
 	private Guid RequireTenant() => currentTenant.Id is Guid tenantId && tenantId != Guid.Empty

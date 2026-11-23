@@ -58,7 +58,8 @@ jobs:
               run: abp install-libs
 
             - name: Build
-              run: dotnet build --configuration Release
+              # Limit concurrent compiler memory use on the hosted runner.
+              run: dotnet build --configuration Release --no-restore -m:1 -p:UseSharedCompilation=false
 
             - name: Run deployment startup regression gates
               run: |

@@ -666,7 +666,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
     }
 
     private async Task<CollectibleAdmissionFixture> CreateCollectibleAdmissionAsync(string name, bool paymentStage = true,
-        decimal amount = 1000m, bool oneTime = true)
+        decimal amount = 1000m, bool oneTime = true, bool secondPaymentStage = false)
     {
         await WithUnitOfWorkAsync(async () =>
         {
@@ -678,7 +678,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
             if (!await users.IsInRoleAsync(user, "admin")) (await users.AddToRoleAsync(user, "admin")).Succeeded.ShouldBeTrue();
         });
         var entry = Guid.NewGuid(); var decision = Guid.NewGuid();
-        var workflow = await _workflowAppService.CreateAsync(new()
+        var workflowInput = new CreateUpdateAdmissionWorkflowDto
         {
             Name = "Finance collection journey", Code = $"COLLECT_{Guid.NewGuid():N}"[..24],
             Stages = paymentStage ? [new() { Id = entry, Code = "FEES", Name = "Fee structure confirmation",
@@ -688,7 +688,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
                 : [new() { Id = decision, Code = "DECISION", Name = "Admission decision", StageType = AdmissionWorkflowStageType.Approval,
                     IsEntryStage = true, IsTerminalStage = true, IsRequired = true }],
             Transitions = paymentStage ? [new() { FromStageId = entry, ToStageId = decision, IsDefault = true, Priority = 1 }] : []
-        });
+        };
+        if (paymentStage && secondPaymentStage)
+        {
+            var followUp = Guid.NewGuid();
+            workflowInput.Stages[1].DisplayOrder = 2;
+            workflowInput.Stages.Insert(1, new() { Id = followUp, Code = "FEES_FOLLOW_UP", Name = "Fee follow-up",
+                StageType = AdmissionWorkflowStageType.Payment, DisplayOrder = 1, IsRequired = true });
+            workflowInput.Transitions[0].ToStageId = followUp;
+            workflowInput.Transitions.Add(new() { FromStageId = followUp, ToStageId = decision, IsDefault = true, Priority = 1 });
+        }
+        var workflow = await _workflowAppService.CreateAsync(workflowInput);
         workflow = await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
         var offering = await CreateAvailableOfferingAsync(workflow.Id);
         var cycle = await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(offering.AdmissionCycleId));

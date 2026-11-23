@@ -8,7 +8,16 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 internal static class AdmissionFormVersionComparer
 {
-	public static List<string> Compare(AdmissionFormDto from, AdmissionFormDto to)
+	public static AdmissionFormVersionComparisonDto CompareVersions(AdmissionFormDto from, AdmissionFormDto to)
+	{
+		var result = new AdmissionFormVersionComparisonDto { FromId = from.Id, ToId = to.Id };
+		result.Changes = Compare(from, to, result.FieldChanges);
+		return result;
+	}
+
+	public static List<string> Compare(AdmissionFormDto from, AdmissionFormDto to) => Compare(from, to, null);
+
+	private static List<string> Compare(AdmissionFormDto from, AdmissionFormDto to, List<AdmissionFormFieldChangeDto>? fieldChanges)
 	{
 		var changes = new List<string>();
 		if (!string.Equals(from.Name, to.Name, StringComparison.Ordinal)) changes.Add($"Form name: '{from.Name}' to '{to.Name}'");
@@ -39,10 +48,19 @@ internal static class AdmissionFormVersionComparer
 			if (!Equivalent(SectionBehavior(before, beforeSteps[code]), SectionBehavior(after, afterSteps[code]))) changes.Add($"Section changed: {sectionName}");
 			var beforeFields = before.Fields.ToDictionary(field => field.Code, StringComparer.OrdinalIgnoreCase);
 			var afterFields = after.Fields.ToDictionary(field => field.Code, StringComparer.OrdinalIgnoreCase);
-			foreach (var field in afterFields.Keys.Except(beforeFields.Keys, StringComparer.OrdinalIgnoreCase)) changes.Add($"Field added: {DisplayName(afterFields[field].Label, "Unnamed field")} ({sectionName})");
-			foreach (var field in beforeFields.Keys.Except(afterFields.Keys, StringComparer.OrdinalIgnoreCase)) changes.Add($"Field removed: {DisplayName(beforeFields[field].Label, "Unnamed field")} ({DisplayName(before.Name, "Unnamed section")})");
+			foreach (var field in afterFields.Keys.Except(beforeFields.Keys, StringComparer.OrdinalIgnoreCase))
+				AddFieldChange("added", DisplayName(afterFields[field].Label, "Unnamed field"), sectionName);
+			foreach (var field in beforeFields.Keys.Except(afterFields.Keys, StringComparer.OrdinalIgnoreCase))
+				AddFieldChange("removed", DisplayName(beforeFields[field].Label, "Unnamed field"), DisplayName(before.Name, "Unnamed section"));
 			foreach (var field in beforeFields.Keys.Intersect(afterFields.Keys, StringComparer.OrdinalIgnoreCase))
-				if (!Equivalent(FieldBehavior(beforeFields[field]), FieldBehavior(afterFields[field]))) changes.Add($"Field changed: {NameChange(beforeFields[field].Label, afterFields[field].Label, "Unnamed field")} ({sectionName})");
+				if (!Equivalent(FieldBehavior(beforeFields[field]), FieldBehavior(afterFields[field])))
+					AddFieldChange("changed", NameChange(beforeFields[field].Label, afterFields[field].Label, "Unnamed field"), sectionName);
+
+			void AddFieldChange(string kind, string fieldName, string messageSectionName)
+			{
+				fieldChanges?.Add(new(changes.Count, code, sectionName, fieldName, kind));
+				changes.Add($"Field {kind}: {fieldName} ({messageSectionName})");
+			}
 		}
 		return changes;
 	}

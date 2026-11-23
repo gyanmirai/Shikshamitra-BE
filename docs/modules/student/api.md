@@ -37,7 +37,7 @@ Workflow `POST /api/student/enrollment/admissions/workflows/{id}/archive` retain
 
 Offering validation errors retain `code`/`message` and optionally include `formDefinitionId`, `formName`, `formPurpose`, `workflowDefinitionId`, `workflowStageId`, and `workflowStageName` for actionable recovery. Failed activation writes include `ConfigurationErrors`, `ValidationErrors` and `ValidationMessages` in business-error data. Archived form errors identify restore/replacement actions; inherited Inquiry approval remains required in the Registration form. Restore rejects non-archived states, invalid immutable definitions, stale stamps, unauthorized access and other-tenant IDs.
 
-Form version writes retain Forms Add/Update access. `Admissions.FormVersionSourceRequired` identifies a Draft source; `Admissions.FormDraftAlreadyExists` includes `DraftId` for the existing same-family draft; `Admissions.FormVersionCodeImmutable` rejects changing a version's family code. These are HTTP 400 business validations with corrective messages. Version comparison returns an empty `changes` list when the definitions are equivalent; it never rewrites either definition or captured answers. Change messages use configured field labels and section names, include both names for a rename, and use `Unnamed field` / `Unnamed section` for legacy missing names. Internal codes continue to match definitions but are not displayed as change descriptions.
+Form version writes retain Forms Add/Update access. `Admissions.FormVersionSourceRequired` identifies a Draft source; `Admissions.FormDraftAlreadyExists` includes `DraftId` for the existing same-family draft; `Admissions.FormVersionCodeImmutable` rejects changing a version's family code. These are HTTP 400 business validations with corrective messages. Version comparison reads from the first form ID to the second and returns an empty `changes` list when the definitions are equivalent. It never rewrites either definition or captured answers. Change messages use configured field labels and section names, include both names for a rename, and use `Unnamed field` / `Unnamed section` for legacy missing names. The response also includes `fieldChanges` with a zero-based `changeIndex` into `changes`, a section code for grouping, and the display names and kind for each field change. Internal codes continue to match definitions but are not displayed as change descriptions.
 
 Publication readiness reports `Admissions.FormVersionUnchanged:<version>` when a valid Inquiry or Registration draft matches its latest Published version. The publish endpoint independently rejects the same condition with HTTP 400, code `Admissions.FormVersionUnchanged` and business data containing `Version` and `Reason`. Draft saves and in-place restore retain their existing contracts.
 
@@ -103,12 +103,12 @@ The server enforces active actor, tenant, medium/year, operational enrollment an
 
 ## Student action permissions
 
-The Student registry exposes 33 feature groups with 111 distinct `View`, `Add` and supported `Delete` action leaves, including House Management and Portal Profile Photo.
-Student List includes the existing Changes, Transitions, Overrides, Guardian Access and Identity Compliance permission identifiers in one feature bundle. These are internal profile workflows, not separate permission-editor menu entries. Each endpoint retains its exact existing permission and scope checks; grouping does not change stored role/user grants or denials. Explicit edits to a Student List action manage the matching existing workflow actions together. No workflow or data is removed.
+The Student registry exposes 33 feature groups with 113 distinct `View`, `Add` and supported `Delete` action leaves, including House Management and Portal Profile Photo.
+Student List groups the Changes, Transitions, Overrides, Guardian Access, App Access and Identity Compliance permission identifiers in one feature bundle. Endpoints enforce their exact permissions and record scope. Explicit edits to a Student List action manage the matching workflow actions together.
 The permission editor labels `Add` as **Add/Update**.
 Approve, reject, publish, rollback, waive, finalize, activate, identifier unlock and attendance lock/unlock use the owning feature's `Add` permission.
 Lifecycle commands including close, archive, deactivate, cancellation, withdrawal, seat release, payment reversal and document void use the owning feature's `Add` permission. Actual record removal retains `Delete`.
-Overrides and Guardian Access have no Delete operation and expose only View and Add.
+Overrides, Guardian Access and App Access expose View and Add.
 Permissions come from effective role/user grants; teacher assignments restrict student/class scope and never supply a Student action grant.
 Tenant isolation, active identity, configured approval stages, separate approvers, reasons, concurrency and owning Finance/Identity permissions still apply.
 Attendance lock/unlock requires MarkAttendance.Add and the same assigned-class scope as marking, with the existing database-administrator scope exception.
@@ -181,6 +181,7 @@ Admissions Application, Inquiry (including CSV export), Offering, Pipeline/optio
 `GET /api/student/enrollment/admissions/applications/pipeline` requires AdmissionApplications.View and projects active inquiry-linked applications and started RTE/Management/Staff special registrations before Admission Decision within existing tenant and offering scope. Unlinked historical General applications and special rows without a started workflow remain excluded. Direct cases return nullable `inquiryId`, `sourceInquiryAvailable: false`, primary guardian contact data and zero Inquiry follow-ups; no synthetic Inquiry is created. Existing Inquiry-linked contact precedence is preserved. Inquiry follow-up commands still require an available source Inquiry.
 It accepts academic hierarchy, MyCases, assigned counsellor, status, stage code, search, whitelisted sorting and bounded paging.
 Each row includes `stageProgress` (runtime stage ID, name and status in display order), `nextFollowUpPurpose` (the earliest scheduled inquiry follow-up) and `overdueFollowUpCount` (only scheduled follow-ups before the server UTC clock). Progress is batched for the authorized result page from existing workflow instances, never inferred from a global stage list or from the number of completed steps. These additive read fields do not mutate stages, follow-ups or Finance data and require no database migration.
+For the current Assessment stage, `assessmentAction` is available to users with Assessment View. It is `book` for an active managed stage that requires scheduling when the caller can book and the exact stage's non-cancelled attempts allow a new booking. It is otherwise `view`. Assessment evidence is batched for the authorized page, and assessment commands continue to enforce their own access and eligibility.
 `GET /api/student/enrollment/admissions/applications/pipeline/options` supplies complete scoped active counsellor/stage choices, current user and the authoritative default queue without page/search truncation.
 Administrators identified by the existing user scope and configured fallback managers default to All; other staff default to My.
 The queue preference never changes academic access.
@@ -360,7 +361,7 @@ Stale roster/revision, incomplete submission, invalid status/detail, conflicting
 
 ## Student Records API families
 
-Records preserve each controller's response contract: Directory/Profile, Settings, Transitions, Guardian Access and certificate/ID metadata use the shared `Result<T>` envelope. Changes, Duplicates, Reports and photo-upload metadata return their DTO or paged DTO directly. PDF, photo and Excel downloads return file responses. Permission names use the central `Students.Records.*` catalogue. Profile requires `Students.Records.StudentList.View`; directory search and academic options accept Student List, Student I-Card or Certificates View. Scope and policy masking still apply.
+Directory/Profile, Settings, Transitions, Guardian Access, App Access and certificate/ID metadata use the shared `Result<T>` envelope. Changes, Duplicates, Reports and photo-upload metadata return their DTO or paged DTO directly. PDF, photo and Excel downloads return file responses. Permission names use the central `Students.Records.*` catalogue. Profile requires `Students.Records.StudentList.View`. Directory search and academic options accept Student List, Student I-Card or Certificates View. Scope and policy masking still apply.
 
 GR requests require independent approval through the existing Records change workflow. They use the school's configured Correction review stages, with the standard admin stage as a fallback when no stages are configured. Only one open GR request per student is allowed. Both modes check the tenant's permanent and reserved numbers, including equivalent legacy numeric values. Auto uses the shared published GR series and advances its counter only when the approved proposal still matches the next available number at application. Application rechecks scope, the enrollment snapshot and the empty permanent GR fields, and writes the approved value and audit record in one transaction.
 
@@ -434,6 +435,23 @@ Renewal portal creation is available only after a real target-year enrollment re
 Common blocking errors use `Students:Records:*`: `ConfigurationChanged`, `ConcurrencyConflict`, `StaleSnapshot`, `BatchHeld`, `TargetEnrollmentExists`, `AuthorityChanged`, `RenewalChecklistRequired`, `RenewalProvisioningRequired`, `FinancialDependency`, and `DownstreamDependency`. Required result/Finance/Library/Transport evidence has distinct readiness codes. Refresh a stale preview or resolve the owning module issue before an explicit retry.
 
 `FinancialPlacementImpactRequired` blocks a same-year class change or same-year return into another class when Finance already has an assignment. Records does not provide a Finance impact confirmation/reassignment contract; a paid installment is not evidence that old-class fees apply to the proposed class. Same-class division/roll edits and returns remain independent of this class-impact blocker.
+
+## Student Records App Access
+
+| Endpoint | Required permissions | Contract |
+| --- | --- | --- |
+| GET `/api/students/records/{studentId}/app-access` | `Students.Records.AppAccess.View` | Returns `Result<T>` with `studentId`, `recipients` and newest-first `history`. |
+| PUT `/api/students/records/{studentId}/app-access/{recipientKey}` | `Students.Records.AppAccess.View`, `Students.Records.AppAccess.Add` | Accepts `enabled`, `reason` (3–400 characters after trimming) and the recipient's current `concurrencyStamp`. Returns the refreshed workspace in the same envelope. |
+
+Each recipient includes `recipientKey`, `relationship`, optional `displayName`, `status` (`on`, `off` or `not-set-up`), `canUpdate` and `concurrencyStamp`. The workspace includes Student (`self`) and eligible linked `father` and `mother` accounts. History includes `id`, `relationship`, optional `displayName`, `enabled`, `reason`, UTC `changedAt` and optional `changedByName`.
+
+Both operations require an active tenant staff identity, full scoped Records access, visible Student Identity and current active enrollment. A Guardian mask filters parent recipients and their history. Updating the current state is idempotent. A changed stamp or missing recipient returns HTTP 409 with `Students:Records:AppAccessConflict` so the caller can reload. Successful changes apply immediately and save a reason and acting identity in the same transaction. Existing account setup and linked identity management remain with their owners.
+
+The mobile roster at `GET /api/student/onboarding/portal/my-students` returns only children that the signed-in identity can still access. A request for a child excluded by App Access is forbidden. If the last association of a portal-only identity is turned off, its earlier access and refresh tokens are invalidated. An authenticated request with an invalidated access token returns HTTP 401, the header `X-ShikshaMitra-Portal-Session: restricted` and JSON `{"errorCode":"Students.Portal.SessionRestricted"}`. The token endpoint uses the existing generic `invalid_grant` response. Turning access back on allows a fresh sign-in using the existing password.
+
+Onboarding credential recipients expose `appAccessOff`. When it is true, sending or resending login details is disabled for that recipient until access is restored in Student Records.
+
+Apply `20261123064329_AddStudentAppAccess` before deploying these endpoints. It adds the restriction and change-history tables. An active linked account with no restriction starts On.
 
 ## Reserved Student identity contract
 
@@ -602,11 +620,16 @@ The former Offering class-capacity GET/PUT and room-choice endpoints are retired
 The validation preview accepts `defaultInquiryFormDefinitionId`, `stages`, and `transitions` in the request body and returns the same `AdmissionWorkflowValidationResultDto` as workflow validation.
 It validates this supplied graph through the current tenant's existing form, document, assessment and review checks without saving children, changing workflow status, or recording a governance event.
 
+Workflow creation with stages, workflow updates, and publication require exactly one terminal stage. It must be the Admission decision (Approval, `7`) at the unique highest `displayOrder`, with no outgoing transition. Earlier decisions may have outgoing routes. Invalid endings report `Admissions.WorkflowInvalidFinalStage`. An empty create request with no transitions starts Blank workflow setup. Publishing still requires a complete journey.
+
 `POST /workflows/{id}/new-version` allows only one pending version per workflow code. If one exists,
 the endpoint returns `Admissions.WorkflowDraftRequired` and includes the existing `DraftId` in the
 business error data so clients can direct the user to the draft. Version creation is serialized by
 workflow family. Cloning is independent and creates a new code; the default name is `[Name] Copy`,
 with an incrementing numeric suffix when that name is already reserved.
+Create, clone and rename enforce unique names across independent workflow families in the same
+tenant, including draft and archived workflows. Name comparison ignores capitalization and
+surrounding whitespace. Conflicts return `Admissions.WorkflowNameAlreadyExists`.
 
 Both workflow publish endpoints execute immediate publication with the existing Workflow Add,
 tenant ownership, graph validation and concurrency checks. Stored maker-checker settings do not
@@ -772,6 +795,7 @@ These flags retain the existing session, attendance, action and scope checks.
 Session input requires offering/stage identifiers, name, ISO date-times, location, and capacity from 1 to 10000.
 Session update/cancellation requires the session concurrency stamp.
 Attempt creation and stage waiver require the application stamp returned in the assessment summary.
+A completed passing attempt disables `canWaive` for its stage. The waiver command rechecks saved attempts before making any changes.
 Other attempt mutations require that attempt's concurrency stamp.
 Review uses `approved: false` plus notes to request correction, and waiver uses `reason`.
 Attempt mutations return the refreshed assessment summary.

@@ -12,19 +12,20 @@ public class StudentRecordsPermissionMenu_Tests
 	{
 		var registry = ShikshaMitraSubmodulePermissions.Students.Submodules;
 		var workflows = new[] { "Students.Records.Changes", "Students.Records.Transitions",
-			"Students.Records.Overrides", "Students.Records.GuardianAccess", "Students.IdentityCompliance" };
+			"Students.Records.Overrides", "Students.Records.GuardianAccess", "Students.Records.AppAccess", "Students.IdentityCompliance" };
 		foreach (var feature in workflows) registry.ShouldNotContainKey(feature);
 		var expected = ShikshaMitraSubmodulePermissions.Students.Records_StudentList.All
 			.Concat(ShikshaMitraSubmodulePermissions.Students.Records_Changes.All)
 			.Concat(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.All)
 			.Concat(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.All)
 			.Concat(ShikshaMitraSubmodulePermissions.Students.Records_GuardianAccess.All)
+			.Concat(["Students.Records.AppAccess.View", "Students.Records.AppAccess.Add"])
 			.Concat(ShikshaMitraSubmodulePermissions.Students.IdentityCompliance.All).ToArray();
 		var bundle = registry["Students.Records.StudentList"];
 		bundle.Permissions.ShouldBe(expected);
 		bundle.DisplayNames.Keys.ShouldBe(expected);
 		var all = registry.Values.SelectMany(item => item.Permissions).ToArray();
-		all.Length.ShouldBe(111);
+		all.Length.ShouldBe(113);
 		all.Distinct().Count().ShouldBe(all.Length);
 	}
 }

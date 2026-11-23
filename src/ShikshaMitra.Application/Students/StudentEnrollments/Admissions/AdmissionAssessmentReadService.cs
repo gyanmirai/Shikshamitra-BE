@@ -76,7 +76,7 @@ public class AdmissionAssessmentReadService(
 				(context.Policy.ScoringMode != "subjects" || latest!.HasCompleteSubjectScores(context.Policy)),
 			CanReview = editable && latest?.Status == "pendingReview" && latest.RecordedBy != userId && grants.Contains(Permissions.Review),
 			CanRetake = editable && remaining && latest?.Status == "completed" && latest.Outcome is "failed" or "absent" && grants.Contains(Permissions.Book),
-			CanWaive = editable && latest?.Outcome != "waived" && grants.Contains(Permissions.Waive),
+			CanWaive = editable && latest?.Outcome != "waived" && grants.Contains(Permissions.Waive) && !rows.Any(item => item.HasPassed()),
 			CanCancel = pending && latest!.Attendance == "pending" && !latest.HasEnteredSubjectMarks() && grants.Contains(Permissions.Book),
 			Attempts = rows.OrderBy(item => item.AttemptNumber).Select(item => MapAttempt(item, item.SessionId.HasValue ? sessionRows.GetValueOrDefault(item.SessionId.Value) : null)).ToList()
 		};

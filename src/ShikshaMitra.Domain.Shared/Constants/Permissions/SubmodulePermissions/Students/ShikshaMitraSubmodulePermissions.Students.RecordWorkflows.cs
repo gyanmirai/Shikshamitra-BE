@@ -54,6 +54,14 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public static readonly string[] All = [View, Add];
 			public static readonly Dictionary<string, string> DisplayNames = Names(All);
 		}
+		public static class Records_AppAccess
+		{
+			private const string Name = "Students.Records.AppAccess";
+			public const string View = Name + ".View";
+			public const string Add = Name + ".Add";
+			public static readonly string[] All = [View, Add];
+			public static readonly Dictionary<string, string> DisplayNames = Names(All);
+		}
 		private static Dictionary<string, string> Names(string[] names)
 		{
 			var result = new Dictionary<string, string>();

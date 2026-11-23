@@ -233,9 +233,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		};
 		if (endsAtForm)
 		{
+			// Historical published journeys can still complete at a Form stage.
 			input.Stages.RemoveAt(1);
 			input.Stages[0].IsTerminalStage = true;
 			input.Transitions.Clear();
+			return await SeedPublishedHistoricalWorkflowAsync(input);
 		}
 		var workflow = await _workflowAppService.CreateAsync(input);
 		workflow = await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);

@@ -25,19 +25,28 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
 		await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Five model Form QA"), true);
-		var draft = await _workflowAppService.CreateAsync(new() { Name = "Managed Form", Code = $"FORM_{Guid.NewGuid():N}"[..24],
-			Stages = [new() { Code = "FORM", Name = "Application form", StageType = AdmissionWorkflowStageType.Form,
-				IsEntryStage = true, IsTerminalStage = true, IsRequired = false, AllowManualSkip = true }] });
+		var formId = Guid.NewGuid();
+		var decisionId = Guid.NewGuid();
+		var draft = await _workflowAppService.CreateAsync(new()
+		{
+			Name = "Managed Form", Code = $"FORM_{Guid.NewGuid():N}"[..24],
+			Stages = [new() { Id = formId, Code = "FORM", Name = "Application form", StageType = AdmissionWorkflowStageType.Form,
+				IsEntryStage = true, IsRequired = false, AllowManualSkip = true },
+				new() { Id = decisionId, Code = "DECISION", Name = "Admission decision", StageType = AdmissionWorkflowStageType.Approval,
+					DisplayOrder = 1, IsTerminalStage = true }],
+			Transitions = [new() { FromStageId = formId, ToStageId = decisionId, IsDefault = true }]
+		});
 		var offering = await CreateAvailableOfferingAsync(draft.Id, assertValid: false);
-		var stageId = draft.Stages.Single().Id;
-		draft = await _workflowAppService.UpdateAsync(draft.Id, new() { Name = draft.Name, Code = draft.Code, ConcurrencyStamp = draft.ConcurrencyStamp,
-			Stages = [new() { Id = stageId, Code = "FORM", Name = "Application form", StageType = AdmissionWorkflowStageType.Form,
-				IsEntryStage = true, IsTerminalStage = true, IsRequired = false, AllowManualSkip = true,
-				ConfigurationJson = JsonSerializer.Serialize(new { formDefinitionId = offering.ApplicationFormDefinitionId,
-					form = new AdmissionFormStagePolicy { Enabled = true, Version = 1, AutoAdvanceOnSubmit = false,
-						RequireSectionVerification = requireVerification, VerificationSectionCodes = requireVerification ? ["STUDENT"] : [] } }) }] });
+		var update = ToUpdateInput(draft);
+		var form = update.Stages.Single(stage => stage.StageType == AdmissionWorkflowStageType.Form);
+		form.AllowManualSkip = true;
+		form.ConfigurationJson = JsonSerializer.Serialize(new { formDefinitionId = offering.ApplicationFormDefinitionId,
+			form = new AdmissionFormStagePolicy { Enabled = true, Version = 1, AutoAdvanceOnSubmit = false,
+				RequireSectionVerification = requireVerification, VerificationSectionCodes = requireVerification ? ["STUDENT"] : [] } });
+		draft = await _workflowAppService.UpdateAsync(draft.Id, update);
 		await _workflowAppService.PublishAsync(draft.Id, draft.ConcurrencyStamp);
-		var savedPolicy = AdmissionFormStagePolicy.Read(draft.Stages.Single().ConfigurationJson)!;
+		var savedForm = draft.Stages.Single(stage => stage.StageType == AdmissionWorkflowStageType.Form);
+		var savedPolicy = AdmissionFormStagePolicy.Read(savedForm.ConfigurationJson)!;
 		savedPolicy.RequireSectionVerification.ShouldBeFalse();
 		savedPolicy.VerificationSectionCodes.ShouldBeEmpty();
 		if (requireVerification)
@@ -45,7 +54,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			{
 				RequireSectionVerification = true, VerificationSectionCodes = ["STUDENT"]
 			});
-		draft.Stages.Single().AllowManualSkip.ShouldBeFalse();
+		savedForm.AllowManualSkip.ShouldBeFalse();
 		var application = await StartFixtureApplicationAsync((await CreateApplicantAsync("Form QA")).Id, offering.Id);
 		var before = await _applicationAppService.GetWorkflowAsync(application.Id);
 		(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.AdvanceWorkflowAsync(application.Id,
@@ -54,8 +63,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			.Code.ShouldBe(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
 		(await _applicationAppService.SubmitAsync(application.Id)).ValidationErrors.ShouldBeEmpty();
 		var after = await _applicationAppService.GetWorkflowAsync(application.Id);
-		after.Status.ShouldBe(AdmissionWorkflowInstanceStatus.Completed);
-		after.Stages.Single().Status.ShouldBe(AdmissionRuntimeStageStatus.Completed);
+		after.Stages.Single(stage => stage.StageType == AdmissionWorkflowStageType.Form)
+			.Status.ShouldBe(AdmissionRuntimeStageStatus.Completed);
+		after.CurrentStageInstanceId.ShouldBe(after.Stages.Single(stage => stage.StageType == AdmissionWorkflowStageType.Approval).Id);
 	}
 
 	[Theory]

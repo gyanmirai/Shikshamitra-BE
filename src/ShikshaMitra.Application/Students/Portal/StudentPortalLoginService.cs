@@ -3,9 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
-using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
-using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 
@@ -13,15 +11,10 @@ namespace ShikshaMitra.Students.Portal;
 
 /// <summary>Portal-only login eligibility; does not change staff authentication rules.</summary>
 [RemoteService(false)]
-public class StudentPortalLoginService(IdentityUserManager users, IRepository<IdentityUser, Guid> identities,
-	IRepository<StudentPortalAccountLink, Guid> links, IRepository<Student, Guid> students, IDataFilter dataFilter)
+public class StudentPortalLoginService(IRepository<IdentityUser, Guid> identities, StudentAppAccessEnforcement appAccess)
 	: ApplicationService, ITransientDependency
 {
-	public async Task<bool> IsPortalUserAsync(IdentityUser user)
-	{
-		var roles = await users.GetRolesAsync(user);
-		return roles.Count == 1 && roles[0] is "Student" or "Parent";
-	}
+	public Task<bool> IsPortalUserAsync(IdentityUser user) => appAccess.IsPortalUserAsync(user);
 
 	public async Task<string?> FindMobileUsernameAsync(string? identifier)
 	{
@@ -35,27 +28,5 @@ public class StudentPortalLoginService(IdentityUserManager users, IRepository<Id
 		return user.IsActive && !string.IsNullOrWhiteSpace(user.Email) && await IsPortalUserAsync(user) ? user.UserName : null;
 	}
 
-	public async Task<bool> CanAccessAsync(IdentityUser user)
-	{
-		if (!CurrentTenant.Id.HasValue || user.TenantId != CurrentTenant.Id || !user.IsActive || string.IsNullOrWhiteSpace(user.Email)) return false;
-		var studentQuery = await students.GetQueryableAsync();
-		var linkQuery = await links.GetQueryableAsync();
-		if (await AsyncExecuter.AnyAsync(from link in linkQuery
-			join student in studentQuery on link.StudentId equals student.Id
-			where link.TenantId == CurrentTenant.Id && student.TenantId == CurrentTenant.Id && link.UserId == user.Id &&
-				student.Status != StudentLifeCycleStatusEnum.Left &&
-				(link.AccountType == "guardian" || link.AccountType == "student" && link.Relationship == "self")
-			select link.Id)) return true;
-		var legacy = await AsyncExecuter.ToListAsync(studentQuery
-			.Where(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id && x.Status != StudentLifeCycleStatusEnum.Left)
-			.Select(x => x.Id));
-		if (legacy.Count == 0) return false;
-		using (dataFilter.Disable<ISoftDelete>())
-		{
-			var history = await AsyncExecuter.ToListAsync((await links.GetQueryableAsync())
-				.Where(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id && x.AccountType == "student" && x.Relationship == "self")
-				.Select(x => x.StudentId));
-			return legacy.Any(studentId => !history.Contains(studentId));
-		}
-	}
+	public Task<bool> CanAccessAsync(IdentityUser user) => appAccess.HasAvailableAssociationAsync(user);
 }

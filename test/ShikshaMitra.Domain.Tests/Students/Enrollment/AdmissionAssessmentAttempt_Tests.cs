@@ -110,6 +110,22 @@ public class AdmissionAssessmentAttempt_Tests
         attempt.ReviewedAt.ShouldBe(Now);
     }
 
+    [Fact]
+    public void Waiver_Cannot_Replace_A_Completed_Passing_Result()
+    {
+        var attempt = Attempt();
+        attempt.RecordResult(80, null, "Recorded marks", Recorder, Policy());
+
+        Should.Throw<BusinessException>(() => attempt.Waive("Requested exemption", Reviewer, Now))
+            .Code.ShouldBe(AdmissionAssessmentErrorCodes.InvalidState);
+        attempt.Outcome.ShouldBe("passed");
+        attempt.Status.ShouldBe("completed");
+        attempt.Marks.ShouldBe(80);
+        attempt.Notes.ShouldBe("Recorded marks");
+        attempt.RecordedBy.ShouldBe(Recorder);
+        attempt.ReviewedBy.ShouldBeNull();
+    }
+
     [Theory]
     [InlineData("pending")]
     [InlineData("retake")]

@@ -138,7 +138,7 @@ public class LibraryNotificationRecipientResolver(
 				{
 					try
 					{
-						if (!(await portal.GetStudentsForUserAsync(userId)).Any(account => account.StudentId == student.Id && account.AccountType == "student")) continue;
+						if (!(await portal.GetDeliveryAssociationsAsync(userId)).Any(account => account.StudentId == student.Id && account.AccountType == "student")) continue;
 						var user = await users.FindAsync(userId);
 						if (CanUsePortal(user)) result.Add(source with { UserId = userId, Email = user!.Email, Kind = "VerifiedStudent", Relationship = "self" });
 					}

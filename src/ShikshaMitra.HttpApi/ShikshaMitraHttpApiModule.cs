@@ -55,6 +55,11 @@ public class ShikshaMitraHttpApiModule : AbpModule
 			options.Map(Students.StudentErrorCodes.IdAssignmentAlreadyIssued, System.Net.HttpStatusCode.Conflict);
 			options.Map(Students.StudentErrorCodes.IdAssignmentIssueKeyReused, System.Net.HttpStatusCode.Conflict);
 			options.Map(Students.StudentErrorCodes.IdTemplateAssigned, System.Net.HttpStatusCode.Conflict);
+			options.Map(Students.StudentRecords.StudentRecordsErrorCodes.AppAccessConflict, System.Net.HttpStatusCode.Conflict);
+			options.Map(Students.StudentRecords.StudentRecordsErrorCodes.AppAccessIdentityRestricted, System.Net.HttpStatusCode.Forbidden);
+			options.Map(Students.StudentRecords.StudentRecordsErrorCodes.AppAccessReasonInvalid, System.Net.HttpStatusCode.BadRequest);
+			options.Map(Students.StudentRecords.StudentRecordsErrorCodes.AppAccessEnrollmentRequired, System.Net.HttpStatusCode.BadRequest);
+			options.Map(Students.StudentRecords.StudentRecordsErrorCodes.AppAccessRecipientUnavailable, System.Net.HttpStatusCode.BadRequest);
 			foreach (var code in new[] {
 				Academic.Mobile.MobileSubmissionErrorCodes.AmbiguousAnswer,
 				Academic.Mobile.MobileSubmissionErrorCodes.InvalidRequestId,

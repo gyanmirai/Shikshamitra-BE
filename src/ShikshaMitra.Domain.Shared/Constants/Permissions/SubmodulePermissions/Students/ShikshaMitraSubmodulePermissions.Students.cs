@@ -105,6 +105,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 				new SubmoduleInfo(Records_Transitions.All, Records_Transitions.DisplayNames),
 				new SubmoduleInfo(Records_Overrides.All, Records_Overrides.DisplayNames),
 				new SubmoduleInfo(Records_GuardianAccess.All, Records_GuardianAccess.DisplayNames),
+				new SubmoduleInfo(Records_AppAccess.All, Records_AppAccess.DisplayNames),
 				new SubmoduleInfo(IdentityCompliance.All, IdentityCompliance.DisplayNames)
 			};
 			return new SubmoduleInfo(features.SelectMany(feature => feature.Permissions).ToArray(),

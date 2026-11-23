@@ -84,6 +84,7 @@ public class StudentCredentialsRecipientDto
 	public string? Name { get; set; }
 	public string? Email { get; set; }
 	public bool CanSend { get; set; }
+	public bool AppAccessOff { get; set; }
 	public bool IsMainContact { get; set; }
 	public string? BlockedReason { get; set; }
 	public StudentCredentialEmailDto? Delivery { get; set; }

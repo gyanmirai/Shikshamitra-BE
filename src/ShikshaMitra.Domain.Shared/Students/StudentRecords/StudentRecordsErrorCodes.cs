@@ -10,4 +10,9 @@ public static class StudentRecordsErrorCodes
 	public const string InvalidApproverRole = "Students:Records:InvalidApproverRole";
 	public const string ConfigurationChanged = "Students:Records:ConfigurationChanged";
 	public const string DraftRequired = "Students:Records:DraftRequired";
+	public const string AppAccessReasonInvalid = "Students:Records:AppAccessReasonInvalid";
+	public const string AppAccessRecipientUnavailable = "Students:Records:AppAccessRecipientUnavailable";
+	public const string AppAccessEnrollmentRequired = "Students:Records:AppAccessEnrollmentRequired";
+	public const string AppAccessIdentityRestricted = "Students:Records:AppAccessIdentityRestricted";
+	public const string AppAccessConflict = "Students:Records:AppAccessConflict";
 }

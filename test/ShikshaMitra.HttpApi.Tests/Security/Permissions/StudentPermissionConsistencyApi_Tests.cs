@@ -55,7 +55,10 @@ public partial class PermissionConsistencyApi_Tests
 			.OrderBy(name => name).ShouldBe(new[] { "Students.Records.HouseManagement.Add", "Students.Records.HouseManagement.Delete", "Students.Records.HouseManagement.View" });
 		studentActions.ShouldNotContain("Students.Records.Overrides.Delete");
 		studentActions.ShouldNotContain("Students.Records.GuardianAccess.Delete");
-		studentActions.Length.ShouldBe(111);
+		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Records_AppAccess.View);
+		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Records_AppAccess.Add);
+		studentActions.ShouldNotContain("Students.Records.AppAccess.Delete");
+		studentActions.Length.ShouldBe(113);
 		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View);
 		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add);
 		studentActions.ShouldNotContain("Students.Portal.ProfilePhoto.Delete");
@@ -73,6 +76,8 @@ public partial class PermissionConsistencyApi_Tests
 			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Delete,
 			ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add,
 			ShikshaMitraSubmodulePermissions.Students.Records_Changes.Add,
+			ShikshaMitraSubmodulePermissions.Students.Records_AppAccess.View,
+			ShikshaMitraSubmodulePermissions.Students.Records_AppAccess.Add,
 			"Students.Records.HouseManagement.View",
 			"Students.Records.HouseManagement.Add",
 			"Students.Records.HouseManagement.Delete"
@@ -104,6 +109,8 @@ public partial class PermissionConsistencyApi_Tests
 	[InlineData("Students.Records.Overrides.Add")]
 	[InlineData("Students.Records.GuardianAccess.View")]
 	[InlineData("Students.Records.GuardianAccess.Add")]
+	[InlineData(ShikshaMitraSubmodulePermissions.Students.Records_AppAccess.View)]
+	[InlineData(ShikshaMitraSubmodulePermissions.Students.Records_AppAccess.Add)]
 	[InlineData("Students.IdentityCompliance.View")]
 	[InlineData("Students.IdentityCompliance.Add")]
 	[InlineData("Students.IdentityCompliance.Delete")]
@@ -119,6 +126,8 @@ public partial class PermissionConsistencyApi_Tests
 			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Delete,
 			ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View,
 			ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add,
+			ShikshaMitraSubmodulePermissions.Students.Records_AppAccess.View,
+			ShikshaMitraSubmodulePermissions.Students.Records_AppAccess.Add,
 			"Students.Records.HouseManagement.View", "Students.Records.HouseManagement.Add", "Students.Records.HouseManagement.Delete" }.Where(name => name != action))
 			await AssertRealCheckerAsync(user, role, other, false);
 		await SetOverridesAsync(user, (action, "deny"));

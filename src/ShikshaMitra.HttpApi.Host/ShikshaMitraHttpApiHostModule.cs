@@ -111,6 +111,8 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		var services = context.Services;
         Configure<AbpBackgroundWorkerOptions>(options => options.IsEnabled = configuration.GetValue<bool>("BackgroundWorkers:IsEnabled", true));
         Configure<Volo.Abp.BackgroundJobs.AbpBackgroundJobOptions>(options => options.IsJobExecutionEnabled = configuration.GetValue<bool>("BackgroundJobs:IsJobExecutionEnabled", true));
+		Configure<Volo.Abp.OpenIddict.AbpOpenIddictClaimsPrincipalOptions>(options =>
+			options.ClaimsPrincipalHandlers.Add<ShikshaMitra.Controllers.StudentPortalSessionClaimsHandler>());
 		services.AddHttpClient();
 		services.AddHttpClient(WhatsAppProviderClient.HttpClientName)
 			.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
@@ -556,6 +558,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		app.UseUnitOfWork();
 		app.UseDynamicClaims();
+		app.UseMiddleware<ShikshaMitra.Middleware.StudentPortalSessionMiddleware>();
 		app.UseAuthorization();
 		app.UseSwagger();
 		app.UseAbpSwaggerUI(c =>

@@ -60,7 +60,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
-		var first = await _workflowAppService.CreateAsync(new CreateUpdateAdmissionWorkflowDto { Name = "Fresh admission" });
+		var first = await CreateDirectPublicationDraftAsync("Fresh admission");
 		var second = await _workflowAppService.CreateAsync(new CreateUpdateAdmissionWorkflowDto { Name = "Other fresh admission" });
 		var cloneOne = await _workflowAppService.CloneAsync(first.Id, new CloneAdmissionWorkflowDto { Name = "Fresh copy" });
 		var cloneTwo = await _workflowAppService.CloneAsync(first.Id, new CloneAdmissionWorkflowDto { Name = "Other fresh copy" });

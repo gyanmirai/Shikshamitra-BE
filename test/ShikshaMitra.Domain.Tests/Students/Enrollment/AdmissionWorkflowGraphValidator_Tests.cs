@@ -30,13 +30,13 @@ public class AdmissionWorkflowGraphValidator_Tests
 	}
 
 	[Fact]
-	public void ValidLinearWorkflowPassesWithoutUsingDisplayOrderAsBusinessLogic()
+	public void Earlier_stages_follow_routes_even_when_their_display_order_differs()
 	{
 		var workflowId = Guid.NewGuid();
-		var entry = Stage(workflowId, "ASSESSMENT", 100, isEntry: true);
+		var entry = Stage(workflowId, "ASSESSMENT", 50, isEntry: true);
 		var form = Stage(workflowId, "FORM", 0, type: AdmissionWorkflowStageType.Form,
 			configurationJson: """{"formDefinitionId":"00000000-0000-0000-0000-000000000001","form":{"enabled":true,"version":1}}""");
-		var terminal = Stage(workflowId, "DECISION", 50, isTerminal: true,
+		var terminal = Stage(workflowId, "DECISION", 100, isTerminal: true,
 			type: AdmissionWorkflowStageType.Approval);
 		var transitions = new[]
 		{
@@ -53,7 +53,7 @@ public class AdmissionWorkflowGraphValidator_Tests
 	}
 
 	[Fact]
-	public void RequiresExactlyOneExplicitEntryAndAtLeastOneTerminal()
+	public void RequiresExactlyOneExplicitEntryAndAnEndingDecision()
 	{
 		var workflowId = Guid.NewGuid();
 		var first = Stage(workflowId, "FIRST", 0, isEntry: true);
@@ -103,9 +103,10 @@ public class AdmissionWorkflowGraphValidator_Tests
 	}
 
 	[Fact]
-	public void All_stage_types_allow_user_selected_endings()
+	public void Only_admission_decision_can_be_an_ending_stage()
 	{
-		AdmissionWorkflowStageTypeRegistry.All.ShouldAllBe(metadata => metadata.CanBeTerminalStage);
+		AdmissionWorkflowStageTypeRegistry.All.Where(metadata => metadata.CanBeTerminalStage)
+			.Select(metadata => metadata.Type).ShouldBe([AdmissionWorkflowStageType.Approval]);
 	}
 
 	[Theory]
@@ -113,7 +114,7 @@ public class AdmissionWorkflowGraphValidator_Tests
 	[InlineData(AdmissionWorkflowStageType.Assessment)]
 	[InlineData(AdmissionWorkflowStageType.Payment)]
 	[InlineData(AdmissionWorkflowStageType.DocumentVerification)]
-	public void Assessment_can_lead_directly_to_any_user_selected_ending(AdmissionWorkflowStageType terminalType)
+	public void Rejects_non_decision_stages_marked_as_ending(AdmissionWorkflowStageType terminalType)
 	{
 		var workflowId = Guid.NewGuid();
 		var entry = Stage(workflowId, "ENTRANCE_EXAM", 0, isEntry: true,
@@ -124,18 +125,49 @@ public class AdmissionWorkflowGraphValidator_Tests
 
 		var issues = _validator.Validate([entry, terminal], [Transition(workflowId, entry.Id, terminal.Id, 0)]);
 
-		issues.ShouldNotContain(issue => issue.Severity == AdmissionWorkflowValidationSeverity.Error);
+		issues.ShouldContain(issue => issue.Code == AdmissionWorkflowErrorCodes.InvalidFinalStage);
 	}
 
 	[Fact]
-	public void Single_form_can_be_both_entry_and_ending()
+	public void Single_form_cannot_end_the_journey()
 	{
 		var form = Stage(Guid.NewGuid(), "REGISTRATION", 0, isEntry: true, isTerminal: true,
 			type: AdmissionWorkflowStageType.Form,
 			configurationJson: """{"formDefinitionId":"00000000-0000-0000-0000-000000000001","form":{"enabled":true,"version":1}}""");
 
-		_validator.Validate([form], []).ShouldNotContain(issue =>
-			issue.Severity == AdmissionWorkflowValidationSeverity.Error);
+		_validator.Validate([form], []).ShouldContain(issue =>
+			issue.Code == AdmissionWorkflowErrorCodes.InvalidFinalStage);
+	}
+
+	[Theory]
+	[InlineData(0, 1, true, false)]
+	[InlineData(1, 1, true, false)]
+	[InlineData(2, 1, true, true)]
+	[InlineData(2, 1, false, false)]
+	public void Rejects_a_decision_ending_that_is_not_unique_and_last(
+		int finalOrder, int entryOrder, bool terminal, bool entryIsTerminal)
+	{
+		var workflowId = Guid.NewGuid();
+		var entry = Stage(workflowId, "REVIEW_DECISION", entryOrder, isEntry: true,
+			isTerminal: entryIsTerminal, type: AdmissionWorkflowStageType.Approval);
+		var decision = Stage(workflowId, "FINAL_DECISION", finalOrder, isTerminal: terminal,
+			type: AdmissionWorkflowStageType.Approval);
+
+		_validator.Validate([entry, decision], entryIsTerminal ? [] : [Transition(workflowId, entry.Id, decision.Id, 0)])
+			.ShouldContain(issue => issue.Code == AdmissionWorkflowErrorCodes.InvalidFinalStage);
+	}
+
+	[Fact]
+	public void Allows_a_routed_decision_before_the_final_decision()
+	{
+		var workflowId = Guid.NewGuid();
+		var entry = Stage(workflowId, "REVIEW_DECISION", 0, isEntry: true,
+			type: AdmissionWorkflowStageType.Approval);
+		var decision = Stage(workflowId, "FINAL_DECISION", 1, isTerminal: true,
+			type: AdmissionWorkflowStageType.Approval);
+
+		_validator.Validate([decision, entry], [Transition(workflowId, entry.Id, decision.Id, 0)])
+			.ShouldNotContain(issue => issue.Severity == AdmissionWorkflowValidationSeverity.Error);
 	}
 
 	[Fact]
@@ -144,7 +176,8 @@ public class AdmissionWorkflowGraphValidator_Tests
 		var workflowId = Guid.NewGuid();
 		var entry = Stage(workflowId, "ENTRY", 0, isEntry: true);
 		var review = Stage(workflowId, "REVIEW", 1);
-		var terminal = Stage(workflowId, "TERMINAL", 2, isTerminal: true);
+		var terminal = Stage(workflowId, "TERMINAL", 2, isTerminal: true,
+			type: AdmissionWorkflowStageType.Approval);
 		var transitions = new[]
 		{
 			Transition(workflowId, entry.Id, review.Id, 1),
@@ -263,7 +296,8 @@ public class AdmissionWorkflowGraphValidator_Tests
 		var workflowId = Guid.NewGuid();
 		var entry = Stage(workflowId, "ENTRY", 0, isEntry: true);
 		var optional = Stage(workflowId, type.ToString().ToUpperInvariant(), 1, type: type);
-		var terminal = Stage(workflowId, "TERMINAL", 2, isTerminal: true);
+		var terminal = Stage(workflowId, "TERMINAL", 2, isTerminal: true,
+			type: AdmissionWorkflowStageType.Approval);
 
 		var issues = _validator.Validate([entry, optional, terminal],
 			[Transition(workflowId, entry.Id, optional.Id, 1), Transition(workflowId, optional.Id, terminal.Id, 1)]);

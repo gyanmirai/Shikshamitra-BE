@@ -18,6 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using OpenIddict.Server.AspNetCore;
+using OpenIddict.Validation.AspNetCore;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Common;
@@ -379,7 +380,9 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	{
 		services.AddAuthentication(TestAuthHandler.SchemeName)
 			.AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
-				TestAuthHandler.SchemeName, _ => { });
+				TestAuthHandler.SchemeName, options =>
+					options.ForwardDefaultSelector = context => context.Request.Headers.ContainsKey("X-Test-Real-Bearer")
+						? OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme : null);
 
 		services.PostConfigure<AuthenticationOptions>(options =>
 		{
@@ -392,7 +395,8 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			{
 				// Keep token request parsing/sign-in native so security regressions can
 				// exercise /connect/token. Normal API auth still defaults to TestAuth.
-				if (scheme.Name != TestAuthHandler.SchemeName && scheme.Name != OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)
+				if (scheme.Name != TestAuthHandler.SchemeName && scheme.Name != OpenIddictServerAspNetCoreDefaults.AuthenticationScheme &&
+					scheme.Name != OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
 				{
 					scheme.HandlerType = typeof(TestAuthHandler);
 				}

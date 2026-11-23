@@ -50,6 +50,7 @@ public class StudentPortalTokenController : TokenController
 	{
 		if (!await TenantActivity.IsActiveAsync(user.TenantId)) return DenyInactiveTenant();
 		if (!await PortalLogin.IsPortalUserAsync(user)) return await base.SetSuccessResultAsync(request, user);
+		var revision = StudentAppAccessEnforcement.GetSessionRevision(user);
 		if (!await PortalLogin.CanAccessAsync(user) || user.ShouldChangePasswordOnNextLogin) return Deny();
 		if (!user.EmailConfirmed && verifiedTemporaryUserId == user.Id)
 		{
@@ -64,15 +65,21 @@ public class StudentPortalTokenController : TokenController
 			verifiedTemporaryUserId = null;
 			return await HandleTwoFactorLoginAsync(request, user);
 		}
-		return await base.SetSuccessResultAsync(request, user);
+		var result = await base.SetSuccessResultAsync(request, user);
+		if (result is SignInResult signIn) StudentPortalSessionClaimsHandler.ApplyRevision(signIn.Principal, revision);
+		return result;
 	}
 
 	protected override async Task<bool> PreSignInCheckAsync(IdentityUser user)
 	{
 		if (!await TenantActivity.IsActiveAsync(user.TenantId)) return false;
 		if (!await base.PreSignInCheckAsync(user)) return false;
-		return !await PortalLogin.IsPortalUserAsync(user) ||
-			user.EmailConfirmed && !user.ShouldChangePasswordOnNextLogin && await PortalLogin.CanAccessAsync(user);
+		if (!await PortalLogin.IsPortalUserAsync(user)) return true;
+		if (!user.EmailConfirmed || user.ShouldChangePasswordOnNextLogin || !await PortalLogin.CanAccessAsync(user)) return false;
+
+		var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+		return result.Principal?.FindFirst(StudentAppAccessEnforcement.SessionClaim)?.Value ==
+			StudentAppAccessEnforcement.GetSessionRevision(user);
 	}
 
 	private ForbidResult Deny() => Forbid(new AuthenticationProperties(new Dictionary<string, string?>

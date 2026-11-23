@@ -59,7 +59,6 @@ public class AdmissionWorkflowDefinitionStore(
 
 	public async Task ReplaceChildrenAsync(Guid workflowId, CreateUpdateAdmissionWorkflowDto input)
 	{
-		EnsureSupportedStages(input);
 		var existingStages = await GetStagesAsync(workflowId);
 		var existingStagesById = existingStages.ToDictionary(stage => stage.Id);
 		var stageIdMap = new Dictionary<Guid, Guid>();
@@ -186,9 +185,19 @@ public class AdmissionWorkflowDefinitionStore(
 			input.IsRequired, input.AllowManualSkip, input.Description, input.ConfigurationJson,
 			input.IsEntryStage, input.IsTerminalStage);
 
-	public static void EnsureSupportedStages(CreateUpdateAdmissionWorkflowDto input)
+	public static void EnsureWritableJourney(CreateUpdateAdmissionWorkflowDto input, bool allowEmpty = false)
 	{
 		foreach (var stage in input.Stages) EnsureSupported(stage.StageType);
+		if (allowEmpty && input.Stages.Count == 0 && input.Transitions.Count == 0) return;
+		if (!AdmissionWorkflowGraphValidator.HasFinalDecisionStage(
+			input.Stages.Select(stage => (stage.StageType, stage.DisplayOrder, stage.IsTerminalStage))))
+			throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidFinalStage,
+				AdmissionWorkflowGraphValidator.FinalDecisionRequiredMessage);
+
+		var finalStageId = input.Stages.Single(stage => stage.IsTerminalStage).Id.GetValueOrDefault();
+		if (finalStageId != Guid.Empty && input.Transitions.Exists(route => route.FromStageId == finalStageId))
+			throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidFinalStage,
+				"The final Admission decision stage cannot have an outgoing route.");
 	}
 
 	private static void EnsureSupported(AdmissionWorkflowStageType type)

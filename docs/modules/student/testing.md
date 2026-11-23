@@ -186,7 +186,7 @@ The first PostgreSQL attempt overlapped the other suites and timed out in FeeCol
 
 ## House Management security checks
 
-`StudentModuleVisibilityPermissionContract_Tests` pins the 33-feature-group/111-action catalogue and exact House View/Add/Delete leaves. `StudentRecordsPermissionMenu_Tests` verifies that Student List contains all 16 existing profile-workflow actions without five extra feature groups or renamed permission identifiers. `NavigationVisibilityPrerequisiteContract_Tests` requires the existing Student and Student Records visibility flags for all three House actions. `PermissionConsistencyApi_Tests` covers exact grants, denial/Follow role, revocation, no teacher/development fallback and atomic visibility prerequisites.
+`StudentModuleVisibilityPermissionContract_Tests` pins the 33-feature-group/113-action catalogue and exact House View/Add/Delete leaves. `StudentRecordsPermissionMenu_Tests` verifies that Student List contains all 18 profile-workflow actions. House and App Access actions require the existing Student and Student Records visibility flags. `PermissionConsistencyApi_Tests` covers exact grants, denial/Follow role, revocation, no teacher/development fallback and atomic visibility prerequisites.
 
 ```powershell
 dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~StudentModuleVisibilityPermissionContract_Tests|FullyQualifiedName~NavigationVisibilityPrerequisiteContract_Tests"

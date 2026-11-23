@@ -10,6 +10,27 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Theory]
+	[InlineData("ſtudent workflow", " STUDENT WORKFLOW ")]
+	[InlineData("Student Workflow", " ſtudent workflow ")]
+	public async Task Workflow_Name_Should_Use_The_Same_Invariant_Comparison_As_The_Lock(string reservedName, string duplicate)
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var reserved = await _workflowAppService.CreateAsync(new CreateUpdateAdmissionWorkflowDto { Name = reservedName });
+		var other = await CreateDirectPublicationDraftAsync("Other workflow");
+		var rename = ToUpdateInput(other);
+		rename.Name = duplicate;
+
+		(await Should.ThrowAsync<BusinessException>(() => _workflowAppService.CreateAsync(
+			new CreateUpdateAdmissionWorkflowDto { Name = duplicate }))).Code.ShouldBe(AdmissionWorkflowErrorCodes.NameAlreadyExists);
+		(await Should.ThrowAsync<BusinessException>(() => _workflowAppService.CloneAsync(reserved.Id,
+			new CloneAdmissionWorkflowDto { Name = duplicate }))).Code.ShouldBe(AdmissionWorkflowErrorCodes.NameAlreadyExists);
+		(await Should.ThrowAsync<BusinessException>(() => _workflowAppService.UpdateAsync(other.Id, rename)))
+			.Code.ShouldBe(AdmissionWorkflowErrorCodes.NameAlreadyExists);
+		(await _workflowAppService.GetAsync(other.Id)).Name.ShouldBe(other.Name);
+	}
+
+	[Theory]
 	[InlineData("Main Workflow")]
 	[InlineData("  main workflow  ")]
 	public async Task Workflow_Name_Should_Reject_Duplicate_Independent_Families_Including_Archived(string name)
@@ -35,8 +56,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
-		var first = await _workflowAppService.CreateAsync(new CreateUpdateAdmissionWorkflowDto { Name = "Main Workflow" });
-		var second = await _workflowAppService.CreateAsync(new CreateUpdateAdmissionWorkflowDto { Name = "Other Workflow" });
+		var first = await CreateDirectPublicationDraftAsync("Main Workflow");
+		var second = await CreateDirectPublicationDraftAsync("Other Workflow");
 		var unchanged = await _workflowAppService.UpdateAsync(first.Id, ToUpdateInput(first));
 		unchanged.Name.ShouldBe(first.Name);
 		var input = ToUpdateInput(second);

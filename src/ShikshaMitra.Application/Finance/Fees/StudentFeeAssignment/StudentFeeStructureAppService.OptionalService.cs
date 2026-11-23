@@ -36,7 +36,7 @@ public partial class StudentFeeStructureAppService
 		var (assignment, lines) = await PlanOptionalServiceStopAsync(studentId, input);
 		var fingerprint = OptionalServiceStopFingerprint(assignment, lines);
 		var assertion = new PreviewAssertion(CurrentTenant.Id, CurrentUser.Id, command, fingerprint, Clock.Now.AddMinutes(20));
-		return new(lines.Count, lines.Sum(line => line.OutstandingAmount), OptionalServiceProtector.Protect(JsonSerializer.Serialize(assertion)));
+		return DescribeOptionalServiceStop(lines, OptionalServiceProtector.Protect(JsonSerializer.Serialize(assertion)));
 	}
 
 	[Authorize(ViewPermission)]
@@ -71,17 +71,20 @@ public partial class StudentFeeStructureAppService
 		if (OptionalServiceStopFingerprint(assignment, lines) != assertion.Prepared)
 			throw new BusinessException(AssignmentErrorCodes.StalePreview);
 
-		var result = new OptionalServiceStopResult(lines.Count, lines.Sum(line => line.OutstandingAmount));
-		var before = lines.Select(line => new { line.Id, line.CoverageStartDate, line.CoverageEndDate, line.OutstandingAmount }).ToArray();
+		var result = DescribeOptionalServiceStop(lines);
+		var before = lines.Select(line => new { line.Id, line.CoverageStartDate, line.CoverageEndDate,
+			line.NetPayableAmount, line.OutstandingAmount, line.PaidAmount }).ToArray();
 		foreach (var line in lines)
 		{
-			line.CancelOptionalServiceInstallment(assignment.Id, input.RequestId, input.LastServiceDate, DateOnly.FromDateTime(acceptedAt));
+			line.CancelOptionalServiceInstallment(assignment.Id, input.RequestId, input.LastServiceDate);
 			await dueFeeRepository.UpdateAsync(line, autoSave: false);
 		}
+		assignment.RecordOptionalServiceEndDate(input.FeeHeadId, input.LastServiceDate.AddDays(1));
+		await studentFeeStructureRepository.UpdateAsync(assignment, autoSave: false);
 
 		var audit = LazyServiceProvider.LazyGetRequiredService<FinanceAuditWriter>();
 		await audit.WriteAsync(input.AcademicYearId, FinanceAuditEntityTypes.FeeAdjustment, assignment.Id,
-			"Optional fee service cancellation", OptionalServiceStopped, "Cancelled future unused installments for an optional fee.",
+			"Optional fee service cancellation", OptionalServiceStopped, "Applied the optional service end date to eligible installments.",
 			new() { StudentId = studentId }, input.Reason.Trim(),
 			context: new OptionalServiceStopEvidence(command, result, input.FeeHeadId, input.LastServiceDate, before),
 			eventId: input.RequestId);
@@ -104,35 +107,54 @@ public partial class StudentFeeStructureAppService
 		var assignment = await studentFeeStructureRepository.FindAsync(x => x.StudentId == studentId && x.AcademicYearId == input.AcademicYearId)
 			?? throw new BusinessException(AssignmentErrorCodes.NotAssigned);
 		var snapshot = SavedAssignment(assignment);
-		var head = snapshot?.Heads.SingleOrDefault(x => x.FeeHeadId == input.FeeHeadId && x.Included && x.IsOptional && !x.IsOneTime);
-		var today = DateOnly.FromDateTime(Clock.Now);
+		var period = assignment.GetOptionalServicePeriods(input.FeeHeadId).LastOrDefault();
+		var head = snapshot?.Heads.SingleOrDefault(x => x.FeeHeadId == input.FeeHeadId && (x.Included || period != null) && x.IsOptional && !x.IsOneTime);
+		var start = period?.StartDate ?? (head?.ServicePeriod?.StartDate is DateTime savedStart ? DateOnly.FromDateTime(savedStart) : null);
+		var end = period?.EndDate ?? (head?.ServicePeriod?.EndDate is DateTime savedEnd ? DateOnly.FromDateTime(savedEnd) : null);
 		if (snapshot == null || snapshot.StudentId != studentId || snapshot.AcademicYearId != input.AcademicYearId ||
-			head?.ServicePeriod?.StartDate is not DateTime start || head.ServicePeriod.EndDate is not DateTime end ||
-			input.LastServiceDate < DateOnly.FromDateTime(start) || input.LastServiceDate >= DateOnly.FromDateTime(end))
+			head == null || !start.HasValue || !end.HasValue || input.LastServiceDate.DayNumber < start.Value.DayNumber - 1 ||
+			input.LastServiceDate >= end.Value)
 			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+
+		var recordedEnd = assignment.GetOptionalServiceEndDate(input.FeeHeadId);
+		if (recordedEnd.HasValue && recordedEnd != input.LastServiceDate.AddDays(1))
+			throw new BusinessException(AssignmentErrorCodes.OptionalServiceAlreadyStopped);
 
 		var rows = await dueFeeRepository.GetListAsync(due => due.StudentFeeStructureId == assignment.Id &&
 			due.StudentId == studentId && due.FeeHeadId == input.FeeHeadId);
+		rows.RemoveAll(due => due.GetOptionalServicePeriodId() != period?.Id);
+		if (!recordedEnd.HasValue && rows.Any(due => due.GetOptionalServiceCancellationId().HasValue))
+			throw new BusinessException(AssignmentErrorCodes.OptionalServiceAlreadyStopped);
+
 		var evidence = snapshot.Lines.Where(line => line.FeeHeadId == input.FeeHeadId).ToList();
-		if (rows.Count != evidence.Count || rows.Any(due => evidence.Count(line => line.DueFeeId == due.Id &&
-			line.ProratedAmount == due.OriginalAmount && line.ScheduledAmount == due.ScheduledAmount) != 1))
+		if (period == null && (rows.Count != evidence.Count || rows.Any(due => evidence.Count(line => line.DueFeeId == due.Id &&
+			line.ProratedAmount == due.OriginalAmount && line.ScheduledAmount == due.ScheduledAmount) != 1)) ||
+			period != null && !AssignmentDueEvidence.MatchesPeriod(period, rows))
 			throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
 
-		var eligible = rows.Where(due => due.CanCancelOptionalServiceInstallment(assignment.Id, input.LastServiceDate, today)).ToList();
-		if (eligible.Count == 0) throw new BusinessException(AssignmentErrorCodes.NoFutureOptionalInstallments);
-
-		// Historical or pending references can exist even when the due has no applied balance change.
-		var protectedIds = await OptionalServiceProtectedDueIdsAsync(studentId, input.AcademicYearId, eligible.Select(due => due.Id).ToArray());
-		eligible.RemoveAll(due => protectedIds.Contains(due.Id));
-		if (eligible.Count == 0) throw new BusinessException(AssignmentErrorCodes.NoFutureOptionalInstallments);
+		var eligible = rows.Where(due => due.CanCancelOptionalServiceInstallment(assignment.Id, input.LastServiceDate)).ToList();
+		if (eligible.Count > 0)
+		{
+			var protectedIds = await OptionalServiceProtectedDueIdsAsync(studentId, input.AcademicYearId, eligible.Select(due => due.Id).ToArray());
+			eligible.RemoveAll(due => protectedIds.Contains(due.Id));
+		}
+		if (recordedEnd.HasValue && eligible.Count == 0)
+			throw new BusinessException(AssignmentErrorCodes.OptionalServiceAlreadyStopped);
 		return (assignment, eligible);
 	}
 
 	private async Task<HashSet<Guid>> OptionalServiceProtectedDueIdsAsync(Guid studentId, Guid yearId, Guid[] dueIds)
 	{
 		using var history = LazyServiceProvider.LazyGetRequiredService<IDataFilter>().Disable<ISoftDelete>();
-		var ids = (await LazyServiceProvider.LazyGetRequiredService<IRepository<FeeCollectionDueFeeAllocation, Guid>>()
-			.GetListAsync(x => Enumerable.Contains(dueIds, x.DueFeeId))).Select(x => x.DueFeeId).ToHashSet();
+		// Cleared principal payments remain on their receipts. Only unsettled instruments block this credit.
+		var pendingReceipts = (await LazyServiceProvider.LazyGetRequiredService<IRepository<FeeRecordMetadata, Guid>>().GetQueryableAsync())
+			.Where(receipt => receipt.AcademicYearId == yearId &&
+				receipt.Status == ShikshaMitra.Finance.Fees.Collections.FeeCollectionStatus.InReconciliation)
+			.Select(receipt => receipt.Id);
+		var allocations = await LazyServiceProvider.LazyGetRequiredService<IRepository<FeeCollectionDueFeeAllocation, Guid>>().GetQueryableAsync();
+		var ids = (await AsyncExecuter.ToListAsync(allocations
+			.Where(line => Enumerable.Contains(dueIds, line.DueFeeId) && pendingReceipts.Contains(line.FeeRecordMetadataId))
+			.Select(line => line.DueFeeId))).ToHashSet();
 		ids.UnionWith((await LazyServiceProvider.LazyGetRequiredService<IRepository<LateFeeCollectionAllocation, Guid>>()
 			.GetListAsync(x => Enumerable.Contains(dueIds, x.DueFeeId))).Select(x => x.DueFeeId));
 		ids.UnionWith((await LazyServiceProvider.LazyGetRequiredService<IRepository<FeeAdjustmentSourceLine, Guid>>()
@@ -160,8 +182,16 @@ public partial class StudentFeeStructureAppService
 	private static string OptionalServiceStopFingerprint(StudentFeeStructure assignment, List<DueFee> lines) => Hash(new
 	{
 		assignment.Id, assignment.ConcurrencyStamp,
-		Lines = lines.OrderBy(line => line.Id).Select(line => new { line.Id, line.ConcurrencyStamp, line.OutstandingAmount })
+		Lines = lines.OrderBy(line => line.Id).Select(line => new { line.Id, line.ConcurrencyStamp,
+			line.NetPayableAmount, line.OutstandingAmount, line.PaidAmount, line.RefundedAmount })
 	});
+
+	private static OptionalServiceStopResult DescribeOptionalServiceStop(List<DueFee> lines, string? token = null)
+	{
+		var cancelled = lines.Sum(line => line.NetPayableAmount);
+		var outstanding = lines.Sum(line => line.OutstandingAmount);
+		return new(lines.Count, cancelled, token, outstanding, cancelled - outstanding);
+	}
 
 	private sealed record OptionalServiceStopEvidence(string Command, OptionalServiceStopResult Result, Guid FeeHeadId,
 		DateOnly LastServiceDate, object Lines);

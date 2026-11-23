@@ -12,6 +12,7 @@ public class FeeStructureDetailConfiguration : IEntityTypeConfiguration<FeeStruc
             table.HasCheckConstraint("CK_FeeStructureDetail_Pricing", "(\"IsVariable\" AND \"Amount\" IS NULL) OR (NOT \"IsVariable\" AND \"Amount\" IS NOT NULL AND \"Amount\" >= 0 AND \"Amount\" <= 9999999999.99)"));
 		builder.ConfigureByConvention();
 		builder.Property(x => x.Amount).HasPrecision(18, 2);
+		builder.Property(x => x.MonthlyRate).HasPrecision(18, 2);
         builder.Property(x => x.IsVariable).HasDefaultValue(false);
 
 		// add navigation for fee head

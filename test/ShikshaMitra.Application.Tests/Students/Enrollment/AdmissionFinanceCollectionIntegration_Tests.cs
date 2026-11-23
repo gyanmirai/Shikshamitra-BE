@@ -666,7 +666,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
     }
 
     private async Task<CollectibleAdmissionFixture> CreateCollectibleAdmissionAsync(string name, bool paymentStage = true,
-        decimal amount = 1000m, bool oneTime = true, bool secondPaymentStage = false)
+        decimal amount = 1000m, bool oneTime = true, bool secondPaymentStage = false, bool optionalFee = false)
     {
         await WithUnitOfWorkAsync(async () =>
         {
@@ -740,6 +740,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
             var detail = new FeeStructureDetail(Guid.NewGuid(), TestTenantId, value.Id, head.Id, amount, oneTime, false, null, null);
             detail.AttachPaymentTerm(term.Id, version.Id);
             value.AddDetail(detail);
+            if (optionalFee)
+            {
+                var optional = await GetRequiredService<IRepository<FeeHead, Guid>>().InsertAsync(new(Guid.NewGuid(), TestTenantId, year.Id, category.Id,
+                    "Optional activity", FeeHeadModule.Finance, false, null, income), true);
+                var optionalDetail = new FeeStructureDetail(Guid.NewGuid(), TestTenantId, value.Id, optional.Id, 500m, oneTime, true, null, null);
+                optionalDetail.AttachPaymentTerm(term.Id, version.Id);
+                value.AddDetail(optionalDetail);
+            }
             value.AttachCollectionPolicy(policy.Id, policy.CurrentVersionId!.Value);
             value.Lock();
             await GetRequiredService<IRepository<FeeStructure, Guid>>().InsertAsync(value, true);
@@ -785,7 +793,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
         var series = (await service.GetAvailableIdentifierSeriesAsync(item.Id)).Single();
         item = await service.AssignGrNumberAsync(item.Id, new() { NumberSeriesId = series.Id, ConcurrencyStamp = item.ConcurrencyStamp });
         item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
-        var selection = await service.SaveFeeStructureAsync(item.Id, new() { StructureId = fixture.StructureId, ConcurrencyStamp = item.ConcurrencyStamp });
+        var currentSelection = await service.GetFeeStructureAsync(item.Id);
+        var selection = await service.SaveFeeStructureAsync(item.Id, new() { StructureId = fixture.StructureId,
+            OptionalHeadIds = currentSelection.Selection?.Heads.Where(h => h.IsOptional).Select(h => h.FeeHeadId).ToList() ?? [],
+            ConcurrencyStamp = item.ConcurrencyStamp });
         selection.OnboardingConfirmed.ShouldBeTrue();
         item = await service.GetAsync(item.Id);
         return await service.ActivateAsync(item.Id, new() { IdempotencyKey = "finance-handoff-activate", ConcurrencyStamp = item.ConcurrencyStamp });

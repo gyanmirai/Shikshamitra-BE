@@ -21,4 +21,5 @@ public class FinancePolicyVersionDto : EntityDto<Guid>
 
 public class FinancePolicyVersionListRequestDto : PagedAndSortedResultRequestDto
 {
+	public Guid? VersionId { get; set; }
 }

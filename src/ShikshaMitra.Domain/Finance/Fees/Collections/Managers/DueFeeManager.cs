@@ -94,7 +94,7 @@ public class DueFeeManager(
 
 			if (detail.PaymentTermId.HasValue && detail.PaymentTermVersionId.HasValue)
 			{
-				dueFees.AddRange(await GenerateFromPaymentTermAsync(
+				dueFees.AddRange(GenerateFromPaymentTerm(
 					studentId, detail, customDetail, prorationPolicy, prorationPolicyVersionId,
 					detailChargeStart, detailChargeEnd, academicYear, financeFeeAccountId, paymentTerms));
 				continue;
@@ -108,7 +108,7 @@ public class DueFeeManager(
 		return dueFees;
 	}
 
-	private Task<List<DueFee>> GenerateFromPaymentTermAsync(
+	private List<DueFee> GenerateFromPaymentTerm(
 		Guid? studentId,
 		FeeStructureDetail detail,
 		CustomOptionalFeeHeadDetail? customDetail,
@@ -125,6 +125,33 @@ public class DueFeeManager(
 				.WithData("PaymentTermId", detail.PaymentTermId!);
 
 		var annualAmount = customDetail?.Amount ?? detail.Amount ?? throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
+		var monthlyRate = customDetail?.IsMonthlyRate == true ? customDetail.Amount : detail.MonthlyRate;
+		return GenerateFromSchedule(studentId, detail, schedule, annualAmount, monthlyRate,
+			prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate, academicYear, financeFeeAccountId);
+	}
+
+	public List<DueFee> GenerateRestartedOptionalServiceDues(StudentFeeStructure assignment,
+		FeeStructureDetail detail, ResolvedFeeHeadSchedule schedule, decimal monthlyRate, ProrationPolicySnapshot policy,
+		Guid policyVersionId, DateTime start, DateTime end, AcademicYear academicYear, Guid periodId,
+		IReadOnlySet<Guid> billedInstallmentIds)
+	{
+		if (!detail.IsOptional || detail.IsOneTime || !schedule.IsValid || periodId == Guid.Empty)
+			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+		ValidateChargePeriod(start, end, academicYear, detail.FeeHeadId);
+		var dues = GenerateFromSchedule(assignment.StudentId, detail, schedule, monthlyRate, monthlyRate,
+			policy, policyVersionId, start, end, academicYear, assignment.FinanceFeeAccountId, billedInstallmentIds);
+		foreach (var due in dues) due.BindOptionalServicePeriod(assignment.Id, periodId);
+		return dues;
+	}
+
+	private List<DueFee> GenerateFromSchedule(Guid? studentId, FeeStructureDetail detail, ResolvedFeeHeadSchedule schedule,
+		decimal annualAmount, decimal? monthlyRate, ProrationPolicySnapshot? prorationPolicy, Guid? prorationPolicyVersionId,
+		DateTime chargeStartDate, DateTime chargeEndDate, AcademicYear academicYear, Guid? financeFeeAccountId,
+		IReadOnlySet<Guid>? billedInstallmentIds = null)
+	{
+		if (monthlyRate.HasValue && (detail.IsOneTime || !MonthlyFeePricing.IsMonthlySchedule(schedule.Installments)))
+			throw new BusinessException(AssignmentErrorCodes.InvalidInput).WithData("FeeHeadId", detail.FeeHeadId)
+				.WithData("Reason", "Monthly pricing requires one installment per covered calendar month.");
 		var rows = new List<DueFee>();
 		// Validate the published allocation before selecting this student's service terms.
 		_ = AssignmentAmountCalculator.Allocate(annualAmount, schedule.Installments.Select(x => x.AllocationPercentage).ToArray());
@@ -135,26 +162,39 @@ public class DueFeeManager(
 			throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid)
 				.WithData("FeeHeadId", detail.FeeHeadId)
 				.WithData("Reason", "The service period must overlap a payment term with a positive allocation.");
+		if (billedInstallmentIds is { Count: > 0 })
+		{
+			installments.RemoveAll(installment => billedInstallmentIds.Contains(installment.PaymentTermInstallmentId));
+			if (installments.Count == 0) return rows;
+		}
+		var monthlyAmount = monthlyRate.HasValue ? MonthlyFeePricing.AmountPerInstallment(monthlyRate.Value) : (decimal?)null;
+		if (monthlyAmount * installments.Count > 9999999999.99m)
+			throw new BusinessException(AssignmentErrorCodes.InvalidInput).WithData("FeeHeadId", detail.FeeHeadId)
+				.WithData("Reason", "The monthly amount produces a fee total above the allowed limit.");
 		// Persist effective weights at the database's six-decimal percentage precision.
 		// The final term absorbs the residual; both saved weights and money sum exactly.
-		var weights = installments.Select(x => decimal.Floor(x.AllocationPercentage * 100_000_000m / weightTotal) / 1_000_000m).ToArray();
+		var weights = installments.Select(x => decimal.Floor(monthlyRate.HasValue
+			? 100_000_000m / installments.Count
+			: x.AllocationPercentage * 100_000_000m / weightTotal) / 1_000_000m).ToArray();
 		weights[^1] = 100m - weights.Take(weights.Length - 1).Sum();
-        var scheduled = AssignmentAmountCalculator.Allocate(annualAmount, weights);
+        var scheduled = monthlyAmount.HasValue ? null : AssignmentAmountCalculator.Allocate(annualAmount, weights);
         var rule = prorationPolicy?.Rules.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
             ?? new ProrationPolicyRuleSnapshot(detail.FeeHeadId, ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null);
         if (detail.IsOneTime) rule = rule with { RuleType = ProrationRuleType.FullCharge, ApplyOnAdmission = false, ApplyOnEarlyWithdrawal = false, EarlyWithdrawalRuleType = ProrationRuleType.FullCharge };
-        var calculation = AssignmentAmountCalculator.Calculate(prorationCalculator, rule, annualAmount,
+        var headCalculation = monthlyRate.HasValue ? null : AssignmentAmountCalculator.Calculate(prorationCalculator, rule, annualAmount,
             academicYear.StartDate.Date, academicYear.EndDate.Date, chargeStartDate, chargeEndDate);
-        var obligations = AssignmentAmountCalculator.Allocate(calculation.ProratedAmount, weights);
+        var obligations = headCalculation == null ? null : AssignmentAmountCalculator.Allocate(headCalculation.ProratedAmount, weights);
 		for (var i = 0; i < installments.Count; i++)
 		{
 			var installment = installments[i];
-			var scheduledAmount = scheduled[i];
+			var scheduledAmount = monthlyAmount ?? scheduled![i];
+			var calculation = headCalculation ?? MonthlyFeePricing.Calculate(prorationCalculator, rule, monthlyRate!.Value,
+				installment.CoverageStartDate, installment.CoverageEndDate, chargeStartDate, chargeEndDate);
 			var dueDate = installment.DueDate;
 			rows.Add(new DueFee(
 				id: GuidGenerator.Create(), tenantId: CurrentTenant.Id, studentId: studentId,
 				feeHeadId: detail.FeeHeadId, month: ToMonthEnum(dueDate.Month), year: dueDate.Year,
-				isOneTime: detail.IsOneTime, amount: obligations[i], dueDate: dueDate,
+				isOneTime: detail.IsOneTime, amount: obligations?[i] ?? calculation.ProratedAmount, dueDate: dueDate,
 				feeStructureDetailId: detail.Id, paymentTermId: schedule.PaymentTermId,
 				paymentTermVersionId: schedule.PaymentTermVersionId, paymentTermInstallmentId: installment.PaymentTermInstallmentId,
 				installmentSequence: installment.Sequence, installmentName: installment.Name,
@@ -176,7 +216,7 @@ public class DueFeeManager(
 			rows[^1].PreserveAllocation(weights[i]);
 		}
 
-		return Task.FromResult(rows);
+		return rows;
 	}
 
 	private List<DueFee> GenerateLegacy(

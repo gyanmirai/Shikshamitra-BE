@@ -58,7 +58,7 @@ Fixed override permission and reason checks remain unchanged.
 
 Preview heads expose `IsVariable`, nullable `ConfiguredAmount`, nullable excluded `EffectiveAmount`, `ZeroAmountReason`, and `AmountBasis=CoverageTotal` for variable rows.
 Included amounts are captured in the assignment snapshot and used by the existing decimal allocation, proration and due generation pipeline.
-The amount is the total for Payment Term service coverage before Finance proration, not a monthly rate.
+An omitted or false `isMonthlyRate` means a total for Payment Term service coverage before Finance proration. Set `isMonthlyRate` for a recurring fee with one installment per covered calendar month. The assignment snapshot records the entered rate with `AmountBasis=MonthlyRate` and the generated balances for the verified service dates.
 Changed amounts, optional selections, periods or policies invalidate the preview token.
 Retry hashing keeps the prior fixed-only fingerprint unchanged when the variable list is empty.
 Commit remains transactional and preserves existing duplicate-assignment protection.

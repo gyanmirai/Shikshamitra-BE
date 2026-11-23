@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
@@ -37,6 +38,72 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         await Should.ThrowAsync<BusinessException>(() => _feeStructures.PatchAsync(draft.Id, Patch(draft.ConcurrencyStamp, new { name = "Stale edit" })));
         request.Changes = JsonSerializer.SerializeToElement(new { name = "Reused key" });
         await Should.ThrowAsync<BusinessException>(() => _feeStructures.PatchAsync(draft.Id, request));
+    }
+
+    [Fact]
+    public async Task Draft_Revision_Requires_A_Unique_Name_And_Modified_Fee_Heads()
+    {
+        using var reviewer = Reviewer();
+        using var tenant = _currentTenant.Change(TestTenantId);
+        var (metadata, standard, candidate) = await ReadyCandidateAsync();
+        var draft = await _feeStructures.CreateAsync(metadata, new() { StandardId = standard, StandardFeeStructures = candidate });
+        var published = await _feeStructures.PublishAsync(draft.Id, new() { ConcurrencyStamp = draft.ConcurrencyStamp });
+        var revision = await _feeStructures.CreateRevisionAsync(published.Id, new() { ConcurrencyStamp = published.ConcurrencyStamp });
+
+        var unchanged = await Should.ThrowAsync<BusinessException>(() =>
+            _feeStructures.PatchAsync(revision.Id, Patch(revision.ConcurrencyStamp, new { })));
+        unchanged.Code.ShouldBe(FeeStructureErrorCodes.DuplicateName);
+        var sameName = await Should.ThrowAsync<BusinessException>(() =>
+            _feeStructures.PatchAsync(revision.Id, Patch(revision.ConcurrencyStamp, new { name = published.Name.ToUpperInvariant() })));
+        sameName.Code.ShouldBe(FeeStructureErrorCodes.DuplicateName);
+        var publish = await Should.ThrowAsync<BusinessException>(() =>
+            _feeStructures.PublishAsync(revision.Id, new() { ConcurrencyStamp = revision.ConcurrencyStamp }));
+        publish.Code.ShouldBe(FeeStructureErrorCodes.DuplicateName);
+
+        var renameOnly = await Should.ThrowAsync<BusinessException>(() =>
+            _feeStructures.PatchAsync(revision.Id, Patch(revision.ConcurrencyStamp, new { name = "Revised fees" })));
+        renameOnly.Code.ShouldBe(FeeStructureErrorCodes.UnchangedRevisionFeeHeads);
+
+        var candidateEdit = AsRequest(revision);
+        candidateEdit.Name = "Revised fees";
+        var preview = await _feeStructures.PreviewAsync(new()
+        {
+            FeeStructureMetadataId = metadata, StandardId = standard,
+            StructureId = revision.Id, StandardFeeStructures = candidateEdit,
+        });
+        preview.Errors.ShouldContain(error => error.Contains("Change at least one fee head"));
+        var update = await Should.ThrowAsync<BusinessException>(() => _feeStructures.UpdateAsync(revision.Id, candidateEdit));
+        update.Code.ShouldBe(FeeStructureErrorCodes.UnchangedRevisionFeeHeads);
+
+        var roundedToSameAmount = await Should.ThrowAsync<BusinessException>(() =>
+            _feeStructures.PatchAsync(revision.Id, Patch(revision.ConcurrencyStamp, new
+            {
+                name = "Revised fees",
+                feeHeads = new { update = new[] { new { lineId = revision.FeeHeads.Single().Id, amount = 1000.99m } } }
+            })));
+        roundedToSameAmount.Code.ShouldBe(FeeStructureErrorCodes.UnchangedRevisionFeeHeads);
+
+        // Simulate an existing draft saved before the fee-head validation was added.
+        var repository = GetRequiredService<IRepository<FeeStructure, Guid>>();
+        var legacyDraft = await repository.GetAsync(revision.Id);
+        legacyDraft.ChangeName("Legacy renamed revision");
+        await repository.UpdateAsync(legacyDraft, autoSave: true);
+        var legacyPublish = await Should.ThrowAsync<BusinessException>(() =>
+            _feeStructures.PublishAsync(revision.Id, new() { ConcurrencyStamp = legacyDraft.ConcurrencyStamp }));
+        legacyPublish.Code.ShouldBe(FeeStructureErrorCodes.UnchangedRevisionFeeHeads);
+
+        var renamed = await _feeStructures.PatchAsync(revision.Id, Patch(legacyDraft.ConcurrencyStamp, new
+        {
+            name = "Revised fees",
+            feeHeads = new { update = new[] { new { lineId = revision.FeeHeads.Single().Id, amount = 4321m } } },
+        }));
+        renamed.Name.ShouldBe("Revised fees");
+        renamed.FeeHeads.Single().Amount.ShouldBe(4321m);
+        renamed.FeeHeads.Single().Id.ShouldBe(revision.FeeHeads.Single().Id);
+        var noOp = await _feeStructures.PatchAsync(renamed.Id, Patch(renamed.ConcurrencyStamp, new { }));
+        noOp.ConcurrencyStamp.ShouldBe(renamed.ConcurrencyStamp);
+        (await _feeStructures.PublishAsync(renamed.Id, new() { ConcurrencyStamp = renamed.ConcurrencyStamp }))
+            .Name.ShouldBe("Revised fees");
     }
 
     [Fact]

@@ -356,6 +356,7 @@ public class CollectionPolicyAppService(
 
 		var query = await versionRepository.GetQueryableAsync();
 		query = query.Where(x => x.PolicyType == "collection" && x.PolicyId == id);
+		if (input.VersionId is Guid versionId) query = query.Where(x => x.Id == versionId);
 
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query

@@ -545,11 +545,19 @@ public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTes
 				});
 				(await GetSummaryRowAsync(yearId, studentId)).PendingCharges.ShouldBe(500d);
 			}
-			await _waivers.ApplyAsync(new ApplyFeeWaiverInput
+			var firstWaiver = await _waivers.ApplyAsync(new ApplyFeeWaiverInput
+			{ SourceType = "LateFee", SourceId = dueId, Amount = 100m, Reason = "Partial hardship waiver", IdempotencyKey = Guid.NewGuid().ToString("N") });
+			var lastWaiver = await _waivers.ApplyAsync(new ApplyFeeWaiverInput
 			{ SourceType = "LateFee", SourceId = dueId, Reason = "Approved hardship", IdempotencyKey = Guid.NewGuid().ToString("N") });
 			var row = await GetSummaryRowAsync(yearId, studentId);
 			row.TotalCharges.ShouldBe(0d); row.PendingCharges.ShouldBe(0d);
-			(await _feeCollections.GetCollectFormAsync(studentId, yearId)).Charges.Single().Status.ShouldBe(FeeCollectionStatus.Waived);
+			var charge = (await _feeCollections.GetCollectFormAsync(studentId, yearId)).Charges.Single();
+			charge.Status.ShouldBe(FeeCollectionStatus.Waived);
+			var history = charge.WaiverHistory.ShouldNotBeNull();
+			history.Count.ShouldBe(2);
+			history.Single(w => w.Id == firstWaiver.Id).Amount.ShouldBe(100m);
+			history.Single(w => w.Id == lastWaiver.Id).Reason.ShouldBe("Approved hardship");
+			history.Sum(w => w.Amount).ShouldBe(500m);
 		}
 	}
 
@@ -774,6 +782,43 @@ public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTes
 			lateFeeCharge.WaivedAmount.ShouldBe(200);
 			lateFeeCharge.CanWaive.ShouldBeFalse();
 			lateFeeCharge.Status.ShouldBe(FeeCollectionStatus.Waived);
+		}
+	}
+
+	[Fact]
+	public async Task Applying_A_Waiver_Reduces_The_Late_Fee_By_The_Requested_Amount()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (academicYearId, studentId, _, dueFeeId, _) =
+				await SeedStudentWithOverdueDueFeeAsync(daysOverdue: 10, attachPolicy: true);
+			var input = new ApplyFeeWaiverInput
+			{
+				SourceType = "LateFee",
+				SourceId = dueFeeId,
+				Amount = 50.25m,
+				Reason = "Partial waiver approved",
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
+			};
+
+			var applied = await _waivers.ApplyAsync(input);
+			var retry = await _waivers.ApplyAsync(input);
+			applied.WaivedAmount.ShouldBe(50.25m);
+			applied.RemainingAmount.ShouldBe(149.75m);
+			retry.Id.ShouldBe(applied.Id);
+			retry.RemainingAmount.ShouldBe(applied.RemainingAmount);
+
+			var form = await _feeCollections.GetCollectFormAsync(studentId, academicYearId);
+			var charge = form.Charges.Single(x => x.SourceType == "LateFee" && x.SourceId == dueFeeId);
+			charge.PendingAmount.ShouldBe(149.75);
+			charge.CanWaive.ShouldBeTrue();
+			form.Ledger.SelectMany(month => month.Items).Single(line => line.DueFeeId == dueFeeId)
+				.DaysOverdue.ShouldBe(10);
+
+			input.Amount = 150m;
+			input.IdempotencyKey = Guid.NewGuid().ToString("N");
+			var error = await Should.ThrowAsync<BusinessException>(() => _waivers.ApplyAsync(input));
+			error.Code.ShouldBe(FeeWaiverErrorCodes.AmountExceedsBalance);
 		}
 	}
 

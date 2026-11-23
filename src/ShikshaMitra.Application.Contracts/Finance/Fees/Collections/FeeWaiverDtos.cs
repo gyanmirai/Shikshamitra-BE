@@ -15,6 +15,8 @@ public class ApplyFeeWaiverInput
 	public string SourceType { get; set; } = string.Empty;
 	/// <summary>DueFee id for LateFee; Charge line id for Charge.</summary>
 	public Guid SourceId { get; set; }
+	/// <summary>Amount to waive. Omit for the full live balance.</summary>
+	public decimal? Amount { get; set; }
 	public string Reason { get; set; } = string.Empty;
 	public string IdempotencyKey { get; set; } = string.Empty;
 }

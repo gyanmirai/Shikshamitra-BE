@@ -51,6 +51,16 @@ public class ChargeCategoryApiContract_Tests
 	}
 
 	[Fact]
+	public void Delete_preflight_uses_the_usage_route_and_delete_permission()
+	{
+		var method = typeof(ChargeCategoryController).GetMethod("GetUsageAsync");
+		method.ShouldNotBeNull();
+		method.GetCustomAttribute<HttpGetAttribute>()!.Template.ShouldBe("{chargeCategoryId:guid}/usage");
+		method.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBe(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ChargeCategory.Delete);
+	}
+
+	[Fact]
 	public void Status_reason_accepts_any_non_empty_length()
 	{
 		var reasonProperty = typeof(UpdateChargeCategoryStatusRequest)

@@ -43,6 +43,12 @@ public partial class FeeStructureAppService
 				if (policy?.AcademicYearId == metadata.AcademicYearId)
 					master = (policy!.PolicyName, policy.Version, policy.Status == RefundPolicyStatus.Active);
 			}
+			else if (family == "proration")
+			{
+				var policy = await prorationPolicyRepository.FindAsync(policyId.Value);
+				if (policy?.AcademicYearId == metadata.AcademicYearId)
+					master = (policy!.PolicyName, policy.Version, policy.Status == ProrationPolicyStatus.Active);
+			}
 			else if (family == "concession")
 			{
 				var policy = await concessionPolicyRepository.FindAsync(policyId.Value);
@@ -63,6 +69,8 @@ public partial class FeeStructureAppService
 		await Add("collection", source.CollectionPolicyId, source.CollectionPolicyVersionId);
 		await Add("concession", source.ConcessionPolicyId, source.ConcessionPolicyVersionId);
 		await Add("refund", source.RefundPolicyId, source.RefundPolicyVersionId);
+		if (source.GetExplicitProrationPolicyVersionId() is { } prorationVersion)
+			await Add("proration", source.ProrationPolicyId, prorationVersion);
 		return result;
 	}
 }

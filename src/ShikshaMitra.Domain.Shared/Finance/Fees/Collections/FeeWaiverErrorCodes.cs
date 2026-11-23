@@ -10,4 +10,6 @@ public static class FeeWaiverErrorCodes
 	public const string SourceNotEligible = Prefix + "010005";
 	public const string NoRemainingBalance = Prefix + "010006";
 	public const string IdempotencyConflict = Prefix + "010007";
+	public const string InvalidAmount = Prefix + "010008";
+	public const string AmountExceedsBalance = Prefix + "010009";
 }

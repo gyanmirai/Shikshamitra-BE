@@ -18,7 +18,7 @@ The frontend-owned screen and client changes are documented in [Proration Policy
 
 ## Current Fee Structure boundary
 
-As of 2026-10-05, Proration is removed from Fee Structure setup and its API contracts. Structure lookups, defaults, attachment validation, review coverage and publication warnings contain no proration. The attachment-impact endpoint is removed. New assignments do not inherit legacy template proration. Existing stored structure pins, publication JSON and assigned/charged calculations remain historical evidence; assigned-policy edits preserve them. Policy lifecycle and simulation remain available. The older attachment rollout/review notes below describe the previous integration and do not authorize recreating it. See [Fee Structure contracts](./fee-structure-workspace.md).
+Fee Structure → Policies supports an optional Proration Policy override. Finance selects a current active same-year policy version in a draft and publishes the selection with the structure. When the field is blank, new fee preparations inherit the academic-year default. Retired structure values remain historical evidence until a new selection is explicitly saved. Existing assignments keep their saved calculation. See [Fee Structure contracts](./fee-structure-workspace.md).
 
 ## Implementation status
 
@@ -77,8 +77,8 @@ It does not own:
 
 ## Independent admission and early-withdrawal contract
 
-Create and activate a policy without student dates. Fee Structure no longer accepts a Proration Policy attachment, and new student assignment never inherits one from legacy structure storage. The assignment policy options and update command accept only concession, refund and collection selections.
-Both Admission preparation and Finance structure assignment automatically resolve the active academic-year default and pin its immutable version for new obligations, including Finance assignments without an Admission link.
+Create and activate a policy without student dates. Fee Structure accepts an optional explicit override. The ordinary assigned-policy update does not replace the proration version captured with existing dues.
+Admission preparation and Finance structure assignment use an explicit Fee Structure policy version when available. Otherwise they resolve the active academic-year default. New obligations pin the resolved version, including Finance assignments without an Admission link.
 Admission uses its confirmed joining date; Finance uses its existing verified or authorized manual service period. A selected full-year period remains full-year service when no actual joining date is available.
 No default policy retains the existing no-proration behavior; an ambiguous default or missing active version fails closed. Existing prepared/assigned financial evidence is reused before consulting today's default.
 Supplying a proration selection is rejected as invalid input, including for callers with policy override permission.

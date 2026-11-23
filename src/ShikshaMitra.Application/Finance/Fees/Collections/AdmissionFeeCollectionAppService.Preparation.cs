@@ -103,6 +103,7 @@ public partial class AdmissionFeeCollectionAppService
 		return requested.Count == variables.Count && requested.All(v => v != null) &&
 			requested.Select(v => v.FeeHeadId).Distinct().Count() == requested.Count &&
 			requested.All(v => variables.Any(h => h.FeeHeadId == v.FeeHeadId && h.EffectiveAmount == v.Amount &&
+				(h.AmountBasis == "MonthlyRate") == v.IsMonthlyRate &&
 				string.Equals(h.ZeroAmountReason, v.ZeroAmountReason?.Trim(), StringComparison.Ordinal)));
 	}
 

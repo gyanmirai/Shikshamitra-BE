@@ -349,8 +349,10 @@ public DueFee(
 	}
 
 	/// <summary>Paid money above the remaining obligation after approved concessions and adjustments.</summary>
-	public decimal OverpaymentAmount => Math.Max(0m,
-		PaidAmount - RefundedAmount + NetAmount - EffectiveObligationAmount - TransferredPaidCreditAmount);
+	public decimal OverpaymentAmount => ProjectOverpaymentAfterCredit(0m);
+
+	public decimal ProjectOverpaymentAfterCredit(decimal credit) => Math.Max(0m,
+		PaidAmount - RefundedAmount + NetAmount + credit - EffectiveObligationAmount - TransferredPaidCreditAmount);
 
 	/// <summary>Principal remaining after non-cash concessions and adjustment credits.</summary>
 	public decimal NetPayableAmount => Math.Max(0m, EffectiveObligationAmount - NetAmount);
@@ -493,19 +495,37 @@ public DueFee(
 
 	public Guid? GetOptionalServiceCancellationId() => this.GetProperty<Guid?>("OptionalServiceCancellationId");
 
-	public bool CanCancelOptionalServiceInstallment(Guid assignmentId, DateOnly lastServiceDate, DateOnly today) =>
-		assignmentId != Guid.Empty && StudentFeeStructureId == assignmentId && !IsDeleted && !IsOneTime &&
-		CoverageStartDate is DateTime coverageStart && DateOnly.FromDateTime(coverageStart) > lastServiceDate &&
-		DateOnly.FromDateTime(coverageStart) > today && DueDate.Date >= today.ToDateTime(TimeOnly.MinValue) &&
-		!HasPaymentEvidence() && !HasProtectedAssignmentUse() && OutstandingAmount > 0m &&
-		OutstandingAmount == OriginalAmount && EffectiveObligationAmount == OriginalAmount;
+	public Guid? GetOptionalServicePeriodId() => this.GetProperty<Guid?>("OptionalServicePeriodId");
 
-	public void CancelOptionalServiceInstallment(Guid assignmentId, Guid requestId, DateOnly lastServiceDate, DateOnly today)
+	internal void BindOptionalServicePeriod(Guid assignmentId, Guid periodId)
 	{
-		if (requestId == Guid.Empty || !CanCancelOptionalServiceInstallment(assignmentId, lastServiceDate, today))
+		if (periodId == Guid.Empty || StudentFeeStructureId.HasValue || !PaymentTermInstallmentId.HasValue)
+			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+		BindAssignment(assignmentId);
+		this.SetProperty("OptionalServicePeriodId", periodId);
+		ScheduleInstanceKey = $"service:{periodId:N}:{PaymentTermInstallmentId.Value:N}";
+	}
+
+	public decimal GetOptionalServiceCancellationAmount() =>
+		GetOptionalServiceCancellationId().HasValue ? OriginalAmount : 0m;
+
+	public bool CanCancelOptionalServiceInstallment(Guid assignmentId, DateOnly lastServiceDate) =>
+		assignmentId != Guid.Empty && StudentFeeStructureId == assignmentId && !IsDeleted && !IsOneTime &&
+		(GetOptionalServicePeriodId().HasValue ? ProrationEligibleStartDate ?? CoverageStartDate : CoverageStartDate) is DateTime coverageStart &&
+		DateOnly.FromDateTime(coverageStart) > lastServiceDate &&
+		!GetOptionalServiceCancellationId().HasValue && !HasProtectedAssignmentUse() &&
+		RefundedAmount == 0m && NetPayableAmount > 0m && EffectiveObligationAmount == OriginalAmount;
+
+	public void CancelOptionalServiceInstallment(Guid assignmentId, Guid requestId, DateOnly lastServiceDate)
+	{
+		if (requestId == Guid.Empty || !CanCancelOptionalServiceInstallment(assignmentId, lastServiceDate))
 			throw new BusinessException(AssignmentErrorCodes.NoFutureOptionalInstallments);
-		ApplyAdjustmentCredit(OutstandingAmount);
+		// The non-cash credit removes the unused service obligation, including any prepaid portion.
+		AdjustmentCreditAmount += NetPayableAmount;
+		NetAmount = EffectiveObligationAmount;
+		this.SetProperty("HasProtectedAssignmentUse", true);
 		this.SetProperty("OptionalServiceCancellationId", requestId);
+		RecalculateBalancesAndStatus();
 	}
 
 	// Kept in the existing extension column, alongside other owner calculation evidence.

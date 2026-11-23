@@ -41,13 +41,19 @@ All routes below are under `/api/student-fee-structure`; the client base URL alr
 | GET `student/{studentId}?academicYearId=<year>` | `.View` | Saved evidence plus current canonical due balances; no repair or regeneration |
 | GET `policy-options?studentId=<student>&academicYearId=<year>` | `.View` + `.OverridePolicies` | Latest active, effective versions for each policy in the accessible student's academic year |
 | PUT `student/{studentId}/policies` | `.View` + `.OverridePolicies` | Concurrency-protected update of concession, refund and collection selections; historical assignment proration stays pinned; no obligation regeneration |
-
 | POST `student/{studentId}/optional-service-stop/preview` | `.View` + `.StopOptionalService` | Count and total of eligible future installments and a protected confirmation token |
 | POST `student/{studentId}/optional-service-stop` | `.View` + `.StopOptionalService` | Apply audited non-cash cancellation credits to the previewed installments |
+| GET `student/{studentId}/optional-service-restart/context` | `.View` + `.Add` + `.StopOptionalService` | Available dates, saved monthly rate, active proration versions, published monthly terms and available credit for the stopped optional fee |
+| GET `student/{studentId}/history` | `.View` | Newest-first assignment history for the scoped student and academic year |
+| POST `student/{studentId}/optional-service-restart/preview` | `.View` + `.Add` + `.StopOptionalService` | Server-calculated monthly installment breakdown and a protected confirmation token |
+| POST `student/{studentId}/optional-service-restart` | `.View` + `.Add` + `.StopOptionalService` | Add a new service period and its canonical dues in one audited transaction |
 
 The abbreviated permission suffixes refer to `Finance.Fees.StructureAssign`.
-On first assignment, fixed published amounts are read-only. An explicit unused assignment correction also allows an included optional fixed fee amount to change with `.OverrideAmount`. Included variable heads accept a single amount for the service range before configured proration.
+Fixed amounts are read-only. A correction preserves an existing fixed amount on the same structure, including a previously saved override. A correction preserves the saved service dates for required heads on the same structure. Required heads on a replacement structure use verified defaults. Optional service date changes require the existing authorization. Variable heads accept a term amount or a monthly rate where supported.
 Manual dates require the existing `Finance.Policies.ProrationPolicy.OverrideChargePeriod` permission.
+An authorized manual range does not require a date-change reason. Start/end dates and academic-year boundaries remain mandatory; supplied historical reasons remain readable. Policy overrides, unpaid corrections and optional-service cancellations retain their separate reason requirements.
+
+Before the first Finance assignment of an unprepared admission selection, optional heads can be selected or removed. The server validates the selected structure and heads and synchronizes the initial admission selection with the new canonical obligations in the same transaction. `FinanceInitialFeeSelectionHistory` retains the previous selection, new selection, actor/time and account identity in ExtraProperties. Prepared accounts still require an exact match; payments and existing obligations continue through the protected correction/cancellation workflows.
 Neither operation checks concession permissions.
 
 ## Correct an unused student assignment
@@ -73,7 +79,19 @@ Eligibility checks historical principal/late-fee allocations, year/student/accou
 Historical evidence checks disable only the soft-delete filter; tenant scope remains enabled.
 Concession, adjustment, refund, waiver, withdrawal and persisted late-fee use also block replacement with an actionable explanation.
 Legacy or inconsistent assignment/due evidence requires reconciliation.
-After payment, policy changes and optional-service cancellation use their own commands. Neither command rebuilds the original schedule.
+After payment, policy changes and optional-service changes use their own commands. They preserve the original schedule and its financial evidence.
+
+### Re-enable a stopped optional service
+
+The student must have an accessible active enrollment and a saved structure containing the recurring optional fee. A service with a recorded stop can resume from the cancellation effective date. A previously unselected service can be added from the assignment charge start. Dates are inclusive and capped by the academic year. When one retained installment on the same assignment covers the selected days for that installment, it carries forward at its existing billed amount and outstanding balance. Conflicting or partial coverage that would create a duplicate obligation is rejected. The restart adds no charges for the gap between service periods. Initial activation uses the same permissions and monthly preview without replacing required dues.
+
+The assignment history combines creation metadata, saved correction and policy evidence, and optional-service audit events. It displays recorded old and new values, occurrence times, actor names where available, and reasons. Raw snapshots, receipt data, and other students' activity are outside this endpoint.
+
+The restart uses the selected active proration policy version and an eligible published monthly payment term. The existing calculator applies the configured rule to each new installment and uses the payment term's demand and due dates. The preview shows the monthly base, applied factor, reduction and payable amount for new charges, plus the retained installments and their balances. A period already fully covered can be saved with zero new charges. Existing prepaid credit from cancelled installments is shown separately for the adjustment or refund workflow.
+
+Saving pins the monthly rate, term version and policy version to the new period. The original assignment evidence, cancelled rows and payments remain available. The new dues appear in Collections using the same ledger and allocation rules as other assignment dues. A scoped preview token binds the request and current evidence. Replaying the same request ID returns the original result, and the period-specific schedule keys keep restarted dues distinct from cancelled dues. Later cancellation targets the latest service period. The period history uses the existing ExtraProperties columns.
+
+Student withdrawal and Finance clearance verify both the original assignment and the saved restart installments. A withdrawal applies each restarted service period's own pinned policy and leaves prior service cancellation credits in place.
 
 Correction retains the canonical assignment ID and appends original structure/revision, snapshot, current policy pins, complete prior due evidence, actor, timestamp and reason to `AssignmentCorrectionHistory` in existing ABP ExtraProperties.
 It archives only unused tracked dues through `SupersedeUnusedAssignment` and normal checked updates, flushes those updates to release filtered schedule uniqueness keys, and inserts the recalculated schedule in the same new Serializable transaction.
@@ -90,9 +108,9 @@ Stale identity, stamp, token, reason or source facts use the existing `StalePrev
 
 ## Stop an optional service
 
-An authorized staff member can stop an included recurring optional fee by selecting the last service day and entering a reason. The server considers installments whose coverage starts after both that day and the current date and whose due date has not passed. It leaves periods already started or overlapping the service end in place. An installment must be wholly unpaid and free of payment and downstream financial evidence. The cutoff never expands the saved service dates.
+An authorized staff member can cancel an included recurring optional service by choosing the first day without service and entering a reason. The API receives the previous calendar day as the last service day. Installments with coverage starting on or after the effective date are eligible, including those with cleared payments. Earlier and overlapping coverage remains chargeable. Unsettled payments and conflicting financial adjustments or downstream activity block the affected installments. The cutoff is inside the assigned service dates.
 
-Confirmation revalidates a short-lived, user- and tenant-bound preview of the exact due rows, stamps and cancelled amount. It applies a non-cash adjustment credit equal to each eligible row's outstanding amount in one serializable transaction. Existing principal, terms, paid amounts, receipts, and the original assignment snapshot are retained. The signed input contains the academic year, optional fee head, ISO calendar date, reason and unique request ID. The audit records the actor, reason, cutoff and due amounts. An identical request ID and input can replay the committed result without applying another credit. No schema migration is needed.
+Confirmation revalidates a short-lived, user- and tenant-bound preview of the exact due rows, stamps, cancelled amount, outstanding reduction and prepaid credit. It saves the effective end date and credits the remaining obligation on each eligible row in the same serializable transaction. Collections deducts these credits from the fee total and displays cancelled rows with zero due. Cleared payments on cancelled installments become available credit through the existing refund and adjustment workflows. Original principal, payment history, receipts and the assignment snapshot remain as evidence. Staff can review a previously recorded end date and apply it to installments that still qualify. Already credited installments are excluded, and a repeated request ID replays the result. The audit records the actor, reason, cutoff and due amounts.
 
 `Finance.Fees.StructureAssign.StopOptionalService` is a separate exact grant. Existing non-admin roles receive it through the permission editor. Student and year scope and active enrollment apply to preview and confirmation.
 
@@ -129,7 +147,7 @@ The new exact permission is registered in the backend catalogue. It is included 
 }
 ```
 
-`feeHeadDetails` accepts `{feeHeadId, amount}`. A price different from the published structure is allowed for an included optional fixed fee during an authorized unused assignment correction.
+`feeHeadDetails` accepts `{feeHeadId, amount}` as evidence of the published fixed amount or a previously saved fixed amount on the same structure. Use `variableFeeHeads` to enter a new variable price.
 Included variable heads use `variableFeeHeads: [{feeHeadId, amount, zeroAmountReason}]`; a zero amount requires its reason.
 Per-month installment replacements are not accepted.
 All mandatory heads remain included.
@@ -142,11 +160,12 @@ Each `servicePeriods` item contains `feeHeadId`, `source`, and source-specific f
 |---|---|
 | `AcademicYear` (default) | Configured year boundaries; explicitly not a verified joining date |
 | `BoardAcademicYear` | The published structure board in the same year supplies the verified default dates when they fall within the academic year. Provided endpoints must match the board configuration. |
+| `Registration` | Finance verifies the student's saved joining date and application ID. The service starts on the joining date or the verified board start, whichever comes later, and ends at the board end. The academic year supplies the boundaries when the board dates are unavailable. |
 | `TransportService` | `sourceReferenceId` must resolve to that student's route assignment and the fee head must belong to Transport; server reads and intersects the dates with the academic year |
 | `ManualOverride` | ISO dates within the academic year, required reason, explicit date-override permission; no source-reference ID |
-| Admission, Hostel, Exit or unknown | Rejected as unavailable until an authoritative source adapter is implemented |
+| Hostel, Exit or unknown | Rejected as unavailable until an authoritative source adapter is implemented |
 
-The server normalizes service dates to UTC midnight. It stores the verification label, source reference/revision and reasons in the assignment snapshot.
+The server normalizes service dates to UTC midnight. It stores the verification label, source reference/revision and reasons in the assignment snapshot. Finance uses one calendar month for one-time heads. It also uses a service month for required full-charge annual heads with a single installment and a verified admission joining date. The published installment still determines the due date.
 
 The protected token expires after 20 minutes and binds tenant, user, command, exact prepared result and source/configuration revisions.
 Preview additionally returns optional UTC `previewExpiresAt` for client feedback; this field is absent from saved evidence and the prepared-result fingerprint.
@@ -159,8 +178,9 @@ Multiple instances must share the application's protected key ring for previews 
 
 ## Amounts, terms and policy evidence
 
-- The existing recurring structure amount is an **annual service total**; a one-time amount is charged once. Payment frequency never changes this amount basis.
-- A head's service obligation is calculated first, then allocated using the exact published term percentages and dates, including structure-local schedule overrides. Every included head requires a published term version.
+- A recurring structure's default amount is a **service total**. A one-time amount is charged once. For a term with one installment per covered calendar month, a fixed structure or a student-specific variable fee can explicitly use a **monthly rate**.
+- Monthly pricing generates the rounded monthly amount for each installment whose coverage intersects the verified service dates. The pinned proration rule is evaluated for that installment's coverage. Equal monthly charges take precedence over the term's percentage split when a monthly rate is selected. The same calculation is used for withdrawal against the saved rate and installment dates.
+- Service totals are allocated using the exact published term percentages and dates, including structure-local schedule overrides. Every included head requires a published term version.
 - Daily proration uses the academic-year service denominator. Monthly cutoff divides the annual total into service months independently of billing frequency. New policy versions configure admission and early withdrawal independently; legacy snapshots retain their existing withdrawal-month behavior. See [the event calculation contract](./proration-policy-end-to-end.md#independent-admission-and-early-withdrawal-contract).
 - Currency rounding is deterministic. The final installment absorbs the residual; very small totals redistribute excess rounding in reverse installment order to prevent negative dues. Installments always sum to the head total.
 - One-time heads and heads with no matching proration rule receive full charge. The review says so explicitly.

@@ -7,5 +7,6 @@ public static class FeeStructureErrorCodes
 	public const string VersionMismatch = "Finance:FeeStructure:VersionMismatch";
 	public const string ConcurrencyConflict = "Finance:FeeStructure:ConcurrencyConflict";
 	public const string DuplicateName = "Finance:FeeStructure:DuplicateName";
+	public const string UnchangedRevisionFeeHeads = "Finance:FeeStructure:UnchangedRevisionFeeHeads";
 	public const string RevisionRequiresPublication = "Finance:FeeStructure:RevisionRequiresPublication";
 }

@@ -54,9 +54,9 @@ Regression proof: `FeeStructureCollectionHeads_Tests.cs` checks rejection of the
 
 Concession Policy setup has been removed from the Fee Structure UI. New structures can be published and assigned without an attachment; no default concession is selected and no discount is granted. Existing attachment/version/scope fields remain for compatibility and historical request processing; supplied legacy attachments still receive their existing validation. The request flow has not moved to request-level policy selection: a new assignment without a snapshot cannot create a concession request, and its legacy concession-context read returns `PolicyNotAttached`. Existing snapshots are preserved. No database migration or historical rewrite is required.
 
-Proration attachment PATCH fields are rejected as unsupported. Older create/update payload fields are ignored and never persisted. New drafts and revisions cannot attach proration, and new student assignments do not inherit old structure pins. Existing nullable structure columns, publication JSON, assignment snapshots and DueFee calculations are retained as historical evidence; no destructive migration is required. Reads project retired proration labels/fields/warnings out of publication responses without rewriting the stored snapshot. The separate Proration Policy lifecycle and simulation remain available; its structure attachment-impact endpoint is retired.
+Proration is optional. Drafts accept an explicit policy and immutable version pair, or a clear operation that restores the academic-year default. Published structures use the selected version for new obligations. Retired values without a new explicit selection are historical evidence.
 
-Regression coverage lives in `FeeStructureProrationRemoval_Tests.cs`, the malformed PATCH cases, the supported policy-default tests and `StudentFeeAssignmentPolicies_Tests.cs`. These check unsupported inputs, publication without proration, historical evidence projection, no template inheritance, independent simulation and preservation of assigned policy pins.
+The proration regression tests cover explicit selection, clearing, academic-year fallback, and projection of retired evidence.
 
 ## Policy and Fee Head mismatch rules
 
@@ -83,7 +83,7 @@ Each head selects its own exact term/version. This supports tuition in two terms
 
 - Term year and board must match the class workspace. Draft/archived versions and archived masters are rejected for draft configuration/publication.
 - New selections require the current published version. Unchanged superseded pins are retained; a newer version never replaces an existing pin during an unrelated edit.
-- Amount is the **total for the selected term's service coverage**, not a monthly amount multiplied automatically. Existing termless legacy rows must have their amount interpretation reviewed before a term is selected.
+- The default amount is the **total for the selected term's service coverage**. Fixed recurring fees can instead supply a `monthlyRate` for terms with one installment per covered calendar month. The server calculates the structure total from the rounded monthly amounts and keeps the rate in the versioned structure. Existing termless legacy rows must have their amount interpretation reviewed before a term is selected.
 - `Inherited` requires no overrides. `Customized` requires overrides referencing the selected version's installment IDs, names and sequence numbers. Partial override rows are merged with that exact master schedule.
 - The merged schedule, not just the changed rows, must have valid coverage dates, increasing due dates, no overlapping coverage periods and allocations totaling exactly 100%.
 - The existing Payment Term validator enforces the board window and demand-date rules. Derived demand dates are recalculated from changed coverage/due dates; only `SpecificDate` uses an explicit demand-date override.
@@ -102,14 +102,15 @@ Amounts are nonnegative, have at most two decimal places and are capped at 9,999
 | Delete | Delete permission; unlocked and unused draft only; soft deletion preserves reserved revision numbers |
 | Publish | Add permission, matching stamp, fresh full server validation; capture review then lock in the same unit of work |
 | Retry publish | Already-published structure returns its canonical record without another publication |
-| Revise | Add permission, checked published source and stamp; copy exact pins and overrides into a separate draft with new detail IDs |
-| Retry revision | Return the existing live draft in the lineage |
-| Revise historical version | Once a newer publication exists, start the next revision from that publication; prevent divergent new branches |
-| Revision name | Retain the series name from the published parent; edit fee configuration in the draft |
+| Revise | Add permission, checked published source and stamp; every new action copies exact pins and overrides into a separate draft with new detail IDs, even when other drafts exist |
+| Retry revision | Reuse the same optional `requestId` to return that command's canonical revision. A new ID creates another draft; requests without an ID are fresh actions. Reusing a key for another source/body or a deleted draft is rejected. |
+| Revise historical version | New drafts must start from the latest published revision. Existing drafts retain their recorded parent. |
+| Revision name | Prefill the published parent's name in the new draft. Revision saves and publication require a class-unique name, including against the published source. An empty PATCH still verifies this rule. |
+| Revision fee heads | A draft revision must change the effective Fee Heads & Terms configuration of its immediate published parent before it can be saved, pass readiness review, or publish. Comparison uses fee-head IDs, stored amounts, pricing and optional flags, one-time timing, exact Payment Term and version, schedule mode, and installment overrides. A rename, policy change, or row reorder alone does not qualify. |
 | Legacy unlocked but used | Reject update, delete and publication; do not rewrite data already referenced by student fees |
 | Legacy published row | Remains protected; does not gain an invented historical review. Its first new revision must meet current publication rules |
 
-Policy versions, schedule pins and local overrides are copied as data. Revision creation deliberately reads history without EF tracking to avoid changing the published parent's concurrency stamp through relationship fixup. Live parent names cannot collide within a class; a filtered unique normalized-name index is the final race guard. A unique `(RevisionRootId, RevisionNumber)` index prevents duplicate revision numbers even under concurrent requests.
+Policy versions, schedule pins and local overrides are copied from the selected publication, not another draft. Revision creation deliberately reads history without EF tracking to avoid changing the published parent's concurrency stamp through relationship fixup. Multiple drafts can share a published parent; renaming and saving one does not prevent another creation action. Revision numbering includes deleted rows and is serialized per tenant/root using a PostgreSQL transaction advisory lock in a Read Committed transaction. Live parent names cannot collide within a class; a filtered unique normalized-name index is the final race guard. A unique `(RevisionRootId, RevisionNumber)` index remains the final duplicate-number guard. Request IDs use the existing primary key and command hashes use ExtraProperties; no schema migration is needed.
 
 ## API and permissions
 
@@ -129,7 +130,7 @@ Academic workspace, scope and calendar lookups project only the required fields.
 | `PATCH /api/fee-structures/{id}` | `.Add` | Request ID, concurrency stamp and explicit `changes` object |
 | `PUT /api/fee-structures/{id}` | `.Add` | Complete candidate with concurrency stamp |
 | `POST /api/fee-structures/{id}/publish` | `.Add` | `concurrencyStamp` |
-| `POST /api/fee-structures/{id}/revisions` | `.Add` and `.Add` | Source `concurrencyStamp` |
+| `POST /api/fee-structures/{id}/revisions` | `.Add` and `.Add` | Source `concurrencyStamp`, optional `requestId` for retry safety |
 | `DELETE /api/fee-structures/{id}` | `.Delete` | Unused draft only |
 | `PATCH /api/fee-structures/{id}/lock` | `.Add` | Retired compatibility route: rejects with instructions to review and use stamped publication |
 
@@ -232,6 +233,7 @@ Variable rows store no configured amount and retain Payment Terms; see [variable
 
 The class navigator uses `GET /api/fee-structures/summaries?standardId` and fetches full configuration through `GET /api/fee-structures/{id}` only when needed.
 `GET /api/fee-structures/catalogue?feeStructureMetadataId&standardId` returns scoped head, eligible term and current policy choices without register usage payloads or full version histories.
+Refund choices include the matching version's fee-head scope, selected head IDs, and names. Collection and Refund policy history reads accept an optional `versionId` to retrieve one saved snapshot under the existing policy read permission.
 `GET /api/fee-structures/term-schedule?scope&paymentTermId&versionId` resolves only the selected immutable schedule.
 These reads retain the existing structure permissions and class scope; save, publication and assignment commands still validate authoritative configuration.
 Fee-head dependency counts aggregate normalized selected-head evidence and legacy due references in SQL rather than retrieving every assignment snapshot.

@@ -40,15 +40,25 @@ public partial class FeeStructureAppService
 		try { candidate = MergePatch(before, input.Changes); }
 		catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException or ArgumentException or NullReferenceException)
 		{ throw InvalidPatch("The changed fields have an invalid value or shape."); }
-		if (JsonSerializer.Serialize(before, PatchJson) == JsonSerializer.Serialize(candidate, PatchJson)) return await MapAsync(entity);
-		if (OnlyNameOrAmountChanges(input.Changes))
+		if (JsonSerializer.Serialize(before, PatchJson) == JsonSerializer.Serialize(candidate, PatchJson))
+		{
+			if (entity.PreviousRevisionId.HasValue)
+			{
+				await EnsureUniqueNameAsync(entity.StandardId, candidate.Name, entity.Id);
+				await EnsureRevisionFeeHeadsChangedAsync(entity, candidate);
+			}
+			return await MapAsync(entity);
+		}
+		if (OnlyNameOrAmountChanges(input.Changes) && candidate.FeeHeads.All(line =>
+			!line.MonthlyRate.HasValue || before.FeeHeads.Any(old => old.Id == line.Id && old.Amount == line.Amount)))
 		{
 			var shape = new StandardFeeStructureRequestValidator().Validate(candidate);
 			if (!shape.IsValid) throw InvalidPatch(string.Join("\n", shape.Errors.Select(x => x.ErrorMessage)));
 		}
 		else ThrowIfInvalid(await ValidateCandidateAsync(entity.FeeStructureMetadataId, entity.StandardId, candidate, entity, false));
 		await CheckAttachmentsAsync(candidate, entity);
-		await EnsureUniqueNameAsync(entity.StandardId, candidate.Name, entity.Id, entity.RevisionRootId);
+		await EnsureUniqueNameAsync(entity.StandardId, candidate.Name, entity.Id);
+		await EnsureRevisionFeeHeadsChangedAsync(entity, candidate);
 		ApplyCandidate(entity, candidate);
 		receipts[input.RequestId] = hash;
 		entity.SetProperty("PatchRequests", JsonSerializer.Serialize(receipts));
@@ -80,7 +90,7 @@ public partial class FeeStructureAppService
 		if (patch.TryGetPropertyValue("policies", out var policyNode))
 		{
 			var policies = policyNode?.AsObject() ?? throw InvalidPatch("Policies must be an object.");
-			Allowed(policies, "collection", "concession", "refund");
+			Allowed(policies, "collection", "concession", "refund", "proration");
 			foreach (var (family, value) in policies)
 			{
 				var selection = value?.AsObject();
@@ -118,7 +128,7 @@ public partial class FeeStructureAppService
 			foreach (var update in Array(operations, "update"))
 			{
 				var fields = update!.AsObject();
-				Allowed(fields, "lineId", "amount", "isVariable", "isOneTime", "isOptional", "payableMonth", "payableYear", "schedule");
+				Allowed(fields, "lineId", "amount", "monthlyRate", "isVariable", "isOneTime", "isOptional", "payableMonth", "payableYear", "schedule");
 				var lineId = fields["lineId"]!.GetValue<Guid>();
 				if (!touched.Add(lineId)) throw InvalidPatch("A Fee Head line can be changed only once per request.");
 				var line = lines.SingleOrDefault(x => x?["id"]?.GetValue<Guid>() == lineId)?.AsObject() ?? throw InvalidPatch("The updated line does not belong to this structure.");
@@ -134,7 +144,7 @@ public partial class FeeStructureAppService
 			foreach (var addition in Array(operations, "add"))
 			{
 				var line = addition!.AsObject();
-				Allowed(line, "feeHeadId", "amount", "isVariable", "isOneTime", "isOptional", "payableMonth", "payableYear", "paymentTermId", "paymentTermVersionId", "scheduleMode", "installmentOverrides");
+				Allowed(line, "feeHeadId", "amount", "monthlyRate", "isVariable", "isOneTime", "isOptional", "payableMonth", "payableYear", "paymentTermId", "paymentTermVersionId", "scheduleMode", "installmentOverrides");
 				lines.Add(line.DeepClone());
 			}
 		}

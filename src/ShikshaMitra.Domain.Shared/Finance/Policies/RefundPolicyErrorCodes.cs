@@ -33,4 +33,6 @@ public static class RefundPolicyErrorCodes
 	public const string InvalidPayoutMethod = Prefix + "010026";
 	public const string InvalidSimulationInput = Prefix + "010027";
 	public const string DefaultPolicyMustBeActive = Prefix + "010028";
+	public const string CloneRequiresTargetFeeHeads = Prefix + "010030";
+	public const string InvalidCloneName = Prefix + "010031";
 }

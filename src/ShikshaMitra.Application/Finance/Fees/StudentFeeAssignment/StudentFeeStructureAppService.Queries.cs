@@ -4,7 +4,10 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.Services;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
+using ShikshaMitra.Finance.Policies;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -98,6 +101,7 @@ public partial class StudentFeeStructureAppService
 		if (structures.Count == 0) return [];
 		var boardIds = structures.Select(s => metadata[s.FeeStructureMetadataId].AcademicBoardId)
 			.OfType<Guid>().Distinct().ToArray();
+		var structureBoards = structures.ToDictionary(s => s.Id, s => metadata[s.FeeStructureMetadataId].AcademicBoardId);
 		var boards = (await LazyServiceProvider.LazyGetRequiredService<IRepository<EducationBoard, Guid>>()
 			.GetListAsync(x => x.AcademicYearId == academicYearId && Enumerable.Contains(boardIds, x.Id))).ToDictionary(x => x.Id);
 		var year = await academicYearRepository.GetAsync(academicYearId);
@@ -105,13 +109,38 @@ public partial class StudentFeeStructureAppService
 		var details = await feeStructureDetailRepository.GetListAsync(x => ids.Contains(x.FeeStructureId));
 		var headIds = details.Select(x => x.FeeHeadId).Distinct().ToList();
 		var heads = (await feeHeadRepository.GetListAsync(x => headIds.Contains(x.Id))).ToDictionary(x => x.Id);
+		var scheduledDetails = details.Where(d => !d.IsOneTime && d.PaymentTermVersionId.HasValue).ToList();
+		var scheduleResolver = LazyServiceProvider.LazyGetRequiredService<PaymentTermScheduleResolver>();
+		var terms = await LoadAssignmentTermsAsync(scheduledDetails);
+		var monthlyDetails = new HashSet<Guid>();
+		var annualSingleInstallmentDetails = new HashSet<Guid>();
+		foreach (var detail in scheduledDetails)
+		{
+			try
+			{
+				var installments = scheduleResolver.ResolveFromTerms(detail, terms).Installments;
+				if (detail.IsVariable && MonthlyFeePricing.IsMonthlySchedule(installments))
+					monthlyDetails.Add(detail.Id);
+				var scopeBoard = structureBoards[detail.FeeStructureId] is Guid scopeBoardId &&
+					boards.TryGetValue(scopeBoardId, out var configuredBoard) && HasAssignmentBoardDates(configuredBoard, year)
+					? configuredBoard : null;
+				if (!detail.IsOptional && IsSingleAnnualInstallment(installments,
+					scopeBoard?.StartDate ?? year.StartDate, scopeBoard?.EndDate ?? year.EndDate))
+					annualSingleInstallmentDetails.Add(detail.Id);
+			}
+			catch (BusinessException)
+			{
+				// The preview reports an unavailable payment term if this head is selected.
+			}
+		}
 		var candidates = structures.OrderBy(x => x.Name).ThenByDescending(x => x.RevisionNumber).Select(s => new AssignmentCandidateDto {
 			Id = s.Id, Name = s.Name, RevisionNumber = s.RevisionNumber, AcademicYearId = academicYearId, StandardId = s.StandardId,
 			Total = details.Where(d => d.FeeStructureId == s.Id).Sum(d => d.Amount ?? 0m),
 			Heads = details.Where(d => d.FeeStructureId == s.Id).Select(d => new AssignmentHeadDto {
 				FeeHeadId = d.FeeHeadId, FeeHeadName = heads.GetValueOrDefault(d.FeeHeadId)?.Name ?? "Fee head", SupportsTransportSource = !d.IsVariable && heads.GetValueOrDefault(d.FeeHeadId)?.Module == ShikshaMitra.Finance.Fees.Settings.FeeHeadModule.Transport, IsOptional = d.IsOptional,
-				IsVariable = d.IsVariable, IsOneTime = d.IsOneTime, Included = !d.IsOptional, ConfiguredAmount = d.Amount, EffectiveAmount = d.Amount,
-				AmountBasis = d.IsVariable ? "CoverageTotal" : d.IsOneTime ? "OneTime" : "AnnualTotal", PaymentTermId = d.PaymentTermId, PaymentTermVersionId = d.PaymentTermVersionId }).ToList()
+				IsVariable = d.IsVariable, IsOneTime = d.IsOneTime, Included = !d.IsOptional, ConfiguredAmount = d.MonthlyRate ?? d.Amount, EffectiveAmount = d.MonthlyRate ?? d.Amount,
+				SupportsMonthlyRate = monthlyDetails.Contains(d.Id),
+				AmountBasis = d.MonthlyRate.HasValue ? "MonthlyRate" : d.IsVariable ? "CoverageTotal" : d.IsOneTime ? "OneTime" : "AnnualTotal", PaymentTermId = d.PaymentTermId, PaymentTermVersionId = d.PaymentTermVersionId }).ToList()
 		}).ToList();
 		var versionIds = structures.SelectMany(s => StructurePolicyVersions(s).Values).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
 		var versions = await financePolicyVersionRepository.GetListAsync(x => versionIds.Contains(x.Id));
@@ -119,6 +148,15 @@ public partial class StudentFeeStructureAppService
 		{
 			var structure = structures.Single(s => s.Id == candidate.Id);
 			candidate.Policies = versions.Where(v => StructurePolicyVersions(structure).Values.Contains(v.Id)).Select(ToAssignmentPolicy).ToList();
+			var singleInstallmentHeadIds = details.Where(d => d.FeeStructureId == structure.Id &&
+				annualSingleInstallmentDetails.Contains(d.Id)).Select(d => d.FeeHeadId).ToHashSet();
+			if (singleInstallmentHeadIds.Count > 0)
+			{
+				var policy = await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(academicYearId, structure.Id);
+				var rules = policy == null ? null : JsonSerializer.Deserialize<ProrationPolicySnapshot>(policy.SnapshotJson)?.Rules;
+				foreach (var head in candidate.Heads.Where(h => singleInstallmentHeadIds.Contains(h.FeeHeadId)))
+					head.UsesSingleServiceMonth = IsFullChargeForServiceDates(rules?.FirstOrDefault(r => r.FeeHeadId == head.FeeHeadId));
+			}
 			if (metadata[structure.FeeStructureMetadataId].AcademicBoardId is Guid boardId &&
 				boards.TryGetValue(boardId, out var board) && HasAssignmentBoardDates(board, year))
 			{
@@ -178,7 +216,25 @@ public partial class StudentFeeStructureAppService
 		var currentHeadIds = snapshot.Heads.Select(x => x.FeeHeadId).Concat(snapshot.Lines.Select(x => x.FeeHeadId)).Distinct().ToList();
 		var currentNames = (await feeHeadRepository.GetListAsync(x => currentHeadIds.Contains(x.Id))).ToDictionary(x => x.Id, x => x.Name);
 		foreach (var head in snapshot.Heads)
+		{
 			if (currentNames.TryGetValue(head.FeeHeadId, out var name)) head.FeeHeadName = name;
+			ProjectOptionalServicePeriods(assignment, head);
+		if (snapshot.CalculationVersion == "LegacyUnknown" || head.OptionalServicePeriods == null) continue;
+			var restartedDues = dues.Where(due => due.FeeHeadId == head.FeeHeadId && due.GetOptionalServicePeriodId().HasValue).ToList();
+			snapshot.Lines.AddRange(restartedDues.Select(due => OptionalServiceRestartLine(due, head.FeeHeadName, true)));
+			head.Obligation += restartedDues.Sum(due => due.OriginalAmount);
+		}
+		var recordedEnds = snapshot.Heads.Where(head => head.OptionalServiceEndDate.HasValue)
+			.ToDictionary(head => head.FeeHeadId, head => (Date: head.OptionalServiceEndDate!.Value, Period: head.OptionalServicePeriods?.LastOrDefault()?.Id));
+		var reviewableDues = dues.Where(due => recordedEnds.TryGetValue(due.FeeHeadId, out var end) &&
+			due.GetOptionalServicePeriodId() == end.Period && due.CanCancelOptionalServiceInstallment(assignment.Id, end.Date.AddDays(-1))).ToList();
+		if (reviewableDues.Count > 0)
+		{
+			var protectedDues = await OptionalServiceProtectedDueIdsAsync(studentId, academicYearId, reviewableDues.Select(due => due.Id).ToArray());
+			var reviewableHeads = reviewableDues.Where(due => !protectedDues.Contains(due.Id)).Select(due => due.FeeHeadId).ToHashSet();
+			foreach (var head in snapshot.Heads)
+				head.CanReviewOptionalServiceCancellation = reviewableHeads.Contains(head.FeeHeadId);
+		}
 		foreach (var line in snapshot.Lines)
 			if (currentNames.TryGetValue(line.FeeHeadId, out var name)) line.FeeHeadName = name;
 		snapshot.ScheduledTotal = snapshot.Lines.Sum(x => x.ScheduledAmount);
@@ -190,7 +246,7 @@ public partial class StudentFeeStructureAppService
 			if (due == null) { result.Warnings.Add("An obligation referenced by the assignment is unavailable; reconciliation is required."); continue; }
 			line.PaidAmount = due.PaidAmount;
 			line.OutstandingAmount = due.OutstandingAmount;
-			if (due.GetOptionalServiceCancellationId().HasValue) line.OptionalServiceCancellationAmount = due.AdjustmentCreditAmount;
+			line.OptionalServiceCancellationAmount = due.GetOptionalServiceCancellationAmount();
 		}
 		snapshot.OriginalPolicies = snapshot.Policies.ToList();
 		if (assignment.FinanceFeeAccountId.HasValue) snapshot.AssignmentSource = "Admission";

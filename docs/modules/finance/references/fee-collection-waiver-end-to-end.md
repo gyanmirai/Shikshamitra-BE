@@ -29,7 +29,7 @@ charge ledger entry.
 
 TL;DR: waiver is a direct Fee Collection operation.
 Collection Policy and Charge Management contain no waiver configuration.
-Every eligible system-generated late-fee charge and approved outstanding manual charge displays a waiver toggle in Fee Collection; enabling it requires only a reason and waives the full live remaining balance.
+Every eligible system-generated late-fee charge and approved outstanding manual charge displays a waiver toggle in Fee Collection; the dialog requires a reason and offers an editable amount defaulted to the displayed pending balance.
 
 > Product decision: this document defines the implemented flow.
 
@@ -42,7 +42,7 @@ Every eligible system-generated late-fee charge and approved outstanding manual 
 | Is waiver availability configured globally or per source? | No |
 | Where is the waiver control? | On each eligible charge row in Fee Collection, including system-generated late-fee charges |
 | What does the collector enter? | Mandatory reason only |
-| Is partial waiver supported? | No; the full live remaining balance is waived |
+| Is partial waiver supported? | Yes. A positive amount up to the live remaining balance can be applied. |
 | Is approval or rejection required? | No |
 | Is there a Waiver tab or separate route? | No |
 | Is the original amount overwritten? | No; waiver is stored as a separate non-cash reduction |
@@ -74,7 +74,7 @@ Fee Collection
   -> collector turns the required row ON
   -> enters mandatory reason
   -> confirms Apply waiver
-  -> server rereads and waives the full live remaining balance
+  -> server rereads the live balance and validates the requested amount
   -> collection totals refresh immediately
 ```
 
@@ -125,18 +125,18 @@ Each eligible row displays:
 
 | UI element | Behavior |
 |---|---|
-| Waiver toggle | OFF by default; turning ON selects the row for full waiver |
+| Waiver toggle | OFF by default; turning ON opens the waiver dialog |
 | Reason | Appears and becomes required only while the toggle is ON |
-| Waiver amount | Read-only; equals the server-provided current remaining balance |
-| Remaining after waiver | Read-only zero for the selected row |
+| Waiver amount | Editable; defaults to the server-provided current remaining balance |
+| Remaining after waiver | Read-only pending balance minus the requested waiver |
 
-The collector cannot type or edit the waiver amount.
+The collector can edit the waiver amount and preview the balance after waiver.
 Turning the toggle OFF before confirmation removes the reason and makes no change.
 
 ### Confirmation
 
 ```text
-Waive the full remaining amount of INR {liveRemainingAmount}?
+Waive INR {requestedAmount}?
 Reason: {reason}
 
 This is a non-cash reduction and will immediately change the student's outstanding balance.
@@ -156,7 +156,7 @@ The server performs the operation in one transaction:
 4. Require a non-empty trimmed reason.
 5. Recalculate the source's live remaining balance.
 6. Reject the command if the live remaining balance is zero.
-7. Use the complete live remaining balance as the applied waiver amount.
+7. Apply the requested amount if it is positive, has up to two decimal places, and fits the live balance. Legacy requests without an amount waive the live remaining balance.
 8. Create an immutable waiver application record.
 9. Reduce the collectible balance without changing the original late fee or charge amount.
 10. Write ledger and audit evidence.
@@ -187,7 +187,7 @@ appliedWaiver = remainingChargeBefore
 remainingChargeAfter = 0
 ```
 
-The server calculates the amount at commit time.
+The server validates the requested amount against the live balance at commit time.
 The UI never submits a trusted monetary value.
 
 ## Example
@@ -216,7 +216,7 @@ These are the active contracts for this flow.
 | Charge Management contracts | Do not add or retain waiver settings |
 | Fee Collection system late-fee charge | Return `sourceType = LateFee`, `sourceId = DueFeeId`, server-derived `canWaive`, and current remaining amount |
 | Fee Collection charge row | Return server-derived `canWaive` and current remaining amount |
-| Apply command | Accept source type, source ID, reason, and idempotency key; do not accept amount |
+| Apply command | Accept source type, source ID, reason, idempotency key, and the amount via POST /api/fee-collections/waivers/with-amount. The legacy route still accepts requests without an amount. |
 | Waiver record | Store source, student, server-calculated applied amount, reason, actor, timestamp, and reversal link if supported |
 
 Proposed Fee Collection endpoint:
@@ -243,7 +243,7 @@ Waiver authorization remains inside Fee Collection without creating a Waiver sub
 
 | Permission | Purpose |
 |---|---|
-| `Finance.Fees.FeeCollections.ApplyWaiver` | Immediately apply a full waiver to an eligible late-fee or charge row |
+| `Finance.Fees.FeeCollections.ApplyWaiver` | Immediately apply a waiver to an eligible late-fee or charge row |
 
 The dedicated permission controls the server mutation. The collect-form balance controls visibility so stale frontend permission state cannot hide an eligible toggle.
 
@@ -276,7 +276,7 @@ The reversal action can appear in Fee Collection history; it does not require a 
 5. Authorize waiver application through the Fee Collection `ApplyWaiver` permission.
 6. Add server-derived `canWaive` to late-fee and approved-charge rows.
 7. Add the toggle and reason-only interaction to Fee Collection.
-8. Replace amount/request/approve/reject commands with one full-balance apply command.
+8. Use one immediate apply command for both full and partial waivers in Fee Collection.
 9. Preserve historical applied waivers as immutable evidence.
 10. Resolve existing pending requests explicitly before cutover; never auto-apply them.
 11. Update ledger, reports, audit, concurrency, idempotency, and reversal behavior for both source types.
@@ -291,8 +291,8 @@ The reversal action can appear in Fee Collection history; it does not require a 
 6. Confirm every approved positive outstanding manual charge row shows the toggle.
 7. Confirm pending, rejected, voided, cancelled, fully paid, and zero-balance charge rows do not show it.
 8. Turn a toggle ON and confirm reason is the only editable waiver field.
-9. Confirm the frontend does not send a waiver amount.
-10. Apply the waiver and confirm the server uses the full live remaining balance.
+9. Confirm the amount defaults to the pending balance and can be reduced.
+10. Apply the waiver and confirm the balance decreases by the requested amount.
 11. Confirm the outstanding balance becomes zero immediately without approval.
 12. Confirm concurrent collection/waiver activity cannot over-reduce the balance.
 13. Confirm the original late-fee or charge amount remains unchanged.
@@ -318,7 +318,7 @@ Current source paths expected to change during implementation:
 
 Backend tests must prove no policy/charge waiver configuration, both eligible source types, server-derived full amount, reason validation, permission/scope enforcement, idempotency, concurrency, immutable original amounts, ledger/report separation, and reversal integrity.
 
-Frontend tests must prove no Waiver route, correct row visibility, toggle behavior, reason-only input, no client amount, refreshed totals, server error display, and keyboard-accessible narrow layouts.
+Frontend tests must prove no Waiver route, correct row visibility, toggle behavior, required reason and amount, default balance and validation, refreshed totals, server error display, and keyboard-accessible narrow layouts.
 
 ```powershell
 # Backend

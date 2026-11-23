@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
@@ -52,10 +53,61 @@ public partial class FeeStructureAppService
   {
    var masters = (await refundPolicyRepository.GetQueryableAsync())
     .Where(p => p.AcademicYearId == context.AcademicYearId && p.Status == RefundPolicyStatus.Active);
-   result.Policies.AddRange(await AsyncExecuter.ToListAsync(
+   var refunds = await AsyncExecuter.ToListAsync(
     from p in masters join v in versions.Where(v => v.PolicyType == "refund")
     on new { PolicyId = p.Id, Version = p.Version } equals new { v.PolicyId, Version = v.VersionNumber }
-    select new FeeStructurePolicyOptionDto { Id = p.Id, Name = p.PolicyName, Family = "refund",
+    select new { p.Id, p.PolicyName, p.IsDefault, p.FeeHeadScope, p.ApplicableFeeHeadIdsJson,
+     VersionId = v.Id, v.VersionNumber });
+   var options = refunds.Select(row => new FeeStructurePolicyOptionDto {
+    Id = row.Id, Name = row.PolicyName, Family = "refund", VersionId = row.VersionId,
+    VersionNumber = row.VersionNumber, IsCurrent = true, IsDefault = row.IsDefault,
+    FeeHeadScope = row.FeeHeadScope.ToString(),
+    ApplicableFeeHeadIds = row.FeeHeadScope == RefundFeeHeadScope.SelectedFeeHeads
+     ? JsonSerializer.Deserialize<List<Guid>>(row.ApplicableFeeHeadIdsJson) ?? [] : []
+   }).ToList();
+   var headIds = options.SelectMany(option => option.ApplicableFeeHeadIds!).Distinct().ToArray();
+   if (headIds.Length > 0)
+   {
+    var heads = await AsyncExecuter.ToListAsync((await feeHeadRepository.GetQueryableAsync())
+     .Where(head => head.AcademicYearId == context.AcademicYearId && Enumerable.Contains(headIds, head.Id))
+     .Select(head => new { head.Id, head.Name }));
+    var names = heads.ToDictionary(head => head.Id, head => head.Name);
+    foreach (var option in options)
+     option.FeeHeadNames = option.ApplicableFeeHeadIds!.Distinct().Where(names.ContainsKey)
+      .ToDictionary(id => id, id => names[id]);
+
+    var missingNameVersions = options
+     .Where(option => option.ApplicableFeeHeadIds!.Any(id => !names.ContainsKey(id)))
+     .ToDictionary(option => option.VersionId);
+    if (missingNameVersions.Count > 0)
+    {
+     var versionIds = missingNameVersions.Keys.ToArray();
+     var snapshots = await AsyncExecuter.ToListAsync(versions
+      .Where(version => Enumerable.Contains(versionIds, version.Id))
+      .Select(version => new { version.Id, version.SnapshotJson }));
+     foreach (var row in snapshots)
+     {
+      RefundPolicySnapshot? snapshot;
+      try { snapshot = JsonSerializer.Deserialize<RefundPolicySnapshot>(row.SnapshotJson, SnapshotOptions); }
+      catch (JsonException) { continue; }
+      if (snapshot?.FeeHeadNames == null) continue;
+      var option = missingNameVersions[row.Id];
+      foreach (var id in option.ApplicableFeeHeadIds!)
+       if (snapshot.FeeHeadNames.TryGetValue(id, out var name))
+        option.FeeHeadNames!.TryAdd(id, name);
+     }
+    }
+   }
+   result.Policies.AddRange(options);
+  }
+  if (context.Permissions.GetValueOrDefault("prorationRead"))
+  {
+   var masters = (await prorationPolicyRepository.GetQueryableAsync())
+    .Where(p => p.AcademicYearId == context.AcademicYearId && p.Status == ProrationPolicyStatus.Active);
+   result.Policies.AddRange(await AsyncExecuter.ToListAsync(
+    from p in masters join v in versions.Where(v => v.PolicyType == "proration")
+    on new { PolicyId = p.Id, Version = p.Version } equals new { v.PolicyId, Version = v.VersionNumber }
+    select new FeeStructurePolicyOptionDto { Id = p.Id, Name = p.PolicyName, Family = "proration",
      VersionId = v.Id, VersionNumber = v.VersionNumber, IsCurrent = true, IsDefault = p.IsDefault }));
   }
   if (context.Permissions.GetValueOrDefault("termsRead"))

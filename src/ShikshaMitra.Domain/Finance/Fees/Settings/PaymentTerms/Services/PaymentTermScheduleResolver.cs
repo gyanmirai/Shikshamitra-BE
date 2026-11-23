@@ -1,6 +1,7 @@
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -43,9 +44,18 @@ public class PaymentTermScheduleResolver(
 		if (term.Id != detail.PaymentTermId.Value)
 			throw new BusinessException(PaymentTermErrorCodes.NotFound).WithData("PaymentTermId", detail.PaymentTermId);
 
-		var version = term.Versions.FirstOrDefault(v => v.Id == detail.PaymentTermVersionId.Value)
+		return ResolveVersion(detail, term, detail.PaymentTermVersionId.Value, applyStructureAmounts: true);
+	}
+
+	/// <summary>Resolve an explicitly selected service-period term, using overrides only for their pinned version.</summary>
+	public ResolvedFeeHeadSchedule ResolveServiceTerm(FeeStructureDetail detail, PaymentTerm term, Guid versionId) =>
+		ResolveVersion(detail, term, versionId, applyStructureAmounts: false);
+
+	private static ResolvedFeeHeadSchedule ResolveVersion(FeeStructureDetail detail, PaymentTerm term, Guid versionId, bool applyStructureAmounts)
+	{
+		var version = term.Versions.FirstOrDefault(v => v.Id == versionId)
 			?? throw new BusinessException(PaymentTermErrorCodes.NotFound)
-				.WithData("VersionId", detail.PaymentTermVersionId);
+				.WithData("VersionId", versionId);
 
 		if (version.Status != PaymentTermVersionStatus.Published &&
 			version.Status != PaymentTermVersionStatus.Superseded)
@@ -55,10 +65,13 @@ public class PaymentTermScheduleResolver(
 				.WithData("Status", version.Status.ToString());
 		}
 
-		var annualAmount = detail.Amount.HasValue ? ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(detail.Amount.Value) : (decimal?)null;
+		var annualAmount = applyStructureAmounts && detail.Amount.HasValue ? ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(detail.Amount.Value) : (decimal?)null;
+		var monthlyRate = applyStructureAmounts ? detail.MonthlyRate : null;
 		var installments = new List<ResolvedInstallment>();
 		var allocated = 0m;
 		var masterInstallments = version.Installments.OrderBy(i => i.Sequence).ToList();
+		var usesOverrides = detail.PaymentTermId == term.Id && detail.PaymentTermVersionId == versionId &&
+			detail.ScheduleMode == ScheduleMode.Customized;
 
 		for (var index = 0; index < masterInstallments.Count; index++)
 		{
@@ -69,7 +82,7 @@ public class PaymentTermScheduleResolver(
 			var dueDate = masterInstallment.DueDate;
 			var allocationPercentage = masterInstallment.AllocationPercentage;
 
-			if (detail.ScheduleMode == ScheduleMode.Customized)
+			if (usesOverrides)
 			{
 				var overrideEntry = detail.ScheduleOverrides
 					.FirstOrDefault(o => o.SourcePaymentTermInstallmentId == masterInstallment.Id);
@@ -98,7 +111,14 @@ public class PaymentTermScheduleResolver(
 			}
 
 			decimal? calculatedAmount;
-			if (!annualAmount.HasValue)
+			if (monthlyRate is decimal rate)
+			{
+				calculatedAmount = MonthlyFeePricing.AmountPerInstallment(rate);
+				allocationPercentage = decimal.Floor(100_000_000m / masterInstallments.Count) / 1_000_000m;
+				if (index == masterInstallments.Count - 1)
+					allocationPercentage = 100m - installments.Sum(row => row.AllocationPercentage);
+			}
+			else if (!annualAmount.HasValue)
             {
                 calculatedAmount = null;
             }
@@ -127,16 +147,24 @@ public class PaymentTermScheduleResolver(
 				masterInstallment.GracePeriodDaysOverride));
 		}
 
+		if (monthlyRate.HasValue)
+		{
+			if (!MonthlyFeePricing.IsMonthlySchedule(installments))
+				throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration)
+					.WithData("Reason", "Monthly pricing requires one installment per covered calendar month.");
+			annualAmount = installments.Sum(row => row.CalculatedAmount);
+		}
+
 		return new ResolvedFeeHeadSchedule(
 			detail.Id,
 			detail.FeeHeadId,
 			detail.FeeHead?.Name,
 			annualAmount,
-			detail.PaymentTermId.Value,
+			term.Id,
 			term.Name,
-			detail.PaymentTermVersionId.Value,
+			versionId,
 			version.VersionNumber,
-			detail.ScheduleMode,
+			usesOverrides ? ScheduleMode.Customized : ScheduleMode.Inherited,
 			installments,
 			isValid: true);
 	}

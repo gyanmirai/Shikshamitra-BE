@@ -56,9 +56,8 @@ public class StudentTransitionFinanceClearanceReader(IRepository<StudentFeeStruc
 		catch (JsonException) { return new(false, "Finance assignment evidence is unavailable or invalid."); }
 		if (evidence == null || evidence.StudentId != studentId || evidence.AcademicYearId != yearId)
 			return new(false, "Finance assignment evidence does not match this student and year.");
-		var expected = evidence.Lines.Select(x => x.DueFeeId).ToList();
 		var actual = await dues.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentFeeStructureId == assignment.Id && x.StudentId == studentId);
-		if (expected.Any(x => !x.HasValue) || expected.Distinct().Count() != expected.Count || actual.Count != expected.Count || actual.Any(x => !expected.Contains(x.Id)))
+		if (!AssignmentDueEvidence.Matches(assignment, evidence, actual))
 			return new(false, "Finance must reconcile missing or mismatched obligations before clearance.");
 		var form = await details.GetCollectFormAsync(studentId, yearId);
 		var credits = plan?.Lines.ToDictionary(x => x.DueFeeId, x => x.Credit) ?? new();

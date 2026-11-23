@@ -185,7 +185,7 @@ public partial class FeeCollectionSummaryQueryService
 		foreach (var due in dues)
 		{
 			if (!rowsByPayer.TryGetValue(FinanceReportPayerKey.From(due.StudentId, due.FinanceFeeAccountId), out var row)) continue;
-			row.TotalFees += (double)due.OriginalAmount;
+			row.TotalFees += (double)(due.OriginalAmount - due.GetOptionalServiceCancellationAmount());
 			// Collection history stays gross; cash returned is reported independently.
 			row.PaidFees += (double)due.PaidAmount;
 			row.RefundAmount += due.RefundedAmount;

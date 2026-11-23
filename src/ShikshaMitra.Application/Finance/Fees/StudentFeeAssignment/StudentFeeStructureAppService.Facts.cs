@@ -119,7 +119,7 @@ public partial class StudentFeeStructureAppService
 				break;
 			case "ManualOverride":
 				await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.OverrideChargePeriod);
-				if (input.SourceReferenceId.HasValue || !input.StartDate.HasValue || !input.EndDate.HasValue || string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Length > 500)
+				if (input.SourceReferenceId.HasValue || !input.StartDate.HasValue || !input.EndDate.HasValue || (input.Reason?.Length ?? 0) > 500)
 					throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 				start = input.StartDate.Value.Date;
 				end = input.EndDate.Value.Date;

@@ -57,7 +57,9 @@ public class FeeWaiverAppService(
 				.EnsureLegacySourcesAsync([input.SourceId]);
 
 		var actorId = CurrentUser.Id ?? Guid.Empty;
-		var replay = await FindReplayAsync(actorId, idempotencyKey, sourceType, input.SourceId);
+		if (input.Amount is decimal amount && (amount <= 0m || decimal.Round(amount, 2) != amount))
+			throw new BusinessException(FeeWaiverErrorCodes.InvalidAmount);
+		var replay = await FindReplayAsync(actorId, idempotencyKey, sourceType, input.SourceId, input.Amount, reason);
 		if (replay is not null)
 		{
 			await uow.CompleteAsync();
@@ -65,15 +67,15 @@ public class FeeWaiverAppService(
 		}
 
 		var result = sourceType == "LateFee"
-			? await ApplyLateFeeAsync(input.SourceId, reason, idempotencyKey, actorId)
-			: await ApplyChargeAsync(input.SourceId, reason, idempotencyKey, actorId);
+			? await ApplyLateFeeAsync(input.SourceId, reason, idempotencyKey, actorId, input.Amount)
+			: await ApplyChargeAsync(input.SourceId, reason, idempotencyKey, actorId, input.Amount);
 
 		await uow.CompleteAsync();
 		return result;
 	}
 
 	private async Task<FeeWaiverResultDto> ApplyLateFeeAsync(
-		Guid dueFeeId, string reason, string idempotencyKey, Guid actorId)
+		Guid dueFeeId, string reason, string idempotencyKey, Guid actorId, decimal? amount)
 	{
 		var dueFee = await dueFeeRepository.FindAsync(dueFeeId)
 			?? throw new BusinessException(FeeWaiverErrorCodes.SourceNotFound).WithData("sourceId", dueFeeId);
@@ -97,24 +99,24 @@ public class FeeWaiverAppService(
 		var balances = await lateFeeBalanceService.GetBalancesAsync([dueFee], feeHead.AcademicYearId,
 			Clock.Now, preserveAssessment: true);
 		var remaining = balances[dueFee.Id].PendingAmount;
-		if (remaining <= 0) throw new BusinessException(FeeWaiverErrorCodes.NoRemainingBalance);
+		var waived = ResolveWaiverAmount(amount, remaining);
 
 		var entity = new LateFeeWaiverApplication(
 			GuidGenerator.Create(), CurrentTenant.Id, dueFee.StudentId.Value, dueFee.Id, policy.Id,
-			policy.AcademicYearId, remaining, remaining, remaining, reason,
+			policy.AcademicYearId, remaining, waived, waived, reason,
 			requiresApproval: false, actorId, idempotencyKey: idempotencyKey);
 		await lateFeeWaiverRepository.InsertAsync(entity, autoSave: false);
 		await financeAuditWriter.WriteAsync(policy.AcademicYearId, FinanceAuditEntityTypes.LateFeeWaiver,
 			entity.Id, $"Late fee waiver on due line {dueFee.Id:N}", FinanceAuditActions.Waive,
-			$"Waived the full remaining late-fee balance of {remaining:0.00}.", reason: reason,
-			context: new { SourceType = "LateFee", SourceId = dueFee.Id, WaivedAmount = remaining },
+			$"Waived {waived:0.00} from the late-fee balance.", reason: reason,
+			context: new { SourceType = "LateFee", SourceId = dueFee.Id, WaivedAmount = waived, RemainingAmount = remaining - waived },
 			correlationId: $"waiver-{idempotencyKey}");
 
 		return ToResult(entity);
 	}
 
 	private async Task<FeeWaiverResultDto> ApplyChargeAsync(
-		Guid chargeId, string reason, string idempotencyKey, Guid actorId)
+		Guid chargeId, string reason, string idempotencyKey, Guid actorId, decimal? amount)
 	{
 		var charge = await chargeRepository.FindAsync(chargeId)
 			?? throw new BusinessException(FeeWaiverErrorCodes.SourceNotFound).WithData("sourceId", chargeId);
@@ -132,29 +134,30 @@ public class FeeWaiverAppService(
 			.Select(x => x.Id).ToHashSet();
 		var paid = allocations.Where(x => !reversedIds.Contains(x.FeeRecordMetadataId)).Sum(x => (decimal)x.Amount);
 		var remaining = Math.Max(0m, charge.Amount - paid - waivers.Sum(x => x.EffectiveAmount));
-		if (remaining <= 0) throw new BusinessException(FeeWaiverErrorCodes.NoRemainingBalance);
+		var waived = ResolveWaiverAmount(amount, remaining);
 
 		var entity = new ChargeWaiverApplication(GuidGenerator.Create(), CurrentTenant.Id,
-			charge.StudentId.Value, charge.Id, charge.AcademicYearId, charge.Amount, remaining,
-			reason, actorId, idempotencyKey);
+			charge.StudentId.Value, charge.Id, charge.AcademicYearId, charge.Amount, waived,
+			reason, actorId, idempotencyKey, remaining - waived);
 		await chargeWaiverRepository.InsertAsync(entity, autoSave: false);
 		await financeAuditWriter.WriteAsync(charge.AcademicYearId, FinanceAuditEntityTypes.FeeCharge,
 			entity.Id, $"Charge waiver on charge line {charge.Id:N}", FinanceAuditActions.Waive,
-			$"Waived the full remaining charge balance of {remaining:0.00}.", reason: reason,
-			context: new { SourceType = "Charge", SourceId = charge.Id, WaivedAmount = remaining },
+			$"Waived {waived:0.00} from the charge balance.", reason: reason,
+			context: new { SourceType = "Charge", SourceId = charge.Id, WaivedAmount = waived, RemainingAmount = remaining - waived },
 			correlationId: $"waiver-{idempotencyKey}");
 
 		return ToResult(entity);
 	}
 
 	private async Task<FeeWaiverResultDto?> FindReplayAsync(
-		Guid actorId, string key, string sourceType, Guid sourceId)
+		Guid actorId, string key, string sourceType, Guid sourceId, decimal? amount, string reason)
 	{
 		var late = await lateFeeWaiverRepository.FirstOrDefaultAsync(x =>
 			x.AppliedByUserId == actorId && x.IdempotencyKey == key);
 		if (late is not null)
 		{
-			if (sourceType != "LateFee" || late.DueFeeId != sourceId)
+			if (sourceType != "LateFee" || late.DueFeeId != sourceId || late.Reason != reason ||
+				(amount.HasValue && amount.Value != late.EffectiveAmount))
 				throw new BusinessException(FeeWaiverErrorCodes.IdempotencyConflict);
 			return ToResult(late);
 		}
@@ -162,9 +165,18 @@ public class FeeWaiverAppService(
 		var charge = await chargeWaiverRepository.FirstOrDefaultAsync(x =>
 			x.AppliedByUserId == actorId && x.IdempotencyKey == key);
 		if (charge is null) return null;
-		if (sourceType != "Charge" || charge.ChargeId != sourceId)
+		if (sourceType != "Charge" || charge.ChargeId != sourceId || charge.Reason != reason ||
+			(amount.HasValue && amount.Value != charge.EffectiveAmount))
 			throw new BusinessException(FeeWaiverErrorCodes.IdempotencyConflict);
 		return ToResult(charge);
+	}
+
+	private static decimal ResolveWaiverAmount(decimal? amount, decimal remaining)
+	{
+		if (remaining <= 0m) throw new BusinessException(FeeWaiverErrorCodes.NoRemainingBalance);
+		if (amount is decimal requested && requested > remaining)
+			throw new BusinessException(FeeWaiverErrorCodes.AmountExceedsBalance).WithData("remainingAmount", remaining);
+		return amount ?? remaining;
 	}
 
 	private static string NormalizeSourceType(string value)
@@ -178,15 +190,16 @@ public class FeeWaiverAppService(
 	{
 		Id = entity.Id, SourceType = "LateFee", SourceId = entity.DueFeeId,
 		StudentId = entity.StudentId, AcademicYearId = entity.AcademicYearId,
-		WaivedAmount = entity.EffectiveAmount, RemainingAmount = 0,
+		WaivedAmount = entity.EffectiveAmount, RemainingAmount = entity.ComputedLateFeeAmount - entity.EffectiveAmount,
 		Reason = entity.Reason, CreationTime = entity.CreationTime
 	};
 
 	private static FeeWaiverResultDto ToResult(ChargeWaiverApplication entity) => new()
 	{
 		Id = entity.Id, SourceType = "Charge", SourceId = entity.ChargeId,
-		StudentId = entity.StudentId ?? throw new BusinessException(FeeWaiverErrorCodes.SourceNotEligible), AcademicYearId = entity.AcademicYearId,
-		WaivedAmount = entity.EffectiveAmount, RemainingAmount = 0,
+		StudentId = entity.StudentId ?? throw new BusinessException(FeeWaiverErrorCodes.SourceNotEligible),
+		AcademicYearId = entity.AcademicYearId,
+		WaivedAmount = entity.EffectiveAmount, RemainingAmount = entity.GetRemainingAfterWaiver(),
 		Reason = entity.Reason, CreationTime = entity.CreationTime
 	};
 }

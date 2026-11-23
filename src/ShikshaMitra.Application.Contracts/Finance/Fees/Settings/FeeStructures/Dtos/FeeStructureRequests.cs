@@ -41,6 +41,8 @@ public class StandardFeeStructureRequest
 	public Guid? RefundPolicyId { get; set; }
 	/// <summary>Exact version assertion; the server validates ownership and availability.</summary>
 	public Guid? RefundPolicyVersionId { get; set; }
+	public Guid? ProrationPolicyId { get; set; }
+	public Guid? ProrationPolicyVersionId { get; set; }
 }
 
 public class CollectionPolicyAttachmentImpactRequest
@@ -78,6 +80,9 @@ public class FeeHeadAssignmentRequest
 	[Required]
 	public Guid FeeHeadId { get; set; }
 	public decimal? Amount { get; set; }
+	/// <summary>Optional fixed rate per covered month. When supplied, the server derives Amount.</summary>
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public decimal? MonthlyRate { get; set; }
     public bool IsVariable { get; set; }
 	public bool IsOneTime { get; set; }
 	public bool IsOptional { get; set; }

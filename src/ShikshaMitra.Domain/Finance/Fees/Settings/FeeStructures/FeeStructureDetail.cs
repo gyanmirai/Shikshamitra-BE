@@ -17,6 +17,7 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
     public Guid FeeHeadId { get; private set; }
 
     public decimal? Amount { get; private set; }
+    public decimal? MonthlyRate { get; private set; }
     public bool IsVariable { get; private set; }
     public bool IsOneTime { get; private set; }
     public bool IsOptional { get; private set; }
@@ -52,13 +53,15 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
         bool isOptional,
 		MonthEnum? payableMonth,
 		int? payableYear,
-        bool isVariable = false) : base(id)
+        bool isVariable = false,
+        decimal? monthlyRate = null) : base(id)
     {
         TenantId = tenantId;
         FeeStructureId = feeStructureId;
         FeeHeadId = feeHeadId;
         SetPricing(isVariable, amount);
         IsOneTime = isOneTime;
+        SetMonthlyRate(monthlyRate);
         IsOptional = isOptional;
 		PayableMonth = isOneTime ? payableMonth : null;
 		PayableYear = isOneTime ? payableYear : null;
@@ -112,10 +115,18 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
         Amount = WholeRupeeAmounts.RoundUp(amount);
     }
 
-	public void UpdateConfiguration(decimal? amount, bool isOneTime, bool isOptional, MonthEnum? month, int? year, bool isVariable = false)
+    private void SetMonthlyRate(decimal? rate)
+    {
+        if (rate.HasValue && (IsVariable || IsOneTime || rate < 0 || rate > 9999999999.99m || decimal.Round(rate.Value, 2) != rate))
+            throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
+        MonthlyRate = rate;
+    }
+
+	public void UpdateConfiguration(decimal? amount, bool isOneTime, bool isOptional, MonthEnum? month, int? year, bool isVariable = false, decimal? monthlyRate = null)
 	{
 		SetPricing(isVariable, amount);
 		IsOneTime = isOneTime;
+		SetMonthlyRate(monthlyRate);
 		IsOptional = isOptional;
 		PayableMonth = isOneTime ? month : null;
 		PayableYear = isOneTime ? year : null;

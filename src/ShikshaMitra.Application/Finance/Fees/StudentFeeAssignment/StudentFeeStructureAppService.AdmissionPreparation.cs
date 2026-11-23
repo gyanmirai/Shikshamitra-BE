@@ -9,6 +9,8 @@ using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.Finance.Policies;
 using Volo.Abp;
+using Volo.Abp.Domain.Repositories;
+using ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
@@ -23,9 +25,6 @@ public partial class StudentFeeStructureAppService
 		if (facts == null) return await PrepareForContextAsync(input, null);
 		if (facts.Selection != null && facts.Selection.StructureId != input.StandardFeeStructureId)
 			throw new BusinessException(AssignmentErrorCodes.StructureMismatch);
-		if (facts.Selection != null && !input.SelectedOptionalFeeHeadIds.Order().SequenceEqual(
-			facts.Selection.Heads.Where(h => h.IsOptional).Select(h => h.FeeHeadId).Order()))
-			throw new BusinessException(AssignmentErrorCodes.SourceUnavailable);
 		if (facts.Account?.AssignmentSnapshotJson != null)
 		{
 			var saved = await ReadPreparedAdmissionAsync(facts, input.StudentId, enrollment.Id);
@@ -33,8 +32,9 @@ public partial class StudentFeeStructureAppService
 			return saved;
 		}
 		var year = await academicYearRepository.GetAsync(input.AcademicYearId);
-		var policy = facts.JoiningDate.HasValue && facts.JoiningDate.Value.Date >= year.StartDate.Date
-			? await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(input.AcademicYearId)
+		// Resolve the policy for a missing date as well, so admission rules can require it.
+		var policy = UsesAdmissionProration(facts.JoiningDate, year.StartDate)
+			? await LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>().ResolveAsync(input.AcademicYearId, input.StandardFeeStructureId)
 			: null;
 		var student = await studentRepository.GetAsync(input.StudentId);
 		// The account's existing unique application/year key serializes Admission and
@@ -54,6 +54,29 @@ public partial class StudentFeeStructureAppService
 			enrollment.DivisionId, input.StudentId, account.ApplicantName, facts.Application.ApplicationNumber, "", facts.Revision,
 			input.StandardFeeStructureId, prepared.Structure.RevisionNumber, input.SelectedOptionalFeeHeadIds, true, null, enrollment.Id, facts.JoiningDate);
 		return prepared with { Account = account, AdmissionSource = source, NewAccount = facts.Account == null };
+	}
+
+	private async Task ConfirmInitialAdmissionSelectionAsync(PreparedAssignment prepared)
+	{
+		if (prepared.Account == null || prepared.AdmissionSource == null || prepared.ReuseDues) return;
+		var applications = LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionApplication, Guid>>();
+		var application = await applications.GetAsync(prepared.AdmissionSource.ApplicationId);
+		var previous = application.GetFeeSelection();
+		var preview = prepared.Preview;
+		application.ConfirmInitialFinanceSelection(prepared.Account.Id, new(prepared.Structure.Id, preview.StructureName,
+			preview.RevisionNumber, preview.AcademicYearId, prepared.Account.StandardId,
+			previous?.OwnerStageId ?? prepared.AdmissionSource.StageId, prepared.Account.Currency,
+			AdmissionSelectionHeads(prepared),
+			CurrentUser.Id!.Value, new DateTimeOffset(Clock.Now).ToUniversalTime(), previous?.ConfirmedBy, previous?.OnboardingConfirmedAt),
+			prepared.Account.HasPaymentEvidence);
+		await applications.UpdateAsync(application, false);
+	}
+
+	private static List<AdmissionFeeSelectionHead> AdmissionSelectionHeads(PreparedAssignment prepared)
+	{
+		var termTotals = prepared.Structure.FeeStructureDetails.ToDictionary(detail => detail.FeeHeadId, detail => detail.Amount);
+		return prepared.Preview.Heads.Where(h => h.Included).Select(h => new AdmissionFeeSelectionHead(h.FeeHeadId,
+			h.FeeHeadName, termTotals[h.FeeHeadId], h.IsOptional, h.IsOneTime, h.PaymentTermId, h.PaymentTermVersionId, h.IsVariable)).ToList();
 	}
 
 	private async Task<PreparedAssignment> ReadPreparedAdmissionAsync(AssignmentAdmissionFacts facts, Guid studentId, Guid enrollmentId,
@@ -106,7 +129,8 @@ public partial class StudentFeeStructureAppService
 			!input.SelectedOptionalFeeHeadIds.Order().SequenceEqual(saved.Heads.Where(h => h.Included && h.IsOptional).Select(h => h.FeeHeadId).Order()) ||
 			input.Policies.Any(p => p.VersionId != saved.Policies.FirstOrDefault(s => s.Family == p.Family)?.VersionId) ||
 			input.VariableFeeHeads.Count != SavedVariableAmounts(saved).Count || input.VariableFeeHeads.Any(v => !saved.Heads.Any(h =>
-				h.Included && h.IsVariable && h.FeeHeadId == v.FeeHeadId && h.EffectiveAmount == v.Amount && h.ZeroAmountReason == v.ZeroAmountReason?.Trim())) ||
+					h.Included && h.IsVariable && h.FeeHeadId == v.FeeHeadId && h.EffectiveAmount == v.Amount &&
+					(h.AmountBasis == "MonthlyRate") == v.IsMonthlyRate && h.ZeroAmountReason == v.ZeroAmountReason?.Trim())) ||
 			input.FeeHeadDetails.Any(v => !saved.Heads.Any(h => h.Included && !h.IsVariable && h.FeeHeadId == v.FeeHeadId && h.EffectiveAmount == v.Amount)) ||
 			input.ServicePeriods.Any(p => !saved.Heads.Any(h => h.Included && h.FeeHeadId == p.FeeHeadId &&
 				h.ServicePeriod?.Source == p.Source && h.ServicePeriod.StartDate?.Date == p.StartDate?.Date &&

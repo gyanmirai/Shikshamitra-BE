@@ -62,4 +62,11 @@ public class ChargeCategoryController(
 	{
 		return chargeCategoryAppService.DeleteAsync(chargeCategoryId);
 	}
+
+	[HttpGet("{chargeCategoryId:guid}/usage")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ChargeCategory.Delete)]
+	public Task<ChargeCategoryUsageResponse> GetUsageAsync(Guid chargeCategoryId)
+	{
+		return chargeCategoryAppService.GetUsageAsync(chargeCategoryId);
+	}
 }

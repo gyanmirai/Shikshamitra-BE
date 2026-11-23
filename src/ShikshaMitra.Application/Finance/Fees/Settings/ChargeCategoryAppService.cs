@@ -1,5 +1,7 @@
 ﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Charges;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Settings.ChargeCategories;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
@@ -21,6 +23,7 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 public partial class ChargeCategoryAppService(
 	IRepository<ChargeCategory, Guid> chargeCategoryRepository,
 	IRepository<Charge, Guid> chargeRepository,
+	IRepository<ChargeRequest, Guid> chargeRequestRepository,
 	IRepository<TransactionCategory, Guid> transactionCategoryRepository,
 	IRepository<AccountHead, Guid> accountHeadRepository,
 	ITransactionCategoryReferenceLock referenceLock,
@@ -163,19 +166,57 @@ public partial class ChargeCategoryAppService(
 		return await ToResponseAsync(category);
 	}
 
-    public async Task DeleteAsync(Guid id)
-    {
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ChargeCategory.Delete)]
+	public async Task<ChargeCategoryUsageResponse> GetUsageAsync(Guid id)
+	{
 		var category = await chargeCategoryRepository.GetAsync(id);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(category.AcademicYearId, null, null, null, null);
-		var existingCharge = await chargeRepository.AnyAsync(x => x.ChargeCategoryId == id);
-
-		if (existingCharge)
+		var lines = await GetChargeLinesAsync(id);
+		var studentLines = lines.Where(x => x.StudentId.HasValue);
+		var usage = new ChargeCategoryUsageResponse
 		{
-			throw new BusinessException("Cannot delete charge category as it is being used in existing charges.");
+			CategoryId = category.Id,
+			CategoryName = category.Name,
+			ChargeCount = await GetChargeCountAsync(id, lines),
+			StudentAssignmentCount = await AsyncExecuter.CountAsync(studentLines)
+		};
+		if (usage.StudentAssignmentCount > 0 &&
+			await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.View))
+		{
+			var scopedStudents = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+			usage.ChargeNames = await AsyncExecuter.ToListAsync(studentLines
+				.Where(x => scopedStudents.Contains(x.StudentId!.Value))
+				.Select(x => x.ChargeName).Distinct().OrderBy(x => x).Take(10));
 		}
+		return usage;
+	}
 
-		await chargeCategoryRepository.DeleteAsync(id);
-    }
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ChargeCategory.Delete)]
+	[UnitOfWork(isTransactional: true)]
+	public async Task DeleteAsync(Guid id)
+	{
+		// Charge creation takes the same lock before it resolves the category.
+		await referenceLock.AcquireAsync();
+		var category = await chargeCategoryRepository.GetAsync(id);
+		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(category.AcademicYearId, null, null, null, null);
+		var chargeCount = await GetChargeCountAsync(id, await GetChargeLinesAsync(id));
+		if (chargeCount > 0)
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeCategoryInUse)
+				.WithData("CategoryName", category.Name)
+				.WithData("ChargeCount", chargeCount);
+
+		await chargeCategoryRepository.DeleteAsync(category, autoSave: true);
+	}
+
+	private async Task<IQueryable<Charge>> GetChargeLinesAsync(Guid id) =>
+		(await chargeRepository.GetQueryableAsync()).Where(x => x.ChargeCategoryId == id);
+
+	private async Task<int> GetChargeCountAsync(Guid id, IQueryable<Charge> lines)
+	{
+		var requests = await chargeRequestRepository.GetQueryableAsync();
+		return await AsyncExecuter.CountAsync(requests.Where(x => x.ChargeCategoryId == id).Select(x => x.Id)
+			.Union(lines.Select(x => x.ChargeRequestId)));
+	}
 
 	private async Task<(TransactionCategory Category, AccountHead? AccountHead)> ValidateAccountingMappingAsync(
 		Guid academicYearId, Guid incomeCategoryId)

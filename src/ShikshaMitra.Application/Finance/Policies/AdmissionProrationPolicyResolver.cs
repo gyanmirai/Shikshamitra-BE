@@ -3,6 +3,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
@@ -12,9 +13,30 @@ namespace ShikshaMitra.Finance.Policies;
 
 /// <summary>Shared academic-year default for Admission preparation and Finance structure assignment.</summary>
 public class AdmissionProrationPolicyResolver(IRepository<ProrationPolicy, Guid> policies,
-	IRepository<FinancePolicyVersion, Guid> versions, ICurrentTenant tenant) : ITransientDependency
+	IRepository<FinancePolicyVersion, Guid> versions, IRepository<FeeStructure, Guid> structures, ICurrentTenant tenant) : ITransientDependency
 {
-	public async Task<FinancePolicyVersion?> ResolveAsync(Guid year)
+	public async Task<FinancePolicyVersion?> ResolveAsync(Guid year, Guid? structureId = null) =>
+		(await ResolveWithSourceAsync(year, structureId)).Version;
+
+	public async Task<(FinancePolicyVersion? Version, string Source)> ResolveWithSourceAsync(Guid year, Guid? structureId)
+	{
+		if (structureId is { } id)
+		{
+			var structure = await structures.FindAsync(x => x.Id == id && x.TenantId == tenant.Id);
+			if (structure?.GetExplicitProrationPolicyVersionId() is { } versionId)
+			{
+				var attached = await versions.FindAsync(x => x.Id == versionId && x.TenantId == tenant.Id &&
+					x.AcademicYearId == year && x.PolicyId == structure.ProrationPolicyId &&
+					x.PolicyType == "proration" && x.Status == "Active")
+					?? throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionMissing);
+				return (attached, "FeeStructure");
+			}
+		}
+
+		return (await ResolveYearDefaultAsync(year), "FinanceDefault");
+	}
+
+	private async Task<FinancePolicyVersion?> ResolveYearDefaultAsync(Guid year)
 	{
 		var defaults = await policies.GetListAsync(x => x.TenantId == tenant.Id && x.AcademicYearId == year && x.IsDefault && x.Status == ProrationPolicyStatus.Active);
 		if (defaults.Count == 0) return null;

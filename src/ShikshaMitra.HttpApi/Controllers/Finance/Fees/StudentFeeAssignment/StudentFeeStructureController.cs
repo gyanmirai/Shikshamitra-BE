@@ -23,6 +23,10 @@ public class StudentFeeStructureController(
 	[HttpGet("policy-options")]
 	public Task<List<AssignmentPolicyDto>> GetPolicyOptionsAsync(Guid studentId, Guid academicYearId) => studentFeeStructureAppService.GetPolicyOptionsAsync(studentId, academicYearId);
 
+	[HttpGet("student/{studentId}/history")]
+	public Task<AssignmentHistoryPage> GetHistoryAsync(Guid studentId, [FromQuery] AssignmentHistoryRequest input) =>
+		studentFeeStructureAppService.GetHistoryAsync(studentId, input);
+
 	[HttpPut("student/{studentId}/policies")]
 	public Task<StudentFeeStructureResponseDto> UpdatePoliciesAsync(Guid studentId, [FromBody] AssignmentPolicyUpdateDto input) => studentFeeStructureAppService.UpdatePoliciesAsync(studentId, input);
 	[HttpPost("student/{studentId}/optional-service-stop/preview")]
@@ -32,6 +36,18 @@ public class StudentFeeStructureController(
 	[HttpPost("student/{studentId}/optional-service-stop")]
 	public Task<OptionalServiceStopResult> StopOptionalServiceAsync(Guid studentId, [FromBody] OptionalServiceStopInput input) =>
 		studentFeeStructureAppService.StopOptionalServiceAsync(studentId, input);
+
+	[HttpGet("student/{studentId}/optional-service-restart/context")]
+	public Task<OptionalServiceRestartContext> GetOptionalServiceRestartContextAsync(Guid studentId, Guid academicYearId, Guid feeHeadId) =>
+		studentFeeStructureAppService.GetOptionalServiceRestartContextAsync(studentId, academicYearId, feeHeadId);
+
+	[HttpPost("student/{studentId}/optional-service-restart/preview")]
+	public Task<OptionalServiceRestartResult> PreviewOptionalServiceRestartAsync(Guid studentId, [FromBody] OptionalServiceRestartInput input) =>
+		studentFeeStructureAppService.PreviewOptionalServiceRestartAsync(studentId, input);
+
+	[HttpPost("student/{studentId}/optional-service-restart")]
+	public Task<OptionalServiceRestartResult> RestartOptionalServiceAsync(Guid studentId, [FromBody] OptionalServiceRestartInput input) =>
+		studentFeeStructureAppService.RestartOptionalServiceAsync(studentId, input);
 
 	[HttpGet("transport-sources")]
 	public Task<List<AssignmentTransportSourceDto>> GetTransportSourcesAsync(Guid studentId, Guid academicYearId) => studentFeeStructureAppService.GetTransportSourcesAsync(studentId, academicYearId);

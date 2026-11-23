@@ -112,7 +112,7 @@ public class AdmissionPaymentJoiningDateAppService(
 		var canSelectPolicy = canEdit && await AuthorizationService.IsGrantedAsync(
 			ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.OverridePolicies);
 		var resolver = LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Policies.AdmissionProrationPolicyResolver>();
-		var defaultPolicy = await resolver.ResolveAsync(source.AcademicYearId);
+		var defaultPolicy = await resolver.ResolveAsync(source.AcademicYearId, source.StructureId);
 		var policyOptions = canSelectPolicy ? await resolver.GetActiveVersionsAsync(source.AcademicYearId) : [];
 		return new()
 		{

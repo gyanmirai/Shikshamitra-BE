@@ -1,15 +1,19 @@
 using System;
-using Volo.Abp;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using ShikshaMitra.Finance.ExternalReceivables;
+using Volo.Abp;
 using Volo.Abp.Auditing;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
-/// <summary>Immutable evidence that the then-current remaining balance of an approved charge was waived.</summary>
+/// <summary>Immutable evidence of an amount waived against an approved charge.</summary>
 public class ChargeWaiverApplication : BasicAggregateRoot<Guid>, IMultiTenant, ICreationAuditedObject
 {
+	private const string RemainingAfterWaiverProperty = "RemainingAfterWaiver";
+
 	public DateTime CreationTime { get; private set; }
 	public Guid? CreatorId { get; private set; }
 	public string LegacyConcurrencyStamp { get; private set; } = Guid.NewGuid().ToString("N");
@@ -25,11 +29,19 @@ public class ChargeWaiverApplication : BasicAggregateRoot<Guid>, IMultiTenant, I
 	public Guid AppliedByUserId { get; private set; }
 	public string IdempotencyKey { get; private set; } = string.Empty;
 
+	public decimal GetRemainingAfterWaiver()
+	{
+		using var json = JsonDocument.Parse(LegacyExtraPropertiesJson);
+		return json.RootElement.ValueKind == JsonValueKind.Object &&
+			json.RootElement.TryGetProperty(RemainingAfterWaiverProperty, out var value) &&
+			value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var amount) ? amount : 0m;
+	}
+
 	protected ChargeWaiverApplication() { }
 
 	public ChargeWaiverApplication(Guid id, Guid? tenantId, Guid studentId, Guid chargeId,
 		Guid academicYearId, decimal chargeAmount, decimal effectiveAmount, string reason,
-		Guid appliedByUserId, string idempotencyKey) : base(id)
+		Guid appliedByUserId, string idempotencyKey, decimal remainingAfterWaiver = 0m) : base(id)
 	{
 		if (string.IsNullOrWhiteSpace(reason))
 			throw new BusinessException(FeeWaiverErrorCodes.ReasonRequired);
@@ -47,6 +59,8 @@ public class ChargeWaiverApplication : BasicAggregateRoot<Guid>, IMultiTenant, I
 		Reason = reason.Trim();
 		AppliedByUserId = appliedByUserId;
 		IdempotencyKey = idempotencyKey.Trim();
+		if (remainingAfterWaiver > 0m)
+			LegacyExtraPropertiesJson = new JsonObject { [RemainingAfterWaiverProperty] = remainingAfterWaiver }.ToJsonString();
 	}
 	public static ChargeWaiverApplication CreateExternal(Guid id, Guid tenantId, FinanceExternalPayerIdentity payer,
 		Guid chargeId, Guid yearId, decimal originalAmount, decimal amount, string reason, Guid actorId, string key)
@@ -58,9 +72,17 @@ public class ChargeWaiverApplication : BasicAggregateRoot<Guid>, IMultiTenant, I
 			throw new BusinessException(FeeWaiverErrorCodes.SourceNotEligible);
 		return new ChargeWaiverApplication
 		{
-			Id = id, TenantId = tenantId, StudentId = payer.StudentId, EmployeeId = payer.EmployeeId,
-			ChargeId = chargeId, AcademicYearId = yearId, ChargeAmount = originalAmount, EffectiveAmount = amount,
-			Reason = reason.Trim(), AppliedByUserId = actorId, IdempotencyKey = key
+			Id = id,
+			TenantId = tenantId,
+			StudentId = payer.StudentId,
+			EmployeeId = payer.EmployeeId,
+			ChargeId = chargeId,
+			AcademicYearId = yearId,
+			ChargeAmount = originalAmount,
+			EffectiveAmount = amount,
+			Reason = reason.Trim(),
+			AppliedByUserId = actorId,
+			IdempotencyKey = key
 		};
 	}
 }

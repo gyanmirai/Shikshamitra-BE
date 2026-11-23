@@ -17,6 +17,24 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 public partial class FeeStructureAppService_CollectionPolicy_Tests
 {
+	[Fact]
+	public async Task Authorized_Manual_Service_Dates_Do_Not_Require_A_Reason()
+	{
+		using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
+		var input = await ReadyAssignmentAsync(amount: 12000m);
+		var service = GetRequiredService<IStudentFeeStructureAppService>();
+		var head = (await service.PreviewAsync(input)).Heads.Single();
+		input.ServicePeriods = [new() { FeeHeadId = head.FeeHeadId, Source = "ManualOverride",
+			StartDate = new(2025, 10, 1), EndDate = new(2026, 3, 31) }];
+		var preview = await service.PreviewAsync(input);
+		preview.Heads.Single().ServicePeriod!.Reason.ShouldBeNull();
+		preview.Heads.Single().Verification.ShouldBe("Authorized manual override");
+		input.PreviewToken = preview.PreviewToken;
+		var result = await service.AssignAsync(input);
+		result.Assignment.Heads.Single().ServicePeriod!.Reason.ShouldBeNull();
+		(await service.AssignAsync(input)).AssignmentId.ShouldBe(result.AssignmentId);
+	}
+
 	[Theory]
 	[InlineData("2025-10-01", "2026-03-31", 1, "Second half")]
 	[InlineData("2025-04-01", "2025-09-30", 1, "First half")]

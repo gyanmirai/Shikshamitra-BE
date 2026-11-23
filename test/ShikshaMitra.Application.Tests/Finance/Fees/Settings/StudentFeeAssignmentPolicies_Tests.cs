@@ -96,6 +96,10 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		aggregate.AssignmentSnapshotJson.ShouldBe(originalSnapshot);
 		aggregate.ProrationPolicyVersionId.ShouldBe(originalProrationVersion);
 		aggregate.ExtraProperties["AssignedPolicyHistory"].ShouldNotBeNull().ToString().ShouldNotBeNull().ShouldContain("Student policy exception");
+		var audit = await service.GetHistoryAsync(input.StudentId, new() { AcademicYearId = input.AcademicYearId });
+		var policyChange = audit.Items.Single(item => item.Action == "Assigned policies changed");
+		policyChange.Reason.ShouldBe(update.Reason);
+		policyChange.Changes.Single().After.ShouldBe($"{concession.Name} · v{concession.Version}");
 		(await dues.GetListAsync(x => x.StudentFeeStructureId == saved.AssignmentId)).Select(x => x.Id).Order().ShouldBe(before.Select(x => x.Id).Order());
 		(await Should.ThrowAsync<BusinessException>(() => service.UpdatePoliciesAsync(input.StudentId, update))).Code.ShouldBe(AssignmentErrorCodes.StalePreview);
 	}

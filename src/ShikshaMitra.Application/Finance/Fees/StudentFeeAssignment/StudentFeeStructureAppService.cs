@@ -144,6 +144,7 @@ public partial class StudentFeeStructureAppService(
 			return corrected;
 		}
 		assignment.CaptureAcademicPlacement(enrollment.StandardId!.Value, enrollment.DivisionId, enrollment.RollNumber);
+		await ConfirmInitialAdmissionSelectionAsync(prepared);
 		if (prepared.Account != null)
 			await LazyServiceProvider.LazyGetRequiredService<AdmissionFeeCollectionAppService>()
 				.LinkForAssignmentAsync(prepared.AdmissionSource!, prepared.Account);

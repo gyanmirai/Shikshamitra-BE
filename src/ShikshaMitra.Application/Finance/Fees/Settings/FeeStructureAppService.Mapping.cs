@@ -114,15 +114,15 @@ public partial class FeeStructureAppService
 
 
 
-	private async Task EnsureUniqueNameAsync(Guid standardId, string name, Guid? exceptId, Guid? rootId)
+	private async Task EnsureUniqueNameAsync(Guid standardId, string name, Guid? exceptId = null)
 
 	{
 
 		var normalized = name.Trim().ToUpperInvariant();
 
-		if (await feeStructureRepository.AnyAsync(x => x.StandardId == standardId && x.Id != exceptId &&
+		if (await feeStructureRepository.AnyAsync(x =>
 
-			(!rootId.HasValue || x.RevisionRootId != rootId.Value) && x.Name.ToUpper() == normalized))
+			x.StandardId == standardId && x.Id != exceptId && x.NormalizedName == normalized))
 
 			throw new BusinessException(FeeStructureErrorCodes.DuplicateName);
 
@@ -141,6 +141,10 @@ public partial class FeeStructureAppService
 		if (input.RefundPolicyId != old?.RefundPolicyId || input.RefundPolicyVersionId != old?.RefundPolicyVersionId)
 
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add);
+
+		if (input.ProrationPolicyVersionId != old?.GetExplicitProrationPolicyVersionId() ||
+			input.ProrationPolicyId != (old?.GetExplicitProrationPolicyVersionId() == null ? null : old?.ProrationPolicyId))
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add);
 
 
 	}
@@ -162,6 +166,8 @@ public partial class FeeStructureAppService
 			null, null, ConcessionFeeHeadScope.EntireFeeStructure, System.Array.Empty<Guid>());
 
 		entity.AttachRefundPolicy(input.RefundPolicyId, input.RefundPolicyVersionId);
+		if (input.ProrationPolicyId.HasValue || entity.GetExplicitProrationPolicyVersionId().HasValue)
+			entity.AttachProrationPolicy(input.ProrationPolicyId, input.ProrationPolicyVersionId);
 
 
 		foreach (var deleted in entity.FeeStructureDetails.Where(x => input.FeeHeads.All(y => y.FeeHeadId != x.FeeHeadId)).ToList())
@@ -180,13 +186,13 @@ public partial class FeeStructureAppService
 
 				detail = new FeeStructureDetail(GuidGenerator.Create(), CurrentTenant.Id, entity.Id, line.FeeHeadId,
 
-					line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable);
+					line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable, line.MonthlyRate);
 
 				entity.AddDetail(detail);
 
 			}
 
-			else detail.UpdateConfiguration(line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable);
+			else detail.UpdateConfiguration(line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable, line.MonthlyRate);
 
 			AttachSchedule(detail, line);
 
@@ -249,6 +255,8 @@ public partial class FeeStructureAppService
 		ConcessionPolicyId = entity.ConcessionPolicyId, ConcessionPolicyVersionId = entity.ConcessionPolicyVersionId,
 
 		RefundPolicyId = entity.RefundPolicyId, RefundPolicyVersionId = entity.RefundPolicyVersionId,
+		ProrationPolicyId = entity.GetExplicitProrationPolicyVersionId().HasValue ? entity.ProrationPolicyId : null,
+		ProrationPolicyVersionId = entity.GetExplicitProrationPolicyVersionId(),
 
 
 		ConcessionFeeHeadScope = entity.ConcessionFeeHeadScope, ConcessionApplicableFeeHeadIds = entity.GetConcessionApplicableFeeHeadIds().ToList(),
@@ -257,7 +265,7 @@ public partial class FeeStructureAppService
 
 		{
 
-			Id = x.Id, FeeHeadId = x.FeeHeadId, Amount = x.Amount, IsVariable = x.IsVariable, IsOneTime = x.IsOneTime, IsOptional = x.IsOptional,
+			Id = x.Id, FeeHeadId = x.FeeHeadId, Amount = x.Amount, MonthlyRate = x.MonthlyRate, IsVariable = x.IsVariable, IsOneTime = x.IsOneTime, IsOptional = x.IsOptional,
 
 			PayableMonth = x.PayableMonth ?? 0, PayableYear = x.PayableYear ?? 0, PaymentTermId = x.PaymentTermId,
 
@@ -284,10 +292,13 @@ public partial class FeeStructureAppService
 		if (frozen?.Coverage.Any(x => x.Collection == "Admission only; excluded from Fee Collection") == true)
 			frozen = null;
 
-		// Project retired setup fields out of the response without rewriting stored publication evidence.
-		if (frozen != null)
+		// Keep retired attachment evidence out of the current configuration.
+		if (frozen != null && !entity.GetExplicitProrationPolicyVersionId().HasValue)
 		{
 			var hadProration = frozen.PolicyLabels.Remove("proration");
+			frozen.Candidate.ProrationPolicyId = null;
+			frozen.Candidate.ProrationPolicyVersionId = null;
+			foreach (var row in frozen.Coverage) row.Proration = null;
 			frozen.Warnings.RemoveAll(x => x.Contains("proration", StringComparison.OrdinalIgnoreCase) ||
 				(hadProration && x.Contains("policy Fee Head(s) are absent", StringComparison.Ordinal)));
 		}
@@ -308,13 +319,15 @@ public partial class FeeStructureAppService
 			ConcessionPolicyId = entity.ConcessionPolicyId, ConcessionPolicyVersionId = entity.ConcessionPolicyVersionId,
 
 			RefundPolicyId = entity.RefundPolicyId, RefundPolicyVersionId = entity.RefundPolicyVersionId,
+			ProrationPolicyId = entity.GetExplicitProrationPolicyVersionId().HasValue ? entity.ProrationPolicyId : null,
+			ProrationPolicyVersionId = entity.GetExplicitProrationPolicyVersionId(),
 
 
 			ConcessionFeeHeadScope = entity.ConcessionFeeHeadScope, ConcessionApplicableFeeHeadIds = entity.GetConcessionApplicableFeeHeadIds().ToList(), FeeHeads = []
 
 		};
 
-		var policyIds = new[] { entity.CollectionPolicyVersionId, entity.ConcessionPolicyVersionId, entity.RefundPolicyVersionId }.Where(x => x.HasValue).Select(x => x!.Value).ToList();
+		var policyIds = new[] { entity.CollectionPolicyVersionId, entity.ConcessionPolicyVersionId, entity.RefundPolicyVersionId, entity.GetExplicitProrationPolicyVersionId() }.Where(x => x.HasValue).Select(x => x!.Value).ToList();
 
 		context ??= await LoadMappingContextAsync([entity]);
 		result.PolicyLabels = frozen?.PolicyLabels ?? context.Policies.Values.Where(x => policyIds.Contains(x.Id))
@@ -341,7 +354,7 @@ public partial class FeeStructureAppService
 
 				Id = line.Id, FeeHeadId = line.FeeHeadId, FeeHeadName = frozen?.Coverage.SingleOrDefault(x => x.FeeHeadId == line.FeeHeadId)?.Name ?? head?.Name ?? "Unavailable fee head", CategoryName = head?.CategoryName ?? "",
 
-				Amount = line.Amount, IsVariable = line.IsVariable, IsOneTime = line.IsOneTime, IsOptional = line.IsOptional, PayableMonth = line.PayableMonth, PayableYear = line.PayableYear,
+				Amount = line.Amount, MonthlyRate = line.MonthlyRate, IsVariable = line.IsVariable, IsOneTime = line.IsOneTime, IsOptional = line.IsOptional, PayableMonth = line.PayableMonth, PayableYear = line.PayableYear,
 
 				PaymentTermId = line.PaymentTermId, PaymentTermVersionId = line.PaymentTermVersionId, PaymentTermName = frozen?.Schedules.SingleOrDefault(x => x.FeeHeadId == line.FeeHeadId)?.PaymentTermName ?? term?.Name,
 

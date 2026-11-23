@@ -80,6 +80,9 @@ public class FeeLedgerLineDto
     /// <summary>Authoritative due date from the Payment Term schedule, when available.</summary>
     public DateTime? DueDate { get; set; }
 
+    /// <summary>Calendar days past the due date for an overdue installment.</summary>
+    public int? DaysOverdue { get; set; }
+
     /// <summary>Installment coverage start (Payment Term schedules only).</summary>
     public DateTime? CoverageStartDate { get; set; }
 

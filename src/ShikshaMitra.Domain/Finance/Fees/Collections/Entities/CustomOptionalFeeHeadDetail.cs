@@ -7,6 +7,7 @@ public class CustomOptionalFeeHeadDetail
 {
 	public Guid FeeHeadId { get; set; }
 	public decimal Amount { get; set; }
+	public bool IsMonthlyRate { get; set; }
 
 	// For one-time optional fees
 	public MonthEnum? PayableMonth { get; set; }

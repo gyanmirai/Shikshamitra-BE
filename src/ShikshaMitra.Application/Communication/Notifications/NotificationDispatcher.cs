@@ -24,12 +24,12 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 {
 	private sealed record PreparedSend(INotificationChannelSender Sender, NotificationChannelSendRequest Request, DateTimeOffset? ExpiresAt);
 
-	public async Task DispatchAsync(Guid dispatchId, Guid leaseToken, CancellationToken cancellationToken, Guid? inAppPilotUserId = null)
+	public async Task DispatchAsync(Guid dispatchId, Guid leaseToken, CancellationToken cancellationToken, NotificationTemplateTestPilot? pilot = null)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
 		if (units.Current != null) throw new BusinessException(NotificationErrorCodes.StateConflict);
-		var prepared = await PrepareAsync(tenantId, dispatchId, leaseToken, cancellationToken, inAppPilotUserId);
+		var prepared = await PrepareAsync(tenantId, dispatchId, leaseToken, cancellationToken, pilot);
 		if (prepared == null) return;
 
 		NotificationChannelSendResult? result;
@@ -42,12 +42,12 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 		{
 			result = null;
 		}
-		await RecordAsync(tenantId, dispatchId, leaseToken, result, prepared.ExpiresAt);
+		await RecordAsync(tenantId, dispatchId, leaseToken, result, prepared.ExpiresAt, allowAutomaticRetry: pilot == null);
 		cancellationToken.ThrowIfCancellationRequested();
 	}
 
 	private async Task<PreparedSend?> PrepareAsync(Guid tenantId, Guid dispatchId, Guid lease, CancellationToken cancellationToken,
-		Guid? inAppPilotUserId)
+		NotificationTemplateTestPilot? pilot)
 	{
 		using var unit = units.Begin(requiresNew: true, isTransactional: true);
 		var row = await FindAsync(tenantId, dispatchId, cancellationToken);
@@ -64,8 +64,9 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 		else
 		{
 			var intent = await FindCurrentIntentAsync(tenantId, row, cancellationToken);
-			decision = intent == null || (inAppPilotUserId.HasValue &&
-				(row.Channel != CommunicationChannelType.InApp || row.AttemptNumber != 1 ||
+			decision = intent == null || (pilot != null &&
+				(!pilot.HasSupportedChannel || pilot.TenantId != tenantId || row.CampaignId != pilot.OperationId ||
+					row.Channel != pilot.Channel || row.AttemptNumber != 1 ||
 					intent.SourceType != NotificationCampaignTypes.AcademicTemplateTestSource))
 				? new(null, null, null, "NotificationOperationUnavailable")
 				: await readiness.CheckAsync(intent, row, now, cancellationToken);
@@ -74,12 +75,16 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 		now = Now();
 		PreparedSend? prepared = null;
 		var error = decision.ExclusionCode;
-		if (error == null && inAppPilotUserId is Guid userId &&
-			(decision.Payload?.Recipient is not { UserId: { } recipientId, StudentId: null } || recipientId != userId))
+		if (error == null && pilot != null &&
+			(decision.Payload?.Recipient is not { UserId: { } recipientId, StudentId: null } || recipientId != pilot.RecipientUserId))
 			error = NotificationErrorCodes.RecipientIneligible;
 		if (error == null && (decision.ExpiresAt <= now || row.ExpiresAt <= now)) error = "SourceExpired";
 		if (error != null) row.SkipBeforeIo(lease, now, error);
-		else if (decision.DueAt > now) row.DeferBeforeIo(lease, now, decision.DueAt.Value);
+		else if (decision.DueAt > now)
+		{
+			if (pilot == null) row.DeferBeforeIo(lease, now, decision.DueAt.Value);
+			else row.SkipBeforeIo(lease, now, "QuietHours");
+		}
 		else
 		{
 			var payload = decision.Payload!;
@@ -100,7 +105,7 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 						TemplateRevisionId: row.TemplateRevisionId, Recipient: payload.Recipient, WhatsAppVariables: payload.WhatsAppVariables,
 						ExpiresAt: decision.ExpiresAt), decision.ExpiresAt);
 				}
-				else if (reservation.RetryAt is DateTimeOffset retryAt && retryAt > now &&
+				else if (pilot == null && reservation.RetryAt is DateTimeOffset retryAt && retryAt > now &&
 					!(decision.ExpiresAt <= retryAt) && !(row.ExpiresAt <= retryAt))
 					row.DeferBeforeIo(lease, now, retryAt, NotificationErrorCodes.ProviderQuotaExhausted);
 				else
@@ -127,7 +132,8 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 		return operationIsCurrent ? intent : null;
 	}
 
-	private async Task RecordAsync(Guid tenantId, Guid dispatchId, Guid lease, NotificationChannelSendResult? result, DateTimeOffset? expiry)
+	private async Task RecordAsync(Guid tenantId, Guid dispatchId, Guid lease, NotificationChannelSendResult? result,
+		DateTimeOffset? expiry, bool allowAutomaticRetry)
 	{
 		for (var attempt = 0; ; attempt++)
 		{
@@ -138,7 +144,7 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 				if (row.CampaignId is Guid operationId) await outcomeLock.AcquireAsync(operationId, CancellationToken.None);
 				var prior = row.Status;
 				var now = Now();
-				ApplyResult(row, lease, now, result, expiry);
+				ApplyResult(row, lease, now, result, expiry, allowAutomaticRetry);
 				await delivery.RecordAsync(row, now, CancellationToken.None);
 				if (prior == NotificationDispatchState.UnknownAcceptance && row.Status != prior)
 					await NotificationOutcomeProjector.ReopenIntentAsync(intents, queries, tenantId, row, CancellationToken.None);
@@ -158,7 +164,7 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 			x.TenantId == tenantId && !x.IsDeleted), cancellationToken);
 
 	private static void ApplyResult(NotificationDispatch row, Guid lease, DateTimeOffset now,
-		NotificationChannelSendResult? result, DateTimeOffset? expiry)
+		NotificationChannelSendResult? result, DateTimeOffset? expiry, bool allowAutomaticRetry)
 	{
 		var providerId = SafeProviderId(result?.ProviderMessageId);
 		switch (result?.Acceptance)
@@ -170,7 +176,7 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 			case NotificationProviderAcceptance.Rejected when string.IsNullOrEmpty(result.ProviderMessageId):
 				var reason = SafeErrorCode(result.ErrorCode);
 				row.RecordOutcome(lease, now, NotificationDispatchState.Failed, errorCode: reason);
-				if (result.IsTransient)
+				if (result.IsTransient && allowAutomaticRetry)
 					NotificationDispatchRetryPolicy.ScheduleAfterRejection(row, lease, now, result.RetryAfter, expiry, reason);
 				return;
 			default:

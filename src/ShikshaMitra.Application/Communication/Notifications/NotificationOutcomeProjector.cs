@@ -83,7 +83,7 @@ public sealed class NotificationOutcomeProjector(ICurrentTenant tenant, IUnitOfW
 		return changed;
 	}
 
-	internal async Task RefreshInAppPilotAsync(NotificationInAppPilot pilot, CancellationToken cancellationToken)
+	internal async Task RefreshTemplateTestPilotAsync(NotificationTemplateTestPilot pilot, CancellationToken cancellationToken)
 	{
 		using var unit = units.Begin(requiresNew: true, isTransactional: true);
 		await outcomeLock.AcquireAsync(pilot.OperationId, cancellationToken);
@@ -92,7 +92,7 @@ public sealed class NotificationOutcomeProjector(ICurrentTenant tenant, IUnitOfW
 			x.SourceEntityType == NotificationCampaignTypes.AcademicTemplateTestSource), cancellationToken)) return;
 		var rows = await queries.ToListAsync((await TenantDispatchesAsync(pilot.TenantId))
 			.Where(x => x.CampaignId == pilot.OperationId).Take(2), cancellationToken);
-		if (rows is not [var row] || row.Channel != CommunicationChannelType.InApp ||
+		if (rows is not [var row] || row.Channel != pilot.Channel ||
 			Enumerable.Contains(ActiveDispatches, row.Status) ||
 			row.AttemptNumber != 1 && (row.Status != NotificationDispatchState.Skipped || row.AttemptNumber != 0)) return;
 		var recipient = NotificationRuntimeJson.Deserialize<NotificationRecipientRefDto>(row.RecipientReferenceJson,

@@ -73,7 +73,7 @@ public partial class WebPushNotificationChannel_Tests
 			["Notifications:WebPush:PublicKey"] = PublicKey(_senderKeys),
 			["Notifications:WebPush:PrivateKey"] = Encode(_senderKeys.D!)
 		}).Build();
-		var options = new WebPushKeyConfiguration(config);
+		var options = new WebPushKeyConfiguration(config, tenant);
 		var protection = new EphemeralDataProtectionProvider();
 		var payloads = new NotificationDispatchPayloadProtector(protection, tenant);
 		var subscriptions = new WebPushSubscriptionProtector(protection);

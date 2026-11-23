@@ -114,7 +114,8 @@ public partial class AcademicNotificationManualApi_Tests
 			var services = scope.ServiceProvider;
 			using var tenant = services.GetRequiredService<ICurrentTenant>().Change(AcademicNotificationPreviewApiFactory.TenantId);
 			await services.GetRequiredService<INotificationDispatcher>().DispatchAsync(dispatchId, lease, CancellationToken.None,
-				inAppPilotUserId: rejectUnexpectedPilotRecipient ? Guid.NewGuid() : null);
+				pilot: rejectUnexpectedPilotRecipient
+					? new(AcademicNotificationPreviewApiFactory.TenantId, operationId, Guid.NewGuid()) : null);
 		}
 		var expected = changeBeforeDelivery || rejectUnexpectedPilotRecipient
 			? NotificationDispatchState.Skipped : NotificationDispatchState.Delivered;

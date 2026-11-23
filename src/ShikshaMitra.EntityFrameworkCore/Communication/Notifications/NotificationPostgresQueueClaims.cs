@@ -16,9 +16,9 @@ internal enum NotificationQueueKind { Intent, Dispatch }
 internal static class NotificationPostgresQueueClaims
 {
 	private const string PilotDispatchFilter = """
-		AND candidate."CampaignId" = @pilotOperation AND candidate."Channel" = @inApp
+		AND candidate."CampaignId" = @pilotOperation AND candidate."Channel" = @pilotChannel
 		AND candidate."AttemptNumber" = 0 AND candidate."ExpiresAt" IS NOT NULL
-		AND candidate."ProviderSettingId" IS NULL
+		AND (candidate."ProviderSettingId" IS NOT NULL) = @requiresProviderSetting
 		AND EXISTS (
 		    SELECT 1 FROM "NotificationIntents" AS intent
 		    WHERE intent."Id" = candidate."IntentId" AND intent."TenantId" = @tenant
@@ -42,7 +42,7 @@ internal static class NotificationPostgresQueueClaims
 	internal static async Task<IReadOnlyList<NotificationQueueClaim>> ClaimAsync(DbConnection connection,
 		DbTransaction? transaction, Guid tenantId, NotificationQueueKind kind, DateTimeOffset now,
 		int batchSize, TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null,
-		IReadOnlyList<CommunicationChannelType>? pausedChannels = null, NotificationInAppPilot? pilot = null)
+		IReadOnlyList<CommunicationChannelType>? pausedChannels = null, NotificationTemplateTestPilot? pilot = null)
 	{
 		if (connection is not NpgsqlConnection) throw new NotSupportedException("Notification queue claims require PostgreSQL.");
 		if (tenantId == Guid.Empty) throw new ArgumentException("A tenant is required.", nameof(tenantId));
@@ -56,8 +56,8 @@ internal static class NotificationPostgresQueueClaims
 		var filterPaused = pausedChannels is { Count: > 0 };
 		if (filterPaused && kind != NotificationQueueKind.Dispatch) throw new ArgumentException("Only dispatches have channels.", nameof(pausedChannels));
 		if (pilot != null && (kind != NotificationQueueKind.Dispatch || batchSize != 1 || pilot.TenantId != tenantId ||
-			pilot.OperationId == Guid.Empty || pilot.RecipientUserId == Guid.Empty))
-			throw new ArgumentException("The In-App pilot must claim one dispatch for its designated tenant.", nameof(pilot));
+			pilot.OperationId == Guid.Empty || pilot.RecipientUserId == Guid.Empty || !pilot.HasSupportedChannel))
+			throw new ArgumentException("The template test pilot must claim one dispatch for its designated tenant and channel.", nameof(pilot));
 		var (table, dueColumn, firstState, secondState, processing, attemptSql) = kind switch
 		{
 			NotificationQueueKind.Intent => ("NotificationIntents", "DueAt", (int)NotificationIntentState.Ready,
@@ -116,7 +116,8 @@ internal static class NotificationPostgresQueueClaims
 			{
 				Parameter(command, "pilotOperation", pilot.OperationId);
 				Parameter(command, "pilotRecipient", pilot.RecipientUserId);
-				Parameter(command, "inApp", (int)CommunicationChannelType.InApp);
+				Parameter(command, "pilotChannel", (int)pilot.Channel);
+				Parameter(command, "requiresProviderSetting", pilot.Channel == CommunicationChannelType.Email);
 				Parameter(command, "templateTestSource", NotificationCampaignTypes.AcademicTemplateTestSource);
 			}
 			var claims = new List<NotificationQueueClaim>();

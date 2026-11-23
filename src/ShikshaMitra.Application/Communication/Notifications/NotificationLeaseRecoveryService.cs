@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,7 +19,7 @@ public sealed record NotificationRecoveryResult(int Intents, int Dispatches, int
 [RemoteService(false), DisableAuditing]
 public sealed class NotificationLeaseRecoveryService(ICurrentTenant tenant, IUnitOfWorkManager units,
 	IRepository<NotificationIntent, Guid> intents, IRepository<NotificationDispatch, Guid> dispatches, IAsyncQueryableExecuter queries,
-	NotificationDeliveryProjection delivery)
+	NotificationDeliveryProjection delivery, IRepository<CommunicationRecipientSnapshot, Guid> recipients, IDataFilter filters)
 	: ITransientDependency
 {
 	public async Task<NotificationRecoveryResult> RecoverAsync(DateTimeOffset now, int batchSize, CancellationToken cancellationToken)
@@ -41,6 +42,36 @@ public sealed class NotificationLeaseRecoveryService(ICurrentTenant tenant, IUni
 				// Another worker can finish a lease or sweep the same row first.
 			}
 		}
+	}
+
+	internal async Task RecoverTemplateTestPilotAsync(NotificationTemplateTestPilot pilot, DateTimeOffset now,
+		CancellationToken cancellationToken)
+	{
+		if (tenant.Id != pilot.TenantId || pilot.TenantId == Guid.Empty)
+			throw new BusinessException(NotificationErrorCodes.TenantRequired);
+		if (!pilot.HasSupportedChannel) return;
+		using var unit = units.Begin(requiresNew: true, isTransactional: true);
+		List<NotificationDispatch> candidates;
+		using (filters.Disable<ISoftDelete>())
+			candidates = await queries.ToListAsync((await dispatches.GetQueryableAsync())
+				.Where(x => x.TenantId == pilot.TenantId && x.CampaignId == pilot.OperationId).Take(2), cancellationToken);
+		if (candidates is not [var row] || row.IsDeleted || row.Channel != pilot.Channel || !row.ExpiresAt.HasValue ||
+			row.ProviderSettingId.HasValue != (pilot.Channel == CommunicationChannelType.Email)) return;
+		var recoverable = row.Status == NotificationDispatchState.Processing && row.AttemptNumber == 1 && row.LeaseExpiresAt <= now ||
+			row.Status == NotificationDispatchState.Pending && row.AttemptNumber == 0 && row.ExpiresAt <= now;
+		if (!recoverable) return;
+		if (!await queries.AnyAsync((await intents.GetQueryableAsync()).Where(x => x.Id == row.IntentId &&
+			x.TenantId == pilot.TenantId && x.CampaignId == pilot.OperationId && !x.IsDeleted &&
+			x.SourceType == NotificationCampaignTypes.AcademicTemplateTestSource), cancellationToken)) return;
+		if (!await queries.AnyAsync((await recipients.GetQueryableAsync()).Where(x => x.Id == row.RecipientSnapshotId &&
+			x.TenantId == pilot.TenantId && x.CampaignId == pilot.OperationId && !x.IsDeleted &&
+			x.UserId == pilot.RecipientUserId && x.RecipientType == "TestAccount" && x.IsEligible), cancellationToken)) return;
+		var recipient = NotificationRuntimeJson.Deserialize<NotificationRecipientRefDto>(row.RecipientReferenceJson,
+			NotificationErrorCodes.RuntimeSnapshotInvalid);
+		if (recipient.UserId != pilot.RecipientUserId || recipient.StudentId.HasValue) return;
+		if (!row.RecoverExpiredLease(now) && !row.ExpirePending(now)) return;
+		await PersistRecoveredDispatchAsync(row, now, cancellationToken);
+		await unit.CompleteAsync(cancellationToken);
 	}
 
 	private async Task<(int Updated, int Leases)> RecoverIntentsAsync(Guid tenantId, DateTimeOffset now, int batchSize, CancellationToken cancellationToken)
@@ -77,11 +108,17 @@ public sealed class NotificationLeaseRecoveryService(ICurrentTenant tenant, IUni
 		{
 			var recovered = row.RecoverExpiredLease(now);
 			if (!recovered && !row.ExpirePending(now)) continue;
-			if (row.Status == NotificationDispatchState.UnknownAcceptance) await delivery.RecordAsync(row, now, cancellationToken);
-			await dispatches.UpdateAsync(row, cancellationToken: cancellationToken);
+			await PersistRecoveredDispatchAsync(row, now, cancellationToken);
 			count++;
 			if (recovered) leases++;
 		}
 		return (count, leases);
+	}
+
+	private async Task PersistRecoveredDispatchAsync(NotificationDispatch row, DateTimeOffset now,
+		CancellationToken cancellationToken)
+	{
+		if (row.Status == NotificationDispatchState.UnknownAcceptance) await delivery.RecordAsync(row, now, cancellationToken);
+		await dispatches.UpdateAsync(row, cancellationToken: cancellationToken);
 	}
 }

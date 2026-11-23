@@ -7,7 +7,8 @@ namespace ShikshaMitra.Communication.Notifications;
 public static class NotificationQueueWorkerConfiguration
 {
 	private const string SharedSwitch = "Notifications:QueueWorker:Enabled";
-	private const string PilotSection = "Notifications:QueueWorker:InAppPilot";
+	private const string InAppPilotSection = "Notifications:QueueWorker:InAppPilot";
+	private const string ExternalPilotSection = "Notifications:QueueWorker:ExternalPilot";
 
 	private static readonly CommunicationChannelType[] QueueChannels =
 		[CommunicationChannelType.InApp, CommunicationChannelType.Email, CommunicationChannelType.WhatsApp, CommunicationChannelType.WebPush];
@@ -15,17 +16,28 @@ public static class NotificationQueueWorkerConfiguration
 	public static bool IsEnabled(IConfiguration configuration) =>
 		!IsPilotConfigured(configuration) && IsTrue(configuration[SharedSwitch]);
 
-	internal static bool IsPilotConfigured(IConfiguration configuration) => configuration.GetSection(PilotSection).Exists();
+	internal static bool IsPilotConfigured(IConfiguration configuration) =>
+		configuration.GetSection(InAppPilotSection).Exists() || configuration.GetSection(ExternalPilotSection).Exists();
 
-	public static NotificationInAppPilot? ReadInAppPilot(IConfiguration configuration)
+	public static NotificationTemplateTestPilot? ReadTemplateTestPilot(IConfiguration configuration)
 	{
-		var section = configuration.GetSection(PilotSection);
-		if (!bool.TryParse(configuration[SharedSwitch], out var enabled) || enabled ||
+		var inApp = configuration.GetSection(InAppPilotSection);
+		var external = configuration.GetSection(ExternalPilotSection);
+		var isExternal = external.Exists();
+		var section = isExternal ? external : inApp;
+		var channel = isExternal ? section["Channel"] switch
+		{
+			nameof(CommunicationChannelType.Email) => CommunicationChannelType.Email,
+			nameof(CommunicationChannelType.WebPush) => CommunicationChannelType.WebPush,
+			_ => (CommunicationChannelType?)null
+		} : CommunicationChannelType.InApp;
+		if (channel is null || isExternal && inApp.Exists() ||
+			!bool.TryParse(configuration[SharedSwitch], out var enabled) || enabled ||
 			!TryReadId(section["TenantId"], out var tenantId) ||
 			!TryReadId(section["OperationId"], out var operationId) ||
 			!TryReadId(section["RecipientUserId"], out var recipientUserId))
 			return null;
-		return new(tenantId, operationId, recipientUserId);
+		return new(tenantId, operationId, recipientUserId, channel.Value);
 	}
 
 	public static bool IsSchoolPaused(IConfiguration configuration, Guid? tenantId) =>

@@ -17,9 +17,9 @@ public sealed class AcademicNotificationDispatchWorker(AbpAsyncTimer timer, ISer
 
 	protected override Task RunWhilePausedAsync(IConfiguration configuration, ILogger logger, CancellationToken cancellationToken)
 	{
-		var pilot = NotificationQueueWorkerConfiguration.ReadInAppPilot(configuration);
+		var pilot = NotificationQueueWorkerConfiguration.ReadTemplateTestPilot(configuration);
 		return pilot == null ? Task.CompletedTask :
 			ProcessSchoolAsync(pilot.TenantId, SchoolTurnBudget(configuration), logger, cancellationToken,
-				(services, token) => services.GetRequiredService<NotificationTenantQueueRunner>().RunInAppPilotAsync(pilot, token)).AsTask();
+				(services, token) => services.GetRequiredService<NotificationTenantQueueRunner>().RunTemplateTestPilotAsync(pilot, token)).AsTask();
 	}
 }

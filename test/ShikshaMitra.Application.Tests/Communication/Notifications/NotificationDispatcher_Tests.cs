@@ -123,7 +123,7 @@ public class NotificationDispatcher_Tests
 		var emailRoute = new NotificationEmailRoute(_tenant, Repository<ChannelProviderSetting>([_provider]), queries, _smtp);
 		var whatsAppRoute = new WhatsAppProviderRoute(_tenant, Repository<ChannelProviderSetting>([_provider]), queries, app);
 		var approvals = new WhatsAppApprovedTemplates(_tenant, Repository<WhatsAppTemplateBinding>([]), queries);
-		var webPush = new WebPushDispatchSubscriptions(_tenant, Repository<WebPushSubscription>([]), queries, new(app));
+		var webPush = new WebPushDispatchSubscriptions(_tenant, Repository<WebPushSubscription>([]), queries, new(app, _tenant));
 		var readiness = new NotificationDispatchReadiness(protector, reader, [resolver], policy,
 			emailRoute, new(app, validator), whatsAppRoute, approvals, webPush,
 			new(app, Repository<Volo.Abp.Identity.IdentityUser>([]), Repository<CommunicationTemplateRevision>([]),

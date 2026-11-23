@@ -67,7 +67,8 @@ public class NotificationQueueMaintenancePostgres_Tests(NotificationPostgresFixt
 			new(tenant, Substitute.For<Volo.Abp.SettingManagement.ISettingManager>()), Repository<ChannelProviderSetting>(db),
 			Repository<DeliveryAttempt>(db), queries, Substitute.For<Volo.Abp.Guids.IGuidGenerator>(), Substitute.For<Volo.Abp.Timing.IClock>());
 		var recovery = new NotificationLeaseRecoveryService(tenant, Units(db), Repository<NotificationIntent>(db),
-			Repository<NotificationDispatch>(db), queries, delivery);
+			Repository<NotificationDispatch>(db), queries, delivery, Repository<CommunicationRecipientSnapshot>(db),
+			Substitute.For<Volo.Abp.Data.IDataFilter>());
 		var result = await recovery.RecoverAsync(Now, 1, default);
 		result.Dispatches.ShouldBe(1);
 		result.Intents.ShouldBe(0);

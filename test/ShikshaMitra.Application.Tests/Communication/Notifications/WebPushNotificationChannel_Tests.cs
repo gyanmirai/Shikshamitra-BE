@@ -13,6 +13,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using Shouldly;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp.Timing;
 using Xunit;
 
@@ -73,7 +74,28 @@ public partial class WebPushNotificationChannel_Tests : IDisposable
 			["Notifications:WebPush:AllowedOrigins:0"] = origin
 		}).Build();
 
-		(new WebPushKeyConfiguration(config).Read() != null).ShouldBe(expected);
+		(new WebPushKeyConfiguration(config, Substitute.For<ICurrentTenant>()).Read() != null).ShouldBe(expected);
+	}
+
+	[Theory]
+	[InlineData("same", true)]
+	[InlineData("other", false)]
+	[InlineData("host", false)]
+	[InlineData("invalid", false)]
+	public void A_push_pilot_exposes_keys_only_to_the_configured_school(string scope, bool expected)
+	{
+		var school = Guid.NewGuid();
+		var tenant = Substitute.For<ICurrentTenant>();
+		tenant.Id.Returns(scope == "host" ? (Guid?)null : scope == "other" ? Guid.NewGuid() : school);
+		var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+			["Notifications:WebPush:PilotTenantId"] = scope == "invalid" ? Guid.Empty.ToString() : school.ToString(),
+			["Notifications:WebPush:PublicKey"] = PublicKey(_senderKeys),
+			["Notifications:WebPush:PrivateKey"] = Encode(_senderKeys.D!),
+			["Notifications:WebPush:KeyVersion"] = "test-v1",
+			["Notifications:WebPush:AllowedOrigins:0"] = "https://push.example.test"
+		}).Build();
+
+		(new WebPushKeyConfiguration(config, tenant).Read() != null).ShouldBe(expected);
 	}
 
 	[Fact]

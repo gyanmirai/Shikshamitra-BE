@@ -32,7 +32,10 @@ foreach ($record in @($scope.Plan.Debuggers) + @($scope.Plan.Runtimes)) {
     $current = Get-CimInstance Win32_Process -Filter "ProcessId=$($record.ProcessId)"
     if (!$current) { continue }
     if ($current.CreationDate -ne $record.CreationDate -or $current.ExecutablePath -ne $record.ExecutablePath) {
-        throw "Process $($record.ProcessId) changed identity; cleanup stopped for safety."
+        # A snapshot cannot authorize touching the process now at this PID.
+        # The listener check below still blocks any live, unverified port owner.
+        Write-Verbose "Skipping stale process record for PID $($record.ProcessId)."
+        continue
     }
     if ([IO.Path]::GetFileName($current.ExecutablePath) -in @('vsdbg.exe', 'vsdbg-ui.exe')) {
         $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($record.ProcessId)")
@@ -45,14 +48,13 @@ foreach ($record in @($scope.Plan.Debuggers) + @($scope.Plan.Runtimes)) {
         throw "Process $($record.ProcessId) no longer belongs to this backend target."
     }
     if ($PSCmdlet.ShouldProcess("$Target development process $($record.ProcessId)", 'Stop before build')) {
-        $running = Get-VerifiedBackendProcess -ProcessRecord $record
-        if ($running) {
-            try {
-                $running.Kill()
-                if (!$running.WaitForExit(8000)) { throw "Process $($record.ProcessId) did not exit." }
-            }
-            finally { $running.Dispose() }
+        $running = Get-VerifiedBackendProcess -ProcessRecord $record -SkipReplacedProcess
+        if (!$running) { continue }
+        try {
+            $running.Kill()
+            if (!$running.WaitForExit(8000)) { throw "Process $($record.ProcessId) did not exit." }
         }
+        finally { $running.Dispose() }
         Write-Output "Stopped $Target development process $($record.ProcessId)."
     }
 }

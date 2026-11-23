@@ -100,7 +100,7 @@ function Get-BackendRegisteredWorktrees {
 }
 
 function Get-VerifiedBackendProcess {
-    param([object]$ProcessRecord)
+    param([object]$ProcessRecord, [switch]$SkipReplacedProcess)
 
     try { $running = [Diagnostics.Process]::GetProcessById($ProcessRecord.ProcessId) }
     catch [ArgumentException] { return $null }
@@ -113,6 +113,10 @@ function Get-VerifiedBackendProcess {
             $running.StartTime.ToUniversalTime().ToString('yyyyMMddHHmmssffffff') -ne
                 $ProcessRecord.CreationDate.ToUniversalTime().ToString('yyyyMMddHHmmssffffff') -or
             $running.MainModule.FileName -ine $ProcessRecord.ExecutablePath) {
+            if ($SkipReplacedProcess) {
+                $running.Dispose()
+                return $null
+            }
             throw "Process $($ProcessRecord.ProcessId) changed identity; cleanup stopped for safety."
         }
         return $running

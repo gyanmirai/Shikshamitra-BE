@@ -117,6 +117,29 @@ System.Threading.Thread.Sleep(System.Threading.Timeout.Infinite);
     }
     Start-Sleep -Milliseconds 500
     Assert-Guard (@($processes | Where-Object HasExited).Count -eq 0) 'Fixture runtimes did not start.'
+    $currentUnrelated = Get-CimInstance Win32_Process -Filter "ProcessId=$($processes[2].Id)"
+    $staleHost = [pscustomobject]@{
+        ProcessId = $currentUnrelated.ProcessId
+        ParentProcessId = $currentUnrelated.ParentProcessId
+        CreationDate = $currentUnrelated.CreationDate.AddMinutes(-1)
+        ExecutablePath = $currentUnrelated.ExecutablePath
+        CommandLine = 'dotnet "' + (Join-Path $flatRuntime 'ShikshaMitra.HttpApi.Host.dll') + '"'
+    }
+    # Simulate replacement both before the fresh CIM query and after it,
+    # before cleanup opens the process handle.
+    foreach ($recheck in @($currentUnrelated, $staleHost)) {
+        & {
+            function Get-CimInstance {
+                param([string]$ClassName, [string]$Filter)
+
+                if ($Filter) { return $recheck }
+                return $staleHost
+            }
+            & $helper -Target Host
+        }
+        Assert-Guard (!$processes[2].HasExited) 'Cleanup must ignore a stale record without stopping the process that reused its PID.'
+        Assert-Guard (!$processes[0].HasExited) 'Ignoring a stale record must not broaden cleanup to other processes.'
+    }
     & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $helper -Target DbMigrator
     Assert-Guard ($LASTEXITCODE -eq 0) 'DbMigrator cleanup failed.'
     Assert-Guard ($processes[1].WaitForExit(5000)) 'DbMigrator cleanup left its matching runtime running.'

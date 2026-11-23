@@ -120,7 +120,7 @@ public partial class AdmissionFeeCollectionAppService(
 			if (result.VariableFeeHeads.Count > 0)
 			{
 				if (source.JoiningDate.HasValue && source.JoiningDate.Value.Date >= year.StartDate.Date)
-					result.ProrationPolicy = await DefaultProrationPolicyAsync(source.AcademicYearId);
+					result.ProrationPolicy = await DefaultProrationPolicyAsync(source.AcademicYearId, source.StructureId);
 				result.Blocker = "Enter the initial amounts for the Finance-configured variable fees.";
 			}
 			else
@@ -153,17 +153,17 @@ public partial class AdmissionFeeCollectionAppService(
 	private static StudentFeeAssignmentPreviewDto ReadAssignment(FinanceFeeAccount account) =>
 		JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(account.AssignmentSnapshotJson!) ?? throw new BusinessException(AdmissionFeeCollectionErrorCodes.NotPrepared);
 
-	private async Task<AdmissionProrationPolicyDto?> DefaultProrationPolicyAsync(Guid academicYearId)
+	private async Task<AdmissionProrationPolicyDto?> DefaultProrationPolicyAsync(Guid academicYearId, Guid? structureId)
 	{
-		var version = await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Policies.AdmissionProrationPolicyResolver>()
-			.ResolveAsync(academicYearId);
+		var (version, source) = await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Policies.AdmissionProrationPolicyResolver>()
+			.ResolveWithSourceAsync(academicYearId, structureId);
 		return version == null ? null : new AdmissionProrationPolicyDto
 		{
 			PolicyId = version.PolicyId,
 			PolicyVersionId = version.Id,
 			PolicyName = version.PolicyName,
 			PolicyVersion = version.VersionNumber,
-			Source = "FinanceDefault"
+			Source = source
 		};
 	}
 

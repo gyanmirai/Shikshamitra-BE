@@ -15370,6 +15370,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<decimal?>("MonthlyRate")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<int?>("PayableMonth")
                         .HasColumnType("integer");
 

@@ -4,7 +4,9 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
+using ShikshaMitra.Finance.Policies;
 using Shouldly;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
@@ -26,25 +28,44 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
     }
 
     [Fact]
-    public async Task Retired_Create_Fields_Do_Not_Attach_Or_Block_Publication()
+    public async Task Structure_Override_Can_Be_Set_And_Cleared_And_Wins_Over_The_Year_Default()
     {
         using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
         var (metadata, standard, candidate) = await ReadyCandidateAsync();
-        candidate.FeeHeads.Single().Amount = 1000m;
-        var legacyInput = JsonSerializer.SerializeToNode(candidate)!.AsObject();
-        legacyInput["ProrationPolicyId"] = Guid.NewGuid();
-        legacyInput["ProrationPolicyVersionId"] = Guid.NewGuid();
-        candidate = legacyInput.Deserialize<StandardFeeStructureRequest>()!;
-        var draft = await _feeStructures.CreateAsync(metadata, new() { StandardId = standard, StandardFeeStructures = candidate });
-        var published = await _feeStructures.PublishAsync(draft.Id, new() { ConcurrencyStamp = draft.ConcurrencyStamp });
-        published.PublicationReview!.IsReady.ShouldBeTrue();
-        JsonSerializer.Serialize(published).ShouldNotContain("Proration");
-        var stored = await GetRequiredService<IRepository<FeeStructure, Guid>>().GetAsync(draft.Id);
-        stored.ProrationPolicyId.ShouldBeNull(); stored.ProrationPolicyVersionId.ShouldBeNull();
-        typeof(FeeStructure).GetMethod("AttachProrationPolicy").ShouldBeNull();
         var context = await _feeStructures.GetContextAsync(metadata, standard);
-        context.Permissions.ShouldNotContainKey("proration");
-        context.Permissions.ShouldNotContainKey("prorationRead");
+        var policies = GetRequiredService<IProrationPolicyAppService>();
+        async Task<ProrationPolicyDto> CreatePolicy(string name, bool isDefault)
+        {
+            var created = await policies.CreateAsync(new()
+            {
+                AcademicYearId = context.AcademicYearId, PolicyName = name, Status = "Active", IsDefault = isDefault,
+                FeeHeadRules = [new() { FeeHeadId = candidate.FeeHeads.Single().FeeHeadId, RuleType = "Daily", ApplyOnAdmission = true }]
+            });
+            return await policies.GetAsync(created.Id);
+        }
+
+        var yearDefault = await CreatePolicy("Academic-year daily rule", true);
+        var selected = await CreatePolicy("Structure daily rule", false);
+        (await _feeStructures.GetCatalogueAsync(metadata, standard)).Policies
+            .ShouldContain(x => x.Family == "proration" && x.VersionId == selected.CurrentVersionId);
+        var draft = await _feeStructures.CreateAsync(metadata, new() { StandardId = standard, StandardFeeStructures = candidate });
+        async Task<FeeStructureCreateResponse> Patch(FeeStructureCreateResponse structure, object? selection) =>
+            await _feeStructures.PatchAsync(structure.Id, new()
+            {
+                RequestId = Guid.NewGuid(), ConcurrencyStamp = structure.ConcurrencyStamp,
+                Changes = JsonSerializer.SerializeToElement(new { policies = new { proration = selection } })
+            });
+
+        var attached = await Patch(draft, new { policyId = selected.Id, policyVersionId = selected.CurrentVersionId });
+        attached.ProrationPolicyVersionId.ShouldBe(selected.CurrentVersionId);
+        var resolver = GetRequiredService<AdmissionProrationPolicyResolver>();
+        var resolved = await WithUnitOfWorkAsync(() => resolver.ResolveAsync(context.AcademicYearId, draft.Id));
+        resolved!.Id.ShouldBe(selected.CurrentVersionId!.Value);
+
+        var cleared = await Patch(attached, null);
+        cleared.ProrationPolicyVersionId.ShouldBeNull();
+        (await WithUnitOfWorkAsync(() => resolver.ResolveAsync(context.AcademicYearId, draft.Id)))!.Id
+            .ShouldBe(yearDefault.CurrentVersionId!.Value);
     }
 
     [Fact]
@@ -71,12 +92,15 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
             await hydration.CompleteAsync();
         }
         var read = (await _feeStructures.GetByStandardAsync(standard)).StandardFeeStructures.Single();
-        JsonSerializer.Serialize(read).ShouldNotContain("Proration");
+        read.ProrationPolicyVersionId.ShouldBeNull();
+        read.PublicationReview!.PolicyLabels.ShouldNotContainKey("proration");
+        read.PublicationReview.Candidate.ProrationPolicyId.ShouldBeNull();
+        read.PublicationReview.Coverage.Single().Proration.ShouldBeNull();
         read.PublicationReview!.Warnings.ShouldNotContain(x => x.Contains("proration", StringComparison.OrdinalIgnoreCase));
         (await repository.GetAsync(draft.Id)).GetProperty<string>("PublicationReview").ShouldBe(evidence);
         read.PublicationReview.Schedules.Single().Installments.Sum(x => x.CalculatedAmount).ShouldBe(1000m);
         var revision = await _feeStructures.CreateRevisionAsync(published.Id, new() { ConcurrencyStamp = read.ConcurrencyStamp });
-        JsonSerializer.Serialize(revision).ShouldNotContain("Proration");
+        revision.ProrationPolicyVersionId.ShouldBeNull();
         (await repository.GetAsync(revision.Id)).ProrationPolicyVersionId.ShouldBeNull();
     }
 }

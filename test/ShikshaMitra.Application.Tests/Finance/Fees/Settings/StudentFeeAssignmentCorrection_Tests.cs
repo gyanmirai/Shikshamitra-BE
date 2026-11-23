@@ -65,6 +65,11 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		var service = GetRequiredService<IStudentFeeStructureAppService>();
 		var master = await GetRequiredService<IRepository<ShikshaMitra.Domain.Finance.Fees.Settings.FeeStructure, Guid>>().GetAsync(input.StandardFeeStructureId);
 		var revision = await _feeStructures.CreateRevisionAsync(master.Id, new() { ConcurrencyStamp = master.ConcurrencyStamp });
+		revision = await _feeStructures.PatchAsync(revision.Id, Patch(revision.ConcurrencyStamp, new
+		{
+			name = "Revised correction fees",
+			feeHeads = new { update = new[] { new { lineId = revision.FeeHeads.Single().Id, amount = 1100m } } }
+		}));
 		await _feeStructures.PublishAsync(revision.Id, new() { ConcurrencyStamp = revision.ConcurrencyStamp });
 		input.StandardFeeStructureId = revision.Id;
 		var context = (await service.GetContextsAsync(new() { AcademicYearId = input.AcademicYearId, StudentIds = [input.StudentId] })).Single();
@@ -112,6 +117,11 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		{
 			var master = await GetRequiredService<IRepository<ShikshaMitra.Domain.Finance.Fees.Settings.FeeStructure, Guid>>().GetAsync(first.StandardFeeStructureId);
 			var revision = await _feeStructures.CreateRevisionAsync(master.Id, new() { ConcurrencyStamp = master.ConcurrencyStamp });
+			revision = await _feeStructures.PatchAsync(revision.Id, Patch(revision.ConcurrencyStamp, new
+			{
+				name = "Revised mixed assignment fees",
+				feeHeads = new { update = new[] { new { lineId = revision.FeeHeads.Single().Id, amount = 1100m } } }
+			}));
 			await _feeStructures.PublishAsync(revision.Id, new() { ConcurrencyStamp = revision.ConcurrencyStamp });
 			second.StandardFeeStructureId = revision.Id;
 		}
@@ -132,6 +142,11 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		}
 		var commonMaster = await GetRequiredService<IRepository<ShikshaMitra.Domain.Finance.Fees.Settings.FeeStructure, Guid>>().GetAsync(first.StandardFeeStructureId);
 		var replacement = await _feeStructures.CreateRevisionAsync(commonMaster.Id, new() { ConcurrencyStamp = commonMaster.ConcurrencyStamp });
+		replacement = await _feeStructures.PatchAsync(replacement.Id, Patch(replacement.ConcurrencyStamp, new
+		{
+			name = "Revised common assignment fees",
+			feeHeads = new { update = new[] { new { lineId = replacement.FeeHeads.Single().Id, amount = 1100m } } }
+		}));
 		await _feeStructures.PublishAsync(replacement.Id, new() { ConcurrencyStamp = replacement.ConcurrencyStamp });
 		first.StandardFeeStructureId = replacement.Id;
 		second.StandardFeeStructureId = replacement.Id;
@@ -330,6 +345,15 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		var dues = await GetRequiredService<IRepository<DueFee, Guid>>().GetListAsync(d => d.StudentFeeStructureId == original.AssignmentId);
 		dues.Sum(d => d.OriginalAmount).ShouldBe(750m);
 		dues.ShouldAllBe(d => d.FeeHeadId != headId);
+		var history = await service.GetHistoryAsync(input.StudentId, new() { AcademicYearId = input.AcademicYearId });
+		var change = history.Items.Single(item => item.Reason == "Correct variable amount");
+		change.Changes.ShouldContain(field => field.Field == "Assigned amount" && Equals(field.Before, 2000m) && Equals(field.After, 1550m));
+		change.Changes.ShouldContain(field => field.FeeHead != null && field.Detail == "assigned amount" &&
+			Equals(field.Before, 1250m) && Equals(field.After, 800m));
+		change.Changes.ShouldContain(field => field.FeeHead != null && field.Installment != null &&
+			field.Detail == "installment amount");
+		history.Items.Single(item => item.Reason == "Remove an inapplicable optional fee").Changes
+			.ShouldContain(field => Equals(field.Before, "Included") && Equals(field.After, "Not selected"));
 	}
 
 	[Fact]

@@ -3,6 +3,7 @@ using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Transactions;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -16,6 +17,7 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Domain.Finance.Policies;
 
@@ -33,7 +35,8 @@ public class RefundPolicyAppService(
 	IRepository<IdentityUser, Guid> userRepository,
 	FinanceRoutingManager routingManager,
 	FinanceScopeAccessService scopeAccess,
-	RefundPolicyCalculationService calculationService)
+	RefundPolicyCalculationService calculationService,
+	ITransactionCategoryReferenceLock referenceLock)
 	: ApplicationService, IRefundPolicyAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.View)]
@@ -175,9 +178,17 @@ public class RefundPolicyAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add)]
+	[UnitOfWork(isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted)]
 	public async Task<RefundPolicyDto> CreateAsync(CreateUpdateRefundPolicyDto input)
 	{
+		await EnsureAcademicYearAccessibleAsync(input.AcademicYearId);
+		await referenceLock.AcquireAsync();
 		await EnsureReferencesAsync(input);
+		return await SaveNewAsync(input, "created");
+	}
+
+	private async Task<RefundPolicyDto> SaveNewAsync(CreateUpdateRefundPolicyDto input, string action)
+	{
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode)
 			? $"REF-{Guid.NewGuid():N}"[..28].ToUpperInvariant()
 			: input.PolicyCode.Trim().ToUpperInvariant();
@@ -192,11 +203,12 @@ public class RefundPolicyAppService(
 			GuidGenerator.Create(), CurrentTenant.Id, input.AcademicYearId,
 			model);
 		await repository.InsertAsync(entity, autoSave: true);
-		await WriteVersionAsync(entity, "created");
+		await WriteVersionAsync(entity, action);
 		return RefundPolicyMapping.ToDto(entity);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add)]
+	[UnitOfWork(isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted)]
 	public async Task<RefundPolicyDto> UpdateAsync(Guid id, CreateUpdateRefundPolicyDto input)
 	{
 		var entity = await GetRequiredAsync(id);
@@ -212,6 +224,8 @@ public class RefundPolicyAppService(
 		if (entity.Status == RefundPolicyStatus.Active && string.IsNullOrWhiteSpace(input.ChangeReason))
 			throw new BusinessException(RefundPolicyErrorCodes.ChangeReasonRequired);
 
+		await EnsureAcademicYearAccessibleAsync(input.AcademicYearId);
+		await referenceLock.AcquireAsync();
 		await EnsureReferencesAsync(input);
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode) ? entity.PolicyCode : input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, id);
@@ -230,24 +244,38 @@ public class RefundPolicyAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add)]
+	[UnitOfWork(isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted)]
 	public async Task<RefundPolicyDto> CloneAsync(Guid id, RefundPolicyCloneRequestDto input)
 	{
 		var source = await GetRequiredAsync(id);
 		var targetYear = input.TargetAcademicYearId ?? source.AcademicYearId;
 		var sameYear = targetYear == source.AcademicYearId;
-		return await CreateAsync(new CreateUpdateRefundPolicyDto
+		await EnsureAcademicYearAccessibleAsync(source.AcademicYearId);
+		if (!sameYear)
+		{
+			await EnsureAcademicYearAccessibleAsync(targetYear);
+			if (source.FeeHeadScope == RefundFeeHeadScope.SelectedFeeHeads)
+				throw new BusinessException(RefundPolicyErrorCodes.CloneRequiresTargetFeeHeads);
+		}
+
+		var requestedName = FinanceName.Normalize(input.Name);
+		if (requestedName.Length is 1 or 2 or > 128)
+			throw new BusinessException(RefundPolicyErrorCodes.InvalidCloneName);
+
+		await referenceLock.AcquireAsync();
+		var copy = new CreateUpdateRefundPolicyDto
 		{
 			AcademicYearId = targetYear,
-			PolicyName = string.IsNullOrWhiteSpace(input.Name)
+			PolicyName = requestedName.Length == 0
 				? FinanceName.NextCopy(source.PolicyName, await AsyncExecuter.ToListAsync(
-					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == (input.TargetAcademicYearId ?? source.AcademicYearId))
+					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == targetYear)
 					.Select(x => x.PolicyName)))
-				: FinanceName.Normalize(input.Name),
+				: requestedName,
 			Status = "Draft",
 			IsDefault = false,
 			Description = source.Description,
-			FeeHeadScope = sameYear ? source.FeeHeadScope.ToString() : RefundFeeHeadScope.AllFeeHeads.ToString(),
-			ApplicableFeeHeadIds = sameYear ? [.. source.GetApplicableFeeHeadIds()] : [],
+			FeeHeadScope = source.FeeHeadScope.ToString(),
+			ApplicableFeeHeadIds = [.. source.GetApplicableFeeHeadIds()],
 			IncludePaidCharges = source.IncludePaidCharges,
 			IncludePaidLateFee = source.IncludePaidLateFee,
 			AllowPartialRefund = source.AllowPartialRefund,
@@ -263,9 +291,11 @@ public class RefundPolicyAppService(
 			DeductionExplanation = source.DeductionExplanation,
 			AllowedPayoutMethods = source.GetAllowedPayoutMethods().Select(x => x.ToString()).ToList(),
 			ExpenseCategoryId = sameYear ? source.ExpenseCategoryId : null,
-            DefaultPayingBankAccountId = sameYear ? source.DefaultPayingBankAccountId : null,
-            ProcessingTargetDays = source.ProcessingTargetDays
-		});
+			DefaultPayingBankAccountId = sameYear ? source.DefaultPayingBankAccountId : null,
+			ProcessingTargetDays = source.ProcessingTargetDays
+		};
+		await EnsureReferencesAsync(copy);
+		return await SaveNewAsync(copy, "cloned");
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Delete)]
@@ -300,6 +330,7 @@ public class RefundPolicyAppService(
 		await GetRequiredAsync(id);
 		var query = (await versionRepository.GetQueryableAsync())
 			.Where(x => x.PolicyType == "refund" && x.PolicyId == id);
+		if (input.VersionId is Guid versionId) query = query.Where(x => x.Id == versionId);
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query.OrderByDescending(x => x.VersionNumber)
 			.Skip(input.SkipCount).Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
@@ -339,20 +370,24 @@ public class RefundPolicyAppService(
 		};
 	}
 
+	private async Task EnsureAcademicYearAccessibleAsync(Guid academicYearId)
+	{
+		if (academicYearId == Guid.Empty || await academicYearRepository.FindAsync(academicYearId) == null)
+			throw new BusinessException(RefundPolicyErrorCodes.AcademicYearRequired);
+		await scopeAccess.EnsureAcademicContextAccessibleAsync(academicYearId, null, null, null, null);
+	}
+
 	private async Task EnsureReferencesAsync(CreateUpdateRefundPolicyDto input)
 	{
-		await scopeAccess.EnsureAcademicContextAccessibleAsync(input.AcademicYearId, null, null, null, null);
-		var active = input.Status == "Active";
+		var active = RefundPolicyMapping.ParseStatus(input.Status) == RefundPolicyStatus.Active;
 		if (active || input.ExpenseCategoryId.HasValue)
 			await routingManager.RequireCategoryAsync(input.AcademicYearId, input.ExpenseCategoryId, TransactionType.Expense);
 		if (input.DefaultPayingBankAccountId.HasValue || (active && input.AllowedPayoutMethods.Any(x => x != "Cash")))
 			await routingManager.RequireBankAsync(input.AcademicYearId, input.DefaultPayingBankAccountId);
-		if (await academicYearRepository.FindAsync(input.AcademicYearId) == null)
-			throw new BusinessException(RefundPolicyErrorCodes.AcademicYearRequired);
 		if (!string.Equals(input.FeeHeadScope, RefundFeeHeadScope.SelectedFeeHeads.ToString(), StringComparison.OrdinalIgnoreCase))
 			return;
 		var ids = input.ApplicableFeeHeadIds.Distinct().ToList();
-		var heads = await feeHeadRepository.GetListAsync(x => ids.Contains(x.Id));
+		var heads = await feeHeadRepository.GetListAsync(x => Enumerable.Contains(ids, x.Id));
 		if (ids.Count == 0 || heads.Count != ids.Count || heads.Any(x => !x.IsActive || x.AcademicYearId != input.AcademicYearId))
 			throw new BusinessException(RefundPolicyErrorCodes.InvalidFeeHeadReference);
 	}

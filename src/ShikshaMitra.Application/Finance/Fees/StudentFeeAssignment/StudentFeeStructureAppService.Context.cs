@@ -52,6 +52,8 @@ public partial class StudentFeeStructureAppService
 			result.StructureRevision = snapshot?.RevisionNumber;
 			if (snapshot != null)
 			{
+				foreach (var head in snapshot.Heads)
+					ProjectOptionalServicePeriods(existing, head);
 				result.JoiningDate = snapshot.RegistrationJoiningDate;
 				result.ChargeStartDate = snapshot.ChargeStartDate;
 				result.ChargeEndDate = snapshot.ChargeEndDate;
@@ -97,8 +99,10 @@ public partial class StudentFeeStructureAppService
 				return result;
 			}
 			result.Status = facts.Selection == null ? "Unassigned" : "Selected";
-			await PopulateDefaultProrationAsync(result, reads);
-			if (!facts.JoiningDate.HasValue && facts.Selection?.Heads.Any(h => !h.IsOneTime && result.AdmissionFeeHeadIds.Contains(h.FeeHeadId)) == true)
+			if (UsesAdmissionProration(facts.JoiningDate, year.StartDate))
+				await PopulateDefaultProrationAsync(result, reads);
+			// Optional fees can be deselected in Finance. Preview checks the final selection.
+			if (!facts.JoiningDate.HasValue && facts.Selection?.Heads.Any(h => !h.IsOptional && !h.IsOneTime && result.AdmissionFeeHeadIds.Contains(h.FeeHeadId)) == true)
 				throw new BusinessException(ProrationPolicyErrorCodes.JoiningDateRequired);
 			if (facts.JoiningDate?.Date > year.EndDate.Date) throw new BusinessException(ProrationPolicyErrorCodes.JoiningDateInvalid);
 		}
@@ -107,7 +111,7 @@ public partial class StudentFeeStructureAppService
 			result.Status = "NeedsAttention";
 			result.ErrorCode = error.Code;
 			result.Blocker = error.Code == ProrationPolicyErrorCodes.JoiningDateRequired
-				? "Confirm the actual joining date in Admission before preparing these fees."
+				? "Review the actual joining date in Student Applications, then refresh this assignment."
 				: error.Code == ProrationPolicyErrorCodes.JoiningDateInvalid
 					? "Review the admission joining date for this academic year."
 					: "The Finance policy configuration or prepared assignment records need review before assignment.";
@@ -118,8 +122,9 @@ public partial class StudentFeeStructureAppService
 	private async Task PopulateDefaultProrationAsync(AssignmentContextDto result, AssignmentContextReads? reads = null)
 	{
 		var resolver = LazyServiceProvider.LazyGetRequiredService<AdmissionProrationPolicyResolver>();
-		var policy = reads == null ? await resolver.ResolveAsync(result.AcademicYearId)
-			: await (reads.DefaultProration ??= resolver.ResolveAsync(result.AcademicYearId));
+		var (policy, source) = result.StructureId.HasValue || reads == null
+			? await resolver.ResolveWithSourceAsync(result.AcademicYearId, result.StructureId)
+			: (await (reads.DefaultProration ??= resolver.ResolveAsync(result.AcademicYearId)), "FinanceDefault");
 		if (policy == null) return;
 		ProrationPolicySnapshot rules;
 		try
@@ -131,7 +136,7 @@ public partial class StudentFeeStructureAppService
 		}
 		catch (JsonException) { throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid); }
 		result.ProrationPolicy = ToAssignmentPolicy(policy);
-		result.ProrationPolicy.Source = "FinanceDefault";
+		result.ProrationPolicy.Source = source;
 		result.AdmissionFeeHeadIds = rules.Rules.Where(r => r.ApplyOnAdmission && r.RuleType != ProrationRuleType.FullCharge)
 			.Select(r => r.FeeHeadId).ToList();
 	}
@@ -148,5 +153,6 @@ public partial class StudentFeeStructureAppService
 
 	private static List<VariableFeeHeadAmountDto> SavedVariableAmounts(StudentFeeAssignmentPreviewDto saved) =>
 		saved.Heads.Where(h => h.Included && h.IsVariable).Select(h => new VariableFeeHeadAmountDto
-		{ FeeHeadId = h.FeeHeadId, Amount = h.EffectiveAmount, ZeroAmountReason = h.ZeroAmountReason }).ToList();
+		{ FeeHeadId = h.FeeHeadId, Amount = h.EffectiveAmount, ZeroAmountReason = h.ZeroAmountReason,
+			IsMonthlyRate = h.AmountBasis == "MonthlyRate" }).ToList();
 }

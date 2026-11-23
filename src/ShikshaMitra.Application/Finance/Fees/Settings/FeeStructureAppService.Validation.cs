@@ -93,7 +93,7 @@ public partial class FeeStructureAppService
 						throw new BusinessException(FeeStructureErrorCodes.VersionMismatch);
 				}
 				var detail = new FeeStructureDetail(GuidGenerator.Create(), CurrentTenant.Id, current?.Id ?? Guid.NewGuid(), line.FeeHeadId,
-					line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable);
+					line.MonthlyRate.HasValue ? 0m : line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable);
 				AttachSchedule(detail, line);
 				var resolved = scheduleResolver.Resolve(detail, term);
 				var installments = resolved.Installments.Select(x => new CreatePaymentTermInstallmentDto
@@ -104,6 +104,17 @@ public partial class FeeStructureAppService
 				PaymentTermInstallmentValidator.PrepareAndValidate(version.DemandGenerationRule, version.DemandOffsetDays, installments, board.StartDate, board.EndDate);
 				if (installments.Sum(x => x.AllocationPercentage) != 100m || resolved.Installments.Any(x => x.CalculatedAmount < 0))
 					throw new BusinessException(PaymentTermErrorCodes.PercentageTotalNot100);
+				if (line.MonthlyRate.HasValue)
+				{
+					detail.UpdateConfiguration(0m, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable, line.MonthlyRate);
+					resolved = scheduleResolver.Resolve(detail, term);
+					line.Amount = resolved.AnnualAmount;
+					if (line.Amount > 9999999999.99m)
+					{
+						result.Errors.Add($"{head.Name}: the monthly amount produces a term total above the allowed limit.");
+						continue;
+					}
+				}
 				result.Schedules.Add(new ResolvedFeeHeadScheduleDto
 				{
 					FeeHeadId = head.Id, FeeHeadName = head.Name, AnnualAmount = line.Amount, PaymentTermId = term.Id, PaymentTermName = term.Name,
@@ -116,11 +127,15 @@ public partial class FeeStructureAppService
 					}).ToList()
 				});
 			}
-			catch (BusinessException error) { result.Errors.Add($"{head.Name}: the Payment Term or customized schedule is invalid ({error.Code})."); }
+			catch (BusinessException error)
+			{
+				var reason = error.Data["Reason"] as string;
+				result.Errors.Add($"{head.Name}: {reason ?? $"the Payment Term or customized schedule is invalid ({error.Code})."}");
+			}
 		}
 
 		var availableVersions = await ActivePolicyVersionsAsync(year.Id,
-			new[] { candidate.CollectionPolicyId, candidate.ConcessionPolicyId, candidate.RefundPolicyId }
+			new[] { candidate.CollectionPolicyId, candidate.ConcessionPolicyId, candidate.RefundPolicyId, candidate.ProrationPolicyId }
 				.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToArray());
 		async Task<FinancePolicyVersion?> Resolve(string family, Guid? id, Guid? selected, Guid? previousId, Guid? previousVersion, bool required)
 		{
@@ -142,6 +157,7 @@ public partial class FeeStructureAppService
 					"collection" => (await collectionPolicyRepository.GetAsync(id.Value)).Version,
 					"concession" => (await concessionPolicyRepository.GetAsync(id.Value)).Version,
 					"refund" => (await refundPolicyRepository.GetAsync(id.Value)).Version,
+					"proration" => (await prorationPolicyRepository.GetAsync(id.Value)).Version,
 					_ => 0
 				};
 				if (version.VersionNumber != currentNumber)
@@ -163,13 +179,20 @@ public partial class FeeStructureAppService
 		candidate.CollectionPolicyVersionId = collection?.Id;
 		candidate.ConcessionPolicyVersionId = concession?.Id;
 		candidate.RefundPolicyVersionId = refund?.Id;
-		foreach (var version in new[] { collection, concession, refund }.Where(x => x != null))
+		var previousProration = current?.GetExplicitProrationPolicyVersionId();
+		var proration = await Resolve("proration", candidate.ProrationPolicyId, candidate.ProrationPolicyVersionId,
+			previousProration.HasValue ? current!.ProrationPolicyId : null, previousProration, false);
+		candidate.ProrationPolicyVersionId = proration?.Id;
+		foreach (var version in new[] { collection, concession, refund, proration }.Where(x => x != null))
 			result.PolicyLabels[version!.PolicyType] = $"{version.PolicyName} · v{version.VersionNumber}";
 		try
 		{
 			var cp = collection == null ? null : CollectionPolicySnapshot.Deserialize(collection.SnapshotJson);
 			var cn = concession == null ? null : JsonSerializer.Deserialize<ConcessionPolicySnapshot>(concession.SnapshotJson, SnapshotOptions);
 			var rp = refund == null ? null : JsonSerializer.Deserialize<RefundPolicySnapshot>(refund.SnapshotJson, SnapshotOptions);
+			var pp = proration == null ? null : JsonSerializer.Deserialize<ProrationPolicySnapshot>(proration.SnapshotJson, SnapshotOptions);
+			if (proration != null && (pp?.Rules == null || pp.PolicyId != proration.PolicyId || pp.AcademicYearId != year.Id))
+				throw new JsonException("Invalid proration policy snapshot.");
 			if (collection != null && (cp == null || string.IsNullOrWhiteSpace(cp.PolicyCode) || cp.LateFeeApplyOnFeeHeads == null) ||
 				concession != null && (cn == null || cn.PolicyId != concession.PolicyId || cn.AcademicYearId != year.Id) ||
 				refund != null && (rp == null || rp.PolicyId != refund.PolicyId || rp.AcademicYearId != year.Id || rp.ApplicableFeeHeadIds == null))
@@ -192,6 +215,12 @@ public partial class FeeStructureAppService
 			{
 				row.Collection = cp is { EnableLateFee: true } && (cp.ApplyLateFeeToAllFeeHeads || cp.LateFeeApplyOnFeeHeads.Contains(row.FeeHeadId)) ? "Late fee applies" : "No late fee";
 				row.Concession = cn != null && candidate.ConcessionApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Eligible on approval" : "Not eligible";
+				if (pp != null)
+				{
+					var recurring = candidate.FeeHeads.Any(line => line.FeeHeadId == row.FeeHeadId && !line.IsOneTime);
+					row.Proration = recurring && pp.Rules.Any(rule => rule.FeeHeadId == row.FeeHeadId)
+						? "Proration rule configured" : "Full charge";
+				}
 				row.Refund = rp == null ? "No refund policy attached" : rp.FeeHeadScope != RefundFeeHeadScope.SelectedFeeHeads || rp.ApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Policy eligible" : "Excluded";
 			}
 			var unused = (cp is { ApplyLateFeeToAllFeeHeads: false } ? cp.LateFeeApplyOnFeeHeads : [])
@@ -210,18 +239,21 @@ public partial class FeeStructureAppService
 		var collectionQuery = (await collectionPolicyRepository.GetQueryableAsync()).Where(x => x.AcademicYearId == yearId && x.Status == CollectionPolicyStatus.Active);
 		var concessionQuery = (await concessionPolicyRepository.GetQueryableAsync()).Where(x => x.AcademicYearId == yearId && x.Status == ConcessionPolicyStatus.Active);
 		var refundQuery = (await refundPolicyRepository.GetQueryableAsync()).Where(x => x.AcademicYearId == yearId && x.Status == RefundPolicyStatus.Active);
+		var prorationQuery = (await prorationPolicyRepository.GetQueryableAsync()).Where(x => x.AcademicYearId == yearId && x.Status == ProrationPolicyStatus.Active);
 		if (requestedPolicyIds != null)
 		{
 			collectionQuery = collectionQuery.Where(x => Enumerable.Contains(requestedPolicyIds, x.Id));
 			concessionQuery = concessionQuery.Where(x => Enumerable.Contains(requestedPolicyIds, x.Id));
 			refundQuery = refundQuery.Where(x => Enumerable.Contains(requestedPolicyIds, x.Id));
+			prorationQuery = prorationQuery.Where(x => Enumerable.Contains(requestedPolicyIds, x.Id));
 		}
 		var collection = await AsyncExecuter.ToListAsync(collectionQuery.Select(x => x.Id));
 		var concession = await AsyncExecuter.ToListAsync(concessionQuery.Select(x => x.Id));
 		var refund = await AsyncExecuter.ToListAsync(refundQuery.Select(x => x.Id));
+		var proration = await AsyncExecuter.ToListAsync(prorationQuery.Select(x => x.Id));
 		return await financePolicyVersionRepository.GetListAsync(x => x.AcademicYearId == yearId && x.Status == "Active" &&
 			(x.PolicyType == "collection" && collection.Contains(x.PolicyId) || x.PolicyType == "concession" && concession.Contains(x.PolicyId) ||
-			 x.PolicyType == "refund" && refund.Contains(x.PolicyId)));
+			 x.PolicyType == "refund" && refund.Contains(x.PolicyId) || x.PolicyType == "proration" && proration.Contains(x.PolicyId)));
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add)]

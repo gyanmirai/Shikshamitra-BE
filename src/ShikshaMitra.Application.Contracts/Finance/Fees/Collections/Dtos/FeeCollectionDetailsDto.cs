@@ -43,6 +43,7 @@ public class FeeSummaryDto
     public double TotalFee { get; set; }
     public double PaidFee { get; set; }
     public double PendingFee { get; set; }
+    public decimal OptionalServiceCredit { get; set; }
 
     /// <summary>
     /// Sum of all DueFee line allocations whose parent <c>FeeRecordMetadata</c> is currently
@@ -105,9 +106,19 @@ public class ChargeDetailDto
     public double PaidAmount { get; set; }
     public double PendingAmount { get; set; }
 	public double WaivedAmount { get; set; }
+	/// <summary>Applied waiver evidence. Omitted for callers without waiver access.</summary>
+	public List<AppliedChargeWaiverDto>? WaiverHistory { get; set; }
 	public bool CanWaive { get; set; }
 	public string? Explanation { get; set; }
     public FeeCollectionStatus Status { get; set; }
+}
+
+public class AppliedChargeWaiverDto
+{
+    public Guid Id { get; set; }
+    public DateTime AppliedAt { get; set; }
+    public decimal Amount { get; set; }
+    public string Reason { get; set; } = string.Empty;
 }
 
 /// <summary>One contiguous interval of actually counted late-fee days. Both dates are inclusive.</summary>

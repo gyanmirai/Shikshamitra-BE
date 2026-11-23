@@ -29,8 +29,10 @@ public class FeeHeadAssignmentRequestValidator : AbstractValidator<FeeHeadAssign
 	{
 		RuleFor(x => x.FeeHeadId).NotEmpty();
 		RuleFor(x => x).Must(x => x.IsVariable
-            ? !x.Amount.HasValue
-            : x.Amount.HasValue && x.Amount >= 0 && x.Amount <= 9999999999.99m && decimal.Round(x.Amount.Value, 2) == x.Amount)
+            ? !x.Amount.HasValue && !x.MonthlyRate.HasValue
+            : x.MonthlyRate.HasValue
+                ? !x.IsOneTime && x.PaymentTermId.HasValue && IsValidAmount(x.MonthlyRate)
+                : IsValidAmount(x.Amount))
             .WithMessage("Fixed fees require a valid amount; variable fees must not contain a structure amount.");
 		RuleFor(x => x.InstallmentOverrides).NotNull();
 		RuleForEach(x => x.InstallmentOverrides).NotNull().ChildRules(row =>
@@ -44,4 +46,7 @@ public class FeeHeadAssignmentRequestValidator : AbstractValidator<FeeHeadAssign
 		RuleFor(x => x.PayableMonth).IsInEnum();
 		RuleFor(x => x.ScheduleMode).IsInEnum();
 	}
+
+	private static bool IsValidAmount(decimal? amount) =>
+		amount is >= 0 and <= 9999999999.99m && decimal.Round(amount.Value, 2) == amount;
 }

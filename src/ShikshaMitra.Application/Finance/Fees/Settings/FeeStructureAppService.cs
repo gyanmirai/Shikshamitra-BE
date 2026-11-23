@@ -40,6 +40,7 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 	private readonly IRepository<FeeHead, Guid> feeHeadRepository;
 	private readonly IRepository<ConcessionPolicy, Guid> concessionPolicyRepository;
 	private readonly IRepository<RefundPolicy, Guid> refundPolicyRepository;
+	private readonly IRepository<ProrationPolicy, Guid> prorationPolicyRepository;
 	private readonly IRepository<CollectionPolicy, Guid> collectionPolicyRepository;
 	private readonly IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository;
 	private readonly IRepository<EducationBoard, Guid> boardRepository;
@@ -48,6 +49,7 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 	private readonly IUserScopeAccessService scopeAccess;
 	private readonly FeeHeadAccountingManager accountingManager;
 	private readonly PaymentTermScheduleResolver scheduleResolver;
+	private readonly IFeeStructureRevisionLock revisionLock;
 
 	public FeeStructureAppService(
 		IRepository<FeeStructure, Guid> feeStructureRepository,
@@ -58,6 +60,7 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 		IRepository<FeeHead, Guid> feeHeadRepository,
 		IRepository<ConcessionPolicy, Guid> concessionPolicyRepository,
 		IRepository<RefundPolicy, Guid> refundPolicyRepository,
+		IRepository<ProrationPolicy, Guid> prorationPolicyRepository,
 		IRepository<CollectionPolicy, Guid> collectionPolicyRepository,
 		IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository,
 		IRepository<EducationMediumStage, Guid> stageRepository,
@@ -67,7 +70,8 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 		IDataFilter dataFilter,
 		IUserScopeAccessService scopeAccess,
 		FeeHeadAccountingManager accountingManager,
-		PaymentTermScheduleResolver scheduleResolver
+		PaymentTermScheduleResolver scheduleResolver,
+		IFeeStructureRevisionLock revisionLock
 	)
 	{
 		this.feeStructureRepository = feeStructureRepository;
@@ -78,6 +82,7 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 		this.feeHeadRepository = feeHeadRepository;
 		this.concessionPolicyRepository = concessionPolicyRepository;
 		this.refundPolicyRepository = refundPolicyRepository;
+		this.prorationPolicyRepository = prorationPolicyRepository;
 		this.collectionPolicyRepository = collectionPolicyRepository;
 		this.financePolicyVersionRepository = financePolicyVersionRepository;
 		_ = stageRepository;
@@ -88,6 +93,7 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 		this.scopeAccess = scopeAccess;
 		this.accountingManager = accountingManager;
 		this.scheduleResolver = scheduleResolver;
+		this.revisionLock = revisionLock;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Add)]
@@ -110,7 +116,7 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 		}
 		ThrowIfInvalid(await ValidateCandidateAsync(feeStructureMetadataId, input.StandardId, candidate, null, !candidate.SaveAsDraft));
 		await CheckAttachmentsAsync(candidate, null);
-		await EnsureUniqueNameAsync(input.StandardId, candidate.Name, null, null);
+		await EnsureUniqueNameAsync(input.StandardId, candidate.Name);
 		var entity = new FeeStructure(input.RequestId ?? GuidGenerator.Create(), CurrentTenant.Id, feeStructureMetadataId, input.StandardId, candidate.Name.Trim());
 		entity.SetProperty("CreationRequestHash", requestHash);
 		ApplyCandidate(entity, candidate);
@@ -127,7 +133,8 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 		EnsureStamp(entity, input.ConcurrencyStamp);
 		ThrowIfInvalid(await ValidateCandidateAsync(entity.FeeStructureMetadataId, entity.StandardId, input, entity, !input.SaveAsDraft));
 		await CheckAttachmentsAsync(input, entity);
-		await EnsureUniqueNameAsync(entity.StandardId, input.Name, entity.Id, entity.RevisionRootId);
+		await EnsureUniqueNameAsync(entity.StandardId, input.Name, entity.Id);
+		await EnsureRevisionFeeHeadsChangedAsync(entity, input);
 		ApplyCandidate(entity, input);
 		await feeStructureRepository.UpdateAsync(entity, autoSave: true);
 		return await MapAsync(entity);
@@ -166,11 +173,15 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 	{
 		var entity = await GetScopedAsync(id);
 		if (entity.IsLocked) return await MapAsync(entity);
+		await revisionLock.AcquireAsync(entity.RevisionRootId);
 		EnsureStamp(entity, input.ConcurrencyStamp);
 		await EnsureUnusedAsync(entity.Id);
 		var candidate = ToRequest(entity);
+		if (entity.PreviousRevisionId.HasValue)
+			await EnsureUniqueNameAsync(entity.StandardId, candidate.Name, entity.Id);
 		var review = await ValidateCandidateAsync(entity.FeeStructureMetadataId, entity.StandardId, candidate, entity, true);
 		ThrowIfInvalid(review);
+		await EnsureRevisionFeeHeadsChangedAsync(entity, candidate);
 		await CheckAttachmentsAsync(candidate, entity);
 		ApplyCandidate(entity, candidate);
 		entity.SetProperty("PublicationReview", JsonSerializer.Serialize(review));
@@ -182,22 +193,40 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Add)]
 	public async Task<FeeStructureCreateResponse> CreateRevisionAsync(Guid id, FeeStructureRevisionRequest input)
 	{
+		if (input.RequestId == Guid.Empty) throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 		// Referencing a published parent must not make EF's relationship fixup mark its aggregate modified.
 		using var untrackedHistory = feeStructureRepository.DisableTracking();
 		var previous = await GetScopedAsync(id);
-		EnsureStamp(previous, input.ConcurrencyStamp);
 		if (!previous.IsLocked) throw new BusinessException(FeeStructureErrorCodes.RevisionRequiresPublication);
+		await revisionLock.AcquireAsync(previous.RevisionRootId);
+		var requestHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+			JsonSerializer.Serialize(new { SourceId = id, input.ConcurrencyStamp }))));
+		if (input.RequestId.HasValue)
+		{
+			FeeStructure? existing;
+			using (dataFilter.Disable<ISoftDelete>())
+				existing = await feeStructureRepository.FindAsync(input.RequestId.Value);
+			if (existing != null)
+			{
+				await EnsureStandardScopeAsync(existing.StandardId);
+				if (existing.IsDeleted || existing.PreviousRevisionId != id ||
+					existing.RevisionRootId != previous.RevisionRootId ||
+					existing.GetProperty<string>("RevisionRequestHash") != requestHash)
+					throw new BusinessException(FeeStructureErrorCodes.ConcurrencyConflict);
+				return await MapAsync(existing);
+			}
+		}
+		EnsureStamp(previous, input.ConcurrencyStamp);
 		List<FeeStructure> siblings;
 		using (dataFilter.Disable<ISoftDelete>())
 			siblings = await feeStructureRepository.GetListAsync(x => x.RevisionRootId == previous.RevisionRootId);
-		var draft = siblings.SingleOrDefault(x => !x.IsLocked && !x.IsDeleted);
-		if (draft != null) return await MapAsync(draft);
 		if (siblings.Where(x => x.IsLocked).Max(x => x.RevisionNumber) != previous.RevisionNumber)
 			throw new BusinessException(FeeStructureErrorCodes.ConcurrencyConflict);
 		var candidate = ToRequest(previous);
 		await CheckAttachmentsAsync(candidate, null);
-		var entity = new FeeStructure(GuidGenerator.Create(), CurrentTenant.Id, previous.FeeStructureMetadataId, previous.StandardId, previous.Name);
+		var entity = new FeeStructure(input.RequestId ?? GuidGenerator.Create(), CurrentTenant.Id, previous.FeeStructureMetadataId, previous.StandardId, previous.Name);
 		entity.SetRevision(previous, siblings.Max(x => x.RevisionNumber) + 1);
+		entity.SetProperty("RevisionRequestHash", requestHash);
 		foreach (var line in candidate.FeeHeads) line.Id = null;
 		ApplyCandidate(entity, candidate);
 		await feeStructureRepository.InsertAsync(entity, autoSave: true);
@@ -210,7 +239,24 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 		var current = input.StructureId.HasValue ? await GetScopedAsync(input.StructureId.Value) : null;
 		if (current != null && (current.StandardId != input.StandardId || current.FeeStructureMetadataId != input.FeeStructureMetadataId))
 			throw new BusinessException(FeeStructureErrorCodes.ScopeMismatch);
-		return await ValidateCandidateAsync(input.FeeStructureMetadataId, input.StandardId, input.StandardFeeStructures, current, true);
+		var review = await ValidateCandidateAsync(input.FeeStructureMetadataId, input.StandardId, input.StandardFeeStructures, current, true);
+		if (current is { IsLocked: false, PreviousRevisionId: not null } && review.Errors.Count == 0)
+		{
+			try
+			{
+				await EnsureUniqueNameAsync(current.StandardId, input.StandardFeeStructures.Name, current.Id);
+				await EnsureRevisionFeeHeadsChangedAsync(current, input.StandardFeeStructures);
+			}
+			catch (BusinessException error) when (error.Code == FeeStructureErrorCodes.DuplicateName)
+			{
+				review.Errors.Add("A Fee Structure with this name already exists in this class. Choose a different name.");
+			}
+			catch (BusinessException error) when (error.Code == FeeStructureErrorCodes.UnchangedRevisionFeeHeads)
+			{
+				review.Errors.Add(UnchangedRevisionFeeHeadsMessage);
+			}
+		}
+		return review;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.View)]

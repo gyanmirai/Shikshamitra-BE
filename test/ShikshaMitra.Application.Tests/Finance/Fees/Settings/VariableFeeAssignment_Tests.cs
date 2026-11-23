@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
@@ -39,7 +40,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         await Should.ThrowAsync<BusinessException>(() => _feeStructures.PatchAsync(revision.Id,
             Patch(revision.ConcurrencyStamp, new { feeHeads = new { update = new[] { new { lineId = revision.FeeHeads.Single().Id, isVariable = false } } } })));
         var fixedRevision = await _feeStructures.PatchAsync(revision.Id, Patch(revision.ConcurrencyStamp,
-            new { feeHeads = new { update = new[] { new { lineId = revision.FeeHeads.Single().Id, isVariable = false, amount = 2500m } } } }));
+            new { name = "Revised fixed fees", feeHeads = new { update = new[] { new { lineId = revision.FeeHeads.Single().Id, isVariable = false, amount = 2500m } } } }));
         fixedRevision.FeeHeads.Single().Amount.ShouldBe(2500m);
         fixedRevision.FeeHeads.Single().IsVariable.ShouldBeFalse();
         var original = (await _feeStructures.GetByStandardAsync(standard)).StandardFeeStructures.Single(x => x.Id == published.Id);
@@ -47,15 +48,16 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         original.FeeHeads.Single().IsVariable.ShouldBeTrue();
     }
 
-    private async Task<(AssignStudentFeeStructureDto Input, Guid HeadId)> VariableAssignmentAsync(bool variable, bool optional, bool addAdditionalHead = false, decimal fixedAmount = 1000.01m)
+    private async Task<(AssignStudentFeeStructureDto Input, Guid HeadId)> VariableAssignmentAsync(bool variable, bool optional, bool addAdditionalHead = false, decimal fixedAmount = 1000.01m, bool monthlyTerm = false, decimal? configuredMonthlyRate = null)
     {
-        var (metadataId, standardId, candidate) = await ReadyCandidateAsync();
+        var (metadataId, standardId, candidate) = await ReadyCandidateAsync(monthlyTerm);
         candidate.ConcessionPolicyId = null;
         candidate.ConcessionPolicyVersionId = null;
         var head = candidate.FeeHeads.Single();
         head.IsVariable = variable;
         head.IsOptional = optional;
         head.Amount = variable ? null : fixedAmount;
+        head.MonthlyRate = configuredMonthlyRate;
         if (addAdditionalHead)
         {
             var original = await _feeHeadRepo.GetAsync(head.FeeHeadId);
@@ -66,7 +68,8 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         }
         var draft = await _feeStructures.CreateAsync(metadataId, new() { StandardId = standardId, StandardFeeStructures = candidate });
         draft.FeeHeads.Single(x => x.FeeHeadId == head.FeeHeadId).IsVariable.ShouldBe(variable);
-        draft.FeeHeads.Single(x => x.FeeHeadId == head.FeeHeadId).Amount.ShouldBe(variable ? null : decimal.Ceiling(fixedAmount));
+        draft.FeeHeads.Single(x => x.FeeHeadId == head.FeeHeadId).Amount.ShouldBe(variable
+            ? null : configuredMonthlyRate.HasValue ? decimal.Ceiling(configuredMonthlyRate.Value) * 12 : decimal.Ceiling(fixedAmount));
         var structure = await _feeStructures.PublishAsync(draft.Id, new() { ConcurrencyStamp = draft.ConcurrencyStamp });
         var metadata = await _metadataRepo.GetAsync(metadataId);
         var standard = await _standardRepo.GetAsync(standardId);
@@ -74,6 +77,43 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
             metadata.AcademicBoardId!.Value, metadata.AcademicMediumId!.Value, standard.EducationMediumStageId, standardId, status: StudentLifeCycleStatusEnum.Enrolled);
         await GetRequiredService<IRepository<Student, Guid>>().InsertAsync(student, autoSave: true);
         return (new() { StudentId = student.Id, AcademicYearId = metadata.AcademicYearId.Value, StandardFeeStructureId = structure.Id }, head.FeeHeadId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Monthly_Rate_Produces_The_Entered_Amount_For_Each_Full_Month(bool variable)
+    {
+        using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
+        var (input, headId) = await VariableAssignmentAsync(variable, false,
+            monthlyTerm: true, configuredMonthlyRate: variable ? null : 5000m);
+        if (variable)
+            input.VariableFeeHeads.Add(new() { FeeHeadId = headId, Amount = 5000m, IsMonthlyRate = true });
+        var service = GetRequiredService<IStudentFeeStructureAppService>();
+        var preview = await service.PreviewAsync(input);
+        preview.Heads.Single().AmountBasis.ShouldBe("MonthlyRate");
+        preview.Lines.Count.ShouldBe(12);
+        preview.Lines.ShouldAllBe(line => line.ProratedAmount == 5000m);
+        preview.ProratedTotal.ShouldBe(60000m);
+        input.PreviewToken = preview.PreviewToken;
+        await service.AssignAsync(input);
+        var dues = await GetRequiredService<IRepository<DueFee, Guid>>().GetListAsync(x => x.StudentId == input.StudentId);
+        dues.Count.ShouldBe(12);
+        dues.ShouldAllBe(due => due.OriginalAmount == 5000m);
+    }
+
+    [Fact]
+    public void Monthly_Rate_Applies_The_Cutoff_Only_To_The_Partial_Month()
+    {
+        var calculator = new ProrationPolicyCalculationService();
+        var rule = new ProrationPolicyRuleSnapshot(Guid.NewGuid(), ProrationRuleType.MonthlyCutoff,
+            ProrationRoundingMode.Currency, 10, ProrationAfterCutoffAction.HalfCharge);
+        var start = new DateTime(2025, 4, 16);
+        var end = new DateTime(2025, 5, 31);
+        MonthlyFeePricing.Calculate(calculator, rule, 5000m, new(2025, 4, 1), new(2025, 4, 30), start, end)
+            .ProratedAmount.ShouldBe(2500m);
+        MonthlyFeePricing.Calculate(calculator, rule, 5000m, new(2025, 5, 1), end, start, end)
+            .ProratedAmount.ShouldBe(5000m);
     }
 
     [Theory]

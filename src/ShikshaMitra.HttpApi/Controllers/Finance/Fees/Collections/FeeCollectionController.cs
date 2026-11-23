@@ -84,4 +84,14 @@ public class FeeCollectionController(
         var result = await feeWaiverAppService.ApplyAsync(input);
         return StatusCode(StatusCodes.Status201Created, result);
     }
+
+    // Use a distinct route so a client sending a partial amount cannot hit an older
+    // server that accepts the request but silently applies the full balance.
+    [HttpPost("waivers/with-amount")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.ApplyWaiver)]
+    [ProducesResponseType(typeof(FeeWaiverResultDto), StatusCodes.Status201Created)]
+    public Task<IActionResult> ApplyWaiverAmountAsync([FromBody] ApplyFeeWaiverInput input)
+        => input.Amount.HasValue
+            ? ApplyWaiverAsync(input)
+            : Task.FromResult<IActionResult>(BadRequest(new ProblemDetails { Detail = "Enter a waiver amount." }));
 }

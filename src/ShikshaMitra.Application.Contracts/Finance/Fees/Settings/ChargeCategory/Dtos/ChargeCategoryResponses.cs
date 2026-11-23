@@ -26,3 +26,15 @@ public class PaginatedChargeCategoryResponse
     public int TotalPages { get; set; }
     public List<ChargeCategoryResponse> Items { get; set; } = null!; // The response mapper populates these members after construction.
 }
+
+public class ChargeCategoryUsageResponse
+{
+	public Guid CategoryId { get; set; }
+	public string CategoryName { get; set; } = string.Empty;
+	/// <summary>Distinct charge requests, including requests without assignment lines.</summary>
+	public int ChargeCount { get; set; }
+	public int StudentAssignmentCount { get; set; }
+	/// <summary>Up to ten charge names within the caller's permitted student scope.</summary>
+	public List<string> ChargeNames { get; set; } = [];
+	public bool CanDelete => ChargeCount == 0;
+}

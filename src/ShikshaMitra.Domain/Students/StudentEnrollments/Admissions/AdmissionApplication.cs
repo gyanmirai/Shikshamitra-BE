@@ -67,6 +67,27 @@ public partial class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMul
 	}
 
 	/// <summary>Finance alone coordinates this transition with the linked unused assignment.</summary>
+	public void ConfirmInitialFinanceSelection(Guid accountId, AdmissionFeeSelectionSnapshot selection, bool hasPaymentEvidence)
+	{
+		var previous = GetFeeSelection();
+		if (hasPaymentEvidence || HasFinanceFeePayment || accountId == Guid.Empty ||
+			(!StudentId.HasValue && !EnrolledStudentId.HasValue) || selection.StructureId == Guid.Empty ||
+			selection.SavedBy == Guid.Empty || selection.OwnerStageId == Guid.Empty || selection.RevisionNumber < 1 ||
+			selection.Heads.Count == 0 || selection.Heads.Select(h => h.FeeHeadId).Distinct().Count() != selection.Heads.Count ||
+			previous != null && (previous.StructureId != selection.StructureId || previous.RevisionNumber != selection.RevisionNumber ||
+				!previous.Heads.Where(h => !h.IsOptional).Select(h => h.FeeHeadId).Order().SequenceEqual(
+					selection.Heads.Where(h => !h.IsOptional).Select(h => h.FeeHeadId).Order())))
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked);
+		if (previous != null && previous.Heads.OrderBy(h => h.FeeHeadId).SequenceEqual(selection.Heads.OrderBy(h => h.FeeHeadId))) return;
+		if (this.GetProperty<string>("FinanceInitialFeeSelectionHistory") != null)
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked);
+		// This records the first financial assignment, not an edit of issued obligations.
+		// Keep the confirmed admission choices as evidence while synchronizing the canonical selection.
+		this.SetProperty("FinanceInitialFeeSelectionHistory", JsonSerializer.Serialize(new { Before = previous, After = selection, AccountId = accountId }));
+		this.SetProperty(FeeSelectionProperty, JsonSerializer.Serialize(selection));
+	}
+
+	/// <summary>Finance alone coordinates this transition with the linked unused assignment.</summary>
 	public void CorrectUnpaidFinanceSelection(Guid accountId, AdmissionFeeSelectionSnapshot selection, string reason)
 	{
 		if (HasFinanceFeePayment || accountId == Guid.Empty || (!StudentId.HasValue && !EnrolledStudentId.HasValue) ||

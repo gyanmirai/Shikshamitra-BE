@@ -4,6 +4,7 @@ using ShikshaMitra.Communication.Notifications;
 using ShikshaMitra.Security.Roles;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 namespace ShikshaMitra.Common.Middleware;
@@ -50,6 +51,9 @@ public static class ApiProblemDetailsMapper
 			TenantSettingsDomainErrorCodes.DuplicateStandardName or
 			TenantSettingsDomainErrorCodes.DuplicateDivisionName => StatusCodes.Status409Conflict,
 			FeeCollectionErrorCodes.IdempotencyConflict => StatusCodes.Status409Conflict,
+			Finance.Fees.Charges.FinanceChargeErrorCodes.ChargeCategoryInUse => StatusCodes.Status409Conflict,
+			RefundPolicyErrorCodes.DuplicateName or RefundPolicyErrorCodes.DuplicateCode => StatusCodes.Status409Conflict,
+			RefundPolicyErrorCodes.PolicyNotFound => StatusCodes.Status404NotFound,
 			Finance.Accounts.CashManagement.CashManagementErrorCodes.Stale or
 			Finance.Accounts.CashManagement.CashManagementErrorCodes.RetryConflict or
 			Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidState or

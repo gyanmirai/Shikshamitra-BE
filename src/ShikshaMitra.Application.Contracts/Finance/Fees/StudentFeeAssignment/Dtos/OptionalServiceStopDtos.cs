@@ -7,4 +7,5 @@ public record OptionalServiceStopInput(Guid AcademicYearId, Guid FeeHeadId, Date
 	public string? PreviewToken { get; init; }
 }
 
-public record OptionalServiceStopResult(int InstallmentCount, decimal CancelledAmount, string? PreviewToken = null);
+public record OptionalServiceStopResult(int InstallmentCount, decimal CancelledAmount, string? PreviewToken = null,
+	decimal OutstandingReduction = 0m, decimal PrepaidCredit = 0m);

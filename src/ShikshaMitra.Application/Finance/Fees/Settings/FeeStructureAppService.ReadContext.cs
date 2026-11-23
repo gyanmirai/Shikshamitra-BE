@@ -35,7 +35,7 @@ public partial class FeeStructureAppService
 		var headIds = details.Select(x => x.FeeHeadId).Distinct().ToArray();
 		var termIds = details.Where(x => x.PaymentTermId.HasValue).Select(x => x.PaymentTermId!.Value).Distinct().ToArray();
 		var policyIds = entities.SelectMany(x => new[] {
-			x.CollectionPolicyVersionId, x.ConcessionPolicyVersionId, x.RefundPolicyVersionId
+			x.CollectionPolicyVersionId, x.ConcessionPolicyVersionId, x.RefundPolicyVersionId, x.GetExplicitProrationPolicyVersionId()
 		}).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToArray();
 
 		var heads = headIds.Length == 0 ? [] : await AsyncExecuter.ToListAsync(

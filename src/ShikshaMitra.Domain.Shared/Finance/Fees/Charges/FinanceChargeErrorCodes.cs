@@ -37,6 +37,7 @@ public static class FinanceChargeErrorCodes
 	public const string InvalidChargeAmountScale = "Finance:Charge:010025";
 	public const string ChargeAmountExceedsMaximum = "Finance:Charge:010026";
 	public const string StudentFeeStructureNotAssigned = "Finance:Charge:010027";
+	public const string ChargeCategoryInUse = "Finance:Charge:010028";
 
 	// ── Reference data: 02xxxx ────────────────────────────────────
 

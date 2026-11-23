@@ -44,22 +44,19 @@ public class WithdrawalProrationService(IRepository<StudentFeeStructure, Guid> a
 	{
 		var assignment = await assignments.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.AcademicYearId == yearId);
 		// Do not attach today's policy to historic unprorated assignments.
-		if (assignment?.ProrationPolicyVersionId == null) return new();
+		if (assignment == null || (!assignment.ProrationPolicyVersionId.HasValue && !assignment.HasOptionalServicePeriods())) return new();
 		await scope.EnsureStudentAccessibleAsync(studentId);
 		await scope.EnsureCollectionYearAccessibleAsync(yearId);
-		var version = await versions.FindAsync(x => x.TenantId == CurrentTenant.Id && x.Id == assignment.ProrationPolicyVersionId &&
-			x.PolicyId == assignment.ProrationPolicyId && x.AcademicYearId == yearId && x.PolicyType == "proration");
-		ProrationPolicySnapshot? policy;
+		var original = assignment.ProrationPolicyVersionId is Guid originalVersionId
+			? await ReadSavedPolicyAsync(yearId, originalVersionId) : null;
 		StudentFeeAssignmentPreviewDto? evidence;
 		try
 		{
-			policy = version == null ? null : JsonSerializer.Deserialize<ProrationPolicySnapshot>(version.SnapshotJson);
 			evidence = string.IsNullOrWhiteSpace(assignment.AssignmentSnapshotJson) ? null : JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(assignment.AssignmentSnapshotJson);
 		}
 		catch (JsonException) { throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid); }
-		if (policy == null || evidence == null || policy.Rules == null || policy.PolicyId != assignment.ProrationPolicyId ||
-			policy.AcademicYearId != yearId || policy.Version != version!.VersionNumber ||
-			evidence.StudentId != studentId || evidence.AcademicYearId != yearId || evidence.ProrationPolicyVersionId != version.Id)
+		if (evidence == null || evidence.StudentId != studentId || evidence.AcademicYearId != yearId ||
+			(original != null && (original.Version.PolicyId != assignment.ProrationPolicyId || evidence.ProrationPolicyVersionId != original.Version.Id)))
 			throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid);
 		var year = await years.GetAsync(x => x.TenantId == CurrentTenant.Id && x.Id == yearId);
 		if (leavingDate.Date >= year.EndDate.Date) return new();
@@ -68,56 +65,151 @@ public class WithdrawalProrationService(IRepository<StudentFeeStructure, Guid> a
 			throw new BusinessException(ProrationPolicyErrorCodes.InvalidChargePeriod);
 		var rows = (await dues.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.StudentFeeStructureId == assignment.Id))
 			.OrderBy(x => x.InstallmentSequence).ThenBy(x => x.Id).ToList();
-		var expected = evidence.Lines.Select(x => x.DueFeeId).ToHashSet();
-		if (expected.Contains(null) || expected.Count != rows.Count || rows.Any(x => !expected.Contains(x.Id)))
+		if (!AssignmentDueEvidence.Matches(assignment, evidence, rows))
 			throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid);
 		var plan = new WithdrawalProrationPlan();
 		var explanations = new HashSet<string>();
-		foreach (var group in rows.GroupBy(x => x.FeeHeadId))
+		var appliedPolicies = new Dictionary<Guid, FinancePolicyVersion>();
+		foreach (var group in rows.Where(x => !x.GetOptionalServicePeriodId().HasValue && original != null).GroupBy(x => x.FeeHeadId))
 		{
 			var lines = group.ToList();
 			var head = evidence.Heads.SingleOrDefault(x => x.FeeHeadId == group.Key && x.Included);
-			var rule = policy.Rules.SingleOrDefault(x => x.FeeHeadId == group.Key);
+			var rule = original!.Policy.Rules.SingleOrDefault(x => x.FeeHeadId == group.Key);
 			if (head == null) throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid);
 			if (head.IsOneTime || rule is not { ApplyOnEarlyWithdrawal: true } ||
 				(rule.EarlyWithdrawalRuleType ?? rule.RuleType) == ProrationRuleType.FullCharge) continue;
+			var serviceStop = assignment.GetOriginalOptionalServiceEndDate(group.Key);
+			if (serviceStop.HasValue && leavingDate.Date >= serviceStop.Value.ToDateTime(TimeOnly.MinValue).AddDays(-1)) continue;
 			if (lines.Any(x => x.ScheduleSource != ScheduleSource.PaymentTerm || !x.AllocationPercentage.HasValue ||
-				x.ProrationPolicyVersionId != version.Id || x.GetWithdrawalProrationSource().HasValue))
+				x.ProrationPolicyVersionId != original.Version.Id || x.GetWithdrawalProrationSource().HasValue))
 				throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
 			var start = head.ServicePeriod?.StartDate?.Date ?? (joining.Date > year.StartDate.Date ? joining.Date : year.StartDate.Date);
 			var serviceEnd = head.ServicePeriod?.EndDate?.Date ?? year.EndDate.Date;
 			if (start < year.StartDate.Date || serviceEnd > year.EndDate.Date || start > serviceEnd)
 				throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid);
 			var end = leavingDate.Date < serviceEnd ? leavingDate.Date : serviceEnd;
-			var calculated = end < start ? null : AssignmentAmountCalculator.Calculate(calculator, rule, lines.Sum(x => x.ScheduledAmount),
-				year.StartDate, year.EndDate, start, end);
-			var explanation = calculated?.Explanation ?? "Withdrawal precedes the saved service period; no service is chargeable.";
+			var explanation = "Withdrawal precedes the saved service period; no service is chargeable.";
+			var revisedAmount = 0m;
+			if (end >= start)
+			{
+				if (head.AmountBasis == "MonthlyRate")
+				{
+					var rate = head.EffectiveAmount ?? throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid);
+					if (lines.Any(line => !line.CoverageStartDate.HasValue || !line.CoverageEndDate.HasValue))
+						throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid);
+					revisedAmount = lines.Sum(line => MonthlyFeePricing.Calculate(calculator, rule, rate,
+						line.CoverageStartDate!.Value, line.CoverageEndDate!.Value, start, end).ProratedAmount);
+					explanation = "Recalculated each covered month using the saved monthly rate and proration policy.";
+				}
+				else
+				{
+					var calculated = AssignmentAmountCalculator.Calculate(calculator, rule, lines.Sum(x => x.ScheduledAmount),
+						year.StartDate, year.EndDate, start, end);
+					revisedAmount = calculated.ProratedAmount;
+					explanation = calculated.Explanation;
+				}
+			}
+			// A previous service credit has already reduced the principal available for withdrawal.
+			revisedAmount += lines.Sum(x => x.GetOptionalServiceCancellationAmount());
 			var credits = WithdrawalProrationAllocation.Credits(lines.Select(x => x.OriginalAmount).ToArray(),
-				lines.Select(x => x.NetAmount).ToArray(), lines.Select(x => x.AllocationPercentage!.Value).ToArray(), calculated?.ProratedAmount ?? 0m,
+				lines.Select(x => x.NetAmount).ToArray(), lines.Select(x => x.AllocationPercentage!.Value).ToArray(), revisedAmount,
 				lines.Select(x => Math.Max(0m, x.PaidAmount - x.RefundedAmount)).ToArray());
 			for (var i = 0; i < lines.Count; i++)
 				if (credits[i] > 0m) plan.Lines.Add(new(lines[i].Id, credits[i], lines[i].PaidAmount, lines[i].RefundedAmount,
 					lines[i].NetAmount, lines[i].ConcessionAmount, lines[i].AdjustmentCreditAmount,
 					$"{head.FeeHeadName}: withdrawal on {leavingDate:yyyy-MM-dd}. {explanation}"));
-			if (credits.Sum() > 0m) explanations.Add($"{head.FeeHeadName}: {explanation}");
+			if (credits.Sum() > 0m)
+			{
+				explanations.Add($"{head.FeeHeadName}: {explanation}");
+				appliedPolicies[original.Version.Id] = original.Version;
+			}
 		}
+		await AddRestartedServiceCreditsAsync(assignment, evidence, rows, leavingDate.Date, plan, explanations, appliedPolicies);
 		if (plan.Lines.Count == 0) return plan;
 		if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Recalculate))
 			throw new BusinessException(ProrationPolicyErrorCodes.RecalculationPermissionRequired);
 		await EnsureNoPendingAsync(studentId, yearId);
 		var byDue = plan.Lines.ToDictionary(x => x.DueFeeId, x => x.Credit);
+		var primaryPolicy = appliedPolicies.Values.First();
 		plan.Result = new()
 		{
-			PolicyId = version.PolicyId, PolicyVersionId = version.Id,
-			PolicyName = version.PolicyName, PolicyVersion = version.VersionNumber, JoiningDate = evidence.RegistrationJoiningDate,
+			PolicyId = primaryPolicy.PolicyId, PolicyVersionId = primaryPolicy.Id,
+			PolicyName = primaryPolicy.PolicyName, PolicyVersion = primaryPolicy.VersionNumber, JoiningDate = evidence.RegistrationJoiningDate,
 			ChargeStartDate = evidence.ChargeStartDate, ChargeEndDate = DateTime.SpecifyKind(leavingDate.Date, DateTimeKind.Utc),
 			ScheduledAmount = rows.Sum(x => x.ScheduledAmount), AdmissionReduction = rows.Sum(x => x.ScheduledAmount - x.OriginalAmount),
-			WithdrawalCredit = plan.Lines.Sum(x => x.Credit), PayableAmount = rows.Sum(x => x.OriginalAmount - x.NetAmount - byDue.GetValueOrDefault(x.Id)),
-			ExcessPaidAmount = rows.Sum(x => Math.Max(0m, x.PaidAmount - x.RefundedAmount + x.NetAmount + byDue.GetValueOrDefault(x.Id) - x.OriginalAmount)),
+			WithdrawalCredit = plan.Lines.Sum(x => x.Credit), PayableAmount = rows.Sum(x => Math.Max(0m, x.NetPayableAmount - byDue.GetValueOrDefault(x.Id))),
+			ExcessPaidAmount = rows.Sum(x => x.ProjectOverpaymentAfterCredit(byDue.GetValueOrDefault(x.Id))),
 			Explanations = explanations.ToList()
 		};
 		return plan;
 	}
+
+	private async Task AddRestartedServiceCreditsAsync(StudentFeeStructure assignment, StudentFeeAssignmentPreviewDto evidence,
+		IEnumerable<DueFee> rows, DateTime leavingDate, WithdrawalProrationPlan plan, HashSet<string> explanations,
+		Dictionary<Guid, FinancePolicyVersion> appliedPolicies)
+	{
+		var restarted = rows.Where(row => row.GetOptionalServicePeriodId().HasValue && !row.GetOptionalServiceCancellationId().HasValue)
+			.ToLookup(row => row.GetOptionalServicePeriodId()!.Value);
+		var savedPolicies = new Dictionary<Guid, SavedWithdrawalPolicy>();
+		foreach (var head in evidence.Heads.Where(head => head.IsOptional && !head.IsOneTime))
+		{
+			foreach (var period in assignment.GetOptionalServicePeriods(head.FeeHeadId))
+			{
+				var start = period.StartDate.ToDateTime(TimeOnly.MinValue);
+				var lastServiceDate = period.CancellationEffectiveDate?.AddDays(-1) ?? period.EndDate;
+				if (leavingDate >= lastServiceDate.ToDateTime(TimeOnly.MinValue)) continue;
+				if (!savedPolicies.TryGetValue(period.ProrationPolicyVersionId, out var saved))
+				{
+					saved = await ReadSavedPolicyAsync(assignment.AcademicYearId, period.ProrationPolicyVersionId);
+					savedPolicies.Add(saved.Version.Id, saved);
+				}
+				var rule = saved.Policy.Rules.SingleOrDefault(rule => rule.FeeHeadId == head.FeeHeadId);
+				if (rule is not { ApplyOnEarlyWithdrawal: true } ||
+					(rule.EarlyWithdrawalRuleType ?? rule.RuleType) == ProrationRuleType.FullCharge) continue;
+				var explanation = $"{head.FeeHeadName}: withdrawal on {leavingDate:yyyy-MM-dd}. Recalculated each monthly installment using {saved.Version.PolicyName} v{saved.Version.VersionNumber}.";
+				var lines = restarted[period.Id].ToList();
+				if (lines.Count == 0) continue;
+				if (lines.Any(row => row.GetWithdrawalProrationSource().HasValue))
+					throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
+				if (lines.Any(row => !row.CoverageStartDate.HasValue || !row.CoverageEndDate.HasValue || row.ScheduleSource != ScheduleSource.PaymentTerm))
+					throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid);
+				var revised = leavingDate < start ? 0m : lines.Sum(row => MonthlyFeePricing.Calculate(calculator, rule, period.MonthlyRate,
+					row.CoverageStartDate!.Value, row.CoverageEndDate!.Value, start, leavingDate).ProratedAmount);
+				// Monthly installments carry equal weight. Normalize after excluding the already-cancelled installments.
+				var share = decimal.Floor(100_000_000m / lines.Count) / 1_000_000m;
+				var weights = Enumerable.Repeat(share, lines.Count).ToArray();
+				weights[^1] += 100m - share * lines.Count;
+				var credits = WithdrawalProrationAllocation.Credits(lines.Select(row => row.OriginalAmount).ToArray(),
+					lines.Select(row => row.OriginalAmount - Math.Max(0m,
+						Math.Min(row.OriginalAmount, row.EffectiveObligationAmount) - row.NetAmount)).ToArray(), weights, revised,
+					lines.Select(row => Math.Max(0m, row.PaidAmount - row.RefundedAmount)).ToArray());
+				for (var i = 0; i < lines.Count; i++)
+				{
+					if (credits[i] == 0m) continue;
+					var row = lines[i];
+					plan.Lines.Add(new(row.Id, credits[i], row.PaidAmount, row.RefundedAmount, row.NetAmount,
+						row.ConcessionAmount, row.AdjustmentCreditAmount, explanation));
+					explanations.Add(explanation);
+					appliedPolicies[saved.Version.Id] = saved.Version;
+				}
+			}
+		}
+	}
+
+	private async Task<SavedWithdrawalPolicy> ReadSavedPolicyAsync(Guid yearId, Guid versionId)
+	{
+		var version = await versions.FindAsync(x => x.TenantId == CurrentTenant.Id && x.Id == versionId &&
+			x.AcademicYearId == yearId && x.PolicyType == "proration");
+		ProrationPolicySnapshot? policy;
+		try { policy = version == null ? null : JsonSerializer.Deserialize<ProrationPolicySnapshot>(version.SnapshotJson); }
+		catch (JsonException) { throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid); }
+		if (version == null || policy?.Rules == null || policy.PolicyId != version.PolicyId ||
+			policy.AcademicYearId != yearId || policy.Version != version.VersionNumber)
+			throw new BusinessException(ProrationPolicyErrorCodes.WithdrawalEvidenceInvalid);
+		return new(version, policy);
+	}
+
+	private sealed record SavedWithdrawalPolicy(FinancePolicyVersion Version, ProrationPolicySnapshot Policy);
 
 	public async Task ApplyAsync(Guid sourceId, Guid studentId, Guid yearId, DateTime leavingDate, string reason)
 	{

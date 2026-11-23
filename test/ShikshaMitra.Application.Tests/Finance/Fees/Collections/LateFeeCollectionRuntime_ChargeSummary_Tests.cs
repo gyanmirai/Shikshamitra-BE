@@ -21,6 +21,42 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 
 public partial class LateFeeCollectionRuntime_Tests
 {
+	[Fact]
+	public async Task Applying_A_Waiver_Reduces_An_Approved_Charge_By_The_Requested_Amount()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (year, student, _, _, _) = await SeedStudentWithOverdueDueFeeAsync(0, true);
+			var payer = await _studentRepo.GetAsync(student);
+			var charge = new Charge(Guid.NewGuid(), TestTenantId, year, Guid.NewGuid(), "Lab charge",
+				Guid.NewGuid(), student, payer.AcademicBoardId!.Value, payer.AcademicMediumId,
+				Guid.NewGuid(), Guid.NewGuid(), "Partial waiver regression", 100m, DateTimeOffset.UtcNow,
+				ChargePriority.Medium, ChargeStatus.Pending, Guid.NewGuid());
+			charge.Approve(Guid.NewGuid());
+			await GetRequiredService<IRepository<Charge, Guid>>().InsertAsync(charge, autoSave: true);
+
+			var input = new ApplyFeeWaiverInput
+			{
+				SourceType = "Charge",
+				SourceId = charge.Id,
+				Amount = 25.50m,
+				Reason = "Approved reduction",
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
+			};
+			var result = await _waivers.ApplyAsync(input);
+			var replay = await _waivers.ApplyAsync(input);
+			result.WaivedAmount.ShouldBe(25.50m);
+			replay.Id.ShouldBe(result.Id);
+			replay.RemainingAmount.ShouldBe(74.50m);
+
+			var form = await _feeCollections.GetCollectFormAsync(student, year);
+			var updated = form.Charges.Single(item => item.SourceId == charge.Id);
+			updated.Amount.ShouldBe(100d);
+			updated.PendingAmount.ShouldBe(74.50d);
+			updated.CanWaive.ShouldBeTrue();
+		}
+	}
+
 	[Theory]
 	[InlineData(false, 0, 5000d, 5000d, 0d, 0d, 0d)]
 	[InlineData(false, 0, 1000d, 200d, 300d, 800d, 500d)]

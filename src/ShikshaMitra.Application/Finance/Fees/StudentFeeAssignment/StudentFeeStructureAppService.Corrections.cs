@@ -97,7 +97,8 @@ public partial class StudentFeeStructureAppService
 				rows.Any(d => d.HasPaymentEvidence() || paidDues.Contains(d.Id)) ||
 				payments.Any(p => p.AcademicYearId == assignment.AcademicYearId && (p.StudentId == assignment.StudentId || assignment.FinanceFeeAccountId.HasValue && p.FinanceFeeAccountId == assignment.FinanceFeeAccountId)))
 				result[assignment.Id] = PaymentEditBlocker;
-			else if (rows.Any(d => d.HasProtectedAssignmentUse() || protectedDues.Contains(d.Id)) ||
+			else if (assignment.HasOptionalServiceEndDates() ||
+				rows.Any(d => d.HasProtectedAssignmentUse() || protectedDues.Contains(d.Id)) ||
 				concessions.Any(c => c.StudentId == assignment.StudentId && c.AcademicYearId == assignment.AcademicYearId))
 				result[assignment.Id] = DownstreamEditBlocker;
 			else if (snapshot == null || snapshot.StudentId != assignment.StudentId || snapshot.AcademicYearId != assignment.AcademicYearId ||
@@ -139,7 +140,10 @@ public partial class StudentFeeStructureAppService
 				throw new BusinessException(AssignmentErrorCodes.SourceUnavailable);
 			if (facts.Application.HasFinanceFeePayment)
 				throw new BusinessException(AssignmentErrorCodes.StructureEditBlocked, PaymentEditBlocker);
-			var proration = await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Policies.AdmissionProrationPolicyResolver>().ResolveAsync(input.AcademicYearId);
+			var year = await academicYearRepository.GetAsync(input.AcademicYearId);
+			var proration = UsesAdmissionProration(facts.JoiningDate, year.StartDate)
+				? await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Policies.AdmissionProrationPolicyResolver>().ResolveAsync(input.AcademicYearId, input.StandardFeeStructureId)
+				: null;
 			prepared = await PrepareForContextAsync(input, new(facts.Account.Id, input.StudentId, enrollment.StandardId!.Value,
 				facts.Offering.BoardId, facts.Offering.MediumId, null, facts.Revision, facts.JoiningDate, proration, facts.Application.Id, IsFinanceAssignment: true), previous);
 			prepared.Preview.EnrollmentId = enrollment.Id;
@@ -187,8 +191,7 @@ public partial class StudentFeeStructureAppService
 			application.CorrectUnpaidFinanceSelection(prepared.Account.Id, new(prepared.Structure.Id, prepared.Preview.StructureName,
 				prepared.Preview.RevisionNumber, existing.AcademicYearId, prepared.Account.StandardId,
 				selection?.OwnerStageId ?? prepared.Account.MediumStageId ?? throw new BusinessException(AssignmentErrorCodes.SourceUnavailable),
-				prepared.Account.Currency, prepared.Preview.Heads.Where(h => h.Included).Select(h => new AdmissionFeeSelectionHead(
-					h.FeeHeadId, h.FeeHeadName, h.ConfiguredAmount, h.IsOptional, h.IsOneTime, h.PaymentTermId, h.PaymentTermVersionId, h.IsVariable)).ToList(),
+				prepared.Account.Currency, AdmissionSelectionHeads(prepared),
 				CurrentUser.Id!.Value, new DateTimeOffset(Clock.Now).ToUniversalTime(), selection?.ConfirmedBy, selection?.OnboardingConfirmedAt), input.EditReason!);
 			await applications.UpdateAsync(application, false);
 		}

@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Cache;
@@ -43,6 +45,7 @@ public partial class StudentFeeDetailsQueryService(
 	IReadOnlyRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository,
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
+	IRepository<LateFeeWaiverApplication, Guid> lateFeeWaiverRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<FeeRefundRequest, Guid> feeRefundRepository,
 	IConcessionRequestRepository concessionRequestRepository,
@@ -89,6 +92,10 @@ public partial class StudentFeeDetailsQueryService(
 		var allowOnlineCollection = true;
 		CollectionPolicy? allocationPolicy = null;
 		IReadOnlyList<Guid> feeHeadOrder = [];
+		var canReadWaivers = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.ApplyWaiver)
+			|| await AuthorizationService.IsGrantedAsync(
+				ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.ViewWaivers);
 
 		if (feeStructureAssignment != null)
 		{
@@ -139,6 +146,25 @@ public partial class StudentFeeDetailsQueryService(
 					feeStructureAssignment.FeeStructureStandardId, cancellationToken);
 
 			var lateFeeBalances = await lateFeeBalanceService.GetBalancesAsync(dueFees, academicYearId, today);
+			var lateWaiverHistory = new Dictionary<Guid, List<AppliedChargeWaiverDto>>();
+			if (canReadWaivers)
+			{
+				var waivedDueIds = dueFees.Where(d => lateFeeBalances[d.Id].WaivedAmount > 0m)
+					.Select(d => d.Id).ToList();
+				if (waivedDueIds.Count > 0)
+				{
+					var appliedWaivers = await lateFeeWaiverRepository.GetListAsync(w =>
+						w.StudentId == studentId && w.AcademicYearId == academicYearId
+						&& waivedDueIds.Contains(w.DueFeeId) && w.Status == LateFeeWaiverStatus.Applied,
+						includeDetails: false, cancellationToken: cancellationToken);
+					lateWaiverHistory = appliedWaivers.GroupBy(w => w.DueFeeId)
+						.ToDictionary(g => g.Key, g => g.Select(w => new AppliedChargeWaiverDto
+						{
+							Id = w.Id, AppliedAt = w.ApprovedAt ?? w.CreationTime,
+							Amount = w.EffectiveAmount, Reason = w.Reason,
+						}).OrderByDescending(w => w.AppliedAt).ThenByDescending(w => w.Id).ToList());
+				}
+			}
 
 			foreach (var group in grouped)
 			{
@@ -168,6 +194,7 @@ public partial class StudentFeeDetailsQueryService(
 								PaidAmount = lateFee.PaidAmount,
 								PendingAmount = lateFee.Amount,
 								WaivedAmount = lateFee.WaivedAmount,
+								WaiverHistory = canReadWaivers ? lateWaiverHistory.GetValueOrDefault(d.Id, []) : null,
 								CanWaive = lateFee.Amount > 0,
 								ReconciliationAmount = balance.ReconciliationAmount,
 								Explanation = lateFee.Explanation,
@@ -179,6 +206,10 @@ public partial class StudentFeeDetailsQueryService(
 						}
 						var collectionAmount = (double) Math.Ceiling(d.OutstandingAmount);
 						var roundingAmount = Math.Max(0d, collectionAmount - (double) d.OutstandingAmount);
+						var dueDate = d.ScheduleDueDate ?? d.DueDate;
+						var serviceCancellation = d.GetOptionalServiceCancellationAmount();
+						var status = serviceCancellation > 0m ? FeeCollectionStatus.Cancelled
+							: DueFeeCollectionStatusResolver.Resolve(d, today, reconByDueFee.GetValueOrDefault(d.Id, 0d));
 						return new FeeLedgerLineDto
 						{
 							DueFeeId = d.Id,
@@ -187,11 +218,12 @@ public partial class StudentFeeDetailsQueryService(
 							PaymentTermName = paymentTermNames.GetValueOrDefault(d.Id),
 							InstallmentLabel = d.GetDisplayInstallmentLabel(),
 							InstallmentId = d.PaymentTermInstallmentId,
-							DueDate = d.ScheduleDueDate ?? d.DueDate,
+							DueDate = dueDate,
+							DaysOverdue = status == FeeCollectionStatus.Overdue ? (today - dueDate.Date).Days : null,
 							CoverageStartDate = d.CoverageStartDate,
 							CoverageEndDate = d.CoverageEndDate,
 							ScheduleSource = d.ScheduleSource.ToString(),
-							Total = (double) d.OriginalAmount,
+							Total = (double) (d.OriginalAmount - serviceCancellation),
 							ScheduledTotal = (double) d.ScheduledAmount,
 							Paid = (double) d.AppliedPaymentAmount,
 							AdjustmentCreditAmount = (double) d.AdjustmentCreditAmount,
@@ -223,7 +255,7 @@ public partial class StudentFeeDetailsQueryService(
 							RefundDescription = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Description,
 							PendingRefundAmount = pendingRefundByDueFee.GetValueOrDefault(d.Id, (Amount: 0m, Description: string.Empty)).Amount,
 							PendingRefundDescription = pendingRefundByDueFee.GetValueOrDefault(d.Id, (Amount: 0m, Description: string.Empty)).Description,
-							Status = DueFeeCollectionStatusResolver.Resolve(d, today, reconByDueFee.GetValueOrDefault(d.Id, 0d)),
+							Status = status,
 							LateFeeAmount = 0,
 							LateFeeExplanation = string.Empty,
 							LateFeeWaivedAmount = 0,
@@ -258,9 +290,10 @@ public partial class StudentFeeDetailsQueryService(
 
 			feeSummary = new FeeSummaryDto
 			{
-				TotalFee = (double) dueFees.Sum(d => d.OriginalAmount),
+				TotalFee = (double) dueFees.Sum(d => d.OriginalAmount - d.GetOptionalServiceCancellationAmount()),
 				PaidFee = (double) dueFees.Sum(d => d.AppliedPaymentAmount),
 				PendingFee = (double) dueFees.Sum(d => d.OutstandingAmount),
+				OptionalServiceCredit = dueFees.Where(d => d.GetOptionalServiceCancellationId().HasValue).Sum(d => d.AdjustableBalance),
 				ReconciliationAmount = reconByDueFee.Values.Sum(),
 				TotalCollectionAmount = (double) dueFees.Sum(d => Math.Ceiling(d.OutstandingAmount)),
 				TotalRoundingAdjustment = (double) dueFees.Sum(d => Math.Ceiling(d.OutstandingAmount) - d.OutstandingAmount),
@@ -275,9 +308,9 @@ public partial class StudentFeeDetailsQueryService(
 		if (approvedCharges.Count > 0)
 		{
 			var chargeIds = approvedCharges.Select(c => c.Id).ToList();
-			var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
+			var waiversPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
 				.GroupBy(x => x.ChargeId)
-				.ToDictionary(x => x.Key, x => x.Sum(w => w.EffectiveAmount));
+				.ToDictionary(x => x.Key, x => x.ToList());
 			var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
 			var chargeMetaQ = await feeRecordMetadataRepository.GetQueryableAsync();
 			var reversedTxIds = chargeMetaQ.Where(m => m.Status == FeeCollectionStatus.Reversed).Select(m => m.Id);
@@ -296,7 +329,8 @@ public partial class StudentFeeDetailsQueryService(
 			{
 				var net = c.Amount;
 				var paid = paidPerCharge.GetValueOrDefault(c.Id, 0m);
-				var waived = waivedPerCharge.GetValueOrDefault(c.Id, 0m);
+				var waivers = waiversPerCharge.GetValueOrDefault(c.Id, []);
+				var waived = waivers.Sum(w => w.EffectiveAmount);
 				var pending = Math.Max(0m, net - paid - waived);
 				return new ChargeDetailDto
 				{
@@ -309,6 +343,11 @@ public partial class StudentFeeDetailsQueryService(
 					PaidAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(paid),
 					PendingAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(pending),
 					WaivedAmount = ShikshaMitra.Finance.ExternalReceivables.FinanceMoneyPrecision.ToLegacyDouble(waived),
+					WaiverHistory = canReadWaivers ? waivers.OrderByDescending(w => w.CreationTime)
+						.ThenByDescending(w => w.Id).Select(w => new AppliedChargeWaiverDto
+						{
+							Id = w.Id, AppliedAt = w.CreationTime, Amount = w.EffectiveAmount, Reason = w.Reason,
+						}).ToList() : null,
 					CanWaive = pending > 0,
 					ReconciliationAmount = reconPerCharge.GetValueOrDefault(c.Id, 0m),
 					Status = reconPerCharge.GetValueOrDefault(c.Id, 0m) > 0m ? FeeCollectionStatus.InReconciliation

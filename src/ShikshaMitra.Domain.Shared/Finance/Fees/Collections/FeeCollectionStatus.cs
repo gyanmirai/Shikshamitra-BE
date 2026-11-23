@@ -31,4 +31,7 @@ public enum FeeCollectionStatus
 
     /// <summary>Summary only: no fee structure assigned and no fee or charge amounts recorded.</summary>
     NoFeeAssigned = 7,
+
+    /// <summary>Installment removed from collection when an optional service ended.</summary>
+    Cancelled = 8,
 }

@@ -15,7 +15,10 @@ public class FeeStructurePublishRequest
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
-public class FeeStructureRevisionRequest : FeeStructurePublishRequest { }
+public class FeeStructureRevisionRequest : FeeStructurePublishRequest
+{
+	public Guid? RequestId { get; set; }
+}
 
 public class FeeStructurePreviewDto
 {
@@ -36,6 +39,7 @@ public class FeeStructureCoverageDto
 	public string Collection { get; set; } = "No late fee";
 	public string Concession { get; set; } = "Not eligible";
 	public string Refund { get; set; } = "No refund policy attached";
+	public string? Proration { get; set; }
 	public string Accounting { get; set; } = string.Empty;
 }
 
@@ -75,6 +79,9 @@ public class FeeStructurePolicyOptionDto
 	public int VersionNumber { get; set; }
 	public bool IsCurrent { get; set; }
 	public bool IsDefault { get; set; }
+	public string? FeeHeadScope { get; set; }
+	public List<Guid>? ApplicableFeeHeadIds { get; set; }
+	public Dictionary<Guid, string>? FeeHeadNames { get; set; }
 }
 
 public class FeeStructureTermOptionDto

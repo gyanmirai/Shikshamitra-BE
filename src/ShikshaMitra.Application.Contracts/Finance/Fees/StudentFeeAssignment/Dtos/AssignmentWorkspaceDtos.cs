@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
@@ -92,12 +93,24 @@ public class AssignmentHeadDto
     public bool IsVariable { get; set; }
     public string? ZeroAmountReason { get; set; }
 	public string AmountBasis { get; set; } = "AnnualTotal";
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+	public bool SupportsMonthlyRate { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+	public bool UsesSingleServiceMonth { get; set; }
 	public string? PaymentTermName { get; set; }
 	public int? PaymentTermVersionNumber { get; set; }
 	public bool SupportsTransportSource { get; set; }
 	public Guid? PaymentTermId { get; set; }
 	public Guid? PaymentTermVersionId { get; set; }
 	public decimal Obligation { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public DateOnly? OptionalServiceEndDate { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public List<OptionalFeeServicePeriodDto>? OptionalServicePeriods { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public DateOnly? OriginalOptionalServiceEndDate { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+	public bool CanReviewOptionalServiceCancellation { get; set; }
 	public AssignmentServicePeriodDto? ServicePeriod { get; set; }
 	public string Verification { get; set; } = "Configured academic year";
 	public string? SourceRevision { get; set; }

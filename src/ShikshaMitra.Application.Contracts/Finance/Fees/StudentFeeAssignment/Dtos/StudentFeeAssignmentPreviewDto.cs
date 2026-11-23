@@ -49,6 +49,14 @@ public class StudentFeeAssignmentPreviewLineDto
     public decimal PaidAmount { get; set; }
     public decimal OutstandingAmount { get; set; }
 	public decimal OptionalServiceCancellationAmount { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public Guid? OptionalServicePeriodId { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public int? CoverageDays { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public int? EligibleDays { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public int? ChargedDays { get; set; }
 
 	public Guid FeeHeadId { get; set; }
 	public string FeeHeadName { get; set; } = string.Empty;

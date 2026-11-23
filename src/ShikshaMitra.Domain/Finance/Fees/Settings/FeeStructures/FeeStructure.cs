@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -40,8 +41,7 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? ConcessionPolicyVersionId { get; private set; }
 	public Guid? RefundPolicyId { get; private set; }
 	public Guid? RefundPolicyVersionId { get; private set; }
-	// Retired attachment storage: retained only for historical evidence and policy usage counts.
-	// New structures and revisions cannot attach or inherit proration.
+	// Existing columns also contain retired values. Only explicitly assigned versions are effective.
 	public Guid? ProrationPolicyId { get; private set; }
 	public Guid? ProrationPolicyVersionId { get; private set; }
 	public ConcessionFeeHeadScope ConcessionFeeHeadScope { get; private set; } = ConcessionFeeHeadScope.EntireFeeStructure;
@@ -73,10 +73,7 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void ChangeName(string name)
 	{
 		EnsureNotLocked();
-		var validName = Check.NotNullOrWhiteSpace(name, nameof(name), maxLength: 256).Trim();
-		if (PreviousRevisionId.HasValue && Name != validName)
-			throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration).WithData("Errors", new[] { "A revision retains the name of its published structure." });
-		Name = validName;
+		Name = Check.NotNullOrWhiteSpace(name, nameof(name), maxLength: 256).Trim();
 		NormalizedName = Name.ToUpperInvariant();
 	}
 
@@ -145,6 +142,21 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public IReadOnlyList<Guid> GetConcessionApplicableFeeHeadIds() =>
 		JsonSerializer.Deserialize<List<Guid>>(ConcessionApplicableFeeHeadIdsJson) ?? [];
+
+	private const string ExplicitProrationPolicy = "ExplicitProrationPolicy";
+
+	public Guid? GetExplicitProrationPolicyVersionId() =>
+		this.GetProperty<bool>(ExplicitProrationPolicy) ? ProrationPolicyVersionId : null;
+
+	public void AttachProrationPolicy(Guid? policyId, Guid? versionId)
+	{
+		if (policyId.HasValue != versionId.HasValue || policyId == Guid.Empty || versionId == Guid.Empty)
+			throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionMissing);
+
+		ProrationPolicyId = policyId;
+		ProrationPolicyVersionId = versionId;
+		this.SetProperty(ExplicitProrationPolicy, policyId.HasValue);
+	}
 
 	public void AttachRefundPolicy(Guid? refundPolicyId, Guid? refundPolicyVersionId)
 	{

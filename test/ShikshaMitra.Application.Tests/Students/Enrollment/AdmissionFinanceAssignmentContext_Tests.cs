@@ -4,11 +4,13 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -18,12 +20,104 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Theory]
+	[InlineData(false, false)]
+	[InlineData(false, true)]
+	[InlineData(true, false)]
+	public Task Finance_verifies_joining_to_board_end_or_one_service_month(bool oneTime, bool prorated) => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await CreateCollectibleAdmissionAsync("FinanceBoardDates", oneTime: oneTime);
+		var year = await ReadAsync<AcademicYear>(fixture.YearId);
+		var joined = year.StartDate.Date.AddMonths(2).AddDays(9);
+		var boardEnd = year.EndDate.Date.AddMonths(-1);
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var boards = GetRequiredService<IRepository<EducationBoard, Guid>>();
+			var board = await boards.GetAsync(fixture.Offering.BoardId);
+			board.SetDates(year.StartDate, boardEnd);
+			await boards.UpdateAsync(board, autoSave: true);
+		});
+		await SaveJoiningAnswerAsync(fixture, joined.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+		if (prorated) await ConfigureProrationAsync(fixture);
+		await CompleteCollectibleDecisionAsync(fixture.Application.Id);
+		var finalized = await FinalizeAsync(await _applicationAppService.GetAsync(fixture.Application.Id), true, "finance-board-dates");
+		await ActivateCollectibleOnboardingAsync(fixture, finalized);
+		var service = GetRequiredService<IStudentFeeStructureAppService>();
+		var candidate = (await service.GetCandidatesAsync(finalized.StudentId, fixture.YearId)).Single();
+		candidate.BoardEndDate?.Date.ShouldBe(boardEnd);
+		var head = candidate.Heads.Single();
+		head.IsOneTime.ShouldBe(oneTime);
+		head.UsesSingleServiceMonth.ShouldBe(!oneTime && !prorated);
+		var end = prorated ? boardEnd : joined.AddDays(DateTime.DaysInMonth(joined.Year, joined.Month) - joined.Day);
+		var request = new AssignStudentFeeStructureDto
+		{
+			StudentId = finalized.StudentId, AcademicYearId = fixture.YearId, StandardFeeStructureId = fixture.StructureId,
+			ServicePeriods = [new() { FeeHeadId = candidate.Heads.Single().FeeHeadId, Source = "Registration",
+				SourceReferenceId = fixture.Application.Id, StartDate = joined, EndDate = end }]
+		};
+		var preview = await service.PreviewAsync(request);
+		preview.Heads.Single().ServicePeriod!.StartDate?.Date.ShouldBe(joined);
+		preview.Heads.Single().ServicePeriod!.EndDate?.Date.ShouldBe(end);
+		var line = preview.Lines.Single();
+		line.DueDate.Date.ShouldBe(year.StartDate.Date.AddDays(10));
+		if (prorated) line.ProratedAmount.ShouldBeLessThan(1000m);
+		else line.ProratedAmount.ShouldBe(1000m);
+		if (!prorated)
+		{
+			request.ServicePeriods[0].Source = "ManualOverride";
+			request.ServicePeriods[0].SourceReferenceId = null;
+			request.ServicePeriods[0].EndDate = end.AddDays(1);
+			(await Should.ThrowAsync<BusinessException>(() => service.PreviewAsync(request))).Code.ShouldBe(AssignmentErrorCodes.OneTimeServiceMonth);
+		}
+		else
+		{
+			await SaveJoiningAnswerAsync(fixture, boardEnd.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+			request.ServicePeriods.Clear();
+			request.ChargePeriodSource = "BoardAcademicYear";
+			(await Should.ThrowAsync<BusinessException>(() => service.PreviewAsync(request))).Code.ShouldBe(ProrationPolicyErrorCodes.JoiningDateInvalid);
+		}
+	});
+
 	[Fact]
-	public Task Finance_assignment_inherits_verified_admission_joining_date_and_default_proration() => RunCertificationScenarioAsync(async () =>
+	public Task Finance_initial_assignment_can_remove_an_optional_admission_fee_and_keeps_collection_in_sync() => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await CreateCollectibleAdmissionAsync("FinanceOptionalChoice", amount: 1000m, optionalFee: true);
+		var optionalId = await WithUnitOfWorkAsync(async () => (await GetRequiredService<IRepository<FeeStructure, Guid>>()
+			.GetAsync(fixture.StructureId)).FeeStructureDetails.Single(h => h.IsOptional).FeeHeadId);
+		var selections = GetRequiredService<IAdmissionFeeSelectionAppService>();
+		var selection = await selections.GetAsync(fixture.Application.Id);
+		await selections.SaveAsync(fixture.Application.Id, new() { StructureId = fixture.StructureId,
+			OptionalHeadIds = [optionalId], ConcurrencyStamp = selection.ConcurrencyStamp });
+		await CompleteCollectibleDecisionAsync(fixture.Application.Id);
+		var finalized = await FinalizeAsync(await _applicationAppService.GetAsync(fixture.Application.Id), true, "finance-optional-finalize");
+		await ActivateCollectibleOnboardingAsync(fixture, finalized);
+		var service = GetRequiredService<IStudentFeeStructureAppService>();
+		var context = (await service.GetContextsAsync(new() { AcademicYearId = fixture.YearId, StudentIds = [finalized.StudentId] })).Single();
+		context.SelectedOptionalFeeHeadIds.ShouldContain(optionalId);
+		var input = new AssignStudentFeeStructureDto { StudentId = finalized.StudentId, AcademicYearId = fixture.YearId,
+			StandardFeeStructureId = fixture.StructureId, SelectedOptionalFeeHeadIds = [optionalId] };
+		(await service.PreviewAsync(input)).ProratedTotal.ShouldBe(1500m);
+		input.SelectedOptionalFeeHeadIds = [];
+		var preview = await service.PreviewAsync(input);
+		preview.Heads.Single(h => h.FeeHeadId == optionalId).Included.ShouldBeFalse();
+		preview.ProratedTotal.ShouldBe(1000m);
+		input.PreviewToken = preview.PreviewToken;
+		var committed = await service.AssignAsync(input);
+		committed.Assignment.ProratedTotal.ShouldBe(1000m);
+		(await service.AssignAsync(input)).AssignmentId.ShouldBe(committed.AssignmentId);
+		var source = await GetRequiredService<IAdmissionFinanceContextReader>().GetAsync(fixture.Application.Id);
+		source.OptionalHeadIds.ShouldBeEmpty();
+		(await GetRequiredService<IAdmissionFeeCollectionAppService>().GetSummaryAsync(fixture.Application.Id)).TotalAmount.ShouldBe(1000m);
+	});
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Finance_assignment_inherits_verified_admission_joining_date_and_default_proration(bool joinedBeforeYear) => RunCertificationScenarioAsync(async () =>
 	{
 		var fixture = await CreateCollectibleAdmissionAsync("FinanceJoining", amount: 12000m, oneTime: false);
 		var year = await ReadAsync<AcademicYear>(fixture.YearId);
-		var joined = year.StartDate.AddMonths(2).Date;
+		var joined = year.StartDate.AddMonths(joinedBeforeYear ? -1 : 2).Date;
 		await SaveJoiningAnswerAsync(fixture, joined.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
 		await ConfigureProrationAsync(fixture);
 		var expected = await GetRequiredService<IAdmissionFeeCollectionAppService>().GetSummaryAsync(fixture.Application.Id);
@@ -36,13 +130,28 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		context.Status.ShouldBe("Selected");
 		context.JoiningDate.ShouldBe(joined);
 		context.StructureId.ShouldBe(fixture.StructureId);
+		if (joinedBeforeYear)
+		{
+			context.ProrationPolicy.ShouldBeNull();
+			context.AdmissionFeeHeadIds.ShouldBeEmpty();
+		}
 		var preview = await service.PreviewAsync(input);
 		preview.RegistrationJoiningDate.ShouldBe(joined);
-		preview.ProrationPolicyVersionId.ShouldNotBeNull();
 		preview.ProratedTotal.ShouldBe(expected.TotalAmount!.Value);
-		preview.ReductionTotal.ShouldBeGreaterThan(0m);
-		preview.Heads.Single().ServicePeriod!.Source.ShouldBe("Registration");
-		preview.Heads.Single().ServicePeriod!.StartDate.ShouldBe(joined);
+		if (joinedBeforeYear)
+		{
+			preview.ProrationPolicyVersionId.ShouldBeNull();
+			preview.ReductionTotal.ShouldBe(0m);
+			preview.Heads.Single().ServicePeriod!.Source.ShouldBe("AcademicYear");
+			preview.Heads.Single().ServicePeriod!.StartDate.ShouldBe(year.StartDate.Date);
+		}
+		else
+		{
+			preview.ProrationPolicyVersionId.ShouldNotBeNull();
+			preview.ReductionTotal.ShouldBeGreaterThan(0m);
+			preview.Heads.Single().ServicePeriod!.Source.ShouldBe("Registration");
+			preview.Heads.Single().ServicePeriod!.StartDate.ShouldBe(joined);
+		}
 		preview.Lines.Single().DueDate.Date.ShouldBe(year.StartDate.AddDays(10).Date);
 		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<DueFee, Guid>>().GetListAsync(d => d.StudentId == finalized.StudentId))).ShouldBeEmpty();
 		input.PreviewToken = preview.PreviewToken;

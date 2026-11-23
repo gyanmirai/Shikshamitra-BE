@@ -34,6 +34,8 @@ public partial class FeeStructureAppService
 			["collection"] = ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add,
 			["concession"] = ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Add,
 			["refund"] = ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add,
+			["proration"] = ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add,
+			["prorationRead"] = ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.View,
 			["collectionRead"] = ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.View,
 			["concessionRead"] = ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.View,
 			["refundRead"] = ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.View

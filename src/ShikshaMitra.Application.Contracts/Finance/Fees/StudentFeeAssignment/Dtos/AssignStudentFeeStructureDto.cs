@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 
@@ -42,5 +43,8 @@ public class VariableFeeHeadAmountDto
 {
     public Guid FeeHeadId { get; set; }
     public decimal? Amount { get; set; }
+    /// <summary>Charge Amount for each month covered by the student's service dates and payment term.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IsMonthlyRate { get; set; }
     public string? ZeroAmountReason { get; set; }
 }

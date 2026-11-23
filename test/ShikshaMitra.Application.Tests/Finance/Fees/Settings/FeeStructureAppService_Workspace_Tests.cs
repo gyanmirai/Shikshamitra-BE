@@ -37,7 +37,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         return json.Deserialize<StandardFeeStructureRequest>()!;
     }
 
-    private async Task<(Guid MetadataId, Guid StandardId, StandardFeeStructureRequest Candidate)> ReadyCandidateAsync()
+    private async Task<(Guid MetadataId, Guid StandardId, StandardFeeStructureRequest Candidate)> ReadyCandidateAsync(bool monthlyTerm = false)
     {
         var (yearId, classId, metadataId, headId) = await SeedStandardAsync();
         var metadata = await _metadataRepo.GetAsync(metadataId);
@@ -46,7 +46,13 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
             "Annual", "ANNUAL", null, false, HolidayShiftingMethod.None, DemandGenerationRule.OnDueDate, null, InitialDemandStatus.Draft);
         var version = new PaymentTermVersion(Guid.NewGuid(), TestTenantId, term.Id, 1, PaymentTermVersionStatus.Draft,
             HolidayShiftingMethod.None, DemandGenerationRule.OnDueDate, null, null, null);
-        version.SetInstallments([
+        version.SetInstallments(monthlyTerm ? Enumerable.Range(0, 12).Select(index =>
+        {
+            var start = new DateTime(2025, 4, 1).AddMonths(index);
+            var end = start.AddMonths(1).AddDays(-1);
+            return new PaymentTermInstallment(Guid.NewGuid(), version.Id, index + 1, start.ToString("MMM yyyy"),
+                start, end, end, end, index == 11 ? 8.37m : 8.33m, true, false);
+        }).ToList() : [
             new PaymentTermInstallment(Guid.NewGuid(), version.Id, 1, "First half", new(2025, 4, 1), new(2025, 9, 30), new(2025, 4, 10), new(2025, 4, 10), 50m, true, false),
             new PaymentTermInstallment(Guid.NewGuid(), version.Id, 2, "Second half", new(2025, 10, 1), new(2026, 3, 31), new(2025, 10, 10), new(2025, 10, 10), 50m, true, false)
         ]);
@@ -82,6 +88,98 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
     }
 
     [Fact]
+    public async Task Separate_Revision_Actions_Create_New_Drafts_After_The_First_Is_Renamed_And_Saved()
+    {
+        using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
+        var (metadata, standard, candidate) = await ReadyCandidateAsync();
+        var root = await _feeStructures.CreateAsync(metadata, new() { StandardId = standard, StandardFeeStructures = candidate });
+        var published = await _feeStructures.PublishAsync(root.Id, new() { ConcurrencyStamp = root.ConcurrencyStamp });
+        var first = await _feeStructures.CreateRevisionAsync(published.Id, new() { ConcurrencyStamp = published.ConcurrencyStamp });
+        var edit = AsRequest(first);
+        edit.Name = "Renamed saved revision";
+        edit.FeeHeads[0].Amount = 2400;
+        first = await _feeStructures.UpdateAsync(first.Id, edit);
+
+        var second = await _feeStructures.CreateRevisionAsync(published.Id, new() { ConcurrencyStamp = published.ConcurrencyStamp });
+        second.Id.ShouldNotBe(first.Id);
+        second.PreviousRevisionId.ShouldBe(published.Id);
+        second.RevisionRootId.ShouldBe(published.RevisionRootId);
+        second.RevisionNumber.ShouldBe(first.RevisionNumber + 1);
+        second.FeeHeads.Single().Amount.ShouldBe(published.FeeHeads.Single().Amount);
+        second.FeeHeads.Single().Id.ShouldNotBe(first.FeeHeads.Single().Id);
+        var rows = (await _feeStructures.GetByStandardAsync(standard)).StandardFeeStructures;
+        rows.Count.ShouldBe(3);
+        rows.Single(row => row.Id == first.Id).Name.ShouldBe("Renamed saved revision");
+        rows.Single(row => row.Id == first.Id).FeeHeads.Single().Amount.ShouldBe(2400);
+        rows.Single(row => row.Id == published.Id).ConcurrencyStamp.ShouldBe(published.ConcurrencyStamp);
+    }
+
+    private static FeeStructureRevisionRequest RevisionCommand(Guid requestId, string stamp) =>
+        JsonSerializer.Deserialize<FeeStructureRevisionRequest>(JsonSerializer.Serialize(new
+        {
+            RequestId = requestId, ConcurrencyStamp = stamp
+        }))!;
+
+    [Fact]
+    public async Task Revision_Request_Replay_Returns_Its_Canonical_Draft_And_New_Keys_Create_Separate_Drafts()
+    {
+        using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
+        var (metadata, standard, candidate) = await ReadyCandidateAsync();
+        var root = await _feeStructures.CreateAsync(metadata, new() { StandardId = standard, StandardFeeStructures = candidate });
+        var published = await _feeStructures.PublishAsync(root.Id, new() { ConcurrencyStamp = root.ConcurrencyStamp });
+        var key = Guid.NewGuid();
+        var first = await _feeStructures.CreateRevisionAsync(published.Id, RevisionCommand(key, published.ConcurrencyStamp));
+        first.Id.ShouldBe(key);
+        var edit = AsRequest(first); edit.Name = "Saved first revision"; edit.FeeHeads[0].Amount = 2600;
+        first = await _feeStructures.UpdateAsync(first.Id, edit);
+        var second = await _feeStructures.CreateRevisionAsync(published.Id, RevisionCommand(Guid.NewGuid(), published.ConcurrencyStamp));
+        second.Id.ShouldNotBe(first.Id);
+        second.RevisionNumber.ShouldBe(3);
+        var replay = await _feeStructures.CreateRevisionAsync(published.Id, RevisionCommand(key, published.ConcurrencyStamp));
+        replay.Id.ShouldBe(first.Id);
+        replay.Name.ShouldBe("Saved first revision");
+        replay.FeeHeads.Single().Amount.ShouldBe(2600);
+        (await _feeStructures.GetByStandardAsync(standard)).StandardFeeStructures.Count.ShouldBe(3);
+        var publishedRevision = await _feeStructures.PublishAsync(first.Id, new() { ConcurrencyStamp = first.ConcurrencyStamp });
+        replay = await _feeStructures.CreateRevisionAsync(published.Id, RevisionCommand(key, published.ConcurrencyStamp));
+        replay.Status.ShouldBe(FeeStructureStatus.Locked);
+        replay.ConcurrencyStamp.ShouldBe(publishedRevision.ConcurrencyStamp);
+        (await Should.ThrowAsync<BusinessException>(() => _feeStructures.CreateRevisionAsync(published.Id,
+            RevisionCommand(Guid.NewGuid(), published.ConcurrencyStamp)))).Code.ShouldBe(FeeStructureErrorCodes.ConcurrencyConflict);
+    }
+
+    [Theory]
+    [InlineData("empty")]
+    [InlineData("changed-body")]
+    [InlineData("different-source")]
+    [InlineData("deleted")]
+    public async Task Revision_Request_Keys_Cannot_Be_Empty_Or_Reused_For_Another_Command(string scenario)
+    {
+        using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
+        var (metadata, standard, candidate) = await ReadyCandidateAsync();
+        var root = await _feeStructures.CreateAsync(metadata, new() { StandardId = standard, StandardFeeStructures = candidate });
+        var published = await _feeStructures.PublishAsync(root.Id, new() { ConcurrencyStamp = root.ConcurrencyStamp });
+        var key = Guid.NewGuid();
+        if (scenario == "empty")
+        {
+            (await Should.ThrowAsync<BusinessException>(() => _feeStructures.CreateRevisionAsync(published.Id,
+                RevisionCommand(Guid.Empty, published.ConcurrencyStamp)))).Code.ShouldBe(FeeStructureErrorCodes.InvalidConfiguration);
+            return;
+        }
+        var revision = await _feeStructures.CreateRevisionAsync(published.Id, RevisionCommand(key, published.ConcurrencyStamp));
+        if (scenario == "deleted") await _feeStructures.DeleteAsync(revision.Id);
+        if (scenario == "different-source")
+        {
+            candidate.Name = "Another published root";
+            root = await _feeStructures.CreateAsync(metadata, new() { StandardId = standard, StandardFeeStructures = candidate });
+            published = await _feeStructures.PublishAsync(root.Id, new() { ConcurrencyStamp = root.ConcurrencyStamp });
+        }
+        var command = RevisionCommand(key, scenario == "changed-body" ? "changed-stamp" : published.ConcurrencyStamp);
+        (await Should.ThrowAsync<BusinessException>(() => _feeStructures.CreateRevisionAsync(published.Id, command)))
+            .Code.ShouldBe(FeeStructureErrorCodes.ConcurrencyConflict);
+    }
+
+    [Fact]
     public async Task Publish_Freezes_Review_Rejects_Edits_And_Creates_Independent_Revisions()
     {
         using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
@@ -89,26 +187,27 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         var draft = await _feeStructures.CreateAsync(metadata, new() { StandardId = standard, StandardFeeStructures = candidate });
         var review = await _feeStructures.PreviewAsync(new() { FeeStructureMetadataId = metadata, StandardId = standard, StructureId = draft.Id, StandardFeeStructures = AsRequest(draft) });
         review.Errors.ShouldBeEmpty();
-        review.Schedules.Single().Installments.Sum(x => x.CalculatedAmount).ShouldBe(1000.01m);
+        review.Schedules.Single().Installments.Sum(x => x.CalculatedAmount).ShouldBe(draft.FeeHeads.Single().Amount);
         var published = await _feeStructures.PublishAsync(draft.Id, new() { ConcurrencyStamp = draft.ConcurrencyStamp });
         published.PublicationReview.ShouldNotBeNull();
         published.PublicationReview!.PolicyLabels["collection"].ShouldContain("v1");
         await Should.ThrowAsync<BusinessException>(() => _feeStructures.UpdateAsync(published.Id, AsRequest(published)));
         await Should.ThrowAsync<BusinessException>(() => _feeStructures.DeleteAsync(published.Id));
-        var revision = await _feeStructures.CreateRevisionAsync(published.Id, new() { ConcurrencyStamp = published.ConcurrencyStamp });
+        var revisionCommand = RevisionCommand(Guid.NewGuid(), published.ConcurrencyStamp);
+        var revision = await _feeStructures.CreateRevisionAsync(published.Id, revisionCommand);
         revision.RevisionNumber.ShouldBe(2);
         revision.RevisionRootId.ShouldBe(published.Id);
         revision.PreviousRevisionId.ShouldBe(published.Id);
         revision.PublicationReview.ShouldBeNull();
         revision.FeeHeads.Single().Id.ShouldNotBe(published.FeeHeads.Single().Id);
         revision.CollectionPolicyVersionId.ShouldBe(published.CollectionPolicyVersionId);
-        var retried = await _feeStructures.CreateRevisionAsync(published.Id, new() { ConcurrencyStamp = published.ConcurrencyStamp });
+        var retried = await _feeStructures.CreateRevisionAsync(published.Id, revisionCommand);
         retried.Id.ShouldBe(revision.Id);
         await _feeStructures.DeleteAsync(revision.Id);
         var next = await _feeStructures.CreateRevisionAsync(published.Id, new() { ConcurrencyStamp = published.ConcurrencyStamp });
         next.RevisionNumber.ShouldBe(3); // Deleted revision numbers remain reserved.
         var persisted = (await _feeStructures.GetByStandardAsync(standard)).StandardFeeStructures.Single(x => x.Id == published.Id);
-        persisted.PublicationReview!.Schedules.Single().AnnualAmount.ShouldBe(1000.01m);
+        persisted.PublicationReview!.Schedules.Single().AnnualAmount.ShouldBe(draft.FeeHeads.Single().Amount);
     }
 
     [Fact]
@@ -250,11 +349,23 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         var year = (await _metadataRepo.GetAsync(metadata)).AcademicYearId!.Value;
         candidate.FeeHeads.Single().Amount = 1000m;
         var head = candidate.FeeHeads.Single().FeeHeadId;
-        var refund = await GetRequiredService<IRefundPolicyAppService>().CreateAsync(new CreateUpdateRefundPolicyDto
+        var refundVersions = GetRequiredService<IRefundPolicyAppService>();
+        var refund = await refundVersions.CreateAsync(new CreateUpdateRefundPolicyDto
         {
             AcademicYearId = year, PolicyName = "Refund rules", Status = "Active", FeeHeadScope = "SelectedFeeHeads", ApplicableFeeHeadIds = [head],
             ExpenseCategoryId = await CreateRefundExpenseCategoryAsync(year), AllowedPayoutMethods = ["Cash"]
         });
+        var savedRefund = await refundVersions.GetAsync(refund.Id);
+        var refundOption = (await _feeStructures.GetCatalogueAsync(metadata, standard)).Policies
+            .Single(x => x.Id == refund.Id && x.Family == "refund");
+        refundOption.VersionId.ShouldBe(savedRefund.CurrentVersionId!.Value);
+        refundOption.FeeHeadScope.ShouldBe("SelectedFeeHeads");
+        refundOption.ApplicableFeeHeadIds!.ShouldBe(new[] { head });
+        refundOption.FeeHeadNames![head].ShouldBe(savedRefund.FeeHeadNames[head]);
+        (await refundVersions.GetVersionsAsync(refund.Id, new() { VersionId = refundOption.VersionId }))
+            .Items.Single().Id.ShouldBe(refundOption.VersionId);
+        (await refundVersions.GetVersionsAsync(refund.Id, new() { VersionId = Guid.NewGuid() }))
+            .Items.ShouldBeEmpty();
         var proration = await GetRequiredService<IProrationPolicyAppService>().CreateAsync(new CreateUpdateProrationPolicyDto
         {
             AcademicYearId = year, PolicyName = "Daily proration", Status = "Active", FeeHeadRules = [new ProrationPolicyRuleDto { FeeHeadId = head, RuleType = "Daily" }]
@@ -274,6 +385,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         published.PublicationReview!.IsReady.ShouldBeTrue();
         saved = await _feeStructures.CreateRevisionAsync(published.Id, new() { ConcurrencyStamp = published.ConcurrencyStamp });
         edit = AsRequest(saved);
+        edit.Name = "Revised policy fees";
         edit.FeeHeads[0].IsOneTime = false; edit.RefundPolicyId = null; edit.RefundPolicyVersionId = null;
         var detached = await _feeStructures.UpdateAsync(saved.Id, edit);
         detached.RefundPolicyVersionId.ShouldBeNull();

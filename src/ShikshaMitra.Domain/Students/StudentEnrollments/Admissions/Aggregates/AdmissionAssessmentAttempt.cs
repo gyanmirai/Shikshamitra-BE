@@ -174,15 +174,23 @@ public class AdmissionAssessmentAttempt : FullAuditedAggregateRoot<Guid>, IMulti
 		Notes = normalizedNotes;
 	}
 
+	public bool HasPassed() => Status == "completed" && Outcome == "passed";
+
 	public void Waive(string reason, Guid userId, DateTime now)
 	{
 		if (Status == "cancelled") throw Invalid("A cancelled attempt cannot be waived.");
+		EnsurePassingResultIsPreserved();
 		var normalizedReason = Check.NotNullOrWhiteSpace(reason, nameof(reason), 1024).Trim();
 		Outcome = "waived";
 		Status = "completed";
 		ReviewNotes = normalizedReason;
 		ReviewedBy = userId;
 		ReviewedAt = now;
+	}
+
+	public void EnsurePassingResultIsPreserved()
+	{
+		if (HasPassed()) throw Invalid("A passed assessment cannot be waived.");
 	}
 
 	private void RecordOutcome(string outcome, Guid userId, AdmissionAssessmentPolicy policy)

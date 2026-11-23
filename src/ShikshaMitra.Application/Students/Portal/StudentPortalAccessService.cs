@@ -22,11 +22,18 @@ public class StudentPortalAccessService(
 	IRepository<StudentPortalAccountLink, Guid> links,
 	IRepository<IdentityUser, Guid> users,
 	IStudentRepository students,
-	IDataFilter dataFilter) : ApplicationService, ITransientDependency
+	IDataFilter dataFilter,
+	StudentAppAccessEnforcement appAccess) : ApplicationService, ITransientDependency
 {
 	public Task<IReadOnlyList<StudentPortalAccountDto>> GetMyStudentsAsync() => GetStudentsForUserAsync(CurrentUser.Id);
 
-	internal async Task<IReadOnlyList<StudentPortalAccountDto>> GetStudentsForUserAsync(Guid? userId)
+	internal Task<IReadOnlyList<StudentPortalAccountDto>> GetStudentsForUserAsync(Guid? userId) =>
+		GetAssociationsAsync(userId, enforceAppAccess: true);
+
+	internal Task<IReadOnlyList<StudentPortalAccountDto>> GetDeliveryAssociationsAsync(Guid userId) =>
+		GetAssociationsAsync(userId, enforceAppAccess: false);
+
+	private async Task<IReadOnlyList<StudentPortalAccountDto>> GetAssociationsAsync(Guid? userId, bool enforceAppAccess)
 	{
 		if (!CurrentTenant.Id.HasValue || !userId.HasValue) throw new AbpAuthorizationException();
 		var user = await users.FindAsync(x => x.Id == userId.Value && x.TenantId == CurrentTenant.Id);
@@ -50,13 +57,25 @@ public class StudentPortalAccessService(
 			await AsyncExecuter.ToListAsync(studentQuery.Where(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(linkedIds, x.Id) && x.Status != StudentLifeCycleStatusEnum.Left)
 				.Select(x => new PersonalStudent { Id = x.Id, FirstName = x.FirstName, LastName = x.LastName }));
 		var result = new List<StudentPortalAccountDto>();
+		List<StudentAppAccessRestriction> off = [];
+		if (enforceAppAccess)
+		{
+			var studentIds = linkedIds.Concat(selfStudents.Select(x => x.Id)).Distinct().ToArray();
+			if (studentIds.Length > 0)
+				off = await AsyncExecuter.ToListAsync((await appAccess.GetOffRestrictionsAsync(CurrentTenant.Id))
+					.Where(x => studentIds.Contains(x.StudentId) && (x.UserId == null || x.UserId == user.Id)));
+		}
 		foreach (var link in activeLinks)
 		{
 			var student = linkedStudents.FirstOrDefault(x => x.Id == link.StudentId);
-			if (student != null) result.Add(Map(student, user, link.AccountType, link.Relationship));
+			var blocked = off.Any(x => x.StudentId == link.StudentId &&
+				(link.AccountType == "student" && x.UserId == null ||
+					link.Relationship is "father" or "mother" && x.UserId == user.Id));
+			if (student != null && !blocked)
+				result.Add(Map(student, user, link.AccountType, link.Relationship));
 		}
 		foreach (var student in selfStudents)
-			if (!selfLinkHistory.Any(x => x.StudentId == student.Id))
+			if (!selfLinkHistory.Any(x => x.StudentId == student.Id) && !off.Any(x => x.StudentId == student.Id && x.UserId == null))
 				result.Add(Map(student, user, "student", "self"));
 		return result;
 	}

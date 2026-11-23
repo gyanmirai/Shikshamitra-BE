@@ -35,6 +35,8 @@ public static class ApiProblemDetailsMapper
 			Students.StudentEnrollments.Admissions.AdmissionJourneyResumeErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionFormCorrectionErrorCodes.Conflict => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Conflict => StatusCodes.Status409Conflict,
+			Students.StudentRecords.StudentRecordsErrorCodes.AppAccessConflict => StatusCodes.Status409Conflict,
+			Students.StudentRecords.StudentRecordsErrorCodes.AppAccessIdentityRestricted => StatusCodes.Status403Forbidden,
 			Students.StudentEnrollments.Admissions.AdmissionErrorCodes.PublicInquiryLinkNameExists => StatusCodes.Status409Conflict,
 			Students.StudentEnrollments.Admissions.AdmissionParentRegistrationErrors.Unavailable => StatusCodes.Status404NotFound,
 			Students.StudentErrorCodes.IdAssignmentChanged or Students.StudentErrorCodes.IdAssignmentRosterChanged or

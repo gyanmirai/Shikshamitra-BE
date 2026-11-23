@@ -30,7 +30,8 @@ public class StudentOnboardingCredentialEligibilityResolver(
 	ICurrentTenant tenant,
 	ITenantRepository tenants,
 	IConfiguration appConfiguration,
-	StudentCredentialsRecipientReader recipients) : IStudentCredentialEmailEligibilityResolver, ITransientDependency
+	StudentCredentialsRecipientReader recipients,
+	StudentAppAccessEnforcement appAccess) : IStudentCredentialEmailEligibilityResolver, ITransientDependency
 {
 	public const string AccountRequired = "Create and verify the selected portal account first.";
 	public async Task<StudentCredentialEmailEligibility> ResolveAsync(Guid caseId, string accountType, bool enforceStaffScope = true)
@@ -72,6 +73,8 @@ public class StudentOnboardingCredentialEligibilityResolver(
 		var loginUrl = (appConfiguration["App:ClientUrl"] ?? appConfiguration["App:AngularUrl"] ?? "").TrimEnd('/') + "/login";
 		StudentCredentialEmailEligibility Result(string? reason, bool waitingForCompletion = false) => new(item.Id, item.StudentId, link?.Id, user?.Id,
 			user?.Email ?? "", name, enabled, reason == null, reason, loginUrl, school?.Name ?? "ShikshaMitra", waitingForCompletion, link?.Relationship);
+		if (!prepareAccount && await appAccess.IsRecipientOffAsync(item.StudentId, accountType, link?.Relationship, link?.UserId))
+			return Result(StudentAppAccessEnforcement.OffMessage);
 		if (accountType == "student")
 		{
 			// Share capture/approved-correction proof across manual, automatic and queued

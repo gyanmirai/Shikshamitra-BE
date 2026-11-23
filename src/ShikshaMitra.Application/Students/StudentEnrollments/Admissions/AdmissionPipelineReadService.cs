@@ -8,8 +8,10 @@ using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using AssessmentPermissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.AdmissionAssessments;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
@@ -25,6 +27,8 @@ public class AdmissionPipelineReadService : ApplicationService, ITransientDepend
 	private readonly IRepository<AdmissionApplicationStageInstance, Guid> stages;
 	private readonly IRepository<AdmissionApplicationWorkflowInstance, Guid> workflows;
 	private readonly IRepository<AdmissionWorkflowStageDefinition, Guid> definitions;
+	private readonly IRepository<AdmissionAssessmentAttempt, Guid> assessmentAttempts;
+	private readonly IPermissionChecker permissions;
 	private readonly IRepository<AdmissionInquiryFollowUp, Guid> followUps;
 	private readonly IRepository<Standard, Guid> standards;
 	private readonly AdmissionApplicationScopeAccessService access;
@@ -40,13 +44,15 @@ public class AdmissionPipelineReadService : ApplicationService, ITransientDepend
 		IRepository<AdmissionApplicationStageInstance, Guid> stages,
 		IRepository<AdmissionApplicationWorkflowInstance, Guid> workflows,
 		IRepository<AdmissionWorkflowStageDefinition, Guid> definitions,
+		IRepository<AdmissionAssessmentAttempt, Guid> assessmentAttempts,
 		IRepository<AdmissionInquiryFollowUp, Guid> followUps,
 		IRepository<AdmissionIntakeProfile, Guid> profiles,
 		IRepository<Standard, Guid> standards,
 		AdmissionApplicationScopeAccessService access,
 		AdmissionApplicationWorkspaceQueryService workspace,
 		AdmissionInquiryPeopleService people,
-		IUserScopeAccessService userScopes
+		IUserScopeAccessService userScopes,
+		IPermissionChecker permissions
 	)
 	{
 		this.applicants = applicants;
@@ -57,6 +63,8 @@ public class AdmissionPipelineReadService : ApplicationService, ITransientDepend
 		this.stages = stages;
 		this.workflows = workflows;
 		this.definitions = definitions;
+		this.assessmentAttempts = assessmentAttempts;
+		this.permissions = permissions;
 		this.followUps = followUps;
 		_ = profiles;
 		this.standards = standards;
@@ -96,11 +104,16 @@ public class AdmissionPipelineReadService : ApplicationService, ITransientDepend
 			from stage in stageQuery
 			join workflow in workflowQuery on stage.WorkflowInstanceId equals workflow.Id
 			where Enumerable.Contains(applicationIds, workflow.ApplicationId)
-			select new { workflow.ApplicationId, Stage = stage });
+			select new { workflow.ApplicationId, WorkflowStatus = workflow.Status, Stage = stage });
 		var stageRows = progressRows.Where(item => Enumerable.Contains(stageIds, item.Stage.Id)).Select(item => item.Stage).ToList();
 		var progressByApplication = progressRows.ToLookup(item => item.ApplicationId);
 		var definitionIds = stageRows.Select(row => row.DefinitionStageId).ToArray();
 		var stageDefinitions = (await definitions.GetListAsync(item => Enumerable.Contains(definitionIds, item.Id))).ToDictionary(row => row.Id);
+		var activeAssessmentStages = progressRows
+			.Where(item => item.WorkflowStatus == AdmissionWorkflowInstanceStatus.Active &&
+				item.Stage.Status == AdmissionRuntimeStageStatus.Active && item.Stage.StageType == AdmissionWorkflowStageType.Assessment)
+			.ToDictionary(item => (item.ApplicationId, item.Stage.Id), item => item.Stage.DefinitionStageId);
+		await PopulateAssessmentActionsAsync(rows, activeAssessmentStages, stageDefinitions);
 		var pendingByInquiry = pending.ToLookup(item => item.InquiryId);
 		var stagesById = stageRows.ToDictionary(row => row.Id);
 		var utcNow = Clock.Kind == DateTimeKind.Utc ? AdmissionOfferUtcTime.Normalize(Clock.Now) : Clock.Now.ToUniversalTime();
@@ -137,6 +150,53 @@ public class AdmissionPipelineReadService : ApplicationService, ITransientDepend
 				? "Review readiness and finalize admission" : "Open the application to review its workflow";
 		}
 		return new(count, rows);
+	}
+
+	private async Task PopulateAssessmentActionsAsync(IReadOnlyCollection<AdmissionPipelineItemDto> rows,
+		IReadOnlyDictionary<(Guid ApplicationId, Guid StageId), Guid> activeStages,
+		IReadOnlyDictionary<Guid, AdmissionWorkflowStageDefinition> stageDefinitions)
+	{
+		var assessmentRows = rows.Where(row => row.StageType == AdmissionWorkflowStageType.Assessment && row.CurrentStageInstanceId.HasValue).ToList();
+		if (assessmentRows.Count == 0 || !await permissions.IsGrantedAsync(AssessmentPermissions.View)) return;
+
+		foreach (var row in assessmentRows) row.AssessmentAction = "view";
+		if (!await permissions.IsGrantedAsync(AssessmentPermissions.Book)) return;
+
+		var scheduled = assessmentRows
+			.Select(row => (Row: row, StageId: row.CurrentStageInstanceId!.Value))
+			.Where(item => activeStages.ContainsKey((item.Row.Id, item.StageId)))
+			.Select(item => (item.Row, item.StageId, Policy: ReadScheduledAssessmentPolicy(
+				stageDefinitions.GetValueOrDefault(activeStages[(item.Row.Id, item.StageId)]))))
+			.Where(item => item.Policy != null).ToList();
+		if (scheduled.Count == 0) return;
+
+		// Pull only readiness evidence for the authorized page, with one query for all its assessment stages.
+		var stageIds = scheduled.Select(item => item.StageId).ToArray();
+		var attemptRows = await AsyncExecuter.ToListAsync((await assessmentAttempts.GetQueryableAsync())
+			.Where(item => item.TenantId == CurrentTenant.Id && Enumerable.Contains(stageIds, item.StageInstanceId) && item.Status != "cancelled")
+			.Select(item => new { item.ApplicationId, item.StageInstanceId, item.AttemptNumber, item.Outcome }));
+		var attemptsByStage = attemptRows.ToLookup(item => (item.ApplicationId, item.StageInstanceId));
+		foreach (var item in scheduled)
+		{
+			var attempts = attemptsByStage[(item.Row.Id, item.StageId)];
+			var latest = attempts.MaxBy(attempt => attempt.AttemptNumber);
+			if (attempts.Count() < item.Policy!.MaxAttempts && (latest == null || latest.Outcome == "retake"))
+				item.Row.AssessmentAction = "book";
+		}
+	}
+
+	private static AdmissionAssessmentPolicy? ReadScheduledAssessmentPolicy(AdmissionWorkflowStageDefinition? definition)
+	{
+		if (definition == null) return null;
+		try
+		{
+			var policy = AdmissionAssessmentAccessService.ReadPolicy(definition);
+			return policy?.SchedulingEnabled == true ? policy : null;
+		}
+		catch (BusinessException exception) when (exception.Code == AdmissionAssessmentErrorCodes.InvalidPolicy)
+		{
+			return null;
+		}
 	}
 
 	public async Task<AdmissionPipelineOptionsDto> GetOptionsAsync(AdmissionPipelineListInput input)

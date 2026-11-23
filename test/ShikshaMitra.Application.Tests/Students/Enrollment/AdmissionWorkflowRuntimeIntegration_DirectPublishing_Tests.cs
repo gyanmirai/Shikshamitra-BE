@@ -38,7 +38,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 		(await Should.ThrowAsync<BusinessException>(() =>
 			_workflowAppService.PublishAsync(invalid.Id, invalid.ConcurrencyStamp)))
-			.Code.ShouldBe(AdmissionWorkflowErrorCodes.InvalidTransition);
+			.Code.ShouldBe(AdmissionWorkflowErrorCodes.InvalidFinalStage);
 		(await _workflowAppService.GetAsync(invalid.Id)).Status.ShouldBe(AdmissionWorkflowStatus.Draft);
 	}
 
@@ -73,9 +73,68 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			.ShouldBe(AdmissionWorkflowStatus.Published);
 	}
 
-	private Task<AdmissionWorkflowDto> CreateDirectPublicationDraftAsync() => _workflowAppService.CreateAsync(new()
+	[Fact]
+	public async Task Workflow_save_requires_an_ending_decision_but_can_bootstrap_an_empty_draft()
 	{
-		Name = $"Direct publication {Guid.NewGuid():N}", Code = $"DIRECT_{Guid.NewGuid():N}"[..24],
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var invalid = new CreateUpdateAdmissionWorkflowDto
+		{
+			Name = "Missing ending decision",
+			Stages = [new() { Code = "ASSESSMENT", Name = "Assessment", StageType = AdmissionWorkflowStageType.Assessment,
+				IsEntryStage = true, IsTerminalStage = true }]
+		};
+		(await Should.ThrowAsync<BusinessException>(() => _workflowAppService.CreateAsync(invalid)))
+			.Code.ShouldBe(AdmissionWorkflowErrorCodes.InvalidFinalStage);
+
+		var blank = await _workflowAppService.CreateAsync(new() { Name = invalid.Name });
+		blank.Stages.ShouldBeEmpty();
+		(await Should.ThrowAsync<BusinessException>(() => _workflowAppService.UpdateAsync(blank.Id, ToUpdateInput(blank))))
+			.Code.ShouldBe(AdmissionWorkflowErrorCodes.InvalidFinalStage);
+		(await _workflowAppService.ValidatePreviewAsync(blank.Id, new() { Stages = invalid.Stages })).Issues
+			.ShouldContain(issue => issue.Code == AdmissionWorkflowErrorCodes.InvalidFinalStage);
+		(await _workflowAppService.GetAsync(blank.Id)).Stages.ShouldBeEmpty();
+
+		var completed = ToUpdateInput(blank);
+		completed.Stages.Add(new() { Code = "DECISION", Name = "Admission decision",
+			StageType = AdmissionWorkflowStageType.Approval, IsEntryStage = true, IsTerminalStage = true });
+		var draft = await _workflowAppService.UpdateAsync(blank.Id, completed);
+		(await _workflowAppService.ValidateAsync(draft.Id)).IsValid.ShouldBeTrue();
+		draft = await _workflowAppService.GetAsync(draft.Id);
+		var input = ToUpdateInput(draft);
+		input.Stages[0].IsTerminalStage = false;
+		(await Should.ThrowAsync<BusinessException>(() => _workflowAppService.UpdateAsync(draft.Id, input)))
+			.Code.ShouldBe(AdmissionWorkflowErrorCodes.InvalidFinalStage);
+		input.Stages[0].IsTerminalStage = true;
+		var finalId = input.Stages[0].Id!.Value;
+		input.Transitions.Add(new() { FromStageId = finalId, ToStageId = finalId, IsDefault = true });
+		(await Should.ThrowAsync<BusinessException>(() => _workflowAppService.UpdateAsync(draft.Id, input)))
+			.Code.ShouldBe(AdmissionWorkflowErrorCodes.InvalidFinalStage);
+		var unchanged = await _workflowAppService.GetAsync(draft.Id);
+		unchanged.Status.ShouldBe(AdmissionWorkflowStatus.Validated);
+		unchanged.Stages.ShouldHaveSingleItem().IsTerminalStage.ShouldBeTrue();
+	}
+
+	[Fact]
+	public async Task Validation_and_publication_refuse_a_saved_legacy_draft_ending_with_assessment()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var draft = await _workflowAppService.CreateAsync(new() { Name = "Legacy assessment draft" });
+		await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<AdmissionWorkflowStageDefinition, Guid>>()
+			.InsertAsync(new AdmissionWorkflowStageDefinition(Guid.NewGuid(), draft.Id, "ASSESSMENT", "Assessment",
+				AdmissionWorkflowStageType.Assessment, 0, true, false, null, null, true, true), autoSave: true));
+
+		(await _workflowAppService.ValidateAsync(draft.Id)).Issues.ShouldContain(issue =>
+			issue.Code == AdmissionWorkflowErrorCodes.InvalidFinalStage);
+		(await Should.ThrowAsync<BusinessException>(() => _workflowAppService.PublishAsync(draft.Id, draft.ConcurrencyStamp)))
+			.Code.ShouldBe(AdmissionWorkflowErrorCodes.InvalidFinalStage);
+		(await _workflowAppService.GetAsync(draft.Id)).Status.ShouldBe(AdmissionWorkflowStatus.Draft);
+	}
+
+	private Task<AdmissionWorkflowDto> CreateDirectPublicationDraftAsync(string? name = null) => _workflowAppService.CreateAsync(new()
+	{
+		Name = name ?? $"Direct publication {Guid.NewGuid():N}",
 		Stages = [new() { Code = "DECISION", Name = "Admission decision", StageType = AdmissionWorkflowStageType.Approval,
 			IsEntryStage = true, IsTerminalStage = true, IsRequired = true }],
 		Transitions = []

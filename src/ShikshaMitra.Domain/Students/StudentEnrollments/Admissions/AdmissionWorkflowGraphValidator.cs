@@ -15,6 +15,8 @@ public sealed record AdmissionWorkflowValidationIssue(
 
 public class AdmissionWorkflowGraphValidator : DomainService
 {
+	public const string FinalDecisionRequiredMessage = "End of Journey must be on for the last Admission decision stage only.";
+
 	private static readonly HashSet<string> GroupOperators = new(StringComparer.OrdinalIgnoreCase)
 	{
 		"ALL",
@@ -46,7 +48,7 @@ public class AdmissionWorkflowGraphValidator : DomainService
 		var issues = new List<AdmissionWorkflowValidationIssue>();
 		if (stages.Count == 0)
 		{
-			issues.Add(Error(AdmissionWorkflowErrorCodes.NoStages, "Add at least one stage before publishing."));
+			issues.Add(Error(AdmissionWorkflowErrorCodes.NoStages, "Add a final Admission decision stage before publishing."));
 			return issues;
 		}
 
@@ -56,6 +58,17 @@ public class AdmissionWorkflowGraphValidator : DomainService
 		issues.AddRange(AdmissionInquiryGraphRules.Validate(stages));
 		issues.AddRange(AdmissionReviewGraphRules.Validate(stages, validTransitions));
 		return issues;
+	}
+
+	public static bool HasFinalDecisionStage(
+		IEnumerable<(AdmissionWorkflowStageType StageType, int DisplayOrder, bool IsTerminalStage)> stages)
+	{
+		var ordered = stages.OrderByDescending(stage => stage.DisplayOrder).ToArray();
+		return ordered.Length > 0 &&
+			ordered[0].StageType == AdmissionWorkflowStageType.Approval &&
+			ordered[0].IsTerminalStage &&
+			(ordered.Length == 1 || ordered[0].DisplayOrder > ordered[1].DisplayOrder) &&
+			ordered.Count(stage => stage.IsTerminalStage) == 1;
 	}
 
 	private static void ValidateStages(
@@ -73,10 +86,9 @@ public class AdmissionWorkflowGraphValidator : DomainService
 			issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidInitialStage, "Select exactly one entry stage."));
 		}
 
-		var terminalStages = stages.Where(stage => stage.IsTerminalStage).ToList();
-		if (terminalStages.Count == 0)
+		if (!HasFinalDecisionStage(stages.Select(stage => (stage.StageType, stage.DisplayOrder, stage.IsTerminalStage))))
 		{
-			issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidFinalStage, "Select at least one terminal stage."));
+			issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidFinalStage, FinalDecisionRequiredMessage));
 		}
 
 		foreach (var stage in stages)

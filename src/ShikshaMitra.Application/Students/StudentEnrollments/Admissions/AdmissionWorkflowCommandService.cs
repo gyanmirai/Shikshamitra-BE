@@ -21,7 +21,7 @@ public class AdmissionWorkflowCommandService(
 {
 	public async Task<AdmissionWorkflowDto> CreateAsync(CreateUpdateAdmissionWorkflowDto input)
 	{
-		AdmissionWorkflowDefinitionStore.EnsureSupportedStages(input);
+		AdmissionWorkflowDefinitionStore.EnsureWritableJourney(input, allowEmpty: true);
 		var id = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "WF", id);
 		await EnsureNameAvailableAsync(input.Name);
@@ -45,7 +45,7 @@ public class AdmissionWorkflowCommandService(
 	public async Task<AdmissionWorkflowDto> UpdateAsync(Guid id, CreateUpdateAdmissionWorkflowDto input)
 	{
 		var workflow = await definitionStore.GetAsync(id);
-		AdmissionWorkflowDefinitionStore.EnsureSupportedStages(input);
+		AdmissionWorkflowDefinitionStore.EnsureWritableJourney(input);
 		workflow.PrepareForEdit();
 		EnsureConcurrency(workflow, input.ConcurrencyStamp);
 		var code = AdmissionSettingsCode.ForUpdate(input.Code, workflow.Code);
@@ -333,8 +333,14 @@ public class AdmissionWorkflowCommandService(
 	{
 		var validation = await validationService.ValidateAsync(workflow.Id);
 		if (!validation.IsValid)
-			throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidTransition, "Workflow validation failed.")
+		{
+			var endingIssue = validation.Issues.Find(issue => issue.Code is
+				AdmissionWorkflowErrorCodes.InvalidFinalStage or AdmissionWorkflowErrorCodes.NoStages);
+			throw new BusinessException(
+				endingIssue == null ? AdmissionWorkflowErrorCodes.InvalidTransition : AdmissionWorkflowErrorCodes.InvalidFinalStage,
+				endingIssue?.Message ?? "Workflow validation failed.")
 				.WithData("ValidationIssues", validation.Issues.Select(issue => issue.Code).ToArray());
+		}
 	}
 
 	private async Task EnsurePublishedInquiryFormAsync(Guid? formDefinitionId)
@@ -353,13 +359,13 @@ public class AdmissionWorkflowCommandService(
 	{
 		if (await IsNameAvailableAsync(name, familyCode)) return;
 		throw new BusinessException(AdmissionWorkflowErrorCodes.NameAlreadyExists,
-			"A workflow with this name already exists. Please enter a different name.");
+			"A workflow with this name already exists. Enter a different name.");
 	}
 
 	private async Task<string> ResolveCloneNameAsync(string sourceName, string requestedName)
 	{
 		var defaultName = BuildCloneName(sourceName, 1);
-		if (!string.Equals(requestedName.Trim(), defaultName, StringComparison.OrdinalIgnoreCase))
+		if (!string.Equals(NormalizeName(requestedName), NormalizeName(defaultName), StringComparison.Ordinal))
 		{
 			await EnsureNameAvailableAsync(requestedName);
 			return requestedName;
@@ -377,8 +383,7 @@ public class AdmissionWorkflowCommandService(
 
 	private async Task<bool> IsNameAvailableAsync(string name, string? familyCode = null)
 	{
-		var normalizedName = Check.NotNullOrWhiteSpace(name, nameof(name), AdmissionWorkflowConsts.MaxNameLength)
-			.Trim().ToUpperInvariant();
+		var normalizedName = NormalizeName(Check.NotNullOrWhiteSpace(name, nameof(name), AdmissionWorkflowConsts.MaxNameLength));
 		await LazyServiceProvider.LazyGetRequiredService<IAdmissionWorkflowNameLock>()
 			.AcquireAsync(CurrentTenant.Id, normalizedName);
 		var tenantId = CurrentTenant.Id;
@@ -388,8 +393,10 @@ public class AdmissionWorkflowCommandService(
 			workflow.TenantId == tenantId && !workflow.IsDeleted &&
 			(familyCode == null || workflow.Code != familyCode)).Select(workflow => workflow.Name));
 		// Compare using the same invariant normalization as the lock, independent of database collation.
-		return !names.Any(existing => string.Equals(existing.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+		return !names.Any(existing => string.Equals(NormalizeName(existing), normalizedName, StringComparison.Ordinal));
 	}
+
+	private static string NormalizeName(string name) => name.Trim().ToUpperInvariant();
 
 	private static string BuildCloneName(string sourceName, int copyNumber)
 	{

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Security.Claims;
@@ -12,6 +13,34 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Fact]
+	public async Task Passed_assessment_rejects_waiver_and_preserves_the_recorded_result()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var (application, stageId, _) = await CreateManagedAssessmentApplicationAsync();
+		var service = GetRequiredService<IAdmissionAssessmentAppService>();
+		var state = await service.GetAsync(application.Id, stageId);
+		state = await service.BookAsync(application.Id, stageId, new() { ConcurrencyStamp = state.ConcurrencyStamp });
+		var attempt = state.Attempts.Single();
+		state = await service.RecordAttendanceAsync(attempt.Id, new() { ConcurrencyStamp = attempt.ConcurrencyStamp, Attendance = "present" });
+		state.CanWaive.ShouldBeTrue();
+		var beforeResult = state;
+		state = await service.RecordResultAsync(attempt.Id, new() { ConcurrencyStamp = state.Attempts.Single().ConcurrencyStamp, Marks = 80 });
+
+		(await Should.ThrowAsync<BusinessException>(() => service.WaiveAsync(application.Id, stageId,
+			new() { ConcurrencyStamp = beforeResult.ConcurrencyStamp, Reason = "Open waiver form" })))
+			.Code.ShouldBe(AdmissionAssessmentErrorCodes.ConcurrencyConflict);
+		state.CanWaive.ShouldBeFalse();
+		(await Should.ThrowAsync<BusinessException>(() => service.WaiveAsync(application.Id, stageId,
+			new() { ConcurrencyStamp = state.ConcurrencyStamp, Reason = "Direct waiver request" })))
+			.Code.ShouldBe(AdmissionAssessmentErrorCodes.InvalidState);
+		var current = await service.GetAsync(application.Id, stageId);
+		current.Attempts.Single().Outcome.ShouldBe("passed");
+		current.Attempts.Single().Marks.ShouldBe(80);
+		current.CanComplete.ShouldBeTrue();
+	}
+
 	[Fact]
 	public async Task Assessment_display_filters_counts_and_pages_use_the_same_waiver_projection()
 	{

@@ -223,6 +223,7 @@
   "Students.Records.Certificates": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Records"]],
   "Students.Records.Changes": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Records"]],
   "Students.Records.GuardianAccess": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Records"]],
+  "Students.Records.AppAccess": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Records"]],
   "Students.Records.HouseManagement": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Records"]],
   "Students.Records.Overrides": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Records"]],
   "Students.Records.Reports": [["ShikshaMitra.Module.Students","ShikshaMitra.Module.Students.Records"]],

@@ -44,6 +44,46 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	});
 
 	[Fact]
+	public Task Saved_joining_date_and_proration_follow_the_application_to_a_second_payment_step() => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await CreateCollectibleAdmissionAsync("TwoPaymentDates", amount: 12000m, oneTime: false, secondPaymentStage: true);
+		var applicationId = fixture.Application.Id;
+		await ConfigureProrationAsync(fixture);
+		var service = GetRequiredService<IAdmissionPaymentJoiningDateAppService>();
+		var runtime = await _applicationAppService.GetWorkflowAsync(applicationId);
+		var firstStageId = runtime.CurrentStageInstanceId!.Value;
+		var first = await service.GetAsync(applicationId);
+		first.JoiningDate.ShouldBeNull();
+		var date = first.AcademicYearStartDate.AddMonths(2);
+		var candidate = date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+		var preview = await service.PreviewAsync(applicationId, new() { JoiningDate = candidate });
+		preview.ReductionAmount.ShouldBeGreaterThan(0m);
+		var saved = await service.SaveAsync(applicationId, new() { JoiningDate = candidate, ConcurrencyStamp = first.ConcurrencyStamp });
+		(await AccountCountAsync(applicationId)).ShouldBe(0);
+
+		var next = await _applicationAppService.AdvanceWorkflowAsync(applicationId, new()
+		{
+			ExpectedCurrentStageInstanceId = firstStageId, ConcurrencyStamp = saved.ConcurrencyStamp,
+			IdempotencyKey = "advance-to-second-payment", DeferFeeCollection = true, Reason = "Collection will be handled later."
+		});
+		next.CurrentStageInstanceId.ShouldNotBe(firstStageId);
+		next.Stages.Single(x => x.Id == next.CurrentStageInstanceId).StageType.ShouldBe(AdmissionWorkflowStageType.Payment);
+		var reopened = await service.GetAsync(applicationId);
+		reopened.JoiningDate.ShouldBe(date);
+		(await GetRequiredService<IAdmissionFeeSelectionAppService>().GetAsync(applicationId)).Selection!.StructureId.ShouldBe(fixture.StructureId);
+		(await GetRequiredService<IAdmissionFinanceContextReader>().GetAsync(applicationId)).JoiningDate.ShouldBe(date);
+		(await AccountCountAsync(applicationId)).ShouldBe(0);
+
+		var prepared = await GetRequiredService<IAdmissionFeeCollectionAppService>().PrepareAsync(applicationId, new());
+		prepared.Proration!.JoiningDate.ShouldBe(date);
+		prepared.Proration.PolicyVersion.ShouldBe(preview.Proration!.PolicyVersion);
+		prepared.TotalAmount.ShouldBe(preview.TotalAmount);
+		var locked = await service.GetAsync(applicationId);
+		locked.JoiningDate.ShouldBe(date);
+		locked.IsLocked.ShouldBeTrue();
+	});
+
+	[Fact]
 	public Task Prepared_fee_schedule_should_lock_the_shared_joining_date() => RunCertificationScenarioAsync(async () =>
 	{
 		var fixture = await CreateCollectibleAdmissionAsync("JoiningDateLock");

@@ -17,6 +17,48 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
+	public async Task Pipeline_assessment_action_tracks_the_current_stage_booking_and_waiver()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var (application, stageId, offering) = await CreateManagedAssessmentApplicationAsync(scheduling: true);
+		var workflow = await _applicationAppService.GetWorkflowAsync(application.Id);
+		var current = workflow.Stages.Single(item => item.Id == stageId);
+		var otherStage = workflow.Stages.Single(item => item.Id != stageId);
+		var service = GetRequiredService<IAdmissionAssessmentAppService>();
+		var startsAt = DateTimeOffset.UtcNow.AddDays(1);
+		var session = await service.CreateSessionAsync(new()
+		{
+			AdmissionOfferingId = offering.Id, WorkflowStageDefinitionId = current.DefinitionStageId,
+			Name = "Pipeline assessment booking", StartsAt = startsAt, EndsAt = startsAt.AddHours(1),
+			Location = "Room A", Capacity = 2
+		});
+
+		async Task<string?> ReadActionAsync(Guid offeringId, Guid applicationId)
+		{
+			var result = await _applicationAppService.GetPipelineAsync(new() { MyCases = false, AdmissionOfferingId = offeringId });
+			return result.Items.Single(item => item.Id == applicationId).AssessmentAction;
+		}
+
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var attempts = GetRequiredService<Volo.Abp.Domain.Repositories.IRepository<AdmissionAssessmentAttempt, Guid>>();
+			await attempts.InsertAsync(new AdmissionAssessmentAttempt(Guid.NewGuid(), TestTenantId, application.Id, otherStage.Id, null, 1, "{}"), true);
+		});
+		(await ReadActionAsync(offering.Id, application.Id)).ShouldBe("book");
+		var booking = await service.BookAsync(application.Id, stageId, new() { SessionId = session.Id, ConcurrencyStamp = application.ConcurrencyStamp });
+		(await ReadActionAsync(offering.Id, application.Id)).ShouldBe("view");
+		var bookedAttempt = booking.Attempts.Single();
+		var cancelled = await service.CancelAttemptAsync(bookedAttempt.Id, new() { ConcurrencyStamp = bookedAttempt.ConcurrencyStamp });
+		(await ReadActionAsync(offering.Id, application.Id)).ShouldBe("book");
+		await service.WaiveAsync(application.Id, stageId, new() { ConcurrencyStamp = cancelled.ConcurrencyStamp, Reason = "An exam waiver was approved." });
+		(await ReadActionAsync(offering.Id, application.Id)).ShouldBe("view");
+
+		var (unscheduled, _, unscheduledOffering) = await CreateManagedAssessmentApplicationAsync();
+		(await ReadActionAsync(unscheduledOffering.Id, unscheduled.Id)).ShouldBe("view");
+	}
+
+	[Fact]
 	public Task Pipeline_progress_should_use_each_application_runtime_without_mutating_or_mixing_workflows() =>
 		RunCertificationScenarioAsync(async () =>
 		{

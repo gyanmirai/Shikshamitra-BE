@@ -25,6 +25,45 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Fact]
+	public Task App_access_off_blocks_onboarding_credentials_for_only_the_linked_recipient() =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var fixture = await CreateOneClickCredentialsCaseAsync("activation", emailEnabled: false);
+			await LinkOneClickFixtureAccountsAsync(fixture);
+			var service = GetRequiredService<IStudentOnboardingAppService>();
+			var parent = (await service.GetPortalAccountsAsync(fixture.Case.Id)).Single(x => x.Relationship == "father");
+			var restrictions = GetRequiredService<IRepository<StudentAppAccessRestriction, Guid>>();
+			await WithUnitOfWorkAsync(() => restrictions.InsertAsync(new(Guid.NewGuid(), TestTenantId,
+				fixture.Case.StudentId, parent.UserId, isOff: true), true));
+
+			var workspace = await service.GetCredentialsAsync(fixture.Case.Id);
+			var recipient = workspace.Recipients.Single(x => x.Relationship == "father");
+			recipient.AppAccessOff.ShouldBeTrue();
+			recipient.CanSend.ShouldBeFalse();
+			recipient.BlockedReason.ShouldBe(StudentAppAccessEnforcement.OffMessage);
+			workspace.Recipients.Single(x => x.Relationship == "self").CanSend.ShouldBeTrue();
+			workspace.Recipients.Where(x => x.Relationship != "father").ShouldAllBe(x => !x.AppAccessOff);
+
+			var blocked = await Should.ThrowAsync<BusinessException>(() => service.SendCredentialsAsync(workspace.CaseId,
+				new() { AccountType = "guardian", ConfirmRecipientAccess = true, Relationship = "father",
+					ExpectedEmail = fixture.FatherEmail, ConcurrencyStamp = workspace.ConcurrencyStamp }));
+			blocked.Code.ShouldBe(StudentOnboardingErrorCodes.PortalAccountInvalid);
+			blocked.Data["Reason"].ShouldBe(StudentAppAccessEnforcement.OffMessage);
+			var eligibility = GetRequiredService<IStudentCredentialEmailEligibilityResolver>();
+			var queued = await WithUnitOfWorkAsync(() => eligibility.ResolveExplicitAsync(workspace.CaseId, "guardian", false));
+			queued.IsReady.ShouldBeFalse();
+			queued.BlockedReason.ShouldBe(StudentAppAccessEnforcement.OffMessage);
+
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var restriction = await restrictions.GetAsync(x => x.StudentId == fixture.Case.StudentId && x.UserId == parent.UserId);
+				restriction.SetEnabled(true);
+				await restrictions.UpdateAsync(restriction, true);
+			});
+			(await service.GetCredentialsAsync(workspace.CaseId)).Recipients.Single(x => x.Relationship == "father").CanSend.ShouldBeTrue();
+		});
+
 	[Theory]
 	[InlineData("activation")]
 	[InlineData("completion")]

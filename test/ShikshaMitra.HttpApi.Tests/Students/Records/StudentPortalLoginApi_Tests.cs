@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -142,6 +144,142 @@ public sealed class StudentPortalLoginApi_Tests(ShikshaMitraApiTestFactory facto
 		using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId));
 		using var work = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
 		await action(scope.ServiceProvider); await work.CompleteAsync();
+	}
+
+	[Fact]
+	public async Task Parent_can_open_siblings_until_last_child_is_off_and_restoring_requires_a_new_session()
+	{
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var userId = Guid.NewGuid();
+		var email = $"app-access-{userId:N}@example.test";
+		var clientId = $"app-access-{userId:N}";
+		var first = Guid.NewGuid();
+		var second = Guid.NewGuid();
+		var selfUserId = Guid.NewGuid();
+		var selfEmail = $"student-access-{selfUserId:N}@example.test";
+		const string password = "Portal-Test-Secret-29!";
+		await InTenantAsync(async services =>
+		{
+			var applications = services.GetRequiredService<IOpenIddictApplicationManager>();
+			await applications.CreateAsync(new OpenIddictApplicationDescriptor
+			{
+				ClientId = clientId, ClientType = OpenIddictConstants.ClientTypes.Public,
+				Permissions = { OpenIddictConstants.Permissions.Endpoints.Token,
+					OpenIddictConstants.Permissions.GrantTypes.Password, OpenIddictConstants.Permissions.GrantTypes.RefreshToken,
+					OpenIddictConstants.Permissions.Scopes.Profile, OpenIddictConstants.Permissions.Scopes.Email,
+					OpenIddictConstants.Permissions.Prefixes.Scope + "ShikshaMitra" }
+			});
+			var roles = services.GetRequiredService<IdentityRoleManager>();
+			var users = services.GetRequiredService<IdentityUserManager>();
+			foreach (var (id, address, role) in new[] { (userId, email, "Parent"), (selfUserId, selfEmail, "Student") })
+			{
+				if (!await roles.RoleExistsAsync(role))
+					(await roles.CreateAsync(new IdentityRole(Guid.NewGuid(), role, tenantId))).Succeeded.ShouldBeTrue();
+				var user = new IdentityUser(id, address, address, tenantId);
+				user.SetEmailConfirmed(true);
+				(await users.CreateAsync(user, password)).Succeeded.ShouldBeTrue();
+				(await users.AddToRoleAsync(user, role)).Succeeded.ShouldBeTrue();
+			}
+			var students = services.GetRequiredService<IRepository<Student, Guid>>();
+			var links = services.GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>();
+			foreach (var id in new[] { first, second })
+			{
+				await students.InsertAsync(new(id, tenantId, "App Access", "", "Child", Factory.SeededAcademicYearId,
+					Factory.SeededBoardId, Factory.SeededMediumId, Factory.SeededMediumStageId,
+					Factory.SeededStandardId, Factory.SeededDivisionId, status: StudentLifeCycleStatusEnum.Enrolled), true);
+				await links.InsertAsync(new(Guid.NewGuid(), tenantId, id, userId, "guardian", "father", Guid.Parse(TestAuthHandler.TestUserId)), true);
+			}
+			await links.InsertAsync(new(Guid.NewGuid(), tenantId, first, selfUserId, "student", "self", Guid.Parse(TestAuthHandler.TestUserId)), true);
+		});
+
+		using var login = CreateAnonymousClient();
+		login.BaseAddress = new Uri("https://localhost");
+		login.DefaultRequestHeaders.Add("__tenant", tenantId.ToString());
+		using var portal = Factory.CreateClient();
+		portal.BaseAddress = login.BaseAddress;
+		portal.DefaultRequestHeaders.Add("__tenant", tenantId.ToString());
+		portal.DefaultRequestHeaders.Add("X-Test-Real-Bearer", "true");
+
+		const string rosterRoute = "/api/student/onboarding/portal/my-students";
+		var original = await TokenAsync(login, clientId, email, password);
+		original.Status.ShouldBe(HttpStatusCode.OK);
+		SetBearer(original.Body);
+		(await RosterAsync()).ShouldBe(new[] { first, second }, ignoreOrder: true);
+
+		await SetAppAccessAsync(first, userId, userId, enabled: false);
+		(await RosterAsync()).ShouldBe(new[] { second });
+		using var deniedChild = await portal.GetAsync($"/api/mobile/v1/students/{first}/profile");
+		deniedChild.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		var partialRefresh = await RefreshAsync(original.Body);
+		partialRefresh.Status.ShouldBe(HttpStatusCode.OK);
+		SetBearer(partialRefresh.Body);
+		(await RosterAsync()).ShouldBe(new[] { second });
+		var child = await TokenAsync(login, clientId, selfEmail, password);
+		child.Status.ShouldBe(HttpStatusCode.OK);
+		SetBearer(child.Body);
+		(await RosterAsync()).ShouldBe(new[] { first });
+
+		await SetAppAccessAsync(first, null, selfUserId, enabled: false);
+		using var deniedStudent = await portal.GetAsync(rosterRoute);
+		deniedStudent.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+		(await TokenAsync(login, clientId, selfEmail, password)).Status.ShouldBe(HttpStatusCode.BadRequest);
+
+		await SetAppAccessAsync(second, userId, userId, enabled: false);
+		SetBearer(partialRefresh.Body);
+		using var deniedSession = await portal.GetAsync(rosterRoute);
+		deniedSession.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+		deniedSession.Headers.GetValues("X-ShikshaMitra-Portal-Session").Single().ShouldBe("restricted");
+		(await TokenAsync(login, clientId, email, password)).Status.ShouldBe(HttpStatusCode.BadRequest);
+
+		await SetAppAccessAsync(second, userId, userId, enabled: true);
+		using var staleSession = await portal.GetAsync(rosterRoute);
+		staleSession.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+		(await RefreshAsync(partialRefresh.Body)).Status.ShouldBe(HttpStatusCode.BadRequest);
+		var restored = await TokenAsync(login, clientId, email, password);
+		restored.Status.ShouldBe(HttpStatusCode.OK);
+		SetBearer(restored.Body);
+		(await RosterAsync()).ShouldBe(new[] { second });
+		var renewed = await RefreshAsync(restored.Body);
+		renewed.Status.ShouldBe(HttpStatusCode.OK);
+		SetBearer(renewed.Body);
+		(await RosterAsync()).ShouldBe(new[] { second });
+
+		void SetBearer(JsonElement tokenResponse) =>
+			portal.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenResponse.GetProperty("access_token").GetString());
+
+		async Task<Guid[]> RosterAsync()
+		{
+			using var result = await portal.GetAsync(rosterRoute);
+			var body = await result.Content.ReadAsStringAsync();
+			result.StatusCode.ShouldBe(HttpStatusCode.OK, body);
+			using var document = JsonDocument.Parse(body);
+			return document.RootElement.GetProperty("data").EnumerateArray().Select(row => row.GetProperty("studentId").GetGuid()).ToArray();
+		}
+
+		async Task<(HttpStatusCode Status, JsonElement Body)> RefreshAsync(JsonElement issued)
+		{
+			using var response = await login.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+			{
+				["grant_type"] = "refresh_token", ["client_id"] = clientId, ["refresh_token"] = issued.GetProperty("refresh_token").GetString()!
+			}));
+			using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+			return (response.StatusCode, document.RootElement.Clone());
+		}
+
+		Task SetAppAccessAsync(Guid studentId, Guid? recipientId, Guid affectedUserId, bool enabled) => InTenantAsync(async services =>
+		{
+			var restrictions = services.GetRequiredService<IRepository<StudentAppAccessRestriction, Guid>>();
+			var row = await restrictions.FindAsync(x => x.TenantId == tenantId && x.StudentId == studentId && x.UserId == recipientId);
+			if (row == null)
+				await restrictions.InsertAsync(new(Guid.NewGuid(), tenantId, studentId, recipientId, isOff: !enabled), true);
+			else
+			{
+				row.SetEnabled(enabled);
+				await restrictions.UpdateAsync(row, true);
+			}
+			if (!enabled) await services.GetRequiredService<StudentAppAccessEnforcement>()
+				.InvalidateFullyBlockedSessionsAsync(new[] { affectedUserId });
+		});
 	}
 
 	private static async Task<(HttpStatusCode Status, JsonElement Body)> TokenAsync(HttpClient client, string clientId, string username, string password, Dictionary<string, string>? extra = null)

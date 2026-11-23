@@ -11,6 +11,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Students.Portal;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using ShikshaMitra.TenantSettings.AcademicSetups;
@@ -72,6 +73,52 @@ public class StudentRecordsAuthorizationApi_Tests(ShikshaMitraApiTestFactory fac
 		var actor = await CreateActorAsync(tenantWide: true);
 		using var denied = AsActor(actor, "__none__");
 		(await denied.GetAsync("/api/students/records/directory")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
+	[Fact, TestTier(TestTraits.Tiers.Critical)]
+	public async Task App_access_HTTP_enforces_exact_actions_scope_and_stale_conflict()
+	{
+		const string view = ShikshaMitraSubmodulePermissions.Students.Records_AppAccess.View;
+		const string add = ShikshaMitraSubmodulePermissions.Students.Records_AppAccess.Add;
+		var record = await CreateRecordAsync();
+		var actor = await CreateActorAsync(scopeRecord: record);
+		var unscoped = await CreateActorAsync();
+		await InTenantAsync(TenantId, async services =>
+		{
+			var userId = Guid.NewGuid();
+			await services.GetRequiredService<IRepository<IdentityUser, Guid>>().InsertAsync(new IdentityUser(userId,
+				$"records-self-{userId:N}", $"{userId:N}@example.test", TenantId), true);
+			await services.GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().InsertAsync(new StudentPortalAccountLink(
+				Guid.NewGuid(), TenantId, record.StudentId, userId, "student", "self", actor), true);
+			return true;
+		});
+		var route = $"/api/students/records/{record.StudentId}/app-access";
+		using var studentListOnly = AsActor(actor, DirectoryView);
+		using var viewOnly = AsActor(actor, view);
+		using var addOnly = AsActor(actor, add);
+		using var editor = AsActor(actor, $"{view},{add}");
+		using var noScope = AsActor(unscoped, $"{view},{add}");
+		(await studentListOnly.GetAsync(route)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		(await addOnly.GetAsync(route)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		var denied = await noScope.GetAsync(route);
+		denied.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await denied.Content.ReadAsStringAsync()).ShouldContain(UserScopeErrorCodes.AccessDenied);
+		var viewDto = (await viewOnly.GetFromJsonAsync<Result<StudentRecordAppAccessDto>>(route, JsonOptions))!.Data!;
+		var row = viewDto.Recipients.Single();
+		row.CanUpdate.ShouldBeFalse();
+		var command = new UpdateStudentRecordAppAccessDto { Enabled = false, Reason = "Pause mobile app", ConcurrencyStamp = row.ConcurrencyStamp };
+		var target = $"{route}/{row.RecipientKey}";
+		(await viewOnly.PutAsJsonAsync(target, command, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		(await addOnly.PutAsJsonAsync(target, command, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		(await editor.PutAsJsonAsync(target, new { command.Reason, command.ConcurrencyStamp }, JsonOptions)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var changed = await editor.PutAsJsonAsync(target, command, JsonOptions);
+		changed.StatusCode.ShouldBe(HttpStatusCode.OK, await changed.Content.ReadAsStringAsync());
+		var updated = (await changed.Content.ReadFromJsonAsync<Result<StudentRecordAppAccessDto>>(JsonOptions))!.Data!;
+		updated.Recipients.Single().Status.ShouldBe("off");
+		updated.History.Count.ShouldBe(1);
+		var stale = await editor.PutAsJsonAsync(target, command, JsonOptions);
+		stale.StatusCode.ShouldBe(HttpStatusCode.Conflict, await stale.Content.ReadAsStringAsync());
+		(await stale.Content.ReadAsStringAsync()).ShouldContain("Students:Records:AppAccessConflict");
 	}
 
 	[Fact, TestTier(TestTraits.Tiers.Critical)]

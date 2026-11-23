@@ -29,6 +29,7 @@ public class AdmissionPipelineItemDto
 	public string? CurrentStageCode { get; set; }
 	public string? CurrentStageName { get; set; }
 	public AdmissionWorkflowStageType? StageType { get; set; }
+	public string? AssessmentAction { get; set; }
 	public List<AdmissionPipelineStageProgressDto> StageProgress { get; set; } = [];
 	public string NextRequiredAction { get; set; } = string.Empty;
 	public DateTime CreationTime { get; set; }

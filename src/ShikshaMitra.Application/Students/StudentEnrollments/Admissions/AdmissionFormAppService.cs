@@ -361,7 +361,7 @@ public class AdmissionFormAppService(
 			throw new BusinessException("Admissions.FormVersionMismatch", "Only versions of the same form can be compared.");
 		var fromDto = await MapAsync(from);
 		var toDto = await MapAsync(to);
-		return new AdmissionFormVersionComparisonDto { FromId = id, ToId = otherId, Changes = Compare(fromDto, toDto) };
+		return AdmissionFormVersionComparer.CompareVersions(fromDto, toDto);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.ViewUsage)]

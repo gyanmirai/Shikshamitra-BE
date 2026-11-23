@@ -17,16 +17,20 @@ namespace ShikshaMitra.Communication.Notifications;
 [RemoteService(false)]
 public sealed class NotificationPersonalStudentAccess(IRepository<StudentPortalAccountLink, Guid> links,
 	IStudentRepository students, IRepository<StudentGuardianAccessReview, Guid> reviews,
-	IAsyncQueryableExecuter executer) : ITransientDependency
+	IAsyncQueryableExecuter executer, StudentAppAccessEnforcement appAccess) : ITransientDependency
 {
 	public async Task<IQueryable<Guid>> GetStudentIdsQueryAsync(NotificationSelfContext owner, string? accountType = null)
 	{
 		var pending = (await reviews.GetQueryableAsync()).Where(x => x.TenantId == owner.TenantId && !x.IsDeleted && x.Status == "Pending");
+		var off = await appAccess.GetOffRestrictionsAsync(owner.TenantId);
 		return from link in await links.GetQueryableAsync()
 			join student in await students.GetQueryableWithoutAutoIncludesAsync() on link.StudentId equals student.Id
 			where link.TenantId == owner.TenantId && !link.IsDeleted && link.UserId == owner.UserId &&
 				student.TenantId == owner.TenantId && !student.IsDeleted && student.Status == StudentLifeCycleStatusEnum.Enrolled &&
 				(accountType == null || link.AccountType == accountType) &&
+				!off.Any(x => x.StudentId == student.Id &&
+					(link.AccountType == "student" && x.UserId == null ||
+						(link.Relationship == "father" || link.Relationship == "mother") && x.UserId == owner.UserId)) &&
 				(link.AccountType == "student" && link.Relationship == "self" || link.AccountType == "guardian" &&
 					(link.Relationship == "father" || link.Relationship == "mother" || link.Relationship == "guardian") &&
 					!pending.Any(x => x.StudentId == student.Id))

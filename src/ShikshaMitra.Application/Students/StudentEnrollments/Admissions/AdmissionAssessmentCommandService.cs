@@ -128,6 +128,7 @@ public class AdmissionAssessmentCommandService(
 		var context = await access.GetContextAsync(applicationId, stageId, requireActive: false, requirePreparation: true);
 		AdmissionAssessmentAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 		var rows = await attempts.GetListAsync(item => item.StageInstanceId == stageId);
+		rows.Find(item => item.HasPassed())?.EnsurePassingResultIsPreserved();
 		var attempt = rows.Where(item => item.Status != "cancelled").OrderByDescending(item => item.AttemptNumber).FirstOrDefault();
 		if (attempt == null)
 		{

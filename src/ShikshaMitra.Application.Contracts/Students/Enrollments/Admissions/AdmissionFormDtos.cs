@@ -34,4 +34,12 @@ public class AdmissionFormOptionDto
 }
 public class AdmissionFormAuditEntryDto { public Guid Id { get; set; } public string Action { get; set; } = string.Empty; public Guid? ActorId { get; set; } [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? ActorName { get; set; } public DateTime OccurredAt { get; set; } public string? Comment { get; set; } public int Version { get; set; } }
 public class AdmissionFormVersionSummaryDto { public Guid Id { get; set; } public int Version { get; set; } public AdmissionFormStatus Status { get; set; } public DateTime CreationTime { get; set; } public DateTime? PublishedAt { get; set; } public Guid? ParentVersionId { get; set; } }
-public class AdmissionFormVersionComparisonDto { public Guid FromId { get; set; } public Guid ToId { get; set; } public List<string> Changes { get; set; } = []; }
+public class AdmissionFormVersionComparisonDto
+{
+	public Guid FromId { get; set; }
+	public Guid ToId { get; set; }
+	public List<string> Changes { get; set; } = [];
+	public List<AdmissionFormFieldChangeDto> FieldChanges { get; set; } = [];
+}
+
+public record AdmissionFormFieldChangeDto(int ChangeIndex, string SectionCode, string SectionName, string FieldName, string Kind);

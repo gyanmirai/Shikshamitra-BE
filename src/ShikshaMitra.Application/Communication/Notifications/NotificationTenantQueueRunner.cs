@@ -40,22 +40,23 @@ public sealed class NotificationTenantQueueRunner(ICurrentTenant tenant, IUnitOf
 		await projector.RefreshBatchAsync(batchSize, cancellationToken);
 	}
 
-	public async Task RunInAppPilotAsync(NotificationInAppPilot pilot, CancellationToken cancellationToken)
+	public async Task RunTemplateTestPilotAsync(NotificationTemplateTestPilot pilot, CancellationToken cancellationToken)
 	{
 		if (tenant.Id != pilot.TenantId || pilot.TenantId == Guid.Empty)
 			throw new BusinessException(NotificationErrorCodes.TenantRequired);
 		if (units.Current != null) throw new BusinessException(NotificationErrorCodes.StateConflict);
-		if (NotificationQueueWorkerConfiguration.ReadInAppPilot(configuration) != pilot ||
+		if (NotificationQueueWorkerConfiguration.ReadTemplateTestPilot(configuration) != pilot ||
 			NotificationQueueWorkerConfiguration.IsSchoolPaused(configuration, pilot.TenantId) ||
 			NotificationQueueWorkerConfiguration.ReadPausedChannels(configuration, pilot.TenantId)
-				.Contains(CommunicationChannelType.InApp)) return;
+				.Contains(pilot.Channel)) return;
+		await recovery.RecoverTemplateTestPilotAsync(pilot, Now(), cancellationToken);
 		var claim = await ClaimNextAsync(pilot.TenantId, dispatch: true, cancellationToken, pilot);
 		if (claim != null)
 		{
 			if (claim.TenantId != pilot.TenantId) throw new BusinessException(NotificationErrorCodes.TenantRequired);
-			await heartbeat.RunAsync(claim, dispatcher, cancellationToken, pilot.RecipientUserId);
+			await heartbeat.RunAsync(claim, dispatcher, cancellationToken, pilot);
 		}
-		await projector.RefreshInAppPilotAsync(pilot, cancellationToken);
+		await projector.RefreshTemplateTestPilotAsync(pilot, cancellationToken);
 	}
 
 	private async Task ProcessAsync(Guid tenantId, int batchSize, bool dispatch, CancellationToken cancellationToken)
@@ -98,11 +99,11 @@ public sealed class NotificationTenantQueueRunner(ICurrentTenant tenant, IUnitOf
 	}
 
 	private async Task<NotificationQueueClaim?> ClaimNextAsync(Guid tenantId, bool dispatch, CancellationToken cancellationToken,
-		NotificationInAppPilot? pilot = null)
+		NotificationTemplateTestPilot? pilot = null)
 	{
 		if (NotificationQueueWorkerConfiguration.IsSchoolPaused(configuration, tenantId)) return null;
 		if (pilot == null ? NotificationQueueWorkerConfiguration.IsPilotConfigured(configuration) :
-			NotificationQueueWorkerConfiguration.ReadInAppPilot(configuration) != pilot) return null;
+			NotificationQueueWorkerConfiguration.ReadTemplateTestPilot(configuration) != pilot) return null;
 		var pausedChannels = dispatch ? NotificationQueueWorkerConfiguration.ReadPausedChannels(configuration, tenantId) : [];
 		using var claim = units.Begin(requiresNew: true, isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted);
 		IReadOnlyList<NotificationQueueClaim> rows = dispatch

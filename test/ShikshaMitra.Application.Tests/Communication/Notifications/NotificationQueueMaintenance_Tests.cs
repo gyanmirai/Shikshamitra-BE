@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using Shouldly;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
@@ -24,6 +25,7 @@ public class NotificationQueueMaintenance_Tests
 	private readonly List<NotificationIntent> _intents = [];
 	private readonly List<NotificationDispatch> _dispatches = [];
 	private readonly List<DeliveryAttempt> _attempts = [];
+	private readonly List<CommunicationRecipientSnapshot> _recipients = [];
 	private readonly List<CommunicationCampaign> _campaigns = [];
 	private readonly NotificationLeaseRecoveryService _recovery;
 	private readonly NotificationOutcomeProjector _projector;
@@ -38,7 +40,7 @@ public class NotificationQueueMaintenance_Tests
 		var delivery = new NotificationDeliveryProjection(_tenant, _writeLock, new(_tenant, Substitute.For<Volo.Abp.SettingManagement.ISettingManager>()),
 			Repository<ChannelProviderSetting>([]), Repository(_attempts), queries, Substitute.For<Volo.Abp.Guids.IGuidGenerator>(),
 			Substitute.For<Volo.Abp.Timing.IClock>());
-		_recovery = new(_tenant, _units, intents, dispatches, queries, delivery);
+		_recovery = new(_tenant, _units, intents, dispatches, queries, delivery, Repository(_recipients), Substitute.For<IDataFilter>());
 		_projector = new(_tenant, _units, new(_writeLock), intents, dispatches, Repository(_campaigns), queries);
 	}
 
@@ -174,6 +176,61 @@ public class NotificationQueueMaintenance_Tests
 	[Theory]
 	[InlineData(true)]
 	[InlineData(false)]
+	public async Task Pilot_recovers_the_selected_expiry_or_interrupted_send_without_touching_held_work(bool startedIo)
+	{
+		var selected = Operation();
+		selected.SourceEntityType = NotificationCampaignTypes.AcademicTemplateTestSource;
+		var recipient = Guid.NewGuid();
+		var intent = NotificationIntent.CreateTemplateTest(Guid.NewGuid(), _tenantId, "Academic.Homework.Published",
+			selected.SourceEntityId!.Value, "hash", "[]", "[]", Now.AddMinutes(-10), Now, recipient, selected.Id);
+		_intents.Add(intent);
+		var reference = NotificationRuntimeJson.Serialize(new NotificationRecipientRefDto("Guardian", UserId: recipient),
+			NotificationErrorCodes.RuntimeSnapshotInvalid);
+		var row = new NotificationDispatch(Guid.NewGuid(), _tenantId, intent.Id, Guid.NewGuid(), reference, "context",
+			CommunicationChannelType.Email, "fingerprint", "cipher", "hash", "key", Now.AddMinutes(-10), Now);
+		var snapshot = new CommunicationRecipientSnapshot(Guid.NewGuid(), _tenantId) {
+			CampaignId = selected.Id, RecipientType = "TestAccount", UserId = recipient
+		};
+		_recipients.Add(snapshot);
+		row.BindPlanningEvidence(selected.Id, snapshot.Id, Guid.NewGuid());
+		_dispatches.Add(row);
+		var held = Dispatch(Intent(Operation()), expiresAt: Now.AddMinutes(-1));
+		DeliveryAttempt? attempt = null;
+		if (startedIo)
+		{
+			HydrateDispatchLease(row, expired: true, startedIo: true);
+			attempt = new DeliveryAttempt(Guid.NewGuid(), _tenantId) {
+				NotificationDispatchId = row.Id, AttemptNumber = row.AttemptNumber, QueuedAt = Now.AddMinutes(-3)
+			};
+			_attempts.Add(attempt);
+			Set(row, nameof(NotificationDispatch.DeliveryAttemptId), attempt.Id);
+		}
+		var pilot = new NotificationTemplateTestPilot(_tenantId, selected.Id, recipient, CommunicationChannelType.Email);
+		var unsettled = startedIo ? NotificationDispatchState.Processing : NotificationDispatchState.Pending;
+		await _recovery.RecoverTemplateTestPilotAsync(pilot with { RecipientUserId = Guid.NewGuid() }, Now, default);
+		row.Status.ShouldBe(unsettled);
+		snapshot.IsDeleted = true;
+		await _recovery.RecoverTemplateTestPilotAsync(pilot, Now, default);
+		row.Status.ShouldBe(unsettled);
+		snapshot.IsDeleted = false;
+		var sibling = Dispatch(intent, expiresAt: Now);
+		sibling.IsDeleted = true;
+		await _recovery.RecoverTemplateTestPilotAsync(pilot, Now, default);
+		row.Status.ShouldBe(unsettled);
+		_dispatches.Remove(sibling);
+
+		await _recovery.RecoverTemplateTestPilotAsync(pilot, Now, default);
+		await _projector.RefreshTemplateTestPilotAsync(pilot, default);
+
+		row.Status.ShouldBe(startedIo ? NotificationDispatchState.UnknownAcceptance : NotificationDispatchState.Skipped);
+		if (startedIo) attempt!.Status.ShouldBe(CommunicationDeliveryStatus.UnknownAcceptance);
+		held.Status.ShouldBe(NotificationDispatchState.Pending);
+		selected.Status.ShouldNotBe(CommunicationCampaignStatus.Queued);
+	}
+
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
 	public async Task Pilot_projection_repairs_only_selected_delivery_or_pre_io_skip(bool delivered)
 	{
 		var selected = Operation();
@@ -195,11 +252,11 @@ public class NotificationQueueMaintenance_Tests
 		else
 			row.SkipBeforeIo(HydrateDispatchLease(row, expired: false, startedIo: false), Now, NotificationErrorCodes.RecipientIneligible);
 		row.AttemptNumber.ShouldBe(delivered ? 1 : 0);
-		var pilot = new NotificationInAppPilot(_tenantId, selected.Id, recipient);
-		await _projector.RefreshInAppPilotAsync(pilot with { RecipientUserId = Guid.NewGuid() }, default);
+		var pilot = new NotificationTemplateTestPilot(_tenantId, selected.Id, recipient);
+		await _projector.RefreshTemplateTestPilotAsync(pilot with { RecipientUserId = Guid.NewGuid() }, default);
 		selected.Status.ShouldBe(CommunicationCampaignStatus.Queued);
 
-		await _projector.RefreshInAppPilotAsync(pilot, default);
+		await _projector.RefreshTemplateTestPilotAsync(pilot, default);
 
 		selected.Status.ShouldBe(delivered ? CommunicationCampaignStatus.Sent : CommunicationCampaignStatus.Cancelled);
 		other.Status.ShouldBe(CommunicationCampaignStatus.Queued);

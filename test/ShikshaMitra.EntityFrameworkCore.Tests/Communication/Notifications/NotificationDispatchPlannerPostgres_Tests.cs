@@ -360,7 +360,7 @@ public class NotificationDispatchPlannerPostgres_Tests(NotificationPostgresFixtu
 		var email = new NotificationEmailRoute(tenant, providers, queries, smtp);
 		var whatsApp = new WhatsAppProviderRoute(tenant, providers, queries, app);
 		var approvals = new WhatsAppApprovedTemplates(tenant, Repository<WhatsAppTemplateBinding>(db), queries);
-		var push = new WebPushDispatchSubscriptions(tenant, Repository<WebPushSubscription>(db), queries, new(app));
+		var push = new WebPushDispatchSubscriptions(tenant, Repository<WebPushSubscription>(db), queries, new(app, tenant));
 		return new(tenant, clock, new(tenant, [catalogue], [adapter], new(new()), new()), resolver,
 			policy, email, new(app, validator), renderer, new(keys, tenant), queries, ids, whatsApp, approvals, push,
 			new(app, Substitute.For<IRepository<IdentityUser, Guid>>(), revisions, queries, validator, policy, email, whatsApp, approvals, push));

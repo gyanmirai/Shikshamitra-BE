@@ -10,6 +10,7 @@ using NSubstitute;
 using ShikshaMitra.HostTenants;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
@@ -94,7 +95,8 @@ public class NotificationQueueWorker_Tests
 		var delivery = new NotificationDeliveryProjection(tenant, Substitute.For<INotificationPersonalWriteLock>(),
 			new(tenant, Substitute.For<Volo.Abp.SettingManagement.ISettingManager>()), Empty<ChannelProviderSetting>(), Empty<DeliveryAttempt>(),
 			queries, Substitute.For<Volo.Abp.Guids.IGuidGenerator>(), clock);
-		var maintenance = new NotificationLeaseRecoveryService(tenant, units, intents, dispatches, queries, delivery);
+		var maintenance = new NotificationLeaseRecoveryService(tenant, units, intents, dispatches, queries, delivery,
+			Empty<CommunicationRecipientSnapshot>(), Substitute.For<IDataFilter>());
 		var outcome = new NotificationOutcomeProjector(tenant, units, new(Substitute.For<INotificationPersonalWriteLock>()),
 			intents, dispatches, Empty<CommunicationCampaign>(), queries);
 		using var services = new ServiceCollection().BuildServiceProvider();

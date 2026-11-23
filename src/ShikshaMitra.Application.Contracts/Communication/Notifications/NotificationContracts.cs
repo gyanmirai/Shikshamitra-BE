@@ -29,7 +29,7 @@ public interface INotificationTemplateRenderer
 
 public interface INotificationDispatcher
 {
-	Task DispatchAsync(Guid dispatchId, Guid leaseToken, CancellationToken cancellationToken, Guid? inAppPilotUserId = null);
+	Task DispatchAsync(Guid dispatchId, Guid leaseToken, CancellationToken cancellationToken, NotificationTemplateTestPilot? pilot = null);
 }
 
 public interface INotificationDueScheduler

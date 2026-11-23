@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Communication.Notifications;
 
@@ -12,10 +13,13 @@ internal sealed record WebPushApplicationKeys(string PublicKey, string PrivateKe
 	public override string ToString() => nameof(WebPushApplicationKeys);
 }
 
-public sealed class WebPushKeyConfiguration(IConfiguration configuration) : ITransientDependency
+public sealed class WebPushKeyConfiguration(IConfiguration configuration, ICurrentTenant tenant) : ITransientDependency
 {
 	internal WebPushApplicationKeys? Read()
 	{
+		var pilotTenant = configuration["Notifications:WebPush:PilotTenantId"];
+		if (pilotTenant != null && (!Guid.TryParse(pilotTenant, out var pilotTenantId) ||
+			pilotTenantId == Guid.Empty || pilotTenantId != tenant.Id)) return null;
 		var publicKey = configuration["Notifications:WebPush:PublicKey"];
 		var privateKey = configuration["Notifications:WebPush:PrivateKey"];
 		var version = configuration["Notifications:WebPush:KeyVersion"];

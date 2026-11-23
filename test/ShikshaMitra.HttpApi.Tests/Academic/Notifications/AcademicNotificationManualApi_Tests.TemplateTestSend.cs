@@ -20,9 +20,11 @@ namespace ShikshaMitra.Academic.Notifications;
 public partial class AcademicNotificationManualApi_Tests
 {
 	[Theory]
-	[InlineData(false)]
-	[InlineData(true)]
-	public async Task Template_test_send_queues_a_synthetic_draft_for_the_authenticated_staff_account(bool changeBeforeDelivery)
+	[InlineData(false, false)]
+	[InlineData(true, false)]
+	[InlineData(false, true)]
+	public async Task Template_test_send_queues_a_synthetic_draft_for_the_authenticated_staff_account(
+		bool changeBeforeDelivery, bool rejectUnexpectedPilotRecipient)
 	{
 		var draft = await CreateTestSendDraftAsync();
 		using var response = await Client.PostAsJsonAsync(TestSendRoute(draft), new
@@ -111,19 +113,22 @@ public partial class AcademicNotificationManualApi_Tests
 		{
 			var services = scope.ServiceProvider;
 			using var tenant = services.GetRequiredService<ICurrentTenant>().Change(AcademicNotificationPreviewApiFactory.TenantId);
-			await services.GetRequiredService<INotificationDispatcher>().DispatchAsync(dispatchId, lease, CancellationToken.None);
+			await services.GetRequiredService<INotificationDispatcher>().DispatchAsync(dispatchId, lease, CancellationToken.None,
+				inAppPilotUserId: rejectUnexpectedPilotRecipient ? Guid.NewGuid() : null);
 		}
+		var expected = changeBeforeDelivery || rejectUnexpectedPilotRecipient
+			? NotificationDispatchState.Skipped : NotificationDispatchState.Delivered;
 		await WithDatabaseAsync(async (db, _) =>
 		{
 			var row = await db.NotificationDispatches.SingleAsync(x => x.Id == dispatchId);
-			row.Status.ShouldBe(changeBeforeDelivery ? NotificationDispatchState.Skipped : NotificationDispatchState.Delivered, row.ErrorCode);
+			row.Status.ShouldBe(expected, row.ErrorCode);
 			if (changeBeforeDelivery) row.ErrorCode.ShouldBe("SourceRevisionChanged");
+			if (rejectUnexpectedPilotRecipient) row.ErrorCode.ShouldBe(NotificationErrorCodes.RecipientIneligible);
 		});
 		var finalHistory = await GetAndReadAsync<PagedResultDto<AcademicNotificationHistoryItemDto>>($"{historyRoute}&operationId={operationId}");
-		finalHistory.Items.ShouldHaveSingleItem().Status.ShouldBe(changeBeforeDelivery
-			? NotificationDispatchState.Skipped : NotificationDispatchState.Delivered);
+		finalHistory.Items.ShouldHaveSingleItem().Status.ShouldBe(expected);
 		finalHistory.Items.Single().CanRequestRetry.ShouldBeFalse();
-		if (changeBeforeDelivery) return;
+		if (expected != NotificationDispatchState.Delivered) return;
 		var inbox = await GetAndReadAsync<PagedResultDto<NotificationInboxItemDto>>("/api/communication/notifications/me/inbox");
 		inbox.Items.ShouldContain(x => x.Title == "[Test] Homework reminder" && x.Body.Contains("Example recipient", StringComparison.Ordinal));
 	}

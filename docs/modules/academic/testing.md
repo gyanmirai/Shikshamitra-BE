@@ -3,7 +3,7 @@ module: academic
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-22
+updated_on: 2026-11-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -235,6 +235,8 @@ Run the hosted `NotificationSelfApi_Tests` to check preference categories, curre
 Run `powershell -ExecutionPolicy Bypass -File scripts/testing/verify-academic-notification-coverage.ps1` from the backend repository. It reads the [event evidence table](references/notification-coverage.md), validates the workflow anchors, and runs the named recipient and transition tests. The application test checks the exact available event set, source adapter, history policy and any required due scanner. It also verifies that catalogue-only events have a registered explanation and are unavailable for manual sending. `AcademicNotificationStaffApi_Tests` checks that the catalogue returns the explanation for all unavailable events.
 
 Run `NotificationQueueHealthPostgres_Tests` with `SHIKSHAMITRA_NOTIFICATION_TEST_POSTGRES` pointed at a disposable loopback test cluster. It checks due and future work, expired and deleted rows, the last-hour outcome counts, pending receipt age and tenant isolation. `NotificationQueueHealthReporter_Tests` checks the aggregate log fields and tenant requirement. The hosted notification self-service test checks worker registration.
+
+`NotificationQueuePilotConfiguration_Tests` verifies the shared pause and validation of the three pilot identifiers. Run `NotificationInAppPilotPostgres_Tests` against the same disposable PostgreSQL fixture to verify that concurrent claims leave other schools, other operations, external channels, ordinary notifications, expired tests and repeat attempts untouched. `NotificationQueueMaintenance_Tests` covers recovery of the selected operation status after delivery or a skip before I/O. The hosted `AcademicNotificationInAppPilotApi_Tests` starts the real worker against disposable PostgreSQL, checks the selected account's inbox and verifies that another test stays queued.
 
 The command saves the application and hosted API test reports in an ignored coverage directory. These reports record local source and recipient behavior. Provider and device acceptance follow the separate delivery checks.
 

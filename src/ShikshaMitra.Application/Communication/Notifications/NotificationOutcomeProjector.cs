@@ -83,6 +83,25 @@ public sealed class NotificationOutcomeProjector(ICurrentTenant tenant, IUnitOfW
 		return changed;
 	}
 
+	internal async Task RefreshInAppPilotAsync(NotificationInAppPilot pilot, CancellationToken cancellationToken)
+	{
+		using var unit = units.Begin(requiresNew: true, isTransactional: true);
+		await outcomeLock.AcquireAsync(pilot.OperationId, cancellationToken);
+		var operations = await OperationsAsync(pilot.TenantId);
+		if (!await queries.AnyAsync(operations.Where(x => x.Id == pilot.OperationId &&
+			x.SourceEntityType == NotificationCampaignTypes.AcademicTemplateTestSource), cancellationToken)) return;
+		var rows = await queries.ToListAsync((await TenantDispatchesAsync(pilot.TenantId))
+			.Where(x => x.CampaignId == pilot.OperationId).Take(2), cancellationToken);
+		if (rows is not [var row] || row.Channel != CommunicationChannelType.InApp ||
+			Enumerable.Contains(ActiveDispatches, row.Status) ||
+			row.AttemptNumber != 1 && (row.Status != NotificationDispatchState.Skipped || row.AttemptNumber != 0)) return;
+		var recipient = NotificationRuntimeJson.Deserialize<NotificationRecipientRefDto>(row.RecipientReferenceJson,
+			NotificationErrorCodes.RuntimeSnapshotInvalid);
+		if (recipient.UserId != pilot.RecipientUserId || recipient.StudentId.HasValue) return;
+		await RefreshLockedAsync(pilot.TenantId, pilot.OperationId, cancellationToken);
+		await unit.CompleteAsync(cancellationToken);
+	}
+
 	internal async Task<bool> RefreshLockedAsync(Guid tenantId, Guid operationId, CancellationToken cancellationToken,
 		bool includeNaturallyCancelled = false)
 	{

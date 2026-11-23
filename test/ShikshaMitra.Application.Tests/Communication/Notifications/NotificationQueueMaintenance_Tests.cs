@@ -171,6 +171,40 @@ public class NotificationQueueMaintenance_Tests
 		expired.Status.ShouldBe(NotificationIntentState.Expired);
 	}
 
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task Pilot_projection_repairs_only_selected_delivery_or_pre_io_skip(bool delivered)
+	{
+		var selected = Operation();
+		selected.SourceEntityType = NotificationCampaignTypes.AcademicTemplateTestSource;
+		var recipient = Guid.NewGuid();
+		var intent = NotificationIntent.CreateTemplateTest(Guid.NewGuid(), _tenantId, "Academic.Homework.Published",
+			selected.SourceEntityId!.Value, "hash", "[]", "[]", Now, Now.AddMinutes(10), recipient, selected.Id);
+		var reference = NotificationRuntimeJson.Serialize(new NotificationRecipientRefDto("Guardian", UserId: recipient),
+			NotificationErrorCodes.RuntimeSnapshotInvalid);
+		var row = new NotificationDispatch(Guid.NewGuid(), _tenantId, intent.Id, Guid.NewGuid(), reference, "context",
+			CommunicationChannelType.InApp, "fingerprint", "cipher", "hash", "key", Now, Now.AddMinutes(10));
+		row.BindPlanningEvidence(selected.Id, Guid.NewGuid(), null);
+		_intents.Add(intent);
+		_dispatches.Add(row);
+		var other = Operation();
+		Finish(Dispatch(Intent(other, planned: true)), NotificationDispatchState.Delivered);
+		if (delivered)
+			Finish(row, NotificationDispatchState.Delivered);
+		else
+			row.SkipBeforeIo(HydrateDispatchLease(row, expired: false, startedIo: false), Now, NotificationErrorCodes.RecipientIneligible);
+		row.AttemptNumber.ShouldBe(delivered ? 1 : 0);
+		var pilot = new NotificationInAppPilot(_tenantId, selected.Id, recipient);
+		await _projector.RefreshInAppPilotAsync(pilot with { RecipientUserId = Guid.NewGuid() }, default);
+		selected.Status.ShouldBe(CommunicationCampaignStatus.Queued);
+
+		await _projector.RefreshInAppPilotAsync(pilot, default);
+
+		selected.Status.ShouldBe(delivered ? CommunicationCampaignStatus.Sent : CommunicationCampaignStatus.Cancelled);
+		other.Status.ShouldBe(CommunicationCampaignStatus.Queued);
+	}
+
 	private CommunicationCampaign Operation(Guid? tenantId = null, string type = NotificationCampaignTypes.Academic)
 	{
 		var campaign = new CommunicationCampaign(Guid.NewGuid(), tenantId ?? _tenantId) {

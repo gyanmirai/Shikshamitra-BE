@@ -15,10 +15,34 @@ internal enum NotificationQueueKind { Intent, Dispatch }
 
 internal static class NotificationPostgresQueueClaims
 {
+	private const string PilotDispatchFilter = """
+		AND candidate."CampaignId" = @pilotOperation AND candidate."Channel" = @inApp
+		AND candidate."AttemptNumber" = 0 AND candidate."ExpiresAt" IS NOT NULL
+		AND candidate."ProviderSettingId" IS NULL
+		AND EXISTS (
+		    SELECT 1 FROM "NotificationIntents" AS intent
+		    WHERE intent."Id" = candidate."IntentId" AND intent."TenantId" = @tenant
+		      AND intent."CampaignId" = @pilotOperation AND intent."IsDeleted" = false
+		      AND intent."SourceType" = @templateTestSource
+		)
+		AND EXISTS (
+		    SELECT 1 FROM "CommunicationRecipientSnapshots" AS recipient
+		    WHERE recipient."Id" = candidate."RecipientSnapshotId" AND recipient."TenantId" = @tenant
+		      AND recipient."CampaignId" = @pilotOperation AND recipient."IsDeleted" = false
+		      AND recipient."UserId" = @pilotRecipient AND recipient."RecipientType" = 'TestAccount'
+		      AND recipient."IsEligible" = true
+		)
+		AND NOT EXISTS (
+		    SELECT 1 FROM "NotificationDispatches" AS sibling
+		    WHERE sibling."TenantId" = @tenant AND sibling."CampaignId" = @pilotOperation
+		      AND sibling."Id" <> candidate."Id"
+		)
+		""";
+
 	internal static async Task<IReadOnlyList<NotificationQueueClaim>> ClaimAsync(DbConnection connection,
 		DbTransaction? transaction, Guid tenantId, NotificationQueueKind kind, DateTimeOffset now,
 		int batchSize, TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null,
-		IReadOnlyList<CommunicationChannelType>? pausedChannels = null)
+		IReadOnlyList<CommunicationChannelType>? pausedChannels = null, NotificationInAppPilot? pilot = null)
 	{
 		if (connection is not NpgsqlConnection) throw new NotSupportedException("Notification queue claims require PostgreSQL.");
 		if (tenantId == Guid.Empty) throw new ArgumentException("A tenant is required.", nameof(tenantId));
@@ -31,6 +55,9 @@ internal static class NotificationPostgresQueueClaims
 			throw new InvalidOperationException("Notification channel capacity requires a read committed transaction.");
 		var filterPaused = pausedChannels is { Count: > 0 };
 		if (filterPaused && kind != NotificationQueueKind.Dispatch) throw new ArgumentException("Only dispatches have channels.", nameof(pausedChannels));
+		if (pilot != null && (kind != NotificationQueueKind.Dispatch || batchSize != 1 || pilot.TenantId != tenantId ||
+			pilot.OperationId == Guid.Empty || pilot.RecipientUserId == Guid.Empty))
+			throw new ArgumentException("The In-App pilot must claim one dispatch for its designated tenant.", nameof(pilot));
 		var (table, dueColumn, firstState, secondState, processing, attemptSql) = kind switch
 		{
 			NotificationQueueKind.Intent => ("NotificationIntents", "DueAt", (int)NotificationIntentState.Ready,
@@ -54,6 +81,7 @@ internal static class NotificationPostgresQueueClaims
 				       AND active."Status" = @processing AND active."IsDeleted" = false AND active."LeaseExpiresAt" > @now) < @maxActive
 				""" : "";
 			var pauseFilter = filterPaused ? """AND candidate."Channel" <> ALL (@pausedChannels)""" : "";
+			var pilotFilter = pilot != null ? PilotDispatchFilter : "";
 			await using var command = connection.CreateCommand();
 			command.Transaction = transaction;
 			command.CommandText = $"""
@@ -63,6 +91,7 @@ internal static class NotificationPostgresQueueClaims
 				      AND "Status" IN (@firstState, @secondState) AND "{dueColumn}" <= @now
 				      AND ("ExpiresAt" IS NULL OR "ExpiresAt" > @now)
 				      {pauseFilter}
+				      {pilotFilter}
 				      {capacity}
 				    ORDER BY "{dueColumn}", "Id" LIMIT @batch FOR UPDATE SKIP LOCKED
 				)
@@ -83,6 +112,13 @@ internal static class NotificationPostgresQueueClaims
 			Parameter(command, "stamp", leaseId.ToString("N"));
 			if (maxActivePerChannel.HasValue) Parameter(command, "maxActive", maxActivePerChannel.Value);
 			if (filterPaused) Parameter(command, "pausedChannels", pausedChannels!.Select(channel => (int)channel).ToArray());
+			if (pilot != null)
+			{
+				Parameter(command, "pilotOperation", pilot.OperationId);
+				Parameter(command, "pilotRecipient", pilot.RecipientUserId);
+				Parameter(command, "inApp", (int)CommunicationChannelType.InApp);
+				Parameter(command, "templateTestSource", NotificationCampaignTypes.AcademicTemplateTestSource);
+			}
 			var claims = new List<NotificationQueueClaim>();
 			await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 			while (await reader.ReadAsync(cancellationToken))

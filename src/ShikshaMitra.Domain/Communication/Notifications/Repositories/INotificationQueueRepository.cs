@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 
 namespace ShikshaMitra.Communication.Notifications;
 
+public sealed record NotificationInAppPilot(Guid TenantId, Guid OperationId, Guid RecipientUserId);
+
 public interface INotificationQueueRepository
 {
 	Task<NotificationQueueHealth> ReadHealthAsync(DateTimeOffset now, CancellationToken cancellationToken);
@@ -12,7 +14,7 @@ public interface INotificationQueueRepository
 		TimeSpan leaseDuration, CancellationToken cancellationToken);
 	Task<IReadOnlyList<NotificationQueueClaim>> ClaimDispatchesAsync(DateTimeOffset now, int batchSize,
 		TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null,
-		IReadOnlyList<CommunicationChannelType>? pausedChannels = null);
+		IReadOnlyList<CommunicationChannelType>? pausedChannels = null, NotificationInAppPilot? pilot = null);
 	Task<bool> RenewDispatchAsync(Guid dispatchId, Guid leaseId, DateTimeOffset now, TimeSpan leaseDuration,
 		CancellationToken cancellationToken);
 }

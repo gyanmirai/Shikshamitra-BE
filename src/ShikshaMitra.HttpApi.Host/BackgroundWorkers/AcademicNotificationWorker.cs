@@ -25,24 +25,31 @@ public abstract class AcademicNotificationWorker : AsyncPeriodicBackgroundWorker
 
 	protected abstract Task RunSchoolAsync(IServiceProvider services, CancellationToken cancellationToken);
 
+	protected virtual Task RunWhilePausedAsync(IConfiguration configuration, ILogger logger, CancellationToken cancellationToken) =>
+		Task.CompletedTask;
+
 	protected static TimeSpan SchoolTurnBudget(IConfiguration configuration) =>
 		TimeSpan.FromSeconds(Math.Clamp(configuration.GetValue<int>("Notifications:QueueWorker:SchoolTurnSeconds", 45), 15, 900));
 
 	protected sealed override async Task DoWorkAsync(PeriodicBackgroundWorkerContext context)
 	{
 		var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
-		if (!NotificationQueueWorkerConfiguration.IsEnabled(configuration)) return;
-		var timeLimit = SchoolTurnBudget(configuration);
-		var schools = context.ServiceProvider.GetRequiredService<NotificationWorkerTenants>();
 		var workerName = GetType().Name;
 		var logger = context.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(workerName);
+		if (!NotificationQueueWorkerConfiguration.IsEnabled(configuration))
+		{
+			await RunWhilePausedAsync(configuration, logger, context.CancellationToken);
+			return;
+		}
+		var timeLimit = SchoolTurnBudget(configuration);
+		var schools = context.ServiceProvider.GetRequiredService<NotificationWorkerTenants>();
 		try
 		{
 			var page = await schools.ReadPageAsync(_nextSchool, SchoolPageSize, context.CancellationToken);
 			_nextSchool = page.NextOffset;
 			await Parallel.ForEachAsync(page.TenantIds, new ParallelOptions {
 				MaxDegreeOfParallelism = 4, CancellationToken = context.CancellationToken
-			}, (id, token) => ProcessSchoolAsync(id, timeLimit, logger, token));
+			}, (id, token) => ProcessSchoolAsync(id, timeLimit, logger, token, RunSchoolAsync));
 		}
 		catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
 		{
@@ -53,7 +60,8 @@ public abstract class AcademicNotificationWorker : AsyncPeriodicBackgroundWorker
 		}
 	}
 
-	private async ValueTask ProcessSchoolAsync(Guid id, TimeSpan timeLimit, ILogger logger, CancellationToken stopping)
+	protected async ValueTask ProcessSchoolAsync(Guid id, TimeSpan timeLimit, ILogger logger, CancellationToken stopping,
+		Func<IServiceProvider, CancellationToken, Task> runSchool)
 	{
 		using var turn = CancellationTokenSource.CreateLinkedTokenSource(stopping);
 		turn.CancelAfter(timeLimit);
@@ -63,7 +71,7 @@ public abstract class AcademicNotificationWorker : AsyncPeriodicBackgroundWorker
 			var services = scope.ServiceProvider;
 			if (!await services.GetRequiredService<NotificationWorkerTenants>().IsActiveAsync(id, turn.Token)) return;
 			using var school = services.GetRequiredService<ICurrentTenant>().Change(id);
-			await RunSchoolAsync(services, turn.Token);
+			await runSchool(services, turn.Token);
 		}
 		catch (OperationCanceledException) when (turn.IsCancellationRequested)
 		{

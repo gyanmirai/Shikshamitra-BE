@@ -15,13 +15,17 @@ public class SecurityReleaseWorkflow_Tests
 		var workflow = ReadWorkflow(root, "deploy.yml");
 		Assert.Matches(@"\A\s*push:\s*branches:\s*\[['""]main['""]\]\s*\z", ReadTopLevelBlock(workflow, "on"));
 		AssertEveryJobRequiresMain(workflow);
-		Assert.Contains("uses: ./.github/workflows/security-regression.yml", workflow);
-		Assert.Matches(@"(?m)^        needs: security\s*$", workflow);
+		Assert.DoesNotContain("uses: ./.github/workflows/security-regression.yml", workflow);
+		Assert.Matches(@"(?m)^        needs: build\s*$", workflow);
+		var deployJob = workflow.IndexOf("\n    deploy:", StringComparison.Ordinal);
+		Assert.True(deployJob > 0, "The workflow must define a separate deploy job.");
+		var build = workflow[..deployJob];
+		var deployment = workflow[deployJob..];
 		Assert.Contains("group: deploy-backend-${{ github.ref }}", workflow);
 		Assert.Contains("cancel-in-progress: false", workflow);
 		Assert.Contains("[[ \"$sdk_version\" == 9.0.* ]]", workflow);
 		Assert.Contains("ShikshaMitra__Seeders__Enabled: 'false'", workflow);
-		Assert.Matches(@"(?m)^\s+build-and-deploy:\s*$", workflow);
+		Assert.Matches(@"(?m)^    build:\s*$", build);
 		Assert.Contains("DOTNET_VERSION: '9.0.x'", workflow);
 		Assert.Contains("dotnet-version: ${{ env.DOTNET_VERSION }}", workflow);
 		Assert.Contains("ASPNETCORE_ENVIRONMENT: Staging", workflow);
@@ -30,11 +34,19 @@ public class SecurityReleaseWorkflow_Tests
 		Assert.Contains("dotnet tool install -g Volo.Abp.Cli --version 9.0.0", workflow);
 		Assert.Contains("abp install-libs", workflow);
 		Assert.Contains("dotnet restore", workflow);
-		Assert.Contains("dotnet build --configuration Release", workflow);
-		Assert.Contains("dotnet run --configuration Release --no-launch-profile", workflow);
+		Assert.Single(Regex.Matches(build, @"(?m)^[ \t]+(?:run:[ \t]+)?dotnet build --configuration Release"));
+		Assert.DoesNotMatch(@"\bdotnet (build|restore|publish|run)\b", deployment);
+		Assert.DoesNotContain("${{ secrets.", build);
+		Assert.Contains("dotnet ShikshaMitra.DbMigrator.dll", deployment);
 		Assert.Contains("ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}", workflow);
 		Assert.Contains("--filter \"FullyQualifiedName~OpenIddictCertificateStore_Tests\"", workflow);
-		Assert.Contains("dotnet publish src/ShikshaMitra.HttpApi.Host -c Release -o ./publish", workflow);
+		Assert.Contains("dotnet publish src/ShikshaMitra.HttpApi.Host -c Release --no-build -o ./release/host", build);
+		Assert.Contains("dotnet publish src/ShikshaMitra.DbMigrator -c Release --no-build -o ./release/migrator", build);
+		Assert.Contains("uses: actions/upload-artifact@v4", build);
+		Assert.Contains("uses: actions/download-artifact@v4", deployment);
+		Assert.Contains("name: backend-release", build);
+		Assert.Contains("name: backend-release", deployment);
+		Assert.Contains("package: ./release/host", deployment);
 		Assert.Contains("- name: Run deployment startup regression gates", workflow);
 		Assert.Contains("- name: Validate Azure publish profile", workflow);
 		Assert.Contains("- name: Run DbMigrator", workflow);
@@ -49,13 +61,15 @@ public class SecurityReleaseWorkflow_Tests
 		Assert.Contains("- name: Collect Azure startup diagnostics", workflow);
 		Assert.Contains("./scripts/deployment/Get-AzureStartupDiagnostics.ps1", workflow);
 		var startupGate = workflow.IndexOf("- name: Run deployment startup regression gates", StringComparison.Ordinal);
+		var upload = workflow.IndexOf("- name: Upload backend release", StringComparison.Ordinal);
+		var extract = workflow.IndexOf("- name: Extract backend release", StringComparison.Ordinal);
 		var publishGate = workflow.IndexOf("- name: Validate Azure publish profile", StringComparison.Ordinal);
 		var migrate = workflow.IndexOf("- name: Run DbMigrator", StringComparison.Ordinal);
 		var deploy = workflow.IndexOf("- name: Deploy to Azure Web App", StringComparison.Ordinal);
 		var startup = workflow.IndexOf("- name: Verify deployed API startup", StringComparison.Ordinal);
 		var routes = workflow.IndexOf("- name: Verify deployed Academic notification routes", StringComparison.Ordinal);
-		Assert.True(startupGate < migrate && publishGate < migrate && migrate < deploy,
-			"Startup and publish validation must precede migration, and migration must precede deployment.");
+		Assert.True(startupGate < upload && upload < deployJob && extract < migrate && publishGate < migrate && migrate < deploy,
+			"Validate the build before uploading it, extract and validate the release before migration, and migrate before deployment.");
 		Assert.True(deploy < startup && startup < routes,
 			"The Academic notification route check must run after deployment and startup.");
 	}

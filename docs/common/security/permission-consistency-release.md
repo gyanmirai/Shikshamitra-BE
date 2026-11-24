@@ -10,12 +10,14 @@ audience: humans-and-agents
 
 # Release permission consistency and schema-only deployments
 
-## Routine staging deployments (October 7)
+## Routine staging deployments
 
-The current backend deployment runs only for a push or merge to `main`; both the caller and reusable security job enforce that branch guard.
-Security Regression, the .NET 9 SDK check, startup regression tests, publishing, and publish-profile validation must succeed before DbMigrator runs.
+The backend deployment runs only for a push or merge to `main`.
+The build job checks the .NET 9 SDK, compiles the solution once, runs the startup regression tests, and publishes the host and DbMigrator to a single workflow artifact.
+The deploy job downloads that artifact and validates the publish profile before starting DbMigrator.
+The full Security Regression workflow remains reusable and independent of routine backend deployments.
 DbMigrator still applies schema migrations using the `DB_CONNECTION_STRING` secret, but `ShikshaMitra__Seeders__Enabled=false` disables demo/business/permission seeding.
-The retained `FullDemo` profile setting is inactive while seeding is disabled, and `SeedTestLogins=false` disables deployment-time synthetic login creation.
+The retained `FullDemo` profile and synthetic login settings are inactive while seeding is disabled.
 Existing identities and grants are not repaired or reset by this routine release.
 Deployment runs are serialized without cancelling an in-progress migration.
 After migration, the API is deployed and its startup endpoint is checked; a startup response does not replace authenticated feature and authorization acceptance.
@@ -57,7 +59,7 @@ The exposed credential remains an outstanding security risk; neither deleting a 
 
 | Repository | Trigger | Current target | Behavior |
 | --- | --- | --- | --- |
-| Backend | Push or merge to `main` | Azure `stg-gyanmirai-be` | Security checks, build, startup tests, publish validation, DbMigrator, API deployment, startup check |
+| Backend | Push or merge to `main` | Azure `shikshamitra-dev` | Release build, startup tests, artifact handoff, publish profile validation, DbMigrator, API deployment, startup check |
 | Frontend | Push or merge to `main` | Azure `dev-gyanmirai-fe` | Security checks, HR checks, build, UI deployment |
 | Either feature branch | Push alone | No deployment | Does not run the deployment seeder |
 
@@ -65,7 +67,7 @@ The backend DbMigrator step applies schema migrations with `ShikshaMitra__Seeder
 Its database comes from the GitHub `DB_CONNECTION_STRING` secret.
 The deployed API connection setting must identify that same intended database.
 Target names are verified from the workflows, not proof of the current Azure or secret configuration.
-Both deployment workflows wait for their reusable Security Regression job.
+The frontend deployment waits for its reusable Security Regression job.
 Backend migration occurs only after tests and publish-profile validation succeed; a fresh FullDemo seed is a separate approved operation.
 Deployment concurrency is serialized without cancelling an in-progress release.
 
@@ -96,7 +98,8 @@ Credential rotation is an explicitly deferred risk, not evidence that the exposu
    Do not delete the PostgreSQL server or unrelated databases.
    Ensure the migrator identity can create and update schema objects; do not assume the application identity can create databases.
 3. Merge the reviewed backend PR to `main`.
-   Wait for Security Regression, startup tests, publish validation, and **Run DbMigrator** to succeed before accepting deployment.
+   Validate Security Regression separately for this reset.
+   Wait for startup tests, publish validation, and **Run DbMigrator** to succeed before accepting deployment.
    Check the migrator's successful completion log and investigate any partial or failed seed step.
    Confirm the backend is running and the workflow startup check passes at `https://stage-api.gyanmirai.in/.well-known/openid-configuration`.
    A deliberately stopped App Service may need to be started by the operator after deployment for this check.

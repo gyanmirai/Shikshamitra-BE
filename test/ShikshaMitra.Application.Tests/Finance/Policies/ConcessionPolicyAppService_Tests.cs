@@ -35,14 +35,18 @@ public class ConcessionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		RoundingMethod = "None"
 	};
 
-	[Fact]
-	public async Task Clone_Skips_Archived_Copy_Names_And_Remains_Nondefault_Draft()
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Clone_Skips_Archived_Copy_Names_And_Remains_Nondefault_Draft(bool sendTargetYear)
 	{
 		var year = _guidGenerator.Create();
 		var source = await _concessionPolicies.CreateAsync(BuildInput(year, "Sibling support"));
-		var first = await _concessionPolicies.CloneAsync(source.Id, new());
+		var cloneInput = new ConcessionPolicyCloneRequestDto { TargetAcademicYearId = sendTargetYear ? year : null };
+		var first = await _concessionPolicies.CloneAsync(source.Id, cloneInput);
 		await _concessionPolicies.ArchiveAsync(first.Id);
-		var second = await _concessionPolicies.CloneAsync(source.Id, new());
+		var second = await _concessionPolicies.CloneAsync(source.Id, cloneInput);
+		second.AcademicYearId.ShouldBe(year);
 		second.PolicyName.ShouldBe("Sibling support Copy 2");
 		second.Status.ShouldBe("Draft");
 		second.IsDefault.ShouldBeFalse();

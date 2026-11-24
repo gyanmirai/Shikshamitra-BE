@@ -9643,7 +9643,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "AcademicYearId", "CategoryType", "NormalizedName")
                         .IsUnique()
-                        .HasDatabaseName("IX_Finance_TransactionCategories_TenantId_AcademicYearId_Cate~1");
+                        .HasDatabaseName("IX_Finance_TransactionCategories_TenantId_AcademicYearId_Cate~1")
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("Finance_TransactionCategories", (string)null);
                 });
@@ -10227,7 +10228,8 @@ namespace ShikshaMitra.Migrations
                         .HasFilter("\"IsDeleted\" = false AND \"IsDefault\" = true");
 
                     b.HasIndex("TenantId", "AcademicYearId", "Code")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("Finance_PaymentTerms", (string)null);
                 });

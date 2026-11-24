@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.CashManagement;
 using ShikshaMitra.Finance.Accounts.Settings.Dtos;
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -27,6 +29,7 @@ public partial class BankAccountAppService(
  IRepository<ShikshaMitra.Domain.Finance.Policies.RefundPolicy, Guid> refundPolicies,
  IRepository<ShikshaMitra.Finance.Fees.FeeCollection.PaymentMethodRecord, Guid> payments,
  IRepository<ShikshaMitra.Finance.Accounts.Incomes.Transaction, Guid> transactions,
+ IRepository<CashCollection, Guid> cashCollections,
  FinanceScopeAccessService financeScopeAccessService,
 	AccountSettingVersionHistoryReader historyReader) : ApplicationService, IBankAccountAppService
 {
@@ -50,7 +53,14 @@ public partial class BankAccountAppService(
 			input.BranchName, input.BranchAddress, input.AccountHolderName, input.AccountType,
 			input.AccountNumber, input.Purpose, input.IfscCode, input.UpiId, true, CurrentTenant.Id,
 			code, null, input.EffectiveFrom, input.EffectiveTo);
-		await bankAccountRepository.InsertAsync(entity, autoSave: true);
+		try
+		{
+			await bankAccountRepository.InsertAsync(entity, autoSave: true);
+		}
+		catch (Exception exception) when (GetUniqueConflict(exception, code) is { } conflict)
+		{
+			throw conflict;
+		}
 		return await MapAsync(entity, includeSensitive: true);
 	}
 
@@ -118,7 +128,14 @@ public partial class BankAccountAppService(
 		entity.Update(code, entity.AccountHeadId, input.BankName, input.BranchName,
 			input.BranchAddress, input.AccountHolderName, input.AccountType, input.AccountNumber,
 			input.Purpose, input.IfscCode, input.UpiId, input.EffectiveFrom, input.EffectiveTo);
-		await bankAccountRepository.UpdateAsync(entity, autoSave: true);
+		try
+		{
+			await bankAccountRepository.UpdateAsync(entity, autoSave: true);
+		}
+		catch (Exception exception) when (GetUniqueConflict(exception, code) is { } conflict)
+		{
+			throw conflict;
+		}
 		return await MapAsync(entity, includeSensitive: true);
 	}
 
@@ -136,7 +153,7 @@ public partial class BankAccountAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Accounts_Settings_BankAccount.Delete)]
-	[UnitOfWork]
+	[UnitOfWork(isTransactional: true)]
 	public async Task DeleteAsync(Guid id)
 	{
 		var entity = await bankAccountRepository.GetAsync(id);
@@ -161,6 +178,7 @@ public partial class BankAccountAppService(
         await refundRequestRepository.AnyAsync(x => x.PayingBankAccountId == id) ||
         await payments.AnyAsync(x => x.BankAccountId == id) ||
         await transactions.AnyAsync(x => x.BankAccountId == id) ||
+        await cashCollections.AnyAsync(x => x.BankAccountId == id) ||
         await policyVersions.AnyAsync(x=>x.SnapshotJson.Contains(id.ToString()));
 
 	private async Task EnsureUniqueAsync(Guid academicYearId, string code, Guid? accountHeadId,
@@ -176,6 +194,26 @@ public partial class BankAccountAppService(
 		if (await bankAccountRepository.AnyAsync(x => x.AcademicYearId == academicYearId &&
 			x.AccountNumber == accountNumber && (!excludingId.HasValue || x.Id != excludingId.Value)))
 			throw new BusinessException(AccountSettingErrorCodes.DuplicateName).WithData("Field", "AccountNumber");
+	}
+
+	private static BusinessException? GetUniqueConflict(Exception exception, string code)
+	{
+		for (Exception? cause = exception; cause != null; cause = cause.InnerException)
+		{
+			if (cause is DbException { SqlState: "23505" })
+			{
+				return (cause.GetType().GetProperty("ConstraintName")?.GetValue(cause) as string) switch
+				{
+					"IX_Finance_BankAccounts_TenantId_AcademicYearId_AccountNumber" =>
+						new BusinessException(AccountSettingErrorCodes.DuplicateName).WithData("Field", "AccountNumber"),
+					"IX_Finance_BankAccounts_TenantId_AcademicYearId_NormalizedCode" =>
+						new BusinessException(AccountSettingErrorCodes.DuplicateCode).WithData("Code", code),
+					_ => null
+				};
+			}
+		}
+
+		return null;
 	}
 
 	private async Task<BankAccountResponse> MapAsync(BankAccount entity, bool includeSensitive)
@@ -215,6 +253,7 @@ public partial class BankAccountAppService(
         used.UnionWith(await SettingsUsageBatch.ReadAsync((await refundPolicies.GetQueryableAsync()).Select(x => (Guid?)x.DefaultPayingBankAccountId), ids, AsyncExecuter));
         used.UnionWith(await SettingsUsageBatch.ReadAsync((await payments.GetQueryableAsync()).Select(x => (Guid?)x.BankAccountId), ids, AsyncExecuter));
         used.UnionWith(await SettingsUsageBatch.ReadAsync((await transactions.GetQueryableAsync()).Select(x => (Guid?)x.BankAccountId), ids, AsyncExecuter));
+        used.UnionWith(await SettingsUsageBatch.ReadAsync((await cashCollections.GetQueryableAsync()).Select(x => x.BankAccountId), ids, AsyncExecuter));
         used.UnionWith(await SettingsUsageBatch.ReadPolicyUsageAsync(await policyVersions.GetQueryableAsync(), ids, AsyncExecuter));
         var headIds = rows.Where(x => x.AccountHeadId.HasValue).Select(x => x.AccountHeadId!.Value).Distinct().ToArray();
         var heads = await AsyncExecuter.ToListAsync((await accountHeadRepository.GetQueryableAsync()).Where(x => Enumerable.Contains(headIds, x.Id)).Select(x => new { x.Id, x.Name }));

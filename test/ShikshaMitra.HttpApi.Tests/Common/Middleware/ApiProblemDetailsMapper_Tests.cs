@@ -1,5 +1,11 @@
 using Microsoft.AspNetCore.Http;
 using ShikshaMitra.Common.Middleware;
+using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.HR;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Security.Roles;
@@ -30,6 +36,29 @@ public class ApiProblemDetailsMapper_Tests
 	[InlineData(TenantSettingsDomainErrorCodes.DuplicateStandardName)]
 	[InlineData(TenantSettingsDomainErrorCodes.DuplicateDivisionName)]
 	[InlineData(FeeCollectionErrorCodes.IdempotencyConflict)]
+	[InlineData(AccountSettingErrorCodes.DuplicateName)]
+	[InlineData(AccountSettingErrorCodes.DuplicateCode)]
+	[InlineData(AccountSettingErrorCodes.ActiveRecordCannotBeDeleted)]
+	[InlineData(AccountSettingErrorCodes.CategoryInUse)]
+	[InlineData(AccountSettingErrorCodes.BankAccountInUse)]
+	[InlineData(FinanceFeeCategoryErrorCodes.CannotDeleteInUse)]
+	[InlineData(FinanceFeeHeadErrorCodes.CannotDeleteInUse)]
+	[InlineData(PaymentTermErrorCodes.DeleteWithReferences)]
+	[InlineData(PaymentTermErrorCodes.DuplicateCode)]
+	[InlineData(PaymentTermErrorCodes.DuplicateName)]
+	[InlineData(ConcessionTypeErrorCodes.CannotDeleteInUse)]
+	[InlineData(ConcessionTypeErrorCodes.ActiveCannotBeDeleted)]
+	[InlineData(ReceiptBookErrorCodes.CannotDeleteInUse)]
+	[InlineData(FeeStructureErrorCodes.CannotDeleteInUse)]
+	[InlineData(CollectionPolicyErrorCodes.DefaultPolicyCannotBeRemoved)]
+	[InlineData(CollectionPolicyErrorCodes.PolicyInUse)]
+	[InlineData(CollectionPolicyErrorCodes.ExceptionWindowAlreadyActive)]
+	[InlineData(ConcessionPolicyErrorCodes.DefaultPolicyCannotBeRemoved)]
+	[InlineData(ConcessionPolicyErrorCodes.PolicyInUse)]
+	[InlineData(ProrationPolicyErrorCodes.DefaultPolicyCannotBeRemoved)]
+	[InlineData(ProrationPolicyErrorCodes.PolicyInUse)]
+	[InlineData(RefundPolicyErrorCodes.DefaultPolicyCannotBeRemoved)]
+	[InlineData(RefundPolicyErrorCodes.PolicyInUse)]
 	[InlineData("HR:Payroll:SalaryTemplateSaveConflict")]
 	[InlineData(HRErrorCodes.CompensationPreviewStale)]
 	public void Conflict_errors_should_resolve_and_normalize_to_409(string errorCode)
@@ -38,6 +67,17 @@ public class ApiProblemDetailsMapper_Tests
 			.ShouldBe(StatusCodes.Status409Conflict);
 		ApiProblemDetailsMapper.NormalizeStatusCode(StatusCodes.Status400BadRequest, errorCode)
 			.ShouldBe(StatusCodes.Status409Conflict);
+	}
+
+	[Theory]
+	[InlineData(PaymentTermErrorCodes.NotFound)]
+	[InlineData(CollectionPolicyErrorCodes.PolicyNotFound)]
+	[InlineData(ConcessionPolicyErrorCodes.PolicyNotFound)]
+	[InlineData(ProrationPolicyErrorCodes.PolicyNotFound)]
+	public void Finance_settings_missing_records_should_resolve_to_404(string errorCode)
+	{
+		ApiProblemDetailsMapper.NormalizeStatusCode(StatusCodes.Status400BadRequest, errorCode)
+			.ShouldBe(StatusCodes.Status404NotFound);
 	}
 
 	[Fact]

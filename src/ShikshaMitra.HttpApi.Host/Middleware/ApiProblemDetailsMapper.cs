@@ -5,6 +5,11 @@ using ShikshaMitra.Security.Roles;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 namespace ShikshaMitra.Common.Middleware;
@@ -51,9 +56,24 @@ public static class ApiProblemDetailsMapper
 			TenantSettingsDomainErrorCodes.DuplicateStandardName or
 			TenantSettingsDomainErrorCodes.DuplicateDivisionName => StatusCodes.Status409Conflict,
 			FeeCollectionErrorCodes.IdempotencyConflict => StatusCodes.Status409Conflict,
+			AccountSettingErrorCodes.DuplicateName or AccountSettingErrorCodes.DuplicateCode or
+				AccountSettingErrorCodes.ActiveRecordCannotBeDeleted or AccountSettingErrorCodes.CategoryInUse or
+				AccountSettingErrorCodes.BankAccountInUse => StatusCodes.Status409Conflict,
 			Finance.Fees.Charges.FinanceChargeErrorCodes.ChargeCategoryInUse => StatusCodes.Status409Conflict,
+			FinanceFeeCategoryErrorCodes.CannotDeleteInUse or FinanceFeeHeadErrorCodes.CannotDeleteInUse or
+				FeeStructureErrorCodes.CannotDeleteInUse or ReceiptBookErrorCodes.CannotDeleteInUse or
+				ConcessionTypeErrorCodes.CannotDeleteInUse or ConcessionTypeErrorCodes.ActiveCannotBeDeleted or
+				PaymentTermErrorCodes.DeleteWithReferences or PaymentTermErrorCodes.DuplicateCode or
+				PaymentTermErrorCodes.DuplicateName => StatusCodes.Status409Conflict,
+			CollectionPolicyErrorCodes.DefaultPolicyCannotBeRemoved or CollectionPolicyErrorCodes.PolicyInUse or
+				CollectionPolicyErrorCodes.ExceptionWindowAlreadyActive or
+				ConcessionPolicyErrorCodes.DefaultPolicyCannotBeRemoved or ConcessionPolicyErrorCodes.PolicyInUse or
+				ProrationPolicyErrorCodes.DefaultPolicyCannotBeRemoved or ProrationPolicyErrorCodes.PolicyInUse or
+				RefundPolicyErrorCodes.DefaultPolicyCannotBeRemoved or RefundPolicyErrorCodes.PolicyInUse => StatusCodes.Status409Conflict,
 			RefundPolicyErrorCodes.DuplicateName or RefundPolicyErrorCodes.DuplicateCode => StatusCodes.Status409Conflict,
-			RefundPolicyErrorCodes.PolicyNotFound => StatusCodes.Status404NotFound,
+			PaymentTermErrorCodes.NotFound or CollectionPolicyErrorCodes.PolicyNotFound or
+				ConcessionPolicyErrorCodes.PolicyNotFound or ProrationPolicyErrorCodes.PolicyNotFound or
+				RefundPolicyErrorCodes.PolicyNotFound => StatusCodes.Status404NotFound,
 			Finance.Accounts.CashManagement.CashManagementErrorCodes.Stale or
 			Finance.Accounts.CashManagement.CashManagementErrorCodes.RetryConflict or
 			Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidState or

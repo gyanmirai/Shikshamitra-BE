@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Finance.Accounts.CashManagement;
+using ShikshaMitra.Finance.Accounts.Settings;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.Students;
@@ -79,7 +81,10 @@ public partial class AccountSettingsQaRegressionApi_Tests(AccountSettingsQaApiFa
         await EnsureAcademicScopeAsync();
         var account = Random.Shared.NextInt64(100000000000, 999999999999).ToString();
         var name = $"QA Bank {Guid.NewGuid():N}";
-        var created = await PostAndReadAsync<JsonElement>($"/api/bank-accounts?academicYearId={Factory.SeededAcademicYearId}", new { bankName = name, branchName = "Branch 10 बैंक", accountHolderName = "School 10 & Co", accountType = 0, accountNumber = account, ifscCode = "QAAA0123456", upiId = "private.bank@qa", effectiveFrom = "2026-10-14T00:00:00Z" });
+        var created = await PostAndReadAsync<JsonElement>($"/api/bank-accounts?academicYearId={Factory.SeededAcademicYearId}", new { bankName = name, branchName = "Branch 10 बैंक", accountHolderName = "School 10 & Co", accountType = 0, accountNumber = account, ifscCode = "QAAA0123456", upiId = "private.bank@qa", effectiveFrom = "2026-10-14T05:30:00+05:30" });
+        var effectiveFrom = created.GetProperty("effectiveFrom").GetDateTimeOffset();
+        effectiveFrom.Offset.ShouldBe(TimeSpan.Zero);
+        effectiveFrom.ShouldBe(new DateTimeOffset(2026, 10, 14, 0, 0, 0, TimeSpan.Zero));
         var id = created.GetProperty("id").GetGuid();
         var list = await GetAndReadAsync<JsonElement>($"/api/bank-accounts?academicYearId={Factory.SeededAcademicYearId}&search={Uri.EscapeDataString(name)}");
         var row = list.GetProperty("items").EnumerateArray().Single();
@@ -109,6 +114,145 @@ public partial class AccountSettingsQaRegressionApi_Tests(AccountSettingsQaApiFa
     }
 
     [Theory]
+    [InlineData("income-categories", "24 income Category")]
+    [InlineData("expense-categories", "24 expense category")]
+    public async Task Deleted_unused_category_releases_its_name(string route, string name)
+    {
+        await EnsureAcademicScopeAsync();
+        var url = $"/api/{route}?academicYearId={Factory.SeededAcademicYearId}";
+        var input = new { name, description = "", tags = Array.Empty<string>(), concurrencyStamp = (string?)null };
+        var created = await PostAndReadAsync<JsonElement>(url, input);
+        var id = created.GetProperty("id").GetGuid();
+        var rowUrl = $"/api/{route}/{id}";
+        created.GetProperty("name").GetString().ShouldBe(name);
+
+        var status = await Client.PatchAsJsonAsync($"{rowUrl}/status", new
+        {
+            isActive = false,
+            deactivationReason = "Unused test category",
+            concurrencyStamp = created.GetProperty("concurrencyStamp").GetString()
+        });
+        status.EnsureSuccessStatusCode();
+
+        (await Client.DeleteAsync(rowUrl)).EnsureSuccessStatusCode();
+        (await Client.GetAsync(rowUrl)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        var recreated = await PostAndReadAsync<JsonElement>(url, input);
+        recreated.GetProperty("name").GetString().ShouldBe(name);
+        recreated.GetProperty("id").GetGuid().ShouldNotBe(id);
+        var list = await GetAndReadAsync<JsonElement>($"{url}&search={Uri.EscapeDataString(name)}");
+        list.GetProperty("items").EnumerateArray().Single().GetProperty("id").GetGuid()
+            .ShouldBe(recreated.GetProperty("id").GetGuid());
+    }
+
+    [Theory]
+    [InlineData("income-categories")]
+    [InlineData("expense-categories")]
+    public async Task Category_duplicate_reports_a_conflict_with_a_specific_message(string route)
+    {
+        await EnsureAcademicScopeAsync();
+        var url = $"/api/{route}?academicYearId={Factory.SeededAcademicYearId}";
+        var name = $"Case {Guid.NewGuid():N}";
+        await PostAndReadAsync<JsonElement>(url, new { name });
+
+        var response = await Client.PostAsJsonAsync(url, new { name = $"  {name.ToUpperInvariant()}  " });
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await response.Content.ReadAsStringAsync();
+        problem.ShouldContain(AccountSettingErrorCodes.DuplicateName);
+        problem.ShouldContain("already exists");
+    }
+
+    [Fact]
+    public async Task Unused_bank_account_can_be_deleted_and_recreated_after_deactivation()
+    {
+        await EnsureAcademicScopeAsync();
+        var url = $"/api/bank-accounts?academicYearId={Factory.SeededAcademicYearId}";
+        var input = new
+        {
+            bankName = "Deletion Test Bank",
+            branchName = "Main",
+            accountHolderName = "Test School",
+            accountType = 0,
+            accountNumber = Random.Shared.NextInt64(100000000000, 999999999999).ToString(),
+            ifscCode = "QAAA0123456"
+        };
+        var created = await PostAndReadAsync<JsonElement>(url, input);
+        var id = created.GetProperty("id").GetGuid();
+        var rowUrl = $"/api/bank-accounts/{id}";
+
+        var duplicate = await Client.PostAsJsonAsync(url, input);
+        duplicate.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var duplicateProblem = await duplicate.Content.ReadAsStringAsync();
+        duplicateProblem.ShouldContain(AccountSettingErrorCodes.DuplicateName);
+        duplicateProblem.ShouldContain("account number");
+
+        var blocked = await Client.DeleteAsync(rowUrl);
+        blocked.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        var problem = await blocked.Content.ReadAsStringAsync();
+        problem.ShouldContain(AccountSettingErrorCodes.ActiveRecordCannotBeDeleted);
+        problem.ShouldContain("Deactivate");
+
+        var status = await Client.PatchAsJsonAsync($"{rowUrl}/status", new
+        {
+            isActive = false,
+            deactivationReason = "Unused test account",
+            concurrencyStamp = created.GetProperty("concurrencyStamp").GetString()
+        });
+        status.EnsureSuccessStatusCode();
+
+        (await Client.DeleteAsync(rowUrl)).EnsureSuccessStatusCode();
+        (await Client.GetAsync(rowUrl)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var recreated = await PostAndReadAsync<JsonElement>(url, input);
+        recreated.GetProperty("id").GetGuid().ShouldNotBe(id);
+    }
+
+    [Fact]
+    public async Task Bank_account_linked_only_to_a_fully_spent_cash_collection_cannot_be_deleted()
+    {
+        await EnsureAcademicScopeAsync();
+        var url = $"/api/bank-accounts?academicYearId={Factory.SeededAcademicYearId}";
+        var bankName = "Cash Evidence " + Guid.NewGuid().ToString("N");
+        var created = await PostAndReadAsync<JsonElement>(url, new
+        {
+            bankName,
+            branchName = "Main",
+            accountHolderName = "Test School",
+            accountType = 0,
+            accountNumber = Random.Shared.NextInt64(100000000000, 999999999999).ToString(),
+            ifscCode = "QAAA0123456"
+        });
+        var id = created.GetProperty("id").GetGuid();
+        var rowUrl = $"/api/bank-accounts/{id}";
+
+        await WithTenantUowAsync(async provider =>
+        {
+            var cash = provider.GetRequiredService<IRepository<CashCollection, Guid>>();
+            var at = DateTimeOffset.UtcNow;
+            var collection = new CashCollection(Guid.NewGuid(), Guid.Parse(TestAuthHandler.TestTenantId),
+                Factory.SeededAcademicYearId, Guid.NewGuid(), "cash-test", null, "Cash test", "Test payer", 10m,
+                at, Guid.NewGuid(), null, null);
+            collection.Spend(Guid.NewGuid(), "Supplies", 10m, at);
+            collection.Approve(Guid.NewGuid(), id, bankName, 0m, at, null);
+            await cash.InsertAsync(collection, autoSave: true);
+        });
+
+        var status = await Client.PatchAsJsonAsync($"{rowUrl}/status", new
+        {
+            isActive = false,
+            deactivationReason = "Bank account closed",
+            concurrencyStamp = created.GetProperty("concurrencyStamp").GetString()
+        });
+        status.EnsureSuccessStatusCode();
+
+        var blocked = await Client.DeleteAsync(rowUrl);
+        blocked.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await blocked.Content.ReadAsStringAsync()).ShouldContain(AccountSettingErrorCodes.BankAccountInUse);
+        (await GetAndReadAsync<JsonElement>(rowUrl)).GetProperty("isUsedInDownstream").GetBoolean().ShouldBeTrue();
+        var list = await GetAndReadAsync<JsonElement>($"{url}&search={Uri.EscapeDataString(bankName)}");
+        list.GetProperty("items").EnumerateArray().Single().GetProperty("isUsedInDownstream").GetBoolean().ShouldBeTrue();
+    }
+
+    [Theory]
     [InlineData("bankName", 101)]
     [InlineData("branchName", 101)]
     [InlineData("accountHolderName", 101)]
@@ -121,7 +265,14 @@ public partial class AccountSettingsQaRegressionApi_Tests(AccountSettingsQaApiFa
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
-    private async Task EnsureAcademicScopeAsync()
+    private Task EnsureAcademicScopeAsync() => WithTenantUowAsync(async provider =>
+    {
+        var students = provider.GetRequiredService<IRepository<Student, Guid>>();
+        if (!await students.AnyAsync(x => x.AcademicYearId == Factory.SeededAcademicYearId))
+            await students.InsertAsync(new Student(Guid.NewGuid(), Guid.Parse(TestAuthHandler.TestTenantId), "Accounts", null, "QA", Factory.SeededAcademicYearId, Factory.SeededBoardId, Factory.SeededMediumId, Factory.SeededMediumStageId, Factory.SeededStandardId, Factory.SeededDivisionId), autoSave: true);
+    });
+
+    private async Task WithTenantUowAsync(Func<IServiceProvider, Task> action)
     {
         using var scope = Factory.Services.CreateScope();
         var provider = scope.ServiceProvider;
@@ -129,9 +280,7 @@ public partial class AccountSettingsQaRegressionApi_Tests(AccountSettingsQaApiFa
         using (provider.GetRequiredService<ICurrentTenant>().Change(tenantId))
         using (var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
         {
-            var students = provider.GetRequiredService<IRepository<Student, Guid>>();
-            if (!await students.AnyAsync(x => x.AcademicYearId == Factory.SeededAcademicYearId))
-                await students.InsertAsync(new Student(Guid.NewGuid(), tenantId, "Accounts", null, "QA", Factory.SeededAcademicYearId, Factory.SeededBoardId, Factory.SeededMediumId, Factory.SeededMediumStageId, Factory.SeededStandardId, Factory.SeededDivisionId), autoSave: true);
+            await action(provider);
             await uow.CompleteAsync();
         }
     }

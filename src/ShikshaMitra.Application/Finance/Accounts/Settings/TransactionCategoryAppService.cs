@@ -58,11 +58,13 @@ public partial class TransactionCategoryAppService(
 		return [];
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public async Task<TransactionCategoryResponse> CreateAsync(Guid academicYearId,
 		CreateTransactionCategoryRequest input, TransactionType categoryType)
 	{
 		await CheckPermissionAsync(categoryType, "Add");
 		await EnsureScopeAsync(academicYearId);
+		await referenceLock.AcquireAsync();
 		var id = GuidGenerator.Create();
 		var code = id.ToString("N").ToUpperInvariant();
 		await EnsureUniqueAsync(academicYearId, categoryType, code, input.Name);
@@ -126,10 +128,12 @@ public partial class TransactionCategoryAppService(
 			HistoryFields, skipCount, maxResultCount, entity.Version);
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public async Task<TransactionCategoryResponse> UpdateAsync(Guid id,
 		UpdateTransactionCategoryRequest input, TransactionType categoryType)
 	{
 		await CheckPermissionAsync(categoryType, "Edit");
+		await referenceLock.AcquireAsync();
 		var entity = await categoryRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureCategoryType(entity, categoryType);
@@ -170,11 +174,13 @@ public partial class TransactionCategoryAppService(
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureCategoryType(entity, categoryType);
 		entity.EnsureUserEditable();
-		if (entity.CategoryType != TransactionType.Income && entity.IsActive)
-			throw new BusinessException(AccountSettingErrorCodes.ActiveRecordCannotBeDeleted);
-		var blockedReason = await GetDeletionBlockedReasonAsync(id);
+		var blockedReason = categoryType == TransactionType.Income || !entity.IsActive
+			? await GetDeletionBlockedReasonAsync(id)
+			: null;
 		if (blockedReason != null)
 			throw new BusinessException(AccountSettingErrorCodes.CategoryInUse).WithData("Reason", blockedReason);
+		if (entity.IsActive)
+			throw new BusinessException(AccountSettingErrorCodes.ActiveRecordCannotBeDeleted);
 		await categoryRepository.DeleteAsync(entity, autoSave: true);
 	}
 
@@ -236,8 +242,9 @@ public partial class TransactionCategoryAppService(
 			IsSystemCategory = entity.IsSystemCategory,
 			Version = entity.Version, ConcurrencyStamp = entity.ConcurrencyStamp,
 			IsUsedInDownstream = !entity.IsSystemCategory && blockedReason != null,
-			DeletionBlockedReason = blockedReason,
-			CanDelete = blockedReason == null && (entity.CategoryType == TransactionType.Income || !entity.IsActive)
+			DeletionBlockedReason = blockedReason ?? (entity.IsActive
+				? "Deactivate this category before deleting it." : null),
+			CanDelete = blockedReason == null && !entity.IsActive
 		};
 
 

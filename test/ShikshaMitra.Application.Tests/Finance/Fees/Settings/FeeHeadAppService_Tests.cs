@@ -85,6 +85,38 @@ public class FeeHeadAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMi
 		exception.Code.ShouldBe(FinanceFeeHeadErrorCodes.InvalidIncomeCategory);
 	}
 
+	[Fact]
+	public async Task Create_rejects_a_deleted_fee_category()
+	{
+		var academicYearId = Guid.NewGuid();
+		var category = new FeeCategory(Guid.NewGuid(), null, academicYearId, "Deleted category", null);
+		await _feeCategoryRepository.InsertAsync(category, autoSave: true);
+		await _feeCategoryRepository.DeleteAsync(category, autoSave: true);
+		var income = await CreateIncomeCategoryAsync(academicYearId, "Create category check");
+
+		var exception = await Should.ThrowAsync<BusinessException>(() => _feeHeads.CreateAsync(academicYearId,
+			new Dtos.FeeHeadCreateRequest { FeeCategoryId = category.Id, IncomeCategoryId = income.Id, Name = "New fee head" }));
+
+		exception.Code.ShouldBe(FinanceFeeHeadErrorCodes.InvalidFeeCategory);
+	}
+
+	[Fact]
+	public async Task Update_rejects_moving_a_fee_head_to_another_academic_year()
+	{
+		var academicYearId = Guid.NewGuid();
+		var category = new FeeCategory(Guid.NewGuid(), null, academicYearId, "Current category", null);
+		var otherYear = new FeeCategory(Guid.NewGuid(), null, Guid.NewGuid(), "Other year category", null);
+		await _feeCategoryRepository.InsertManyAsync([category, otherYear], autoSave: true);
+		var income = await CreateIncomeCategoryAsync(academicYearId, "Update category check");
+		var head = new FeeHead(Guid.NewGuid(), null, academicYearId, category.Id, "Fee to move", null, false, null, income.Id);
+		await _feeHeadRepository.InsertAsync(head, autoSave: true);
+
+		var exception = await Should.ThrowAsync<BusinessException>(() => _feeHeads.UpdateAsync(head.Id,
+			new Dtos.FeeHeadUpdateRequest { FeeCategoryId = otherYear.Id, IncomeCategoryId = income.Id, Name = head.Name }));
+		exception.Code.ShouldBe(FinanceFeeHeadErrorCodes.InvalidFeeCategory);
+		(await _feeHeadRepository.GetAsync(head.Id)).FeeCategoryId.ShouldBe(category.Id);
+	}
+
 	[Theory]
 	[InlineData(true)]
 	[InlineData(false)]

@@ -26,6 +26,7 @@ public partial class FeeCategoryAppService : ApplicationService, IFeeCategoryApp
 	private readonly FeeCategoryManager feeCategoryManager;
 	private readonly FeeHeadAccountingManager accountingManager;
 	private readonly FeeHeadDependencyQuery dependencyQuery;
+	private readonly ITransactionCategoryReferenceLock referenceLock;
 
 	public FeeCategoryAppService(
 		IRepository<FeeCategory, Guid> feeCategoryRepository,
@@ -35,7 +36,8 @@ public partial class FeeCategoryAppService : ApplicationService, IFeeCategoryApp
 		IRepository<AccountHead, Guid> accountHeadRepository,
 		FeeCategoryManager feeCategoryManager,
 		FeeHeadAccountingManager accountingManager,
-		FeeHeadDependencyQuery dependencyQuery
+		FeeHeadDependencyQuery dependencyQuery,
+		ITransactionCategoryReferenceLock referenceLock
 	)
 	{
 		this.feeCategoryRepository = feeCategoryRepository;
@@ -46,6 +48,7 @@ public partial class FeeCategoryAppService : ApplicationService, IFeeCategoryApp
 		this.feeCategoryManager = feeCategoryManager;
 		this.accountingManager = accountingManager;
 		this.dependencyQuery = dependencyQuery;
+		this.referenceLock = referenceLock;
 	}
 
 	[UnitOfWork(isTransactional: true)]
@@ -245,6 +248,7 @@ public partial class FeeCategoryAppService : ApplicationService, IFeeCategoryApp
 	[UnitOfWork(isTransactional: true)]
 	public async Task<FeeCategoryResponse> UpdateAsync(Guid id, FeeCategoryUpdateRequest input)
 	{
+		await referenceLock.AcquireAsync();
 		var feeCategory = await feeCategoryRepository.GetAsync(id);
 
 		await feeCategoryManager.EnsureNameIsUniqueAsync(feeCategory.AcademicYearId, input.Name, id);
@@ -278,7 +282,7 @@ public partial class FeeCategoryAppService : ApplicationService, IFeeCategoryApp
 
 		foreach (var headInput in input.FeeHeads)
 		{
-			await accountingManager.GetValidMappingAsync(feeCategory.AcademicYearId, headInput.IncomeCategoryId, creatingReference: true);
+			await accountingManager.GetValidMappingAsync(feeCategory.AcademicYearId, headInput.IncomeCategoryId);
 			var normalizedName = headInput.Name.Trim();
 			if (!seenNames.Add(normalizedName))
 			{
@@ -335,8 +339,11 @@ public partial class FeeCategoryAppService : ApplicationService, IFeeCategoryApp
 		return await MapToResponseAsync(feeCategory, resultHeads);
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public async Task<MessageResponse> DeleteAsync(Guid id)
 	{
+		await referenceLock.AcquireAsync();
+		var category = await feeCategoryRepository.GetAsync(id);
 		var feeHeads = await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id);
 		var usedIds = await GetUsedFeeHeadIdsAsync(feeHeads.Select(x => x.Id).ToList());
 
@@ -350,7 +357,7 @@ public partial class FeeCategoryAppService : ApplicationService, IFeeCategoryApp
 			await feeHeadRepository.DeleteAsync(feeHead);
 		}
 
-		await feeCategoryRepository.DeleteAsync(id);
+		await feeCategoryRepository.DeleteAsync(category);
 
 		return new MessageResponse
 		{

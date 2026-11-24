@@ -267,6 +267,13 @@ public class FeeCategoryApi_Tests : ShikshaMitraApiTestBase
     }
 
     [Fact]
+    public async Task Delete_reports_a_missing_category()
+    {
+        var response = await Client.DeleteAsync($"{BaseUrl}/{Guid.NewGuid()}");
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Get_List_Returns_Paged_Shape_With_FeeHeads()
     {

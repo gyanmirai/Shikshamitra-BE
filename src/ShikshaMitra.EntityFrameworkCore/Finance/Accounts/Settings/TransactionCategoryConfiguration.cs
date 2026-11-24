@@ -21,7 +21,8 @@ public class TransactionCategoryConfiguration : IEntityTypeConfiguration<Transac
 		builder.Property(x => x.DeactivationReason).HasMaxLength(AccountSettingConsts.MaxDeactivationReasonLength);
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.CategoryType, x.NormalizedCode }).IsUnique();
-		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.CategoryType, x.NormalizedName }).IsUnique();
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.CategoryType, x.NormalizedName })
+			.IsUnique().HasFilter("\"IsDeleted\" = false");
 		builder.HasOne<AccountHead>()
 			.WithMany()
 			.HasForeignKey(x => x.DefaultAccountHeadId)

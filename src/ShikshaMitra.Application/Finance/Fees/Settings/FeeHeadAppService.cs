@@ -28,6 +28,7 @@ public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 	private readonly FeeCategoryManager feeCategoryManager;
 	private readonly FeeHeadAccountingManager accountingManager;
 	private readonly FeeHeadDependencyQuery dependencyQuery;
+	private readonly ITransactionCategoryReferenceLock referenceLock;
 
 	public FeeHeadAppService(
 		IRepository<FeeHead, Guid> feeHeadRepository,
@@ -37,7 +38,8 @@ public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 		IRepository<AccountHead, Guid> accountHeadRepository,
 		FeeCategoryManager feeCategoryManager,
 		FeeHeadAccountingManager accountingManager,
-		FeeHeadDependencyQuery dependencyQuery
+		FeeHeadDependencyQuery dependencyQuery,
+		ITransactionCategoryReferenceLock referenceLock
 	)
 	{
 		this.feeHeadRepository = feeHeadRepository;
@@ -48,13 +50,16 @@ public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 		this.feeCategoryManager = feeCategoryManager;
 		this.accountingManager = accountingManager;
 		this.dependencyQuery = dependencyQuery;
+		this.referenceLock = referenceLock;
 	}
 
 	[UnitOfWork(isTransactional: true)]
 	public async Task<FeeHeadResponse> CreateAsync(Guid academicYearId, FeeHeadCreateRequest input)
     {
+		await referenceLock.AcquireAsync();
+		await EnsureFeeCategoryAvailableAsync(academicYearId, input.FeeCategoryId);
 		await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(academicYearId, input.FeeCategoryId, input.Name);
-		await accountingManager.GetValidMappingAsync(academicYearId, input.IncomeCategoryId, creatingReference: true);
+		await accountingManager.GetValidMappingAsync(academicYearId, input.IncomeCategoryId);
 
 		var feeHead = new FeeHead(
             GuidGenerator.Create(),
@@ -184,11 +189,13 @@ public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 	[UnitOfWork(isTransactional: true)]
     public async Task<FeeHeadResponse> UpdateAsync(Guid feeHeadId, FeeHeadUpdateRequest input)
     {
+		await referenceLock.AcquireAsync();
 		var feeHead = await feeHeadRepository.GetAsync(feeHeadId);
 
+		await EnsureFeeCategoryAvailableAsync(feeHead.AcademicYearId, input.FeeCategoryId);
 		await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(
 			feeHead.AcademicYearId, input.FeeCategoryId, input.Name, feeHeadId);
-		await accountingManager.GetValidMappingAsync(feeHead.AcademicYearId, input.IncomeCategoryId, creatingReference: true);
+		await accountingManager.GetValidMappingAsync(feeHead.AcademicYearId, input.IncomeCategoryId);
 		if (feeHead.IncomeCategoryId != input.IncomeCategoryId &&
 			(await GetUsedFeeHeadIdsAsync([feeHeadId])).Count > 0)
 		{
@@ -202,6 +209,14 @@ public partial class FeeHeadAppService : ApplicationService, IFeeHeadAppService
 
         return await MapToResponseAsync(feeHead);
     }
+
+	private async Task EnsureFeeCategoryAvailableAsync(Guid academicYearId, Guid categoryId)
+	{
+		var tenantId = CurrentTenant.Id;
+		if (!await feeCategoryRepository.AnyAsync(category =>
+			category.Id == categoryId && category.TenantId == tenantId && category.AcademicYearId == academicYearId))
+			throw new BusinessException(FinanceFeeHeadErrorCodes.InvalidFeeCategory);
+	}
 
     public async Task<MessageResponse> DeleteAsync(Guid feeHeadId)
     {

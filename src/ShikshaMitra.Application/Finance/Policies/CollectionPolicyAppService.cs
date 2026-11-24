@@ -241,7 +241,7 @@ public class CollectionPolicyAppService(
 			AcademicYearId = targetAcademicYearId,
 			PolicyName = string.IsNullOrWhiteSpace(input.Name)
 				? FinanceName.NextCopy(source.PolicyName, await AsyncExecuter.ToListAsync(
-					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == (input.TargetAcademicYearId ?? source.AcademicYearId))
+					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == targetAcademicYearId)
 					.Select(x => x.PolicyName)))
 				: FinanceName.Normalize(input.Name),
 			// Sequential GUID prefixes can repeat. Use random GUID material within the code length limit.

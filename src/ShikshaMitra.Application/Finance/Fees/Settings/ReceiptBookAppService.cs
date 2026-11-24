@@ -4,13 +4,18 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 
@@ -21,9 +26,21 @@ public partial class ReceiptBookAppService(
 	IAcademicYearRepository academicYearRepository,
 	IEducationBoardRepository educationBoardRepository,
 	IEducationMediumRepository educationMediumRepository,
-	IEducationMediumStageRepository educationMediumStageRepository
+	IEducationMediumStageRepository educationMediumStageRepository,
+	IUserScopeAccessService scopeAccess,
+	IRepository<FeeStructure, Guid> feeStructureRepository,
+	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
+	IFeePaymentReceiptRepository paymentReceiptRepository,
+	IDataFilter dataFilter
 ) : ApplicationService, IReceiptBookAppService
 {
+	private sealed record ReceiptBookScope(Guid? AcademicYearId, Guid? EducationBoardId,
+		Guid? EducationMediumId, Guid? EducationMediumStageId) : IUserScopedEntity
+	{
+		public Guid? StandardId => null;
+		public Guid? DivisionId => null;
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ReceiptBook.Add)]
 	public async Task<ReceiptBookResponse> CreateAsync(Guid academicYearId, ReceiptBookCreateRequest input)
 	{
@@ -86,10 +103,28 @@ public partial class ReceiptBookAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ReceiptBook.Delete)]
+	[UnitOfWork(isTransactional: true)]
 	public async Task<MessageResponse> DeleteAsync(Guid receiptBookId)
 	{
-		await receiptBookRepository.DeleteAsync(receiptBookId);
+		var book = await receiptBookRepository.GetAsync(receiptBookId);
+		await scopeAccess.EnsureCurrentUserCanAccessAsync(
+			new ReceiptBookScope(book.AcademicYearId, book.BoardId, book.MediumId, book.MediumStageId));
+
+		if (await feeStructureMetadataRepository.AnyAsync(metadata => metadata.ReceiptBookId == receiptBookId) ||
+			await feeStructureRepository.AnyAsync(structure => structure.ReceiptBookId == receiptBookId) ||
+			await HasIssuedReceiptAsync(receiptBookId))
+		{
+			throw new BusinessException(ReceiptBookErrorCodes.CannotDeleteInUse).WithData("Name", book.Name);
+		}
+
+		await receiptBookRepository.DeleteAsync(book);
 		return new MessageResponse { Message = "Receipt book deleted successfully" };
+	}
+
+	private async Task<bool> HasIssuedReceiptAsync(Guid receiptBookId)
+	{
+		using var historicalReceipts = dataFilter.Disable<ISoftDelete>();
+		return await paymentReceiptRepository.AnyAsync(receipt => receipt.ReceiptBookId == receiptBookId);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ReceiptBook.Add)]

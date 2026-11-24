@@ -266,7 +266,7 @@ public class ConcessionPolicyAppService(
 			AcademicYearId = targetYear,
 			PolicyName = string.IsNullOrWhiteSpace(input.Name)
 				? FinanceName.NextCopy(source.PolicyName, await AsyncExecuter.ToListAsync(
-					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == (input.TargetAcademicYearId ?? source.AcademicYearId))
+					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == targetYear)
 					.Select(x => x.PolicyName)))
 				: FinanceName.Normalize(input.Name),
 			Status = "Draft",

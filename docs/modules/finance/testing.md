@@ -224,6 +224,8 @@ Verify scoped concession counts/draft visibility and Collections canonical balan
 Run `dotnet test test/ShikshaMitra.Domain.Tests --filter FullyQualifiedName~AccountSettings`.
 Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AccountSettingsQaRegressionApi|FullyQualifiedName~AccountSettingsSimplificationApi|FullyQualifiedName~AccountSettingsPermissionApi"`.
 The regression factory deliberately enables auditing, which the default HTTP fixture disables. It disables transactions only inside this shared-connection SQLite fixture because ABP saves audit logs through a separate unit of work; SQLite cannot nest those transactions. Production transaction settings remain unchanged. Use PostgreSQL tests for transaction rollback guarantees.
+
+`ReleaseDeletedFinanceSettingKeys` rebuilds the Income and Expense Category name index and the Payment Term code index. Verify the migration on PostgreSQL with a deleted record and a new record using the same key, a second non-deleted record rejected in the same scope, and the deleted row retained. The previous unfiltered indexes can be restored only while the stored keys still satisfy them.
 Changes before entity-history registration cannot be reconstructed; missing known versions remain explicitly unavailable rather than being invented.
 
 | Change area | First tests |

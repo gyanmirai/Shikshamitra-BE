@@ -90,7 +90,7 @@ public class BankAccount : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Purpose = string.IsNullOrWhiteSpace(purpose) ? null : Check.Length(purpose.Trim(), nameof(purpose), AccountSettingConsts.MaxBankPurposeLength);
 		IfscCode = Check.NotNullOrWhiteSpace(ifscCode, nameof(ifscCode), 11).Trim().ToUpperInvariant();
 		UpiId = string.IsNullOrWhiteSpace(upiId) ? null : upiId.Trim().ToLowerInvariant();
-		EffectiveFrom = effectiveFrom;
-		EffectiveTo = effectiveTo;
+		EffectiveFrom = effectiveFrom?.ToUniversalTime();
+		EffectiveTo = effectiveTo?.ToUniversalTime();
 	}
 }

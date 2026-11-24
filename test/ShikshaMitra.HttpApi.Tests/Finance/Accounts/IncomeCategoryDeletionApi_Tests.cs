@@ -24,28 +24,36 @@ public class IncomeCategoryDeletionApi_Tests(FinanceRoutingApiTestFactory factor
 	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
-	public async Task Unused_income_category_can_be_deleted_without_deactivation(bool deactivate)
+	public async Task Unused_income_category_can_only_be_deleted_after_deactivation(bool deactivate)
 	{
 		await EnsureAcademicScopeAsync();
 		var created = await CreateCategoryAsync();
 		var id = created.GetProperty("id").GetGuid();
 		created.GetProperty("isActive").GetBoolean().ShouldBeTrue();
 		created.GetProperty("isUsedInDownstream").GetBoolean().ShouldBeFalse();
-		created.GetProperty("deletionBlockedReason").ValueKind.ShouldBe(JsonValueKind.Null);
-		created.GetProperty("canDelete").GetBoolean().ShouldBeTrue();
+		created.GetProperty("deletionBlockedReason").GetString().ShouldBe("Deactivate this category before deleting it.");
+		created.GetProperty("canDelete").GetBoolean().ShouldBeFalse();
+		if (deactivate)
+			await DeactivateCategoryAsync(created);
+		var detail = await GetAndReadAsync<JsonElement>($"/api/income-categories/{id}");
+		detail.GetProperty("canDelete").GetBoolean().ShouldBe(deactivate);
+		var list = await GetAndReadAsync<JsonElement>($"/api/income-categories?academicYearId={Factory.SeededAcademicYearId}&search={Uri.EscapeDataString(created.GetProperty("name").GetString()!)}");
+		list.GetProperty("items").EnumerateArray().Single().GetProperty("canDelete").GetBoolean().ShouldBe(deactivate);
+
+		var response = await Client.DeleteAsync($"/api/income-categories/{id}");
 		if (deactivate)
 		{
-			var response = await Client.PatchAsJsonAsync($"/api/income-categories/{id}/status",
-				new { isActive = false, deactivationReason = "Unused test category", concurrencyStamp = created.GetProperty("concurrencyStamp").GetString() });
 			response.EnsureSuccessStatusCode();
+			(await Client.GetAsync($"/api/income-categories/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
 		}
-		var detail = await GetAndReadAsync<JsonElement>($"/api/income-categories/{id}");
-		detail.GetProperty("canDelete").GetBoolean().ShouldBeTrue();
-		var list = await GetAndReadAsync<JsonElement>($"/api/income-categories?academicYearId={Factory.SeededAcademicYearId}&search={Uri.EscapeDataString(created.GetProperty("name").GetString()!)}");
-		list.GetProperty("items").EnumerateArray().Single().GetProperty("canDelete").GetBoolean().ShouldBeTrue();
-
-		(await Client.DeleteAsync($"/api/income-categories/{id}")).EnsureSuccessStatusCode();
-		(await Client.GetAsync($"/api/income-categories/{id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+		else
+		{
+			response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+			var problem = await response.Content.ReadAsStringAsync();
+			problem.ShouldContain("Finance:Accounts:Settings:ActiveRecordCannotBeDeleted");
+			problem.ShouldContain("Deactivate");
+			(await Client.GetAsync($"/api/income-categories/{id}")).StatusCode.ShouldBe(HttpStatusCode.OK);
+		}
 	}
 
 	[Theory]
@@ -56,7 +64,9 @@ public class IncomeCategoryDeletionApi_Tests(FinanceRoutingApiTestFactory factor
 		await EnsureAcademicScopeAsync();
 		var category = await CreateCategoryAsync();
 		var id = category.GetProperty("id").GetGuid();
-		category.GetProperty("canDelete").GetBoolean().ShouldBeTrue();
+		await DeactivateCategoryAsync(category);
+		var beforeReference = await GetAndReadAsync<JsonElement>($"/api/income-categories/{id}");
+		beforeReference.GetProperty("canDelete").GetBoolean().ShouldBeTrue();
 		await WithTenantUowAsync(async provider =>
 		{
 			var categories = provider.GetRequiredService<IRepository<FeeCategory, Guid>>();
@@ -69,8 +79,10 @@ public class IncomeCategoryDeletionApi_Tests(FinanceRoutingApiTestFactory factor
 		});
 
 		var response = await Client.DeleteAsync($"/api/income-categories/{id}");
-		response.IsSuccessStatusCode.ShouldBeFalse();
-		(await response.Content.ReadAsStringAsync()).ShouldContain("Finance:Accounts:Settings:CategoryInUse");
+		response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+		var problem = await response.Content.ReadAsStringAsync();
+		problem.ShouldContain("Finance:Accounts:Settings:CategoryInUse");
+		problem.ShouldContain("Used by fee heads.");
 		var detail = await GetAndReadAsync<JsonElement>($"/api/income-categories/{id}");
 		detail.GetProperty("isUsedInDownstream").GetBoolean().ShouldBeTrue();
 		detail.GetProperty("deletionBlockedReason").GetString().ShouldBe("Used by fee heads.");
@@ -170,14 +182,30 @@ public class IncomeCategoryDeletionApi_Tests(FinanceRoutingApiTestFactory factor
 		var category = await PostAndReadAsync<JsonElement>($"/api/expense-categories?academicYearId={Factory.SeededAcademicYearId}",
 			new { name = $"Exp {Guid.NewGuid():N}", tags = Array.Empty<string>() });
 		category.GetProperty("canDelete").GetBoolean().ShouldBeFalse();
+		category.GetProperty("isUsedInDownstream").GetBoolean().ShouldBeFalse();
+		category.GetProperty("deletionBlockedReason").GetString().ShouldBe("Deactivate this category before deleting it.");
 		var response = await Client.DeleteAsync($"/api/expense-categories/{category.GetProperty("id").GetGuid()}");
-		response.IsSuccessStatusCode.ShouldBeFalse();
-		(await response.Content.ReadAsStringAsync()).ShouldContain("Finance:Accounts:Settings:ActiveRecordCannotBeDeleted");
+		response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+		var problem = await response.Content.ReadAsStringAsync();
+		problem.ShouldContain("Finance:Accounts:Settings:ActiveRecordCannotBeDeleted");
+		problem.ShouldContain("Deactivate");
 	}
 
 	private Task<JsonElement> CreateCategoryAsync() => PostAndReadAsync<JsonElement>(
 		$"/api/income-categories?academicYearId={Factory.SeededAcademicYearId}",
 		new { name = $"Del {Guid.NewGuid():N}", tags = Array.Empty<string>() });
+
+	private async Task DeactivateCategoryAsync(JsonElement category)
+	{
+		var id = category.GetProperty("id").GetGuid();
+		var response = await Client.PatchAsJsonAsync($"/api/income-categories/{id}/status", new
+		{
+			isActive = false,
+			deactivationReason = "Unused test category",
+			concurrencyStamp = category.GetProperty("concurrencyStamp").GetString()
+		});
+		response.EnsureSuccessStatusCode();
+	}
 
 	private Task EnsureAcademicScopeAsync() => WithTenantUowAsync(async provider =>
 	{

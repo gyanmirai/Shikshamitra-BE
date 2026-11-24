@@ -1,9 +1,13 @@
 using System;
 using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
+using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.EntityFrameworkCore.Finance.Fees.Settings.PaymentTerms;
 using Shouldly;
 using Volo.Abp.EntityFrameworkCore;
@@ -23,6 +27,19 @@ public sealed class PaymentTermNamePostgresFactAttribute : FactAttribute
 
 public class PaymentTermNameMutationLock_Tests
 {
+	[Fact]
+	public void Deleted_drafts_do_not_reserve_the_code_in_the_database()
+	{
+		ShikshaMitraEfCoreEntityExtensionMappings.Configure();
+		using var context = CreateContext("Host=localhost;Database=unused;Username=unused;Password=unused");
+		var index = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(PaymentTerm))!.GetIndexes().Single(candidate =>
+			candidate.Properties.Select(property => property.Name).SequenceEqual([
+				nameof(PaymentTerm.TenantId), nameof(PaymentTerm.AcademicYearId), nameof(PaymentTerm.Code)]));
+
+		index.IsUnique.ShouldBeTrue();
+		index.GetFilter().ShouldBe("\"IsDeleted\" = false");
+	}
+
 	[Fact]
 	public async Task Name_mutations_require_a_transaction_before_acquiring_the_database_lock()
 	{

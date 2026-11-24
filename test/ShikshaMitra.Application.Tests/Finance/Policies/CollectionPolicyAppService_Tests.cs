@@ -300,16 +300,23 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		restored.Status.ShouldBe("Draft");
 	}
 
-	[Fact]
-	public async Task Clone_Copies_Fields_And_Forces_Non_Default()
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Clone_Copies_Fields_And_Forces_Non_Default(bool sendTargetYear)
 	{
 		var academicYearId = _guidGenerator.Create();
 		var source = await _collectionPolicies.CreateAsync(await BuildInputAsync(academicYearId, "Source Policy", isDefault: true));
 
-		var cloned = await _collectionPolicies.CloneAsync(source.Id, new CollectionPolicyCloneRequestDto());
+		var cloned = await _collectionPolicies.CloneAsync(source.Id, new CollectionPolicyCloneRequestDto
+		{
+			TargetAcademicYearId = sendTargetYear ? academicYearId : null
+		});
 
 		cloned.Id.ShouldNotBe(source.Id);
 		cloned.PolicyName.ShouldBe("Source Policy Copy");
+		cloned.AcademicYearId.ShouldBe(academicYearId);
+		cloned.Status.ShouldBe("Draft");
 		cloned.IsDefault.ShouldBeFalse();
 		cloned.GracePeriodDays.ShouldBe(source.GracePeriodDays);
 		cloned.AmountPerDay.ShouldBe(source.AmountPerDay);

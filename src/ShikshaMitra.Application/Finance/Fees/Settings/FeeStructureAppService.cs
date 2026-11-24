@@ -145,7 +145,8 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 	{
 		var entity = await GetScopedAsync(id);
 		entity.EnsureNotLocked();
-		await EnsureUnusedAsync(entity.Id);
+		if (await IsUsedAsync(entity.Id))
+			throw new BusinessException(FeeStructureErrorCodes.CannotDeleteInUse);
 		await feeStructureRepository.DeleteAsync(entity);
 	}
 
@@ -280,10 +281,14 @@ public partial class FeeStructureAppService : ApplicationService, IFeeStructureA
 	}
 	private async Task EnsureUnusedAsync(Guid id)
 	{
-		using var historicalReferences = dataFilter.Disable<ISoftDelete>();
-		if (await studentStructureRepository.AnyAsync(x => x.FeeStructureStandardId == id))
+		if (await IsUsedAsync(id))
 			throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration)
 				.WithData("Errors", new[] { "This structure is already referenced by student fees. Its configuration must remain unchanged." });
+	}
+	private async Task<bool> IsUsedAsync(Guid id)
+	{
+		using var historicalReferences = dataFilter.Disable<ISoftDelete>();
+		return await studentStructureRepository.AnyAsync(x => x.FeeStructureStandardId == id);
 	}
 	private static void ThrowIfInvalid(FeeStructurePreviewDto preview)
 	{

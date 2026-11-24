@@ -3,6 +3,7 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 public static class FinanceFeeHeadErrorCodes
 {
 	private const string Prefix = "Finance:FeeHead";
+	public const string InvalidFeeCategory = $"{Prefix}:InvalidFeeCategory";
 
 	public const string CannotDeleteInUse = $"{Prefix}:010001";
 	public const string CannotDeactivateInUse = $"{Prefix}:010002";

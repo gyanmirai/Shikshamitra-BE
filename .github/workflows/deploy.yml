@@ -17,25 +17,13 @@ env:
     SeedTestLogins: 'true'
 
 jobs:
-    security:
+    build:
         if: github.ref == 'refs/heads/main'
-        uses: ./.github/workflows/security-regression.yml
-
-    build-and-deploy:
-        if: github.ref == 'refs/heads/main'
-        needs: security
         runs-on: ubuntu-latest
 
         steps:
             - uses: actions/checkout@v4
 
-            - name: Diagnose an existing production startup failure
-              shell: pwsh
-              env:
-                  AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-              run: |
-                  ./scripts/deployment/Get-AzureStartupDiagnostics.ps1 `
-                    -PublishProfile $env:AZURE_PUBLISH_PROFILE
             - name: Setup .NET
               uses: actions/setup-dotnet@v4
               with:
@@ -68,9 +56,53 @@ jobs:
                     --no-build \
                     --filter "FullyQualifiedName~OpenIddictCertificateStore_Tests"
 
-            # ⭐ Publish Host App
-            - name: Publish
-              run: dotnet publish src/ShikshaMitra.HttpApi.Host -c Release -o ./publish
+            - name: Package backend release
+              run: |
+                  dotnet publish src/ShikshaMitra.HttpApi.Host -c Release --no-build -o ./release/host
+                  dotnet publish src/ShikshaMitra.DbMigrator -c Release --no-build -o ./release/migrator
+                  tar -cf backend-release.tar -C ./release host migrator
+
+            - name: Upload backend release
+              uses: actions/upload-artifact@v4
+              with:
+                  name: backend-release
+                  path: backend-release.tar
+                  if-no-files-found: error
+                  overwrite: true
+                  retention-days: 7
+
+    deploy:
+        if: github.ref == 'refs/heads/main'
+        needs: build
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Diagnose an existing production startup failure
+              shell: pwsh
+              env:
+                  AZURE_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+              run: |
+                  ./scripts/deployment/Get-AzureStartupDiagnostics.ps1 `
+                    -PublishProfile $env:AZURE_PUBLISH_PROFILE
+
+            - name: Setup .NET
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: ${{ env.DOTNET_VERSION }}
+
+            - name: Download backend release
+              uses: actions/download-artifact@v4
+              with:
+                  name: backend-release
+
+            - name: Extract backend release
+              run: |
+                  mkdir -p ./release
+                  tar -xf backend-release.tar -C ./release
+                  test -f ./release/host/ShikshaMitra.HttpApi.Host.dll
+                  test -f ./release/migrator/ShikshaMitra.DbMigrator.dll
 
             - name: Validate Azure publish profile
               shell: pwsh
@@ -101,8 +133,8 @@ jobs:
                   ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
                   ShikshaMitra__Seeders__Enabled: 'false'
               run: |
-                  cd src/ShikshaMitra.DbMigrator
-                  dotnet run --configuration Release --no-launch-profile
+                  cd ./release/migrator
+                  dotnet ShikshaMitra.DbMigrator.dll
 
             # ⭐ Deploy using Publish Profile
             - name: Deploy to Azure Web App
@@ -111,7 +143,7 @@ jobs:
               with:
                   app-name: ${{ env.AZURE_WEBAPP_NAME }}
                   publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-                  package: ./publish
+                  package: ./release/host
 
             - name: Verify deployed API startup
               id: health
@@ -151,7 +183,7 @@ jobs:
               run: |
                   ./scripts/deployment/Test-DeployedAcademicNotificationRoutes.ps1 `
                     -ApiBaseUri 'https://stage-api.gyanmirai.in' `
-                    -PublishedDirectory './publish'
+                    -PublishedDirectory './release/host'
 
             - name: Collect Azure startup diagnostics
               if: failure() && steps.deploy.outcome == 'success'

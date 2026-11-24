@@ -178,7 +178,9 @@ Never use a database reset or blanket reseed as an access repair.
 ## Required local checks and main release gates
 
 Run the backend and frontend Security Regression checks locally before merging feature work.
-GitHub Actions runs these jobs only on `main`, through reusable deployment gates triggered by pushes after merge.
+GitHub Actions restricts the reusable security workflows to `main`.
+Routine backend deployment does not call the full Security Regression workflow.
+The backend deploy job consumes the API host and DbMigrator published by the build job after the startup regression tests pass.
 Do not add pull-request triggers or require PR workflow runs; every job must guard `github.ref == 'refs/heads/main'`.
 Cross-repository changes still require both repositories' local checks and coordinated contract review.
 Branch-protection configuration needs separate authorization.

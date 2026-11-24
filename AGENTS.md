@@ -34,7 +34,9 @@ Do not restore PR build requirements or broaden workflow triggers without explic
 ## Start here
 
 Before changing permissions, navigation guards, identity, scope, or security-related seeders, read [the canonical security standard](docs/common/security/permission-consistency.md).
-Follow its mandatory checklist, run security checks locally before merge, and require the reusable Security Regression gate on `main` before deployment.
+Follow its mandatory checklist and run security checks locally before merge.
+The reusable Security Regression workflow stays restricted to `main`.
+Routine backend deployment requires the Release build and startup regression tests.
 Never restore revoked grants through reseeding or treat screenshots as security sign-off.
 Use the .NET 9 SDK selected by `global.json` for local, CI, and deployment builds.
 Do not remove the SDK selection to make a missing installation pass; install the matching SDK instead.

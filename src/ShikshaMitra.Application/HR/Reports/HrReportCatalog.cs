@@ -37,7 +37,7 @@ internal static class HrReportCatalog
 		if (source is HrReportDataSources.PayrollStatement or HrReportDataSources.PayrollRegister)
 		{
 			requested = requested.Concat(new[] { "month", "employeeCode", "employeeName", "totalEarnings", "totalDeduction", "netPay" }).Distinct().ToList();
-			foreach (var deduction in new[] { "pf", "pt", "tds", "esic", "otherDeductions" })
+			foreach (var deduction in AutomaticSalaryDocumentDeductions)
 					if (rows.Any(x => decimal.TryParse(x.GetValueOrDefault(deduction), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var value) && value != 0m) && !requested.Contains(deduction)) requested.Add(deduction);
 		}
 		var fields = metadata.Fields.ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
@@ -52,6 +52,9 @@ internal static class HrReportCatalog
 			})
 			.ToList();
 	}
+
+	internal static IReadOnlyList<string> AutomaticSalaryDocumentDeductions { get; } =
+		["pf", "pt", "tds", "esic", "otherDeductions"];
 
 	public static bool IsGroupable(string source, string? field) =>
 		FieldSupports(source, field, x => x.Groupable);

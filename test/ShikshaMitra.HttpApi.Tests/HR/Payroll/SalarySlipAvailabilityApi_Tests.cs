@@ -14,6 +14,7 @@ using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Infrastructure.Auth;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Claims;
@@ -66,6 +67,9 @@ public class SalarySlipAvailabilityApi_Tests(ShikshaMitraApiTestFactory factory)
 		await AssertUnavailableAsync(query);
 		(await Client.GetAsync($"/api/payroll/payslip-documents/{invalidDocument}/pdf")).IsSuccessStatusCode.ShouldBeFalse();
 		(await Client.GetFromJsonAsync<System.Collections.Generic.List<PayslipDocumentDto>>($"/api/payroll/payslip-documents?{query}", JsonOptions))!.ShouldBeEmpty();
+		var issued = await Client.GetFromJsonAsync<PagedResultDto<IssuedPayslipListItem>>(
+			$"/api/payroll/payslip-documents/issued?monthYear={Month}&search=IssuedBoundary", JsonOptions);
+		issued!.TotalCount.ShouldBe(0);
 		await InTenantAsync(async services =>
 		{
 			var service = services.GetRequiredService<ISalarySlipAppService>();
@@ -157,11 +161,28 @@ public class SalarySlipAvailabilityApi_Tests(ShikshaMitraApiTestFactory factory)
 			slip.FinalizeSlip();
 			if (paid) slip.RecordPayment(DateTimeOffset.UtcNow.AddMinutes(-1), "synthetic-payment", Actor, Guid.NewGuid());
 			await services.GetRequiredService<ISalarySlipRepository>().UpdateAsync(slip);
+			var documents = services.GetRequiredService<IRepository<PayslipDocument, Guid>>();
+			var previousId = Guid.NewGuid();
+			var issuedAt = DateTime.UtcNow;
+			await documents.InsertAsync(new(previousId, Tenant, slipId, employee.Id, Month, 1,
+				issuedAt.AddDays(-1), Actor, "{}", pdf));
 			var facts = new SalarySlipDto { Id = slipId, EmployeeId = employee.Id, EmployeeName = "Frozen Synthetic Staff",
-				DocumentId = documentId, DocumentRevision = 1, MonthYear = Month, NetSalary = 10000m };
-			await services.GetRequiredService<IRepository<PayslipDocument, Guid>>().InsertAsync(new(documentId, Tenant,
-				slipId, employee.Id, Month, 1, DateTime.UtcNow, Actor, JsonSerializer.Serialize(facts), pdf));
+				DocumentId = documentId, DocumentRevision = 2, MonthYear = Month, NetSalary = 10000m };
+			await documents.InsertAsync(new(documentId, Tenant, slipId, employee.Id, Month, 2,
+				issuedAt, Actor, JsonSerializer.Serialize(facts), pdf, previousId, "Synthetic correction", Guid.NewGuid()));
 		});
+		var listPath = $"/api/payroll/payslip-documents/issued?search={Uri.EscapeDataString(employee.FirstName)}&maxResultCount=1";
+		var issued = await Client.GetFromJsonAsync<PagedResultDto<IssuedPayslipListItem>>(
+			$"{listPath}&monthYear={Month}", JsonOptions);
+		issued!.TotalCount.ShouldBe(1);
+		var item = issued.Items.ShouldHaveSingleItem();
+		item.Id.ShouldBe(documentId);
+		item.EmployeeId.ShouldBe(employee.Id);
+		item.Revision.ShouldBe(2);
+		item.IsPaid.ShouldBe(paid);
+		var otherMonth = await Client.GetFromJsonAsync<PagedResultDto<IssuedPayslipListItem>>(
+			$"{listPath}&monthYear=2026-09", JsonOptions);
+		otherMonth!.TotalCount.ShouldBe(0);
 		var query = $"employeeId={employee.Id}&monthYear={Month}";
 		var availability = await Client.GetFromJsonAsync<SalarySlipAvailabilityDto>($"/api/payroll/salary-slips/availability?{query}", JsonOptions);
 		availability!.Status.ShouldBe("AVAILABLE");
@@ -188,15 +209,18 @@ public class SalarySlipAvailabilityApi_Tests(ShikshaMitraApiTestFactory factory)
 		using var denied = Factory.CreateClient();
 		denied.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, "HR.PayrollManagement.RunPayroll.Lock");
 		(await denied.GetAsync(path)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		(await denied.GetAsync("/api/payroll/payslip-documents/issued")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 		denied.DefaultRequestHeaders.Remove(AlwaysGrantPermissionChecker.TestPermissionsHeader);
 		denied.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, View);
 		(await denied.GetAsync(path)).StatusCode.ShouldBe(HttpStatusCode.OK);
+		(await denied.GetAsync("/api/payroll/payslip-documents/issued")).StatusCode.ShouldBe(HttpStatusCode.OK);
 		using var foreign = Factory.CreateClient();
 		foreign.DefaultRequestHeaders.Add(TestAuthHandler.TestTenantIdHeader, Guid.NewGuid().ToString());
 		(await foreign.GetAsync(path)).IsSuccessStatusCode.ShouldBeFalse();
 		(await foreign.GetAsync($"/api/payroll/salary-slips?employeeId={employee.Id}&monthYear={Month}")).IsSuccessStatusCode.ShouldBeFalse();
 		using var unassigned = CreateClientAs(Guid.NewGuid());
 		(await unassigned.GetAsync(path)).IsSuccessStatusCode.ShouldBeFalse();
+		(await unassigned.GetAsync("/api/payroll/payslip-documents/issued")).IsSuccessStatusCode.ShouldBeFalse();
 	}
 
 	private async Task AssertUnavailableAsync(string query)

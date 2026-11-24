@@ -19,7 +19,10 @@ public sealed class AcademicNotificationTemplateTestSendInput
 }
 
 public sealed record AcademicNotificationTemplateTestSendDto(Guid OperationId, CommunicationCampaignStatus Status,
-	CommunicationChannelType Channel, bool IsSynthetic);
+	CommunicationChannelType Channel, bool IsSynthetic)
+{
+	public DateTimeOffset? ExpiresAt { get; init; }
+}
 
 public interface IAcademicNotificationTemplateTestSendAppService : IApplicationService
 {

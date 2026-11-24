@@ -31,7 +31,7 @@ public sealed partial class AcademicNotificationOperationAccess(AcademicNotifica
 			?? AcademicNotificationHistoryRows.Utc(AuditCreatedAt)).ToUniversalTime();
 	}
 	internal sealed record HistoricalIntent(Guid Id, Guid OperationId, string EventKey, string RuntimeJson,
-		NotificationIntentState State, string? ReasonCode, Guid? ActorUserId);
+		NotificationIntentState State, string? ReasonCode, Guid? ActorUserId, DateTimeOffset? ExpiresAt);
 
 	internal sealed record AuthorizedOperation(Operation Record, NotificationEventDefinition Definition, IReadOnlyList<HistoricalIntent> Intents);
 
@@ -137,7 +137,8 @@ public sealed partial class AcademicNotificationOperationAccess(AcademicNotifica
 				!allIntents.Any(other => other.CampaignId == campaign.Id &&
 					(other.SourceId != sourceId || other.SourceType != sourceType || other.EventKey != intent.EventKey))
 			select new HistoricalIntent(intent.Id, campaign.Id, intent.EventKey,
-				includeRuntime ? intent.RuleConfigurationJson : string.Empty, intent.Status, intent.ErrorCode, intent.ActorUserId);
+				includeRuntime ? intent.RuleConfigurationJson : string.Empty, intent.Status, intent.ErrorCode, intent.ActorUserId,
+				intent.ExpiresAt);
 		return await queries.ToListAsync(query, cancellationToken);
 	}
 

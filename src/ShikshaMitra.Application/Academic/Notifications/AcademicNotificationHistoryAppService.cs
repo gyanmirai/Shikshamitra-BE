@@ -53,6 +53,9 @@ public class AcademicNotificationHistoryAppService(AcademicNotificationAccessSer
 		var authorized = await operations.RequireAsync(operationId, null, tenantId, callerScope, cancellationToken,
 			templateTestViewerId: actorId);
 		var operation = authorized.Record;
+		var isSynthetic = operation.SourceType == NotificationCampaignTypes.AcademicTemplateTestSource;
+		var testExpiresAt = isSynthetic ? authorized.Intents[0].ExpiresAt : null;
+		var testDeadlinePassed = testExpiresAt is { } expiry && expiry <= Clock.Now.ToUniversalTime();
 		var deliveries = await history.GetCountsAsync(tenantId, authorized.Intents.Select(x => x.Id).ToArray(), cancellationToken);
 		var excluded = await history.CountExcludedAsync(tenantId, [operationId], cancellationToken);
 		var outcomes = authorized.Intents.GroupBy(x => (x.State, ReasonCode: AcademicNotificationHistoryRows.SafeReason(x.ReasonCode)))
@@ -61,12 +64,17 @@ public class AcademicNotificationHistoryAppService(AcademicNotificationAccessSer
 		var canReviewApproval = operation.Status == CommunicationCampaignStatus.PendingApproval && operation.ApprovalRequired &&
 			manual.IsConfiguredApprover(tenantId, actorId) && await access.CanUseStaffActionsAsync() &&
 			await reviews.IsAssignedAsync(tenantId, operationId, actorId, cancellationToken);
+		var testExpiredBeforeDelivery = testDeadlinePassed &&
+			operation.Status == CommunicationCampaignStatus.Queued &&
+			deliveries is [{ Status: NotificationDispatchState.Pending, Count: 1 }];
 		return new(operation.Id, authorized.Definition.EventKey, operation.SourceType!, operation.SourceId!.Value,
 			operation.Status, operation.ApprovalRequired, operation.CreatedAt,
 			operation.PublishedAt, operation.ScheduledAt, operation.ApprovedAt, deliveries, outcomes, excluded)
 		{
 			CanReviewApproval = canReviewApproval, ApprovalRejected = operation.ApprovalRejected,
-			IsSynthetic = operation.SourceType == NotificationCampaignTypes.AcademicTemplateTestSource
+			IsSynthetic = isSynthetic,
+			TemplateTestExpiresAt = testExpiresAt,
+			TemplateTestExpiredBeforeDelivery = testExpiredBeforeDelivery
 		};
 	}
 

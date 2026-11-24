@@ -91,7 +91,7 @@ public class AcademicNotificationTemplateTestSendAppService(AcademicNotification
 		await dispatches.InsertAsync(dispatch, cancellationToken: cancellationToken);
 		await audit.WriteAsync(tenantId, actorId, "QueueTemplateTest", operation.Id, dispatch.Id,
 			revision.EventKey, "Queued", null, null, cancellationToken);
-		return new(operation.Id, operation.Status, channel, true);
+		return new(operation.Id, operation.Status, channel, true) { ExpiresAt = expiry };
 	}
 
 	private static string TestSubject(CommunicationChannelType channel, string subject)

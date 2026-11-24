@@ -28,6 +28,24 @@ namespace ShikshaMitra.HR.Reports;
 
 public class HrOperationalTableQuery_UnitTests(ITestOutputHelper output)
 {
+	[Fact]
+	public async Task Salary_Criteria_Can_Use_Deductions_Added_By_The_Preview()
+	{
+		var source = new HrTableExportSources(null!);
+		var request = Request("hr-salary-documents", "netPay");
+		request.Query = JsonSerializer.SerializeToElement(new { dataSource = "payroll_statement", columns = new[] { "netPay" } });
+		(await source.OperationalColumnsAsync(request)).ShouldHaveSingleItem().Id.ShouldBe("netPay");
+		request.Query = JsonSerializer.SerializeToElement(new {
+			dataSource = "payroll_statement", columns = new[] { "netPay" },
+			criteria = new {
+				filters = new[] { new { column = "pf", type = "greaterThan", value = 0 } },
+				sorts = new[] { new { column = "pt", direction = "desc" } }
+			}
+		});
+		var columns = await source.OperationalColumnsAsync(request);
+		columns.ConvertAll(column => column.Id).ShouldBe(["netPay", "pf", "pt"]);
+	}
+
 	[Theory]
 	[InlineData("{\"statusCode\":0,\"status\":\"Absent\"}", "Present")]
 	[InlineData("{\"statusCode\":1,\"status\":\"Present\"}", "Absent")]

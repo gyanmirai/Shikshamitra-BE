@@ -14,6 +14,8 @@ public sealed class AcademicNotificationTemplateTestSendInput
 	public required Guid RevisionId { get; init; }
 	[Required, StringLength(40)]
 	public required string ConcurrencyStamp { get; init; }
+	[JsonPropertyName("webPushSubscriptionId")]
+	public Guid? WebPushSubscriptionId { get; init; }
 }
 
 public sealed record AcademicNotificationTemplateTestSendDto(Guid OperationId, CommunicationCampaignStatus Status,

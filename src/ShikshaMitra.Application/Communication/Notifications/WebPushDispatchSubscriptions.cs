@@ -17,12 +17,13 @@ internal sealed record WebPushDispatchTargets(bool IsConfigured, ILookup<Guid, G
 public sealed class WebPushDispatchSubscriptions(ICurrentTenant tenant, IRepository<WebPushSubscription, Guid> subscriptions,
 	IAsyncQueryableExecuter queries, WebPushKeyConfiguration configuration) : ITransientDependency
 {
-	internal async Task<WebPushDispatchTargets> LoadAsync(Guid[] users, CancellationToken cancellationToken)
+	internal async Task<WebPushDispatchTargets> LoadAsync(Guid[] users, CancellationToken cancellationToken, Guid? subscriptionId = null)
 	{
 		var keys = users.Length > 0 ? configuration.Read() : null;
 		if (keys == null) return new(false, Array.Empty<Guid>().ToLookup(x => x));
-		var rows = await queries.ToListAsync((await ActiveAsync(keys.Version))
-			.Where(x => Enumerable.Contains(users, x.UserId)).Select(x => new { x.UserId, x.Id }), cancellationToken);
+		var eligible = (await ActiveAsync(keys.Version)).Where(x => Enumerable.Contains(users, x.UserId));
+		if (subscriptionId is Guid selected) eligible = eligible.Where(x => x.Id == selected);
+		var rows = await queries.ToListAsync(eligible.Select(x => new { x.UserId, x.Id }), cancellationToken);
 		return new(true, rows.ToLookup(x => x.UserId, x => x.Id));
 	}
 

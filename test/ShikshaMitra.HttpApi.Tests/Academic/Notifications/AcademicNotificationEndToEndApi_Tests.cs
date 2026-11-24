@@ -291,7 +291,8 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 		}
 	}
 
-	private static async Task SeedHomeworkAsync(DeliveryApiFactory fixture, IServiceProvider services, SchoolSample sample)
+	private static async Task SeedHomeworkAsync(DeliveryApiFactory fixture, IServiceProvider services, SchoolSample sample,
+		bool useDemoAccounts = false)
 	{
 		var division = await services.GetRequiredService<DivisionManager>().CreateAsync(fixture.SeededStandardId, "Delivery test division", 30);
 		sample.Division = (await InsertAsync(services, division)).Id;
@@ -304,8 +305,8 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 		homework.PublishAll();
 		await InsertAsync(services, homework);
 		var learner = await CreateLearnerAsync(sample.Learner, "River", PrimaryEmail, PrimaryPhone);
-		await CreateAccountAsync(learner.Id, sample.Primary, "guardian", "mother", PrimaryEmail);
-		await CreateAccountAsync(learner.Id, sample.LearnerAccount, "student", "self", LearnerEmail);
+		await CreateAccountAsync(learner.Id, sample.Primary, "guardian", "mother", PrimaryEmail, useDemoAccounts ? "parent-demo" : null);
+		await CreateAccountAsync(learner.Id, sample.LearnerAccount, "student", "self", LearnerEmail, useDemoAccounts ? "student-demo" : null);
 		var sibling = await CreateLearnerAsync(sample.OtherLearner, "Unselected", "unselected@example.invalid", null);
 		await CreateAccountAsync(sibling.Id, sample.UnrelatedGuardian, "guardian", "mother", "unselected@example.invalid");
 		await InsertAsync(services, new ChannelProviderSetting(Guid.NewGuid(), School)
@@ -335,9 +336,9 @@ public sealed partial class AcademicNotificationEndToEndApi_Tests
 			return student;
 		}
 
-		async Task CreateAccountAsync(Guid studentId, Guid userId, string type, string relationship, string email)
+		async Task CreateAccountAsync(Guid studentId, Guid userId, string type, string relationship, string email, string? userName = null)
 		{
-			var user = new IdentityUser(userId, $"delivery-{userId:N}", email, School);
+			var user = new IdentityUser(userId, userName ?? $"delivery-{userId:N}", email, School);
 			user.SetEmailConfirmed(true);
 			await services.GetRequiredService<IIdentityUserRepository>().InsertAsync(user, autoSave: true);
 			await InsertAsync(services, new StudentPortalAccountLink(Guid.NewGuid(), School, studentId, userId, type, relationship, Actor));

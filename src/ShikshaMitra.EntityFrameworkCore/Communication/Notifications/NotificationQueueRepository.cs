@@ -24,12 +24,12 @@ public sealed class NotificationQueueRepository(IDbContextProvider<ShikshaMitraD
 	}
 
 	public Task<IReadOnlyList<NotificationQueueClaim>> ClaimIntentsAsync(DateTimeOffset now, int batchSize,
-		TimeSpan leaseDuration, CancellationToken cancellationToken) =>
-		ClaimAsync(NotificationQueueKind.Intent, now, batchSize, leaseDuration, cancellationToken);
+		TimeSpan leaseDuration, CancellationToken cancellationToken, StagingInAppNotificationPilot? pilot = null) =>
+		ClaimAsync(NotificationQueueKind.Intent, now, batchSize, leaseDuration, cancellationToken, pilot: pilot);
 
 	public Task<IReadOnlyList<NotificationQueueClaim>> ClaimDispatchesAsync(DateTimeOffset now, int batchSize,
 		TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null,
-		IReadOnlyList<CommunicationChannelType>? pausedChannels = null, NotificationTemplateTestPilot? pilot = null) =>
+		IReadOnlyList<CommunicationChannelType>? pausedChannels = null, NotificationDispatchPilot? pilot = null) =>
 		ClaimAsync(NotificationQueueKind.Dispatch, now, batchSize, leaseDuration, cancellationToken, maxActivePerChannel, pausedChannels, pilot);
 
 	public async Task<bool> RenewDispatchAsync(Guid dispatchId, Guid leaseId, DateTimeOffset now, TimeSpan leaseDuration,
@@ -43,7 +43,7 @@ public sealed class NotificationQueueRepository(IDbContextProvider<ShikshaMitraD
 
 	private async Task<IReadOnlyList<NotificationQueueClaim>> ClaimAsync(NotificationQueueKind kind,
 		DateTimeOffset now, int batchSize, TimeSpan leaseDuration, CancellationToken cancellationToken, int? maxActivePerChannel = null,
-		IReadOnlyList<CommunicationChannelType>? pausedChannels = null, NotificationTemplateTestPilot? pilot = null)
+		IReadOnlyList<CommunicationChannelType>? pausedChannels = null, NotificationDispatchPilot? pilot = null)
 	{
 		var tenantId = RequireTenant();
 		var context = await contexts.GetDbContextAsync();

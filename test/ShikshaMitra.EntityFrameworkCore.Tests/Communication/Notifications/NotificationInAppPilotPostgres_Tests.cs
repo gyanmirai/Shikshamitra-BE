@@ -96,7 +96,58 @@ public class NotificationInAppPilotPostgres_Tests(NotificationPostgresFixture fi
 			(x.TenantId == school || x.TenantId == otherSchool) && x.AttemptNumber != 0)).ShouldBe(1);
 	}
 
-	private static Guid Seed(NotificationPersistenceTestDbContext context, NotificationTemplateTestPilot pilot, DateTimeOffset now,
+	[NotificationPostgresFact]
+	public async Task A_regular_pilot_claims_only_its_single_regular_intent_and_in_app_dispatch()
+	{
+		var pilot = new StagingInAppNotificationPilot(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+		var otherOperation = pilot with { OperationId = Guid.NewGuid() };
+		var templateTest = pilot with { OperationId = Guid.NewGuid() };
+		var withSiblings = pilot with { OperationId = Guid.NewGuid() };
+		var email = pilot with { OperationId = Guid.NewGuid() };
+		var now = DateTimeOffset.UtcNow;
+		Guid selectedDispatch;
+		await using (var seed = fixture.CreateContext())
+		{
+			selectedDispatch = Seed(seed, pilot, now, synthetic: false);
+			Seed(seed, pilot with { TenantId = Guid.NewGuid() }, now, synthetic: false);
+			Seed(seed, otherOperation, now, synthetic: false);
+			Seed(seed, templateTest, now);
+			Seed(seed, withSiblings, now, synthetic: false);
+			Seed(seed, withSiblings, now, synthetic: false);
+			Seed(seed, email, now, CommunicationChannelType.Email, synthetic: false);
+			await seed.SaveChangesAsync();
+		}
+
+		await using var connection = fixture.CreateConnection();
+		await connection.OpenAsync();
+		Task<System.Collections.Generic.IReadOnlyList<NotificationQueueClaim>> ClaimAsync(NotificationQueueKind kind,
+			StagingInAppNotificationPilot selection, DateTimeOffset? claimTime = null) =>
+			NotificationPostgresQueueClaims.ClaimAsync(connection, null, pilot.TenantId,
+				kind, claimTime ?? now, 1, TimeSpan.FromMinutes(5), default, pilot: selection);
+
+		var wrongSource = pilot with { SourceId = Guid.NewGuid() };
+		foreach (var blocked in new[] { templateTest, withSiblings, wrongSource })
+		{
+			(await ClaimAsync(NotificationQueueKind.Intent, blocked)).ShouldBeEmpty();
+			(await ClaimAsync(NotificationQueueKind.Dispatch, blocked)).ShouldBeEmpty();
+		}
+		(await ClaimAsync(NotificationQueueKind.Dispatch, email)).ShouldBeEmpty();
+		(await ClaimAsync(NotificationQueueKind.Dispatch, pilot with { RecipientUserId = Guid.NewGuid() })).ShouldBeEmpty();
+		var intent = (await ClaimAsync(NotificationQueueKind.Intent, pilot)).ShouldHaveSingleItem();
+		(await ClaimAsync(NotificationQueueKind.Intent, pilot)).ShouldBeEmpty();
+		var reclaimed = (await ClaimAsync(NotificationQueueKind.Intent, pilot, now.AddMinutes(6))).ShouldHaveSingleItem();
+		reclaimed.Id.ShouldBe(intent.Id);
+		reclaimed.LeaseId.ShouldNotBe(intent.LeaseId);
+		(await ClaimAsync(NotificationQueueKind.Dispatch, pilot)).ShouldHaveSingleItem().Id.ShouldBe(selectedDispatch);
+		(await ClaimAsync(NotificationQueueKind.Dispatch, pilot)).ShouldBeEmpty();
+
+		await using var verify = fixture.CreateContext();
+		var selected = await verify.Set<NotificationDispatch>().SingleAsync(x => x.Id == selectedDispatch);
+		selected.IntentId.ShouldBe(intent.Id);
+		(await verify.Set<NotificationDispatch>().CountAsync(x => x.TenantId == pilot.TenantId && x.AttemptNumber != 0)).ShouldBe(1);
+	}
+
+	private static Guid Seed(NotificationPersistenceTestDbContext context, NotificationDispatchPilot pilot, DateTimeOffset now,
 		CommunicationChannelType channel = CommunicationChannelType.InApp, bool synthetic = true, Guid? providerSettingId = null)
 	{
 		const string eventKey = "Academic.Homework.Published";
@@ -104,11 +155,12 @@ public class NotificationInAppPilotPostgres_Tests(NotificationPostgresFixture fi
 		var revision = new CommunicationTemplateRevision(Guid.NewGuid(), pilot.TenantId, header.Id, 1,
 			eventKey, "PrimaryGuardian", channel, "en", "Homework", "Body", 1);
 		var expires = now.AddMinutes(10);
+		var sourceId = pilot is StagingInAppNotificationPilot staging ? staging.SourceId : header.Id;
 		var intent = synthetic
-			? NotificationIntent.CreateTemplateTest(Guid.NewGuid(), pilot.TenantId, eventKey, header.Id, "hash", "[]", "[]",
+			? NotificationIntent.CreateTemplateTest(Guid.NewGuid(), pilot.TenantId, eventKey, sourceId, "hash", "[]", "[]",
 				now, expires, pilot.RecipientUserId, pilot.OperationId)
 			: NotificationIntent.CreateReviewedManual(Guid.NewGuid(), pilot.TenantId, null, 0, eventKey, "Academic.Homework",
-				header.Id, "hash", Guid.NewGuid().ToString("N"), now, "[]", "[]", expires, pilot.RecipientUserId,
+				sourceId, "hash", Guid.NewGuid().ToString("N"), now, "[]", "[]", expires, pilot.RecipientUserId,
 				pilot.OperationId, """{"schemaVersion":1}""");
 		var snapshot = new CommunicationRecipientSnapshot(Guid.NewGuid(), pilot.TenantId) {
 			CampaignId = pilot.OperationId, UserId = pilot.RecipientUserId, RecipientId = pilot.RecipientUserId,

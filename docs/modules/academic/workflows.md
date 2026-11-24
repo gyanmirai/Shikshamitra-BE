@@ -100,7 +100,23 @@ For Email, confirm the school SMTP provider and the designated account's confirm
 
 After queueing the selected external test, arm the matching operation. Check the provider's acceptance in Delivery History and verify actual receipt in the designated mailbox or browser. Remove the four External Pilot settings afterward. Keep the shared worker paused. Remove temporary Web Push configuration at the end of the pilot if it was enabled only for the test.
 
-The worker claims only the selected operation's single, unexpired, first-attempt dispatch with matching school, channel and test recipient evidence. The regular dispatcher rechecks eligibility before sending. Failed or deferred pilot sends are settled without an automatic retry. If a lease expires after provider I/O started, history shows Acceptance unknown. An unclaimed expired test is skipped. A partial configuration, both pilot sections, or any pilot configured with the shared switch enabled holds all work. Pilot turns skip the general queue, reminder scans and provider receipt processing.
+The worker claims only the selected operation's single, unexpired, first-attempt dispatch with matching school, channel and test recipient evidence. The regular dispatcher rechecks eligibility before sending. Failed or deferred template test sends are settled without an automatic retry. If a lease expires after provider I/O started, history shows Acceptance unknown. An unclaimed expired template test is skipped. A partial configuration, conflicting pilot sections, or any pilot configured with the shared switch enabled holds all work. Pilot turns skip the general queue, reminder scans and provider receipt processing.
+
+## Verify a regular In-App delivery on staging
+
+1. Use a DDVS test Academic record and one linked demo account. Queue a regular reviewed In-App send or use an Academic action that creates an automatic operation. Confirm the operation ID and source record ID in the authorized delivery summary. The notification must be due and use a published In-App template.
+2. Keep `Notifications__QueueWorker__Enabled` set to `false`. Remove any template-test pilot settings before applying these staging backend settings together.
+
+   | App setting | Value |
+   | --- | --- |
+   | `Notifications__QueueWorker__StagingInAppPilot__TenantId` | DDVS tenant GUID |
+   | `Notifications__QueueWorker__StagingInAppPilot__OperationId` | Selected regular operation GUID |
+   | `Notifications__QueueWorker__StagingInAppPilot__SourceId` | Academic source record GUID for that operation |
+   | `Notifications__QueueWorker__StagingInAppPilot__RecipientUserId` | Linked DDVS demo user GUID |
+
+3. Check that Delivery History shows Delivered and that the intended demo user's notification bell lists one matching unread message. Remove all four temporary settings after checking the result. Each Azure settings save can restart the staging API.
+
+The pilot runs on the Staging host and honors the DDVS school and In-App pauses. It requires an active `student-demo`, `parent-demo`, `teacher-demo-1`, or `teacher-demo-2` account. It uses the normal Academic planner and sender for one regular intent with one In-App dispatch. A different recipient, another dispatch, or conflicting pilot settings hold delivery. The shared worker remains paused while the pilot is configured.
 
 ## Monitor Academic notification delivery
 

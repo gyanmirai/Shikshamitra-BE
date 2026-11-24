@@ -235,6 +235,7 @@ public partial class AcademicNotificationManualApi_Tests
 		{
 			await SeedApproverAsync();
 			var draft = await CreateTestSendDraftAsync(CommunicationChannelType.WebPush);
+			Permissions(Client, $"{View},{Add}");
 			await WithDatabaseAsync((db, _) =>
 			{
 				db.AddRange(Subscription(actorDevice, actorId, version), Subscription(oldDevice, recipientId, "old-version"));
@@ -249,6 +250,7 @@ public partial class AcademicNotificationManualApi_Tests
 				return Task.CompletedTask;
 			});
 			var legacy = await ReadQueuedAsync(await LegacyRequestAsync());
+			draft = await GetAndReadAsync<NotificationTemplateDto>($"{BasePath}/templates/{draft.TemplateId}");
 			await WithDatabaseAsync((db, _) =>
 			{
 				db.Add(Subscription(otherDevice, recipientId, version));
@@ -257,6 +259,7 @@ public partial class AcademicNotificationManualApi_Tests
 			await ExpectRejectionAsync(await LegacyRequestAsync(), "WebPushTestDeviceSelectionRequired");
 			await ExpectRejectionAsync(await DeviceRequestAsync(Guid.Empty), "WebPushSubscriptionUnavailable");
 			var selected = await ReadQueuedAsync(await DeviceRequestAsync(chosenDevice));
+			draft = await GetAndReadAsync<NotificationTemplateDto>($"{BasePath}/templates/{draft.TemplateId}");
 
 			await WithDatabaseAsync(async (db, services) =>
 			{

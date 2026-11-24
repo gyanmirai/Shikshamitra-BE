@@ -32,7 +32,11 @@ public class HrOperationalTableQuery_UnitTests(ITestOutputHelper output)
 	public async Task Salary_Criteria_Can_Use_Deductions_Added_By_The_Preview()
 	{
 		var source = new HrTableExportSources(null!);
-		var request = Request("hr-salary-documents", "netPay");
+		var request = new HrTableExportRequest
+		{
+			Table = "hr-salary-documents",
+			Columns = [new() { Id = "netPay", Label = "Net pay" }]
+		};
 		request.Query = JsonSerializer.SerializeToElement(new { dataSource = "payroll_statement", columns = new[] { "netPay" } });
 		(await source.OperationalColumnsAsync(request)).ShouldHaveSingleItem().Id.ShouldBe("netPay");
 		request.Query = JsonSerializer.SerializeToElement(new {

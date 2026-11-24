@@ -8,6 +8,43 @@ namespace ShikshaMitra.Communication.Notifications;
 
 public class NotificationQueuePilotConfiguration_Tests
 {
+	[Theory]
+	[InlineData(true, "false", true, true, false, true)]
+	[InlineData(false, "false", true, true, false, false)]
+	[InlineData(true, "true", true, true, false, false)]
+	[InlineData(true, null, true, true, false, false)]
+	[InlineData(true, "false", false, true, false, false)]
+	[InlineData(true, "false", true, false, false, false)]
+	[InlineData(true, "false", true, true, true, false)]
+	public void A_regular_in_app_pilot_requires_staging_ddvs_complete_scope_and_an_explicit_shared_pause(
+		bool staging, string? enabled, bool completeScope, bool ddvs, bool conflictingTemplatePilot, bool expected)
+	{
+		var tenant = ddvs ? Guid.Parse("11111111-1111-1111-1111-111111111111") : Guid.NewGuid();
+		var operation = Guid.NewGuid();
+		var source = Guid.NewGuid();
+		var recipient = Guid.NewGuid();
+		const string prefix = "Notifications:QueueWorker:StagingInAppPilot:";
+		var settings = new Dictionary<string, string?> {
+			["Notifications:QueueWorker:Enabled"] = enabled,
+			[prefix + "TenantId"] = tenant.ToString(),
+			[prefix + "OperationId"] = operation.ToString(),
+			[prefix + "SourceId"] = completeScope ? source.ToString() : null,
+			[prefix + "RecipientUserId"] = recipient.ToString()
+		};
+		if (conflictingTemplatePilot)
+		{
+			settings["Notifications:QueueWorker:InAppPilot:TenantId"] = tenant.ToString();
+			settings["Notifications:QueueWorker:InAppPilot:OperationId"] = operation.ToString();
+			settings["Notifications:QueueWorker:InAppPilot:RecipientUserId"] = recipient.ToString();
+		}
+		var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+
+		NotificationQueueWorkerConfiguration.ReadStagingInAppPilot(configuration, staging).ShouldBe(expected
+			? new StagingInAppNotificationPilot(tenant, operation, recipient, source) : null);
+		NotificationQueueWorkerConfiguration.ReadTemplateTestPilot(configuration).ShouldBeNull();
+		NotificationQueueWorkerConfiguration.IsEnabled(configuration).ShouldBeFalse();
+	}
+
 	[Fact]
 	public void An_external_test_pilot_keeps_the_shared_worker_paused_even_with_conflicting_settings()
 	{

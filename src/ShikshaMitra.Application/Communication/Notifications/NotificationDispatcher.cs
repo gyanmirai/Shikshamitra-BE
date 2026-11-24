@@ -24,7 +24,7 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 {
 	private sealed record PreparedSend(INotificationChannelSender Sender, NotificationChannelSendRequest Request, DateTimeOffset? ExpiresAt);
 
-	public async Task DispatchAsync(Guid dispatchId, Guid leaseToken, CancellationToken cancellationToken, NotificationTemplateTestPilot? pilot = null)
+	public async Task DispatchAsync(Guid dispatchId, Guid leaseToken, CancellationToken cancellationToken, NotificationDispatchPilot? pilot = null)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		if (tenant.Id is not Guid tenantId || tenantId == Guid.Empty) throw new BusinessException(NotificationErrorCodes.TenantRequired);
@@ -47,7 +47,7 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 	}
 
 	private async Task<PreparedSend?> PrepareAsync(Guid tenantId, Guid dispatchId, Guid lease, CancellationToken cancellationToken,
-		NotificationTemplateTestPilot? pilot)
+		NotificationDispatchPilot? pilot)
 	{
 		using var unit = units.Begin(requiresNew: true, isTransactional: true);
 		var row = await FindAsync(tenantId, dispatchId, cancellationToken);
@@ -64,10 +64,7 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 		else
 		{
 			var intent = await FindCurrentIntentAsync(tenantId, row, cancellationToken);
-			decision = intent == null || (pilot != null &&
-				(!pilot.HasSupportedChannel || pilot.TenantId != tenantId || row.CampaignId != pilot.OperationId ||
-					row.Channel != pilot.Channel || row.AttemptNumber != 1 ||
-					intent.SourceType != NotificationCampaignTypes.AcademicTemplateTestSource))
+			decision = intent == null || !MatchesPilot(pilot, tenantId, intent, row)
 				? new(null, null, null, "NotificationOperationUnavailable")
 				: await readiness.CheckAsync(intent, row, now, cancellationToken);
 		}
@@ -76,13 +73,14 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 		PreparedSend? prepared = null;
 		var error = decision.ExclusionCode;
 		if (error == null && pilot != null &&
-			(decision.Payload?.Recipient is not { UserId: { } recipientId, StudentId: null } || recipientId != pilot.RecipientUserId))
+			(decision.Payload?.Recipient.UserId != pilot.RecipientUserId ||
+				pilot is NotificationTemplateTestPilot && decision.Payload?.Recipient.StudentId.HasValue == true))
 			error = NotificationErrorCodes.RecipientIneligible;
 		if (error == null && (decision.ExpiresAt <= now || row.ExpiresAt <= now)) error = "SourceExpired";
 		if (error != null) row.SkipBeforeIo(lease, now, error);
 		else if (decision.DueAt > now)
 		{
-			if (pilot == null) row.DeferBeforeIo(lease, now, decision.DueAt.Value);
+			if (pilot is not NotificationTemplateTestPilot) row.DeferBeforeIo(lease, now, decision.DueAt.Value);
 			else row.SkipBeforeIo(lease, now, "QuietHours");
 		}
 		else
@@ -105,7 +103,7 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 						TemplateRevisionId: row.TemplateRevisionId, Recipient: payload.Recipient, WhatsAppVariables: payload.WhatsAppVariables,
 						ExpiresAt: decision.ExpiresAt), decision.ExpiresAt);
 				}
-				else if (pilot == null && reservation.RetryAt is DateTimeOffset retryAt && retryAt > now &&
+				else if (pilot is not NotificationTemplateTestPilot && reservation.RetryAt is DateTimeOffset retryAt && retryAt > now &&
 					!(decision.ExpiresAt <= retryAt) && !(row.ExpiresAt <= retryAt))
 					row.DeferBeforeIo(lease, now, retryAt, NotificationErrorCodes.ProviderQuotaExhausted);
 				else
@@ -116,6 +114,18 @@ public sealed class NotificationDispatcher(ICurrentTenant tenant, IUnitOfWorkMan
 		await unit.CompleteAsync(cancellationToken);
 		return prepared;
 	}
+
+	private static bool MatchesPilot(NotificationDispatchPilot? pilot, Guid tenantId, NotificationIntent intent, NotificationDispatch row) =>
+		pilot switch
+		{
+			null => true,
+			_ when pilot.TenantId != tenantId || row.CampaignId != pilot.OperationId || row.AttemptNumber != 1 => false,
+			NotificationTemplateTestPilot test => test.HasSupportedChannel && row.Channel == test.Channel &&
+				intent.SourceType == NotificationCampaignTypes.AcademicTemplateTestSource,
+			StagingInAppNotificationPilot staging => row.Channel == CommunicationChannelType.InApp &&
+				intent.SourceId == staging.SourceId && intent.SourceType != NotificationCampaignTypes.AcademicTemplateTestSource,
+			_ => false
+		};
 
 	private async Task<NotificationIntent?> FindCurrentIntentAsync(Guid tenantId, NotificationDispatch dispatch, CancellationToken cancellationToken)
 	{

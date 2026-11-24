@@ -16,7 +16,7 @@ public sealed class NotificationDispatchHeartbeat(IServiceScopeFactory scopes, I
 	internal static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(5);
 
 	internal async Task RunAsync(NotificationQueueClaim claim, INotificationDispatcher dispatcher, CancellationToken cancellationToken,
-		NotificationTemplateTestPilot? pilot = null)
+		NotificationDispatchPilot? pilot = null)
 	{
 		using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 		var heartbeat = RenewUntilFinishedAsync(claim, stop.Token);

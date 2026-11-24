@@ -307,7 +307,7 @@ An effective change to an active substitution can queue `Academic.Substitution.C
 The first cancellation can queue `Academic.Substitution.Cancelled` before the duty ends. The configured audience is limited to staff whose earlier duty notice has recorded provider acceptance and whose role or prior duty still qualifies. A pending or unconfirmed notice supplies no cancellation eligibility. An informed former substitute remains eligible if the removal notice has yet to be accepted. A cancellation invalidates the pending duty notices and acknowledgement reminders.
 
 Template test-send requires `revisionId` and `concurrencyStamp`.
-It renders sample values, queues one delivery, expires after ten minutes and returns 202 with `isSynthetic: true`.
+It renders sample values and returns 202 with `isSynthetic: true` and `expiresAt`. The queued delivery has ten minutes to start.
 In-app, email and Web Push use the authenticated account by default.
 To designate a test account, set `Notifications:Academic:Tenants:<tenantIdN>:TemplateTest:<channel>:UserId`.
 WhatsApp requires a designated account with a verified number, current consent and a published revision with an approved provider binding.
@@ -324,7 +324,7 @@ The queued delivery rechecks the stored subscription and skips the test if that 
 
 `GET /api/communication/notifications/providers/whatsapp/templates/context?templateId={templateId}&revisionId={revisionId}` reads the school's resolved WhatsApp provider setting ID and the binding for the exact published revision. Read requires Provider Settings View and the template's Academic View permission and scope. `bindingMatchesProvider` reflects whether the binding was created for the currently configured provider account. Linking, submitting and syncing use the existing Provider Settings Add and template write checks. The context response omits provider account configuration and credentials.
 
-Template test status and history are available to the staff member who queued the test while they have Notification View and access to the template. Read the operation using the returned ID, then pass that ID and its event, template ID and `Academic.NotificationTemplateTest` source type to history. These operations expose delivery evidence without recipient destinations or message content.
+Template test status and history are available to the staff member who queued the test while they have Notification View and access to the template. Read the operation using the returned ID, then pass that ID and its event, template ID and `Academic.NotificationTemplateTest` source type to history. These operations expose delivery evidence without recipient destinations or message content. For a synthetic test, the operation summary exposes `templateTestExpiresAt`. `templateTestExpiredBeforeDelivery` indicates that the test is still recorded as queued after its delivery deadline.
 
 History takes `eventKey`, `sourceType`, `sourceId`, optional `operationId` and `state`, and standard `skipCount` and `maxResultCount` pagination. Staff see rows for their authorized source scopes. Whole-operation status and exclusions recorded before dispatch require access to every scope represented by that operation.
 

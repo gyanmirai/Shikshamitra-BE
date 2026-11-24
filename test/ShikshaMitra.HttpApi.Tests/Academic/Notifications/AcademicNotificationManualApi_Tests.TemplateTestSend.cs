@@ -22,6 +22,33 @@ namespace ShikshaMitra.Academic.Notifications;
 
 public partial class AcademicNotificationManualApi_Tests
 {
+	[Fact]
+	public async Task Template_test_history_reports_expiry_while_the_dispatch_is_still_queued()
+	{
+		var draft = await CreateTestSendDraftAsync();
+		using var response = await Client.PostAsJsonAsync(TestSendRoute(draft), new
+		{
+			revisionId = draft.RevisionId, concurrencyStamp = draft.ConcurrencyStamp
+		});
+		response.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+		var queued = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		var operationId = queued.GetProperty("operationId").GetGuid();
+		var expiry = DateTimeOffset.UtcNow.AddMinutes(-1);
+		await WithDatabaseAsync(async (db, _) =>
+		{
+			var dispatch = await db.NotificationDispatches.SingleAsync(x => x.CampaignId == operationId);
+			var intent = await db.NotificationIntents.SingleAsync(x => x.Id == dispatch.IntentId);
+			db.Entry(intent).Property(x => x.ExpiresAt).CurrentValue = expiry;
+			db.Entry(dispatch).Property(x => x.ExpiresAt).CurrentValue = expiry;
+		});
+
+		Permissions(Client, View);
+		var operation = await GetAndReadAsync<JsonElement>($"{BasePath}/operations/{operationId}");
+		operation.GetProperty("templateTestExpiredBeforeDelivery").GetBoolean().ShouldBeTrue();
+		operation.GetProperty("deliveries").EnumerateArray().ShouldHaveSingleItem()
+			.GetProperty("status").GetInt32().ShouldBe((int)NotificationDispatchState.Pending);
+	}
+
 	[Theory]
 	[InlineData(false, false)]
 	[InlineData(true, false)]
@@ -43,12 +70,15 @@ public partial class AcademicNotificationManualApi_Tests
 		var responseBody = await response.Content.ReadAsStringAsync();
 		responseBody.ShouldNotContain("Example recipient");
 		responseBody.ShouldNotContain(TestAuthHandler.TestUserId);
+		var expiresAt = result.GetProperty("expiresAt").GetDateTimeOffset();
 		var operationRoute = $"{BasePath}/operations/{operationId}";
 		var historyRoute = $"{BasePath}/history?sourceType={NotificationCampaignTypes.AcademicTemplateTestSource}" +
 			$"&eventKey={draft.EventKey}&sourceId={draft.TemplateId}";
 		Permissions(Client, View);
 		var initialStatus = await GetAndReadAsync<JsonElement>(operationRoute);
 		initialStatus.GetProperty("isSynthetic").GetBoolean().ShouldBeTrue();
+		initialStatus.GetProperty("templateTestExpiresAt").GetDateTimeOffset().ShouldBe(expiresAt);
+		initialStatus.GetProperty("templateTestExpiredBeforeDelivery").GetBoolean().ShouldBeFalse();
 		var initialHistory = await GetAndReadAsync<PagedResultDto<AcademicNotificationHistoryItemDto>>($"{historyRoute}&operationId={operationId}");
 		initialHistory.Items.ShouldHaveSingleItem().Status.ShouldBe(NotificationDispatchState.Pending);
 		using var missingOperation = await Client.GetAsync(historyRoute);

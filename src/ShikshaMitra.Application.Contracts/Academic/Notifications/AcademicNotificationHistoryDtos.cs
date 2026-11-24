@@ -38,6 +38,8 @@ public sealed record AcademicNotificationOperationStatusDto(Guid OperationId, st
 	public bool CanReviewApproval { get; init; }
 	public bool ApprovalRejected { get; init; }
 	public bool IsSynthetic { get; init; }
+	public DateTimeOffset? TemplateTestExpiresAt { get; init; }
+	public bool TemplateTestExpiredBeforeDelivery { get; init; }
 }
 
 public sealed record AcademicNotificationPendingApprovalDto(Guid OperationId, string EventKey, DateTimeOffset CreatedAt,

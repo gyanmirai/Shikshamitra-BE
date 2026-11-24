@@ -79,7 +79,7 @@ public partial class StudentFeeAssignmentApi_Tests
 		if (optionalHead.HasValue) updates.Add(new { lineId = draft.FeeHeads.Single(h => h.FeeHeadId == optionalHead).Id, amount = 7500m });
 		var patch = await Client.PatchAsJsonAsync($"/api/fee-structures/{draft.Id}", new FeeStructurePatchRequest {
 			RequestId = Guid.NewGuid(), ConcurrencyStamp = draft.ConcurrencyStamp,
-			Changes = JsonSerializer.SerializeToElement(new { feeHeads = new { update = updates } }, JsonOptions) }, JsonOptions);
+			Changes = JsonSerializer.SerializeToElement(new { name = $"Correction {draft.Id:N}", feeHeads = new { update = updates } }, JsonOptions) }, JsonOptions);
 		patch.StatusCode.ShouldBe(HttpStatusCode.OK, await patch.Content.ReadAsStringAsync());
 		var changed = (await patch.Content.ReadFromJsonAsync<FeeStructureCreateResponse>(JsonOptions)).ShouldNotBeNull();
 		return await PostAndReadAsync<FeeStructureCreateResponse>($"/api/fee-structures/{draft.Id}/publish", new { concurrencyStamp = changed.ConcurrencyStamp });

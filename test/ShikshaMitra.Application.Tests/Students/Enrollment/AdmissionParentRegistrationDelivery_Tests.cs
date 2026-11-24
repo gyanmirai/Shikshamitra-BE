@@ -37,21 +37,25 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var sent = await staff.GetAsync(fixture.Application.Id);
 			sent.CanCopyLink.ShouldBeTrue();
 			sent.CanCreateLink.ShouldBeFalse();
-			var copy = new AdmissionParentCopyLinkInput { RequestId = sent.Request!.Id, ConcurrencyStamp = sent.ConcurrencyStamp, IdempotencyKey = "copy-sent" };
+			var copy = new AdmissionParentCopyLinkInput { RequestId = sent.Request!.Id, ConcurrencyStamp = sent.ConcurrencyStamp, IdempotencyKey = "copy-sent", ValidityDays = 30 };
 			var link = await staff.CopyLinkAsync(fixture.Application.Id, copy);
 			link.ShouldBe("https://school.example.test/admission-registration#token=" + fixture.Token);
 			(await staff.CopyLinkAsync(fixture.Application.Id, copy)).ShouldBe(link);
-			(await parent.GetAsync(fixture.Token)).CanEdit.ShouldBeTrue();
+			var current = await parent.GetAsync(fixture.Token);
+			current.CanEdit.ShouldBeTrue();
+			current.ExpiresAt.ShouldBe(sent.Request.ExpiresAt);
 			await staff.RevokeAsync(fixture.Application.Id, new() { ConcurrencyStamp = sent.ConcurrencyStamp, IdempotencyKey = "revoke-before-manual-share" });
 			await Should.ThrowAsync<BusinessException>(() => staff.CopyLinkAsync(fixture.Application.Id, copy));
 
 			var fresh = await staff.GetAsync(fixture.Application.Id);
 			fresh.CanCreateLink.ShouldBeTrue();
-			var issue = new AdmissionParentCopyLinkInput { RecipientRelationship = "mother", ConcurrencyStamp = fresh.ConcurrencyStamp, IdempotencyKey = "manual-share" };
+			var issue = new AdmissionParentCopyLinkInput { RecipientRelationship = "mother", ConcurrencyStamp = fresh.ConcurrencyStamp, IdempotencyKey = "manual-share", ValidityDays = 14 };
+			var issuedAt = DateTime.UtcNow;
 			var manualLink = await staff.CopyLinkAsync(fixture.Application.Id, issue);
 			(await staff.CopyLinkAsync(fixture.Application.Id, issue)).ShouldBe(manualLink);
 			var manual = (await staff.GetAsync(fixture.Application.Id)).Request!;
 			manual.DeliveryStatus.ShouldBe("NotSent");
+			manual.ExpiresAt.ShouldBeInRange(issuedAt.AddDays(14), DateTime.UtcNow.AddDays(14));
 			var manualToken = await ParentTokenAsync(manual.Id);
 			manualLink.ShouldEndWith("#token=" + manualToken);
 			(await parent.GetAsync(manualToken)).CanEdit.ShouldBeTrue();

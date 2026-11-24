@@ -16,18 +16,19 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Registration_print_settings_survive_create_get_update_clone_and_new_version(string template) => RunCertificationScenarioAsync(async () =>
 	{
 		var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+		const string advanced = """
+			{"paper":{"orientation":"landscape"},"header":{"title":"Saved print title","layout":{"schoolName":{"x":12.5,"y":4,"width":60,"height":6},"photo":{"x":80,"y":10,"width":20,"height":90,"lockAspectRatio":true}}},"sections":{"DETAILS":{"columns":2}},"content":{"translations":{"en":{"declaration":"Saved declaration"}}}}
+			""";
 		var input = JsonSerializer.Deserialize<CreateUpdateAdmissionFormDto>("""
 			{"name":"Printable Registration","printSettings":{"layout":"spacious","paperSize":"A4","showSchoolHeader":false,"showPhoto":true,"showSignature":false}}
 			""", options)!;
 		input.PrintSettings!.Template = template;
-		input.PrintSettings.Advanced = JsonSerializer.Deserialize<AdmissionFormPrintAdvancedSettingsDto>("""
-			{"paper":{"orientation":"landscape"},"header":{"title":"Saved print title"},"sections":{"DETAILS":{"columns":2}},"content":{"translations":{"en":{"declaration":"Saved declaration"}}}}
-			""", options);
+		input.PrintSettings.Advanced = JsonSerializer.Deserialize<AdmissionFormPrintAdvancedSettingsDto>(advanced, options);
 		var created = await _formAppService.CreateAsync(input);
 		var loaded = await _formAppService.GetAsync(created.Id);
 		var expected = JsonNode.Parse("""{"layout":"spacious","paperSize":"A4","showSchoolHeader":false,"showPhoto":true,"showSignature":false}""");
 		expected!["template"] = template;
-		expected["advanced"] = JsonSerializer.SerializeToNode(input.PrintSettings.Advanced, options);
+		expected["advanced"] = JsonNode.Parse(advanced);
 		var loadedSettings = JsonSerializer.SerializeToNode(loaded, options)!["printSettings"];
 		loadedSettings.ShouldNotBeNull();
 		JsonNode.DeepEquals(loadedSettings, expected).ShouldBeTrue();
@@ -58,6 +59,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var next = await _formAppService.CreateNewVersionAsync(published.Id);
 		JsonNode.DeepEquals(JsonSerializer.SerializeToNode(next, options)!["printSettings"], expected).ShouldBeTrue();
 		(await _formAppService.CompareVersionsAsync(published.Id, next.Id)).Changes.ShouldBeEmpty();
+		(await _formAppService.ValidateAsync(next.Id)).Errors.ShouldContain($"{AdmissionFormErrorCodes.VersionUnchanged}:{published.Version}");
+		var newVersionUpdate = JsonSerializer.SerializeToNode(next, options)!;
+		newVersionUpdate["printSettings"]!["advanced"]!["header"]!["layout"]!["schoolName"]!["x"] = 18;
+		next = await _formAppService.UpdateAsync(next.Id, newVersionUpdate.Deserialize<CreateUpdateAdmissionFormDto>(options)!);
+		(await _formAppService.CompareVersionsAsync(published.Id, next.Id)).Changes.ShouldBe(["Print settings changed"]);
+		next = await _formAppService.PublishAsync(next.Id, next.ConcurrencyStamp);
+		next.Status.ShouldBe(AdmissionFormStatus.Published);
+		var currentPublished = await _formAppService.GetAsync(published.Id);
+		JsonNode.DeepEquals(JsonSerializer.SerializeToNode(currentPublished, options)!["printSettings"], expected).ShouldBeTrue();
 	});
 
 	[Fact]

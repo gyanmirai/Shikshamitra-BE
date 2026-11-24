@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-11-19
+updated_on: 2026-11-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -663,11 +663,14 @@ Omitting `advanced` or sending it as null preserves the saved advanced configura
 | Body / title font size | 8–14 / 12–24 points |
 | Photo width / height | 20–55 mm / 25–70 mm |
 | Logo and banner geometry | Position 0–100%; size 5–100%; contained inside the header band |
+| `header.layout` geometry | Position 0–100%, size 1–100%, and finite values contained inside the header band |
 | Per-section / per-field maps | Up to 128 / 512 distinct authored codes; codes up to 128 characters |
 | Section columns / blank rows / field writing lines | 1–4 / 1–30 / 1–8 |
 | Instructions and declaration | Up to 2000 characters per translated value |
 | Titles, captions, signature labels and checklist items | Up to 128 characters; at most 20 checklist items per language |
 | Translations / colours | Up to 8 valid language codes / `#RRGGBB` |
+
+`advanced.header.layout` optionally maps `logo`, `banner`, `schoolName`, `address`, `phone`, `email`, `website`, `title`, `subtitle`, `board`, `medium`, `class`, `academicYear`, `registrationNumber`, `date` and `photo` to rectangles with `x`, `y`, `width`, `height` and optional `lockAspectRatio`. Map keys are case-sensitive. An omitted layout uses the existing template placements.
 
 Advanced content may include `parentSignatureImage` and `officeSignatureImage` as PNG/JPEG data URIs. Each decoded image is limited to 5 MiB and must match its declared PNG/JPEG signature. Instruction translations remain newline-separated strings; the print renderer presents non-empty lines as bullets.
 
@@ -838,6 +841,17 @@ Unknown policy versions, stale stamps, unavailable capacity, missing evidence, a
 For sibling membership without replacing the pending child's parent details, send `familyLinkOnly: true`, the selected `existingFamilyId`, a visible child witness as `existingParentApplicantId`, and the target `concurrencyStamp`; omit `parentRelationship`. The same pending-identity and downstream-evidence fences apply to a new family assignment. Existing same-family requests revalidate target/source scope and active membership and then return without mutation or another audit, including retries with the original browser stamp. Parent roles, both parent profiles, school-contact responsibility and captured Inquiry answers remain unchanged. Applicant-only contact snapshots protect subsequent reads/edits and Registration/Student handoff from the shared family guardian. Family-only confirmation is stored separately from `SiblingParentConfirmation` and cannot authorize portal-account reuse, account changes or sibling-parent autofill. Old saved-parent requests and their exact retry behavior remain compatible.
 
 Inquiry detail/list adds `hasLinkedSiblings`, computed from other active applicants in the same family visible in the caller's current admission scope. Both children can therefore display linked membership. This informational flag is independent of the legacy `siblingFamilyConfirmed` parent-account proof and grants no authority. No historical parent/profile repair or data migration is performed.
+
+Inquiry list adds `hasPossibleSiblingMatch` for a pending, unlinked child with another accessible active child's matching saved parent mobile/email.
+The read batches contacts for the current page and excludes self, existing Student targets and transferred cases.
+An explicitly selected main Guardian does not supply a generic parent-match contact; explicit Father/Mother fields and older unknown-role contacts retain their matching behavior.
+`GET /api/student/enrollment/admissions/inquiries/{id}/sibling-matches` requires Inquiry View at HTTP and application boundaries and returns `{inquiry,matches}` with the current Inquiry concurrency stamp and existing duplicate-match DTO rows.
+Confirmed membership returns the accessible same-family children with `canLinkFamily=false`; every confirmed match contains the same parent snapshots aggregated from accessible active family children, including the current child.
+Candidate reads require current tenant/record scope; application-only sources additionally require Application View, and linked Student identities must pass the same exact Student-scope check used by confirmation.
+The linked indicator applies that Student gate too, so a hidden Student cannot supply a parent snapshot or membership signal.
+Saved contact matches are suggestions until the existing explicit family-only confirmation; reversed already-same-family requests remain idempotent and preserve contacts, form answers, parent/account proofs and audit history.
+Same normalized child names with equal or missing dates of birth are excluded as duplicate identities; different recorded birth dates remain distinguishable.
+New family-only confirmation rechecks that identity rule and the existing cycle duplicate guard before changing membership, returning `Admissions.InquiryDuplicateStudent` for a duplicate child.
 
 The existing inquiry capture-context response includes nullable `academicYearStartDate` (a calendar date) and `minimumAgeYears`. After the offering scope check, these are read from its cycle's Academic Year and its Standard's existing `AgeLowerLimit`; non-positive minima return null. Clients use them for advisory DOB age feedback in inquiry create/edit. This does not add inquiry validation, change workflow eligibility policies, require Institute Setup permissions, or introduce persisted settings/migrations.
 
@@ -1215,7 +1229,7 @@ Business errors include `Students:Records:OutstandingReasonRequired`, `Outstandi
 
 Form DTOs and existing draft writes add optional `inheritance` with `enabled` and source entries containing `inquiryFormDefinitionId` and reviewed `fieldMappings`. The retained `requiredFieldIdentities` and `layouts` properties are accepted for policy compatibility but cannot change Inquiry-owned requirements or placement during composition. Preview input contains `inquiryFormDefinitionId`, optional `registrationFormDefinitionId` and optional `draft`. A preview does not create a form/application, approve a source or modify routing. Effective fields carry `fieldIdentity` and optional `inheritedFrom` provenance, retaining the original source key for prefill even when a reserved legacy starter maps to a canonical Registration binding. The application-form response keeps the existing definition/value shape and adds safe source context.
 
-`inheritance.sources[].stepNames` is an optional dictionary of Registration-only step titles, keyed by the effective Inquiry step code (`INQ_<sourceStepCode>` or `INQUIRY_PAGE`). Names must contain non-whitespace text and be at most 128 characters; at most 500 overrides per source are accepted. The existing inheritance metadata stores and clones these titles. Composition applies them to cloned Inquiry sections and their context counterparts; the published Inquiry and frozen application schemas remain unchanged. Older policies without the dictionary retain their original titles.
+New Registration drafts store `inheritance.useRegistrationSteps` after an inheritance write or version copy. Effective schemas place source sections at the start of the first Registration step and retain Inquiry step visibility as section visibility. Composed single-page definitions share a single `REGISTRATION_PAGE` group and retain their single-page layout type. An editable draft can set `inheritance.enabled` to false while retaining its approved sources. The existing published and frozen policies retain their saved layout. Historical policies without `useRegistrationSteps` continue to honor `inheritance.sources[].stepNames`, with at most 500 nonblank titles of at most 128 characters per source, keyed by the effective Inquiry step code.
 
 Existing publish validates every approved source composition. Active routes and application start enforce compatibility; incomplete inactive drafts retain their existing save behavior. Published/base definitions stay immutable. Legacy requests without inheritance settings retain existing behavior. `Admissions.FormInheritance...` business failures identify invalid policy, incompatible source or unavailable frozen schema without weakening existing tenant, permission, ownership or concurrency checks.
 
@@ -1247,16 +1261,19 @@ Staff routes use `/api/student/enrollment/admissions/applications/{applicationId
 |---|---|
 | GET root | Saved recipient choices, request/delivery/progress, concurrency stamp, correction choices and server capabilities; never the stored token |
 | GET `/email-history` | Registration-link snapshots and recorded Communication attempts for this application; requires Applications View and returns safe provider guidance without protected links or raw provider diagnostics |
-| POST `/send` | `{recipientRelationship, concurrencyStamp, idempotencyKey}`; create or replace a seven-day initial link |
-| POST `/copy-link` | Requires Applications Edit and scoped View. Send `{requestId, concurrencyStamp, idempotencyKey}` to copy the current writable initial link or `{recipientRelationship, concurrencyStamp, idempotencyKey}` to issue a link without email when no live link exists. Returns the private URL in a no-store response. |
-| POST `/email` | Send-command fields plus `{email,expectedEmail,reason?}`; compare the saved adult email and application stamp, save an eligible draft contact, synchronize compatible draft answers, revoke prior links and return refreshed context without sending |
-| POST `/corrections` | Send input plus `{notes,fieldCodes,documents:[{stageInstanceId,requirementCode}]}`; grant only requested eligible changes |
+| POST `/send` | `{recipientRelationship, validityDays?, concurrencyStamp, idempotencyKey}`; create or replace an initial link and queue email |
+| POST `/copy-link` | Send `{requestId, concurrencyStamp, idempotencyKey}` to copy the current writable initial link with its existing expiry, or `{recipientRelationship, validityDays?, concurrencyStamp, idempotencyKey}` to issue a link without email when no live link exists. Returns the private URL in a no-store response. |
+| POST `/reactivate` | `{requestId, validityDays?, concurrencyStamp, idempotencyKey}`; set a new expiry on the latest eligible expired initial request and return refreshed context. The original URL works again. |
+| POST `/email` | `{recipientRelationship, email, expectedEmail, reason?, concurrencyStamp, idempotencyKey}`; compare the saved adult email and application stamp, save an eligible draft contact, synchronize compatible draft answers, revoke prior links and return refreshed context without sending |
+| POST `/corrections` | `{recipientRelationship, notes, fieldCodes, documents:[{stageInstanceId,requirementCode}], concurrencyStamp, idempotencyKey}`; grant only requested eligible changes |
 | POST `/revoke`, `/takeover`, `/retry-delivery` | `{concurrencyStamp,idempotencyKey}`; retries retain the existing eligibility and uncertain-delivery safeguards |
 | POST `/apply` | Command plus `{reason}`; apply a ready post-submission proposal through the audited form-correction owner |
 
 Recipients expose `canChangeEmail` and `emailChangeBlockedReason`; submitted or linked/shared contact edits retain their governed owner. `canRequestDocumentCorrections` identifies the current eligible Documents stage; a document-only correction has empty `fieldCodes` and nonempty current-stage `documents`. `emailDeliveryBlockedReason` explains an explicitly unavailable Email setup without blocking staff form editing. Application-wide profile scope is revalidated for email changes, and exact command retries never restore an older email after a later edit.
 
-Copy-only links use the existing expiry, recipient and application scope rules and start with delivery status `NotSent`. Newly sent initial links retain the encrypted token for authorized copying while the link is writable. Older sent links whose token was cleared remain usable by the recipient until expiry, and their URL is unavailable to Copy link. Status and history return only safe metadata.
+New initial links and reactivations use a positive whole-number `validityDays`, defaulting to 7. Expiry is counted from the command time and must be a representable date. Copy-only links start with delivery status `NotSent`. The staff context exposes `canReactivate` when the latest initial request expired while `Invited` or `InProgress`, the saved recipient and original sender still pass authorization, and the current staff member has the applicable permissions and scope on the draft Registration Form. Revoked, superseded, handed-in and correction requests are ineligible.
+
+Reactivation retains the token, grant ID, recipient, progress, answers, files and delivery history. It enqueues no email and cancels an expired invitation's queued attempt so it cannot dispatch after reactivation. Staff can share the original URL through Copy link when the protected token is retained. Eligible legacy links with a cleared protected token work again for parents who still have the original URL. The response and history include the new expiry and safe metadata. Existing expiry storage supports the new commands.
 
 Public routes use `/api/public/admission-registration` and require exactly one `X-Admission-Registration-Token` header. They return raw context rather than the staff Result envelope. Responses are private/no-store. The frontend receives its token in a URL fragment, keeping it out of route/query logging.
 

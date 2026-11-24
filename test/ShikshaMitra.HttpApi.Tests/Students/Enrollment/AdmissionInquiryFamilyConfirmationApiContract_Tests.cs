@@ -15,6 +15,27 @@ namespace ShikshaMitra.HttpApi.Tests.Students.Enrollment;
 public class AdmissionInquiryFamilyConfirmationApiContract_Tests
 {
 	[Fact]
+	public async Task Sibling_matches_is_a_scoped_view_get_and_forwards_one_read_without_mutation()
+	{
+		foreach (var type in new[] { typeof(AdmissionInquiriesController), typeof(AdmissionInquiryAppService) })
+			type.GetMethod(nameof(AdmissionInquiriesController.GetSiblingMatchesAsync))!.GetCustomAttributes<AuthorizeAttribute>()
+				.Select(attribute => attribute.Policy).ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View);
+		typeof(AdmissionInquiriesController).GetMethod(nameof(AdmissionInquiriesController.GetSiblingMatchesAsync))!
+			.GetCustomAttribute<HttpGetAttribute>()!.Template.ShouldBe("{id:guid}/sibling-matches");
+		var service = Substitute.For<IAdmissionInquiryAppService>(); var id = Guid.NewGuid();
+		service.GetSiblingMatchesAsync(id).Returns(new AdmissionInquirySiblingMatchesDto
+		{
+			Inquiry = new() { Id = id, ConcurrencyStamp = "fresh", HasPossibleSiblingMatch = true },
+			Matches = [new() { ApplicantId = Guid.NewGuid(), CanLinkFamily = true }]
+		});
+		var response = await new AdmissionInquiriesController(service).GetSiblingMatchesAsync(id);
+		response.Data!.Inquiry.ConcurrencyStamp.ShouldBe("fresh"); response.Data.Matches.Count.ShouldBe(1);
+		await service.Received(1).GetSiblingMatchesAsync(id);
+		await service.DidNotReceiveWithAnyArgs().ConfirmFamilyAsync(default, default!);
+		await service.DidNotReceiveWithAnyArgs().CreateAsync(default!);
+	}
+
+	[Fact]
 	public async Task Family_only_confirmation_forwards_the_child_witness_without_parent_role_or_account_proof()
 	{
 		new ConfirmAdmissionInquiryFamilyDto().FamilyLinkOnly.ShouldBeFalse();

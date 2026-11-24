@@ -27,6 +27,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		await MarkInheritedInquiryInterestedAsync(inquiry.Id);
 		var application = await _applicationAppService.StartAsync(inquiry.ApplicantId!.Value, fixture.Id, inquiry.Id);
 		var form = await _applicationAppService.GetFormAsync(application.Id);
+		form.Definition.Inheritance!.UseRegistrationSteps.ShouldBe(true);
+		form.Definition.LayoutType.ShouldBe(AdmissionFormLayoutType.SinglePage);
+		form.Definition.Sections.Concat(form.InquiryContextSections)
+			.ShouldAllBe(section => section.StepId.HasValue && section.StepCode == "REGISTRATION_PAGE");
+		form.Definition.Sections.Concat(form.InquiryContextSections).Select(section => section.StepId).Distinct().Count().ShouldBe(1);
 		var birth = form.Definition.Sections.SelectMany(section => section.Fields).Single(field => field.BindingKey == "Applicant.DateOfBirth");
 		birth.Label.ShouldBe("DOB");
 		birth.InheritedFrom!.InquiryFormDefinitionId.ShouldBe(fixture.InquiryFormDefinitionId!.Value);

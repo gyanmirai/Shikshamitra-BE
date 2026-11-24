@@ -39,17 +39,27 @@ public class AdmissionParentRegistration : FullAuditedAggregateRoot<Guid>, IMult
 	protected AdmissionParentRegistration() { }
 	public AdmissionParentRegistration(Guid id, Guid tenantId, Guid applicationId, Guid requestedBy, string tokenHash,
 		string protectedToken, string recipientJson, string recipientFingerprint, string purpose, DateTime now,
-		string fingerprint, bool allowsDocuments, string fieldCodes = "[]", string documents = "[]", string? notes = null) : base(id)
+		string fingerprint, bool allowsDocuments, string fieldCodes = "[]", string documents = "[]", string? notes = null, int? validityDays = null) : base(id)
 	{
 		if (requestedBy == Guid.Empty || tenantId == Guid.Empty || applicationId == Guid.Empty || tokenHash.Length != 64 || purpose is not ("initial" or "correction"))
 			throw new BusinessException(AdmissionParentRegistrationErrors.Invalid);
 		TenantId = tenantId; ApplicationId = applicationId; RequestedBy = requestedBy; TokenHash = tokenHash;
 		ProtectedToken = protectedToken; RecipientJson = recipientJson; RecipientFingerprint = recipientFingerprint;
-		Purpose = purpose; ExpiresAt = now.AddDays(7); RequestFingerprint = fingerprint; AllowsDocuments = allowsDocuments;
+		Purpose = purpose; ExpiresAt = Expiry(now, purpose == "initial" ? validityDays : null); RequestFingerprint = fingerprint; AllowsDocuments = allowsDocuments;
 		FieldCodesJson = fieldCodes; DocumentsJson = documents; Notes = notes;
 	}
-	public bool CanRead(DateTime now) => ExpiresAt > now && Status is "Invited" or "InProgress" or "ReadyForReview";
+	public bool HasExpired(DateTime now) => ExpiresAt <= AdmissionEventUtcTime.Normalize(now);
+	public bool CanRead(DateTime now) => !HasExpired(now) && Status is "Invited" or "InProgress" or "ReadyForReview";
 	public bool CanWrite(DateTime now) => CanRead(now) && Status is "Invited" or "InProgress";
+	public bool CanReactivate(DateTime now) => Purpose == "initial" && HasExpired(now) && (Status is "Invited" or "InProgress") && !HandedInAt.HasValue;
+	public void Reactivate(DateTime now, int? validityDays)
+	{
+		if (!CanReactivate(now)) throw new BusinessException(AdmissionParentRegistrationErrors.Unavailable);
+		ExpiresAt = Expiry(now, validityDays);
+		// An old queued attempt must not start delivery just because the link can be used again.
+		if (DeliveryStatus == "Pending") SetDelivery("Cancelled");
+		if (DeliveryStatus == "Sending") SetDelivery("Unknown", "Provider acceptance could not be confirmed for the previous invitation.");
+	}
 	public void Save(DateTime now, string? proposedValues = null, string? baseline = null)
 	{
 		EnsureWritable(now); Status = "InProgress"; LastSavedAt = now;
@@ -85,5 +95,13 @@ public class AdmissionParentRegistration : FullAuditedAggregateRoot<Guid>, IMult
 		operations.Add(key, fingerprint); OperationsJson = JsonSerializer.Serialize(operations);
 	}
 	private void EnsureWritable(DateTime now) { if (!CanWrite(now)) throw new BusinessException(AdmissionParentRegistrationErrors.Unavailable); }
+	private static DateTime Expiry(DateTime now, int? validityDays)
+	{
+		var days = validityDays ?? 7;
+		var utcNow = AdmissionEventUtcTime.Normalize(now);
+		if (days < 1 || days > (DateTime.MaxValue - utcNow).Days)
+			throw new BusinessException(AdmissionParentRegistrationErrors.Invalid, "Enter a positive whole number of days that produces a valid expiry date.");
+		return utcNow.AddDays(days);
+	}
 	public static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }

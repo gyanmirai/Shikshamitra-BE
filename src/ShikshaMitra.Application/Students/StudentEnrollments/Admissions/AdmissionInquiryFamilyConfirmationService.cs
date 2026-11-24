@@ -102,6 +102,7 @@ public class AdmissionInquiryFamilyConfirmationService(
 		if (string.IsNullOrWhiteSpace(input.ConcurrencyStamp) || inquiry.ConcurrencyStamp != input.ConcurrencyStamp)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.ConcurrencyConflict);
 		await EnsurePendingGraphAsync(inquiry, target, source.FamilyId);
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryStudentDuplicateGuard>().EnsureDistinctSiblingAsync(inquiry, target, source);
 		var contacts = new[] { "Father", "Mother" }.Select(prefix => new AdmissionSiblingParentContactDto
 		{
 			Relationship = prefix.ToLowerInvariant(), Mobile = AdmissionStudentProfileMapping.Read(target, prefix + ".Mobile"),

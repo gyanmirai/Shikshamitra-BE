@@ -10,6 +10,8 @@ public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 {
 	/// <summary>Informational scoped family membership; never parent-account authority.</summary>
 	public bool HasLinkedSiblings { get; set; }
+	/// <summary>A scoped saved parent-contact match; not confirmed family membership or account authority.</summary>
+	public bool HasPossibleSiblingMatch { get; set; }
 	public bool SiblingFamilyConfirmed { get; set; }
 	public AdmissionSchoolContactDto? MainSchoolContact { get; set; }
 	public string? ParentRelationship { get; set; }
@@ -65,6 +67,12 @@ public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 	public bool IsQualificationOverdue { get; set; }
 	public bool HasOverdueFollowUp { get; set; }
 	public bool IsOverdue => IsFirstContactOverdue || IsQualificationOverdue || HasOverdueFollowUp;
+}
+
+public class AdmissionInquirySiblingMatchesDto
+{
+	public AdmissionInquiryDto Inquiry { get; set; } = new();
+	public List<AdmissionInquiryDuplicateMatchDto> Matches { get; set; } = [];
 }
 
 public class ConfirmAdmissionInquiryFamilyDto

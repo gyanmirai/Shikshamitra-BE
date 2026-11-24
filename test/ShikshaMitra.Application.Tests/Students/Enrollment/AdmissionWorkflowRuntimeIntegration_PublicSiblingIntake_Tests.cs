@@ -168,7 +168,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	});
 
 	private Task<AdmissionPublicInquiryLinkCreatedDto> CreatePublicSiblingLinkAsync(IAdmissionPublicInquiryAppService service, AdmissionOffering offering) =>
-		service.CreateLinkAsync(new() { AdmissionCycleId = offering.AdmissionCycleId, InquiryFormDefinitionId = offering.InquiryFormDefinitionId, Name = "Sibling public fixture", Source = AdmissionInquirySource.QrCode, SourceDetail = "School QR" });
+		service.CreateLinkAsync(new() { AdmissionCycleId = offering.AdmissionCycleId, InquiryFormDefinitionId = offering.InquiryFormDefinitionId, Name = "Sibling public fixture " + Guid.NewGuid().ToString("N"), Source = AdmissionInquirySource.QrCode, SourceDetail = "School QR" });
 
 	private static SubmitPublicAdmissionInquiryDto PublicSiblingInput(AdmissionOffering offering, string child) => new()
 	{

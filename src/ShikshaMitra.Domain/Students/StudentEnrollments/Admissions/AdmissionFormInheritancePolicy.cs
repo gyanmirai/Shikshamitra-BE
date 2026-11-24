@@ -6,6 +6,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionFormInheritancePolicy
 {
 	public bool Enabled { get; set; }
+	public bool? UseRegistrationSteps { get; set; }
 	public List<AdmissionFormInheritanceSource> Sources { get; set; } = [];
 }
 

@@ -34,7 +34,7 @@ public class AdmissionParentRegistrationAccess(IRepository<AdmissionParentRegist
 		if (grant == null || !grant.CanRead(Clock.Now)) throw AdmissionParentRegistrationData.Unavailable();
 		return grant;
 	}
-	internal async Task<AdmissionApplication> AuthorizeAsync(AdmissionParentRegistration grant, bool requireLiveGrant = true)
+	internal async Task<AdmissionApplication> AuthorizeAsync(AdmissionParentRegistration grant, bool requireLiveGrant = true, bool requireSenderAuthority = false)
 	{
 		if (grant.TenantId != CurrentTenant.Id || requireLiveGrant && !grant.CanRead(Clock.Now)) throw AdmissionParentRegistrationData.Unavailable();
 		var application = await data.Repo<AdmissionApplication>().FindAsync(grant.ApplicationId);
@@ -47,7 +47,7 @@ public class AdmissionParentRegistrationAccess(IRepository<AdmissionParentRegist
 		var saved = JsonSerializer.Deserialize<AdmissionParentRecipientDto>(grant.RecipientJson)!;
 		var recipient = AdmissionParentRegistrationData.Recipients(applicant).SingleOrDefault(item => item.Relationship == saved.Relationship && item.CanSend);
 		if (recipient == null || AdmissionParentRegistrationData.RecipientFingerprint(applicant, recipient) != grant.RecipientFingerprint ||
-			requireLiveGrant && !await SenderAuthorizedAsync(grant, application)) throw AdmissionParentRegistrationData.Unavailable();
+			(requireLiveGrant || requireSenderAuthority) && !await SenderAuthorizedAsync(grant, application)) throw AdmissionParentRegistrationData.Unavailable();
 		return application;
 	}
 	internal async Task<bool> SenderAuthorizedAsync(AdmissionParentRegistration grant, AdmissionApplication application)

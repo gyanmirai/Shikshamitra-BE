@@ -30,11 +30,22 @@ public class AdmissionInquiryStudentDuplicateGuard(
 			}));
 		// Match the existing inquiry review rule: a missing DOB cannot clear a same-name match.
 		// No candidate identifiers or contact details are exposed outside the caller's scope.
-		if (candidates.Any(candidate => Normalize(candidate.ApplicantName) == Normalize(name) &&
-			(!birthDate.HasValue || !candidate.DateOfBirth.HasValue || birthDate.Value.Date == candidate.DateOfBirth.Value.Date)))
+		if (candidates.Any(candidate => IsSameIdentity(name, birthDate, candidate.ApplicantName, candidate.DateOfBirth)))
 			throw new BusinessException(AdmissionErrorCodes.InquiryDuplicateStudent);
 		// Family membership and parent access still require the existing explicit sibling confirmation.
 	}
+
+	internal async Task EnsureDistinctSiblingAsync(AdmissionInquiry inquiry, AdmissionApplicant target, AdmissionApplicant source)
+	{
+		var sourceName = string.Join(" ", new[] { source.FirstName, source.MiddleName, source.LastName }.Where(value => !string.IsNullOrWhiteSpace(value)));
+		if (IsSameIdentity(inquiry.ApplicantName, target.DateOfBirth, sourceName, source.DateOfBirth))
+			throw new BusinessException(AdmissionErrorCodes.InquiryDuplicateStudent);
+		await EnsureDistinctAsync(inquiry, inquiry.ApplicantName, inquiry.NormalizedPhone);
+	}
+
+	internal static bool IsSameIdentity(string name, DateTime? birthDate, string candidateName, DateTime? candidateBirthDate) =>
+		Normalize(name) == Normalize(candidateName) &&
+		(!birthDate.HasValue || !candidateBirthDate.HasValue || birthDate.Value.Date == candidateBirthDate.Value.Date);
 
 	private static string Normalize(string name) => string.Join(" ", name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
 }

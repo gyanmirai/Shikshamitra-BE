@@ -94,6 +94,7 @@ public sealed class AdmissionPrintHeaderSettingsDto
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? Alignment { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? RegistrationNumber { get; set; }
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public bool? Date { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public Dictionary<string, AdmissionPrintAssetPlacementDto?>? Layout { get; set; }
 }
 
 public sealed class AdmissionPrintPhotoSettingsDto

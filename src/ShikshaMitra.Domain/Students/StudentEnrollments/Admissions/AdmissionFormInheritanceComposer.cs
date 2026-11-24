@@ -69,11 +69,16 @@ public static class AdmissionFormInheritanceComposer
 		// Legacy requiredness/placement overrides remain readable policy metadata, but cannot
 		// alter Inquiry-owned definitions. Frozen application schemas are never recomposed.
 		var inquiryStepper = inquiry.LayoutType == AdmissionFormLayoutType.Stepper;
-		var combinedStepper = registration.LayoutType == AdmissionFormLayoutType.Stepper || inquiryStepper;
+		var useRegistrationSteps = policy.UseRegistrationSteps == true;
+		var combinedStepper = registration.LayoutType == AdmissionFormLayoutType.Stepper || (!useRegistrationSteps && inquiryStepper);
+		var firstRegistrationSection = useRegistrationSteps && combinedStepper
+			? result.Definition.Sections.OrderBy(section => section.StepDisplayOrder ?? section.DisplayOrder)
+				.ThenBy(section => section.DisplayOrder).FirstOrDefault()
+			: null;
 		result.Definition.LayoutType = combinedStepper ? AdmissionFormLayoutType.Stepper : AdmissionFormLayoutType.SinglePage;
 		if (registration.LayoutType == AdmissionFormLayoutType.SinglePage)
 			foreach (var section in result.Definition.Sections)
-				SetSinglePageStep(section, registration, combinedStepper, registration.Id, "REGISTRATION_PAGE", 0);
+				SetSinglePageStep(section, registration, combinedStepper || useRegistrationSteps, registration.Id, "REGISTRATION_PAGE", 0);
 		var languages = registration.SupportedLanguages.Concat(inquiry.SupportedLanguages).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 		var sectionCodes = result.Definition.Sections.Select(section => section.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
 		var nextSectionOrder = 0;
@@ -98,7 +103,10 @@ public static class AdmissionFormInheritanceComposer
 				return result;
 			}
 		}
-		foreach (var sourceSection in inquiry.Sections.OrderBy(section => section.DisplayOrder))
+		var orderedSourceSections = useRegistrationSteps && inquiryStepper
+			? inquiry.Sections.OrderBy(section => sourceStepOrders[section.StepId ?? section.Id]).ThenBy(section => section.DisplayOrder)
+			: inquiry.Sections.OrderBy(section => section.DisplayOrder);
+		foreach (var sourceSection in orderedSourceSections)
 		{
 			var inheritedSection = Clone(sourceSection);
 			inheritedSection.FormDefinitionId = registration.Id;
@@ -113,7 +121,21 @@ public static class AdmissionFormInheritanceComposer
 			FillTranslations(inheritedSection.Translations, inquiry.DefaultLanguage, languages, sourceSection.Name, null, null);
 			inheritedSection.VisibilityRuleJson = Rewrite(sourceSection.VisibilityRuleJson, codeMap);
 			inheritedSection.StepVisibilityRuleJson = Rewrite(sourceSection.StepVisibilityRuleJson, codeMap);
-			if (inquiryStepper)
+			if (useRegistrationSteps)
+			{
+				if (inquiryStepper)
+					inheritedSection.VisibilityRuleJson = CombineVisibilityRules(inheritedSection.VisibilityRuleJson, inheritedSection.StepVisibilityRuleJson);
+				if (combinedStepper && firstRegistrationSection != null)
+				{
+					inheritedSection.StepId = firstRegistrationSection.StepId ?? firstRegistrationSection.Id;
+					inheritedSection.StepCode = firstRegistrationSection.StepCode ?? firstRegistrationSection.Code;
+					inheritedSection.StepName = firstRegistrationSection.StepName ?? firstRegistrationSection.Name;
+					inheritedSection.StepDisplayOrder = firstRegistrationSection.StepDisplayOrder ?? firstRegistrationSection.DisplayOrder;
+					inheritedSection.StepVisibilityRuleJson = null;
+				}
+				else SetSinglePageStep(inheritedSection, registration, true, registration.Id, "REGISTRATION_PAGE", 0);
+			}
+			else if (inquiryStepper)
 			{
 				inheritedSection.StepId = StableId(registration.Id, inquiry.Id, "STEP:" + (sourceSection.StepId ?? sourceSection.Id));
 				inheritedSection.StepCode = sourceStepCodes[sourceSection.StepId ?? sourceSection.Id];
@@ -122,7 +144,7 @@ public static class AdmissionFormInheritanceComposer
 			}
 			else
 				SetSinglePageStep(inheritedSection, inquiry, combinedStepper, registration.Id, "INQUIRY_PAGE", nextStepOrder);
-			if (inheritedSection.StepCode != null && sourcePolicy.StepNames.TryGetValue(inheritedSection.StepCode, out var stepName))
+			if (!useRegistrationSteps && inheritedSection.StepCode != null && sourcePolicy.StepNames.TryGetValue(inheritedSection.StepCode, out var stepName))
 				inheritedSection.StepName = stepName;
 			var contextSection = Clone(inheritedSection);
 			foreach (var source in sourceSection.Fields.OrderBy(field => field.DisplayOrder))
@@ -224,7 +246,19 @@ public static class AdmissionFormInheritanceComposer
 			if (contextSection.Fields.Count > 0) result.InquiryContextSections.Add(contextSection);
 		}
 		RemoveUnusedAcademicParents(result.Definition, replacedAcademicParents);
-		OrderInquiryFirst(result.Definition, result.InquiryContextSections, sourceSectionIds, authoredEmptySections);
+		if (firstRegistrationSection != null)
+		{
+			// The shared first step remains visible while either owner has a visible section.
+			// Keep the original Registration step condition scoped to Registration sections.
+			var firstStepId = firstRegistrationSection.StepId ?? firstRegistrationSection.Id;
+			foreach (var section in result.Definition.Sections.Where(section =>
+				!sourceSectionIds.Contains(section.Id) && (section.StepId ?? section.Id) == firstStepId))
+			{
+				section.VisibilityRuleJson = CombineVisibilityRules(section.VisibilityRuleJson, section.StepVisibilityRuleJson);
+				section.StepVisibilityRuleJson = null;
+			}
+		}
+		OrderInquiryFirst(result.Definition, result.InquiryContextSections, sourceSectionIds, authoredEmptySections, useRegistrationSteps);
 		result.Definition.SupportedLanguages = languages;
 		return result;
 	}
@@ -315,7 +349,7 @@ public static class AdmissionFormInheritanceComposer
 	}
 
 	private static void OrderInquiryFirst(AdmissionFormSchema definition, IReadOnlyCollection<AdmissionFormSchemaSection> contextSections,
-		IReadOnlySet<Guid> sourceSectionIds, IReadOnlySet<Guid> authoredEmptySections)
+		IReadOnlySet<Guid> sourceSectionIds, IReadOnlySet<Guid> authoredEmptySections, bool useRegistrationSteps)
 	{
 		var source = definition.Sections.Where(section => sourceSectionIds.Contains(section.Id)).OrderBy(section => section.DisplayOrder).ToList();
 		// A source-only section can live entirely in the immutable context payload.
@@ -333,7 +367,9 @@ public static class AdmissionFormInheritanceComposer
 		for (var index = 0; index < registration.Count; index++) registration[index].DisplayOrder = sourceGroups.Count + index;
 		if (definition.LayoutType != AdmissionFormLayoutType.Stepper) return;
 		var stepOrder = 0;
-		foreach (var owner in new[] { allSource, registration })
+		IEnumerable<AdmissionFormSchemaSection>[] stepSections = useRegistrationSteps
+			? [allSource.Concat(registration)] : [allSource, registration];
+		foreach (var owner in stepSections)
 			foreach (var group in owner.GroupBy(section => section.StepId ?? section.Id)
 				.OrderBy(group => group.Min(section => section.StepDisplayOrder ?? section.DisplayOrder)))
 			{
@@ -342,13 +378,24 @@ public static class AdmissionFormInheritanceComposer
 			}
 	}
 
-	private static void SetSinglePageStep(AdmissionFormSchemaSection section, AdmissionFormSchema form,
-		bool stepper, Guid registrationId, string code, int order)
+	private static string? CombineVisibilityRules(string? section, string? step)
 	{
-		section.StepId = stepper ? StableId(registrationId, form.Id, code) : null;
-		section.StepCode = stepper ? code : null;
-		section.StepName = stepper ? form.Name : null;
-		section.StepDisplayOrder = stepper ? order : null;
+		if (string.IsNullOrWhiteSpace(section)) return step;
+		if (string.IsNullOrWhiteSpace(step)) return section;
+		return new JsonObject
+		{
+			["operator"] = "ALL",
+			["conditions"] = new JsonArray(JsonNode.Parse(section), JsonNode.Parse(step))
+		}.ToJsonString();
+	}
+
+	private static void SetSinglePageStep(AdmissionFormSchemaSection section, AdmissionFormSchema form,
+		bool includeGroup, Guid registrationId, string code, int order)
+	{
+		section.StepId = includeGroup ? StableId(registrationId, form.Id, code) : null;
+		section.StepCode = includeGroup ? code : null;
+		section.StepName = includeGroup ? form.Name : null;
+		section.StepDisplayOrder = includeGroup ? order : null;
 		// Dormant step rules on a single-page source must not hide its sections.
 		section.StepVisibilityRuleJson = null;
 	}

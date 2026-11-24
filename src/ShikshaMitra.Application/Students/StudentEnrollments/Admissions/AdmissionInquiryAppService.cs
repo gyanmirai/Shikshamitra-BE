@@ -119,6 +119,7 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 		var rows = await AsyncExecuter.ToListAsync(query.Skip(input.SkipCount).Take(input.MaxResultCount));
 		if (rows.Count == 0) return new PagedResultDto<AdmissionInquiryDto>(count, []);
 		var linkedFamilyApplicants = await ReadScopedFamilyApplicantsAsync(rows.Where(row => row.FamilyId.HasValue).Select(row => row.FamilyId!.Value));
+		var possibleSiblingIds = await LazyServiceProvider.LazyGetRequiredService<AdmissionInquirySiblingMatchService>().FindPossibleInquiryIdsAsync(rows);
 
 		var inquiryIds = rows.Select(row => row.Id).ToList();
 		var linkedApplications = (await applicationRepository.GetListAsync(application => application.InquiryId.HasValue && inquiryIds.Contains(application.InquiryId.Value)))
@@ -156,12 +157,24 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 			dto.ApplicationId = linkedApplications.GetValueOrDefault(row.Id) is var applicationId && applicationId != Guid.Empty ? applicationId : null;
 			dto.IsTransferred |= dto.ApplicationId.HasValue;
 			dto.HasLinkedSiblings = row.FamilyId.HasValue && linkedFamilyApplicants.TryGetValue(row.FamilyId.Value, out var familyApplicants) && familyApplicants.Any(id => id != row.ApplicantId);
+			dto.HasPossibleSiblingMatch = !dto.IsTransferred && possibleSiblingIds.Contains(row.Id);
 			return dto;
 		}).ToList());
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)]
 	public async Task<AdmissionInquiryDto> GetAsync(Guid id) => await ReadDetailAsync(await GetInquiryAsync(id));
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)]
+	public async Task<AdmissionInquirySiblingMatchesDto> GetSiblingMatchesAsync(Guid id)
+	{
+		var inquiry = await GetInquiryAsync(id);
+		var detail = await ReadDetailAsync(inquiry);
+		var matches = await LazyServiceProvider.LazyGetRequiredService<AdmissionInquirySiblingMatchService>().ReadMatchesAsync(inquiry);
+		if (detail.IsTransferred) foreach (var match in matches) match.CanLinkFamily = false;
+		detail.HasPossibleSiblingMatch = !detail.HasLinkedSiblings && matches.Any(match => match.CanLinkFamily);
+		return new() { Inquiry = detail, Matches = matches };
+	}
 
 	private async Task<AdmissionInquiryDto> ReadDetailAsync(AdmissionInquiry inquiry, AdmissionInquiryFormEditService.Context? loaded = null)
 	{
@@ -659,6 +672,7 @@ public class AdmissionInquiryAppService : ApplicationService, IAdmissionInquiryA
 		var scopedApplications = await applicationScope.GetScopedApplicationsAsync();
 		if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)) scopedApplications = scopedApplications.Where(_ => false);
 		var applicants = await applicantRepository.GetQueryableAsync();
+		applicants = await LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingSourceVisibilityService>().ApplyAsync(applicants);
 		var visible = await AsyncExecuter.ToListAsync(applicants.Where(applicant => applicant.TenantId == CurrentTenant.Id &&
 			applicant.Status == AdmissionApplicantStatus.Active && Enumerable.Contains(ids, applicant.FamilyId) &&
 			(scopedInquiries.Any(inquiry => inquiry.ApplicantId == applicant.Id) || scopedApplications.Any(application => application.ApplicantId == applicant.Id)))

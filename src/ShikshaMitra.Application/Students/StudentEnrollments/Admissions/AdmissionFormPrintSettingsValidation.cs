@@ -8,9 +8,15 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 internal static class AdmissionFormPrintSettingsValidation
 {
+	private const double HeaderLayoutBoundaryTolerance = 1e-9;
 	private const int SignatureImageMaxBytes = 5 * 1024 * 1024;
 	private const int SignatureImageMaxBase64Characters = ((SignatureImageMaxBytes + 2) / 3) * 4;
 	private static readonly byte[] PngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
+	private static readonly string[] HeaderLayoutElements =
+	[
+		"logo", "banner", "schoolName", "address", "phone", "email", "website", "title", "subtitle",
+		"board", "medium", "class", "academicYear", "registrationNumber", "date", "photo"
+	];
 
 	public static void Validate(AdmissionFormPrintAdvancedSettingsDto? settings)
 	{
@@ -54,6 +60,15 @@ internal static class AdmissionFormPrintSettingsValidation
 			Choice(header.Continuation, "continuation header", "compact", "full", "none");
 			Choice(header.Alignment, "header alignment", "left", "center", "right");
 			Text(header.Title, 128, "form title"); Text(header.Subtitle, 128, "form subtitle");
+			if (header.Layout is { } layout)
+			{
+				foreach (var (key, placement) in layout)
+				{
+					Choice(key, "header layout element", HeaderLayoutElements);
+					if (placement == null) Invalid("Provide a position and size for each header element.");
+					Placement(placement!, 1, "header element", "Keep each element inside the header area.", HeaderLayoutBoundaryTolerance);
+				}
+			}
 		}
 		if (settings.Photo is { } photo)
 		{
@@ -125,10 +140,17 @@ internal static class AdmissionFormPrintSettingsValidation
 
 	private static void Asset(AdmissionPrintAssetPlacementDto? asset)
 	{
-		if (asset == null) return;
-		Range(asset.X, 0, 100, "asset horizontal position"); Range(asset.Y, 0, 100, "asset vertical position");
-		Range(asset.Width, 5, 100, "asset width"); Range(asset.Height, 5, 100, "asset height");
-		if (asset.X + asset.Width > 100 || asset.Y + asset.Height > 100) Invalid("Keep the school image inside the header area.");
+		if (asset != null) Placement(asset, 5, "asset", "Keep the school image inside the header area.");
+	}
+	private static void Placement(AdmissionPrintAssetPlacementDto placement, double minimumSize, string label,
+		string outOfBoundsMessage, double boundaryTolerance = 0)
+	{
+		Range(placement.X, 0, 100, $"{label} horizontal position");
+		Range(placement.Y, 0, 100, $"{label} vertical position");
+		Range(placement.Width, minimumSize, 100, $"{label} width");
+		Range(placement.Height, minimumSize, 100, $"{label} height");
+		if (placement.X + placement.Width > 100 + boundaryTolerance || placement.Y + placement.Height > 100 + boundaryTolerance)
+			Invalid(outOfBoundsMessage);
 	}
 	private static void SignatureImage(string? value, string label)
 	{

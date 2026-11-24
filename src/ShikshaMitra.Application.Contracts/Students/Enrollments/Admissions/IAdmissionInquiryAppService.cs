@@ -11,6 +11,7 @@ public interface IAdmissionInquiryAppService : IApplicationService
 	Task<PagedResultDto<AdmissionInquiryDto>> GetListAsync(AdmissionInquiryListInput input);
 	Task<byte[]> ExportCsvAsync(AdmissionInquiryListInput input);
 	Task<AdmissionInquiryDto> GetAsync(Guid id);
+	Task<AdmissionInquirySiblingMatchesDto> GetSiblingMatchesAsync(Guid id);
 	Task<AdmissionInquiryDto> CreateAsync(CreateAdmissionInquiryDto input);
 	Task<AdmissionInquiryDto> UpdateAsync(Guid id, UpdateAdmissionInquiryDto input);
 	Task<AdmissionInquiryDto> ConfirmOfferingAsync(Guid id, ConfirmAdmissionInquiryOfferingDto input);

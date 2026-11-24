@@ -64,8 +64,9 @@ public partial class AdmissionParentRegistrationAppService
 				var inquiry = await data.Repo<AdmissionInquiry>().FindAsync(application.InquiryId.Value);
 				if (inquiry?.ApplicantId == applicant.Id) { AdmissionFamilyContactCapture.CopyToInquiry(applicant, inquiry); await data.Repo<AdmissionInquiry>().UpdateAsync(inquiry, false); }
 			}
+			var now = Clock.Now;
 			foreach (var grant in await data.Repo<AdmissionParentRegistration>().GetListAsync(row => row.ApplicationId == applicationId))
-				if (grant.CanRead(Clock.Now)) { grant.Close("Revoked"); await data.Repo<AdmissionParentRegistration>().UpdateAsync(grant, false); }
+				if (grant.CanRead(now) || grant.CanReactivate(now)) { grant.Close("Revoked"); await data.Repo<AdmissionParentRegistration>().UpdateAsync(grant, false); }
 			application.SaveDraft(); form.Instance.MarkSaved();
 			await data.Repo<AdmissionFormInstance>().UpdateAsync(form.Instance, false);
 			await data.Repo<AdmissionApplication>().UpdateAsync(application, false);

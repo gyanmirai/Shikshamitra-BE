@@ -3,12 +3,33 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Volo.Abp.BackgroundJobs;
+using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionParentRegistrationAppService
 {
+	public Task<AdmissionParentStaffContextDto> ReactivateAsync(Guid applicationId, AdmissionParentReactivateInput input) =>
+		StaffMutationAsync(applicationId, input, async application =>
+		{
+			if (input.RequestId == Guid.Empty)
+				throw AdmissionParentRegistrationData.Invalid("Select the expired registration link.");
+			var grant = await LatestAsync(applicationId);
+			if (grant.Id != input.RequestId) throw AdmissionParentRegistrationData.Unavailable();
+			var fingerprint = AdmissionParentRegistration.Hash("reactivate" + JsonSerializer.Serialize(input));
+			if (grant.IsReplay(input.IdempotencyKey, fingerprint)) return;
+			EnsureStamp(application, input);
+			if (!grant.CanReactivate(Clock.Now)) throw AdmissionParentRegistrationData.Unavailable();
+			if (grant.AllowsDocuments) await AuthorizationService.CheckAsync(Permissions.AdmissionDocuments.Upload);
+			await access.AuthorizeAsync(grant, requireLiveGrant: false, requireSenderAuthority: true);
+			grant.Reactivate(Clock.Now, input.ValidityDays);
+			grant.RecordOperation(input.IdempotencyKey, fingerprint);
+			await data.Repo<AdmissionParentRegistration>().UpdateAsync(grant, false);
+			await data.Repo<AdmissionApplication>().UpdateAsync(application, false);
+		});
+
 	public Task<AdmissionParentStaffContextDto> RevokeAsync(Guid applicationId, AdmissionParentCommand input) => CloseAsync(applicationId, input, "Revoked");
 	public Task<AdmissionParentStaffContextDto> TakeoverAsync(Guid applicationId, AdmissionParentCommand input) => CloseAsync(applicationId, input, "TakenOver");
 	private Task<AdmissionParentStaffContextDto> CloseAsync(Guid applicationId, AdmissionParentCommand input, string status) =>

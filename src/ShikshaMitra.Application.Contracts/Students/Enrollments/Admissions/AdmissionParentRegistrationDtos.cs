@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Volo.Abp.Application.Services;
@@ -13,22 +14,32 @@ public class AdmissionParentCommand
 	[Required, StringLength(128)] public string ConcurrencyStamp { get; set; } = "";
 	[Required, StringLength(128)] public string IdempotencyKey { get; set; } = "";
 }
-public class AdmissionParentSendInput : AdmissionParentCommand
+public class AdmissionParentRecipientCommand : AdmissionParentCommand
 {
 	[Required, RegularExpression("^(father|mother|guardian)$")] public string RecipientRelationship { get; set; } = "";
+}
+public class AdmissionParentSendInput : AdmissionParentRecipientCommand
+{
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? ValidityDays { get; set; }
 }
 public class AdmissionParentCopyLinkInput : AdmissionParentCommand
 {
 	public Guid? RequestId { get; set; }
 	[RegularExpression("^(father|mother|guardian)$")] public string? RecipientRelationship { get; set; }
+	public int? ValidityDays { get; set; }
 }
-public class AdmissionParentEmailInput : AdmissionParentSendInput
+public class AdmissionParentReactivateInput : AdmissionParentCommand
+{
+	public Guid RequestId { get; set; }
+	public int? ValidityDays { get; set; }
+}
+public class AdmissionParentEmailInput : AdmissionParentRecipientCommand
 {
 	[Required, EmailAddress, StringLength(256)] public string Email { get; set; } = "";
 	[StringLength(256)] public string? ExpectedEmail { get; set; }
 	[StringLength(512)] public string? Reason { get; set; }
 }
-public class AdmissionParentCorrectionInput : AdmissionParentSendInput
+public class AdmissionParentCorrectionInput : AdmissionParentRecipientCommand
 {
 	[Required, StringLength(1024)] public string Notes { get; set; } = "";
 	public List<string> FieldCodes { get; set; } = [];
@@ -100,6 +111,7 @@ public class AdmissionParentStaffContextDto
 	public bool CanSend { get; set; }
 	public bool CanCopyLink { get; set; }
 	public bool CanCreateLink { get; set; }
+	public bool CanReactivate { get; set; }
 	public bool CanRequestCorrections { get; set; }
 	public bool CanRequestDocumentCorrections { get; set; }
 	public bool CanRevoke { get; set; }
@@ -233,6 +245,7 @@ public interface IAdmissionParentRegistrationAppService : IApplicationService
 	Task<List<AdmissionParentEmailHistoryDto>> GetEmailHistoryAsync(Guid applicationId);
 	Task<AdmissionParentStaffContextDto> SendAsync(Guid applicationId, AdmissionParentSendInput input);
 	Task<string> CopyLinkAsync(Guid applicationId, AdmissionParentCopyLinkInput input);
+	Task<AdmissionParentStaffContextDto> ReactivateAsync(Guid applicationId, AdmissionParentReactivateInput input);
 	Task<AdmissionParentStaffContextDto> ChangeEmailAsync(Guid applicationId, AdmissionParentEmailInput input);
 	Task<AdmissionParentStaffContextDto> RequestCorrectionsAsync(Guid applicationId, AdmissionParentCorrectionInput input);
 	Task<AdmissionParentStaffContextDto> RevokeAsync(Guid applicationId, AdmissionParentCommand input);

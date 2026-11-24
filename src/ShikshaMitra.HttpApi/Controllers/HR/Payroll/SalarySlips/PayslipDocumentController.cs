@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.HR.Payroll.SalarySlips;
@@ -13,6 +14,9 @@ namespace ShikshaMitra.Controllers.HR.Payroll.SalarySlips;
 public class PayslipDocumentController(IPayslipDocumentAppService documents) : AbpControllerBase
 {
 	[HttpGet] public Task<List<PayslipDocumentDto>> GetAsync(Guid employeeId, string monthYear) => documents.GetAsync(employeeId, monthYear);
+	[HttpGet("issued")]
+	public Task<PagedResultDto<IssuedPayslipListItem>> GetIssuedAsync([FromQuery] IssuedPayslipListInput input) =>
+		documents.GetIssuedAsync(input);
 	[HttpGet("{id}/pdf")]
 	public async Task<IActionResult> GetPdfAsync(Guid id) => File(await documents.GetPdfAsync(id), "application/pdf", $"Payslip_{id:N}.pdf");
 	[HttpPost("payment")] public Task RecordPaymentAsync(RecordPayslipPaymentDto input) => documents.RecordPaymentAsync(input);

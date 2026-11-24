@@ -193,7 +193,13 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			var fields = HrReportCatalog.GetSource(source).Fields;
 			if (selected.Count is < 1 or > 60 || selected.Distinct().Count() != selected.Count || selected.Any(id => !fields.Any(field => field.Id == id)))
 				throw HrReportingEngine.Invalid("Choose supported salary document columns.");
-			return selected.Select(id => fields.Single(field => field.Id == id)).ToList();
+			var criteria = ReportingCriteria(request);
+			var automaticDeductions = (criteria.Filters ?? []).Select(filter => filter?.Column)
+				.Concat((criteria.Sorts ?? []).Select(sort => sort?.Column))
+				.OfType<string>()
+				.Where(HrReportCatalog.AutomaticSalaryDocumentDeductions.Contains);
+			return selected.Union(automaticDeductions, StringComparer.Ordinal)
+				.Select(id => fields.Single(field => field.Id == id)).ToList();
 		}
 		return Fields[request.Table].Select(id =>
 		{

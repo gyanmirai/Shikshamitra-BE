@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
@@ -30,8 +31,18 @@ public class ReplacePayslipFactsDto
 	[Required, StringLength(1000)] public string Reason { get; set; } = string.Empty;
 }
 
+public class IssuedPayslipListInput : PagedResultRequestDto
+{
+	[StringLength(7)] public string? MonthYear { get; set; }
+	[StringLength(100)] public string? Search { get; set; }
+}
+
+public record IssuedPayslipListItem(Guid Id, Guid EmployeeId, string EmployeeName, string? EmployeeCode,
+	string MonthYear, int Revision, DateTime IssuedAt, bool IsPaid);
+
 public interface IPayslipDocumentAppService : IApplicationService
 {
+	Task<PagedResultDto<IssuedPayslipListItem>> GetIssuedAsync(IssuedPayslipListInput input);
 	Task<List<PayslipDocumentDto>> GetAsync(Guid employeeId, string monthYear);
 	Task<byte[]> GetPdfAsync(Guid documentId);
 	Task RecordPaymentAsync(RecordPayslipPaymentDto input);

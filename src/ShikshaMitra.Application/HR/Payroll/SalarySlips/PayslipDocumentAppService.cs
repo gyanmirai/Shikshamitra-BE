@@ -7,6 +7,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Employees;
 using Volo.Abp;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Uow;
@@ -19,6 +20,42 @@ public class PayslipDocumentAppService(IRepository<PayslipDocument, Guid> docume
 	PayslipIssuanceService issuance, IEmployeeRepository employees,
 	IRepository<PayslipCorrection, Guid> corrections) : ApplicationService, IPayslipDocumentAppService
 {
+	public async Task<PagedResultDto<IssuedPayslipListItem>> GetIssuedAsync(IssuedPayslipListInput input)
+	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.View);
+		var staff = await access.GetIssuedHistoryEmployeesAsync();
+		var tenantId = CurrentTenant.Id;
+		var issued = (await documents.GetQueryableAsync()).Where(document => document.TenantId == tenantId);
+		var finalized = (await slips.GetQueryableAsync()).Where(slip => slip.TenantId == tenantId &&
+			(slip.Status == SalarySlipStatus.Finalized || slip.Status == SalarySlipStatus.Paid));
+		if (!string.IsNullOrWhiteSpace(input.MonthYear))
+		{
+			var month = SalarySlipMonthYearNormalizer.Normalize(input.MonthYear);
+			issued = issued.Where(document => document.MonthYear == month);
+		}
+		var search = input.Search?.Trim().ToLowerInvariant();
+		if (!string.IsNullOrEmpty(search))
+			staff = staff.Where(employee =>
+				((employee.FirstName ?? "") + " " + (employee.LastName ?? "")).ToLower().Contains(search) ||
+				(employee.EmployeeCode != null && employee.EmployeeCode.ToLower().Contains(search)));
+
+		var query =
+			from document in issued
+			join slip in finalized on document.SalarySlipId equals slip.Id
+			join employee in staff on document.EmployeeId equals employee.Id
+			where document.EmployeeId == slip.EmployeeId && document.MonthYear == slip.MonthYear &&
+				!issued.Any(newer => newer.SalarySlipId == document.SalarySlipId && newer.Revision > document.Revision)
+			select new { document, slip.Status, employee.FirstName, employee.LastName, employee.EmployeeCode };
+		var total = await AsyncExecuter.LongCountAsync(query);
+		var rows = await AsyncExecuter.ToListAsync(query.OrderByDescending(row => row.document.MonthYear)
+			.ThenBy(row => row.FirstName).ThenBy(row => row.LastName).ThenBy(row => row.document.Id)
+			.Skip(input.SkipCount).Take(input.MaxResultCount)
+			.Select(row => new IssuedPayslipListItem(row.document.Id, row.document.EmployeeId,
+				((row.FirstName ?? "") + " " + (row.LastName ?? "")).Trim(), row.EmployeeCode,
+				row.document.MonthYear, row.document.Revision, row.document.IssuedAt, row.Status == SalarySlipStatus.Paid)));
+		return new PagedResultDto<IssuedPayslipListItem>(total, rows);
+	}
+
 	public async Task<List<PayslipDocumentDto>> GetAsync(Guid employeeId, string monthYear)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.View);

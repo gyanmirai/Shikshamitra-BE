@@ -551,6 +551,7 @@ There is no public document URL or arbitrary email-recipient override.
 
 | Endpoint | Permission | Contract |
 | --- | --- | --- |
+| GET /api/payroll/payslip-documents/issued?monthYear=&search=&skipCount=&maxResultCount= | GenerateSalarySlip.View | Paged metadata for the latest issued revision of each finalized or paid payslip in the caller's current employee scope, newest pay period first. Search matches staff name or code, and month is optional. |
 | GET /api/payroll/payslip-documents?employeeId=&monthYear= | GenerateSalarySlip.View | Revision metadata, current marker, checksum, replacement reason/relation, recorded employee email and separate payment state. |
 | GET /api/payroll/payslip-documents/{id}/pdf | GenerateSalarySlip.View | Exact immutable PDF bytes for the requested revision, including a replaced revision. |
 | POST /api/payroll/payslip-documents/payment | GenerateSalarySlip.Add | DocumentId, IdempotencyKey, PaidAt and Reference; current finalized revision only. |

@@ -306,7 +306,21 @@ An effective change to an active substitution can queue `Academic.Substitution.C
 
 The first cancellation can queue `Academic.Substitution.Cancelled` before the duty ends. The configured audience is limited to staff whose earlier duty notice has recorded provider acceptance and whose role or prior duty still qualifies. A pending or unconfirmed notice supplies no cancellation eligibility. An informed former substitute remains eligible if the removal notice has yet to be accepted. A cancellation invalidates the pending duty notices and acknowledgement reminders.
 
-Template test-send accepts only `revisionId` and `concurrencyStamp`. It renders sample values, queues one delivery, expires after ten minutes and returns 202 with `isSynthetic: true`. In-app, email and web push use the authenticated account by default. To designate a test account, set `Notifications:Academic:Tenants:<tenantIdN>:TemplateTest:<channel>:UserId`. WhatsApp requires a designated account with a verified number, current consent and a published revision with an approved provider binding. Email uses the account's verified address and the existing provider's consent policy. Web push uses an active subscription for that account. The test-send limit is five queued test messages per school and channel in 15 minutes.
+Template test-send requires `revisionId` and `concurrencyStamp`.
+It renders sample values, queues one delivery, expires after ten minutes and returns 202 with `isSynthetic: true`.
+In-app, email and Web Push use the authenticated account by default.
+To designate a test account, set `Notifications:Academic:Tenants:<tenantIdN>:TemplateTest:<channel>:UserId`.
+WhatsApp requires a designated account with a verified number, current consent and a published revision with an approved provider binding.
+Email uses the account's verified address and the existing provider's consent policy.
+The test-send limit is five queued test messages per school and channel in 15 minutes.
+
+For Web Push, send the browser's subscription GUID in `webPushSubscriptionId` to target that device.
+The subscription must be active for the designated account and current push key version in the school.
+If the ID is omitted, a single qualifying subscription is selected for compatibility.
+Multiple qualifying subscriptions require an explicit ID and return `WebPushTestDeviceSelectionRequired`.
+No qualifying subscription or an unavailable selected ID returns `WebPushSubscriptionUnavailable`.
+A supplied subscription ID on another channel returns `Communication:Notification:TemplateInvalid`.
+The queued delivery rechecks the stored subscription and skips the test if that device becomes unavailable.
 
 `GET /api/communication/notifications/providers/whatsapp/templates/context?templateId={templateId}&revisionId={revisionId}` reads the school's resolved WhatsApp provider setting ID and the binding for the exact published revision. Read requires Provider Settings View and the template's Academic View permission and scope. `bindingMatchesProvider` reflects whether the binding was created for the currently configured provider account. Linking, submitting and syncing use the existing Provider Settings Add and template write checks. The context response omits provider account configuration and credentials.
 

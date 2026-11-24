@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Communication.Notifications;
@@ -149,6 +152,13 @@ public partial class AcademicNotificationManualApi_Tests
 			revisionId = draft.RevisionId, concurrencyStamp = draft.ConcurrencyStamp, destination = "unapproved@example.invalid"
 		});
 		invalid.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await invalid.Content.ReadAsStringAsync());
+		using var wrongChannel = await Client.PostAsJsonAsync(route, new
+		{
+			revisionId = draft.RevisionId, concurrencyStamp = draft.ConcurrencyStamp, webPushSubscriptionId = Guid.NewGuid()
+		});
+		wrongChannel.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await wrongChannel.Content.ReadAsStringAsync());
+		var wrongChannelDetails = await wrongChannel.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		wrongChannelDetails.GetProperty("errorCode").GetString().ShouldBe(NotificationErrorCodes.TemplateInvalid);
 		using var stale = await Client.PostAsJsonAsync(route, new { revisionId = draft.RevisionId, concurrencyStamp = "stale" });
 		stale.StatusCode.ShouldBe(HttpStatusCode.Conflict, await stale.Content.ReadAsStringAsync());
 		await WithDatabaseAsync(async (db, _) =>
@@ -199,6 +209,127 @@ public partial class AcademicNotificationManualApi_Tests
 		details.GetProperty("errorCode").GetString().ShouldBe(NotificationErrorCodes.TemplateTestAccountUnavailable);
 	}
 
+	[Fact]
+	public async Task Web_push_template_test_pins_one_active_device_for_the_designated_account()
+	{
+		const string version = "template-test-v1";
+		var tenantId = AcademicNotificationPreviewApiFactory.TenantId;
+		var actorId = Guid.Parse(TestAuthHandler.TestUserId);
+		var recipientId = AcademicNotificationPreviewApiFactory.ApproverId;
+		var chosenDevice = Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff");
+		var otherDevice = Guid.NewGuid();
+		var actorDevice = Guid.NewGuid();
+		var oldDevice = Guid.NewGuid();
+		var configuration = Factory.Services.GetRequiredService<IConfiguration>();
+		var pair = NotificationSelfPushApiFactory.CreateParameters();
+		var settings = new Dictionary<string, string?> {
+			["Notifications:WebPush:PublicKey"] = NotificationSelfPushApiFactory.PublicKey(pair),
+			["Notifications:WebPush:PrivateKey"] = NotificationSelfPushApiFactory.Base64(pair.D!),
+			["Notifications:WebPush:KeyVersion"] = version,
+			["Notifications:WebPush:AllowedOrigins:0"] = "https://push.example.test",
+			[$"Notifications:Academic:Tenants:{tenantId:N}:TemplateTest:WebPush:UserId"] = recipientId.ToString()
+		};
+		var original = settings.Keys.ToDictionary(key => key, key => configuration[key]);
+		foreach (var (key, value) in settings) configuration[key] = value;
+		try
+		{
+			await SeedApproverAsync();
+			var draft = await CreateTestSendDraftAsync(CommunicationChannelType.WebPush);
+			await WithDatabaseAsync((db, _) =>
+			{
+				db.AddRange(Subscription(actorDevice, actorId, version), Subscription(oldDevice, recipientId, "old-version"));
+				return Task.CompletedTask;
+			});
+			await ExpectRejectionAsync(await LegacyRequestAsync(), "WebPushSubscriptionUnavailable");
+			await ExpectRejectionAsync(await DeviceRequestAsync(actorDevice), "WebPushSubscriptionUnavailable");
+			await ExpectRejectionAsync(await DeviceRequestAsync(oldDevice), "WebPushSubscriptionUnavailable");
+			await WithDatabaseAsync((db, _) =>
+			{
+				db.Add(Subscription(chosenDevice, recipientId, version));
+				return Task.CompletedTask;
+			});
+			var legacy = await ReadQueuedAsync(await LegacyRequestAsync());
+			await WithDatabaseAsync((db, _) =>
+			{
+				db.Add(Subscription(otherDevice, recipientId, version));
+				return Task.CompletedTask;
+			});
+			await ExpectRejectionAsync(await LegacyRequestAsync(), "WebPushTestDeviceSelectionRequired");
+			await ExpectRejectionAsync(await DeviceRequestAsync(Guid.Empty), "WebPushSubscriptionUnavailable");
+			var selected = await ReadQueuedAsync(await DeviceRequestAsync(chosenDevice));
+
+			await WithDatabaseAsync(async (db, services) =>
+			{
+				var readiness = services.GetRequiredService<NotificationDispatchReadiness>();
+				var testDelivery = services.GetRequiredService<AcademicNotificationTemplateTestDelivery>();
+				foreach (var queued in new[] { legacy, selected })
+				{
+					var row = await db.NotificationDispatches.SingleAsync(x => x.CampaignId == queued.OperationId);
+					var intent = await db.NotificationIntents.SingleAsync(x => x.Id == row.IntentId);
+					var now = DateTimeOffset.UtcNow;
+					var ready = await readiness.CheckAsync(intent, row, now, default);
+					ready.ExclusionCode.ShouldBeNull();
+					var payload = ready.Payload.ShouldNotBeNull();
+					payload.Recipient.UserId.ShouldBe(recipientId);
+					payload.Destination.ShouldBe(chosenDevice.ToString("N"));
+					foreach (var invalidDestination in new[] { null, "invalid", actorDevice.ToString("N") })
+					{
+						var rejected = await testDelivery.CheckAsync(intent, row, payload with { Destination = invalidDestination }, now, default);
+						rejected.ExclusionCode.ShouldBe("WebPushSubscriptionUnavailable");
+						rejected.Payload.ShouldBeNull();
+					}
+				}
+			});
+
+			await WithDatabaseAsync(async (db, _) =>
+				(await db.Set<WebPushSubscription>().SingleAsync(x => x.Id == chosenDevice)).Disable());
+			await ExpectRejectionAsync(await DeviceRequestAsync(chosenDevice), "WebPushSubscriptionUnavailable");
+			await WithDatabaseAsync(async (db, services) =>
+			{
+				var row = await db.NotificationDispatches.SingleAsync(x => x.CampaignId == selected.OperationId);
+				var intent = await db.NotificationIntents.SingleAsync(x => x.Id == row.IntentId);
+				var readiness = await services.GetRequiredService<NotificationDispatchReadiness>().CheckAsync(intent, row,
+					DateTimeOffset.UtcNow, default);
+				readiness.ExclusionCode.ShouldBe("WebPushSubscriptionUnavailable");
+				readiness.Payload.ShouldBeNull();
+			});
+
+			Task<HttpResponseMessage> LegacyRequestAsync() => Client.PostAsJsonAsync(TestSendRoute(draft),
+				new { revisionId = draft.RevisionId, concurrencyStamp = draft.ConcurrencyStamp });
+			Task<HttpResponseMessage> DeviceRequestAsync(Guid deviceId) => Client.PostAsJsonAsync(TestSendRoute(draft),
+				new { revisionId = draft.RevisionId, concurrencyStamp = draft.ConcurrencyStamp, webPushSubscriptionId = deviceId });
+		}
+		finally
+		{
+			foreach (var (key, value) in original) configuration[key] = value;
+			var fixtureIds = new[] { chosenDevice, otherDevice, actorDevice, oldDevice };
+			await WithDatabaseAsync(async (db, _) => db.RemoveRange(await db.Set<WebPushSubscription>()
+				.Where(x => Enumerable.Contains(fixtureIds, x.Id)).ToListAsync()));
+		}
+
+		WebPushSubscription Subscription(Guid id, Guid userId, string key) =>
+			new(id, tenantId, userId, Guid.NewGuid(), id.ToString("N"), "fixture", key, DateTimeOffset.UtcNow);
+
+		static async Task<AcademicNotificationTemplateTestSendDto> ReadQueuedAsync(HttpResponseMessage response)
+		{
+			using (response)
+			{
+				response.StatusCode.ShouldBe(HttpStatusCode.Accepted, await response.Content.ReadAsStringAsync());
+				return (await response.Content.ReadFromJsonAsync<AcademicNotificationTemplateTestSendDto>(JsonOptions))!;
+			}
+		}
+
+		static async Task ExpectRejectionAsync(HttpResponseMessage response, string code)
+		{
+			using (response)
+			{
+				response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+				var problem = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+				problem.GetProperty("errorCode").GetString().ShouldBe(code);
+			}
+		}
+	}
+
 	private async Task<NotificationTemplateDto> CreateTestSendDraftAsync(CommunicationChannelType channel = CommunicationChannelType.InApp)
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
@@ -206,7 +337,7 @@ public partial class AcademicNotificationManualApi_Tests
 		return await PostAndReadAsync<NotificationTemplateDto>(BasePath + "/templates",
 			new CreateNotificationTemplateDto(AcademicNotificationEventKeys.HomeworkDue, "Guardian",
 				channel, "en", "Homework test-send sample", "Homework reminder",
-				"Hello {{recipient_name}}. Details: {{source_link}}"));
+				channel == CommunicationChannelType.WebPush ? "A homework update is available." : "Hello {{recipient_name}}. Details: {{source_link}}"));
 	}
 
 	private static string TestSendRoute(NotificationTemplateDto draft) => $"{BasePath}/templates/{draft.TemplateId}/test-send";

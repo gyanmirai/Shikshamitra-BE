@@ -96,7 +96,7 @@ For **Email** or **Web Push**, use the same steps with the following settings in
 | `Notifications__QueueWorker__ExternalPilot__RecipientUserId` | Designated test account GUID |
 | `Notifications__QueueWorker__ExternalPilot__Channel` | `Email` or `WebPush` |
 
-For Email, confirm the school SMTP provider and the designated account's confirmed login email. Communication and Admissions also use the school provider setting, so review the effect on those workflows before changing it. For Web Push, set `Notifications__WebPush__PilotTenantId` to the selected school GUID along with the normal push keys and allowed origins. Enable notifications in a browser signed in to the designated account. The template test selects one active subscription for that account.
+For Email, confirm the school SMTP provider and the designated account's confirmed login email. Communication and Admissions also use the school provider setting, so review the effect on those workflows before changing it. For Web Push, set `Notifications__WebPush__PilotTenantId` to the selected school GUID along with the normal push keys and allowed origins. Enable notifications in the browser signed in to the designated account and use its subscription ID to queue the test. Keep that browser enrolled until delivery.
 
 After queueing the selected external test, arm the matching operation. Check the provider's acceptance in Delivery History and verify actual receipt in the designated mailbox or browser. Remove the four External Pilot settings afterward. Keep the shared worker paused. Remove temporary Web Push configuration at the end of the pilot if it was enabled only for the test.
 

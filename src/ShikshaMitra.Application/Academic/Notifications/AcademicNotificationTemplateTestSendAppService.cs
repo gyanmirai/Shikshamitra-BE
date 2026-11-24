@@ -39,6 +39,8 @@ public class AcademicNotificationTemplateTestSendAppService(AcademicNotification
 		if (revision.IsRetired) throw new BusinessException(NotificationErrorCodes.TemplateInvalid);
 
 		var channel = revision.Channel;
+		if (input.WebPushSubscriptionId.HasValue && channel != CommunicationChannelType.WebPush)
+			throw new BusinessException(NotificationErrorCodes.TemplateInvalid);
 		var channels = NotificationRuntimeJson.Serialize(new[] { channel }, NotificationErrorCodes.TemplateInvalid);
 		await writeLock.AcquireAsync([$"academic-template-test:{channel}"], cancellationToken);
 		var now = new DateTimeOffset(clock.Now.ToUniversalTime());
@@ -51,7 +53,8 @@ public class AcademicNotificationTemplateTestSendAppService(AcademicNotification
 
 		var expiry = now + DeliveryLifetime;
 		var definition = validator.GetDefinition(revision.EventKey);
-		var target = await delivery.ResolveAsync(tenantId, actorId, revision, definition, now, expiry, cancellationToken);
+		var target = await delivery.ResolveAsync(tenantId, actorId, revision, definition, now, expiry,
+			input.WebPushSubscriptionId, cancellationToken);
 		if (target.ExclusionCode != null) throw new BusinessException(target.ExclusionCode);
 		var rendered = previews.RenderSynthetic(revision, definition);
 		if (!rendered.IsSuccess)

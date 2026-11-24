@@ -31,7 +31,8 @@ public sealed class AcademicNotificationTemplateTestDelivery(IConfiguration conf
 	WhatsAppProviderRoute whatsAppRoute, WhatsAppApprovedTemplates approvals, WebPushDispatchSubscriptions push) : ITransientDependency
 {
 	internal async Task<AcademicNotificationTestTarget> ResolveAsync(Guid tenantId, Guid actorId, CommunicationTemplateRevision revision,
-		NotificationEventDefinition definition, DateTimeOffset now, DateTimeOffset expiry, CancellationToken cancellationToken)
+		NotificationEventDefinition definition, DateTimeOffset now, DateTimeOffset expiry, Guid? webPushSubscriptionId,
+		CancellationToken cancellationToken)
 	{
 		var channel = revision.Channel;
 		var configured = configuration[$"Notifications:Academic:Tenants:{tenantId:N}:TemplateTest:{channel}:UserId"];
@@ -72,11 +73,13 @@ public sealed class AcademicNotificationTemplateTestDelivery(IConfiguration conf
 				variables = NotificationTemplatePreviewService.CreateExampleVariables(definition, configuration["App:ClientUrl"]);
 				break;
 			case CommunicationChannelType.WebPush:
-				var subscriptions = await push.LoadAsync([userId], cancellationToken);
+				if (webPushSubscriptionId == Guid.Empty) return new(NotificationErrorCodes.WebPushSubscriptionUnavailable);
+				var subscriptions = await push.LoadAsync([userId], cancellationToken, webPushSubscriptionId);
 				if (!subscriptions.IsConfigured) return new(NotificationErrorCodes.ProviderUnavailable);
-				var subscription = subscriptions.Subscriptions[userId].Order().FirstOrDefault();
-				if (subscription == Guid.Empty) return new("WebPushSubscriptionUnavailable");
-				destination = subscription.ToString("N");
+				var active = subscriptions.Subscriptions[userId].Take(2).ToArray();
+				if (active.Length == 0) return new(NotificationErrorCodes.WebPushSubscriptionUnavailable);
+				if (active.Length > 1) return new(NotificationErrorCodes.WebPushTestDeviceSelectionRequired);
+				destination = active[0].ToString("N");
 				break;
 		}
 
@@ -108,8 +111,15 @@ public sealed class AcademicNotificationTemplateTestDelivery(IConfiguration conf
 			x.Channel == dispatch.Channel && !x.IsRetired && !x.IsDeleted), cancellationToken);
 		if (revision == null) return new(null, null, null, NotificationErrorCodes.TemplateInvalid);
 		if (revision.ContentHash != intent.SourceRevision) return new(null, null, null, "SourceRevisionChanged");
+		Guid? webPushSubscriptionId = null;
+		if (dispatch.Channel == CommunicationChannelType.WebPush)
+		{
+			if (!Guid.TryParseExact(payload.Destination, "N", out var subscriptionId))
+				return new(null, null, null, NotificationErrorCodes.WebPushSubscriptionUnavailable);
+			webPushSubscriptionId = subscriptionId;
+		}
 		var definition = validator.GetDefinition(revision.EventKey);
-		var target = await ResolveAsync(tenantId, actorId, revision, definition, now, expiry, cancellationToken);
+		var target = await ResolveAsync(tenantId, actorId, revision, definition, now, expiry, webPushSubscriptionId, cancellationToken);
 		if (target.ExclusionCode != null) return new(null, null, null, target.ExclusionCode);
 		if (payload.Recipient != target.Recipient || payload.SourceRecipient != target.Recipient ||
 			payload.AssociationRevision != target.AssociationRevision || !string.Equals(payload.Destination, target.Destination, StringComparison.Ordinal))

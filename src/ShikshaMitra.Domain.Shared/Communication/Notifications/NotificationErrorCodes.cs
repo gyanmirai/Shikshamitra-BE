@@ -16,6 +16,8 @@ public static class NotificationErrorCodes
 	public const string TemplateImmutable = "Communication:Notification:TemplateImmutable";
 	public const string TemplateTestRateLimited = "Communication:Notification:TemplateTestRateLimited";
 	public const string TemplateTestAccountUnavailable = "Communication:Notification:TemplateTestAccountUnavailable";
+	public const string WebPushTestDeviceSelectionRequired = "WebPushTestDeviceSelectionRequired";
+	public const string WebPushSubscriptionUnavailable = "WebPushSubscriptionUnavailable";
 	public const string ReviewConsumed = "Communication:Notification:ReviewConsumed";
 	public const string ReviewInvalid = "Communication:Notification:ReviewInvalid";
 	public const string ApprovalSetupRequired = "Communication:Notification:ApprovalSetupRequired";

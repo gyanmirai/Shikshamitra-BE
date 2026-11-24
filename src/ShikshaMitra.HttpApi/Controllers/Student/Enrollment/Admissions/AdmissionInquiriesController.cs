@@ -30,6 +30,11 @@ public class AdmissionInquiriesController(IAdmissionInquiryAppService service) :
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)]
 	public async Task<Result<AdmissionInquiryDto>> GetAsync(Guid id) => Result.Success(await service.GetAsync(id));
 
+	[HttpGet("{id:guid}/sibling-matches")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)]
+	public async Task<Result<AdmissionInquirySiblingMatchesDto>> GetSiblingMatchesAsync(Guid id) =>
+		Result.Success(await service.GetSiblingMatchesAsync(id));
+
 	[HttpGet("{id:guid}/timeline")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)]
 	public async Task<Result<List<AdmissionInquiryTimelineItemDto>>> GetTimelineAsync(Guid id) =>

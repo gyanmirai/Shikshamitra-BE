@@ -23,6 +23,23 @@ public class AdmissionFormInheritance_Tests
 		AdmissionFormInheritanceMetadataStore.ReadPolicy(copy)!.Sources.Single().StepNames["INQ_DETAILS"].ShouldBe("Student Information");
 	}
 
+	[Fact]
+	public void A_new_draft_version_uses_registration_steps_without_rewriting_the_published_policy()
+	{
+		var published = Form();
+		var inquiryId = Guid.NewGuid();
+		published.SetProperty("AdmissionFormInheritanceV1",
+			$$"""{"enabled":true,"sources":[{"inquiryFormDefinitionId":"{{inquiryId}}"}]}""");
+		published.Publish(null);
+
+		var draft = Form();
+		AdmissionFormInheritanceMetadataStore.Copy(published, draft);
+		var policy = AdmissionFormInheritanceMetadataStore.ReadPolicy(draft)!;
+		policy.UseRegistrationSteps.ShouldBe(true);
+		policy.Sources.Single().InquiryFormDefinitionId.ShouldBe(inquiryId);
+		AdmissionFormInheritanceMetadataStore.ReadPolicy(published)!.UseRegistrationSteps.ShouldBeNull();
+	}
+
 	[Theory]
 	[InlineData("")]
 	[InlineData(" ")]
@@ -58,7 +75,44 @@ public class AdmissionFormInheritance_Tests
 	}
 
 	[Fact]
-	public void Approved_inheritance_cannot_be_disabled_to_bypass_inherited_deletion_locks()
+	public void Approved_inheritance_can_be_disabled_and_reenabled_with_its_saved_sources()
+	{
+		var form = Form();
+		var policy = new AdmissionFormInheritancePolicyDto { Enabled = true, Sources = [new()
+		{
+			InquiryFormDefinitionId = Guid.NewGuid(), StepNames = new() { ["INQ_DETAILS"] = "Original title" }
+		}] };
+		var input = new CreateUpdateAdmissionFormDto { Inheritance = policy };
+		AdmissionFormInheritanceMetadataStore.Write(form, input);
+		policy.Enabled = false;
+		AdmissionFormInheritanceMetadataStore.Write(form, input);
+		var reopened = AdmissionFormInheritanceMetadataStore.ReadPolicy(form)!;
+		reopened.Enabled.ShouldBeFalse();
+		reopened.UseRegistrationSteps.ShouldBe(true);
+		reopened.Sources.Single().StepNames["INQ_DETAILS"].ShouldBe("Original title");
+		Should.Throw<BusinessException>(() => AdmissionFormInheritanceMetadataStore.Write(form, new()
+		{
+			Inheritance = new() { Enabled = true }
+		}));
+		reopened.Enabled = true;
+		AdmissionFormInheritanceMetadataStore.Write(form, new() { Inheritance = reopened });
+		AdmissionFormInheritanceMetadataStore.ReadPolicy(form)!.Enabled.ShouldBeTrue();
+	}
+
+	[Fact]
+	public void Version_comparison_ignores_inactive_step_placement_but_reports_active_changes()
+	{
+		var form = Definition(AdmissionFormPurpose.Registration, "Date of birth", "DATE");
+		var newer = System.Text.Json.JsonSerializer.Deserialize<AdmissionFormDto>(System.Text.Json.JsonSerializer.Serialize(form))!;
+		form.Inheritance = new();
+		newer.Inheritance = new() { UseRegistrationSteps = true };
+		AdmissionFormVersionComparer.Compare(form, newer).ShouldBeEmpty();
+		form.Inheritance.Enabled = newer.Inheritance.Enabled = true;
+		AdmissionFormVersionComparer.Compare(form, newer).ShouldContain("Inquiry inheritance changed");
+	}
+
+	[Fact]
+	public void Approved_sources_cannot_be_deleted_by_disabling_inheritance()
 	{
 		var form = Form();
 		AdmissionFormInheritanceMetadataStore.Write(form, new()

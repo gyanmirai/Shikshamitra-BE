@@ -647,6 +647,76 @@ public class AdmissionFormInheritanceComposer_Tests
 			.StepDisplayOrder.ShouldBe(1);
 	}
 
+	[Theory]
+	[InlineData(AdmissionFormLayoutType.SinglePage)]
+	[InlineData(AdmissionFormLayoutType.Stepper)]
+	public void Registration_layout_owns_steps_and_keeps_inquiry_order_and_visibility(AdmissionFormLayoutType layout)
+	{
+		var registration = Form(Custom("SCHOOL", "Previous school", "school"));
+		registration.LayoutType = layout;
+		var first = registration.Sections[0];
+		first.StepId = Guid.NewGuid();
+		first.StepCode = "REGISTRATION_STUDENT";
+		first.StepName = "Registration Student";
+		first.StepDisplayOrder = 0;
+		first.StepVisibilityRuleJson = "{\"field\":\"SCHOOL\",\"operator\":\"IsNotEmpty\"}";
+		var later = Form(Custom("ADDRESS", "Home address", "address")).Sections[0];
+		later.Code = "ADDRESS_DETAILS";
+		later.StepId = Guid.NewGuid();
+		later.StepCode = "REGISTRATION_ADDRESS";
+		later.DisplayOrder = 1;
+		later.StepDisplayOrder = 1;
+		registration.Sections.Add(later);
+
+		var inquiry = Form(Custom("INTEREST", "Learning interests", "interest"));
+		inquiry.LayoutType = AdmissionFormLayoutType.Stepper;
+		inquiry.Sections[0].StepId = Guid.NewGuid();
+		inquiry.Sections[0].StepDisplayOrder = 0;
+		inquiry.Sections[0].DisplayOrder = 2;
+		var context = Form(Field("SOURCE", "Source", "Inquiry.Source")).Sections[0];
+		context.Code = "CONTACT";
+		context.StepId = Guid.NewGuid();
+		context.StepDisplayOrder = 1;
+		context.DisplayOrder = 0;
+		context.StepVisibilityRuleJson = "{\"field\":\"INTEREST\",\"operator\":\"IsNotEmpty\"}";
+		context.VisibilityRuleJson = "{\"field\":\"INTEREST\",\"operator\":\"NotEquals\",\"value\":\"hidden\"}";
+		inquiry.Sections.Add(context);
+		var policy = Policy(inquiry.Id);
+		policy.UseRegistrationSteps = true;
+		var result = AdmissionFormInheritanceComposer.Compose(registration, inquiry, policy);
+
+		result.Issues.ShouldBeEmpty();
+		result.Definition.LayoutType.ShouldBe(layout);
+		var inherited = result.Definition.Sections[0];
+		var inheritedContext = result.InquiryContextSections.Single();
+		inherited.DisplayOrder.ShouldBe(0);
+		inheritedContext.DisplayOrder.ShouldBe(1);
+		result.Definition.Sections[1].DisplayOrder.ShouldBe(2);
+		inheritedContext.StepVisibilityRuleJson.ShouldBeNull();
+		using var rule = JsonDocument.Parse(inheritedContext.VisibilityRuleJson!);
+		rule.RootElement.GetProperty("operator").GetString().ShouldBe("ALL");
+		rule.RootElement.GetProperty("conditions").GetArrayLength().ShouldBe(2);
+		inheritedContext.Fields[0].ReadOnly.ShouldBeTrue();
+
+		if (layout == AdmissionFormLayoutType.Stepper)
+		{
+			inherited.StepId.ShouldBe(first.StepId);
+			inherited.StepName.ShouldBe(first.StepName);
+			inherited.StepVisibilityRuleJson.ShouldBeNull();
+			inherited.VisibilityRuleJson.ShouldBeNull();
+			inheritedContext.StepId.ShouldBe(first.StepId);
+			result.Definition.Sections[1].VisibilityRuleJson.ShouldBe(first.StepVisibilityRuleJson);
+			result.Definition.Sections[1].StepVisibilityRuleJson.ShouldBeNull();
+			result.Definition.Sections[^1].StepId.ShouldBe(later.StepId);
+		}
+		else
+		{
+			inherited.StepId.ShouldNotBeNull();
+			result.Definition.Sections.Concat(result.InquiryContextSections)
+				.ShouldAllBe(section => section.StepId == inherited.StepId && section.StepCode == "REGISTRATION_PAGE");
+		}
+	}
+
 	[Fact]
 	public void Location_validation_cannot_depend_on_hidden_inquiry_context()
 	{

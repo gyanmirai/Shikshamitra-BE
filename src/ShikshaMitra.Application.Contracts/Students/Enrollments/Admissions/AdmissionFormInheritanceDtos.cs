@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionFormInheritancePolicyDto
 {
 	public bool Enabled { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public bool? UseRegistrationSteps { get; set; }
 	public List<AdmissionFormInheritanceSourceDto> Sources { get; set; } = [];
 }
 

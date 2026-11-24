@@ -21,6 +21,9 @@ public class AdmissionParentRegistrationController(IAdmissionParentRegistrationA
 	[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 	public async Task<Result<string>> CopyLinkAsync(Guid applicationId, AdmissionParentCopyLinkInput input) =>
 		Result.Success(await service.CopyLinkAsync(applicationId, input));
+	[HttpPost("reactivate"), Authorize(Permissions.Edit)]
+	public async Task<Result<AdmissionParentStaffContextDto>> ReactivateAsync(Guid applicationId, AdmissionParentReactivateInput input) =>
+		Result.Success(await service.ReactivateAsync(applicationId, input));
 	[HttpPost("email"), Authorize(Permissions.Edit)] public async Task<Result<AdmissionParentStaffContextDto>> EmailAsync(Guid applicationId, AdmissionParentEmailInput input) => Result.Success(await service.ChangeEmailAsync(applicationId, input));
 	[HttpPost("corrections"), Authorize(Permissions.Edit)] public async Task<Result<AdmissionParentStaffContextDto>> CorrectionsAsync(Guid applicationId, AdmissionParentCorrectionInput input) => Result.Success(await service.RequestCorrectionsAsync(applicationId, input));
 	[HttpPost("revoke"), Authorize(Permissions.Edit)] public async Task<Result<AdmissionParentStaffContextDto>> RevokeAsync(Guid applicationId, AdmissionParentCommand input) => Result.Success(await service.RevokeAsync(applicationId, input));

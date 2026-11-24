@@ -12,6 +12,7 @@ using ShikshaMitra.TenantSettings.Divisions;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
@@ -327,13 +328,14 @@ public class AdmissionFormInheritanceService_Tests
 			.GetSavedPreviewAsync(registration.Id, source.Id));
 	}
 	[Fact]
-	public async Task Context_only_inquiry_step_counts_toward_the_composed_stepper_layout()
+	public async Task Context_only_inquiry_step_counts_toward_a_historical_composed_stepper_layout()
 	{
 		var school = Guid.NewGuid();
 		var source = new AdmissionFormDefinition(Guid.NewGuid(), school, "Inquiry", "INQUIRY_CONTEXT", AdmissionFormLayoutType.Stepper, purpose: AdmissionFormPurpose.Inquiry);
 		source.Publish(null);
 		var registration = new AdmissionFormDefinition(Guid.NewGuid(), school, "Registration", "REG_CONTEXT", AdmissionFormLayoutType.Stepper, purpose: AdmissionFormPurpose.Registration);
-		AdmissionFormInheritanceMetadataStore.Write(registration, new() { Purpose = AdmissionFormPurpose.Registration, Inheritance = new() { Enabled = true, Sources = [new() { InquiryFormDefinitionId = source.Id }] } });
+		registration.SetProperty("AdmissionFormInheritanceV1",
+			$$"""{"enabled":true,"sources":[{"inquiryFormDefinitionId":"{{source.Id}}"}]}""");
 		registration.Publish(null);
 		var contact = new AdmissionFormSectionDefinition(Guid.NewGuid(), source.Id, "CONTACT", "Contact", 0, null, Guid.NewGuid(), "CONTACT_STEP", "Contact", 0);
 		var student = new AdmissionFormSectionDefinition(Guid.NewGuid(), source.Id, "STUDENT", "Student", 1, null, Guid.NewGuid(), "STUDENT_STEP", "Student", 1);

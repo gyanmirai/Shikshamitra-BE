@@ -332,6 +332,8 @@ public class AdmissionFormInheritanceService(
 			}
 		}
 		var definition = node.Deserialize<AdmissionFormDto>(JsonOptions)!;
+		if (definition.Purpose == AdmissionFormPurpose.Registration)
+			definition.Inheritance = AdmissionFormInheritanceMetadataStore.ForRegistrationDraft(definition.Inheritance ?? new());
 		definition.PrintSettings = AdmissionFormMetadataStore.NormalizePrintSettings(definition.PrintSettings);
 		return definition;
 	}

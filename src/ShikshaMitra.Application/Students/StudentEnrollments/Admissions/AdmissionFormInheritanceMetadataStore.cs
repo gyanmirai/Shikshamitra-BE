@@ -31,12 +31,10 @@ internal static class AdmissionFormInheritanceMetadataStore
 		if (input.Inheritance?.Enabled == true && input.Purpose != AdmissionFormPurpose.Registration) throw InvalidPolicy();
 		var policy = input.Inheritance;
 		var previous = ReadPolicy(form);
-		if (previous?.Enabled == true && previous.Sources.Count > 0 && policy?.Enabled != true) throw InvalidPolicy();
-		if (policy != null)
-		{
-			Validate(policy);
-			if (previous?.Enabled == true && previous.Sources.Any(source => policy.Sources.All(next => next.InquiryFormDefinitionId != source.InquiryFormDefinitionId))) throw InvalidPolicy();
-		}
+		if (policy != null) Validate(policy);
+		if (previous != null && previous.Sources.Any(source =>
+			policy == null || policy.Sources.All(next => next.InquiryFormDefinitionId != source.InquiryFormDefinitionId))) throw InvalidPolicy();
+		if (policy != null && input.Purpose == AdmissionFormPurpose.Registration) policy = ForRegistrationDraft(policy);
 		form.SetProperty(PolicyKey, policy == null ? null : JsonSerializer.Serialize(policy, JsonOptions));
 		var existing = ReadIdentities(form);
 		var identities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -53,6 +51,13 @@ internal static class AdmissionFormInheritanceMetadataStore
 		}
 		form.SetProperty(IdentitiesKey, JsonSerializer.Serialize(identities, JsonOptions));
 	}
+
+	internal static AdmissionFormInheritancePolicyDto ForRegistrationDraft(AdmissionFormInheritancePolicyDto policy) => new()
+	{
+		Enabled = policy.Enabled,
+		UseRegistrationSteps = true,
+		Sources = policy.Sources
+	};
 
 	public static void Validate(AdmissionFormInheritancePolicyDto policy)
 	{
@@ -80,11 +85,12 @@ internal static class AdmissionFormInheritanceMetadataStore
 
 	public static void Copy(AdmissionFormDefinition source, AdmissionFormDefinition target)
 	{
-		foreach (var key in new[] { PolicyKey, IdentitiesKey })
-		{
-			var value = source.GetProperty<string>(key);
-			if (!string.IsNullOrWhiteSpace(value)) target.SetProperty(key, value);
-		}
+		var policy = ReadPolicy(source);
+		if (policy != null)
+			target.SetProperty(PolicyKey, JsonSerializer.Serialize(
+				target.Purpose == AdmissionFormPurpose.Registration ? ForRegistrationDraft(policy) : policy, JsonOptions));
+		var storedIdentities = source.GetProperty<string>(IdentitiesKey);
+		if (!string.IsNullOrWhiteSpace(storedIdentities)) target.SetProperty(IdentitiesKey, storedIdentities);
 		if (ReadIdentities(source).Count == 0)
 		{
 			var identities = AdmissionFormMetadataStore.ReadExperience(source).Sections.Values.SelectMany(section => section.Fields.Keys)

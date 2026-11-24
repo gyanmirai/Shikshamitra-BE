@@ -30,7 +30,7 @@ internal static class AdmissionFormVersionComparer
 		if (from.CoreFieldPolicyVersion != to.CoreFieldPolicyVersion) changes.Add("Core field policy changed");
 		if (!Equivalent(AdmissionFormMetadataStore.NormalizePrintSettings(from.PrintSettings),
 			AdmissionFormMetadataStore.NormalizePrintSettings(to.PrintSettings))) changes.Add("Print settings changed");
-		if (!Equivalent(from.Inheritance, to.Inheritance)) changes.Add("Inquiry inheritance changed");
+		if (!Equivalent(InheritanceBehavior(from.Inheritance), InheritanceBehavior(to.Inheritance))) changes.Add("Inquiry inheritance changed");
 		var beforeSections = from.Sections.ToDictionary(section => section.Code, StringComparer.OrdinalIgnoreCase);
 		var afterSections = to.Sections.ToDictionary(section => section.Code, StringComparer.OrdinalIgnoreCase);
 		var beforeSteps = StepMemberships(from);
@@ -94,6 +94,8 @@ internal static class AdmissionFormVersionComparer
 		Options = Rule(field.OptionsJson), Validation = Rule(field.ValidationJson),
 		Visibility = Rule(field.VisibilityRuleJson), RequiredRule = Rule(field.RequiredRuleJson)
 	};
+	private static object? InheritanceBehavior(AdmissionFormInheritancePolicyDto? policy) =>
+		policy == null ? null : new { policy.Enabled, UseRegistrationSteps = policy.Enabled && policy.UseRegistrationSteps == true, policy.Sources };
 	private static bool Equivalent(object? before, object? after) =>
 		JsonNode.DeepEquals(JsonSerializer.SerializeToNode(before), JsonSerializer.SerializeToNode(after));
 	private static JsonNode? Rule(string? json)

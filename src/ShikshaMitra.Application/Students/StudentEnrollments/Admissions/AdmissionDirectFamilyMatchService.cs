@@ -86,18 +86,32 @@ public class AdmissionDirectFamilyMatchService(
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Choose Father or Mother for each parent contact.");
 		var phones = NormalizePhones((contacts ?? []).Select(contact => contact.Mobile).Append(mobile));
 		var emails = NormalizeEmails((contacts ?? []).Select(contact => contact.Email).Append(email));
-		if (phones.Length == 0 && emails.Length == 0) return [];
+		return await FindAccessibleMatchesCoreAsync(phones, emails, includeLegacyGuardians);
+	}
+
+	internal Task<List<AdmissionDirectFamilyMatchDto>> FindInquiryMatchesBatchAsync(IEnumerable<string?> phones,
+		IEnumerable<string?> emails, Guid[] retainedFamilyIds, bool includeApplications) =>
+		FindAccessibleMatchesCoreAsync(NormalizePhones(phones), NormalizeEmails(emails), false, retainedFamilyIds, includeApplications, true);
+
+	private async Task<List<AdmissionDirectFamilyMatchDto>> FindAccessibleMatchesCoreAsync(string[] phones, string[] emails,
+		bool includeLegacyGuardians, Guid[]? retainedFamilyIds = null, bool includeApplications = true, bool activeSourcesOnly = false)
+	{
+		retainedFamilyIds ??= [];
+		if (phones.Length == 0 && emails.Length == 0 && retainedFamilyIds.Length == 0) return [];
 		var scopedApplications = await applicationScope.GetScopedApplicationsAsync();
+		if (!includeApplications) scopedApplications = scopedApplications.Where(_ => false);
 		var scopedInquiries = await inquiryScope.GetScopedQueryAsync();
 		var visibleApplicants = (await applicants.GetQueryableAsync()).Where(applicant =>
-			applicant.TenantId == CurrentTenant.Id &&
+			applicant.TenantId == CurrentTenant.Id && (!activeSourcesOnly || applicant.Status == AdmissionApplicantStatus.Active) &&
 			(scopedApplications.Any(application => application.ApplicantId == applicant.Id) ||
 			 scopedInquiries.Any(inquiry => inquiry.ApplicantId == applicant.Id)));
 		var matchingGuardians = await guardians.GetListAsync(parent =>
 			(parent.Relationship == AdmissionGuardianRelationship.Parent || includeLegacyGuardians && parent.IsPrimaryContact) &&
 			(Enumerable.Contains(phones, parent.Mobile) || parent.Email != null && Enumerable.Contains(emails, parent.Email.Trim().ToLower())));
-		var matchedFamilyIds = matchingGuardians.Select(parent => parent.FamilyId).ToHashSet();
+		var matchedFamilyIds = matchingGuardians.Select(parent => parent.FamilyId).Concat(retainedFamilyIds).ToHashSet();
 		var studentQuery = await students.GetQueryableWithoutAutoIncludesAsync();
+		if (activeSourcesOnly)
+			visibleApplicants = await LazyServiceProvider.LazyGetRequiredService<AdmissionSiblingSourceVisibilityService>().ApplyAsync(visibleApplicants);
 		var matchingPhones = phones.Concat(phones.Select(phone => "91" + phone)).ToArray();
 		var matchingStudentIds = await AsyncExecuter.ToListAsync(studentQuery.Where(student => student.FamilyDetail != null &&
 			(student.FamilyDetail.FatherDetails != null &&
@@ -145,6 +159,7 @@ public class AdmissionDirectFamilyMatchService(
 					if (!string.IsNullOrWhiteSpace(candidate.Email) || !string.IsNullOrWhiteSpace(candidate.Mobile)) parents.Add(candidate);
 				}
 				if (applicantContact != null && currentStudent == null &&
+					(!activeSourcesOnly || AdmissionPrimaryContactSelection.ReadRelationship(applicant) != "guardian") &&
 					applicantContact.Relationship == AdmissionGuardianRelationship.Parent && !parents.Any(parent => parent.SourceApplicantId == applicant.Id &&
 					(string.Equals(parent.Email, applicantContact.Email, StringComparison.OrdinalIgnoreCase) || parent.Mobile == applicantContact.Mobile)))
 					parents.Add(CreateCandidate(applicant.Id, null, string.Join(" ", new[] { applicantContact.FirstName, applicantContact.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))), applicantContact.Mobile, applicantContact.Email));
@@ -158,7 +173,7 @@ public class AdmissionDirectFamilyMatchService(
 				MatchByMobile = parents.Any(parent => parent.Mobile != null && phones.Contains(parent.Mobile)) ||
 					includeLegacyGuardians && matchingGuardians.Any(parent => parent.FamilyId == family.Id && phones.Contains(parent.Mobile))
 			};
-		}).Where(match => match.MatchByEmail || match.MatchByMobile).ToList();
+		}).Where(match => retainedFamilyIds.Contains(match.FamilyId) || match.MatchByEmail || match.MatchByMobile).ToList();
 	}
 
 	private static AdmissionSiblingParentCandidateDto ReadParent(Guid applicantId, string prefix, Func<string, string?> read) =>

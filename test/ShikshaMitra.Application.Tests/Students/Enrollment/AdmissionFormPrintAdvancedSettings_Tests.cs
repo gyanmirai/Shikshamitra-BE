@@ -16,7 +16,7 @@ public class AdmissionFormPrintAdvancedSettings_Tests
 		"border":{"enabled":true,"placement":"every","style":"double","thickness":"medium","inset":4,"corners":"rounded","sectionBorders":true,"fieldBorders":false,"dividers":true},
 		"style":{"palette":"school-blue","sectionFill":"#EEEEFF","borderColor":"#123456","textColor":"#111111","fontFamily":"serif","baseSize":10,"titleSize":18,"labelWeight":"semibold"},
 		"branding":{"showLogo":true,"showBanner":false,"bannerPlacement":"selected","bannerPages":[1,3],"logo":{"x":0,"y":8,"width":14,"height":84,"lockAspectRatio":true}},
-		"header":{"continuation":"compact","schoolName":true,"address":true,"phone":true,"email":true,"website":false,"board":true,"medium":true,"class":true,"academicYear":true,"title":"Application form","subtitle":"School intake","alignment":"center","registrationNumber":true,"date":true},
+		"header":{"continuation":"compact","schoolName":true,"address":true,"phone":true,"email":true,"website":false,"board":true,"medium":true,"class":true,"academicYear":true,"title":"Application form","subtitle":"School intake","alignment":"center","registrationNumber":true,"date":true,"layout":{"schoolName":{"x":5.5,"y":10,"width":94.5,"height":4},"registrationNumber":{"x":60,"y":29.7,"width":40,"height":70.3},"photo":{"x":2,"y":6,"width":12,"height":80,"lockAspectRatio":true}}},
 		"photo":{"placement":"header-top-right","alignment":"center","width":35,"height":45,"caption":"Student photograph","useSaved":true},
 		"footer":{"placement":"every","alignment":"right","pageNumbers":true,"registrationReference":true,"schoolName":false,"formTitle":true},
 		"flow":{"stepTitles":true,"sectionNumbers":true},
@@ -68,6 +68,15 @@ public class AdmissionFormPrintAdvancedSettings_Tests
 	[InlineData("{\"branding\":{\"bannerPlacement\":\"selected\",\"bannerPages\":[0,2]}}")]
 	[InlineData("{\"branding\":{\"bannerPlacement\":\"selected\",\"bannerPages\":[2,2]}}")]
 	[InlineData("{\"header\":{\"alignment\":\"justify\"}}")]
+	[InlineData("""{"header":{"layout":{"website":{"x":-1,"y":0,"width":10,"height":10}}}}""")]
+	[InlineData("""{"header":{"layout":{"title":{"x":1e500,"y":0,"width":10,"height":10}}}}""")]
+	[InlineData("""{"header":{"layout":{"logo":{"x":0,"y":0,"width":0,"height":10}}}}""")]
+	[InlineData("""{"header":{"layout":{"title":{"x":0,"y":0,"width":10,"height":0.9}}}}""")]
+	[InlineData("""{"header":{"layout":{"title":{"x":95,"y":0,"width":10,"height":10}}}}""")]
+	[InlineData("""{"header":{"layout":{"title":{"x":0,"y":95,"width":10,"height":10}}}}""")]
+	[InlineData("""{"header":{"layout":{"schoolName":null}}}""")]
+	[InlineData("""{"header":{"layout":{"SchoolName":{"x":0,"y":0,"width":10,"height":10}}}}""")]
+	[InlineData("""{"header":{"layout":{"other":{"x":0,"y":0,"width":10,"height":10}}}}""")]
 	[InlineData("{\"photo\":{\"width\":19}}")]
 	[InlineData("{\"photo\":{\"alignment\":\"justify\"}}")]
 	[InlineData("{\"footer\":{\"placement\":\"middle\"}}")]
@@ -108,7 +117,7 @@ public class AdmissionFormPrintAdvancedSettings_Tests
 	public void Nullable_optional_groups_are_safe_and_advanced_snapshots_are_independent()
 	{
 		var source = Form();
-		AdmissionFormMetadataStore.WriteExperience(source, Input("""{"paper":null,"branding":null,"sections":null,"fields":null,"content":{"translations":null}}"""));
+		AdmissionFormMetadataStore.WriteExperience(source, Input("""{"paper":null,"branding":null,"header":{"layout":null},"sections":null,"fields":null,"content":{"translations":null}}"""));
 		AdmissionFormMetadataStore.WriteExperience(source, Input(Advanced));
 		var copied = Form();
 		AdmissionFormMetadataStore.CopyExperience(source, copied);

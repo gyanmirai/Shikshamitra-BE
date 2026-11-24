@@ -3,7 +3,7 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-11-19
+updated_on: 2026-11-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -598,6 +598,32 @@ Run the API project with `FullyQualifiedName~StudentAttendanceApi_Tests|FullyQua
 The current isolated API gate passed **29/29 tests**, zero failures/skips, on 2026-10-12 (`.artifacts/attendance-workspace/results/attendance-workspace-api-r3.trx`). Shared Directory Application regression selected nine scenarios: six passed and three existing provisioning-mode assertions failed (`student-directory-regression-r2.trx`). Their unchanged fixture creates a persisted linked enrollment then expects Directory exclusion; the unchanged HEAD eligibility predicate includes that activated onboarding. The extracted default population predicate was compared with HEAD and is identical apart from whitespace. These unrelated lifecycle assertions remain unchanged; this is not a green Application-suite claim. Authenticated local browser proof is a separate gate; staging/production acceptance is not asserted.
 
 ## Parent-only sibling admission and onboarding (2026-10-23)
+
+`AdmissionWorkflowRuntimeIntegration_InquirySiblingMatches_Tests.cs` covers list/read symmetry for pending public inquiries, ordinary staff capture, unchanged Interested confirmation restrictions, same-family reverse replay with one audit event, identical confirmed parent snapshots despite different child profiles, normalized email-only matching, unmatched-contact exclusion, same-name equal/missing DOB duplicate denials, different-DOB acceptance, self/tenant/academic-scope exclusion and a linked Student outside scope within an otherwise visible family.
+Use `FullyQualifiedName~Inquiry_sibling_matches` and retain the existing family-only and pending-family confirmation regressions.
+`AdmissionInquiryFamilyConfirmationApiContract_Tests` additionally verifies the read-only sibling-match GET, exact View permission at both boundaries, fresh stamp/DTO forwarding and absence of command calls.
+The explicit-Guardian regression verifies that generic Guardian contact alone does not create the new parent-match signal while a saved Father/Mother contact still can.
+The guarded `AdmissionInquiryFamilyConfirmationPostgres_Tests` requires an absent disposable loopback `admissions_assessment_tests_*` database; it must never use a school database.
+
+The 2026-11-24 verification recorded **23 distinct passing cases: 20 Application/provider and 3 HTTP contracts**, with zero outstanding failures or skips after rerun.
+The first combined Application selection passed 15/19; four failures came from a shared test helper reusing a public-link name after link-name uniqueness was introduced.
+The helper now generates a unique fixture name without relaxing the production rule.
+The final bounded selection passed **11/11** in 2 minutes 19 seconds, covering all nine new matching cases and the two older confirmation cases affected by that helper; it overlaps six earlier passes, leaving nine additional compatibility/provider passes from the first selection.
+The disposable PostgreSQL applicant/inquiry lock-fence regression passed in 6.95 seconds, using a unique previously absent loopback test database that the fixture removes; no school data was read or changed.
+Evidence is retained in ignored `.artifacts/inquiry-sibling-matches/inquiry-sibling-matches-green.trx`, `inquiry-sibling-matches-final.trx` and `inquiry-sibling-matches-api.trx`.
+The initial single-case red run reproduced the missing symmetric list flag before implementation (`inquiry-sibling-matches-red.trx`).
+Pinned .NET 9 Contracts, Application, HTTP API and test-assembly builds passed with analyzers/shared compilation disabled, `BuildProjectReferences=false`, one build worker and `DOTNET_PROCESSOR_COUNT=2`.
+The existing cached EF assembly was reused; this change adds no entity, schema or migration edits and does not claim a fresh EF rebuild.
+All module documentation validation passed under PowerShell 7 and the owned diff whitespace check passed.
+Frontend browser/cache behavior, deployed runtime acceptance and production data repair remain separate evidence in [frontend Student testing](../../../../Shikshamitra-FE/docs/student/testing.md).
+
+```powershell
+$env:DOTNET_PROCESSOR_COUNT = '2'
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --no-build --no-restore -m:1 --filter "FullyQualifiedName~Inquiry_sibling_matches|FullyQualifiedName~Pending_family_confirmation_rejects_stale|FullyQualifiedName~Pending_family_confirmation_source_action"
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --no-build --no-restore -m:1 --filter FullyQualifiedName~AdmissionInquiryFamilyConfirmationApiContract_Tests
+```
+
+These no-build commands require the current compiled source and dependencies.
 
 `AdmissionWorkflowRuntimeIntegration_FamilyLinkOnly_Tests.cs` covers family-only Inquiry creation and confirmation without copying parent details or establishing parent-account proof. Cases cover own Mother/Father profiles, unchanged captured answers/source snapshots, linked indicators on both children, same-family retries, current actor/tenant/source scope and stale/tampered/downstream denials, editable own Inquiry/Registration contacts, missing shared primary guardian without a new guardian row, own-Mother Student finalization, a scoped child witness without parent candidates, and structured-contact synchronization including optional identity clears. Retain the legacy family-confirmation, sibling-parent, Registration-prefill and Onboarding tests as compatibility coverage. These files contribute to the shared `AdmissionWorkflowRuntimeIntegration_Tests` partial class, so use method-name filters rather than filenames: `Family_only_`, `Pending_family_confirmation`, `Sibling_parent_direct_`, `Sibling_parent_matching_`, `Sibling_parent_inquiry_`, `Sibling_parent_helper_`, `Sibling_parent_confirmed_`, `Sibling_parent_legacy_`, `Sibling_registration_`, and `Sibling_prefill_`. Then run `AdmissionInquiryFamilyConfirmationApiContract_Tests` in the HttpApi test project. Family membership is informational and must never replace the separate parent-account proof or Onboarding access confirmation. These local tests do not establish deployed acceptance or historical data repair.
 
@@ -1508,6 +1534,8 @@ Required cases include source-first sections/steps and columns, source-specific 
 
 When Registration requires DOB or Gender, optional Inquiry versions must compose as one required Registration question without changing the Inquiry definition or other optional inherited questions.
 
+Registration-owned step regressions verify that enabling, disabling and re-enabling a draft retains approved sources, a new version groups inherited and context sections inside the first Registration step, conditional Inquiry steps remain restricted to their own source sections, and historical published policies retain their prior layout. Runtime coverage checks the frozen single-page grouping.
+
 The focused requiredness regression is covered by `Registration_required_dob_and_gender_promote_optional_inquiry_fields_without_mutating_source`, `Optional_source_dob_and_gender_are_required_in_registration_when_registration_requires_them`, `Preview_promotes_optional_inquiry_dob_and_gender_when_registration_requires_them`, and `Saved_preview_keeps_registration_requiredness_for_optional_inquiry_dob_and_gender`.
 Run the Domain composer and Application composition/inheritance service selections above for those cases.
 
@@ -1558,6 +1586,8 @@ These gates used the pinned SDK and isolated `inquiry-first-runtime` artifacts. 
 Run focused ParentRegistration Domain/Application/HTTP cases with the pinned SDK, then existing draft/submission, correction, public Inquiry, sibling-family, document revision/finalization and Onboarding document suites. Cover both invited and ordinary staff-only applications. Use isolated build artifacts when a local Host locks assemblies; do not weaken permissions or reuse a school database to make fixtures pass.
 
 Required scenarios include saved-recipient selection; invited Mother capturing missing unlinked Father details; shared/linked identity protection; token rotation/expiry/revocation; removed sender permission/scope; anonymous safe options; hidden and repeatable field validation; snapshots across repeated saves and uploads; exact retries; required/no-document/unresolved-route hand-in; post-submission proposal review; private file ownership/signature/size; replacement acceptance and retained handoff. Verify the actual migration and EF mapping separately from domain tests.
+
+`AdmissionParentRegistrationValidity_Tests.cs` checks the same URL before expiry and after reactivation, denial during expiry, preserved draft and delivery metadata, parent hand-in and formal staff submission, exact retries, recipient changes, superseded requests, legacy links with cleared protected tokens, and queued-email cancellation. The Domain suite checks validity bounds, UTC expiry and reactivation eligibility. The delivery suite checks configured copy-only validity and unchanged expiry when copying a live link.
 
 Communication verification uses a substituted `IEmailSender` to exercise `AdmissionParentRegistrationDeliveryJob` explicitly through Communication and the SMTP gateway, without external email. `AdmissionParentRegistrationDelivery_Tests.cs` covers the Onboarding-sender fallback, disabled/removed provider refusal, explicit-provider opt-in, consent withdrawal/approval, known rejection retries with retained history, and unconfirmed acceptance refusing a second send. Background job scheduling remains disabled by the test module; the tests invoke the job directly. Actual provider/inbox acceptance and browser walkthroughs remain separate gates. `AdmissionParentRegistrationContact_Tests.cs` covers saved-contact/answer synchronization, expected-email and application stamps, exact retry after later edits, grant revocation/no enqueue, linked/submitted restrictions, and draft/submitted document-only stage closure. Record exact executed commands/results and limitations in the task evidence; test guidance alone is not a passing result.
 

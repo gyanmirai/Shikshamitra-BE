@@ -28,12 +28,13 @@ public partial class AdmissionParentRegistrationAppService
 		var recipients = AdmissionParentRegistrationData.Recipients(applicant);
 		var initial = await data.IsInitialAllowedAsync(application);
 		var open = AdmissionParentRegistrationData.IsOpen(application);
+		var now = Clock.Now;
 		var history = new List<AdmissionParentEmailHistoryDto>(grants.Count);
 		foreach (var grant in grants)
 		{
 			var recipient = JsonSerializer.Deserialize<AdmissionParentRecipientDto>(grant.RecipientJson)!;
 			var linkStatus = grant.Status;
-			if (grant.CanRead(Clock.Now))
+			if (grant.CanRead(now))
 			{
 				var savedRecipient = recipients.FirstOrDefault(item => item.Relationship == recipient.Relationship && item.CanSend);
 				var stageAllowed = grant.Purpose == "initial" ? initial : application.SubmittedAt.HasValue
@@ -43,7 +44,7 @@ public partial class AdmissionParentRegistrationAppService
 					AdmissionParentRegistrationData.RecipientFingerprint(applicant, savedRecipient) != grant.RecipientFingerprint)
 					linkStatus = "Closed";
 			}
-			else if (grant.ExpiresAt <= Clock.Now && grant.Status is "Invited" or "InProgress")
+			else if (grant.HasExpired(now) && (grant.Status is "Invited" or "InProgress"))
 				linkStatus = "Expired";
 
 			var grantCampaigns = campaigns.Where(row => row.SourceEntityId == grant.Id).OrderBy(row => row.CreationTime).ToList();

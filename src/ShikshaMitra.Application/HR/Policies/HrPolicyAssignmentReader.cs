@@ -17,7 +17,8 @@ namespace ShikshaMitra.HR.Policies;
 public class HrPolicyAssignmentReader(
 	IRepository<HrPolicyAssignment, Guid> repository,
 	HrPolicyResolver policyResolver,
-	HrPolicyAssignmentEnricher assignmentEnricher)
+	HrPolicyAssignmentEnricher assignmentEnricher,
+	IEmployeeAuthorizationService employeeAuthorization)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<PagedResultDto<HrPolicyAssignmentDto>> GetListAsync(PolicyListRequestDto input)
@@ -86,6 +87,7 @@ public class HrPolicyAssignmentReader(
 
 	public async Task<EffectiveEmployeePoliciesDto> GetEffectivePoliciesAsync(Guid employeeId, DateTime date)
 	{
+		await employeeAuthorization.CheckEmployeeScopeAccessAsync(employeeId);
 		var resolved = await policyResolver.ResolveAsync(employeeId, date);
 		var dto = ToEffectivePoliciesDto(resolved);
 		await assignmentEnricher.EnrichEffectiveTargetDisplayNamesAsync(dto);
@@ -94,6 +96,9 @@ public class HrPolicyAssignmentReader(
 
 	public async Task<EffectiveEmployeePoliciesDto> GetPreviewAsync(PolicyAssignmentPreviewRequestDto input)
 	{
+		if (input.EmployeeId is Guid employeeId)
+			await employeeAuthorization.CheckEmployeeScopeAccessAsync(employeeId);
+
 		var resolved = await policyResolver.ResolvePreviewAsync(
 			input.EmployeeId,
 			input.GroupId,
@@ -122,7 +127,7 @@ public class HrPolicyAssignmentReader(
 		if (targetType == HrPolicyAssignmentTargetType.Employee && input.SampleEmployeeId.HasValue && input.SampleEmployeeId != employeeId)
 			throw new BusinessException(HRErrorCodes.HrPolicyAssignmentTargetInvalid);
 		if (employeeId.HasValue)
-			await LazyServiceProvider.LazyGetRequiredService<IEmployeeAuthorizationService>().CheckEmployeeScopeAccessAsync(employeeId.Value);
+			await employeeAuthorization.CheckEmployeeScopeAccessAsync(employeeId.Value);
 		Guid? groupId = targetType == HrPolicyAssignmentTargetType.Group ? Guid.Parse(proposal.TargetKey) : null;
 		var current = await policyResolver.ResolvePreviewAsync(employeeId, groupId, input.Date, proposal.AcademicYearId);
 		var draft = new HrPolicyAssignment(input.AssignmentId ?? Guid.Empty, CurrentTenant.Id, proposal.AcademicYearId,

@@ -32,6 +32,8 @@ Without parameters it reopens the recorded sample, or chooses the first authoriz
 `newSample=true` deliberately selects a new sample instead of reopening old evidence; this read never records completion.
 The sample uses `HrPolicyResolver`, tenant and academic-year staff scope. Explicit out-of-scope staff is rejected.
 An inaccessible recorded sample becomes stale/deferred without silently substituting another staff member.
+The sample identifies any resolved attendance or payroll calendar whose configured range excludes the checked date.
+This advisory notice leaves calculation and review eligibility unchanged.
 
 POST accepts `{ fingerprint, concurrencyStamp, employeeId?, date? }`. Actor, tenant and reviewed time are server derived;
 unknown JSON actor/time/tenant fields cannot override them. Missing/invalid settings, no staff and deferred checks cannot be recorded complete.

@@ -276,6 +276,7 @@ Finalized employees are excluded before recalculation.
 | Operation | Contract |
 |---|---|
 | `GET /api/payroll/run/register` | Uses Run Payroll View and current staff scope. Accepts month, academic year, zero-based paging, staff name or code search, review state, issue class or code, and one sort. Counts eligible staff plus issued staff before filtering. Flags pending section reviews separately from submissions for finalization. |
+| `GET /api/payroll/run/register?rowsOnly=true` | Uses the same permissions and criteria to return the requested page of saved staff facts in `registerRows`. Use the full read for counts, detailed rows, and review or locking evidence. |
 | `GET /api/payroll/run/approval-settings` | Returns the school's mode, settings version and section routes. Legacy is the default. |
 | `GET /api/payroll/run/approval-settings/approvers` | Requires ManageWorkflow and school-wide HR scope. Searches active users with payroll view and lock permissions. |
 | `PUT /api/payroll/run/approval-settings` and `POST /api/payroll/run/approval-settings/{activate,pause,resume}` | Require ManageWorkflow, school-wide scope, a reason and the expected settings version. |

@@ -23,7 +23,13 @@ The staff profile ID reader keeps the existing employee-access check, then proje
 
 Attendance register lock lookup projects requested distinct lock dates in one query and reuses that result for page rows and summaries. Central holiday overlap is filtered before materialization. Report history authorizes its already-loaded run entities through the same tenant/owner, captured-access and interrupted-work recovery checks used by direct ID reads; it does not introduce an authorization cache.
 
-Payroll previews calculate asynchronously and keep versioned results. The monthly register and preview status resolve current eligibility from a narrow lifecycle projection; the register pages saved facts first and hydrates only the sources present on that page. Issued history and salary documents do not recompute payroll. A staff salary estimate is a live read of effective compensation and statutory setup, not an issued result.
+Payroll previews calculate asynchronously and keep versioned results.
+The monthly register and preview status resolve current eligibility from a narrow lifecycle projection.
+The register pages saved facts first and loads only details from the sources present on that page.
+Its `rowsOnly=true` mode returns saved staff identity, payable days, net pay, and locked state in `registerRows`.
+This mode uses the same scope, criteria, and pagination and skips the detailed evidence and total count queries.
+Issued history and salary documents do not recompute payroll.
+A staff salary estimate is a live read of effective compensation and statutory setup, not an issued result.
 
 
 ## Layer map

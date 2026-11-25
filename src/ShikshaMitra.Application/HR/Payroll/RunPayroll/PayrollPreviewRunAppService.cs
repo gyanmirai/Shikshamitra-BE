@@ -117,7 +117,6 @@ public class PayrollPreviewRunAppService(
 		var workingRun = await AsyncExecuter.FirstOrDefaultAsync(scopedRuns.Where(x => x.Status == "SUCCEEDED"));
 		var issuedSlips = await coverage.GetIssuedAsync(canonicalMonth, scopedStaff);
 		var issuedIdsQuery = issuedSlips.Select(x => x.EmployeeId);
-		var issuedIds = (await AsyncExecuter.ToListAsync(issuedIdsQuery)).ToHashSet();
 		var monthSnapshots = (await snapshots.GetQueryableAsync()).Where(x => x.MonthYear == internalMonth);
 		var lockedSnapshots = monthSnapshots.Where(x => x.IsLocked && issuedIdsQuery.Contains(x.EmployeeId));
 		var finalized = lockedSnapshots;
@@ -193,10 +192,30 @@ public class PayrollPreviewRunAppService(
 			(_, true) => displayRows.OrderByDescending(x => x.EmployeeName),
 			_ => displayRows.OrderBy(x => x.EmployeeName)
 		};
+		var page = ordered.ThenBy(x => x.EmployeeId)
+			.Skip(checked(input.Page * input.PageSize)).Take(input.PageSize);
+		if (input.RowsOnly)
+		{
+			return new RunPayrollResponse
+			{
+				PreviewRunId = workingRun?.Id,
+				CurrentPage = input.Page,
+				PageSize = input.PageSize,
+				RegisterRows = await AsyncExecuter.ToListAsync(page.Select(x => new PayrollRegisterRowDto
+				{
+					EmployeeId = x.EmployeeId,
+					EmployeeName = x.EmployeeName,
+					EmployeeIdentifier = x.Code,
+					PayableDays = x.Source == 2 ? null : x.PayableDays,
+					NetPay = x.NetPay,
+					IsLocked = x.Source != 0
+				}))
+			};
+		}
+
 		var count = await AsyncExecuter.CountAsync(displayRows);
-		var pageRows = await AsyncExecuter.ToListAsync(ordered.ThenBy(x => x.EmployeeId)
-			.Skip(checked(input.Page * input.PageSize)).Take(input.PageSize)
-			.Select(x => new { x.EmployeeId, x.Source }));
+		var pageRows = await AsyncExecuter.ToListAsync(page.Select(x => new { x.EmployeeId, x.Source }));
+		var issuedIds = (await AsyncExecuter.ToListAsync(issuedIdsQuery)).ToHashSet();
 		var workingIds = pageRows.Where(x => x.Source == 0).Select(x => x.EmployeeId).ToArray();
 		var finalizedIds = pageRows.Where(x => x.Source == 1).Select(x => x.EmployeeId).ToArray();
 		var legacyIds = pageRows.Where(x => x.Source == 2).Select(x => x.EmployeeId).ToArray();

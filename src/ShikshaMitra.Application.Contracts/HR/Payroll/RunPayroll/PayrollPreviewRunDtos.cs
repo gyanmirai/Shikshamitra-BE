@@ -46,6 +46,7 @@ public class PayrollRegisterInput : PayrollPageInput
 {
 	[Required, MaxLength(30)] public string Month { get; set; } = "";
 	public Guid? AcademicYearId { get; set; }
+	public bool RowsOnly { get; set; }
 	public string? Sort { get; set; }
 	public bool Descending { get; set; }
 	public string? ReviewState { get; set; }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
@@ -9,6 +10,8 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 public class RunPayrollResponse
 {
 	public Guid? PreviewRunId { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public List<PayrollRegisterRowDto>? RegisterRows { get; set; }
 	public bool IsCurrent { get; set; }
 	/// <summary>
 	/// Indicates whether payroll is already generated (locked) for the month
@@ -44,6 +47,16 @@ public class RunPayrollResponse
 	/// Month-level readiness summary for the payroll workbench.
 	/// </summary>
 	public RunPayrollReadinessSummary Readiness { get; set; } = new();
+}
+
+public class PayrollRegisterRowDto
+{
+	public Guid EmployeeId { get; set; }
+	public string EmployeeName { get; set; } = "";
+	public string EmployeeIdentifier { get; set; } = "";
+	public decimal? PayableDays { get; set; }
+	public decimal? NetPay { get; set; }
+	public bool IsLocked { get; set; }
 }
 
 /// <summary>

@@ -10,6 +10,7 @@ using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.Infrastructure.Auth;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Security.Claims;
@@ -36,9 +37,11 @@ public class EsiPayrollWorkflowPostgres_Tests
 		private static readonly DateTime EarlierMonth = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 		private static readonly DateTime LaterMonth = EarlierMonth.AddMonths(1);
 
-		private async Task<Guid> PrepareAsync()
+		private async Task<(Guid EmployeeId, Guid EarlierDraftId)> PrepareAsync()
 		{
 			await PayrollTestHelper.EnsureActiveEsiTestSetupAsync(Factory);
+			await PayrollTestHelper.SetSchoolProfileForTestAsync(Factory, "Synthetic ESI payroll school",
+				"1 Synthetic Payroll Test Road");
 			using (var scope = Factory.Services.CreateScope())
 			using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Tenant))
 			using (var unit = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true))
@@ -65,16 +68,25 @@ public class EsiPayrollWorkflowPostgres_Tests
 			await RequireSuccess(await ActivateAsync(employee.Id));
 			await SeedAttendanceAsync(employee.Id, EarlierMonth);
 			await SeedAttendanceAsync(employee.Id, LaterMonth);
-			var august = await CalculateAsync(EarlierMonth);
-			(await EmployeeAsync(august.Id, employee.Id)).EmployeeStateInsuranceCoverageDecision.ShouldBe("WITHIN_WAGE_CEILING");
-			await ReviewAsync(august.Id, employee.Id, EarlierMonth);
-			await WithSalarySlipAsync(employee.Id, finalize: false);
-			return employee.Id;
+			var earlier = await CalculateAsync(EarlierMonth);
+			(await EmployeeAsync(earlier.Id, employee.Id)).EmployeeStateInsuranceCoverageDecision.ShouldBe("WITHIN_WAGE_CEILING");
+			await ReviewAsync(earlier.Id, employee.Id, EarlierMonth);
+
+			// Compatibility finalization acts on an existing draft. Public reads only return issued slips.
+			using var draftScope = Factory.Services.CreateScope();
+			var services = draftScope.ServiceProvider;
+			using var tenant = services.GetRequiredService<ICurrentTenant>().Change(Tenant);
+			using var draftUnit = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
+			var draft = await services.GetRequiredService<SalarySlipSnapshotGenerationService>()
+				.GenerateOrGetFromSnapshotAsync(employee.Id, EarlierMonth.ToString("yyyy-MM"));
+			draft.Status.ShouldBe(SalarySlipStatus.Draft);
+			await draftUnit.CompleteAsync();
+			return (employee.Id, draft.Id);
 		}
 
 		internal async Task FinalizationWinsAsync()
 		{
-			var employee = await PrepareAsync();
+			var (employee, earlierDraftId) = await PrepareAsync();
 			var reviewed = await CalculateAsync(LaterMonth);
 			(await EmployeeAsync(reviewed.Id, employee)).EmployeeStateInsuranceCoverageDecision.ShouldBe("ABOVE_WAGE_CEILING");
 			await ReviewAsync(reviewed.Id, employee, LaterMonth);
@@ -87,7 +99,7 @@ public class EsiPayrollWorkflowPostgres_Tests
 			try
 			{
 				await factory.Barrier.Reached.WaitAsync(TimeSpan.FromSeconds(30));
-				finalization = WithSalarySlipAsync(employee, true, ownsFence, releaseFinalization.Task);
+				finalization = FinalizeDraftAsync(earlierDraftId, ownsFence, releaseFinalization.Task);
 				await ownsFence.Task.WaitAsync(TimeSpan.FromSeconds(30));
 				factory.Barrier.Observe("HR_PayrollMonthLocks");
 				var locking = LockAsync(reviewed.Id, employee, LaterMonth);
@@ -114,7 +126,7 @@ public class EsiPayrollWorkflowPostgres_Tests
 
 		internal async Task LockWinsAsync()
 		{
-			var employee = await PrepareAsync();
+			var (employee, earlierDraftId) = await PrepareAsync();
 			var reviewed = await CalculateAsync(LaterMonth);
 			var before = await EmployeeAsync(reviewed.Id, employee);
 			before.EmployeeStateInsuranceCoverageDecision.ShouldBe("ABOVE_WAGE_CEILING");
@@ -128,7 +140,7 @@ public class EsiPayrollWorkflowPostgres_Tests
 			{
 				await factory.Barrier.Reached.WaitAsync(TimeSpan.FromSeconds(30));
 				factory.Barrier.Observe("INSERT INTO \"HR_PayrollInputRevisions\"", count: 3);
-				var finalization = WithSalarySlipAsync(employee, true);
+				var finalization = FinalizeDraftAsync(earlierDraftId);
 				// Starting a preview also takes the fence; this request competes with finalization.
 				var start = StartAsync(LaterMonth);
 				var registrationChange = Api.PutAsJsonAsync(profileUrl, new SaveEmployeeStatutoryProfileDto
@@ -144,10 +156,15 @@ public class EsiPayrollWorkflowPostgres_Tests
 				await RequireSuccess(registrationResponse);
 				(await registrationResponse.Content.ReadFromJsonAsync<EmployeeStatutoryProfileDto>(JsonOptions))!.EffectiveMonth
 					.ShouldBe(LaterMonth.AddMonths(1).ToString("yyyy-MM"));
-				(await finalization.WaitAsync(TimeSpan.FromSeconds(45))).Status.ShouldBe(SalarySlipStatus.Finalized);
+				var stale = await Should.ThrowAsync<BusinessException>(() => finalization.WaitAsync(TimeSpan.FromSeconds(45)));
+				stale.Code.ShouldBe(HRErrorCodes.PayrollPreviewStale);
 				var running = await start.WaitAsync(TimeSpan.FromSeconds(45));
 				await ExecuteAsync(running.Id);
-				// A run queued before finalization may be superseded; regeneration remains safe.
+
+				// The winning lock advanced the tenant revision. Recalculate and review before issuing the earlier slip.
+				var earlier = await CalculateAsync(EarlierMonth);
+				await ReviewAsync(earlier.Id, employee, EarlierMonth);
+				(await FinalizeDraftAsync(earlierDraftId)).Status.ShouldBe(SalarySlipStatus.Finalized);
 				var fresh = await CalculateAsync(LaterMonth);
 				var after = await EmployeeAsync(fresh.Id, employee);
 				after.IsLocked.ShouldBeTrue();
@@ -160,7 +177,7 @@ public class EsiPayrollWorkflowPostgres_Tests
 
 		internal async Task ProfileWinsAsync()
 		{
-			var employee = await PrepareAsync();
+			var (employee, _) = await PrepareAsync();
 			var reviewed = await CalculateAsync(EarlierMonth);
 			await ReviewAsync(reviewed.Id, employee, EarlierMonth);
 			var profileUrl = $"/api/employees/{employee}/payroll/statutory-profile";
@@ -193,7 +210,7 @@ public class EsiPayrollWorkflowPostgres_Tests
 			finally { factory.Barrier.Release(); }
 		}
 
-		private async Task<SalarySlipDto> WithSalarySlipAsync(Guid employee, bool finalize,
+		private async Task<SalarySlipDto> FinalizeDraftAsync(Guid draftId,
 			TaskCompletionSource? ownsFence = null, Task? release = null)
 		{
 			using var scope = Factory.Services.CreateScope();
@@ -205,15 +222,12 @@ public class EsiPayrollWorkflowPostgres_Tests
 					new Claim(AbpClaimTypes.TenantId, TestAuthHandler.TestTenantId),
 					new Claim(AbpClaimTypes.Role, "admin") }, "Test")));
 			using var unit = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
-			if (finalize)
-			{
-				await scope.ServiceProvider.GetRequiredService<IPayrollInputRevisionStore>().LockAsync();
-				ownsFence?.TrySetResult();
-				if (release != null) await release.WaitAsync(TimeSpan.FromSeconds(30));
-			}
+			await scope.ServiceProvider.GetRequiredService<IPayrollInputRevisionStore>().LockAsync();
+			ownsFence?.TrySetResult();
+			if (release != null) await release.WaitAsync(TimeSpan.FromSeconds(30));
 			var service = scope.ServiceProvider.GetRequiredService<ISalarySlipAppService>();
-			var slip = await service.GetSalarySlipAsync(employee, EarlierMonth.ToString("yyyy-MM"));
-			if (finalize) slip = await service.FinalizeAsync(slip.Id);
+			var slip = await service.FinalizeAsync(draftId);
+			slip.DocumentId.ShouldNotBeNull();
 			await unit.CompleteAsync();
 			return slip;
 		}

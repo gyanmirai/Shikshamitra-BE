@@ -47,6 +47,11 @@ public partial class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory fac
 		empty.PreviewRunId.ShouldBeNull();
 		empty.Items.ShouldBeEmpty();
 		empty.Readiness.LockedCount.ShouldBe(0);
+		(await GetAndReadAsync<RunPayrollResponse>(route + "&rowsOnly=true")).RegisterRows!.ShouldBeEmpty();
+		using var anonymous = Factory.CreateClient();
+		anonymous.DefaultRequestHeaders.Add("X-Skip-Auth", "true");
+		using var denied = await anonymous.GetAsync(route + "&rowsOnly=true");
+		denied.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
 		var staffIds = new List<Guid>();
 		using var services = Factory.Services.CreateScope();
@@ -105,6 +110,20 @@ public partial class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory fac
 		beyondLast.Readiness.LockedCount.ShouldBe(1);
 		var mixed = await GetAndReadAsync<RunPayrollResponse>(route + "&pageSize=10");
 		mixed.Items.Select(x => x.EmployeeId).ShouldBe(staffIds);
+		var opening = await GetAndReadAsync<RunPayrollResponse>(route + "&rowsOnly=true");
+		opening.PreviewRunId.ShouldBe(run.Id);
+		opening.Items.ShouldBeEmpty();
+		opening.IsCurrent.ShouldBeFalse();
+		opening.Readiness.CanLock.ShouldBeFalse();
+		opening.RegisterRows.ShouldNotBeNull();
+		opening.RegisterRows.Select(x => x.EmployeeId).ShouldBe(staffIds);
+		opening.RegisterRows.Select(x => x.EmployeeName).ShouldBe(["Register A", "Register B"]);
+		opening.RegisterRows.Select(x => x.IsLocked).ShouldBe([true, false]);
+		opening.RegisterRows[0].NetPay.ShouldBe(12000m);
+		var firstOpeningPage = await GetAndReadAsync<RunPayrollResponse>(route + "&rowsOnly=true&sort=netPay&pageSize=1");
+		firstOpeningPage.RegisterRows!.Single().EmployeeId.ShouldBe(staffIds[1]);
+		var filteredOpening = await GetAndReadAsync<RunPayrollResponse>(route + "&rowsOnly=true&reviewState=LOCKED");
+		filteredOpening.RegisterRows!.Single().EmployeeId.ShouldBe(staffIds[0]);
 		var second = await GetAndReadAsync<RunPayrollResponse>(route + "&pageSize=1&page=1");
 		second.Items.Single().EmployeeId.ShouldBe(staffIds[1]);
 		var search = await GetAndReadAsync<RunPayrollResponse>(route + "&search=register-working");
@@ -196,6 +215,14 @@ public partial class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory fac
 			var rows = await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{run.Id}/employees?pageSize=50&search=PayrollPerf");
 			rows.Items.ShouldNotBeEmpty();
 			rows.Items.ShouldAllBe(item => item.GrossSalary > 0);
+			var register = $"/api/payroll/run/register?month={month}";
+			watch.Restart();
+			var firstRows = await GetAndReadAsync<RunPayrollResponse>(register + "&rowsOnly=true");
+			output.WriteLine($"PERFORMANCE: {size} employees, opening register {watch.Elapsed.TotalMilliseconds:F1}ms");
+			firstRows.RegisterRows.ShouldNotBeNull();
+			firstRows.RegisterRows.Count.ShouldBe(25);
+			var fullPage = await GetAndReadAsync<RunPayrollResponse>(register);
+			firstRows.RegisterRows.Select(x => x.EmployeeId).ShouldBe(fullPage.Items.Select(x => x.EmployeeId));
 			foreach (var endpoint in new[] { "start", "status", "page" })
 			{
 				var measurements = new List<double>();

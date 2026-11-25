@@ -2,6 +2,7 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Compensation;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Payroll.Templates;
 using System;
 using System.Collections.Generic;
@@ -330,6 +331,8 @@ public partial class HRSeederContributor
 			Guid.TryParse(pfRuleId, out parsedPfRuleId) ? parsedPfRuleId : null,
 			"IN-GJ",
 			snapshot);
+		var esiPolicy = await _esiPolicyRepository.GetAsync(x => x.IsDefault);
+		revision.SetEsiAssignment(EsiManagement.InPlatform, esiPolicy.Id, null);
 		var submitterId = GuidGenerator.Create();
 		revision.Submit(submitterId, new DateTime(2022, 4, 1, 0, 0, 0, DateTimeKind.Utc));
 		revision.Approve(GuidGenerator.Create(), new DateTime(2022, 4, 1, 0, 1, 0, DateTimeKind.Utc));

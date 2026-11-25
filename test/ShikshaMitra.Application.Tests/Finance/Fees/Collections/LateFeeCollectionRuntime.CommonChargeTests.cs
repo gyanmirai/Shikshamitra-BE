@@ -99,7 +99,7 @@ public partial class LateFeeCollectionRuntime_Tests
 				Payments = [new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = (double)first.OutstandingAmount }],
 			});
 			var balances = await ReadCommonBalancesAsync(
-				[await _dueFeeRepo.GetAsync(first.Id), second], year, DateTime.UtcNow.Date.AddDays(1));
+				[await _dueFeeRepo.GetAsync(first.Id), second], year, first.DueDate.Date.AddDays(41));
 			balances.Values.Sum(x => x.Total).ShouldBe(410m);
 		}
 	}

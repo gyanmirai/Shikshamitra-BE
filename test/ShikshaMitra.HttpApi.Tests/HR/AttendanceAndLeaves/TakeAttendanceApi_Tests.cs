@@ -91,6 +91,25 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Day_Should_Find_The_Displayed_Name_Without_A_Middle_Name()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = $"Teacher{Guid.NewGuid():N}"[..15];
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, marker,
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
+		employee.MiddleName.ShouldBeNullOrWhiteSpace();
+		var search = Uri.EscapeDataString($"{employee.FirstName} {employee.LastName}".ToUpperInvariant());
+
+		var response = await Client.GetAsync($"{BaseUrl}/day?attendanceDate=2026-04-10&search={search}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var day = await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions);
+		day!.Items.Single().EmployeeId.ShouldBe(employee.Id);
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Reject_Take_Attendance_Endpoints_When_Permissions_Are_Missing()
 	{
@@ -128,8 +147,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
 		var marker = $"HolidayDay{Guid.NewGuid():N}";
-		await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		await CreateActiveEmployeeAsync(
 			marker,
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
@@ -158,8 +176,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
 		var attendanceDate = new DateOnly(2026, 4, 11);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var employee = await CreateActiveEmployeeAsync(
 			$"OnLeaveFull{Guid.NewGuid():N}",
 			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 		var leaveId = await InsertLeaveForAttendanceAsync(
@@ -194,8 +211,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
 		var attendanceDate = new DateOnly(2026, 4, 11);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var employee = await CreateActiveEmployeeAsync(
 			$"OnLeaveHalf{Guid.NewGuid():N}",
 			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 		await InsertLeaveForAttendanceAsync(
@@ -227,8 +243,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
 		var attendanceDate = new DateOnly(2026, 4, 11);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var employee = await CreateActiveEmployeeAsync(
 			$"OnLeaveOverride{Guid.NewGuid():N}",
 			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 		await InsertLeaveForAttendanceAsync(
@@ -304,8 +319,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
 		var attendanceDate = new DateOnly(2026, 4, 11);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var employee = await CreateActiveEmployeeAsync(
 			$"OnLeaveRoundTrip{Guid.NewGuid():N}",
 			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 		var leaveId = await InsertLeaveForAttendanceAsync(
@@ -353,8 +367,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
 		var attendanceDate = new DateOnly(2026, 4, 11);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var employee = await CreateActiveEmployeeAsync(
 			$"OnLeaveOutside{Guid.NewGuid():N}",
 			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 		await InsertLeaveForAttendanceAsync(
@@ -387,8 +400,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
 		var attendanceDate = new DateOnly(2026, 4, 11);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var employee = await CreateActiveEmployeeAsync(
 			$"OnLeaveNonApproved{status}{Guid.NewGuid():N}",
 			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 		await InsertLeaveForAttendanceAsync(employee.Id, attendanceDate, attendanceDate, status);
@@ -536,10 +548,10 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 
 		var uniqueName = $"LeftEditableHistory{Guid.NewGuid():N}";
 		var historicalDate = DateTime.UtcNow.AddDays(-1);
-		var created = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var created = await CreateActiveEmployeeAsync(
 			uniqueName,
 			dateOfJoining: DateTime.UtcNow.AddDays(-2));
+		await EmployeeTestHelper.SetWorkShiftForTestAsync(Factory, created.Id, EmployeeTestHelper.DefaultShiftId);
 
 		var initialSave = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
 		{
@@ -631,12 +643,10 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 
 		var marker = $"MixedCapture{Guid.NewGuid():N}";
 		var attendanceDate = DateTime.UtcNow.AddDays(-1);
-		var manualStatusEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var manualStatusEmployee = await CreateActiveEmployeeAsync(
 			$"{marker}Status",
 			dateOfJoining: attendanceDate.AddDays(-10));
-		var manualTimeEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var manualTimeEmployee = await CreateActiveEmployeeAsync(
 			$"{marker}Time",
 			dateOfJoining: attendanceDate.AddDays(-10));
 		await AssignCaptureModePolicyAsync(manualStatusEmployee.Id, DateOnly.FromDateTime(attendanceDate), AttendanceCaptureMode.ManualStatus);
@@ -661,8 +671,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
 		var attendanceDate = DateTime.UtcNow.AddDays(-1);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var employee = await CreateActiveEmployeeAsync(
 			$"ManualStatusSave{Guid.NewGuid():N}",
 			dateOfJoining: attendanceDate.AddDays(-10));
 		await AssignCaptureModePolicyAsync(employee.Id, DateOnly.FromDateTime(attendanceDate), AttendanceCaptureMode.ManualStatus);
@@ -697,10 +706,10 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 
 		var attendanceDate = DateTime.UtcNow.AddDays(-1);
 		var attendanceDateOnly = DateOnly.FromDateTime(attendanceDate);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var employee = await CreateActiveEmployeeAsync(
 			$"ManualTimeSave{Guid.NewGuid():N}",
 			dateOfJoining: attendanceDate.AddDays(-10));
+		await EmployeeTestHelper.SetWorkShiftForTestAsync(Factory, employee.Id, EmployeeTestHelper.DefaultShiftId);
 		await AssignCaptureModePolicyAsync(employee.Id, attendanceDateOnly, AttendanceCaptureMode.ManualWithTime);
 
 		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
@@ -735,8 +744,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 
 		var attendanceDate = new DateTime(2026, 4, 9);
 		var attendanceDateOnly = DateOnly.FromDateTime(attendanceDate);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var employee = await CreateActiveEmployeeAsync(
 			$"ManualAbsentZeroTime{Guid.NewGuid():N}",
 			dateOfJoining: attendanceDate.AddDays(-10));
 		await AssignCaptureModePolicyAsync(employee.Id, attendanceDateOnly, AttendanceCaptureMode.ManualWithTime);
@@ -775,10 +783,10 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
 		var mismatchedPunchDate = attendanceDate.AddMonths(-1);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var employee = await CreateActiveEmployeeAsync(
 			$"ManualDateTimePunch{Guid.NewGuid():N}",
 			dateOfJoining: attendanceDate.AddDays(-10).ToDateTime(TimeOnly.MinValue));
+		await EmployeeTestHelper.SetWorkShiftForTestAsync(Factory, employee.Id, EmployeeTestHelper.DefaultShiftId);
 		await AssignCaptureModePolicyAsync(employee.Id, attendanceDate, AttendanceCaptureMode.ManualWithTime);
 
 		var response = await Client.PostAsJsonAsync($"{BaseUrl}/day/save", new TakeAttendanceSaveInput
@@ -813,8 +821,7 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
 		var attendanceDate = new DateOnly(2026, 4, 11);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
+		var employee = await CreateActiveEmployeeAsync(
 			$"ArchivedAttendancePolicy{Guid.NewGuid():N}",
 			dateOfJoining: attendanceDate.AddDays(-10).ToDateTime(TimeOnly.MinValue));
 		var policyContext = await AssignArchivableAttendancePolicyAsync(employee.Id, attendanceDate);
@@ -1009,6 +1016,13 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 			doc.RootElement.GetProperty("status").GetInt32().ShouldBe(400);
 			doc.RootElement.GetProperty("title").GetString().ShouldNotBeNullOrWhiteSpace();
 		}
+	}
+
+	private async Task<PersonalInfoResponse> CreateActiveEmployeeAsync(string name, DateTime dateOfJoining)
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, name, dateOfJoining: dateOfJoining);
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
+		return employee;
 	}
 
 	private async Task AssertAttendanceStageAsync(Guid employeeId, DateOnly attendanceDate, Guid expectedStageId)

@@ -69,7 +69,9 @@ public class PayslipSchoolIssuance_Tests
 		await workflow.ReviewAsync(preview.Id, employee.Id, month);
 		var failedLock = await workflow.LockAsync(preview.Id, employee.Id, month);
 		failedLock.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		(await failedLock.Content.ReadAsStringAsync()).ShouldContain(HRErrorCodes.PayslipSchoolDetailsRequired);
+		var failedLockBody = await failedLock.Content.ReadAsStringAsync();
+		failedLockBody.ShouldContain(HRErrorCodes.PayslipSchoolDetailsRequired);
+		failedLockBody.ShouldContain("Institute Setup");
 		var documentsUrl = $"/api/payroll/payslip-documents?employeeId={employee.Id}&monthYear={month:yyyy-MM}";
 		(await api.GetFromJsonAsync<List<PayslipDocumentDto>>(documentsUrl, json))!.ShouldBeEmpty();
 		using (var scope = factory.Services.CreateScope())
@@ -85,22 +87,34 @@ public class PayslipSchoolIssuance_Tests
 		var invalidSave = await api.PutAsJsonAsync("/api/payroll/payslip-settings", new PayslipSettingsDto
 		{
 			SchoolName = "Synthetic School",
-			SchoolAddress = "",
+			SchoolAddress = "An address supplied to the read-only projection",
 			IdempotencyKey = Guid.NewGuid()
 		}, json);
 		invalidSave.IsSuccessStatusCode.ShouldBeFalse();
-		(await api.GetFromJsonAsync<PayslipSettingsDto>("/api/payroll/payslip-settings", json))!.ConcurrencyStamp.ShouldBeNull();
+		var unconfigured = (await api.GetFromJsonAsync<PayslipSettingsDto>("/api/payroll/payslip-settings", json))!;
+		unconfigured.ConcurrencyStamp.ShouldBeNull();
+		unconfigured.SchoolAddress.ShouldBeEmpty();
+		await PayrollTestHelper.SetSchoolProfileForTestAsync(factory, "Synthetic Recovered School",
+			"Synthetic Recovery Road, Ahmedabad, Gujarat");
 		var save = await api.PutAsJsonAsync("/api/payroll/payslip-settings", new PayslipSettingsDto
 		{
-			SchoolName = "Synthetic Recovered School",
-			SchoolAddress = "Synthetic Recovery Road, Ahmedabad, Gujarat",
 			AutomaticEmail = false,
 			IdempotencyKey = Guid.NewGuid()
 		}, json);
 		await EsiPayrollWorkflowScenario.RequireSuccess(save);
+		var savedSettings = (await save.Content.ReadFromJsonAsync<PayslipSettingsDto>(json))!;
+		savedSettings.SchoolName.ShouldBe("Synthetic Recovered School");
+		savedSettings.SchoolAddress.ShouldContain("Synthetic Recovery Road");
 		var fresh = await workflow.CalculateAsync(month);
+		var calculated = await workflow.EmployeeAsync(fresh.Id, employee.Id);
+		calculated.NetPay.ShouldBeGreaterThan(0);
 		await workflow.ReviewAsync(fresh.Id, employee.Id, month);
 		await EsiPayrollWorkflowScenario.RequireSuccess(await workflow.LockAsync(fresh.Id, employee.Id, month));
+		var register = (await api.GetFromJsonAsync<RunPayrollResponse>(
+			$"/api/payroll/run/register?month={month:yyyy-MM}&pageSize=100", json))!;
+		var locked = register.Items.Single(row => row.EmployeeId == employee.Id);
+		locked.IsLocked.ShouldBeTrue();
+		locked.NetPay.ShouldBe(calculated.NetPay);
 		var document = (await api.GetFromJsonAsync<List<PayslipDocumentDto>>(documentsUrl, json))!.Single();
 		document.Revision.ShouldBe(1);
 		document.ReplacesDocumentId.ShouldBeNull();
@@ -110,6 +124,7 @@ public class PayslipSchoolIssuance_Tests
 		var slip = (await api.GetFromJsonAsync<SalarySlipResponse>(
 			$"/api/payroll/salary-slips?employeeId={employee.Id}&monthYear={month:yyyy-MM}", json))!;
 		slip.Status.ShouldBe("Finalized");
+		slip.NetPay.ShouldBe(calculated.NetPay);
 		factory.Messages.ShouldBeEmpty();
 	}
 }

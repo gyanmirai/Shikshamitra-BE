@@ -30,6 +30,31 @@ public partial class HrSetupReviewApi_Tests(ShikshaMitraApiTestFactory factory) 
 	private sealed record School(Guid TenantId, Guid ActorId, Guid YearId, Guid CalendarId);
 
 	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Staff_policy_read_requires_scope_as_well_as_the_existing_view_grant(bool assignmentPreview)
+	{
+		var school = await SeedAsync(withStaff: true);
+		var path = assignmentPreview
+			? $"/api/hr/policy-assignment-preview?academicYearId={school.YearId}&employeeId={school.ActorId}&date=2026-06-01"
+			: $"/api/hr/employees/{school.ActorId}/effective-policies?date=2026-06-01";
+		using var allowed = As(school);
+		allowed.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, "HR.Policies.View");
+		(await allowed.GetAsync(path)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+		var otherUser = Guid.NewGuid();
+		await InAsync(school.TenantId, async services =>
+		{
+			await services.GetRequiredService<IIdentityUserRepository>().InsertAsync(
+				new IdentityUser(otherUser, "unscoped-policy-reader", "unscoped-policy-reader@example.test", school.TenantId), true);
+		});
+		using var denied = As(school with { ActorId = otherUser });
+		denied.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, "HR.Policies.View");
+		denied.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Teacher");
+		(await denied.GetAsync(path)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
+	[Theory]
 	[InlineData("calendar"), InlineData("attendance"), InlineData("leave"), InlineData("payroll")]
 	public async Task Valid_defaults_are_not_a_review_and_recording_preserves_configuration(string section)
 	{
@@ -43,8 +68,14 @@ public partial class HrSetupReviewApi_Tests(ShikshaMitraApiTestFactory factory) 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var saved = (await response.Content.ReadFromJsonAsync<HrSetupReviewDto>())!;
 		saved.ReviewState.ShouldBe("reviewed"); saved.Fingerprint.ShouldBe(before.Fingerprint);
-		saved.ReviewedBy.ShouldBe(school.ActorId); saved.ReviewedAt!.Value.ShouldBeGreaterThanOrEqualTo(started.AddSeconds(-1));
-		(await GetAsync(client, school, section)).ReviewState.ShouldBe("reviewed");
+		saved.ReviewedBy.ShouldBe(school.ActorId);
+		var reviewedAt = saved.ReviewedAt!.Value;
+		reviewedAt.Offset.ShouldBe(TimeSpan.Zero);
+		reviewedAt.ShouldBeGreaterThanOrEqualTo(started.AddSeconds(-1));
+		reviewedAt.ShouldBeLessThanOrEqualTo(DateTimeOffset.UtcNow.AddSeconds(1));
+		var persisted = await GetAsync(client, school, section);
+		persisted.ReviewState.ShouldBe("reviewed");
+		persisted.ReviewedAt.ShouldBe(saved.ReviewedAt);
 		await InAsync(school.TenantId, async services => {
 			var year = await services.GetRequiredService<IRepository<AcademicYear, Guid>>().GetAsync(school.YearId);
 			AcademicYearHrSetupReview.Read(year).Sections[section].ActorId.ShouldBe(school.ActorId);
@@ -229,6 +260,33 @@ public partial class HrSetupReviewApi_Tests(ShikshaMitraApiTestFactory factory) 
 
 	private static RecordHrSetupReviewDto Record(HrSetupReviewDto value) => new() {
 		Fingerprint = value.Fingerprint, ConcurrencyStamp = value.ConcurrencyStamp, EmployeeId = value.EmployeeId, Date = value.Date };
+
+	[Theory]
+	[InlineData("2026-06-04", "starts on 2026-06-05")]
+	[InlineData("2026-06-05", null)]
+	[InlineData("2026-06-20", null)]
+	[InlineData("2026-06-21", "ends on 2026-06-20")]
+	public async Task Sample_surfaces_calendar_date_mismatch_without_blocking_review(string date, string? expectedNotice)
+	{
+		var school = await SeedAsync(withStaff: true);
+		await InAsync(school.TenantId, async services =>
+		{
+			var repository = services.GetRequiredService<IRepository<WorkCalendarPolicy, Guid>>();
+			var calendar = await repository.GetAsync(school.CalendarId);
+			calendar.Update(calendar.Name, calendar.Status, new(2026, 6, 5), new(2026, 6, 20),
+				calendar.WeeklyOffPattern, null, calendar.HolidaySyncMode);
+			await repository.UpdateAsync(calendar, true);
+		});
+		using var client = As(school);
+		var sample = (await client.GetFromJsonAsync<HrSetupReviewDto>(Url(school.YearId, "sample") + $"?date={date}"))!;
+		sample.ConfigurationState.ShouldBe("valid");
+		sample.CanReview.ShouldBeTrue();
+		var dateNotices = sample.Notices.Where(notice => notice.StartsWith("Attendance and payroll calendar", StringComparison.Ordinal)).ToList();
+		if (expectedNotice == null)
+			dateNotices.ShouldBeEmpty();
+		else
+			dateNotices.Single().ShouldContain(expectedNotice);
+	}
 
 	[Fact]
 	public async Task A_recorded_sample_outside_changed_year_is_stale_and_new_sample_read_is_deliberate()

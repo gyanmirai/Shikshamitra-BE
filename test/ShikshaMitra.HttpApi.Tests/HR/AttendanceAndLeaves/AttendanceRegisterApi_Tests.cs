@@ -112,8 +112,12 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		(await Read("")).TotalCount.ShouldBe(3);
 		var scopedUser = Guid.NewGuid();
 		await EnsureUserHasStageScopeAsync(scopedUser, organizations.CurrentYearStageId);
-		var denied = await CreateClientAs(scopedUser).GetAsync(baseline + divisions);
+		using var scopedClient = CreateClientAs(scopedUser);
+		scopedClient.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View);
+		var denied = await scopedClient.GetAsync(baseline + divisions);
 		denied.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+		(await denied.Content.ReadAsStringAsync()).ShouldContain(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 
 		var tableQuery = new HrOperationalTableQueryRequest
 		{
@@ -466,6 +470,8 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var presentEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}Present", dateOfJoining: attendanceDate.AddDays(-10));
 		var absentEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}Absent", dateOfJoining: attendanceDate.AddDays(-10));
 		var notMarkedEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}NotMarked", dateOfJoining: attendanceDate.AddDays(-10));
+		await EmployeeTestHelper.SetWorkShiftForTestAsync(Factory, presentEmployee.Id, EmployeeTestHelper.DefaultShiftId,
+			DateOnly.FromDateTime(attendanceDate));
 
 		var day = DateOnly.FromDateTime(attendanceDate);
 		await SeedAttendanceAsync(presentEmployee.Id, day, EmployeeTestHelper.DefaultMediumStageId,
@@ -586,6 +592,8 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var startEnd = attendanceDate.ToString("yyyy-MM-dd");
 		var presentEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}Present", dateOfJoining: attendanceDate.AddDays(-10));
 		await CreateActiveRegisterEmployeeAsync($"{marker}NotMarked", dateOfJoining: attendanceDate.AddDays(-10));
+		await EmployeeTestHelper.SetWorkShiftForTestAsync(Factory, presentEmployee.Id, EmployeeTestHelper.DefaultShiftId,
+			DateOnly.FromDateTime(attendanceDate));
 
 		await SeedAttendanceAsync(presentEmployee.Id, DateOnly.FromDateTime(attendanceDate), EmployeeTestHelper.DefaultMediumStageId,
 			timeIn: new TimeOnly(9, 0), timeOut: new TimeOnly(17, 0));
@@ -615,6 +623,8 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var startEnd = attendanceDate.ToString("yyyy-MM-dd");
 		var matchedEmployee = await CreateActiveRegisterEmployeeAsync("Remark Search Matched", dateOfJoining: attendanceDate.AddDays(-10));
 		await CreateActiveRegisterEmployeeAsync("Remark Search Unmarked", dateOfJoining: attendanceDate.AddDays(-10));
+		await EmployeeTestHelper.SetWorkShiftForTestAsync(Factory, matchedEmployee.Id, EmployeeTestHelper.DefaultShiftId,
+			DateOnly.FromDateTime(attendanceDate));
 
 		await SeedAttendanceAsync(matchedEmployee.Id, DateOnly.FromDateTime(attendanceDate), EmployeeTestHelper.DefaultMediumStageId,
 			timeIn: new TimeOnly(9, 0), timeOut: new TimeOnly(17, 0), remarks: marker);
@@ -870,11 +880,13 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 		var scopedUserId = Guid.NewGuid();
 		await EnsureUserHasStageScopeAsync(scopedUserId, seeded.CurrentYearStageId);
-		var scopedClient = CreateClientAs(scopedUserId);
+		using var scopedClient = CreateClientAs(scopedUserId);
+		scopedClient.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View);
 
 		var response = await scopedClient.GetAsync(
 			$"{RegisterUrl}/grouped?startDate={attendanceDate:yyyy-MM-dd}&endDate={attendanceDate:yyyy-MM-dd}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 
 		var payload = await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to deserialize grouped register response.");
@@ -894,13 +906,6 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 			var deniedPayload = await deniedResponse.Content.ReadAsStringAsync();
 			deniedPayload.ShouldContain(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		}
-	}
-
-	private async Task<PersonalInfoResponse> CreateActiveRegisterEmployeeAsync(string name, DateTime? dateOfJoining = null)
-	{
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, name, dateOfJoining: dateOfJoining);
-		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
-		return employee;
 	}
 
 	private async Task SeedAttendanceAsync(
@@ -1148,6 +1153,13 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
+	private async Task<PersonalInfoResponse> CreateActiveRegisterEmployeeAsync(string name, DateTime? dateOfJoining = null)
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, name, dateOfJoining: dateOfJoining);
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
+		return employee;
+	}
+
 	private async Task<EmployeeAttendance> GetAttendanceAsync(Guid employeeId, DateOnly attendanceDate)
 	{
 		using var scope = Factory.Services.CreateScope();
@@ -1172,14 +1184,14 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
 		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 		var scopeRepository = scope.ServiceProvider.GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		var users = scope.ServiceProvider.GetRequiredService<IIdentityUserRepository>();
 		var userScopeService = scope.ServiceProvider.GetRequiredService<IUserScopeService>();
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 
 		using (currentTenant.Change(tenantId))
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
-			var identityUsers = scope.ServiceProvider.GetRequiredService<IIdentityUserRepository>();
-			await identityUsers.InsertAsync(new IdentityUser(userId, $"attendance-{userId:N}", $"attendance-{userId:N}@example.invalid", tenantId));
+			await users.InsertAsync(new IdentityUser(userId, $"attendance-{userId:N}", $"attendance-{userId:N}@example.invalid", tenantId));
 			await scopeRepository.InsertAsync(
 				new UserScopeAssignment(
 					Guid.NewGuid(),

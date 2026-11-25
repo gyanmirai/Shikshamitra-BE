@@ -195,7 +195,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
 		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeaveEmployeeNotFound);
 		payload.GetProperty("detail").GetString()
-			.ShouldBe("Current user is not linked to an employee profile, so this leave action is not allowed.");
+			.ShouldBe("Current user is not linked to a staff profile, so this leave action is not allowed.");
 	}
 
 	[Fact]
@@ -228,6 +228,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Create_Leave_With_Direct_File_Form_Field()
 	{
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"DirectFileLeave{Guid.NewGuid():N}");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
 		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 		var leaveDate = FirstNonSunday(startDate);
 
@@ -264,6 +265,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 			Client,
 			$"AutoApproveLeave{Guid.NewGuid():N}",
 			dateOfJoining: leaveDate.AddDays(-1));
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
 		var policy = await CreateLeavePolicyFixtureAsync("AutoApprove", unpaidRequiresApproval: false);
 		await AssignLeavePolicyOverrideAsync(employee.Id, policy.Id, leaveDate);
 
@@ -297,6 +299,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Reject_Legacy_LeaveTypeId_Create_Payload()
 	{
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "LegacyLeaveTypePayload");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
 		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 
 		using var form = new MultipartFormDataContent();
@@ -311,6 +314,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, rawPayload);
 		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
+		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeavePolicyRuleNotFound);
 		rawPayload.ToLowerInvariant().ShouldContain("paidtype");
 	}
 
@@ -319,6 +323,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Reject_Create_When_PaidType_Is_Missing()
 	{
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "MissingPaidTypeLeave");
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
 		var (startDate, _) = await GetAcademicYearDateRangeAsync(AcademicYearId);
 
 		using var form = new MultipartFormDataContent();
@@ -484,7 +489,7 @@ public class LeaveManagementApi_Tests : ShikshaMitraApiTestBase
 		var payload = JsonSerializer.Deserialize<JsonElement>(rawPayload);
 		payload.GetProperty("errorCode").GetString().ShouldBe(HRErrorCodes.LeaveTargetEmployeeRequired);
 		payload.GetProperty("detail").GetString()
-			.ShouldBe("Target employee is required for this leave operation.");
+			.ShouldBe("Target staff member is required for this leave operation.");
 	}
 
 	[Fact]

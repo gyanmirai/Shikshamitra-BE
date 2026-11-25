@@ -690,7 +690,9 @@ The subsequent API failure was the reproduced negative-zero product bug and rema
 `PayslipSchoolIssuance_Tests` omits only the synthetic school settings row in its fresh owned fixture database.
 Salary preparation, activation, calculation and review succeed without invented school facts, but payroll locking returns the actionable school-details error.
 That rejected lock leaves no salary slip, official document, locked employee snapshot or delivery intent.
-An invalid settings save creates no configuration; saving the required school name and address then permits recalculation, review, locking and first-revision issuance.
+A settings save cannot fill a missing school profile.
+Completing the school profile in Institute Setup and saving Payslip settings permits recalculation, review, locking and first-revision issuance.
+The recovered run verifies that the locked register and finalized salary slip retain the calculated net pay and that the downloaded PDF matches the stored document checksum.
 Use a separate fresh `PAYROLL_PAYSLIP_SCHOOL_ISSUANCE_TEST_POSTGRES` database.
 The final school-issuance, unpaid-correction and paid-settlement API selection passed three tests with no failures or skips in 3m46s on 2026-10-05.
 The unpaid regression includes PDF-persistence rollback and competing payment/reissue requests; the paid regression retains exact settlement reconciliation, retries and the protected paid original.

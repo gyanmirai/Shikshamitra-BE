@@ -50,8 +50,9 @@ public class HrSetupReviewAppService(
 		if (string.IsNullOrWhiteSpace(input.Fingerprint) || input.Fingerprint != result.Fingerprint)
 			throw new BusinessException(HrSetupReviewSections.Conflict);
 		if (result.ConfigurationState != "valid") throw new BusinessException(HrSetupReviewSections.Invalid);
+		var reviewedAt = new DateTimeOffset(Clock.Now).ToUniversalTime();
 		AcademicYearHrSetupReview.Record(year, section, new(CurrentUser.Id!.Value,
-			new DateTimeOffset(DateTime.SpecifyKind(Clock.Now, DateTimeKind.Utc)), result.Fingerprint, result.EmployeeId, result.Date));
+			reviewedAt, result.Fingerprint, result.EmployeeId, result.Date));
 		await years.UpdateAsync(year, autoSave: true);
 		var saved = await ReadAsync(year, section, input);
 		await unit.CompleteAsync();

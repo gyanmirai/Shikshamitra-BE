@@ -76,6 +76,15 @@ public class HrSetupReviewSampleReader(
 			result.Details.Add($"{employee.EmployeeName} on {date:yyyy-MM-dd}: source {resolved.PolicySource}");
 			result.Details.Add($"Attendance: {resolved.AttendancePolicy.Name}; payroll: {resolved.PayrollPolicy.Name}; leave: {resolved.LeavePolicy?.PolicyName}");
 			result.Details.Add($"Attendance calendar: {resolved.AttendanceWorkCalendarPolicy.Name}; payroll calendar: {resolved.PayrollWorkCalendarPolicy.Name}");
+			if (resolved.AttendanceWorkCalendarPolicy.Id == resolved.PayrollWorkCalendarPolicy.Id)
+			{
+				AddCalendarDateNotice(result, resolved.AttendanceWorkCalendarPolicy, "Attendance and payroll", date);
+			}
+			else
+			{
+				AddCalendarDateNotice(result, resolved.AttendanceWorkCalendarPolicy, "Attendance", date);
+				AddCalendarDateNotice(result, resolved.PayrollWorkCalendarPolicy, "Payroll", date);
+			}
 			resolution = new { resolved.PolicySource, Assignment = resolved.Assignment?.Id, Payroll = resolved.PayrollPolicy.Id,
 				Attendance = resolved.AttendancePolicy.Id, Leave = resolved.LeavePolicy?.Id,
 				AttendanceCalendar = resolved.AttendanceWorkCalendarPolicy.Id, PayrollCalendar = resolved.PayrollWorkCalendarPolicy.Id,
@@ -91,5 +100,13 @@ public class HrSetupReviewSampleReader(
 			EmployeeId = employee.Id, employee.ConcurrencyStamp, Date = date, Configuration = fingerprints,
 			Assignments = assignmentRows.OrderBy(x => x.Id).Select(HrPolicyMapping.ToDto), Resolution = resolution });
 		return result;
+	}
+
+	private static void AddCalendarDateNotice(HrSetupReviewDto result, WorkCalendarPolicy calendar, string usage, DateTime date)
+	{
+		if (calendar.EffectiveFrom is DateTime start && date < start.Date)
+			result.Notices.Add($"{usage} calendar \"{calendar.Name}\" starts on {start:yyyy-MM-dd}, after the sample date.");
+		else if (calendar.EffectiveTo is DateTime end && date > end.Date)
+			result.Notices.Add($"{usage} calendar \"{calendar.Name}\" ends on {end:yyyy-MM-dd}, before the sample date.");
 	}
 }

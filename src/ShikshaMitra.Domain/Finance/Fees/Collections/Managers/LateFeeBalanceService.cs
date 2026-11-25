@@ -158,12 +158,10 @@ public partial class LateFeeBalanceService(
 			if (root.ValueKind != JsonValueKind.Object
 				|| !root.TryGetProperty("CollectedAt", out var collectedAt) || collectedAt.ValueKind != JsonValueKind.String
 				|| !collectedAt.TryGetDateTimeOffset(out var recordedAt)
-				|| !collectedAt.TryGetDateTime(out recoveryTimestamp)
 				|| !root.TryGetProperty("AuditSummary", out var summary) || summary.ValueKind != JsonValueKind.Object
 				|| !summary.TryGetProperty("AllocationLines", out var lines) || lines.ValueKind != JsonValueKind.Array) return false;
-			// Late days use the payment's recorded calendar, never a server-local
-			// conversion that can move an offset timestamp onto the following day.
-			// Keep the existing timestamp basis for policy/audit chronology guards.
+			// Compare audit instants in UTC and count late days in the recorded payment calendar.
+			recoveryTimestamp = recordedAt.UtcDateTime;
 			calendarDate = recordedAt.DateTime;
 			foreach (var line in lines.EnumerateArray())
 			{
@@ -196,7 +194,8 @@ public partial class LateFeeBalanceService(
 					|| !before.TryGetProperty("CollectionPolicyVersionId", out var oldVersion)
 					|| !after.TryGetProperty("CollectionPolicyVersionId", out var newVersion)
 					|| !IsVersionIdOrNull(oldVersion) || !IsVersionIdOrNull(newVersion)) return false;
-				if (changedAt >= paymentDate && oldVersion.ToString() != newVersion.ToString()) return false;
+				var changedAtUtc = changedAt.Kind == DateTimeKind.Local ? changedAt.ToUniversalTime() : changedAt;
+				if (changedAtUtc >= paymentDate && oldVersion.ToString() != newVersion.ToString()) return false;
 			}
 			return true;
 		}

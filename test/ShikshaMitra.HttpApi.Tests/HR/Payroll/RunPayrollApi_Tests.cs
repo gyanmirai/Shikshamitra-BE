@@ -20,8 +20,10 @@ using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.WorkShifts;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.TenantSettings;
@@ -497,12 +499,14 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 			Client,
 			"PayrollUnpaidLeave",
 			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
 		await AssignSalaryStructureAsync(
 			employee.Id,
 			"PayrollUnpaidLeave",
 			earningAmount: monthlyGross,
 			deductionAmount: 0m,
 			useMasterComponents: false);
+		await EmployeeTestHelper.SetWorkShiftForTestAsync(Factory, employee.Id, EmployeeTestHelper.DefaultShiftId);
 		await MarkAttendanceAsync(employee.Id, "04-06-2026");
 		await MarkAttendanceAsync(employee.Id, "05-06-2026");
 		var leavePolicyId = await EnsureActiveDefaultLeavePolicyAsync(new DateTime(2026, 6, 1));
@@ -536,6 +540,7 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 	public async Task Payroll_Register_And_Payslip_Should_Include_Overtime_Earning()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		await PayrollTestHelper.SetSchoolProfileForTestAsync(Factory, "Synthetic Payroll Test School", "Synthetic Test Road, Ahmedabad, Gujarat");
 
 		const string month = "2026-06";
 		var attendanceDate = new DateOnly(2026, 6, 10);
@@ -551,6 +556,7 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 				Client,
 				"PayrollOvertime",
 				dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+			await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
 			var shiftId = await InsertShiftAsync(
 				$"Payroll overtime shift {Guid.NewGuid():N}",
 				shiftStart,
@@ -598,7 +604,7 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 				monthlyGross / (decimal)item.BasisDays,
 				2,
 				MidpointRounding.AwayFromZero);
-			var expectedGross = expectedRegularGross + expectedOvertime;
+			var expectedTotalEarnings = expectedRegularGross + expectedOvertime;
 			var overtimeLine = item.EarningComponents.Single(x => x.Name == "Overtime Pay");
 
 			item.PresentDays.ShouldBeGreaterThanOrEqualTo(1);
@@ -606,8 +612,9 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 			overtimeLine.Amount.ShouldBe((double)expectedOvertime);
 			overtimeLine.Description.ShouldNotBeNull();
 			overtimeLine.Description.ShouldContain("90");
-			item.GrossSalary.ShouldBe((double)expectedGross);
-			item.NetPay.ShouldBe((double)expectedGross);
+			item.GrossSalary.ShouldBe((double)expectedRegularGross);
+			item.TotalEarnings.ShouldBe((double)expectedTotalEarnings);
+			item.NetPay.ShouldBe((double)expectedTotalEarnings);
 
 			var reviewResponse = await Client.PostAsJsonAsync(
 				ReviewUrl,
@@ -620,7 +627,6 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 				JsonOptions);
 			var reviewBody = await reviewResponse.Content.ReadAsStringAsync();
 			reviewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, reviewBody);
-			await MarkPayrollSnapshotReviewedAsync(employee.Id, month);
 
 			var lockResponse = await Client.PostAsJsonAsync(
 				BaseUrl,
@@ -636,9 +642,9 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 
 			var salarySlip = await GetSalarySlipResponseAsync(employee.Id, "JUNE-2026");
 			salarySlip.Earnings.ShouldContain(x => x.Name == "Overtime Pay" && x.Amount == (double)expectedOvertime);
-			salarySlip.TotalEarning.ShouldBe((double)expectedGross);
-			salarySlip.NetSalary.ShouldBe((double)expectedGross);
-			salarySlip.NetPay.ShouldBe((double)expectedGross);
+			salarySlip.TotalEarning.ShouldBe((double)expectedTotalEarnings);
+			salarySlip.NetSalary.ShouldBe((double)expectedTotalEarnings);
+			salarySlip.NetPay.ShouldBe((double)expectedTotalEarnings);
 		}
 		finally
 		{
@@ -651,6 +657,7 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 	public async Task Payroll_Register_And_Payslip_Should_Create_Late_Arrival_Salary_Deduction()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		await PayrollTestHelper.SetSchoolProfileForTestAsync(Factory, "Synthetic Payroll Test School", "Synthetic Test Road, Ahmedabad, Gujarat");
 
 		const string month = "2026-06";
 		var attendanceDate = new DateOnly(2026, 6, 11);
@@ -665,6 +672,7 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 				Client,
 				"PayrollLateDeduction",
 				dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
+			await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
 			var shiftId = await InsertShiftAsync(
 				$"Payroll late deduction shift {Guid.NewGuid():N}",
 				new TimeOnly(9, 0),
@@ -1750,7 +1758,6 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 			JsonOptions);
 		var reviewBody = await reviewResponse.Content.ReadAsStringAsync();
 		reviewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, reviewBody);
-		await MarkPayrollSnapshotReviewedAsync(employeeId, month);
 		await AssertSnapshotAdjustmentsMatchAsync(employeeId, month);
 
 		var lockResponse = await Client.PostAsJsonAsync(
@@ -2087,6 +2094,7 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 				pfRuleId,
 				"IN-GJ",
 				JsonSerializer.Serialize(new { Deductions = statutoryDeductions, PfRuleId = pfRuleId }));
+			revision.SetEsiAssignment(EsiManagement.External, null, "Fixture isolates non-ESI payroll calculations.");
 			var submitterId = Guid.NewGuid();
 			revision.Submit(submitterId, DateTime.UtcNow);
 			revision.Approve(Guid.NewGuid(), DateTime.UtcNow);
@@ -2620,40 +2628,21 @@ public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixtur
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
 		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-		var shiftRepository = scope.ServiceProvider.GetRequiredService<IRepository<ShiftManagement, Guid>>();
+		var shiftRepository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeWorkShift, Guid>>();
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 
 		using (currentTenant.Change(tenantId))
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
-			var shift = await shiftRepository.InsertAsync(new ShiftManagement
-			{
-				ShiftName = shiftName,
-				StartTime = startTime,
-				EndTime = endTime
-			}, autoSave: false);
+			var shift = await shiftRepository.InsertAsync(
+				new EmployeeWorkShift(Guid.NewGuid(), tenantId, shiftName, startTime, endTime), autoSave: false);
 			await uow.CompleteAsync();
 			return shift.Id;
 		}
 	}
 
-	private async Task AssignEmployeeShiftAsync(Guid employeeId, Guid shiftId)
-	{
-		using var scope = Factory.Services.CreateScope();
-		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
-		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-		var employeeRepository = scope.ServiceProvider.GetRequiredService<IRepository<Employee, Guid>>();
-		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
-
-		using (currentTenant.Change(tenantId))
-		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
-		{
-			var employee = await employeeRepository.GetAsync(employeeId);
-			employee.ShiftId = shiftId;
-			await employeeRepository.UpdateAsync(employee, autoSave: false);
-			await uow.CompleteAsync();
-		}
-	}
+	private Task AssignEmployeeShiftAsync(Guid employeeId, Guid shiftId) =>
+		EmployeeTestHelper.SetWorkShiftForTestAsync(Factory, employeeId, shiftId);
 
 	private async Task ClearEmployeeShiftAsync(Guid employeeId)
 	{

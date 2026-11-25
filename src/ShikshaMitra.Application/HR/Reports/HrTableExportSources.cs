@@ -13,6 +13,7 @@ using ShikshaMitra.HR.Employees.Onboarding;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.HR.Employees.ICards;
 using ShikshaMitra.HR.Employees.Documents;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceRegister;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -136,7 +137,22 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 	public async Task<HrTableExportPage> ReadAsync(HrTableExportRequest request, int offset, int size, bool capturePopulation = false)
 	{
 		Validate(request);
-		if (request.Table is "hr-generated-report" or "hr-generated-report-history" || (!capturePopulation && !ReportingCriteria(request).HasCriteria))
+		var criteria = ReportingCriteria(request);
+		if (capturePopulation && !criteria.HasCriteria && criteria.Search is { Length: <= 256 }
+			&& request.Table is ("employee-table" or "employee-icard-selection-table" or "hr-attendance-register"))
+		{
+			var nativePage = await ReadUnfilteredAsync(request, offset, size);
+			if (nativePage.Total > HrReportingEngine.MaximumPopulation)
+				throw new Volo.Abp.BusinessException(HRErrorCodes.ReportPopulationTooLarge);
+			if (nativePage.Total == 0)
+			{
+				var envelope = JsonNode.Parse(nativePage.Envelope.GetRawText())!.AsObject();
+				envelope["totalPages"] = 1;
+				return nativePage with { Envelope = JsonSerializer.SerializeToElement(envelope) };
+			}
+			return nativePage;
+		}
+		if (request.Table is "hr-generated-report" or "hr-generated-report-history" || (!capturePopulation && !criteria.HasCriteria))
 			return await ReadUnfilteredAsync(request, offset, size);
 		var key = request.Table + request.Query.GetRawText();
 		if (_operationalQuery != key)
@@ -146,28 +162,42 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			var columns = await OperationalColumnsAsync(request);
 			var timezone = await Service<HrReportingTimeZone>().GetAsync();
 			var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById(timezone)).DateTime);
-			var engine = new HrReportingTableQuery(ReportingCriteria(request), columns, timezone);
+			var engine = new HrReportingTableQuery(criteria, columns, timezone);
 			var all = new List<HrOperationalTableRow>();
 			var next = 0;
+			var capturedCount = 0;
+			Func<int, int, GroupedAttendanceRegisterResponse>? attendancePage = null;
+			async Task<GroupedAttendanceRegisterResponse> ReadAttendancePageAsync(GetGroupedAttendanceRegisterInput input)
+			{
+				if (attendancePage == null)
+				{
+					await Service<IAuthorizationService>().CheckAsync(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_AttendanceTracking.View);
+					attendancePage = await Service<AttendanceRegisterReader>().CaptureGroupedPagesAsync(input, HrReportingEngine.MaximumPopulation);
+				}
+				return attendancePage(input.SkipCount, input.MaxResultCount);
+			}
+			var captureAttendance = request.Table == "hr-attendance-register";
 			long? expected = null;
 			while (true)
 			{
 				Service<Volo.Abp.Threading.ICancellationTokenProvider>().Token.ThrowIfCancellationRequested();
-				var page = await ReadUnfilteredAsync(request, next, 100);
+				var page = await ReadUnfilteredAsync(request, next, 100, captureAttendance ? ReadAttendancePageAsync : null);
 				if (page.Total > HrReportingEngine.MaximumPopulation) throw new Volo.Abp.BusinessException(HRErrorCodes.ReportPopulationTooLarge);
 				expected ??= page.Total;
-				if (page.Total != expected || page.Rows.Count != HrOperationalTableQuery.Items(page.Envelope).Count)
+				var raw = HrOperationalTableQuery.Items(page.Envelope);
+				if (page.Total != expected || page.Rows.Count != raw.Count)
 					throw HrReportingEngine.Invalid("The table population changed during capture. Retry the query.");
 				if (next == 0) _operationalEnvelope = page.Envelope;
-				var raw = HrOperationalTableQuery.Items(page.Envelope);
+				capturedCount += raw.Count;
 				all.AddRange(page.Rows.Select((row, index) => new HrOperationalTableRow(row, raw[index],
-					columns.ToDictionary(column => column.Id, column => HrTableExportProjection.QueryValue(request.Table, column, row, raw[index], today)))));
+					columns.ToDictionary(column => column.Id, column => HrTableExportProjection.QueryValue(request.Table, column, row, raw[index], today))))
+					.Where(row => engine.Matches(row.Values)));
 				next = page.NextOffset ?? next + page.Rows.Count;
 				if (next >= page.Total) break;
 				if (page.Rows.Count < 100 || next > HrReportingEngine.MaximumPopulation) throw HrReportingEngine.Invalid("The table source returned an incomplete population. Retry the query.");
 			}
-			if (all.Count != expected) throw HrReportingEngine.Invalid("The table source returned an incomplete population. Retry the query.");
-			_operationalRows = engine.Apply(all, row => row.Values).ToList();
+			if (capturedCount != expected) throw HrReportingEngine.Invalid("The table source returned an incomplete population. Retry the query.");
+			_operationalRows = engine.Order(all, row => row.Values).ToList();
 			_operationalQuery = key;
 		}
 		var selected = _operationalRows!.Skip(offset).Take(size).ToList();
@@ -209,7 +239,8 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			return field;
 		}).ToList();
 	}
-	private async Task<HrTableExportPage> ReadUnfilteredAsync(HrTableExportRequest request, int offset, int size)
+	private async Task<HrTableExportPage> ReadUnfilteredAsync(HrTableExportRequest request, int offset, int size,
+		Func<GetGroupedAttendanceRegisterInput, Task<GroupedAttendanceRegisterResponse>>? readAttendancePage = null)
 	{
 		Validate(request);
 		// These legacy readers enforce view access in their HTTP controllers.
@@ -290,6 +321,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			"employee-table" => await Service<IEmployeeSearchAppService>().GetFilteredListAsync(Input<GetEmployeeListInput>()),
 			"employee-icard-selection-table" => await Service<IEmployeeSearchAppService>().GetFilteredListAsync(Input<GetEmployeeListInput>()),
 			"employee-onboarding-table" => await Service<IEmployeeApplicationAppService>().GetListAsync(Input<GetEmployeeApplicationListInput>()),
+			"hr-attendance-register" when readAttendancePage != null => await readAttendancePage(Input<GetGroupedAttendanceRegisterInput>()),
 			"hr-attendance-register" => await Service<IAttendanceRegisterAppService>().GetGroupedAsync(Input<GetGroupedAttendanceRegisterInput>()),
 			"hr-manual-attendance" => await Service<ITakeAttendanceAppService>().GetDayAsync(Input<GetTakeAttendanceDayInput>()),
 			"payroll-monthly-workbench-table" when q["month"] != null => await Service<IPayrollPreviewRunAppService>()

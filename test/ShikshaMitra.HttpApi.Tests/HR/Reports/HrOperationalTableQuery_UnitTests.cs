@@ -178,6 +178,45 @@ public class HrOperationalTableQuery_UnitTests(ITestOutputHelper output)
 		var export = await source.ReadAsync(request, 25, 25); export.Total.ShouldBe(50); export.Rows[0].GetProperty("fullName").GetString().ShouldBe("Staff 074");
 		await reader.Received(2).GetFilteredListAsync(Arg.Is<GetEmployeeListInput>(input => input.MediumStageId.HasValue && input.Designation == "Teacher" && input.MaxResultCount == 100));
 	}
+	[Fact]
+	public async Task Directory_Without_Table_Criteria_Only_Requests_The_Selected_Page()
+	{
+		var staff = Enumerable.Range(0, 125).Select(index => new EmployeeSummary
+		{
+			Id = Guid.NewGuid(),
+			FullName = $"Staff {index:000}"
+		}).ToList();
+		var reader = Substitute.For<IEmployeeSearchAppService>();
+		reader.GetFilteredListAsync(Arg.Any<GetEmployeeListInput>()).Returns(call =>
+		{
+			var input = call.Arg<GetEmployeeListInput>();
+			return new EmployeeListResponse
+			{
+				TotalCount = staff.Count,
+				Items = staff.Skip(input.SkipCount).Take(input.MaxResultCount).ToList()
+			};
+		});
+		var services = Substitute.For<IAbpLazyServiceProvider>();
+		services.LazyGetRequiredService<IEmployeeSearchAppService>().Returns(reader);
+		var settings = Substitute.For<ISettingProvider>();
+		settings.GetOrNullAsync(Arg.Any<string>()).Returns("Asia/Kolkata");
+		services.LazyGetRequiredService<HrReportingTimeZone>().Returns(new HrReportingTimeZone(settings));
+		services.LazyGetRequiredService<ICancellationTokenProvider>().Returns(Substitute.For<ICancellationTokenProvider>());
+		var request = new HrTableExportRequest
+		{
+			Table = "employee-table",
+			Columns = [new() { Id = "fullName", Label = "Staff" }],
+			Query = JsonSerializer.SerializeToElement(new { })
+		};
+
+		var page = await new HrTableExportSources(services).ReadAsync(request, 106, 5, capturePopulation: true);
+		page.Total.ShouldBe(125);
+		page.Rows.Select(row => row.GetProperty("fullName").GetString())
+			.ShouldBe(staff.Skip(106).Take(5).Select(employee => employee.FullName));
+		await reader.Received(1).GetFilteredListAsync(Arg.Any<GetEmployeeListInput>());
+		await reader.Received(1).GetFilteredListAsync(Arg.Is<GetEmployeeListInput>(input => input.SkipCount == 106 && input.MaxResultCount == 5));
+	}
+
 	private static HrReportTableFilterDto Filter(string column, string type, object value) => new() { Column = column, Type = type, Value = JsonSerializer.SerializeToElement(value) };
 	private static (HrTableExportSources Source, IEmployeeApplicationAppService Reader) Source(bool incomplete = false, int count = 251, bool changing = false, long? reportedTotal = null)
 	{

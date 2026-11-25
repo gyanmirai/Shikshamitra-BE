@@ -10,6 +10,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.Documents;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -99,6 +100,37 @@ public class EmployeeDocumentApi_Tests : ShikshaMitraApiTestBase
 		var body = await response.Content.ReadFromJsonAsync<EmployeeDocumentListResponse>(JsonOptions);
 		body.ShouldNotBeNull();
 		body.Items.ShouldNotBeNull();
+	}
+
+	[Fact]
+	public async Task Document_list_searches_both_names_and_pages_in_the_database()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var employee = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "DocumentPaging");
+		var definition = await EmployeeTestHelper.CreateDocumentConfigAsync(Client);
+		foreach (var filename in new[] { "Budget-first.pdf", "Budget-second.pdf", "Unrelated.pdf" })
+		{
+			using var upload = BuildDocumentUpload(definition.Id, filename);
+			using var response = await Client.PostAsync(Url(employee), upload);
+			response.EnsureSuccessStatusCode();
+		}
+
+		using var commands = new SelectCommandCapture("EmployeeDocuments");
+		var page = await Client.GetFromJsonAsync<EmployeeDocumentListResponse>(
+			Url(employee) + "?page=2&pageSize=1&search=BUDGET", JsonOptions);
+		page!.TotalCount.ShouldBe(2);
+		page.TotalPages.ShouldBe(2);
+		page.Items.Single().FileName.ShouldStartWith("Budget-");
+		var reads = commands.Commands.ToArray();
+		reads.Count(sql => sql.Contains("COUNT(", StringComparison.OrdinalIgnoreCase)).ShouldBe(1);
+		reads.Count(sql => sql.Contains("LIMIT", StringComparison.OrdinalIgnoreCase)
+			&& sql.Contains("OFFSET", StringComparison.OrdinalIgnoreCase)).ShouldBe(1);
+
+		var title = page.Items.Single().DocumentName!;
+		var byDefinition = await Client.GetFromJsonAsync<EmployeeDocumentListResponse>(
+			Url(employee) + "?page=1&pageSize=1&search=" + Uri.EscapeDataString(title.ToUpperInvariant()), JsonOptions);
+		byDefinition!.TotalCount.ShouldBe(3);
+		byDefinition.Items.Single().DocumentName.ShouldBe(title);
 	}
 
 	#endregion

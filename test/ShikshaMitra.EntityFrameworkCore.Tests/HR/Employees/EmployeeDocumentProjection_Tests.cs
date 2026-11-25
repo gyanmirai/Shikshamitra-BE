@@ -3,6 +3,7 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Documents;
+using ShikshaMitra.HR.Employees.Settings;
 using Shouldly;
 using Volo.Abp.DependencyInjection;
 using Xunit;
@@ -13,7 +14,7 @@ namespace ShikshaMitra.EntityFrameworkCore.Tests.HR.Employees;
 public class EmployeeDocumentProjection_Tests(ITestOutputHelper output) : ShikshaMitraEntityFrameworkCoreTestBase
 {
 	[Fact]
-	public void Metadata_and_selected_download_translate_without_the_employee_graph_in_PostgreSQL()
+	public void Metadata_queries_translate_without_the_employee_graph_in_PostgreSQL()
 	{
 		// Translation only: this unusable connection is never opened.
 		var options = new DbContextOptionsBuilder<ShikshaMitraDbContext>()
@@ -31,9 +32,13 @@ public class EmployeeDocumentProjection_Tests(ITestOutputHelper output) : Shiksh
 		var selectedSql = documents.Where(document => document.Id == documentId).Take(1).ToQueryString();
 		var checklistSql = documents.Where(document => document.DocumentNameId.HasValue &&
 			Enumerable.Contains(definitionIds, document.DocumentNameId.Value)).ToQueryString();
+		var pageSql = EmployeeDocumentProjection.QueryList(documents, context.Set<DocumentSetting>(), "budget")
+			.OrderByDescending(document => document.UploadedAt)
+			.ThenBy(document => document.DocumentId)
+			.Skip(10).Take(10).ToQueryString();
 		output.WriteLine($"Post-authorization metadata SQL: full employee {baselineSql.Length} characters; selected document {selectedSql.Length}; checklist {checklistSql.Length}.");
 		baselineSql.ShouldContain("WorkExperiences");
-		foreach (var sql in new[] { selectedSql, checklistSql })
+		foreach (var sql in new[] { selectedSql, checklistSql, pageSql })
 		{
 			sql.ShouldContain("EmployeeDocuments");
 			sql.ShouldContain("TenantId");
@@ -45,5 +50,11 @@ public class EmployeeDocumentProjection_Tests(ITestOutputHelper output) : Shiksh
 		selectedSql.ShouldContain(documentId.ToString());
 		checklistSql.ShouldContain("DocumentNameId");
 		checklistSql.ShouldContain("ANY");
+		pageSql.ShouldContain("LEFT JOIN");
+		pageSql.ShouldContain("DocumentSettings");
+		pageSql.ShouldContain("budget");
+		pageSql.ShouldContain("LIMIT");
+		pageSql.ShouldContain("OFFSET");
+		pageSql.ShouldNotContain("BlobName");
 	}
 }

@@ -53,17 +53,18 @@ public class EmployeeDocumentReadService(
 		var normalizedPage = page < 1 ? 1 : page;
 		var normalizedPageSize = pageSize < 1 ? defaultPageSize : Math.Min(pageSize, maxPageSize);
 
-		var documents = await AsyncExecuter.ToListAsync(await GetDocumentQueryAsync(employeeId));
-		if (documents.Count == 0) await EnsureEmployeeExistsAsync(employeeId);
-		var settingsLookup = await GetSettingsLookupAsync(documents);
-		var filtered = FilterDocuments(documents, settingsLookup, search);
-		var totalCount = filtered.Count();
-		var items = filtered
-			.OrderByDescending(d => d.CreationTime)
-			.Skip((normalizedPage - 1) * normalizedPageSize)
-			.Take(normalizedPageSize)
-			.Select(d => EmployeeDocumentProjection.ToListItem(d, settingsLookup))
-			.ToList();
+		var documents = await GetDocumentQueryAsync(employeeId);
+		var definitions = await documentSettingRepository.GetQueryableAsync();
+		var query = EmployeeDocumentProjection.QueryList(documents, definitions, search);
+		var totalCount = await AsyncExecuter.CountAsync(query);
+		if (totalCount == 0) await EnsureEmployeeExistsAsync(employeeId);
+
+		var offset = (normalizedPage - 1L) * normalizedPageSize;
+		List<EmployeeDocumentResponseDto> items = offset >= totalCount ? [] : await AsyncExecuter.ToListAsync(query
+			.OrderByDescending(document => document.UploadedAt)
+			.ThenBy(document => document.DocumentId)
+			.Skip((int)offset)
+			.Take(normalizedPageSize));
 
 		var totalPages = totalCount == 0
 			? 0
@@ -121,38 +122,5 @@ public class EmployeeDocumentReadService(
 		// mutation methods continue loading their aggregate through the domain manager.
 		if (!await AsyncExecuter.AnyAsync(employees.Where(employee => employee.Id == employeeId)))
 			throw new EntityNotFoundException(typeof(Employee), employeeId);
-	}
-
-	private async Task<Dictionary<Guid, string>> GetSettingsLookupAsync(IEnumerable<EmployeeDocumentReadItem> documents)
-	{
-		var nameIds = documents
-			.Where(d => d.DocumentNameId.HasValue)
-			.Select(d => d.DocumentNameId!.Value)
-			.Distinct()
-			.ToList();
-
-		if (nameIds.Count == 0)
-		{
-			return [];
-		}
-
-		var settings = await documentSettingRepository.GetListAsync(s => nameIds.Contains(s.Id));
-		return settings.ToDictionary(s => s.Id, s => s.DocumentName);
-	}
-
-	private static IEnumerable<EmployeeDocumentReadItem> FilterDocuments(
-		IEnumerable<EmployeeDocumentReadItem> documents,
-		IReadOnlyDictionary<Guid, string> settingsLookup,
-		string? search)
-	{
-		if (string.IsNullOrWhiteSpace(search))
-		{
-			return documents;
-		}
-
-		return documents.Where(d =>
-			d.DocumentName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-			(d.DocumentNameId.HasValue && settingsLookup.TryGetValue(d.DocumentNameId.Value, out var name) &&
-			 name.Contains(search, StringComparison.OrdinalIgnoreCase)));
 	}
 }

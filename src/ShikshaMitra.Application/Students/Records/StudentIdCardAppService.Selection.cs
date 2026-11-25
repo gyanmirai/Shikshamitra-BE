@@ -18,6 +18,8 @@ public partial class StudentIdCardAppService
 
 	private async Task<List<StudentIdCardTemplateDto>> VisibleTemplatesAsync(List<StudentIdCardTemplateDto> result)
 	{
+		if (result.Any(template => template.Signature != null) && !await CanReadSignatureConfigurationAsync())
+			foreach (var template in result) template.Signature = null;
 		foreach (var invalid in result.Where(t => !ValidSelectionMembers(t.Selection!))) Restrict(invalid);
 		var selections = result.Where(t => !t.SelectionRestricted && HasSelectionContext(t.Selection!)).GroupBy(t => t.Selection!.AcademicYearId);
 		foreach (var group in selections)

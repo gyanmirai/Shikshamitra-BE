@@ -77,7 +77,8 @@ public partial class StudentIdCardAppService
 				row = transferring ? rows.FirstOrDefault(t => !id.HasValue || t.Id == id) : await FindTemplateRowAsync(id);
 			if (id.HasValue && row == null) throw new EntityNotFoundException(typeof(StudentIdCardTemplate), id);
 			if (row != null && row.ConcurrencyStamp != input.ConcurrencyStamp) throw new BusinessException("Students:Records:IdTemplateConflict");
-			var previous = row == null ? null : MapTemplate(row).Selection;
+			var previousTemplate = row == null ? null : MapTemplate(row);
+			var previous = previousTemplate?.Selection;
 			if (draft.Selection == null) draft.Selection = previous ?? new();
 			else
 			{
@@ -85,6 +86,15 @@ public partial class StudentIdCardAppService
 			}
 			draft.Id = null; draft.ConcurrencyStamp = null; draft.SchoolIdentity = null; draft.SelectionRestricted = false;
 			await identityAssets.ValidateAndRetainAsync(draft.Logo, SchoolIdentityAssetKind.Logo);
+			if (draft.SchemaVersion == 2) draft.Signature ??= previousTemplate?.Signature;
+			if (draft.Signature != previousTemplate?.Signature || (draft.Signature != null &&
+				draft.LayoutJson != previousTemplate?.LayoutJson && SignatureLayers(draft) != SignatureLayers(previousTemplate)))
+			{
+				await AuthorizationService.CheckAsync(SchoolIdentityPermissions.View);
+				await AuthorizationService.CheckAsync(SchoolIdentityPermissions.AccessSignature);
+				if (draft.Signature != null)
+					await identityAssets.ValidateAndRetainAsync(draft.Signature, SchoolIdentityAssetKind.Signature, schoolDefaultOnly: true);
+			}
 			if (input.Selection != null && draft.Selection.StudentIds.Count > 0)
 			{
 				var selected = draft.Selection.StudentIds.ToHashSet();
@@ -136,11 +146,18 @@ public partial class StudentIdCardAppService
 			!new[] { "Horizontal", "Vertical" }.Contains(input.Orientation) || input.CardsPerPage is < 1 or > 10 ||
 			!Regex.IsMatch(input.PrimaryColor, "^#[0-9a-fA-F]{6}$") || !Regex.IsMatch(input.BackgroundColor, "^#[0-9a-fA-F]{6}$") ||
 			!StudentIdCardDesign.HasValidStudentFields(input.Fields, input.SchemaVersion)) throw new BusinessException("Students:Records:InvalidIdTemplate");
-		if (input.SchemaVersion is not (1 or 2) || (input.SchemaVersion == 1 && (input.BackSideEnabled || input.LayoutJson != null || input.PrintSettingsJson != null)))
+		if (input.SchemaVersion is not (1 or 2) || (input.SchemaVersion == 1 && (input.BackSideEnabled || input.LayoutJson != null || input.PrintSettingsJson != null || input.Signature != null)))
 			throw new BusinessException("Students:Records:InvalidIdTemplate");
 		if (input.SchemaVersion == 2) _ = StudentIdCardDesign.Resolve(input);
 		if (input.Selection is { } selection && (!ValidSelectionMembers(selection) || new[] { selection.BoardIds, selection.MediumIds, selection.StandardIds, selection.DivisionIds, selection.StudentIds }.Any(ids => ids.Count > 100)))
 			throw new BusinessException("Students:Records:InvalidIdTemplate");
+	}
+	private static string SignatureLayers(StudentIdCardTemplateDto? template)
+	{
+		if (template?.SchemaVersion != 2) return "[]";
+		var (layout, _) = StudentIdCardDesign.Resolve(template);
+		return JsonSerializer.Serialize(new[] { layout.Front, layout.Back }.Select(side =>
+			side?.Elements.Where(element => element.Type == "signature").ToList() ?? []), JsonOptions);
 	}
 	private static bool IsTemplateSerializationConflict(Exception exception)
 	{

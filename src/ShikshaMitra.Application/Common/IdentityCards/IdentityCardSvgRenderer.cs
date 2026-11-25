@@ -9,7 +9,7 @@ namespace ShikshaMitra.Common.IdentityCards;
 internal static class IdentityCardSvgRenderer
 {
 	public static string Render(IdentityCardLayout layout, bool back, Func<IdentityCardLayoutElement, string?> value,
-		Func<IdentityCardLayoutElement, bool> enabled, byte[]? logo, byte[]? photo, string qrPayload, string barcodePayload, bool strictText = true)
+		Func<IdentityCardLayoutElement, bool> enabled, byte[]? logo, byte[]? photo, string qrPayload, string barcodePayload, bool strictText = true, byte[]? signature = null)
 	{
 		var builder = new StringBuilder(FormattableString.Invariant($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{layout.Width}\" height=\"{layout.Height}\" viewBox=\"0 0 {layout.Width} {layout.Height}\"><rect width=\"{layout.Width}\" height=\"{layout.Height}\" fill=\"{IdentityCardSvgFormatting.Escape(layout.BackgroundColor)}\"/>"));
 		foreach (var element in ((back ? layout.Back?.Elements : layout.Front.Elements) ?? []).Where(e => e.Visible && enabled(e)).OrderBy(e => e.Z))
@@ -24,6 +24,7 @@ internal static class IdentityCardSvgRenderer
 				"shape" => FormattableString.Invariant($"<rect x=\"{element.X}\" y=\"{element.Y}\" width=\"{element.W}\" height=\"{element.H}\" rx=\"{style.BorderRadius ?? 0}\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{style.BorderWidth ?? 0}\"/>"),
 				"line" => FormattableString.Invariant($"<rect x=\"{element.X}\" y=\"{element.Y}\" width=\"{element.W}\" height=\"{element.H}\" fill=\"{fill}\"/>"),
 				"logo" => IdentityCardMediaRenderer.RenderImageOrPlaceholder(element, logo, layout.ThemeColor, "LOGO"),
+				"signature" when signature != null => IdentityCardMediaRenderer.RenderImageOrPlaceholder(element, signature, layout.ThemeColor, "SIGNATURE"),
 				"photo" => IdentityCardMediaRenderer.RenderImageOrPlaceholder(element, photo, layout.ThemeColor, "PHOTO", style.PhotoShape),
 				"image" => IdentityCardMediaRenderer.RenderImageOrPlaceholder(element, IdentityCardRaster.Decode(element.ImageData), layout.ThemeColor, "IMAGE"),
 				"qr" => IdentityCardMediaRenderer.RenderEmbeddedSvg(element, IdentityCardMediaRenderer.BuildQrSvg(qrPayload)),

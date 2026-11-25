@@ -57,22 +57,28 @@ internal static class IdentityCardPdfComposer
 			builder.Append(back ? cards[index].BackSvg : cards[index].FrontSvg).Append("</g>");
 			if (back && settings.BackRotation == 180) builder.Append("</g>");
 			builder.Append("</g>");
-			if (settings.ShowCutMarks && settings.PageSize == "A4") AppendCutMarks(builder, x, y, sheet, settings);
+			if (settings.ShowCutMarks && settings.PageSize == "A4") AppendCutMarks(builder, x, y, sheet, settings, width, height);
 		}
 		return builder.Append("</svg>").ToString();
 	}
 
-	private static void AppendCutMarks(StringBuilder builder, float x, float y, IdentityCardSheet sheet, IdentityCardPrintSettings settings)
+	private static void AppendCutMarks(StringBuilder builder, float x, float y, IdentityCardSheet sheet, IdentityCardPrintSettings settings, float width, float height)
 	{
-		var length = Math.Min(2, Math.Min(settings.Gap / 2, Math.Min(Math.Min(x - settings.BleedMm, 210 - x - sheet.CardWidthMm - settings.BleedMm), Math.Min(y - settings.BleedMm, 297 - y - sheet.CardHeightMm - settings.BleedMm))));
-		if (length <= 0.4f) return;
-		var bleed = settings.BleedMm + 0.2f;
-		foreach (var edgeX in new[] { x, x + sheet.CardWidthMm })
-		foreach (var edgeY in new[] { y, y + sheet.CardHeightMm })
+		const float stroke = 0.1f;
+		var start = settings.BleedMm + 0.2f;
+		var minimumReach = start + 0.1f - 0.00001f;
+		float Reach(float space) => settings.BleedMm + Math.Min(1.2f, Math.Min(settings.Gap / 2 - 0.2f, space - settings.BleedMm - stroke / 2));
+		foreach (var dx in new[] { -1, 1 })
+		foreach (var dy in new[] { -1, 1 })
 		{
-			var directionX = edgeX == x ? -1 : 1;
-			var directionY = edgeY == y ? -1 : 1;
-			builder.Append(FormattableString.Invariant($"<path d=\"M {edgeX + directionX * bleed} {edgeY} h {directionX * (length - 0.2f)} M {edgeX} {edgeY + directionY * bleed} v {directionY * (length - 0.2f)}\" fill=\"none\" stroke=\"#333333\" stroke-width=\"0.1\"/>"));
+			var edgeX = dx < 0 ? x : x + sheet.CardWidthMm;
+			var edgeY = dy < 0 ? y : y + sheet.CardHeightMm;
+			var horizontal = Reach(dx < 0 ? edgeX : width - edgeX);
+			var vertical = Reach(dy < 0 ? edgeY : height - edgeY);
+			if (horizontal >= minimumReach) Line(edgeX + dx * start, edgeY, edgeX + dx * horizontal, edgeY);
+			if (vertical >= minimumReach) Line(edgeX, edgeY + dy * start, edgeX, edgeY + dy * vertical);
 		}
+		void Line(float x1, float y1, float x2, float y2) =>
+			builder.Append(FormattableString.Invariant($"<line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" stroke=\"#333333\" stroke-width=\"{stroke}\"/>"));
 	}
 }

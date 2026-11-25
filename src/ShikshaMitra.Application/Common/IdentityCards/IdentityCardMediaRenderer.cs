@@ -29,7 +29,7 @@ internal static class IdentityCardMediaRenderer
 
 		var mime = IsPng(bytes) ? "image/png" : "image/jpeg";
 		var data = Convert.ToBase64String(bytes);
-		if (element.Type == "image")
+		if (element.Type is "image" or "signature")
 		{
 			var imageRadius = element.Style?.BorderRadius ?? 0;
 			return FormattableString.Invariant($"""<rect x="{element.X}" y="{element.Y}" width="{element.W}" height="{element.H}" rx="{imageRadius}" fill="{element.Style?.BackgroundColor ?? "none"}" stroke="{element.Style?.BorderColor ?? "#C4CDD5"}" stroke-width="{element.Style?.BorderWidth ?? 0}"/><clipPath id="{clipId}"><rect x="{element.X}" y="{element.Y}" width="{element.W}" height="{element.H}" rx="{imageRadius}"/></clipPath><image xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="data:{mime};base64,{data}" x="{element.X}" y="{element.Y}" width="{element.W}" height="{element.H}" preserveAspectRatio="xMidYMid meet" clip-path="url(#{clipId})"/>""");

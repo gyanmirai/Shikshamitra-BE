@@ -24,7 +24,7 @@ internal static class StudentIdCardDesign
 	{
 		try
 		{
-			var layout = IdentityCardSchema.ParseLayout(template.LayoutJson ?? "", Bindings, template.SchemaVersion, template.BackSideEnabled);
+			var layout = IdentityCardSchema.ParseLayout(template.LayoutJson ?? "", Bindings, template.SchemaVersion, template.BackSideEnabled, allowSignature: true);
 			var settings = IdentityCardSchema.ParsePrint(template.PrintSettingsJson, schemaVersion: template.SchemaVersion);
 			if (cardOutput)
 			{
@@ -41,7 +41,7 @@ internal static class StudentIdCardDesign
 		}
 	}
 
-	public static IdentityCardArtwork Artwork(StudentIdCardDto card, byte[]? photo, byte[]? logo)
+	public static IdentityCardArtwork Artwork(StudentIdCardDto card, byte[]? photo, byte[]? logo, byte[]? signature = null)
 	{
 		var template = card.TemplateSnapshot;
 		var (layout, _) = Resolve(template);
@@ -58,12 +58,13 @@ internal static class StudentIdCardDesign
 		bool Enabled(IdentityCardLayoutElement element) => element.Type switch
 		{
 			"logo" => template.Logo.Mode != SchoolIdentityAssetMode.Hidden,
+			"signature" => signature != null && template.Signature is { Mode: not SchoolIdentityAssetMode.Hidden },
 			"qr" => template.ShowQrCode,
 			"barcode" => true,
 			"photo" => template.ShowPhoto,
 			_ => string.IsNullOrEmpty(element.FieldKey) || element.FieldKey is "schoolName" or "schoolAddress" or "headerText" or "footerText" or "static" or "CardNumber" || template.Fields.Contains(element.FieldKey)
 		};
-		string Render(bool back) => IdentityCardSvgRenderer.Render(layout, back, Value, Enabled, logo, photo, card.StudentId.ToString("N"), card.CardNumber);
+		string Render(bool back) => IdentityCardSvgRenderer.Render(layout, back, Value, Enabled, logo, photo, card.StudentId.ToString("N"), card.CardNumber, signature: signature);
 		return new(Render(false), template.BackSideEnabled ? Render(true) : null);
 	}
 }

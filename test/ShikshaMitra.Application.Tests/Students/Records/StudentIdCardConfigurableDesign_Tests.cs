@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Security.Claims;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -8,6 +9,7 @@ using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Security.Claims;
 using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -69,6 +71,62 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		};
 		StudentIdCardDesign.Artwork(card, null, null).FrontSvg.ShouldNotContain("LOGO");
 	}
+
+	[Fact]
+	public Task Configurable_card_captures_the_medium_signature_and_reprints_the_issued_choice() => RunCertificationScenarioAsync(async () =>
+	{
+		using var actor = _principalAccessor.Change(new ClaimsPrincipal(new ClaimsIdentity(
+			BuildAdminPrincipal().Claims.Append(new Claim(AbpClaimTypes.TenantId, TestTenantId.ToString())), "Test")));
+		var fixture = await IcardLibraryFixtureAsync(1);
+		var student = fixture.Students.Single();
+		var identity = GetRequiredService<ISchoolIdentityAppService>();
+		var documentIdentity = GetRequiredService<SchoolIdentityDocumentService>();
+		var pixels = SchoolIdentityTestImage.Png(64, 32);
+		var mediumSignature = await identity.UploadAsync(SchoolIdentityAssetKind.Signature,
+			student.AcademicBoardId, student.AcademicMediumId, "medium-signature.png", pixels);
+		var profile = await identity.UpdateAsync(new()
+		{
+			BoardId = student.AcademicBoardId, MediumId = student.AcademicMediumId,
+			Choices = new() { Signature = new() { Mode = SchoolIdentityAssetMode.Custom, AssetId = mediumSignature.Id, PrincipalName = "Medium Principal", Designation = "Principal" } }
+		});
+		var design = IcardDesign("Signed student card", fixture.Year, student.Id);
+		design.SchemaVersion = 2;
+		design.BackSideEnabled = true;
+		design.Signature = new() { Mode = SchoolIdentityAssetMode.Inherit };
+		design.LayoutJson = """{"width":428,"height":270,"widthMm":85.6,"heightMm":53.98,"front":{"elements":[{"id":"name","type":"text","fieldKey":"StudentName","x":20,"y":20,"w":388,"h":60}]},"back":{"elements":[{"id":"signature","type":"signature","x":240,"y":180,"w":120,"h":32}]}}""";
+		var saved = await fixture.Service.CreateTemplateAsync(design);
+		saved.Signature.ShouldBe(design.Signature);
+		var request = new StudentIdCardPreviewRequestDto { TemplateId = saved.Id, StudentIds = [student.Id] };
+		var preview = (await fixture.Service.PreviewAsync(request)).Single();
+		preview.TemplateSnapshot.SchoolIdentity!.SignatureAssetId.ShouldBe(mediumSignature.Id);
+		var issued = (await fixture.Service.IssueAsync(new()
+		{
+			TemplateId = saved.Id, StudentIds = [student.Id], IdempotencyKey = "medium-signature-card"
+		})).Single();
+		await identity.UpdateAsync(new()
+		{
+			BoardId = student.AcademicBoardId, MediumId = student.AcademicMediumId, ConcurrencyStamp = profile.ConcurrencyStamp,
+			Choices = new() { Signature = new() { Mode = SchoolIdentityAssetMode.Hidden } }
+		});
+		(await fixture.Service.PreviewAsync(request)).Single().TemplateSnapshot.SchoolIdentity!.SignatureAssetId.ShouldBeNull();
+		var historical = (await fixture.Service.GetHistoryAsync(student.Id)).Single();
+		historical.TemplateSnapshot.SchoolIdentity!.SignatureAssetId.ShouldBe(mediumSignature.Id);
+		var assets = await WithUnitOfWorkAsync(() => documentIdentity.LoadAsync(historical.TemplateSnapshot.SchoolIdentity));
+		var artwork = StudentIdCardDesign.Artwork(historical, null, null, assets.Signature);
+		artwork.BackSvg!.ShouldContain("data:image/png;base64,");
+		artwork.BackSvg!.ShouldContain("xMidYMid meet");
+		(await fixture.Service.GetPdfAsync(issued.Id!.Value)).Content.Take(4).ToArray().ShouldBe("%PDF"u8.ToArray());
+		saved.Signature = new() { Mode = SchoolIdentityAssetMode.Custom, AssetId = mediumSignature.Id, PrincipalName = "Medium Principal", Designation = "Principal" };
+		var scopedAsset = await Should.ThrowAsync<BusinessException>(() => fixture.Service.UpdateTemplateAsync(saved.Id!.Value, saved));
+		scopedAsset.Code.ShouldBe(SchoolIdentityErrorCodes.AssetInvalid);
+		var custom = await identity.UploadAsync(SchoolIdentityAssetKind.Signature, null, null, "template-signature.png", pixels);
+		saved.Signature = new() { Mode = SchoolIdentityAssetMode.Custom, AssetId = custom.Id, PrincipalName = "Template Principal", Designation = "Principal" };
+		saved = await fixture.Service.UpdateTemplateAsync(saved.Id!.Value, saved);
+		(await fixture.Service.PreviewAsync(request)).Single().TemplateSnapshot.SchoolIdentity!.SignatureAssetId.ShouldBe(custom.Id);
+		saved.Signature = new() { Mode = SchoolIdentityAssetMode.Hidden };
+		await fixture.Service.UpdateTemplateAsync(saved.Id!.Value, saved);
+		(await fixture.Service.PreviewAsync(request)).Single().TemplateSnapshot.SchoolIdentity!.SignatureAssetId.ShouldBeNull();
+	});
 
 	[Fact]
 	public Task Icard_templates_schema_two_roundtrips_and_issued_duplex_snapshots_survive_edits() => RunCertificationScenarioAsync(async () =>

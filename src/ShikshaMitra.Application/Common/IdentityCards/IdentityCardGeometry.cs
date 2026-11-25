@@ -40,11 +40,12 @@ internal static class IdentityCardGeometry
 			if (settings.BackOffsetXmm != 0 || settings.BackOffsetYmm != 0) throw Invalid("Back offsets require A4 sheet output.");
 			return new(1, 1, 1, 1, width, height, 0, 0, slotWidth, slotHeight);
 		}
-		var columns = (int)Math.Floor((210 - 2 * settings.Margin + settings.Gap) / (slotWidth + settings.Gap));
-		var rows = (int)Math.Floor((297 - 2 * settings.Margin + settings.Gap) / (slotHeight + settings.Gap));
+		const double exactFitTolerance = 0.000001;
+		var columns = (int)Math.Floor((210 - 2 * settings.Margin + settings.Gap) / (slotWidth + settings.Gap) + exactFitTolerance);
+		var rows = (int)Math.Floor((297 - 2 * settings.Margin + settings.Gap) / (slotHeight + settings.Gap) + exactFitTolerance);
 		if (columns < 1 || rows < 1) throw Invalid("No card fits A4 at the requested dimensions, bleed and margins.");
-		var startX = (210 - columns * slotWidth - (columns - 1) * settings.Gap) / 2;
-		var startY = (297 - rows * slotHeight - (rows - 1) * settings.Gap) / 2;
+		var startX = Math.Max(0, (210 - columns * slotWidth - (columns - 1) * settings.Gap) / 2);
+		var startY = Math.Max(0, (297 - rows * slotHeight - (rows - 1) * settings.Gap) / 2);
 		if (Math.Abs(settings.BackOffsetXmm) > startX || Math.Abs(settings.BackOffsetYmm) > startY)
 			throw Invalid("Back offsets would clip the sheet artwork.");
 		return new(columns, rows, columns * rows, Math.Min(settings.CardsPerPage, columns * rows), width, height, startX, startY, slotWidth, slotHeight);

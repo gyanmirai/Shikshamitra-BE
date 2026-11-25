@@ -13,7 +13,7 @@ namespace ShikshaMitra.TenantSettings.SchoolIdentity;
 public class SchoolIdentityTemplateAssetService(IRepository<SchoolIdentityAsset, Guid> assets,
 	SchoolIdentityScopeAccess access) : ApplicationService, ITransientDependency
 {
-	public async Task ValidateAndRetainAsync(SchoolIdentitySelectionDto selection, SchoolIdentityAssetKind kind)
+	public async Task ValidateAndRetainAsync(SchoolIdentitySelectionDto selection, SchoolIdentityAssetKind kind, bool schoolDefaultOnly = false)
 	{
 		var value = SchoolIdentityMapping.Domain(selection).Validated(kind);
 		if (value.Mode != SchoolIdentityAssetMode.Custom) return;
@@ -21,6 +21,8 @@ public class SchoolIdentityTemplateAssetService(IRepository<SchoolIdentityAsset,
 		if (kind == SchoolIdentityAssetKind.Signature) await AuthorizationService.CheckAsync(SchoolIdentityPermissions.AccessSignature);
 		var asset = await assets.GetAsync(value.AssetId!.Value);
 		if (asset.TenantId != CurrentTenant.Id || asset.Kind != kind) throw new BusinessException(SchoolIdentityErrorCodes.AssetInvalid);
+		if (schoolDefaultOnly && (asset.EducationBoardId.HasValue || asset.EducationMediumId.HasValue || asset.OrganizationId.HasValue))
+			throw new BusinessException(SchoolIdentityErrorCodes.AssetInvalid);
 		if (!asset.IsRetained && asset.CreatorId != CurrentUser.Id) throw new AbpAuthorizationException();
 		await access.EnsureAsync(asset.EducationBoardId, asset.EducationMediumId, organizationId: asset.OrganizationId);
 		asset.Retain(); await assets.UpdateAsync(asset, autoSave: true);

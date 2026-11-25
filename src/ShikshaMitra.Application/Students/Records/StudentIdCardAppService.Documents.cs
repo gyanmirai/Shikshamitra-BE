@@ -30,7 +30,7 @@ public partial class StudentIdCardAppService
 	{
 		if (input.CardsPerPage is < 1 or > 10) throw new BusinessException("Students:Records:InvalidIdTemplate");
 		var identitySnapshots = new Dictionary<IdentityReadKey, SchoolIdentityDocumentSnapshotDto>();
-		var cards = new List<(StudentIdCardDto Card, byte[]? Photo, byte[]? Logo)>();
+		var cards = new List<(StudentIdCardDto Card, byte[]? Photo, SchoolIdentityDocumentAssets Assets)>();
 		var cohort = await CapturePhotoCohortAsync(input.StudentIds, input.PhotoEdits);
 		foreach (var studentId in input.StudentIds)
 		{
@@ -38,15 +38,15 @@ public partial class StudentIdCardAppService
 			template ??= await LoadTemplateAsync(input.TemplateId);
 			var photo = await LoadPhotoAsync(template, snapshot.Fields);
 			var frozen = await CaptureIdentityTemplateAsync(template, snapshot, identitySnapshots);
-			var logo = (await schoolIdentity.LoadAsync(frozen.SchoolIdentity)).Logo;
+			var assets = await schoolIdentity.LoadAsync(frozen.SchoolIdentity);
 			cards.Add((new StudentIdCardDto { StudentId = studentId, HasPhoto = photo != null,
-				StudentSnapshot = PublicFields(snapshot.Fields), TemplateSnapshot = frozen }, photo, logo));
+				StudentSnapshot = PublicFields(snapshot.Fields), TemplateSnapshot = frozen }, photo, assets));
 		}
 		if (template!.SchemaVersion == 2)
 		{
 			var (layout, settings) = StudentIdCardDesign.Resolve(template);
 			settings.CardsPerPage = input.CardsPerPage;
-			var bytes = IdentityCardPdfComposer.Compose(layout, settings, cards.Select(item => StudentIdCardDesign.Artwork(item.Card, item.Photo, item.Logo)).ToList(), template.BackSideEnabled);
+			var bytes = IdentityCardPdfComposer.Compose(layout, settings, cards.Select(item => StudentIdCardDesign.Artwork(item.Card, item.Photo, item.Assets.Logo, item.Assets.Signature)).ToList(), template.BackSideEnabled);
 			return new() { FileName = $"Student-I-Cards-{Clock.Now:yyyy-MM-dd}.pdf", Content = bytes };
 		}
 		QuestPDF.Settings.License = LicenseType.Community;
@@ -68,7 +68,7 @@ public partial class StudentIdCardAppService
 							{
 								row.Spacing(2, Unit.Millimetre);
 								foreach (var item in rowCards)
-									row.ConstantItem(vertical ? 54 : 85.6f, Unit.Millimetre).Element(c => ComposeCard(c, item.Card, item.Photo, item.Logo));
+									row.ConstantItem(vertical ? 54 : 85.6f, Unit.Millimetre).Element(c => ComposeCard(c, item.Card, item.Photo, item.Assets.Logo));
 							});
 						}
 					});
@@ -100,7 +100,7 @@ public partial class StudentIdCardAppService
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add); ValidateReason(input);
 		var card = await LoadCardAsync(id);
 		if (card.Status != "Voided") { card.Void(); await cards.UpdateAsync(card, autoSave: true); await AddEventAsync(card, "Void", input.Reason); }
-		return Map(card);
+		return (await RedactCardSignaturesAsync([Map(card)])).Single();
 	}
 	private static void ValidateReason(StudentDocumentActionDto input) { if (input == null || string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Trim().Length < 5 || input.Reason.Length > 2000) throw new BusinessException("Students:Records:DocumentReasonRequired"); }
 	private async Task<StudentCertificatePdfDto> RenderPdfAsync(StudentIdCard card)
@@ -108,11 +108,11 @@ public partial class StudentIdCardAppService
 		var dto = Map(card); var template = dto.TemplateSnapshot;
 		var snapshot = JsonSerializer.Deserialize<Dictionary<string, string?>>(card.StudentSnapshotJson, JsonOptions)!;
 		var photo = await LoadPhotoAsync(template, snapshot);
-		var logo = (await schoolIdentity.LoadAsync(template.SchoolIdentity)).Logo;
+		var assets = await schoolIdentity.LoadAsync(template.SchoolIdentity);
 		if (template.SchemaVersion == 2)
 		{
 			var (layout, settings) = StudentIdCardDesign.Resolve(template, cardOutput: true);
-			var bytes = IdentityCardPdfComposer.Compose(layout, settings, [StudentIdCardDesign.Artwork(dto, photo, logo)], template.BackSideEnabled);
+			var bytes = IdentityCardPdfComposer.Compose(layout, settings, [StudentIdCardDesign.Artwork(dto, photo, assets.Logo, assets.Signature)], template.BackSideEnabled);
 			return new() { FileName = $"{card.CardNumber}.pdf", Content = bytes };
 		}
 		QuestPDF.Settings.License = LicenseType.Community;
@@ -120,7 +120,7 @@ public partial class StudentIdCardAppService
 		var content = Document.Create(container => container.Page(page =>
 		{
 			page.Size(vertical ? 54 : 85.6f, vertical ? 85.6f : 54, Unit.Millimetre);
-			page.Margin(0); page.Content().Element(c => ComposeCard(c, dto, photo, logo));
+			page.Margin(0); page.Content().Element(c => ComposeCard(c, dto, photo, assets.Logo));
 		})).GeneratePdf();
 		return new() { FileName = $"{card.CardNumber}.pdf", Content = content };
 	}

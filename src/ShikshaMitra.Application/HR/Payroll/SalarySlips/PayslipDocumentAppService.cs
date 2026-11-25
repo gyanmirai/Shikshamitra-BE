@@ -47,6 +47,8 @@ public class PayslipDocumentAppService(IRepository<PayslipDocument, Guid> docume
 				!issued.Any(newer => newer.SalarySlipId == document.SalarySlipId && newer.Revision > document.Revision)
 			select new { document, slip.Status, employee.FirstName, employee.LastName, employee.EmployeeCode };
 		var total = await AsyncExecuter.LongCountAsync(query);
+		if (input.SkipCount >= total)
+			return new PagedResultDto<IssuedPayslipListItem>(total, []);
 		var rows = await AsyncExecuter.ToListAsync(query.OrderByDescending(row => row.document.MonthYear)
 			.ThenBy(row => row.FirstName).ThenBy(row => row.LastName).ThenBy(row => row.document.Id)
 			.Skip(input.SkipCount).Take(input.MaxResultCount)

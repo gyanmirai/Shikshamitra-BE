@@ -53,8 +53,9 @@ public class SalarySummaryAppService(
 		var pfCoverage = await pfEligibility.GetCoverageAsync(date);
 		var pfHandledExternally = pfCoverage?.IsHandledExternally == true;
 		var pfRuleId = pfHandledExternally ? null : salary.Revision.PfRuleId;
-		var components = await providentFund.AddProvidentFundDeductionAsync(employeeId, pfRuleId, salary.Components, date.Year, date.Month);
 		var pfRule = await providentFund.ResolveRuleAsync(pfRuleId, employeeId, date.Year, date.Month);
+		var components = PayrollProvidentFundComponentBuilder.AddProvidentFundDeduction(
+			employeeId, pfRule, salary.Components, date.Year, date.Month);
 		var slabs = await professionalTax.GetListAsync(x => x.IsActive && x.JurisdictionCode == salary.Revision.StatutoryProfile && x.EffectiveFrom <= date && (!x.EffectiveTo.HasValue || x.EffectiveTo >= date));
 		var configuration = await esiConfiguration.ResolveAsync(date);
 		PayrollEsiStatutoryContext? esiContext = null;

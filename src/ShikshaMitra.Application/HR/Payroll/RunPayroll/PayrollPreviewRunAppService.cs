@@ -88,8 +88,8 @@ public class PayrollPreviewRunAppService(
 	{
 		var (year, month, _) = PayrollRunRules.ParseMonth(input.Month);
 		var academicYear = await academicYearResolver.ResolveAsync(input.AcademicYearId, year, month);
-		var scoped = await scopeResolver.GetScopedPayrollEmployeesAsync(year, month, false);
-		var scopedRuns = await GetScopedRunsAsync($"{year:0000}-{month:00}", academicYear, ScopeFingerprint(scoped.Select(x => x.Id)));
+		var scopedIds = await scopeResolver.ReadScopedEligibleIdsAsync(year, month);
+		var scopedRuns = await GetScopedRunsAsync($"{year:0000}-{month:00}", academicYear, ScopeFingerprint(scopedIds));
 		var latest = await AsyncExecuter.FirstOrDefaultAsync(scopedRuns);
 		return new PayrollPreviewLookupDto
 		{
@@ -112,8 +112,7 @@ public class PayrollPreviewRunAppService(
 		var academicYear = await academicYearResolver.ResolveAsync(input.AcademicYearId, year, month);
 		var scopedStaff = await scopeResolver.GetScopedEmployeeQueryAsync(false);
 		var scopedIds = scopedStaff.Select(x => x.Id);
-		var eligible = await PayrollScopedEmployeeResolver.ReadEligibleAsync(scopedStaff, year, month, AsyncExecuter);
-		var eligibleIds = eligible.Select(x => x.Id).ToHashSet();
+		var eligibleIds = await PayrollScopedEmployeeResolver.ReadEligibleIdsAsync(scopedStaff, year, month, AsyncExecuter);
 		var scopedRuns = await GetScopedRunsAsync(canonicalMonth, academicYear, ScopeFingerprint(eligibleIds));
 		var workingRun = await AsyncExecuter.FirstOrDefaultAsync(scopedRuns.Where(x => x.Status == "SUCCEEDED"));
 		var issuedSlips = await coverage.GetIssuedAsync(canonicalMonth, scopedStaff);
@@ -164,19 +163,19 @@ public class PayrollPreviewRunAppService(
 		var submittedQuery = activeClaims.Where(x => batches.Any(batch => batch.Id == x.SubmissionId && batch.StageId == null));
 		var displayRows = working.Select(x => new
 			{
-				x.EmployeeId, x.EmployeeName, Code = x.EmployeeCode, x.PayableDays, x.NetPay, x.NetPayDelta,
+				x.EmployeeId, x.EmployeeName, Code = x.EmployeeCode, x.PayableDays, x.NetPay, x.NetPayDelta, Source = 0,
 				State = submittedQuery.Any(claim => claim.EmployeeId == x.EmployeeId) ? "SUBMITTED" :
 					reviewQuery.Any(review => review.EmployeeId == x.EmployeeId) ? "REVIEWED" : "PENDING"
 			})
 			.Concat(finalized.Select(x => new
 			{
 				x.EmployeeId, x.EmployeeName, Code = x.EmployeeIdentifier, PayableDays = (decimal?) x.PayableDays,
-				NetPay = (decimal?) x.NetPay, x.NetPayDelta, State = "LOCKED"
+				NetPay = (decimal?) x.NetPay, x.NetPayDelta, Source = 1, State = "LOCKED"
 			}))
 			.Concat(legacyIssued.Select(x => new
 			{
 				x.EmployeeId, x.EmployeeName, x.Code, x.PayableDays,
-				NetPay = (decimal?) x.NetSalary, NetPayDelta = (decimal?) null, State = "LOCKED"
+				NetPay = (decimal?) x.NetSalary, NetPayDelta = (decimal?) null, Source = 2, State = "LOCKED"
 			}));
 		var search = input.Search?.Trim().ToLowerInvariant();
 		if (!string.IsNullOrEmpty(search))
@@ -195,21 +194,29 @@ public class PayrollPreviewRunAppService(
 			_ => displayRows.OrderBy(x => x.EmployeeName)
 		};
 		var count = await AsyncExecuter.CountAsync(displayRows);
-		var pageIds = await AsyncExecuter.ToListAsync(ordered.ThenBy(x => x.EmployeeId)
-			.Skip(checked(input.Page * input.PageSize)).Take(input.PageSize).Select(x => x.EmployeeId));
+		var pageRows = await AsyncExecuter.ToListAsync(ordered.ThenBy(x => x.EmployeeId)
+			.Skip(checked(input.Page * input.PageSize)).Take(input.PageSize)
+			.Select(x => new { x.EmployeeId, x.Source }));
+		var workingIds = pageRows.Where(x => x.Source == 0).Select(x => x.EmployeeId).ToArray();
+		var finalizedIds = pageRows.Where(x => x.Source == 1).Select(x => x.EmployeeId).ToArray();
+		var legacyIds = pageRows.Where(x => x.Source == 2).Select(x => x.EmployeeId).ToArray();
 
-		var workingRows = await AsyncExecuter.ToListAsync(working.Where(x => pageIds.Contains(x.EmployeeId)));
-		var finalizedRows = await AsyncExecuter.ToListAsync(finalized.Where(x => pageIds.Contains(x.EmployeeId)));
-		var pageReviews = (await AsyncExecuter.ToListAsync(reviewQuery.Where(x => pageIds.Contains(x.EmployeeId))))
+		var workingRows = workingIds.Length == 0 ? [] : await AsyncExecuter.ToListAsync(
+			working.Where(x => Enumerable.Contains(workingIds, x.EmployeeId)));
+		var pageReviews = workingIds.Length == 0 ? [] : (await AsyncExecuter.ToListAsync(
+			reviewQuery.Where(x => Enumerable.Contains(workingIds, x.EmployeeId))))
 			.ToDictionary(x => x.EmployeeId);
-		var pageClaims = (await AsyncExecuter.ToListAsync(
+		var pageClaims = workingIds.Length == 0 ? [] : (await AsyncExecuter.ToListAsync(
 			from claim in activeClaims
 			join batch in batches on claim.SubmissionId equals (Guid?)batch.Id
-			where pageIds.Contains(claim.EmployeeId)
+			where Enumerable.Contains(workingIds, claim.EmployeeId)
 			select new { claim.EmployeeId, SectionReview = batch.StageId.HasValue }))
 			.ToDictionary(claim => claim.EmployeeId, claim => claim.SectionReview);
-		var items = finalizedRows.ToDictionary(x => x.EmployeeId, PayrollRunProjection.ToItem);
-		var legacyRows = await AsyncExecuter.ToListAsync(legacyIssued.Where(x => pageIds.Contains(x.EmployeeId)));
+		var items = finalizedIds.Length == 0 ? new Dictionary<Guid, RunPayrollItem>()
+			: (await AsyncExecuter.ToListAsync(finalized.Where(x => Enumerable.Contains(finalizedIds, x.EmployeeId))))
+				.ToDictionary(x => x.EmployeeId, PayrollRunProjection.ToItem);
+		var legacyRows = legacyIds.Length == 0 ? [] : await AsyncExecuter.ToListAsync(
+			legacyIssued.Where(x => Enumerable.Contains(legacyIds, x.EmployeeId)));
 		if (legacyRows.Count > 0)
 		{
 			var slipIds = legacyRows.Select(x => x.Id).ToList();
@@ -258,7 +265,8 @@ public class PayrollPreviewRunAppService(
 			: new RunPayrollReadinessSummary { Month = canonicalMonth };
 		summary.EmployeeCount = eligibleIds.Union(issuedIds).Count();
 		summary.LockedCount = issuedIds.Count;
-		summary.ReviewedCount = await AsyncExecuter.CountAsync(reviewQuery.Where(x => allWorking.Any(row => row.EmployeeId == x.EmployeeId)));
+		summary.ReviewedCount = workingRun == null ? 0 :
+			await AsyncExecuter.CountAsync(reviewQuery.Where(x => allWorking.Any(row => row.EmployeeId == x.EmployeeId)));
 		summary.CanLock = isCurrent && summary.BlockingIssues.Count == 0 && summary.ReviewedCount > 0;
 		return new RunPayrollResponse
 		{
@@ -269,7 +277,7 @@ public class PayrollPreviewRunAppService(
 			CurrentPage = input.Page,
 			PageSize = input.PageSize,
 			TotalPages = (int) Math.Ceiling((double) count / input.PageSize),
-			Items = pageIds.Where(items.ContainsKey).Select(id => items[id]).ToList(),
+			Items = pageRows.Select(x => x.EmployeeId).Where(items.ContainsKey).Select(id => items[id]).ToList(),
 			Readiness = summary
 		};
 	}
@@ -360,8 +368,8 @@ public class PayrollPreviewRunAppService(
 		var run = await runs.FindAsync(id) ?? throw new BusinessException(HRErrorCodes.PayrollPreviewNotFound);
 		var (year, month, _) = PayrollRunRules.ParseMonth(run.Month);
 		await academicYearResolver.ResolveAsync(run.AcademicYearId, year, month);
-		var scoped = await scopeResolver.GetScopedPayrollEmployeesAsync(year, month, false);
-		if (run.ScopeFingerprint != ScopeFingerprint(scoped.Select(x => x.Id))) throw new BusinessException(HRErrorCodes.PayrollPreviewNotFound);
+		var scopedIds = await scopeResolver.ReadScopedEligibleIdsAsync(year, month);
+		if (run.ScopeFingerprint != ScopeFingerprint(scopedIds)) throw new BusinessException(HRErrorCodes.PayrollPreviewNotFound);
 		return run;
 	}
 

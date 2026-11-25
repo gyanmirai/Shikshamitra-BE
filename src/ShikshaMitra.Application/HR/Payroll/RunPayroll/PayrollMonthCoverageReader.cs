@@ -20,8 +20,8 @@ public class PayrollMonthCoverageReader(ISalarySlipRepository slips, IAsyncQuery
 	internal async Task<(int EligibleOrIssued, int Issued)> ReadAsync(string month, IQueryable<Employee> staff)
 	{
 		var (year, number, period) = PayrollRunRules.ParseMonth(month);
-		var eligible = await PayrollScopedEmployeeResolver.ReadEligibleAsync(staff, year, number, queries);
+		var eligible = await PayrollScopedEmployeeResolver.ReadEligibleIdsAsync(staff, year, number, queries);
 		var issued = await queries.ToListAsync((await GetIssuedAsync(period, staff)).Select(x => x.EmployeeId).Distinct());
-		return (eligible.Select(x => x.Id).Union(issued).Count(), issued.Count);
+		return (eligible.Union(issued).Count(), issued.Count);
 	}
 }

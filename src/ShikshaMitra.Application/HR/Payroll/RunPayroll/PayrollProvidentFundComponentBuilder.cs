@@ -51,8 +51,14 @@ public class PayrollProvidentFundComponentBuilder(
 		int year,
 		int month)
 	{
-		var result = components.ToList();
 		var rule = await ResolveRuleAsync(pfRuleId, employeeId, year, month);
+		return AddProvidentFundDeduction(employeeId, rule, components, year, month);
+	}
+
+	internal static List<EmployeePayrollComponent> AddProvidentFundDeduction(
+		Guid employeeId, ProvidentFund? rule, List<EmployeePayrollComponent> components, int year, int month)
+	{
+		var result = components.ToList();
 		if (rule == null)
 		{
 			result.RemoveAll(x => x.SemanticType == PayrollComponentSemanticType.EmployeeProvidentFund);

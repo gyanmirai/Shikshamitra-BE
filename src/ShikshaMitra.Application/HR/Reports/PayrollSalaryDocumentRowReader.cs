@@ -89,7 +89,8 @@ public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> d
 			"employeeCode" when sort.Direction == "desc" => query.OrderByDescending(x => x.EmployeeCode).ThenBy(x => x.Month),
 			_ => query.OrderBy(x => x.EmployeeCode).ThenBy(x => x.Month)
 		};
-		var records = await executer.ToListAsync(statement ? sorted.Take(HrReportRequestProcessor.MaxExportRows) : sorted.Skip(skip).Take(take));
+		var records = total <= (statement ? 0 : skip) ? [] : await executer.ToListAsync(
+			statement ? sorted.Take(HrReportRequestProcessor.MaxExportRows) : sorted.Skip(skip).Take(take));
 		var rows = records.Select(ToRow).ToList();
 		if (statement)
 		{

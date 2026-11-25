@@ -40,8 +40,38 @@ public class PayrollScopedEmployeeResolver(
 	{
 		var monthStart = DateOnly.FromDateTime(new DateTime(year, month, 1));
 		var monthEnd = PayrollRunRules.GetPayrollMonthEndDate(year, month);
+
+		var candidates = await queries.ToListAsync(
+			FilterPayrollCandidates(employeeQuery, monthStart, monthEnd)
+				.OrderBy(e => e.FirstName)
+				.ThenBy(e => e.LastName));
+		return candidates
+			.Where(employee => EmployeeLifecycleEligibility.IsEligibleForPayrollMonth(employee, monthStart, monthEnd))
+			.ToList();
+	}
+
+	internal async Task<List<Guid>> ReadScopedEligibleIdsAsync(int year, int month) =>
+		await ReadEligibleIdsAsync(await GetScopedEmployeeQueryAsync(false), year, month, AsyncExecuter);
+
+	internal static async Task<List<Guid>> ReadEligibleIdsAsync(IQueryable<Employee> employeeQuery,
+		int year, int month, IAsyncQueryableExecuter queries)
+	{
+		var monthStart = new DateOnly(year, month, 1);
+		var monthEnd = PayrollRunRules.GetPayrollMonthEndDate(year, month);
+		var candidates = await queries.ToListAsync(FilterPayrollCandidates(employeeQuery, monthStart, monthEnd)
+			.Select(x => new { x.Id, x.DateOfJoining, x.CreationTime, x.EmployeeStatusType,
+				x.StatusEffectiveDate, x.StatusLastChangedAt }));
+		return candidates.Where(x => EmployeeLifecycleEligibility.IsEligibleForPayrollMonth(
+			x.DateOfJoining, x.CreationTime, x.EmployeeStatusType, x.StatusEffectiveDate,
+			x.StatusLastChangedAt, monthStart, monthEnd))
+			.Select(x => x.Id).ToList();
+	}
+
+	private static IQueryable<Employee> FilterPayrollCandidates(IQueryable<Employee> employeeQuery,
+		DateOnly monthStart, DateOnly monthEnd)
+	{
 		var joinedEndExclusive = monthEnd.ToDateTime(TimeOnly.MinValue).AddDays(1);
-		employeeQuery = employeeQuery.Where(employee =>
+		return employeeQuery.Where(employee =>
 			((employee.DateOfJoining.HasValue && employee.DateOfJoining.Value <= monthEnd) ||
 			 (!employee.DateOfJoining.HasValue && employee.CreationTime < joinedEndExclusive)) &&
 			((!employee.EmployeeStatusType.HasValue) ||
@@ -51,13 +81,6 @@ public class PayrollScopedEmployeeResolver(
 			    employee.StatusEffectiveDate.Value >= monthStart) ||
 			   (!employee.StatusEffectiveDate.HasValue &&
 			    employee.StatusLastChangedAt.HasValue)))));
-		var candidates = await queries.ToListAsync(
-			employeeQuery
-				.OrderBy(e => e.FirstName)
-				.ThenBy(e => e.LastName));
-		return candidates
-			.Where(employee => EmployeeLifecycleEligibility.IsEligibleForPayrollMonth(employee, monthStart, monthEnd))
-			.ToList();
 	}
 
 	public async Task<List<Employee>> GetScopedEmployeesAsync(bool includeUnknownStageEmployees)

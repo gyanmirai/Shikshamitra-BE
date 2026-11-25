@@ -3,15 +3,18 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Common;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceRegister;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.Reports;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Security.UserScope;
@@ -115,6 +118,46 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		await EnsureUserHasStageScopeAsync(scopedUser, organizations.CurrentYearStageId);
 		var denied = await CreateClientAs(scopedUser).GetAsync(baseline + divisions);
 		denied.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+
+		var tableQuery = new HrOperationalTableQueryRequest
+		{
+			Table = "hr-attendance-register",
+			Query = JsonSerializer.SerializeToElement(new
+			{
+				startDate = $"{date:yyyy-MM-dd}",
+				endDate = $"{date:yyyy-MM-dd}",
+				search = marker,
+				educationMediumStageIds = new[] { organizations.CurrentYearStageId, organizations.OtherYearStageId },
+				employeeGroup = "Teaching",
+				sorting = "employeeName asc"
+			}),
+			Offset = 1,
+			Size = 1
+		};
+		async Task<GroupedAttendanceRegisterResponse> ReadTable()
+		{
+			using var response = await Client.PostAsJsonAsync("/api/hr/table-query", tableQuery, JsonOptions);
+			response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+			return (await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions))!;
+		}
+		var unfilteredTable = await ReadTable();
+		unfilteredTable.TotalCount.ShouldBe(2);
+		unfilteredTable.Items.Single().EmployeeId.ShouldBe(second.Id);
+		var beforeCriteria = JsonSerializer.Serialize(unfilteredTable.Summary);
+		beforeCriteria.ShouldBe(JsonSerializer.Serialize(pageTwo.Summary));
+
+		tableQuery.Criteria = new() { Sorts = [new() { Column = "employeeName", Direction = "desc" }] };
+		var sortedTable = await ReadTable();
+		sortedTable.TotalCount.ShouldBe(2);
+		sortedTable.Items.Single().EmployeeId.ShouldBe(first.Id);
+		sortedTable.Items.Single().Days.Single().AttendanceDate.ShouldBe($"{date:yyyy-MM-dd}");
+		JsonSerializer.Serialize(sortedTable.Summary).ShouldBe(beforeCriteria);
+
+		using var deniedClient = Factory.CreateClient();
+		deniedClient.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			ShikshaMitraSubmodulePermissions.HR.Reports.Export);
+		using var deniedTable = await deniedClient.PostAsJsonAsync("/api/hr/table-query", tableQuery, JsonOptions);
+		deniedTable.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
 	[Fact]

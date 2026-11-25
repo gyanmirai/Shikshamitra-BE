@@ -26,9 +26,11 @@ public sealed class HrReportingTableQuery
 		// Shared table semantics: alternatives in one column, intersection across columns.
 		_filters = _query.Filters.GroupBy(x => x.Column).Select(group => group.Select(Compile).ToList()).ToList();
 	}
-	public IEnumerable<T> Apply<T>(IEnumerable<T> rows, Func<T, Dictionary<string, object?>> values)
+	public IEnumerable<T> Apply<T>(IEnumerable<T> rows, Func<T, Dictionary<string, object?>> values) =>
+		Order(rows.Where(row => Matches(values(row))), values);
+
+	internal IEnumerable<T> Order<T>(IEnumerable<T> matching, Func<T, Dictionary<string, object?>> values)
 	{
-		var matching = rows.Where(row => Matches(values(row)));
 		IOrderedEnumerable<T>? sorted = null;
 		foreach (var sort in _query.Sorts)
 		{
@@ -40,7 +42,7 @@ public sealed class HrReportingTableQuery
 		// LINQ ordering is stable, preserving capture order (or the history ID tie-breaker).
 		return sorted ?? matching;
 	}
-	private bool Matches(Dictionary<string, object?> row) =>
+	internal bool Matches(Dictionary<string, object?> row) =>
 		(string.IsNullOrWhiteSpace(_query.Search) || _fields.Values.Any(field =>
 			Text(row.GetValueOrDefault(field.Id), field.Type).Contains(_query.Search.Trim(), StringComparison.OrdinalIgnoreCase) ||
 			(Convert.ToString(DisplayValue(row.GetValueOrDefault(field.Id)), CultureInfo.InvariantCulture) ?? "").Contains(_query.Search.Trim(), StringComparison.OrdinalIgnoreCase)))

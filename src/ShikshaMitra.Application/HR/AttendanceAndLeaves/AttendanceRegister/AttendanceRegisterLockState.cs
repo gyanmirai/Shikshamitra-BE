@@ -9,7 +9,7 @@ internal static class AttendanceRegisterLockState
 	public static bool IsPayrollLocked(
 		RegisterProjection row,
 		Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup) =>
-		lockLookup.GetValueOrDefault((row.EmployeeId, AttendanceRegisterProjection.ToMonthYear(row.AttendanceDate)), new PayrollLockInfo(false, null)).IsLocked;
+		lockLookup.TryGetValue((row.EmployeeId, AttendanceRegisterProjection.ToMonthYear(row.AttendanceDate)), out var info) && info.IsLocked;
 
 	public static bool IsLocked(
 		RegisterProjection row,

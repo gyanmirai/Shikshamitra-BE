@@ -77,7 +77,7 @@ public class TakeAttendanceDayReader(
 		{
 			var s = input.Search.Trim().ToLowerInvariant();
 			empQuery = empQuery.Where(e =>
-				((e.FirstName ?? "") + " " + (e.MiddleName ?? "") + " " + (e.LastName ?? "")).ToLower().Contains(s) ||
+				(((e.FirstName ?? "") + " " + (e.MiddleName ?? "")).Trim() + " " + (e.LastName ?? "")).Trim().ToLower().Contains(s) ||
 				(e.EmployeeCode ?? "").ToLower().Contains(s) ||
 				(e.MobileNo ?? "").ToLower().Contains(s));
 		}

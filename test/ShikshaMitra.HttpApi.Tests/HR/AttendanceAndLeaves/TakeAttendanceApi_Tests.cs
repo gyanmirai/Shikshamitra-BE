@@ -91,6 +91,25 @@ public class TakeAttendanceApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Day_Should_Find_The_Displayed_Name_Without_A_Middle_Name()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var marker = $"Teacher{Guid.NewGuid():N}"[..15];
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, marker,
+			dateOfJoining: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
+		employee.MiddleName.ShouldBeNullOrWhiteSpace();
+		var search = Uri.EscapeDataString($"{employee.FirstName} {employee.LastName}".ToUpperInvariant());
+
+		var response = await Client.GetAsync($"{BaseUrl}/day?attendanceDate=2026-04-10&search={search}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var day = await response.Content.ReadFromJsonAsync<TakeAttendanceDayResponse>(JsonOptions);
+		day!.Items.Single().EmployeeId.ShouldBe(employee.Id);
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Reject_Take_Attendance_Endpoints_When_Permissions_Are_Missing()
 	{

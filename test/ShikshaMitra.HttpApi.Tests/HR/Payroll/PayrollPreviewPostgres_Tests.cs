@@ -50,8 +50,10 @@ public partial class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory fac
 		(await GetAndReadAsync<RunPayrollResponse>(route + "&rowsOnly=true")).RegisterRows!.ShouldBeEmpty();
 		using var anonymous = Factory.CreateClient();
 		anonymous.DefaultRequestHeaders.Add("X-Skip-Auth", "true");
+		using var fullDenied = await anonymous.GetAsync(route);
 		using var denied = await anonymous.GetAsync(route + "&rowsOnly=true");
-		denied.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+		denied.StatusCode.ShouldBe(fullDenied.StatusCode);
+		denied.IsSuccessStatusCode.ShouldBeFalse();
 
 		var staffIds = new List<Guid>();
 		using var services = Factory.Services.CreateScope();

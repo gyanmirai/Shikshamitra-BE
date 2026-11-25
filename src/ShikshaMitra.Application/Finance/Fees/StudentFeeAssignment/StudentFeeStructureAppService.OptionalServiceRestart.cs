@@ -97,6 +97,9 @@ public partial class StudentFeeStructureAppService
 		var plan = await PlanOptionalServiceRestartAsync(studentId, input);
 		if (plan.Fingerprint != assertion.Prepared)
 			throw new BusinessException(AssignmentErrorCodes.StalePreview);
+		if (!await LazyServiceProvider.LazyGetRequiredService<IPaymentTermReferenceLock>()
+			.AcquireAsync([plan.PaymentTermId]))
+			throw new BusinessException(AssignmentErrorCodes.StalePreview);
 
 		// Use the original stopped period as history even for assignments stopped before the end date was stored.
 		if (plan.Scope.LatestPeriod == null && plan.Scope.CancellationEffectiveDate is { } cutoff &&
@@ -261,7 +264,7 @@ public partial class StudentFeeStructureAppService
 		{
 			ExistingInstallments = alreadyBilled.Values.OrderBy(installment => installment.CoverageStartDate).ToList()
 		};
-		return new(scope, policy, dues, result, Hash(new { scope.Assignment.Id, scope.Assignment.ConcurrencyStamp,
+		return new(scope, policy, term.Version.PaymentTermId, dues, result, Hash(new { scope.Assignment.Id, scope.Assignment.ConcurrencyStamp,
 			scope.CancellationEffectiveDate, scope.EarliestStart, Result = result, Policy = policy.SnapshotJson,
 			Dues = scope.Rows.OrderBy(row => row.Id).Select(row => new { row.Id, row.ConcurrencyStamp, row.NetPayableAmount, row.AdjustableBalance }) }));
 	}
@@ -299,7 +302,7 @@ public partial class StudentFeeStructureAppService
 		AcademicYear Year, Guid BoardId, OptionalFeeServicePeriod? LatestPeriod, DateOnly? CancellationEffectiveDate,
 		DateOnly EarliestStart, decimal PrepaidCredit, List<DueFee> Rows, List<DueFee> Retained);
 	private sealed record OptionalServiceRestartTerm(string Name, bool IsDefault, PaymentTermVersion Version, ResolvedFeeHeadSchedule Schedule);
-	private sealed record OptionalServiceRestartPlan(OptionalServiceRestartScope Scope, FinancePolicyVersion Policy, List<DueFee> Dues,
+	private sealed record OptionalServiceRestartPlan(OptionalServiceRestartScope Scope, FinancePolicyVersion Policy, Guid PaymentTermId, List<DueFee> Dues,
 		OptionalServiceRestartResult Result, string Fingerprint);
 	private sealed record OptionalServiceRestartEvidence(string Command, OptionalServiceRestartResult Result, Guid FeeHeadId,
 		DateOnly? PreviousCancellationEffectiveDate, Guid ProrationPolicyVersionId, Guid PaymentTermVersionId);

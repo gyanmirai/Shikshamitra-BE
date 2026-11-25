@@ -20,7 +20,7 @@ public class FinanceExternalSettlementGuard(
 	public async Task EnsureLegacyChargesAsync(IEnumerable<Guid> chargeIds)
 	{
 		var ids = chargeIds.Distinct().ToArray();
-		if (ids.Length > 0 && await links.AnyAsync(row => row.TenantId == tenant.Id && ids.Contains(row.FinanceChargeId)))
+		if (ids.Length > 0 && await links.AnyAsync(row => row.TenantId == tenant.Id && Enumerable.Contains(ids, row.FinanceChargeId)))
 			throw new BusinessException(LibraryFinanceErrorCodes.SettlementRequiresFinance,
 				"Use the source receivable settlement workflow for this charge.");
 	}

@@ -7,6 +7,7 @@ using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.Services;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -19,6 +20,7 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 using Volo.Abp.Uow;
@@ -37,7 +39,11 @@ public partial class PaymentTermAppService(
 	FinanceAuditWriter auditWriter,
 	IUserScopeAccessService scopeAccess,
 	PaymentTermScheduleResolver scheduleResolver,
-	IPaymentTermNameMutationLock nameMutationLock
+	IPaymentTermNameMutationLock nameMutationLock,
+	IPaymentTermReferenceLock referenceLock,
+	IDueFeeRepository dueFeeRepository,
+	IRepository<FinanceAuditEvent, Guid> auditRepository,
+	IDataFilter dataFilter
 ) : ApplicationService, IPaymentTermAppService
 {
 	public async Task<PagedResultDto<PaymentTermListDto>> GetListAsync(PaymentTermGetListInput input)
@@ -373,21 +379,48 @@ public partial class PaymentTermAppService(
 		return await GetAsync(term.Id);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.Delete)]
+	[UnitOfWork(isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted)]
 	public async Task DeleteAsync(Guid paymentTermId)
 	{
+		if (!await referenceLock.AcquireAsync([paymentTermId]))
+			throw new BusinessException(PaymentTermErrorCodes.NotFound).WithData("PaymentTermId", paymentTermId);
+
 		var term = await GetTermWithVersionsAsync(paymentTermId);
-		if (term.GetPublishedVersion() != null)
-		{
-			throw new BusinessException(PaymentTermErrorCodes.DeleteWithReferences)
-				.WithData("Reason", "Published payment terms must be archived, not deleted.");
-		}
+		var draft = term.GetDraftVersion();
+		if (term.Status == PaymentTermStatus.Archived || draft == null)
+			throw new BusinessException(PaymentTermErrorCodes.DeleteRequiresDraft);
+		if (term.IsDefault)
+			throw new BusinessException(PaymentTermErrorCodes.DeleteBoardDefault);
+
 		var referenceCount = (await GetReferenceCountsAsync(new[] { term.Id })).GetValueOrDefault(term.Id);
-		if (referenceCount > 0)
+		if (referenceCount > 0 || await HasStudentScheduleReferencesAsync(term))
 		{
 			throw new BusinessException(PaymentTermErrorCodes.DeleteWithReferences)
 				.WithData("ReferencedStructureCount", referenceCount);
 		}
+
+		await auditWriter.WriteAsync(term.AcademicYearId, FinanceAuditEntityTypes.PaymentTerm, term.Id,
+			term.Name, FinanceAuditActions.Delete, "Deleted unused draft payment term.",
+			context: new { DraftVersion = draft.VersionNumber });
 		await paymentTermRepository.DeleteAsync(term);
+	}
+
+	private async Task<bool> HasStudentScheduleReferencesAsync(PaymentTerm term)
+	{
+		var versionIds = term.Versions.Select(version => version.Id).ToArray();
+		using (dataFilter.Disable<ISoftDelete>())
+		{
+			if (await dueFeeRepository.AnyAsync(due => due.PaymentTermId == term.Id ||
+				(due.PaymentTermVersionId.HasValue && Enumerable.Contains(versionIds, due.PaymentTermVersionId.Value))))
+				return true;
+		}
+
+		// A restarted optional service can retain its selected version without generating another due.
+		var versionEvidence = versionIds.Select(id => $"\"paymentTermVersionId\":\"{id:D}\"").ToArray();
+		return await auditRepository.AnyAsync(audit => audit.AcademicYearId == term.AcademicYearId &&
+			audit.EntityType == FinanceAuditEntityTypes.FeeAdjustment && audit.ContextJson != null &&
+			versionEvidence.Any(evidence => audit.ContextJson.Contains(evidence)));
 	}
 
 	public async Task<PaymentTermDto> CreateRevisionAsync(Guid paymentTermId, CreateRevisionDto input)

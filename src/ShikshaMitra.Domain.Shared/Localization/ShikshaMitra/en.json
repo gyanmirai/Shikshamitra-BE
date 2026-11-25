@@ -747,7 +747,7 @@
         "ShikshaMitra:DueFee:10001": "Due fees have already been generated for this student.",
         "ShikshaMitra:DefaultAttendancePolicyRequired": "This attendance policy is the only active default for the selected academic year. Set another active attendance policy as default before clearing this policy's default status or archiving it.",
         "Finance:PaymentTerm:000023": "A payment term with code '{Code}' already exists in this academic year. Use a different payment term name or code.",
-        "Finance:PaymentTerm:000014": "Only unused draft payment terms can be deleted. Archive a published term when it is no longer needed.",
+        "Finance:PaymentTerm:000014": "This payment term is used by a fee structure or student schedule and cannot be deleted.",
         "Finance:PaymentTerm:000028": "The payment term could not be found. Refresh the payment term list and try again.",
         "Finance:FeeHead:010001": "Fee head '{Name}' cannot be removed: {Students}, {Assignments}, {FeeStructures}, and {PaymentTerms} reference it. Remove or reassign these references first.",
         "Finance:FeeHead:010002": "Fee head '{Name}' cannot be deactivated: {Students}, {Assignments}, {FeeStructures}, and {PaymentTerms} reference it. Remove or reassign these references first.",
@@ -807,6 +807,8 @@
         "Finance:PaymentTerm:000040": "Invoice date must be on or after the installment start date.",
         "Finance:PaymentTerm:000041": "Days before due must not exceed {Maximum} days for this installment.",
         "Finance:PaymentTerm:000042": "A payment term named '{Name}' already exists in this academic year. Use a different name.",
+        "Finance:PaymentTerm:000043": "Only draft payment terms can be deleted.",
+        "Finance:PaymentTerm:000044": "Select another board default before deleting this payment term.",
         "ShikshaMitra:HrPolicyAssignmentOverlap": "Policy assignment conflicts with active assignment {conflictingAssignmentId} for {targetDisplayName} ({effectiveRange}). Payroll: {payrollPolicyName}; attendance: {attendancePolicyName}; leave: {leavePolicyName}. Adjust the dates or deactivate or edit the conflicting assignment.",
 
         "Academic:HomeworkAssignment:010001": "Assignment type '{Name}' already exists. Please use a different name.",

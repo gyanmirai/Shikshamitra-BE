@@ -22,6 +22,50 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 public partial class LateFeeCollectionRuntime_Tests
 {
 	[Fact]
+	public async Task Automatic_Allocation_Collects_Only_The_Selected_Charge_And_Replays_Safely()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		var (year, student, feeHeadId, dueFeeId, _) = await SeedStudentWithOverdueDueFeeAsync(10, true,
+			enableLateFee: false, allocationBasis: "FeeHead");
+		var payer = await _studentRepo.GetAsync(student);
+		var head = await _feeHeadRepo.GetAsync(feeHeadId);
+		var charge = new Charge(Guid.NewGuid(), TestTenantId, year, Guid.NewGuid(), "Uniform charge",
+			Guid.NewGuid(), student, payer.AcademicBoardId!.Value, payer.AcademicMediumId,
+			Guid.NewGuid(), Guid.NewGuid(), "Charge-only collection regression", 500m, DateTimeOffset.UtcNow,
+			ChargePriority.Medium, ChargeStatus.Pending, FakeAdminUserId);
+		charge.SetAccountingSnapshot(head.IncomeCategoryId);
+		charge.Approve(FakeAdminUserId);
+		await GetRequiredService<IRepository<Charge, Guid>>().InsertAsync(charge, autoSave: true);
+
+		var form = await _feeCollections.GetCollectFormAsync(student, year);
+		form.AllocationBasis.ShouldBe("FeeHead");
+		form.AllocationRevision.ShouldNotBeNullOrWhiteSpace();
+		var input = new CollectFeeInput
+		{
+			StudentId = student, AcademicYearId = year, IdempotencyKey = Guid.NewGuid().ToString("N"),
+			AutomaticAllocation = new() { Revision = form.AllocationRevision!, ChargeIds = [charge.Id] },
+			ChargePayments = [new() { ChargeId = charge.Id, Amount = 200d }],
+			Payments = [new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 200d }],
+		};
+
+		var result = await _feeCollections.CollectFeeAsync(input);
+		result.Status.ShouldBe(FeeCollectionStatus.Partial);
+		result.ReceivedAmount.ShouldBe(200d);
+		result.PaidDueFees.ShouldBeEmpty();
+		result.PaidCharges!.Single().AmountPaid.ShouldBe(200d);
+		result.FeeReceiptId.ShouldBeNull();
+		result.ChargeReceiptId.ShouldNotBeNull();
+		var replay = await _feeCollections.CollectFeeAsync(input);
+		replay.Id.ShouldBe(result.Id);
+		replay.ChargeReceiptId.ShouldBe(result.ChargeReceiptId);
+
+		var updated = (await _feeCollections.GetCollectFormAsync(student, year)).Charges.Single();
+		updated.PaidAmount.ShouldBe(200d);
+		updated.PendingAmount.ShouldBe(300d);
+		(await _dueFeeRepo.GetAsync(dueFeeId)).OutstandingAmount.ShouldBe(5000m);
+	}
+
+	[Fact]
 	public async Task Applying_A_Waiver_Reduces_An_Approved_Charge_By_The_Requested_Amount()
 	{
 		using (_currentTenant.Change(TestTenantId))

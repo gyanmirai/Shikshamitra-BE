@@ -13,6 +13,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
+using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.Services;
 
 using ShikshaMitra.Domain.Finance.Policies;
 
@@ -146,7 +147,12 @@ public partial class FeeStructureAppService
 			input.ProrationPolicyId != (old?.GetExplicitProrationPolicyVersionId() == null ? null : old?.ProrationPolicyId))
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add);
 
-
+		var newTermIds = input.FeeHeads.Where(line => line.PaymentTermId.HasValue &&
+			!(old?.FeeStructureDetails.Any(detail => detail.PaymentTermId == line.PaymentTermId) ?? false))
+			.Select(line => line.PaymentTermId!.Value).Distinct().ToArray();
+		if (newTermIds.Length > 0 &&
+			!await LazyServiceProvider.LazyGetRequiredService<IPaymentTermReferenceLock>().AcquireAsync(newTermIds))
+			throw new BusinessException(FeeStructureErrorCodes.VersionMismatch);
 	}
 
 

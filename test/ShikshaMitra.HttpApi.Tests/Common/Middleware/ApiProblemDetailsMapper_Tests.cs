@@ -44,6 +44,8 @@ public class ApiProblemDetailsMapper_Tests
 	[InlineData(FinanceFeeCategoryErrorCodes.CannotDeleteInUse)]
 	[InlineData(FinanceFeeHeadErrorCodes.CannotDeleteInUse)]
 	[InlineData(PaymentTermErrorCodes.DeleteWithReferences)]
+	[InlineData(PaymentTermErrorCodes.DeleteRequiresDraft)]
+	[InlineData(PaymentTermErrorCodes.DeleteBoardDefault)]
 	[InlineData(PaymentTermErrorCodes.DuplicateCode)]
 	[InlineData(PaymentTermErrorCodes.DuplicateName)]
 	[InlineData(ConcessionTypeErrorCodes.CannotDeleteInUse)]

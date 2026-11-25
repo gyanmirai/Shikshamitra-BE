@@ -63,7 +63,8 @@ public static class ApiProblemDetailsMapper
 			FinanceFeeCategoryErrorCodes.CannotDeleteInUse or FinanceFeeHeadErrorCodes.CannotDeleteInUse or
 				FeeStructureErrorCodes.CannotDeleteInUse or ReceiptBookErrorCodes.CannotDeleteInUse or
 				ConcessionTypeErrorCodes.CannotDeleteInUse or ConcessionTypeErrorCodes.ActiveCannotBeDeleted or
-				PaymentTermErrorCodes.DeleteWithReferences or PaymentTermErrorCodes.DuplicateCode or
+				PaymentTermErrorCodes.DeleteWithReferences or PaymentTermErrorCodes.DeleteRequiresDraft or
+				PaymentTermErrorCodes.DeleteBoardDefault or PaymentTermErrorCodes.DuplicateCode or
 				PaymentTermErrorCodes.DuplicateName => StatusCodes.Status409Conflict,
 			CollectionPolicyErrorCodes.DefaultPolicyCannotBeRemoved or CollectionPolicyErrorCodes.PolicyInUse or
 				CollectionPolicyErrorCodes.ExceptionWindowAlreadyActive or

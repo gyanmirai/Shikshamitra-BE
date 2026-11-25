@@ -29,7 +29,7 @@ public class FinanceChargeSettlementAccessService(
 		if (ids.Length == 0) return;
 		if (!tenant.Id.HasValue) throw Denied();
 		var rows = await queries.ToListAsync((await charges.GetQueryableAsync())
-			.Where(row => row.TenantId == tenant.Id && ids.Contains(row.Id))
+			.Where(row => row.TenantId == tenant.Id && Enumerable.Contains(ids, row.Id))
 			.Select(row => new { row.Id, row.StudentId, row.EmployeeId, row.AcademicYearId }));
 		if (!includesLateFeeSelections && rows.Count != ids.Length) throw Denied();
 		if (rows.Count == 0) return;
@@ -49,10 +49,10 @@ public class FinanceChargeSettlementAccessService(
 			await scope.EnsureCollectionYearAccessibleAsync(yearId);
 		var studentIds = rows.Where(row => row.StudentId.HasValue).Select(row => row.StudentId!.Value).ToArray();
 		var allowedStudents = studentIds.Length == 0 ? [] : await queries.ToListAsync(
-			(await scope.GetScopedStudentIdsQueryAsync()).Where(id => studentIds.Contains(id)));
+			(await scope.GetScopedStudentIdsQueryAsync()).Where(id => Enumerable.Contains(studentIds, id)));
 		var employeeIds = rows.Where(row => row.EmployeeId.HasValue).Select(row => row.EmployeeId!.Value).ToArray();
 		var allowedEmployees = employeeIds.Length == 0 ? [] : await queries.ToListAsync(
-			(await scope.GetScopedEmployeeIdsQueryAsync()).Where(id => employeeIds.Contains(id)));
+			(await scope.GetScopedEmployeeIdsQueryAsync()).Where(id => Enumerable.Contains(employeeIds, id)));
 		if (rows.Any(row => row.StudentId.HasValue == row.EmployeeId.HasValue ||
 			row.StudentId.HasValue && !allowedStudents.Contains(row.StudentId.Value) ||
 			row.EmployeeId.HasValue && !allowedEmployees.Contains(row.EmployeeId.Value))) throw Denied();
@@ -68,7 +68,7 @@ public class FinanceChargeSettlementAccessService(
 		await familyAccess.RequireAsync(studentId, yearId, guardianOnly: true,
 			permission: MobileFinancePermissions.RequestRefund);
 		var matched = await queries.CountAsync((await charges.GetQueryableAsync()).Where(row =>
-			row.TenantId == tenant.Id && ids.Contains(row.Id) && row.StudentId == studentId &&
+			row.TenantId == tenant.Id && Enumerable.Contains(ids, row.Id) && row.StudentId == studentId &&
 			!row.EmployeeId.HasValue && row.AcademicYearId == yearId));
 		if (matched != ids.Length) throw Denied();
 		await externalSettlementGuard.EnsureLegacyChargesAsync(ids);

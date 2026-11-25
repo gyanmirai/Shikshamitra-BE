@@ -43,4 +43,6 @@ public static class PaymentTermErrorCodes
 	public const string DemandDateBeforeCoverageStart = $"{Prefix}:000040";
 	public const string DemandOffsetDaysExceedsMaximum = $"{Prefix}:000041";
 	public const string DuplicateName = $"{Prefix}:000042";
+	public const string DeleteRequiresDraft = $"{Prefix}:000043";
+	public const string DeleteBoardDefault = $"{Prefix}:000044";
 }

@@ -21,6 +21,7 @@ using Volo.Abp.Security.Claims;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Xunit;
 
@@ -123,6 +124,69 @@ public class PaymentTermAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		});
 		clone.ClonedTermIds.ShouldBeEmpty();
 		clone.ConflictedCodes.ShouldContain("SOURCE-CODE");
+	}
+
+	[Fact]
+	public async Task Delete_Removes_An_Unused_Draft_Revision_From_The_List()
+	{
+		var (yearId, boardId, _) = await SeedAcademicContextAsync();
+		var input = BuildInput(yearId, boardId, "Unused term revision", "UNUSED-REVISION");
+		input.Status = PaymentTermSaveStatus.Active;
+		var term = await _paymentTerms.CreateAsync(input);
+		var revision = await _paymentTerms.UpdateDraftAsync(term.Id, new()
+		{
+			Name = input.Name, Code = input.Code, Status = PaymentTermSaveStatus.Draft,
+			DemandGenerationRule = input.DemandGenerationRule, Installments = input.Installments
+		});
+		revision.Status.ShouldBe(PaymentTermLifecycleStatus.Draft);
+		revision.Versions.Single(version => version.Status == PaymentTermVersionStatus.Draft)
+			.VersionNumber.ShouldBe(2);
+
+		await _paymentTerms.DeleteAsync(term.Id);
+
+		var list = await _paymentTerms.GetListAsync(new() { AcademicYearId = yearId, IncludeArchived = true });
+		list.Items.ShouldNotContain(item => item.Id == term.Id);
+		using (GetRequiredService<IDataFilter>().Disable<ISoftDelete>())
+		{
+			var deleted = await GetRequiredService<IRepository<PaymentTerm, Guid>>().GetAsync(term.Id);
+			deleted.IsDeleted.ShouldBeTrue();
+			deleted.GetPublishedVersion()!.Id.ShouldBe(term.CurrentVersionId!.Value);
+			deleted.GetPublishedVersion()!.Installments.Count.ShouldBe(1);
+		}
+	}
+
+	[Fact]
+	public async Task Delete_Rejects_A_Draft_Revision_Used_By_A_Student_Schedule()
+	{
+		var (yearId, boardId, _) = await SeedAcademicContextAsync();
+		var input = BuildInput(yearId, boardId, "Scheduled term revision", "SCHEDULED-REVISION");
+		input.Status = PaymentTermSaveStatus.Active;
+		var term = await _paymentTerms.CreateAsync(input);
+		await _paymentTerms.CreateRevisionAsync(term.Id, new() { ChangeReason = "Update calendar" });
+		await WithUnitOfWorkAsync(() => GetRequiredService<FinanceAuditWriter>().WriteAsync(yearId, FinanceAuditEntityTypes.FeeAdjustment,
+			Guid.NewGuid(), "Optional fee service", "optional_fee_service_enabled", "Recorded a new optional service period.",
+			context: new { PaymentTermVersionId = term.CurrentVersionId!.Value }));
+
+		var error = await Should.ThrowAsync<BusinessException>(() => _paymentTerms.DeleteAsync(term.Id));
+
+		error.Code.ShouldBe(PaymentTermErrorCodes.DeleteWithReferences);
+		(await _paymentTerms.GetAsync(term.Id)).Status.ShouldBe(PaymentTermLifecycleStatus.Draft);
+	}
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Delete_Rejects_An_Active_Or_Archived_Term(bool archived)
+	{
+		var (yearId, boardId, _) = await SeedAcademicContextAsync();
+		var input = BuildInput(yearId, boardId, "Protected term", "PROTECTED-TERM");
+		input.Status = archived ? PaymentTermSaveStatus.Draft : PaymentTermSaveStatus.Active;
+		var term = await _paymentTerms.CreateAsync(input);
+		if (archived) await _paymentTerms.ArchiveAsync(term.Id, new() { Reason = "Retired schedule" });
+
+		var error = await Should.ThrowAsync<BusinessException>(() => _paymentTerms.DeleteAsync(term.Id));
+
+		error.Code.ShouldBe(PaymentTermErrorCodes.DeleteRequiresDraft);
 	}
 
 	[Fact]
@@ -457,6 +521,9 @@ public class PaymentTermAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		(await structures.GetAsync(first.Id)).FeeStructureDetails.Single().PaymentTermVersionId.ShouldBe(version1);
 		(await structures.GetAsync(second.Id)).FeeStructureDetails.Single().PaymentTermVersionId.ShouldBe(version2);
 		(await _paymentTerms.GetUsageAsync(term.Id)).FeeStructureCount.ShouldBe(2);
+		await _paymentTerms.CreateRevisionAsync(term.Id, new() { ChangeReason = "Update calendar" });
+		(await Should.ThrowAsync<BusinessException>(() => _paymentTerms.DeleteAsync(term.Id)))
+			.Code.ShouldBe(PaymentTermErrorCodes.DeleteWithReferences);
 	}
 
 	[Fact]

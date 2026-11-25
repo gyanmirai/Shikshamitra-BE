@@ -11,7 +11,9 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Reports;
 using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Infrastructure.Data;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -183,6 +185,24 @@ public class SalarySlipAvailabilityApi_Tests(ShikshaMitraApiTestFactory factory)
 		var otherMonth = await Client.GetFromJsonAsync<PagedResultDto<IssuedPayslipListItem>>(
 			$"{listPath}&monthYear=2026-09", JsonOptions);
 		otherMonth!.TotalCount.ShouldBe(0);
+		using (var reportCommands = new SelectCommandCapture("HR_PayslipDocuments"))
+		{
+			using var reportResponse = await Client.PostAsJsonAsync("/api/hr/reports/preview", new HrReportRequestDto
+			{
+				ReportType = "Employee salary statement",
+				DataSource = HrReportDataSources.PayrollStatement,
+				Columns = ["month", "netPay"],
+				PageSize = 1,
+				Filters = new() { EmployeeIds = [employee.Id], FromDate = new(2026, 9, 1), ToDate = new(2026, 10, 1) }
+			}, JsonOptions);
+			reportResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await reportResponse.Content.ReadAsStringAsync());
+			var report = (await reportResponse.Content.ReadFromJsonAsync<HrReportPreviewDto>(JsonOptions))!;
+			report.TotalCount.ShouldBe(2);
+			report.Rows.ShouldHaveSingleItem()["month"].ShouldBe("2026-09");
+			report.Totals["netPay"].ShouldBe(10000m);
+			reportCommands.Commands.Count(sql => sql.Contains("COUNT(", StringComparison.OrdinalIgnoreCase)
+				|| sql.Contains("SUM(", StringComparison.OrdinalIgnoreCase)).ShouldBe(1);
+		}
 		var query = $"employeeId={employee.Id}&monthYear={Month}";
 		var availability = await Client.GetFromJsonAsync<SalarySlipAvailabilityDto>($"/api/payroll/salary-slips/availability?{query}", JsonOptions);
 		availability!.Status.ShouldBe("AVAILABLE");

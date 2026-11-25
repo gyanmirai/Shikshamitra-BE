@@ -62,9 +62,14 @@ public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> d
 					   };
 		IQueryable<DocumentRow> query = official;
 		// Salary documents and exports never expose unlocked payroll, including legacy IncludeDrafts requests.
-		var total = await executer.CountAsync(query);
 		var financialTotals = await executer.FirstOrDefaultAsync(query.GroupBy(_ => 1).Select(group => new
-		{ Earnings = group.Sum(x => x.TotalEarnings), Deductions = group.Sum(x => x.TotalDeduction), Net = group.Sum(x => x.NetPay) }));
+		{
+			Count = group.Count(),
+			Earnings = group.Sum(row => row.TotalEarnings),
+			Deductions = group.Sum(row => row.TotalDeduction),
+			Net = group.Sum(row => row.NetPay)
+		}));
+		var total = financialTotals?.Count ?? 0;
 		var warnings = new List<string>();
 		if (!statement)
 		{

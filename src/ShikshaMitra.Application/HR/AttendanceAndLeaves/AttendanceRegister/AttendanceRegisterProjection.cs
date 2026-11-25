@@ -30,18 +30,39 @@ internal static class AttendanceRegisterProjection
 		HashSet<DateOnly> dayLocks,
 		int staffCount)
 	{
-		return new AttendanceRegisterSummaryDto
+		var summary = new AttendanceRegisterSummaryDto { StaffCount = staffCount };
+		foreach (var row in rows)
 		{
-			StaffCount = staffCount,
-			Present = rows.Count(x => x.Status == AttendanceRegisterStatus.Present),
-			HalfDay = rows.Count(x => x.Status == AttendanceRegisterStatus.HalfDay),
-			Absent = rows.Count(x => x.Status == AttendanceRegisterStatus.Absent),
-			NotMarked = rows.Count(x => x.Status == AttendanceRegisterStatus.NotMarked),
-			Locked = rows.Count(x => IsLocked(x, lockLookup, dayLocks)),
-			Editable = rows.Count(x => !IsLocked(x, lockLookup, dayLocks)),
-			MissingPunch = rows.Count(IsMissingPunch),
-			Holiday = rows.Count(x => x.IsHoliday)
-		};
+			switch (row.Status)
+			{
+				case AttendanceRegisterStatus.Present: summary.Present++; break;
+				case AttendanceRegisterStatus.HalfDay: summary.HalfDay++; break;
+				case AttendanceRegisterStatus.Absent: summary.Absent++; break;
+				case AttendanceRegisterStatus.NotMarked: summary.NotMarked++; break;
+			}
+			if (IsLocked(row, lockLookup, dayLocks)) summary.Locked++;
+			else summary.Editable++;
+			if (IsMissingPunch(row)) summary.MissingPunch++;
+			if (row.IsHoliday) summary.Holiday++;
+		}
+		return summary;
+	}
+
+	public static AttendanceRegisterSummaryDto SummarizeGroups(List<GroupedRegisterProjection> groups)
+	{
+		var summary = new AttendanceRegisterSummaryDto { StaffCount = groups.Count };
+		foreach (var group in groups)
+		{
+			summary.Present += group.Present;
+			summary.HalfDay += group.HalfDay;
+			summary.Absent += group.Absent;
+			summary.NotMarked += group.RecordedDays - group.Present - group.HalfDay - group.Absent;
+			summary.Editable += group.Editable;
+			summary.Locked += group.Locked;
+			summary.MissingPunch += group.MissingPunch;
+			summary.Holiday += group.Holiday;
+		}
+		return summary;
 	}
 
 	public static GroupedRegisterProjection BuildGroupedEmployee(
@@ -49,13 +70,9 @@ internal static class AttendanceRegisterProjection
 		Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> lockLookup,
 		HashSet<DateOnly> dayLocks)
 	{
-		var first = rows.OrderBy(x => x.AttendanceDate).First();
 		var orderedRows = rows.OrderBy(x => x.AttendanceDate).ToList();
-		var absent = orderedRows.Count(x => x.Status == AttendanceRegisterStatus.Absent);
-		var halfDay = orderedRows.Count(x => x.Status == AttendanceRegisterStatus.HalfDay);
-		var missingPunch = orderedRows.Count(IsMissingPunch);
-		var locked = orderedRows.Count(x => IsLocked(x, lockLookup, dayLocks));
-		var holiday = orderedRows.Count(x => x.IsHoliday);
+		var first = orderedRows[0];
+		var summary = BuildSummary(orderedRows, lockLookup, dayLocks, 1);
 		return new GroupedRegisterProjection
 		{
 			EmployeeId = first.EmployeeId,
@@ -66,14 +83,14 @@ internal static class AttendanceRegisterProjection
 			EducationMediumStageId = first.EducationMediumStageId,
 			RoleId = first.RoleId,
 			RecordedDays = orderedRows.Count,
-			Present = orderedRows.Count(x => x.Status == AttendanceRegisterStatus.Present),
-			HalfDay = halfDay,
-			Absent = absent,
-			Editable = orderedRows.Count(x => !IsLocked(x, lockLookup, dayLocks)),
-			Locked = locked,
-			MissingPunch = missingPunch,
-			Holiday = holiday,
-			HasExceptions = absent > 0 || halfDay > 0 || missingPunch > 0 || locked > 0,
+			Present = summary.Present,
+			HalfDay = summary.HalfDay,
+			Absent = summary.Absent,
+			Editable = summary.Editable,
+			Locked = summary.Locked,
+			MissingPunch = summary.MissingPunch,
+			Holiday = summary.Holiday,
+			HasExceptions = summary.Absent > 0 || summary.HalfDay > 0 || summary.MissingPunch > 0 || summary.Locked > 0,
 			RawDays = orderedRows
 		};
 	}

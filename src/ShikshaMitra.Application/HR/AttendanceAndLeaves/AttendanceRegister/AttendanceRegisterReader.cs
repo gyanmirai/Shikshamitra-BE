@@ -51,6 +51,33 @@ public class AttendanceRegisterReader(
 
 	public async Task<GroupedAttendanceRegisterResponse> GetGroupedAsync(GetGroupedAttendanceRegisterInput input)
 	{
+		var register = await ReadGroupedRegisterAsync(input);
+		var size = NormalizeMaxResultCount(input.MaxResultCount);
+		var offset = Math.Max(input.SkipCount, 0);
+		var page = register.Groups.Skip(offset).Take(size).ToList();
+		var stageNames = await lookupReader.BuildStageNameLookupAsync(StageIds(page));
+		return BuildGroupedPage(register, page, stageNames, offset, size);
+	}
+
+	internal async Task<Func<int, int, GroupedAttendanceRegisterResponse>> CaptureGroupedPagesAsync(
+		GetGroupedAttendanceRegisterInput input, int populationLimit)
+	{
+		var register = await ReadGroupedRegisterAsync(input);
+		if (register.Groups.Count > populationLimit)
+			throw new BusinessException(HRErrorCodes.ReportPopulationTooLarge);
+
+		var allStageNames = await lookupReader.BuildStageNameLookupAsync(StageIds(register.Groups));
+		return (offset, size) =>
+		{
+			var page = register.Groups.Skip(offset).Take(size).ToList();
+			var stageNames = StageIds(page).Distinct().Where(allStageNames.ContainsKey)
+				.ToDictionary(id => id, id => allStageNames[id]);
+			return BuildGroupedPage(register, page, stageNames, offset, size);
+		};
+	}
+
+	private async Task<GroupedRegister> ReadGroupedRegisterAsync(GetGroupedAttendanceRegisterInput input)
+	{
 		var (filteredRows, lockLookup) = await ResolveRegisterRowsAsync(input);
 		var allDayLocks = await lookupReader.BuildDayLockLookupAsync(filteredRows.Select(x => x.AttendanceDate));
 		var groupedRows = filteredRows
@@ -67,22 +94,27 @@ public class AttendanceRegisterReader(
 			.ToList();
 
 		groupedRows = AttendanceRegisterOrdering.Apply(groupedRows, input.Sorting);
-		var totalCount = groupedRows.Count;
-		var maxResultCount = NormalizeMaxResultCount(input.MaxResultCount);
-		var skipCount = Math.Max(input.SkipCount, 0);
-		var pageGroups = groupedRows.Skip(skipCount).Take(maxResultCount).ToList();
-		var stageNames = await lookupReader.BuildStageNameLookupAsync(pageGroups.Select(x => x.EducationMediumStageId).Where(x => x.HasValue).Select(x => x!.Value));
-
-		return new GroupedAttendanceRegisterResponse
-		{
-			TotalCount = totalCount,
-			CurrentPage = maxResultCount == 0 ? 1 : (skipCount / maxResultCount) + 1,
-			PageSize = maxResultCount,
-			TotalPages = totalCount == 0 ? 0 : (int)Math.Ceiling((double)totalCount / maxResultCount),
-			Summary = BuildSummary(groupedRows.SelectMany(x => x.RawDays).ToList(), lockLookup, allDayLocks, groupedRows.Count),
-			Items = pageGroups.Select(x => MapGroupedEmployee(x, lockLookup, stageNames, allDayLocks)).ToList()
-		};
+		return new(groupedRows, lockLookup, allDayLocks, SummarizeGroups(groupedRows));
 	}
+
+	private static IEnumerable<Guid> StageIds(IEnumerable<GroupedRegisterProjection> groups) =>
+		groups.Select(group => group.EducationMediumStageId).OfType<Guid>();
+
+	private static GroupedAttendanceRegisterResponse BuildGroupedPage(GroupedRegister register,
+		List<GroupedRegisterProjection> page, Dictionary<Guid, string> stageNames, int offset, int size) =>
+		new()
+		{
+			TotalCount = register.Groups.Count,
+			CurrentPage = offset / size + 1,
+			PageSize = size,
+			TotalPages = (int)Math.Ceiling((double)register.Groups.Count / size),
+			Summary = register.Summary,
+			Items = page.Select(group => MapGroupedEmployee(group, register.PayrollLocks, stageNames, register.DayLocks)).ToList()
+		};
+
+	private sealed record GroupedRegister(List<GroupedRegisterProjection> Groups,
+		Dictionary<(Guid EmployeeId, string MonthYear), PayrollLockInfo> PayrollLocks,
+		HashSet<DateOnly> DayLocks, AttendanceRegisterSummaryDto Summary);
 
 	internal async Task<PayrollLockInfo> ResolvePayrollLockAsync(Guid employeeId, string monthYear)
 	{

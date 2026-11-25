@@ -1,11 +1,38 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees.Settings;
 
 namespace ShikshaMitra.HR.Employees.Documents;
 
 public static class EmployeeDocumentProjection
 {
+	public static IQueryable<EmployeeDocumentResponseDto> QueryList(
+		IQueryable<EmployeeDocumentReadItem> documents, IQueryable<DocumentSetting> definitions, string? search)
+	{
+		var query = from document in documents
+					join definition in definitions on document.DocumentNameId equals (Guid?)definition.Id into documentDefinitions
+					from definition in documentDefinitions.DefaultIfEmpty()
+					select new EmployeeDocumentResponseDto
+					{
+						DocumentId = document.Id,
+						DocumentNameId = document.DocumentNameId,
+						DocumentName = definition == null ? null : definition.DocumentName,
+						FileName = document.DocumentName,
+						ContentType = document.ContentType,
+						Size = document.Size,
+						UploadedAt = document.CreationTime,
+						UpdatedAt = document.LastModificationTime
+					};
+
+		if (string.IsNullOrWhiteSpace(search)) return query;
+
+		var term = search.ToLowerInvariant();
+		return query.Where(document => document.FileName.ToLower().Contains(term)
+			|| (document.DocumentName != null && document.DocumentName.ToLower().Contains(term)));
+	}
+
 	public static EmployeeDocumentResponseDto ToListItem(EmployeeDocumentReadItem document, IReadOnlyDictionary<Guid, string> settingsLookup) => new()
 	{
 		DocumentId = document.Id,

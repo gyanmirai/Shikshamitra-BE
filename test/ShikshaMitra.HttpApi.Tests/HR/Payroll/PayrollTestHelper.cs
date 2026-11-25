@@ -9,8 +9,10 @@ using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Data;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.TenantManagement;
 using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Payroll;
@@ -20,6 +22,22 @@ namespace ShikshaMitra.HR.Payroll;
 /// </summary>
 public static class PayrollTestHelper
 {
+	public static async Task SetSchoolProfileForTestAsync(
+		ShikshaMitraApiTestFactory factory, string name, string address)
+	{
+		using var scope = factory.Services.CreateScope();
+		var services = scope.ServiceProvider;
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using var tenantScope = services.GetRequiredService<ICurrentTenant>().Change(tenantId);
+		using var unit = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
+		var tenants = services.GetRequiredService<ITenantRepository>();
+		var school = await tenants.GetAsync(tenantId);
+		school.SetProperty("InstituteName", name);
+		school.SetProperty("Address1", address);
+		await tenants.UpdateAsync(school);
+		await unit.CompleteAsync();
+	}
+
 	public static async Task<Compensation.SaveEmployeeCompensationDto> BindEsiPolicyVersionAsync(
 		HttpClient client, Compensation.SaveEmployeeCompensationDto input)
 	{

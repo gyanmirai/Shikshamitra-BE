@@ -13,6 +13,7 @@ using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Infrastructure.Auth;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 
@@ -24,7 +25,7 @@ namespace ShikshaMitra.HR.Employees;
 /// </summary>
 public static class EmployeeTestHelper
 {
-	// Arrange persisted status for read-only search tests independently of onboarding activation.
+	// Arrange persisted status for operation fixtures that start after onboarding.
 	public static async Task SetActiveStatusForTestAsync(ShikshaMitraApiTestFactory factory, Guid employeeId)
 	{
 		using var scope = factory.Services.CreateScope();
@@ -36,6 +37,23 @@ public static class EmployeeTestHelper
 		var repository = scope.ServiceProvider.GetRequiredService<IEmployeeRepository>();
 		var employee = await manager.UpdateEmployeeStatusAsync(employeeId, EmployeeStatusType.Active, "Active employee search fixture");
 		await repository.UpdateAsync(employee, autoSave: true);
+		await unit.CompleteAsync();
+	}
+
+	public static async Task SetWorkShiftForTestAsync(
+		ShikshaMitraApiTestFactory factory, Guid employeeId, Guid shiftId, DateOnly? effectiveFrom = null)
+	{
+		using var scope = factory.Services.CreateScope();
+		var services = scope.ServiceProvider;
+		using var tenant = services.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId));
+		using var unit = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
+		var shift = await services.GetRequiredService<IRepository<EmployeeWorkShift, Guid>>().GetAsync(shiftId);
+		var from = effectiveFrom ?? EmployeeLifecycleEligibility.GetEffectiveEmploymentStartDate(
+			await services.GetRequiredService<IEmployeeRepository>().GetAsync(employeeId));
+		var assignments = services.GetRequiredService<IRepository<EmployeeShiftAssignment, Guid>>();
+		var initial = await assignments.GetListAsync(x => x.EmployeeId == employeeId);
+		await assignments.DeleteManyAsync(initial, autoSave: true);
+		await assignments.InsertAsync(new EmployeeShiftAssignment(Guid.NewGuid(), employeeId, shift, from));
 		await unit.CompleteAsync();
 	}
 

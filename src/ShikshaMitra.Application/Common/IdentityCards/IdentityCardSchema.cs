@@ -17,7 +17,7 @@ internal static class IdentityCardSchema
 	private static readonly string[] ElementTypes = ["text", "photo", "logo", "qr", "barcode", "shape", "line", "image"];
 	private static readonly string[] Fonts = ["Arial", "sans-serif", "Inter", "Roboto", "Noto Sans", "Lato"];
 
-	public static IdentityCardLayout ParseLayout(string json, IEnumerable<string> fields, int schemaVersion = 1, bool backEnabled = false)
+	public static IdentityCardLayout ParseLayout(string json, IEnumerable<string> fields, int schemaVersion = 1, bool backEnabled = false, bool allowSignature = false)
 	{
 		if (schemaVersion is not (1 or 2) || string.IsNullOrWhiteSpace(json) || System.Text.Encoding.UTF8.GetByteCount(json) > 2 * 1024 * 1024) throw IdentityCardGeometry.Invalid("Unsupported layout schema or excessive JSON size (maximum 2 MB).");
 		try
@@ -41,7 +41,8 @@ internal static class IdentityCardSchema
 				foreach (var element in side!.Elements)
 				{
 					if (schemaVersion == 1 && element != null) element.Type = element.Type?.ToLowerInvariant() ?? "";
-					if (element == null || string.IsNullOrWhiteSpace(element.Id) || element.Id.Length > 100 || !ids.Add(element.Id) || !ElementTypes.Contains(element.Type) || element.Style == null ||
+					if (element == null || string.IsNullOrWhiteSpace(element.Id) || element.Id.Length > 100 || !ids.Add(element.Id) ||
+						(!ElementTypes.Contains(element.Type) && !(allowSignature && element.Type == "signature")) || element.Style == null ||
 						!float.IsFinite(element.X) || !float.IsFinite(element.Y) || !float.IsFinite(element.W) || !float.IsFinite(element.H) ||
 						element.X < 0 || element.Y < 0 || element.W <= 0 || element.H <= 0 || element.X + element.W > layout.Width + 0.01f || element.Y + element.H > layout.Height + 0.01f ||
 						element.Z is < -1000 or > 1000 || element.Value?.Length > 2000 || element.Label?.Length > 150 ||

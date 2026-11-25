@@ -45,7 +45,7 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 			var frozen = await CaptureIdentityTemplateAsync(template, snapshot, identitySnapshots);
 			result.Add(new() { StudentId = studentId, HasPhoto = !string.IsNullOrWhiteSpace(snapshot.Fields.GetValueOrDefault("_PhotoBlobName")), StudentSnapshot = PublicFields(snapshot.Fields), TemplateSnapshot = frozen });
 		}
-		return result;
+		return await RedactCardSignaturesAsync(result);
 	}
 	public async Task<List<StudentIdCardDto>> IssueAsync(IssueStudentIdCardsDto input)
 	{
@@ -94,7 +94,7 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 				JsonSerializer.Serialize(snapshot.Fields, JsonOptions), JsonSerializer.Serialize(frozen, JsonOptions), Clock.Now, CurrentUser.Id!.Value, snapshot.AcademicYearId);
 			await cards.InsertAsync(card); await AddEventAsync(card, "Issued", null); result.Add(Map(card));
 		}
-		return result;
+		return await RedactCardSignaturesAsync(result);
 	}
 
 	private static void ValidateIdempotencyKey(string key)
@@ -107,7 +107,7 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 		await snapshots.CaptureAsync(studentId);
 		var history = await AsyncExecuter.ToListAsync((await cards.GetQueryableAsync()).Where(c => c.TenantId == CurrentTenant.Id && c.StudentId == studentId).OrderByDescending(c => c.CreationTime));
 		foreach (var year in history.Select(c => c.AcademicYearId).Distinct()) await EnsureIssuedYearVisibleAsync(year);
-		return history.Select(Map).ToList();
+		return await RedactCardSignaturesAsync(history.Select(Map).ToList());
 	}
 	private async Task<StudentIdCard> LoadCardAsync(Guid id)
 	{

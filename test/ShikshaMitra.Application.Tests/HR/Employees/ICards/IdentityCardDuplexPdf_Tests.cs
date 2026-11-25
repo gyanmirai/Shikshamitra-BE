@@ -30,6 +30,48 @@ public class IdentityCardDuplexPdf_Tests
 	}
 
 	[Fact]
+	public void Crop_marks_keep_clear_space_where_four_cards_meet()
+	{
+		var layout = Layout();
+		var settings = new IdentityCardPrintSettings { Gap = 3, BleedMm = 1, ShowCutMarks = true };
+		var sheet = IdentityCardGeometry.Sheet(layout, settings);
+		var svg = IdentityCardPdfComposer.BuildPageSvg(layout, settings, sheet, Enumerable.Repeat(Artwork(), 4).ToArray(), false);
+		var marks = System.Xml.Linq.XDocument.Parse(svg).Descendants().Where(e => e.Name.LocalName == "line").ToList();
+		marks.Count.ShouldBe(32);
+		var culture = System.Globalization.CultureInfo.InvariantCulture;
+		float At(System.Xml.Linq.XElement line, string coordinate) => float.Parse(line.Attribute(coordinate)!.Value, culture);
+		foreach (var line in marks)
+		{
+			var length = Math.Abs(At(line, "x2") - At(line, "x1")) + Math.Abs(At(line, "y2") - At(line, "y1"));
+			length.ShouldBe(1, 0.001f);
+		}
+		var outer = marks[0];
+		var trim = sheet.Position(0, settings, false);
+		At(outer, "y1").ShouldBe(trim.Y, 0.001f);
+		At(outer, "x1").ShouldBe(trim.X - 1.2f, 0.001f);
+		var right = marks[4];
+		At(marks[8], "x2").ShouldBeGreaterThan(At(right, "x2") + 0.5f);
+		if (Environment.GetEnvironmentVariable("ID_CARD_ARTIFACTS_PATH") != null)
+			SaveEvidence("a4-crop-marks.pdf", IdentityCardPdfComposer.Compose(layout, settings, Enumerable.Repeat(Artwork(), 4).ToArray(), true));
+		settings.Gap = 1;
+		sheet = IdentityCardGeometry.Sheet(layout, settings);
+		svg = IdentityCardPdfComposer.BuildPageSvg(layout, settings, sheet, [Artwork()], false);
+		System.Xml.Linq.XDocument.Parse(svg).Descendants().Count(e => e.Name.LocalName == "line").ShouldBe(8);
+	}
+
+	[Fact]
+	public void Decimal_gaps_keep_all_slots_when_the_sheet_is_an_exact_fit()
+	{
+		var layout = Layout();
+		layout.WidthMm = 34;
+		layout.HeightMm = 150;
+		var settings = new IdentityCardPrintSettings { Margin = 0, Gap = 1.2f };
+		var sheet = IdentityCardGeometry.Sheet(layout, settings);
+		sheet.EffectiveCardsPerPage.ShouldBe(6);
+		sheet.Position(0, settings, false).X.ShouldBe(0);
+	}
+
+	[Fact]
 	public void Nine_cards_produce_front_then_back_for_each_sheet()
 	{
 		var pdf = IdentityCardPdfComposer.Compose(Layout(), new(), Enumerable.Repeat(Artwork(), 9).ToList(), true);

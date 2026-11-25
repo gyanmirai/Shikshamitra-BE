@@ -18,6 +18,7 @@ public class StudentIdCardTemplateDto
 	public StudentIdCardSelectionDto? Selection { get; set; }
 	public bool SelectionRestricted { get; set; }
 	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentitySelectionDto Logo { get; set; } = new();
+	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentitySelectionDto? Signature { get; set; }
 	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityDocumentSnapshotDto? SchoolIdentity { get; set; }
 	[StringLength(150)] public string Name { get; set; } = "Student I-Card";
 	[StringLength(40)] public string PresetKey { get; set; } = "formal-student";

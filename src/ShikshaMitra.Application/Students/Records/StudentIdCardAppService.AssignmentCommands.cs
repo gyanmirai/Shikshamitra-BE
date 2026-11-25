@@ -117,7 +117,7 @@ public partial class StudentIdCardAppService
 			if (issued.Count != input.StudentIds.Count || input.StudentIds.Any(id => !issuedByStudent.ContainsKey(id)) ||
 				!snapshot.RootElement.TryGetProperty(AssignmentFingerprintField, out var saved) || saved.GetString() != fingerprint)
 				throw new BusinessException(StudentErrorCodes.IdAssignmentIssueKeyReused);
-			return input.StudentIds.Select(id => Map(issuedByStudent[id])).ToList();
+			return await RedactCardSignaturesAsync(input.StudentIds.Select(id => Map(issuedByStudent[id])).ToList());
 		}
 		var selectedIds = input.StudentIds.ToArray();
 		if (await AsyncExecuter.AnyAsync((await GetValidAssignmentCardsAsync(year)).Where(card => Enumerable.Contains(selectedIds, card.StudentId))))

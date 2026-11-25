@@ -68,8 +68,14 @@ public partial class HrSetupReviewApi_Tests(ShikshaMitraApiTestFactory factory) 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var saved = (await response.Content.ReadFromJsonAsync<HrSetupReviewDto>())!;
 		saved.ReviewState.ShouldBe("reviewed"); saved.Fingerprint.ShouldBe(before.Fingerprint);
-		saved.ReviewedBy.ShouldBe(school.ActorId); saved.ReviewedAt!.Value.ShouldBeGreaterThanOrEqualTo(started.AddSeconds(-1));
-		(await GetAsync(client, school, section)).ReviewState.ShouldBe("reviewed");
+		saved.ReviewedBy.ShouldBe(school.ActorId);
+		var reviewedAt = saved.ReviewedAt!.Value;
+		reviewedAt.Offset.ShouldBe(TimeSpan.Zero);
+		reviewedAt.ShouldBeGreaterThanOrEqualTo(started.AddSeconds(-1));
+		reviewedAt.ShouldBeLessThanOrEqualTo(DateTimeOffset.UtcNow.AddSeconds(1));
+		var persisted = await GetAsync(client, school, section);
+		persisted.ReviewState.ShouldBe("reviewed");
+		persisted.ReviewedAt.ShouldBe(saved.ReviewedAt);
 		await InAsync(school.TenantId, async services => {
 			var year = await services.GetRequiredService<IRepository<AcademicYear, Guid>>().GetAsync(school.YearId);
 			AcademicYearHrSetupReview.Read(year).Sections[section].ActorId.ShouldBe(school.ActorId);

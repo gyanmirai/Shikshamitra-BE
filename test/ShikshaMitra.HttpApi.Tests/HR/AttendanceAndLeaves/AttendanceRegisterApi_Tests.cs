@@ -13,6 +13,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.AttendanceRegister;
 using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Reports;
 using ShikshaMitra.Infrastructure.Auth;
@@ -48,11 +49,8 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
 		var attendanceDate = new DateOnly(2026, 4, 17);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"RegUnmarkedBulk{Guid.NewGuid():N}",
+		var employee = await CreateActiveRegisterEmployeeAsync($"RegUnmarkedBulk{Guid.NewGuid():N}",
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
-		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
 		await AssignCaptureModePolicyAsync(employee.Id, attendanceDate, AttendanceCaptureMode.ManualStatus);
 
 		var response = await Client.PostAsJsonAsync($"{RegisterUrl}/bulk-adjust", new AttendanceRegisterBulkAdjustRequest
@@ -87,12 +85,11 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var organizations = await SeedRegisterAcademicOrganizationsAsync();
 		var marker = $"RegisterMulti{Guid.NewGuid():N}";
 		var date = DateTime.UtcNow.Date.AddDays(-1);
-		var first = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}A", dateOfJoining: date.AddDays(-10));
-		var second = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}B", dateOfJoining: date.AddDays(-10));
-		var unassigned = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}C", dateOfJoining: date.AddDays(-10));
+		var first = await CreateActiveRegisterEmployeeAsync($"{marker}A", dateOfJoining: date.AddDays(-10));
+		var second = await CreateActiveRegisterEmployeeAsync($"{marker}B", dateOfJoining: date.AddDays(-10));
+		var unassigned = await CreateActiveRegisterEmployeeAsync($"{marker}C", dateOfJoining: date.AddDays(-10));
 		foreach (var id in new[] { first.Id, second.Id, unassigned.Id })
 		{
-			await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, id);
 			await ClearEmployeeOrganizationAssignmentsAsync(id);
 		}
 		await AssignEmployeeToStageAsync(first.Id, organizations.CurrentYearStageId);
@@ -168,9 +165,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 		var marker = $"RegHoliday{Guid.NewGuid():N}";
 		var holidayDate = new DateOnly(2026, 5, 10);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
+		var employee = await CreateActiveRegisterEmployeeAsync(marker,
 			dateOfJoining: holidayDate.ToDateTime(TimeOnly.MinValue).AddDays(-1));
 		await SeedAttendanceAsync(employee.Id, holidayDate, EmployeeTestHelper.DefaultMediumStageId);
 
@@ -206,9 +201,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 		try
 		{
-			var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-				Client,
-				marker,
+			var employee = await CreateActiveRegisterEmployeeAsync(marker,
 				dateOfJoining: holidayDate.ToDateTime(TimeOnly.MinValue).AddDays(-1));
 
 			var response = await Client.GetAsync(
@@ -239,9 +232,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 		var marker = $"RegHolidayBulk{Guid.NewGuid():N}";
 		var holidayDate = new DateOnly(2026, 5, 10);
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
+		var employee = await CreateActiveRegisterEmployeeAsync(marker,
 			dateOfJoining: holidayDate.ToDateTime(TimeOnly.MinValue).AddDays(-1));
 		await SeedAttendanceAsync(employee.Id, holidayDate, EmployeeTestHelper.DefaultMediumStageId);
 
@@ -278,9 +269,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 		var marker = $"RegManualStatus{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
+		var employee = await CreateActiveRegisterEmployeeAsync(marker,
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 		await AssignCaptureModePolicyAsync(employee.Id, attendanceDate, AttendanceCaptureMode.ManualStatus);
 		await SeedAttendanceAsync(employee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
@@ -315,13 +304,9 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 		var marker = $"RegManualRaw{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var csvEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"{marker}Csv",
+		var csvEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}Csv",
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
-		var integrationEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"{marker}Integration",
+		var integrationEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}Integration",
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 		await AssignCaptureModePolicyAsync(csvEmployee.Id, attendanceDate, AttendanceCaptureMode.ManualStatus);
 		await AssignCaptureModePolicyAsync(integrationEmployee.Id, attendanceDate, AttendanceCaptureMode.ManualStatus);
@@ -375,9 +360,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 		var marker = $"RegManualStatusAdjust{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
+		var employee = await CreateActiveRegisterEmployeeAsync(marker,
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 		await AssignCaptureModePolicyAsync(employee.Id, attendanceDate, AttendanceCaptureMode.ManualStatus);
 
@@ -404,7 +387,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"RegTimestampAdjust{Guid.NewGuid():N}");
+		var employee = await CreateActiveRegisterEmployeeAsync($"RegTimestampAdjust{Guid.NewGuid():N}");
 
 		var adjustResponse = await Client.PostAsJsonAsync($"{RegisterUrl}/adjust", new AttendanceRegisterAdjustRequest
 		{
@@ -443,13 +426,9 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 		var marker = $"RegTimePunch{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var manualTimeEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"{marker}ManualTime",
+		var manualTimeEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}ManualTime",
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
-		var integratedEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"{marker}Integrated",
+		var integratedEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}Integrated",
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 		await AssignCaptureModePolicyAsync(manualTimeEmployee.Id, attendanceDate, AttendanceCaptureMode.ManualWithTime);
 		await AssignCaptureModePolicyAsync(integratedEmployee.Id, attendanceDate, AttendanceCaptureMode.Integrated);
@@ -486,9 +465,9 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var attendanceDate = DateTime.UtcNow.AddDays(-1);
 		var attendanceDateText = attendanceDate.ToString("dd-MM-yyyy");
 		var startEnd = attendanceDate.ToString("yyyy-MM-dd");
-		var presentEmployee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}Present", dateOfJoining: attendanceDate.AddDays(-10));
-		var absentEmployee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}Absent", dateOfJoining: attendanceDate.AddDays(-10));
-		var notMarkedEmployee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}NotMarked", dateOfJoining: attendanceDate.AddDays(-10));
+		var presentEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}Present", dateOfJoining: attendanceDate.AddDays(-10));
+		var absentEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}Absent", dateOfJoining: attendanceDate.AddDays(-10));
+		var notMarkedEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}NotMarked", dateOfJoining: attendanceDate.AddDays(-10));
 
 		var saveResponse = await Client.PostAsJsonAsync($"{TakeAttendanceUrl}/day/save", new TakeAttendanceSaveInput
 		{
@@ -540,13 +519,9 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 		var marker = $"RegBrokenPolicy{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
-		var healthyEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"{marker}Healthy",
+		var healthyEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}Healthy",
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
-		var brokenEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"{marker}Broken",
+		var brokenEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}Broken",
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 		await SeedAttendanceAsync(healthyEmployee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
 		await SeedAttendanceAsync(brokenEmployee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
@@ -575,7 +550,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var marker = $"RegCreate{Guid.NewGuid():N}";
 		var attendanceDate = DateTime.UtcNow.AddDays(-1);
 		var startEnd = attendanceDate.ToString("yyyy-MM-dd");
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, marker, dateOfJoining: attendanceDate.AddDays(-10));
+		var employee = await CreateActiveRegisterEmployeeAsync(marker, dateOfJoining: attendanceDate.AddDays(-10));
 
 		var registerResponse = await Client.GetAsync(
 			$"{RegisterUrl}/grouped?startDate={startEnd}&endDate={startEnd}&search={Uri.EscapeDataString(marker)}&skipCount=0&maxResultCount=50");
@@ -627,8 +602,8 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var attendanceDate = DateTime.UtcNow.AddDays(-1);
 		var attendanceDateText = attendanceDate.ToString("dd-MM-yyyy");
 		var startEnd = attendanceDate.ToString("yyyy-MM-dd");
-		var presentEmployee = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}Present", dateOfJoining: attendanceDate.AddDays(-10));
-		await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}NotMarked", dateOfJoining: attendanceDate.AddDays(-10));
+		var presentEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}Present", dateOfJoining: attendanceDate.AddDays(-10));
+		await CreateActiveRegisterEmployeeAsync($"{marker}NotMarked", dateOfJoining: attendanceDate.AddDays(-10));
 
 		var saveResponse = await Client.PostAsJsonAsync($"{TakeAttendanceUrl}/day/save", new TakeAttendanceSaveInput
 		{
@@ -670,8 +645,8 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var attendanceDate = DateTime.UtcNow.AddDays(-1);
 		var attendanceDateText = attendanceDate.ToString("dd-MM-yyyy");
 		var startEnd = attendanceDate.ToString("yyyy-MM-dd");
-		var matchedEmployee = await EmployeeTestHelper.CreateEmployeeAsync(Client, "Remark Search Matched", dateOfJoining: attendanceDate.AddDays(-10));
-		await EmployeeTestHelper.CreateEmployeeAsync(Client, "Remark Search Unmarked", dateOfJoining: attendanceDate.AddDays(-10));
+		var matchedEmployee = await CreateActiveRegisterEmployeeAsync("Remark Search Matched", dateOfJoining: attendanceDate.AddDays(-10));
+		await CreateActiveRegisterEmployeeAsync("Remark Search Unmarked", dateOfJoining: attendanceDate.AddDays(-10));
 
 		var saveResponse = await Client.PostAsJsonAsync($"{TakeAttendanceUrl}/day/save", new TakeAttendanceSaveInput
 		{
@@ -712,9 +687,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 		var marker = $"RegAcademicPermission{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
+		var employee = await CreateActiveRegisterEmployeeAsync(marker,
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 
 		var response = await Client.GetAsync(
@@ -740,9 +713,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 
 		var marker = $"RegTakenYear{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
+		var employee = await CreateActiveRegisterEmployeeAsync(marker,
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 
 		await SeedAttendanceAsync(employee.Id, attendanceDate, EmployeeTestHelper.DefaultMediumStageId);
@@ -771,9 +742,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var seeded = await SeedRegisterAcademicOrganizationsAsync();
 		var marker = $"RegYearScope{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
+		var employee = await CreateActiveRegisterEmployeeAsync(marker,
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 
 		await AssignEmployeeToStageAsync(employee.Id, seeded.CurrentYearStageId);
@@ -818,9 +787,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var seeded = await SeedRegisterAcademicOrganizationsAsync();
 		var marker = $"RegYearMissing{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
+		var employee = await CreateActiveRegisterEmployeeAsync(marker,
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 
 		await AssignEmployeeToStageAsync(employee.Id, seeded.OtherYearStageId);
@@ -851,9 +818,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var seeded = await SeedRegisterAcademicOrganizationsAsync();
 		var marker = $"RegUnassignedAll{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
+		var employee = await CreateActiveRegisterEmployeeAsync(marker,
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 		await ClearEmployeeOrganizationAssignmentsAsync(employee.Id);
 
@@ -885,9 +850,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var seeded = await SeedRegisterAcademicOrganizationsAsync();
 		var marker = $"RegUnassignedYear{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
+		var employee = await CreateActiveRegisterEmployeeAsync(marker,
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 		await AssignEmployeeToStageAsync(employee.Id, seeded.OtherYearStageId);
 
@@ -916,9 +879,7 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var seeded = await SeedRegisterAcademicOrganizationsAsync();
 		var marker = $"RegUnassignedSpecific{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
-		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			marker,
+		var employee = await CreateActiveRegisterEmployeeAsync(marker,
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 		await ClearEmployeeOrganizationAssignmentsAsync(employee.Id);
 
@@ -943,13 +904,9 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 		var seeded = await SeedRegisterAcademicOrganizationsAsync();
 		var marker = $"RegScope{Guid.NewGuid():N}";
 		var attendanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-1));
-		var inScopeEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"{marker}In",
+		var inScopeEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}In",
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
-		var outOfScopeEmployee = await EmployeeTestHelper.CreateEmployeeAsync(
-			Client,
-			$"{marker}Out",
+		var outOfScopeEmployee = await CreateActiveRegisterEmployeeAsync($"{marker}Out",
 			dateOfJoining: attendanceDate.ToDateTime(TimeOnly.MinValue).AddDays(-10));
 
 		await AssignEmployeeToStageAsync(inScopeEmployee.Id, seeded.CurrentYearStageId);
@@ -983,6 +940,13 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 			var deniedPayload = await deniedResponse.Content.ReadAsStringAsync();
 			deniedPayload.ShouldContain(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		}
+	}
+
+	private async Task<PersonalInfoResponse> CreateActiveRegisterEmployeeAsync(string name, DateTime? dateOfJoining = null)
+	{
+		var employee = await EmployeeTestHelper.CreateEmployeeAsync(Client, name, dateOfJoining: dateOfJoining);
+		await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, employee.Id);
+		return employee;
 	}
 
 	private async Task SeedAttendanceAsync(

@@ -99,6 +99,12 @@ public partial class PayrollPreviewPostgres_Tests(PayrollPostgresTestFactory fac
 		var first = await GetAndReadAsync<RunPayrollResponse>(route + "&pageSize=1");
 		first.TotalCount.ShouldBe(2);
 		first.Items.Single().NetPay.ShouldBe(12000);
+		var beyondLast = await GetAndReadAsync<RunPayrollResponse>(route + "&pageSize=1&page=2");
+		beyondLast.TotalCount.ShouldBe(2);
+		beyondLast.Items.ShouldBeEmpty();
+		beyondLast.Readiness.LockedCount.ShouldBe(1);
+		var mixed = await GetAndReadAsync<RunPayrollResponse>(route + "&pageSize=10");
+		mixed.Items.Select(x => x.EmployeeId).ShouldBe(staffIds);
 		var second = await GetAndReadAsync<RunPayrollResponse>(route + "&pageSize=1&page=1");
 		second.Items.Single().EmployeeId.ShouldBe(staffIds[1]);
 		var search = await GetAndReadAsync<RunPayrollResponse>(route + "&search=register-working");

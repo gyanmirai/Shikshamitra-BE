@@ -50,20 +50,16 @@ public static class EmployeeLifecycleEligibility
 		Employee employee,
 		DateOnly monthStart,
 		DateOnly monthEnd,
-		bool treatNullStatusAsActive = true)
-	{
-		if (GetEffectiveEmploymentStartDate(employee) > monthEnd)
-		{
-			return false;
-		}
+		bool treatNullStatusAsActive = true) =>
+		IsEligibleForPayrollMonth(employee.DateOfJoining, employee.CreationTime, employee.EmployeeStatusType,
+			employee.StatusEffectiveDate, employee.StatusLastChangedAt, monthStart, monthEnd, treatNullStatusAsActive);
 
-		return IsActiveOnOrAfter(
-			employee.EmployeeStatusType,
-			employee.StatusEffectiveDate,
-			employee.StatusLastChangedAt,
-			monthStart,
-			treatNullStatusAsActive);
-	}
+	public static bool IsEligibleForPayrollMonth(
+		DateOnly? dateOfJoining, DateTime creationTime, EmployeeStatusType? status,
+		DateOnly? statusEffectiveDate, DateTimeOffset? statusLastChangedAt,
+		DateOnly monthStart, DateOnly monthEnd, bool treatNullStatusAsActive = true) =>
+		(dateOfJoining ?? DateOnly.FromDateTime(creationTime.Date)) <= monthEnd &&
+		IsActiveOnOrAfter(status, statusEffectiveDate, statusLastChangedAt, monthStart, treatNullStatusAsActive);
 
 	public static bool IsAttendanceEligibleOnDate(
 		EmployeeStatusType? status,

@@ -55,6 +55,17 @@ public class AdmissionFormPrintAdvancedSettings_Tests
 	}
 
 	[Theory]
+	[InlineData("vertical")]
+	[InlineData("horizontal")]
+	public void Address_layout_roundtrips_in_saved_settings(string addressLayout)
+	{
+		var form = Form();
+		var advanced = new JsonObject { ["header"] = new JsonObject { ["addressLayout"] = addressLayout } };
+		AdmissionFormMetadataStore.WriteExperience(form, Input(advanced.ToJsonString()));
+		Settings(form)["advanced"]!["header"]!["addressLayout"]!.GetValue<string>().ShouldBe(addressLayout);
+	}
+
+	[Theory]
 	[InlineData("{\"paper\":{\"orientation\":\"diagonal\"}}")]
 	[InlineData("{\"paper\":{\"margins\":{\"top\":4,\"right\":10,\"bottom\":10,\"left\":10}}}")]
 	[InlineData("{\"border\":{\"placement\":\"last\"}}")]

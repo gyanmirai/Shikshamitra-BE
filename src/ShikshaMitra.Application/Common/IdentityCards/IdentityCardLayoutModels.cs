@@ -51,6 +51,7 @@ internal sealed class IdentityCardElementStyle
 	public string? BackgroundColor { get; set; }
 	public string? BorderColor { get; set; }
 	public float? BorderWidth { get; set; }
+	public string? BorderStyle { get; set; }
 	public float? BorderRadius { get; set; }
 	public float? FontSize { get; set; }
 	public object? FontWeight { get; set; }

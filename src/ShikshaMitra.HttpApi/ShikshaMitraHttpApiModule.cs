@@ -60,6 +60,7 @@ public class ShikshaMitraHttpApiModule : AbpModule
 			options.Map(Students.StudentRecords.StudentRecordsErrorCodes.AppAccessReasonInvalid, System.Net.HttpStatusCode.BadRequest);
 			options.Map(Students.StudentRecords.StudentRecordsErrorCodes.AppAccessEnrollmentRequired, System.Net.HttpStatusCode.BadRequest);
 			options.Map(Students.StudentRecords.StudentRecordsErrorCodes.AppAccessRecipientUnavailable, System.Net.HttpStatusCode.BadRequest);
+			options.Map(Students.StudentRecords.StudentRecordsErrorCodes.InvalidBirthdayQuery, System.Net.HttpStatusCode.BadRequest);
 			foreach (var code in new[] {
 				Academic.Mobile.MobileSubmissionErrorCodes.AmbiguousAnswer,
 				Academic.Mobile.MobileSubmissionErrorCodes.InvalidRequestId,

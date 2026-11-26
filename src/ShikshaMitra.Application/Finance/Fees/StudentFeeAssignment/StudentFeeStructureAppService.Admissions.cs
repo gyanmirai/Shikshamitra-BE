@@ -36,9 +36,9 @@ public partial class StudentFeeStructureAppService
 		var prorationEligible = source.JoiningDate.HasValue && UsesAdmissionProration(source.JoiningDate, year.StartDate);
 		if (!prorationEligible && prorationPolicyVersionId.HasValue)
 			throw new BusinessException(AssignmentErrorCodes.InvalidInput)
-				.WithData("Reason", "A proration policy cannot be selected before the academic-year start date.");
+				.WithData("Reason", "A proration policy can only be selected for a joining date after the academic-year start date.");
 		// An unknown date must still be validated against the default policy's
-		// applicable recurring fees. Only a known early date bypasses proration.
+		// applicable recurring fees. A known date on or before the start bypasses proration.
 		var defaultProration = UsesAdmissionProration(source.JoiningDate, year.StartDate)
 			? await resolver.ResolveAsync(source.AcademicYearId, source.StructureId)
 			: null;
@@ -68,8 +68,8 @@ public partial class StudentFeeStructureAppService
 	}
 
 	// An unknown date still needs the default policy to check whether a joining date is required.
-	private static bool UsesAdmissionProration(DateTime? joiningDate, DateTime yearStart) =>
-		!joiningDate.HasValue || joiningDate.Value.Date >= yearStart.Date;
+	internal static bool UsesAdmissionProration(DateTime? joiningDate, DateTime yearStart) =>
+		!joiningDate.HasValue || joiningDate.Value.Date > yearStart.Date;
 
 	private sealed record AdmissionAssignmentContext(Guid? AccountId, Guid? StudentId, Guid StandardId,
 		Guid BoardId, Guid MediumId, int? StructureRevision, string SourceRevision, DateTime? JoiningDate,

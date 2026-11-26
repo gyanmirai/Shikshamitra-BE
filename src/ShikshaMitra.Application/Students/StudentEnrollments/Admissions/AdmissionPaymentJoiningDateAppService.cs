@@ -107,9 +107,18 @@ public class AdmissionPaymentJoiningDateAppService(
 			var stage = await stages.FindAsync(application.CurrentStageInstanceId.Value);
 			active = stage?.StageType == AdmissionWorkflowStageType.Payment && stage.Status == AdmissionRuntimeStageStatus.Active;
 		}
-		var canEdit = !locked && ownerEditable && active && source.CanCollect &&
+		var canConfirm = !locked && ownerEditable && source.CanCollect &&
 			await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.Add);
-		var canSelectPolicy = canEdit && await AuthorizationService.IsGrantedAsync(
+		var canPrepareDate = false;
+		if (canConfirm && !active && application.CanEndJourney)
+		{
+			var context = await access.GetContextAsync(application);
+			canPrepareDate = context.IsEditable && context.Owner is
+				{ StageType: AdmissionWorkflowStageType.Payment, Status: AdmissionRuntimeStageStatus.Pending };
+		}
+		var canEdit = canConfirm && (active || canPrepareDate);
+		var canPreview = canEdit && active && source.StructureId.HasValue;
+		var canSelectPolicy = canPreview && await AuthorizationService.IsGrantedAsync(
 			ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.OverridePolicies);
 		var resolver = LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Policies.AdmissionProrationPolicyResolver>();
 		var defaultPolicy = await resolver.ResolveAsync(source.AcademicYearId, source.StructureId);
@@ -117,10 +126,11 @@ public class AdmissionPaymentJoiningDateAppService(
 		return new()
 		{
 			JoiningDate = await reader.ReadAsync(application), ConcurrencyStamp = application.ConcurrencyStamp,
-			CanEdit = canEdit, CanPreview = canEdit && source.StructureId.HasValue, IsLocked = locked,
+			CanEdit = canEdit, CanPreview = canPreview, IsLocked = locked,
 			LockReason = locked ? "Fees have already been prepared. Ask Finance to review a joining date correction." :
-				!source.CanCollect ? source.Blocker : !active ? "Confirm the joining date during an open Payment or Onboarding step." :
-				!canEdit ? "You do not have permission to confirm the joining date." : null,
+				!source.CanCollect ? source.Blocker :
+				!canConfirm ? "You do not have permission to confirm the joining date." :
+				!canEdit ? "Joining date changes are unavailable at this stage." : null,
 			AcademicYearStartDate = DateTime.SpecifyKind(year.StartDate.Date, DateTimeKind.Utc),
 			AcademicYearEndDate = DateTime.SpecifyKind(year.EndDate.Date, DateTimeKind.Utc),
 			CanSelectProrationPolicy = canSelectPolicy, DefaultProrationPolicyVersionId = defaultPolicy?.Id,

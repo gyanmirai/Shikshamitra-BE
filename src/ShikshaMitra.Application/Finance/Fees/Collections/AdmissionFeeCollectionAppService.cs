@@ -119,7 +119,7 @@ public partial class AdmissionFeeCollectionAppService(
 			result.VariableFeeHeads = await VariableHeadsAsync(source);
 			if (result.VariableFeeHeads.Count > 0)
 			{
-				if (source.JoiningDate.HasValue && source.JoiningDate.Value.Date >= year.StartDate.Date)
+				if (source.JoiningDate.HasValue && StudentFeeStructureAppService.UsesAdmissionProration(source.JoiningDate, year.StartDate))
 					result.ProrationPolicy = await DefaultProrationPolicyAsync(source.AcademicYearId, source.StructureId);
 				result.Blocker = "Enter the initial amounts for the Finance-configured variable fees.";
 			}

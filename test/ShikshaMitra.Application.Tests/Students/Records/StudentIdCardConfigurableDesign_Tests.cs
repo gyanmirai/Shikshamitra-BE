@@ -137,13 +137,19 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		design.SchemaVersion = 2;
 		design.PresetKey = "classic-identity";
 		design.BackSideEnabled = true;
-		design.LayoutJson = """{"orientation":"Horizontal","width":428,"height":270,"widthMm":85.6,"heightMm":53.98,"front":{"elements":[{"id":"name","type":"text","fieldKey":"StudentName","x":20,"y":20,"w":388,"h":60,"style":{"fontSize":14}}]},"back":{"elements":[{"id":"return","type":"text","fieldKey":"static","value":"Return to the school office.","x":20,"y":20,"w":388,"h":60,"style":{"fontSize":14}}]}}""";
+		design.LayoutJson = """
+			{"orientation":"Horizontal","width":428,"height":270,"widthMm":85.6,"heightMm":53.98,
+			"front":{"elements":[{"id":"name","type":"text","fieldKey":"StudentName","x":20,"y":20,"w":388,"h":60,"style":{"fontSize":14}},
+			{"id":"divider","type":"line","x":20,"y":85,"w":388,"h":5,"style":{"borderStyle":"dashed","borderWidth":3}}]},
+			"back":{"elements":[{"id":"return","type":"text","fieldKey":"static","value":"Return to the school office.","x":20,"y":20,"w":388,"h":60,"style":{"fontSize":14}},
+			{"id":"marker","type":"shape","x":30,"y":100,"w":70,"h":50,"style":{"shape":"rectangle","borderStyle":"dotted","borderWidth":4}}]}}
+			""";
 		design.PrintSettingsJson = """{"pageSize":"Card","units":"mm","cardsPerPage":8,"sideMode":"both"}""";
 		var saved = await fixture.Service.CreateTemplateAsync(design);
 		saved.SchemaVersion.ShouldBe(2); saved.LayoutJson.ShouldBe(design.LayoutJson); saved.PrintSettingsJson.ShouldBe(design.PrintSettingsJson); saved.BackSideEnabled.ShouldBeTrue();
 		var issued = (await fixture.Service.IssueAsync(new() { TemplateId = saved.Id, StudentIds = [student.Id], IdempotencyKey = "configurable-classic-duplex" })).Single();
 		issued.TemplateSnapshot.LayoutJson.ShouldBe(design.LayoutJson);
-		saved.LayoutJson = saved.LayoutJson!.Replace("Return to the school office.", "Updated office instructions.");
+		saved.LayoutJson = saved.LayoutJson!.Replace("Return to the school office.", "Updated office instructions.").Replace("\"dotted\"", "\"solid\"");
 		await fixture.Service.UpdateTemplateAsync(saved.Id!.Value, saved);
 		var frozen = (await fixture.Service.GetHistoryAsync(student.Id)).Single();
 		frozen.TemplateSnapshot.LayoutJson.ShouldBe(design.LayoutJson);

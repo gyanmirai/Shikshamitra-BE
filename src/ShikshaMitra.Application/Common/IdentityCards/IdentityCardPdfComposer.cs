@@ -11,7 +11,7 @@ internal sealed record IdentityCardArtwork(string FrontSvg, string? BackSvg);
 
 internal static class IdentityCardPdfComposer
 {
-	public static byte[] Compose(IdentityCardLayout layout, IdentityCardPrintSettings settings, IReadOnlyCollection<IdentityCardArtwork> cards, bool backEnabled)
+	public static byte[] Compose(IdentityCardLayout layout, IdentityCardPrintSettings settings, IReadOnlyCollection<IdentityCardArtwork> cards, bool backEnabled, bool sheetTrimGuides = false)
 	{
 		QuestPDF.Settings.License = LicenseType.Community;
 		var sheet = IdentityCardGeometry.Sheet(layout, settings);
@@ -24,7 +24,7 @@ internal static class IdentityCardPdfComposer
 				{
 					var width = settings.PageSize == "Card" ? sheet.CardWidthMm + 2 * settings.BleedMm : 210;
 					var height = settings.PageSize == "Card" ? sheet.CardHeightMm + 2 * settings.BleedMm : 297;
-					var artwork = BuildPageSvg(layout, settings, sheet, chunk, back, width, height);
+					var artwork = BuildPageSvg(layout, settings, sheet, chunk, back, width, height, sheetTrimGuides);
 					document.Page(page =>
 					{
 						page.Size(width, height, Unit.Millimetre);
@@ -43,7 +43,7 @@ internal static class IdentityCardPdfComposer
 	}
 
 	internal static string BuildPageSvg(IdentityCardLayout layout, IdentityCardPrintSettings settings, IdentityCardSheet sheet,
-		IReadOnlyList<IdentityCardArtwork> cards, bool back, float width = 210, float height = 297)
+		IReadOnlyList<IdentityCardArtwork> cards, bool back, float width = 210, float height = 297, bool sheetTrimGuides = false)
 	{
 		var builder = new StringBuilder(FormattableString.Invariant($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}mm\" height=\"{height}mm\" viewBox=\"0 0 {width} {height}\">"));
 		for (var index = 0; index < cards.Count; index++)
@@ -59,6 +59,8 @@ internal static class IdentityCardPdfComposer
 			builder.Append("</g>");
 			if (settings.ShowCutMarks && settings.PageSize == "A4") AppendCutMarks(builder, x, y, sheet, settings, width, height);
 		}
+		if (sheetTrimGuides && settings.PageSize == "A4")
+			IdentityCardSheetTrimGuides.AppendTo(builder, sheet, settings, cards.Count, back);
 		return builder.Append("</svg>").ToString();
 	}
 

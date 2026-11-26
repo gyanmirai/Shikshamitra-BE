@@ -102,7 +102,7 @@ public partial class HouseManagementCommandService(
 
 	public Task CommitAsync(HouseAssignmentRequest input) => TransactionAsync(async () =>
 	{
-		var state = await AssignmentStateAsync(input);
+		var state = await AssignmentStateAsync(input, committing: true);
 		if (string.IsNullOrWhiteSpace(input.PreviewToken) || input.PreviewToken != state.Preview.PreviewToken)
 			throw new BusinessException(HouseManagementErrorCodes.StalePreview);
 		foreach (var enrollment in state.Enrollments.Where(e => e.HouseId != input.HouseId))
@@ -119,20 +119,17 @@ public partial class HouseManagementCommandService(
 		return true;
 	});
 
-	private async Task<(HouseAssignmentPreviewDto Preview, List<StudentEnrollment> Enrollments, List<HouseSettings> Houses)> AssignmentStateAsync(HouseAssignmentRequest input)
+	private async Task<(HouseAssignmentPreviewDto Preview, List<StudentEnrollment> Enrollments, List<HouseSettings> Houses)> AssignmentStateAsync(HouseAssignmentRequest input, bool committing = false)
 	{
 		await access.GetAsync(input.AcademicMediumId);
-		if (input.EnrollmentIds == null || input.EnrollmentIds.Count is < 1 or > 500 ||
-			input.EnrollmentIds.Contains(Guid.Empty) || input.EnrollmentIds.Distinct().Count() != input.EnrollmentIds.Count ||
-			input.DivisionId == Guid.Empty || input.HouseId == Guid.Empty)
+		if (input.DivisionId == Guid.Empty || input.HouseId == Guid.Empty ||
+			input.TargetScope is not (null or HouseAssignmentRequest.DivisionScope))
 			throw new BusinessException(HouseManagementErrorCodes.InvalidInput);
-		var ids = input.EnrollmentIds.ToArray();
-		var roster = await queries.StudentsAsync(input.AcademicMediumId);
-		var selected = await AsyncExecuter.ToListAsync(roster.Where(s => Enumerable.Contains(ids, s.EnrollmentId)));
-		if (selected.Count != ids.Length)
-			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
-		if (selected.Any(s => s.DivisionId != input.DivisionId))
-			throw new BusinessException(HouseManagementErrorCodes.AssignmentDivisionMismatch);
+		var targetsDivision = input.TargetScope == HouseAssignmentRequest.DivisionScope;
+		var selected = targetsDivision
+			? await DivisionAssignmentStudentsAsync(input, committing)
+			: await SelectedAssignmentStudentsAsync(input);
+		var ids = selected.Select(s => s.EnrollmentId).ToArray();
 		var rows = await enrollments.GetListAsync(e => e.TenantId == CurrentTenant.Id && Enumerable.Contains(ids, e.Id));
 		if (rows.Count != ids.Length || rows.Any(e => e.DivisionId != input.DivisionId))
 			throw new BusinessException(HouseManagementErrorCodes.StalePreview);
@@ -145,6 +142,7 @@ public partial class HouseManagementCommandService(
 		var clearedLeaders = selected.Where(s => s.IsHouseLeader && s.HouseId != input.HouseId).ToList();
 		var signature = string.Join("|",
 			new[] { CurrentTenant.Id.ToString(), CurrentUser.Id.ToString(), input.AcademicMediumId.ToString(), input.DivisionId.ToString(), input.HouseId.ToString() }
+				.Concat(targetsDivision ? new[] { HouseAssignmentRequest.DivisionScope, input.IncludeAssigned.ToString() } : Array.Empty<string>())
 				.Concat(rows.OrderBy(e => e.Id).Select(e => $"{e.Id}:{e.ConcurrencyStamp}:{e.HouseId}"))
 				.Concat(involved.OrderBy(h => h.Id).Select(h => $"{h.Id}:{h.ConcurrencyStamp}:{h.MembershipRevision}"))
 				.Concat(clearedLeaders.OrderBy(s => s.EnrollmentId).Select(s => $"{s.HouseId}:{s.EnrollmentId}")));
@@ -156,6 +154,55 @@ public partial class HouseManagementCommandService(
 			ClearedHouseLeaders = clearedLeaders,
 			PreviewToken = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(signature)))
 		}, rows, involved);
+	}
+
+	private async Task<List<HouseManagementStudentDto>> SelectedAssignmentStudentsAsync(HouseAssignmentRequest input)
+	{
+		if (input.IncludeAssigned || input.EnrollmentIds == null ||
+			input.EnrollmentIds.Count is < 1 or > HouseAssignmentRequest.MaxEnrollmentIds ||
+			input.EnrollmentIds.Contains(Guid.Empty) || input.EnrollmentIds.Distinct().Count() != input.EnrollmentIds.Count)
+			throw new BusinessException(HouseManagementErrorCodes.InvalidInput);
+		var ids = input.EnrollmentIds.ToArray();
+		var roster = await queries.StudentsAsync(input.AcademicMediumId);
+		var selected = await AsyncExecuter.ToListAsync(roster.Where(s => Enumerable.Contains(ids, s.EnrollmentId)));
+		if (selected.Count != ids.Length)
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+		if (selected.Any(s => s.DivisionId != input.DivisionId))
+			throw new BusinessException(HouseManagementErrorCodes.AssignmentDivisionMismatch);
+		return selected;
+	}
+
+	private async Task<List<HouseManagementStudentDto>> DivisionAssignmentStudentsAsync(HouseAssignmentRequest input, bool committing)
+	{
+		if (!input.HouseId.HasValue || input.EnrollmentIds?.Count != 0)
+			throw new BusinessException(HouseManagementErrorCodes.InvalidInput);
+		await ScopedDivisionAsync(input.DivisionId, input.AcademicMediumId, "HouseManagement.DivisionAssignment");
+
+		var roster = await queries.StudentsAsync(input.AcademicMediumId);
+		var divisionStudents = roster.Where(s => s.DivisionId == input.DivisionId);
+		var affected = input.IncludeAssigned
+			? divisionStudents.Where(s => s.HouseId != input.HouseId)
+			: divisionStudents.Where(s => s.HouseId == null);
+		var selected = await AsyncExecuter.ToListAsync(affected.OrderBy(s => s.StudentName).ThenBy(s => s.EnrollmentId)
+			.Take(HouseAssignmentRequest.MaxEnrollmentIds + 1));
+		if (selected.Count == 0)
+			throw new BusinessException(committing ? HouseManagementErrorCodes.StalePreview : HouseManagementErrorCodes.NoEligibleStudents);
+		if (selected.Count > HouseAssignmentRequest.MaxEnrollmentIds)
+			throw new BusinessException(committing ? HouseManagementErrorCodes.StalePreview : HouseManagementErrorCodes.AssignmentLimitExceeded);
+		return selected;
+	}
+
+	private async Task<Division> ScopedDivisionAsync(Guid divisionId, Guid mediumId, string operation)
+	{
+		await scope.EnsureCanAccessDivisionAsync(divisionId, operation);
+		var query =
+			from d in await divisions.GetQueryableAsync()
+			join c in await standards.GetQueryableAsync() on d.StandardId equals c.Id
+			join stage in await stages.GetQueryableAsync() on c.EducationMediumStageId equals stage.Id
+			where d.Id == divisionId && d.TenantId == CurrentTenant.Id && c.TenantId == CurrentTenant.Id &&
+				stage.TenantId == CurrentTenant.Id && stage.EducationMediumId == mediumId
+			select d;
+		return await AsyncExecuter.SingleOrDefaultAsync(query) ?? throw new BusinessException(UserScopeErrorCodes.AccessDenied);
 	}
 
 	private async Task<HouseSettings> HouseAsync(Guid id, Guid mediumId)

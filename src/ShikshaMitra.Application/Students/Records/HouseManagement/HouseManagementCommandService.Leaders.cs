@@ -23,15 +23,7 @@ public partial class HouseManagementCommandService
 	public Task ReplaceDivisionLeaderAsync(Guid id, ReplaceStudentLeaderRequest input) => TransactionAsync(async () =>
 	{
 		await access.GetAsync(input.AcademicMediumId);
-		await scope.EnsureCanAccessDivisionAsync(id, "HouseManagement.DivisionLeader");
-		var dq =
-			from d in await divisions.GetQueryableAsync()
-			join c in await standards.GetQueryableAsync() on d.StandardId equals c.Id
-			join stage in await stages.GetQueryableAsync() on c.EducationMediumStageId equals stage.Id
-			where d.Id == id && d.TenantId == CurrentTenant.Id && c.TenantId == CurrentTenant.Id &&
-				stage.TenantId == CurrentTenant.Id && stage.EducationMediumId == input.AcademicMediumId
-			select d;
-		var division = await AsyncExecuter.SingleOrDefaultAsync(dq) ?? throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+		var division = await ScopedDivisionAsync(id, input.AcademicMediumId, "HouseManagement.DivisionLeader");
 		var enrollment = await LeaderAsync(input);
 		division.ReplaceLeader(enrollment, input.ConcurrencyStamp);
 		await divisions.UpdateAsync(division);

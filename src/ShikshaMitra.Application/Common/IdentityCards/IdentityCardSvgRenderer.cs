@@ -20,8 +20,8 @@ internal static class IdentityCardSvgRenderer
 			builder.Append(FormattableString.Invariant($"<g opacity=\"{element.Opacity ?? 1}\" transform=\"rotate({element.Rotation ?? 0} {element.X + element.W / 2} {element.Y + element.H / 2})\">"));
 			builder.Append(element.Type switch
 			{
-				"shape" when style.Shape == "ellipse" => FormattableString.Invariant($"<ellipse cx=\"{element.X + element.W / 2}\" cy=\"{element.Y + element.H / 2}\" rx=\"{element.W / 2}\" ry=\"{element.H / 2}\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{style.BorderWidth ?? 0}\"/>"),
-				"shape" => FormattableString.Invariant($"<rect x=\"{element.X}\" y=\"{element.Y}\" width=\"{element.W}\" height=\"{element.H}\" rx=\"{style.BorderRadius ?? 0}\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{style.BorderWidth ?? 0}\"/>"),
+				"shape" => RenderShape(element, fill, stroke),
+				"line" when style.BorderStyle != null => RenderStyledLine(element, layout.ThemeColor),
 				"line" => FormattableString.Invariant($"<rect x=\"{element.X}\" y=\"{element.Y}\" width=\"{element.W}\" height=\"{element.H}\" fill=\"{fill}\"/>"),
 				"logo" => IdentityCardMediaRenderer.RenderImageOrPlaceholder(element, logo, layout.ThemeColor, "LOGO"),
 				"signature" when signature != null => IdentityCardMediaRenderer.RenderImageOrPlaceholder(element, signature, layout.ThemeColor, "SIGNATURE"),
@@ -37,33 +37,48 @@ internal static class IdentityCardSvgRenderer
 		return builder.Append("</svg>").ToString();
 	}
 
+	private static string RenderShape(IdentityCardLayoutElement element, string fill, string stroke)
+	{
+		var style = element.Style;
+		var width = style.BorderWidth ?? 0;
+		var strokePattern = StrokePattern(style.BorderStyle, width);
+		return style.Shape == "ellipse"
+			? FormattableString.Invariant($"<ellipse cx=\"{element.X + element.W / 2}\" cy=\"{element.Y + element.H / 2}\" rx=\"{element.W / 2}\" ry=\"{element.H / 2}\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{width}\"{strokePattern}/>")
+			: FormattableString.Invariant($"<rect x=\"{element.X}\" y=\"{element.Y}\" width=\"{element.W}\" height=\"{element.H}\" rx=\"{style.BorderRadius ?? 0}\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{width}\"{strokePattern}/>");
+	}
+
+	private static string RenderStyledLine(IdentityCardLayoutElement element, string themeColor)
+	{
+		var style = element.Style;
+		var stroke = IdentityCardSvgFormatting.Escape(style.BorderColor ?? style.BackgroundColor ?? themeColor);
+		var width = style.BorderWidth ?? element.H;
+		var y = element.Y + element.H / 2;
+		var strokePattern = StrokePattern(style.BorderStyle, width);
+		return FormattableString.Invariant($"<line x1=\"{element.X}\" y1=\"{y}\" x2=\"{element.X + element.W}\" y2=\"{y}\" stroke=\"{stroke}\" stroke-width=\"{width}\"{strokePattern}/>");
+	}
+
+	private static string StrokePattern(string? borderStyle, float width)
+	{
+		if (width <= 0) return string.Empty;
+		return borderStyle switch
+		{
+			"dashed" => FormattableString.Invariant($" stroke-dasharray=\"{4 * width} {2 * width}\" stroke-linecap=\"butt\""),
+			"dotted" => FormattableString.Invariant($" stroke-dasharray=\"{0.01f * width} {2 * width}\" stroke-linecap=\"round\""),
+			_ => string.Empty
+		};
+	}
+
 	internal static string RenderText(IdentityCardLayoutElement element, string? value, bool strict)
 	{
 		var style = element.Style;
-		value = string.IsNullOrWhiteSpace(value) ? "-" : value;
-		if (element.Prefix is not null && element.FieldKey is not (null or "" or "static")) value = element.Prefix + value;
-		else if (style.ShowLabel == true && !string.IsNullOrWhiteSpace(element.Label)) value = $"{element.Label}{style.Separator ?? ": "}{value}";
 		var size = style.FontSize ?? 9;
-		var family = style.FontFamily ?? "Arial";
-		var bold = style.FontWeight?.ToString() is "600" or "700" or "800" or "900" or "bold";
+		var bold = IsBold(style);
 		var italic = style.FontStyle == "italic";
-		using var typeface = SKTypeface.FromFamilyName(family, italic ? bold ? SKFontStyle.BoldItalic : SKFontStyle.Italic : bold ? SKFontStyle.Bold : SKFontStyle.Normal);
-		family = IdentityCardPdfFonts.Register(typeface);
+		using var typeface = GetTypeface(style);
+		var family = IdentityCardPdfFonts.Register(typeface);
 		using var font = new SKFont(typeface, size);
 		var lines = new List<string>();
-		foreach (var paragraph in value.Replace("\r", "").Split('\n'))
-		{
-			var line = "";
-			foreach (var word in paragraph.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-			{
-				if (strict && font.MeasureText(word) > element.W + 0.5f) throw Overflow(element);
-				var candidate = line.Length == 0 ? word : $"{line} {word}";
-				if (line.Length > 0 && font.MeasureText(candidate) > element.W) { lines.Add(line); line = word; }
-				else line = candidate;
-			}
-			lines.Add(line);
-		}
-		if (strict && lines.Count * size * 1.2f > element.H + 0.5f) throw Overflow(element);
+		if (!TryWrapText(element, DisplayText(element, value), font, strict, lines)) throw Overflow(element);
 		var anchor = style.TextAlign == "center" ? "middle" : style.TextAlign == "right" ? "end" : "start";
 		var x = element.X + (anchor == "middle" ? element.W / 2 : anchor == "end" ? element.W : 0);
 		var builder = new StringBuilder();
@@ -75,6 +90,70 @@ internal static class IdentityCardSvgRenderer
 		builder.Append("</text>");
 		AppendTextDecoration(builder, element, font, lines, x, anchor);
 		return builder.ToString();
+	}
+
+	internal static float? FitTextFontSize(IdentityCardLayoutElement element, string? value)
+	{
+		using var typeface = GetTypeface(element.Style);
+		using var font = new SKFont(typeface, element.Style.FontSize ?? 9);
+		var text = DisplayText(element, value);
+		var lines = new List<string>();
+		bool Fits(float size)
+		{
+			font.Size = size;
+			lines.Clear();
+			return TryWrapText(element, text, font, strict: true, lines);
+		}
+
+		var upper = font.Size;
+		if (Fits(upper)) return null;
+
+		var lower = IdentityCardSchema.MinimumFontSize;
+		if (!Fits(lower)) throw Overflow(element);
+		while (upper - lower > 0.1f)
+		{
+			var candidate = (lower + upper) / 2;
+			if (Fits(candidate)) lower = candidate;
+			else upper = candidate;
+		}
+		return lower;
+	}
+
+	private static bool IsBold(IdentityCardElementStyle style) =>
+		style.FontWeight?.ToString() is "600" or "700" or "800" or "900" or "bold";
+
+	private static SKTypeface GetTypeface(IdentityCardElementStyle style)
+	{
+		var bold = IsBold(style);
+		var italic = style.FontStyle == "italic";
+		return SKTypeface.FromFamilyName(style.FontFamily ?? "Arial",
+			italic ? bold ? SKFontStyle.BoldItalic : SKFontStyle.Italic : bold ? SKFontStyle.Bold : SKFontStyle.Normal);
+	}
+
+	private static string DisplayText(IdentityCardLayoutElement element, string? value)
+	{
+		var text = string.IsNullOrWhiteSpace(value) ? "-" : value;
+		if (element.Prefix is not null && element.FieldKey is not (null or "" or "static")) return element.Prefix + text;
+		return element.Style.ShowLabel == true && !string.IsNullOrWhiteSpace(element.Label)
+			? $"{element.Label}{element.Style.Separator ?? ": "}{text}"
+			: text;
+	}
+
+	private static bool TryWrapText(IdentityCardLayoutElement element, string text, SKFont font, bool strict, List<string> lines)
+	{
+		foreach (var paragraph in text.Replace("\r", "").Split('\n'))
+		{
+			var line = "";
+			foreach (var word in paragraph.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+			{
+				if (strict && font.MeasureText(word) > element.W + 0.5f) return false;
+				var candidate = line.Length == 0 ? word : $"{line} {word}";
+				if (line.Length > 0 && font.MeasureText(candidate) > element.W) { lines.Add(line); line = word; }
+				else line = candidate;
+			}
+			lines.Add(line);
+		}
+		return !strict || lines.Count * font.Size * 1.2f <= element.H + 0.5f;
 	}
 
 	private static void AppendTextDecoration(StringBuilder builder, IdentityCardLayoutElement element, SKFont font, IReadOnlyList<string> lines, float anchorX, string anchor)

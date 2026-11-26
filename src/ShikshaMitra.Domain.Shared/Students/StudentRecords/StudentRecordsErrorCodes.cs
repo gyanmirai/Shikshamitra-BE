@@ -7,6 +7,7 @@ public static class StudentRecordsErrorCodes
 	public const string InvalidConfigurationScope = "Students:Records:InvalidConfigurationScope";
 	public const string InvalidPublishedVersion = "Students:Records:InvalidPublishedVersion";
 	public const string InvalidAcademicYear = "Students:Records:InvalidAcademicYear";
+	public const string InvalidBirthdayQuery = "Students:Records:InvalidBirthdayQuery";
 	public const string InvalidApproverRole = "Students:Records:InvalidApproverRole";
 	public const string ConfigurationChanged = "Students:Records:ConfigurationChanged";
 	public const string DraftRequired = "Students:Records:DraftRequired";

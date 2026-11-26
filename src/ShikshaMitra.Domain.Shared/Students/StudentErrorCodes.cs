@@ -86,6 +86,7 @@ public static class StudentErrorCodes
     public const string InvalidIdHistoryQuery                = "Students:Records:InvalidIdHistoryQuery";
     public const string InvalidIdHistorySort                 = "Students:Records:InvalidIdHistorySort";
     public const string InvalidIdAssignment                  = "Students:Records:InvalidIdAssignment";
+    public const string InvalidIdAssignmentRosterFilter      = "Students:Records:InvalidIdAssignmentRosterFilter";
     public const string IdAssignmentChanged                  = "Students:Records:IdAssignmentChanged";
     public const string IdAssignmentRosterChanged            = "Students:Records:IdAssignmentRosterChanged";
     public const string IdAssignmentAlreadyIssued            = "Students:Records:IdAssignmentAlreadyIssued";

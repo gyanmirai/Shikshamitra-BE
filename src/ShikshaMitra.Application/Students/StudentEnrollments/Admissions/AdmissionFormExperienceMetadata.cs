@@ -61,8 +61,8 @@ internal static class AdmissionFormMetadataStore
 		if (settings == null) return;
 		if (settings.Layout is not ("compact" or "spacious") || settings.PaperSize is not ("A4" or "A5" or "LETTER" or "LEGAL") ||
 			settings.Template is not (null or "simple" or "boxed-grid" or "structured-classic"))
-			throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition,
-				"Choose a supported print template, compact or spacious layout, and paper size.");
+			throw new UserFriendlyException("Choose a supported print template, compact or spacious layout, and paper size.",
+				code: AdmissionFormErrorCodes.InvalidDefinition);
 		AdmissionFormPrintSettingsValidation.Validate(settings.Advanced);
 	}
 

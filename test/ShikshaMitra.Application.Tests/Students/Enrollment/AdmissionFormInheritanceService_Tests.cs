@@ -225,8 +225,10 @@ public class AdmissionFormInheritanceService_Tests
 		fields.Single(field => field.BindingKey == "Applicant.Gender").Required.ShouldBeTrue();
 	}
 
-	[Fact]
-	public async Task Preview_promotes_optional_inquiry_dob_and_gender_when_registration_requires_them()
+	[Theory]
+	[InlineData("roboto")]
+	[InlineData("monospace")]
+	public async Task Preview_promotes_optional_inquiry_dob_and_gender_when_registration_requires_them(string fontFamily)
 	{
 		var school = Guid.NewGuid();
 		var source = Form(school, "Inquiry", AdmissionFormPurpose.Inquiry);
@@ -252,10 +254,16 @@ public class AdmissionFormInheritanceService_Tests
 		{
 			RegistrationFormDefinitionId = registration.Id,
 			InquiryFormDefinitionId = source.Id,
-			Draft = new() { ConcurrencyStamp = registration.ConcurrencyStamp, CoreFieldPolicyVersion = null, Sections = [registrationSection] }
+			Draft = new()
+			{
+				ConcurrencyStamp = registration.ConcurrencyStamp,
+				Sections = [registrationSection],
+				PrintSettings = new() { Advanced = new() { Style = new() { FontFamily = fontFamily } } }
+			}
 		});
 
 		preview.Issues.ShouldBeEmpty();
+		preview.Definition.PrintSettings!.Advanced!.Style!.FontFamily.ShouldBe(fontFamily);
 		var fields = preview.Definition.Sections.SelectMany(section => section.Fields).ToList();
 		fields.Count(field => field.BindingKey == "Applicant.DateOfBirth").ShouldBe(1);
 		fields.Count(field => field.BindingKey == "Applicant.Gender").ShouldBe(1);

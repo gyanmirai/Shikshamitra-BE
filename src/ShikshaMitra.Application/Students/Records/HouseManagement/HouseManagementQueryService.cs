@@ -114,6 +114,8 @@ public class HouseManagementQueryService(
 		var context = await access.GetAsync(input.AcademicMediumId);
 		var roster = await StudentsAsync(input.AcademicMediumId);
 		var q = (await houses.GetQueryableAsync()).Where(h => h.TenantId == CurrentTenant.Id && h.AcademicMediumId == input.AcademicMediumId);
+		if (input.HouseId.HasValue)
+			q = q.Where(h => h.Id == input.HouseId.Value);
 		if (!string.IsNullOrWhiteSpace(input.Filter))
 		{
 			var term = input.Filter.Trim().ToLower();

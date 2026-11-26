@@ -16,7 +16,7 @@ TL;DR: setup commands produce validated offering defaults, while inquiry and app
 
 1. Select an accessible medium and read its houses, scoped students and divisions.
 2. With Add and sufficient configuration scope, create or update a house.
-3. Select eligible enrolled students and preview assignment or removal. Review affected house leaders, then submit the current preview atomically.
+3. Preview assignment for selected enrollments or for the entire division. Entire-division assignment uses unassigned students by default, with an explicit option to include students assigned to other houses. Removal uses selected enrollments. Review departing House Leaders before committing the preview atomically.
 4. Select or clear a house leader from eligible members, or independently select or clear a division leader. Replacements require the current concurrency stamp and authority over the affected records.
 5. Delete only an empty house using Delete authority through the House Management API.
 
@@ -409,6 +409,8 @@ Eligibility, Review, and Offer are retired Admission Stage types. New drafts can
 Legacy Admission record, verification, waiver and reversal commands are unavailable in this flow. Repeated workflow keys replay the existing transition and do not duplicate deferral audit or Finance rows. Confirmation/deferral alone perform no Finance ledger mutation; actual collection uses the Finance integration and its persistence requirements.
 
 ### Confirm the actual joining date before collection
+
+Authorized staff can save the actual joining date for an upcoming Payment step after confirming its fee structure. This uses the same pending-stage preparation eligibility as fee-structure selection and neither advances the workflow nor creates Finance dues. Joining-date preview and policy selection remain available during active Payment or eligible Onboarding.
 
 The Payment workspace can confirm the same actual joining date used by Registration and Onboarding. Registration supplies the initial saved value when present; Payment also supports a form without a joining-date field. Candidate preview calls the existing Finance calculator without creating accounts, dues, or payments. Staff confirm the date with the current application stamp before using the existing Finance preparation endpoint. The application stores the shared fact, synchronizes explicit bound/legacy current form answers and captured admission data, and records an audit event while preserving submitted snapshots. After any fee assignment is prepared, both Payment and Registration date changes are locked for controlled Finance correction. Collection deferral remains independent and performs no date confirmation or monetary write; an unfinished Onboarding case can capture a missing date before its first preparation.
 

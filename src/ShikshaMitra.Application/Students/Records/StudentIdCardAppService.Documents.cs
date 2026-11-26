@@ -26,7 +26,7 @@ public partial class StudentIdCardAppService
 		return await ExportCoreAsync(input);
 	}
 
-	private async Task<StudentCertificatePdfDto> ExportCoreAsync(StudentIdCardsPdfRequestDto input, StudentIdCardTemplateDto? template = null)
+	private async Task<StudentCertificatePdfDto> ExportCoreAsync(StudentIdCardsPdfRequestDto input, StudentIdCardTemplateDto? template = null, bool forAssignmentPrint = false)
 	{
 		if (input.CardsPerPage is < 1 or > 10) throw new BusinessException("Students:Records:InvalidIdTemplate");
 		var identitySnapshots = new Dictionary<IdentityReadKey, SchoolIdentityDocumentSnapshotDto>();
@@ -37,7 +37,7 @@ public partial class StudentIdCardAppService
 			var snapshot = cohort[studentId];
 			template ??= await LoadTemplateAsync(input.TemplateId);
 			var photo = await LoadPhotoAsync(template, snapshot.Fields);
-			var frozen = await CaptureIdentityTemplateAsync(template, snapshot, identitySnapshots);
+			var frozen = await CaptureIdentityTemplateAsync(template, snapshot, identitySnapshots, fitStudentName: forAssignmentPrint);
 			var assets = await schoolIdentity.LoadAsync(frozen.SchoolIdentity);
 			cards.Add((new StudentIdCardDto { StudentId = studentId, HasPhoto = photo != null,
 				StudentSnapshot = PublicFields(snapshot.Fields), TemplateSnapshot = frozen }, photo, assets));
@@ -46,9 +46,22 @@ public partial class StudentIdCardAppService
 		{
 			var (layout, settings) = StudentIdCardDesign.Resolve(template);
 			settings.CardsPerPage = input.CardsPerPage;
-			var bytes = IdentityCardPdfComposer.Compose(layout, settings, cards.Select(item => StudentIdCardDesign.Artwork(item.Card, item.Photo, item.Assets.Logo, item.Assets.Signature)).ToList(), template.BackSideEnabled);
+			if (forAssignmentPrint)
+			{
+				settings.PageSize = "A4";
+				settings.Margin = Math.Max(5, settings.Margin);
+			}
+			var artwork = cards.Select(item => StudentIdCardDesign.Artwork(item.Card, item.Photo,
+				item.Assets.Logo, item.Assets.Signature, forAssignmentPrint: forAssignmentPrint)).ToList();
+			var bytes = IdentityCardPdfComposer.Compose(layout, settings, artwork, template.BackSideEnabled, sheetTrimGuides: forAssignmentPrint);
 			return new() { FileName = $"Student-I-Cards-{Clock.Now:yyyy-MM-dd}.pdf", Content = bytes };
 		}
+		if (forAssignmentPrint)
+		{
+			var legacyCards = cards.Select(item => (item.Card, item.Photo, item.Assets.Logo)).ToList();
+			return new() { FileName = $"Student-I-Cards-{Clock.Now:yyyy-MM-dd}.pdf", Content = RenderLegacyAssignmentSheet(legacyCards, template, input.CardsPerPage) };
+		}
+
 		QuestPDF.Settings.License = LicenseType.Community;
 		var vertical = template.Orientation == "Vertical";
 		var perPage = Math.Min(input.CardsPerPage, vertical ? 9 : 10);
@@ -76,6 +89,44 @@ public partial class StudentIdCardAppService
 			}
 		}).GeneratePdf();
 		return new() { FileName = $"Student-I-Cards-{Clock.Now:yyyy-MM-dd}.pdf", Content = content };
+	}
+
+	internal static byte[] RenderLegacyAssignmentSheet(
+		IReadOnlyList<(StudentIdCardDto Card, byte[]? Photo, byte[]? Logo)> cards, StudentIdCardTemplateDto template, int cardsPerPage)
+	{
+		var settings = new IdentityCardPrintSettings { CardsPerPage = cardsPerPage };
+		var sheet = IdentityCardGeometry.Sheet(new IdentityCardLayout { Orientation = template.Orientation }, settings);
+		QuestPDF.Settings.License = LicenseType.Community;
+		return Document.Create(document =>
+		{
+			foreach (var pageCards in cards.Chunk(sheet.EffectiveCardsPerPage))
+			{
+				document.Page(page =>
+				{
+					page.Size(210, 297, Unit.Millimetre);
+					page.Margin(0);
+					page.Content().Layers(layers =>
+					{
+						layers.PrimaryLayer().Svg(IdentityCardSheetTrimGuides.BuildSvg(sheet, settings, pageCards.Length, back: false));
+						layers.Layer().PaddingLeft(sheet.StartXmm, Unit.Millimetre).PaddingTop(sheet.StartYmm, Unit.Millimetre)
+							.AlignTop().AlignLeft().Column(column =>
+							{
+								column.Spacing(settings.Gap, Unit.Millimetre);
+								foreach (var pageRow in pageCards.Chunk(sheet.Columns))
+								{
+									column.Item().Row(row =>
+									{
+										row.Spacing(settings.Gap, Unit.Millimetre);
+										foreach (var item in pageRow)
+											row.ConstantItem(sheet.CardWidthMm, Unit.Millimetre).Height(sheet.CardHeightMm, Unit.Millimetre)
+												.Element(c => ComposeCard(c, item.Card, item.Photo, item.Logo, forAssignmentPrint: true));
+									});
+								}
+							});
+					});
+				});
+			}
+		}).GeneratePdf();
 	}
 
 	public async Task<StudentCertificatePdfDto> GetPdfAsync(Guid id)
@@ -135,7 +186,7 @@ public partial class StudentIdCardAppService
 		return photo;
 	}
 
-	internal static void ComposeCard(IContainer container, StudentIdCardDto card, byte[]? photo, byte[]? logo = null)
+	internal static void ComposeCard(IContainer container, StudentIdCardDto card, byte[]? photo, byte[]? logo = null, bool forAssignmentPrint = false)
 	{
 		var template = card.TemplateSnapshot;
 		var vertical = template.Orientation == "Vertical";
@@ -154,14 +205,15 @@ public partial class StudentIdCardAppService
 			column.Item().PaddingTop(2, Unit.Millimetre).Text(template.HeaderText).FontSize(7).SemiBold().ClampLines(1);
 			column.Item().PaddingTop(2, Unit.Millimetre).Row(row =>
 			{
-				if (template.ShowPhoto) row.ConstantItem(photoFirst ? 25 : vertical ? 15 : 19, Unit.Millimetre).Height(photoFirst ? 29 : vertical ? 19 : 25, Unit.Millimetre).PaddingRight(2, Unit.Millimetre).Element(c =>
+				if (template.ShowPhoto && (!forAssignmentPrint || photo != null)) row.ConstantItem(photoFirst ? 25 : vertical ? 15 : 19, Unit.Millimetre).Height(photoFirst ? 29 : vertical ? 19 : 25, Unit.Millimetre).PaddingRight(2, Unit.Millimetre).Element(c =>
 				{
 					if (photo != null) c.Image(photo).FitArea(); else c.Border(0.5f).BorderColor(template.PrimaryColor).AlignCenter().AlignMiddle().Text("PHOTO").FontSize(5);
 				});
 				row.RelativeItem().Column(fields =>
 				{
 					foreach (var field in template.Fields)
-						if (card.StudentSnapshot.TryGetValue(field, out var value)) fields.Item().Text($"{field}: {value ?? "-"}").FontSize(vertical ? 5.5f : 6.5f).ClampLines(1);
+						if (card.StudentSnapshot.TryGetValue(field, out var value) && (!forAssignmentPrint || !string.IsNullOrWhiteSpace(value)))
+							fields.Item().Text($"{field}: {value ?? "-"}").FontSize(vertical ? 5.5f : 6.5f).ClampLines(1);
 					if (card.CardNumber != "Preview") fields.Item().Text($"Card: {card.CardNumber}").FontSize(6).SemiBold().ClampLines(1);
 				});
 				if (template.ShowQrCode)

@@ -58,7 +58,9 @@ public partial class PermissionConsistencyApi_Tests
 		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Records_AppAccess.View);
 		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Records_AppAccess.Add);
 		studentActions.ShouldNotContain("Students.Records.AppAccess.Delete");
-		studentActions.Length.ShouldBe(113);
+		studentActions.Length.ShouldBe(115);
+		studentActions.Where(name => name.StartsWith("Students.Records.Birthdays.", StringComparison.Ordinal))
+			.OrderBy(name => name).ShouldBe(new[] { "Students.Records.Birthdays.OfficeScope.View", "Students.Records.Birthdays.View" });
 		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.View);
 		studentActions.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Portal_ProfilePhoto.Add);
 		studentActions.ShouldNotContain("Students.Portal.ProfilePhoto.Delete");
@@ -96,6 +98,8 @@ public partial class PermissionConsistencyApi_Tests
 	[InlineData("Students.Records.HouseManagement.View")]
 	[InlineData("Students.Records.HouseManagement.Add")]
 	[InlineData("Students.Records.HouseManagement.Delete")]
+	[InlineData("Students.Records.Birthdays.View")]
+	[InlineData("Students.Records.Birthdays.OfficeScope.View")]
 	[InlineData("Students.Records.StudentList.View")]
 	[InlineData("Students.Records.StudentList.Add")]
 	[InlineData("Students.Records.StudentList.Delete")]
@@ -121,6 +125,8 @@ public partial class PermissionConsistencyApi_Tests
 		await SetAsync(Url("R", role), (action, true));
 		await AssertRealCheckerAsync(user, role, action, true);
 		foreach (var other in new[] {
+			"Students.Records.Birthdays.View",
+			"Students.Records.Birthdays.OfficeScope.View",
 			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View,
 			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add,
 			ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Delete,

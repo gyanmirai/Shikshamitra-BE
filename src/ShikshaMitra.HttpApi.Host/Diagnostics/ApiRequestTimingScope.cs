@@ -29,6 +29,7 @@ public sealed class ApiRequestTimingScope : IDisposable
 
 	public static ApiRequestTimingScope? Current => Ambient.Value;
 	public static ApiRequestTimingScope Start(bool trackPayrollRead = false) => new(trackPayrollRead);
+	internal bool TracksPayrollRead => _payrollCheckpoints != null;
 	public double ElapsedMilliseconds => _watch.Elapsed.TotalMilliseconds;
 	public long CommandCount => Interlocked.Read(ref _commandCount);
 	public double CommandMilliseconds => TimeSpan.FromTicks(Interlocked.Read(ref _commandTicks)).TotalMilliseconds;
@@ -78,7 +79,12 @@ public sealed class ApiRequestTimingScope : IDisposable
 				PayrollReadCheckpoint.PermissionIdentityResolved => "payroll-permission-identity",
 				PayrollReadCheckpoint.PermissionProvidersChecked => "payroll-permission-providers",
 				PayrollReadCheckpoint.AuthorizationCompleted => "payroll-authorization-end",
-				PayrollReadCheckpoint.ActionStarted => "payroll-mvc-entry",
+				PayrollReadCheckpoint.SwaggerMiddlewareCompleted => "payroll-swagger-middleware",
+				PayrollReadCheckpoint.EndpointDispatchStarted => "payroll-audit-middleware",
+				PayrollReadCheckpoint.MvcActionInvoking => "payroll-mvc-invoker-setup",
+				PayrollReadCheckpoint.ControllerActivated => "payroll-mvc-controller-activation",
+				PayrollReadCheckpoint.ActionFiltersStarted => "payroll-mvc-model-binding",
+				PayrollReadCheckpoint.ActionStarted => "payroll-mvc-action-filters",
 				PayrollReadCheckpoint.ServiceStarted => "payroll-service-entry",
 				PayrollReadCheckpoint.AcademicYearResolved => "payroll-academic-year",
 				PayrollReadCheckpoint.StaffScopeResolved => "payroll-staff-scope",

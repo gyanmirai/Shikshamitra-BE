@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.AspNetCore.TestHost;
@@ -96,7 +97,7 @@ public class ApiRequestTiming_Tests
 			payrollTiming.ShouldContain("payroll-permission-identity;dur=");
 			payrollTiming.ShouldContain("payroll-permission-providers;dur=");
 			payrollTiming.ShouldContain("payroll-authorization-end;dur=");
-			payrollTiming.ShouldContain("payroll-mvc-entry;dur=");
+			payrollTiming.ShouldContain("payroll-mvc-action-filters;dur=");
 			payrollTiming.ShouldContain("payroll-service-entry;dur=");
 			payrollTiming.ShouldContain("payroll-page;dur=");
 			payrollTiming.ShouldContain("payroll-action-exit;dur=");
@@ -113,6 +114,37 @@ public class ApiRequestTiming_Tests
 		{
 			await observer.StopAsync(CancellationToken.None);
 		}
+	}
+
+	[Fact]
+	public async Task Should_Observe_Framework_Mvc_Events_Only_On_Payroll_Reads()
+	{
+		using var server = new TestServer(new WebHostBuilder()
+			.ConfigureServices(services =>
+			{
+				services.AddControllers().AddApplicationPart(typeof(PayrollMvcTimingTestController).Assembly);
+				services.AddHostedService<ApiRequestTimingObserver>();
+			})
+			.Configure(app =>
+			{
+				app.UseMiddleware<ApiRequestTimingMiddleware>();
+				app.UseRouting();
+				app.UseEndpoints(endpoints => endpoints.MapControllers());
+			}));
+		using var client = server.CreateClient();
+		using var payroll = await client.GetAsync("/api/payroll/run/previews/current?month=private-value");
+		payroll.StatusCode.ShouldBe(HttpStatusCode.OK);
+		(await payroll.Content.ReadAsStringAsync()).ShouldBe("private-value");
+		var timing = string.Join(",", payroll.Headers.GetValues("Server-Timing"));
+		timing.ShouldContain("payroll-mvc-invoker-setup;dur=");
+		timing.ShouldContain("payroll-mvc-controller-activation;dur=");
+		timing.ShouldContain("payroll-mvc-model-binding;dur=");
+		timing.ShouldContain("payroll-mvc-action-filters;dur=");
+		timing.ShouldNotContain("private-value");
+
+		using var unrelated = await client.GetAsync("/api/timing-test?month=other");
+		unrelated.StatusCode.ShouldBe(HttpStatusCode.OK);
+		string.Join(",", unrelated.Headers.GetValues("Server-Timing")).ShouldNotContain("payroll-");
 	}
 
 	[Fact]
@@ -182,5 +214,19 @@ public class ApiRequestTiming_Tests
 		public bool IsEnabled(LogLevel logLevel) => true;
 		public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
 			Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
+	}
+}
+
+[ApiController]
+public sealed class PayrollMvcTimingTestController : ControllerBase
+{
+	public PayrollMvcTimingTestController() => PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ControllerActivated);
+
+	[HttpGet("/api/payroll/run/previews/current")]
+	[HttpGet("/api/timing-test")]
+	public IActionResult Get([FromQuery] string month)
+	{
+		PayrollReadDiagnostics.Mark(PayrollReadCheckpoint.ActionStarted);
+		return Content(month);
 	}
 }

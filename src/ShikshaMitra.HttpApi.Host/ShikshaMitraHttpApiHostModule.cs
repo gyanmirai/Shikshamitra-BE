@@ -593,8 +593,20 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			c.OAuthScopes("ShikshaMitra");
 		});
 
+		app.Use(next => httpContext =>
+		{
+			Diagnostics.ApiRequestTimingScope.Current?.RecordPayrollCheckpoint(
+				HR.Payroll.RunPayroll.PayrollReadCheckpoint.SwaggerMiddlewareCompleted);
+			return next(httpContext);
+		});
 		app.UseAuditing();
 		app.UseAbpSerilogEnrichers();
+		app.Use(next => httpContext =>
+		{
+			Diagnostics.ApiRequestTimingScope.Current?.RecordPayrollCheckpoint(
+				HR.Payroll.RunPayroll.PayrollReadCheckpoint.EndpointDispatchStarted);
+			return next(httpContext);
+		});
 		app.UseEndpoints(endpoints =>
 		{
 			endpoints.MapHealthChecks("/health/payroll-snapshot", new HealthCheckOptions

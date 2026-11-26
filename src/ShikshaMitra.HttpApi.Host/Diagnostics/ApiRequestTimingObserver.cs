@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc.Diagnostics;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using ShikshaMitra.HR.Payroll.RunPayroll;
@@ -41,13 +42,21 @@ public sealed class ApiRequestTimingObserver : IHostedService, IObserver<Diagnos
 
 	public void OnNext(DiagnosticListener listener)
 	{
-		if (listener.Name is not ("Microsoft.EntityFrameworkCore" or PayrollReadDiagnostics.SourceName)) return;
+		if (listener.Name is not ("Microsoft.EntityFrameworkCore" or "Microsoft.AspNetCore" or PayrollReadDiagnostics.SourceName)) return;
 		lock (_gate)
 		{
 			if (!_stopped)
-				_subscriptions.Add(listener.Subscribe(this, name => name is Executed or Failed or Opened or PayrollReadDiagnostics.CheckpointEvent));
+				_subscriptions.Add(listener.Subscribe(this, IsObservedEvent));
 		}
 	}
+
+	private static bool IsObservedEvent(string name) => name switch
+	{
+		Executed or Failed or Opened or PayrollReadDiagnostics.CheckpointEvent => true,
+		BeforeActionEventData.EventName or BeforeActionFilterOnActionExecutingEventData.EventName or
+			BeforeActionFilterOnActionExecutionEventData.EventName => ApiRequestTimingScope.Current?.TracksPayrollRead == true,
+		_ => false
+	};
 
 	public void OnNext(KeyValuePair<string, object?> value)
 	{
@@ -59,6 +68,10 @@ public sealed class ApiRequestTimingObserver : IHostedService, IObserver<Diagnos
 			scope.RecordConnection(connection.Duration);
 		else if (value.Key == PayrollReadDiagnostics.CheckpointEvent && value.Value is PayrollReadCheckpoint checkpoint)
 			scope.RecordPayrollCheckpoint(checkpoint);
+		else if (value.Key == BeforeActionEventData.EventName)
+			scope.RecordPayrollCheckpoint(PayrollReadCheckpoint.MvcActionInvoking);
+		else if (value.Key is BeforeActionFilterOnActionExecutingEventData.EventName or BeforeActionFilterOnActionExecutionEventData.EventName)
+			scope.RecordPayrollCheckpoint(PayrollReadCheckpoint.ActionFiltersStarted);
 	}
 
 	public void OnCompleted() { }

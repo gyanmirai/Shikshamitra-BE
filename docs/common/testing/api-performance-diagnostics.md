@@ -22,6 +22,7 @@ request duration to calculate an exact non-database duration.
 Run Payroll register and current-preview reads also report `payroll-*` intervals between completed steps.
 These cover routing, authentication and claim resolution, authorization, MVC entry, service entry, academic year, staff scope, and saved preview selection.
 The authorization intervals distinguish policy resolution, the identity and denial check, and the existing permission providers.
+After authorization, the intervals distinguish Swagger middleware, auditing and logging middleware, MVC invoker setup, controller activation, model binding, and the action filters before the body runs.
 Full register reads identify count, page selection, details, and status separately.
 Opening rows omit the full-register phases they skip.
 Action exit and response-header timings show the remaining time after the last recorded read.

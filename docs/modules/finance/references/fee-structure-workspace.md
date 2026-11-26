@@ -3,7 +3,7 @@ module: finance
 domain: fee-structure
 content_type: Reference
 status: canonical
-updated_on: 2026-10-24
+updated_on: 2026-11-26
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -19,7 +19,7 @@ flowchart LR
     M[Academic board and medium workspace] --> C[Authorized class]
     C --> D[Draft Fee Structure]
     H[Active Fee Heads and accounting mappings] --> D
-    P[Collection and Refund immutable versions] --> D
+    P[Collection, Refund and Proration immutable versions] --> D
     T[Published Payment Term versions] --> L[Per-head schedules and local overrides]
     L --> D
     D --> V[Authoritative readiness review]
@@ -38,7 +38,7 @@ flowchart LR
 
 Drafts may be incomplete. New/changed attachments must be valid: wrong-year, inactive, foreign-version, duplicate-head, corrupt-snapshot, and invalid-custom-schedule errors block relationship changes. Name/amount-only PATCH operations validate the command and monetary shape without revalidating unrelated master settings; full preview/publication always revalidates everything. `SaveAsDraft=false` requests complete validation on a save; publication remains a separate explicit action.
 
-Publication requires at least one active Fee Head, a Collection policy, and an active valid accounting mapping plus a published/superseded version of an active Payment Term for every head. Refund is optional. Proration is removed from request/response contracts, settings catalogs, context capabilities, attachment validation, coverage and publication warnings; no Refund attachment means no refund policy has been configured by this workspace.
+Publication and complete saves (`SaveAsDraft=false`) require at least one active Fee Head, a Collection policy, an explicit eligible Proration policy/version attachment, and an active valid accounting mapping plus a published/superseded version of an active Payment Term for every head. Refund is optional; no Refund attachment means no refund policy has been configured by this workspace. Readiness preview applies the same required-policy checks. A missing Proration attachment remains valid for an incomplete draft save, even when an academic-year default exists; the server does not silently attach that default.
 
 ## Fee head collection
 
@@ -54,9 +54,9 @@ Regression proof: `FeeStructureCollectionHeads_Tests.cs` checks rejection of the
 
 Concession Policy setup has been removed from the Fee Structure UI. New structures can be published and assigned without an attachment; no default concession is selected and no discount is granted. Existing attachment/version/scope fields remain for compatibility and historical request processing; supplied legacy attachments still receive their existing validation. The request flow has not moved to request-level policy selection: a new assignment without a snapshot cannot create a concession request, and its legacy concession-context read returns `PolicyNotAttached`. Existing snapshots are preserved. No database migration or historical rewrite is required.
 
-Proration is optional. Drafts accept an explicit policy and immutable version pair, or a clear operation that restores the academic-year default. Published structures use the selected version for new obligations. Retired values without a new explicit selection are historical evidence.
+Drafts accept an explicit Proration policy and immutable version pair, or an explicit clear that leaves the draft incomplete. New/changed selections must reference the current active same-year policy snapshot; unchanged valid saved pins retain their exact version. Proration rules and assignment calculations are unchanged. Already-published structures remain readable and publication retries return their canonical record without applying the new requiredness rule to historical configuration. Retired stored values without a new explicit selection remain historical evidence; a new revision must meet current readiness rules before publication.
 
-The proration regression tests cover explicit selection, clearing, academic-year fallback, and projection of retired evidence.
+The proration regression tests cover missing-policy readiness/publication rejection, complete-save rejection, incomplete draft create/update/clear, exact pinned publication, foreign-version rejection, academic-year fallback resolution for incomplete drafts, and projection of retired evidence without rewriting it.
 
 ## Policy and Fee Head mismatch rules
 
@@ -134,7 +134,7 @@ Academic workspace, scope and calendar lookups project only the required fields.
 | `DELETE /api/fee-structures/{id}` | `.Delete` | Unused draft only |
 | `PATCH /api/fee-structures/{id}/lock` | `.Add` | Retired compatibility route: rejects with instructions to review and use stamped publication |
 
-Permission prefix in abbreviated rows is `Finance.Settings.FeeStructure`. Changed attachments additionally require `Finance.Policies.{CollectionPolicy|ConcessionPolicy|RefundPolicy}.Add`; changing selected concession coverage is an attachment change. Existing unchanged attachments do not require every policy-management permission merely to edit a fee amount.
+Permission prefix in abbreviated rows is `Finance.Settings.FeeStructure`. Changed attachments additionally require `Finance.Policies.{CollectionPolicy|ConcessionPolicy|RefundPolicy|ProrationPolicy}.Add`; changing selected concession coverage is an attachment change. Existing unchanged attachments do not require every policy-management permission merely to edit a fee amount.
 
 The `Finance:FeeStructure:*` error family includes InvalidConfiguration, ScopeMismatch, VersionMismatch, ConcurrencyConflict, DuplicateName and RevisionRequiresPublication. Validation failures include human-readable `error.data.Errors`; clients should retain unsaved input and display this list. Database uniqueness/concurrency failures must not be interpreted as a successful save; refresh the canonical resource before retrying.
 

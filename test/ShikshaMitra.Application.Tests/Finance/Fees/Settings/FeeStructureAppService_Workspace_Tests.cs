@@ -62,11 +62,20 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         var book = new ReceiptBook(Guid.NewGuid(), TestTenantId, yearId, metadata.AcademicBoardId.Value,
             metadata.AcademicMediumId!.Value, standard.EducationMediumStageId, "School Fees", "FEES", "", 1, 99999, "");
         await GetRequiredService<IRepository<ReceiptBook, Guid>>().InsertAsync(book, autoSave: true);
+        var prorations = GetRequiredService<IProrationPolicyAppService>();
+        var proration = await prorations.CreateAsync(new()
+        {
+            AcademicYearId = yearId, PolicyName = "Withdrawal proration", Status = "Active", IsDefault = true,
+            FeeHeadRules = [new() { FeeHeadId = headId, RuleType = "Daily", ApplyOnAdmission = false,
+                ApplyOnEarlyWithdrawal = true, EarlyWithdrawalRuleType = "Daily" }]
+        });
+        proration = await prorations.GetAsync(proration.Id);
         return (metadataId, classId, new StandardFeeStructureRequest
         {
             Name = "Annual fee structure", ReceiptBookId = book.Id,
             CollectionPolicyId = await CreateCollectionPolicyAsync(yearId, headId, "Collection"),
             ConcessionPolicyId = await CreateConcessionPolicyAsync(yearId, "Concession"),
+            ProrationPolicyId = proration.Id, ProrationPolicyVersionId = proration.CurrentVersionId,
             FeeHeads = [new FeeHeadAssignmentRequest { FeeHeadId = headId, Amount = 1000.01m, PaymentTermId = term.Id, PaymentTermVersionId = version.Id }]
         });
     }
@@ -376,7 +385,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         (await _feeStructures.GetSettingsAsync(metadata, standard)).Policies.ShouldNotContain(x => x.Family == "proration");
         var review = await _feeStructures.PreviewAsync(new() { FeeStructureMetadataId = metadata, StandardId = standard, StructureId = saved.Id, StandardFeeStructures = AsRequest(saved) });
         review.Errors.ShouldBeEmpty();
-        review.PolicyLabels.ShouldNotContainKey("proration");
+        review.PolicyLabels.ShouldContainKey("proration");
         review.Warnings.ShouldNotContain(x => x.Contains("proration", StringComparison.OrdinalIgnoreCase));
         review.Coverage.Single().Refund.ShouldBe("Policy eligible");
         var edit = AsRequest(saved); edit.FeeHeads[0].IsOneTime = true;

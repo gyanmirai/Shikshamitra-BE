@@ -122,7 +122,6 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
     }
 
     [Theory]
-    [InlineData("{\"policies\":{\"proration\":null}}")]
     [InlineData("{\"policies\":{\"proration\":{\"policyId\":\"00000000-0000-0000-0000-000000000001\",\"policyVersionId\":\"00000000-0000-0000-0000-000000000002\"}}}")]
     [InlineData("{\"receiptBookId\":null}")]
     [InlineData("{\"feeHeads\":{\"update\":[{\"lineId\":\"00000000-0000-0000-0000-000000000001\",\"amount\":1}]}}")]

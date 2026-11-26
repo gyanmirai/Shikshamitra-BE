@@ -46,6 +46,8 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 
         var yearDefault = await CreatePolicy("Academic-year daily rule", true);
         var selected = await CreatePolicy("Structure daily rule", false);
+        candidate.ProrationPolicyId = null;
+        candidate.ProrationPolicyVersionId = null;
         (await _feeStructures.GetCatalogueAsync(metadata, standard)).Policies
             .ShouldContain(x => x.Family == "proration" && x.VersionId == selected.CurrentVersionId);
         var draft = await _feeStructures.CreateAsync(metadata, new() { StandardId = standard, StandardFeeStructures = candidate });
@@ -81,6 +83,8 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         using (var hydration = GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true))
         {
             var stored = await repository.GetAsync(draft.Id);
+            // Reconstruct a publication made before explicit proration pins were supported.
+            stored.AttachProrationPolicy(null, null);
             var frozen = JsonNode.Parse(stored.GetProperty<string>("PublicationReview")!)!;
             frozen["PolicyLabels"]!["proration"] = "Historical policy · v1";
             frozen["Candidate"]!["ProrationPolicyId"] = Guid.NewGuid();
@@ -99,6 +103,10 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         read.PublicationReview!.Warnings.ShouldNotContain(x => x.Contains("proration", StringComparison.OrdinalIgnoreCase));
         (await repository.GetAsync(draft.Id)).GetProperty<string>("PublicationReview").ShouldBe(evidence);
         read.PublicationReview.Schedules.Single().Installments.Sum(x => x.CalculatedAmount).ShouldBe(1000m);
+        var retry = await _feeStructures.PublishAsync(read.Id, new() { ConcurrencyStamp = read.ConcurrencyStamp });
+        retry.ConcurrencyStamp.ShouldBe(read.ConcurrencyStamp);
+        retry.ProrationPolicyVersionId.ShouldBeNull();
+        (await repository.GetAsync(draft.Id)).GetProperty<string>("PublicationReview").ShouldBe(evidence);
         var revision = await _feeStructures.CreateRevisionAsync(published.Id, new() { ConcurrencyStamp = read.ConcurrencyStamp });
         revision.ProrationPolicyVersionId.ShouldBeNull();
         (await repository.GetAsync(revision.Id)).ProrationPolicyVersionId.ShouldBeNull();

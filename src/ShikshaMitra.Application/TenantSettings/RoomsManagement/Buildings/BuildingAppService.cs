@@ -105,34 +105,46 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 
 		var counts = await capacity.GetRoomCountsAsync([id]);
 		var floorsById = existingFloors.ToDictionary(floor => floor.Id);
-		foreach (var floorDto in input.FloorsToUpdate)
-			capacity.EnsureFloorLimit(floorsById[floorDto.Id], floorDto.TotalRoom, counts.GetValueOrDefault(floorDto.Id));
+		var changedFloors = input.FloorsToUpdate.Where(update =>
+		{
+			var floor = floorsById[update.Id];
+			return floor.FloorName != update.FloorName || floor.TotalRoom != update.TotalRoom || floor.FloorNo != update.FloorNo;
+		}).ToList();
+		foreach (var update in changedFloors)
+		{
+			var floor = floorsById[update.Id];
+			var count = counts.GetValueOrDefault(floor.Id);
+			if (floor.TotalRoom != update.TotalRoom)
+				capacity.EnsureFloorLimit(floor, update.TotalRoom, count);
+			capacity.EnsureFloorIsUnused(floor, count);
+		}
+
+		var firstFloor = existingFloors.OrderBy(floor => floor.FloorNo).ThenBy(floor => floor.Id).FirstOrDefault();
+		var floorsToDelete = input.FloorIdsToDelete.Distinct().Select(floorId => floorsById[floorId]).ToList();
+		foreach (var floor in floorsToDelete)
+		{
+			capacity.EnsureFloorIsUnused(floor, counts.GetValueOrDefault(floor.Id));
+			if (floor.Id == firstFloor?.Id)
+				throw new BusinessException(RoomsManagementErrorCodes.FirstFloorCannotBeRemoved);
+		}
+
 		building.BuildingName = input.BuildingName;
 		building.TotalFloors = input.TotalFloors;
 		building.Description = input.Description;
 		await buildingRepository.UpdateAsync(building, autoSave: false);
-
-		// Delete floors explicitly marked for deletion
-		var floorsToDelete = existingFloors
-			.Where(f => input.FloorIdsToDelete.Contains(f.Id))
-			.ToList();
 
 		foreach (var floor in floorsToDelete)
 		{
 			await floorRepository.DeleteAsync(floor, autoSave: false);
 		}
 
-		// Update existing floors
-		foreach (var floorDto in input.FloorsToUpdate)
+		foreach (var floorDto in changedFloors)
 		{
-			var existingFloor = floorsById.GetValueOrDefault(floorDto.Id);
-			if (existingFloor != null)
-			{
-				existingFloor.FloorName = floorDto.FloorName;
-				existingFloor.TotalRoom = floorDto.TotalRoom;
-				existingFloor.FloorNo = floorDto.FloorNo;
-				await floorRepository.UpdateAsync(existingFloor, autoSave: false);
-			}
+			var existingFloor = floorsById[floorDto.Id];
+			existingFloor.FloorName = floorDto.FloorName;
+			existingFloor.TotalRoom = floorDto.TotalRoom;
+			existingFloor.FloorNo = floorDto.FloorNo;
+			await floorRepository.UpdateAsync(existingFloor, autoSave: false);
 		}
 
 		// Add new floors

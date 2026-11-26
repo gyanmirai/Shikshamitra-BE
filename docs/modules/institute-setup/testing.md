@@ -79,7 +79,7 @@ The room migration script and EF model consistency were checked locally. Applyin
 
 Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~BuildingRoomCapacityApi_Tests|FullyQualifiedName~RoomTransportApi_Tests" --artifacts-path .artifacts/room-capacity-validation` for the HTTP capacity and room-command regressions.
 `BuildingRoomCapacityApi_Tests` uses disposable SQLite and the production HTTP pipeline with development exception details and stack traces disabled.
-It covers the 2-to-1 capacity rejection, HTTP 400 ProblemDetails with localized requested count/floor/current count and corrective guidance, typed floor/count context, unchanged saved building/floor values, equal or higher capacity, and reducing capacity after deleting a room.
+It covers occupied floor name, number, capacity and removal restrictions, HTTP 400 ProblemDetails with floor context, unchanged saved building and floor values after rejection, first-floor protection, and editing after deleting the last assigned room.
 These tests establish local API behavior; they do not validate deployed staging data or PostgreSQL row-lock concurrency.
 The [frontend testing guide](../../../../Shikshamitra-FE/docs/institute-setup/testing.md) owns inline validation and browser evidence.
 
@@ -142,7 +142,7 @@ powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module 
 ### Floor room limits
 
 Run `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~RoomFloorCapacity_Tests|FullyQualifiedName~RoomSearch_Tests|FullyQualifiedName~RoomAuthorization_Tests|FullyQualifiedName~RoomImagePersistence_Tests" --artifacts-path .artifacts/room-capacity-tests`.
-The capacity regressions cover full-floor creation, rejected floor moves with the original assignment retained, editing an existing room on a full floor, increasing/decreasing limits, building response counts, cross-tenant rejection before insertion and cross-tenant building deletion before its floors are touched.
+The capacity regressions cover full-floor creation, rejected room moves with the original assignment retained, editing an existing room on a full floor, configuring an unused floor, building response counts, and cross-tenant room placement and building deletion.
 The application harness uses disposable SQLite and disables transactions; it validates business behavior and tenant boundaries but does not execute the PostgreSQL building-row lock.
 Simultaneous PostgreSQL room saves and building limit changes require separate disposable-database concurrency evidence before claiming that race coverage.
 On 2026-10-26, the focused set passed 25 tests with zero failures/skips using the command above plus `--no-restore -p:RunAnalyzers=false`; existing compiler warnings remain.

@@ -8,6 +8,7 @@ using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.TenantSettings;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Volo.Abp.Identity;
@@ -16,12 +17,12 @@ using Xunit;
 
 namespace ShikshaMitra.HR.Employees.ICards;
 
-public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public class EmployeeICardTemplateAppService_Tests : EmployeeWorkShiftTestBase
 {
 	private readonly IEmployeeICardTemplateAppService _iCardAppService;
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IIdentityRoleRepository _roleRepository;
-	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+
 	private readonly IGuidGenerator _guidGenerator;
 	private readonly ICurrentTenant _currentTenant;
 
@@ -30,7 +31,7 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 		_iCardAppService = GetRequiredService<IEmployeeICardTemplateAppService>();
 		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
-		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		QuestPDF.Settings.License = LicenseType.Community;
@@ -181,11 +182,12 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 	{
 		var template = await _iCardAppService.CreateAsync(BuildTemplateRequest());
 
-		var exception = await Should.ThrowAsync<BusinessException>(() => _iCardAppService.GenerateEmployeeICardsPdfAsync(
+		var missingEmployeeId = Guid.NewGuid();
+		var exception = await Should.ThrowAsync<EntityNotFoundException>(() => _iCardAppService.GenerateEmployeeICardsPdfAsync(
 			template.Id,
-			new EmployeeICardPdfRequest { EmployeeIds = [Guid.NewGuid()] }));
+			new EmployeeICardPdfRequest { EmployeeIds = [missingEmployeeId] }));
 
-		exception.Code.ShouldBe(HRErrorCodes.EmployeeICardPdfEmployeeMissing);
+		exception.Id.ShouldBe(missingEmployeeId);
 	}
 
 	[Fact]
@@ -279,6 +281,7 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 
 	private async Task<EmployeePersonalInfoDto> CreateEmployeeAsync()
 	{
+		await EnsureSchoolWideActorAsync();
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
 		return await _personalInfoAppService.CreateAsync(new CreateEmployeePersonalInfoDto
@@ -297,7 +300,7 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 			EmployeeStatusType = EmployeeStatusType.Active,
 			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = roleId,
-			ShiftId = shiftId
+			InitialWorkShiftAssignment = await InitialWorkShiftAsync(shiftId)
 		});
 	}
 
@@ -310,24 +313,8 @@ public class EmployeeICardTemplateAppService_Tests : ShikshaMitraApplicationTest
 			"EmployeeICardRole");
 	}
 
-	private async Task<Guid> EnsureShiftExistsAsync()
-	{
-		var shifts = await _shiftRepository.GetListAsync();
-		var existing = shifts.FirstOrDefault();
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var shift = new ShiftManagement
-		{
-			ShiftName = "Test Shift",
-			StartTime = new TimeOnly(8, 0),
-			EndTime = new TimeOnly(16, 0)
-		};
-		await _shiftRepository.InsertAsync(shift, autoSave: true);
-		return shift.Id;
-	}
+	private Task<Guid> EnsureShiftExistsAsync() =>
+		EnsureWorkShiftAsync("EmployeeICardTemplateAppService shift", new TimeOnly(8, 0), new TimeOnly(16, 0));
 
 	private static byte[] BuildMinimalPng()
 	{

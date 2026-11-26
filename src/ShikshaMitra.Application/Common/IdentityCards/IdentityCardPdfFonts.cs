@@ -8,6 +8,25 @@ internal static class IdentityCardPdfFonts
 {
 	private static readonly object Gate = new();
 	private static readonly HashSet<string> Registered = [];
+
+	public static SKTypeface Resolve(string family, SKFontStyle style, bool bold)
+	{
+		var typeface = SKTypeface.FromFamilyName(family, style);
+		if (typeface != null)
+		{
+			using var font = typeface.OpenStream();
+			if (font != null) return typeface;
+			typeface.Dispose();
+		}
+
+		var variant = bold ? "Bold" : "Regular";
+		using var resource = typeof(IdentityCardPdfFonts).Assembly.GetManifestResourceStream(
+			$"ShikshaMitra.Pdf.Fonts.NotoSansDevanagari-{variant}.ttf");
+		if (resource == null) throw IdentityCardGeometry.Invalid("The selected font is unavailable for printing.");
+		using var data = SKData.Create(resource);
+		return SKTypeface.FromData(data) ?? throw IdentityCardGeometry.Invalid("The selected font is unavailable for printing.");
+	}
+
 	public static string Register(SKTypeface typeface)
 	{
 		var key = $"{typeface.FamilyName}:{typeface.FontWeight}:{typeface.FontWidth}:{typeface.FontSlant}";

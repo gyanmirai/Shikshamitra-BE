@@ -16,7 +16,7 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves.Import;
 public class AttendanceImportScopeReader(
 	TakeAttendanceAccessService attendanceAccess,
 	HrEmployeeScopeQueryService employeeScope,
-	HrMediumStageScopeReader stageScope,
+	HrUserScopeAccessService scopeAccess,
 	IAcademicYearRepository academicYears,
 	IEmployeeRepository employees,
 	IEmployeeAttendanceRepository attendance,
@@ -55,8 +55,7 @@ public class AttendanceImportScopeReader(
 			return candidates.ToDictionary(x => x, x => new AttendanceImportTarget(existing.ContainsKey(x), existing.GetValueOrDefault(x)));
 
 		var assignments = await employeeScope.BuildEmployeeStageLookupAsync(currentEmployees);
-		var accessibleStages = (await stageScope.GetAllAsync())
-			.Where(x => scope.CanAccessMediumStage(x.StageId, x.MediumId, x.BoardId, x.AcademicYearId))
+		var accessibleStages = (await scopeAccess.ResolveAccessibleStagesAsync(scope))
 			.ToDictionary(x => x.StageId, x => x.AcademicYearId);
 		var yearIds = accessibleStages.Values.Distinct().ToList();
 		var years = (await asyncExecuter.ToListAsync((await academicYears.GetQueryableAsync())

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Employees.Search;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
@@ -17,13 +18,13 @@ using Xunit;
 
 namespace ShikshaMitra.HR.Employees;
 
-public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public class EmployeeSearchAppService_Tests : EmployeeWorkShiftTestBase
 {
 	private readonly IEmployeeSearchAppService _employeeSearchAppService;
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
-	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IGuidGenerator _guidGenerator;
 	private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
@@ -34,7 +35,7 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_employeeRepository = GetRequiredService<IEmployeeRepository>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
-		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
 		_currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
@@ -92,7 +93,7 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 		fullNameResult.Items.Select(x => x.Id).ShouldNotContain(outsider.Id);
 		middleNameResult.Items.Select(x => x.Id).ShouldContain(target.Id);
 		firstNameResult.Items.Select(x => x.Id).ShouldContain(target.Id);
-		var assignedShift = await _shiftRepository.GetAsync(targetInput.ShiftId!.Value);
+		var assignedShift = await WorkShifts.GetAsync(targetInput.InitialWorkShiftAssignment!.WorkShiftId);
 		var returnedShift = firstNameResult.Items.Single(x => x.Id == target.Id).Shift;
 		returnedShift.ShouldNotBeNull();
 		returnedShift.Name.ShouldBe(assignedShift.ShiftName);
@@ -116,7 +117,21 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 		employeeB.AssignReportingManager(reporteeA.Id);
 		await _employeeRepository.UpdateAsync(employeeB, autoSave: true);
 
-		var principal = BuildPrincipal(manager.Id);
+		var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var assignments = GetRequiredService<IRepository<EmployeeOrganizationAssignment, Guid>>();
+			foreach (var reporteeId in new[] { reporteeA.Id, reporteeB.Id })
+			{
+				await assignments.InsertAsync(new EmployeeOrganizationAssignment(
+					Guid.NewGuid(), _currentTenant.Id, reporteeId, stageId), autoSave: true);
+			}
+			await GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(
+				new UserScopeAssignment(Guid.NewGuid(), _currentTenant.Id, userId: reporteeA.UserId,
+					educationMediumStageId: stageId), autoSave: true);
+		});
+
+		var principal = BuildPrincipal(manager.UserId!.Value);
 		using (_currentPrincipalAccessor.Change(principal))
 		{
 			var result = await _employeeSearchAppService.GetFilteredListAsync(new GetEmployeeListInput
@@ -143,6 +158,7 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 	{
 		var futureEmployeeInput = await BuildCreateDtoAsync("future.join");
 		futureEmployeeInput.DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(5));
+		futureEmployeeInput.InitialWorkShiftAssignment!.EffectiveFrom = futureEmployeeInput.DateOfJoining;
 		var futureEmployee = await _personalInfoAppService.CreateAsync(futureEmployeeInput);
 
 		var currentEmployeeInput = await BuildCreateDtoAsync("current.join");
@@ -208,6 +224,7 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 
 	private async Task<CreateEmployeePersonalInfoDto> BuildCreateDtoAsync(string prefix)
 	{
+		await EnsureSchoolWideActorAsync();
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
 		var uniq = Guid.NewGuid().ToString("N")[..8];
@@ -228,7 +245,7 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 			EmployeeStatusType = EmployeeStatusType.Active,
 			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = roleId,
-			ShiftId = shiftId
+			InitialWorkShiftAssignment = await InitialWorkShiftAsync(shiftId)
 		};
 	}
 
@@ -241,22 +258,6 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 			"EmployeeSearchRole");
 	}
 
-	private async Task<Guid> EnsureShiftExistsAsync()
-	{
-		var shifts = await _shiftRepository.GetListAsync();
-		var existing = shifts.FirstOrDefault();
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var shift = new ShiftManagement
-		{
-			ShiftName = "Test Shift",
-			StartTime = new TimeOnly(8, 0),
-			EndTime = new TimeOnly(16, 0)
-		};
-		await _shiftRepository.InsertAsync(shift, autoSave: true);
-		return shift.Id;
-	}
+	private Task<Guid> EnsureShiftExistsAsync() =>
+		EnsureWorkShiftAsync("EmployeeSearchAppService shift", new TimeOnly(8, 0), new TimeOnly(16, 0));
 }

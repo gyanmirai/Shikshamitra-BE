@@ -17,13 +17,13 @@ using Xunit;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
-public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public class LeaveReportingChain_Tests : EmployeeWorkShiftTestBase
 {
 	private readonly LeaveValidationService _leaveValidation;
 	private readonly IEmployeePersonalInfoAppService _employeePersonalInfo;
 	private readonly IReportingManagerAppService _reportingManager;
 	private readonly IIdentityRoleRepository _roleRepository;
-	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IGuidGenerator _guidGenerator;
 
@@ -33,7 +33,7 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 		_employeePersonalInfo = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_reportingManager = GetRequiredService<IReportingManagerAppService>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
-		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
 	}
@@ -108,6 +108,7 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 	{
 		var manager = await _employeePersonalInfo.CreateAsync(await BuildCreateDtoAsync($"mgr.{Guid.NewGuid():N}@t.com"));
 		var reportee = await _employeePersonalInfo.CreateAsync(await BuildCreateDtoAsync($"rep.{Guid.NewGuid():N}@t.com"));
+		await SetFixtureEmployeeActiveAsync(manager.Id);
 		await _reportingManager.AssignReportingManagerAsync(reportee.Id, new AssignReportingManagerDto
 		{
 			ReportingManagerId = manager.Id
@@ -120,6 +121,8 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 		var top = await _employeePersonalInfo.CreateAsync(await BuildCreateDtoAsync($"top.{Guid.NewGuid():N}@t.com"));
 		var mid = await _employeePersonalInfo.CreateAsync(await BuildCreateDtoAsync($"mid.{Guid.NewGuid():N}@t.com"));
 		var leaf = await _employeePersonalInfo.CreateAsync(await BuildCreateDtoAsync($"leaf.{Guid.NewGuid():N}@t.com"));
+		await SetFixtureEmployeeActiveAsync(top.Id);
+		await SetFixtureEmployeeActiveAsync(mid.Id);
 		await _reportingManager.AssignReportingManagerAsync(mid.Id, new AssignReportingManagerDto { ReportingManagerId = top.Id });
 		await _reportingManager.AssignReportingManagerAsync(leaf.Id, new AssignReportingManagerDto { ReportingManagerId = mid.Id });
 		return (top.Id, mid.Id, leaf.Id);
@@ -129,6 +132,7 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 		string email,
 		EmployeeStatusType employeeStatusType = EmployeeStatusType.Active)
 	{
+		await EnsureSchoolWideActorAsync();
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
 		return new CreateEmployeePersonalInfoDto
@@ -147,7 +151,7 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 			EmployeeStatusType = employeeStatusType,
 			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = roleId,
-			ShiftId = shiftId
+			InitialWorkShiftAssignment = await InitialWorkShiftAsync(shiftId)
 		};
 	}
 
@@ -160,22 +164,6 @@ public class LeaveReportingChain_Tests : ShikshaMitraApplicationTestBase<Shiksha
 			"LeaveReportingRole");
 	}
 
-	private async Task<Guid> EnsureShiftExistsAsync()
-	{
-		var shifts = await _shiftRepository.GetListAsync();
-		var existing = shifts.FirstOrDefault();
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var shift = new ShiftManagement
-		{
-			ShiftName = "Test Shift",
-			StartTime = new TimeOnly(8, 0),
-			EndTime = new TimeOnly(16, 0)
-		};
-		await _shiftRepository.InsertAsync(shift, autoSave: true);
-		return shift.Id;
-	}
+	private Task<Guid> EnsureShiftExistsAsync() =>
+		EnsureWorkShiftAsync("LeaveReportingChain shift", new TimeOnly(8, 0), new TimeOnly(16, 0));
 }

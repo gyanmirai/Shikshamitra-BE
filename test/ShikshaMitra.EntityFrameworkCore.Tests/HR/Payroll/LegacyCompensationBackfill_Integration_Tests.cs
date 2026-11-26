@@ -5,6 +5,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Compensation;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.Seeders;
 using Shouldly;
@@ -48,6 +49,8 @@ public class LegacyCompensationBackfill_Integration_Tests
 
 		await WithTenantAsync(tenantId, async () =>
 		{
+			await GetRequiredService<IRepository<EsiPolicy, Guid>>().InsertAsync(
+				new EsiPolicy(_guidGenerator.Create(), tenantId, "Standard ESIC", "STANDARD_ESIC", true), autoSave: true);
 			var roleId = _guidGenerator.Create();
 			await _roleRepository.InsertAsync(
 				new IdentityRole(roleId, $"legacy-payroll-{Guid.NewGuid():N}", tenantId),

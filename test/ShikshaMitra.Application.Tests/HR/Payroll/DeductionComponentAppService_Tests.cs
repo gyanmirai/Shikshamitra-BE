@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Payroll.SalarySlips;
@@ -22,7 +23,7 @@ namespace ShikshaMitra.HR.Payroll;
 /// <summary>
 /// End-to-End tests for Deduction Component App Service
 /// </summary>
-public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public class DeductionComponentAppService_Tests : EmployeeWorkShiftTestBase
 {
     private readonly IDeductionComponentAppService _deductionComponentAppService;
     private readonly IEarningComponentAppService _earningComponentAppService;
@@ -30,7 +31,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
     private readonly IEmployeePayrollComponentRepository _employeePayrollComponentRepository;
     private readonly ISalarySlipRepository _salarySlipRepository;
     private readonly IIdentityRoleRepository _roleRepository;
-    private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+
     private readonly ICurrentTenant _currentTenant;
     private readonly IGuidGenerator _guidGenerator;
 
@@ -42,7 +43,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
         _employeePayrollComponentRepository = GetRequiredService<IEmployeePayrollComponentRepository>();
         _salarySlipRepository = GetRequiredService<ISalarySlipRepository>();
         _roleRepository = GetRequiredService<IIdentityRoleRepository>();
-        _shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+
         _currentTenant = GetRequiredService<ICurrentTenant>();
         _guidGenerator = GetRequiredService<IGuidGenerator>();
     }
@@ -1655,7 +1656,7 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             EmployeeStatusType = EmployeeStatusType.Active,
             EmployeeGroup = EmployeeGroupType.NonTeaching,
             RoleId = roleId,
-            ShiftId = shiftId
+            InitialWorkShiftAssignment = await InitialWorkShiftAsync(shiftId)
         });
     }
 
@@ -1668,24 +1669,8 @@ public class DeductionComponentAppService_Tests : ShikshaMitraApplicationTestBas
             "DeductionComponentRole");
     }
 
-    private async Task<Guid> EnsureShiftExistsAsync()
-    {
-        var existing = (await _shiftRepository.GetListAsync()).FirstOrDefault();
-        if (existing != null)
-        {
-            return existing.Id;
-        }
-
-        var shift = new ShiftManagement
-        {
-            ShiftName = "Deduction Component Test Shift",
-            StartTime = new TimeOnly(8, 0),
-            EndTime = new TimeOnly(16, 0)
-        };
-
-        await _shiftRepository.InsertAsync(shift, autoSave: true);
-        return shift.Id;
-    }
+    private Task<Guid> EnsureShiftExistsAsync() =>
+        EnsureWorkShiftAsync("DeductionComponentAppService shift", new TimeOnly(8, 0), new TimeOnly(16, 0));
 
     #endregion
 }

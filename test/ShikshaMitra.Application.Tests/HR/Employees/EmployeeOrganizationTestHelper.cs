@@ -14,16 +14,16 @@ namespace ShikshaMitra.HR.Employees;
 
 internal static class EmployeeOrganizationTestHelper
 {
-	public static async Task<Guid> EnsureOrganizationExistsAsync(IServiceProvider serviceProvider)
+	public static async Task<Guid> EnsureOrganizationExistsAsync(IServiceProvider serviceProvider, Guid? academicYearId = null)
 	{
 		using var unitOfWork = serviceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(new AbpUnitOfWorkOptions());
 		var stageRepository = serviceProvider.GetRequiredService<IEducationMediumStageRepository>();
-		var existingStages = await stageRepository.GetListAsync();
-		var existingStage = existingStages.FirstOrDefault();
+		var stages = await serviceProvider.GetRequiredService<HrMediumStageScopeReader>().GetAllAsync();
+		var existingStage = stages.FirstOrDefault(x => !academicYearId.HasValue || x.AcademicYearId == academicYearId.Value);
 		if (existingStage != null)
 		{
 			await unitOfWork.CompleteAsync();
-			return existingStage.Id;
+			return existingStage.StageId;
 		}
 
 		var academicYearRepository = serviceProvider.GetRequiredService<IAcademicYearRepository>();
@@ -38,13 +38,17 @@ internal static class EmployeeOrganizationTestHelper
 
 		using (currentTenant.Change(tenantId))
 		{
-			var academicYear = await academicYearManager.CreateAsync(
-				$"TY-{Guid.NewGuid():N}"[..35],
-				new DateTime(2026, 4, 1),
-				new DateTime(2027, 3, 31));
-			await academicYearRepository.InsertAsync(academicYear, autoSave: true);
+			if (!academicYearId.HasValue)
+			{
+				var academicYear = await academicYearManager.CreateAsync(
+					$"TY-{Guid.NewGuid():N}"[..35],
+					new DateTime(2026, 4, 1),
+					new DateTime(2027, 3, 31));
+				await academicYearRepository.InsertAsync(academicYear, autoSave: true);
+				academicYearId = academicYear.Id;
+			}
 
-			var board = await educationBoardManager.CreateAsync(academicYear.Id, EducationBoardType.CBSE);
+			var board = await educationBoardManager.CreateAsync(academicYearId.Value, EducationBoardType.CBSE);
 			await educationBoardRepository.InsertAsync(board, autoSave: true);
 
 			var medium = await educationMediumManager.CreateAsync(board.Id, "English");

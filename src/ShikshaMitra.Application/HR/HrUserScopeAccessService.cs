@@ -153,19 +153,20 @@ public class HrUserScopeAccessService(HrMediumStageScopeReader stageScopeReader)
 			.ToList();
 	}
 
-	public async Task<List<Guid>> ResolveAccessibleStageIdsAsync(UserScopeContext scope)
+	public async Task<List<Guid>> ResolveAccessibleStageIdsAsync(UserScopeContext scope) =>
+		(await ResolveAccessibleStagesAsync(scope)).Select(x => x.StageId).Distinct().ToList();
+
+	internal async Task<List<HrMediumStageScope>> ResolveAccessibleStagesAsync(UserScopeContext scope)
 	{
 		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
-			return new List<Guid>();
+			return [];
 		}
 
 		var rows = await stageScopeReader.GetAllAsync();
 
 		return rows
 			.Where(x => scope.CanAccessMediumStage(x.StageId, x.MediumId, x.BoardId, x.AcademicYearId))
-			.Select(x => x.StageId)
-			.Distinct()
 			.ToList();
 	}
 }

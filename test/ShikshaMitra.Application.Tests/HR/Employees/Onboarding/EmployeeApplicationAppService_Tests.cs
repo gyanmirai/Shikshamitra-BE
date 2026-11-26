@@ -32,7 +32,7 @@ using Xunit;
 
 namespace ShikshaMitra.HR.Employees.Onboarding;
 
-public partial class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class EmployeeApplicationAppService_Tests : EmployeeWorkShiftTestBase
 {
 	private readonly IEmployeeApplicationAppService _applications;
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
@@ -50,7 +50,7 @@ public partial class EmployeeApplicationAppService_Tests : ShikshaMitraApplicati
 	private readonly IAcademicYearRepository _academicYearRepository;
 	private readonly AcademicYearManager _academicYearManager;
 	private readonly IIdentityRoleRepository _roleRepository;
-	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
 	private readonly ICurrentTenant _currentTenant;
@@ -75,7 +75,7 @@ public partial class EmployeeApplicationAppService_Tests : ShikshaMitraApplicati
 		_academicYearRepository = GetRequiredService<IAcademicYearRepository>();
 		_academicYearManager = GetRequiredService<AcademicYearManager>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
-		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+
 		_employeeRepository = GetRequiredService<IEmployeeRepository>();
 		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
@@ -653,7 +653,7 @@ public partial class EmployeeApplicationAppService_Tests : ShikshaMitraApplicati
 			EmployeeStatusType = EmployeeStatusType.Active,
 			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = await EnsureRoleExistsAsync(),
-			ShiftId = await EnsureShiftExistsAsync()
+			InitialWorkShiftAssignment = await InitialWorkShiftAsync(await EnsureShiftExistsAsync(), new DateOnly(2026, 4, 1))
 		};
 	}
 
@@ -940,21 +940,8 @@ public partial class EmployeeApplicationAppService_Tests : ShikshaMitraApplicati
 		return id;
 	}
 
-	private async Task<Guid> EnsureShiftExistsAsync()
-	{
-		var shifts = await _shiftRepository.GetListAsync();
-		var existing = shifts.FirstOrDefault();
-		if (existing != null) return existing.Id;
-
-		var shift = new ShiftManagement
-		{
-			ShiftName = "Test Shift",
-			StartTime = new TimeOnly(8, 0),
-			EndTime = new TimeOnly(16, 0)
-		};
-		await _shiftRepository.InsertAsync(shift, autoSave: true);
-		return shift.Id;
-	}
+	private Task<Guid> EnsureShiftExistsAsync() =>
+		EnsureWorkShiftAsync("EmployeeApplicationAppService shift", new TimeOnly(8, 0), new TimeOnly(16, 0));
 
 	private async Task SetLegacyResumeAsync(
 		Guid applicationId,

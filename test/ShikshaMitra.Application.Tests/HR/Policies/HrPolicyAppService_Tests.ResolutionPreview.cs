@@ -35,7 +35,8 @@ public partial class HrPolicyAppService_Tests
 		}
 		var draft = BuildAssignment(context, "group", proposedGroup.Id.ToString());
 		draft.Priority = 200;
-		using var authorized = GetRequiredService<ICurrentPrincipalAccessor>().Change(await BuildResolutionPreviewAdminAsync());
+		using var authorized = GetRequiredService<ICurrentPrincipalAccessor>().Change(
+			await BuildResolutionPreviewCallerAsync(isAdministrator: true));
 		var preview = await _assignments.PreviewResolutionAsync(new()
 		{
 			Assignment = draft,
@@ -53,17 +54,20 @@ public partial class HrPolicyAppService_Tests
 		preview.Proposed.LeavePolicy!.Name.ShouldBe(context.LeavePolicy.PolicyName);
 	}
 
-	private async Task<ClaimsPrincipal> BuildResolutionPreviewAdminAsync()
+	private async Task<ClaimsPrincipal> BuildResolutionPreviewCallerAsync(bool isAdministrator)
 	{
 		using var unit = _unitOfWorkManager.Begin(requiresNew: true);
-		var role = (await _roleRepository.GetListAsync()).FirstOrDefault(x => x.Name == "admin")
-			?? await _roleRepository.InsertAsync(new IdentityRole(Guid.NewGuid(), "admin", _currentTenant.Id), autoSave: true);
 		var id = Guid.NewGuid();
 		var user = new IdentityUser(id, $"synthetic-policy-preview-{id:N}", $"policy-preview-{id:N}@example.invalid", _currentTenant.Id);
 		var manager = GetRequiredService<IdentityUserManager>();
 		// Synthetic test identity only: no password, token, email or usable login is created.
 		(await manager.CreateAsync(user)).Succeeded.ShouldBeTrue();
-		(await manager.AddToRoleAsync(user, role.Name)).Succeeded.ShouldBeTrue();
+		if (isAdministrator)
+		{
+			var role = (await _roleRepository.GetListAsync()).FirstOrDefault(x => x.Name == "admin")
+				?? await _roleRepository.InsertAsync(new IdentityRole(Guid.NewGuid(), "admin", _currentTenant.Id), autoSave: true);
+			(await manager.AddToRoleAsync(user, role.Name)).Succeeded.ShouldBeTrue();
+		}
 		await unit.CompleteAsync();
 		return new ClaimsPrincipal(new ClaimsIdentity([new Claim(AbpClaimTypes.UserId, id.ToString()), new Claim(AbpClaimTypes.UserName, user.UserName)], "Synthetic test"));
 	}
@@ -74,6 +78,8 @@ public partial class HrPolicyAppService_Tests
 		var context = await CreatePolicyContextAsync();
 		var group = await CreateGroupAsync(context.AcademicYearId, "Restricted sample");
 		var employee = await CreateEmployeeAsync();
+		using var restricted = GetRequiredService<ICurrentPrincipalAccessor>().Change(
+			await BuildResolutionPreviewCallerAsync(isAdministrator: false));
 		await Should.ThrowAsync<Volo.Abp.Authorization.AbpAuthorizationException>(() => _assignments.PreviewResolutionAsync(new()
 		{
 			Assignment = BuildAssignment(context, "group", group.Id.ToString()),

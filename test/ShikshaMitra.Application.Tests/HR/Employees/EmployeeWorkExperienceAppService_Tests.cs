@@ -20,13 +20,13 @@ using Xunit;
 
 namespace ShikshaMitra.HR.Employees;
 
-public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public class EmployeeWorkExperienceAppService_Tests : EmployeeWorkShiftTestBase
 {
 	private readonly IEmployeeWorkExperienceAppService _workExperienceAppService;
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IIdentityRoleRepository _roleRepository;
-	private readonly IRepository<ShiftManagement, Guid> _shiftRepository;
+
 	private readonly IRepository<EducationMediumStage, Guid> _mediumStageRepository;
 	private readonly ICurrentTenant _currentTenant;
 	private readonly IGuidGenerator _guidGenerator;
@@ -38,7 +38,7 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 		_personalInfoAppService = GetRequiredService<IEmployeePersonalInfoAppService>();
 		_employeeRepository = GetRequiredService<IEmployeeRepository>();
 		_roleRepository = GetRequiredService<IIdentityRoleRepository>();
-		_shiftRepository = GetRequiredService<IRepository<ShiftManagement, Guid>>();
+
 		_mediumStageRepository = GetRequiredService<IRepository<EducationMediumStage, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_guidGenerator = GetRequiredService<IGuidGenerator>();
@@ -171,6 +171,7 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 
 	private async Task<Guid> CreateEmployeeAsync()
 	{
+		await EnsureSchoolWideActorAsync();
 		var roleId = await EnsureRoleExistsAsync();
 		var shiftId = await EnsureShiftExistsAsync();
 		var dto = new CreateEmployeePersonalInfoDto
@@ -189,7 +190,7 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 			EmployeeStatusType = EmployeeStatusType.Active,
 			EmployeeGroup = EmployeeGroupType.NonTeaching,
 			RoleId = roleId,
-			ShiftId = shiftId
+			InitialWorkShiftAssignment = await InitialWorkShiftAsync(shiftId)
 		};
 
 		var created = await _personalInfoAppService.CreateAsync(dto);
@@ -206,24 +207,8 @@ public class EmployeeWorkExperienceAppService_Tests : ShikshaMitraApplicationTes
 			"EmployeeWorkExperienceRole");
 	}
 
-	private async Task<Guid> EnsureShiftExistsAsync()
-	{
-		var shifts = await _shiftRepository.GetListAsync();
-		var existing = shifts.FirstOrDefault();
-		if (existing != null)
-		{
-			return existing.Id;
-		}
-
-		var shift = new ShiftManagement
-		{
-			ShiftName = "Test Shift",
-			StartTime = new TimeOnly(8, 0),
-			EndTime = new TimeOnly(16, 0)
-		};
-		await _shiftRepository.InsertAsync(shift, autoSave: true);
-		return shift.Id;
-	}
+	private Task<Guid> EnsureShiftExistsAsync() =>
+		EnsureWorkShiftAsync("EmployeeWorkExperienceAppService shift", new TimeOnly(8, 0), new TimeOnly(16, 0));
 
 	private ClaimsPrincipal BuildPrincipal(Guid userId)
 	{

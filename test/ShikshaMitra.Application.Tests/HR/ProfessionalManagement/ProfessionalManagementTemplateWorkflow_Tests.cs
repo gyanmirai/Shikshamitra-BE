@@ -68,6 +68,7 @@ public class ProfessionalManagementTemplateWorkflow_Tests
 		{
 			await WithUnitOfWorkAsync(async () =>
 			{
+				await HrSchoolScopeTestHelper.EnsureCurrentActorAsync(ServiceProvider);
 				var template = new PerformanceTemplate(
 					_guidGenerator.Create(),
 					tenantId,

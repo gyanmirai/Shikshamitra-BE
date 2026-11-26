@@ -10,9 +10,11 @@ namespace ShikshaMitra.Communication.Notifications;
 public sealed class GetNotificationInboxInput : PagedResultRequestDto
 {
 	public bool UnreadOnly { get; set; }
+	public bool PrioritizeActions { get; set; }
 }
 public sealed record NotificationInboxItemDto(Guid Id, string Title, string Body, string? RelativeLink,
-	DateTime CreationTime, DateTimeOffset? ReadAt, DateTimeOffset? AcknowledgedAt);
+	DateTime CreationTime, DateTimeOffset? ReadAt, DateTimeOffset? AcknowledgedAt,
+	bool RequiresReview = false, bool RequiresAcknowledgement = false);
 public sealed record NotificationUnreadCountDto(long UnreadCount);
 public sealed record SaveNotificationPreferenceDto(string Category, Guid? StudentId,
 	IReadOnlyList<CommunicationChannelType> EnabledChannels, string LanguageCode, bool QuietHoursEnabled,

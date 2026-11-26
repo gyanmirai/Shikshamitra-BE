@@ -24,18 +24,16 @@ namespace ShikshaMitra.HR.Setup;
 public class HrSetupReadinessAppService(
 	IPermissionChecker permissions, IIdentityUserRepository users, IIdentityRoleRepository roles,
 	IRepository<AcademicYear, Guid> years, IRepository<EmployeeWorkShift, Guid> shifts,
-	HrSetupPolicyReadinessReader policies, HrSetupPayrollReadinessReader payroll) : ApplicationService, IHrSetupReadinessAppService
+	HrSetupPolicyReadinessReader policies, HrSetupPayrollReadinessReader payroll,
+	IHrSetupReadinessStore store) : ApplicationService, IHrSetupReadinessAppService
 {
 	public async Task<HrSetupReadinessDto> GetAsync(Guid? academicYearId = null)
 	{
-		if (CurrentTenant.Id is not Guid tenantId || CurrentUser.Id is not Guid userId) throw new AbpAuthorizationException();
-		var actor = await users.FindAsync(userId);
-		if (actor == null || actor.TenantId != tenantId || !actor.IsActive) throw new AbpAuthorizationException();
-		var allowed = false;
-		foreach (var action in HrSetupPermissions.Operators)
-			if (await permissions.IsGrantedAsync(action)) { allowed = true; break; }
-		if (!allowed) throw new AbpAuthorizationException();
+		if (CurrentTenant.Id is not Guid tenantId || !await CanCheckAsync(tenantId))
+			throw new AbpAuthorizationException();
 
+		var checkedAt = DateTime.SpecifyKind(Clock.Now, DateTimeKind.Utc);
+		var revision = academicYearId.HasValue ? await store.ReadRevisionAsync() : Guid.Empty;
 		var yearRows = await years.GetListAsync(x => x.TenantId == tenantId);
 		var year = academicYearId.HasValue ? yearRows.SingleOrDefault(x => x.Id == academicYearId.Value) : null;
 		if (academicYearId.HasValue && year == null) throw new EntityNotFoundException(typeof(AcademicYear), academicYearId.Value);
@@ -78,8 +76,37 @@ public class HrSetupReadinessAppService(
 			});
 		}
 		result.Checks.AddRange(await policies.ReadAsync(year, tenantId));
-		result.Checks.AddRange(await payroll.ReadAsync(tenantId, Clock.Now));
+		result.Checks.AddRange(await payroll.ReadAsync(tenantId, checkedAt));
 		result.IsReady = result.Checks.All(x => x.State == "ready");
+		if (year != null)
+			await store.RecordAsync(year.Id, revision, result.IsReady, checkedAt, ValidUntil(checkedAt));
 		return result;
+	}
+
+	public async Task<bool?> GetSavedStatusAsync(Guid academicYearId)
+	{
+		if (CurrentTenant.Id is not Guid tenantId || !await CanCheckAsync(tenantId)) return null;
+		return await store.ReadStatusAsync(academicYearId, DateTime.SpecifyKind(Clock.Now, DateTimeKind.Utc));
+	}
+
+	private async Task<bool> CanCheckAsync(Guid tenantId)
+	{
+		if (CurrentUser.Id is not Guid userId) return false;
+		var actor = await users.FindAsync(userId);
+		if (actor == null || actor.TenantId != tenantId || !actor.IsActive) return false;
+		foreach (var action in HrSetupPermissions.Operators)
+			if (await permissions.IsGrantedAsync(action)) return true;
+		return false;
+	}
+
+	private static DateTime ValidUntil(DateTime checkedAt)
+	{
+		// Existing checks use UTC months for statutory rules and Indian months for PF coverage.
+		var schoolZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata");
+		var schoolTime = TimeZoneInfo.ConvertTimeFromUtc(checkedAt, schoolZone);
+		var nextSchoolMonth = TimeZoneInfo.ConvertTimeToUtc(
+			new DateTime(schoolTime.Year, schoolTime.Month, 1).AddMonths(1), schoolZone);
+		var nextUtcMonth = new DateTime(checkedAt.Year, checkedAt.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(1);
+		return nextSchoolMonth < nextUtcMonth ? nextSchoolMonth : nextUtcMonth;
 	}
 }

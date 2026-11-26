@@ -43,6 +43,12 @@ Either Covered or Not covered satisfies this configuration check; it does not re
 Missing coverage keeps `isReady=false`, even when the salary template is usable.
 Its `canConfigure` requires the existing PF Rule View and Add grants and backend-confirmed school-wide scope, matching the coverage editor and save endpoint.
 The read does not seed defaults, record review acknowledgements, enable schemes, or persist progress.
+An explicit year-specific check stores only the resulting school readiness flag, its revision, and its validity dates.
+The existing `GET /api/hr/dashboard/overview` reads that flag when `setupAcademicYearId` is supplied and the caller has operator access.
+It returns `hrSetupReady` as true or false when the saved result still matches the configuration revision and applicable statutory months.
+A missing, stale, or inaccessible result returns null.
+Changes to readiness inputs update the school revision in the same transaction as the configuration change.
+The saved result is advisory and payroll commands use their own validation.
 Configuration writes continue through their existing authorized endpoints, and operational validation remains authoritative.
 
 ## Employee picker lookup

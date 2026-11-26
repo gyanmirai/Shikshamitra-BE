@@ -14,6 +14,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using ShikshaMitra.Common.Middleware;
 using ShikshaMitra.Diagnostics;
 using ShikshaMitra.HR.Payroll.RunPayroll;
@@ -24,6 +26,27 @@ namespace ShikshaMitra.Middleware;
 
 public class ApiRequestTiming_Tests
 {
+	[Fact]
+	public async Task Payroll_Warmup_Resolves_And_Disposes_The_Service_Without_Running_Payroll()
+	{
+		var payroll = Substitute.For<IPayrollPreviewRunAppService, IDisposable>();
+		var activations = 0;
+		await using var provider = new ServiceCollection()
+			.AddScoped<IPayrollPreviewRunAppService>(_ =>
+			{
+				activations++;
+				return payroll;
+			})
+			.BuildServiceProvider();
+		var warmup = new PayrollReadActivationWarmup(provider.GetRequiredService<IServiceScopeFactory>(),
+			NullLogger<PayrollReadActivationWarmup>.Instance);
+
+		await warmup.StartAsync(CancellationToken.None);
+
+		activations.ShouldBe(1);
+		payroll.ReceivedCalls().ShouldHaveSingleItem().GetMethodInfo().Name.ShouldBe(nameof(IDisposable.Dispose));
+	}
+
 	[Fact]
 	public async Task Should_Report_Real_Database_Timing_Without_Logging_Request_Or_Sql_Secrets()
 	{

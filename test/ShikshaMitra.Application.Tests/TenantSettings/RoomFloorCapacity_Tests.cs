@@ -60,14 +60,14 @@ public class RoomFloorCapacity_Tests : ShikshaMitraApplicationTestBase<ShikshaMi
 	}
 
 	[Fact]
-	public async Task Increasing_a_floor_limit_allows_the_next_room_and_returns_current_counts()
+	public async Task Setting_capacity_before_assigning_rooms_allows_room_placement_and_returns_current_counts()
 	{
 		using var tenant = GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid());
 		var input = await CreateInputAsync();
 		var rooms = GetRequiredService<IRoomAppService>();
-		await rooms.CreateAsync(input);
 		var buildings = GetRequiredService<IBuildingAppService>();
 		await buildings.UpdateAsync(input.BuildingId, Update(input, 2));
+		await rooms.CreateAsync(input);
 		input.RoomName = "Second room";
 		await rooms.CreateAsync(input);
 		var floor = (await buildings.GetAsync(input.BuildingId)).Floors.Single();

@@ -28,9 +28,8 @@ public class BuildingRoomCapacityApi_Tests(BuildingRoomCapacityTestFactory facto
 		var (client, input) = await ClientAsync();
 		using var owner = client;
 		await CreateTwoRoomsAsync(owner, input);
-		var initial = Update(input, 2);
+		var initial = Update(input, 10);
 		initial.BuildingName = "Transport block";
-		initial.FloorsToUpdate[0].FloorName = "Ground";
 		(await owner.PutAsJsonAsync($"{BuildingsUrl}/{input.BuildingId}", initial, Json)).StatusCode.ShouldBe(HttpStatusCode.OK);
 		var response = await owner.PutAsJsonAsync($"{BuildingsUrl}/{input.BuildingId}", Update(input, 1), Json);
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -45,37 +44,79 @@ public class BuildingRoomCapacityApi_Tests(BuildingRoomCapacityTestFactory facto
 		var saved = (await owner.GetFromJsonAsync<BuildingDto>($"{BuildingsUrl}/{input.BuildingId}", Json))!;
 		saved.BuildingName.ShouldBe("Transport block");
 		saved.Floors[0].FloorName.ShouldBe("Ground");
-		saved.Floors[0].TotalRoom.ShouldBe(2);
+		saved.Floors[0].TotalRoom.ShouldBe(10);
 		saved.Floors[0].RoomCount.ShouldBe(2);
 	}
 
 	[Theory]
-	[InlineData(2)]
-	[InlineData(3)]
-	public async Task Capacity_equal_to_or_above_saved_room_count_can_be_saved(int limit)
+	[InlineData("name")]
+	[InlineData("number")]
+	[InlineData("capacity")]
+	[InlineData("delete")]
+	public async Task Occupied_floor_rejects_changes_and_removal_without_saving_building_details(string change)
 	{
 		var (client, input) = await ClientAsync();
 		using var owner = client;
 		await CreateTwoRoomsAsync(owner, input);
-		var response = await owner.PutAsJsonAsync($"{BuildingsUrl}/{input.BuildingId}", Update(input, limit), Json);
-		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-		var saved = (await response.Content.ReadFromJsonAsync<BuildingDto>(Json))!;
-		saved.Floors[0].TotalRoom.ShouldBe(limit);
+		var update = Update(input, 10);
+		var floor = update.FloorsToUpdate[0];
+		if (change == "name") floor.FloorName = "Renamed";
+		if (change == "number") floor.FloorNo = 1;
+		if (change == "capacity") floor.TotalRoom = 11;
+		if (change == "delete")
+		{
+			update.FloorsToUpdate.Clear();
+			update.FloorIdsToDelete.Add(input.FloorId);
+			update.FloorsToAdd.Add(new() { FloorName = "Replacement", FloorNo = 0, TotalRoom = 10 });
+		}
+		var response = await owner.PutAsJsonAsync($"{BuildingsUrl}/{input.BuildingId}", update, Json);
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+		using var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		error.RootElement.GetProperty("errorCode").GetString().ShouldBe("ShikshaMitra.TenantSettings:FloorInUse");
+		var saved = (await owner.GetFromJsonAsync<BuildingDto>($"{BuildingsUrl}/{input.BuildingId}", Json))!;
+		saved.BuildingName.ShouldNotBe(update.BuildingName);
+		saved.Floors[0].FloorName.ShouldBe("Ground");
+		saved.Floors[0].FloorNo.ShouldBe(0);
+		saved.Floors[0].TotalRoom.ShouldBe(10);
 		saved.Floors[0].RoomCount.ShouldBe(2);
 	}
 
 	[Fact]
-	public async Task Deleting_a_room_releases_capacity_for_a_floor_reduction()
+	public async Task First_floor_can_be_edited_without_rooms_but_cannot_be_replaced()
 	{
 		var (client, input) = await ClientAsync();
 		using var owner = client;
-		var room = await CreateTwoRoomsAsync(owner, input);
+		var update = Update(input, 4);
+		update.FloorsToUpdate[0].FloorName = "Renamed";
+		update.FloorsToUpdate[0].FloorNo = 1;
+		var url = $"{BuildingsUrl}/{input.BuildingId}";
+		(await owner.PutAsJsonAsync(url, update, Json)).StatusCode.ShouldBe(HttpStatusCode.OK);
+		update.FloorsToUpdate.Clear();
+		update.FloorIdsToDelete.Add(input.FloorId);
+		update.FloorsToAdd.Add(new() { FloorName = "Replacement", FloorNo = 1, TotalRoom = 4 });
+		var response = await owner.PutAsJsonAsync(url, update, Json);
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+		using var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		error.RootElement.GetProperty("errorCode").GetString().ShouldBe("ShikshaMitra.TenantSettings:FirstFloorCannotBeRemoved");
+		var saved = (await owner.GetFromJsonAsync<BuildingDto>(url, Json))!;
+		saved.Floors[0].Id.ShouldBe(input.FloorId);
+		saved.Floors[0].FloorName.ShouldBe("Renamed");
+	}
+
+	[Fact]
+	public async Task Removing_the_last_room_unlocks_the_floor()
+	{
+		var (client, input) = await ClientAsync();
+		using var owner = client;
+		var created = await owner.PostAsJsonAsync(RoomsUrl, input, Json);
+		created.StatusCode.ShouldBe(HttpStatusCode.Created);
+		var room = (await created.Content.ReadFromJsonAsync<RoomDto>(Json))!;
 		(await owner.DeleteAsync($"{RoomsUrl}/{room.Id}")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 		var response = await owner.PutAsJsonAsync($"{BuildingsUrl}/{input.BuildingId}", Update(input, 1), Json);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var saved = (await response.Content.ReadFromJsonAsync<BuildingDto>(Json))!;
 		saved.Floors[0].TotalRoom.ShouldBe(1);
-		saved.Floors[0].RoomCount.ShouldBe(1);
+		saved.Floors[0].RoomCount.ShouldBe(0);
 	}
 
 	private async Task<(HttpClient Client, CreateUpdateRoomDto Input)> ClientAsync()
@@ -99,7 +140,7 @@ public class BuildingRoomCapacityApi_Tests(BuildingRoomCapacityTestFactory facto
 	private static UpdateBuildingDto Update(CreateUpdateRoomDto input, int limit) => new()
 	{
 		BuildingName = "Changed block", TotalFloors = 1,
-		FloorsToUpdate = [new() { Id = input.FloorId, FloorName = "Changed floor", FloorNo = 0, TotalRoom = limit }]
+		FloorsToUpdate = [new() { Id = input.FloorId, FloorName = "Ground", FloorNo = 0, TotalRoom = limit }]
 	};
 }
 

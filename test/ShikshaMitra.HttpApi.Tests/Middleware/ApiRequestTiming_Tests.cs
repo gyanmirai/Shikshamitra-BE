@@ -62,6 +62,43 @@ public class ApiRequestTiming_Tests
 		}
 	}
 
+	[Theory]
+	[InlineData(true, false)]
+	[InlineData(true, true)]
+	[InlineData(false, false)]
+	public async Task Should_Report_Only_Reached_Phases_When_Enabled(bool enabled, bool deny)
+	{
+		var logger = new RecordingLogger();
+		using var server = CreateServer(logger, context => context.Response.WriteAsync("ok"),
+			includePhases: enabled, denyBeforeEndpoint: deny);
+		using var client = server.CreateClient();
+		using var response = await client.GetAsync("/api/test");
+		response.StatusCode.ShouldBe(deny ? HttpStatusCode.Forbidden : HttpStatusCode.OK);
+		var timing = string.Join(",", response.Headers.GetValues("Server-Timing"));
+		timing.ShouldContain("app;dur=");
+		if (enabled)
+		{
+			timing.ShouldContain(", pre-auth;dur=");
+			if (deny)
+			{
+				timing.ShouldNotContain(", auth;dur=");
+				timing.ShouldNotContain(", post-auth;dur=");
+				timing.ShouldNotContain(", endpoint;dur=");
+			}
+			else
+			{
+				timing.ShouldContain(", auth;dur=");
+				timing.ShouldContain(", post-auth;dur=");
+				timing.ShouldContain(", endpoint;dur=");
+			}
+		}
+		else
+		{
+			timing.ShouldNotContain(", pre-auth;dur=");
+			timing.ShouldNotContain(", endpoint;dur=");
+		}
+	}
+
 	[Fact]
 	public async Task Should_Leave_NonApi_Requests_And_Exceptions_Unchanged()
 	{
@@ -112,14 +149,31 @@ public class ApiRequestTiming_Tests
 		logger.Messages.ShouldBeEmpty();
 	}
 
-	private static TestServer CreateServer(RecordingLogger logger, RequestDelegate handler, string threshold = "0") => new(
+	private static TestServer CreateServer(RecordingLogger logger, RequestDelegate handler, string threshold = "0",
+		bool includePhases = false, bool denyBeforeEndpoint = false) => new(
 		new WebHostBuilder()
 			.ConfigureAppConfiguration(builder => builder.AddInMemoryCollection(new Dictionary<string, string?>
 			{
-				["PerformanceDiagnostics:SlowRequestMilliseconds"] = threshold
+				["PerformanceDiagnostics:SlowRequestMilliseconds"] = threshold,
+				["PerformanceDiagnostics:IncludeRequestPhases"] = includePhases.ToString()
 			}))
 			.ConfigureServices(services => services.AddSingleton<ILogger<ApiRequestTimingMiddleware>>(logger))
-			.Configure(app => { app.UseMiddleware<ApiRequestTimingMiddleware>(); app.Run(handler); }));
+			.Configure(app =>
+			{
+				app.UseMiddleware<ApiRequestTimingMiddleware>();
+				ApiRequestTimingCheckpoints.BeforeAuth(app);
+				if (denyBeforeEndpoint)
+				{
+					app.Run(context =>
+					{
+						context.Response.StatusCode = StatusCodes.Status403Forbidden;
+						return context.Response.WriteAsync("denied");
+					});
+				}
+				ApiRequestTimingCheckpoints.AfterAuth(app);
+				ApiRequestTimingCheckpoints.BeforeEndpoint(app);
+				app.Run(handler);
+			}));
 
 	private sealed class TimingDbContext(DbContextOptions<TimingDbContext> options) : DbContext(options);
 	private sealed class RecordingLogger : ILogger<ApiRequestTimingMiddleware>

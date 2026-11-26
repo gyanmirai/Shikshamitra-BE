@@ -19,6 +19,20 @@ include all reader consumption, EF model building, query compilation or non-EF
 database calls. Concurrent durations can overlap; do not subtract their sum from
 request duration to calculate an exact non-database duration.
 
+With `PerformanceDiagnostics__IncludeRequestPhases=true` (on in Staging only),
+the same header also shows completed pipeline phases:
+
+| Metric | Meaning |
+|---|---|
+| `pre-auth` | Timing middleware to authentication, including routing, rate limiting and CORS |
+| `auth` | Authentication through authorization, including tenant resolution, unit-of-work setup and dynamic claims |
+| `post-auth` | Authorization to the endpoint boundary, including the general request middleware |
+| `endpoint` | Endpoint dispatch, MVC filters, application work and start of the response |
+
+A short circuit omits phases without both timestamps. The durations end at
+response start, not the end of body transfer. Do not add `db` to the request phases:
+it measures work that overlaps them. Azure queueing before middleware is not included.
+
 ## Slow-request log
 
 Requests taking at least 2,000 ms produce one `SlowApiRequest` warning with:
@@ -49,7 +63,8 @@ after the updated backend is deployed.
 
 `ApiRequestTiming_Tests` uses an actual SQLite command through EF diagnostics and
 an HTTP test server to check timing headers, unchanged response behavior, absence
-of request/SQL secrets in warnings, non-API bypass and concurrent-request isolation.
+of request/SQL secrets in warnings, non-API bypass, concurrent-request isolation,
+and configured phase timings with normal and short-circuited requests.
 
 Source: `src/ShikshaMitra.HttpApi.Host/Diagnostics/` and
 `src/ShikshaMitra.HttpApi.Host/Middleware/ApiRequestTimingMiddleware.cs`.

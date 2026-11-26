@@ -14,6 +14,28 @@ public sealed class ApiRequestTimingScope : IDisposable
 	private long _connectionTicks;
 	private long _commandCount;
 	private long _maxCommandTicks;
+	private long _beforeAuthTicks = -1;
+	private long _afterAuthTicks = -1;
+	private long _beforeEndpointTicks = -1;
+
+	internal void MarkBeforeAuth() => RecordCheckpoint(ref _beforeAuthTicks);
+	internal void MarkAfterAuth() => RecordCheckpoint(ref _afterAuthTicks);
+	internal void MarkBeforeEndpoint() => RecordCheckpoint(ref _beforeEndpointTicks);
+	internal (double? BeforeAuth, double? Auth, double? AfterAuth, double? Endpoint) ReadPhases()
+	{
+		var end = _watch.Elapsed.Ticks;
+		var beforeAuth = Interlocked.Read(ref _beforeAuthTicks);
+		var afterAuth = Interlocked.Read(ref _afterAuthTicks);
+		var beforeEndpoint = Interlocked.Read(ref _beforeEndpointTicks);
+		return (Duration(0, beforeAuth), Duration(beforeAuth, afterAuth),
+			Duration(afterAuth, beforeEndpoint), Duration(beforeEndpoint, end));
+	}
+
+	private void RecordCheckpoint(ref long checkpoint) =>
+		Interlocked.CompareExchange(ref checkpoint, _watch.Elapsed.Ticks, -1);
+
+	private static double? Duration(long start, long end) =>
+		start >= 0 && end >= start ? TimeSpan.FromTicks(end - start).TotalMilliseconds : null;
 
 	private ApiRequestTimingScope()
 	{

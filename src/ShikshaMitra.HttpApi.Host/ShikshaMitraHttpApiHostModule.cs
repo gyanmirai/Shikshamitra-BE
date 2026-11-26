@@ -548,6 +548,8 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			// app.UseDevAutoAuth();
 		}
 
+		var timeRequestPhases = ApiRequestTimingCheckpoints.IsEnabled(configuration, env);
+		if (timeRequestPhases) ApiRequestTimingCheckpoints.BeforeAuth(app);
 		app.UseAuthentication();
 		app.UseAbpOpenIddictValidation();
 
@@ -560,6 +562,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseDynamicClaims();
 		app.UseMiddleware<ShikshaMitra.Middleware.StudentPortalSessionMiddleware>();
 		app.UseAuthorization();
+		if (timeRequestPhases) ApiRequestTimingCheckpoints.AfterAuth(app);
 		app.UseSwagger();
 		app.UseAbpSwaggerUI(c =>
 		{
@@ -577,6 +580,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		app.UseAuditing();
 		app.UseAbpSerilogEnrichers();
+		if (timeRequestPhases) ApiRequestTimingCheckpoints.BeforeEndpoint(app);
 		app.UseEndpoints(endpoints =>
 		{
 			endpoints.MapHealthChecks("/health/payroll-snapshot", new HealthCheckOptions
